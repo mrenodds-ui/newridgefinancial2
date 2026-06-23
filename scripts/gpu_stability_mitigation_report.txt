@@ -1,0 +1,52 @@
+GPU Stability Mitigation Report
+Timestamp: 2026-06-22T07:05:01
+PreviewOnly: False
+ActiveScheme: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+ASPMAlreadyOffBefore: True
+--- PCIe ASPM Before ---
+Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)
+  GUID Alias: SCHEME_MIN
+  Subgroup GUID: 501a4d13-42af-4429-9fd1-a8218c268e20  (PCI Express)
+    GUID Alias: SUB_PCIEXPRESS
+    Power Setting GUID: ee12f906-d277-404b-b6da-e5fa1a576df5  (Link State Power Management)
+      GUID Alias: ASPM
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Off
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Moderate power savings
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Maximum power savings
+    Current AC Power Setting Index: 0x00000000
+    Current DC Power Setting Index: 0x00000000
+
+
+--- PCIe ASPM After ---
+Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)
+  GUID Alias: SCHEME_MIN
+  Subgroup GUID: 501a4d13-42af-4429-9fd1-a8218c268e20  (PCI Express)
+    GUID Alias: SUB_PCIEXPRESS
+    Power Setting GUID: ee12f906-d277-404b-b6da-e5fa1a576df5  (Link State Power Management)
+      GUID Alias: ASPM
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Off
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Moderate power savings
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Maximum power savings
+    Current AC Power Setting Index: 0x00000000
+    Current DC Power Setting Index: 0x00000000
+
+
+--- Root Port Validation ---
+RootPortHardwareId: PCI\VEN_8086&DEV_AE4D&SUBSYS_88EF1043&REV_10
+ValidationWindowMinutes: 5
+ValidationThreshold: 25
+ValidationStatus: NOISY
+WHEA17RootPortEventsInWindow: 2
+RecentWheaEvent: 2026-06-22T07:03:42 | Id=17 | Level=Warning
+RecentWheaEvent: 2026-06-22T07:00:07 | Id=17 | Level=Warning
+--- Notes ---
+This mitigation disables PCIe Link State Power Management (ASPM) for AC and DC on the active power plan.
+Reboot is recommended for a clean telemetry baseline.
+If ASPM was already off before this run, this mitigation is only a verification step.
+If validation remains NOISY or ALERT, the remaining issue is likely firmware, driver, slot, power delivery, or device hardware rather than the Windows PCIe power plan.

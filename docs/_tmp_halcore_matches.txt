@@ -1,0 +1,15 @@
+524:buildHalLiveAwarenessSummary,
+553:getSafeHalErrorMessage,
+983:const halQuickBooksSummary = await runHalChatStage('quickbooks-summary', async () => quickBooksFinancialDataService.getHalQuickBooksFinancialSummary({}));
+985:buildHalLiveAwarenessSummary
+986:? await buildHalLiveAwarenessSummary()
+1019:const modelResult = await runHalChatStage('model-call', async () => normalizeHalModelResult(await halModelProviderRouter.callHalModel(buildHalModelRequest({
+1062:error: "HAL model request failed.",
+1066:detail: getSafeHalErrorMessage(error)
+1123:const modelResult = normalizeHalModelResult(await halModelProviderRouter.callHalModel(buildHalModelRequest({
+1159:detail: getSafeHalErrorMessage(error)
+1185:detail: getSafeHalErrorMessage(error, 'HAL status route failed.'),
+1224:detail: getSafeHalErrorMessage(error, 'HAL status-lite route failed.'),
+1250:detail: getSafeHalErrorMessage(error, 'HAL9000 compatibility status route failed.'),
+1316:detail: getSafeHalErrorMessage(error, 'HAL9000 accounting-documents route failed.'),
+1378:detail: getSafeHalErrorMessage(error, 'HAL9000 compatibility chat route failed.'),

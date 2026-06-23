@@ -1,0 +1,147 @@
+.landing-btn-float {
+  float: right;
+  margin-top: 8px;
+}
+.landing-btn-float-margin {
+  float: right;
+  margin-top: 8px;
+  margin-right: 8px;
+}
+.landing-flex-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.landing-search-input {
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  min-width: 120px;
+}
+.landing-label-margin {
+  margin-right: 8px;
+}
+.landing-table-scroll {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+.landing-th-sort {
+  cursor: pointer;
+}
+.landing-th-button {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+.landing-th-active {
+  background: #e0e7ef;
+}
+.landing-root {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #e0e7ef 0%, #f8fafc 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 32px;
+  gap: 32px;
+}
+.landing-card-title {
+  margin: 16px 0 8px 0;
+  font-weight: 700;
+  font-size: 28px;
+  color: #0f2233;
+}
+.landing-card-desc {
+  max-width: 540px;
+  color: #334155;
+  font-size: 18px;
+  margin-bottom: 24px;
+}
+.landing-card-list {
+  text-align: left;
+  max-width: 480px;
+  margin: 0 auto 24px auto;
+  color: #475569;
+  font-size: 16px;
+}
+.landing-form {
+  margin-top: 32px;
+  text-align: center;
+}
+.landing-input {
+  padding: 8px;
+  width: 320px;
+  max-width: 100%;
+  margin-bottom: 8px;
+}
+.landing-btn {
+  padding: 8px 24px;
+  font-weight: 600;
+}
+.landing-btn-min-width {
+  min-width: 120px;
+}
+.landing-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.landing-refresh-label {
+  font-size: 14px;
+}
+.landing-kpis {
+  display: flex;
+  gap: 32px;
+  margin: 24px 0;
+  flex-wrap: wrap;
+}
+.landing-kpi-card {
+  min-width: 160px;
+}
+.landing-kpi-label {
+  font-weight: 600;
+}
+.landing-kpi-value {
+  font-size: 24px;
+}
+.landing-kpi-value-production {
+  color: #2563eb;
+}
+.landing-kpi-value-collections {
+  color: #22c55e;
+}
+.landing-kpi-value-success {
+  color: #22c55e;
+}
+.landing-kpi-value-warning {
+  color: #eab308;
+}
+.landing-kpi-value-danger {
+  color: #ef4444;
+}
+.landing-advice {
+  margin-top: 24px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 16px;
+  color: #0f2233;
+  max-width: 540px;
+}
+.landing-advice-text {
+  margin-top: 8px;
+  white-space: pre-line;
+}
+.landing-error {
+  color: #b91c1c;
+  margin-top: 16px;
+}
+.landing-section {
+  width: 100%;
+  max-width: 900px;
+}

@@ -1,0 +1,25 @@
+C:\New folder\scripts\buildSoftDentInsuranceCompanyLearningSeed.js:199:likelyActive: rows.filter((row) => row.status === 'likely_active').length,
+C:\New folder\scripts\buildSoftDentInsuranceCompanyLearningSeed.js:200:discontinued: rows.filter((row) => row.status === 'discontinued').length,
+C:\New folder\scripts\buildSoftDentInsuranceCompanyLearningSeed.js:201:placeholders: rows.filter((row) => row.status === 'placeholder').length,
+C:\New folder\scripts\halActionQueueService.js:287:const missing = rows.filter((row) => row.status === 'missing');
+C:\New folder\scripts\halActionQueueService.js:288:const limited = rows.filter((row) => row.status === 'limited');
+C:\New folder\scripts\halActionQueueService.js:295:const missingRows = sectionRows.filter((row) => row.status === 'missing');
+C:\New folder\scripts\halDoctorService.js:36:const missing = safeRows.filter((row) => row.status === 'missing');
+C:\New folder\scripts\halDoctorService.js:37:const limited = safeRows.filter((row) => row.status === 'limited');
+C:\New folder\scripts\halDoctorService.js:38:const available = safeRows.filter((row) => row.status === 'available');
+C:\New folder\scripts\internalAccountingWorkbenchService.js:245:return currencyNumber(rows.filter(predicate).reduce((total, row) => total + Number(row.amount || 0), 0));
+C:\New folder\scripts\internalAccountingWorkbenchService.js:260:return rows.filter((row) => row.status !== 'paid').reduce((totals, row) => {
+C:\New folder\scripts\quickbooksFinancialDataService.js:968:const sectionRows = rows.filter((row) => row.section === name).map((row) => ({ label: row.label, amount: row.amount }));
+C:\New folder\src\lib\internalAccountingEngine.ts:419:const rowsBySection = (dataset: AccountingDataset, rows: TrialBalanceRow[], sections: StatementSection[]): TrialBalanceRow[] => rows.filter(row => {
+C:\New folder\src\pages\DashboardPage.tsx:441:const missingCount = sortedRows.filter(r => r.status === 'missing').length;
+C:\New folder\src\pages\DashboardPage.tsx:442:const limitedCount = sortedRows.filter(r => r.status === 'limited').length;
+C:\New folder\src\pages\DashboardPage.tsx:443:const availableCount = sortedRows.filter(r => r.status === 'available').length;
+C:\New folder\src\pages\DashboardPage.tsx:445:sortedRows.filter(r => r.status === 'missing'),
+C:\New folder\src\pages\DashboardPage.tsx:449:sortedRows.filter(r => r.status === 'limited'),
+C:\New folder\src\pages\DashboardPage.tsx:962:const rows = monthlyRows.filter(row => row.month === currentMonthId());
+C:\New folder\src\pages\DashboardPage.tsx:984:const rowsWithActivity = monthlyRows.filter(hasNonZeroProductionCollectionValue);
+C:\New folder\src\pages\DashboardPage.tsx:1135:const writeoffRows = transactionRows.filter((row: any) => {
+C:\New folder\src\pages\DashboardPage.tsx:1555:return monthlyRows.filter(row => row.month.startsWith(`${selectedYear}-`));
+C:\New folder\src\pages\DashboardPage.tsx:1591:const meaningfulProductionRows = monthlyRows.filter(hasNonZeroProductionCollectionValue);
+C:\New folder\src\pages\DashboardPage.tsx:1600:const showTrailingChart = trailingRows.filter(hasNonZeroProductionCollectionValue).length >= 3;
+C:\New folder\src\pages\DashboardPage.tsx:1601:const showYearOverYearChart = calendarYearRows.filter((row: any) => hasAnyNonZero([row.grossProduction, row.collections])).length >= 2;

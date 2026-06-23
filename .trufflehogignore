@@ -1,0 +1,8 @@
+# Ignore patterns for truffleHog secret scanning
+node_modules/
+dist/
+frontend/dist/
+app/data/
+*.sqlite
+*.db
+.env

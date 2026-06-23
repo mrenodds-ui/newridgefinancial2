@@ -1,0 +1,33 @@
+.dashboard-data-preview {
+  margin: 2rem 0;
+}
+
+.dashboard-data-preview-note {
+  font-size: 0.9em;
+  color: #888;
+}
+
+.dashboard-custom-alert {
+  border-radius: 10px;
+  padding: 12px;
+  margin: 16px 0;
+  border: 1.5px solid var(--dashboard-custom-alert-color);
+  background: var(--dashboard-custom-alert-background);
+  color: var(--dashboard-custom-alert-color);
+}
+
+.dashboard-custom-alert--warning {
+  --dashboard-custom-alert-color: #d89a2b;
+  --dashboard-custom-alert-background: rgba(216, 154, 43, 0.13);
+}
+
+.dashboard-custom-alert--info,
+.dashboard-custom-alert--success {
+  --dashboard-custom-alert-color: #78a86b;
+  --dashboard-custom-alert-background: rgba(120, 168, 107, 0.13);
+}
+
+.dashboard-custom-alert--error {
+  --dashboard-custom-alert-color: #c96a5b;
+  --dashboard-custom-alert-background: rgba(201, 106, 91, 0.13);
+}

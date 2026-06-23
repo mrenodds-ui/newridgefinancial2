@@ -1,0 +1,10 @@
+[
+  {
+    "id": "owner-tone",
+    "prompt": "Talk to me like a steady operator, not a dashboard. In two short paragraphs, tell me what matters most this morning for New Ridge and why.",
+    "content_assertions": {
+      "required_contains": ["SoftDent", "QuickBooks"],
+      "forbidden_contains": ["weather", "traffic", "school status", "if you need more detail", "let me know", "if you want"]
+    }
+  }
+]

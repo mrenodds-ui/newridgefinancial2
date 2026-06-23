@@ -1,0 +1,164 @@
+{
+  "generated_at_utc": "2026-06-20T21:26:03.112483+00:00",
+  "base_url": "http://127.0.0.1:11434",
+  "dry_run": false,
+  "profile_a_alias": "chat",
+  "profile_b_alias": "chat_second_opinion",
+  "prompt_count": 1,
+  "gate_config": {
+    "max_ttft_seconds": 0.75,
+    "max_tps_drop_fraction": 0.15
+  },
+  "profile_summaries": {
+    "chat": {
+      "case_count": 1,
+      "median_ttft_estimate_seconds": 0.4009,
+      "median_output_tokens_per_second": 12.77,
+      "median_end_to_end_tokens_per_second": 184.8,
+      "average_word_count": 107.0,
+      "average_character_count": 689.0,
+      "median_sentence_count": 7.0,
+      "median_paragraph_count": 2.0
+    },
+    "chat_second_opinion": {
+      "case_count": 1,
+      "median_ttft_estimate_seconds": 5.9324,
+      "median_output_tokens_per_second": 14.19,
+      "median_end_to_end_tokens_per_second": 26.7,
+      "average_word_count": 52.0,
+      "average_character_count": 347.0,
+      "median_sentence_count": 2.0,
+      "median_paragraph_count": 2.0
+    }
+  },
+  "content_assertion_summary": {
+    "evaluated_case_count": 1,
+    "evaluated_case_ids": [
+      "owner-tone"
+    ],
+    "baseline_failed_case_ids": [
+      "owner-tone"
+    ],
+    "candidate_failed_case_ids": [],
+    "candidate_failed": false
+  },
+  "profile_delta": {
+    "baseline_alias": "chat",
+    "candidate_alias": "chat_second_opinion",
+    "candidate_minus_baseline": {
+      "median_ttft_estimate_seconds": 5.5315,
+      "median_output_tokens_per_second": 1.42,
+      "median_end_to_end_tokens_per_second": -158.1,
+      "average_word_count": -55.0,
+      "average_character_count": -342.0,
+      "median_sentence_count": -5.0,
+      "median_paragraph_count": 0.0
+    }
+  },
+  "regression_flags": {
+    "gate_evaluated": true,
+    "gate_skipped": false,
+    "any_failed": true,
+    "output_tps_regressed": false,
+    "ttft_ceiling_exceeded": true,
+    "gate_reason": "Candidate median TTFT (5.932s) exceeded absolute ceiling of 0.750s.",
+    "content_assertions_failed": false
+  },
+  "cases": [
+    {
+      "id": "owner-tone",
+      "prompt": "Talk to me like a steady operator, not a dashboard. In two short paragraphs, tell me what matters most this morning for New Ridge and why.",
+      "profile_a": {
+        "alias": "chat",
+        "model": "mistral-small3.1:24b",
+        "options": {
+          "role": "primary",
+          "label": "Mistral Small 3.1 24B Daily GPU",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull mistral-small3.1:24b",
+          "keep_alive": "30m",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 8192,
+          "num_gpu": 999,
+          "seed": 17,
+          "strip_thinking_tags": true
+        },
+        "output": "This morning, our top priority is addressing the SoftDent coverage gaps.\nWe have 7 missing, 5 limited, and 7 available coverage areas that need attention.\nThese gaps can affect our ability to provide comprehensive care and billing, so we should focus on filling these gaps as soon as possible.\n\nAdditionally, we need to monitor our landing-window coverage. Currently, only 11 of the 26 tracked page fields are within freshness targets.\nThis means there are areas where our data might be stale or incomplete, which could impact decision-making and operational efficiency.\nLet's prioritize updating these fields to ensure we have accurate and up-to-date information across all tracked pages.",
+        "summary": {
+          "character_count": 689,
+          "word_count": 107,
+          "sentence_count": 7,
+          "paragraph_count": 2,
+          "avg_words_per_sentence": 15.29
+        },
+        "performance": {
+          "load_duration_ns": 228196700,
+          "prompt_eval_duration_ns": 94418000,
+          "eval_duration_ns": 10887039000,
+          "total_duration_ns": 11223036800,
+          "prompt_eval_count": 1935,
+          "eval_count": 139,
+          "time_to_first_token_estimate_seconds": 0.4009,
+          "output_tokens_per_second": 12.77,
+          "prompt_tokens_per_second": 20493.97,
+          "end_to_end_tokens_per_second": 184.8
+        },
+        "content_assertions": {
+          "passed": false,
+          "missing_required": [
+            "QuickBooks"
+          ],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "missing required content: QuickBooks"
+        }
+      },
+      "profile_b": {
+        "alias": "chat_second_opinion",
+        "model": "qwen3:30b",
+        "options": {
+          "role": "second_opinion",
+          "label": "Qwen3 30B Deeper Second Opinion",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull qwen3:30b",
+          "keep_alive": "30m",
+          "prompt_prefix": "/no_think\n",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 2048,
+          "num_gpu": 0,
+          "seed": 29,
+          "strip_thinking_tags": true
+        },
+        "output": "SoftDent aggregates for 2026-06 are live across 3 providers, but 7 missing and 5 limited coverage gaps require immediate resolution to prevent billing disruptions and maintain patient access.  \n\nQuickBooks revenue lane health is ok, but the concrete priority is to validate the latest revenue data against freshness anchors for the current period.",
+        "summary": {
+          "character_count": 347,
+          "word_count": 52,
+          "sentence_count": 2,
+          "paragraph_count": 2,
+          "avg_words_per_sentence": 26.0
+        },
+        "performance": {
+          "load_duration_ns": 144105400,
+          "prompt_eval_duration_ns": 5717868000,
+          "eval_duration_ns": 55740190000,
+          "total_duration_ns": 61725551600,
+          "prompt_eval_count": 857,
+          "eval_count": 791,
+          "time_to_first_token_estimate_seconds": 5.9324,
+          "output_tokens_per_second": 14.19,
+          "prompt_tokens_per_second": 149.88,
+          "end_to_end_tokens_per_second": 26.7
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Vary: Origin
+Access-Control-Allow-Credentials: true
+X-Request-Id: e2dc078c-4fa2-45cc-91f9-5e13e39aec63
+Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate
+Pragma: no-cache
+Expires: 0
+Content-Type: application/json; charset=utf-8
+Content-Length: 17017
+ETag: W/"4279-9riGtfSdYJHKQFD/sc8lcvZg+mQ"
+Date: Thu, 18 Jun 2026 18:13:28 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+

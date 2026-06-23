@@ -1,0 +1,141 @@
+{
+  "vendor_aliases": {
+    "PRAIRIE DENTAL SUPPLY": "Prairie Dental Supply",
+    "PRAIRIE DENTAL": "Prairie Dental Supply",
+    "HENRY SCHEIN": "Henry Schein",
+    "HENRY SCHEIN DENTAL": "Henry Schein Dental",
+    "HS DENTAL": "Henry Schein Dental",
+    "PATTERSON DENTAL": "Patterson Dental",
+    "PATTERSON": "Patterson Dental",
+    "BENCO DENTAL": "Benco Dental",
+    "BENCO": "Benco Dental",
+    "DARBY DENTAL": "Darby Dental",
+    "SAFCO DENTAL": "Safco Dental",
+    "BURKHART DENTAL": "Burkhart Dental",
+    "ULTRADENT": "Ultradent",
+    "DENTSPLY SIRONA": "Dentsply Sirona",
+    "PATTERSON DENTAL SUPPLY": "Patterson Dental",
+    "MIDWAY DENTAL": "Midway Dental",
+    "PEARSON DENTAL": "Pearson Dental",
+    "ZIRC DENTAL": "Zirc Dental",
+    "SULLIVAN SCHEIN": "Henry Schein Dental",
+    "KURARAY NORITAKE": "Kuraray Noritake",
+    "GC AMERICA": "GC America",
+    "IVOCLAR": "Ivoclar",
+    "SHOFU": "Shofu",
+    "KERR DENTAL": "Kerr Dental",
+    "COLTENE": "COLTENE",
+    "VOCO": "VOCO",
+    "3M ORAL CARE": "3M Oral Care",
+    "BIOLASE": "BIOLASE",
+    "A-DEC": "A-dec",
+    "ADEC": "A-dec",
+    "DEXIS": "DEXIS",
+    "CARESTREAM DENTAL": "Carestream Dental",
+    "PLANMECA": "Planmeca",
+    "VATECH": "Vatech",
+    "ALIGN TECHNOLOGY": "Align Technology",
+    "NOBEL BIOCARE": "Nobel Biocare",
+    "STRAUMANN": "Straumann",
+    "ZIMVIE": "ZimVie",
+    "BIOHORIZONS": "BioHorizons",
+    "DDS LAB": "DDS Lab",
+    "GLIDEWELL": "Glidewell",
+    "GLIDEWELL LABORATORIES": "Glidewell",
+    "NDX": "National Dentex",
+    "NATIONAL DENTEX": "National Dentex"
+  },
+  "vendor_match_patterns": [
+    {
+      "pattern": "(?i)henry\\s+schein(?:\\s+dental)?",
+      "normalized": "Henry Schein Dental"
+    },
+    {
+      "pattern": "(?i)patterson\\s+dental",
+      "normalized": "Patterson Dental"
+    },
+    {
+      "pattern": "(?i)benco\\s+dental",
+      "normalized": "Benco Dental"
+    },
+    {
+      "pattern": "(?i)darby\\s+dental",
+      "normalized": "Darby Dental"
+    },
+    {
+      "pattern": "(?i)safco\\s+dental",
+      "normalized": "Safco Dental"
+    },
+    {
+      "pattern": "(?i)burkhart\\s+dental",
+      "normalized": "Burkhart Dental"
+    },
+    {
+      "pattern": "(?i)dentsply\\s+sirona",
+      "normalized": "Dentsply Sirona"
+    },
+    {
+      "pattern": "(?i)glidewell(?:\\s+laboratories)?",
+      "normalized": "Glidewell"
+    },
+    {
+      "pattern": "(?i)(?:national\\s+dentex|ndx)",
+      "normalized": "National Dentex"
+    },
+    {
+      "pattern": "(?i)a[- ]?dec",
+      "normalized": "A-dec"
+    },
+    {
+      "pattern": "(?i)carestream\\s+dental",
+      "normalized": "Carestream Dental"
+    }
+  ],
+  "invoice_layout_rules": [
+    {
+      "vendor": "Prairie Dental Supply",
+      "prefix": "SCANNED",
+      "date_suffix_format": "YYYY-MMDD"
+    },
+    {
+      "vendor": "Henry Schein Dental",
+      "prefix": "HS",
+      "date_suffix_format": "YYYY-MMDD"
+    },
+    {
+      "vendor": "Patterson Dental",
+      "prefix": "PAT",
+      "date_suffix_format": "YYYY-MMDD"
+    },
+    {
+      "vendor": "Benco Dental",
+      "prefix": "BEN",
+      "date_suffix_format": "YYYY-MMDD"
+    },
+    {
+      "vendor": "Darby Dental",
+      "prefix": "DAR",
+      "date_suffix_format": "YYYY-MMDD"
+    },
+    {
+      "vendor": "Safco Dental",
+      "prefix": "SAF",
+      "date_suffix_format": "YYYY-MMDD"
+    },
+    {
+      "vendor": "Burkhart Dental",
+      "prefix": "BUR",
+      "date_suffix_format": "YYYY-MMDD"
+    },
+    {
+      "vendor": "Glidewell",
+      "prefix": "GL",
+      "date_suffix_format": "YYYY-MMDD"
+    },
+    {
+      "vendor": "National Dentex",
+      "prefix": "NDX",
+      "date_suffix_format": "YYYY-MMDD"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "generated_at_utc": "2026-06-20T12:57:25.060539+00:00",
+  "project_root": "C:\\NewRidgeFamilyFinancial",
+  "skip_steps": true,
+  "overall_pass": true,
+  "receipt_version": 1,
+  "artifact_paths": {
+    "rebuild_receipt": "C:\\NewRidgeFamilyFinancial\\scripts\\rebuild_receipt.smoke.json",
+    "ci_gate_report": "C:\\NewRidgeFamilyFinancial\\scripts\\ci_gate_report.rebuild.json"
+  },
+  "steps": []
+}

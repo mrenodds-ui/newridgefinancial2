@@ -1,0 +1,99 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  # ── Security scans run first so secrets/vulns are caught fast ──────────
+  security:
+    name: Security scans
+    runs-on: ubuntu-latest
+    # Skip for fork PRs (no write permissions / no secret access)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Checkout (full history for gitleaks)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Vulnerability audit (high+)
+        run: npm audit --audit-level=high
+
+  ci:
+    name: Typecheck · Lint · Test · Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Biome check (lint + format)
+        run: npm run check:ci
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
+      - name: Bundle size check
+        run: node scripts/check-bundle-size.mjs
+
+      # Playwright smoke tests run only when the backend is available.
+      # Skip on forks (no secrets) or when SKIP_E2E is set.
+      - name: Playwright smoke tests
+        if: ${{ !github.event.pull_request.head.repo.fork && env.SKIP_E2E != 'true' }}
+        run: npm run smoke:playwright
+        env:
+          SKIP_E2E: ${{ vars.SKIP_E2E }}
+        continue-on-error: true
+
+      # Lighthouse audit runs on the built preview server.
+      # Only run when LHCI_BUILD_CONTEXT__CURRENT_HASH is available (non-fork).
+      - name: Lighthouse CI
+        if: ${{ !github.event.pull_request.head.repo.fork && vars.RUN_LIGHTHOUSE == 'true' }}
+        run: npm run lighthouse:local
+        continue-on-error: true

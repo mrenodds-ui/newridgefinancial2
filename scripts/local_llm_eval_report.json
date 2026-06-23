@@ -1,0 +1,117 @@
+{
+  "generated_at_utc": "2026-06-15T20:31:04.903290+00:00",
+  "base_url": "http://127.0.0.1:11434",
+  "dry_run": false,
+  "overall_pass": true,
+  "result_count": 5,
+  "results": [
+    {
+      "case_id": "qwen-json-only-code-plan",
+      "type": "format_assertion",
+      "passed": true,
+      "response": "{\n  \"action\": \"emit_stub\",\n  \"language\": \"python\",\n  \"code\": \"def reconcile_invoice():\\n    pass\"\n}",
+      "parsed": {
+        "action": "emit_stub",
+        "language": "python",
+        "code": "def reconcile_invoice():\n    pass"
+      }
+    },
+    {
+      "case_id": "extract-static-total-amount",
+      "type": "exact_value_assertion",
+      "passed": true,
+      "response": "$1,250.45"
+    },
+    {
+      "case_id": "qb-read-only-boundary",
+      "type": "retrieval_assertion",
+      "passed": true,
+      "response": "No. [qb-safe-1] HAL must remain limited to approved summary topics and approved read-only SQL templates. It must not generate or execute any QuickBooks write request. [qb-safe-2] If posting is ever added, it must not be part of HAL's direct tool surface.",
+      "context_precision": 1.0,
+      "minimum_context_precision": 0.7
+    },
+    {
+      "case_id": "fail-closed-when-context-missing",
+      "type": "retrieval_assertion",
+      "passed": true,
+      "response": "INSUFFICIENT_CONTEXT",
+      "context_precision": 1.0,
+      "minimum_context_precision": 0.7
+    },
+    {
+      "case_id": "hal-grounded-summary-tone",
+      "type": "judge_assertion",
+      "passed": true,
+      "average_score": 4.75,
+      "minimum_average_score": 4.2,
+      "runs": [
+        {
+          "case_id": "hal-grounded-summary-tone",
+          "type": "judge_assertion",
+          "passed": true,
+          "judge_output": "```json\n{\n  \"scores\": {\n    \"grounding\": 5,\n    \"coverage\": 5,\n    \"format\": 4,\n    \"tone\": 5\n  },\n  \"average_score\": 4.75,\n  \"pass\": true,\n  \"rationale\": \"The answer is well-grounded in the reference facts, covers all key points, and maintains a direct tone. The format is mostly correct but has an indentation issue on the second bullet point.\"\n}\n```",
+          "parsed": {
+            "scores": {
+              "grounding": 5,
+              "coverage": 5,
+              "format": 4,
+              "tone": 5
+            },
+            "average_score": 4.75,
+            "pass": true,
+            "rationale": "The answer is well-grounded in the reference facts, covers all key points, and maintains a direct tone. The format is mostly correct but has an indentation issue on the second bullet point."
+          },
+          "average_score": 4.75,
+          "minimum_average_score": 4.2,
+          "judge_pass": true,
+          "candidate_seed": 11,
+          "candidate_answer": "- Uses sanitized summaries and approved docs only\n - Employs backend-owned read-only tools exclusively\n - Fails closed when answer is not in context"
+        },
+        {
+          "case_id": "hal-grounded-summary-tone",
+          "type": "judge_assertion",
+          "passed": true,
+          "judge_output": "```json\n{\n  \"scores\": {\n    \"grounding\": 5,\n    \"coverage\": 5,\n    \"format\": 4,\n    \"tone\": 5\n  },\n  \"average_score\": 4.75,\n  \"pass\": true,\n  \"rationale\": \"The answer is well-grounded in the reference facts, covers all key points, and maintains a direct tone. The format is mostly correct but has an indentation issue on the second bullet point.\"\n}\n```",
+          "parsed": {
+            "scores": {
+              "grounding": 5,
+              "coverage": 5,
+              "format": 4,
+              "tone": 5
+            },
+            "average_score": 4.75,
+            "pass": true,
+            "rationale": "The answer is well-grounded in the reference facts, covers all key points, and maintains a direct tone. The format is mostly correct but has an indentation issue on the second bullet point."
+          },
+          "average_score": 4.75,
+          "minimum_average_score": 4.2,
+          "judge_pass": true,
+          "candidate_seed": 13,
+          "candidate_answer": "- Uses sanitized summaries and approved docs only\n - Employs backend-owned read-only tools exclusively\n - Fails closed when answer is not in context"
+        },
+        {
+          "case_id": "hal-grounded-summary-tone",
+          "type": "judge_assertion",
+          "passed": true,
+          "judge_output": "```json\n{\n  \"scores\": {\n    \"grounding\": 5,\n    \"coverage\": 5,\n    \"format\": 4,\n    \"tone\": 5\n  },\n  \"average_score\": 4.75,\n  \"pass\": true,\n  \"rationale\": \"The answer is well-grounded in the reference facts, covers all key points, and maintains a direct tone. The format is mostly correct but has an indentation issue on the second bullet point.\"\n}\n```",
+          "parsed": {
+            "scores": {
+              "grounding": 5,
+              "coverage": 5,
+              "format": 4,
+              "tone": 5
+            },
+            "average_score": 4.75,
+            "pass": true,
+            "rationale": "The answer is well-grounded in the reference facts, covers all key points, and maintains a direct tone. The format is mostly correct but has an indentation issue on the second bullet point."
+          },
+          "average_score": 4.75,
+          "minimum_average_score": 4.2,
+          "judge_pass": true,
+          "candidate_seed": 17,
+          "candidate_answer": "- Uses sanitized summaries and approved docs only\n - Employs backend-owned read-only tools exclusively\n - Fails closed when answer is not in context"
+        }
+      ]
+    }
+  ]
+}

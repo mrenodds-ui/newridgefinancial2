@@ -1,0 +1,545 @@
+{
+  "generated_at_utc": "2026-06-20T21:33:07.152706+00:00",
+  "base_url": "http://127.0.0.1:11434",
+  "dry_run": false,
+  "profile_a_alias": "chat",
+  "profile_b_alias": "chat_second_opinion",
+  "prompt_count": 5,
+  "gate_config": {
+    "max_ttft_seconds": 0.75,
+    "max_tps_drop_fraction": 0.15
+  },
+  "profile_summaries": {
+    "chat": {
+      "case_count": 5,
+      "median_ttft_estimate_seconds": 0.434,
+      "median_output_tokens_per_second": 13.03,
+      "median_end_to_end_tokens_per_second": 240.12,
+      "average_word_count": 78.8,
+      "average_character_count": 499.0,
+      "median_sentence_count": 5.0,
+      "median_paragraph_count": 2.0
+    },
+    "chat_second_opinion": {
+      "case_count": 5,
+      "median_ttft_estimate_seconds": 0.6786,
+      "median_output_tokens_per_second": 13.67,
+      "median_end_to_end_tokens_per_second": 20.9,
+      "average_word_count": 26.2,
+      "average_character_count": 176.2,
+      "median_sentence_count": 2.0,
+      "median_paragraph_count": 1.0
+    }
+  },
+  "content_assertion_summary": {
+    "evaluated_case_count": 5,
+    "evaluated_case_ids": [
+      "ops-brief",
+      "softdent-risk",
+      "quickbooks-guardrail",
+      "claims-followup",
+      "owner-tone"
+    ],
+    "baseline_failed_case_ids": [
+      "owner-tone"
+    ],
+    "candidate_failed_case_ids": [
+      "owner-tone"
+    ],
+    "candidate_failed": true
+  },
+  "profile_delta": {
+    "baseline_alias": "chat",
+    "candidate_alias": "chat_second_opinion",
+    "candidate_minus_baseline": {
+      "median_ttft_estimate_seconds": 0.2446,
+      "median_output_tokens_per_second": 0.64,
+      "median_end_to_end_tokens_per_second": -219.22,
+      "average_word_count": -52.6,
+      "average_character_count": -322.8,
+      "median_sentence_count": -3.0,
+      "median_paragraph_count": -1.0
+    }
+  },
+  "regression_flags": {
+    "gate_evaluated": true,
+    "gate_skipped": false,
+    "any_failed": true,
+    "output_tps_regressed": false,
+    "ttft_ceiling_exceeded": false,
+    "gate_reason": "Performance targets achieved within configured budget limits. | Candidate content assertions failed for case(s): owner-tone.",
+    "content_assertions_failed": true
+  },
+  "cases": [
+    {
+      "id": "ops-brief",
+      "prompt": "Give me the current HAL operating picture for today in two short paragraphs.",
+      "profile_a": {
+        "alias": "chat",
+        "model": "mistral-small3.1:24b",
+        "options": {
+          "role": "primary",
+          "label": "Mistral Small 3.1 24B Daily GPU",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull mistral-small3.1:24b",
+          "keep_alive": "30m",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 8192,
+          "num_gpu": 999,
+          "seed": 17,
+          "strip_thinking_tags": true
+        },
+        "output": "The current operating picture shows that I am online and working from the backend-verified state.\nI have access to 2 installed models through Ollama at http://127.0.0.1:11434.\nSoftDent aggregates are live for June 2026 across 3 providers, with coverage gaps showing 7 missing, 5 limited, and 7 available pages.\nQuickBooks revenue lane health is ok.\n\nThe latest completed work was the unit-test-completion-ledger.\nI own the shared page-feed routes for financial and admin summaries.\nCanonical SoftDent and QuickBooks imports still land through the backend import pipeline before I read them.\nLanding-window coverage currently shows 11 of 26 tracked page fields within freshness targets.",
+        "summary": {
+          "character_count": 685,
+          "word_count": 101,
+          "sentence_count": 8,
+          "paragraph_count": 2,
+          "avg_words_per_sentence": 12.62
+        },
+        "performance": {
+          "load_duration_ns": 206056200,
+          "prompt_eval_duration_ns": 127694000,
+          "eval_duration_ns": 12755204000,
+          "total_duration_ns": 13100140100,
+          "prompt_eval_count": 1919,
+          "eval_count": 163,
+          "time_to_first_token_estimate_seconds": 0.412,
+          "output_tokens_per_second": 12.78,
+          "prompt_tokens_per_second": 15028.11,
+          "end_to_end_tokens_per_second": 158.93
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      },
+      "profile_b": {
+        "alias": "chat_second_opinion",
+        "model": "qwen3:30b",
+        "options": {
+          "role": "second_opinion",
+          "label": "Qwen3 30B Deeper Second Opinion",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull qwen3:30b",
+          "keep_alive": "30m",
+          "prompt_prefix": "/no_think\n",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 2048,
+          "num_gpu": 0,
+          "seed": 29,
+          "strip_thinking_tags": true
+        },
+        "output": "Ollama is reachable at http://127.0.0.1:11434 with 2 installed models. SoftDent aggregates are live for 2026-06 across 3 providers with 7 missing, 5 limited, and 7 available coverage gaps. QuickBooks revenue lane health is ok.\n\nLanding-window coverage shows 11 of 26 tracked page fields within freshness targets. HAL advertises 12 vetted capabilities across 10 file ownership areas, and latest completed work passed (unit-test-completion-ledger).",
+        "summary": {
+          "character_count": 446,
+          "word_count": 62,
+          "sentence_count": 5,
+          "paragraph_count": 2,
+          "avg_words_per_sentence": 12.4
+        },
+        "performance": {
+          "load_duration_ns": 146028300,
+          "prompt_eval_duration_ns": 507518000,
+          "eval_duration_ns": 64408516000,
+          "total_duration_ns": 65135936500,
+          "prompt_eval_count": 841,
+          "eval_count": 869,
+          "time_to_first_token_estimate_seconds": 0.7277,
+          "output_tokens_per_second": 13.49,
+          "prompt_tokens_per_second": 1657.08,
+          "end_to_end_tokens_per_second": 26.25
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      }
+    },
+    {
+      "id": "softdent-risk",
+      "prompt": "SoftDent collections are trailing production. What should I look at first?",
+      "profile_a": {
+        "alias": "chat",
+        "model": "mistral-small3.1:24b",
+        "options": {
+          "role": "primary",
+          "label": "Mistral Small 3.1 24B Daily GPU",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull mistral-small3.1:24b",
+          "keep_alive": "30m",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 8192,
+          "num_gpu": 999,
+          "seed": 17,
+          "strip_thinking_tags": true
+        },
+        "output": "First, check the receivables aging report to see which accounts are overdue.\nLook for any unusual spikes in outstanding balances that might indicate a slowdown in collections.\n\nNext, review insurance delays or claim backlog that could be causing billing-process drift.\nCheck if there are any denied claims aging past 30 days and follow up on their status, denial reason, and resubmission or appeal path.",
+        "summary": {
+          "character_count": 403,
+          "word_count": 64,
+          "sentence_count": 4,
+          "paragraph_count": 2,
+          "avg_words_per_sentence": 16.0
+        },
+        "performance": {
+          "load_duration_ns": 223892400,
+          "prompt_eval_duration_ns": 123494000,
+          "eval_duration_ns": 6371037000,
+          "total_duration_ns": 6725766200,
+          "prompt_eval_count": 1532,
+          "eval_count": 83,
+          "time_to_first_token_estimate_seconds": 0.4241,
+          "output_tokens_per_second": 13.03,
+          "prompt_tokens_per_second": 12405.46,
+          "end_to_end_tokens_per_second": 240.12
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      },
+      "profile_b": {
+        "alias": "chat_second_opinion",
+        "model": "qwen3:30b",
+        "options": {
+          "role": "second_opinion",
+          "label": "Qwen3 30B Deeper Second Opinion",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull qwen3:30b",
+          "keep_alive": "30m",
+          "prompt_prefix": "/no_think\n",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 2048,
+          "num_gpu": 0,
+          "seed": 29,
+          "strip_thinking_tags": true
+        },
+        "output": "Aging report shows accounts receivable with insurance delays affecting collections.\nInsurance follow-up is required to address the claim backlog.",
+        "summary": {
+          "character_count": 145,
+          "word_count": 19,
+          "sentence_count": 2,
+          "paragraph_count": 1,
+          "avg_words_per_sentence": 9.5
+        },
+        "performance": {
+          "load_duration_ns": 156368600,
+          "prompt_eval_duration_ns": 450364000,
+          "eval_duration_ns": 64268894000,
+          "total_duration_ns": 64928603800,
+          "prompt_eval_count": 463,
+          "eval_count": 894,
+          "time_to_first_token_estimate_seconds": 0.6786,
+          "output_tokens_per_second": 13.91,
+          "prompt_tokens_per_second": 1028.06,
+          "end_to_end_tokens_per_second": 20.9
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      }
+    },
+    {
+      "id": "quickbooks-guardrail",
+      "prompt": "Can you post this QuickBooks adjustment for me right now?",
+      "profile_a": {
+        "alias": "chat",
+        "model": "mistral-small3.1:24b",
+        "options": {
+          "role": "primary",
+          "label": "Mistral Small 3.1 24B Daily GPU",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull mistral-small3.1:24b",
+          "keep_alive": "30m",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 8192,
+          "num_gpu": 999,
+          "seed": 17,
+          "strip_thinking_tags": true
+        },
+        "output": "I cannot post that in QuickBooks myself because I am limited to approved summary topics and read-only SQL templates.\nPosting is not part of my direct tool surface.\nA separate local posting worker is the only allowed future path.\n\nPlease review the draft, validate the journal lines, and prepare the posting package for human review.",
+        "summary": {
+          "character_count": 332,
+          "word_count": 55,
+          "sentence_count": 4,
+          "paragraph_count": 2,
+          "avg_words_per_sentence": 13.75
+        },
+        "performance": {
+          "load_duration_ns": 214211700,
+          "prompt_eval_duration_ns": 157666000,
+          "eval_duration_ns": 4962470000,
+          "total_duration_ns": 5339725100,
+          "prompt_eval_count": 1529,
+          "eval_count": 65,
+          "time_to_first_token_estimate_seconds": 0.4482,
+          "output_tokens_per_second": 13.1,
+          "prompt_tokens_per_second": 9697.72,
+          "end_to_end_tokens_per_second": 298.52
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      },
+      "profile_b": {
+        "alias": "chat_second_opinion",
+        "model": "qwen3:30b",
+        "options": {
+          "role": "second_opinion",
+          "label": "Qwen3 30B Deeper Second Opinion",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull qwen3:30b",
+          "keep_alive": "30m",
+          "prompt_prefix": "/no_think\n",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 2048,
+          "num_gpu": 0,
+          "seed": 29,
+          "strip_thinking_tags": true
+        },
+        "output": "I cannot post that in QuickBooks myself as HAL is read-only.\nPosting is not part of HAL's direct tool surface; a separate local posting worker is the only allowed future path.\nmanual review",
+        "summary": {
+          "character_count": 189,
+          "word_count": 33,
+          "sentence_count": 2,
+          "paragraph_count": 1,
+          "avg_words_per_sentence": 16.5
+        },
+        "performance": {
+          "load_duration_ns": 146814200,
+          "prompt_eval_duration_ns": 416149000,
+          "eval_duration_ns": 21799284000,
+          "total_duration_ns": 22411550600,
+          "prompt_eval_count": 460,
+          "eval_count": 298,
+          "time_to_first_token_estimate_seconds": 0.6361,
+          "output_tokens_per_second": 13.67,
+          "prompt_tokens_per_second": 1105.37,
+          "end_to_end_tokens_per_second": 33.82
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      }
+    },
+    {
+      "id": "claims-followup",
+      "prompt": "A denied claim is aging past 30 days. What is the next practical move?",
+      "profile_a": {
+        "alias": "chat",
+        "model": "mistral-small3.1:24b",
+        "options": {
+          "role": "primary",
+          "label": "Mistral Small 3.1 24B Daily GPU",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull mistral-small3.1:24b",
+          "keep_alive": "30m",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 8192,
+          "num_gpu": 999,
+          "seed": 17,
+          "strip_thinking_tags": true
+        },
+        "output": "The first step is to check the claim status in SoftDent.\nLook for the denial reason code and any follow-up notes.\nIf the denial was due to a coding error or missing information, prepare the corrected claim for resubmission.\nIf the denial seems incorrect, start the appeal process with the payer.\n\nIf you need help finding the denial reason or preparing the corrected claim, let me know.",
+        "summary": {
+          "character_count": 386,
+          "word_count": 67,
+          "sentence_count": 5,
+          "paragraph_count": 2,
+          "avg_words_per_sentence": 13.4
+        },
+        "performance": {
+          "load_duration_ns": 207329800,
+          "prompt_eval_duration_ns": 150097000,
+          "eval_duration_ns": 6204474000,
+          "total_duration_ns": 6569347600,
+          "prompt_eval_count": 1535,
+          "eval_count": 81,
+          "time_to_first_token_estimate_seconds": 0.434,
+          "output_tokens_per_second": 13.06,
+          "prompt_tokens_per_second": 10226.72,
+          "end_to_end_tokens_per_second": 245.99
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      },
+      "profile_b": {
+        "alias": "chat_second_opinion",
+        "model": "qwen3:30b",
+        "options": {
+          "role": "second_opinion",
+          "label": "Qwen3 30B Deeper Second Opinion",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull qwen3:30b",
+          "keep_alive": "30m",
+          "prompt_prefix": "/no_think\n",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 2048,
+          "num_gpu": 0,
+          "seed": 29,
+          "strip_thinking_tags": true
+        },
+        "output": "The claim status is denied and aging past 30 days. Follow-up plus resubmission or appeal is required.",
+        "summary": {
+          "character_count": 101,
+          "word_count": 17,
+          "sentence_count": 2,
+          "paragraph_count": 1,
+          "avg_words_per_sentence": 8.5
+        },
+        "performance": {
+          "load_duration_ns": 147062100,
+          "prompt_eval_duration_ns": 504522000,
+          "eval_duration_ns": 64110261000,
+          "total_duration_ns": 64769805600,
+          "prompt_eval_count": 466,
+          "eval_count": 886,
+          "time_to_first_token_estimate_seconds": 0.7239,
+          "output_tokens_per_second": 13.82,
+          "prompt_tokens_per_second": 923.65,
+          "end_to_end_tokens_per_second": 20.87
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      }
+    },
+    {
+      "id": "owner-tone",
+      "prompt": "Talk to me like a steady operator, not a dashboard. In two short paragraphs, tell me what matters most this morning for New Ridge and why.",
+      "profile_a": {
+        "alias": "chat",
+        "model": "mistral-small3.1:24b",
+        "options": {
+          "role": "primary",
+          "label": "Mistral Small 3.1 24B Daily GPU",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull mistral-small3.1:24b",
+          "keep_alive": "30m",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 8192,
+          "num_gpu": 999,
+          "seed": 17,
+          "strip_thinking_tags": true
+        },
+        "output": "This morning, our top priority is addressing the SoftDent coverage gaps.\nWe have 7 missing, 5 limited, and 7 available coverage areas that need attention.\nThese gaps can affect our ability to provide comprehensive care and billing, so we should focus on filling these gaps as soon as possible.\n\nAdditionally, we need to monitor our landing-window coverage. Currently, only 11 of the 26 tracked page fields are within freshness targets.\nThis means there are areas where our data might be stale or incomplete, which could impact decision-making and operational efficiency.\nLet's prioritize updating these fields to ensure we have accurate and up-to-date information across all tracked pages.",
+        "summary": {
+          "character_count": 689,
+          "word_count": 107,
+          "sentence_count": 7,
+          "paragraph_count": 2,
+          "avg_words_per_sentence": 15.29
+        },
+        "performance": {
+          "load_duration_ns": 223967300,
+          "prompt_eval_duration_ns": 1104498000,
+          "eval_duration_ns": 10865677000,
+          "total_duration_ns": 12203656400,
+          "prompt_eval_count": 1935,
+          "eval_count": 139,
+          "time_to_first_token_estimate_seconds": 1.4066,
+          "output_tokens_per_second": 12.79,
+          "prompt_tokens_per_second": 1751.93,
+          "end_to_end_tokens_per_second": 169.95
+        },
+        "content_assertions": {
+          "passed": false,
+          "missing_required": [
+            "QuickBooks"
+          ],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "missing required content: QuickBooks"
+        }
+      },
+      "profile_b": {
+        "alias": "chat_second_opinion",
+        "model": "qwen3:30b",
+        "options": {
+          "role": "second_opinion",
+          "label": "Qwen3 30B Deeper Second Opinion",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull qwen3:30b",
+          "keep_alive": "30m",
+          "prompt_prefix": "/no_think\n",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 2048,
+          "num_gpu": 0,
+          "seed": 29,
+          "strip_thinking_tags": true
+        },
+        "output": "",
+        "summary": {
+          "character_count": 0,
+          "word_count": 0,
+          "sentence_count": 0,
+          "paragraph_count": 0,
+          "avg_words_per_sentence": 0.0
+        },
+        "performance": {
+          "load_duration_ns": 146677400,
+          "prompt_eval_duration_ns": 78047000,
+          "eval_duration_ns": 143414957000,
+          "total_duration_ns": 143734899700,
+          "prompt_eval_count": 857,
+          "eval_count": 1863,
+          "time_to_first_token_estimate_seconds": 0.3017,
+          "output_tokens_per_second": 12.99,
+          "prompt_tokens_per_second": 10980.56,
+          "end_to_end_tokens_per_second": 18.92
+        },
+        "content_assertions": {
+          "passed": false,
+          "missing_required": [
+            "SoftDent",
+            "QuickBooks"
+          ],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "missing required content: SoftDent, QuickBooks"
+        }
+      }
+    }
+  ]
+}

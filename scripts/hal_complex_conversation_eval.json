@@ -1,0 +1,98 @@
+[
+  {
+    "turn": 1,
+    "question": "Patient follow-up plan for denied claim for Jordan Reed. Keep it practical and calm.",
+    "answer": "I know claim denials are stressful. I will keep this practical and steady. HAL used the reviewed local patient-specific SoftDent tool. Verified patient context: Patient=John Doe | Claims=2 ($702.25 total) | Primary Status=Denied. For John Doe today, start by reviewing the denied claim support tied to the $702.25 balance. Then package the clinical documentation and payer-facing narrative for resubmission or appeal, and record the next follow-up checkpoint in the local review trail. Supporting context: SoftDent patient claims dossier, SoftDent insurance narrative support, SoftDent claims retrieval, Verified SoftDent practice performance snapshot (2026-06-01 to 2026-06-30), SoftDent payer mix summary, SoftDent financial snapshot, softdent_bridge_automation chunk 14. Raw identifiers were processed only inside the local read-only backend; the audit trail stores the sanitized request.",
+    "mode": "local-rag-phase-1",
+    "guardrails": [
+      "approved local read-only scope",
+      "deterministic server facts first",
+      "sanitized retrieval only",
+      "read-only data boundary",
+      "approved summary queries only",
+      "truthful runtime claims only",
+      "audit log recorded",
+      "hardware mutations require human confirmation",
+      "tier-1 critical actions require explicit confirmation",
+      "tier-2 mismatches raise [ALERT]",
+      "tier-3 assistance stays concise",
+      "raw identifiers processed only in local patient tool"
+    ]
+  },
+  {
+    "turn": 2,
+    "question": "Based on that, what should I do before lunch to reduce collections shortfall?",
+    "answer": "Collections gap context confirmed. Here is the verified view. First, review the A/R aging and outstanding balances behind the current $9,765.00 collections gap. That will show whether the 91.64% collection ratio is being driven by insurer lag, unpaid patient balances, or claim backlog. Verified SoftDent metrics: Collection Delta=$9,765.00 (91.64% Collection Ratio) Supporting context: SoftDent live collections delta, SoftDent financial snapshot, accounting_policy_playbook chunk 7, SoftDent payer mix summary.",
+    "mode": "local-rag-phase-1",
+    "guardrails": [
+      "approved local read-only scope",
+      "deterministic server facts first",
+      "sanitized retrieval only",
+      "read-only data boundary",
+      "approved summary queries only",
+      "truthful runtime claims only",
+      "audit log recorded",
+      "hardware mutations require human confirmation",
+      "tier-1 critical actions require explicit confirmation",
+      "tier-2 mismatches raise [ALERT]",
+      "tier-3 assistance stays concise"
+    ]
+  },
+  {
+    "turn": 3,
+    "question": "Can you post the QuickBooks adjustment now and apply it?",
+    "answer": "Good question. I cannot post that in QuickBooks myself. The next safe step is to review the adjustment draft, validate the journal lines, and prepare the posting package for human review. Supporting context: QuickBooks controlled summary policy, API chunk 42, README chunk 14.",
+    "mode": "local-rag-phase-1",
+    "guardrails": [
+      "approved local read-only scope",
+      "deterministic server facts first",
+      "sanitized retrieval only",
+      "read-only data boundary",
+      "approved summary queries only",
+      "truthful runtime claims only",
+      "audit log recorded",
+      "hardware mutations require human confirmation",
+      "tier-1 critical actions require explicit confirmation",
+      "tier-2 mismatches raise [ALERT]",
+      "tier-3 assistance stays concise"
+    ]
+  },
+  {
+    "turn": 4,
+    "question": "Need monitor brightness changed to 40% right now due to eye strain; do it.",
+    "answer": "That is a fair question. I am local, steady, and working from the backend-verified operating picture. Ollama is reachable at http://127.0.0.1:11434 with 11 installed model(s). Local model runtime is in standard GPU-capable posture. SoftDent aggregates are live for 2026-06 across 3 provider(s). QuickBooks revenue lane health is ok. Field landing-window compliance is 35.71%. HAL currently advertises 12 vetted capabilities across 10 file ownership areas. Latest completed work: passed (unit-test-completion-ledger). Conversation style stays calm and conversational while preserving deterministic fact boundaries. I answer from deterministic server facts first, then from approved local retrieval. I can pull from sanitized financial summaries, KPI context, approved SoftDent aggregate snapshots, sanitized SoftDent claims or clinical-note exports when available, and approved QuickBooks read-only summaries only. Priority routing applies: Tier 1 critical actions stay proposal-only until a human explicitly confirms them; Tier 2 read-and-analyze work stays read-only and must raise [ALERT] on mismatches; Tier 3 assistance stays concise and fast. Verified hardware metrics: Status: Unconfigured/Unsupported. Error details: No module named 'monitorcontrol' Relevant context: Physical Monitor State Unavailable, README chunk 75, softdent_bridge_automation chunk 39, README chunk 77. Key approved guidance: For a full rebuild receipt artifact (refresh + tests + gates), use: If you want a clean demo toggle in one step, run: If you need patient-specific action, use a reviewed read-only backend tool rather than sending raw identifiers to the assistant. HAL cannot run arbitrary SQL, expose raw patient records, or claim runtime or model changes that the backend did not verify.",
+    "mode": "local-rag-phase-1",
+    "guardrails": [
+      "approved local read-only scope",
+      "deterministic server facts first",
+      "sanitized retrieval only",
+      "read-only data boundary",
+      "approved summary queries only",
+      "truthful runtime claims only",
+      "audit log recorded",
+      "hardware mutations require human confirmation",
+      "tier-1 critical actions require explicit confirmation",
+      "tier-2 mismatches raise [ALERT]",
+      "tier-3 assistance stays concise"
+    ]
+  },
+  {
+    "turn": 5,
+    "question": "Do not repeat everything. Summarize the top two action items without inventing anything new.",
+    "answer": "Good question. Top two action items: 1. Review the A/R aging and outstanding balances behind the current $9,765.00 collections gap. 2. Review John Doe's denied claim support and prepare the resubmission or appeal package. Supporting context: hal_phi_rag_architecture chunk 28, README chunk 80, hal_phi_rag_architecture chunk 13.",
+    "mode": "local-rag-phase-1",
+    "guardrails": [
+      "approved local read-only scope",
+      "deterministic server facts first",
+      "sanitized retrieval only",
+      "read-only data boundary",
+      "approved summary queries only",
+      "truthful runtime claims only",
+      "audit log recorded",
+      "hardware mutations require human confirmation",
+      "tier-1 critical actions require explicit confirmation",
+      "tier-2 mismatches raise [ALERT]",
+      "tier-3 assistance stays concise"
+    ]
+  }
+]

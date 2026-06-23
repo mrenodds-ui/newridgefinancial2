@@ -1,0 +1,261 @@
+{
+  "generated_at_utc": "2026-06-20T21:22:25.246824+00:00",
+  "base_url": "http://127.0.0.1:11434",
+  "dry_run": false,
+  "profile_a_alias": "chat",
+  "profile_b_alias": "chat_second_opinion",
+  "prompt_count": 2,
+  "gate_config": {
+    "max_ttft_seconds": 0.75,
+    "max_tps_drop_fraction": 0.15
+  },
+  "profile_summaries": {
+    "chat": {
+      "case_count": 2,
+      "median_ttft_estimate_seconds": 1.0038,
+      "median_output_tokens_per_second": 12.93,
+      "median_end_to_end_tokens_per_second": 202.495,
+      "average_word_count": 85.5,
+      "average_character_count": 546.0,
+      "median_sentence_count": 5.5,
+      "median_paragraph_count": 2.0
+    },
+    "chat_second_opinion": {
+      "case_count": 2,
+      "median_ttft_estimate_seconds": 5.291,
+      "median_output_tokens_per_second": 13.89,
+      "median_end_to_end_tokens_per_second": 18.565,
+      "average_word_count": 8.5,
+      "average_character_count": 62.0,
+      "median_sentence_count": 0.5,
+      "median_paragraph_count": 0.5
+    }
+  },
+  "content_assertion_summary": {
+    "evaluated_case_count": 2,
+    "evaluated_case_ids": [
+      "softdent-risk",
+      "owner-tone"
+    ],
+    "baseline_failed_case_ids": [
+      "owner-tone"
+    ],
+    "candidate_failed_case_ids": [
+      "owner-tone"
+    ],
+    "candidate_failed": true
+  },
+  "profile_delta": {
+    "baseline_alias": "chat",
+    "candidate_alias": "chat_second_opinion",
+    "candidate_minus_baseline": {
+      "median_ttft_estimate_seconds": 4.2872,
+      "median_output_tokens_per_second": 0.96,
+      "median_end_to_end_tokens_per_second": -183.93,
+      "average_word_count": -77.0,
+      "average_character_count": -484.0,
+      "median_sentence_count": -5.0,
+      "median_paragraph_count": -1.5
+    }
+  },
+  "regression_flags": {
+    "gate_evaluated": true,
+    "gate_skipped": false,
+    "any_failed": true,
+    "output_tps_regressed": false,
+    "ttft_ceiling_exceeded": true,
+    "gate_reason": "Candidate median TTFT (5.291s) exceeded absolute ceiling of 0.750s. | Candidate content assertions failed for case(s): owner-tone.",
+    "content_assertions_failed": true
+  },
+  "cases": [
+    {
+      "id": "softdent-risk",
+      "prompt": "SoftDent collections are trailing production. What should I look at first?",
+      "profile_a": {
+        "alias": "chat",
+        "model": "mistral-small3.1:24b",
+        "options": {
+          "role": "primary",
+          "label": "Mistral Small 3.1 24B Daily GPU",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull mistral-small3.1:24b",
+          "keep_alive": "30m",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 8192,
+          "num_gpu": 999,
+          "seed": 17,
+          "strip_thinking_tags": true
+        },
+        "output": "First, check the receivables aging report to see which accounts are overdue.\nLook for any unusual spikes in outstanding balances that might indicate a slowdown in collections.\n\nNext, review insurance delays or claim backlog that could be causing billing-process drift.\nCheck if there are any denied claims aging past 30 days and follow up on their status, denial reason, and resubmission or appeal path.",
+        "summary": {
+          "character_count": 403,
+          "word_count": 64,
+          "sentence_count": 4,
+          "paragraph_count": 2,
+          "avg_words_per_sentence": 16.0
+        },
+        "performance": {
+          "load_duration_ns": 369225300,
+          "prompt_eval_duration_ns": 122058000,
+          "eval_duration_ns": 6371217000,
+          "total_duration_ns": 6870379300,
+          "prompt_eval_count": 1532,
+          "eval_count": 83,
+          "time_to_first_token_estimate_seconds": 0.568,
+          "output_tokens_per_second": 13.03,
+          "prompt_tokens_per_second": 12551.41,
+          "end_to_end_tokens_per_second": 235.07
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      },
+      "profile_b": {
+        "alias": "chat_second_opinion",
+        "model": "qwen3:30b",
+        "options": {
+          "role": "second_opinion",
+          "label": "Qwen3 30B Deeper Second Opinion",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull qwen3:30b",
+          "keep_alive": "30m",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 2048,
+          "num_gpu": 0,
+          "seed": 29,
+          "strip_thinking_tags": true
+        },
+        "output": "aging report shows outstanding balances with insurance delays.\ninsurance follow-up is required to address the claim backlog.",
+        "summary": {
+          "character_count": 124,
+          "word_count": 17,
+          "sentence_count": 1,
+          "paragraph_count": 1,
+          "avg_words_per_sentence": 17.0
+        },
+        "performance": {
+          "load_duration_ns": 1683617900,
+          "prompt_eval_duration_ns": 3041328000,
+          "eval_duration_ns": 84336110000,
+          "total_duration_ns": 89125343500,
+          "prompt_eval_count": 459,
+          "eval_count": 1215,
+          "time_to_first_token_estimate_seconds": 4.7944,
+          "output_tokens_per_second": 14.41,
+          "prompt_tokens_per_second": 150.92,
+          "end_to_end_tokens_per_second": 18.78
+        },
+        "content_assertions": {
+          "passed": true,
+          "missing_required": [],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "Content assertions passed."
+        }
+      }
+    },
+    {
+      "id": "owner-tone",
+      "prompt": "Talk to me like a steady operator, not a dashboard. In two short paragraphs, tell me what matters most this morning for New Ridge and why.",
+      "profile_a": {
+        "alias": "chat",
+        "model": "mistral-small3.1:24b",
+        "options": {
+          "role": "primary",
+          "label": "Mistral Small 3.1 24B Daily GPU",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull mistral-small3.1:24b",
+          "keep_alive": "30m",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 8192,
+          "num_gpu": 999,
+          "seed": 17,
+          "strip_thinking_tags": true
+        },
+        "output": "This morning, our top priority is addressing the SoftDent coverage gaps.\nWe have 7 missing, 5 limited, and 7 available coverage areas that need attention.\nThese gaps can affect our ability to provide comprehensive care and billing, so we should focus on filling these gaps as soon as possible.\n\nAdditionally, we need to monitor our landing-window coverage. Currently, only 11 of the 26 tracked page fields are within freshness targets.\nThis means there are areas where our data might be stale or incomplete, which could impact decision-making and operational efficiency.\nLet's prioritize updating these fields to ensure we have accurate and up-to-date information across all tracked pages.",
+        "summary": {
+          "character_count": 689,
+          "word_count": 107,
+          "sentence_count": 7,
+          "paragraph_count": 2,
+          "avg_words_per_sentence": 15.29
+        },
+        "performance": {
+          "load_duration_ns": 223808300,
+          "prompt_eval_duration_ns": 1137941000,
+          "eval_duration_ns": 10833028000,
+          "total_duration_ns": 12206016500,
+          "prompt_eval_count": 1935,
+          "eval_count": 139,
+          "time_to_first_token_estimate_seconds": 1.4397,
+          "output_tokens_per_second": 12.83,
+          "prompt_tokens_per_second": 1700.44,
+          "end_to_end_tokens_per_second": 169.92
+        },
+        "content_assertions": {
+          "passed": false,
+          "missing_required": [
+            "QuickBooks"
+          ],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "missing required content: QuickBooks"
+        }
+      },
+      "profile_b": {
+        "alias": "chat_second_opinion",
+        "model": "qwen3:30b",
+        "options": {
+          "role": "second_opinion",
+          "label": "Qwen3 30B Deeper Second Opinion",
+          "gguf_quant": "Q4_K_M",
+          "ollama_pull": "ollama pull qwen3:30b",
+          "keep_alive": "30m",
+          "temperature": 0,
+          "top_p": 1,
+          "num_ctx": 2048,
+          "num_gpu": 0,
+          "seed": 29,
+          "strip_thinking_tags": true
+        },
+        "output": "",
+        "summary": {
+          "character_count": 0,
+          "word_count": 0,
+          "sentence_count": 0,
+          "paragraph_count": 0,
+          "avg_words_per_sentence": 0.0
+        },
+        "performance": {
+          "load_duration_ns": 142425600,
+          "prompt_eval_duration_ns": 5570296000,
+          "eval_duration_ns": 150148854000,
+          "total_duration_ns": 155914685200,
+          "prompt_eval_count": 853,
+          "eval_count": 2008,
+          "time_to_first_token_estimate_seconds": 5.7875,
+          "output_tokens_per_second": 13.37,
+          "prompt_tokens_per_second": 153.13,
+          "end_to_end_tokens_per_second": 18.35
+        },
+        "content_assertions": {
+          "passed": false,
+          "missing_required": [
+            "SoftDent",
+            "QuickBooks"
+          ],
+          "missing_required_any": [],
+          "matched_forbidden": [],
+          "reason": "missing required content: SoftDent, QuickBooks"
+        }
+      }
+    }
+  ]
+}

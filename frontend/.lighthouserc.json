@@ -1,0 +1,26 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "npm run preview -- --port 5001",
+      "url": [
+        "http://127.0.0.1:5001/app",
+        "http://127.0.0.1:5001/admin"
+      ],
+      "numberOfRuns": 1,
+      "settings": {
+        "chromeFlags": "--headless --no-sandbox",
+        "skipAudits": ["is-on-https", "uses-http2", "redirects-http"]
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["warn", { "minScore": 0.8 }],
+        "categories:accessibility": ["error", { "minScore": 0.9 }],
+        "categories:best-practices": ["warn", { "minScore": 0.8 }]
+      }
+    },
+    "upload": {
+      "target": "temporary-public-storage"
+    }
+  }
+}

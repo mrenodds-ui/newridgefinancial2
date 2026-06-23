@@ -1,0 +1,63 @@
+/* Dark mode and responsive styles for LandingPage */
+.landing-root.dark {
+  background: linear-gradient(135deg, #181f2a 0%, #232b3a 100%);
+  color: #f1f5f9;
+}
+.landing-root.dark .landing-card-title,
+.landing-root.dark .landing-card-desc,
+.landing-root.dark .landing-card-list,
+.landing-root.dark .landing-advice {
+  color: #f1f5f9;
+  background: #232b3a;
+}
+.landing-root.dark .landing-btn {
+  background: #334155;
+  color: #f1f5f9;
+}
+.landing-root.dark .dashboard-table th,
+.landing-root.dark .dashboard-table td {
+  background: #232b3a;
+  color: #f1f5f9;
+}
+
+@media (max-width: 700px) {
+  .landing-root {
+    padding: 8px;
+  }
+  .landing-section {
+    max-width: 100vw;
+    padding: 0 2vw;
+  }
+  .landing-card-title {
+    font-size: 20px;
+  }
+  .landing-card-desc {
+    font-size: 15px;
+  }
+  .landing-btn {
+    padding: 8px 12px;
+    font-size: 15px;
+  }
+}
+
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+.dashboard-table th,
+.dashboard-table td {
+  border: 1px solid #cbd5e1;
+  padding: 8px;
+  text-align: left;
+}
+.dashboard-table th {
+  background: #f1f5f9;
+  cursor: pointer;
+}
+.dashboard-table tr:nth-child(even) {
+  background: #f8fafc;
+}
+.landing-root.dark .dashboard-table tr:nth-child(even) {
+  background: #232b3a;
+}

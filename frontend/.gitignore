@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.vite/
+coverage/
+.pytest_cache/
+.ruff_cache/
+*.tsbuildinfo
+.tmp_*
+tmp_*
+debug-*.log
+hal-audit-task*.log
+hal_evaluate_all_output.txt
+_d_drive_project_dirs.txt
+
+
+# Local environment files — never commit real values
+.env
+.env.*
+.env.*.local
+!.env.example
+
+# Build/test artifacts
+storybook-static/
+playwright-report/
+test-results/
+lighthouse-report.html

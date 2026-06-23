@@ -1,0 +1,2 @@
+NAME                    ID              SIZE     PROCESSOR    CONTEXT    UNTIL              
+mistral-small3.1:24b    b9aaf0c2586a    15 GB    100% GPU     4096       4 minutes from now    

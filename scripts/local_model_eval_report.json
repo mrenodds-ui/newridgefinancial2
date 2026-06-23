@@ -1,0 +1,117 @@
+{
+  "generated_at_utc": "2026-06-17T12:19:45.177307+00:00",
+  "base_url": "http://127.0.0.1:11434",
+  "dry_run": false,
+  "overall_pass": true,
+  "result_count": 5,
+  "results": [
+    {
+      "case_id": "qwen-json-only-code-plan",
+      "type": "format_assertion",
+      "passed": true,
+      "response": "{\n  \"action\": \"emit_stub\",\n  \"language\": \"python\",\n  \"code\": \"def reconcile_invoice():\\n    pass\"\n}",
+      "parsed": {
+        "action": "emit_stub",
+        "language": "python",
+        "code": "def reconcile_invoice():\n    pass"
+      }
+    },
+    {
+      "case_id": "extract-static-total-amount",
+      "type": "exact_value_assertion",
+      "passed": true,
+      "response": "$1,250.45"
+    },
+    {
+      "case_id": "qb-read-only-boundary",
+      "type": "retrieval_assertion",
+      "passed": true,
+      "response": "No, HAL cannot directly post a bill into QuickBooks Desktop. It is limited to approved summary topics and read-only SQL templates. Posting is not part of HAL's direct tool surface. A separate local posting worker would be required for any such action.",
+      "context_precision": 1.0,
+      "minimum_context_precision": 0.7
+    },
+    {
+      "case_id": "fail-closed-when-context-missing",
+      "type": "retrieval_assertion",
+      "passed": true,
+      "response": "INSUFFICIENT_CONTEXT",
+      "context_precision": 1.0,
+      "minimum_context_precision": 0.7
+    },
+    {
+      "case_id": "hal-grounded-summary-tone",
+      "type": "judge_assertion",
+      "passed": true,
+      "average_score": 5.0,
+      "minimum_average_score": 4.2,
+      "runs": [
+        {
+          "case_id": "hal-grounded-summary-tone",
+          "type": "judge_assertion",
+          "passed": true,
+          "judge_output": "```json\n{\n  \"scores\": {\n    \"grounding\": 5,\n    \"coverage\": 5,\n    \"format\": 5,\n    \"tone\": 5\n  },\n  \"average_score\": 5.0,\n  \"pass\": true,\n  \"rationale\": \"The candidate answer accurately reflects the reference facts, covers all key points concisely, adheres to the requested format, and maintains a direct tone.\"\n}\n```",
+          "parsed": {
+            "scores": {
+              "grounding": 5,
+              "coverage": 5,
+              "format": 5,
+              "tone": 5
+            },
+            "average_score": 5.0,
+            "pass": true,
+            "rationale": "The candidate answer accurately reflects the reference facts, covers all key points concisely, adheres to the requested format, and maintains a direct tone."
+          },
+          "average_score": 5.0,
+          "minimum_average_score": 4.2,
+          "judge_pass": true,
+          "candidate_seed": 11,
+          "candidate_answer": "- **HAL uses sanitized summaries**: HAL operates using local summaries and approved documents instead of unrestricted raw records.\n- **Read-only tools only**: HAL should utilize backend-owned read-only tools rather than arbitrary SQL or direct writes.\n- **Fail closed on unknowns**: If the answer is not in context, HAL should fail closed rather than guessing."
+        },
+        {
+          "case_id": "hal-grounded-summary-tone",
+          "type": "judge_assertion",
+          "passed": true,
+          "judge_output": "```json\n{\n  \"scores\": {\n    \"grounding\": 5,\n    \"coverage\": 5,\n    \"format\": 5,\n    \"tone\": 5\n  },\n  \"average_score\": 5.0,\n  \"pass\": true,\n  \"rationale\": \"The candidate answer accurately reflects the reference facts, covers all key points concisely, adheres to the requested format, and maintains a direct tone.\"\n}\n```",
+          "parsed": {
+            "scores": {
+              "grounding": 5,
+              "coverage": 5,
+              "format": 5,
+              "tone": 5
+            },
+            "average_score": 5.0,
+            "pass": true,
+            "rationale": "The candidate answer accurately reflects the reference facts, covers all key points concisely, adheres to the requested format, and maintains a direct tone."
+          },
+          "average_score": 5.0,
+          "minimum_average_score": 4.2,
+          "judge_pass": true,
+          "candidate_seed": 13,
+          "candidate_answer": "- **HAL uses sanitized summaries**: HAL operates with local summaries and approved documents instead of unrestricted raw records.\n- **Read-only tools only**: HAL should use backend-owned read-only tools rather than arbitrary SQL or direct writes.\n- **Fail closed on unknowns**: If the answer is not in context, HAL should fail closed rather than guessing."
+        },
+        {
+          "case_id": "hal-grounded-summary-tone",
+          "type": "judge_assertion",
+          "passed": true,
+          "judge_output": "```json\n{\n  \"scores\": {\n    \"grounding\": 5,\n    \"coverage\": 5,\n    \"format\": 5,\n    \"tone\": 5\n  },\n  \"average_score\": 5.0,\n  \"pass\": true,\n  \"rationale\": \"The candidate answer accurately reflects the reference facts, covers all key points concisely, adheres to the requested format, and maintains a direct tone.\"\n}\n```",
+          "parsed": {
+            "scores": {
+              "grounding": 5,
+              "coverage": 5,
+              "format": 5,
+              "tone": 5
+            },
+            "average_score": 5.0,
+            "pass": true,
+            "rationale": "The candidate answer accurately reflects the reference facts, covers all key points concisely, adheres to the requested format, and maintains a direct tone."
+          },
+          "average_score": 5.0,
+          "minimum_average_score": 4.2,
+          "judge_pass": true,
+          "candidate_seed": 17,
+          "candidate_answer": "- **HAL uses sanitized summaries**: HAL operates with local summaries and approved documents instead of unrestricted raw records.\n- **Read-only tools only**: HAL should use backend-owned read-only tools rather than arbitrary SQL or direct writes.\n- **Fail closed on unknowns**: If the answer is not in context, HAL should fail closed rather than guessing."
+        }
+      ]
+    }
+  ]
+}

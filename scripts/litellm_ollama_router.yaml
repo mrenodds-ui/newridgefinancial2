@@ -1,0 +1,167 @@
+environment_variables:
+  OLLAMA_BASE_URL: http://127.0.0.1:11434
+  LITELLM_PROXY_BASE_URL: http://127.0.0.1:4000
+
+model_list:
+  - model_name: hal-chat-balanced
+    litellm_params:
+      model: ollama_chat/qwen3:30b
+      api_base: os.environ/OLLAMA_BASE_URL
+      rpm: 18
+      tpm: 90000
+    model_info:
+      family: qwen3moe
+      context_length: 262144
+      heuristic_tags:
+        - coding
+        - long_context
+        - tools
+        - faster_turnaround
+  - model_name: hal-chat-balanced
+    litellm_params:
+      model: ollama_chat/mistral-small3.1:24b
+      api_base: os.environ/OLLAMA_BASE_URL
+      rpm: 24
+      tpm: 120000
+    model_info:
+      family: mistral3
+      context_length: 131072
+      heuristic_tags:
+        - vision
+        - tools
+        - long_context
+        - faster_turnaround
+  - model_name: hal-coding
+    litellm_params:
+      model: ollama_chat/qwen3:30b
+      api_base: os.environ/OLLAMA_BASE_URL
+      rpm: 18
+      tpm: 90000
+    model_info:
+      family: qwen3moe
+      context_length: 262144
+      heuristic_tags:
+        - coding
+        - long_context
+        - tools
+        - faster_turnaround
+  - model_name: hal-coding
+    litellm_params:
+      model: ollama_chat/gpt-oss:120b
+      api_base: os.environ/OLLAMA_BASE_URL
+      rpm: 6
+      tpm: 24000
+    model_info:
+      family: gptoss
+      context_length: 131072
+      heuristic_tags:
+        - coding
+        - long_context
+        - tools
+        - large_reasoning
+  - model_name: hal-analysis
+    litellm_params:
+      model: ollama_chat/gpt-oss:120b
+      api_base: os.environ/OLLAMA_BASE_URL
+      rpm: 6
+      tpm: 24000
+    model_info:
+      family: gptoss
+      context_length: 131072
+      heuristic_tags:
+        - coding
+        - long_context
+        - tools
+        - large_reasoning
+  - model_name: hal-analysis
+    litellm_params:
+      model: ollama_chat/qwen3:30b
+      api_base: os.environ/OLLAMA_BASE_URL
+      rpm: 18
+      tpm: 90000
+    model_info:
+      family: qwen3moe
+      context_length: 262144
+      heuristic_tags:
+        - coding
+        - long_context
+        - tools
+        - faster_turnaround
+  - model_name: hal-second-opinion
+    litellm_params:
+      model: ollama_chat/gpt-oss:120b
+      api_base: os.environ/OLLAMA_BASE_URL
+      rpm: 6
+      tpm: 24000
+    model_info:
+      family: gptoss
+      context_length: 131072
+      heuristic_tags:
+        - coding
+        - long_context
+        - tools
+        - large_reasoning
+  - model_name: hal-second-opinion
+    litellm_params:
+      model: ollama_chat/qwen3:30b
+      api_base: os.environ/OLLAMA_BASE_URL
+      rpm: 18
+      tpm: 90000
+    model_info:
+      family: qwen3moe
+      context_length: 262144
+      heuristic_tags:
+        - coding
+        - long_context
+        - tools
+        - faster_turnaround
+  - model_name: hal-vision
+    litellm_params:
+      model: ollama_chat/mistral-small3.1:24b
+      api_base: os.environ/OLLAMA_BASE_URL
+      rpm: 24
+      tpm: 120000
+    model_info:
+      family: mistral3
+      context_length: 131072
+      heuristic_tags:
+        - vision
+        - tools
+        - long_context
+        - faster_turnaround
+
+litellm_settings:
+  drop_params: true
+  request_timeout: 60
+  force_ipv4: true
+  json_logs: false
+  turn_off_message_logging: true
+  redact_user_api_key_info: true
+
+router_settings:
+  routing_strategy: simple-shuffle
+  enable_pre_call_checks: true
+  model_group_alias:
+    chat: hal-chat-balanced
+    coding: hal-coding
+    analysis: hal-analysis
+    second-opinion: hal-second-opinion
+    vision: hal-vision
+  fallbacks:
+    - hal-coding:
+        - hal-analysis
+        - hal-chat-balanced
+    - hal-analysis:
+        - hal-second-opinion
+        - hal-chat-balanced
+    - hal-second-opinion:
+        - hal-analysis
+        - hal-chat-balanced
+    - hal-chat-balanced:
+        - hal-analysis
+    - hal-vision:
+        - hal-analysis
+
+general_settings:
+  infer_model_from_keys: true
+  health_check_details: true

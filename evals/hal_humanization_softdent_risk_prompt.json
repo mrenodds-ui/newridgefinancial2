@@ -1,0 +1,11 @@
+[
+  {
+    "id": "softdent-risk",
+    "prompt": "SoftDent collections are trailing production. What should I look at first?",
+    "content_assertions": {
+      "required_contains": ["insurance"],
+      "required_contains_any": [["aging report", "accounts receivable", "A/R", "outstanding balances"]],
+      "forbidden_contains": ["weather", "traffic"]
+    }
+  }
+]

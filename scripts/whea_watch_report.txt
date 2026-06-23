@@ -1,0 +1,2 @@
+﻿WHEA root-port watcher started at 2026-06-22T07:00:29
+[2026-06-22T07:00:29] OK WHEA17 root-port events in last 5 minute(s): 2 (threshold=25)

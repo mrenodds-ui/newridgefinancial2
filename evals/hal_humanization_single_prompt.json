@@ -1,0 +1,10 @@
+[
+  {
+    "id": "ops-brief",
+    "prompt": "Give me the current HAL operating picture for today in two short paragraphs.",
+    "content_assertions": {
+      "required_contains": ["Ollama", "SoftDent", "QuickBooks"],
+      "forbidden_contains": ["weather", "traffic", "bridge conditions", "school status", "power grid", "aging report", "billing team", "follow-up with the billing team", "outliers", "if you want", "let me know", "work queue", "no verified model count", "do not know the exact model statuses", "health values available locally right now"]
+    }
+  }
+]

@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from time import perf_counter
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from app.evaluation.ab_compare import run_ab_comparison, validate_ab_prompt_cases
+from app.evaluation.client import check_ollama_available, load_json_file
+
+
+def emit_progress(message: str, *, started_at: float) -> None:
+    elapsed_seconds = perf_counter() - started_at
+    print(f"[ab-eval +{elapsed_seconds:0.1f}s] {message}", file=sys.stderr, flush=True)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run side-by-side local-model A/B comparisons against Ollama.")
+    parser.add_argument("--config", default="evals/local_model_profiles.json")
+    parser.add_argument("--prompts", default="evals/hal_humanization_ab_prompts.json")
+    parser.add_argument("--output", default="scripts/local_model_ab_report.json")
+    parser.add_argument("--profile-a", default="chat")
+    parser.add_argument("--profile-b", default="chat_second_opinion")
+    parser.add_argument("--base-url", default=os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
+    parser.add_argument("--timeout-seconds", type=int, default=600)
+    parser.add_argument("--max-ttft", type=float, default=0.75)
+    parser.add_argument("--max-tps-drop", type=float, default=0.15)
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    config = load_json_file(PROJECT_ROOT / args.config)
+    prompts = validate_ab_prompt_cases(load_json_file(PROJECT_ROOT / args.prompts))
+
+    if not args.dry_run:
+        available, error_message = check_ollama_available(args.base_url, timeout_seconds=10)
+        if not available:
+            payload = {
+                "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+                "base_url": args.base_url,
+                "overall_pass": False,
+                "reason": f"ollama_unavailable: {error_message}",
+                "prompt_count": 0,
+                "cases": [],
+            }
+            output_path = (PROJECT_ROOT / args.output).resolve()
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            print(json.dumps(payload, indent=2))
+            return 1
+
+    started_at = perf_counter()
+    emit_progress(
+        f"loaded prompts={len(prompts)} profile_a={args.profile_a} profile_b={args.profile_b} dry_run={bool(args.dry_run)}",
+        started_at=started_at,
+    )
+
+    comparison = run_ab_comparison(
+        prompts=prompts,
+        config=config,
+        base_url=args.base_url,
+        timeout_seconds=args.timeout_seconds,
+        profile_a_alias=args.profile_a,
+        profile_b_alias=args.profile_b,
+        max_ttft_seconds=args.max_ttft,
+        max_tps_drop_fraction=args.max_tps_drop,
+        dry_run=bool(args.dry_run),
+        progress_callback=lambda message: emit_progress(message, started_at=started_at),
+    )
+    payload = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "base_url": args.base_url,
+        "dry_run": bool(args.dry_run),
+        **comparison,
+    }
+
+    output_path = (PROJECT_ROOT / args.output).resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(json.dumps(payload, indent=2))
+    if args.dry_run:
+        return 0
+    return 1 if payload.get("regression_flags", {}).get("any_failed") else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

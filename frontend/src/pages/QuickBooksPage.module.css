@@ -1,0 +1,37 @@
+.quickbooks-form {
+  margin-bottom: 12px;
+}
+.quickbooks-sql-input {
+  width: 400px;
+  margin-left: 8px;
+}
+.quickbooks-btn {
+  margin-left: 8px;
+}
+.quickbooks-filter-input {
+  margin-left: 8px;
+}
+.quickbooks-last-refresh {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+}
+.quickbooks-download-link {
+  display: none;
+}
+.quickbooks-error {
+  color: red;
+}
+.quickbooks-table-scroll {
+  overflow-x: auto;
+}
+.quickbooks-th-sort {
+  cursor: pointer;
+}
+.quickbooks-th-active {
+  text-decoration: underline;
+}
+.quickbooks-list {
+  margin: 0;
+  padding-left: 18px;
+}

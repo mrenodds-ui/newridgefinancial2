@@ -1,0 +1,18 @@
+
+{
+  "name": "New Ridge Family Financial Dev",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11-node",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  "postCreateCommand": "pip install -r requirements.txt -r requirements-dev.txt && cd frontend && npm ci",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python3.11"
+      }
+    }
+  }
+}

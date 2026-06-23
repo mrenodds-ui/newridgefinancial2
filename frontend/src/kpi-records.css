@@ -1,0 +1,63 @@
+.kpi-records-main {
+  display: grid;
+  gap: 16px;
+}
+.kpi-records-desc {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(29, 35, 43, 0.72);
+}
+.kpi-records-form {
+  display: grid;
+  gap: 12px;
+}
+.kpi-records-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.kpi-records-label {
+  display: grid;
+  gap: 6px;
+}
+.kpi-records-error {
+  color: #a62d24;
+  font-size: 12px;
+}
+.kpi-records-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kpi-records-submit-error {
+  margin: 0;
+  color: #a62d24;
+}
+.kpi-records-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+.kpi-records-list-item {
+  border: 1px solid rgba(95, 106, 118, 0.16);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.78);
+}
+.kpi-records-list-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.kpi-records-list-meta {
+  display: grid;
+  gap: 4px;
+}
+.kpi-records-list-updated {
+  font-size: 12px;
+  color: rgba(29, 35, 43, 0.68);
+}

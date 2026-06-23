@@ -1,0 +1,15 @@
+C:\New folder\scripts\buildSoftDentInsuranceCompanyLearningSeed.js:199:likelyActive: rows.filter((row) => row.status === 'likely_active').length,
+C:\New folder\scripts\buildSoftDentInsuranceCompanyLearningSeed.js:200:discontinued: rows.filter((row) => row.status === 'discontinued').length,
+C:\New folder\scripts\buildSoftDentInsuranceCompanyLearningSeed.js:201:placeholders: rows.filter((row) => row.status === 'placeholder').length,
+C:\New folder\scripts\halActionQueueService.js:287:const missing = rows.filter((row) => row.status === 'missing');
+C:\New folder\scripts\halActionQueueService.js:288:const limited = rows.filter((row) => row.status === 'limited');
+C:\New folder\scripts\halActionQueueService.js:295:const missingRows = sectionRows.filter((row) => row.status === 'missing');
+C:\New folder\scripts\halDoctorService.js:36:const missing = safeRows.filter((row) => row.status === 'missing');
+C:\New folder\scripts\halDoctorService.js:37:const limited = safeRows.filter((row) => row.status === 'limited');
+C:\New folder\scripts\halDoctorService.js:38:const available = safeRows.filter((row) => row.status === 'available');
+C:\New folder\scripts\internalAccountingWorkbenchService.js:245:return currencyNumber(rows.filter(predicate).reduce((total, row) => total + Number(row.amount || 0), 0));
+C:\New folder\scripts\internalAccountingWorkbenchService.js:260:return rows.filter((row) => row.status !== 'paid').reduce((totals, row) => {
+C:\New folder\scripts\quickbooksFinancialDataService.js:968:const sectionRows = rows.filter((row) => row.section === name).map((row) => ({ label: row.label, amount: row.amount }));
+C:\New folder\local_dashboard_api_server.js:2121:const missing = rows.filter((row) => row.status === 'missing');
+C:\New folder\local_dashboard_api_server.js:2122:const limited = rows.filter((row) => row.status === 'limited');
+C:\New folder\local_dashboard_api_server.js:2123:const available = rows.filter((row) => row.status === 'available');

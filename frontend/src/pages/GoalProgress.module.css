@@ -1,0 +1,7 @@
+.goal-progress-row {
+  display: flex;
+  gap: 32px;
+}
+.goal-progress-bar {
+  width: 200px;
+}

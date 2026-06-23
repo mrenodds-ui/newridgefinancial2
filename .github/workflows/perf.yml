@@ -1,0 +1,23 @@
+name: Performance Budget
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: |
+          cd frontend && npm ci
+      - name: Run Lighthouse CI
+        run: |
+          npx -p @lhci/cli lhci autorun --collect.url=http://localhost:5173 --assert.preset=lighthouse:recommended

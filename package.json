@@ -1,0 +1,41 @@
+{
+  "private": true,
+  "dependencies": {
+    "cors": "^2.8.6",
+    "csv-parser": "^3.2.1",
+    "express": "^5.2.1",
+    "node-cron": "^4.2.1",
+    "odbc": "^2.5.0",
+    "papaparse": "^5.5.3",
+    "ts-node-dev": "^2.0.0"
+  },
+  "name": "newridgefamilyfinancial",
+  "version": "1.0.0",
+  "description": "Workspace metadata for the New Ridge Family Financial backend and supported frontend app.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "contracts:generate": "npm --prefix frontend run generate:contracts",
+    "build": "npm run contracts:generate && npm run frontend:build",
+    "dev": "npm run dashboard:watch --",
+    "start": "npm run dashboard:start",
+    "start:reload": "npm run dashboard:start:reload",
+    "frontend:build": "npm --prefix frontend run build",
+    "backend:start": "node scripts/start_backend_host.cjs",
+    "backend:start:reload": "node scripts/start_backend_host.cjs --reload",
+    "dashboard:start": "npm run build && npm run backend:start",
+    "dashboard:start:reload": "npm run build && npm run backend:start:reload",
+    "dashboard:watch": "node scripts/start_dashboard_watch.cjs",
+    "test": "npm --prefix frontend run test",
+    "typecheck": "npm --prefix frontend run typecheck"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/papaparse": "^5.5.2"
+  }
+}

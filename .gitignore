@@ -1,0 +1,110 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.venv/
+.venv*/
+venv/
+env/
+
+# Node / frontend package artifacts
+node_modules/
+frontend/node_modules/
+dist/
+build/
+frontend/dist/
+frontend/build/
+.vite/
+frontend/.vite/
+*.tsbuildinfo
+
+# Test / coverage / browser reports
+coverage/
+htmlcov/
+.nyc_output/
+playwright-report/
+test-results/
+storybook-static/
+lighthouse-report.html
+
+# Logs
+*.log
+debug-*.log
+frontend-dev.log
+debug-storybook.log
+softdent_bridge_automation.log
+hal-audit-task*.log
+
+# Temp and local run artifacts
+.tmp/
+.tmp*
+tmp_*
+backend_pytest_capture*.txt
+frontend_vitest_capture*.txt
+hal_evaluate_all_output.txt
+_d_drive_project_dirs.txt
+
+# Test runtime outputs
+app/tests/.document_rag_runtime/
+
+# Root local report/export artifacts
+frontend_vitest_quickbooks_route.txt
+softdent_claims_export.csv
+softdent_clinical_notes_data.json
+softdent_dashboard_data.json
+app/data/imports/softdent/softdent_dashboard_data.csv
+test_dashboard.zip
+test_dashboard.json
+sensei_20260616_tail_markers_excerpt.txt
+
+# Generated CI / rebuild receipts
+rebuild_receipt.json
+rebuild_receipt.quick.json
+ci_gate_report.json
+ci_gate_report.quick.json
+ci_gate_report.rebuild.json
+
+# Databases and local runtime stores
+*.sqlite
+*.sqlite3
+*.db
+hal_local.sqlite3
+hal_chroma/
+
+# Frontend imported local bridge data
+frontend/public/softdent_dashboard_data_import.json
+
+# Local runtime data
+local_accounting_inbox/
+local_ai_finance/
+
+# Generated page audit bundles
+QuickBooksPage/
+SoftDentPage/
+
+# Local AI/data analysis workspaces excluded from first commit
+AI_Workspace/
+DataAnalysisExpert/
+
+# Local backup / reset folders
+_seeded_backup_*/
+_softdent_reset_*/
+.venv_broken_*/
+
+# Editor / OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+.fake

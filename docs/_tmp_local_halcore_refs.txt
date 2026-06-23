@@ -1,0 +1,6 @@
+22:const { registerHalCoreRoutes } = require('./api/server/halCoreRoutes');
+1115:async function buildHalLiveAwarenessSummary() {
+1242:const awareness = await buildHalLiveAwarenessSummary();
+1984:const awareness = await buildHalLiveAwarenessSummary();
+2349:registerHalCoreRoutes(app, {
+2356:buildHalLiveAwarenessSummary,

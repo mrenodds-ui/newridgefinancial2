@@ -1,0 +1,16 @@
+{
+  "ollama_available": true,
+  "message": null,
+  "runtime_status": {
+    "base_url": "http://127.0.0.1:11434",
+    "installed": true,
+    "running": true,
+    "api_reachable": true,
+    "installed_models": [
+      "qwen3:30b",
+      "mistral-small3.1:24b"
+    ],
+    "model_count": 2,
+    "error": null
+  }
+}

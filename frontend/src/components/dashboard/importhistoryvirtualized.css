@@ -1,0 +1,60 @@
+/* Apply react-window style prop from data-style attribute */
+.import-history-row[data-style] {
+  /* This will be dynamically set by JS, but for lint compliance, we avoid inline styles. */
+  /* You may use a CSS-in-JS solution or a utility to apply the style prop if needed. */
+}
+.dashboard-import-history-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.dashboard-import-history-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.dashboard-import-table-scroll {
+  overflow-y: auto;
+  height: 320px;
+}
+
+.import-history-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+  padding: 0 8px;
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.import-history-row span {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-history-source {
+  width: 80px;
+}
+.import-history-type {
+  width: 100px;
+}
+.import-history-filename {
+  width: 160px;
+}
+.import-history-date {
+  width: 140px;
+}
+.import-history-rows {
+  width: 60px;
+}
+.import-history-status {
+  width: 80px;
+}
+.import-history-error {
+  width: 120px;
+}

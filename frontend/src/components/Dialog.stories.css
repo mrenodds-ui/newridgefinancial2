@@ -1,0 +1,23 @@
+.dialog-story__overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog-story__panel {
+  background: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  min-width: 320px;
+}
+
+.dialog-story__actions {
+  margin-top: 16px;
+  text-align: right;
+}

@@ -1,0 +1,29 @@
+.hiddenInput {
+  display: none;
+}
+.browser-backup-card-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.browser-backup-card-p {
+  margin: 0;
+}
+
+.browser-backup-card-p-secondary {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.78;
+}
+
+.browser-backup-card-flex {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.browser-backup-card-p-tertiary {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
+}

@@ -1,0 +1,123 @@
+{
+  "ok": true,
+  "keys": [
+    "source",
+    "connected",
+    "connectionMode",
+    "lastCheckedAt",
+    "lastSyncAt",
+    "stale",
+    "dateRange",
+    "totals",
+    "trends",
+    "alerts",
+    "importReadiness",
+    "dataContract",
+    "limitations",
+    "recommendedNextStep",
+    "coverage",
+    "unavailableFields",
+    "pagesUsingQuickBooksData"
+  ],
+  "coverage": {
+    "arAging": {
+      "available": false,
+      "status": "authorization_required",
+      "reason": "No imported QuickBooks A/R aging rows are available for the selected as-of date.",
+      "recommendedNextStep": "Run a read-only QuickBooks ARAgingSummary import for the selected as-of date.",
+      "totals": null,
+      "redacted": true,
+      "rawRecordsIncluded": false,
+      "customerIdentifiersIncluded": false,
+      "invoiceIdentifiersIncluded": false
+    },
+    "invoices": {
+      "available": false,
+      "reason": "Invoices are not available from the current imported QuickBooks dataset.",
+      "recommendedNextStep": "Invoices are intentionally deferred and not needed for the current dashboard workflow. Do not implement invoice coverage unless explicitly requested later."
+    },
+    "payments": {
+      "available": false,
+      "reason": "Payment detail is not available from the current imported QuickBooks dataset.",
+      "recommendedNextStep": "Add read-only QuickBooks payment summary import for collections reconciliation."
+    },
+    "deposits": {
+      "available": false,
+      "reason": "Deposit detail is not available from the current imported QuickBooks dataset.",
+      "recommendedNextStep": "Add read-only QuickBooks deposit summary import."
+    },
+    "balanceSheet": {
+      "available": false,
+      "reason": "No imported QuickBooks Balance Sheet rows are available for the selected as-of date.",
+      "recommendedNextStep": "Run a read-only QuickBooks BalanceSheet import for the selected as-of date."
+    },
+    "profitLossDetail": {
+      "available": true,
+      "totals": {
+        "incomeTotal": 497230.31,
+        "expenseTotal": 387513.89,
+        "netIncome": 109716.42
+      },
+      "rowCount": 1
+    },
+    "expenseBreakdown": {
+      "available": true,
+      "totals": {
+        "amount": 376447.94,
+        "totalExpenses": 387513.89
+      },
+      "topCategories": [
+        {
+          "groupBy": "category",
+          "label": "Payroll / Staff",
+          "amount": 162841.39,
+          "transactionCount": 1,
+          "firstDate": "2026-06-18",
+          "lastDate": "2026-06-18",
+          "lastSyncAt": "2026-06-18T17:18:07Z",
+          "sourceCategoryCount": 1
+        },
+        {
+          "groupBy": "category",
+          "label": "Supplies",
+          "amount": 107131.64,
+          "transactionCount": 3,
+          "firstDate": "2026-06-18",
+          "lastDate": "2026-06-18",
+          "lastSyncAt": "2026-06-18T17:18:07Z",
+          "sourceCategoryCount": 3
+        },
+        {
+          "groupBy": "category",
+          "label": "Rent / Facility",
+          "amount": 69773.22,
+          "transactionCount": 4,
+          "firstDate": "2026-06-18",
+          "lastDate": "2026-06-18",
+          "lastSyncAt": "2026-06-18T17:18:07Z",
+          "sourceCategoryCount": 4
+        },
+        {
+          "groupBy": "category",
+          "label": "Lab",
+          "amount": 19310.64,
+          "transactionCount": 2,
+          "firstDate": "2026-06-18",
+          "lastDate": "2026-06-18",
+          "lastSyncAt": "2026-06-18T17:18:07Z",
+          "sourceCategoryCount": 2
+        },
+        {
+          "groupBy": "category",
+          "label": "Insurance",
+          "amount": 8097.83,
+          "transactionCount": 3,
+          "firstDate": "2026-06-18",
+          "lastDate": "2026-06-18",
+          "lastSyncAt": "2026-06-18T17:18:07Z",
+          "sourceCategoryCount": 3
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,254 @@
+{
+  "scan_window_days": 120,
+  "browser_correlated_hits": [
+    {
+      "browser_history": "C:\\Users\\mreno\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\History",
+      "download_time": "2026-06-13 21:37:32.964642",
+      "current_path": "E:\\OneDrive\\Desktop\\2001 A Space Odyssey script by Stanley Kubrick and Arthur C. Clark.html",
+      "target_path": "E:\\OneDrive\\Desktop\\2001 A Space Odyssey script by Stanley Kubrick and Arthur C. Clark.html",
+      "tab_url": "https://www.dailyscript.com/scripts/2001.html",
+      "referrer": "",
+      "total_bytes": 1
+    }
+  ],
+  "timestamp_file_hits": [
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\HAL_REPORT_CATEGORIES.md",
+      "mtime": "2026-05-11 11:51:50.826405",
+      "size": 1335,
+      "name_match": true,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\installers\\build-temp\\new_ridge_staff_coach\\warn-new_ridge_staff_coach.txt",
+      "mtime": "2026-04-08 10:49:25.635799",
+      "size": 28322,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\installers\\build-temp\\new_ridge_website_portal\\warn-new_ridge_website_portal.txt",
+      "mtime": "2026-04-08 10:48:10.063700",
+      "size": 61697,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\SoftDent_Diagnostic_20260326_075748.txt",
+      "mtime": "2026-03-26 07:57:53.801944",
+      "size": 12966,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\SoftDent_Diagnostic_20260326_075659.txt",
+      "mtime": "2026-03-26 07:57:05.565404",
+      "size": 12966,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\SoftDent_Diagnostic_20260326_075501.txt",
+      "mtime": "2026-03-26 07:55:09.830468",
+      "size": 12966,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\data\\employee_handbook.txt",
+      "mtime": "2026-03-20 06:46:41.981049",
+      "size": 151747,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\installers\\output\\server-package\\HEYGEN-WORKFLOW.md",
+      "mtime": "2026-03-19 22:53:27.292296",
+      "size": 4024,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\docs\\training\\HEYGEN-WORKFLOW.md",
+      "mtime": "2026-03-19 22:53:27.292296",
+      "size": 4024,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\installers\\output\\server-package\\STAFF-PORTAL-TRAINING-SCRIPTS.md",
+      "mtime": "2026-03-19 22:53:21.578722",
+      "size": 17436,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\docs\\training\\STAFF-PORTAL-TRAINING-SCRIPTS.md",
+      "mtime": "2026-03-19 22:53:21.578722",
+      "size": 17436,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\installers\\output\\server-package\\VIDEO-PRODUCTION-CHECKLIST.md",
+      "mtime": "2026-03-19 22:53:17.499974",
+      "size": 2960,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\docs\\training\\VIDEO-PRODUCTION-CHECKLIST.md",
+      "mtime": "2026-03-19 22:53:17.499974",
+      "size": 2960,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\insurance_portal_investigation\\investigation_report.json",
+      "mtime": "2026-03-18 12:20:25.163655",
+      "size": 25787,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\vyne_payers\\vyne_payers.json",
+      "mtime": "2026-03-18 11:07:03.005127",
+      "size": 38779,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\vyne_payers\\vyne_payers.csv",
+      "mtime": "2026-03-18 11:07:03.004122",
+      "size": 16891,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\appointment_insurance\\appointment_insurance_20260317.txt",
+      "mtime": "2026-03-17 22:07:47.691361",
+      "size": 7736,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\vyne_insurance_pull\\vyne_insurance_pull_20260317_2119.txt",
+      "mtime": "2026-03-17 21:19:45.327069",
+      "size": 7300,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_1226.txt",
+      "mtime": "2026-03-17 12:26:58.364628",
+      "size": 7264,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_debug_20260317_1158.txt",
+      "mtime": "2026-03-17 11:58:52.610833",
+      "size": 311,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_debug_20260317_1154.txt",
+      "mtime": "2026-03-17 11:54:08.112631",
+      "size": 317,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_1030.txt",
+      "mtime": "2026-03-17 10:30:03.501184",
+      "size": 7438,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_1026.txt",
+      "mtime": "2026-03-17 10:26:59.923800",
+      "size": 7438,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_1022.txt",
+      "mtime": "2026-03-17 10:22:35.828441",
+      "size": 7438,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_1015.txt",
+      "mtime": "2026-03-17 10:15:21.732164",
+      "size": 7312,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_0959.txt",
+      "mtime": "2026-03-17 09:59:47.287037",
+      "size": 7312,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_0813.txt",
+      "mtime": "2026-03-17 08:13:36.974666",
+      "size": 7303,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_0804.txt",
+      "mtime": "2026-03-17 08:04:48.600740",
+      "size": 7303,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_0803.txt",
+      "mtime": "2026-03-17 08:03:58.213812",
+      "size": 7303,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_0739.txt",
+      "mtime": "2026-03-17 07:39:04.404192",
+      "size": 7303,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_0737.txt",
+      "mtime": "2026-03-17 07:37:08.013543",
+      "size": 7303,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_0736.txt",
+      "mtime": "2026-03-17 07:36:30.406115",
+      "size": 7303,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\weave_insurance_pull\\weave_insurance_pull_20260317_0731.txt",
+      "mtime": "2026-03-17 07:31:53.796137",
+      "size": 7303,
+      "name_match": false,
+      "content_match": true
+    },
+    {
+      "path": "C:\\Users\\mreno\\Desktop\\NewRidgePortal-legacy-archive-20260418\\reports\\extension-test\\rep_test.csv",
+      "mtime": "2026-03-17 04:38:29.977815",
+      "size": 180004,
+      "name_match": false,
+      "content_match": true
+    }
+  ]
+}

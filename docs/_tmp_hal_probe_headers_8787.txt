@@ -1,0 +1,15 @@
+HTTP/1.1 502 Bad Gateway
+X-Powered-By: Express
+Vary: Origin
+Access-Control-Allow-Credentials: true
+X-Request-Id: fe6d0022-11be-4c10-8eca-f4e4251f2733
+Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate
+Pragma: no-cache
+Expires: 0
+Content-Type: application/json; charset=utf-8
+Content-Length: 539
+ETag: W/"21b-XWyc0LZm1BH3VEKNJQdpRJYWtMA"
+Date: Thu, 18 Jun 2026 18:11:39 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+

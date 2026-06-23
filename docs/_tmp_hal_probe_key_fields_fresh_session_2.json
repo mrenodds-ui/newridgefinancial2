@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "source": "dashboard-local-repair-playbook",
+  "messageType": "answer",
+  "commandId": null,
+  "detail": "HAL calls Local Ollama (mistral-small3.1:24b) directly for live local inference.",
+  "reply": "Repair Playbook: Dashboard API down. Purpose: Restore visibility into local dashboard health without exposing raw logs or secrets. Safe diagnostics: Check GET /api/health; Run registered dashboard status command; Inspect local_dashboard_api_server.js only if endpoint shape changed. Confirmation required before: restart dashboard service; change server files; stop running process. Blocked actions: print .env; dump raw logs; free-form shell; delete process state. Verify with: dashboard:status; hal:smoke. I will not invent repair steps while this playbook applies, and I will use registered command IDs or known npm scripts only."
+}

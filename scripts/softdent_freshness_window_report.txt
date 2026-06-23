@@ -1,0 +1,81 @@
+SoftDent freshness monitor start: 2026-06-17T09:38:31 WindowMinutes: 10 
+Snapshot 1 at 2026-06-17T09:38:31
+  SRC softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  DST softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  SRC softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  DST softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  SRC softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+  DST softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+
+Snapshot 2 at 2026-06-17T09:39:31
+  SRC softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  DST softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  SRC softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  DST softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  SRC softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+  DST softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+
+Snapshot 3 at 2026-06-17T09:40:31
+  SRC softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  DST softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  SRC softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  DST softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  SRC softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+  DST softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+
+Snapshot 4 at 2026-06-17T09:41:31
+  SRC softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  DST softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  SRC softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  DST softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  SRC softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+  DST softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+
+Snapshot 5 at 2026-06-17T09:42:31
+  SRC softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  DST softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  SRC softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  DST softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  SRC softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+  DST softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+
+Snapshot 6 at 2026-06-17T09:43:31
+  SRC softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  DST softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  SRC softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  DST softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  SRC softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+  DST softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+
+Snapshot 7 at 2026-06-17T09:44:31
+  SRC softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  DST softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  SRC softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  DST softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  SRC softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+  DST softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+
+Snapshot 8 at 2026-06-17T09:45:31
+  SRC softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  DST softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  SRC softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  DST softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  SRC softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+  DST softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+
+Snapshot 9 at 2026-06-17T09:46:32
+  SRC softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  DST softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  SRC softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  DST softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  SRC softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+  DST softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+
+Snapshot 10 at 2026-06-17T09:47:32
+  SRC softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  DST softdent_dashboard_data.json | LastWrite=2026-06-15T11:22:56 | Length=528
+  SRC softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  DST softdent_claims_export.csv | LastWrite=2026-06-15T11:22:56 | Length=573
+  SRC softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+  DST softdent_clinical_notes_data.json | LastWrite=2026-06-15T11:22:56 | Length=1198
+
