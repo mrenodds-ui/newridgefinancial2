@@ -1,9 +1,12 @@
 .insurance-patient-bar {
   width: 100%;
-  height: 32px;
-  border-radius: 6px;
+  height: 36px;
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(23, 48, 66, 0.08);
+  background: linear-gradient(90deg, rgba(44, 122, 134, 0.08), rgba(198, 161, 95, 0.14));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .insurance-patient-bar-svg {
@@ -13,11 +16,11 @@
 }
 
 .insurance-bar-fill {
-  fill: #78a86b;
+  fill: var(--color-success);
 }
 
 .patient-bar-fill {
-  fill: #d6b15e;
+  fill: var(--color-accent);
 }
 
 .insurance-patient-percentages {
@@ -30,14 +33,14 @@
 
 .insurance-percentage,
 .patient-percentage {
-  font-weight: 500;
-  font-size: 15px;
+  font-size: 0.96rem;
+  font-weight: 700;
 }
 
 .insurance-percentage {
-  color: #78a86b;
+  color: var(--color-success);
 }
 
 .patient-percentage {
-  color: #d6b15e;
+  color: #9b7b3b;
 }

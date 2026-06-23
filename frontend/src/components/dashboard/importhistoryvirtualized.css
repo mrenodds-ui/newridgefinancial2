@@ -1,60 +1,63 @@
-/* Apply react-window style prop from data-style attribute */
-.import-history-row[data-style] {
-  /* This will be dynamically set by JS, but for lint compliance, we avoid inline styles. */
-  /* You may use a CSS-in-JS solution or a utility to apply the style prop if needed. */
-}
 .dashboard-import-history-card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  padding: 16px;
-  margin-bottom: 24px;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
 }
 
 .dashboard-import-history-title {
-  font-weight: bold;
-  margin-bottom: 8px;
+  padding: 20px 22px 0;
 }
 
 .dashboard-import-table-scroll {
-  overflow-y: auto;
-  height: 320px;
+  max-height: 360px;
+  overflow: auto;
+  margin-top: 14px;
+  border-top: 1px solid rgba(23, 48, 66, 0.08);
 }
 
 .import-history-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(88px, 0.9fr) minmax(110px, 1fr) minmax(220px, 2.2fr) minmax(160px, 1.4fr) minmax(80px, 0.7fr) minmax(120px, 1fr) minmax(180px, 1.4fr);
+  gap: 12px;
   align-items: center;
-  border-bottom: 1px solid #eee;
-  padding: 0 8px;
-  height: 40px;
-  box-sizing: border-box;
+  min-height: 52px;
+  padding: 0 22px;
+  border-bottom: 1px solid rgba(23, 48, 66, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.import-history-row:nth-child(even) {
+  background: #f9fbfd;
+}
+
+.import-history-row:hover {
+  background: rgba(44, 122, 134, 0.06);
 }
 
 .import-history-row span {
-  display: inline-block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--color-text);
 }
 
-.import-history-source {
-  width: 80px;
-}
-.import-history-type {
-  width: 100px;
-}
-.import-history-filename {
-  width: 160px;
-}
-.import-history-date {
-  width: 140px;
-}
+.import-history-source,
+.import-history-type,
+.import-history-status,
 .import-history-rows {
-  width: 60px;
+  font-weight: 600;
 }
-.import-history-status {
-  width: 80px;
-}
+
+.import-history-date,
 .import-history-error {
-  width: 120px;
+  color: var(--color-muted);
+}
+
+@media (max-width: 1100px) {
+  .import-history-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+    padding: 14px 18px;
+    min-height: 0;
+  }
 }
