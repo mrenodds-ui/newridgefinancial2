@@ -158,6 +158,8 @@ describe("API auth gate", () => {
 
     renderApp("/app/");
 
+    expect(await screen.findByText("Verifying session...")).toBeInTheDocument();
+    expect(screen.queryByText("Connected as admin")).not.toBeInTheDocument();
     expect(await screen.findByText("Loading verified financial summary...")).toBeInTheDocument();
     expect(screen.queryByText("$2,500")).not.toBeInTheDocument();
     expect(screen.queryByText("$1,900")).not.toBeInTheDocument();
@@ -178,6 +180,8 @@ describe("API auth gate", () => {
 
     renderApp("/app/");
 
+    expect(await screen.findByText("Session verification unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Connected as admin")).not.toBeInTheDocument();
     expect(
       await screen.findByText(
         "Sign in from the dashboard banner to load the verified financial summary. Import-preview charts and CSV inspection remain available below.",

@@ -12,12 +12,34 @@ import "../theme.css";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
-  const { authenticatedUsername, isAuthenticated } = useAuthSession();
+  const { authenticatedUsername, error, isSessionAuthenticated, isSessionVerified, session, sessionStatusCode } = useAuthSession();
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  const hasCachedIdentity = Boolean(authenticatedUsername);
+  const hasVerifiedSession = isSessionAuthenticated;
+  const isVerificationPending = hasCachedIdentity && !isSessionVerified && !error;
+  const hasVerificationError = hasCachedIdentity && !isSessionVerified && Boolean(error) && sessionStatusCode !== 401;
+  const bannerClassName = hasVerifiedSession ? "api-auth-banner api-auth-banner--connected" : "api-auth-banner";
+  const bannerTitle = hasVerifiedSession
+    ? `Connected as ${session?.username}`
+    : isVerificationPending
+      ? "Verifying session..."
+      : hasVerificationError
+        ? "Session verification unavailable"
+        : "Sign in required";
+  const bannerMessage = hasVerifiedSession
+    ? "Your dashboard session is managed by the backend and stays active until you sign out or it expires."
+    : isVerificationPending
+      ? "Checking the current backend-managed dashboard session before showing connected account details."
+      : hasVerificationError
+        ? "The current dashboard session could not be verified right now. Reconnect or try again after the session check recovers."
+        : "Sign in with your dashboard account to load live HAL, SoftDent, QuickBooks, and document-library data.";
+  const showSignOutButton = hasVerifiedSession || hasCachedIdentity;
+  const primaryActionLabel = hasVerifiedSession || hasCachedIdentity ? "Switch account" : "Sign in";
 
   useEffect(() => {
     return subscribeToApiAuthRequired(({ invalidCredentials }) => {
@@ -69,14 +91,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
       <main className="app-main">
         <div className="page-content">
-          <section className={isAuthenticated ? "api-auth-banner api-auth-banner--connected" : "api-auth-banner"}>
+          <section className={bannerClassName}>
             <div>
-              <strong>{isAuthenticated ? `Connected as ${authenticatedUsername}` : "Sign in required"}</strong>
-              <div>
-                {isAuthenticated
-                  ? "Your dashboard session is managed by the backend and stays active until you sign out or it expires."
-                  : "Sign in with your dashboard account to load live HAL, SoftDent, QuickBooks, and document-library data."}
-              </div>
+              <strong>{bannerTitle}</strong>
+              <div>{bannerMessage}</div>
             </div>
             <div className="hal-form__actions">
               <button
@@ -86,9 +104,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   setAuthError(null);
                 }}
               >
-                {isAuthenticated ? "Switch account" : "Sign in"}
+                {primaryActionLabel}
               </button>
-              {isAuthenticated ? (
+              {showSignOutButton ? (
                 <button type="button" onClick={() => void handleSignOut()}>
                   Sign out
                 </button>
