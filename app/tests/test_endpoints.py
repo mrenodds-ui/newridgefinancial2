@@ -616,6 +616,123 @@ def test_admin_only_routes_reject_viewer(method: str, path: str):
     assert response.status_code == 403
 
 
+def test_reports_pull_status_allows_admin_role(monkeypatch):
+    expected_payload = {
+        "daily_refresh_enabled": True,
+        "last_refresh_date": "2026-06-23",
+        "status": {},
+    }
+
+    monkeypatch.setattr(routes_module, "get_pull_status_payload", lambda app: expected_payload)
+
+    response = client.get("/api/reports/pull-status", auth=basic_auth())
+
+    assert response.status_code == 200
+    assert response.json() == expected_payload
+
+
+@pytest.mark.parametrize("auth", [viewer_auth(), operator_auth()], ids=["viewer", "operator"])
+def test_reports_pull_status_rejects_authenticated_user_without_admin_role(auth, monkeypatch):
+    monkeypatch.setattr(
+        routes_module,
+        "get_pull_status_payload",
+        lambda app: pytest.fail("pull-status payload should not be resolved for unauthorized users"),
+    )
+
+    response = client.get("/api/reports/pull-status", auth=auth)
+
+    assert response.status_code == 403
+
+
+def test_reports_pull_status_blocks_unauthenticated_request(monkeypatch):
+    monkeypatch.setattr(
+        routes_module,
+        "get_pull_status_payload",
+        lambda app: pytest.fail("pull-status payload should not be resolved for unauthenticated users"),
+    )
+
+    response = client.get("/api/reports/pull-status")
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Basic"
+
+
+@pytest.mark.parametrize(
+    ("path", "auth"),
+    [
+        ("/softdent", viewer_auth()),
+        ("/quickbooks", viewer_auth()),
+        ("/accounts-receivable", viewer_auth()),
+        ("/trends", viewer_auth()),
+        ("/ebitda", viewer_auth()),
+        ("/claims", basic_auth()),
+        ("/reconciliation", operator_auth()),
+        ("/admin", basic_auth()),
+        ("/reports", basic_auth()),
+        ("/api/admin", basic_auth()),
+        ("/api/reconciliation", operator_auth()),
+        ("/api/reports/practice-central-delta", basic_auth()),
+    ],
+    ids=[
+        "softdent-dashboard-read",
+        "quickbooks-dashboard-read",
+        "accounts-receivable-dashboard-read",
+        "trends-dashboard-read",
+        "ebitda-dashboard-read",
+        "claims-dashboard-and-operator",
+        "reconciliation-operator",
+        "admin-page-admin",
+        "reports-page-admin",
+        "api-admin-admin",
+        "api-reconciliation-operator",
+        "practice-central-delta-admin",
+    ],
+)
+def test_legacy_placeholder_routes_keep_not_implemented_for_allowed_roles(path: str, auth: tuple[str, str]):
+    response = client.get(path, auth=auth)
+
+    assert response.status_code == 501
+
+
+@pytest.mark.parametrize(
+    ("path", "auth"),
+    [
+        ("/softdent", operator_auth()),
+        ("/quickbooks", operator_auth()),
+        ("/accounts-receivable", operator_auth()),
+        ("/trends", operator_auth()),
+        ("/ebitda", operator_auth()),
+        ("/claims", viewer_auth()),
+        ("/claims", operator_auth()),
+        ("/reconciliation", viewer_auth()),
+        ("/admin", viewer_auth()),
+        ("/reports", viewer_auth()),
+        ("/api/admin", viewer_auth()),
+        ("/api/reconciliation", viewer_auth()),
+        ("/api/reports/practice-central-delta", viewer_auth()),
+    ],
+    ids=[
+        "softdent-operator-without-dashboard-read",
+        "quickbooks-operator-without-dashboard-read",
+        "accounts-receivable-operator-without-dashboard-read",
+        "trends-operator-without-dashboard-read",
+        "ebitda-operator-without-dashboard-read",
+        "claims-viewer-without-operator",
+        "claims-operator-without-dashboard-read",
+        "reconciliation-viewer-without-operator",
+        "admin-page-viewer",
+        "reports-page-viewer",
+        "api-admin-viewer",
+        "api-reconciliation-viewer",
+        "practice-central-delta-viewer",
+    ],
+)
+def test_legacy_placeholder_routes_reject_low_privilege_authenticated_users(path: str, auth: tuple[str, str]):
+    response = client.get(path, auth=auth)
+
+    assert response.status_code == 403
+
+
 def test_hal_page_summary_allows_dashboard_read_role(monkeypatch):
     monkeypatch.setattr(
         routes_module,

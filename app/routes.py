@@ -1199,42 +1199,42 @@ def hal9000_admin_summary(user: AuthenticatedUser = Depends(require_roles("admin
 
 @router.get("/api/softdent", response_model=MessageResponse, include_in_schema=False)
 @router.get("/softdent", response_model=MessageResponse)
-def softdent_page(user: AuthenticatedUser = Depends(authenticate)):
+def softdent_page(user: AuthenticatedUser = Depends(require_roles("dashboard:read"))):
     del user
     _raise_not_implemented_surface("SoftDent page")
 
 @router.get("/api/quickbooks", response_model=MessageResponse, include_in_schema=False)
 @router.get("/quickbooks", response_model=MessageResponse)
-def quickbooks_page(user: AuthenticatedUser = Depends(authenticate)):
+def quickbooks_page(user: AuthenticatedUser = Depends(require_roles("dashboard:read"))):
     del user
     _raise_not_implemented_surface("QuickBooks page")
 
 @router.get("/api/accounts-receivable", response_model=MessageResponse, include_in_schema=False)
 @router.get("/accounts-receivable", response_model=MessageResponse)
-def ar_page(user: AuthenticatedUser = Depends(authenticate)):
+def ar_page(user: AuthenticatedUser = Depends(require_roles("dashboard:read"))):
     del user
     _raise_not_implemented_surface("Accounts Receivable page")
 
 @router.get("/reconciliation", response_model=MessageResponse)
-def reconciliation_page(user: AuthenticatedUser = Depends(authenticate)):
+def reconciliation_page(user: AuthenticatedUser = Depends(require_roles("hal:operator"))):
     del user
     _raise_not_implemented_surface("Reconciliation page")
 
 @router.get("/api/trends", response_model=MessageResponse, include_in_schema=False)
 @router.get("/trends", response_model=MessageResponse)
-def trends_page(user: AuthenticatedUser = Depends(authenticate)):
+def trends_page(user: AuthenticatedUser = Depends(require_roles("dashboard:read"))):
     del user
     _raise_not_implemented_surface("Trends page")
 
 @router.get("/api/ebitda", response_model=MessageResponse, include_in_schema=False)
 @router.get("/ebitda", response_model=MessageResponse)
-def ebitda_page(user: AuthenticatedUser = Depends(authenticate)):
+def ebitda_page(user: AuthenticatedUser = Depends(require_roles("dashboard:read"))):
     del user
     _raise_not_implemented_surface("EBITDA page")
 
 @router.get("/api/claims", response_model=MessageResponse, include_in_schema=False)
 @router.get("/claims", response_model=MessageResponse)
-def claims_page(user: AuthenticatedUser = Depends(authenticate)):
+def claims_page(user: AuthenticatedUser = Depends(require_roles("hal:operator", "dashboard:read"))):
     del user
     _raise_not_implemented_surface("Claims page")
 
@@ -1250,13 +1250,13 @@ def hal9000_page(request: Request, user: AuthenticatedUser = Depends(require_rol
     })
 
 @router.get("/admin", response_model=MessageResponse)
-def admin_page(user: AuthenticatedUser = Depends(authenticate)):
+def admin_page(user: AuthenticatedUser = Depends(require_roles("admin"))):
     del user
     _raise_not_implemented_surface("Admin page")
 
 @router.get("/api/reports", response_model=MessageResponse, include_in_schema=False)
 @router.get("/reports", response_model=MessageResponse)
-def reports_page(user: AuthenticatedUser = Depends(authenticate)):
+def reports_page(user: AuthenticatedUser = Depends(require_roles("admin"))):
     del user
     _raise_not_implemented_surface("Reports page")
 
@@ -1266,12 +1266,12 @@ def api_health(user: AuthenticatedUser = Depends(authenticate)):
     return {"status": "ok"}
 
 @router.get("/api/admin", response_model=MessageResponse)
-def api_admin(user: AuthenticatedUser = Depends(authenticate)):
+def api_admin(user: AuthenticatedUser = Depends(require_roles("admin"))):
     del user
     _raise_not_implemented_surface("Admin API")
 
 @router.get("/api/reconciliation", response_model=MessageResponse)
-def api_reconciliation(user: AuthenticatedUser = Depends(authenticate)):
+def api_reconciliation(user: AuthenticatedUser = Depends(require_roles("hal:operator"))):
     del user
     _raise_not_implemented_surface("Reconciliation API")
 
@@ -1442,12 +1442,12 @@ def api_hal9000_audits(limit: int = Query(10, ge=1, le=100), user: Authenticated
     return list_hal_audit_events(limit=limit)
 
 @router.get("/api/reports/pull-status", response_model=ReportPullStatusResponse)
-def api_reports_pull_status(request: Request, user: AuthenticatedUser = Depends(authenticate)):
+def api_reports_pull_status(request: Request, user: AuthenticatedUser = Depends(require_roles("admin"))):
     del user
     return get_pull_status_payload(request.app)
 
 @router.get("/api/reports/practice-central-delta", response_model=DeltaResponse)
-def api_reports_practice_central_delta(user: AuthenticatedUser = Depends(authenticate)):
+def api_reports_practice_central_delta(user: AuthenticatedUser = Depends(require_roles("admin"))):
     del user
     _raise_not_implemented_surface("Practice Central delta report")
 
