@@ -184,4 +184,21 @@ describe("ImportPanel QuickBooks routing", () => {
     expect(screen.queryByText(/Live claims aggregate snapshot:/i)).not.toBeInTheDocument();
     expect(fetchFinancialSummary).not.toHaveBeenCalled();
   });
+
+  it("shows neutral session verification failure copy without live import coverage data", async () => {
+    setApiBasicAuthCredentials("admin", "password");
+    vi.mocked(fetchAuthSession).mockRejectedValue(Object.assign(new Error("session backend unavailable"), { status: 500 }));
+    vi.mocked(fetchFinancialSummary).mockResolvedValue(buildFinancialSummary());
+
+    renderImportPanel();
+
+    expect(await screen.findByText("The dashboard session could not be verified right now.")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Sign in from the dashboard banner to load live HAL source status, claims aggregate snapshot, and SoftDent coverage details\./i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("import-history")).toHaveTextContent("0");
+    expect(screen.queryByText(/Live claims aggregate snapshot:/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("softdent-coverage-panel")).not.toBeInTheDocument();
+    expect(fetchFinancialSummary).not.toHaveBeenCalled();
+  });
 });

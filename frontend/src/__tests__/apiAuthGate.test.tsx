@@ -182,11 +182,12 @@ describe("API auth gate", () => {
 
     expect(await screen.findByText("Session verification unavailable")).toBeInTheDocument();
     expect(screen.queryByText("Connected as admin")).not.toBeInTheDocument();
+    expect(await screen.findByText("The dashboard session could not be verified right now.")).toBeInTheDocument();
     expect(
-      await screen.findByText(
+      screen.queryByText(
         "Sign in from the dashboard banner to load the verified financial summary. Import-preview charts and CSV inspection remain available below.",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("$2,500")).not.toBeInTheDocument();
     expect(screen.queryByText("$1,900")).not.toBeInTheDocument();
     expect(financialSummaryRequestCount).toBe(0);

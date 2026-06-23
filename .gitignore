@@ -50,6 +50,7 @@ hal-audit-task*.log
 .tmp/
 .tmp*
 tmp_*
+docs/_tmp_*
 backend_pytest_capture*.txt
 frontend_vitest_capture*.txt
 hal_evaluate_all_output.txt

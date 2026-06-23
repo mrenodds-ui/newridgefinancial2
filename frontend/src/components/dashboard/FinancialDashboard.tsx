@@ -75,7 +75,7 @@ function ChartUnavailableCard({ title, message }: { title: string; message: stri
 
 function FinancialDashboard() {
   const { dashboardData } = useDashboardData();
-  const { isLoading: isAuthSessionLoading, isSessionVerified } = useAuthSession();
+  const { error: authSessionError, isAuthenticated, isLoading: isAuthSessionLoading, isSessionVerified, sessionStatusCode } = useAuthSession();
   const financialSummaryQuery = useQuery({
     queryKey: ["financial-summary"],
     queryFn: fetchFinancialSummary,
@@ -104,15 +104,22 @@ function FinancialDashboard() {
   const hasMonthlyExpenseTrend = monthlyExpenseTrend.length > 0;
   const hasNetIncomeTrendData = netIncomeTrendData.length > 0;
   const arOver90AlertMessage = useMemo(() => buildArOver90AlertMessage(summary), [summary]);
+  const hasSessionVerificationError = isAuthenticated && !isSessionVerified && Boolean(authSessionError) && sessionStatusCode !== 401;
   const trendDataUnavailableMessage = isSessionVerified
     ? "Verified SoftDent production and collections trends are not available from the current backend summary yet."
-    : "Sign in from the dashboard banner to load verified SoftDent trend data.";
+    : hasSessionVerificationError
+      ? "The dashboard session could not be verified right now."
+      : "Sign in from the dashboard banner to load verified SoftDent trend data.";
   const expenseDataUnavailableMessage = isSessionVerified
     ? "Verified QuickBooks expense data is not available from the current backend summary yet."
-    : "Sign in from the dashboard banner to load verified QuickBooks expense and net-income charts.";
+    : hasSessionVerificationError
+      ? "The dashboard session could not be verified right now."
+      : "Sign in from the dashboard banner to load verified QuickBooks expense and net-income charts.";
   const summaryUnavailableMessage = isSessionVerified
     ? "Verified financial summary data is unavailable right now. Load the backend summary first, then return to the dashboard for live KPI cards and charts."
-    : "Sign in from the dashboard banner to load the verified financial summary. Import-preview charts and CSV inspection remain available below.";
+    : hasSessionVerificationError
+      ? "The dashboard session could not be verified right now."
+      : "Sign in from the dashboard banner to load the verified financial summary. Import-preview charts and CSV inspection remain available below.";
 
   if (isAuthSessionLoading && !hasImportPreviewData && !showMockCharts) {
     return (

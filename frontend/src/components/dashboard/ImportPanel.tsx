@@ -155,6 +155,7 @@ export default function ImportPanel() {
     isSessionVerified,
     isRoleKnown,
     error: authSessionError,
+    sessionStatusCode,
   } = useAuthSession();
   const [history, setHistory] = useState<ImportRecord[]>([]);
   const [dragActive, setDragActive] = useState(false);
@@ -186,9 +187,12 @@ export default function ImportPanel() {
   const previewColumns = previewData ? Object.keys(previewData[0] ?? {}) : [];
   const importsRequireAdmin = isAuthenticated && isRoleKnown && !isAuthSessionLoading && !isAdmin;
   const importControlsLocked = isAuthenticated && (!isRoleKnown || isAuthSessionLoading || !isAdmin);
+  const hasSessionVerificationError = isAuthenticated && isAuthSessionError && sessionStatusCode !== 401;
   const liveCoverageMessage = isAuthSessionLoading
     ? "Verifying the current dashboard session before loading live HAL source status and coverage details."
-    : "Sign in from the dashboard banner to load live HAL source status, claims aggregate snapshot, and SoftDent coverage details.";
+    : hasSessionVerificationError
+      ? "The dashboard session could not be verified right now."
+      : "Sign in from the dashboard banner to load live HAL source status, claims aggregate snapshot, and SoftDent coverage details.";
 
   async function invalidateHalViews() {
     await Promise.all([
