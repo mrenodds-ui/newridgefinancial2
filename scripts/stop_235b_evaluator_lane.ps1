@@ -71,13 +71,13 @@ $evalHost = "${HostName}:$Port"
 $env:OLLAMA_HOST = $evalHost
 
 Write-Host 'Stopping qwen3:235b on evaluator lane...'
+Stop-ListenerOnPort -ListenPort $Port
+
 if ($PSCmdlet.ShouldProcess('qwen3:235b', 'ollama stop')) {
     if (Test-OllamaLane $evalHost) {
         ollama stop qwen3:235b 2>$null | Out-Null
     }
 }
-
-Stop-ListenerOnPort -ListenPort $Port
 
 if (-not $WhatIfPreference) {
     Start-Sleep -Seconds 2
