@@ -13,6 +13,8 @@ if (-not $ModelPath) { $ModelPath = $env:AI_BACKEND_MODEL_PATH }
 
 Write-Host 'Local-only: keep weights under models/ or .local_models/ (gitignored). Never commit GGUF or checkpoint files.'
 Write-Host 'VRAM: backend 30B Q4_K_S - prefer CPU/RAM or partial offload on :11435 to avoid contending with the 24B frontend lane.'
+Write-Host 'This script runs in the foreground. Keep this terminal open; stopping it shuts down the backend lane on this port.'
+Write-Host 'Health check: curl http://127.0.0.1:11435/v1/models'
 
 if ($runtime -eq 'ollama') {
     if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {

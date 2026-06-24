@@ -91,6 +91,18 @@ Outputs are written to `.local_models/` by default (gitignored, local-only — d
 
 Both lanes must be running for backend tasks (journal AI parser, coder profile, LiteLLM backend aliases). HAL `/api/hal9000/status` and `/control/runtime` report frontend and backend lane health separately.
 
+`run_frontend_model.ps1` and `run_backend_model.ps1` are **long-running foreground processes**. They call `ollama serve` (or `llama-server`) and block until you stop them.
+
+1. **Keep the terminal open** while you need that lane. Closing the window or stopping the PowerShell task takes the lane down.
+2. **Stopping the backend script stops `:11435`.** Stopping the frontend script stops `:11434` (when it is the process bound to that port).
+3. For continuous use, run each lane in a **dedicated terminal**, or wrap the script in a Windows service, scheduled task, or process manager (NSSM, pm2, etc.).
+4. Check lane health:
+
+```powershell
+curl http://127.0.0.1:11434/v1/models
+curl http://127.0.0.1:11435/v1/models
+```
+
 ### Ollama (recommended)
 
 Terminal 1 — frontend 24B:
@@ -132,6 +144,8 @@ uvicorn app.main:app --reload
 ## Manual smoke test
 
 ```powershell
+curl http://127.0.0.1:11434/v1/models
+curl http://127.0.0.1:11435/v1/models
 curl http://127.0.0.1:11434/api/tags
 curl http://127.0.0.1:11435/api/tags
 ```
