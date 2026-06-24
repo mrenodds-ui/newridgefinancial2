@@ -824,11 +824,18 @@ export const halReviewActionSchema = z.object({
   confirmation_message: z.string().default(""),
 });
 
+export const defaultHalVoiceProfile = {
+  lane: "primary",
+  label: "Primary response",
+  tone: "direct and grounded",
+  style_notes: [] as string[],
+};
+
 const halResponseVoiceProfileSchema = z.object({
-  lane: z.string().default("primary"),
-  label: z.string().default("Primary response"),
-  tone: z.string().default("direct and grounded"),
-  style_notes: z.array(z.string()).default([]),
+  lane: z.string().default(defaultHalVoiceProfile.lane),
+  label: z.string().default(defaultHalVoiceProfile.label),
+  tone: z.string().default(defaultHalVoiceProfile.tone),
+  style_notes: z.array(z.string()).default(defaultHalVoiceProfile.style_notes),
 });
 
 const halGovernanceNoteSchema = z.object({
@@ -846,7 +853,7 @@ export const halAskResponseSchema = z.object({
   audit_id: z.string().default(""),
   access_policy: halAccessPolicySchema,
   review_actions: z.array(halReviewActionSchema).default([]),
-  voice_profile: halResponseVoiceProfileSchema,
+  voice_profile: halResponseVoiceProfileSchema.default(defaultHalVoiceProfile),
   governance_notes: z.array(halGovernanceNoteSchema).default([]),
 });
 
@@ -936,7 +943,7 @@ export const halInsuranceNarrativeSchema = z.object({
   guardrails: z.array(z.string()).default([]),
   audit_id: z.string().default(""),
   access_policy: halAccessPolicySchema,
-  voice_profile: halResponseVoiceProfileSchema,
+  voice_profile: halResponseVoiceProfileSchema.default(defaultHalVoiceProfile),
   governance_notes: z.array(halGovernanceNoteSchema).default([]),
 });
 
@@ -950,7 +957,7 @@ export const halPatientDossierSchema = z.object({
   guardrails: z.array(z.string()).default([]),
   audit_id: z.string().default(""),
   access_policy: halAccessPolicySchema,
-  voice_profile: halResponseVoiceProfileSchema,
+  voice_profile: halResponseVoiceProfileSchema.default(defaultHalVoiceProfile),
   governance_notes: z.array(halGovernanceNoteSchema).default([]),
 });
 
@@ -1013,7 +1020,7 @@ export const accountingPolicyAnswerResponseSchema = z.object({
   review_required: z.boolean().default(true),
   audit_id: z.string().default(""),
   access_policy: halAccessPolicySchema,
-  voice_profile: halResponseVoiceProfileSchema,
+  voice_profile: halResponseVoiceProfileSchema.default(defaultHalVoiceProfile),
   governance_notes: z.array(halGovernanceNoteSchema).default([]),
 });
 

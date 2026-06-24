@@ -1558,7 +1558,7 @@ export const handlers = [
     };
     return HttpResponse.json({
       mode: "local-rag-phase-1",
-      answer: `For this request, HAL found relevant guidance from hal_phi_rag_architecture chunk 24, API chunk 1. Treat this as draft guidance under ${payload.accounting_standard || "internal reviewed guidance"}. A human reviewer should confirm the final accounting treatment before anything reaches the ledger.`,
+      answer: `For this request, HAL found relevant guidance from approved local policy sources. Treat this as draft guidance under ${payload.accounting_standard || "internal reviewed guidance"}. A human reviewer should confirm the final accounting treatment before anything reaches the ledger.`,
       accounting_standard: payload.accounting_standard || null,
       citations: [
         {
@@ -1596,7 +1596,7 @@ export const handlers = [
         },
         {
           label: "Approved sources",
-          detail: "This answer was grounded in hal_phi_rag_architecture chunk 24, API chunk 1.",
+          detail: "This answer was grounded in approved local citations.",
         },
       ],
     });

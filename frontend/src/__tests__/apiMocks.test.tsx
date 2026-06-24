@@ -18,12 +18,36 @@ import {
   fetchHalStatus,
   fetchHealth,
 } from "../api/client";
-import { accountingPostingQueueEntrySchema } from "../api/schemas";
+import { accountingPostingQueueEntrySchema, defaultHalVoiceProfile } from "../api/schemas";
 import { server } from "../mocks/server";
 import { queryClient } from "../queryClient";
 import { DRAFT_STATUS_DRAFT_ONLY } from "../utils/journalDraftStatus";
 import { ENQUEUE_MODE_AUTO_VALIDATED_AI } from "../utils/postingQueueLineage";
 import { POSTING_QUEUE_STATUS_PENDING_REVIEW } from "../utils/postingQueueStatus";
+
+function buildHalAskMockResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    mode: "local-rag-phase-1",
+    answer: "HAL handled: example",
+    sanitized_question: "",
+    sanitization_findings: [],
+    retrieved_context: [],
+    guardrails: ["approved local read-only scope"],
+    audit_id: "hal-ask-mock-1",
+    access_policy: {
+      mode: "local-rag-phase-1",
+      auth_requirement: "auth",
+      network_boundary: "local",
+      audited: true,
+      allowed_sources: [],
+      disallowed_actions: [],
+    },
+    review_actions: [],
+    voice_profile: defaultHalVoiceProfile,
+    governance_notes: [],
+    ...overrides,
+  };
+}
 
 function renderApp(pathname: string): void {
   cleanup();
@@ -272,24 +296,13 @@ describe("api mocks", () => {
         };
         expect(payload.question).toBe("What is the latest daily gross production?");
         expect(payload.summary?.latestDailyKpi?.gross_production).toBe(7759);
-        return HttpResponse.json({
-          mode: "local-rag-phase-1",
-          answer: "Latest daily gross production is $7,759.",
-          sanitized_question: payload.question || "",
-          sanitization_findings: [],
-          retrieved_context: [],
-          guardrails: ["approved local read-only scope"],
-          audit_id: "hal-ask-summary-1",
-          access_policy: {
-            mode: "local-rag-phase-1",
-            auth_requirement: "auth",
-            network_boundary: "local",
-            audited: true,
-            allowed_sources: [],
-            disallowed_actions: [],
-          },
-          review_actions: [],
-        });
+        return HttpResponse.json(
+          buildHalAskMockResponse({
+            answer: "Latest daily gross production is $7,759.",
+            sanitized_question: payload.question || "",
+            audit_id: "hal-ask-summary-1",
+          }),
+        );
       }),
     );
 
@@ -311,24 +324,21 @@ describe("api mocks", () => {
         };
         expect(payload.question).toBe("Give me a deeper second opinion on the latest daily gross production.");
         expect(payload.summary?.latestDailyKpi?.gross_production).toBe(7759);
-        return HttpResponse.json({
-          mode: "local-rag-phase-1:second-opinion",
-          answer: "HAL second-opinion review via qwen3:30b: collections are not present in the verified context.",
-          sanitized_question: payload.question || "",
-          sanitization_findings: [],
-          retrieved_context: [],
-          guardrails: ["approved local read-only scope", "explicit second-opinion lane: qwen3:30b"],
-          audit_id: "hal-ask-second-opinion-1",
-          access_policy: {
-            mode: "local-rag-phase-1",
-            auth_requirement: "auth",
-            network_boundary: "local",
-            audited: true,
-            allowed_sources: [],
-            disallowed_actions: [],
-          },
-          review_actions: [],
-        });
+        return HttpResponse.json(
+          buildHalAskMockResponse({
+            mode: "local-rag-phase-1:second-opinion",
+            answer: "HAL second-opinion review via qwen3:30b: collections are not present in the verified context.",
+            sanitized_question: payload.question || "",
+            guardrails: ["approved local read-only scope", "explicit second-opinion lane: qwen3:30b"],
+            audit_id: "hal-ask-second-opinion-1",
+            voice_profile: {
+              lane: "second_opinion",
+              label: "Second opinion",
+              tone: "slower and more evaluative",
+              style_notes: [],
+            },
+          }),
+        );
       }),
     );
 
@@ -354,24 +364,13 @@ describe("api mocks", () => {
         await new Promise<void>((resolve) => {
           resolveRequest = () => resolve();
         });
-        return HttpResponse.json({
-          mode: "local-rag-phase-1",
-          answer: `HAL handled: ${payload.question || ""}`,
-          sanitized_question: payload.question || "",
-          sanitization_findings: [],
-          retrieved_context: [],
-          guardrails: ["approved local read-only scope"],
-          audit_id: "hal-ask-overlap-1",
-          access_policy: {
-            mode: "local-rag-phase-1",
-            auth_requirement: "auth",
-            network_boundary: "local",
-            audited: true,
-            allowed_sources: [],
-            disallowed_actions: [],
-          },
-          review_actions: [],
-        });
+        return HttpResponse.json(
+          buildHalAskMockResponse({
+            answer: `HAL handled: ${payload.question || ""}`,
+            sanitized_question: payload.question || "",
+            audit_id: "hal-ask-overlap-1",
+          }),
+        );
       }),
     );
 
@@ -397,6 +396,31 @@ describe("api mocks", () => {
 
     expect(await screen.findByText(/HAL's Response/)).toBeInTheDocument();
     expect(screen.getByText(/HAL handled: Give me the current operating picture\./)).toBeInTheDocument();
+  });
+
+  it("shows a generic error when HAL returns a malformed response shape", async () => {
+    server.use(
+      http.post("/api/hal9000", async () =>
+        HttpResponse.json({
+          mode: "local-rag-phase-1",
+          answer: "broken",
+        }),
+      ),
+    );
+
+    await expect(askHalQuestion("What is the status?")).rejects.toThrow(
+      /HAL returned an unexpected response shape\. Reference: hal-schema\./,
+    );
+
+    renderApp("/app/hal");
+    fireEvent.change(await screen.findByLabelText("What do you want HAL to help with?"), {
+      target: { value: "What is the status?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ask HAL" }));
+
+    expect(await screen.findByText(/HAL returned an unexpected response shape/)).toBeInTheDocument();
+    expect(screen.queryByText(/invalid_type/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/voice_profile/)).not.toBeInTheDocument();
   });
 
   it("keeps the HAL page focused on the core ask-and-answer workflow", async () => {
@@ -757,8 +781,8 @@ describe("api mocks", () => {
     expect(screen.getByText(/Response profile:/)).toBeInTheDocument();
     expect(screen.getByText(/Governance:/)).toBeInTheDocument();
     expect(screen.getByText(/Confidence:/)).toBeInTheDocument();
-    expect(screen.getAllByText(/hal_phi_rag_architecture chunk 24/)).toHaveLength(2);
-    expect(screen.getAllByText(/API chunk 1/)).toHaveLength(2);
+    expect(screen.getAllByText(/hal_phi_rag_architecture chunk 24/)).toHaveLength(1);
+    expect(screen.getAllByText(/API chunk 1/)).toHaveLength(1);
   });
 
   it("renders the posting queue review workflow", async () => {

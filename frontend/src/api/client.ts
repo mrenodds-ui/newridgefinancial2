@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { ZodError, z } from "zod";
 import { config } from "../config";
 import type { PostingQueueEnqueueMode } from "../utils/postingQueueLineage";
 import type { PostingQueueReviewAction, PostingQueueStatus } from "../utils/postingQueueStatus";
@@ -174,6 +174,19 @@ function buildRequestError(path: string, response: Response, payload: unknown): 
     path,
     status: response.status,
   });
+}
+
+const HAL_SCHEMA_ERROR_MESSAGE = "HAL returned an unexpected response shape. Reference: hal-schema.";
+
+function parseHalAskResponse(payload: unknown): HalAskResponse {
+  try {
+    return halAskResponseSchema.parse(payload);
+  } catch (error) {
+    if (import.meta.env.DEV && error instanceof ZodError) {
+      console.error("HAL ask response failed schema validation", error);
+    }
+    throw new Error(HAL_SCHEMA_ERROR_MESSAGE);
+  }
 }
 
 const numberLikeSchema = z.union([z.number(), z.string()]);
@@ -416,17 +429,26 @@ const financialTransactionDiagnosticsSchema = z
   })
   .passthrough();
 
-const financialSummaryWidgetFeedSchema = z
+const widgetMetricSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+const financialWidgetSchema = z
   .object({
-    manager: z.string().nullable().optional(),
-    run_id: z.string().nullable().optional(),
-    generated_at: z.string().nullable().optional(),
-    received_at: z.string().nullable().optional(),
-    widgets: z.record(z.unknown()).nullable().optional().default({}),
-    sources: z.record(z.unknown()).nullable().optional().default({}),
-    jobs: z.record(z.unknown()).nullable().optional().default({}),
+    status: z.string().optional(),
+    title: z.string().optional(),
+    summary: z.string().optional(),
+    metrics: z.record(widgetMetricSchema).default({}),
   })
   .passthrough();
+
+const financialSummaryWidgetFeedSchema = z.object({
+  manager: z.string().optional(),
+  run_id: z.string().nullable().optional(),
+  generated_at: z.string().nullable().optional(),
+  received_at: z.string().nullable().optional(),
+  widgets: z.record(financialWidgetSchema).default({}),
+  sources: z.record(z.unknown()).default({}),
+  jobs: z.record(z.unknown()).default({}),
+});
 
 const financialSummarySchema = z
   .object({
@@ -824,7 +846,7 @@ export async function askHalQuestion(
   if (!primary.response.ok) {
     throw buildRequestError(`/api${path}`, primary.response, primary.payload);
   }
-  return halAskResponseSchema.parse(primary.payload);
+  return parseHalAskResponse(primary.payload);
 }
 
 export async function generateHalChartPlan(question: string): Promise<HalChartPlanResponse> {
