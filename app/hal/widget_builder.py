@@ -65,7 +65,10 @@ def _latest_daily_kpi(summary: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _latest_ar(summary: Mapping[str, Any]) -> dict[str, Any]:
-    return _as_dict(summary.get("latestAr"))
+    payload = _as_dict(summary.get("latestAr"))
+    if not payload or payload.get("available") is False:
+        return {}
+    return payload
 
 
 def _claims_summary(summary: Mapping[str, Any]) -> dict[str, Any]:
@@ -195,7 +198,7 @@ def build_widget_feed_from_financial_summary(summary: Mapping[str, Any]) -> dict
         "practice_financial_overview": {
             "title": "Practice Financial Overview",
             "status": _merge_widget_status(qb_status, softdent_status),
-            "summary": "Practice revenue and production totals derived from the canonical QuickBooks and SoftDent import cache.",
+            "summary": "Practice revenue from QuickBooks and production/collections from SoftDent import cache. Dental A/R is not sourced from QuickBooks.",
             "metrics": {
                 "monthly_revenue": _scalar_metric(monthly_revenue),
                 "monthly_net_income": _scalar_metric(monthly_net_income),

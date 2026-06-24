@@ -706,6 +706,8 @@ class FinancialSummaryLatestArResponse(BaseModel):
     balance_60: float
     balance_90: float
     credit_balance: float
+    source: str = "softdent"
+    available: bool = True
 
 
 class FinancialSummaryMonthlyKpiResponse(BaseModel):

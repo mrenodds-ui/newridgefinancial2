@@ -852,6 +852,7 @@ def test_hal_page_summary_blocks_unauthenticated_request():
 def test_hal_page_summary_route_returns_financial_summary_payload(monkeypatch):
     fresh_timestamp = "2026-06-18T13:45:00+00:00"
 
+    monkeypatch.setattr(routes_module, "load_softdent_ar_rows", lambda: [])
     monkeypatch.setattr(
         routes_module,
         "load_softdent_dashboard_rows",
@@ -1000,16 +1001,71 @@ def test_hal_page_summary_route_returns_financial_summary_payload(monkeypatch):
             "last_imported_at_utc": fresh_timestamp,
         },
     ]
+    assert payload.get("latestAr") is None
+
+
+def test_hal_page_summary_uses_softdent_ar_export_when_available(monkeypatch):
+    fresh_timestamp = "2026-06-18T13:45:00+00:00"
+    monkeypatch.setattr(routes_module, "load_softdent_dashboard_rows", lambda: [])
+    monkeypatch.setattr(
+        routes_module,
+        "load_softdent_ar_rows",
+        lambda: [
+            {
+                "as_of_date": "2026-06-18",
+                "total_ar": 21700.0,
+                "patient_ar": 9100.0,
+                "insurance_ar": 12600.0,
+                "current_balance": 12000.0,
+                "balance_30": 5000.0,
+                "balance_60": 3000.0,
+                "balance_90": 1700.0,
+                "credit_balance": 0.0,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        routes_module,
+        "build_softdent_snapshot",
+        lambda: {"available": True, "period": "2026-06", "provider_count": 1, "providers": [], "totals": {}},
+    )
+    monkeypatch.setattr(routes_module, "get_softdent_source_status", lambda: {"available": True, "modified_at_utc": fresh_timestamp})
+    monkeypatch.setattr(routes_module, "get_softdent_claim_source_status", lambda: {"available": False})
+    monkeypatch.setattr(routes_module, "get_softdent_clinical_note_source_status", lambda: {"available": False})
+    monkeypatch.setattr(routes_module, "get_quickbooks_sdk_status", lambda: {"com_available": True})
+    monkeypatch.setattr(routes_module, "get_softdent_coverage_metrics", lambda: {"trueOutstandingClaims": {}, "unsubmittedClaims": {}})
+    monkeypatch.setattr(routes_module, "fetch_quickbooks_sdk_summary", lambda topic: [{"AccountsReceivable": 99999.0}] if topic == "ar" else [])
+    monkeypatch.setattr(routes_module, "load_quickbooks_export_rows", lambda topic: [])
+    monkeypatch.setattr(
+        routes_module,
+        "get_financial_source_status",
+        lambda: {
+            "softdent": {
+                "available": True,
+                "coverage": {"summary": "SoftDent coverage available.", "counts": {"missing": 0, "limited": 0, "available": 1}, "rows": []},
+                "live_snapshot": {"available": True, "checked_at_utc": fresh_timestamp, "confidence_label": "verified", "review_required": False, "review_flags": [], "excerpt": "SoftDent live snapshot available."},
+                "live_claims": {"available": False, "checked_at_utc": fresh_timestamp, "confidence_label": "manual review", "review_required": True, "review_flags": [], "excerpt": "SoftDent claims export unavailable."},
+            },
+            "quickbooks": {"live_revenue": {}, "live_expenses": {}, "live_ar": {"available": True, "excerpt": "QuickBooks A/R available."}},
+        },
+    )
+
+    response = client.get("/api/hal9000/page-summary", auth=basic_auth())
+    payload = response.json()
+
+    assert response.status_code == 200
     assert payload["latestAr"] == {
-        "as_of_date": "2026-06",
-        "total_ar": 400.0,
-        "insurance_ar": 0.0,
-        "patient_ar": 0.0,
-        "current_balance": 400.0,
-        "balance_30": 0.0,
-        "balance_60": 0.0,
-        "balance_90": 0.0,
+        "as_of_date": "2026-06-18",
+        "total_ar": 21700.0,
+        "insurance_ar": 12600.0,
+        "patient_ar": 9100.0,
+        "current_balance": 12000.0,
+        "balance_30": 5000.0,
+        "balance_60": 3000.0,
+        "balance_90": 1700.0,
         "credit_balance": 0.0,
+        "available": True,
+        "source": "softdent",
     }
 
 
@@ -1149,6 +1205,7 @@ def test_page_summary_flags_missing_quickbooks_detail_exports(monkeypatch):
         "load_softdent_dashboard_rows",
         lambda: [{"period": "2026-06", "production": 1500.0, "collections": 1100.0}],
     )
+    monkeypatch.setattr(routes_module, "load_softdent_ar_rows", lambda: [])
     monkeypatch.setattr(routes_module, "get_softdent_source_status", lambda: {"available": True, "modified_at_utc": fresh_timestamp})
     monkeypatch.setattr(routes_module, "get_softdent_claim_source_status", lambda: {"available": False})
     monkeypatch.setattr(routes_module, "get_softdent_coverage_metrics", lambda: {"trueOutstandingClaims": {}, "unsubmittedClaims": {}})
@@ -1192,17 +1249,7 @@ def test_page_summary_flags_missing_quickbooks_detail_exports(monkeypatch):
     assert payload["sourceReview"]["quickBooks"]["reviewRequired"] is True
     assert "expense detail export missing" in payload["sourceReview"]["quickBooks"]["reviewFlags"]
     assert "Expense category detail export is unavailable" in payload["sourceReview"]["quickBooks"]["summary"]
-    assert payload["latestAr"] == {
-        "as_of_date": "2026-06",
-        "total_ar": 400.0,
-        "insurance_ar": 0.0,
-        "patient_ar": 0.0,
-        "current_balance": 400.0,
-        "balance_30": 0.0,
-        "balance_60": 0.0,
-        "balance_90": 0.0,
-        "credit_balance": 0.0,
-    }
+    assert payload.get("latestAr") is None
 
 
 def test_hal_field_timeframes_route_returns_tracked_registry(monkeypatch):

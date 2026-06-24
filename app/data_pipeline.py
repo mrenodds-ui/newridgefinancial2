@@ -30,6 +30,8 @@ SOFTDENT_IMPORT_FILE_NAMES = frozenset(
         "softdent_clinical_notes_data.json",
         "outstanding_claims_by_company.csv",
         "unsubmitted_claims.csv",
+        "softdent_ar_aging.csv",
+        "softdent_accounts_receivable.csv",
         "insurance_income.csv",
         "insurance_payment_distribution.csv",
         "insurance_check_distribution.csv",
@@ -43,6 +45,8 @@ SOFTDENT_PASSTHROUGH_IMPORT_FILES = {
     for name in (
         "outstanding_claims_by_company.csv",
         "unsubmitted_claims.csv",
+        "softdent_ar_aging.csv",
+        "softdent_accounts_receivable.csv",
         "insurance_income.csv",
         "insurance_payment_distribution.csv",
         "insurance_check_distribution.csv",

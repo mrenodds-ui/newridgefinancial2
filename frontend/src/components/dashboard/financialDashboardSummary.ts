@@ -214,6 +214,16 @@ function selectTopExpenseCategory(rows: FinancialSummaryQuickBooksExpenseCategor
     .sort((left, right) => right.amount - left.amount || left.label.localeCompare(right.label))[0]?.label;
 }
 
+function isSoftdentArAvailable(
+  latestAr: FinancialSummaryResponse["latestAr"],
+): latestAr is NonNullable<FinancialSummaryResponse["latestAr"]> {
+  if (!latestAr) {
+    return false;
+  }
+  const availability = (latestAr as { available?: boolean }).available;
+  return availability !== false;
+}
+
 export function buildDashboardSummaryFromFinancialSummary(
   financialSummary: FinancialSummaryResponse | null | undefined,
 ): FinancialDashboardSummary | null {
@@ -225,7 +235,7 @@ export function buildDashboardSummaryFromFinancialSummary(
   const latestProfitLoss = selectLatestProfitLoss(financialSummary.quickBooksProfitLossSummary);
   const latestAr = financialSummary.latestAr;
 
-  if (!latestMonthlyKpi && !latestProfitLoss && !latestAr) {
+  if (!latestMonthlyKpi && !latestProfitLoss && !isSoftdentArAvailable(latestAr)) {
     return null;
   }
 
@@ -242,11 +252,11 @@ export function buildDashboardSummaryFromFinancialSummary(
     monthExpenses: latestProfitLoss ? toFiniteNumber(latestProfitLoss.expense_total) : null,
     estimatedNetIncome: latestProfitLoss ? toFiniteNumber(latestProfitLoss.net_income) : null,
     topExpenseCategory: selectTopExpenseCategory(financialSummary.quickBooksExpenseCategories) ?? null,
-    totalAR: latestAr ? toFiniteNumber(latestAr.total_ar) : null,
-    ar0to30: latestAr ? toFiniteNumber(latestAr.current_balance) : null,
-    ar31to60: latestAr ? toFiniteNumber(latestAr.balance_30) : null,
-    ar61to90: latestAr ? toFiniteNumber(latestAr.balance_60) : null,
-    arOver90: latestAr ? toFiniteNumber(latestAr.balance_90) : null,
+    totalAR: isSoftdentArAvailable(latestAr) ? toFiniteNumber(latestAr.total_ar) : null,
+    ar0to30: isSoftdentArAvailable(latestAr) ? toFiniteNumber(latestAr.current_balance) : null,
+    ar31to60: isSoftdentArAvailable(latestAr) ? toFiniteNumber(latestAr.balance_30) : null,
+    ar61to90: isSoftdentArAvailable(latestAr) ? toFiniteNumber(latestAr.balance_60) : null,
+    arOver90: isSoftdentArAvailable(latestAr) ? toFiniteNumber(latestAr.balance_90) : null,
     lastImportAt: refreshTimestamp,
     lastRefreshedAt: refreshTimestamp,
     isStale: financialSummary.dataFreshnessStatus === "stale",

@@ -603,6 +603,8 @@ export const handlers = [
         balance_60: 1900,
         balance_90: 1300,
         credit_balance: 0,
+        available: true,
+        source: "softdent",
       },
       monthlyKpis: [
         {

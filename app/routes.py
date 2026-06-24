@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import secrets
-from typing import Optional
+from typing import Mapping, Optional
 from datetime import datetime, timezone
 from uuid import uuid4
 from pydantic import BaseModel, ValidationError
@@ -420,6 +420,7 @@ from .services import (
     get_softdent_source_status,
     load_quickbooks_export_rows,
     load_softdent_dashboard_rows,
+    load_softdent_ar_rows,
     get_kpi_data,
     list_local_accounting_documents,
     stage_hal_import_files,
@@ -730,7 +731,11 @@ def _build_latest_ar_snapshot(*, ar_rows: list[dict[str, object]], fallback_as_o
     return snapshot
 
 
-def _build_softdent_latest_ar_snapshot(*, softdent_rows: list[dict[str, object]], softdent_snapshot: dict[str, object], latest_monthly: dict[str, object] | None, fallback_as_of_date: str) -> dict[str, object]:
+def _softdent_ar_snapshot_is_available(snapshot: Mapping[str, object]) -> bool:
+    return snapshot.get("available") is True and str(snapshot.get("source") or "") == "softdent"
+
+
+def _build_softdent_latest_ar_snapshot(*, softdent_ar_rows: list[dict[str, object]], fallback_as_of_date: str) -> dict[str, object]:
     snapshot = {
         "as_of_date": fallback_as_of_date,
         "total_ar": 0.0,
@@ -744,7 +749,7 @@ def _build_softdent_latest_ar_snapshot(*, softdent_rows: list[dict[str, object]]
     }
     explicit_ar_values_present = False
 
-    for row in softdent_rows:
+    for row in softdent_ar_rows:
         row_as_of_date = (
             _normalize_iso_date(_first_non_empty(row, "as_of_date", "report_date", "reportdate", "date"))
             or _normalize_year_month(_first_non_empty(row, "period", "year_month", "month", "report_period"))
@@ -796,23 +801,23 @@ def _build_softdent_latest_ar_snapshot(*, softdent_rows: list[dict[str, object]]
                 + _coerce_float(snapshot.get("balance_90")),
                 2,
             )
+        snapshot["available"] = True
+        snapshot["source"] = "softdent"
         return snapshot
 
-    production_total = _coerce_float((latest_monthly or {}).get("gross_production"))
-    collections_total = _coerce_float((latest_monthly or {}).get("collections"))
-    if production_total <= 0 and collections_total <= 0:
-        totals = softdent_snapshot.get("totals") if isinstance(softdent_snapshot.get("totals"), dict) else {}
-        production_total = _coerce_float(totals.get("production"))
-        collections_total = _coerce_float(totals.get("collections"))
-
-    total_ar = round(max(production_total - collections_total, 0.0), 2)
-    if total_ar <= 0:
-        return snapshot
-
-    snapshot["as_of_date"] = str(softdent_snapshot.get("period") or fallback_as_of_date)
-    snapshot["total_ar"] = total_ar
-    snapshot["current_balance"] = total_ar
-    return snapshot
+    return {
+        "available": False,
+        "source": "softdent",
+        "as_of_date": fallback_as_of_date,
+        "total_ar": 0.0,
+        "insurance_ar": 0.0,
+        "patient_ar": 0.0,
+        "current_balance": 0.0,
+        "balance_30": 0.0,
+        "balance_60": 0.0,
+        "balance_90": 0.0,
+        "credit_balance": 0.0,
+    }
 
 
 def _resolve_hal_session_id(request: Request, payload_session_id: str | None) -> str:
@@ -922,12 +927,11 @@ def _build_financial_summary_payload() -> dict[str, object]:
         fallback_expense_total=expense_total,
         generated_at=generated_at,
     )
-    latest_ar = _build_softdent_latest_ar_snapshot(
-        softdent_rows=softdent_rows,
-        softdent_snapshot=softdent_snapshot,
-        latest_monthly=latest_monthly if isinstance(latest_monthly, dict) else None,
+    latest_ar_snapshot = _build_softdent_latest_ar_snapshot(
+        softdent_ar_rows=load_softdent_ar_rows(),
         fallback_as_of_date=str(latest_monthly.get("year_month") if isinstance(latest_monthly, dict) else "") or generated_at[:10],
     )
+    latest_ar = latest_ar_snapshot if _softdent_ar_snapshot_is_available(latest_ar_snapshot) else None
     quickbooks_profit_loss = []
     if quickbooks_revenue_rows and quickbooks_expense_rows:
         quickbooks_profit_loss.append(

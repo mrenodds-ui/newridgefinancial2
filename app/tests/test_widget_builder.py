@@ -63,6 +63,8 @@ def _sample_financial_summary() -> dict[str, object]:
             "total_ar": 21700.0,
             "patient_ar": 9100.0,
             "insurance_ar": 12600.0,
+            "available": True,
+            "source": "softdent",
         },
         "claimsSummary": {
             "available": True,
@@ -168,6 +170,48 @@ def test_recompute_cache_publishes_import_driven_widget_feed(monkeypatch, widget
     feed = get_widget_feed()
     assert feed is not None
     assert feed["widgets"]["smart_claims_and_receivables"]["metrics"]["outstanding_claim_amount"] == 22110.0
+
+
+def test_build_widget_feed_does_not_use_quickbooks_ar_when_softdent_ar_missing(widget_cache_path: Path):
+    payload = build_widget_feed_from_financial_summary(
+        {
+            "generatedAt": "2026-06-24T12:00:00Z",
+            "sourceReview": {
+                "softDent": {"status": "ready", "metrics": {"providerCount": 1}},
+                "quickBooks": {"status": "ready"},
+            },
+            "quickBooksStatus": {
+                "status": "ready",
+                "lastError": None,
+                "rowCounts": {"revenue": 1, "expenses": 1, "ar": 1},
+            },
+            "quickBooksProfitLossSummary": [
+                {"year_month": "2026-06", "income_total": 155000.0, "expense_total": 93000.0, "net_income": 62000.0}
+            ],
+            "latestDailyKpi": {"production": 171500.0, "collections": 149250.0},
+            "currentMonthProduction": {
+                "gross_production": 171500.0,
+                "collections": 149250.0,
+                "collection_rate": 87.03,
+            },
+            "claimsSummary": {
+                "available": True,
+                "true_outstanding_claims_amount": 22110.0,
+                "true_outstanding_claims_count": 34,
+                "unsubmitted_claims_count": 9,
+            },
+        }
+    )
+
+    claims = payload["widgets"]["smart_claims_and_receivables"]["metrics"]
+    care = payload["widgets"]["care_delivery_performance"]["metrics"]
+    finance = payload["widgets"]["practice_financial_overview"]["metrics"]
+
+    assert finance["monthly_revenue"] == 155000.0
+    assert finance["monthly_net_income"] == 62000.0
+    assert claims["accounts_receivable_total"] is None
+    assert care["patient_balance_total"] is None
+    assert claims["outstanding_claim_amount"] == 22110.0
 
 
 def test_build_widget_feed_does_not_mark_empty_imports_success(widget_cache_path: Path):

@@ -73,6 +73,7 @@ QUICKBOOKS_EXPORT_DEFAULT_NAMES_BY_TOPIC: dict[str, tuple[str, ...]] = {
 }
 SOFTDENT_OUTSTANDING_CLAIMS_EXPORT_ENV = "SOFTDENT_OUTSTANDING_CLAIMS_EXPORT_PATH"
 SOFTDENT_UNSUBMITTED_CLAIMS_EXPORT_ENV = "SOFTDENT_UNSUBMITTED_CLAIMS_EXPORT_PATH"
+SOFTDENT_AR_EXPORT_ENV = "SOFTDENT_AR_EXPORT_PATH"
 SOFTDENT_INSURANCE_INCOME_EXPORT_ENV = "SOFTDENT_INSURANCE_INCOME_EXPORT_PATH"
 SOFTDENT_INSURANCE_PAYMENT_DISTRIBUTION_EXPORT_ENV = "SOFTDENT_INSURANCE_PAYMENT_DISTRIBUTION_EXPORT_PATH"
 SOFTDENT_INSURANCE_CHECK_DISTRIBUTION_EXPORT_ENV = "SOFTDENT_INSURANCE_CHECK_DISTRIBUTION_EXPORT_PATH"
@@ -801,6 +802,20 @@ def load_softdent_dashboard_rows() -> list[dict]:
             "softdent_dashboard_export.xlsx",
             "softdent_dashboard_data.xls",
             "softdent_dashboard_export.xls",
+        ),
+    )
+    return rows
+
+
+def load_softdent_ar_rows() -> list[dict]:
+    rows, _, _ = _load_optional_tabular_export(
+        env_var=SOFTDENT_AR_EXPORT_ENV,
+        default_names=(
+            "softdent_ar_aging.csv",
+            "softdent_accounts_receivable.csv",
+            "softdent_ar_aging.json",
+            "patient_aging.csv",
+            "ar_aging.csv",
         ),
     )
     return rows

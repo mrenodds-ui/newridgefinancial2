@@ -202,6 +202,8 @@ const financialSummaryLatestArSchema = z
     balance_60: z.number(),
     balance_90: z.number(),
     credit_balance: z.number(),
+    source: z.string().optional(),
+    available: z.boolean().optional(),
   })
   .passthrough();
 

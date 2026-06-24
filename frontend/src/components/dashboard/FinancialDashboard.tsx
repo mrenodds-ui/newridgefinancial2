@@ -890,7 +890,7 @@ function FinancialDashboard() {
       </div>
     </div>
   ) : (
-    <ChartUnavailableCard title="A/R Aging" message="Verified A/R aging data is not available from the current backend summary yet." />
+    <ChartUnavailableCard title="A/R Aging" message="SoftDent A/R aging is not available from the import cache yet. QuickBooks receivables are not used for dental A/R on this dashboard." />
   );
 
   const trailingCollectionsCard = hasTrendData ? (
@@ -1098,11 +1098,11 @@ function FinancialDashboard() {
                 badgeTone="neutral"
               />
               <SummaryMetricCard
-                title="A/R balance"
+                title="SoftDent A/R balance"
                 value={formatCurrencyValue(summary.totalAR)}
-                label="Current receivables"
-                detail={`90+ aging ${formatCurrencyValue(summary.arOver90)}`}
-                badge="Receivables"
+                label="Dental practice receivables"
+                detail={`SoftDent 90+ aging ${formatCurrencyValue(summary.arOver90)}`}
+                badge="SoftDent"
                 badgeTone="warning"
               />
             </>
