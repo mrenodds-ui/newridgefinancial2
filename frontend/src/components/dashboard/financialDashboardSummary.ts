@@ -214,7 +214,7 @@ function selectTopExpenseCategory(rows: FinancialSummaryQuickBooksExpenseCategor
     .sort((left, right) => right.amount - left.amount || left.label.localeCompare(right.label))[0]?.label;
 }
 
-function isSoftdentArAvailable(
+export function isSoftdentArAvailable(
   latestAr: FinancialSummaryResponse["latestAr"],
 ): latestAr is NonNullable<FinancialSummaryResponse["latestAr"]> {
   if (!latestAr) {
