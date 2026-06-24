@@ -133,6 +133,35 @@ AI_PORT=11435 AI_RUNTIME=llama_cpp AI_GPU_LAYERS=0 \
 ./scripts/run_backend_model.sh
 ```
 
+## 235B evaluator workflow (isolated, one section at a time)
+
+Do **not** run the 24B frontend lane or 30B backend lane while the 235B evaluator is active. Resource contention on 16GB VRAM makes multi-lane 235B runs unreliable.
+
+| Step | Action |
+| --- | --- |
+| 1 | Ensure tracked git tree is clean (or pass `-AllowDirtyRepo` intentionally). |
+| 2 | Stop normal lanes: `scripts/stop_normal_model_lanes.ps1` |
+| 3 | Verify `:11434` and `:11435` do not respond to `/v1/models`. |
+| 4 | Start only the evaluator on `:11436` (foreground `ollama serve` in a dedicated terminal, or `scripts/start_235b_evaluator_lane.ps1`). |
+| 5 | Run **one** section: `scripts/run_235b_isolated_section.ps1 -Section N` |
+| 6 | Save **one** report (`235b_sectionN_*_report.md` at repo root; do not commit unless approved). |
+| 7 | Stop `qwen3:235b` and tear down `:11436`: `scripts/stop_235b_evaluator_lane.ps1` |
+| 8 | Restart 24B/30B only if needed: `-RestartNormalLanes` on the orchestrator, or start `run_frontend_model.ps1` / `run_backend_model.ps1` manually. |
+
+Orchestrator (single section, lane checks, optional report overwrite):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_235b_isolated_section.ps1 -Section 2
+```
+
+Python runner (called by the orchestrator; use `--isolated` when normal lanes must be down):
+
+```powershell
+.\.venv\Scripts\python.exe .\run_235b_eval_section.py 2 --isolated
+```
+
+Optional `-ForceStopOllamaApp` on `stop_normal_model_lanes.ps1` stops the Windows Ollama tray when it keeps respawning `:11434`. It is **off by default** because it can affect unrelated Ollama use.
+
 ## App
 
 ```powershell
