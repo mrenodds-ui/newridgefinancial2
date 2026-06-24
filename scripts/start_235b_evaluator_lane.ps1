@@ -46,7 +46,7 @@ function Test-OllamaLane([string]$HostPort) {
 }
 
 function Get-ListenerPidsOnPort([int]$ListenPort) {
-    $pids = @()
+    $listenerPids = @()
     $patterns = @(
         "127.0.0.1:$ListenPort\s",
         "0.0.0.0:$ListenPort\s",
@@ -54,13 +54,13 @@ function Get-ListenerPidsOnPort([int]$ListenPort) {
     )
     foreach ($pattern in $patterns) {
         foreach ($line in (netstat -ano | Select-String $pattern)) {
-            $pid = [int](($line -split '\s+')[-1])
-            if ($pid -gt 0) {
-                $pids += $pid
+            $listenerPid = [int](($line -split '\s+')[-1])
+            if ($listenerPid -gt 0) {
+                $listenerPids += $listenerPid
             }
         }
     }
-    return $pids | Select-Object -Unique
+    return $listenerPids | Select-Object -Unique
 }
 
 if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {

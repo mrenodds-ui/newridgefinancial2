@@ -43,7 +43,7 @@ function Test-OllamaLane([string]$HostPort) {
 }
 
 function Get-ListenerPidsOnPort([int]$Port) {
-    $pids = @()
+    $listenerPids = @()
     $patterns = @(
         "127.0.0.1:$Port\s",
         "0.0.0.0:$Port\s",
@@ -51,20 +51,20 @@ function Get-ListenerPidsOnPort([int]$Port) {
     )
     foreach ($pattern in $patterns) {
         foreach ($line in (netstat -ano | Select-String $pattern)) {
-            $pid = [int](($line -split '\s+')[-1])
-            if ($pid -gt 0) {
-                $pids += $pid
+            $listenerPid = [int](($line -split '\s+')[-1])
+            if ($listenerPid -gt 0) {
+                $listenerPids += $listenerPid
             }
         }
     }
-    return $pids | Select-Object -Unique
+    return $listenerPids | Select-Object -Unique
 }
 
 function Stop-ListenerOnPort([int]$Port) {
-    foreach ($pid in Get-ListenerPidsOnPort -Port $Port) {
-        if ($PSCmdlet.ShouldProcess("PID $pid on :$Port", 'Stop-Process')) {
-            Write-Host "Stopping PID $pid listening on :$Port"
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    foreach ($listenerPid in Get-ListenerPidsOnPort -Port $Port) {
+        if ($PSCmdlet.ShouldProcess("PID $listenerPid on :$Port", 'Stop-Process')) {
+            Write-Host "Stopping PID $listenerPid listening on :$Port"
+            Stop-Process -Id $listenerPid -Force -ErrorAction SilentlyContinue
         }
     }
 }

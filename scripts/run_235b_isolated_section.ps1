@@ -85,9 +85,12 @@ if ((Test-Path $reportPath) -and -not $OverwriteReport) {
 }
 
 Write-Host "`n[2/10] Stop normal 24B/30B lanes"
-$stopArgs = @()
-if ($ForceStopOllamaApp) { $stopArgs += '-ForceStopOllamaApp' }
-& (Join-Path $PSScriptRoot 'stop_normal_model_lanes.ps1') @stopArgs
+$stopScript = Join-Path $PSScriptRoot 'stop_normal_model_lanes.ps1'
+if ($ForceStopOllamaApp) {
+    & $stopScript -ForceStopOllamaApp
+} else {
+    & $stopScript
+}
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "`n[3/10] Verify :11434 and :11435 are down"

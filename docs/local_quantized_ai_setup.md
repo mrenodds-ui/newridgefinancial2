@@ -160,7 +160,7 @@ Python runner (called by the orchestrator; use `--isolated` when normal lanes mu
 .\.venv\Scripts\python.exe .\run_235b_eval_section.py 2 --isolated
 ```
 
-Optional `-ForceStopOllamaApp` on `stop_normal_model_lanes.ps1` stops the Windows Ollama tray when it keeps respawning `:11434`. It is **off by default** because it can affect unrelated Ollama use.
+Optional `-ForceStopOllamaApp` on `stop_normal_model_lanes.ps1` (or on `run_235b_isolated_section.ps1`, which forwards the switch) stops the Windows Ollama tray when it keeps respawning `:11434`. It is **off by default** because it can affect unrelated Ollama use.
 
 ## App
 
