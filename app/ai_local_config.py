@@ -116,6 +116,18 @@ def get_base_url_for_profile_alias(alias: str) -> str:
     return get_frontend_base_url()
 
 
+def get_model_for_profile_alias(alias: str) -> str:
+    if profile_lane(alias) == "backend":
+        return get_backend_model_name()
+    return get_frontend_model_name()
+
+
+def resolve_profile_base_url(alias: str, *, override_base_url: str = "") -> str:
+    if override_base_url.strip():
+        return _strip_openai_suffix(override_base_url)
+    return get_base_url_for_profile_alias(alias)
+
+
 def _parse_positive_int(raw_value: str, default: int) -> int:
     if not raw_value.strip():
         return default
@@ -255,6 +267,10 @@ def get_model_routing_snapshot() -> dict[str, object]:
             "quantization": get_backend_quantization(),
             "model_path": get_backend_model_path() or None,
             "profile_aliases": sorted(BACKEND_PROFILE_ALIASES),
+        },
+        "profile_base_urls": {
+            alias: get_base_url_for_profile_alias(alias)
+            for alias in sorted(FRONTEND_PROFILE_ALIASES | BACKEND_PROFILE_ALIASES)
         },
     }
 

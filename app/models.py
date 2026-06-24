@@ -254,6 +254,7 @@ class JournalDraftResponse(BaseModel):
     queue_id: str | None = None
     queue_status: PostingQueueStatus | None = None
     enqueue_error: str | None = None
+    local_ai_unavailable: str | None = None
     audit_id: str
     access_policy: HalAccessPolicy
 
@@ -574,6 +575,19 @@ class ControlModelSummary(BaseModel):
     heuristic_tags: list[str] = Field(default_factory=list)
 
 
+class ControlLaneRuntimeSummary(BaseModel):
+    lane: str
+    base_url: str
+    model: str
+    api_reachable: bool
+    installed: bool = False
+    running: bool = False
+    model_count: int = 0
+    installed_models: list[ControlModelSummary] = Field(default_factory=list)
+    error: str | None = None
+    warning: str | None = None
+
+
 class ControlRuntimeStatusResponse(BaseModel):
     base_url: str
     api_reachable: bool
@@ -583,6 +597,7 @@ class ControlRuntimeStatusResponse(BaseModel):
     installed_models: list[ControlModelSummary] = Field(default_factory=list)
     suggested_defaults: dict[str, str] = Field(default_factory=dict)
     warning: str | None = None
+    lanes: dict[str, ControlLaneRuntimeSummary] = Field(default_factory=dict)
 
 
 class ControlRouteRequest(BaseModel):

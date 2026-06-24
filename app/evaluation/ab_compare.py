@@ -386,6 +386,8 @@ def run_ab_comparison(
     timeout_seconds: int,
     profile_a_alias: str,
     profile_b_alias: str,
+    profile_a_base_url: str | None = None,
+    profile_b_base_url: str | None = None,
     max_ttft_seconds: float = 0.5,
     max_tps_drop_fraction: float = 0.15,
     dry_run: bool = False,
@@ -393,6 +395,8 @@ def run_ab_comparison(
 ) -> dict[str, object]:
     profile_a = resolve_profile(config, profile_a_alias)
     profile_b = resolve_profile(config, profile_b_alias)
+    base_url_a = profile_a_base_url or base_url
+    base_url_b = profile_b_base_url or base_url
     operating_picture = get_hal_operating_picture() if {profile_a_alias, profile_b_alias} & {"chat", "chat_second_opinion"} else None
 
     cases: list[dict[str, object]] = []
@@ -423,11 +427,11 @@ def run_ab_comparison(
             }
             metrics_b = dict(metrics_a)
         else:
-            result_a = generate_response_result(base_url, profile_a, eval_prompt_text, timeout_seconds, seed=profile_a.get("seed"))
+            result_a = generate_response_result(base_url_a, profile_a, eval_prompt_text, timeout_seconds, seed=profile_a.get("seed"))
             if progress_callback:
                 progress_callback(f"completed case={prompt_id} profile={profile_a_alias}")
                 progress_callback(f"starting case={prompt_id} profile={profile_b_alias}")
-            result_b = generate_response_result(base_url, profile_b, eval_prompt_text, timeout_seconds, seed=profile_b.get("seed"))
+            result_b = generate_response_result(base_url_b, profile_b, eval_prompt_text, timeout_seconds, seed=profile_b.get("seed"))
             output_a = str(result_a["response_text"])
             output_b = str(result_b["response_text"])
             metrics_a = dict(result_a["metrics"])

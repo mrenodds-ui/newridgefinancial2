@@ -13,6 +13,7 @@ from .accounting_tools import draft_journal_entry_for_common_case, get_chart_of_
 from .accounting_validation import build_journal_validation
 from .audit import get_recent_hal_audits, record_hal_audit
 from app.ai_local_config import (
+    LocalAIConfigError,
     get_backend_base_url,
     get_backend_model_name,
     get_frontend_base_url,
@@ -22,7 +23,7 @@ from app.ai_local_config import (
     require_lane_runtime,
     resolve_lane_profile,
 )
-from app.evaluation.client import check_ollama_available, get_ollama_runtime_status, load_json_file, run_structured_output_workflow
+from app.evaluation.client import get_ollama_runtime_status, load_json_file, run_structured_output_workflow
 from app.services import fetch_softdent_dashboard_aggregate, list_local_accounting_documents, run_ci_gates, run_rebuild_receipt, run_refresh_and_verify, run_smoke_tests
 from .hardware_tools import build_monitor_mutation_intent, get_monitor_status
 
@@ -420,6 +421,8 @@ def _get_hal_model_routing() -> dict[str, object]:
         "code_help": {
             "route": "local_only_raw_ollama",
             "model": code_model,
+            "base_url": str(backend.get("base_url") or get_backend_base_url()),
+            "lane": "backend",
             "purpose": "low-risk code_help",
         },
         "optional_test_lane": {
@@ -447,8 +450,28 @@ def _get_hal_operator_endpoints() -> list[dict[str, str]]:
     ]
 
 
+def _build_lane_runtime_snapshot(*, base_url: str, lane: str, model: str) -> dict[str, object]:
+    runtime_status = get_ollama_runtime_status(base_url, timeout_seconds=5)
+    return {
+        **runtime_status,
+        "lane": lane,
+        "model": model,
+        "api_reachable": bool(runtime_status.get("api_reachable")),
+    }
+
+
 def _build_hal_operating_picture(financial_sources: dict[str, object]) -> dict[str, object]:
-    runtime_status = get_ollama_runtime_status(DEFAULT_OLLAMA_BASE_URL, timeout_seconds=5)
+    frontend_runtime = _build_lane_runtime_snapshot(
+        base_url=get_frontend_base_url(),
+        lane="frontend",
+        model=get_frontend_model_name(),
+    )
+    backend_runtime = _build_lane_runtime_snapshot(
+        base_url=get_backend_base_url(),
+        lane="backend",
+        model=get_backend_model_name(),
+    )
+    runtime_status = frontend_runtime
     model_routing = _get_hal_model_routing()
     softdent_status = financial_sources.get("softdent") if isinstance(financial_sources.get("softdent"), dict) else {}
     quickbooks_status = financial_sources.get("quickbooks") if isinstance(financial_sources.get("quickbooks"), dict) else {}
@@ -463,11 +486,23 @@ def _build_hal_operating_picture(financial_sources: dict[str, object]) -> dict[s
         if isinstance(latest_completion, dict)
         else "Latest completed work: none recorded yet."
     )
-    runtime_clause = (
-        f"Ollama is reachable at {runtime_status['base_url']} with {runtime_status['model_count']} installed model(s)."
-        if runtime_status.get("api_reachable")
-        else f"Ollama status is degraded at {runtime_status['base_url']}: {runtime_status.get('error') or 'unreachable'}."
+    frontend_clause = (
+        f"Frontend lane is reachable at {frontend_runtime['base_url']} ({frontend_runtime['model']}, {frontend_runtime['model_count']} installed model(s))."
+        if frontend_runtime.get("api_reachable")
+        else (
+            f"Frontend lane is unavailable at {frontend_runtime['base_url']} ({frontend_runtime['model']}): "
+            f"{frontend_runtime.get('error') or 'unreachable'}."
+        )
     )
+    backend_clause = (
+        f"Backend lane is reachable at {backend_runtime['base_url']} ({backend_runtime['model']}, {backend_runtime['model_count']} installed model(s))."
+        if backend_runtime.get("api_reachable")
+        else (
+            f"Backend lane is unavailable at {backend_runtime['base_url']} ({backend_runtime['model']}): "
+            f"{backend_runtime.get('error') or 'unreachable'}."
+        )
+    )
+    runtime_clause = f"{frontend_clause} {backend_clause}"
     softdent_clause = (
         f"SoftDent aggregates are live for {softdent_period} across {provider_count} provider(s)."
         if softdent_available
@@ -485,6 +520,12 @@ def _build_hal_operating_picture(financial_sources: dict[str, object]) -> dict[s
         "summary": summary,
         "operator_mode": "deterministic_server_facts_first",
         "local_runtime": runtime_status,
+        "frontend_runtime": frontend_runtime,
+        "backend_runtime": backend_runtime,
+        "local_runtimes": {
+            "frontend": frontend_runtime,
+            "backend": backend_runtime,
+        },
         "capability_matrix": HAL_CAPABILITY_MATRIX[:],
         "file_ownership_areas": HAL_FILE_OWNERSHIP_AREAS[:],
         "completion_ledger": [dict(entry) for entry in HAL_COMPLETION_LEDGER],
@@ -813,6 +854,16 @@ def _build_local_ai_journal_validator(*, chart_of_accounts: dict[str, str], acco
     return validator
 
 
+def _format_backend_lane_unavailable_message(error: LocalAIConfigError | None = None) -> str:
+    base_url = get_backend_base_url()
+    model_name = get_backend_model_name()
+    detail = str(error).strip() if error else "Start the backend model server or configure AI_BACKEND_BASE_URL / AI_BACKEND_MODEL."
+    return (
+        f"Backend local AI lane unavailable at {base_url} for {model_name}. "
+        f"{detail}"
+    )
+
+
 def _try_local_ai_journal_draft(
     *,
     description: str,
@@ -823,16 +874,17 @@ def _try_local_ai_journal_draft(
     if not _local_ai_journal_workflow_enabled(context):
         return None
     if not LOCAL_MODEL_PROFILE_CONFIG_PATH.exists():
-        return None
+        return {"local_ai_unavailable": "Local model profile config is missing; using rule-based journal draft fallback."}
 
-    available, _ = check_ollama_available(get_backend_base_url(), timeout_seconds=5)
-    if not available:
-        return None
+    try:
+        require_lane_runtime("coder", purpose="journal draft structured parsing")
+    except LocalAIConfigError as exc:
+        return {"local_ai_unavailable": _format_backend_lane_unavailable_message(exc)}
 
     try:
         config = load_local_model_profile_config()
-    except Exception:
-        return None
+    except Exception as exc:
+        return {"local_ai_unavailable": f"Local model profile config could not be loaded: {exc}"}
 
     parser_profile = resolve_lane_profile(config, "coder")
     narrator_profile = resolve_lane_profile(config, "chat")
@@ -843,27 +895,31 @@ def _try_local_ai_journal_draft(
         description=description,
     )
     source_text = str(context.get("source_text") or description)
-    workflow_result = run_structured_output_workflow(
-        base_url=get_backend_base_url(),
-        parser_base_url=get_backend_base_url(),
-        narrator_base_url=get_frontend_base_url(),
-        parser_profile=parser_profile,
-        narrator_profile=narrator_profile,
-        source_text=source_text,
-        parse_instructions=(
-            "Infer the accounting transaction type and return a JSON object with keys transaction_type and lines. "
-            "The lines array must contain balanced debit and credit entries using only the approved chart of accounts. "
-            f"Use this exact amount for the full entry total: {amount:.2f}."
-        ),
-        summary_instructions=(
-            "Summarize the validated journal draft in one sentence for a human accounting reviewer. "
-            "Mention whether the draft is balanced and that human review is still required."
-        ),
-        timeout_seconds=20,
-        required_keys=["transaction_type", "lines"],
-        validator=validator,
-        seed=parser_profile.get("seed"),
-    )
+    try:
+        workflow_result = run_structured_output_workflow(
+            base_url=get_backend_base_url(),
+            parser_base_url=get_backend_base_url(),
+            narrator_base_url=get_frontend_base_url(),
+            parser_profile=parser_profile,
+            narrator_profile=narrator_profile,
+            source_text=source_text,
+            parse_instructions=(
+                "Infer the accounting transaction type and return a JSON object with keys transaction_type and lines. "
+                "The lines array must contain balanced debit and credit entries using only the approved chart of accounts. "
+                f"Use this exact amount for the full entry total: {amount:.2f}."
+            ),
+            summary_instructions=(
+                "Summarize the validated journal draft in one sentence for a human accounting reviewer. "
+                "Mention whether the draft is balanced and that human review is still required."
+            ),
+            timeout_seconds=20,
+            required_keys=["transaction_type", "lines"],
+            validator=validator,
+            seed=parser_profile.get("seed"),
+        )
+    except Exception as exc:
+        return {"local_ai_unavailable": f"Backend local AI journal workflow failed: {exc}"}
+
     return {
         "lines": workflow_result["parsed_payload"]["lines"],
         "summary": str(workflow_result["summary_text"]),
@@ -2254,6 +2310,7 @@ def draft_accounting_journal_entry(
     generated_summary: str | None = None
     generated_transaction_type: str | None = None
     used_local_ai_workflow = False
+    local_ai_unavailable: str | None = None
     workflow_result = _try_local_ai_journal_draft(
         description=sanitized_description,
         accounting_period=accounting_period,
@@ -2261,6 +2318,14 @@ def draft_accounting_journal_entry(
         context=context,
     )
     if workflow_result is None:
+        lines = draft_journal_entry_for_common_case(
+            description=sanitized_description,
+            accounting_period=accounting_period,
+            amount=amount,
+            context=context,
+        )
+    elif workflow_result.get("local_ai_unavailable"):
+        local_ai_unavailable = str(workflow_result["local_ai_unavailable"])
         lines = draft_journal_entry_for_common_case(
             description=sanitized_description,
             accounting_period=accounting_period,
@@ -2281,6 +2346,8 @@ def draft_accounting_journal_entry(
         f"Drafted {len(lines)} journal line(s) for review from sanitized accounting input. "
         f"Balanced={validation['balanced']}. Open period={validation['open_period']}."
     )
+    if local_ai_unavailable:
+        summary = f"{summary} Local AI workflow unavailable; used rule-based fallback. {local_ai_unavailable}"
     review_plan_path = write_review_step_file(
         tier="tier_1",
         actor=actor,
@@ -2346,6 +2413,7 @@ def draft_accounting_journal_entry(
         "queue_id": queue_id,
         "queue_status": queue_status,
         "enqueue_error": enqueue_error,
+        "local_ai_unavailable": local_ai_unavailable,
         "audit_id": audit_entry["audit_id"],
         "access_policy": get_hal_access_policy(),
     }

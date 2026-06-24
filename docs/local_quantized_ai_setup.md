@@ -89,6 +89,8 @@ Outputs are written to `.local_models/` by default (gitignored, local-only — d
 
 ## Run model servers
 
+Both lanes must be running for backend tasks (journal AI parser, coder profile, LiteLLM backend aliases). HAL `/api/hal9000/status` and `/control/runtime` report frontend and backend lane health separately.
+
 ### Ollama (recommended)
 
 Terminal 1 — frontend 24B:

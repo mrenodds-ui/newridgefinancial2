@@ -12,6 +12,12 @@ import yaml
 from fastapi import APIRouter, Depends
 
 from .auth import AuthenticatedUser, require_roles
+from app.ai_local_config import (
+    get_backend_base_url,
+    get_backend_model_name,
+    get_frontend_base_url,
+    get_frontend_model_name,
+)
 from .evaluation.client import get_ollama_runtime_status
 from .models import (
     ControlModelSummary,
@@ -31,7 +37,8 @@ from .models import (
 
 
 router = APIRouter()
-DEFAULT_OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+DEFAULT_OLLAMA_BASE_URL = get_frontend_base_url()
+DEFAULT_BACKEND_OLLAMA_BASE_URL = get_backend_base_url()
 DEFAULT_LITELLM_PROXY_BASE_URL = os.getenv("LITELLM_PROXY_BASE_URL", "http://127.0.0.1:4000")
 LITELLM_ROUTER_CONFIG_PATH = Path(__file__).resolve().parent.parent / "scripts" / "litellm_ollama_router.yaml"
 DEFAULT_LITELLM_ROUTING_STRATEGY = "simple-shuffle"
@@ -282,6 +289,66 @@ def _select_model(payload: ControlRouteRequest, models: list[_ModelCard]) -> dic
         "reasoning": reasoning,
         "warnings": warnings,
     }
+
+
+def _base_url_for_task_kind(task_kind: str) -> str:
+    if task_kind in {"coding", "analysis", "second_opinion"}:
+        return DEFAULT_BACKEND_OLLAMA_BASE_URL
+    return DEFAULT_OLLAMA_BASE_URL
+
+
+def _build_lane_runtime_summary(
+    *,
+    lane: str,
+    base_url: str,
+    model: str,
+    runtime_status: dict[str, Any],
+    models: list[_ModelCard],
+) -> dict[str, Any]:
+    lane_response = _build_runtime_response(runtime_status, models)
+    warning = lane_response.get("warning")
+    if not runtime_status.get("api_reachable"):
+        warning = runtime_status.get("error") or warning or f"{lane} lane Ollama is not reachable."
+    return {
+        "lane": lane,
+        "base_url": base_url,
+        "model": model,
+        "api_reachable": bool(runtime_status.get("api_reachable")),
+        "installed": bool(lane_response.get("installed")),
+        "running": bool(lane_response.get("running")),
+        "model_count": int(lane_response.get("model_count") or 0),
+        "installed_models": lane_response.get("installed_models") or [],
+        "error": runtime_status.get("error"),
+        "warning": warning,
+    }
+
+
+def _build_dual_lane_runtime_response() -> dict[str, Any]:
+    frontend_status, frontend_models = _fetch_model_catalog(DEFAULT_OLLAMA_BASE_URL)
+    backend_status, backend_models = _fetch_model_catalog(DEFAULT_BACKEND_OLLAMA_BASE_URL)
+    frontend_lane = _build_lane_runtime_summary(
+        lane="frontend",
+        base_url=DEFAULT_OLLAMA_BASE_URL,
+        model=get_frontend_model_name(),
+        runtime_status=frontend_status,
+        models=frontend_models,
+    )
+    backend_lane = _build_lane_runtime_summary(
+        lane="backend",
+        base_url=DEFAULT_BACKEND_OLLAMA_BASE_URL,
+        model=get_backend_model_name(),
+        runtime_status=backend_status,
+        models=backend_models,
+    )
+    primary_response = _build_runtime_response(frontend_status, frontend_models)
+    warnings = [item for item in (frontend_lane.get("warning"), backend_lane.get("warning")) if item]
+    if warnings:
+        primary_response["warning"] = " ".join(str(item) for item in warnings)
+    primary_response["lanes"] = {
+        "frontend": frontend_lane,
+        "backend": backend_lane,
+    }
+    return primary_response
 
 
 def _build_runtime_response(runtime_status: dict[str, Any], models: list[_ModelCard]) -> dict[str, Any]:
@@ -622,16 +689,16 @@ def _score_response_text(payload: ControlScoreRequest) -> dict[str, Any]:
 @router.get("/control/runtime", response_model=ControlRuntimeStatusResponse)
 def control_runtime_status(user: AuthenticatedUser = Depends(require_roles("hal:operator"))):
     del user
-    runtime_status, models = _fetch_model_catalog(DEFAULT_OLLAMA_BASE_URL)
-    return _build_runtime_response(runtime_status, models)
+    return _build_dual_lane_runtime_response()
 
 
 @router.post("/api/control/route", response_model=ControlRouteResponse, include_in_schema=False)
 @router.post("/control/route", response_model=ControlRouteResponse)
 def control_route_model(payload: ControlRouteRequest, user: AuthenticatedUser = Depends(require_roles("hal:operator"))):
     del user
-    runtime_status, models = _fetch_model_catalog(DEFAULT_OLLAMA_BASE_URL)
-    runtime_response = _build_runtime_response(runtime_status, models)
+    route_base_url = _base_url_for_task_kind(payload.task_kind)
+    runtime_status, models = _fetch_model_catalog(route_base_url)
+    runtime_response = _build_dual_lane_runtime_response()
     decision = _select_model(payload, models)
     selected = decision.get("selected")
     alternatives = decision.get("alternatives") or []
@@ -668,14 +735,23 @@ def control_score_response(payload: ControlScoreRequest, user: AuthenticatedUser
 @router.post("/control/workflows/preview", response_model=ControlWorkflowPreviewResponse)
 def control_workflow_preview(payload: ControlWorkflowPreviewRequest, user: AuthenticatedUser = Depends(require_roles("hal:operator"))):
     del user
-    runtime_status, models = _fetch_model_catalog(DEFAULT_OLLAMA_BASE_URL)
-    runtime_response = _build_runtime_response(runtime_status, models)
+    route_base_url = _base_url_for_task_kind(payload.task_kind)
+    runtime_status, models = _fetch_model_catalog(route_base_url)
+    runtime_response = _build_dual_lane_runtime_response()
     decision = _select_model(payload, models)
     selected = decision.get("selected")
     blocking_issues: list[str] = []
 
     if not runtime_status.get("api_reachable"):
-        blocking_issues.append(runtime_status.get("error") or "Ollama is not reachable.")
+        blocking_issues.append(runtime_status.get("error") or f"Ollama is not reachable for the {payload.task_kind} lane at {route_base_url}.")
+    if payload.task_kind in {"coding", "analysis", "second_opinion"}:
+        backend_lane = (runtime_response.get("lanes") or {}).get("backend") if isinstance(runtime_response.get("lanes"), dict) else {}
+        if isinstance(backend_lane, dict) and not backend_lane.get("api_reachable"):
+            blocking_issues.append(
+                backend_lane.get("warning")
+                or backend_lane.get("error")
+                or f"Backend lane is unavailable at {DEFAULT_BACKEND_OLLAMA_BASE_URL}."
+            )
     if not models:
         blocking_issues.append("No installed Ollama models are available for routing.")
     if (payload.requires_vision or payload.task_kind == "vision") and selected and "vision" not in selected["card"].capabilities:

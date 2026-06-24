@@ -157,7 +157,7 @@ def test_journal_draft_infers_payroll_accrual_from_description():
 def test_journal_draft_can_use_local_ai_workflow_when_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("HAL_ALLOWED_BASE_PATH", str(tmp_path))
     monkeypatch.setenv("HAL_AI_WORKSPACE_PATH", str(tmp_path / "AI_Workspace"))
-    monkeypatch.setattr("app.hal.orchestrator.check_ollama_available", lambda base_url, timeout_seconds=5: (True, None))
+    monkeypatch.setattr("app.hal.orchestrator.require_lane_runtime", lambda alias, *, purpose: "http://127.0.0.1:11435")
     monkeypatch.setattr(
         "app.hal.orchestrator.load_json_file",
         lambda path: {"profiles": {"coder": {"model": "qwen", "seed": 23}, "chat": {"model": "mistral", "seed": 17}}},
@@ -204,7 +204,15 @@ def test_journal_draft_can_use_local_ai_workflow_when_enabled(monkeypatch: pytes
 
 
 def test_journal_draft_falls_back_when_local_ai_workflow_is_unavailable(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("app.hal.orchestrator.check_ollama_available", lambda base_url, timeout_seconds=5: (False, "offline"))
+    from app.ai_local_config import LocalAIConfigError
+
+    def fake_require_lane_runtime(alias, *, purpose):
+        raise LocalAIConfigError(
+            "Local AI runtime unavailable for journal draft structured parsing. "
+            "Lane=backend, model=qwen3:30b, base_url=http://127.0.0.1:11435. connection refused"
+        )
+
+    monkeypatch.setattr("app.hal.orchestrator.require_lane_runtime", fake_require_lane_runtime)
 
     response = client.post(
         "/api/hal9000/accounting/journal-draft",
@@ -223,10 +231,13 @@ def test_journal_draft_falls_back_when_local_ai_workflow_is_unavailable(monkeypa
     assert payload["validation"]["balanced"] is True
     assert payload["lines"][0]["account_code"] == "1310"
     assert payload["lines"][1]["account_code"] == "1010"
+    assert payload["local_ai_unavailable"] is not None
+    assert "Backend local AI lane unavailable" in payload["local_ai_unavailable"]
+    assert "rule-based fallback" in payload["summary"]
 
 
 def test_journal_draft_can_auto_enqueue_validated_ai_draft(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("app.hal.orchestrator.check_ollama_available", lambda base_url, timeout_seconds=5: (True, None))
+    monkeypatch.setattr("app.hal.orchestrator.require_lane_runtime", lambda alias, *, purpose: "http://127.0.0.1:11435")
     monkeypatch.setattr(
         "app.hal.orchestrator.load_json_file",
         lambda path: {"profiles": {"coder": {"model": "qwen", "seed": 23}, "chat": {"model": "mistral", "seed": 17}}},
@@ -276,7 +287,7 @@ def test_journal_draft_can_auto_enqueue_validated_ai_draft(monkeypatch: pytest.M
 
 
 def test_journal_draft_returns_draft_when_auto_enqueue_fails(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("app.hal.orchestrator.check_ollama_available", lambda base_url, timeout_seconds=5: (True, None))
+    monkeypatch.setattr("app.hal.orchestrator.require_lane_runtime", lambda alias, *, purpose: "http://127.0.0.1:11435")
     monkeypatch.setattr(
         "app.hal.orchestrator.load_json_file",
         lambda path: {"profiles": {"coder": {"model": "qwen", "seed": 23}, "chat": {"model": "mistral", "seed": 17}}},

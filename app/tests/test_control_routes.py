@@ -111,7 +111,12 @@ def _fake_proxy_models_payload() -> dict[str, object]:
 
 
 def test_control_runtime_lists_models_and_suggested_defaults(monkeypatch):
-    monkeypatch.setattr(control_routes_module.requests, "get", lambda url, timeout=5: _FakeResponse(_fake_tags_payload()))
+    def fake_get(url, timeout=5):
+        if ":11435" in url:
+            return _FakeResponse({"models": []}, status_code=503)
+        return _FakeResponse(_fake_tags_payload())
+
+    monkeypatch.setattr(control_routes_module.requests, "get", fake_get)
 
     response = client.get("/api/control/runtime", auth=basic_auth())
 
@@ -121,6 +126,9 @@ def test_control_runtime_lists_models_and_suggested_defaults(monkeypatch):
     assert body["model_count"] == 3
     assert body["suggested_defaults"]["coding"] == "qwen3:30b"
     assert body["suggested_defaults"]["vision"] == "mistral-small3.1:24b"
+    assert body["lanes"]["frontend"]["api_reachable"] is True
+    assert body["lanes"]["backend"]["api_reachable"] is False
+    assert body["lanes"]["backend"]["model"] == control_routes_module.get_backend_model_name()
 
 
 def test_control_route_prefers_vision_capable_model_when_required(monkeypatch):
