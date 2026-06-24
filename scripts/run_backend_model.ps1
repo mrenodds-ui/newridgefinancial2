@@ -11,8 +11,8 @@ $contextSize = if ($env:AI_BACKEND_CONTEXT_SIZE) { $env:AI_BACKEND_CONTEXT_SIZE 
 
 if (-not $ModelPath) { $ModelPath = $env:AI_BACKEND_MODEL_PATH }
 
-Write-Host "Local-only: keep weights under models/ or .local_models/ (gitignored). Never commit GGUF or checkpoint files."
-Write-Host "VRAM: backend 30B Q4_K_S — prefer CPU/RAM or partial offload on :11435 to avoid contending with the 24B frontend lane."
+Write-Host 'Local-only: keep weights under models/ or .local_models/ (gitignored). Never commit GGUF or checkpoint files.'
+Write-Host 'VRAM: backend 30B Q4_K_S - prefer CPU/RAM or partial offload on :11435 to avoid contending with the 24B frontend lane.'
 
 if ($runtime -eq 'ollama') {
     if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
