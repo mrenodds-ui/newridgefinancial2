@@ -3,8 +3,8 @@
   Stop qwen3:235b and the evaluator Ollama lane on :11436.
 
 .DESCRIPTION
-  Stops the model tag, then stops only the listener bound to the evaluator port.
-  Does not stop :11434 or :11435.
+  Stops only the listener bound to the evaluator port (with retries for tray respawn).
+  Does not call ollama stop; unloading qwen3:235b via ollama stop can hang during automation.
 
 .PARAMETER WhatIf
   Show planned actions without stopping processes.
@@ -70,12 +70,15 @@ function Stop-ListenerOnPort([int]$ListenPort) {
 $evalHost = "${HostName}:$Port"
 $env:OLLAMA_HOST = $evalHost
 
-Write-Host 'Stopping qwen3:235b on evaluator lane...'
-Stop-ListenerOnPort -ListenPort $Port
-
-if ($PSCmdlet.ShouldProcess('qwen3:235b', 'ollama stop')) {
-    if (Test-OllamaLane $evalHost) {
-        ollama stop qwen3:235b 2>$null | Out-Null
+Write-Host "Stopping evaluator lane on http://$evalHost..."
+for ($pass = 1; $pass -le 3; $pass++) {
+    Stop-ListenerOnPort -ListenPort $Port
+    if (-not (Test-OllamaLane $evalHost)) {
+        break
+    }
+    if ($pass -lt 3 -and -not $WhatIfPreference) {
+        Write-Host "Evaluator lane still responds; retrying listener stop ($pass/3)..."
+        Start-Sleep -Seconds 2
     }
 }
 
