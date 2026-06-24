@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -52,6 +53,8 @@ SOFTDENT_PASSTHROUGH_IMPORT_FILES = {
 
 SUPPORTED_IMPORT_SUFFIXES = frozenset({".csv", ".json", ".txt", ".xlsx", ".xlsm", ".xls"})
 SUPPORTED_TEXT_IMPORT_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252")
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -119,6 +122,12 @@ def recompute_cache(app) -> dict[str, object]:
     app.state.last_refresh_date = datetime.now(timezone.utc).date().isoformat()
     app.state.last_refresh_utc = evaluated_at
     _refresh_current_kpis(app)
+    try:
+        from app.hal.widget_builder import refresh_import_driven_widget_feed
+
+        refresh_import_driven_widget_feed()
+    except Exception as exc:
+        logger.warning("Import-driven widget feed refresh failed after cache recompute: %s", exc)
     return payload
 
 

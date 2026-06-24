@@ -6,8 +6,8 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-import app.hal.widget_feed as widget_feed_module
 import app.hal.orchestrator as hal_orchestrator
+import app.hal.widget_feed as widget_feed_module
 import app.hardware_routes as hardware_routes_module
 import app.routes as routes_module
 import app.services as services_module
@@ -51,6 +51,7 @@ def setup_function():
     os.environ["HAL_SQLITE_PATH"] = str(runtime_dir / "hal_test.sqlite3")
     os.environ["HAL_CHROMA_PATH"] = str(runtime_dir / "hal_chroma")
     clear_user_registry_cache()
+    widget_feed_module.configure_widget_feed_cache_path(runtime_dir / "import_widget_feed.json")
     widget_feed_module.clear_widget_feed()
 
 def basic_auth():

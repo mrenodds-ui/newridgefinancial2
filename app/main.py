@@ -13,6 +13,7 @@ from fastapi import Response
 from .auth import require_roles, validate_auth_configuration
 from .control_routes import router as control_router
 from .data_pipeline import ensure_runtime_state
+from .hal.widget_feed import load_widget_feed_from_disk
 from .hardware_routes import router as hardware_router
 from .mcp_routes import router as mcp_router
 from .routes import router
@@ -98,6 +99,7 @@ def _frontend_bundle_available() -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     validate_auth_configuration()
+    load_widget_feed_from_disk()
     yield
 
 

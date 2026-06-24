@@ -16,7 +16,6 @@ import {
   buildDashboardTrendData,
   buildDashboardSummaryFromFinancialSummary,
   buildFinancialSummaryInsurancePatientTotals,
-  buildFinancialSummaryProviderProduction,
   buildProfitLossTrendData,
   buildQuickBooksExpenseCategoryData,
   buildQuickBooksMonthlyExpenseTrendData,
@@ -36,7 +35,6 @@ import {
   type FinancialDashboardTileId,
 } from "./financialDashboardLayout";
 import { HorizontalExpenseBarChart } from "./HorizontalExpenseBarChart";
-import { ProviderPerformanceTable } from "./ProviderPerformanceTable";
 
 const PRODUCTION_COLOR = "#4c84ff";
 const COLLECTIONS_COLOR = "#e4ecff";
@@ -206,6 +204,23 @@ function getPublishedHalWidget(widgetFeed: FinancialSummaryWidgetFeedSnapshot | 
   };
 }
 
+function isSuccessfulHalWidget(widget: PublishedHalWidget | null): widget is PublishedHalWidget {
+  return widget !== null && String(widget.status ?? "").trim().toUpperCase() === "SUCCESS";
+}
+
+function getWidgetFeedSourceLabel(widgetFeed: FinancialSummaryWidgetFeedSnapshot | null): string {
+  const manager = String(widgetFeed?.manager ?? "")
+    .trim()
+    .toLowerCase();
+  if (manager === "import cache") {
+    return "Import cache";
+  }
+  if (manager) {
+    return "HAL feed";
+  }
+  return "Local KPI";
+}
+
 function toHalWidgetStatusTone(status: unknown): WidgetTone {
   const normalized = String(status ?? "").trim().toUpperCase();
   if (normalized === "SUCCESS") {
@@ -217,10 +232,10 @@ function toHalWidgetStatusTone(status: unknown): WidgetTone {
   return "neutral";
 }
 
-function toHalWidgetStatusLabel(status: unknown, fallback: string) {
+function toHalWidgetStatusLabel(status: unknown, fallback: string, sourceLabel = "HAL feed") {
   const normalized = String(status ?? "").trim().toUpperCase();
   if (normalized === "SUCCESS") {
-    return "HAL current";
+    return sourceLabel;
   }
   if (normalized === "DEGRADED") {
     return "HAL degraded";
@@ -234,11 +249,9 @@ function toHalWidgetStatusLabel(status: unknown, fallback: string) {
 function buildHighTechFinanceWidgets({
   financialSummary,
   summary,
-  providerProduction,
 }: {
   financialSummary: FinancialSummaryResponse | undefined;
   summary: ReturnType<typeof buildDashboardSummaryFromFinancialSummary>;
-  providerProduction: ReturnType<typeof buildFinancialSummaryProviderProduction>;
 }): FinancialWidget[] {
   const latestAr = financialSummary?.latestAr ?? null;
   const quickBooksStatus = financialSummary?.quickBooksStatus ?? null;
@@ -249,7 +262,6 @@ function buildHighTechFinanceWidgets({
   const paymentPlans = softDentCoverageMetrics?.paymentPlans ?? null;
   const claimsSource = sourceReview?.softDentClaims ?? null;
   const topOutstandingPayer = claimsSummary?.top_outstanding_payers?.[0] ?? null;
-  const topProvider = providerProduction[0] ?? null;
   const patientAr = latestAr?.patient_ar ?? null;
   const importedRowCount = sumRowCounts(quickBooksStatus?.rowCounts ?? undefined);
   const hasTreatmentPlans = Boolean(treatmentPlans?.available);
@@ -261,6 +273,7 @@ function buildHighTechFinanceWidgets({
   const claimsNeedReview = !claimsAvailable || Boolean(claimsSource?.reviewRequired) || claimsSource?.confidenceLabel === "manual review";
   const revenueNeedsRefresh = Boolean(summary?.isStale) || !quickBooksReady;
   const widgetFeed = getWidgetFeedSnapshot(financialSummary);
+  const widgetFeedSourceLabel = getWidgetFeedSourceLabel(widgetFeed);
   const practiceFinancialOverview = getPublishedHalWidget(widgetFeed, "practice_financial_overview");
   const accountsPayableAutomation = getPublishedHalWidget(widgetFeed, "accounts_payable_automation");
   const smartClaimsAndReceivables = getPublishedHalWidget(widgetFeed, "smart_claims_and_receivables");
@@ -388,17 +401,13 @@ function buildHighTechFinanceWidgets({
         summary?.monthProduction !== null
           ? `${formatCurrency(summary?.monthProduction ?? 0)} produced this month`
           : "Revenue run-rate is not available",
-      summary: topProvider
-        ? `${topProvider.provider} leads verified production at ${formatCurrency(topProvider.production)}, while collections pace is ${formatPercentValue(summary?.collectionPercent ?? null)}.`
-        : `Collections pace is ${formatPercentValue(summary?.collectionPercent ?? null)} with live production and QuickBooks metrics aligned in one view.`,
+      summary: `Practice-wide collections pace is ${formatPercentValue(summary?.collectionPercent ?? null)} with production and QuickBooks metrics aligned in one view.`,
       metrics: [
         { label: "Collections", value: formatCurrencyValue(summary?.monthCollections ?? null) },
         { label: "Collection rate", value: formatPercentValue(summary?.collectionPercent ?? null) },
-        { label: "Lead provider", value: topProvider?.provider ?? "Unavailable" },
+        { label: "Practice production", value: formatCurrencyValue(summary?.monthProduction ?? null) },
       ],
-      nextAction: topProvider
-        ? `Compare ${topProvider.provider}'s output with collections pace before shifting more chair time or staffing.`
-        : "Use the verified monthly production and collections trend to spot pacing risk early.",
+      nextAction: "Use the verified monthly production and collections trend to spot pacing risk early.",
       actionLabel: revenueAnalyticsPrimaryAction.label,
       actionPath: revenueAnalyticsPrimaryAction.path,
       secondaryActionLabel: revenueAnalyticsSecondaryAction.label,
@@ -451,103 +460,87 @@ function buildHighTechFinanceWidgets({
   const outstandingClaimCount = toOptionalNumber(claimsMetrics?.outstanding_claim_count);
   const unsubmittedClaimCount = toOptionalNumber(claimsMetrics?.unsubmitted_claim_count);
   const accountsReceivableTotal = toOptionalNumber(claimsMetrics?.accounts_receivable_total);
-  const providerCount = toOptionalNumber(careMetrics?.provider_count);
   const patientCount = toOptionalNumber(careMetrics?.patient_count);
   const patientBalanceTotal = toOptionalNumber(careMetrics?.patient_balance_total);
 
   return widgets.map((widget) => {
-    if (widget.id === "case-acceptance" && careDeliveryPerformance) {
+    if (widget.id === "case-acceptance" && isSuccessfulHalWidget(careDeliveryPerformance)) {
       return {
         ...widget,
-        statusLabel: toHalWidgetStatusLabel(careDeliveryPerformance.status, widget.statusLabel),
+        statusLabel: toHalWidgetStatusLabel(careDeliveryPerformance.status, widget.statusLabel, widgetFeedSourceLabel),
         statusTone: toHalWidgetStatusTone(careDeliveryPerformance.status),
         headline: patientBalanceTotal !== null ? `${formatCurrency(patientBalanceTotal)} patient balance in active care` : widget.headline,
-        summary: "HAL 9000 published a current care-delivery balance snapshot from the latest extraction cycle.",
+        summary: `${widgetFeedSourceLabel} published a current care-delivery balance snapshot from the latest import cache.`,
         metrics: [
-          { label: "Providers", value: formatCountValue(providerCount) },
           { label: "Patients", value: formatCountValue(patientCount) },
           { label: "Patient balance", value: formatCurrencyValue(patientBalanceTotal) },
+          { label: "Feed status", value: toHalWidgetStatusLabel(careDeliveryPerformance.status, widget.statusLabel, widgetFeedSourceLabel) },
         ],
-        nextAction:
-          String(careDeliveryPerformance.status ?? "").toUpperCase() === "SUCCESS"
-            ? "Use the HAL care-delivery snapshot to prioritize financing and case presentation follow-up."
-            : "Review HAL 9000 care-delivery status before using this widget for patient financing decisions.",
+        nextAction: "Use the published care-delivery snapshot to prioritize financing and case presentation follow-up.",
       };
     }
 
-    if (widget.id === "ap-automation" && accountsPayableAutomation) {
+    if (widget.id === "ap-automation" && isSuccessfulHalWidget(accountsPayableAutomation)) {
       return {
         ...widget,
-        statusLabel: toHalWidgetStatusLabel(accountsPayableAutomation.status, widget.statusLabel),
+        statusLabel: toHalWidgetStatusLabel(accountsPayableAutomation.status, widget.statusLabel, "QuickBooks"),
         statusTone: toHalWidgetStatusTone(accountsPayableAutomation.status),
         headline: openBillsTotal !== null ? `${formatCurrency(openBillsTotal)} open bills staged` : widget.headline,
-        summary: "HAL 9000 published current payable exposure and expense totals from the latest orchestration cycle.",
+        summary: "QuickBooks import cache published current payable exposure and expense totals for this dashboard slice.",
         metrics: [
           { label: "Open bills", value: formatCurrencyValue(openBillsTotal) },
           { label: "Expense total", value: formatCurrencyValue(expenseTotal) },
-          { label: "Feed status", value: toHalWidgetStatusLabel(accountsPayableAutomation.status, widget.statusLabel) },
+          { label: "Feed status", value: toHalWidgetStatusLabel(accountsPayableAutomation.status, widget.statusLabel, "QuickBooks") },
         ],
-        nextAction:
-          String(accountsPayableAutomation.status ?? "").toUpperCase() === "SUCCESS"
-            ? "Review HAL-published payable exposure before approving the next vendor payment batch."
-            : "Repair the HAL payable lane before using this widget for payment approval decisions.",
+        nextAction: "Review QuickBooks payable exposure before approving the next vendor payment batch.",
       };
     }
 
-    if (widget.id === "smart-claims" && smartClaimsAndReceivables) {
+    if (widget.id === "smart-claims" && isSuccessfulHalWidget(smartClaimsAndReceivables)) {
       return {
         ...widget,
-        statusLabel: toHalWidgetStatusLabel(smartClaimsAndReceivables.status, widget.statusLabel),
+        statusLabel: toHalWidgetStatusLabel(smartClaimsAndReceivables.status, widget.statusLabel, "SoftDent"),
         statusTone: toHalWidgetStatusTone(smartClaimsAndReceivables.status),
         headline: outstandingClaimAmount !== null ? `${formatCurrency(outstandingClaimAmount)} insurance receivables` : widget.headline,
-        summary: "HAL 9000 published current claim exposure and receivables totals from the latest extraction cycle.",
+        summary: "SoftDent import cache published current claim exposure and receivables totals for this dashboard slice.",
         metrics: [
           { label: "Outstanding", value: formatCountValue(outstandingClaimCount) },
           { label: "Receivables", value: formatCurrencyValue(accountsReceivableTotal) },
           { label: "Unsubmitted", value: formatCountValue(unsubmittedClaimCount) },
         ],
-        nextAction:
-          String(smartClaimsAndReceivables.status ?? "").toUpperCase() === "SUCCESS"
-            ? "Work the HAL-published outstanding claims queue before month-end close."
-            : "Review HAL claims routing before using this widget for payer follow-up decisions.",
+        nextAction: "Work the published outstanding claims queue before month-end close.",
       };
     }
 
-    if (widget.id === "revenue-analytics" && practiceFinancialOverview) {
+    if (widget.id === "revenue-analytics" && isSuccessfulHalWidget(practiceFinancialOverview)) {
       return {
         ...widget,
-        statusLabel: toHalWidgetStatusLabel(practiceFinancialOverview.status, widget.statusLabel),
+        statusLabel: toHalWidgetStatusLabel(practiceFinancialOverview.status, widget.statusLabel, widgetFeedSourceLabel),
         statusTone: toHalWidgetStatusTone(practiceFinancialOverview.status),
-        headline: monthlyRevenue !== null ? `${formatCurrency(monthlyRevenue)} HAL revenue snapshot` : widget.headline,
-        summary: "HAL 9000 published synchronized revenue, net income, production, and collections totals for this dashboard slice.",
+        headline: monthlyRevenue !== null ? `${formatCurrency(monthlyRevenue)} revenue snapshot` : widget.headline,
+        summary: `${widgetFeedSourceLabel} published synchronized revenue, net income, production, and collections totals for this dashboard slice.`,
         metrics: [
           { label: "Revenue", value: formatCurrencyValue(monthlyRevenue) },
           { label: "Net income", value: formatCurrencyValue(monthlyNetIncome) },
           { label: "Collection rate", value: formatPercentValue(collectionRate) },
         ],
-        nextAction:
-          String(practiceFinancialOverview.status ?? "").toUpperCase() === "SUCCESS"
-            ? "Use the HAL revenue snapshot to compare production, collections, and margin pacing before shifting resources."
-            : "Review HAL financial overview status before relying on this revenue snapshot operationally.",
+        nextAction: "Use the published revenue snapshot to compare production, collections, and margin pacing before shifting resources.",
       };
     }
 
-    if (widget.id === "ai-follow-up" && smartClaimsAndReceivables) {
+    if (widget.id === "ai-follow-up" && isSuccessfulHalWidget(smartClaimsAndReceivables)) {
       return {
         ...widget,
-        statusLabel: toHalWidgetStatusLabel(smartClaimsAndReceivables.status, widget.statusLabel),
+        statusLabel: toHalWidgetStatusLabel(smartClaimsAndReceivables.status, widget.statusLabel, "SoftDent"),
         statusTone: toHalWidgetStatusTone(smartClaimsAndReceivables.status),
         headline: accountsReceivableTotal !== null ? `${formatCurrency(accountsReceivableTotal)} receivables queue` : widget.headline,
-        summary: "HAL 9000 published a live follow-up queue for receivables and unsubmitted claims.",
+        summary: "SoftDent import cache published a live follow-up queue for receivables and unsubmitted claims.",
         metrics: [
           { label: "Receivables", value: formatCurrencyValue(accountsReceivableTotal) },
           { label: "Outstanding claims", value: formatCountValue(outstandingClaimCount) },
           { label: "Unsubmitted claims", value: formatCountValue(unsubmittedClaimCount) },
         ],
-        nextAction:
-          String(smartClaimsAndReceivables.status ?? "").toUpperCase() === "SUCCESS"
-            ? "Start with the HAL-published receivables queue before lower-risk reminder workflows."
-            : "Review HAL claims and receivables status before enabling follow-up automation from this widget.",
+        nextAction: "Start with the published receivables queue before lower-risk reminder workflows.",
       };
     }
 
@@ -690,7 +683,6 @@ function FinancialDashboard() {
   const verifiedFinancialSummary = isSessionVerified ? financialSummaryQuery.data : undefined;
   const summary = useMemo(() => buildDashboardSummaryFromFinancialSummary(verifiedFinancialSummary), [verifiedFinancialSummary]);
   const trendData = useMemo(() => buildDashboardTrendData(verifiedFinancialSummary), [verifiedFinancialSummary]);
-  const providerProduction = useMemo(() => buildFinancialSummaryProviderProduction(verifiedFinancialSummary), [verifiedFinancialSummary]);
   const insurancePatientTotals = useMemo(() => buildFinancialSummaryInsurancePatientTotals(verifiedFinancialSummary), [verifiedFinancialSummary]);
   const expenseCategoryData = useMemo(() => buildQuickBooksExpenseCategoryData(verifiedFinancialSummary), [verifiedFinancialSummary]);
   const monthlyExpenseTrend = useMemo(
@@ -702,7 +694,6 @@ function FinancialDashboard() {
     [verifiedFinancialSummary?.quickBooksProfitLossSummary],
   );
   const hasTrendData = trendData.length > 0;
-  const hasProviderProduction = providerProduction.length > 0;
   const hasInsurancePatientTotals = insurancePatientTotals.insurance > 0 || insurancePatientTotals.patient > 0;
   const hasExpenseCategoryData = expenseCategoryData.length > 0;
   const hasMonthlyExpenseTrend = monthlyExpenseTrend.length > 0;
@@ -767,9 +758,8 @@ function FinancialDashboard() {
       buildHighTechFinanceWidgets({
         financialSummary: verifiedFinancialSummary,
         summary,
-        providerProduction,
       }),
-    [providerProduction, summary, verifiedFinancialSummary],
+    [summary, verifiedFinancialSummary],
   );
 
   useEffect(() => {
@@ -1173,11 +1163,6 @@ function FinancialDashboard() {
           </ResponsiveGridLayout>
         </section>
 
-        {hasProviderProduction && (
-          <div className="dashboard-section-spacer">
-            <ProviderPerformanceTable data={providerProduction} />
-          </div>
-        )}
         {arOver90AlertMessage ? (
           <div className="dashboard-section-spacer">
             <CustomAlert message={arOver90AlertMessage} type="warning" />

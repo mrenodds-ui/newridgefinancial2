@@ -41,10 +41,6 @@ vi.mock("../components/dashboard/HorizontalExpenseBarChart", () => ({
   HorizontalExpenseBarChart: () => <div data-testid="expense-bar-chart" />,
 }));
 
-vi.mock("../components/dashboard/ProviderPerformanceTable", () => ({
-  ProviderPerformanceTable: () => <div data-testid="provider-performance-table" />,
-}));
-
 function buildFinancialSummary(): FinancialSummaryResponse {
   const trailing12Months = Array.from({ length: 12 }, (_, index) => ({
     year_month: `2026-${String(index + 1).padStart(2, "0")}`,
@@ -156,8 +152,13 @@ function buildFinancialSummary(): FinancialSummaryResponse {
     calendarYearKpis: trailing12Months,
     fourYearMonthlyKpis: trailing12Months,
     providerProduction: [
-      { provider: "Dr. Adams", production: 4200, collections: 3600, insurance: 2800, patient: 800 },
-      { provider: "Dr. Lee", production: 3100, collections: 2800, insurance: 1800, patient: 1000 },
+      {
+        provider: "Entire Practice",
+        production: 7300,
+        collections: 6400,
+        insurance: 4600,
+        patient: 1800,
+      },
     ],
     topAdaCodes: [],
     quickBooksStatus: {
@@ -248,6 +249,62 @@ function buildFinancialSummaryWithIssues(): FinancialSummaryResponse {
   };
 }
 
+function buildFinancialSummaryWithImportWidgetFeed(): FinancialSummaryResponse {
+  return {
+    ...buildFinancialSummary(),
+    widgetFeed: {
+      manager: "Import cache",
+      run_id: "import-run-1",
+      generated_at: "2026-06-24T12:00:00Z",
+      received_at: "2026-06-24T12:00:05Z",
+      widgets: {
+        practice_financial_overview: {
+          title: "Practice Financial Overview",
+          status: "SUCCESS",
+          metrics: {
+            monthly_revenue: 5100,
+            monthly_net_income: 1900,
+            collection_rate: 84,
+          },
+        },
+        accounts_payable_automation: {
+          title: "Accounts Payable Automation",
+          status: "SUCCESS",
+          metrics: {
+            expense_total: 3200,
+          },
+        },
+        smart_claims_and_receivables: {
+          title: "Smart Claims & Receivables",
+          status: "SUCCESS",
+          metrics: {
+            outstanding_claim_count: 9,
+            outstanding_claim_amount: 12401,
+            unsubmitted_claim_count: 4,
+            accounts_receivable_total: 12000,
+          },
+        },
+        care_delivery_performance: {
+          title: "Care Delivery Performance",
+          status: "SUCCESS",
+          metrics: {
+            provider_count: 1,
+            patient_balance_total: 7000,
+          },
+        },
+      },
+      sources: {
+        quickbooks: { last_status: "SUCCESS", origin: "imports" },
+        softdent: { last_status: "SUCCESS", origin: "imports" },
+      },
+      jobs: {
+        import_cache_refresh: { status: "SUCCESS" },
+        widget_publish: { status: "SUCCESS" },
+      },
+    },
+  };
+}
+
 function buildFinancialSummaryWithHalWidgetFeed(): FinancialSummaryResponse {
   return {
     ...buildFinancialSummary(),
@@ -288,7 +345,7 @@ function buildFinancialSummaryWithHalWidgetFeed(): FinancialSummaryResponse {
           title: "Care Delivery Performance",
           status: "SUCCESS",
           metrics: {
-            provider_count: 7,
+            provider_count: 1,
             patient_count: 642,
             patient_balance_total: 9100,
           },
@@ -351,7 +408,7 @@ describe("FinancialDashboard widget deck", () => {
     expect(screen.getByText("$48,200 pending plan value")).toBeInTheDocument();
     expect(screen.getByText("$12,401 insurance receivables")).toBeInTheDocument();
     expect(screen.getByText("Delta Dental")).toBeInTheDocument();
-    expect(screen.getByText("Dr. Adams")).toBeInTheDocument();
+    expect(screen.getByText("Practice production")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open SoftDent plans" })).toHaveAttribute("href", "/softdent");
     expect(screen.getByRole("link", { name: "Review A/R follow-up" })).toHaveAttribute("href", "/ar");
     expect(screen.getByRole("link", { name: "Review QuickBooks feed" })).toHaveAttribute("href", "/quickbooks");
@@ -383,7 +440,7 @@ describe("FinancialDashboard widget deck", () => {
     expect(screen.getByRole("link", { name: "Open collections page" })).toHaveAttribute("href", "/ar");
   });
 
-  it("prefers HAL-published widget values when the backend exposes a widget feed", async () => {
+  it("prefers SUCCESS HAL-published widget values when the backend exposes a widget feed", async () => {
     vi.mocked(fetchFinancialSummary).mockResolvedValue(buildFinancialSummaryWithHalWidgetFeed());
 
     renderDashboard();
@@ -392,12 +449,66 @@ describe("FinancialDashboard widget deck", () => {
 
     expect(screen.getByText("$9,100 patient balance in active care")).toBeInTheDocument();
     expect(screen.getByText("$12,850 open bills staged")).toBeInTheDocument();
-    expect(screen.getByText("$22,110 insurance receivables")).toBeInTheDocument();
-    expect(screen.getByText("$155,000 HAL revenue snapshot")).toBeInTheDocument();
-    expect(screen.getByText("$21,700 receivables queue")).toBeInTheDocument();
-    expect(screen.getAllByText("HAL current").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("HAL degraded").length).toBeGreaterThan(0);
+    expect(screen.getByText("$155,000 revenue snapshot")).toBeInTheDocument();
+    expect(screen.getAllByText("HAL feed").length).toBeGreaterThan(0);
+    expect(screen.getByText("$12,401 insurance receivables")).toBeInTheDocument();
+    expect(screen.queryByText("$22,110 insurance receivables")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Review QuickBooks feed" })).toHaveAttribute("href", "/quickbooks");
     expect(screen.getByRole("link", { name: "Open collections page" })).toHaveAttribute("href", "/ar");
+  });
+
+  it("renders import-cache SUCCESS widget values in finance and operations cards", async () => {
+    vi.mocked(fetchFinancialSummary).mockResolvedValue(buildFinancialSummaryWithImportWidgetFeed());
+
+    renderDashboard();
+
+    await screen.findByRole("heading", { name: "New Ridge Family Financial" });
+
+    expect(screen.getByText("$5,100 revenue snapshot")).toBeInTheDocument();
+    expect(screen.getByText("$12,401 insurance receivables")).toBeInTheDocument();
+    expect(screen.getByText("$7,000 patient balance in active care")).toBeInTheDocument();
+    expect(screen.getAllByText("Import cache").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("QuickBooks").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("SoftDent").length).toBeGreaterThan(0);
+  });
+
+  it("does not override local KPI widgets when the widget feed is DEGRADED or FAILED", async () => {
+    vi.mocked(fetchFinancialSummary).mockResolvedValue({
+      ...buildFinancialSummaryWithHalWidgetFeed(),
+      widgetFeed: {
+        ...buildFinancialSummaryWithHalWidgetFeed().widgetFeed!,
+        widgets: {
+          ...buildFinancialSummaryWithHalWidgetFeed().widgetFeed!.widgets,
+          practice_financial_overview: {
+            title: "Practice Financial Overview",
+            status: "FAILED",
+            metrics: {
+              monthly_revenue: 999999,
+              monthly_net_income: 888888,
+              collection_rate: 12,
+            },
+          },
+          smart_claims_and_receivables: {
+            title: "Smart Claims & Receivables",
+            status: "DEGRADED",
+            metrics: {
+              outstanding_claim_count: 99,
+              outstanding_claim_amount: 99999,
+              unsubmitted_claim_count: 88,
+              accounts_receivable_total: 77777,
+            },
+          },
+        },
+      },
+    });
+
+    renderDashboard();
+
+    await screen.findByRole("heading", { name: "New Ridge Family Financial" });
+
+    expect(screen.getByText("Practice production")).toBeInTheDocument();
+    expect(screen.queryByText("$999,999 revenue snapshot")).not.toBeInTheDocument();
+    expect(screen.getByText("$12,401 insurance receivables")).toBeInTheDocument();
+    expect(screen.queryByText("$99,999 insurance receivables")).not.toBeInTheDocument();
   });
 });
