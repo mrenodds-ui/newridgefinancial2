@@ -58,6 +58,10 @@ _d_drive_project_dirs.txt
 
 # Test runtime outputs
 app/tests/.document_rag_runtime/
+app/tests/.endpoint_test_runtime/
+
+# Local import cache and dev import drops (not canonical repo data)
+app/data/
 
 # Root local report/export artifacts
 frontend_vitest_quickbooks_route.txt
