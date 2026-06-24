@@ -117,7 +117,7 @@ export default function AdminPage() {
   const softdentFinancialSource = financialSources?.softdent;
   const quickbooksFinancialSource = financialSources?.quickbooks;
   const softdentLiveSnapshot = softdentFinancialSource?.live_snapshot;
-  const softdentLiveProviderRanking = softdentFinancialSource?.live_provider_ranking;
+  const softdentLivePracticeProduction = softdentFinancialSource?.live_provider_ranking;
   const softdentLivePayerMix = softdentFinancialSource?.live_payer_mix;
   const softdentLiveCollectionDelta = softdentFinancialSource?.live_collection_delta;
   const softdentLiveTransactionFeed = softdentFinancialSource?.live_transaction_feed;
@@ -125,7 +125,7 @@ export default function AdminPage() {
   const softdentLiveClinicalNotes = softdentFinancialSource?.live_clinical_notes;
   const softdentLiveStatuses = [
     { label: "SOFTDENT SNAPSHOT", item: softdentLiveSnapshot },
-    { label: "SOFTDENT PROVIDER RANKING", item: softdentLiveProviderRanking },
+    { label: "SOFTDENT PRACTICE PRODUCTION", item: softdentLivePracticeProduction },
     { label: "SOFTDENT PAYER MIX", item: softdentLivePayerMix },
     { label: "SOFTDENT COLLECTIONS DELTA", item: softdentLiveCollectionDelta },
     { label: "SOFTDENT TRANSACTION FEED", item: softdentLiveTransactionFeed },
@@ -279,7 +279,7 @@ export default function AdminPage() {
               <dt>SoftDent snapshot</dt>
               <dd>
                 {softdentFinancialSource?.available
-                  ? `${softdentFinancialSource.period || "current"} · ${softdentFinancialSource.provider_count} providers`
+                  ? `${softdentFinancialSource.period || "current"} · practice-wide`
                   : "not available"}
               </dd>
             </div>

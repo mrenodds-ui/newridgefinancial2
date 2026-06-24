@@ -330,7 +330,7 @@ describe("API auth gate", () => {
                 lastVerifiedAt: "2026-06-21T21:38:09.549167+00:00",
                 metrics: {
                   period: "2026-06",
-                  provider_count: 3,
+                  provider_count: 1,
                 },
               },
             },

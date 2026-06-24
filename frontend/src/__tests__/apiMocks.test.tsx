@@ -97,13 +97,13 @@ describe("api mocks", () => {
     expect(await screen.findByText("HAL Retrieval Status")).toBeInTheDocument();
     expect(screen.getByText("onnx-minilm")).toBeInTheDocument();
     expect(screen.getByText(/SOFTDENT SNAPSHOT/)).toBeInTheDocument();
-    expect(screen.getByText(/SOFTDENT PROVIDER RANKING/)).toBeInTheDocument();
+    expect(screen.getByText(/SOFTDENT PRACTICE PRODUCTION/)).toBeInTheDocument();
     expect(screen.getByText(/SOFTDENT PAYER MIX/)).toBeInTheDocument();
     expect(screen.getByText(/SOFTDENT COLLECTIONS DELTA/)).toBeInTheDocument();
     expect(screen.getByText(/SOFTDENT CLAIMS/)).toBeInTheDocument();
     expect(screen.getByText(/SOFTDENT CLINICAL NOTES/)).toBeInTheDocument();
-    expect(screen.getAllByText(/production 135000.0, collections 126500.0/)).toHaveLength(2);
-    expect(screen.getByText(/Rank 1: Dr. Adams production 74000 collections 69000/)).toBeInTheDocument();
+    expect(screen.getAllByText(/production 135000.0, collections 126500.0/)).toHaveLength(3);
+    expect(screen.getByText(/SoftDent practice production for 2026-05: production 135000.0, collections 126500.0, insurance 74500.0, patient 52000.0./)).toBeInTheDocument();
     expect(screen.getByText(/insurance collections share 0.5889, patient collections share 0.4111/)).toBeInTheDocument();
     expect(screen.getByText(/delta 8500.0, collection ratio 0.937/)).toBeInTheDocument();
     expect(screen.getAllByText(/Source file: softdent_dashboard_data.json/)).toHaveLength(4);
@@ -121,7 +121,7 @@ describe("api mocks", () => {
     expect(screen.getAllByText("manual review").length).toBeGreaterThan(0);
     expect(screen.getByText(/live quickbooks summary missing/)).toBeInTheDocument();
     expect(screen.getByText("Configured SQL")).toBeInTheDocument();
-    expect(screen.getByText("2026-05 · 3 providers")).toBeInTheDocument();
+    expect(screen.getByText("2026-05 · practice-wide")).toBeInTheDocument();
     expect(screen.getByText("QuickBooks Posting Queue")).toBeInTheDocument();
     expect(screen.getByText("Recent Posting Queue Activity")).toBeInTheDocument();
     expect(screen.getByText("Queue prepaid insurance entry for QuickBooks Desktop review.")).toBeInTheDocument();

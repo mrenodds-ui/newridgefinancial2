@@ -323,10 +323,7 @@ export const handlers = [
             ],
           },
         },
-        providers: [
-          { provider: "Dr. Adams", production: 74000, collections: 69000 },
-          { provider: "Dr. Lee", production: 61000, collections: 57500 },
-        ],
+        providers: [{ provider: "Entire Practice", production: 135000, collections: 126500 }],
       },
       owner_financial: {
         business_date: "2026-05-23",
@@ -475,7 +472,7 @@ export const handlers = [
           reviewRequired: false,
           reviewFlags: [],
           lastVerifiedAt: "2026-06-16T12:00:00Z",
-          metrics: { providerCount: 2, period: "2026-05" },
+          metrics: { providerCount: 1, period: "2026-05" },
         },
         quickBooks: {
           sourceSystem: "QuickBooks",
@@ -643,15 +640,11 @@ export const handlers = [
       fourYearMonthlyKpis: [],
       providerProduction: [
         {
-          provider: "Dr. Adams",
-          production: 74000,
-          collections: 69000,
-          period: "2026-05",
-        },
-        {
-          provider: "Dr. Lee",
-          production: 61000,
-          collections: 57500,
+          provider: "Entire Practice",
+          production: 135000,
+          collections: 126500,
+          insurance: 74500,
+          patient: 52000,
           period: "2026-05",
         },
       ],
@@ -814,7 +807,7 @@ export const handlers = [
         softdent: {
           available: true,
           period: "2026-05",
-          provider_count: 3,
+          provider_count: 1,
           live_snapshot: {
             available: true,
             health: "ok",
@@ -835,7 +828,7 @@ export const handlers = [
             source_file: "softdent_dashboard_data.json",
             modified_at_utc: "2026-06-15T11:45:00+00:00",
             excerpt:
-              "SoftDent provider ranking for 2026-05: Rank 1: Dr. Adams production 74000 collections 69000; Rank 2: Dr. Lee production 61000 collections 57500; Rank 3: Dr. Patel production 0 collections 0.",
+              "SoftDent practice production for 2026-05: production 135000.0, collections 126500.0, insurance 74500.0, patient 52000.0.",
             checked_at_utc: "2026-06-15T12:00:00+00:00",
             confidence_label: "high confidence",
             review_required: false,
@@ -887,7 +880,7 @@ export const handlers = [
             source_file: "softdent_clinical_notes_data.json",
             modified_at_utc: "2026-06-15T11:48:00+00:00",
             excerpt:
-              "SoftDent clinical notes export is available with 8 row(s). Sample fields: NoteDate=2026-06-15; Provider=Dr. Adams; Procedure=Crown prep; ClinicalNote=PATIENT_REDACTED sensitivity persists.",
+              "SoftDent clinical notes export is available with 8 row(s). Sample fields: NoteDate=2026-06-15; Provider=Entire Practice; Procedure=Crown prep; ClinicalNote=PATIENT_REDACTED sensitivity persists.",
             checked_at_utc: "2026-06-15T12:00:00+00:00",
             confidence_label: "review suggested",
             review_required: true,
