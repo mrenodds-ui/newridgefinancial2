@@ -107,10 +107,19 @@ Write-Host 'Note: ollama serve is a long-running process. This script starts it 
 Write-Host 'For interactive use, re-run with -ForegroundInstructions and start serve in a dedicated terminal.'
 
 $proc = Start-Process -FilePath 'ollama' -ArgumentList 'serve' -PassThru -WindowStyle Hidden -RedirectStandardOutput $logFile -RedirectStandardError $logErrFile
-Start-Sleep -Seconds 3
 
-if (-not (Test-OllamaLane $evalHost)) {
-    throw "Evaluator lane failed to start on http://$evalHost. Check $logFile"
+$ready = $false
+for ($attempt = 1; $attempt -le 30; $attempt++) {
+    Start-Sleep -Seconds 2
+    if (Test-OllamaLane $evalHost) {
+        $ready = $true
+        break
+    }
+    Write-Host "Waiting for evaluator lane on http://$evalHost (attempt $attempt/30)..."
+}
+
+if (-not $ready) {
+    throw "Evaluator lane failed to start on http://$evalHost. Check $logFile and $logErrFile"
 }
 
 Write-Host "Evaluator lane is up (pid $($proc.Id))."
