@@ -88,12 +88,13 @@ def test_document_rag_upload_and_ask(monkeypatch):
 
     monkeypatch.setattr(document_rag_module, "get_document_rag_collection", lambda: fake_collection)
 
-    def fake_check_ollama_available(base_url, timeout_seconds=5):
-        captured_runtime["base_url"] = base_url
-        captured_runtime["timeout_seconds"] = timeout_seconds
-        return True, None
+    def fake_require_lane_runtime(alias, *, purpose):
+        captured_runtime["alias"] = alias
+        captured_runtime["purpose"] = purpose
+        captured_runtime["base_url"] = document_rag_module.get_frontend_base_url()
+        return captured_runtime["base_url"]
 
-    monkeypatch.setattr(document_rag_module, "check_ollama_available", fake_check_ollama_available)
+    monkeypatch.setattr(document_rag_module, "require_lane_runtime", fake_require_lane_runtime)
 
     def fake_generate_response_result(*, base_url, profile, prompt, timeout_seconds, seed=None):
         del seed
@@ -149,6 +150,7 @@ def test_document_rag_upload_and_ask(monkeypatch):
     assert ask_payload["retrieved_context"]
     assert any(item["title"] == "q2-earnings-notes.md" for item in ask_payload["retrieved_context"])
     assert "q2-earnings-notes.md" in str(captured_prompt.get("prompt") or "")
+    assert captured_runtime["alias"] == "chat"
     assert captured_runtime["base_url"] == captured_runtime["generation_base_url"]
 
 
@@ -156,7 +158,7 @@ def test_document_rag_grounded_false_for_insufficient_context_answer(monkeypatch
     fake_collection = _FakeCollection()
 
     monkeypatch.setattr(document_rag_module, "get_document_rag_collection", lambda: fake_collection)
-    monkeypatch.setattr(document_rag_module, "check_ollama_available", lambda *args, **kwargs: (True, None))
+    monkeypatch.setattr(document_rag_module, "require_lane_runtime", lambda *args, **kwargs: document_rag_module.get_frontend_base_url())
     monkeypatch.setattr(
         document_rag_module,
         "generate_response_result",
@@ -210,7 +212,7 @@ def test_document_rag_skips_generation_when_retrieval_has_no_usable_content(monk
     )
     monkeypatch.setattr(
         document_rag_module,
-        "check_ollama_available",
+        "require_lane_runtime",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("runtime check should not run without support")),
     )
     monkeypatch.setattr(

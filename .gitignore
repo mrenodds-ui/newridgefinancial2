@@ -94,6 +94,15 @@ frontend/public/softdent_dashboard_data_import.json
 local_accounting_inbox/
 local_ai_finance/
 
+# Local quantized model weights and runtime artifacts (never commit)
+models/
+.local_models/
+*.gguf
+*.safetensors
+*.bin
+*.pth
+*.pt
+
 # Generated page audit bundles
 QuickBooksPage/
 SoftDentPage/

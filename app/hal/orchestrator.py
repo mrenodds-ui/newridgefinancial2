@@ -12,7 +12,17 @@ from typing import Any
 from .accounting_tools import draft_journal_entry_for_common_case, get_chart_of_accounts, is_period_open
 from .accounting_validation import build_journal_validation
 from .audit import get_recent_hal_audits, record_hal_audit
-from app.evaluation.client import check_ollama_available, get_ollama_runtime_status, load_json_file, resolve_profile, run_structured_output_workflow
+from app.ai_local_config import (
+    get_backend_base_url,
+    get_backend_model_name,
+    get_frontend_base_url,
+    get_frontend_model_name,
+    get_model_routing_snapshot,
+    load_local_model_profile_config,
+    require_lane_runtime,
+    resolve_lane_profile,
+)
+from app.evaluation.client import check_ollama_available, get_ollama_runtime_status, load_json_file, run_structured_output_workflow
 from app.services import fetch_softdent_dashboard_aggregate, list_local_accounting_documents, run_ci_gates, run_rebuild_receipt, run_refresh_and_verify, run_smoke_tests
 from .hardware_tools import build_monitor_mutation_intent, get_monitor_status
 
@@ -28,7 +38,7 @@ from uuid import uuid4
 
 
 HAL_MODE = "local-rag-phase-1"
-DEFAULT_OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+DEFAULT_OLLAMA_BASE_URL = get_frontend_base_url()
 LOCAL_MODEL_PROFILE_CONFIG_PATH = Path(__file__).resolve().parents[2] / "evals" / "local_model_profiles.json"
 HAL_PHASES = [
     "Authenticate operator",
@@ -381,27 +391,30 @@ def _load_hal_model_profiles() -> dict[str, object]:
 
 
 def _get_hal_model_routing() -> dict[str, object]:
+    routing_snapshot = get_model_routing_snapshot()
+    frontend = routing_snapshot["frontend"] if isinstance(routing_snapshot.get("frontend"), dict) else {}
+    backend = routing_snapshot["backend"] if isinstance(routing_snapshot.get("backend"), dict) else {}
     config = _load_hal_model_profiles()
     profiles = config.get("profiles") if isinstance(config.get("profiles"), dict) else {}
     coder_profile = profiles.get("coder") if isinstance(profiles.get("coder"), dict) else {}
 
-    # The operating picture publishes stable approved lane labels rather than the
-    # mutable runtime profile file value so downstream status contracts stay fixed.
-    primary_model = "mistral-small3.1:24b"
-    second_opinion_model = "qwen3:30b"
-    code_model = str(coder_profile.get("model") or "qwen2.5-coder:14b")
+    primary_model = str(frontend.get("model") or get_frontend_model_name())
+    second_opinion_model = str(backend.get("model") or get_backend_model_name())
+    code_model = str(coder_profile.get("model") or second_opinion_model)
     if not code_model or code_model == "unknown":
-        code_model = "qwen2.5-coder:14b"
+        code_model = second_opinion_model
 
     return {
         "primary": {
             "route": "local",
             "model": primary_model,
+            "base_url": str(frontend.get("base_url") or get_frontend_base_url()),
             "purpose": "general HAL",
         },
         "second_opinion": {
             "route": "local",
             "model": second_opinion_model,
+            "base_url": str(backend.get("base_url") or get_backend_base_url()),
             "purpose": "deeper second opinion",
         },
         "code_help": {
@@ -812,13 +825,17 @@ def _try_local_ai_journal_draft(
     if not LOCAL_MODEL_PROFILE_CONFIG_PATH.exists():
         return None
 
-    available, _ = check_ollama_available(DEFAULT_OLLAMA_BASE_URL, timeout_seconds=5)
+    available, _ = check_ollama_available(get_backend_base_url(), timeout_seconds=5)
     if not available:
         return None
 
-    config = load_json_file(LOCAL_MODEL_PROFILE_CONFIG_PATH)
-    parser_profile = resolve_profile(config, "coder")
-    narrator_profile = resolve_profile(config, "chat")
+    try:
+        config = load_local_model_profile_config()
+    except Exception:
+        return None
+
+    parser_profile = resolve_lane_profile(config, "coder")
+    narrator_profile = resolve_lane_profile(config, "chat")
     chart_of_accounts = get_chart_of_accounts()
     validator = _build_local_ai_journal_validator(
         chart_of_accounts=chart_of_accounts,
@@ -827,7 +844,9 @@ def _try_local_ai_journal_draft(
     )
     source_text = str(context.get("source_text") or description)
     workflow_result = run_structured_output_workflow(
-        base_url=DEFAULT_OLLAMA_BASE_URL,
+        base_url=get_backend_base_url(),
+        parser_base_url=get_backend_base_url(),
+        narrator_base_url=get_frontend_base_url(),
         parser_profile=parser_profile,
         narrator_profile=narrator_profile,
         source_text=source_text,

@@ -830,7 +830,7 @@ def test_hal_status_includes_operating_picture(monkeypatch):
     assert operating_picture["completion_ledger"][-1]["entry_id"] == "unit-test-completion-ledger"
     assert operating_picture["model_routing"]["primary"]["model"] == "mistral-small3.1:24b"
     assert operating_picture["model_routing"]["second_opinion"]["model"] == "qwen3:30b"
-    assert operating_picture["model_routing"]["code_help"]["model"] == "qwen2.5-coder:14b"
+    assert operating_picture["model_routing"]["code_help"]["model"] == "qwen3:30b"
     assert any(item["path"] == "/api/hal/shell/commands" for item in operating_picture["developer_operator_endpoints"])
 
 

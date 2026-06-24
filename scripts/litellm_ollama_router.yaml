@@ -1,5 +1,6 @@
 environment_variables:
   OLLAMA_BASE_URL: http://127.0.0.1:11434
+  OLLAMA_BACKEND_BASE_URL: http://127.0.0.1:11435
   LITELLM_PROXY_BASE_URL: http://127.0.0.1:4000
 
 model_list:
@@ -20,7 +21,7 @@ model_list:
   - model_name: hal-coding
     litellm_params:
       model: ollama_chat/qwen3:30b
-      api_base: os.environ/OLLAMA_BASE_URL
+      api_base: os.environ/OLLAMA_BACKEND_BASE_URL
       rpm: 18
       tpm: 90000
     model_info:
@@ -34,7 +35,7 @@ model_list:
   - model_name: hal-coding
     litellm_params:
       model: ollama_chat/gpt-oss:120b
-      api_base: os.environ/OLLAMA_BASE_URL
+      api_base: os.environ/OLLAMA_BACKEND_BASE_URL
       rpm: 6
       tpm: 24000
     model_info:
@@ -48,7 +49,7 @@ model_list:
   - model_name: hal-analysis
     litellm_params:
       model: ollama_chat/qwen3:30b
-      api_base: os.environ/OLLAMA_BASE_URL
+      api_base: os.environ/OLLAMA_BACKEND_BASE_URL
       rpm: 18
       tpm: 90000
     model_info:
@@ -62,7 +63,7 @@ model_list:
   - model_name: hal-second-opinion
     litellm_params:
       model: ollama_chat/qwen3:30b
-      api_base: os.environ/OLLAMA_BASE_URL
+      api_base: os.environ/OLLAMA_BACKEND_BASE_URL
       rpm: 18
       tpm: 90000
     model_info:

@@ -419,6 +419,8 @@ def run_structured_output_workflow(
     validator: Callable[[dict[str, Any]], Any] | None = None,
     max_parse_attempts: int = 3,
     seed: int | None = None,
+    parser_base_url: str | None = None,
+    narrator_base_url: str | None = None,
 ) -> dict[str, Any]:
     parse_prompt = (
         "Convert the source text into a single JSON object that follows the instructions exactly. "
@@ -436,7 +438,7 @@ def run_structured_output_workflow(
         }
 
     parser_output_text, parser_result = generate_response_with_validation(
-        base_url=base_url,
+        base_url=parser_base_url or base_url,
         profile=parser_profile,
         prompt=parse_prompt,
         timeout_seconds=timeout_seconds,
@@ -454,7 +456,7 @@ def run_structured_output_workflow(
         f"{json.dumps(parser_result['validation_result'], indent=2, sort_keys=True)}\n"
     )
     summary_text = generate_response(
-        base_url=base_url,
+        base_url=narrator_base_url or base_url,
         profile=narrator_profile,
         prompt=summary_prompt,
         timeout_seconds=timeout_seconds,

@@ -15,7 +15,13 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
 from app.config_runtime import get_env_setting
-from app.evaluation.client import check_ollama_available, generate_response_result, load_json_file, resolve_profile
+from app.ai_local_config import (
+    LocalAIConfigError,
+    load_local_model_profile_config,
+    require_lane_runtime,
+    resolve_lane_profile,
+)
+from app.evaluation.client import generate_response_result
 
 from .audit import record_hal_audit
 from .sanitization import sanitize_hal_text
@@ -26,7 +32,9 @@ from .vector_store import get_embedding_function
 
 DOCUMENT_RAG_MODE = "langchain-document-rag-v1"
 DOCUMENT_RAG_COLLECTION_NAME = "hal_document_rag"
-DEFAULT_OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+from app.ai_local_config import get_frontend_base_url
+
+DEFAULT_OLLAMA_BASE_URL = get_frontend_base_url()
 DEFAULT_DOCUMENT_RAG_LLM_BASE_URL = os.getenv("LITELLM_PROXY_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
 LOCAL_MODEL_PROFILE_CONFIG_PATH = Path(__file__).resolve().parents[2] / "evals" / "local_model_profiles.json"
 SUPPORTED_EXTENSIONS = {".csv", ".json", ".md", ".pdf", ".txt"}
@@ -431,13 +439,15 @@ def answer_document_rag_question(*, question: str, actor: str, top_k: int = 4) -
             "grounded": False,
         }
 
-    generation_base_url = _get_document_rag_generation_base_url()
-    available, error_message = check_ollama_available(generation_base_url, timeout_seconds=5)
-    if not available:
-        raise RuntimeError(error_message or "Local model runtime is unavailable.")
+    try:
+        generation_base_url = _get_document_rag_generation_base_url()
+        if generation_base_url == DEFAULT_OLLAMA_BASE_URL:
+            generation_base_url = require_lane_runtime("chat", purpose="document RAG answer generation")
+    except LocalAIConfigError as exc:
+        raise RuntimeError(str(exc)) from exc
 
-    profile_config = load_json_file(LOCAL_MODEL_PROFILE_CONFIG_PATH)
-    chat_profile = resolve_profile(profile_config, "chat")
+    profile_config = load_local_model_profile_config()
+    chat_profile = resolve_lane_profile(profile_config, "chat")
     answer_result = generate_response_result(
         base_url=generation_base_url,
         profile=chat_profile,
