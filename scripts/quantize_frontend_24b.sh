@@ -20,6 +20,7 @@ fi
 
 QUANT_BIN="$(resolve_llama_quantize_bin)"
 mkdir -p "$OUT_DIR"
+print_local_only_notice
 
 BASENAME="$(basename "$SOURCE_PATH")"
 STEM="${BASENAME%.*}"

@@ -13,6 +13,13 @@ require_cmd() {
   fi
 }
 
+print_local_only_notice() {
+  cat <<EOF
+Local-only: keep quantized weights under models/ or .local_models/ (gitignored).
+Never commit .gguf, .safetensors, .bin, .pth, .pt files, or model caches.
+EOF
+}
+
 print_vram_guidance() {
   local lane="$1"
   local quant="$2"

@@ -11,7 +11,15 @@ This repo routes **frontend-facing** HAL interactions through a **24B** model an
 | Preferred stack | **Ollama with Vulkan** (already integrated) |
 | Fallback | **llama.cpp** server with Vulkan (`AI_RUNTIME=llama_cpp`) |
 
-ROCm is not assumed on Windows. Do not add CUDA-only tooling.
+ROCm is not assumed on Windows. Do not add CUDA-only tooling. This repo targets AMD Radeon on Windows with **Vulkan-first Ollama**; use **llama.cpp + Vulkan** when Ollama is unavailable. ROCm is optional on Linux only when cleanly supported for your GPU.
+
+## Local-only artifacts (never commit)
+
+Quantized model weights and runtime outputs stay on the workstation only:
+
+- Write outputs to `models/` or `.local_models/` (both gitignored).
+- Never commit `.gguf`, `.safetensors`, `.bin`, `.pth`, `.pt`, or Ollama/model caches.
+- Override output location with `MODEL_OUTPUT_DIR` when running quantize scripts.
 
 ## Architecture
 
@@ -47,6 +55,25 @@ AI_CONTEXT_SIZE=4096
 
 Model weights, `.gguf` files, and caches belong under `.local_models/` or `models/` (gitignored).
 
+## Configuration overrides
+
+All lane settings are env-driven (`app/ai_local_config.py` reads `.env`); do not hardcode paths in source.
+
+| Variable | Purpose |
+| --- | --- |
+| `AI_RUNTIME` | `ollama` (default) or `llama_cpp` |
+| `AI_GPU_BACKEND` | `vulkan` (Windows AMD default) or `rocm` when available |
+| `AI_GPU_LAYERS` | `auto`, `cpu`, or explicit layer count for partial offload |
+| `AI_FRONTEND_BASE_URL` / `AI_BACKEND_BASE_URL` | OpenAI-compatible or Ollama base URLs (ports default `:11434` / `:11435`) |
+| `AI_FRONTEND_MODEL` / `AI_BACKEND_MODEL` | Ollama model tags or LiteLLM aliases |
+| `AI_FRONTEND_MODEL_PATH` / `AI_BACKEND_MODEL_PATH` | Local GGUF paths for `llama_cpp` |
+| `AI_CONTEXT_SIZE` | Shared default context (4096 recommended on 16GB) |
+| `AI_FRONTEND_CONTEXT_SIZE` / `AI_BACKEND_CONTEXT_SIZE` | Per-lane context override |
+| `AI_FRONTEND_QUANT` / `AI_BACKEND_QUANT` | Target GGUF quant labels (`Q4_K_M`, `Q4_K_S`, etc.) |
+| `AI_PORT` / `AI_HOST` | Run-script listen port and host |
+| `AI_MODEL_PATH` | Run-script GGUF path shortcut |
+| `MODEL_OUTPUT_DIR` | Quantize-script output directory |
+
 ## Quantize (llama.cpp path)
 
 Requires `llama-quantize` on PATH. Source can be HuggingFace directory or an existing `.gguf`.
@@ -57,6 +84,8 @@ Requires `llama-quantize` on PATH. Source can be HuggingFace directory or an exi
 ```
 
 Fallback quants are attempted automatically if the primary quant fails.
+
+Outputs are written to `.local_models/` by default (gitignored, local-only — do not commit).
 
 ## Run model servers
 

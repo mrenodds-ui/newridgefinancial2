@@ -11,6 +11,7 @@ $contextSize = if ($env:AI_FRONTEND_CONTEXT_SIZE) { $env:AI_FRONTEND_CONTEXT_SIZ
 
 if (-not $ModelPath) { $ModelPath = $env:AI_FRONTEND_MODEL_PATH }
 
+Write-Host "Local-only: keep weights under models/ or .local_models/ (gitignored). Never commit GGUF or checkpoint files."
 Write-Host "VRAM: frontend 24B Q4_K_M — keep context at 4096 on 16GB AMD; use Vulkan Ollama on Windows."
 
 if ($runtime -eq 'ollama') {

@@ -11,6 +11,7 @@ CONTEXT_SIZE="${AI_BACKEND_CONTEXT_SIZE:-${AI_CONTEXT_SIZE:-4096}}"
 RUNTIME="${AI_RUNTIME:-ollama}"
 GPU_BACKEND="${AI_GPU_BACKEND:-vulkan}"
 
+print_local_only_notice
 print_vram_guidance "backend" "${AI_BACKEND_QUANT:-Q4_K_S}"
 
 if [[ "$RUNTIME" == "ollama" ]]; then

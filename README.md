@@ -280,6 +280,7 @@ python scripts/write_rebuild_receipt.py --skip-steps --output scripts/rebuild_re
 
 For the recommended PHI-safe local AI architecture and retrieval boundary for HAL, see `docs/hal_phi_rag_architecture.md`.
 For the required authentication and audit controls before any real HAL model integration, see `docs/hal_auth_audit_plan.md`.
+For dual-lane local quantized model setup on AMD Radeon (24B frontend / 30B backend, Ollama or llama.cpp), see `docs/local_quantized_ai_setup.md`.
 
 HAL now uses a local Chroma-backed vector store for retrieval, loads credentials from `APP_AUTH_USERS_JSON`, and exposes a read-only admin audit endpoint at `/api/hal9000/audits`.
 
