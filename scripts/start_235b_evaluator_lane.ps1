@@ -100,12 +100,13 @@ $repoRoot = Join-Path $PSScriptRoot '..'
 $logDir = Join-Path $repoRoot '.local_logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $logFile = Join-Path $logDir "ollama_evaluator_${Port}.log"
+$logErrFile = Join-Path $logDir "ollama_evaluator_${Port}.err.log"
 
 Write-Host "Starting Ollama evaluator serve on http://$evalHost (log: $logFile)"
 Write-Host 'Note: ollama serve is a long-running process. This script starts it in the background for automation.'
 Write-Host 'For interactive use, re-run with -ForegroundInstructions and start serve in a dedicated terminal.'
 
-$proc = Start-Process -FilePath 'ollama' -ArgumentList 'serve' -PassThru -WindowStyle Hidden -RedirectStandardOutput $logFile -RedirectStandardError $logFile
+$proc = Start-Process -FilePath 'ollama' -ArgumentList 'serve' -PassThru -WindowStyle Hidden -RedirectStandardOutput $logFile -RedirectStandardError $logErrFile
 Start-Sleep -Seconds 3
 
 if (-not (Test-OllamaLane $evalHost)) {

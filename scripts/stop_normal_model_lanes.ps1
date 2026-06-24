@@ -73,12 +73,16 @@ Write-Host 'Stopping normal model lanes (24B :11434, 30B :11435)...'
 
 if ($PSCmdlet.ShouldProcess('mistral-small3.1:24b on :11434', 'ollama stop')) {
     $env:OLLAMA_HOST = '127.0.0.1:11434'
-    ollama stop mistral-small3.1:24b 2>$null | Out-Null
+    if ((Test-OllamaLane '127.0.0.1:11434').Up) {
+        ollama stop mistral-small3.1:24b 2>$null | Out-Null
+    }
 }
 
 if ($PSCmdlet.ShouldProcess('qwen3:30b on :11435', 'ollama stop')) {
     $env:OLLAMA_HOST = '127.0.0.1:11435'
-    ollama stop qwen3:30b 2>$null | Out-Null
+    if ((Test-OllamaLane '127.0.0.1:11435').Up) {
+        ollama stop qwen3:30b 2>$null | Out-Null
+    }
 }
 
 Stop-ListenerOnPort -Port 11434
@@ -100,11 +104,13 @@ $lane11434 = Test-OllamaLane '127.0.0.1:11434'
 $lane11435 = Test-OllamaLane '127.0.0.1:11435'
 
 if ($lane11434.Up -or $lane11435.Up) {
-    Write-Error @(
-        'Normal lanes still respond on :11434 or :11435.',
-        'Stop foreground scripts/run_frontend_model.ps1 and scripts/run_backend_model.ps1 (Ctrl+C),',
-        'or re-run with -ForceStopOllamaApp if the tray app keeps respawning :11434.'
-    ) -join ' '
+    Write-Error (
+        @(
+            'Normal lanes still respond on :11434 or :11435.',
+            'Stop foreground scripts/run_frontend_model.ps1 and scripts/run_backend_model.ps1 (Ctrl+C),',
+            'or re-run with -ForceStopOllamaApp if the tray app keeps respawning :11434.'
+        ) -join ' '
+    )
     exit 1
 }
 
