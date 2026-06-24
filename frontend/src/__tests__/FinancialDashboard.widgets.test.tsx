@@ -511,4 +511,138 @@ describe("FinancialDashboard widget deck", () => {
     expect(screen.getByText("$12,401 insurance receivables")).toBeInTheDocument();
     expect(screen.queryByText("$99,999 insurance receivables")).not.toBeInTheDocument();
   });
+
+  it("does not show SUCCESS widget receivables when latestAr is missing", async () => {
+    vi.mocked(fetchFinancialSummary).mockResolvedValue({
+      ...buildFinancialSummaryWithImportWidgetFeed(),
+      latestAr: null,
+    });
+
+    renderDashboard();
+
+    await screen.findByRole("heading", { name: "New Ridge Family Financial" });
+
+    expect(screen.getByText("$12,401 insurance receivables")).toBeInTheDocument();
+    expect(screen.queryByText("$7,000 patient balance in active care")).not.toBeInTheDocument();
+    expect(screen.queryByText("$12,000 receivables queue")).not.toBeInTheDocument();
+
+    const smartClaimsCard = screen.getByRole("heading", { name: "Smart Claims & Invoicing" }).closest("article");
+    expect(smartClaimsCard).not.toBeNull();
+    expect(smartClaimsCard).toHaveTextContent("Outstanding");
+    expect(smartClaimsCard).toHaveTextContent("9");
+    expect(smartClaimsCard).toHaveTextContent("Receivables");
+    expect(smartClaimsCard).toHaveTextContent("Unavailable");
+    expect(smartClaimsCard).not.toHaveTextContent("$12,000");
+  });
+
+  it("does not show SUCCESS widget receivables when latestAr is marked unavailable", async () => {
+    vi.mocked(fetchFinancialSummary).mockResolvedValue({
+      ...buildFinancialSummaryWithImportWidgetFeed(),
+      latestAr: {
+        as_of_date: "2026-06-22",
+        total_ar: 12000,
+        insurance_ar: 5000,
+        patient_ar: 7000,
+        current_balance: 6000,
+        balance_30: 3000,
+        balance_60: 2000,
+        balance_90: 1000,
+        credit_balance: 0,
+        available: false,
+      } as FinancialSummaryResponse["latestAr"],
+    });
+
+    renderDashboard();
+
+    await screen.findByRole("heading", { name: "New Ridge Family Financial" });
+
+    expect(screen.queryByText("$7,000 patient balance in active care")).not.toBeInTheDocument();
+    expect(screen.queryByText("$12,000 receivables queue")).not.toBeInTheDocument();
+
+    const smartClaimsCard = screen.getByRole("heading", { name: "Smart Claims & Invoicing" }).closest("article");
+    expect(smartClaimsCard).toHaveTextContent("Unavailable");
+    expect(smartClaimsCard).not.toHaveTextContent("$12,000");
+    expect(smartClaimsCard).toHaveTextContent("9");
+  });
+
+  it("shows SUCCESS widget receivables when explicit SoftDent A/R is available", async () => {
+    vi.mocked(fetchFinancialSummary).mockResolvedValue({
+      ...buildFinancialSummaryWithImportWidgetFeed(),
+      latestAr: {
+        as_of_date: "2026-06-22",
+        total_ar: 12000,
+        insurance_ar: 5000,
+        patient_ar: 7000,
+        current_balance: 6000,
+        balance_30: 3000,
+        balance_60: 2000,
+        balance_90: 1000,
+        credit_balance: 0,
+        available: true,
+      } as FinancialSummaryResponse["latestAr"],
+    });
+
+    renderDashboard();
+
+    await screen.findByRole("heading", { name: "New Ridge Family Financial" });
+
+    expect(screen.getByText("$7,000 patient balance in active care")).toBeInTheDocument();
+    expect(screen.getByText("$12,000 receivables queue")).toBeInTheDocument();
+
+    const smartClaimsCard = screen.getByRole("heading", { name: "Smart Claims & Invoicing" }).closest("article");
+    expect(smartClaimsCard).toHaveTextContent("$12,000");
+  });
+
+  it("allows real zero receivables from SUCCESS widgets when latestAr is explicitly available", async () => {
+    vi.mocked(fetchFinancialSummary).mockResolvedValue({
+      ...buildFinancialSummaryWithImportWidgetFeed(),
+      latestAr: {
+        as_of_date: "2026-06-22",
+        total_ar: 0,
+        insurance_ar: 0,
+        patient_ar: 0,
+        current_balance: 0,
+        balance_30: 0,
+        balance_60: 0,
+        balance_90: 0,
+        credit_balance: 0,
+        available: true,
+      } as FinancialSummaryResponse["latestAr"],
+      widgetFeed: {
+        ...buildFinancialSummaryWithImportWidgetFeed().widgetFeed!,
+        widgets: {
+          ...buildFinancialSummaryWithImportWidgetFeed().widgetFeed!.widgets,
+          smart_claims_and_receivables: {
+            title: "Smart Claims & Receivables",
+            status: "SUCCESS",
+            metrics: {
+              outstanding_claim_count: 9,
+              outstanding_claim_amount: 12401,
+              unsubmitted_claim_count: 4,
+              accounts_receivable_total: 0,
+            },
+          },
+          care_delivery_performance: {
+            title: "Care Delivery Performance",
+            status: "SUCCESS",
+            metrics: {
+              provider_count: 1,
+              patient_balance_total: 0,
+            },
+          },
+        },
+      },
+    });
+
+    renderDashboard();
+
+    await screen.findByRole("heading", { name: "New Ridge Family Financial" });
+
+    expect(screen.getByText("$0 receivables queue")).toBeInTheDocument();
+    expect(screen.getByText("$0 patient balance in active care")).toBeInTheDocument();
+
+    const smartClaimsCard = screen.getByRole("heading", { name: "Smart Claims & Invoicing" }).closest("article");
+    expect(smartClaimsCard).toHaveTextContent("$0");
+    expect(smartClaimsCard).toHaveTextContent("9");
+  });
 });

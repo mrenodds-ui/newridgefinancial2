@@ -19,6 +19,7 @@ import {
   buildProfitLossTrendData,
   buildQuickBooksExpenseCategoryData,
   buildQuickBooksMonthlyExpenseTrendData,
+  isSoftdentArAvailable,
 } from "./financialDashboardSummary";
 import { ARAgingBarChart } from "./ARAgingBarChart";
 import { CurrencyBarChart } from "./CurrencyBarChart";
@@ -49,6 +50,12 @@ function formatCurrency(value: number) {
 }
 function formatCurrencyValue(value: number | null) {
   return value === null ? "Unavailable" : formatCurrency(value);
+}
+function gatedReceivablesValue(arAvailable: boolean, value: number | null | undefined): number | null {
+  if (!arAvailable) {
+    return null;
+  }
+  return value ?? null;
 }
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
@@ -254,6 +261,7 @@ function buildHighTechFinanceWidgets({
   summary: ReturnType<typeof buildDashboardSummaryFromFinancialSummary>;
 }): FinancialWidget[] {
   const latestAr = financialSummary?.latestAr ?? null;
+  const arAvailable = isSoftdentArAvailable(latestAr);
   const quickBooksStatus = financialSummary?.quickBooksStatus ?? null;
   const claimsSummary = financialSummary?.claimsSummary ?? null;
   const softDentCoverageMetrics = financialSummary?.softDentCoverageMetrics ?? null;
@@ -262,7 +270,7 @@ function buildHighTechFinanceWidgets({
   const paymentPlans = softDentCoverageMetrics?.paymentPlans ?? null;
   const claimsSource = sourceReview?.softDentClaims ?? null;
   const topOutstandingPayer = claimsSummary?.top_outstanding_payers?.[0] ?? null;
-  const patientAr = latestAr?.patient_ar ?? null;
+  const patientAr = arAvailable && latestAr ? toOptionalNumber(latestAr.patient_ar) : null;
   const importedRowCount = sumRowCounts(quickBooksStatus?.rowCounts ?? undefined);
   const hasTreatmentPlans = Boolean(treatmentPlans?.available);
   const hasPaymentPlans = Boolean(paymentPlans?.available);
@@ -465,15 +473,21 @@ function buildHighTechFinanceWidgets({
 
   return widgets.map((widget) => {
     if (widget.id === "case-acceptance" && isSuccessfulHalWidget(careDeliveryPerformance)) {
+      const publishedPatientBalance = gatedReceivablesValue(arAvailable, patientBalanceTotal);
       return {
         ...widget,
         statusLabel: toHalWidgetStatusLabel(careDeliveryPerformance.status, widget.statusLabel, widgetFeedSourceLabel),
         statusTone: toHalWidgetStatusTone(careDeliveryPerformance.status),
-        headline: patientBalanceTotal !== null ? `${formatCurrency(patientBalanceTotal)} patient balance in active care` : widget.headline,
-        summary: `${widgetFeedSourceLabel} published a current care-delivery balance snapshot from the latest import cache.`,
+        headline:
+          publishedPatientBalance !== null
+            ? `${formatCurrency(publishedPatientBalance)} patient balance in active care`
+            : widget.headline,
+        summary: arAvailable
+          ? `${widgetFeedSourceLabel} published a current care-delivery balance snapshot from the latest import cache.`
+          : `${widgetFeedSourceLabel} published care-delivery activity; dental A/R is unavailable until SoftDent A/R export is present.`,
         metrics: [
           { label: "Patients", value: formatCountValue(patientCount) },
-          { label: "Patient balance", value: formatCurrencyValue(patientBalanceTotal) },
+          { label: "Patient balance", value: formatCurrencyValue(publishedPatientBalance) },
           { label: "Feed status", value: toHalWidgetStatusLabel(careDeliveryPerformance.status, widget.statusLabel, widgetFeedSourceLabel) },
         ],
         nextAction: "Use the published care-delivery snapshot to prioritize financing and case presentation follow-up.",
@@ -497,15 +511,18 @@ function buildHighTechFinanceWidgets({
     }
 
     if (widget.id === "smart-claims" && isSuccessfulHalWidget(smartClaimsAndReceivables)) {
+      const publishedReceivablesTotal = gatedReceivablesValue(arAvailable, accountsReceivableTotal);
       return {
         ...widget,
         statusLabel: toHalWidgetStatusLabel(smartClaimsAndReceivables.status, widget.statusLabel, "SoftDent"),
         statusTone: toHalWidgetStatusTone(smartClaimsAndReceivables.status),
         headline: outstandingClaimAmount !== null ? `${formatCurrency(outstandingClaimAmount)} insurance receivables` : widget.headline,
-        summary: "SoftDent import cache published current claim exposure and receivables totals for this dashboard slice.",
+        summary: arAvailable
+          ? "SoftDent import cache published current claim exposure and receivables totals for this dashboard slice."
+          : "SoftDent import cache published current claim exposure; dental A/R totals remain unavailable until SoftDent A/R export is present.",
         metrics: [
           { label: "Outstanding", value: formatCountValue(outstandingClaimCount) },
-          { label: "Receivables", value: formatCurrencyValue(accountsReceivableTotal) },
+          { label: "Receivables", value: formatCurrencyValue(publishedReceivablesTotal) },
           { label: "Unsubmitted", value: formatCountValue(unsubmittedClaimCount) },
         ],
         nextAction: "Work the published outstanding claims queue before month-end close.",
@@ -529,18 +546,26 @@ function buildHighTechFinanceWidgets({
     }
 
     if (widget.id === "ai-follow-up" && isSuccessfulHalWidget(smartClaimsAndReceivables)) {
+      const publishedReceivablesTotal = gatedReceivablesValue(arAvailable, accountsReceivableTotal);
       return {
         ...widget,
         statusLabel: toHalWidgetStatusLabel(smartClaimsAndReceivables.status, widget.statusLabel, "SoftDent"),
         statusTone: toHalWidgetStatusTone(smartClaimsAndReceivables.status),
-        headline: accountsReceivableTotal !== null ? `${formatCurrency(accountsReceivableTotal)} receivables queue` : widget.headline,
-        summary: "SoftDent import cache published a live follow-up queue for receivables and unsubmitted claims.",
+        headline:
+          publishedReceivablesTotal !== null
+            ? `${formatCurrency(publishedReceivablesTotal)} receivables queue`
+            : widget.headline,
+        summary: arAvailable
+          ? "SoftDent import cache published a live follow-up queue for receivables and unsubmitted claims."
+          : "SoftDent import cache published unsubmitted-claims follow-up; dental A/R queue values remain unavailable until SoftDent A/R export is present.",
         metrics: [
-          { label: "Receivables", value: formatCurrencyValue(accountsReceivableTotal) },
+          { label: "Receivables", value: formatCurrencyValue(publishedReceivablesTotal) },
           { label: "Outstanding claims", value: formatCountValue(outstandingClaimCount) },
           { label: "Unsubmitted claims", value: formatCountValue(unsubmittedClaimCount) },
         ],
-        nextAction: "Start with the published receivables queue before lower-risk reminder workflows.",
+        nextAction: arAvailable
+          ? "Start with the published receivables queue before lower-risk reminder workflows."
+          : "Start with unsubmitted claims before lower-risk reminder workflows.",
       };
     }
 
