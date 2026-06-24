@@ -6,11 +6,30 @@ import { LoadingSpinner } from "../components/LoadingSpinner";
 import { ARAgingBarChart } from "../components/dashboard/ARAgingBarChart";
 import { ChartCard } from "../components/dashboard/ChartCard";
 import { CurrencyLineChart } from "../components/dashboard/CurrencyLineChart";
-import { buildProductionCollectionsSeries, selectLatestMonthlyKpi } from "../components/dashboard/financialDashboardSummary";
+import {
+  buildProductionCollectionsSeries,
+  isSoftdentArAvailable,
+  selectLatestMonthlyKpi,
+} from "../components/dashboard/financialDashboardSummary";
 import { SummaryCard } from "../components/dashboard/SummaryCard";
+
+function toArField(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
 
 function formatCurrencyValue(value: number | null | undefined) {
   return value === null || value === undefined ? "Unavailable" : formatCurrency(value);
+}
+
+function formatArCurrency(value: number | null) {
+  if (value === null) {
+    return "Unavailable";
+  }
+  return formatCurrency(value);
 }
 
 export default function SoftDentPage() {
@@ -38,20 +57,25 @@ export default function SoftDentPage() {
   const financialSummary = financialSummaryQuery.data;
 
   const latestAr = financialSummary.latestAr;
-  const softDentCoverage = financialSummary.softDentCoverage ?? null;
-  const softDentReview = financialSummary.sourceReview?.softDent ?? null;
+  const arAvailable = isSoftdentArAvailable(latestAr);
+  const totalAr = arAvailable ? toArField(latestAr.total_ar) : null;
+  const arOver90 = arAvailable ? toArField(latestAr.balance_90) : null;
+  const currentBalance = arAvailable ? toArField(latestAr.current_balance) : null;
+  const balance60 = arAvailable ? toArField(latestAr.balance_60) : null;
+  const balance90 = arAvailable ? toArField(latestAr.balance_90) : null;
+  const olderArBalance =
+    arAvailable && balance60 !== null && balance90 !== null ? balance60 + balance90 : null;
   const monthlyKpi = selectLatestMonthlyKpi(financialSummary.monthlyKpis);
   const trailing12Months = buildProductionCollectionsSeries(financialSummary.trailing12Months);
   const collectionPercent = monthlyKpi?.collection_rate != null ? Math.round(monthlyKpi.collection_rate) : null;
-  const arAging = latestAr
+  const arAging = arAvailable
     ? [
-        { name: "Current", value: latestAr.current_balance ?? 0 },
-        { name: "31-60", value: latestAr.balance_30 ?? 0 },
-        { name: "61-90", value: latestAr.balance_60 ?? 0 },
-        { name: "90+", value: latestAr.balance_90 ?? 0 },
-      ]
+        { name: "Current", value: toArField(latestAr.current_balance) },
+        { name: "31-60", value: toArField(latestAr.balance_30) },
+        { name: "61-90", value: balance60 },
+        { name: "90+", value: balance90 },
+      ].filter((bucket): bucket is { name: string; value: number } => bucket.value !== null)
     : [];
-  const olderArBalance = latestAr ? (latestAr.balance_60 ?? 0) + (latestAr.balance_90 ?? 0) : 0;
 
   return (
     <div className="dashboard-page">
@@ -67,11 +91,11 @@ export default function SoftDentPage() {
         </div>
         <div>
           <div className="dashboard-toolbar__label">Total A/R</div>
-          <div className="dashboard-toolbar__value">{formatCurrencyValue(latestAr?.total_ar)}</div>
+          <div className="dashboard-toolbar__value">{formatArCurrency(totalAr)}</div>
         </div>
         <div>
           <div className="dashboard-toolbar__label">90+ A/R</div>
-          <div className="dashboard-toolbar__value">{formatCurrencyValue(latestAr?.balance_90)}</div>
+          <div className="dashboard-toolbar__value">{formatArCurrency(arOver90)}</div>
         </div>
       </section>
       <div className="kpi-grid">
@@ -93,18 +117,18 @@ export default function SoftDentPage() {
         </SummaryCard>
         <SummaryCard title="A/R Aging">
           <div>
-            Total: <strong>{formatCurrencyValue(latestAr?.total_ar)}</strong>
+            Total: <strong>{formatArCurrency(totalAr)}</strong>
           </div>
           <div>
-            90+: <strong>{formatCurrencyValue(latestAr?.balance_90)}</strong>
+            90+: <strong>{formatArCurrency(arOver90)}</strong>
           </div>
         </SummaryCard>
         <SummaryCard title="Receivables Focus">
           <div>
-            Current A/R: <strong>{formatCurrencyValue(latestAr?.current_balance)}</strong>
+            Current A/R: <strong>{formatArCurrency(currentBalance)}</strong>
           </div>
           <div>
-            60+ aging: <strong>{formatCurrencyValue(olderArBalance)}</strong>
+            60+ aging: <strong>{formatArCurrency(olderArBalance)}</strong>
           </div>
         </SummaryCard>
       </div>
@@ -116,7 +140,11 @@ export default function SoftDentPage() {
           <CurrencyLineChart data={trailing12Months} lines={[{ dataKey: "collections", name: "Collections", color: "#78A86B" }]} />
         </ChartCard>
         <ChartCard title="A/R Aging">
-          <ARAgingBarChart data={arAging} />
+          {arAvailable ? (
+            <ARAgingBarChart data={arAging} />
+          ) : (
+            <div className="page-state-card page-state-card--info">No SoftDent A/R export available.</div>
+          )}
         </ChartCard>
       </div>
       <section className="dashboard-card">
@@ -131,7 +159,7 @@ export default function SoftDentPage() {
             Net production: <strong>{formatCurrencyValue(monthlyKpi?.net_production)}</strong>
           </span>
           <span>
-            Older A/R: <strong>{formatCurrencyValue(olderArBalance)}</strong>
+            Older A/R: <strong>{formatArCurrency(olderArBalance)}</strong>
           </span>
         </div>
       </section>
