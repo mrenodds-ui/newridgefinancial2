@@ -27,6 +27,7 @@ FIXTURE_CLAIMS_CSV = FIXTURE_EXPORT_DIR / "claims_export_fixture.csv"
 FIXTURE_PROCEDURES_CSV = FIXTURE_EXPORT_DIR / "softdent_procedures_export.csv"
 FIXTURE_LEDGER_CSV = FIXTURE_EXPORT_DIR / "softdent_patient_ledger_export.csv"
 FIXTURE_CLAIM_STATUS_CSV = FIXTURE_EXPORT_DIR / "softdent_claim_status_export.csv"
+FIXTURE_CLINICAL_NOTES_CSV = FIXTURE_EXPORT_DIR / "softdent_clinical_notes_export.csv"
 
 
 @pytest.fixture
@@ -420,6 +421,12 @@ def export_fixture_dir(tmp_path: Path) -> Path:
             claim_status_src.read_text(encoding="utf-8"),
             encoding="utf-8",
         )
+    clinical_notes_src = FIXTURE_CLINICAL_NOTES_CSV
+    if clinical_notes_src.is_file():
+        (tmp_path / "softdent_clinical_notes_export.csv").write_text(
+            clinical_notes_src.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
     return tmp_path
 
 
@@ -481,7 +488,8 @@ def test_softdent_export_adapter_scoped_rows_produce_source_facts(
     )
 
     assert packet.source_facts
-    assert all(fact.source_type == "softdent" for fact in packet.source_facts)
+    assert all(fact.source_type in {"softdent", "clinical_note"} for fact in packet.source_facts)
+    assert any(fact.source_type == "softdent" for fact in packet.source_facts)
     assert any("Claim CLAIM-EXPORT-1 status" in fact.text for fact in packet.source_facts)
     assert any("Crown buildup" in fact.text for fact in packet.source_facts)
     assert any(fact.source_label == "softdent_claims_export.csv" for fact in packet.source_facts)
@@ -1129,3 +1137,332 @@ def test_builder_accepts_softdent_export_adapter_with_claim_status_facts(
 
     assert packet.audit_metadata.adapter_name == "softdent_export_file"
     assert any("claim_status" in fact.supports for fact in packet.source_facts)
+
+
+def test_softdent_export_adapter_missing_clinical_notes_file(
+    tmp_path: Path,
+    fixed_timestamp: str,
+) -> None:
+    (tmp_path / "softdent_claims_export.csv").write_text(
+        FIXTURE_CLAIMS_CSV.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "softdent_procedures_export.csv").write_text(
+        FIXTURE_PROCEDURES_CSV.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=tmp_path)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    missing_codes = {item.code for item in packet.missing_data}
+    assert "missing_softdent_clinical_notes_export" in missing_codes
+    assert all("clinical_note" not in fact.supports for fact in packet.source_facts)
+
+
+def test_softdent_export_adapter_invalid_clinical_notes_file(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    (export_fixture_dir / "softdent_clinical_notes_export.csv").write_bytes(b"\xff\xfe")
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    missing_codes = {item.code for item in packet.missing_data}
+    assert "invalid_softdent_clinical_notes_export" in missing_codes
+    assert all("clinical_note" not in fact.supports for fact in packet.source_facts)
+
+
+def test_softdent_export_adapter_scoped_clinical_note_produces_source_fact(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    note_facts = [fact for fact in packet.source_facts if "clinical_note" in fact.supports]
+    assert note_facts
+    assert any(fact.fact_id == "fact-NOTE-1001-clinical-note" for fact in note_facts)
+    assert any(
+        'Clinical note NOTE-1001 for Patient ref CHART-EXPORT on 2026-06-12 documents: '
+        '"Tooth 30 buildup required due to insufficient remaining tooth structure."'
+        in fact.text
+        for fact in note_facts
+    )
+    assert all(fact.source_type == "clinical_note" for fact in note_facts)
+    assert all(fact.source_label == "softdent_clinical_notes_export.csv" for fact in note_facts)
+    assert all(fact.source_strength == "supporting" for fact in note_facts)
+
+
+def test_softdent_export_adapter_ignores_non_matching_clinical_note_patients(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    note_text = " ".join(fact.text for fact in packet.source_facts if "clinical_note" in fact.supports)
+    assert "Other patient note" not in note_text
+    assert "NOTE-OTHER" not in note_text
+
+
+def test_softdent_export_adapter_ignores_non_matching_clinical_note_claim_and_procedure_rows(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    note_text = " ".join(fact.text for fact in packet.source_facts if "clinical_note" in fact.supports)
+    assert "Wrong claim note" not in note_text
+    assert "Unscoped procedure note" not in note_text
+    assert "NOTE-1001" in note_text
+
+
+def test_softdent_export_adapter_procedure_scope_can_include_claim_mismatched_notes(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        procedure_ids=["PROC-CROWN-30"],
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    note_ids = {
+        fact.supports[1]
+        for fact in packet.source_facts
+        if "clinical_note" in fact.supports and len(fact.supports) > 1
+    }
+    assert "NOTE-WRONG-CLAIM" in note_ids
+
+
+def test_softdent_export_adapter_claim_or_procedure_ids_match_clinical_notes(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        procedure_ids=["PROC-CROWN-30"],
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    note_ids = {
+        fact.supports[1]
+        for fact in packet.source_facts
+        if "clinical_note" in fact.supports and len(fact.supports) > 1
+    }
+    assert "NOTE-1001" in note_ids
+    assert "NOTE-1002" in note_ids
+
+
+def test_softdent_export_adapter_claim_id_only_excludes_procedure_only_clinical_notes(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    note_ids = {
+        fact.supports[1]
+        for fact in packet.source_facts
+        if "clinical_note" in fact.supports and len(fact.supports) > 1
+    }
+    assert "NOTE-1001" in note_ids
+    assert "NOTE-1002" not in note_ids
+
+
+def test_softdent_export_adapter_date_range_filters_clinical_note_rows(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        date_range=("2026-06-01", "2026-06-30"),
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    note_text = " ".join(fact.text for fact in packet.source_facts if "clinical_note" in fact.supports)
+    assert "Older note outside date range" not in note_text
+    assert "NOTE-1001" in note_text
+
+
+def test_softdent_export_adapter_blank_clinical_notes_are_ignored(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    assert all("NOTE-BLANK" not in fact.supports for fact in packet.source_facts)
+
+
+def test_softdent_export_adapter_long_clinical_notes_are_trimmed(
+    tmp_path: Path,
+    fixed_timestamp: str,
+) -> None:
+    (tmp_path / "softdent_claims_export.csv").write_text(
+        FIXTURE_CLAIMS_CSV.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "softdent_procedures_export.csv").write_text(
+        FIXTURE_PROCEDURES_CSV.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    long_note = "Buildup documented. " + ("x" * 600)
+    (tmp_path / "softdent_clinical_notes_export.csv").write_text(
+        "patient_ref,note_id,note_date,procedure_id,claim_id,provider_label,note_type,note_text,source_report_date\n"
+        f"CHART-EXPORT,NOTE-LONG,2026-06-12,PROC-CROWN-30,CLAIM-EXPORT-1,Dr. Smith,clinical,{long_note},2026-06-20\n",
+        encoding="utf-8",
+    )
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=tmp_path)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    note_fact = next(
+        fact for fact in packet.source_facts if fact.fact_id == "fact-NOTE-LONG-clinical-note"
+    )
+    assert len(note_fact.text) <= 600
+    assert "..." in note_fact.text
+
+
+def test_softdent_export_adapter_clinical_notes_do_not_create_ar_or_balances(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    assert any("clinical_note" in fact.supports for fact in packet.source_facts)
+    assert "missing_softdent_ar" in {item.code for item in packet.missing_data}
+    dumped = json.dumps(packet.model_dump(mode="json"))
+    assert '"ar_total"' not in dumped
+    assert '"accounts_receivable"' not in dumped
+    assert '"patient_balance"' not in dumped
+
+
+def test_softdent_export_adapter_missing_scoped_clinical_note_rows(
+    tmp_path: Path,
+    fixed_timestamp: str,
+) -> None:
+    (tmp_path / "softdent_claims_export.csv").write_text(
+        FIXTURE_CLAIMS_CSV.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "softdent_procedures_export.csv").write_text(
+        FIXTURE_PROCEDURES_CSV.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "softdent_clinical_notes_export.csv").write_text(
+        "patient_ref,note_id,note_date,procedure_id,claim_id,provider_label,note_type,note_text,source_report_date\n"
+        "CHART-EXPORT,NOTE-OTHER-CLAIM,2026-06-12,PROC-CROWN-30,CLAIM-OTHER-9,Dr. Smith,clinical,Note for different claim.,2026-06-20\n",
+        encoding="utf-8",
+    )
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=tmp_path)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        procedure_ids=["PROC-NOT-IN-NOTES"],
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    missing_codes = {item.code for item in packet.missing_data}
+    assert "missing_scoped_clinical_note_rows" in missing_codes
+    assert all("clinical_note" not in fact.supports for fact in packet.source_facts)
+
+
+def test_builder_accepts_softdent_export_adapter_with_clinical_note_facts(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = softdent_export_file_adapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    assert packet.audit_metadata.adapter_name == "softdent_export_file"
+    assert any("clinical_note" in fact.supports for fact in packet.source_facts)

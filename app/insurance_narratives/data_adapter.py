@@ -186,12 +186,43 @@ MISSING_DATA_CATALOG: dict[str, NarrativeMissingDataItem] = {
         why_it_matters="Payer may require a clinical narrative for appeal or resubmission.",
         blocking=False,
     ),
+    "missing_softdent_clinical_notes_export": NarrativeMissingDataItem(
+        code="missing_softdent_clinical_notes_export",
+        label="SoftDent clinical notes export file",
+        severity="warning",
+        why_it_matters="Clinical rationale facts require softdent_clinical_notes_export.csv in the configured import directory.",
+        blocking=False,
+    ),
+    "missing_scoped_clinical_note_rows": NarrativeMissingDataItem(
+        code="missing_scoped_clinical_note_rows",
+        label="Scoped clinical note rows",
+        severity="warning",
+        why_it_matters="No clinical note rows in the export matched the requested patient, claim, procedure, or date scope.",
+        blocking=False,
+    ),
+    "invalid_softdent_clinical_notes_export": NarrativeMissingDataItem(
+        code="invalid_softdent_clinical_notes_export",
+        label="Invalid SoftDent clinical notes export",
+        severity="warning",
+        why_it_matters="softdent_clinical_notes_export.csv is present but malformed or missing required columns.",
+        blocking=False,
+    ),
 }
 
 SOFTDENT_NARRATIVE_CLAIMS_FILENAME = "softdent_claims_export.csv"
 SOFTDENT_NARRATIVE_PROCEDURES_FILENAME = "softdent_procedures_export.csv"
 SOFTDENT_NARRATIVE_PATIENT_LEDGER_FILENAME = "softdent_patient_ledger_export.csv"
 SOFTDENT_NARRATIVE_CLAIM_STATUS_FILENAME = "softdent_claim_status_export.csv"
+SOFTDENT_NARRATIVE_CLINICAL_NOTES_FILENAME = "softdent_clinical_notes_export.csv"
+CLINICAL_NOTE_TEXT_MAX_LENGTH = 500
+CLINICAL_NOTE_RAW_MAX_LENGTH = 8000
+CLINICAL_NOTE_BULK_MARKERS = (
+    "full patient export",
+    "all patients",
+    "database dump",
+    "patient roster",
+    "unrestricted export",
+)
 SOFTDENT_NARRATIVE_LEDGER_REQUIRED_COLUMNS = frozenset(
     {
         "patient_ref",
@@ -216,6 +247,19 @@ SOFTDENT_NARRATIVE_CLAIM_STATUS_REQUIRED_COLUMNS = frozenset(
         "denial_reason",
         "remark_code",
         "requested_items",
+        "source_report_date",
+    }
+)
+SOFTDENT_NARRATIVE_CLINICAL_NOTES_REQUIRED_COLUMNS = frozenset(
+    {
+        "patient_ref",
+        "note_id",
+        "note_date",
+        "procedure_id",
+        "claim_id",
+        "provider_label",
+        "note_type",
+        "note_text",
         "source_report_date",
     }
 )
@@ -1217,6 +1261,153 @@ def _build_export_claim_status_facts(
     ]
 
 
+def _clinical_notes_csv_has_required_columns(path: Path) -> bool:
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            if reader.fieldnames is None:
+                return False
+            normalized = {_normalize_csv_header(name) for name in reader.fieldnames}
+            return SOFTDENT_NARRATIVE_CLINICAL_NOTES_REQUIRED_COLUMNS.issubset(normalized)
+    except (OSError, csv.Error, UnicodeDecodeError):
+        return False
+
+
+def _load_clinical_notes_export(path: Path) -> tuple[list[dict[str, str]], str | None]:
+    """Load clinical notes CSV. Returns (rows, missing_code) when absent or invalid."""
+    if not path.is_file():
+        return [], "missing_softdent_clinical_notes_export"
+    if not _clinical_notes_csv_has_required_columns(path):
+        return [], "invalid_softdent_clinical_notes_export"
+    rows = _read_scoped_export_csv(path)
+    if rows is None:
+        return [], "invalid_softdent_clinical_notes_export"
+    return rows, None
+
+
+def _clinical_note_date(row: dict[str, str]) -> str | None:
+    value = str(row.get("note_date") or "").strip()
+    return value or None
+
+
+def _clinical_note_row_in_date_range(row: dict[str, str], date_range: tuple[str, str] | None) -> bool:
+    if not date_range:
+        return True
+    note_date = _clinical_note_date(row)
+    if not note_date:
+        return True
+    start_date, end_date = date_range
+    return start_date <= note_date <= end_date
+
+
+def _normalize_clinical_note_text(value: str, *, max_length: int = CLINICAL_NOTE_TEXT_MAX_LENGTH) -> str:
+    collapsed = " ".join(value.split())
+    if len(collapsed) > max_length:
+        return collapsed[: max_length - 3].rstrip() + "..."
+    return collapsed
+
+
+def _clinical_note_text_is_safe(raw_text: str) -> bool:
+    if len(raw_text) > CLINICAL_NOTE_RAW_MAX_LENGTH:
+        return False
+    lower = raw_text.lower()
+    return not any(marker in lower for marker in CLINICAL_NOTE_BULK_MARKERS)
+
+
+def _scope_clinical_note_rows(
+    note_rows: list[dict[str, str]],
+    *,
+    patient_ref: str,
+    claim_id: str | None,
+    procedure_ids: list[str] | None,
+    included_procedure_ids: set[str],
+    date_range: tuple[str, str] | None,
+) -> list[dict[str, str]]:
+    scoped: list[dict[str, str]] = []
+    requested_procedure_ids = (
+        {_normalize_ref(proc_id) for proc_id in procedure_ids} if procedure_ids else None
+    )
+    for row in note_rows:
+        if _export_row_patient_ref(row) != patient_ref:
+            continue
+        if not _clinical_note_row_in_date_range(row, date_range):
+            continue
+        row_claim_id = _export_row_claim_id(row)
+        row_procedure_id = _export_row_procedure_id(row)
+        if claim_id and requested_procedure_ids is not None:
+            claim_match = row_claim_id == claim_id
+            procedure_match = bool(
+                row_procedure_id and row_procedure_id in requested_procedure_ids
+            )
+            if not claim_match and not procedure_match:
+                continue
+            if claim_match and row_procedure_id and row_procedure_id not in included_procedure_ids:
+                if row_procedure_id not in requested_procedure_ids:
+                    continue
+        elif claim_id:
+            if row_claim_id != claim_id:
+                continue
+            if row_procedure_id and included_procedure_ids and row_procedure_id not in included_procedure_ids:
+                continue
+        elif requested_procedure_ids is not None:
+            if not row_procedure_id or row_procedure_id not in requested_procedure_ids:
+                continue
+        raw_note_text = str(row.get("note_text") or "")
+        if not raw_note_text.strip():
+            continue
+        if not _clinical_note_text_is_safe(raw_note_text):
+            continue
+        scoped.append(row)
+    return scoped
+
+
+def _build_export_clinical_note_facts(
+    *,
+    patient_ref: str,
+    note_rows: list[dict[str, str]],
+) -> list[NarrativeSourceFact]:
+    facts: list[NarrativeSourceFact] = []
+    for row in note_rows:
+        note_id = str(row.get("note_id") or "").strip()
+        if not note_id:
+            continue
+        raw_note_text = str(row.get("note_text") or "")
+        note_text = _normalize_clinical_note_text(raw_note_text)
+        if not note_text:
+            continue
+        note_date = _clinical_note_date(row) or ""
+        source_report_date = str(row.get("source_report_date") or "").strip() or None
+        procedure_id = _export_row_procedure_id(row)
+        claim_id = _export_row_claim_id(row)
+        note_type = str(row.get("note_type") or "").strip()
+
+        supports = ["clinical_note", note_id]
+        if procedure_id:
+            supports.append(procedure_id)
+        if claim_id:
+            supports.append(claim_id)
+        if note_type:
+            supports.append(note_type)
+
+        text = f'Clinical note {note_id} for Patient ref {patient_ref}'
+        if note_date:
+            text += f" on {note_date}"
+        text += f' documents: "{note_text}".'
+
+        facts.append(
+            NarrativeSourceFact(
+                fact_id=f"fact-{note_id}-clinical-note",
+                source_type="clinical_note",
+                source_label=SOFTDENT_NARRATIVE_CLINICAL_NOTES_FILENAME,
+                source_date=source_report_date or note_date or None,
+                text=text,
+                supports=supports,
+                source_strength="supporting",
+            )
+        )
+    return facts
+
+
 class SoftDentExportFileInsuranceNarrativeAdapter:
     """Reads scoped SoftDent narrative CSV exports from a configured import directory.
 
@@ -1404,6 +1595,29 @@ class SoftDentExportFileInsuranceNarrativeAdapter:
                 denial_reason = str(status_row.get("denial_reason") or "").strip()
                 if denial_reason and not claim_summary.denial_reason:
                     claim_summary = claim_summary.model_copy(update={"denial_reason": denial_reason})
+
+        clinical_notes_path = self._export_dir / SOFTDENT_NARRATIVE_CLINICAL_NOTES_FILENAME
+        clinical_note_rows, clinical_notes_error = _load_clinical_notes_export(clinical_notes_path)
+        if clinical_notes_error:
+            missing_data.append(missing_data_item(clinical_notes_error))
+        else:
+            scoped_clinical_note_rows = _scope_clinical_note_rows(
+                clinical_note_rows,
+                patient_ref=normalized_ref,
+                claim_id=claim_key,
+                procedure_ids=scope.procedure_ids,
+                included_procedure_ids=expected_procedure_ids,
+                date_range=scope.date_range,
+            )
+            if not scoped_clinical_note_rows:
+                missing_data.append(missing_data_item("missing_scoped_clinical_note_rows"))
+            else:
+                source_facts.extend(
+                    _build_export_clinical_note_facts(
+                        patient_ref=normalized_ref,
+                        note_rows=scoped_clinical_note_rows,
+                    )
+                )
 
         date_range_summary: DateRangeSummary | None = None
         service_dates = [proc.service_date for proc in procedures if proc.service_date]

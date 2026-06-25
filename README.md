@@ -97,7 +97,7 @@ Open: <http://localhost:5173/app>
 ---
 
 See docs/API.md for endpoint documentation and authentication details.
-For insurance narrative case packets and SoftDent export-file adapters (claims, procedures, patient ledger, claim status), see `docs/insurance_narratives.md`.
+For insurance narrative case packets and SoftDent export-file adapters (claims, procedures, patient ledger, claim status, clinical notes), see `docs/insurance_narratives.md`.
 
 ## SPA Overview
 
