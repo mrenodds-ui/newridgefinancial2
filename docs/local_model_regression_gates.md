@@ -47,6 +47,8 @@ To compare the primary GPU chat lane against the CPU/RAM second-opinion lane sid
 python scripts/run_local_model_ab_eval.py
 ```
 
+By default, `chat` resolves to the frontend lane (`:11434`, `mistral-small3.1:24b`) and `chat_second_opinion` resolves to the backend lane (`:11435`, `qwen3:30b`) via `app/ai_local_config.py`. Lane-specific env overrides such as `AI_FRONTEND_MODEL`, `AI_BACKEND_MODEL`, `AI_FRONTEND_BASE_URL`, and `AI_BACKEND_BASE_URL` apply before the run starts. Use `--base-url` only when you intentionally want one URL to override both profiles.
+
 Optional gate overrides:
 
 ```powershell

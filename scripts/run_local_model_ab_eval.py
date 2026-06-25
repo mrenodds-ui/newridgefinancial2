@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.ai_local_config import resolve_profile_base_url
+from app.ai_local_config import resolve_ab_eval_lane, resolve_profile_base_url
 from app.evaluation.ab_compare import run_ab_comparison, validate_ab_prompt_cases
 from app.evaluation.client import check_ollama_available, load_json_file
 
@@ -26,6 +25,18 @@ def _resolve_lane_base_urls(profile_a: str, profile_b: str, override_base_url: s
     return (
         resolve_profile_base_url(profile_a, override_base_url=override_base_url),
         resolve_profile_base_url(profile_b, override_base_url=override_base_url),
+    )
+
+
+def _resolve_lane_targets(
+    config: dict[str, object],
+    profile_a: str,
+    profile_b: str,
+    override_base_url: str,
+) -> tuple[dict[str, object], dict[str, object]]:
+    return (
+        resolve_ab_eval_lane(config, profile_a, override_base_url=override_base_url),
+        resolve_ab_eval_lane(config, profile_b, override_base_url=override_base_url),
     )
 
 
@@ -43,8 +54,11 @@ def main() -> int:
     parser.add_argument("--profile-b", default="chat_second_opinion")
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("OLLAMA_BASE_URL", ""),
-        help="Optional override applied to both profiles. When omitted, each profile uses its lane URL from ai_local_config.",
+        default="",
+        help=(
+            "Optional CLI override applied to both profiles. "
+            "When omitted, each profile uses its lane URL from ai_local_config."
+        ),
     )
     parser.add_argument("--timeout-seconds", type=int, default=600)
     parser.add_argument("--max-ttft", type=float, default=0.75)
@@ -54,7 +68,9 @@ def main() -> int:
 
     config = load_json_file(PROJECT_ROOT / args.config)
     prompts = validate_ab_prompt_cases(load_json_file(PROJECT_ROOT / args.prompts))
-    profile_a_base_url, profile_b_base_url = _resolve_lane_base_urls(args.profile_a, args.profile_b, args.base_url)
+    lane_a, lane_b = _resolve_lane_targets(config, args.profile_a, args.profile_b, args.base_url)
+    profile_a_base_url = str(lane_a["base_url"])
+    profile_b_base_url = str(lane_b["base_url"])
 
     if not args.dry_run:
         lane_checks = {
@@ -83,7 +99,8 @@ def main() -> int:
     emit_progress(
         (
             f"loaded prompts={len(prompts)} profile_a={args.profile_a}@{profile_a_base_url} "
-            f"profile_b={args.profile_b}@{profile_b_base_url} dry_run={bool(args.dry_run)}"
+            f"model={lane_a['model']} profile_b={args.profile_b}@{profile_b_base_url} "
+            f"model={lane_b['model']} dry_run={bool(args.dry_run)}"
         ),
         started_at=started_at,
     )
@@ -108,6 +125,10 @@ def main() -> int:
         "profile_base_urls": {
             args.profile_a: profile_a_base_url,
             args.profile_b: profile_b_base_url,
+        },
+        "profile_models": {
+            args.profile_a: lane_a["model"],
+            args.profile_b: lane_b["model"],
         },
         "dry_run": bool(args.dry_run),
         **comparison,

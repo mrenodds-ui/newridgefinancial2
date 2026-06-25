@@ -236,6 +236,21 @@ def resolve_lane_profile(config: dict[str, Any], alias: str) -> dict[str, Any]:
     return apply_lane_env_overrides(profile, alias)
 
 
+def resolve_ab_eval_lane(
+    config: dict[str, Any],
+    alias: str,
+    *,
+    override_base_url: str = "",
+) -> dict[str, object]:
+    return {
+        "alias": alias,
+        "lane": profile_lane(alias),
+        "base_url": resolve_profile_base_url(alias, override_base_url=override_base_url),
+        "model": get_model_for_profile_alias(alias),
+        "profile": resolve_lane_profile(config, alias),
+    }
+
+
 def load_local_model_profile_config() -> dict[str, Any]:
     if not LOCAL_MODEL_PROFILE_CONFIG_PATH.exists():
         raise LocalAIConfigError(

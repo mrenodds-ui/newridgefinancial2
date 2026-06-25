@@ -8,7 +8,9 @@ from typing import Any
 
 from app.hal.orchestrator import get_hal_operating_picture
 
-from .client import generate_response_result, resolve_profile
+from app.ai_local_config import resolve_lane_profile, resolve_profile_base_url
+
+from .client import generate_response_result
 
 
 _PROTECTED_PERIOD_TOKEN = "<DOT>"
@@ -393,10 +395,10 @@ def run_ab_comparison(
     dry_run: bool = False,
     progress_callback: Callable[[str], None] | None = None,
 ) -> dict[str, object]:
-    profile_a = resolve_profile(config, profile_a_alias)
-    profile_b = resolve_profile(config, profile_b_alias)
-    base_url_a = profile_a_base_url or base_url
-    base_url_b = profile_b_base_url or base_url
+    profile_a = resolve_lane_profile(config, profile_a_alias)
+    profile_b = resolve_lane_profile(config, profile_b_alias)
+    base_url_a = profile_a_base_url or resolve_profile_base_url(profile_a_alias)
+    base_url_b = profile_b_base_url or resolve_profile_base_url(profile_b_alias)
     operating_picture = get_hal_operating_picture() if {profile_a_alias, profile_b_alias} & {"chat", "chat_second_opinion"} else None
 
     cases: list[dict[str, object]] = []
