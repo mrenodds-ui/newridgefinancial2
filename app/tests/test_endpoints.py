@@ -1070,6 +1070,8 @@ def test_hal_page_summary_uses_softdent_ar_export_when_available(monkeypatch):
 
 
 def test_widget_update_route_accepts_local_payload_and_surfaces_widget_feed(monkeypatch):
+    monkeypatch.delenv("WIDGET_API_KEY", raising=False)
+    monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setattr(
         routes_module,
         "_build_financial_summary_payload",
@@ -1123,6 +1125,17 @@ def test_widget_update_route_requires_api_key_when_configured(monkeypatch):
 def test_widget_update_rejects_without_api_key_in_production(monkeypatch):
     monkeypatch.delenv("WIDGET_API_KEY", raising=False)
     monkeypatch.setenv("APP_ENV", "production")
+
+    response = client.post("/api/widgets/update", json=_sample_widget_update_payload())
+
+    assert response.status_code == 403
+    assert "WIDGET_API_KEY" in response.json()["detail"]
+
+
+def test_widget_update_rejects_unset_app_env_without_api_key(monkeypatch):
+    monkeypatch.delenv("WIDGET_API_KEY", raising=False)
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
 
     response = client.post("/api/widgets/update", json=_sample_widget_update_payload())
 
@@ -1918,3 +1931,30 @@ def test_validate_auth_configuration_rejects_malformed_json():
 
     with pytest.raises(RuntimeError, match="not valid JSON"):
         validate_auth_configuration()
+
+
+def test_validate_auth_configuration_requires_session_secret_in_production(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("APP_AUTH_SESSION_SECRET", raising=False)
+    clear_user_registry_cache()
+
+    with pytest.raises(RuntimeError, match="APP_AUTH_SESSION_SECRET is required"):
+        validate_auth_configuration()
+
+
+def test_validate_auth_configuration_requires_session_secret_when_app_env_unset(monkeypatch):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("APP_AUTH_SESSION_SECRET", raising=False)
+    clear_user_registry_cache()
+
+    with pytest.raises(RuntimeError, match="APP_AUTH_SESSION_SECRET is required"):
+        validate_auth_configuration()
+
+
+def test_validate_auth_configuration_allows_session_secret_fallback_in_development(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.delenv("APP_AUTH_SESSION_SECRET", raising=False)
+    clear_user_registry_cache()
+
+    assert validate_auth_configuration()["user_count"] == 3

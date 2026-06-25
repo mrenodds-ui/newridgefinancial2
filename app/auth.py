@@ -13,7 +13,7 @@ import time
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-from .config_runtime import get_env_setting
+from .config_runtime import get_env_setting, is_production_like_app_environment
 
 
 security = HTTPBasic(auto_error=False)
@@ -102,6 +102,12 @@ def _get_auth_session_secret() -> bytes:
     configured_secret = get_env_setting("APP_AUTH_SESSION_SECRET", "")
     if configured_secret:
         return configured_secret.encode("utf-8")
+
+    if is_production_like_app_environment():
+        raise RuntimeError(
+            "APP_AUTH_SESSION_SECRET is required when APP_ENV is unset, production, staging, "
+            "or any non-development value. Set a dedicated random secret for deployment."
+        )
 
     raw_users = get_env_setting("APP_AUTH_USERS_JSON", "")
     if not raw_users:
@@ -272,6 +278,11 @@ def validate_auth_configuration() -> dict[str, object]:
         raise RuntimeError(f"APP_AUTH_USERS_JSON is missing required roles: {', '.join(missing_roles)}")
 
     session_ttl_seconds = _get_auth_session_ttl_seconds()
+    if is_production_like_app_environment() and not get_env_setting("APP_AUTH_SESSION_SECRET", "").strip():
+        raise RuntimeError(
+            "APP_AUTH_SESSION_SECRET is required when APP_ENV is unset, production, staging, "
+            "or any non-development value. Set a dedicated random secret for deployment."
+        )
 
     clear_user_registry_cache()
     return {

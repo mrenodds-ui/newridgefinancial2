@@ -44,4 +44,12 @@ Write-Host "Using frontend Ollama base URL: $($env:OLLAMA_FRONTEND_BASE_URL)"
 Write-Host "Using backend Ollama base URL: $($env:OLLAMA_BACKEND_BASE_URL)"
 Write-Host "OpenAI-compatible endpoint will be available on http://127.0.0.1:4000 by default."
 
+if ([string]::IsNullOrWhiteSpace($env:LITELLM_MASTER_KEY)) {
+    Write-Warning @"
+LITELLM_MASTER_KEY is not set. This is acceptable for localhost-only development.
+Set LITELLM_MASTER_KEY before exposing the proxy to other hosts or shared networks.
+Do not run an unauthenticated LiteLLM proxy outside 127.0.0.1.
+"@
+}
+
 uv tool run --from "litellm[proxy]" litellm --config $resolvedConfigPath

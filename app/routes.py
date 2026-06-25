@@ -19,6 +19,7 @@ from .auth import (
     create_auth_session_token,
     require_roles,
 )
+from .config_runtime import is_local_app_environment
 from .data_pipeline import get_pull_status_payload, import_uploaded_file
 from .services import fetch_quickbooks_data
 from .hal import advance_hal_autonomy_run, answer_accounting_policy_question, answer_hal_question, answer_hal_second_opinion_question, answer_insurance_narrative_request, answer_patient_dossier_request, approve_hal_chart_plan, create_hal_autonomy_run, create_hal_chart_plan, draft_accounting_journal_entry, get_accounting_posting_queue_summary, get_hal_access_policy, get_hal_autonomy_profile, get_hal_autonomy_run_status, get_hal_index_status, get_hal_phases, get_hal_shell_commands, list_accounting_posting_queue, list_hal_audit_events, list_hal_autonomy_runs, list_hal_chart_plans, list_recent_accounting_posting_queue_activity, queue_accounting_posting_draft, refresh_local_hal_index, review_accounting_posting_queue_entry
@@ -35,8 +36,6 @@ MAX_IMPORT_UPLOAD_BYTES = 5 * 1024 * 1024
 MAX_DOCUMENT_RAG_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_WIDGET_UPDATE_BYTES = 512 * 1024
 LOCAL_WIDGET_UPDATE_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
-LOCAL_WIDGET_UPDATE_ENVIRONMENTS = {"development", "dev", "test", "testing", "local"}
-PRODUCTION_WIDGET_UPDATE_ENVIRONMENTS = {"production", "prod", "staging"}
 
 
 class QuickBooksDiagnosticRequest(BaseModel):
@@ -98,14 +97,8 @@ def _widget_update_api_key_header_name() -> str:
     return header_name or "X-API-Key"
 
 
-def _widget_update_allows_local_fallback(request: Request) -> bool:
-    environment = str(os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "").strip().lower()
-    if environment in PRODUCTION_WIDGET_UPDATE_ENVIRONMENTS:
-        return False
-    if environment in LOCAL_WIDGET_UPDATE_ENVIRONMENTS:
-        return True
-    client_host = request.client.host if request.client is not None else ""
-    return client_host == "testclient"
+def _widget_update_allows_local_fallback() -> bool:
+    return is_local_app_environment()
 
 
 def _authorize_widget_update_request(request: Request) -> str:
@@ -117,7 +110,7 @@ def _authorize_widget_update_request(request: Request) -> str:
             raise HTTPException(status_code=401, detail=f"Missing or invalid {header_name} for widget updates")
         return "api-key"
 
-    if not _widget_update_allows_local_fallback(request):
+    if not _widget_update_allows_local_fallback():
         raise HTTPException(
             status_code=403,
             detail="Widget updates require WIDGET_API_KEY in this environment",

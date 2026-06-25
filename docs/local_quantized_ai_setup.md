@@ -38,6 +38,16 @@ Optional LiteLLM proxy (:4000)
 
 Configuration is centralized in `app/ai_local_config.py` and `evals/local_model_profiles.json`.
 
+## Security defaults
+
+| Surface | Development / test (`APP_ENV=development` or `test`) | Production-like (`APP_ENV` unset, `production`, `staging`, or other) |
+| --- | --- | --- |
+| `/api/widgets/update` | Localhost fallback allowed without `WIDGET_API_KEY` | `WIDGET_API_KEY` required |
+| Session cookies | `APP_AUTH_SESSION_SECRET` optional (dev-only fallback exists) | `APP_AUTH_SESSION_SECRET` required at startup |
+| LiteLLM proxy (`:4000`) | Localhost-only; `LITELLM_MASTER_KEY` optional with startup warning | Set `LITELLM_MASTER_KEY`; do not expose the proxy without auth |
+
+`scripts/start_litellm_proxy.ps1` warns when `LITELLM_MASTER_KEY` is unset. Bind the proxy to `127.0.0.1` unless you intentionally expose it on a shared network.
+
 ## Environment
 
 Copy `.env.example` to `.env` and adjust:
