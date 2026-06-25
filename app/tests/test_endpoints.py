@@ -1104,6 +1104,43 @@ def test_widget_update_route_accepts_local_payload_and_surfaces_widget_feed(monk
     assert payload["widgetFeed"]["widgets"]["practice_financial_overview"]["metrics"]["monthly_revenue"] == 155000.0
 
 
+def test_widget_update_downgrades_receivables_success_without_ar_availability(monkeypatch):
+    monkeypatch.delenv("WIDGET_API_KEY", raising=False)
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setattr(
+        routes_module,
+        "_build_financial_summary_payload",
+        lambda: {
+            "generatedAt": "2026-06-23T00:00:00Z",
+            "healthFlags": [],
+            "monthlyKpis": [],
+            "trailing12Months": [],
+            "calendarYearKpis": [],
+            "fourYearMonthlyKpis": [],
+            "providerProduction": [],
+            "topAdaCodes": [],
+            "latestAr": None,
+        },
+    )
+
+    payload = _sample_widget_update_payload()
+    payload["widgets"]["smart_claims_and_receivables"]["status"] = "SUCCESS"
+    payload["widgets"]["care_delivery_performance"]["status"] = "SUCCESS"
+
+    update_response = client.post("/api/widgets/update", json=payload)
+
+    assert update_response.status_code == 202
+    feed = widget_feed_module.get_widget_feed()
+    assert feed is not None
+    claims_widget = feed["widgets"]["smart_claims_and_receivables"]
+    care_widget = feed["widgets"]["care_delivery_performance"]
+    assert claims_widget["status"] == "DEGRADED"
+    assert claims_widget["metrics"]["accounts_receivable_total"] is None
+    assert claims_widget["metrics"]["outstanding_claim_amount"] == 22110.0
+    assert care_widget["status"] == "DEGRADED"
+    assert care_widget["metrics"]["patient_balance_total"] is None
+
+
 def test_widget_update_route_requires_api_key_when_configured(monkeypatch):
     monkeypatch.setenv("WIDGET_API_KEY", "widget-secret")
     monkeypatch.setenv("WIDGET_API_KEY_HEADER", "X-API-Key")

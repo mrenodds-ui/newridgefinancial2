@@ -203,8 +203,10 @@ def test_build_widget_feed_does_not_use_quickbooks_ar_when_softdent_ar_missing(w
         }
     )
 
-    claims = payload["widgets"]["smart_claims_and_receivables"]["metrics"]
-    care = payload["widgets"]["care_delivery_performance"]["metrics"]
+    claims_widget = payload["widgets"]["smart_claims_and_receivables"]
+    care_widget = payload["widgets"]["care_delivery_performance"]
+    claims = claims_widget["metrics"]
+    care = care_widget["metrics"]
     finance = payload["widgets"]["practice_financial_overview"]["metrics"]
 
     assert finance["monthly_revenue"] == 155000.0
@@ -212,6 +214,54 @@ def test_build_widget_feed_does_not_use_quickbooks_ar_when_softdent_ar_missing(w
     assert claims["accounts_receivable_total"] is None
     assert care["patient_balance_total"] is None
     assert claims["outstanding_claim_amount"] == 22110.0
+    assert claims_widget["status"] == "DEGRADED"
+    assert care_widget["status"] == "DEGRADED"
+    assert payload["widgets"]["practice_financial_overview"]["status"] == "SUCCESS"
+    assert payload["widgets"]["accounts_payable_automation"]["status"] == "SUCCESS"
+
+
+def test_build_widget_feed_marks_receivables_success_when_softdent_ar_available(widget_cache_path: Path):
+    payload = build_widget_feed_from_financial_summary(_sample_financial_summary())
+
+    claims = payload["widgets"]["smart_claims_and_receivables"]
+    care = payload["widgets"]["care_delivery_performance"]
+
+    assert claims["status"] == "SUCCESS"
+    assert care["status"] == "SUCCESS"
+    assert claims["metrics"]["accounts_receivable_total"] == 21700.0
+    assert care["metrics"]["patient_balance_total"] == 9100.0
+
+
+def test_enforce_receivables_widget_ar_policy_downgrades_external_success_without_ar(widget_cache_path: Path):
+    from app.hal.widget_builder import enforce_receivables_widget_ar_policy
+
+    payload = {
+        "manager": "HAL 9000",
+        "widgets": {
+            "smart_claims_and_receivables": {
+                "status": "SUCCESS",
+                "metrics": {
+                    "outstanding_claim_count": 34,
+                    "accounts_receivable_total": 21700.0,
+                },
+            },
+            "care_delivery_performance": {
+                "status": "SUCCESS",
+                "metrics": {"patient_balance_total": 9100.0},
+            },
+            "practice_financial_overview": {"status": "SUCCESS", "metrics": {}},
+        },
+        "jobs": {"widget_publish": {"status": "SUCCESS"}},
+    }
+
+    gated = enforce_receivables_widget_ar_policy(payload, ar_available=False)
+
+    assert gated["widgets"]["smart_claims_and_receivables"]["status"] == "DEGRADED"
+    assert gated["widgets"]["smart_claims_and_receivables"]["metrics"]["accounts_receivable_total"] is None
+    assert gated["widgets"]["care_delivery_performance"]["status"] == "DEGRADED"
+    assert gated["widgets"]["care_delivery_performance"]["metrics"]["patient_balance_total"] is None
+    assert gated["widgets"]["practice_financial_overview"]["status"] == "SUCCESS"
+    assert gated["jobs"]["widget_publish"]["status"] == "DEGRADED"
 
 
 def test_build_widget_feed_does_not_mark_empty_imports_success(widget_cache_path: Path):

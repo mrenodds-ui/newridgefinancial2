@@ -26,6 +26,7 @@ from .hal import advance_hal_autonomy_run, answer_accounting_policy_question, an
 from .hal import answer_document_rag_question, ingest_document_rag_upload, list_document_rag_documents
 from .hal.orchestrator import get_hal_operating_picture
 from .hal.financial_tools import get_financial_source_status
+from .hal.widget_builder import _ar_available, enforce_receivables_widget_ar_policy
 from .hal.widget_feed import get_widget_feed, record_widget_feed
 from .hal.safety import append_ai_activity_log, create_ai_workspace_handle, ensure_within_ai_workspace, resolve_ai_workspace_handle
 from .hal.posting_queue import PostingQueueStatus
@@ -1268,7 +1269,13 @@ async def api_widget_update(request: Request):
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=json.loads(exc.json())) from exc
     try:
-        widget_feed = record_widget_feed(validated.model_dump())
+        payload_dict = validated.model_dump()
+        summary = _build_financial_summary_payload()
+        payload_dict = enforce_receivables_widget_ar_policy(
+            payload_dict,
+            ar_available=_ar_available(summary),
+        )
+        widget_feed = record_widget_feed(payload_dict)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

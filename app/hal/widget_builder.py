@@ -71,6 +71,30 @@ def _latest_ar(summary: Mapping[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _ar_available(summary: Mapping[str, Any]) -> bool:
+    latest_ar = _latest_ar(summary)
+    if not latest_ar:
+        return False
+    return any(
+        _coerce_float(latest_ar.get(key)) is not None
+        for key in ("total_ar", "patient_ar", "insurance_ar")
+    )
+
+
+def _softdent_ops_available(summary: Mapping[str, Any]) -> bool:
+    daily = _latest_daily_kpi(summary)
+    month = _current_month_production(summary)
+    return any(
+        _coerce_float(value) is not None
+        for value in (
+            daily.get("production"),
+            daily.get("collections"),
+            month.get("gross_production"),
+            month.get("collections"),
+        )
+    )
+
+
 def _claims_summary(summary: Mapping[str, Any]) -> dict[str, Any]:
     return _as_dict(summary.get("claimsSummary"))
 
@@ -83,25 +107,19 @@ def _softdent_review_status(summary: Mapping[str, Any]) -> str:
     source_review = _as_dict(summary.get("sourceReview"))
     softdent = _as_dict(source_review.get("softDent"))
     status = str(softdent.get("status") or "").strip().lower()
-    daily = _latest_daily_kpi(summary)
-    month = _current_month_production(summary)
-    latest_ar = _latest_ar(summary)
-    has_ops_data = any(
-        _coerce_float(value) is not None
-        for value in (
-            daily.get("production"),
-            daily.get("collections"),
-            month.get("gross_production"),
-            month.get("collections"),
-            latest_ar.get("total_ar"),
-            latest_ar.get("patient_ar"),
-        )
-    )
+    has_ops_data = _softdent_ops_available(summary)
     if status in {"ready", "available"} and has_ops_data:
         return "SUCCESS"
     if status in {"warning", "limited", "stale"} or has_ops_data:
         return "DEGRADED"
     return "FAILED"
+
+
+def _care_delivery_status(summary: Mapping[str, Any]) -> str:
+    base_status = _softdent_review_status(summary)
+    if base_status == "SUCCESS" and not _ar_available(summary):
+        return "DEGRADED"
+    return base_status
 
 
 def _quickbooks_review_status(summary: Mapping[str, Any]) -> str:
@@ -121,11 +139,13 @@ def _quickbooks_review_status(summary: Mapping[str, Any]) -> str:
     return "FAILED"
 
 
-def _claims_review_status(summary: Mapping[str, Any]) -> str:
+def _smart_claims_and_receivables_status(summary: Mapping[str, Any]) -> str:
     claims = _claims_summary(summary)
-    if claims.get("available"):
+    has_claims = bool(claims.get("available"))
+    has_ar = _ar_available(summary)
+    if has_claims and has_ar:
         return "SUCCESS"
-    if _coerce_float(_latest_ar(summary).get("total_ar")) is not None:
+    if has_claims or has_ar:
         return "DEGRADED"
     return "FAILED"
 
@@ -188,7 +208,9 @@ def build_widget_feed_from_financial_summary(summary: Mapping[str, Any]) -> dict
 
     qb_status = _quickbooks_review_status(summary)
     softdent_status = _softdent_review_status(summary)
-    claims_status = _claims_review_status(summary)
+    claims_status = _smart_claims_and_receivables_status(summary)
+    care_delivery_status = _care_delivery_status(summary)
+    ar_available = _ar_available(summary)
 
     posting_queue_pending = _posting_queue_pending_count()
     softdent_metrics = _as_dict(_as_dict(summary.get("sourceReview")).get("softDent")).get("metrics")
@@ -220,7 +242,11 @@ def build_widget_feed_from_financial_summary(summary: Mapping[str, Any]) -> dict
         "smart_claims_and_receivables": {
             "title": "Smart Claims & Receivables",
             "status": claims_status,
-            "summary": "SoftDent claims and receivables totals derived from imported practice operations data.",
+            "summary": (
+                "SoftDent claims and receivables totals derived from imported practice operations data."
+                if ar_available
+                else "SoftDent claims totals from imported practice operations data; dental A/R is unavailable until explicit SoftDent A/R export is present."
+            ),
             "metrics": {
                 "outstanding_claim_count": _scalar_metric(_coerce_int(claims.get("true_outstanding_claims_count"))),
                 "outstanding_claim_amount": _scalar_metric(_coerce_float(claims.get("true_outstanding_claims_amount"))),
@@ -230,8 +256,12 @@ def build_widget_feed_from_financial_summary(summary: Mapping[str, Any]) -> dict
         },
         "care_delivery_performance": {
             "title": "Care Delivery Performance",
-            "status": softdent_status,
-            "summary": "Practice-wide SoftDent operational balances from the import cache.",
+            "status": care_delivery_status,
+            "summary": (
+                "Practice-wide SoftDent operational balances from the import cache."
+                if ar_available
+                else "Practice-wide SoftDent operational activity from the import cache; patient A/R balances are unavailable until explicit SoftDent A/R export is present."
+            ),
             "metrics": {
                 "provider_count": _scalar_metric(provider_count),
                 "patient_count": None,
@@ -275,8 +305,44 @@ def refresh_import_driven_widget_feed() -> dict[str, Any]:
     return record_widget_feed(payload)
 
 
+def enforce_receivables_widget_ar_policy(payload: Mapping[str, Any], *, ar_available: bool) -> dict[str, Any]:
+    from copy import deepcopy
+
+    normalized = deepcopy(dict(payload))
+    widgets = normalized.get("widgets")
+    if not isinstance(widgets, dict):
+        return normalized
+
+    if not ar_available:
+        for widget_key, metric_keys in (
+            ("smart_claims_and_receivables", ("accounts_receivable_total",)),
+            ("care_delivery_performance", ("patient_balance_total",)),
+        ):
+            widget = widgets.get(widget_key)
+            if not isinstance(widget, dict):
+                continue
+            metrics = widget.get("metrics")
+            if not isinstance(metrics, dict):
+                continue
+            for metric_key in metric_keys:
+                metrics[metric_key] = None
+            if str(widget.get("status") or "").strip().upper() == "SUCCESS":
+                widget["status"] = "DEGRADED"
+
+    jobs = normalized.get("jobs")
+    if isinstance(jobs, dict):
+        publish_status = _publish_job_status(widgets)
+        for job_key in ("import_cache_refresh", "widget_publish"):
+            job = jobs.get(job_key)
+            if isinstance(job, dict):
+                job["status"] = publish_status
+
+    return normalized
+
+
 __all__ = [
     "IMPORT_CACHE_MANAGER",
     "build_widget_feed_from_financial_summary",
+    "enforce_receivables_widget_ar_policy",
     "refresh_import_driven_widget_feed",
 ]
