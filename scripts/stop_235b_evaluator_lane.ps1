@@ -3,8 +3,9 @@
   Stop qwen3:235b and the evaluator Ollama lane on :11436.
 
 .DESCRIPTION
-  Stops only the listener bound to the evaluator port (with retries for tray respawn).
+  Stops only the LISTENING process bound to the evaluator port (with retries for tray respawn).
   Does not call ollama stop; unloading qwen3:235b via ollama stop can hang during automation.
+  Exits 0 immediately when :11436 has no listener.
 
 .PARAMETER WhatIf
   Show planned actions without stopping processes.
@@ -36,17 +37,14 @@ $ErrorActionPreference = 'Continue'
 
 function Get-ListenerPidsOnPort([int]$ListenPort) {
     $listenerPids = @()
-    $patterns = @(
-        "127.0.0.1:$ListenPort\s",
-        "0.0.0.0:$ListenPort\s",
-        "\[::\]:$ListenPort\s"
-    )
-    foreach ($pattern in $patterns) {
-        foreach ($line in (netstat -ano | Select-String $pattern)) {
-            $listenerPid = [int](($line -split '\s+')[-1])
-            if ($listenerPid -gt 0) {
-                $listenerPids += $listenerPid
-            }
+    foreach ($line in (netstat -ano | Select-String 'LISTENING')) {
+        $parts = ($line.ToString().Trim() -split '\s+')
+        if ($parts.Count -lt 5) { continue }
+        $localAddress = $parts[1]
+        if ($localAddress -notmatch ":$ListenPort`$") { continue }
+        $listenerPid = [int]$parts[-1]
+        if ($listenerPid -gt 0) {
+            $listenerPids += $listenerPid
         }
     }
     return $listenerPids | Select-Object -Unique
@@ -67,6 +65,11 @@ function Test-PortListening([int]$ListenPort) {
 
 $evalHost = "${HostName}:$Port"
 $env:OLLAMA_HOST = $evalHost
+
+if (-not (Test-PortListening -ListenPort $Port)) {
+    Write-Host "Evaluator lane already down (http://$evalHost)."
+    exit 0
+}
 
 Write-Host "Stopping evaluator lane on http://$evalHost..."
 if ($ForceStopOllamaApp) {

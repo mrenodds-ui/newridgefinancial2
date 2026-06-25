@@ -133,7 +133,7 @@ if ($ForceStopOllamaApp) {
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "`n[8/10] Verify :11436 is down"
-$code11436 = curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:11436/v1/models 2>$null
+$code11436 = curl.exe -s -m 3 -o NUL -w "%{http_code}" http://127.0.0.1:11436/v1/models 2>$null
 Write-Host ":11436 http=$code11436"
 if ($code11436 -match '^2') {
     throw ':11436 still responds after teardown.'

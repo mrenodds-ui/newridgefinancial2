@@ -145,7 +145,7 @@ Do **not** run the 24B frontend lane or 30B backend lane while the 235B evaluato
 | 4 | Start only the evaluator on `:11436` (foreground `ollama serve` in a dedicated terminal, or `scripts/start_235b_evaluator_lane.ps1`). |
 | 5 | Run **one** section: `scripts/run_235b_isolated_section.ps1 -Section N` |
 | 6 | Save **one** report (`235b_sectionN_*_report.md` at repo root; do not commit unless approved). |
-| 7 | Stop `qwen3:235b` and tear down `:11436`: `scripts/stop_235b_evaluator_lane.ps1` |
+| 7 | Tear down `:11436` only: `scripts/stop_235b_evaluator_lane.ps1` kills the LISTENING serve PID (not client connections). It does **not** block on `ollama stop qwen3:235b`. Exits 0 immediately if `:11436` is already down. |
 | 8 | Restart 24B/30B only if needed: `-RestartNormalLanes` on the orchestrator, or start `run_frontend_model.ps1` / `run_backend_model.ps1` manually. |
 
 Orchestrator (single section, lane checks, optional report overwrite):
