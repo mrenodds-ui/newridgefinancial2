@@ -17,6 +17,7 @@ from pypdf import PdfReader
 from app.config_runtime import get_env_setting
 from app.ai_local_config import (
     LocalAIConfigError,
+    get_frontend_base_url,
     load_local_model_profile_config,
     require_lane_runtime,
     resolve_lane_profile,
@@ -32,10 +33,6 @@ from .vector_store import get_embedding_function
 
 DOCUMENT_RAG_MODE = "langchain-document-rag-v1"
 DOCUMENT_RAG_COLLECTION_NAME = "hal_document_rag"
-from app.ai_local_config import get_frontend_base_url
-
-DEFAULT_OLLAMA_BASE_URL = get_frontend_base_url()
-DEFAULT_DOCUMENT_RAG_LLM_BASE_URL = os.getenv("LITELLM_PROXY_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
 LOCAL_MODEL_PROFILE_CONFIG_PATH = Path(__file__).resolve().parents[2] / "evals" / "local_model_profiles.json"
 SUPPORTED_EXTENSIONS = {".csv", ".json", ".md", ".pdf", ".txt"}
 DOCUMENT_GUARDRAILS = [
@@ -385,7 +382,14 @@ def _get_profile_timeout_seconds(profile: dict[str, object], *, default: int = 9
 
 
 def _get_document_rag_generation_base_url() -> str:
-    return DEFAULT_DOCUMENT_RAG_LLM_BASE_URL
+    proxy_base_url = get_env_setting("LITELLM_PROXY_BASE_URL", "").strip()
+    if proxy_base_url:
+        return proxy_base_url.rstrip("/")
+    return get_frontend_base_url()
+
+
+def _document_rag_uses_direct_frontend_lane() -> bool:
+    return not get_env_setting("LITELLM_PROXY_BASE_URL", "").strip()
 
 
 def _has_grounded_retrieval_support(retrieved_context: list[dict[str, Any]]) -> bool:
@@ -441,7 +445,7 @@ def answer_document_rag_question(*, question: str, actor: str, top_k: int = 4) -
 
     try:
         generation_base_url = _get_document_rag_generation_base_url()
-        if generation_base_url == DEFAULT_OLLAMA_BASE_URL:
+        if _document_rag_uses_direct_frontend_lane():
             generation_base_url = require_lane_runtime("chat", purpose="document RAG answer generation")
     except LocalAIConfigError as exc:
         raise RuntimeError(str(exc)) from exc

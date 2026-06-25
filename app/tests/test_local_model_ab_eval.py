@@ -42,6 +42,18 @@ def _load_ab_eval_module():
     return module
 
 
+def test_ab_eval_lane_urls_reflect_env_after_config_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert config.get_frontend_base_url() == config.DEFAULT_FRONTEND_BASE_URL
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", "http://post-import-frontend:11434")
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", "http://post-import-backend:11435")
+    module = _load_ab_eval_module()
+
+    profile_a_url, profile_b_url = module._resolve_lane_base_urls("chat", "chat_second_opinion", "")
+
+    assert profile_a_url == "http://post-import-frontend:11434"
+    assert profile_b_url == "http://post-import-backend:11435"
+
+
 def test_ab_eval_default_lane_urls_are_profile_specific(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_FRONTEND_BASE_URL", "http://frontend:11434")
     monkeypatch.setenv("AI_BACKEND_BASE_URL", "http://backend:11435")

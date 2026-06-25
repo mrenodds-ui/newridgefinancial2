@@ -40,7 +40,6 @@ from uuid import uuid4
 
 HAL_MODE = "local-rag-phase-1"
 SECOND_OPINION_PROFILE_ALIAS = "chat_second_opinion"
-DEFAULT_OLLAMA_BASE_URL = get_frontend_base_url()
 LOCAL_MODEL_PROFILE_CONFIG_PATH = Path(__file__).resolve().parents[2] / "evals" / "local_model_profiles.json"
 HAL_PHASES = [
     "Authenticate operator",

@@ -78,6 +78,16 @@ def test_litellm_backend_aliases_resolve_to_backend_lane(monkeypatch: pytest.Mon
     assert config.resolve_profile_base_url("chat_second_opinion") == "http://127.0.0.1:11435"
 
 
+def test_control_routes_resolve_lane_urls_dynamically(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.control_routes as control_routes
+
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", "http://dynamic-frontend:11434")
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", "http://dynamic-backend:11435")
+
+    assert control_routes._base_url_for_task_kind("chat") == "http://dynamic-frontend:11434"
+    assert control_routes._base_url_for_task_kind("second_opinion") == "http://dynamic-backend:11435"
+
+
 def test_normal_aliases_never_resolve_to_evaluator_lane(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_FRONTEND_BASE_URL", "http://127.0.0.1:11434")
     monkeypatch.setenv("AI_BACKEND_BASE_URL", "http://127.0.0.1:11435")

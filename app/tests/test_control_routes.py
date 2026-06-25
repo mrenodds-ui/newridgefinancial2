@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 import app.control_routes as control_routes_module
+from app.ai_local_config import get_litellm_proxy_base_url
 from app.auth import clear_user_registry_cache
 
 
@@ -215,7 +216,7 @@ def test_control_route_returns_litellm_alias(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["litellm_model_alias"] == "hal-coding"
-    assert body["litellm_proxy_base_url"] == control_routes_module.DEFAULT_LITELLM_PROXY_BASE_URL
+    assert body["litellm_proxy_base_url"] == get_litellm_proxy_base_url()
 
 
 def test_control_litellm_config_renders_openai_compatible_proxy_yaml(monkeypatch):

@@ -122,3 +122,51 @@ def test_require_lane_runtime_raises_clear_message_when_unreachable(monkeypatch:
 
     with pytest.raises(config.LocalAIConfigError, match="document RAG"):
         config.require_lane_runtime("chat", purpose="document RAG answer generation")
+
+
+def test_base_url_resolvers_read_env_after_module_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert config.get_frontend_base_url() == config.DEFAULT_FRONTEND_BASE_URL
+    assert config.get_backend_base_url() == config.DEFAULT_BACKEND_BASE_URL
+
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", "http://dynamic-frontend:11434")
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", "http://dynamic-backend:11435")
+
+    assert config.get_frontend_base_url() == "http://dynamic-frontend:11434"
+    assert config.get_backend_base_url() == "http://dynamic-backend:11435"
+    assert config.resolve_profile_base_url("chat") == "http://dynamic-frontend:11434"
+    assert config.resolve_profile_base_url("coder") == "http://dynamic-backend:11435"
+
+
+def test_legacy_ollama_base_url_affects_frontend_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AI_FRONTEND_BASE_URL", raising=False)
+    monkeypatch.delenv("OLLAMA_FRONTEND_BASE_URL", raising=False)
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://legacy-frontend:11434")
+
+    assert config.get_frontend_base_url() == "http://legacy-frontend:11434"
+    assert config.get_backend_base_url() == config.DEFAULT_BACKEND_BASE_URL
+    assert config.resolve_profile_base_url("chat_second_opinion") == config.DEFAULT_BACKEND_BASE_URL
+
+
+def test_evaluator_url_is_isolated_from_normal_profiles(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OLLAMA_EVALUATOR_BASE_URL", "http://evaluator:11436")
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", "http://frontend:11434")
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", "http://backend:11435")
+
+    assert config.get_evaluator_base_url() == "http://evaluator:11436"
+    assert config.resolve_profile_base_url("chat") == "http://frontend:11434"
+    assert config.resolve_profile_base_url("coder") == "http://backend:11435"
+    assert config.resolve_profile_base_url("chat") != config.get_evaluator_base_url()
+    assert config.resolve_profile_base_url("coder") != config.get_evaluator_base_url()
+
+
+def test_resolve_lane_profile_picks_up_env_changes_after_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = config.load_local_model_profile_config()
+
+    monkeypatch.setenv("AI_FRONTEND_MODEL", "dynamic-frontend-model")
+    monkeypatch.setenv("AI_BACKEND_MODEL", "dynamic-backend-model")
+
+    frontend_profile = config.resolve_lane_profile(payload, "chat")
+    backend_profile = config.resolve_lane_profile(payload, "chat_second_opinion")
+
+    assert frontend_profile["model"] == "dynamic-frontend-model"
+    assert backend_profile["model"] == "dynamic-backend-model"

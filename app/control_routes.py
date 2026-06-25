@@ -18,6 +18,7 @@ from app.ai_local_config import (
     get_backend_model_name,
     get_frontend_base_url,
     get_frontend_model_name,
+    get_litellm_proxy_base_url,
     litellm_api_base_env_for_alias,
 )
 from .evaluation.client import get_ollama_runtime_status
@@ -39,9 +40,6 @@ from .models import (
 
 
 router = APIRouter()
-DEFAULT_OLLAMA_BASE_URL = get_frontend_base_url()
-DEFAULT_BACKEND_OLLAMA_BASE_URL = get_backend_base_url()
-DEFAULT_LITELLM_PROXY_BASE_URL = os.getenv("LITELLM_PROXY_BASE_URL", "http://127.0.0.1:4000")
 LITELLM_ROUTER_CONFIG_PATH = Path(__file__).resolve().parent.parent / "scripts" / "litellm_ollama_router.yaml"
 DEFAULT_LITELLM_ROUTING_STRATEGY = "simple-shuffle"
 APPROVED_HAL_PRIMARY_MODEL = "mistral-small3.1:24b"
@@ -295,8 +293,8 @@ def _select_model(payload: ControlRouteRequest, models: list[_ModelCard]) -> dic
 
 def _base_url_for_task_kind(task_kind: str) -> str:
     if task_kind in {"coding", "analysis", "second_opinion"}:
-        return DEFAULT_BACKEND_OLLAMA_BASE_URL
-    return DEFAULT_OLLAMA_BASE_URL
+        return get_backend_base_url()
+    return get_frontend_base_url()
 
 
 def _build_lane_runtime_summary(
@@ -326,18 +324,18 @@ def _build_lane_runtime_summary(
 
 
 def _build_dual_lane_runtime_response() -> dict[str, Any]:
-    frontend_status, frontend_models = _fetch_model_catalog(DEFAULT_OLLAMA_BASE_URL)
-    backend_status, backend_models = _fetch_model_catalog(DEFAULT_BACKEND_OLLAMA_BASE_URL)
+    frontend_status, frontend_models = _fetch_model_catalog(get_frontend_base_url())
+    backend_status, backend_models = _fetch_model_catalog(get_backend_base_url())
     frontend_lane = _build_lane_runtime_summary(
         lane="frontend",
-        base_url=DEFAULT_OLLAMA_BASE_URL,
+        base_url=get_frontend_base_url(),
         model=get_frontend_model_name(),
         runtime_status=frontend_status,
         models=frontend_models,
     )
     backend_lane = _build_lane_runtime_summary(
         lane="backend",
-        base_url=DEFAULT_BACKEND_OLLAMA_BASE_URL,
+        base_url=get_backend_base_url(),
         model=get_backend_model_name(),
         runtime_status=backend_status,
         models=backend_models,
@@ -372,7 +370,7 @@ def _build_runtime_response(runtime_status: dict[str, Any], models: list[_ModelC
         warning = "Ollama is reachable but no installed models were reported."
 
     return {
-        "base_url": runtime_status.get("base_url", DEFAULT_OLLAMA_BASE_URL),
+        "base_url": runtime_status.get("base_url", get_frontend_base_url()),
         "api_reachable": bool(runtime_status.get("api_reachable")),
         "installed": bool(runtime_status.get("installed")),
         "running": bool(runtime_status.get("running")),
@@ -544,7 +542,7 @@ def _build_litellm_config_payload(models: list[_ModelCard]) -> dict[str, Any]:
 
     config = {
         "environment_variables": build_litellm_environment_variables(
-            proxy_base_url=DEFAULT_LITELLM_PROXY_BASE_URL,
+            proxy_base_url=get_litellm_proxy_base_url(),
         ),
         "model_list": model_list,
         "litellm_settings": {
@@ -573,14 +571,14 @@ def _build_litellm_config_payload(models: list[_ModelCard]) -> dict[str, Any]:
         },
     }
     return {
-        "proxy_base_url": DEFAULT_LITELLM_PROXY_BASE_URL,
+        "proxy_base_url": get_litellm_proxy_base_url(),
         "config_path": str(LITELLM_ROUTER_CONFIG_PATH),
         "routing_strategy": DEFAULT_LITELLM_ROUTING_STRATEGY,
         "auth_expected": bool(os.getenv("LITELLM_MASTER_KEY", "").strip()),
         "startup_command": _litellm_startup_command(),
         "model_aliases": [_route_group_to_response(group) for group in route_groups],
         "openai_compatible_example": {
-            "url": f"{DEFAULT_LITELLM_PROXY_BASE_URL.rstrip('/')}/chat/completions",
+            "url": f"{get_litellm_proxy_base_url().rstrip('/')}/chat/completions",
             "body": {
                 "model": "hal-coding",
                 "messages": [
@@ -597,7 +595,7 @@ def _build_litellm_config_payload(models: list[_ModelCard]) -> dict[str, Any]:
 
 def _fetch_litellm_proxy_status(models: list[_ModelCard]) -> dict[str, Any]:
     payload = _build_litellm_config_payload(models)
-    proxy_base_url = DEFAULT_LITELLM_PROXY_BASE_URL.rstrip("/")
+    proxy_base_url = get_litellm_proxy_base_url().rstrip("/")
     health_endpoint = f"{proxy_base_url}/v1/models"
     headers: dict[str, str] = {}
     master_key = os.getenv("LITELLM_MASTER_KEY", "").strip()
@@ -610,7 +608,7 @@ def _fetch_litellm_proxy_status(models: list[_ModelCard]) -> dict[str, Any]:
         body = response.json()
     except (requests.RequestException, ValueError) as exc:
         return {
-            "proxy_base_url": DEFAULT_LITELLM_PROXY_BASE_URL,
+            "proxy_base_url": get_litellm_proxy_base_url(),
             "health_endpoint": health_endpoint,
             "config_path": payload["config_path"],
             "reachable": False,
@@ -628,7 +626,7 @@ def _fetch_litellm_proxy_status(models: list[_ModelCard]) -> dict[str, Any]:
         if isinstance(item, dict) and str(item.get("id") or "").strip()
     ]
     return {
-        "proxy_base_url": DEFAULT_LITELLM_PROXY_BASE_URL,
+        "proxy_base_url": get_litellm_proxy_base_url(),
         "health_endpoint": health_endpoint,
         "config_path": payload["config_path"],
         "reachable": True,
@@ -712,7 +710,7 @@ def control_route_model(payload: ControlRouteRequest, user: AuthenticatedUser = 
         "selected_model": _model_summary(selected["card"]) if selected else None,
         "fallback_model": alternatives[1]["card"].name if len(alternatives) > 1 else None,
         "litellm_model_alias": _litellm_alias_for_request(payload),
-        "litellm_proxy_base_url": DEFAULT_LITELLM_PROXY_BASE_URL,
+        "litellm_proxy_base_url": get_litellm_proxy_base_url(),
         "reasoning": decision.get("reasoning") or [],
         "alternatives": [
             {
@@ -752,7 +750,7 @@ def control_workflow_preview(payload: ControlWorkflowPreviewRequest, user: Authe
             blocking_issues.append(
                 backend_lane.get("warning")
                 or backend_lane.get("error")
-                or f"Backend lane is unavailable at {DEFAULT_BACKEND_OLLAMA_BASE_URL}."
+                or f"Backend lane is unavailable at {get_backend_base_url()}."
             )
     if not models:
         blocking_issues.append("No installed Ollama models are available for routing.")
@@ -827,7 +825,7 @@ def control_workflow_preview(payload: ControlWorkflowPreviewRequest, user: Authe
 @router.get("/control/litellm/config", response_model=LiteLLMProxyConfigResponse)
 def control_litellm_config(user: AuthenticatedUser = Depends(require_roles("hal:operator"))):
     del user
-    runtime_status, models = _fetch_model_catalog(DEFAULT_OLLAMA_BASE_URL)
+    runtime_status, models = _fetch_model_catalog(get_frontend_base_url())
     del runtime_status
     return _build_litellm_config_payload(models)
 
@@ -836,6 +834,6 @@ def control_litellm_config(user: AuthenticatedUser = Depends(require_roles("hal:
 @router.get("/control/litellm/status", response_model=LiteLLMProxyStatusResponse)
 def control_litellm_status(user: AuthenticatedUser = Depends(require_roles("hal:operator"))):
     del user
-    runtime_status, models = _fetch_model_catalog(DEFAULT_OLLAMA_BASE_URL)
+    runtime_status, models = _fetch_model_catalog(get_frontend_base_url())
     del runtime_status
     return _fetch_litellm_proxy_status(models)

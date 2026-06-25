@@ -28,6 +28,7 @@ OLLAMA_BACKEND_MODEL_ENV = "OLLAMA_BACKEND_MODEL"
 DEFAULT_FRONTEND_QUANT = "Q4_K_M"
 DEFAULT_BACKEND_QUANT = "Q4_K_S"
 DEFAULT_CONTEXT_SIZE = 4096
+DEFAULT_LITELLM_PROXY_BASE_URL = "http://127.0.0.1:4000"
 
 
 class LocalAIConfigError(RuntimeError):
@@ -78,6 +79,13 @@ def get_evaluator_base_url() -> str:
     if explicit:
         return _strip_openai_suffix(explicit)
     return DEFAULT_EVALUATOR_BASE_URL
+
+
+def get_litellm_proxy_base_url() -> str:
+    explicit = _env("LITELLM_PROXY_BASE_URL")
+    if explicit.strip():
+        return explicit.strip().rstrip("/")
+    return DEFAULT_LITELLM_PROXY_BASE_URL
 
 
 def litellm_lane_for_alias(alias: str) -> str:
