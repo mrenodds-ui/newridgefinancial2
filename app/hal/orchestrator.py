@@ -23,7 +23,7 @@ from app.ai_local_config import (
     require_lane_runtime,
     resolve_lane_profile,
 )
-from app.evaluation.client import get_ollama_runtime_status, load_json_file, run_structured_output_workflow
+from app.evaluation.client import generate_response_result, get_ollama_runtime_status, load_json_file, run_structured_output_workflow
 from app.services import fetch_softdent_dashboard_aggregate, list_local_accounting_documents, run_ci_gates, run_rebuild_receipt, run_refresh_and_verify, run_smoke_tests
 from .hardware_tools import build_monitor_mutation_intent, get_monitor_status
 
@@ -39,6 +39,7 @@ from uuid import uuid4
 
 
 HAL_MODE = "local-rag-phase-1"
+SECOND_OPINION_PROFILE_ALIAS = "chat_second_opinion"
 DEFAULT_OLLAMA_BASE_URL = get_frontend_base_url()
 LOCAL_MODEL_PROFILE_CONFIG_PATH = Path(__file__).resolve().parents[2] / "evals" / "local_model_profiles.json"
 HAL_PHASES = [
@@ -852,6 +853,179 @@ def _build_local_ai_journal_validator(*, chart_of_accounts: dict[str, str], acco
         }
 
     return validator
+
+
+def _get_profile_timeout_seconds(profile: dict[str, object], *, default: int = 90) -> int:
+    timeout_value = profile.get("timeout_seconds")
+    try:
+        timeout_seconds = int(timeout_value) if timeout_value is not None else default
+    except (TypeError, ValueError):
+        timeout_seconds = default
+    return max(timeout_seconds, 1)
+
+
+def _collect_hal_question_context(
+    *,
+    question: str,
+    actor: str,
+    session_id: str | None,
+) -> dict[str, object]:
+    state = _get_conversation_state(actor, session_id)
+    patient_context = get_controlled_patient_context(question)
+    if (not bool(patient_context.get("matched"))) and _is_patient_follow_up_question(question):
+        last_patient_name = str(state.get("last_patient_name") or "").strip()
+        if last_patient_name:
+            patient_context = get_controlled_patient_context(f"{question} Patient {last_patient_name}")
+    sanitized = sanitize_hal_text(question)
+    sanitized_question = str(sanitized["sanitized_text"])
+    retrieved_context = retrieve_relevant_context(sanitized_question)
+    live_context = get_live_financial_context(sanitized_question)
+    hardware_context = compile_hardware_snippets(sanitized_question)
+    hardware_review_actions = _build_hardware_review_actions(sanitized_question)
+    softdent_aggregate_context = compile_softdent_aggregate_snippets(sanitized_question)
+    live_report_context = compile_live_report_snippets(sanitized_question)
+    combined_context = [
+        *patient_context["snippets"],
+        *live_context,
+        *hardware_context,
+        *softdent_aggregate_context,
+        *live_report_context,
+        *retrieved_context,
+    ]
+    return {
+        "state": state,
+        "patient_context": patient_context,
+        "sanitized": sanitized,
+        "sanitized_question": sanitized_question,
+        "hardware_context": hardware_context,
+        "hardware_review_actions": hardware_review_actions,
+        "softdent_aggregate_context": softdent_aggregate_context,
+        "live_report_context": live_report_context,
+        "combined_context": combined_context,
+        "operating_picture": _build_hal_operating_picture(get_financial_source_status()),
+    }
+
+
+def _build_second_opinion_prompt(
+    *,
+    sanitized_question: str,
+    combined_context: list[dict[str, object]],
+    summary: dict[str, object] | None,
+) -> str:
+    context_blocks: list[str] = []
+    for index, item in enumerate(combined_context, start=1):
+        excerpt = str(item.get("excerpt") or item.get("content") or "").strip()
+        if not excerpt:
+            continue
+        context_blocks.append(f"[{index}] {_get_context_title(item)}\n{excerpt}")
+    context_text = "\n\n".join(context_blocks) if context_blocks else "No additional verified context retrieved."
+    summary_text = ""
+    if summary:
+        summary_text = (
+            "\n\nPrior summary or dashboard context:\n"
+            f"{json.dumps(summary, indent=2, default=str)}\n"
+        )
+    return (
+        "Provide a deeper second opinion on the operator question below. "
+        "Use only the verified local context provided. "
+        "Add one verification angle when useful, call out tradeoffs and uncertainty, and stay practical.\n\n"
+        f"Question:\n{sanitized_question}"
+        f"{summary_text}\n\n"
+        f"Verified local context:\n{context_text}\n"
+    )
+
+
+def _second_opinion_guardrails(*, patient_context_matched: bool) -> list[str]:
+    guardrails = [
+        "approved local read-only scope",
+        "backend second-opinion model required",
+        "sanitized retrieval only",
+        "read-only data boundary",
+        "truthful runtime claims only",
+        "audit log recorded",
+        "no deterministic fallback when backend unavailable",
+        "hardware mutations require human confirmation",
+        "tier-1 critical actions require explicit confirmation",
+        "tier-2 mismatches raise [ALERT]",
+    ]
+    if patient_context_matched:
+        guardrails.append("raw identifiers processed only in local patient tool")
+    return guardrails
+
+
+def _build_second_opinion_response(
+    *,
+    actor: str,
+    question: str,
+    session_id: str | None,
+    context_bundle: dict[str, object],
+    answer: str,
+    local_ai_unavailable: str | None = None,
+) -> dict[str, object]:
+    patient_context = context_bundle["patient_context"]
+    if not isinstance(patient_context, dict):
+        patient_context = {}
+    sanitized = context_bundle["sanitized"]
+    if not isinstance(sanitized, dict):
+        sanitized = {"findings": []}
+    sanitized_question = str(context_bundle["sanitized_question"])
+    combined_context = context_bundle["combined_context"]
+    if not isinstance(combined_context, list):
+        combined_context = []
+    hardware_review_actions = context_bundle["hardware_review_actions"]
+    if not isinstance(hardware_review_actions, list):
+        hardware_review_actions = []
+    softdent_aggregate_context = context_bundle["softdent_aggregate_context"]
+    if not isinstance(softdent_aggregate_context, list):
+        softdent_aggregate_context = []
+    state = context_bundle["state"]
+    if not isinstance(state, dict):
+        state = {}
+
+    _update_conversation_state(
+        actor=actor,
+        session_id=session_id,
+        state=state,
+        question=question,
+        patient_context=patient_context,
+        softdent_aggregate_context=softdent_aggregate_context,
+        hardware_review_actions=hardware_review_actions,
+    )
+    append_ai_activity_log(
+        tier="tier_2",
+        actor=actor,
+        action="hal-second-opinion",
+        detail=(
+            f"Second opinion unavailable for sanitized request: {sanitized_question[:140]}"
+            if local_ai_unavailable
+            else f"Answered a HAL second-opinion request for sanitized request: {sanitized_question[:140]}"
+        ),
+    )
+    audit_entry = record_hal_audit(
+        actor=actor,
+        mode=f"{HAL_MODE}:second-opinion",
+        sanitized_question=sanitized_question,
+        retrieval_ids=[_get_context_source_id(item) for item in combined_context if isinstance(item, dict)],
+        response_summary=answer[:180],
+    )
+    patient_matched = bool(patient_context.get("matched"))
+    return {
+        "mode": f"{HAL_MODE}:second-opinion",
+        "answer": answer,
+        "local_ai_unavailable": local_ai_unavailable,
+        "sanitized_question": sanitized_question,
+        "sanitization_findings": sanitized.get("findings", []),
+        "retrieved_context": combined_context,
+        "guardrails": _second_opinion_guardrails(patient_context_matched=patient_matched),
+        "audit_id": audit_entry["audit_id"],
+        "access_policy": get_hal_access_policy(),
+        "review_actions": hardware_review_actions,
+        "voice_profile": _voice_profile("second_opinion"),
+        "governance_notes": _build_governance_notes(
+            patient_context_used=patient_matched,
+            review_actions_present=bool(hardware_review_actions),
+        ),
+    }
 
 
 def _format_backend_lane_unavailable_message(error: LocalAIConfigError | None = None) -> str:
@@ -2001,23 +2175,18 @@ def answer_hal_question(
     session_id: str | None = None,
 ) -> dict[str, object]:
     del summary
-    state = _get_conversation_state(actor, session_id)
-    patient_context = get_controlled_patient_context(question)
-    if (not bool(patient_context.get("matched"))) and _is_patient_follow_up_question(question):
-        last_patient_name = str(state.get("last_patient_name") or "").strip()
-        if last_patient_name:
-            patient_context = get_controlled_patient_context(f"{question} Patient {last_patient_name}")
-    sanitized = sanitize_hal_text(question)
-    sanitized_question = str(sanitized["sanitized_text"])
-    retrieved_context = retrieve_relevant_context(sanitized_question)
-    live_context = get_live_financial_context(sanitized_question)
-    hardware_context = compile_hardware_snippets(sanitized_question)
-    hardware_review_actions = _build_hardware_review_actions(sanitized_question)
-    softdent_aggregate_context = compile_softdent_aggregate_snippets(sanitized_question)
-    live_report_context = compile_live_report_snippets(sanitized_question)
-    combined_context = [*patient_context["snippets"], *live_context, *hardware_context, *softdent_aggregate_context, *live_report_context, *retrieved_context]
+    context_bundle = _collect_hal_question_context(question=question, actor=actor, session_id=session_id)
+    state = context_bundle["state"]
+    patient_context = context_bundle["patient_context"]
+    sanitized = context_bundle["sanitized"]
+    sanitized_question = str(context_bundle["sanitized_question"])
+    hardware_context = context_bundle["hardware_context"]
+    hardware_review_actions = context_bundle["hardware_review_actions"]
+    softdent_aggregate_context = context_bundle["softdent_aggregate_context"]
+    live_report_context = context_bundle["live_report_context"]
+    combined_context = context_bundle["combined_context"]
+    operating_picture = context_bundle["operating_picture"]
     context_titles = ", ".join(_get_context_title(item) for item in combined_context)
-    operating_picture = _build_hal_operating_picture(get_financial_source_status())
     lowered_question = question.lower()
     if patient_context["matched"]:
         patient_summary = _build_patient_context_summary(patient_context)
@@ -2137,17 +2306,94 @@ def answer_hal_second_opinion_question(
     summary: dict[str, object] | None = None,
     session_id: str | None = None,
 ) -> dict[str, object]:
-    payload = answer_hal_question(
-        question=question,
-        actor=actor,
+    context_bundle = _collect_hal_question_context(question=question, actor=actor, session_id=session_id)
+
+    if not LOCAL_MODEL_PROFILE_CONFIG_PATH.exists():
+        unavailable_message = (
+            "Local model profile config is missing; second opinion requires the backend local AI lane."
+        )
+        return _build_second_opinion_response(
+            actor=actor,
+            question=question,
+            session_id=session_id,
+            context_bundle=context_bundle,
+            answer=f"Second opinion unavailable. {unavailable_message}",
+            local_ai_unavailable=unavailable_message,
+        )
+
+    try:
+        generation_base_url = require_lane_runtime(
+            SECOND_OPINION_PROFILE_ALIAS,
+            purpose="HAL second opinion",
+        )
+    except LocalAIConfigError as exc:
+        unavailable_message = _format_backend_lane_unavailable_message(exc)
+        return _build_second_opinion_response(
+            actor=actor,
+            question=question,
+            session_id=session_id,
+            context_bundle=context_bundle,
+            answer=f"Second opinion unavailable. {unavailable_message}",
+            local_ai_unavailable=unavailable_message,
+        )
+
+    try:
+        profile_config = load_local_model_profile_config()
+        second_opinion_profile = resolve_lane_profile(profile_config, SECOND_OPINION_PROFILE_ALIAS)
+    except Exception as exc:
+        unavailable_message = f"Local model profile config could not be loaded: {exc}"
+        return _build_second_opinion_response(
+            actor=actor,
+            question=question,
+            session_id=session_id,
+            context_bundle=context_bundle,
+            answer=f"Second opinion unavailable. {unavailable_message}",
+            local_ai_unavailable=unavailable_message,
+        )
+
+    prompt = _build_second_opinion_prompt(
+        sanitized_question=str(context_bundle["sanitized_question"]),
+        combined_context=context_bundle["combined_context"],
         summary=summary,
-        session_id=session_id,
     )
-    return {
-        **payload,
-        "mode": f"{HAL_MODE}:second-opinion",
-        "voice_profile": _voice_profile("second_opinion"),
-    }
+    try:
+        answer_result = generate_response_result(
+            base_url=generation_base_url,
+            profile=second_opinion_profile,
+            prompt=prompt,
+            timeout_seconds=_get_profile_timeout_seconds(second_opinion_profile),
+            seed=second_opinion_profile.get("seed"),
+        )
+    except Exception as exc:
+        unavailable_message = f"Backend local AI second opinion failed: {exc}"
+        return _build_second_opinion_response(
+            actor=actor,
+            question=question,
+            session_id=session_id,
+            context_bundle=context_bundle,
+            answer=f"Second opinion unavailable. {unavailable_message}",
+            local_ai_unavailable=unavailable_message,
+        )
+
+    answer = str(answer_result.get("response_text") or "").strip()
+    if not answer:
+        unavailable_message = "Backend local AI returned an empty second opinion."
+        return _build_second_opinion_response(
+            actor=actor,
+            question=question,
+            session_id=session_id,
+            context_bundle=context_bundle,
+            answer=f"Second opinion unavailable. {unavailable_message}",
+            local_ai_unavailable=unavailable_message,
+        )
+
+    return _build_second_opinion_response(
+        actor=actor,
+        question=question,
+        session_id=session_id,
+        context_bundle=context_bundle,
+        answer=answer,
+    )
 
 
 def answer_insurance_narrative_request(*, question: str, actor: str) -> dict[str, object]:

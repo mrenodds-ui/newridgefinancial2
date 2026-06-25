@@ -39,6 +39,7 @@ def test_get_model_for_profile_alias_uses_lane_models(monkeypatch: pytest.Monkey
 
     assert config.get_model_for_profile_alias("chat") == "frontend-24b"
     assert config.get_model_for_profile_alias("coder") == "backend-30b"
+    assert config.get_model_for_profile_alias("chat_second_opinion") == "backend-30b"
 
 
 def test_resolve_lane_base_urls_for_ab_eval_script() -> None:

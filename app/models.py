@@ -120,6 +120,7 @@ class HalAskResponse(BaseModel):
     review_actions: list[HalReviewAction] = Field(default_factory=list)
     voice_profile: HalResponseVoiceProfile
     governance_notes: list[HalGovernanceNote] = Field(default_factory=list)
+    local_ai_unavailable: str | None = None
 
 
 class HalInsuranceNarrativeRequest(BaseModel):

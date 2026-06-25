@@ -24,11 +24,11 @@ Quantized model weights and runtime outputs stay on the workstation only:
 ## Architecture
 
 ```text
-Frontend UI -> POST /api/hal9000, /api/hal9000/document-rag/ask -> backend HAL
+Frontend UI -> POST /api/hal9000, /api/hal9000/second-opinion, /api/hal9000/document-rag/ask -> backend HAL
   -> AI_FRONTEND_BASE_URL (:11434) -> mistral-small3.1:24b (Q4_K_M, ctx 4096)
 
 Backend HAL server tasks (journal draft parser, coder profile, second-opinion lane)
-  -> AI_BACKEND_BASE_URL (:11435) -> qwen3:30b (Q4_K_S, ctx 4096, CPU/RAM by default)
+  -> POST /api/hal9000/second-opinion uses chat_second_opinion on AI_BACKEND_BASE_URL (:11435) -> qwen3:30b
 
 Optional LiteLLM proxy (:4000)
   -> hal-chat-balanced / hal-vision -> frontend Ollama
