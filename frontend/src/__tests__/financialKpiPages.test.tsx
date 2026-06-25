@@ -82,6 +82,8 @@ function buildFinancialSummary(): FinancialSummaryResponse {
       balance_60: 500,
       balance_90: 200,
       credit_balance: 0,
+      source: "softdent",
+      available: true,
     },
     monthlyKpis: [
       { year_month: "2026-05", gross_production: 100, net_production: 80, collections: 50, collection_rate: 50 },

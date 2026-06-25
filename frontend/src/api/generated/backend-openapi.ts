@@ -296,6 +296,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/widgets/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Api Widget Update */
+        post: operations["api_widget_update_api_widgets_update_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/hal9000/page-summary": {
         parameters: {
             query?: never;
@@ -1285,6 +1302,9 @@ export interface components {
             /** Audit Id */
             audit_id: string;
             access_policy: components["schemas"]["HalAccessPolicy"];
+            voice_profile: components["schemas"]["HalResponseVoiceProfile"];
+            /** Governance Notes */
+            governance_notes?: components["schemas"]["HalGovernanceNote"][];
         };
         /** AccountingPolicyCitation */
         AccountingPolicyCitation: {
@@ -1516,6 +1536,38 @@ export interface components {
             /** Top Unsubmitted Payers */
             top_unsubmitted_payers?: components["schemas"]["SoftDentCoverageMetricBreakdownRowResponse"][];
         };
+        /** ControlLaneRuntimeSummary */
+        ControlLaneRuntimeSummary: {
+            /** Lane */
+            lane: string;
+            /** Base Url */
+            base_url: string;
+            /** Model */
+            model: string;
+            /** Api Reachable */
+            api_reachable: boolean;
+            /**
+             * Installed
+             * @default false
+             */
+            installed: boolean;
+            /**
+             * Running
+             * @default false
+             */
+            running: boolean;
+            /**
+             * Model Count
+             * @default 0
+             */
+            model_count: number;
+            /** Installed Models */
+            installed_models?: components["schemas"]["ControlModelSummary"][];
+            /** Error */
+            error?: string | null;
+            /** Warning */
+            warning?: string | null;
+        };
         /** ControlModelSummary */
         ControlModelSummary: {
             /** Name */
@@ -1613,6 +1665,10 @@ export interface components {
             };
             /** Warning */
             warning?: string | null;
+            /** Lanes */
+            lanes?: {
+                [key: string]: components["schemas"]["ControlLaneRuntimeSummary"];
+            };
         };
         /** ControlScoreRequest */
         ControlScoreRequest: {
@@ -1816,6 +1872,16 @@ export interface components {
             balance_90: number;
             /** Credit Balance */
             credit_balance: number;
+            /**
+             * Source
+             * @default softdent
+             */
+            source: string;
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
         };
         /** FinancialSummaryLatestDailyKpiResponse */
         FinancialSummaryLatestDailyKpiResponse: {
@@ -1995,6 +2061,10 @@ export interface components {
             currentYearProduction?: {
                 [key: string]: unknown;
             } | null;
+            /** Widgetfeed */
+            widgetFeed?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** FinancialSummarySourceReviewResponse */
         FinancialSummarySourceReviewResponse: {
@@ -2108,6 +2178,11 @@ export interface components {
             access_policy: components["schemas"]["HalAccessPolicy"];
             /** Review Actions */
             review_actions?: components["schemas"]["HalReviewAction"][];
+            voice_profile: components["schemas"]["HalResponseVoiceProfile"];
+            /** Governance Notes */
+            governance_notes?: components["schemas"]["HalGovernanceNote"][];
+            /** Local Ai Unavailable */
+            local_ai_unavailable?: string | null;
         };
         /** HalAuditEntryResponse */
         HalAuditEntryResponse: {
@@ -2444,6 +2519,13 @@ export interface components {
             message: string;
             document: components["schemas"]["HalDocumentRagDocumentResponse"];
         };
+        /** HalGovernanceNote */
+        HalGovernanceNote: {
+            /** Label */
+            label: string;
+            /** Detail */
+            detail: string;
+        };
         /** HalIndexRefreshResponse */
         HalIndexRefreshResponse: {
             /** Message */
@@ -2489,6 +2571,9 @@ export interface components {
             /** Audit Id */
             audit_id: string;
             access_policy: components["schemas"]["HalAccessPolicy"];
+            voice_profile: components["schemas"]["HalResponseVoiceProfile"];
+            /** Governance Notes */
+            governance_notes?: components["schemas"]["HalGovernanceNote"][];
         };
         /** HalPageResponse */
         HalPageResponse: {
@@ -2522,6 +2607,20 @@ export interface components {
             /** Audit Id */
             audit_id: string;
             access_policy: components["schemas"]["HalAccessPolicy"];
+            voice_profile: components["schemas"]["HalResponseVoiceProfile"];
+            /** Governance Notes */
+            governance_notes?: components["schemas"]["HalGovernanceNote"][];
+        };
+        /** HalResponseVoiceProfile */
+        HalResponseVoiceProfile: {
+            /** Lane */
+            lane: string;
+            /** Label */
+            label: string;
+            /** Tone */
+            tone: string;
+            /** Style Notes */
+            style_notes?: string[];
         };
         /** HalReviewAction */
         HalReviewAction: {
@@ -2702,6 +2801,8 @@ export interface components {
             queue_status?: ("pending_review" | "approved" | "rejected") | null;
             /** Enqueue Error */
             enqueue_error?: string | null;
+            /** Local Ai Unavailable */
+            local_ai_unavailable?: string | null;
             /** Audit Id */
             audit_id: string;
             access_policy: components["schemas"]["HalAccessPolicy"];
@@ -3113,6 +3214,27 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WidgetUpdateResponse */
+        WidgetUpdateResponse: {
+            /** Accepted */
+            accepted: boolean;
+            /** Manager */
+            manager: string;
+            /** Run Id */
+            run_id?: string | null;
+            /** Received At */
+            received_at: string;
+            /** Widget Count */
+            widget_count: number;
+            /** Source Count */
+            source_count: number;
+            /** Job Count */
+            job_count: number;
+            /** Auth Mode */
+            auth_mode: string;
+            /** Message */
+            message: string;
         };
     };
     responses: never;
@@ -3555,6 +3677,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    api_widget_update_api_widgets_update_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WidgetUpdateResponse"];
                 };
             };
         };
