@@ -24,6 +24,7 @@ CASE_PACKET_BUILDER_VERSION = "1.0.0"
 NARRATIVE_DRAFT_VERSION = "1.0.0"
 NARRATIVE_REVIEW_VERSION = "1.0.0"
 NARRATIVE_EXPORT_VERSION = "1.0.0"
+NARRATIVE_WORKFLOW_VERSION = "1.0.0"
 
 NarrativeDraftStatus = Literal["draft", "blocked_missing_data", "ready_for_human_review"]
 NarrativeReviewStatus = Literal[
@@ -34,6 +35,16 @@ NarrativeReviewStatus = Literal[
 ]
 NarrativeExportFormat = Literal["plain_text", "markdown"]
 NarrativeSubmissionStatus = Literal["not_submitted"]
+InsuranceNarrativeWorkflowStatus = Literal[
+    "packet_created",
+    "draft_created",
+    "pending_review",
+    "approved",
+    "export_created",
+    "blocked_missing_data",
+    "checker_unavailable",
+    "checker_completed",
+]
 
 
 class NarrativeSourceFact(BaseModel):
@@ -225,3 +236,32 @@ class InsuranceNarrativeExport(BaseModel):
     created_at: str
     actor: str
     submission_status: NarrativeSubmissionStatus = "not_submitted"
+
+
+class NarrativeWorkflowWarning(BaseModel):
+    code: str
+    message: str
+
+
+class NarrativeWorkflowAuditEvent(BaseModel):
+    event_type: str
+    at: str
+    actor: str
+    detail: str | None = None
+
+
+class InsuranceNarrativeWorkflowOptions(BaseModel):
+    run_checker: bool = False
+    export_format: str = "markdown"
+
+
+class InsuranceNarrativeWorkflowResult(BaseModel):
+    packet: InsuranceNarrativeCasePacket
+    draft: InsuranceNarrativeDraft
+    checker_summary: NarrativeCheckerSummary | None = None
+    review: InsuranceNarrativeReviewRecord | None = None
+    export: InsuranceNarrativeExport | None = None
+    status: InsuranceNarrativeWorkflowStatus
+    warnings: list[NarrativeWorkflowWarning] = Field(default_factory=list)
+    audit_events: list[NarrativeWorkflowAuditEvent] = Field(default_factory=list)
+    workflow_version: str = NARRATIVE_WORKFLOW_VERSION

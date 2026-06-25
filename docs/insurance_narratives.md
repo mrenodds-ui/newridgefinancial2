@@ -37,6 +37,9 @@ InsuranceNarrativeCasePacket
         |                   +--> approve / reject / request_narrative_revision
         |                             |
         |                             +--> export_approved_insurance_narrative(...) -> InsuranceNarrativeExport
+        |
+        +--> create_insurance_narrative_draft_workflow(...)  # orchestrated facade
+        +--> approve_and_export_insurance_narrative_workflow(...)
         +--> case_packet_to_fast_review_source_text(packet)
 ```
 
@@ -62,6 +65,69 @@ Python module: `app.insurance_narratives`
 | `InsuranceNarrativeExport` | Local formatted export for approved drafts |
 | `NarrativeExportSection` | Exported narrative section |
 | `NarrativeExportApprovalSummary` | Reviewer attestation summary on export |
+| `InsuranceNarrativeWorkflowResult` | Orchestrated workflow output |
+| `InsuranceNarrativeWorkflowOptions` | Workflow options (`run_checker`, `export_format`) |
+
+## Local workflow facade
+
+`app.insurance_narratives.workflow` composes the packet → draft → optional checker → review →
+approval → export pipeline as **pure local functions**. This is the intended future UI
+integration point. No routes, no automatic submission, and no unrestricted database access.
+
+```python
+from app.insurance_narratives import (
+    create_insurance_narrative_draft_workflow,
+    approve_and_export_insurance_narrative_workflow,
+)
+
+# Step 1: packet + draft (checker off by default)
+draft_result = create_insurance_narrative_draft_workflow(
+    patient_ref="CHART-A",
+    claim_id="CLAIM-1001",
+    narrative_type="denied_claim_resubmission",
+    actor="staff@clinic",
+    run_checker=False,  # explicit opt-in only
+)
+
+# Step 2: after human approval — separate from draft creation
+export_result = approve_and_export_insurance_narrative_workflow(
+    packet=draft_result.packet,
+    draft=draft_result.draft,
+    reviewer="staff@clinic",
+    notes="Citations verified.",
+    approval_attestation=True,
+    actor="staff@clinic",
+)
+# export_result.export.submission_status == "not_submitted"
+```
+
+### Draft workflow (`create_insurance_narrative_draft_workflow`)
+
+- Always builds a bounded case packet and template draft from packet facts only
+- `run_checker=False` by default — **no live model call**
+- `run_checker=True` explicitly invokes `run_fast_review_check` once using
+  `draft_to_fast_review_source_text(packet, draft)`
+- Checker lane unavailable → `checker_unavailable` status + advisory warning; workflow continues
+- `blocked_missing_data` drafts are never auto-approved; no export from this function
+
+### Approval/export workflow (`approve_and_export_insurance_narrative_workflow`)
+
+- Creates review record, approves with attestation, formats local export
+- `blocked_missing_data` drafts fail safely at approval
+- `approval_attestation=True` required
+- `submission_status` remains `not_submitted`; no email, fax, upload, or payer API calls
+
+### Workflow statuses
+
+| Status | When |
+| --- | --- |
+| `draft_created` | Packet + draft created; checker not run |
+| `blocked_missing_data` | Draft has blocking missing data |
+| `checker_completed` | Opt-in checker returned `ok` |
+| `checker_unavailable` | Opt-in checker lane unavailable |
+| `export_created` | Approved export formatted locally |
+
+Audit lineage: `packet_id` → `draft_id` → `review_id` → `export_id`
 
 ## Approved-only export formatting
 
@@ -270,3 +336,6 @@ attestation, blocked-draft rules, advisory checker summary, audit events, and no
 
 `app/tests/test_insurance_narrative_export.py` covers approved-only export, lineage guards,
 citation/disclosure inclusion, format variants, and no filesystem/network side effects.
+
+`app/tests/test_insurance_narrative_workflow.py` covers the orchestrated facade, checker
+opt-in behavior, approval/export composition, lineage, and no submission side effects.
