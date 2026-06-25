@@ -77,6 +77,8 @@ class NarrativeAuditMetadata(BaseModel):
     created_by: str
     builder_version: str = CASE_PACKET_BUILDER_VERSION
     schema_version: str = CASE_PACKET_SCHEMA_VERSION
+    adapter_name: str | None = None
+    source_mode: str | None = None
 
 
 class PatientCaseSummary(BaseModel):

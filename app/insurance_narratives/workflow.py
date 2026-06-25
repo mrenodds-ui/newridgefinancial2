@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.insurance_narratives.case_packet import build_insurance_narrative_case_packet
+from app.insurance_narratives.data_adapter import InsuranceNarrativeDataAdapter
 from app.insurance_narratives.draft import (
     draft_insurance_narrative_from_packet,
     draft_to_fast_review_source_text,
@@ -90,6 +91,7 @@ def create_insurance_narrative_draft_workflow(
     actor: str,
     created_at: str | None = None,
     run_checker: bool = False,
+    adapter: InsuranceNarrativeDataAdapter | None = None,
 ) -> InsuranceNarrativeWorkflowResult:
     """Build a bounded packet and template draft; optionally run the opt-in checker."""
 
@@ -112,6 +114,7 @@ def create_insurance_narrative_draft_workflow(
         narrative_type=narrative_type,
         actor=actor,
         created_at=timestamp,
+        adapter=adapter,
     )
     audit_events.append(
         _workflow_audit(
