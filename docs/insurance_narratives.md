@@ -31,6 +31,10 @@ InsuranceNarrativeCasePacket
         +--> draft_insurance_narrative_from_packet(packet) -> InsuranceNarrativeDraft
         |         |
         |         +--> draft_to_fast_review_source_text(packet, draft)   # opt-in checker input
+        |         |
+        |         +--> create_narrative_review_record(draft) -> InsuranceNarrativeReviewRecord
+        |                   |
+        |                   +--> approve / reject / request_narrative_revision
         +--> case_packet_to_fast_review_source_text(packet)
 ```
 
@@ -50,6 +54,73 @@ Python module: `app.insurance_narratives`
 | `NarrativeDraftSection` | Purpose, summary, facts, limitations, next step |
 | `NarrativeDraftCitation` | `fact_id` citation tied to a draft section |
 | `NarrativeDraftWarning` | Non-blocking missing-data warnings |
+| `InsuranceNarrativeReviewRecord` | Human review state for a draft |
+| `NarrativeReviewAuditEvent` | Append-only audit trail entry |
+| `NarrativeCheckerSummary` | Advisory fast-review checker counts |
+
+## Human review workflow
+
+After drafting, staff open a **local, auditable review record** tied to `packet_id` and
+`draft_id`. No UI or export wiring in this patch.
+
+```python
+from app.insurance_narratives import (
+    create_narrative_review_record,
+    approve_narrative_draft,
+    reject_narrative_draft,
+    request_narrative_revision,
+    checker_result_to_summary,
+)
+
+review = create_narrative_review_record(draft, reviewer="staff@clinic")
+# Optional advisory checker (explicit opt-in only, not called here):
+# summary = checker_result_to_summary(run_fast_review_check(...))
+# review = create_narrative_review_record(draft, reviewer="staff@clinic", checker_summary=summary)
+
+approved = approve_narrative_draft(
+    review,
+    reviewer="staff@clinic",
+    notes="Citations verified against packet.",
+    approval_attestation=True,
+)
+```
+
+### Review statuses
+
+| Status | Meaning |
+| --- | --- |
+| `pending_review` | Awaiting human decision |
+| `approved` | Reviewer attested and approved (no auto-submit) |
+| `rejected` | Reviewer rejected the draft |
+| `revision_requested` | Reviewer requested specific changes |
+
+### Approval attestation
+
+`approve_narrative_draft(..., approval_attestation=True)` requires the reviewer to confirm:
+
+- the draft was reviewed by a human
+- citations and source facts were checked
+- missing-data limitations were considered
+- the narrative is **not** automatically submitted to any payer
+
+Approval does not call export or submission code.
+
+### Blocked draft behavior
+
+Drafts with `status == blocked_missing_data` cannot be approved. Staff must resolve
+blocking `missing_data[]` items and produce a new draft before approval.
+
+### Checker summary is advisory only
+
+`checker_summary` stores normalized counts from an optional `run_fast_review_check()` result
+(`checker_status`, issue counts, `ready_for_human_review`). It is informational only — it
+does not gate approval and is never required.
+
+### Audit trail and lineage
+
+Each `InsuranceNarrativeReviewRecord` preserves immutable `packet_id` / `draft_id` lineage.
+`audit_events[]` append on create, approve, reject, and revision request with actor,
+timestamp, previous status, and new status.
 
 ## Packet-bounded drafting
 
@@ -146,3 +217,6 @@ semantics, fact ids, fast-review source text, and PHI-like fixture scans.
 
 `app/tests/test_insurance_narrative_draft.py` covers template drafting, citations, blocking
 status, warnings, approval requirements, and `draft_to_fast_review_source_text`.
+
+`app/tests/test_insurance_narrative_review.py` covers human review workflow, approval
+attestation, blocked-draft rules, advisory checker summary, audit events, and no auto-submit.

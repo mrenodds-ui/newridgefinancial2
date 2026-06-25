@@ -22,8 +22,15 @@ MissingDataSeverity = Literal["info", "warning", "critical"]
 CASE_PACKET_SCHEMA_VERSION = "1.0.0"
 CASE_PACKET_BUILDER_VERSION = "1.0.0"
 NARRATIVE_DRAFT_VERSION = "1.0.0"
+NARRATIVE_REVIEW_VERSION = "1.0.0"
 
 NarrativeDraftStatus = Literal["draft", "blocked_missing_data", "ready_for_human_review"]
+NarrativeReviewStatus = Literal[
+    "pending_review",
+    "approved",
+    "rejected",
+    "revision_requested",
+]
 
 
 class NarrativeSourceFact(BaseModel):
@@ -138,3 +145,42 @@ class InsuranceNarrativeDraft(BaseModel):
     actor: str
     approval_required: bool = True
     audit_metadata: NarrativeDraftAuditMetadata
+
+
+class NarrativeReviewerRef(BaseModel):
+    reviewer: str
+
+
+class NarrativeReviewAuditEvent(BaseModel):
+    event_type: str
+    at: str
+    actor: str
+    previous_status: NarrativeReviewStatus | None = None
+    new_status: NarrativeReviewStatus
+    notes: str | None = None
+
+
+class NarrativeCheckerSummary(BaseModel):
+    checker_status: str | None = None
+    missing_data_count: int = 0
+    citation_issue_count: int = 0
+    possible_invented_fact_count: int = 0
+    contradiction_count: int = 0
+    ready_for_human_review: bool | None = None
+
+
+class InsuranceNarrativeReviewRecord(BaseModel):
+    review_id: str
+    packet_id: str
+    draft_id: str
+    draft_status: NarrativeDraftStatus
+    status: NarrativeReviewStatus
+    reviewer: str
+    reviewed_at: str | None = None
+    notes: str | None = None
+    required_changes: list[str] = Field(default_factory=list)
+    checker_summary: NarrativeCheckerSummary | None = None
+    approval_attestation: bool | None = None
+    audit_events: list[NarrativeReviewAuditEvent] = Field(default_factory=list)
+    created_at: str
+    review_version: str = NARRATIVE_REVIEW_VERSION
