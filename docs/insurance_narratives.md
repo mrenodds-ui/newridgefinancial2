@@ -154,9 +154,16 @@ Supported first-pass exports:
 | --- | --- |
 | `softdent_claims_export.csv` | `patient_ref`, `claim_id`, `payer_name`, `service_date`, `claim_status`, `claim_amount`, `procedure_ids`, `source_report_date` |
 | `softdent_procedures_export.csv` | `patient_ref`, `procedure_id`, `procedure_code`, `procedure_description`, `service_date`, `tooth`, `provider_label`, `source_report_date` |
+| `softdent_patient_ledger_export.csv` | `patient_ref`, `transaction_id`, `transaction_date`, `transaction_type`, `procedure_id`, `claim_id`, `description`, `amount`, `source_report_date` |
 
 Scoped parsing matches `patient_ref` and `claim_id`; procedure rows are linked via
-`procedure_ids` on the claim row (comma-separated). Non-matching export rows are ignored.
+`procedure_ids` on the claim row (comma-separated). Ledger rows are scoped by `patient_ref`,
+optional `claim_id`, optional `procedure_ids`, and optional `date_range` on `transaction_date`.
+When `claim_id` is provided, ledger rows with a matching `claim_id` are included, as are rows
+with a blank `claim_id` when `procedure_id` is tied to an included procedure. Non-matching
+export rows are ignored. Ledger `amount` values become supporting source facts only — they do
+**not** create A/R totals, patient balance totals, or `latestAr` values. Explicit A/R still
+requires a dedicated A/R export (`missing_softdent_ar` remains until that export is supported).
 Malformed or missing exports surface explicit missing-data codes — never invented clinical
 facts or synthetic `$0` A/R.
 
@@ -175,9 +182,12 @@ Adapter output is limited to typed summaries (`PatientCaseSummary`, `ClaimCaseSu
 ### Missing data policy
 
 When exports are unavailable or incomplete, adapters append `NarrativeMissingDataItem`
-entries (e.g. `missing_softdent_ar`, `missing_claim_record`). Missing A/R remains
+entries (e.g. `missing_softdent_ar`, `missing_claim_record`, `missing_softdent_patient_ledger_export`,
+`missing_scoped_ledger_rows`, `invalid_softdent_patient_ledger_export`). Missing A/R remains
 **unavailable**, never `$0`. The local adapter always flags `missing_softdent_ar` until a
-scoped A/R mapping is approved.
+scoped A/R mapping is approved. Ledger exports are optional supporting inputs; absent or
+invalid ledger files do not block claim/procedure facts, but ledger amounts never substitute
+for A/R.
 
 ### Future SoftDent mapping plan
 

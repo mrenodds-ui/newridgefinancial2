@@ -137,10 +137,45 @@ MISSING_DATA_CATALOG: dict[str, NarrativeMissingDataItem] = {
         why_it_matters="Expected procedure rows were not found in the procedures export for this scope.",
         blocking=False,
     ),
+    "missing_softdent_patient_ledger_export": NarrativeMissingDataItem(
+        code="missing_softdent_patient_ledger_export",
+        label="SoftDent patient ledger export file",
+        severity="warning",
+        why_it_matters="Ledger supporting facts require softdent_patient_ledger_export.csv in the configured import directory.",
+        blocking=False,
+    ),
+    "missing_scoped_ledger_rows": NarrativeMissingDataItem(
+        code="missing_scoped_ledger_rows",
+        label="Scoped ledger rows",
+        severity="warning",
+        why_it_matters="No ledger rows in the export matched the requested patient, claim, procedure, or date scope.",
+        blocking=False,
+    ),
+    "invalid_softdent_patient_ledger_export": NarrativeMissingDataItem(
+        code="invalid_softdent_patient_ledger_export",
+        label="Invalid SoftDent patient ledger export",
+        severity="warning",
+        why_it_matters="softdent_patient_ledger_export.csv is present but malformed or missing required columns.",
+        blocking=False,
+    ),
 }
 
 SOFTDENT_NARRATIVE_CLAIMS_FILENAME = "softdent_claims_export.csv"
 SOFTDENT_NARRATIVE_PROCEDURES_FILENAME = "softdent_procedures_export.csv"
+SOFTDENT_NARRATIVE_PATIENT_LEDGER_FILENAME = "softdent_patient_ledger_export.csv"
+SOFTDENT_NARRATIVE_LEDGER_REQUIRED_COLUMNS = frozenset(
+    {
+        "patient_ref",
+        "transaction_id",
+        "transaction_date",
+        "transaction_type",
+        "procedure_id",
+        "claim_id",
+        "description",
+        "amount",
+        "source_report_date",
+    }
+)
 DEFAULT_SOFTDENT_NARRATIVE_EXPORT_DIR = Path("app/data/imports/insurance_narratives/softdent")
 
 
@@ -861,6 +896,137 @@ def _build_export_claim_facts(
     return facts
 
 
+def _ledger_csv_has_required_columns(path: Path) -> bool:
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            if reader.fieldnames is None:
+                return False
+            normalized = {_normalize_csv_header(name) for name in reader.fieldnames}
+            return SOFTDENT_NARRATIVE_LEDGER_REQUIRED_COLUMNS.issubset(normalized)
+    except (OSError, csv.Error, UnicodeDecodeError):
+        return False
+
+
+def _load_patient_ledger_export(path: Path) -> tuple[list[dict[str, str]], str | None]:
+    """Load ledger CSV. Returns (rows, missing_code) when absent or invalid."""
+    if not path.is_file():
+        return [], "missing_softdent_patient_ledger_export"
+    if not _ledger_csv_has_required_columns(path):
+        return [], "invalid_softdent_patient_ledger_export"
+    rows = _read_scoped_export_csv(path)
+    if rows is None:
+        return [], "invalid_softdent_patient_ledger_export"
+    return rows, None
+
+
+def _ledger_transaction_date(row: dict[str, str]) -> str | None:
+    value = str(row.get("transaction_date") or "").strip()
+    return value or None
+
+
+def _ledger_row_in_date_range(row: dict[str, str], date_range: tuple[str, str] | None) -> bool:
+    if not date_range:
+        return True
+    transaction_date = _ledger_transaction_date(row)
+    if not transaction_date:
+        return False
+    start_date, end_date = date_range
+    return start_date <= transaction_date <= end_date
+
+
+def _scope_ledger_rows(
+    ledger_rows: list[dict[str, str]],
+    *,
+    patient_ref: str,
+    claim_id: str | None,
+    procedure_ids: list[str] | None,
+    included_procedure_ids: set[str],
+    date_range: tuple[str, str] | None,
+) -> list[dict[str, str]]:
+    scoped: list[dict[str, str]] = []
+    requested_procedure_ids = (
+        {_normalize_ref(proc_id) for proc_id in procedure_ids} if procedure_ids else None
+    )
+    for row in ledger_rows:
+        if _export_row_patient_ref(row) != patient_ref:
+            continue
+        if not _ledger_row_in_date_range(row, date_range):
+            continue
+        row_procedure_id = _export_row_procedure_id(row)
+        if requested_procedure_ids is not None:
+            if not row_procedure_id or row_procedure_id not in requested_procedure_ids:
+                continue
+        row_claim_id = _export_row_claim_id(row)
+        if claim_id:
+            if row_claim_id == claim_id:
+                if row_procedure_id and included_procedure_ids and row_procedure_id not in included_procedure_ids:
+                    continue
+                scoped.append(row)
+                continue
+            if not row_claim_id and row_procedure_id and row_procedure_id in included_procedure_ids:
+                scoped.append(row)
+            continue
+        if row_procedure_id and included_procedure_ids and row_procedure_id not in included_procedure_ids:
+            continue
+        scoped.append(row)
+    return scoped
+
+
+def _build_export_ledger_facts(
+    *,
+    patient_ref: str,
+    ledger_rows: list[dict[str, str]],
+    procedure_code_by_id: dict[str, str],
+) -> list[NarrativeSourceFact]:
+    facts: list[NarrativeSourceFact] = []
+    for row in ledger_rows:
+        transaction_id = str(row.get("transaction_id") or "").strip()
+        if not transaction_id:
+            continue
+        transaction_date = _ledger_transaction_date(row) or ""
+        source_report_date = str(row.get("source_report_date") or "").strip() or None
+        procedure_id = _export_row_procedure_id(row)
+        claim_id = _export_row_claim_id(row)
+        amount = _parse_claim_amount(str(row.get("amount") or ""))
+
+        procedure_display = ""
+        if procedure_id:
+            procedure_display = procedure_code_by_id.get(procedure_id) or procedure_id
+
+        supports = ["ledger", transaction_id]
+        if procedure_id:
+            supports.append(procedure_id)
+        if claim_id:
+            supports.append(claim_id)
+
+        text = f"Ledger transaction {transaction_id} for Patient ref {patient_ref}"
+        if transaction_date:
+            text += f" on {transaction_date}"
+        detail_parts: list[str] = []
+        if procedure_display:
+            detail_parts.append(f"records procedure {procedure_display}")
+        if amount is not None:
+            detail_parts.append(f"with amount {amount:.2f}")
+        if detail_parts:
+            text = f"{text} {' '.join(detail_parts)}."
+        else:
+            text = f"{text}."
+
+        facts.append(
+            NarrativeSourceFact(
+                fact_id=f"fact-{transaction_id}-ledger",
+                source_type="softdent",
+                source_label=SOFTDENT_NARRATIVE_PATIENT_LEDGER_FILENAME,
+                source_date=source_report_date or transaction_date or None,
+                text=text,
+                supports=supports,
+                source_strength="supporting",
+            )
+        )
+    return facts
+
+
 class SoftDentExportFileInsuranceNarrativeAdapter:
     """Reads scoped SoftDent narrative CSV exports from a configured import directory.
 
@@ -989,6 +1155,35 @@ class SoftDentExportFileInsuranceNarrativeAdapter:
             claims_source_label=SOFTDENT_NARRATIVE_CLAIMS_FILENAME,
             procedures_source_label=SOFTDENT_NARRATIVE_PROCEDURES_FILENAME,
         )
+
+        ledger_path = self._export_dir / SOFTDENT_NARRATIVE_PATIENT_LEDGER_FILENAME
+        ledger_rows, ledger_error = _load_patient_ledger_export(ledger_path)
+        if ledger_error:
+            missing_data.append(missing_data_item(ledger_error))
+        else:
+            scoped_ledger_rows = _scope_ledger_rows(
+                ledger_rows,
+                patient_ref=normalized_ref,
+                claim_id=claim_key,
+                procedure_ids=scope.procedure_ids,
+                included_procedure_ids=expected_procedure_ids,
+                date_range=scope.date_range,
+            )
+            if not scoped_ledger_rows:
+                missing_data.append(missing_data_item("missing_scoped_ledger_rows"))
+            else:
+                procedure_code_by_id = {
+                    _export_row_procedure_id(row): str(row.get("procedure_code") or "").strip()
+                    for row in matched_procedure_rows
+                    if _export_row_procedure_id(row)
+                }
+                source_facts.extend(
+                    _build_export_ledger_facts(
+                        patient_ref=normalized_ref,
+                        ledger_rows=scoped_ledger_rows,
+                        procedure_code_by_id=procedure_code_by_id,
+                    )
+                )
 
         date_range_summary: DateRangeSummary | None = None
         service_dates = [proc.service_date for proc in procedures if proc.service_date]

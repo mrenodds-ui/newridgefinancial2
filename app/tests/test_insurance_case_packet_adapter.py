@@ -25,6 +25,7 @@ from app.insurance_narratives.schemas import PatientCaseSummary
 FIXTURE_EXPORT_DIR = Path(__file__).resolve().parent / "fixtures" / "insurance_narratives" / "softdent"
 FIXTURE_CLAIMS_CSV = FIXTURE_EXPORT_DIR / "claims_export_fixture.csv"
 FIXTURE_PROCEDURES_CSV = FIXTURE_EXPORT_DIR / "softdent_procedures_export.csv"
+FIXTURE_LEDGER_CSV = FIXTURE_EXPORT_DIR / "softdent_patient_ledger_export.csv"
 
 
 @pytest.fixture
@@ -406,6 +407,12 @@ def export_fixture_dir(tmp_path: Path) -> Path:
         procedures_src.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+    ledger_src = FIXTURE_LEDGER_CSV
+    if ledger_src.is_file():
+        (tmp_path / "softdent_patient_ledger_export.csv").write_text(
+            ledger_src.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
     return tmp_path
 
 
@@ -652,3 +659,209 @@ def test_softdent_export_adapter_missing_procedures_file(
     assert "missing_softdent_procedures_export" in missing_codes
     assert packet.claim is not None
     assert any("Claim CLAIM-EXPORT-1 status" in fact.text for fact in packet.source_facts)
+
+
+def test_softdent_export_adapter_missing_ledger_file(
+    tmp_path: Path,
+    fixed_timestamp: str,
+) -> None:
+    claims_src = FIXTURE_CLAIMS_CSV
+    procedures_src = FIXTURE_PROCEDURES_CSV
+    (tmp_path / "softdent_claims_export.csv").write_text(
+        claims_src.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "softdent_procedures_export.csv").write_text(
+        procedures_src.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=tmp_path)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    missing_codes = {item.code for item in packet.missing_data}
+    assert "missing_softdent_patient_ledger_export" in missing_codes
+    assert all("ledger" not in fact.supports for fact in packet.source_facts)
+
+
+def test_softdent_export_adapter_invalid_ledger_file(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    (export_fixture_dir / "softdent_patient_ledger_export.csv").write_bytes(b"\xff\xfe")
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    missing_codes = {item.code for item in packet.missing_data}
+    assert "invalid_softdent_patient_ledger_export" in missing_codes
+    assert all("ledger" not in fact.supports for fact in packet.source_facts)
+
+
+def test_softdent_export_adapter_scoped_ledger_rows_produce_source_facts(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        procedure_ids=["PROC-CROWN-30"],
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    ledger_facts = [fact for fact in packet.source_facts if "ledger" in fact.supports]
+    assert ledger_facts
+    assert any(fact.fact_id == "fact-TXN-1001-ledger" for fact in ledger_facts)
+    assert any(
+        "Ledger transaction TXN-1001 for Patient ref CHART-EXPORT on 2026-06-12"
+        in fact.text
+        for fact in ledger_facts
+    )
+    assert any("records procedure D2950 with amount 185.00" in fact.text for fact in ledger_facts)
+    assert all(fact.source_type == "softdent" for fact in ledger_facts)
+    assert all(fact.source_label == "softdent_patient_ledger_export.csv" for fact in ledger_facts)
+    assert all(fact.source_strength == "supporting" for fact in ledger_facts)
+
+
+def test_softdent_export_adapter_ignores_non_matching_ledger_patients(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    ledger_facts = [fact for fact in packet.source_facts if "ledger" in fact.supports]
+    assert all("TXN-OTHER-PATIENT" not in fact.text for fact in ledger_facts)
+    dumped = json.dumps(packet.model_dump(mode="json"))
+    assert "CHART-OTHER" not in dumped or "TXN-OTHER-PATIENT" not in dumped
+
+
+def test_softdent_export_adapter_ignores_non_matching_ledger_claim_and_procedure_rows(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        procedure_ids=["PROC-CROWN-30"],
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    ledger_facts = [fact for fact in packet.source_facts if "ledger" in fact.supports]
+    ledger_text = " ".join(fact.text for fact in ledger_facts)
+    assert "TXN-WRONG-CLAIM" not in ledger_text
+    assert "TXN-OTHER-PROC" not in ledger_text
+    assert "TXN-1001" in ledger_text
+    assert any(fact.fact_id == "fact-TXN-1002-ledger" for fact in ledger_facts)
+
+
+def test_softdent_export_adapter_date_range_filters_ledger_rows(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        procedure_ids=["PROC-CROWN-30"],
+        date_range=("2026-06-01", "2026-06-30"),
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    ledger_facts = [fact for fact in packet.source_facts if "ledger" in fact.supports]
+    ledger_text = " ".join(fact.text for fact in ledger_facts)
+    assert "TXN-OLD" not in ledger_text
+    assert "TXN-1001" in ledger_text
+
+
+def test_softdent_export_adapter_ledger_does_not_create_ar_or_balance_totals(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    assert any(fact for fact in packet.source_facts if "ledger" in fact.supports)
+    assert "missing_softdent_ar" in {item.code for item in packet.missing_data}
+    dumped = json.dumps(packet.model_dump(mode="json"))
+    assert '"ar_total"' not in dumped
+    assert '"accounts_receivable"' not in dumped
+    assert '"patient_balance"' not in dumped
+    assert packet.claim is not None
+    assert packet.claim.billed_amount == 215.75
+
+
+def test_softdent_export_adapter_missing_scoped_ledger_rows(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        procedure_ids=["PROC-NOT-IN-LEDGER"],
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    missing_codes = {item.code for item in packet.missing_data}
+    assert "missing_scoped_ledger_rows" in missing_codes
+    assert all("ledger" not in fact.supports for fact in packet.source_facts)
+
+
+def test_builder_accepts_softdent_export_adapter_with_ledger_facts(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = softdent_export_file_adapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        procedure_ids=["PROC-CROWN-30"],
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    assert packet.audit_metadata.adapter_name == "softdent_export_file"
+    assert any("ledger" in fact.supports for fact in packet.source_facts)

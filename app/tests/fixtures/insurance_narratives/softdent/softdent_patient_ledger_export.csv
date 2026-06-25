@@ -1,0 +1,7 @@
+patient_ref,transaction_id,transaction_date,transaction_type,procedure_id,claim_id,description,amount,source_report_date
+CHART-EXPORT,TXN-1001,2026-06-12,Charge,PROC-CROWN-30,CLAIM-EXPORT-1,Crown buildup charge,185.00,2026-06-20
+CHART-EXPORT,TXN-1002,2026-06-12,Payment,PROC-CROWN-30,,Patient copay,-50.00,2026-06-20
+CHART-EXPORT,TXN-OLD,2026-05-01,Charge,PROC-CROWN-30,CLAIM-EXPORT-1,Prior-period charge,100.00,2026-06-20
+CHART-EXPORT,TXN-WRONG-CLAIM,2026-06-12,Charge,PROC-CROWN-30,CLAIM-OTHER-9,Wrong claim linkage,75.00,2026-06-20
+CHART-EXPORT,TXN-OTHER-PROC,2026-06-12,Charge,PROC-OTHER,CLAIM-EXPORT-1,Unscoped procedure,40.00,2026-06-20
+CHART-OTHER,TXN-OTHER-PATIENT,2026-06-12,Charge,PROC-OTHER,CLAIM-OTHER-9,Other patient ledger,50.00,2026-06-20
