@@ -91,3 +91,4 @@ If the local gate is enabled but not required, the run may skip cleanly when Oll
 - The legacy `local_ai/` harness and `scripts/run_local_llm_evals.py` path have been retired.
 - CI now calls the canonical runner in `scripts/run_local_model_evals.py`, which imports directly from `app/evaluation/`.
 - Deployment hardening: unset `APP_ENV` is treated as production-like. Set `APP_ENV=development` only on local workstations. Production requires `APP_AUTH_SESSION_SECRET` and `WIDGET_API_KEY`. LiteLLM proxy use outside localhost requires `LITELLM_MASTER_KEY`.
+- Local 235B evaluator outputs (`235b_*.md`, `235b_*.txt`, `235b_*.json`, raw logs) are gitignored at the repo root. Keep them local unless you deliberately sanitize and approve a commit.

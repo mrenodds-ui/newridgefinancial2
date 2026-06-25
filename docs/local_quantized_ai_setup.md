@@ -162,7 +162,7 @@ Do **not** run the 24B frontend lane or 30B backend lane while the 235B evaluato
 | 3 | Verify `:11434` and `:11435` do not respond to `/v1/models`. |
 | 4 | Start only the evaluator on `:11436` (foreground `ollama serve` in a dedicated terminal, or `scripts/start_235b_evaluator_lane.ps1`). |
 | 5 | Run **one** section: `scripts/run_235b_isolated_section.ps1 -Section N` |
-| 6 | Save **one** report (`235b_sectionN_*_report.md` at repo root; do not commit unless approved). |
+| 6 | Save **one** report (`235b_sectionN_*_report.md` at repo root). Root-level `235b_*` reports, context files, raw JSON, and legacy eval runners are gitignored by default—do not commit unless explicitly sanitized and approved. |
 | 7 | Tear down `:11436` only: `scripts/stop_235b_evaluator_lane.ps1` kills the LISTENING serve PID (not client connections). It does **not** block on `ollama stop qwen3:235b`. Exits 0 immediately if `:11436` is already down. |
 | 8 | Restart 24B/30B only if needed: `-RestartNormalLanes` on the orchestrator, or start `run_frontend_model.ps1` / `run_backend_model.ps1` manually. |
 

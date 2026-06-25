@@ -116,6 +116,18 @@ _seeded_backup_*/
 _softdent_reset_*/
 .venv_broken_*/
 
+# Local 235B evaluator artifacts (do not commit unless explicitly sanitized)
+235b_*.md
+235b_*.txt
+235b_*.json
+235b_*.raw.json
+235b_*.log
+eval_files.txt
+run_235b_eval.py
+run_235b_eval_resume.py
+run_235b_focused_eval.py
+run_235b_section1_only.py
+
 # Editor / OS
 .vscode/
 .DS_Store
