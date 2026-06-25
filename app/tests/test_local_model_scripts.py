@@ -12,7 +12,10 @@ STALE_DEFAULT_TAGS = ("frontend-24b-q4", "backend-30b-q4")
 NORMAL_RUN_SCRIPTS = (
     "run_frontend_model.ps1",
     "run_backend_model.ps1",
+    "run_frontend_model.sh",
+    "run_backend_model.sh",
     "_local_model_defaults.ps1",
+    "ai_model_common.sh",
 )
 
 
@@ -47,14 +50,21 @@ def test_model_env_precedence_matches_app_config(monkeypatch: pytest.MonkeyPatch
 
 
 def test_normal_run_scripts_use_app_default_tags() -> None:
-    defaults = (SCRIPTS_DIR / "_local_model_defaults.ps1").read_text(encoding="utf-8")
-    frontend_script = (SCRIPTS_DIR / "run_frontend_model.ps1").read_text(encoding="utf-8")
-    backend_script = (SCRIPTS_DIR / "run_backend_model.ps1").read_text(encoding="utf-8")
+    defaults_ps1 = (SCRIPTS_DIR / "_local_model_defaults.ps1").read_text(encoding="utf-8")
+    defaults_sh = (SCRIPTS_DIR / "ai_model_common.sh").read_text(encoding="utf-8")
+    frontend_script_ps1 = (SCRIPTS_DIR / "run_frontend_model.ps1").read_text(encoding="utf-8")
+    backend_script_ps1 = (SCRIPTS_DIR / "run_backend_model.ps1").read_text(encoding="utf-8")
+    frontend_script_sh = (SCRIPTS_DIR / "run_frontend_model.sh").read_text(encoding="utf-8")
+    backend_script_sh = (SCRIPTS_DIR / "run_backend_model.sh").read_text(encoding="utf-8")
 
-    assert "mistral-small3.1:24b" in defaults
-    assert "qwen3:30b" in defaults
-    assert "Get-LocalFrontendModelName" in frontend_script
-    assert "Get-LocalBackendModelName" in backend_script
+    assert "mistral-small3.1:24b" in defaults_ps1
+    assert "qwen3:30b" in defaults_ps1
+    assert "mistral-small3.1:24b" in defaults_sh
+    assert "qwen3:30b" in defaults_sh
+    assert "Get-LocalFrontendModelName" in frontend_script_ps1
+    assert "Get-LocalBackendModelName" in backend_script_ps1
+    assert "resolve_frontend_model_tag" in frontend_script_sh
+    assert "resolve_backend_model_tag" in backend_script_sh
 
     for script_name in NORMAL_RUN_SCRIPTS:
         script_text = (SCRIPTS_DIR / script_name).read_text(encoding="utf-8")

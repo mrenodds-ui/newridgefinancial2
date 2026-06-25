@@ -71,3 +71,27 @@ gpu_backend_flags() {
       ;;
   esac
 }
+
+resolve_frontend_model_tag() {
+  if [[ -n "${AI_FRONTEND_MODEL:-}" ]]; then
+    echo "$AI_FRONTEND_MODEL"
+    return 0
+  fi
+  if [[ -n "${OLLAMA_FRONTEND_MODEL:-}" ]]; then
+    echo "$OLLAMA_FRONTEND_MODEL"
+    return 0
+  fi
+  echo "mistral-small3.1:24b"
+}
+
+resolve_backend_model_tag() {
+  if [[ -n "${AI_BACKEND_MODEL:-}" ]]; then
+    echo "$AI_BACKEND_MODEL"
+    return 0
+  fi
+  if [[ -n "${OLLAMA_BACKEND_MODEL:-}" ]]; then
+    echo "$OLLAMA_BACKEND_MODEL"
+    return 0
+  fi
+  echo "qwen3:30b"
+}

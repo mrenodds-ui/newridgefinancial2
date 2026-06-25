@@ -3,6 +3,21 @@ set -euo pipefail
 
 source "$(dirname "$0")/ai_model_common.sh"
 
+print_frontend_model_help() {
+  cat <<EOF
+run_frontend_model.sh - start the frontend Ollama or llama.cpp lane on :11434.
+
+Default model tag: mistral-small3.1:24b
+Override with AI_FRONTEND_MODEL or OLLAMA_FRONTEND_MODEL.
+Optional custom GGUF tag via AI_FRONTEND_MODEL_PATH / AI_MODEL_PATH when creating from a local file.
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  print_frontend_model_help
+  exit 0
+fi
+
 ROOT="$(repo_root)"
 PORT="${AI_PORT:-11434}"
 HOST="${AI_HOST:-127.0.0.1}"
@@ -10,15 +25,17 @@ MODEL_PATH="${AI_MODEL_PATH:-${AI_FRONTEND_MODEL_PATH:-}}"
 CONTEXT_SIZE="${AI_FRONTEND_CONTEXT_SIZE:-${AI_CONTEXT_SIZE:-4096}}"
 RUNTIME="${AI_RUNTIME:-ollama}"
 GPU_BACKEND="${AI_GPU_BACKEND:-vulkan}"
+DEFAULT_MODEL_TAG="$(resolve_frontend_model_tag)"
 
 print_local_only_notice
 print_vram_guidance "frontend" "${AI_FRONTEND_QUANT:-Q4_K_M}"
+echo "Default frontend model tag: ${DEFAULT_MODEL_TAG}"
 
 if [[ "$RUNTIME" == "ollama" ]]; then
   require_cmd ollama
   export OLLAMA_HOST="${HOST}:${PORT}"
   if [[ -n "$MODEL_PATH" && -f "$MODEL_PATH" ]]; then
-    TAG="${AI_FRONTEND_MODEL:-frontend-24b-q4}"
+    TAG="$DEFAULT_MODEL_TAG"
     MODEFILE="$(mktemp)"
     cat >"$MODEFILE" <<EOF
 FROM $MODEL_PATH

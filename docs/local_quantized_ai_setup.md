@@ -133,10 +133,12 @@ $env:AI_PORT = '11435'
 AI_MODEL_PATH=.local_models/frontend/frontend-24b.Q4_K_M.gguf \
 AI_PORT=11434 AI_RUNTIME=llama_cpp AI_GPU_BACKEND=vulkan \
 ./scripts/run_frontend_model.sh
+# Default tag: mistral-small3.1:24b (override with AI_FRONTEND_MODEL)
 
 AI_MODEL_PATH=.local_models/backend/backend-30b.Q4_K_S.gguf \
 AI_PORT=11435 AI_RUNTIME=llama_cpp AI_GPU_LAYERS=0 \
 ./scripts/run_backend_model.sh
+# Default tag: qwen3:30b (override with AI_BACKEND_MODEL)
 ```
 
 ## 235B evaluator workflow (isolated, one section at a time)
