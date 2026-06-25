@@ -26,6 +26,7 @@ FIXTURE_EXPORT_DIR = Path(__file__).resolve().parent / "fixtures" / "insurance_n
 FIXTURE_CLAIMS_CSV = FIXTURE_EXPORT_DIR / "claims_export_fixture.csv"
 FIXTURE_PROCEDURES_CSV = FIXTURE_EXPORT_DIR / "softdent_procedures_export.csv"
 FIXTURE_LEDGER_CSV = FIXTURE_EXPORT_DIR / "softdent_patient_ledger_export.csv"
+FIXTURE_CLAIM_STATUS_CSV = FIXTURE_EXPORT_DIR / "softdent_claim_status_export.csv"
 
 
 @pytest.fixture
@@ -411,6 +412,12 @@ def export_fixture_dir(tmp_path: Path) -> Path:
     if ledger_src.is_file():
         (tmp_path / "softdent_patient_ledger_export.csv").write_text(
             ledger_src.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+    claim_status_src = FIXTURE_CLAIM_STATUS_CSV
+    if claim_status_src.is_file():
+        (tmp_path / "softdent_claim_status_export.csv").write_text(
+            claim_status_src.read_text(encoding="utf-8"),
             encoding="utf-8",
         )
     return tmp_path
@@ -865,3 +872,260 @@ def test_builder_accepts_softdent_export_adapter_with_ledger_facts(
 
     assert packet.audit_metadata.adapter_name == "softdent_export_file"
     assert any("ledger" in fact.supports for fact in packet.source_facts)
+
+
+def test_softdent_export_adapter_missing_claim_status_file(
+    tmp_path: Path,
+    fixed_timestamp: str,
+) -> None:
+    claims_src = FIXTURE_CLAIMS_CSV
+    procedures_src = FIXTURE_PROCEDURES_CSV
+    (tmp_path / "softdent_claims_export.csv").write_text(
+        claims_src.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "softdent_procedures_export.csv").write_text(
+        procedures_src.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=tmp_path)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    missing_codes = {item.code for item in packet.missing_data}
+    assert "missing_softdent_claim_status_export" in missing_codes
+    assert all("claim_status" not in fact.supports for fact in packet.source_facts)
+
+
+def test_softdent_export_adapter_invalid_claim_status_file(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    (export_fixture_dir / "softdent_claim_status_export.csv").write_bytes(b"\xff\xfe")
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    missing_codes = {item.code for item in packet.missing_data}
+    assert "invalid_softdent_claim_status_export" in missing_codes
+    assert all("claim_status" not in fact.supports for fact in packet.source_facts)
+
+
+def test_softdent_export_adapter_scoped_claim_status_row_produces_source_fact(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    status_facts = [fact for fact in packet.source_facts if "claim_status" in fact.supports]
+    assert status_facts
+    assert any(fact.fact_id == "fact-CLAIM-EXPORT-1-claim-status-export" for fact in status_facts)
+    assert any(
+        "Claim CLAIM-EXPORT-1 for Patient ref CHART-EXPORT is listed as denied by Delta Dental"
+        in fact.text
+        for fact in status_facts
+    )
+    assert any("radiograph missing" in fact.text for fact in status_facts)
+    assert all(fact.source_type == "softdent" for fact in status_facts)
+    assert all(fact.source_label == "softdent_claim_status_export.csv" for fact in status_facts)
+    assert all(fact.source_strength == "primary" for fact in status_facts)
+
+
+def test_softdent_export_adapter_ignores_non_matching_claim_status_patients(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    status_facts = [fact for fact in packet.source_facts if "claim_status" in fact.supports]
+    status_text = " ".join(fact.text for fact in status_facts)
+    assert "CLAIM-OTHER-9" not in status_text
+    assert "MetLife" not in status_text
+
+
+def test_softdent_export_adapter_ignores_non_matching_claim_status_claim_rows(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    status_facts = [fact for fact in packet.source_facts if "claim_status" in fact.supports]
+    status_text = " ".join(fact.text for fact in status_facts)
+    assert "wrong claim linkage" not in status_text
+
+
+def test_softdent_export_adapter_date_range_filters_claim_status_rows(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        date_range=("2026-06-01", "2026-06-30"),
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    status_facts = [fact for fact in packet.source_facts if "claim_status" in fact.supports]
+    status_text = " ".join(fact.text for fact in status_facts)
+    assert "radiograph missing" in status_text
+    assert "old denial note" not in status_text
+
+
+def test_softdent_export_adapter_requested_items_create_missing_radiograph(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        date_range=("2026-06-01", "2026-06-30"),
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    missing_codes = {item.code for item in packet.missing_data}
+    assert "missing_radiograph" in missing_codes
+
+
+def test_softdent_export_adapter_does_not_invent_missing_data_from_blank_requested_items(
+    tmp_path: Path,
+    fixed_timestamp: str,
+) -> None:
+    (tmp_path / "softdent_claims_export.csv").write_text(
+        FIXTURE_CLAIMS_CSV.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "softdent_procedures_export.csv").write_text(
+        FIXTURE_PROCEDURES_CSV.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "softdent_claim_status_export.csv").write_text(
+        "patient_ref,claim_id,payer_name,status,status_date,denial_code,denial_reason,remark_code,requested_items,source_report_date\n"
+        "CHART-EXPORT,CLAIM-EXPORT-1,Delta Dental,Denied,2026-06-15,DENY-001,general denial,,,2026-06-20\n",
+        encoding="utf-8",
+    )
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=tmp_path)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    derived_codes = {
+        item.code
+        for item in packet.missing_data
+        if item.code
+        in {
+            "missing_radiograph",
+            "missing_periodontal_chart",
+            "missing_prior_auth",
+            "missing_denial_letter",
+            "missing_clinical_narrative",
+        }
+    }
+    assert derived_codes == set()
+
+
+def test_softdent_export_adapter_claim_status_does_not_create_ar_or_balances(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    assert any("claim_status" in fact.supports for fact in packet.source_facts)
+    assert "missing_softdent_ar" in {item.code for item in packet.missing_data}
+    dumped = json.dumps(packet.model_dump(mode="json"))
+    assert '"ar_total"' not in dumped
+    assert '"accounts_receivable"' not in dumped
+    assert '"patient_balance"' not in dumped
+
+
+def test_softdent_export_adapter_missing_scoped_claim_status_row(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = SoftDentExportFileInsuranceNarrativeAdapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-NOT-FOUND",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    missing_codes = {item.code for item in packet.missing_data}
+    assert "missing_scoped_claim_row" in missing_codes
+    assert all("claim_status" not in fact.supports for fact in packet.source_facts)
+
+
+def test_builder_accepts_softdent_export_adapter_with_claim_status_facts(
+    export_fixture_dir: Path,
+    fixed_timestamp: str,
+) -> None:
+    adapter = softdent_export_file_adapter(export_dir=export_fixture_dir)
+    packet = build_insurance_narrative_case_packet(
+        patient_ref="CHART-EXPORT",
+        claim_id="CLAIM-EXPORT-1",
+        narrative_type="denied_claim_resubmission",
+        actor="operator@test",
+        created_at=fixed_timestamp,
+        adapter=adapter,
+    )
+
+    assert packet.audit_metadata.adapter_name == "softdent_export_file"
+    assert any("claim_status" in fact.supports for fact in packet.source_facts)

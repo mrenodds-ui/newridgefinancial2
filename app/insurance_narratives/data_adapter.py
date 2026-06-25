@@ -158,11 +158,40 @@ MISSING_DATA_CATALOG: dict[str, NarrativeMissingDataItem] = {
         why_it_matters="softdent_patient_ledger_export.csv is present but malformed or missing required columns.",
         blocking=False,
     ),
+    "missing_softdent_claim_status_export": NarrativeMissingDataItem(
+        code="missing_softdent_claim_status_export",
+        label="SoftDent claim status export file",
+        severity="warning",
+        why_it_matters="Claim status and denial facts require softdent_claim_status_export.csv in the configured import directory.",
+        blocking=False,
+    ),
+    "missing_scoped_claim_status_row": NarrativeMissingDataItem(
+        code="missing_scoped_claim_status_row",
+        label="Scoped claim status row",
+        severity="warning",
+        why_it_matters="No claim status row in the export matched the requested patient, claim, or date scope.",
+        blocking=False,
+    ),
+    "invalid_softdent_claim_status_export": NarrativeMissingDataItem(
+        code="invalid_softdent_claim_status_export",
+        label="Invalid SoftDent claim status export",
+        severity="warning",
+        why_it_matters="softdent_claim_status_export.csv is present but malformed or missing required columns.",
+        blocking=False,
+    ),
+    "missing_clinical_narrative": NarrativeMissingDataItem(
+        code="missing_clinical_narrative",
+        label="Clinical narrative",
+        severity="warning",
+        why_it_matters="Payer may require a clinical narrative for appeal or resubmission.",
+        blocking=False,
+    ),
 }
 
 SOFTDENT_NARRATIVE_CLAIMS_FILENAME = "softdent_claims_export.csv"
 SOFTDENT_NARRATIVE_PROCEDURES_FILENAME = "softdent_procedures_export.csv"
 SOFTDENT_NARRATIVE_PATIENT_LEDGER_FILENAME = "softdent_patient_ledger_export.csv"
+SOFTDENT_NARRATIVE_CLAIM_STATUS_FILENAME = "softdent_claim_status_export.csv"
 SOFTDENT_NARRATIVE_LEDGER_REQUIRED_COLUMNS = frozenset(
     {
         "patient_ref",
@@ -175,6 +204,27 @@ SOFTDENT_NARRATIVE_LEDGER_REQUIRED_COLUMNS = frozenset(
         "amount",
         "source_report_date",
     }
+)
+SOFTDENT_NARRATIVE_CLAIM_STATUS_REQUIRED_COLUMNS = frozenset(
+    {
+        "patient_ref",
+        "claim_id",
+        "payer_name",
+        "status",
+        "status_date",
+        "denial_code",
+        "denial_reason",
+        "remark_code",
+        "requested_items",
+        "source_report_date",
+    }
+)
+REQUESTED_ITEM_MISSING_DATA_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("radiograph", "x-ray", "xray"), "missing_radiograph"),
+    (("periodontal chart", "perio chart"), "missing_periodontal_chart"),
+    (("prior authorization", "prior auth"), "missing_prior_auth"),
+    (("denial letter",), "missing_denial_letter"),
+    (("narrative", "clinical narrative"), "missing_clinical_narrative"),
 )
 DEFAULT_SOFTDENT_NARRATIVE_EXPORT_DIR = Path("app/data/imports/insurance_narratives/softdent")
 
@@ -1027,6 +1077,146 @@ def _build_export_ledger_facts(
     return facts
 
 
+def _claim_status_csv_has_required_columns(path: Path) -> bool:
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            if reader.fieldnames is None:
+                return False
+            normalized = {_normalize_csv_header(name) for name in reader.fieldnames}
+            return SOFTDENT_NARRATIVE_CLAIM_STATUS_REQUIRED_COLUMNS.issubset(normalized)
+    except (OSError, csv.Error, UnicodeDecodeError):
+        return False
+
+
+def _load_claim_status_export(path: Path) -> tuple[list[dict[str, str]], str | None]:
+    """Load claim status CSV. Returns (rows, missing_code) when absent or invalid."""
+    if not path.is_file():
+        return [], "missing_softdent_claim_status_export"
+    if not _claim_status_csv_has_required_columns(path):
+        return [], "invalid_softdent_claim_status_export"
+    rows = _read_scoped_export_csv(path)
+    if rows is None:
+        return [], "invalid_softdent_claim_status_export"
+    return rows, None
+
+
+def _claim_status_date(row: dict[str, str]) -> str | None:
+    value = str(row.get("status_date") or "").strip()
+    return value or None
+
+
+def _claim_status_row_in_date_range(row: dict[str, str], date_range: tuple[str, str] | None) -> bool:
+    if not date_range:
+        return True
+    status_date = _claim_status_date(row)
+    if not status_date:
+        return True
+    start_date, end_date = date_range
+    return start_date <= status_date <= end_date
+
+
+def _scope_claim_status_rows(
+    status_rows: list[dict[str, str]],
+    *,
+    patient_ref: str,
+    claim_id: str | None,
+    date_range: tuple[str, str] | None,
+) -> list[dict[str, str]]:
+    scoped: list[dict[str, str]] = []
+    for row in status_rows:
+        if _export_row_patient_ref(row) != patient_ref:
+            continue
+        if claim_id and _export_row_claim_id(row) != claim_id:
+            continue
+        if not _claim_status_row_in_date_range(row, date_range):
+            continue
+        scoped.append(row)
+    return scoped
+
+
+def _parse_requested_items(value: str) -> list[str]:
+    normalized = value.replace(";", ",")
+    return [part.strip() for part in normalized.split(",") if part.strip()]
+
+
+def _requested_items_indicate_required(row: dict[str, str]) -> bool:
+    haystack = " ".join(
+        [
+            str(row.get("denial_reason") or ""),
+            str(row.get("remark_code") or ""),
+            str(row.get("requested_items") or ""),
+            str(row.get("status") or ""),
+        ]
+    ).lower()
+    return any(token in haystack for token in ("required", "must provide", "must submit"))
+
+
+def _missing_data_from_requested_items(row: dict[str, str]) -> list[NarrativeMissingDataItem]:
+    requested_items = _parse_requested_items(str(row.get("requested_items") or ""))
+    if not requested_items:
+        return []
+    mark_blocking = _requested_items_indicate_required(row)
+    derived: list[NarrativeMissingDataItem] = []
+    seen_codes: set[str] = set()
+    for item_label in requested_items:
+        item_lower = item_label.lower()
+        for keywords, code in REQUESTED_ITEM_MISSING_DATA_KEYWORDS:
+            if not any(keyword in item_lower for keyword in keywords):
+                continue
+            if code in seen_codes:
+                break
+            catalog_item = missing_data_item(code)
+            if not mark_blocking and catalog_item.blocking:
+                catalog_item = catalog_item.model_copy(update={"blocking": False})
+            derived.append(catalog_item)
+            seen_codes.add(code)
+            break
+    return derived
+
+
+def _build_export_claim_status_facts(
+    *,
+    patient_ref: str,
+    claim_id: str,
+    status_row: dict[str, str],
+) -> list[NarrativeSourceFact]:
+    status = str(status_row.get("status") or "").strip()
+    if not status:
+        return []
+    payer_name = str(status_row.get("payer_name") or "").strip()
+    status_date = _claim_status_date(row=status_row) or ""
+    source_report_date = str(status_row.get("source_report_date") or "").strip() or None
+    denial_reason = str(status_row.get("denial_reason") or "").strip()
+    denial_code = str(status_row.get("denial_code") or "").strip()
+
+    supports = ["claim_status", claim_id, status.lower()]
+    if denial_code:
+        supports.append(denial_code)
+
+    text = f"Claim {claim_id} for Patient ref {patient_ref} is listed as {status.lower()}"
+    if payer_name:
+        text += f" by {payer_name}"
+    if status_date:
+        text += f" on {status_date}"
+    if denial_reason:
+        text += f" with denial reason: {denial_reason}."
+    else:
+        text += "."
+
+    return [
+        NarrativeSourceFact(
+            fact_id=f"fact-{claim_id}-claim-status-export",
+            source_type="softdent",
+            source_label=SOFTDENT_NARRATIVE_CLAIM_STATUS_FILENAME,
+            source_date=source_report_date or status_date or None,
+            text=text,
+            supports=supports,
+            source_strength="primary",
+        )
+    ]
+
+
 class SoftDentExportFileInsuranceNarrativeAdapter:
     """Reads scoped SoftDent narrative CSV exports from a configured import directory.
 
@@ -1184,6 +1374,36 @@ class SoftDentExportFileInsuranceNarrativeAdapter:
                         procedure_code_by_id=procedure_code_by_id,
                     )
                 )
+
+        claim_status_path = self._export_dir / SOFTDENT_NARRATIVE_CLAIM_STATUS_FILENAME
+        claim_status_rows, claim_status_error = _load_claim_status_export(claim_status_path)
+        if claim_status_error:
+            missing_data.append(missing_data_item(claim_status_error))
+        else:
+            scoped_status_rows = _scope_claim_status_rows(
+                claim_status_rows,
+                patient_ref=normalized_ref,
+                claim_id=claim_key,
+                date_range=scope.date_range,
+            )
+            if not scoped_status_rows:
+                missing_data.append(missing_data_item("missing_scoped_claim_status_row"))
+            else:
+                status_row = max(
+                    scoped_status_rows,
+                    key=lambda row: _claim_status_date(row) or "",
+                )
+                source_facts.extend(
+                    _build_export_claim_status_facts(
+                        patient_ref=normalized_ref,
+                        claim_id=claim_key,
+                        status_row=status_row,
+                    )
+                )
+                missing_data.extend(_missing_data_from_requested_items(status_row))
+                denial_reason = str(status_row.get("denial_reason") or "").strip()
+                if denial_reason and not claim_summary.denial_reason:
+                    claim_summary = claim_summary.model_copy(update={"denial_reason": denial_reason})
 
         date_range_summary: DateRangeSummary | None = None
         service_dates = [proc.service_date for proc in procedures if proc.service_date]

@@ -155,13 +155,24 @@ Supported first-pass exports:
 | `softdent_claims_export.csv` | `patient_ref`, `claim_id`, `payer_name`, `service_date`, `claim_status`, `claim_amount`, `procedure_ids`, `source_report_date` |
 | `softdent_procedures_export.csv` | `patient_ref`, `procedure_id`, `procedure_code`, `procedure_description`, `service_date`, `tooth`, `provider_label`, `source_report_date` |
 | `softdent_patient_ledger_export.csv` | `patient_ref`, `transaction_id`, `transaction_date`, `transaction_type`, `procedure_id`, `claim_id`, `description`, `amount`, `source_report_date` |
+| `softdent_claim_status_export.csv` | `patient_ref`, `claim_id`, `payer_name`, `status`, `status_date`, `denial_code`, `denial_reason`, `remark_code`, `requested_items`, `source_report_date` |
 
 Scoped parsing matches `patient_ref` and `claim_id`; procedure rows are linked via
 `procedure_ids` on the claim row (comma-separated). Ledger rows are scoped by `patient_ref`,
 optional `claim_id`, optional `procedure_ids`, and optional `date_range` on `transaction_date`.
 When `claim_id` is provided, ledger rows with a matching `claim_id` are included, as are rows
-with a blank `claim_id` when `procedure_id` is tied to an included procedure. Non-matching
-export rows are ignored. Ledger `amount` values become supporting source facts only — they do
+with a blank `claim_id` when `procedure_id` is tied to an included procedure. Claim status rows
+are scoped by `patient_ref` and `claim_id`, with optional `date_range` filtering on `status_date`
+when present. Non-matching export rows are ignored.
+
+`requested_items` on claim status rows may add missing-data disclosures (not invented facts),
+for example `radiograph` → `missing_radiograph`, `periodontal chart` → `missing_periodontal_chart`,
+`prior authorization` → `missing_prior_auth`, `denial letter` → `missing_denial_letter`, and
+`narrative` → `missing_clinical_narrative`. Derived items preserve catalog `why_it_matters` text
+and are non-blocking unless the row clearly indicates a required submission. The adapter does
+**not** auto-appeal, submit, email, fax, or upload.
+
+Ledger `amount` values and claim status exports become supporting source facts only — they do
 **not** create A/R totals, patient balance totals, or `latestAr` values. Explicit A/R still
 requires a dedicated A/R export (`missing_softdent_ar` remains until that export is supported).
 Malformed or missing exports surface explicit missing-data codes — never invented clinical
@@ -183,7 +194,8 @@ Adapter output is limited to typed summaries (`PatientCaseSummary`, `ClaimCaseSu
 
 When exports are unavailable or incomplete, adapters append `NarrativeMissingDataItem`
 entries (e.g. `missing_softdent_ar`, `missing_claim_record`, `missing_softdent_patient_ledger_export`,
-`missing_scoped_ledger_rows`, `invalid_softdent_patient_ledger_export`). Missing A/R remains
+`missing_scoped_ledger_rows`, `invalid_softdent_patient_ledger_export`, `missing_softdent_claim_status_export`,
+`missing_scoped_claim_status_row`, `invalid_softdent_claim_status_export`). Missing A/R remains
 **unavailable**, never `$0`. The local adapter always flags `missing_softdent_ar` until a
 scoped A/R mapping is approved. Ledger exports are optional supporting inputs; absent or
 invalid ledger files do not block claim/procedure facts, but ledger amounts never substitute
