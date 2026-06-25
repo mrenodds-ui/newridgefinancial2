@@ -9,6 +9,12 @@ import pytest
 from app import ai_local_config as config
 import app.hal.orchestrator as hal_orchestrator
 from app.ai_local_config import LocalAIConfigError
+from app.tests.lane_routing_test_helpers import (
+    BACKEND_LANE_MODEL,
+    BACKEND_LANE_URL,
+    FRONTEND_LANE_URL,
+    make_require_lane_runtime_mock,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -45,23 +51,26 @@ def test_resolve_lane_profile_chat_second_opinion_uses_backend_lane(monkeypatch:
 
 
 def test_second_opinion_calls_backend_lane_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AI_BACKEND_BASE_URL", "http://127.0.0.1:11435")
-    monkeypatch.setenv("AI_BACKEND_MODEL", "qwen3:30b")
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", BACKEND_LANE_URL)
+    monkeypatch.setenv("AI_BACKEND_MODEL", BACKEND_LANE_MODEL)
 
     captured: dict[str, object] = {}
 
-    def fake_require_lane_runtime(alias, *, purpose):
-        assert alias == "chat_second_opinion"
-        captured["base_url"] = config.get_backend_base_url()
-        return captured["base_url"]
-
     def fake_generate_response_result(*, base_url, profile, prompt, timeout_seconds, seed=None):
+        assert base_url == BACKEND_LANE_URL
+        assert ":11434" not in base_url
+        assert ":11436" not in base_url
+        assert profile["model"] == BACKEND_LANE_MODEL
         captured["base_url"] = base_url
         captured["profile"] = profile
         captured["prompt"] = prompt
         return {"response_text": "Backend second opinion on collections risk."}
 
-    monkeypatch.setattr(hal_orchestrator, "require_lane_runtime", fake_require_lane_runtime)
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "require_lane_runtime",
+        make_require_lane_runtime_mock(expected_alias="chat_second_opinion"),
+    )
     monkeypatch.setattr(hal_orchestrator, "generate_response_result", fake_generate_response_result)
     monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: [])
     monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
@@ -83,8 +92,8 @@ def test_second_opinion_calls_backend_lane_model(monkeypatch: pytest.MonkeyPatch
     assert payload["mode"] == "local-rag-phase-1:second-opinion"
     assert payload["answer"] == "Backend second opinion on collections risk."
     assert payload["local_ai_unavailable"] is None
-    assert captured["base_url"] == "http://127.0.0.1:11435"
-    assert captured["profile"]["model"] == "qwen3:30b"
+    assert captured["base_url"] == BACKEND_LANE_URL
+    assert captured["profile"]["model"] == BACKEND_LANE_MODEL
     assert "7759" in str(captured["prompt"])
     assert "backend second-opinion model required" in payload["guardrails"]
 
@@ -160,3 +169,41 @@ def test_second_opinion_backend_unavailable_returns_explicit_status(monkeypatch:
     assert "Backend local AI lane unavailable" in payload["local_ai_unavailable"]
     assert "no deterministic fallback when backend unavailable" in payload["guardrails"]
     assert payload["answer"] != payload.get("narrative")
+    assert "deterministic server facts first" not in payload["answer"]
+    assert payload["mode"] == "local-rag-phase-1:second-opinion"
+
+
+def test_second_opinion_unavailable_does_not_use_frontend_lane(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", FRONTEND_LANE_URL)
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", BACKEND_LANE_URL)
+
+    def fake_require_lane_runtime(alias, *, purpose):
+        raise LocalAIConfigError(
+            f"Local AI runtime unavailable for HAL second opinion. "
+            f"Lane=backend, model={BACKEND_LANE_MODEL}, base_url={BACKEND_LANE_URL}. connection refused"
+        )
+
+    def fail_if_frontend_lane(**kwargs):
+        base_url = kwargs.get("base_url", "")
+        raise AssertionError(f"Second opinion must not generate via frontend lane: {base_url}")
+
+    monkeypatch.setattr(hal_orchestrator, "require_lane_runtime", fake_require_lane_runtime)
+    monkeypatch.setattr(hal_orchestrator, "generate_response_result", fail_if_frontend_lane)
+    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "get_controlled_patient_context",
+        lambda question: {"matched": False, "snippets": [], "narrative": ""},
+    )
+
+    payload = hal_orchestrator.answer_hal_second_opinion_question(
+        question="Give me a deeper second opinion on collections risk.",
+        actor="hal_operator",
+    )
+
+    assert payload["answer"].startswith("Second opinion unavailable.")
+    assert payload["local_ai_unavailable"] is not None

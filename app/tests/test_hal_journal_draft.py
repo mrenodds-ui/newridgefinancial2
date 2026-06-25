@@ -10,6 +10,7 @@ from app.hal.accounting_validation import build_journal_validation
 import app.hal.orchestrator as orchestrator_module
 from app.hal.posting_queue import DRAFT_STATUS_DRAFT_ONLY, DRAFT_STATUS_ENQUEUED, ENQUEUE_MODE_AUTO_VALIDATED_AI, POSTING_QUEUE_STATUS_PENDING_REVIEW
 from app.main import app
+from app.tests.lane_routing_test_helpers import make_require_lane_runtime_mock
 
 
 TEST_AUTH_USERS_JSON = json.dumps(
@@ -157,7 +158,10 @@ def test_journal_draft_infers_payroll_accrual_from_description():
 def test_journal_draft_can_use_local_ai_workflow_when_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("HAL_ALLOWED_BASE_PATH", str(tmp_path))
     monkeypatch.setenv("HAL_AI_WORKSPACE_PATH", str(tmp_path / "AI_Workspace"))
-    monkeypatch.setattr("app.hal.orchestrator.require_lane_runtime", lambda alias, *, purpose: "http://127.0.0.1:11435")
+    monkeypatch.setattr(
+        "app.hal.orchestrator.require_lane_runtime",
+        make_require_lane_runtime_mock(expected_alias="coder"),
+    )
     monkeypatch.setattr(
         "app.hal.orchestrator.load_json_file",
         lambda path: {"profiles": {"coder": {"model": "qwen", "seed": 23}, "chat": {"model": "mistral", "seed": 17}}},
@@ -237,7 +241,10 @@ def test_journal_draft_falls_back_when_local_ai_workflow_is_unavailable(monkeypa
 
 
 def test_journal_draft_can_auto_enqueue_validated_ai_draft(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("app.hal.orchestrator.require_lane_runtime", lambda alias, *, purpose: "http://127.0.0.1:11435")
+    monkeypatch.setattr(
+        "app.hal.orchestrator.require_lane_runtime",
+        make_require_lane_runtime_mock(expected_alias="coder"),
+    )
     monkeypatch.setattr(
         "app.hal.orchestrator.load_json_file",
         lambda path: {"profiles": {"coder": {"model": "qwen", "seed": 23}, "chat": {"model": "mistral", "seed": 17}}},
@@ -287,7 +294,10 @@ def test_journal_draft_can_auto_enqueue_validated_ai_draft(monkeypatch: pytest.M
 
 
 def test_journal_draft_returns_draft_when_auto_enqueue_fails(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("app.hal.orchestrator.require_lane_runtime", lambda alias, *, purpose: "http://127.0.0.1:11435")
+    monkeypatch.setattr(
+        "app.hal.orchestrator.require_lane_runtime",
+        make_require_lane_runtime_mock(expected_alias="coder"),
+    )
     monkeypatch.setattr(
         "app.hal.orchestrator.load_json_file",
         lambda path: {"profiles": {"coder": {"model": "qwen", "seed": 23}, "chat": {"model": "mistral", "seed": 17}}},

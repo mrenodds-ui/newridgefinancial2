@@ -8,8 +8,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import clear_user_registry_cache
-from app.ai_local_config import get_backend_base_url, get_backend_model_name, get_frontend_model_name
+from app.ai_local_config import get_backend_base_url, get_backend_model_name, get_frontend_base_url, get_frontend_model_name
 import app.hal.orchestrator as hal_orchestrator
+from app.tests.lane_routing_test_helpers import (
+    BACKEND_LANE_URL,
+    FRONTEND_LANE_URL,
+    make_ollama_runtime_status_mock,
+)
 
 
 TEST_AUTH_USERS_JSON = json.dumps(
@@ -57,15 +62,10 @@ def _runtime_payload(*, base_url: str, reachable: bool, models: list[str]) -> di
 
 
 def test_hal_status_operating_picture_reports_frontend_and_backend_lanes(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_runtime_status(base_url: str, timeout_seconds: int = 5) -> dict[str, object]:
-        if base_url.endswith(":11435"):
-            return _runtime_payload(base_url=base_url, reachable=False, models=[])
-        return _runtime_payload(
-            base_url=base_url,
-            reachable=True,
-            models=["mistral-small3.1:24b", "qwen3:30b"],
-        )
-
+    fake_runtime_status, calls = make_ollama_runtime_status_mock(
+        frontend_reachable=True,
+        backend_reachable=False,
+    )
     monkeypatch.setattr(hal_orchestrator, "get_ollama_runtime_status", fake_runtime_status)
 
     response = client.get("/api/hal9000/status", auth=operator_auth())
@@ -79,16 +79,17 @@ def test_hal_status_operating_picture_reports_frontend_and_backend_lanes(monkeyp
     assert "Backend lane is unavailable" in operating_picture["summary"]
     assert operating_picture["model_routing"]["code_help"]["base_url"] == get_backend_base_url()
     assert operating_picture["model_routing"]["code_help"]["model"] == get_backend_model_name()
+    assert FRONTEND_LANE_URL in calls[0] or get_frontend_base_url() in calls
+    assert any(":11434" in url for url in calls)
+    assert any(":11435" in url for url in calls)
+    assert all(":11436" not in url for url in calls)
 
 
 def test_hal_status_reports_backend_lane_up_when_reachable(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_runtime_status(base_url: str, timeout_seconds: int = 5) -> dict[str, object]:
-        return _runtime_payload(
-            base_url=base_url,
-            reachable=True,
-            models=["mistral-small3.1:24b"] if base_url.endswith(":11434") else ["qwen3:30b"],
-        )
-
+    fake_runtime_status, calls = make_ollama_runtime_status_mock(
+        frontend_reachable=True,
+        backend_reachable=True,
+    )
     monkeypatch.setattr(hal_orchestrator, "get_ollama_runtime_status", fake_runtime_status)
 
     response = client.get("/api/hal9000/status", auth=operator_auth())
@@ -98,3 +99,5 @@ def test_hal_status_reports_backend_lane_up_when_reachable(monkeypatch: pytest.M
     assert operating_picture["frontend_runtime"]["api_reachable"] is True
     assert operating_picture["backend_runtime"]["api_reachable"] is True
     assert "Backend lane is reachable" in operating_picture["summary"]
+    assert len({url for url in calls if ":11434" in url or get_frontend_base_url() in url}) >= 1
+    assert len({url for url in calls if ":11435" in url or get_backend_base_url() in url}) >= 1

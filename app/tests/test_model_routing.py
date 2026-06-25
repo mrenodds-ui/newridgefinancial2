@@ -3,6 +3,11 @@ from __future__ import annotations
 import pytest
 
 from app import ai_local_config as config
+from app.tests.lane_routing_test_helpers import (
+    BACKEND_LANE_URL,
+    EVALUATOR_LANE_URL,
+    FRONTEND_LANE_URL,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -106,3 +111,33 @@ def test_normal_aliases_never_resolve_to_evaluator_lane(monkeypatch: pytest.Monk
             resolved = config.resolve_profile_base_url(alias)
         assert resolved != evaluator_url
         assert ":11436" not in resolved
+
+
+def test_chat_profile_never_resolves_to_backend_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", FRONTEND_LANE_URL)
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", BACKEND_LANE_URL)
+
+    chat_url = config.resolve_profile_base_url("chat")
+    assert ":11434" in chat_url
+    assert ":11435" not in chat_url
+    assert chat_url != BACKEND_LANE_URL
+
+
+def test_backend_profiles_never_resolve_to_frontend_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", FRONTEND_LANE_URL)
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", BACKEND_LANE_URL)
+
+    for alias in config.BACKEND_PROFILE_ALIASES:
+        resolved = config.resolve_profile_base_url(alias)
+        assert ":11435" in resolved
+        assert ":11434" not in resolved
+        assert resolved != FRONTEND_LANE_URL
+
+
+def test_normal_profiles_never_resolve_to_evaluator_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OLLAMA_EVALUATOR_BASE_URL", EVALUATOR_LANE_URL)
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", FRONTEND_LANE_URL)
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", BACKEND_LANE_URL)
+
+    for alias in config.FRONTEND_PROFILE_ALIASES | config.BACKEND_PROFILE_ALIASES:
+        assert config.resolve_profile_base_url(alias) != EVALUATOR_LANE_URL

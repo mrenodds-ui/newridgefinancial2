@@ -8,6 +8,9 @@ from app import ai_local_config as config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
+ISOLATED_SECTION_SCRIPT = SCRIPTS_DIR / "run_235b_isolated_section.ps1"
+START_EVALUATOR_SCRIPT = SCRIPTS_DIR / "start_235b_evaluator_lane.ps1"
+STOP_EVALUATOR_SCRIPT = SCRIPTS_DIR / "stop_235b_evaluator_lane.ps1"
 STALE_DEFAULT_TAGS = ("frontend-24b-q4", "backend-30b-q4")
 NORMAL_RUN_SCRIPTS = (
     "run_frontend_model.ps1",
@@ -84,3 +87,47 @@ def test_env_example_documents_actual_default_tags() -> None:
     assert "AI_BACKEND_MODEL=qwen3:30b" in env_example
     assert "# AI_FRONTEND_MODEL=frontend-24b-q4" in env_example
     assert "# AI_BACKEND_MODEL=backend-30b-q4" in env_example
+
+
+def test_normal_run_scripts_do_not_use_evaluator_port() -> None:
+    for script_name in NORMAL_RUN_SCRIPTS:
+        script_text = (SCRIPTS_DIR / script_name).read_text(encoding="utf-8")
+        assert ":11436" not in script_text
+
+
+def test_isolated_section_script_runs_one_section_only() -> None:
+    script_text = ISOLATED_SECTION_SCRIPT.read_text(encoding="utf-8")
+    assert "ValidateSet('1', '2', '3', '4', '5')" in script_text
+    assert "run_235b_eval_section.py" in script_text
+    assert "Does not run multiple sections" in script_text
+
+
+def test_isolated_section_script_stops_normal_lanes_before_evaluator() -> None:
+    script_text = ISOLATED_SECTION_SCRIPT.read_text(encoding="utf-8")
+    stop_index = script_text.index("stop_normal_model_lanes.ps1")
+    start_eval_index = script_text.index("start_235b_evaluator_lane.ps1")
+    verify_normal_down_index = script_text.index("Verify :11434 and :11435 are down")
+    assert stop_index < verify_normal_down_index < start_eval_index
+    assert "Normal lanes still respond" in script_text
+
+
+def test_restart_normal_lanes_is_opt_in() -> None:
+    script_text = ISOLATED_SECTION_SCRIPT.read_text(encoding="utf-8")
+    assert "[switch]$RestartNormalLanes" in script_text
+    assert "if ($RestartNormalLanes)" in script_text
+    assert "Skipping normal lane restart" in script_text
+
+
+def test_force_stop_ollama_app_is_opt_in() -> None:
+    for script_path in (ISOLATED_SECTION_SCRIPT, STOP_EVALUATOR_SCRIPT):
+        script_text = script_path.read_text(encoding="utf-8")
+        assert "[switch]$ForceStopOllamaApp" in script_text
+        assert "if ($ForceStopOllamaApp)" in script_text
+
+
+def test_start_evaluator_requires_normal_lanes_down() -> None:
+    script_text = START_EVALUATOR_SCRIPT.read_text(encoding="utf-8")
+    assert "127.0.0.1:11434" in script_text
+    assert "127.0.0.1:11435" in script_text
+    assert "Normal lanes must be stopped before starting the 235B evaluator" in script_text
+    assert "stop_normal_model_lanes.ps1" in script_text

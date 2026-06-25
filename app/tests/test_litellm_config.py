@@ -6,6 +6,7 @@ import pytest
 import yaml
 
 from app import ai_local_config as config
+from app.tests.lane_routing_test_helpers import BACKEND_LANE_URL, FRONTEND_LANE_URL
 
 
 LITELLM_CONFIG_PATH = Path(__file__).resolve().parents[2] / "scripts" / "litellm_ollama_router.yaml"
@@ -76,3 +77,15 @@ def test_normal_litellm_aliases_do_not_use_evaluator_lane() -> None:
         resolved = config.resolve_litellm_api_base_url(alias)
         assert ":11436" not in resolved
         assert resolved != config.get_evaluator_base_url()
+
+
+def test_litellm_frontend_and_backend_aliases_resolve_to_distinct_urls(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", FRONTEND_LANE_URL)
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", BACKEND_LANE_URL)
+
+    frontend_urls = {config.resolve_litellm_api_base_url(alias) for alias in config.LITELLM_FRONTEND_ALIASES}
+    backend_urls = {config.resolve_litellm_api_base_url(alias) for alias in config.LITELLM_BACKEND_ALIASES}
+
+    assert frontend_urls == {FRONTEND_LANE_URL}
+    assert backend_urls == {BACKEND_LANE_URL}
+    assert frontend_urls.isdisjoint(backend_urls)

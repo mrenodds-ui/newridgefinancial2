@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from app import ai_local_config as config
+from app.tests.lane_routing_test_helpers import BACKEND_LANE_URL, FRONTEND_LANE_URL
 
 
 @pytest.fixture(autouse=True)
@@ -170,3 +171,21 @@ def test_resolve_lane_profile_picks_up_env_changes_after_import(monkeypatch: pyt
 
     assert frontend_profile["model"] == "dynamic-frontend-model"
     assert backend_profile["model"] == "dynamic-backend-model"
+
+
+def test_require_lane_runtime_uses_lane_specific_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", FRONTEND_LANE_URL)
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", BACKEND_LANE_URL)
+
+    seen: list[tuple[str, str]] = []
+
+    def fake_check(alias: str, *, timeout_seconds: int = 5) -> tuple[bool, str | None]:
+        base_url = config.get_base_url_for_profile_alias(alias)
+        seen.append((alias, base_url))
+        return True, None
+
+    monkeypatch.setattr(config, "check_lane_runtime_available", fake_check)
+
+    assert config.require_lane_runtime("chat", purpose="frontend test") == FRONTEND_LANE_URL
+    assert config.require_lane_runtime("coder", purpose="backend test") == BACKEND_LANE_URL
+    assert seen == [("chat", FRONTEND_LANE_URL), ("coder", BACKEND_LANE_URL)]

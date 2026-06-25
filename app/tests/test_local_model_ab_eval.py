@@ -7,6 +7,7 @@ import pytest
 
 from app import ai_local_config as config
 from app.evaluation.ab_compare import run_ab_comparison
+from app.tests.lane_routing_test_helpers import BACKEND_LANE_URL, FRONTEND_LANE_URL
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AB_EVAL_SCRIPT = REPO_ROOT / "scripts" / "run_local_model_ab_eval.py"
@@ -106,7 +107,21 @@ def test_ab_eval_lane_targets_apply_env_model_overrides(monkeypatch: pytest.Monk
     assert lane_b["profile"]["model"] == "backend-env-30b"
 
 
-def test_run_ab_comparison_uses_resolve_lane_profile_models(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ab_eval_default_lane_urls_are_not_collapsed_without_cli_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_ab_eval_module()
+
+    profile_a_url, profile_b_url = module._resolve_lane_base_urls("chat", "chat_second_opinion", "")
+
+    assert profile_a_url == config.DEFAULT_FRONTEND_BASE_URL
+    assert profile_b_url == config.DEFAULT_BACKEND_BASE_URL
+    assert profile_a_url != profile_b_url
+    assert ":11434" in profile_a_url
+    assert ":11435" in profile_b_url
+    assert ":11436" not in profile_a_url
+    assert ":11436" not in profile_b_url
+
+
+def test_run_ab_comparison_uses_distinct_lane_urls_and_models(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_FRONTEND_MODEL", "frontend-env-24b")
     monkeypatch.setenv("AI_BACKEND_MODEL", "backend-env-30b")
     captured: list[tuple[str, str]] = []
@@ -134,14 +149,15 @@ def test_run_ab_comparison_uses_resolve_lane_profile_models(monkeypatch: pytest.
         timeout_seconds=5,
         profile_a_alias="chat",
         profile_b_alias="chat_second_opinion",
-        profile_a_base_url="http://frontend:11434",
-        profile_b_base_url="http://backend:11435",
+        profile_a_base_url=FRONTEND_LANE_URL,
+        profile_b_base_url=BACKEND_LANE_URL,
     )
 
     assert captured == [
-        ("http://frontend:11434", "frontend-env-24b"),
-        ("http://backend:11435", "backend-env-30b"),
+        (FRONTEND_LANE_URL, "frontend-env-24b"),
+        (BACKEND_LANE_URL, "backend-env-30b"),
     ]
+    assert captured[0][0] != captured[1][0]
 
 
 def test_ab_eval_defaults_do_not_use_evaluator_lane() -> None:
