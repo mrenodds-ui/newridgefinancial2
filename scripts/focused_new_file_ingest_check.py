@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
+import tempfile
 from datetime import date
 from pathlib import Path
 
@@ -36,8 +38,11 @@ def _as_float(value: object) -> float:
 
 
 def main() -> int:
-    source_dir = Path("app/data/test_ingest_source/softdent").resolve()
+    tmp_root = Path(tempfile.mkdtemp(prefix="ci_softdent_ingest_"))
+    source_dir = tmp_root / "source"
+    import_dir = tmp_root / "import"
     source_dir.mkdir(parents=True, exist_ok=True)
+    import_dir.mkdir(parents=True, exist_ok=True)
 
     file_name = "controlled_softdent_ingest_check.csv"
     source_file = source_dir / file_name
@@ -49,14 +54,18 @@ def main() -> int:
     with TestClient(app):
         settings = app.state.settings
         original_source_dir = settings.softdent_source_dir
+        original_import_dir = settings.softdent_import_dir
         original_auto_pull = settings.softdent_auto_pull_enabled
+        original_import_env = os.environ.get("SOFTDENT_IMPORT_DIR")
 
         settings.softdent_source_dir = source_dir
+        settings.softdent_import_dir = import_dir
         settings.softdent_auto_pull_enabled = True
+        os.environ["SOFTDENT_IMPORT_DIR"] = str(import_dir)
 
         target_files = [
-            settings.softdent_import_dir / "softdent_dashboard_data.csv",
-            settings.softdent_import_dir / "softdent_dashboard_data.json",
+            import_dir / "softdent_dashboard_data.csv",
+            import_dir / "softdent_dashboard_data.json",
         ]
         source_file.unlink(missing_ok=True)
         for target_file in target_files:
@@ -124,8 +133,14 @@ def main() -> int:
             for target_file in target_files:
                 target_file.unlink(missing_ok=True)
             settings.softdent_source_dir = original_source_dir
+            settings.softdent_import_dir = original_import_dir
             settings.softdent_auto_pull_enabled = original_auto_pull
+            if original_import_env is None:
+                os.environ.pop("SOFTDENT_IMPORT_DIR", None)
+            else:
+                os.environ["SOFTDENT_IMPORT_DIR"] = original_import_env
             recompute_cache(app)
+            shutil.rmtree(tmp_root, ignore_errors=True)
 
 
 if __name__ == "__main__":

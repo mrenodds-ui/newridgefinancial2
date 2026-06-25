@@ -43,6 +43,25 @@ def main() -> int:
         "/api/quickbooks/odbc": {422},
         "/api/hal9000/chart-files": {422},
         "/api/api/hal9000/chart-files": {422},
+        "/softdent": {501},
+        "/api/softdent": {501},
+        "/quickbooks": {501},
+        "/api/quickbooks": {501},
+        "/accounts-receivable": {501},
+        "/api/accounts-receivable": {501},
+        "/reconciliation": {501},
+        "/api/reconciliation": {501},
+        "/trends": {501},
+        "/api/trends": {501},
+        "/ebitda": {501},
+        "/api/ebitda": {501},
+        "/claims": {501},
+        "/api/claims": {501},
+        "/admin": {501},
+        "/api/admin": {501},
+        "/reports": {501},
+        "/api/reports": {501},
+        "/api/reports/practice-central-delta": {501},
     }
 
     with _service_test_client(required_role="admin") as client:
@@ -90,7 +109,7 @@ def main() -> int:
                     "files": {
                         "file": (
                             "smoke_softdent.csv",
-                            b"Month,Metric,Amount\\n2026-01,Production,100\\n",
+                            b"Month,Metric,Amount\n2026-01,Production,100\n2026-01,Collections,80\n",
                             "text/csv",
                         )
                     }
@@ -102,7 +121,7 @@ def main() -> int:
                     "files": {
                         "file": (
                             "smoke_quickbooks.csv",
-                            b"Date,Account,Category,Amount\\n2026-01-01,Income,Income,100\\n",
+                            b"account,amount\nRevenue,100\n",
                             "text/csv",
                         )
                     }

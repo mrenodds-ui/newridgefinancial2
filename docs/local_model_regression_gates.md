@@ -63,6 +63,8 @@ Prompt packs may also include per-case `content_assertions` with `required_conta
 
 ## CI Gate Usage
 
+GitHub Actions runs `python scripts/run_ci_gates.py` in `.github/workflows/test.yml` (`ci-gates` job) on every push/PR to `main`.
+
 To include the local LLM gate in the existing CI runner:
 
 ```powershell
