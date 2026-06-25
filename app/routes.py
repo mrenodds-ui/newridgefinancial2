@@ -24,6 +24,13 @@ from .data_pipeline import get_pull_status_payload, import_uploaded_file
 from .services import fetch_quickbooks_data
 from .hal import advance_hal_autonomy_run, answer_accounting_policy_question, answer_hal_question, answer_hal_second_opinion_question, answer_insurance_narrative_request, answer_patient_dossier_request, approve_hal_chart_plan, create_hal_autonomy_run, create_hal_chart_plan, draft_accounting_journal_entry, get_accounting_posting_queue_summary, get_hal_access_policy, get_hal_autonomy_profile, get_hal_autonomy_run_status, get_hal_index_status, get_hal_phases, get_hal_shell_commands, list_accounting_posting_queue, list_hal_audit_events, list_hal_autonomy_runs, list_hal_chart_plans, list_recent_accounting_posting_queue_activity, queue_accounting_posting_draft, refresh_local_hal_index, review_accounting_posting_queue_entry, run_fast_review_check
 from .hal import answer_document_rag_question, ingest_document_rag_upload, list_document_rag_documents
+from .insurance_narratives.export import NarrativeExportWorkflowError
+from .insurance_narratives.review import NarrativeReviewWorkflowError
+from .insurance_narratives.schemas import InsuranceNarrativeWorkflowResult
+from .insurance_narratives.workflow import (
+    approve_and_export_insurance_narrative_workflow,
+    create_insurance_narrative_draft_workflow,
+)
 from .hal.orchestrator import get_hal_operating_picture
 from .hal.financial_tools import get_financial_source_status
 from .hal.widget_builder import _ar_available, enforce_receivables_widget_ar_policy
@@ -386,6 +393,8 @@ from .models import (
     HalInsuranceNarrativeResponse,
     HalFastReviewCheckRequest,
     HalFastReviewCheckResponse,
+    InsuranceNarrativeApproveExportRequest,
+    InsuranceNarrativeDraftWorkflowRequest,
     HalPatientDossierRequest,
     HalPatientDossierResponse,
     JournalDraftRequest,
@@ -1648,6 +1657,50 @@ async def api_hal9000_fast_review_check(
         packet_id=payload.packet_id,
         actor=user.username,
     )
+
+
+@router.post(
+    "/api/insurance-narratives/draft",
+    response_model=InsuranceNarrativeWorkflowResult,
+    include_in_schema=False,
+)
+async def api_insurance_narrative_draft_workflow(
+    payload: InsuranceNarrativeDraftWorkflowRequest,
+    user: AuthenticatedUser = Depends(require_roles("hal:operator")),
+):
+    return create_insurance_narrative_draft_workflow(
+        patient_ref=payload.patient_ref,
+        claim_id=payload.claim_id,
+        procedure_ids=payload.procedure_ids,
+        date_range=payload.date_range,
+        narrative_type=payload.narrative_type,
+        actor=user.username,
+        run_checker=payload.run_checker,
+    )
+
+
+@router.post(
+    "/api/insurance-narratives/approve-export",
+    response_model=InsuranceNarrativeWorkflowResult,
+    include_in_schema=False,
+)
+async def api_insurance_narrative_approve_export_workflow(
+    payload: InsuranceNarrativeApproveExportRequest,
+    user: AuthenticatedUser = Depends(require_roles("hal:operator")),
+):
+    try:
+        return approve_and_export_insurance_narrative_workflow(
+            packet=payload.packet,
+            draft=payload.draft,
+            reviewer=payload.reviewer,
+            notes=payload.notes,
+            approval_attestation=payload.approval_attestation,
+            actor=user.username,
+            export_format=payload.export_format,
+            checker_summary=payload.checker_summary,
+        )
+    except (NarrativeReviewWorkflowError, NarrativeExportWorkflowError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/api/hal9000/patient-dossier", response_model=HalPatientDossierResponse)

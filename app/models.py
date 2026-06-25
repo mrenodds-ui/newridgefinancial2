@@ -4,6 +4,11 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.hal.posting_queue import JournalDraftStatus, PostingQueueEnqueueMode, PostingQueueReviewAction, PostingQueueStatus
+from app.insurance_narratives.schemas import (
+    InsuranceNarrativeCasePacket,
+    InsuranceNarrativeDraft,
+    NarrativeCheckerSummary,
+)
 
 
 class KPIResponse(BaseModel):
@@ -169,6 +174,25 @@ class HalFastReviewCheckResponse(BaseModel):
     audit_id: str
     guardrails: list[str] = Field(default_factory=list)
     packet_id: str | None = None
+
+
+class InsuranceNarrativeDraftWorkflowRequest(BaseModel):
+    patient_ref: str = Field(min_length=1, max_length=64)
+    claim_id: str | None = Field(default=None, max_length=64)
+    procedure_ids: list[str] | None = None
+    date_range: tuple[str, str] | None = None
+    narrative_type: str = Field(min_length=1, max_length=128)
+    run_checker: bool = False
+
+
+class InsuranceNarrativeApproveExportRequest(BaseModel):
+    packet: InsuranceNarrativeCasePacket
+    draft: InsuranceNarrativeDraft
+    reviewer: str = Field(min_length=1, max_length=256)
+    notes: str = Field(min_length=1, max_length=4000)
+    approval_attestation: bool
+    export_format: Literal["markdown", "plain_text"] = "markdown"
+    checker_summary: NarrativeCheckerSummary | dict | None = None
 
 
 class HalPatientDossierRequest(BaseModel):

@@ -266,6 +266,40 @@ Require role **`hal:operator`** (HTTP Basic or valid session):
 - Requires `admin`
 - Auth: Required
 
+### POST /api/insurance-narratives/draft (internal)
+
+- Operator-only local workflow endpoint for bounded packet + template draft creation
+- Requires `hal:operator`
+- Hidden from public OpenAPI (`include_in_schema=False`)
+- `run_checker` defaults to **`false`** — no live model unless explicitly requested
+- When `run_checker=true`, invokes the opt-in `fast_review` checker only (no cloud fallback)
+- Does not approve, export, or submit narratives
+- Returns `InsuranceNarrativeWorkflowResult`
+
+Request body (`InsuranceNarrativeDraftWorkflowRequest`):
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `patient_ref` | string | Bounded patient reference (fixture/export scope) |
+| `claim_id` | string \| null | Optional claim scope |
+| `procedure_ids` | string[] \| null | Optional procedure scope |
+| `date_range` | `[start, end]` \| null | Optional service window |
+| `narrative_type` | string | Narrative workflow type |
+| `run_checker` | boolean | Default `false` |
+
+### POST /api/insurance-narratives/approve-export (internal)
+
+- Operator-only workflow for human approval + local export formatting
+- Requires `hal:operator`
+- Hidden from public OpenAPI (`include_in_schema=False`)
+- Enforces review approval rules (`approval_attestation=true` required)
+- `export.submission_status` is always `not_submitted` — no payer email/fax/upload
+- Returns `InsuranceNarrativeWorkflowResult` with `status=export_created`
+
+Request body includes full `packet` and `draft` objects plus `reviewer`, `notes`,
+`approval_attestation`, optional `export_format` (`markdown` \| `plain_text`), and optional
+advisory `checker_summary`.
+
 ---
 
 For more details, see README.md and the OpenAPI docs at `/docs` when running the server.

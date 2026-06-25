@@ -71,8 +71,18 @@ Python module: `app.insurance_narratives`
 ## Local workflow facade
 
 `app.insurance_narratives.workflow` composes the packet → draft → optional checker → review →
-approval → export pipeline as **pure local functions**. This is the intended future UI
-integration point. No routes, no automatic submission, and no unrestricted database access.
+approval → export pipeline as **pure local functions**. Operator-only HTTP endpoints wrap this
+facade for future UI integration. No automatic submission and no unrestricted database access.
+
+### Operator-only API endpoints (internal)
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/insurance-narratives/draft` | Packet + draft workflow (`run_checker` defaults `false`) |
+| `POST /api/insurance-narratives/approve-export` | Approve + local export (`submission_status=not_submitted`) |
+
+Both require `hal:operator`, are hidden from public OpenAPI (`include_in_schema=False`), and do
+not submit to payers. See `docs/API.md` for request/response shapes.
 
 ```python
 from app.insurance_narratives import (
@@ -339,3 +349,6 @@ citation/disclosure inclusion, format variants, and no filesystem/network side e
 
 `app/tests/test_insurance_narrative_workflow.py` covers the orchestrated facade, checker
 opt-in behavior, approval/export composition, lineage, and no submission side effects.
+
+`app/tests/test_insurance_narrative_routes.py` covers operator-only HTTP endpoints, auth scope,
+checker defaults, advisory unavailable handling, and export safety rules.
