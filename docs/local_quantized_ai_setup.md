@@ -148,6 +148,32 @@ ollama serve
 
 Resolve the lane in Python/tests via `app.ai_local_config.resolve_profile_base_url("fast_review")`.
 
+### Bakeoff harness (`scripts/run_fast_review_bakeoff.py`)
+
+Compare the experimental reviewer against the current backend default on **de-identified** insurance
+narrative review packets. This is manual and local-only; it does not run in CI and does not change
+any route or user-facing behavior.
+
+```bash
+python scripts/run_fast_review_bakeoff.py \
+  --packets evals/insurance_narrative_packets \
+  --profiles chat_second_opinion fast_review \
+  --out fast_review_bakeoff_report.json
+```
+
+- Packets live in `evals/insurance_narrative_packets/` and contain **no PHI** (enforced by
+  `app/tests/test_fast_review_bakeoff.py`).
+- Each profile resolves to its lane via `app.ai_local_config`; the harness never uses the `:11436`
+  evaluator lane and never falls back to cloud models.
+- A down lane is recorded as `lane_unavailable`, not a pass/fail success.
+- Per packet/profile it records: latency, output length, JSON/structured parse, missing-data
+  detection, citation/source compliance, invented-fact warning count, model, and base URL.
+- The default report `fast_review_bakeoff_report.json` is gitignored.
+- Use `--dry-run` to resolve lanes and check health without calling models.
+
+Benchmark `fast_review` against `qwen3:30b` here before considering it for any real workflow. Do
+**not** run the bakeoff at the same time as the isolated 235B evaluator.
+
 ## Run model servers
 
 Both lanes must be running for backend tasks (journal AI parser, coder profile, LiteLLM backend aliases). HAL `/api/hal9000/status` and `/control/runtime` report frontend and backend lane health separately.

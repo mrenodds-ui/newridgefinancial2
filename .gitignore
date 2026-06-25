@@ -80,6 +80,10 @@ ci_gate_report.json
 ci_gate_report.quick.json
 ci_gate_report.rebuild.json
 
+# Experimental fast_review lane bakeoff reports (local-only, may include model output)
+fast_review_bakeoff_report.json
+fast_review_bakeoff_report*.json
+
 # Databases and local runtime stores
 *.sqlite
 *.sqlite3
