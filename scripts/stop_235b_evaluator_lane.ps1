@@ -54,9 +54,9 @@ function Get-ListenerPidsOnPort([int]$ListenPort) {
 
 function Stop-ListenerOnPort([int]$ListenPort) {
     foreach ($listenerPid in Get-ListenerPidsOnPort -ListenPort $ListenPort) {
-        if ($PSCmdlet.ShouldProcess("PID $listenerPid on :$ListenPort", 'Stop-Process')) {
+        if ($PSCmdlet.ShouldProcess("PID $listenerPid on :$ListenPort", 'taskkill /F')) {
             Write-Host "Stopping evaluator serve PID $listenerPid on :$ListenPort"
-            Stop-Process -Id $listenerPid -Force -ErrorAction SilentlyContinue
+            & taskkill.exe /F /PID $listenerPid 2>$null | Out-Null
         }
     }
 }
@@ -69,6 +69,14 @@ $evalHost = "${HostName}:$Port"
 $env:OLLAMA_HOST = $evalHost
 
 Write-Host "Stopping evaluator lane on http://$evalHost..."
+if ($ForceStopOllamaApp) {
+    $tray = Get-Process -Name 'ollama app' -ErrorAction SilentlyContinue
+    if ($tray -and $PSCmdlet.ShouldProcess('ollama app tray', 'Stop-Process')) {
+        Write-Host 'ForceStopOllamaApp: stopping Ollama tray app before evaluator teardown.'
+        $tray | Stop-Process -Force -ErrorAction SilentlyContinue
+        if (-not $WhatIfPreference) { Start-Sleep -Seconds 1 }
+    }
+}
 for ($pass = 1; $pass -le 3; $pass++) {
     Stop-ListenerOnPort -ListenPort $Port
     if (-not (Test-PortListening -ListenPort $Port)) {
