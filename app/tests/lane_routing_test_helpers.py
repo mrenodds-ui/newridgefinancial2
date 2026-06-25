@@ -7,15 +7,19 @@ from app import ai_local_config as config
 FRONTEND_LANE_URL = "http://127.0.0.1:11434"
 BACKEND_LANE_URL = "http://127.0.0.1:11435"
 EVALUATOR_LANE_URL = "http://127.0.0.1:11436"
+FAST_REVIEW_LANE_URL = "http://127.0.0.1:11437"
 
 FRONTEND_LANE_MODEL = "mistral-small3.1:24b"
 BACKEND_LANE_MODEL = "qwen3:30b"
 EVALUATOR_LANE_MODEL = "qwen3:235b"
+FAST_REVIEW_LANE_MODEL = "qwen3-coder:30b"
 
 
 def lane_from_url(url: str) -> str:
     if ":11436" in url:
         return "evaluator"
+    if ":11437" in url:
+        return "fast_review"
     if ":11435" in url:
         return "backend"
     if ":11434" in url:
@@ -54,6 +58,18 @@ def tags_payload_for_lane(lane: str) -> dict[str, object]:
                     "family": "qwen3moe",
                     "parameter_size": "30.5B",
                     "context_length": 262144,
+                },
+            },
+        ]
+    elif lane == "fast_review":
+        models = [
+            {
+                "name": FAST_REVIEW_LANE_MODEL,
+                "capabilities": ["completion", "tools"],
+                "details": {
+                    "family": "qwen3",
+                    "parameter_size": "30.0B",
+                    "context_length": 32768,
                 },
             },
         ]
@@ -106,9 +122,13 @@ def make_require_lane_runtime_mock(*, expected_alias: str) -> Callable[..., str]
         if alias in config.BACKEND_PROFILE_ALIASES:
             assert ":11435" in resolved, f"Backend alias {alias} must resolve to :11435, got {resolved}"
             assert ":11434" not in resolved, f"Backend alias {alias} must not resolve to frontend :11434"
+            assert ":11437" not in resolved, f"Backend alias {alias} must not resolve to fast review :11437"
         elif alias in config.FRONTEND_PROFILE_ALIASES:
             assert ":11434" in resolved, f"Frontend alias {alias} must resolve to :11434, got {resolved}"
             assert ":11435" not in resolved, f"Frontend alias {alias} must not resolve to backend :11435"
+            assert ":11437" not in resolved, f"Frontend alias {alias} must not resolve to fast review :11437"
+        elif config.is_fast_review_profile_alias(alias):
+            assert ":11437" in resolved, f"Fast review alias {alias} must resolve to :11437, got {resolved}"
         assert ":11436" not in resolved, f"Normal profile {alias} must not resolve to evaluator :11436"
         return resolved
 

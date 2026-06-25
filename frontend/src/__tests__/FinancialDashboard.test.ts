@@ -288,6 +288,8 @@ describe("buildDashboardSummaryFromFinancialSummary", () => {
         balance_60: 2000,
         balance_90: 1000,
         credit_balance: 0,
+        source: "softdent",
+        available: true,
       },
       monthlyKpis: [
         { year_month: "2026-05", gross_production: 1000, collections: 800, collection_rate: 80 },

@@ -1,0 +1,5 @@
+patient_ref,claim_id,payer_name,status,status_date,denial_code,denial_reason,remark_code,requested_items,source_report_date
+CHART-EXPORT,CLAIM-EXPORT-1,Delta Dental,Denied,2026-06-15,DENY-001,radiograph missing,MA01,radiograph,2026-06-20
+CHART-EXPORT,CLAIM-EXPORT-1,Delta Dental,Denied,2026-05-01,DENY-OLD,old denial note,,,2026-06-20
+CHART-OTHER,CLAIM-OTHER-9,MetLife,Paid,2026-06-01,,,,,2026-06-20
+CHART-EXPORT,CLAIM-OTHER-9,MetLife,Denied,2026-06-12,DENY-WRONG,wrong claim linkage,,,2026-06-20

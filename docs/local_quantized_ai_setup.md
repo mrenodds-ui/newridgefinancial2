@@ -34,6 +34,11 @@ Optional LiteLLM proxy (:4000)
   -> hal-chat-balanced / hal-vision -> OLLAMA_FRONTEND_BASE_URL (:11434) -> mistral-small3.1:24b
   -> hal-coding / hal-second-opinion / hal-analysis -> OLLAMA_BACKEND_BASE_URL (:11435) -> qwen3:30b
   -> qwen3:235b evaluator (:11436) is isolated workflow only; no normal LiteLLM alias uses it
+
+Optional experimental fast structured reviewer (opt-in profile `fast_review` only)
+  -> AI_FAST_REVIEW_BASE_URL (:11437) -> qwen3-coder:30b (Ollama default)
+  -> not wired into user-facing narrative generation or second-opinion defaults yet
+  -> explicit checker: POST /api/hal9000/fast-review-check (hal:operator, not in OpenAPI schema)
 ```
 
 Configuration is centralized in `app/ai_local_config.py` and `evals/local_model_profiles.json`.
@@ -80,6 +85,8 @@ All lane settings are env-driven (`app/ai_local_config.py` reads `.env`); do not
 | `AI_FRONTEND_BASE_URL` / `AI_BACKEND_BASE_URL` | OpenAI-compatible or Ollama base URLs (ports default `:11434` / `:11435`) |
 | `OLLAMA_FRONTEND_BASE_URL` / `OLLAMA_BACKEND_BASE_URL` | LiteLLM proxy lane URLs (should match the `AI_*` values above) |
 | `OLLAMA_EVALUATOR_BASE_URL` | Isolated 235B evaluator on `:11436` only; not used by normal HAL or LiteLLM aliases |
+| `AI_FAST_REVIEW_BASE_URL` / `OLLAMA_FAST_REVIEW_BASE_URL` | **Experimental** fast structured reviewer on `:11437` (`fast_review` profile only; opt-in) |
+| `AI_FAST_REVIEW_MODEL` / `OLLAMA_FAST_REVIEW_MODEL` | Fast reviewer model tag. **Ollama default:** `qwen3-coder:30b`. The GGUF name `Qwen3-Coder-30B-A3B-Instruct` is not in the Ollama registry; use your exact local tag or a custom Ollama import / `llama.cpp` GGUF path. |
 | `AI_FRONTEND_MODEL` / `AI_BACKEND_MODEL` | Ollama model tags or LiteLLM aliases (`mistral-small3.1:24b`, `qwen3:30b`) |
 | `OLLAMA_FRONTEND_MODEL` / `OLLAMA_BACKEND_MODEL` | Optional model-tag overrides used by run scripts when `AI_*_MODEL` is unset |
 | `AI_FRONTEND_MODEL_PATH` / `AI_BACKEND_MODEL_PATH` | Local GGUF paths for `llama_cpp` |
@@ -102,6 +109,104 @@ Requires `llama-quantize` on PATH. Source can be HuggingFace directory or an exi
 Fallback quants are attempted automatically if the primary quant fails.
 
 Outputs are written to `.local_models/` by default (gitignored, local-only — do not commit).
+
+## Experimental fast structured reviewer (`:11437`)
+
+**Status: experimental and opt-in.** This lane does **not** replace the production backend default (`qwen3:30b` on `:11435`) or `POST /api/hal9000/second-opinion`.
+
+Use the `fast_review` profile when you want a faster structured checker for:
+
+- insurance narrative fact-checking
+- missing-data detection
+- citation/source compliance checks
+- contradiction checks
+- structured JSON review output
+
+It is **not** the default narrative writer. Benchmark structured review quality against `qwen3:30b` before promoting it.
+
+| Item | Value |
+| --- | --- |
+| Profile alias | `fast_review` |
+| Default port | `127.0.0.1:11437` |
+| Default Ollama model | `qwen3-coder:30b` |
+| GGUF reference name | `Qwen3-Coder-30B-A3B-Instruct` (use when serving a local GGUF; not an Ollama registry tag) |
+| Config | `AI_FAST_REVIEW_*` or `OLLAMA_FAST_REVIEW_*` in `.env` |
+| Opt-in checker API | `POST /api/hal9000/fast-review-check` (`hal:operator`; hidden from OpenAPI schema) |
+
+**Operational rules**
+
+1. Start only when needed; normal HAL chat, coder, and second-opinion routes never call `:11437` unless code explicitly targets `fast_review`.
+2. Do **not** run `:11437` at the same time as the isolated 235B evaluator (`:11436` / `qwen3:235b`).
+3. Override `AI_FAST_REVIEW_MODEL` when your local Ollama tag or custom GGUF import differs.
+
+Start the lane (Ollama example):
+
+```powershell
+$env:AI_PORT = '11437'
+$env:AI_FAST_REVIEW_MODEL = 'qwen3-coder:30b'  # supported Ollama default
+$env:OLLAMA_HOST = '127.0.0.1:11437'
+ollama serve
+# Health check: curl http://127.0.0.1:11437/v1/models
+```
+
+### Opt-in checker workflow (`POST /api/hal9000/fast-review-check`)
+
+Explicit structured review only — does **not** replace `POST /api/hal9000/second-opinion` or narrative generation.
+
+Request body:
+
+```json
+{
+  "source_text": "de-identified packet text...",
+  "review_task": "insurance_narrative_review",
+  "packet_id": "optional-label"
+}
+```
+
+Response `review` object keys when `status` is `ok`:
+
+```json
+{
+  "missing_data": [],
+  "citation_issues": [],
+  "possible_invented_facts": [],
+  "contradictions": [],
+  "recommended_action": "...",
+  "ready_for_human_review": true
+}
+```
+
+If the `fast_review` lane is down, `status` is `lane_unavailable` with an explicit error — the checker does **not** fall back to `chat_second_opinion` or cloud models.
+
+Python entry point: `app.hal.fast_review_checker.run_fast_review_check(...)`.
+
+Resolve the lane in Python/tests via `app.ai_local_config.resolve_profile_base_url("fast_review")`.
+
+### Bakeoff harness (`scripts/run_fast_review_bakeoff.py`)
+
+Compare the experimental reviewer against the current backend default on **de-identified** insurance
+narrative review packets. This is manual and local-only; it does not run in CI and does not change
+any route or user-facing behavior.
+
+```bash
+python scripts/run_fast_review_bakeoff.py \
+  --packets evals/insurance_narrative_packets \
+  --profiles chat_second_opinion fast_review \
+  --out fast_review_bakeoff_report.json
+```
+
+- Packets live in `evals/insurance_narrative_packets/` and contain **no PHI** (enforced by
+  `app/tests/test_fast_review_bakeoff.py`).
+- Each profile resolves to its lane via `app.ai_local_config`; the harness never uses the `:11436`
+  evaluator lane and never falls back to cloud models.
+- A down lane is recorded as `lane_unavailable`, not a pass/fail success.
+- Per packet/profile it records: latency, output length, JSON/structured parse, missing-data
+  detection, citation/source compliance, invented-fact warning count, model, and base URL.
+- The default report `fast_review_bakeoff_report.json` is gitignored.
+- Use `--dry-run` to resolve lanes and check health without calling models.
+
+Benchmark `fast_review` against `qwen3:30b` here before considering it for any real workflow. Do
+**not** run the bakeoff at the same time as the isolated 235B evaluator.
 
 ## Run model servers
 

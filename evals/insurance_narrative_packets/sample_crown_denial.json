@@ -1,0 +1,44 @@
+{
+  "id": "sample_crown_denial",
+  "title": "Denied crown buildup claim narrative review (de-identified)",
+  "deidentified": true,
+  "review_task": "insurance_narrative_factcheck",
+  "source_text": "De-identified claim packet for review.\nPatient label: Patient A (no real name on file in this sample).\nChart label: CHART-A (synthetic).\nClaim: CLAIM-1001, status Denied.\nPayer: Payer One.\nProcedure: Crown buildup, tooth 3.\nDate of service: 2026-06-12.\nBilled amount: 215.75.\nDenial note from payer: Missing supporting attachment.\nClinical note excerpt: Fractured cusp with recurrent decay; documented cold sensitivity.\nAccounts receivable export: NOT PROVIDED in this packet.\nPrior authorization reference: NOT PROVIDED in this packet.",
+  "review_instructions": "You are reviewing a dental insurance claim packet for a resubmission narrative. Do not invent any patient identity, dollar amount, date, or clinical fact that is not present in the source text. Respond ONLY with a single JSON object (no markdown fences) using exactly these keys: missing_data (array of strings naming fields that are not provided), citations (array of strings quoting facts you used directly from the source text), contradictions (array of strings; empty if none), invented_facts (array of strings; list any value you could not source, otherwise empty), recommended_action (short string).",
+  "required_json_keys": [
+    "missing_data",
+    "citations",
+    "contradictions",
+    "invented_facts",
+    "recommended_action"
+  ],
+  "expected_missing_data": [
+    "accounts receivable",
+    "prior authorization"
+  ],
+  "source_citations": [
+    "CLAIM-1001",
+    "Crown buildup",
+    "2026-06-12",
+    "215.75",
+    "Missing supporting attachment"
+  ],
+  "allowed_facts": [
+    "Patient A",
+    "CHART-A",
+    "CLAIM-1001",
+    "Payer One",
+    "Crown buildup",
+    "tooth 3",
+    "2026-06-12",
+    "215.75"
+  ],
+  "allowed_numbers": [
+    "215.75",
+    "1001",
+    "3",
+    "2026",
+    "06",
+    "12"
+  ]
+}

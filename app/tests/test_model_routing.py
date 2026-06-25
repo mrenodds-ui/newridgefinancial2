@@ -6,6 +6,7 @@ from app import ai_local_config as config
 from app.tests.lane_routing_test_helpers import (
     BACKEND_LANE_URL,
     EVALUATOR_LANE_URL,
+    FAST_REVIEW_LANE_URL,
     FRONTEND_LANE_URL,
 )
 
@@ -20,6 +21,10 @@ def _clear_ai_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "OLLAMA_BASE_URL",
         "OLLAMA_FRONTEND_BASE_URL",
         "OLLAMA_BACKEND_BASE_URL",
+        "AI_FAST_REVIEW_BASE_URL",
+        "AI_FAST_REVIEW_MODEL",
+        "OLLAMA_FAST_REVIEW_BASE_URL",
+        "OLLAMA_FAST_REVIEW_MODEL",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -120,7 +125,9 @@ def test_chat_profile_never_resolves_to_backend_port(monkeypatch: pytest.MonkeyP
     chat_url = config.resolve_profile_base_url("chat")
     assert ":11434" in chat_url
     assert ":11435" not in chat_url
+    assert ":11437" not in chat_url
     assert chat_url != BACKEND_LANE_URL
+    assert chat_url != FAST_REVIEW_LANE_URL
 
 
 def test_backend_profiles_never_resolve_to_frontend_port(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -131,7 +138,42 @@ def test_backend_profiles_never_resolve_to_frontend_port(monkeypatch: pytest.Mon
         resolved = config.resolve_profile_base_url(alias)
         assert ":11435" in resolved
         assert ":11434" not in resolved
+        assert ":11437" not in resolved
         assert resolved != FRONTEND_LANE_URL
+        assert resolved != FAST_REVIEW_LANE_URL
+
+
+def test_fast_review_profile_resolves_to_fast_lane_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_FAST_REVIEW_BASE_URL", FAST_REVIEW_LANE_URL)
+    monkeypatch.setenv("AI_FAST_REVIEW_MODEL", "qwen3-coder:30b")
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", BACKEND_LANE_URL)
+    monkeypatch.setenv("AI_BACKEND_MODEL", "qwen3:30b")
+
+    resolved = config.resolve_profile_base_url("fast_review")
+    assert resolved == FAST_REVIEW_LANE_URL
+    assert config.get_model_for_profile_alias("fast_review") == "qwen3-coder:30b"
+    assert config.resolve_profile_base_url("chat_second_opinion") == BACKEND_LANE_URL
+    assert config.get_model_for_profile_alias("chat_second_opinion") == "qwen3:30b"
+
+
+def test_default_profiles_never_resolve_to_fast_review_lane(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_FAST_REVIEW_BASE_URL", FAST_REVIEW_LANE_URL)
+    monkeypatch.setenv("AI_FRONTEND_BASE_URL", FRONTEND_LANE_URL)
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", BACKEND_LANE_URL)
+
+    default_aliases = (
+        *config.FRONTEND_PROFILE_ALIASES,
+        *config.BACKEND_PROFILE_ALIASES,
+        *config.LITELLM_FRONTEND_ALIASES,
+        *config.LITELLM_BACKEND_ALIASES,
+    )
+    for alias in default_aliases:
+        if alias in config.LITELLM_FRONTEND_ALIASES | config.LITELLM_BACKEND_ALIASES:
+            resolved = config.resolve_litellm_api_base_url(alias)
+        else:
+            resolved = config.resolve_profile_base_url(alias)
+        assert resolved != FAST_REVIEW_LANE_URL
+        assert ":11437" not in resolved
 
 
 def test_normal_profiles_never_resolve_to_evaluator_port(monkeypatch: pytest.MonkeyPatch) -> None:

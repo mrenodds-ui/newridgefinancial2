@@ -11,12 +11,15 @@ LOCAL_MODEL_PROFILE_CONFIG_PATH = Path(__file__).resolve().parents[1] / "evals" 
 
 FRONTEND_PROFILE_ALIASES = frozenset({"chat"})
 BACKEND_PROFILE_ALIASES = frozenset({"chat_second_opinion", "coder"})
+FAST_REVIEW_PROFILE_ALIASES = frozenset({"fast_review"})
 
 DEFAULT_FRONTEND_MODEL = "mistral-small3.1:24b"
 DEFAULT_BACKEND_MODEL = "qwen3:30b"
+DEFAULT_FAST_REVIEW_MODEL = "qwen3-coder:30b"
 DEFAULT_FRONTEND_BASE_URL = "http://127.0.0.1:11434"
 DEFAULT_BACKEND_BASE_URL = "http://127.0.0.1:11435"
 DEFAULT_EVALUATOR_BASE_URL = "http://127.0.0.1:11436"
+DEFAULT_FAST_REVIEW_BASE_URL = "http://127.0.0.1:11437"
 
 LITELLM_FRONTEND_ALIASES = frozenset({"hal-chat-balanced", "hal-vision"})
 LITELLM_BACKEND_ALIASES = frozenset({"hal-coding", "hal-analysis", "hal-second-opinion"})
@@ -25,6 +28,8 @@ OLLAMA_BACKEND_BASE_URL_ENV = "OLLAMA_BACKEND_BASE_URL"
 OLLAMA_LEGACY_FRONTEND_BASE_URL_ENV = "OLLAMA_BASE_URL"
 OLLAMA_FRONTEND_MODEL_ENV = "OLLAMA_FRONTEND_MODEL"
 OLLAMA_BACKEND_MODEL_ENV = "OLLAMA_BACKEND_MODEL"
+OLLAMA_FAST_REVIEW_BASE_URL_ENV = "OLLAMA_FAST_REVIEW_BASE_URL"
+OLLAMA_FAST_REVIEW_MODEL_ENV = "OLLAMA_FAST_REVIEW_MODEL"
 DEFAULT_FRONTEND_QUANT = "Q4_K_M"
 DEFAULT_BACKEND_QUANT = "Q4_K_S"
 DEFAULT_CONTEXT_SIZE = 4096
@@ -72,6 +77,13 @@ def get_backend_base_url() -> str:
     if explicit:
         return _strip_openai_suffix(explicit)
     return DEFAULT_BACKEND_BASE_URL
+
+
+def get_fast_review_base_url() -> str:
+    explicit = _env("AI_FAST_REVIEW_BASE_URL") or _env(OLLAMA_FAST_REVIEW_BASE_URL_ENV)
+    if explicit:
+        return _strip_openai_suffix(explicit)
+    return DEFAULT_FAST_REVIEW_BASE_URL
 
 
 def get_evaluator_base_url() -> str:
@@ -135,6 +147,13 @@ def get_backend_model_name() -> str:
     return DEFAULT_BACKEND_MODEL
 
 
+def get_fast_review_model_name() -> str:
+    explicit = _env("AI_FAST_REVIEW_MODEL") or _env(OLLAMA_FAST_REVIEW_MODEL_ENV)
+    if explicit.strip():
+        return explicit.strip()
+    return DEFAULT_FAST_REVIEW_MODEL
+
+
 def get_frontend_model_path() -> str:
     return _env("AI_FRONTEND_MODEL_PATH")
 
@@ -165,7 +184,13 @@ def get_backend_quantization() -> str:
     return _env("AI_BACKEND_QUANT", DEFAULT_BACKEND_QUANT)
 
 
+def is_fast_review_profile_alias(alias: str) -> bool:
+    return alias in FAST_REVIEW_PROFILE_ALIASES
+
+
 def profile_lane(alias: str) -> str:
+    if is_fast_review_profile_alias(alias):
+        return "fast_review"
     if alias in BACKEND_PROFILE_ALIASES:
         return "backend"
     if alias in FRONTEND_PROFILE_ALIASES:
@@ -174,12 +199,16 @@ def profile_lane(alias: str) -> str:
 
 
 def get_base_url_for_profile_alias(alias: str) -> str:
+    if is_fast_review_profile_alias(alias):
+        return get_fast_review_base_url()
     if profile_lane(alias) == "backend":
         return get_backend_base_url()
     return get_frontend_base_url()
 
 
 def get_model_for_profile_alias(alias: str) -> str:
+    if is_fast_review_profile_alias(alias):
+        return get_fast_review_model_name()
     if profile_lane(alias) == "backend":
         return get_backend_model_name()
     return get_frontend_model_name()
@@ -223,7 +252,11 @@ def _apply_gpu_layer_override(profile: dict[str, Any], lane: str) -> dict[str, A
 def apply_lane_env_overrides(profile: dict[str, Any], alias: str) -> dict[str, Any]:
     lane = profile_lane(alias)
     merged = dict(profile)
-    if lane == "backend":
+    if is_fast_review_profile_alias(alias):
+        model_name = get_fast_review_model_name()
+        context_size = get_backend_context_size()
+        quant = get_backend_quantization()
+    elif lane == "backend":
         model_name = get_backend_model_name()
         context_size = get_backend_context_size()
         quant = get_backend_quantization()
@@ -236,7 +269,7 @@ def apply_lane_env_overrides(profile: dict[str, Any], alias: str) -> dict[str, A
         merged["model"] = model_name
     merged["num_ctx"] = context_size
     merged["gguf_quant"] = quant
-    return _apply_gpu_layer_override(merged, lane)
+    return _apply_gpu_layer_override(merged, lane if lane != "fast_review" else "backend")
 
 
 def resolve_lane_profile(config: dict[str, Any], alias: str) -> dict[str, Any]:
@@ -346,9 +379,22 @@ def get_model_routing_snapshot() -> dict[str, object]:
             "model_path": get_backend_model_path() or None,
             "profile_aliases": sorted(BACKEND_PROFILE_ALIASES),
         },
+        "fast_review": {
+            "experimental": True,
+            "opt_in": True,
+            "base_url": get_fast_review_base_url(),
+            "model": get_fast_review_model_name(),
+            "context_size": get_backend_context_size(),
+            "quantization": get_backend_quantization(),
+            "profile_aliases": sorted(FAST_REVIEW_PROFILE_ALIASES),
+        },
         "profile_base_urls": {
             alias: get_base_url_for_profile_alias(alias)
             for alias in sorted(FRONTEND_PROFILE_ALIASES | BACKEND_PROFILE_ALIASES)
+        },
+        "optional_profile_base_urls": {
+            alias: get_base_url_for_profile_alias(alias)
+            for alias in sorted(FAST_REVIEW_PROFILE_ALIASES)
         },
     }
 

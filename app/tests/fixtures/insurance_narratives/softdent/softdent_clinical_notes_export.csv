@@ -1,0 +1,8 @@
+patient_ref,note_id,note_date,procedure_id,claim_id,provider_label,note_type,note_text,source_report_date
+CHART-EXPORT,NOTE-1001,2026-06-12,PROC-CROWN-30,CLAIM-EXPORT-1,Dr. Smith,clinical,Tooth 30 buildup required due to insufficient remaining tooth structure.,2026-06-20
+CHART-EXPORT,NOTE-1002,2026-06-12,PROC-CROWN-30,,Dr. Smith,clinical,Procedure-linked note without claim id on row.,2026-06-20
+CHART-EXPORT,NOTE-OLD,2026-05-01,PROC-CROWN-30,CLAIM-EXPORT-1,Dr. Smith,clinical,Older note outside date range.,2026-06-20
+CHART-EXPORT,NOTE-BLANK,2026-06-12,PROC-CROWN-30,CLAIM-EXPORT-1,Dr. Smith,clinical,,2026-06-20
+CHART-OTHER,NOTE-OTHER,2026-06-12,PROC-OTHER,CLAIM-OTHER-9,Dr. Jones,clinical,Other patient note.,2026-06-20
+CHART-EXPORT,NOTE-WRONG-CLAIM,2026-06-12,PROC-CROWN-30,CLAIM-OTHER-9,Dr. Smith,clinical,Wrong claim note.,2026-06-20
+CHART-EXPORT,NOTE-OTHER-PROC,2026-06-12,PROC-OTHER,CLAIM-EXPORT-1,Dr. Smith,clinical,Unscoped procedure note.,2026-06-20

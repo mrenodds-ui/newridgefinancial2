@@ -1,0 +1,51 @@
+{
+  "id": "sample_missing_ar",
+  "title": "Receivables summary review with missing A/R export (de-identified)",
+  "deidentified": true,
+  "review_task": "missing_data_detection",
+  "source_text": "De-identified practice summary packet for review.\nReporting period: 2026-06.\nProvider labels: Provider 1, Provider 2, Provider 3 (synthetic).\nProduction total: 116780.00.\nCollections total: 107015.00.\nInsurance collections: 65435.00.\nPatient collections: 41580.00.\nAccounts receivable aging export: NOT PROVIDED.\nOutstanding claims export: NOT PROVIDED.\nNote: Do not assume accounts receivable is zero. Missing means unavailable, not 0.",
+  "review_instructions": "You are checking a practice financial summary for data completeness before it is shown on a dashboard. Do not invent any dollar amount or treat missing accounts receivable as zero. Respond ONLY with a single JSON object (no markdown fences) using exactly these keys: missing_data (array of strings naming unavailable fields), citations (array of strings quoting figures you used directly from the source text), contradictions (array of strings; empty if none), invented_facts (array of strings; empty if none), recommended_action (short string).",
+  "required_json_keys": [
+    "missing_data",
+    "citations",
+    "contradictions",
+    "invented_facts",
+    "recommended_action"
+  ],
+  "expected_missing_data": [
+    "accounts receivable",
+    "outstanding claims"
+  ],
+  "source_citations": [
+    "116780.00",
+    "107015.00",
+    "65435.00",
+    "41580.00",
+    "2026-06"
+  ],
+  "allowed_facts": [
+    "Provider 1",
+    "Provider 2",
+    "Provider 3",
+    "2026-06",
+    "116780.00",
+    "107015.00",
+    "65435.00",
+    "41580.00"
+  ],
+  "allowed_numbers": [
+    "116780.00",
+    "107015.00",
+    "65435.00",
+    "41580.00",
+    "116780",
+    "107015",
+    "65435",
+    "41580",
+    "2026",
+    "06",
+    "1",
+    "2",
+    "3"
+  ]
+}

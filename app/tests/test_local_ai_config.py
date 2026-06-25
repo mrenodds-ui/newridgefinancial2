@@ -24,6 +24,10 @@ def _clear_ai_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "AI_GPU_LAYERS",
         "OLLAMA_BASE_URL",
         "OLLAMA_BACKEND_BASE_URL",
+        "AI_FAST_REVIEW_BASE_URL",
+        "AI_FAST_REVIEW_MODEL",
+        "OLLAMA_FAST_REVIEW_BASE_URL",
+        "OLLAMA_FAST_REVIEW_MODEL",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -189,3 +193,39 @@ def test_require_lane_runtime_uses_lane_specific_base_url(monkeypatch: pytest.Mo
     assert config.require_lane_runtime("chat", purpose="frontend test") == FRONTEND_LANE_URL
     assert config.require_lane_runtime("coder", purpose="backend test") == BACKEND_LANE_URL
     assert seen == [("chat", FRONTEND_LANE_URL), ("coder", BACKEND_LANE_URL)]
+
+
+def test_fast_review_lane_resolves_separately(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_FAST_REVIEW_BASE_URL", "http://fast-review:11437")
+    monkeypatch.setenv("AI_FAST_REVIEW_MODEL", "custom-fast-reviewer")
+    monkeypatch.setenv("AI_BACKEND_BASE_URL", "http://backend:11435")
+    monkeypatch.setenv("AI_BACKEND_MODEL", "qwen3:30b")
+
+    assert config.get_fast_review_base_url() == "http://fast-review:11437"
+    assert config.get_fast_review_model_name() == "custom-fast-reviewer"
+    assert config.resolve_profile_base_url("fast_review") == "http://fast-review:11437"
+    assert config.get_model_for_profile_alias("fast_review") == "custom-fast-reviewer"
+    assert config.resolve_profile_base_url("chat_second_opinion") == "http://backend:11435"
+    assert config.get_model_for_profile_alias("chat_second_opinion") == "qwen3:30b"
+
+
+def test_fast_review_defaults_to_experimental_lane(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert config.get_fast_review_base_url() == config.DEFAULT_FAST_REVIEW_BASE_URL
+    assert config.get_fast_review_model_name() == config.DEFAULT_FAST_REVIEW_MODEL
+    assert config.is_fast_review_profile_alias("fast_review") is True
+    assert config.is_fast_review_profile_alias("chat_second_opinion") is False
+
+
+def test_fast_review_profile_not_in_default_backend_aliases() -> None:
+    assert "fast_review" not in config.BACKEND_PROFILE_ALIASES
+    assert "fast_review" not in config.FRONTEND_PROFILE_ALIASES
+
+
+def test_model_routing_snapshot_marks_fast_review_experimental(monkeypatch: pytest.MonkeyPatch) -> None:
+    snapshot = config.get_model_routing_snapshot()
+
+    assert snapshot["fast_review"]["experimental"] is True
+    assert snapshot["fast_review"]["opt_in"] is True
+    assert snapshot["fast_review"]["base_url"] == config.DEFAULT_FAST_REVIEW_BASE_URL
+    assert "fast_review" in snapshot["optional_profile_base_urls"]
+    assert "fast_review" not in snapshot["profile_base_urls"]

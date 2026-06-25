@@ -4,6 +4,11 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.hal.posting_queue import JournalDraftStatus, PostingQueueEnqueueMode, PostingQueueReviewAction, PostingQueueStatus
+from app.insurance_narratives.schemas import (
+    InsuranceNarrativeCasePacket,
+    InsuranceNarrativeDraft,
+    NarrativeCheckerSummary,
+)
 
 
 class KPIResponse(BaseModel):
@@ -139,6 +144,55 @@ class HalInsuranceNarrativeResponse(BaseModel):
     access_policy: HalAccessPolicy
     voice_profile: HalResponseVoiceProfile
     governance_notes: list[HalGovernanceNote] = Field(default_factory=list)
+
+
+class HalFastReviewCheckRequest(BaseModel):
+    source_text: str = Field(min_length=10, max_length=32000)
+    review_task: str = Field(default="insurance_narrative_review", min_length=3, max_length=200)
+    packet_id: str | None = Field(default=None, max_length=128)
+
+
+class HalFastReviewStructuredReview(BaseModel):
+    missing_data: list[str] = Field(default_factory=list)
+    citation_issues: list[str] = Field(default_factory=list)
+    possible_invented_facts: list[str] = Field(default_factory=list)
+    contradictions: list[str] = Field(default_factory=list)
+    recommended_action: str
+    ready_for_human_review: bool
+
+
+class HalFastReviewCheckResponse(BaseModel):
+    status: Literal["ok", "lane_unavailable", "parse_error", "error"]
+    profile: str
+    model: str
+    base_url: str
+    review: HalFastReviewStructuredReview | None = None
+    raw_output: str | None = None
+    latency_seconds: float | None = None
+    parse_error: str | None = None
+    error: str | None = None
+    audit_id: str
+    guardrails: list[str] = Field(default_factory=list)
+    packet_id: str | None = None
+
+
+class InsuranceNarrativeDraftWorkflowRequest(BaseModel):
+    patient_ref: str = Field(min_length=1, max_length=64)
+    claim_id: str | None = Field(default=None, max_length=64)
+    procedure_ids: list[str] | None = None
+    date_range: tuple[str, str] | None = None
+    narrative_type: str = Field(min_length=1, max_length=128)
+    run_checker: bool = False
+
+
+class InsuranceNarrativeApproveExportRequest(BaseModel):
+    packet: InsuranceNarrativeCasePacket
+    draft: InsuranceNarrativeDraft
+    reviewer: str = Field(min_length=1, max_length=256)
+    notes: str = Field(min_length=1, max_length=4000)
+    approval_attestation: bool
+    export_format: Literal["markdown", "plain_text"] = "markdown"
+    checker_summary: NarrativeCheckerSummary | dict | None = None
 
 
 class HalPatientDossierRequest(BaseModel):

@@ -51,6 +51,8 @@ function buildDashboardFinancialSummary() {
       balance_60: 2000,
       balance_90: 1000,
       credit_balance: 0,
+      source: "softdent",
+      available: true,
     },
     monthlyKpis: [{ year_month: "2026-06", gross_production: 2500, collections: 2100, collection_rate: 84 }],
     trailing12Months: [],
@@ -307,6 +309,8 @@ describe("API auth gate", () => {
               balance_60: 0,
               balance_90: 0,
               credit_balance: 0,
+              source: "softdent",
+              available: true,
             },
             monthlyKpis: [
               {

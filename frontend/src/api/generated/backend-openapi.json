@@ -525,6 +525,24 @@
         ]
       }
     },
+    "/api/widgets/update": {
+      "post": {
+        "summary": "Api Widget Update",
+        "operationId": "api_widget_update_api_widgets_update_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WidgetUpdateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/hal9000/page-summary": {
       "get": {
         "summary": "Hal9000 Page Summary",
@@ -2803,6 +2821,16 @@
           },
           "access_policy": {
             "$ref": "#/components/schemas/HalAccessPolicy"
+          },
+          "voice_profile": {
+            "$ref": "#/components/schemas/HalResponseVoiceProfile"
+          },
+          "governance_notes": {
+            "items": {
+              "$ref": "#/components/schemas/HalGovernanceNote"
+            },
+            "type": "array",
+            "title": "Governance Notes"
           }
         },
         "type": "object",
@@ -2811,7 +2839,8 @@
           "answer",
           "confidence",
           "audit_id",
-          "access_policy"
+          "access_policy",
+          "voice_profile"
         ],
         "title": "AccountingPolicyAnswerResponse"
       },
@@ -3505,6 +3534,78 @@
         ],
         "title": "ClaimsSummaryResponse"
       },
+      "ControlLaneRuntimeSummary": {
+        "properties": {
+          "lane": {
+            "type": "string",
+            "title": "Lane"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "api_reachable": {
+            "type": "boolean",
+            "title": "Api Reachable"
+          },
+          "installed": {
+            "type": "boolean",
+            "title": "Installed",
+            "default": false
+          },
+          "running": {
+            "type": "boolean",
+            "title": "Running",
+            "default": false
+          },
+          "model_count": {
+            "type": "integer",
+            "title": "Model Count",
+            "default": 0
+          },
+          "installed_models": {
+            "items": {
+              "$ref": "#/components/schemas/ControlModelSummary"
+            },
+            "type": "array",
+            "title": "Installed Models"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lane",
+          "base_url",
+          "model",
+          "api_reachable"
+        ],
+        "title": "ControlLaneRuntimeSummary"
+      },
       "ControlModelSummary": {
         "properties": {
           "name": {
@@ -3799,6 +3900,13 @@
               }
             ],
             "title": "Warning"
+          },
+          "lanes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ControlLaneRuntimeSummary"
+            },
+            "type": "object",
+            "title": "Lanes"
           }
         },
         "type": "object",
@@ -4381,6 +4489,16 @@
           "credit_balance": {
             "type": "number",
             "title": "Credit Balance"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "softdent"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "default": true
           }
         },
         "type": "object",
@@ -5302,6 +5420,18 @@
               }
             ],
             "title": "Currentyearproduction"
+          },
+          "widgetFeed": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Widgetfeed"
           }
         },
         "type": "object",
@@ -5698,6 +5828,27 @@
             },
             "type": "array",
             "title": "Review Actions"
+          },
+          "voice_profile": {
+            "$ref": "#/components/schemas/HalResponseVoiceProfile"
+          },
+          "governance_notes": {
+            "items": {
+              "$ref": "#/components/schemas/HalGovernanceNote"
+            },
+            "type": "array",
+            "title": "Governance Notes"
+          },
+          "local_ai_unavailable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Ai Unavailable"
           }
         },
         "type": "object",
@@ -5706,7 +5857,8 @@
           "answer",
           "sanitized_question",
           "audit_id",
-          "access_policy"
+          "access_policy",
+          "voice_profile"
         ],
         "title": "HalAskResponse"
       },
@@ -6513,6 +6665,24 @@
         ],
         "title": "HalDocumentRagUploadResponse"
       },
+      "HalGovernanceNote": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "detail"
+        ],
+        "title": "HalGovernanceNote"
+      },
       "HalIndexRefreshResponse": {
         "properties": {
           "message": {
@@ -6626,6 +6796,16 @@
           },
           "access_policy": {
             "$ref": "#/components/schemas/HalAccessPolicy"
+          },
+          "voice_profile": {
+            "$ref": "#/components/schemas/HalResponseVoiceProfile"
+          },
+          "governance_notes": {
+            "items": {
+              "$ref": "#/components/schemas/HalGovernanceNote"
+            },
+            "type": "array",
+            "title": "Governance Notes"
           }
         },
         "type": "object",
@@ -6635,7 +6815,8 @@
           "narrative",
           "sanitized_question",
           "audit_id",
-          "access_policy"
+          "access_policy",
+          "voice_profile"
         ],
         "title": "HalInsuranceNarrativeResponse"
       },
@@ -6721,6 +6902,16 @@
           },
           "access_policy": {
             "$ref": "#/components/schemas/HalAccessPolicy"
+          },
+          "voice_profile": {
+            "$ref": "#/components/schemas/HalResponseVoiceProfile"
+          },
+          "governance_notes": {
+            "items": {
+              "$ref": "#/components/schemas/HalGovernanceNote"
+            },
+            "type": "array",
+            "title": "Governance Notes"
           }
         },
         "type": "object",
@@ -6730,9 +6921,40 @@
           "summary",
           "sanitized_question",
           "audit_id",
-          "access_policy"
+          "access_policy",
+          "voice_profile"
         ],
         "title": "HalPatientDossierResponse"
+      },
+      "HalResponseVoiceProfile": {
+        "properties": {
+          "lane": {
+            "type": "string",
+            "title": "Lane"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "tone": {
+            "type": "string",
+            "title": "Tone"
+          },
+          "style_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Style Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lane",
+          "label",
+          "tone"
+        ],
+        "title": "HalResponseVoiceProfile"
       },
       "HalReviewAction": {
         "properties": {
@@ -7193,6 +7415,17 @@
               }
             ],
             "title": "Enqueue Error"
+          },
+          "local_ai_unavailable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Ai Unavailable"
           },
           "audit_id": {
             "type": "string",
@@ -8193,6 +8426,65 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WidgetUpdateResponse": {
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "title": "Accepted"
+          },
+          "manager": {
+            "type": "string",
+            "title": "Manager"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "received_at": {
+            "type": "string",
+            "title": "Received At"
+          },
+          "widget_count": {
+            "type": "integer",
+            "title": "Widget Count"
+          },
+          "source_count": {
+            "type": "integer",
+            "title": "Source Count"
+          },
+          "job_count": {
+            "type": "integer",
+            "title": "Job Count"
+          },
+          "auth_mode": {
+            "type": "string",
+            "title": "Auth Mode"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "manager",
+          "received_at",
+          "widget_count",
+          "source_count",
+          "job_count",
+          "auth_mode",
+          "message"
+        ],
+        "title": "WidgetUpdateResponse"
       }
     },
     "securitySchemes": {

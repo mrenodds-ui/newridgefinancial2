@@ -60,6 +60,23 @@
       "seed": 31,
       "strip_thinking_tags": true,
       "system_prompt_path": "evals/prompts/qwen_second_opinion_system.txt"
+    },
+    "fast_review": {
+      "role": "fast_structured_review",
+      "label": "Qwen3 Coder 30B Fast Reviewer (experimental)",
+      "model": "qwen3-coder:30b",
+      "gguf_quant": "Q4_K_S",
+      "ollama_pull": "ollama pull qwen3-coder:30b",
+      "timeout_seconds": 300,
+      "keep_alive": "15m",
+      "prompt_prefix": "/no_think\n",
+      "temperature": 0,
+      "top_p": 1,
+      "num_ctx": 4096,
+      "num_gpu": 0,
+      "seed": 37,
+      "strip_thinking_tags": true,
+      "system_prompt_path": "evals/prompts/qwen_second_opinion_system.txt"
     }
   }
 }
