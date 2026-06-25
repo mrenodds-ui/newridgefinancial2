@@ -4,17 +4,17 @@ Generated: 2026-06-25 (UTC)
 
 ## Status
 
-**Ready with caveats**
+**Ready**
 
-Sections 1–5 repair/audit work is complete and the critical business rules are covered by targeted tests, CI gates, and documentation. Full backend `pytest app/tests` on this workstation reported **8 failures** in HAL/SoftDent snapshot tests that appear driven by **stale hardcoded expectations against changed local import snapshot data**, not by regressions in the Section 1–5 fixes. CI regression gates, frontend checks, and script/help validation all passed.
+Sections 1–5 repair/audit work is complete and the critical business rules are covered by targeted tests, CI gates, and documentation. The prior backend-suite caveat (8 order-dependent HAL/SoftDent snapshot failures) was resolved in `f574342` (`test: stabilize SoftDent snapshot expectations`) by pinning dashboard-dependent assertions to a committed canonical fixture instead of the mutable `app/data/imports` snapshot. Full backend `pytest app/tests` and CI regression gates now pass on this workstation.
 
 ## Validation Summary
 
 | Command | Result | Notes |
 | --- | --- | --- |
 | `git status --short` | **Pass** | Tracked tree clean at closeout start |
-| `pytest app/tests -q` | **Fail** | 429 passed, **8 failed** (~39m 35s) |
-| `python scripts/run_ci_gates.py` | **Pass** | `overall_pass: true` (~4m 48s) |
+| `pytest app/tests -q` | **Pass** | **437 passed** (~17m 31s; after `f574342`) |
+| `python scripts/run_ci_gates.py` | **Pass** | `overall_pass: true` (~3m 46s; after `f574342`) |
 | `cd frontend && npm run typecheck` | **Pass** | |
 | `cd frontend && npm run test` | **Pass** | 26 files, 125 tests (~14s) |
 | `git diff --check` | **Pass** | |
@@ -22,16 +22,9 @@ Sections 1–5 repair/audit work is complete and the critical business rules are
 | `bash -n scripts/run_backend_model.sh` | **Pass** | |
 | PowerShell `-Help` / `-WhatIf` script checks | **Pass** | frontend/backend model scripts, `run_235b_isolated_section.ps1`, `stop_235b_evaluator_lane.ps1` |
 
-### `pytest app/tests` failures (caveat)
+### Backend-suite caveat (resolved)
 
-All 8 failures are in `app/tests/test_hal.py` and `app/tests/test_softdent_services.py`:
-
-- Dollar totals drifted (e.g. `$116,780.00` expected vs `$116,880.00` actual)
-- Provider count drifted (`3` expected vs `4` actual)
-- Rounding drift in payer-mix percentages (`61.15%` vs `61.10%`)
-- Weakest-provider narrative assertion (`Hygiene Team` vs `Unknown`)
-
-These tests read live/local SoftDent aggregate snapshots and assert exact legacy strings. They do **not** indicate A/R correctness, security hardening, lane routing, or widget-status regressions from Sections 1–5. Remediation: refresh test fixtures or isolate tests from mutable `app/data/imports` content.
+The 8 HAL/SoftDent snapshot failures reported at initial closeout were order-dependent: tests read the mutable `app/data/imports/softdent` snapshot, which other tests in the same session could rewrite. Fixed in `f574342` via `canonical_softdent_dashboard` fixture and `app/tests/fixtures/softdent_dashboard_canonical.json`. No runtime or business-rule changes.
 
 ## Section Summary
 
@@ -166,7 +159,6 @@ These tests read live/local SoftDent aggregate snapshots and assert exact legacy
 
 **Deferred**
 
-- Full-suite HAL snapshot string tests (see Validation Summary failures)
 - Root `test:all` orchestration script (low)
 
 ## Critical Business Rules Verified
@@ -221,10 +213,9 @@ Normal runtime must **not** depend on `:11436`. Long-running lane scripts are fo
 
 Non-blocking, intentional or environmental:
 
-1. **8 HAL/SoftDent snapshot tests** fail on this machine due to stale string/number expectations vs current local import data — refresh fixtures or isolate from mutable imports before treating full `pytest app/tests` as a hard gate on every workstation.
-2. **Widget feed disk-write failure** path still logs-and-continues (no rollback test).
-3. **MSW default `latestAr.available: true`** in `handlers.ts` (page tests cover null A/R).
-4. **No single root `test:all` script** chaining backend pytest + frontend vitest + CI gates (documented separately in README/regression docs).
+1. **Widget feed disk-write failure** path still logs-and-continues (no rollback test).
+2. **MSW default `latestAr.available: true`** in `handlers.ts` (page tests cover null A/R).
+3. **No single root `test:all` script** chaining backend pytest + frontend vitest + CI gates (documented separately in README/regression docs).
 
 ## Recommended Next Product Work
 
@@ -232,4 +223,3 @@ Non-blocking, intentional or environmental:
 - AI citation/source audit layer
 - Optional heavy second-opinion model bakeoff
 - Financial page UX improvements
-- Refresh HAL SoftDent snapshot tests to use pinned fixtures instead of live import drift
