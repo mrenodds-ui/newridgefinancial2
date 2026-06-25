@@ -22,7 +22,7 @@ from .auth import (
 from .config_runtime import is_local_app_environment
 from .data_pipeline import get_pull_status_payload, import_uploaded_file
 from .services import fetch_quickbooks_data
-from .hal import advance_hal_autonomy_run, answer_accounting_policy_question, answer_hal_question, answer_hal_second_opinion_question, answer_insurance_narrative_request, answer_patient_dossier_request, approve_hal_chart_plan, create_hal_autonomy_run, create_hal_chart_plan, draft_accounting_journal_entry, get_accounting_posting_queue_summary, get_hal_access_policy, get_hal_autonomy_profile, get_hal_autonomy_run_status, get_hal_index_status, get_hal_phases, get_hal_shell_commands, list_accounting_posting_queue, list_hal_audit_events, list_hal_autonomy_runs, list_hal_chart_plans, list_recent_accounting_posting_queue_activity, queue_accounting_posting_draft, refresh_local_hal_index, review_accounting_posting_queue_entry
+from .hal import advance_hal_autonomy_run, answer_accounting_policy_question, answer_hal_question, answer_hal_second_opinion_question, answer_insurance_narrative_request, answer_patient_dossier_request, approve_hal_chart_plan, create_hal_autonomy_run, create_hal_chart_plan, draft_accounting_journal_entry, get_accounting_posting_queue_summary, get_hal_access_policy, get_hal_autonomy_profile, get_hal_autonomy_run_status, get_hal_index_status, get_hal_phases, get_hal_shell_commands, list_accounting_posting_queue, list_hal_audit_events, list_hal_autonomy_runs, list_hal_chart_plans, list_recent_accounting_posting_queue_activity, queue_accounting_posting_draft, refresh_local_hal_index, review_accounting_posting_queue_entry, run_fast_review_check
 from .hal import answer_document_rag_question, ingest_document_rag_upload, list_document_rag_documents
 from .hal.orchestrator import get_hal_operating_picture
 from .hal.financial_tools import get_financial_source_status
@@ -384,6 +384,8 @@ from .models import (
     HalAskResponse,
     HalInsuranceNarrativeRequest,
     HalInsuranceNarrativeResponse,
+    HalFastReviewCheckRequest,
+    HalFastReviewCheckResponse,
     HalPatientDossierRequest,
     HalPatientDossierResponse,
     JournalDraftRequest,
@@ -1627,6 +1629,25 @@ async def hal9000_second_opinion_post(payload: HalAskRequest, request: Request, 
 async def api_hal9000_insurance_narrative(payload: HalInsuranceNarrativeRequest, request: Request, user: AuthenticatedUser = Depends(require_roles("hal:operator"))):
     del request
     return _serialize_public_hal_payload(answer_insurance_narrative_request(question=payload.question, actor=user.username))
+
+
+@router.post(
+    "/api/hal9000/fast-review-check",
+    response_model=HalFastReviewCheckResponse,
+    include_in_schema=False,
+)
+async def api_hal9000_fast_review_check(
+    payload: HalFastReviewCheckRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_roles("hal:operator")),
+):
+    del request
+    return run_fast_review_check(
+        source_text=payload.source_text,
+        review_task=payload.review_task,
+        packet_id=payload.packet_id,
+        actor=user.username,
+    )
 
 
 @router.post("/api/hal9000/patient-dossier", response_model=HalPatientDossierResponse)

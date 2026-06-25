@@ -138,7 +138,7 @@ def test_unavailable_lane_recorded_not_treated_as_success() -> None:
     assert packets, "expected at least one de-identified packet"
 
     targets = [
-        {"profile": "fast_review", "base_url": FAST_REVIEW_LANE_URL, "model": "Qwen3-Coder-30B-A3B-Instruct"},
+        {"profile": "fast_review", "base_url": FAST_REVIEW_LANE_URL, "model": "qwen3-coder:30b"},
     ]
     lane_availability = {"fast_review": {"available": False, "error": "connection refused"}}
 

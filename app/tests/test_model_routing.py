@@ -145,13 +145,13 @@ def test_backend_profiles_never_resolve_to_frontend_port(monkeypatch: pytest.Mon
 
 def test_fast_review_profile_resolves_to_fast_lane_only(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_FAST_REVIEW_BASE_URL", FAST_REVIEW_LANE_URL)
-    monkeypatch.setenv("AI_FAST_REVIEW_MODEL", "Qwen3-Coder-30B-A3B-Instruct")
+    monkeypatch.setenv("AI_FAST_REVIEW_MODEL", "qwen3-coder:30b")
     monkeypatch.setenv("AI_BACKEND_BASE_URL", BACKEND_LANE_URL)
     monkeypatch.setenv("AI_BACKEND_MODEL", "qwen3:30b")
 
     resolved = config.resolve_profile_base_url("fast_review")
     assert resolved == FAST_REVIEW_LANE_URL
-    assert config.get_model_for_profile_alias("fast_review") == "Qwen3-Coder-30B-A3B-Instruct"
+    assert config.get_model_for_profile_alias("fast_review") == "qwen3-coder:30b"
     assert config.resolve_profile_base_url("chat_second_opinion") == BACKEND_LANE_URL
     assert config.get_model_for_profile_alias("chat_second_opinion") == "qwen3:30b"
 

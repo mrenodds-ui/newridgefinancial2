@@ -64,9 +64,9 @@
     "fast_review": {
       "role": "fast_structured_review",
       "label": "Qwen3 Coder 30B Fast Reviewer (experimental)",
-      "model": "Qwen3-Coder-30B-A3B-Instruct",
+      "model": "qwen3-coder:30b",
       "gguf_quant": "Q4_K_S",
-      "ollama_pull": "ollama pull Qwen3-Coder-30B-A3B-Instruct",
+      "ollama_pull": "ollama pull qwen3-coder:30b",
       "timeout_seconds": 300,
       "keep_alive": "15m",
       "prompt_prefix": "/no_think\n",

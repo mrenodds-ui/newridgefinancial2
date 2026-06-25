@@ -141,6 +141,36 @@ class HalInsuranceNarrativeResponse(BaseModel):
     governance_notes: list[HalGovernanceNote] = Field(default_factory=list)
 
 
+class HalFastReviewCheckRequest(BaseModel):
+    source_text: str = Field(min_length=10, max_length=32000)
+    review_task: str = Field(default="insurance_narrative_review", min_length=3, max_length=200)
+    packet_id: str | None = Field(default=None, max_length=128)
+
+
+class HalFastReviewStructuredReview(BaseModel):
+    missing_data: list[str] = Field(default_factory=list)
+    citation_issues: list[str] = Field(default_factory=list)
+    possible_invented_facts: list[str] = Field(default_factory=list)
+    contradictions: list[str] = Field(default_factory=list)
+    recommended_action: str
+    ready_for_human_review: bool
+
+
+class HalFastReviewCheckResponse(BaseModel):
+    status: Literal["ok", "lane_unavailable", "parse_error", "error"]
+    profile: str
+    model: str
+    base_url: str
+    review: HalFastReviewStructuredReview | None = None
+    raw_output: str | None = None
+    latency_seconds: float | None = None
+    parse_error: str | None = None
+    error: str | None = None
+    audit_id: str
+    guardrails: list[str] = Field(default_factory=list)
+    packet_id: str | None = None
+
+
 class HalPatientDossierRequest(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
 

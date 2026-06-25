@@ -12,7 +12,7 @@ FAST_REVIEW_LANE_URL = "http://127.0.0.1:11437"
 FRONTEND_LANE_MODEL = "mistral-small3.1:24b"
 BACKEND_LANE_MODEL = "qwen3:30b"
 EVALUATOR_LANE_MODEL = "qwen3:235b"
-FAST_REVIEW_LANE_MODEL = "Qwen3-Coder-30B-A3B-Instruct"
+FAST_REVIEW_LANE_MODEL = "qwen3-coder:30b"
 
 
 def lane_from_url(url: str) -> str:

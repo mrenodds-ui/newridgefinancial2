@@ -36,8 +36,9 @@ Optional LiteLLM proxy (:4000)
   -> qwen3:235b evaluator (:11436) is isolated workflow only; no normal LiteLLM alias uses it
 
 Optional experimental fast structured reviewer (opt-in profile `fast_review` only)
-  -> AI_FAST_REVIEW_BASE_URL (:11437) -> Qwen3-Coder-30B-A3B-Instruct
+  -> AI_FAST_REVIEW_BASE_URL (:11437) -> qwen3-coder:30b (Ollama default)
   -> not wired into user-facing narrative generation or second-opinion defaults yet
+  -> explicit checker: POST /api/hal9000/fast-review-check (hal:operator, not in OpenAPI schema)
 ```
 
 Configuration is centralized in `app/ai_local_config.py` and `evals/local_model_profiles.json`.
@@ -85,7 +86,7 @@ All lane settings are env-driven (`app/ai_local_config.py` reads `.env`); do not
 | `OLLAMA_FRONTEND_BASE_URL` / `OLLAMA_BACKEND_BASE_URL` | LiteLLM proxy lane URLs (should match the `AI_*` values above) |
 | `OLLAMA_EVALUATOR_BASE_URL` | Isolated 235B evaluator on `:11436` only; not used by normal HAL or LiteLLM aliases |
 | `AI_FAST_REVIEW_BASE_URL` / `OLLAMA_FAST_REVIEW_BASE_URL` | **Experimental** fast structured reviewer on `:11437` (`fast_review` profile only; opt-in) |
-| `AI_FAST_REVIEW_MODEL` / `OLLAMA_FAST_REVIEW_MODEL` | Fast reviewer model tag (default `Qwen3-Coder-30B-A3B-Instruct`; override if your local Ollama tag differs) |
+| `AI_FAST_REVIEW_MODEL` / `OLLAMA_FAST_REVIEW_MODEL` | Fast reviewer model tag. **Ollama default:** `qwen3-coder:30b`. The GGUF name `Qwen3-Coder-30B-A3B-Instruct` is not in the Ollama registry; use your exact local tag or a custom Ollama import / `llama.cpp` GGUF path. |
 | `AI_FRONTEND_MODEL` / `AI_BACKEND_MODEL` | Ollama model tags or LiteLLM aliases (`mistral-small3.1:24b`, `qwen3:30b`) |
 | `OLLAMA_FRONTEND_MODEL` / `OLLAMA_BACKEND_MODEL` | Optional model-tag overrides used by run scripts when `AI_*_MODEL` is unset |
 | `AI_FRONTEND_MODEL_PATH` / `AI_BACKEND_MODEL_PATH` | Local GGUF paths for `llama_cpp` |
@@ -127,24 +128,57 @@ It is **not** the default narrative writer. Benchmark structured review quality 
 | --- | --- |
 | Profile alias | `fast_review` |
 | Default port | `127.0.0.1:11437` |
-| Default model | `Qwen3-Coder-30B-A3B-Instruct` |
+| Default Ollama model | `qwen3-coder:30b` |
+| GGUF reference name | `Qwen3-Coder-30B-A3B-Instruct` (use when serving a local GGUF; not an Ollama registry tag) |
 | Config | `AI_FAST_REVIEW_*` or `OLLAMA_FAST_REVIEW_*` in `.env` |
+| Opt-in checker API | `POST /api/hal9000/fast-review-check` (`hal:operator`; hidden from OpenAPI schema) |
 
 **Operational rules**
 
 1. Start only when needed; normal HAL chat, coder, and second-opinion routes never call `:11437` unless code explicitly targets `fast_review`.
 2. Do **not** run `:11437` at the same time as the isolated 235B evaluator (`:11436` / `qwen3:235b`).
-3. Override `AI_FAST_REVIEW_MODEL` if your local Ollama tag differs from the default GGUF name.
+3. Override `AI_FAST_REVIEW_MODEL` when your local Ollama tag or custom GGUF import differs.
 
 Start the lane (Ollama example):
 
 ```powershell
 $env:AI_PORT = '11437'
-$env:AI_FAST_REVIEW_MODEL = 'Qwen3-Coder-30B-A3B-Instruct'  # or your local tag
+$env:AI_FAST_REVIEW_MODEL = 'qwen3-coder:30b'  # supported Ollama default
 $env:OLLAMA_HOST = '127.0.0.1:11437'
 ollama serve
 # Health check: curl http://127.0.0.1:11437/v1/models
 ```
+
+### Opt-in checker workflow (`POST /api/hal9000/fast-review-check`)
+
+Explicit structured review only — does **not** replace `POST /api/hal9000/second-opinion` or narrative generation.
+
+Request body:
+
+```json
+{
+  "source_text": "de-identified packet text...",
+  "review_task": "insurance_narrative_review",
+  "packet_id": "optional-label"
+}
+```
+
+Response `review` object keys when `status` is `ok`:
+
+```json
+{
+  "missing_data": [],
+  "citation_issues": [],
+  "possible_invented_facts": [],
+  "contradictions": [],
+  "recommended_action": "...",
+  "ready_for_human_review": true
+}
+```
+
+If the `fast_review` lane is down, `status` is `lane_unavailable` with an explicit error — the checker does **not** fall back to `chat_second_opinion` or cloud models.
+
+Python entry point: `app.hal.fast_review_checker.run_fast_review_check(...)`.
 
 Resolve the lane in Python/tests via `app.ai_local_config.resolve_profile_base_url("fast_review")`.
 
