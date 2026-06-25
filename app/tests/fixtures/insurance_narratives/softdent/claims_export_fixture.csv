@@ -1,0 +1,3 @@
+patient_ref,claim_id,payer_name,service_date,claim_status,claim_amount,procedure_ids,source_report_date
+CHART-EXPORT,CLAIM-EXPORT-1,Delta Dental,2026-06-12,Denied,215.75,PROC-CROWN-30,2026-06-20
+CHART-OTHER,CLAIM-OTHER-9,MetLife,2026-06-01,Paid,100.00,PROC-OTHER,2026-06-20

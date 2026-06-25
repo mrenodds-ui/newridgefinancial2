@@ -10,8 +10,10 @@ from app.insurance_narratives.data_adapter import (
     InsuranceNarrativePacketInputs,
     InsuranceNarrativeScope,
     LocalInsuranceNarrativeDataAdapter,
+    SoftDentExportFileInsuranceNarrativeAdapter,
     build_packet_inputs_from_adapter_scope,
     default_fixture_adapter,
+    softdent_export_file_adapter,
 )
 from app.insurance_narratives.draft import (
     draft_insurance_narrative_from_packet,
@@ -76,6 +78,7 @@ __all__ = [
     "InsuranceNarrativeWorkflowOptions",
     "InsuranceNarrativeWorkflowResult",
     "LocalInsuranceNarrativeDataAdapter",
+    "SoftDentExportFileInsuranceNarrativeAdapter",
     "NarrativeAttachmentSummary",
     "NarrativeAuditMetadata",
     "NarrativeCheckerSummary",
@@ -110,4 +113,5 @@ __all__ = [
     "export_approved_insurance_narrative",
     "reject_narrative_draft",
     "request_narrative_revision",
+    "softdent_export_file_adapter",
 ]

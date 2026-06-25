@@ -20,7 +20,7 @@ that is:
 ## Architecture
 
 ```text
-Scoped adapter (fixture | local export)
+Scoped adapter (fixture | local export | SoftDent export file)
         |
         v
 InsuranceNarrativeScope  ->  fetch_packet_inputs(scope)
@@ -58,6 +58,7 @@ Python module: `app.insurance_narratives`
 | `InsuranceNarrativePacketInputs` | Bounded adapter output before packet assembly (no raw DB rows) |
 | `FixtureInsuranceNarrativeDataAdapter` | Deterministic de-identified fixtures (default for tests) |
 | `LocalInsuranceNarrativeDataAdapter` | Conservative SoftDent export reader (explicit opt-in only) |
+| `SoftDentExportFileInsuranceNarrativeAdapter` | Scoped CSV export reader for insurance narrative packets |
 | `InsuranceNarrativeCasePacket` | Top-level bounded packet |
 | `PatientCaseSummary` | Patient reference label (no raw PHI dump) |
 | `ClaimCaseSummary` | Claim id, status, payer, billed amount, denial reason |
@@ -93,6 +94,8 @@ from app.insurance_narratives import (
     InsuranceNarrativeScope,
     FixtureInsuranceNarrativeDataAdapter,
     LocalInsuranceNarrativeDataAdapter,
+    SoftDentExportFileInsuranceNarrativeAdapter,
+    softdent_export_file_adapter,
     build_insurance_narrative_case_packet,
     build_packet_inputs_from_adapter_scope,
 )
@@ -114,19 +117,48 @@ local_packet = build_insurance_narrative_case_packet(
     **scope.model_dump(),
     adapter=LocalInsuranceNarrativeDataAdapter(),
 )
+
+# Explicit SoftDent export-file adapter (CSV imports; no E-Services/Gateway)
+export_packet = build_insurance_narrative_case_packet(
+    **scope.model_dump(),
+    adapter=softdent_export_file_adapter(),
+)
 ```
 
-### Fixture vs local adapter
+### Fixture vs local vs export-file adapter
 
 | Adapter | `adapter_name` | `source_mode` | When to use |
 | --- | --- | --- | --- |
 | `FixtureInsuranceNarrativeDataAdapter` | `fixture` | `fixture` | Tests, local dev, default when `adapter=None` |
 | `LocalInsuranceNarrativeDataAdapter` | `local_softdent_export` | `local_export` | Explicit opt-in when approved SoftDent claim/clinical-note exports exist |
+| `SoftDentExportFileInsuranceNarrativeAdapter` | `softdent_export_file` | `export_file` | Scoped insurance-narrative CSV exports from `INSURANCE_NARRATIVE_SOFTDENT_EXPORT_DIR` |
 
 The fixture adapter preserves all prior deterministic behavior (`CHART-A` / `CLAIM-1001`).
 The local adapter reads only scoped rows from `load_softdent_claim_rows()` and
-`load_softdent_clinical_note_rows()` matched by `patient_ref` and `claim_id`. It does
-not invent facts, synthesize A/R, or read arbitrary files.
+`load_softdent_clinical_note_rows()` matched by `patient_ref`, `claim_id`, optional
+`procedure_ids`, and optional `date_range`. It emits source facts only when the row can
+be cited with a `fact_id`, `source_type`, `source_label`, and `source_date`; it does not
+invent facts, synthesize A/R, or read arbitrary files.
+
+The export-file adapter reads **only** known CSV files from a configured import directory.
+It does **not** use Carestream/Sensei E-Services, Gateway APIs, or direct SoftDent database
+access. Configure with:
+
+```bash
+INSURANCE_NARRATIVE_SOFTDENT_EXPORT_DIR=app/data/imports/insurance_narratives/softdent
+```
+
+Supported first-pass exports:
+
+| File | Required columns |
+| --- | --- |
+| `softdent_claims_export.csv` | `patient_ref`, `claim_id`, `payer_name`, `service_date`, `claim_status`, `claim_amount`, `procedure_ids`, `source_report_date` |
+| `softdent_procedures_export.csv` | `patient_ref`, `procedure_id`, `procedure_code`, `procedure_description`, `service_date`, `tooth`, `provider_label`, `source_report_date` |
+
+Scoped parsing matches `patient_ref` and `claim_id`; procedure rows are linked via
+`procedure_ids` on the claim row (comma-separated). Non-matching export rows are ignored.
+Malformed or missing exports surface explicit missing-data codes — never invented clinical
+facts or synthetic `$0` A/R.
 
 ### Explicit scope (no open queries)
 
@@ -152,7 +184,7 @@ scoped A/R mapping is approved.
 1. Wire scoped A/R aging from approved exports (still as missing-data when absent).
 2. Map attachment availability from SoftDent imaging export contracts.
 3. Add prior-auth reference lookup when export schema is stable.
-4. Expose adapter selection on operator routes via a safe enum (`fixture` | `local_export`) only.
+4. Expose adapter selection on operator routes via a safe enum (`fixture` | `local_softdent`) only.
 
 Audit metadata on each packet records `adapter_name` and `source_mode` for traceability.
 
@@ -394,6 +426,10 @@ Missing exports are **explicit** `NarrativeMissingDataItem` entries:
 | Code | Meaning |
 | --- | --- |
 | `missing_softdent_ar` | No A/R export — unavailable, **not** `$0` |
+| `missing_softdent_claims_export` | `softdent_claims_export.csv` missing or unreadable in narrative import dir |
+| `missing_softdent_procedures_export` | `softdent_procedures_export.csv` missing or unreadable |
+| `missing_scoped_claim_row` | No claim row matched `patient_ref` + `claim_id` |
+| `missing_scoped_procedure_rows` | Linked procedure rows not found in procedures export |
 | `missing_prior_auth` | Prior auth reference not in packet |
 | `missing_radiograph` | Supporting image unavailable |
 | `missing_claim_record` | No matching claim in approved scope |
@@ -418,9 +454,11 @@ second-opinion path on `:11435` / `qwen3:30b`.
 
 `build_insurance_narrative_case_packet()` defaults to `FixtureInsuranceNarrativeDataAdapter`
 when `adapter=None` (deterministic de-identified fixtures). Pass
-`LocalInsuranceNarrativeDataAdapter()` explicitly for conservative reads from approved
-SoftDent exports. The builder does not invent clinical facts, synthesize dental A/R, or
-return unrestricted database tables regardless of adapter.
+`LocalInsuranceNarrativeDataAdapter()` for conservative reads from approved SoftDent
+dashboard claim exports, or `SoftDentExportFileInsuranceNarrativeAdapter()` for scoped
+reads from `INSURANCE_NARRATIVE_SOFTDENT_EXPORT_DIR` CSV files. The builder does not invent
+clinical facts, synthesize dental A/R, or return unrestricted database tables regardless of
+adapter.
 
 ## Tests
 
@@ -429,8 +467,8 @@ semantics, fact ids, fast-review source text, and PHI-like fixture scans.
 
 `app/tests/test_insurance_case_packet_adapter.py` covers fixture preservation, explicit
 adapter wiring, scoped inputs only, no raw rows in packets, missing-data policy, local
-adapter skeleton behavior, audit metadata (`adapter_name` / `source_mode`), and workflow
-adapter passthrough.
+and SoftDent export-file adapter behavior, audit metadata (`adapter_name` / `source_mode`),
+and workflow adapter passthrough.
 
 `app/tests/test_insurance_narrative_draft.py` covers template drafting, citations, blocking
 status, warnings, approval requirements, and `draft_to_fast_review_source_text`.

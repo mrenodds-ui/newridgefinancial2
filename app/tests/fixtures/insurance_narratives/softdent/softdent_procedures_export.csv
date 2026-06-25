@@ -1,0 +1,3 @@
+patient_ref,procedure_id,procedure_code,procedure_description,service_date,tooth,provider_label,source_report_date
+CHART-EXPORT,PROC-CROWN-30,D2950,Crown buildup,2026-06-12,30,Dr. Smith,2026-06-20
+CHART-OTHER,PROC-OTHER,D1110,Prophylaxis,2026-06-01,,Dr. Jones,2026-06-20
