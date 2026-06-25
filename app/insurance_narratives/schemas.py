@@ -21,6 +21,9 @@ MissingDataSeverity = Literal["info", "warning", "critical"]
 
 CASE_PACKET_SCHEMA_VERSION = "1.0.0"
 CASE_PACKET_BUILDER_VERSION = "1.0.0"
+NARRATIVE_DRAFT_VERSION = "1.0.0"
+
+NarrativeDraftStatus = Literal["draft", "blocked_missing_data", "ready_for_human_review"]
 
 
 class NarrativeSourceFact(BaseModel):
@@ -96,3 +99,42 @@ class InsuranceNarrativeCasePacket(BaseModel):
     attachments: list[NarrativeAttachmentSummary] = Field(default_factory=list)
     missing_data: list[NarrativeMissingDataItem] = Field(default_factory=list)
     audit_metadata: NarrativeAuditMetadata
+
+
+class NarrativeDraftCitation(BaseModel):
+    fact_id: str
+    section_key: str
+    excerpt: str
+
+
+class NarrativeDraftWarning(BaseModel):
+    code: str
+    message: str
+    severity: MissingDataSeverity
+
+
+class NarrativeDraftSection(BaseModel):
+    key: str
+    title: str
+    body: str
+
+
+class NarrativeDraftAuditMetadata(BaseModel):
+    created_at: str
+    created_by: str
+    drafter_version: str = NARRATIVE_DRAFT_VERSION
+
+
+class InsuranceNarrativeDraft(BaseModel):
+    draft_id: str
+    packet_id: str
+    narrative_type: str
+    status: NarrativeDraftStatus
+    sections: list[NarrativeDraftSection] = Field(default_factory=list)
+    citations: list[NarrativeDraftCitation] = Field(default_factory=list)
+    warnings: list[NarrativeDraftWarning] = Field(default_factory=list)
+    missing_data: list[NarrativeMissingDataItem] = Field(default_factory=list)
+    created_at: str
+    actor: str
+    approval_required: bool = True
+    audit_metadata: NarrativeDraftAuditMetadata

@@ -28,8 +28,10 @@ build_insurance_narrative_case_packet(...)
         v
 InsuranceNarrativeCasePacket
         |
-        +--> case_packet_to_fast_review_source_text(packet)   # later: opt-in fast_review checker
-        +--> future narrative drafter (not built yet)
+        +--> draft_insurance_narrative_from_packet(packet) -> InsuranceNarrativeDraft
+        |         |
+        |         +--> draft_to_fast_review_source_text(packet, draft)   # opt-in checker input
+        +--> case_packet_to_fast_review_source_text(packet)
 ```
 
 Python module: `app.insurance_narratives`
@@ -44,6 +46,52 @@ Python module: `app.insurance_narratives`
 | `NarrativeAttachmentSummary` | Attachment availability summary |
 | `NarrativeMissingDataItem` | Explicit unavailable data (never fake `$0`) |
 | `NarrativeAuditMetadata` | Actor, timestamps, schema version |
+| `InsuranceNarrativeDraft` | Template draft from a bounded packet |
+| `NarrativeDraftSection` | Purpose, summary, facts, limitations, next step |
+| `NarrativeDraftCitation` | `fact_id` citation tied to a draft section |
+| `NarrativeDraftWarning` | Non-blocking missing-data warnings |
+
+## Packet-bounded drafting
+
+`draft_insurance_narrative_from_packet(packet, actor=...)` builds a **template/rule-based** draft
+from packet facts only. No live model is required in this patch.
+
+Draft sections:
+
+1. **Purpose** — human-reviewed scope statement
+2. **Case Summary** — patient/claim scope with cited facts
+3. **Supporting Facts** — one line per `source_facts[]` entry with `[fact_id]`
+4. **Missing Information / Limitations** — explicit missing-data codes (unavailable, not `$0`)
+5. **Recommended Next Step** — staff action before any submission
+
+### Draft status
+
+| Status | When |
+| --- | --- |
+| `blocked_missing_data` | Any `missing_data[].blocking == true` |
+| `ready_for_human_review` | No blocking missing data |
+| `draft` | Reserved for future in-progress states |
+
+`approval_required` is **always** `true`. Nothing auto-submits to payers.
+
+### Citation requirements
+
+Every factual sentence in **Case Summary** and **Supporting Facts** must cite a packet
+`fact_id`. Missing-data references use `missing_data[].code` in the limitations section.
+The drafter does not invent clinical facts, patient details, or synthetic A/R.
+
+```python
+from app.insurance_narratives import (
+    build_insurance_narrative_case_packet,
+    draft_insurance_narrative_from_packet,
+    draft_to_fast_review_source_text,
+)
+
+packet = build_insurance_narrative_case_packet(...)
+draft = draft_insurance_narrative_from_packet(packet, actor="operator")
+checker_input = draft_to_fast_review_source_text(packet, draft)
+# Later (explicit opt-in only): run_fast_review_check(source_text=checker_input, ...)
+```
 
 ## Source facts and citations
 
@@ -75,23 +123,11 @@ Each item has `severity`, `why_it_matters`, and `blocking`.
 Case packets are inputs to human-reviewed workflows. Nothing in this layer auto-submits to payers
 or replaces staff judgment.
 
-## Fast review checker (later)
+## Fast review checker (opt-in, later)
 
-The opt-in checker (`POST /api/hal9000/fast-review-check`, `run_fast_review_check`) remains
-separate. Convert a packet with:
-
-```python
-from app.insurance_narratives import build_insurance_narrative_case_packet, case_packet_to_fast_review_source_text
-
-packet = build_insurance_narrative_case_packet(
-    patient_ref="CHART-A",
-    claim_id="CLAIM-1001",
-    narrative_type="denied_claim_resubmission",
-    actor="operator",
-)
-source_text = case_packet_to_fast_review_source_text(packet)
-# Later: pass source_text to run_fast_review_check(...) when explicitly requested
-```
+The opt-in checker (`POST /api/hal9000/fast-review-check`, `run_fast_review_check`) is **not**
+called automatically by the drafter. Use `draft_to_fast_review_source_text(packet, draft)` to
+prepare deterministic checker input when staff explicitly requests a structured review.
 
 `fast_review` is **not** a default narrative writer. `chat_second_opinion` remains the production
 second-opinion path on `:11435` / `qwen3:30b`.
@@ -107,3 +143,6 @@ export contracts are wired with the same bounds.
 
 `app/tests/test_insurance_case_packet.py` covers serialization, deterministic ids, missing A/R
 semantics, fact ids, fast-review source text, and PHI-like fixture scans.
+
+`app/tests/test_insurance_narrative_draft.py` covers template drafting, citations, blocking
+status, warnings, approval requirements, and `draft_to_fast_review_source_text`.
