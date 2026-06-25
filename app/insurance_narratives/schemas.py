@@ -23,6 +23,7 @@ CASE_PACKET_SCHEMA_VERSION = "1.0.0"
 CASE_PACKET_BUILDER_VERSION = "1.0.0"
 NARRATIVE_DRAFT_VERSION = "1.0.0"
 NARRATIVE_REVIEW_VERSION = "1.0.0"
+NARRATIVE_EXPORT_VERSION = "1.0.0"
 
 NarrativeDraftStatus = Literal["draft", "blocked_missing_data", "ready_for_human_review"]
 NarrativeReviewStatus = Literal[
@@ -31,6 +32,8 @@ NarrativeReviewStatus = Literal[
     "rejected",
     "revision_requested",
 ]
+NarrativeExportFormat = Literal["plain_text", "markdown"]
+NarrativeSubmissionStatus = Literal["not_submitted"]
 
 
 class NarrativeSourceFact(BaseModel):
@@ -184,3 +187,41 @@ class InsuranceNarrativeReviewRecord(BaseModel):
     audit_events: list[NarrativeReviewAuditEvent] = Field(default_factory=list)
     created_at: str
     review_version: str = NARRATIVE_REVIEW_VERSION
+
+
+class NarrativeExportSection(BaseModel):
+    key: str
+    title: str
+    body: str
+
+
+class NarrativeExportApprovalSummary(BaseModel):
+    reviewer: str
+    reviewed_at: str
+    notes: str | None = None
+    attestation_confirmed: bool
+    attestation_text: str
+
+
+class NarrativeExportAuditMetadata(BaseModel):
+    created_at: str
+    created_by: str
+    export_version: str = NARRATIVE_EXPORT_VERSION
+
+
+class InsuranceNarrativeExport(BaseModel):
+    export_id: str
+    packet_id: str
+    draft_id: str
+    review_id: str
+    format: NarrativeExportFormat
+    title: str
+    body: str
+    sections: list[NarrativeExportSection] = Field(default_factory=list)
+    citations: list[NarrativeDraftCitation] = Field(default_factory=list)
+    missing_data_disclosures: list[NarrativeMissingDataItem] = Field(default_factory=list)
+    approval_summary: NarrativeExportApprovalSummary
+    audit_metadata: NarrativeExportAuditMetadata
+    created_at: str
+    actor: str
+    submission_status: NarrativeSubmissionStatus = "not_submitted"

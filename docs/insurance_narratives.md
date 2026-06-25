@@ -35,6 +35,8 @@ InsuranceNarrativeCasePacket
         |         +--> create_narrative_review_record(draft) -> InsuranceNarrativeReviewRecord
         |                   |
         |                   +--> approve / reject / request_narrative_revision
+        |                             |
+        |                             +--> export_approved_insurance_narrative(...) -> InsuranceNarrativeExport
         +--> case_packet_to_fast_review_source_text(packet)
 ```
 
@@ -57,6 +59,51 @@ Python module: `app.insurance_narratives`
 | `InsuranceNarrativeReviewRecord` | Human review state for a draft |
 | `NarrativeReviewAuditEvent` | Append-only audit trail entry |
 | `NarrativeCheckerSummary` | Advisory fast-review checker counts |
+| `InsuranceNarrativeExport` | Local formatted export for approved drafts |
+| `NarrativeExportSection` | Exported narrative section |
+| `NarrativeExportApprovalSummary` | Reviewer attestation summary on export |
+
+## Approved-only export formatting
+
+After human approval, staff can format an export for **local copy/review** only. Export does
+not submit, email, fax, upload, or write to disk.
+
+```python
+from app.insurance_narratives import export_approved_insurance_narrative
+
+export = export_approved_insurance_narrative(
+    packet=packet,
+    draft=draft,
+    review=approved_review,
+    actor="staff@clinic",
+    export_format="markdown",  # or "plain_text"
+)
+# export.body is ready for human copy; submission_status is always "not_submitted"
+```
+
+### Export rules
+
+- `review.status` must be `approved`
+- `review.approval_attestation` must be `true`
+- `packet_id`, `draft_id`, and `review_id` lineage must match
+- `blocked_missing_data` drafts cannot be exported (defensive guard)
+- Citations, missing-data disclosures, and approval summary are always included
+- `submission_status` is always `not_submitted`
+
+### Supported formats
+
+| Format | Description |
+| --- | --- |
+| `markdown` | Headings with `#` / `##` for staff copy into documents |
+| `plain_text` | Same content with ASCII section dividers |
+
+### Audit lineage
+
+Full traceability chain:
+
+`packet_id` → `draft_id` → `review_id` → `export_id`
+
+Each export records `created_at`, `actor`, and `NarrativeExportAuditMetadata`.
 
 ## Human review workflow
 
@@ -220,3 +267,6 @@ status, warnings, approval requirements, and `draft_to_fast_review_source_text`.
 
 `app/tests/test_insurance_narrative_review.py` covers human review workflow, approval
 attestation, blocked-draft rules, advisory checker summary, audit events, and no auto-submit.
+
+`app/tests/test_insurance_narrative_export.py` covers approved-only export, lineage guards,
+citation/disclosure inclusion, format variants, and no filesystem/network side effects.

@@ -1,4 +1,4 @@
-"""Insurance narrative case-packet foundation, drafting, and human review."""
+"""Insurance narrative case-packet foundation, drafting, review, and export."""
 
 from app.insurance_narratives.case_packet import (
     build_insurance_narrative_case_packet,
@@ -7,6 +7,10 @@ from app.insurance_narratives.case_packet import (
 from app.insurance_narratives.draft import (
     draft_insurance_narrative_from_packet,
     draft_to_fast_review_source_text,
+)
+from app.insurance_narratives.export import (
+    NarrativeExportWorkflowError,
+    export_approved_insurance_narrative,
 )
 from app.insurance_narratives.review import (
     NarrativeReviewWorkflowError,
@@ -21,6 +25,7 @@ from app.insurance_narratives.schemas import (
     DateRangeSummary,
     InsuranceNarrativeCasePacket,
     InsuranceNarrativeDraft,
+    InsuranceNarrativeExport,
     InsuranceNarrativeReviewRecord,
     NarrativeAttachmentSummary,
     NarrativeAuditMetadata,
@@ -29,6 +34,9 @@ from app.insurance_narratives.schemas import (
     NarrativeDraftCitation,
     NarrativeDraftSection,
     NarrativeDraftWarning,
+    NarrativeExportApprovalSummary,
+    NarrativeExportAuditMetadata,
+    NarrativeExportSection,
     NarrativeMissingDataItem,
     NarrativeReviewAuditEvent,
     NarrativeReviewerRef,
@@ -42,6 +50,7 @@ __all__ = [
     "DateRangeSummary",
     "InsuranceNarrativeCasePacket",
     "InsuranceNarrativeDraft",
+    "InsuranceNarrativeExport",
     "InsuranceNarrativeReviewRecord",
     "NarrativeAttachmentSummary",
     "NarrativeAuditMetadata",
@@ -50,6 +59,10 @@ __all__ = [
     "NarrativeDraftCitation",
     "NarrativeDraftSection",
     "NarrativeDraftWarning",
+    "NarrativeExportApprovalSummary",
+    "NarrativeExportAuditMetadata",
+    "NarrativeExportSection",
+    "NarrativeExportWorkflowError",
     "NarrativeMissingDataItem",
     "NarrativeReviewAuditEvent",
     "NarrativeReviewerRef",
@@ -64,6 +77,7 @@ __all__ = [
     "create_narrative_review_record",
     "draft_insurance_narrative_from_packet",
     "draft_to_fast_review_source_text",
+    "export_approved_insurance_narrative",
     "reject_narrative_draft",
     "request_narrative_revision",
 ]
