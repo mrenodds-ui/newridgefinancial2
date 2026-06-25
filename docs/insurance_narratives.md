@@ -227,6 +227,36 @@ Audit metadata on each packet records `adapter_name` and `source_mode` for trace
 approval → export pipeline as **pure local functions**. Operator-only HTTP endpoints wrap this
 facade for future UI integration. No automatic submission and no unrestricted database access.
 
+### Dry-run workflow (synthetic SoftDent exports)
+
+`scripts/run_insurance_narrative_dry_run.py` exercises the full local backend path using
+synthetic CSV fixtures — no UI, no payer submission, no email/fax/upload, and no cloud/235B
+models. The script copies fixture files into canonical SoftDent export filenames, builds a
+packet via `SoftDentExportFileInsuranceNarrativeAdapter`, creates a draft, optionally runs
+`fast_review` only when `--run-checker` is supplied, then performs explicit human approval and
+local export formatting.
+
+```bash
+python scripts/run_insurance_narrative_dry_run.py \
+  --export-dir app/tests/fixtures/insurance_narratives/softdent \
+  --patient-ref CHART-EXPORT \
+  --claim-id CLAIM-EXPORT-1 \
+  --procedure-ids PROC-CROWN-30 \
+  --narrative-type appeal \
+  --actor local-operator \
+  --reviewer local-reviewer \
+  --out insurance_narrative_dry_run_report.json
+```
+
+Synthetic export fixtures use de-identified refs such as `CHART-EXPORT` / `CLAIM-EXPORT-1` /
+`PROC-CROWN-30`. The default `--run-checker` is **false** (opt-in only). Output is written to
+`insurance_narrative_dry_run_report.json` by default and is gitignored.
+
+Report JSON includes `packet_id`, `draft_id`, `review_id`, `export_id`, `workflow_status`,
+`source_fact_count`, `missing_data_codes`, `draft_status`, `review_status`, `export_format`,
+`submission_status` (always `not_submitted` for dry-run exports), `export_body`, optional
+`checker_summary`, and `warnings[]`. Raw CSV rows are never included.
+
 ### Operator-only API endpoints (internal)
 
 | Endpoint | Purpose |

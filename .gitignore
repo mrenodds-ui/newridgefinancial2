@@ -79,6 +79,7 @@ rebuild_receipt.quick.json
 ci_gate_report.json
 ci_gate_report.quick.json
 ci_gate_report.rebuild.json
+insurance_narrative_dry_run_report*.json
 
 # Experimental fast_review lane bakeoff reports (local-only, may include model output)
 fast_review_bakeoff_report.json
