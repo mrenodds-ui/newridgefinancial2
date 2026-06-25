@@ -229,6 +229,10 @@ def test_control_litellm_config_renders_openai_compatible_proxy_yaml(monkeypatch
     assert body["config_path"].endswith("scripts\\litellm_ollama_router.yaml")
     assert "hal-coding" in body["config_yaml"]
     assert "ollama_chat/qwen3:30b" in body["config_yaml"]
+    assert "os.environ/OLLAMA_BACKEND_BASE_URL" in body["config_yaml"]
+    assert "os.environ/OLLAMA_FRONTEND_BASE_URL" in body["config_yaml"]
+    assert "OLLAMA_BACKEND_BASE_URL: http://127.0.0.1:11435" in body["config_yaml"]
+    assert ":11436" not in body["config_yaml"]
     assert body["openai_compatible_example"]["body"]["model"] == "hal-coding"
     assert 'uv tool run --from "litellm[proxy]" litellm --config' in body["startup_command"]
 

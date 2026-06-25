@@ -31,8 +31,9 @@ Backend HAL server tasks (journal draft parser, coder profile, second-opinion la
   -> POST /api/hal9000/second-opinion uses chat_second_opinion on AI_BACKEND_BASE_URL (:11435) -> qwen3:30b
 
 Optional LiteLLM proxy (:4000)
-  -> hal-chat-balanced / hal-vision -> frontend Ollama
-  -> hal-coding / hal-second-opinion / hal-analysis -> backend Ollama
+  -> hal-chat-balanced / hal-vision -> OLLAMA_FRONTEND_BASE_URL (:11434) -> mistral-small3.1:24b
+  -> hal-coding / hal-second-opinion / hal-analysis -> OLLAMA_BACKEND_BASE_URL (:11435) -> qwen3:30b
+  -> qwen3:235b evaluator (:11436) is isolated workflow only; no normal LiteLLM alias uses it
 ```
 
 Configuration is centralized in `app/ai_local_config.py` and `evals/local_model_profiles.json`.
@@ -65,6 +66,8 @@ All lane settings are env-driven (`app/ai_local_config.py` reads `.env`); do not
 | `AI_GPU_BACKEND` | `vulkan` (Windows AMD default) or `rocm` when available |
 | `AI_GPU_LAYERS` | `auto`, `cpu`, or explicit layer count for partial offload |
 | `AI_FRONTEND_BASE_URL` / `AI_BACKEND_BASE_URL` | OpenAI-compatible or Ollama base URLs (ports default `:11434` / `:11435`) |
+| `OLLAMA_FRONTEND_BASE_URL` / `OLLAMA_BACKEND_BASE_URL` | LiteLLM proxy lane URLs (should match the `AI_*` values above) |
+| `OLLAMA_EVALUATOR_BASE_URL` | Isolated 235B evaluator on `:11436` only; not used by normal HAL or LiteLLM aliases |
 | `AI_FRONTEND_MODEL` / `AI_BACKEND_MODEL` | Ollama model tags or LiteLLM aliases |
 | `AI_FRONTEND_MODEL_PATH` / `AI_BACKEND_MODEL_PATH` | Local GGUF paths for `llama_cpp` |
 | `AI_CONTEXT_SIZE` | Shared default context (4096 recommended on 16GB) |

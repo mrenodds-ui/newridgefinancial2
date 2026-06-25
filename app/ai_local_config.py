@@ -16,6 +16,13 @@ DEFAULT_FRONTEND_MODEL = "mistral-small3.1:24b"
 DEFAULT_BACKEND_MODEL = "qwen3:30b"
 DEFAULT_FRONTEND_BASE_URL = "http://127.0.0.1:11434"
 DEFAULT_BACKEND_BASE_URL = "http://127.0.0.1:11435"
+DEFAULT_EVALUATOR_BASE_URL = "http://127.0.0.1:11436"
+
+LITELLM_FRONTEND_ALIASES = frozenset({"hal-chat-balanced", "hal-vision"})
+LITELLM_BACKEND_ALIASES = frozenset({"hal-coding", "hal-analysis", "hal-second-opinion"})
+OLLAMA_FRONTEND_BASE_URL_ENV = "OLLAMA_FRONTEND_BASE_URL"
+OLLAMA_BACKEND_BASE_URL_ENV = "OLLAMA_BACKEND_BASE_URL"
+OLLAMA_LEGACY_FRONTEND_BASE_URL_ENV = "OLLAMA_BASE_URL"
 DEFAULT_FRONTEND_QUANT = "Q4_K_M"
 DEFAULT_BACKEND_QUANT = "Q4_K_S"
 DEFAULT_CONTEXT_SIZE = 4096
@@ -48,20 +55,60 @@ def _strip_openai_suffix(url: str) -> str:
 
 
 def get_frontend_base_url() -> str:
-    explicit = _env("AI_FRONTEND_BASE_URL")
+    explicit = _env("AI_FRONTEND_BASE_URL") or _env(OLLAMA_FRONTEND_BASE_URL_ENV)
     if explicit:
         return _strip_openai_suffix(explicit)
-    legacy = _env("OLLAMA_BASE_URL")
+    legacy = _env(OLLAMA_LEGACY_FRONTEND_BASE_URL_ENV)
     if legacy:
         return _strip_openai_suffix(legacy)
     return DEFAULT_FRONTEND_BASE_URL
 
 
 def get_backend_base_url() -> str:
-    explicit = _env("AI_BACKEND_BASE_URL") or _env("OLLAMA_BACKEND_BASE_URL")
+    explicit = _env("AI_BACKEND_BASE_URL") or _env(OLLAMA_BACKEND_BASE_URL_ENV)
     if explicit:
         return _strip_openai_suffix(explicit)
     return DEFAULT_BACKEND_BASE_URL
+
+
+def get_evaluator_base_url() -> str:
+    explicit = _env("AI_EVALUATOR_BASE_URL") or _env("OLLAMA_EVALUATOR_BASE_URL")
+    if explicit:
+        return _strip_openai_suffix(explicit)
+    return DEFAULT_EVALUATOR_BASE_URL
+
+
+def litellm_lane_for_alias(alias: str) -> str:
+    if alias in LITELLM_BACKEND_ALIASES:
+        return "backend"
+    if alias in LITELLM_FRONTEND_ALIASES:
+        return "frontend"
+    raise LocalAIConfigError(f"Unknown LiteLLM alias: {alias}")
+
+
+def litellm_api_base_env_for_alias(alias: str) -> str:
+    if litellm_lane_for_alias(alias) == "backend":
+        return OLLAMA_BACKEND_BASE_URL_ENV
+    return OLLAMA_FRONTEND_BASE_URL_ENV
+
+
+def resolve_litellm_api_base_url(alias: str) -> str:
+    if litellm_lane_for_alias(alias) == "backend":
+        return get_backend_base_url()
+    return get_frontend_base_url()
+
+
+def build_litellm_environment_variables(*, proxy_base_url: str = "") -> dict[str, str]:
+    frontend_base_url = get_frontend_base_url()
+    backend_base_url = get_backend_base_url()
+    environment_variables = {
+        OLLAMA_FRONTEND_BASE_URL_ENV: frontend_base_url,
+        OLLAMA_LEGACY_FRONTEND_BASE_URL_ENV: frontend_base_url,
+        OLLAMA_BACKEND_BASE_URL_ENV: backend_base_url,
+    }
+    if proxy_base_url.strip():
+        environment_variables["LITELLM_PROXY_BASE_URL"] = proxy_base_url.strip().rstrip("/")
+    return environment_variables
 
 
 def get_frontend_model_name() -> str:

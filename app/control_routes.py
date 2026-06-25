@@ -13,10 +13,12 @@ from fastapi import APIRouter, Depends
 
 from .auth import AuthenticatedUser, require_roles
 from app.ai_local_config import (
+    build_litellm_environment_variables,
     get_backend_base_url,
     get_backend_model_name,
     get_frontend_base_url,
     get_frontend_model_name,
+    litellm_api_base_env_for_alias,
 )
 from .evaluation.client import get_ollama_runtime_status
 from .models import (
@@ -510,7 +512,7 @@ def _litellm_startup_command() -> str:
     return f"uv tool run --from \"litellm[proxy]\" litellm --config \"{LITELLM_ROUTER_CONFIG_PATH}\""
 
 
-def _build_litellm_config_payload(base_url: str, models: list[_ModelCard]) -> dict[str, Any]:
+def _build_litellm_config_payload(models: list[_ModelCard]) -> dict[str, Any]:
     route_groups = _build_litellm_route_groups(models)
     fallback_entries = [
         {group.alias: list(group.fallback_aliases)}
@@ -520,6 +522,7 @@ def _build_litellm_config_payload(base_url: str, models: list[_ModelCard]) -> di
 
     model_list: list[dict[str, Any]] = []
     for group in route_groups:
+        api_base_env = litellm_api_base_env_for_alias(group.alias)
         for model in group.models:
             rpm, tpm = _estimate_litellm_capacity(model)
             model_list.append(
@@ -527,7 +530,7 @@ def _build_litellm_config_payload(base_url: str, models: list[_ModelCard]) -> di
                     "model_name": group.alias,
                     "litellm_params": {
                         "model": f"ollama_chat/{model.name}",
-                        "api_base": "os.environ/OLLAMA_BASE_URL",
+                        "api_base": f"os.environ/{api_base_env}",
                         "rpm": rpm,
                         "tpm": tpm,
                     },
@@ -540,10 +543,9 @@ def _build_litellm_config_payload(base_url: str, models: list[_ModelCard]) -> di
             )
 
     config = {
-        "environment_variables": {
-            "OLLAMA_BASE_URL": base_url,
-            "LITELLM_PROXY_BASE_URL": DEFAULT_LITELLM_PROXY_BASE_URL,
-        },
+        "environment_variables": build_litellm_environment_variables(
+            proxy_base_url=DEFAULT_LITELLM_PROXY_BASE_URL,
+        ),
         "model_list": model_list,
         "litellm_settings": {
             "drop_params": True,
@@ -594,7 +596,7 @@ def _build_litellm_config_payload(base_url: str, models: list[_ModelCard]) -> di
 
 
 def _fetch_litellm_proxy_status(models: list[_ModelCard]) -> dict[str, Any]:
-    payload = _build_litellm_config_payload(DEFAULT_OLLAMA_BASE_URL, models)
+    payload = _build_litellm_config_payload(models)
     proxy_base_url = DEFAULT_LITELLM_PROXY_BASE_URL.rstrip("/")
     health_endpoint = f"{proxy_base_url}/v1/models"
     headers: dict[str, str] = {}
@@ -827,7 +829,7 @@ def control_litellm_config(user: AuthenticatedUser = Depends(require_roles("hal:
     del user
     runtime_status, models = _fetch_model_catalog(DEFAULT_OLLAMA_BASE_URL)
     del runtime_status
-    return _build_litellm_config_payload(DEFAULT_OLLAMA_BASE_URL, models)
+    return _build_litellm_config_payload(models)
 
 
 @router.get("/api/control/litellm/status", response_model=LiteLLMProxyStatusResponse, include_in_schema=False)
