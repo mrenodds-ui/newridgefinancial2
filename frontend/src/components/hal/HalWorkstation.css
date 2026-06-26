@@ -1,0 +1,145 @@
+.hal-workstation-page {
+  background: radial-gradient(circle at top left, rgba(214, 177, 94, 0.14), transparent 34%), #111827;
+}
+
+.hal-workstation-header {
+  color: #f8fafc;
+}
+
+.hal-workstation-header p {
+  max-width: 980px;
+}
+
+.hal-workstation-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.hal-workstation-main,
+.hal-workstation-side {
+  display: grid;
+  gap: 1rem;
+}
+
+.hal-workstation-card {
+  border: 1px solid rgba(214, 177, 94, 0.28);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #e5e7eb;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  padding: 1rem;
+}
+
+.hal-workstation-card h2,
+.hal-workstation-card h3,
+.hal-workstation-card h4 {
+  color: #f8fafc;
+  margin-top: 0;
+}
+
+.hal-workstation-card__header {
+  margin-bottom: 1rem;
+}
+
+.hal-command-center__form,
+.hal-draft-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.hal-command-center__textarea,
+.hal-draft-form input,
+.hal-draft-form textarea,
+.hal-draft-form select {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.88);
+  color: #f8fafc;
+  padding: 0.75rem;
+}
+
+.hal-command-center__checkbox {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.hal-inline-error {
+  color: #fecaca;
+}
+
+.hal-recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.hal-recommendation-grid section,
+.hal-artifact-card,
+.hal-source-group {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.66);
+  padding: 0.85rem;
+}
+
+.hal-artifact-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.hal-artifact-meta div {
+  border-left: 3px solid #d6b15e;
+  padding-left: 0.65rem;
+}
+
+.hal-artifact-meta dt {
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hal-artifact-meta dd {
+  margin: 0.15rem 0 0;
+  color: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.hal-safety-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.85rem 0;
+}
+
+.hal-safety-strip span {
+  border: 1px solid rgba(120, 168, 107, 0.45);
+  border-radius: 999px;
+  background: rgba(21, 128, 61, 0.16);
+  color: #dcfce7;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.82rem;
+}
+
+.hal-speech-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.hal-attention-list {
+  padding-left: 1.1rem;
+}
+
+@media (max-width: 1100px) {
+  .hal-workstation-layout,
+  .hal-recommendation-grid {
+    grid-template-columns: 1fr;
+  }
+}

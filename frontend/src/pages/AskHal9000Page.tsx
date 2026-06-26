@@ -6,7 +6,17 @@ import {
   createHalConversationId,
   executeMonitorReviewAction,
   fetchFinancialSummary,
+  fetchHalStatus,
+  type SoftDentDraftArtifact,
+  type SoftDentLocalPacketArtifact,
 } from "../api/client";
+import { ApprovedLocalPacketsPanel } from "../components/hal/ApprovedLocalPacketsPanel";
+import { DraftsForReviewPanel } from "../components/hal/DraftsForReviewPanel";
+import { HalCommandCenter } from "../components/hal/HalCommandCenter";
+import { HalRecommendationBlock } from "../components/hal/HalRecommendationBlock";
+import { HalSourcesPanel } from "../components/hal/HalSourcesPanel";
+import { HalSystemHealthPanel } from "../components/hal/HalSystemHealthPanel";
+import "../components/hal/HalWorkstation.css";
 
 const HAL_SPEECH_VOICE_KEY = "halSpeechVoice";
 const HAL_SPEECH_RATE_KEY = "halSpeechRate";
@@ -69,6 +79,9 @@ function isAutomatedBrowserSession(): boolean {
 export default function AskHal9000Page() {
   const [question, setQuestion] = useState("");
   const [lastRequestLane, setLastRequestLane] = useState<"primary" | "second_opinion">("primary");
+  const [useSecondOpinion, setUseSecondOpinion] = useState(false);
+  const [selectedDraft, setSelectedDraft] = useState<SoftDentDraftArtifact | null>(null);
+  const [selectedPacket, setSelectedPacket] = useState<SoftDentLocalPacketArtifact | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechRate, setSpeechRate] = useState(() => {
@@ -90,6 +103,10 @@ export default function AskHal9000Page() {
   const financialSummaryQuery = useQuery({
     queryKey: ["financial-summary"],
     queryFn: fetchFinancialSummary,
+  });
+  const halStatusQuery = useQuery({
+    queryKey: ["hal-status"],
+    queryFn: fetchHalStatus,
   });
   const halMutation = useMutation({
     mutationFn: ({ nextQuestion, lane }: { nextQuestion: string; lane: "primary" | "second_opinion" }) =>
@@ -124,11 +141,7 @@ export default function AskHal9000Page() {
 
   function handleAsk(e: FormEvent) {
     e.preventDefault();
-    submitHalQuestion("primary");
-  }
-
-  function handleSecondOpinionAsk() {
-    submitHalQuestion("second_opinion");
+    submitHalQuestion(useSecondOpinion ? "second_opinion" : "primary");
   }
 
   function handleRetryAsk() {
@@ -260,133 +273,118 @@ export default function AskHal9000Page() {
     });
   }
 
+  const speechControls = response ? (
+    <div className="hal-answer-card__section hal-speech-controls">
+      <label htmlFor="hal-response-voice">Voice</label>
+      <select
+        id="hal-response-voice"
+        className="hal-form__textarea"
+        value={selectedVoiceName}
+        onChange={(event) => setSelectedVoiceName(event.target.value)}
+      >
+        {availableVoices.length === 0 ? <option value="">Browser default</option> : null}
+        {availableVoices.map((voice) => (
+          <option key={`${voice.name}-${voice.lang}`} value={voice.name}>
+            {voice.name} ({voice.lang})
+          </option>
+        ))}
+      </select>
+      <label htmlFor="hal-response-rate">Speech rate</label>
+      <input
+        id="hal-response-rate"
+        type="range"
+        min="0.7"
+        max="1.4"
+        step="0.1"
+        value={speechRate}
+        onChange={(event) => setSpeechRate(Number(event.target.value))}
+      />
+      <span>{speechRate.toFixed(1)}x</span>
+      <button type="button" className="refresh-button" onClick={handleSpeakResponse}>
+        Read It Aloud
+      </button>
+      {isSpeaking ? (
+        <button type="button" className="refresh-button" onClick={handleStopSpeaking}>
+          Stop Reading
+        </button>
+      ) : null}
+      {speechError ? <span>{speechError}</span> : null}
+    </div>
+  ) : null;
+
   return (
-    <div className="dashboard-page dashboard-page--hal">
+    <div className="dashboard-page dashboard-page--hal hal-workstation-page">
       <div className="page-content">
-        <header className="page-header">
-          <p className="eyebrow">Dashboard / HAL Workspace</p>
+        <header className="page-header hal-workstation-header">
+          <p className="eyebrow">HAL workstation</p>
           <h1>Ask HAL</h1>
           <p>
-            Ask HAL a question in plain language. HAL answers from the verified information on this system, and anything that could change
-            hardware still waits for your approval first.
+            Read SoftDent facts, prepare drafts for review, approve local packets, and keep every action local:
+            still not submitted, still not written to SoftDent, and still no external delivery.
           </p>
         </header>
-        <form className="hal-form hal-form--narrative" onSubmit={handleAsk}>
-          <label htmlFor="hal-question">What do you want HAL to help with?</label>
-          <textarea
-            className="hal-form__textarea"
-            id="hal-question"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            rows={4}
-            placeholder="e.g. What needs my attention today, or lower the primary monitor brightness to 30%."
-            required
-            minLength={HAL_QUESTION_MIN_LENGTH}
-            aria-invalid={questionTooShort || undefined}
-            aria-describedby={questionTooShort ? "hal-question-length-hint" : undefined}
-          />
-          {questionTooShort ? (
-            <p id="hal-question-length-hint" className="hal-answer-card__error" role="alert">
-              Ask at least 3 characters.
-            </p>
-          ) : null}
-          <br />
-          <div className="hal-form__actions">
-            <button type="submit" className="refresh-button" disabled={!canSubmitQuestion}>
-              {halMutation.isPending && lastRequestLane === "primary" ? "Asking HAL..." : "Ask HAL"}
-            </button>
-            <button
-              type="button"
-              className="refresh-button"
-              onClick={handleSecondOpinionAsk}
-              disabled={!canSubmitQuestion}
-            >
-              {halMutation.isPending && lastRequestLane === "second_opinion" ? "Getting second opinion..." : "Get second opinion"}
-            </button>
-          </div>
-        </form>
 
-        {halMutation.isError && (
-          <div className="hal-answer-card">
-            <h2>That request did not go through</h2>
-            <div>{halMutation.error instanceof Error ? halMutation.error.message : "HAL could not finish that request."}</div>
-            <button type="button" className="refresh-button" onClick={handleRetryAsk} disabled={!canSubmitQuestion}>
-              {halMutation.isPending ? "Retrying..." : "Try Again"}
-            </button>
-          </div>
-        )}
+        <div className="hal-workstation-layout">
+          <div className="hal-workstation-main">
+            <HalCommandCenter
+              question={question}
+              setQuestion={setQuestion}
+              useSecondOpinion={useSecondOpinion}
+              setUseSecondOpinion={setUseSecondOpinion}
+              questionTooShort={questionTooShort}
+              canSubmitQuestion={canSubmitQuestion}
+              isPending={halMutation.isPending}
+              onSubmit={handleAsk}
+            />
 
-        {response && (
-          <div className="hal-answer-card">
-            <h2>HAL's Response</h2>
-            <div className="hal-answer-card__section">
-              <strong>Review depth:</strong> {lastRequestLane === "second_opinion" ? "Second opinion" : "Primary response"}
-            </div>
-            <div className="hal-answer-card__section">
-              <strong>Response profile:</strong> {response.voice_profile.label} · {response.voice_profile.tone}
-            </div>
-            <div className="hal-answer-card__section hal-answer-card__section--lead">{response.answer}</div>
-            <div className="hal-answer-card__section">
-              <label htmlFor="hal-response-voice">Voice</label>
-              <select
-                id="hal-response-voice"
-                className="hal-form__textarea"
-                value={selectedVoiceName}
-                onChange={(event) => setSelectedVoiceName(event.target.value)}
-              >
-                {availableVoices.length === 0 ? <option value="">Browser default</option> : null}
-                {availableVoices.map((voice) => (
-                  <option key={`${voice.name}-${voice.lang}`} value={voice.name}>
-                    {voice.name} ({voice.lang})
-                  </option>
-                ))}
-              </select>
-              <label htmlFor="hal-response-rate">Speech rate</label>
-              <input
-                id="hal-response-rate"
-                type="range"
-                min="0.7"
-                max="1.4"
-                step="0.1"
-                value={speechRate}
-                onChange={(event) => setSpeechRate(Number(event.target.value))}
-              />
-              <div>{speechRate.toFixed(1)}x</div>
-              <button type="button" className="refresh-button" onClick={handleSpeakResponse}>
-                Read It Aloud
-              </button>
-              {isSpeaking ? (
-                <button type="button" className="refresh-button" onClick={handleStopSpeaking}>
-                  Stop Reading
+            {halMutation.isError ? (
+              <div className="hal-workstation-card">
+                <h2>That request did not go through</h2>
+                <p>
+                  {halMutation.error instanceof Error
+                    ? halMutation.error.message
+                    : "HAL could not finish that request. Check permissions or source availability."}
+                </p>
+                <button type="button" className="refresh-button" onClick={handleRetryAsk} disabled={!canSubmitQuestion}>
+                  {halMutation.isPending ? "Retrying..." : "Try Again"}
                 </button>
-              ) : null}
-            </div>
-            {speechError ? <div className="hal-answer-card__section">{speechError}</div> : null}
-            <div className="hal-answer-card__section">
-              <strong>Answer lane:</strong> {humanizeLaneLabel(response.voice_profile.lane)}
-            </div>
-            {(response.voice_profile.style_notes ?? []).length ? (
-              <div className="hal-answer-card__section">
-                <strong>Style notes:</strong> {response.voice_profile.style_notes.join(" ")}
               </div>
             ) : null}
-            <div className="hal-answer-card__section">
-              <strong>Saved question:</strong> {response.sanitized_question}
-            </div>
-            <div className="hal-answer-card__section">
-              <strong>Reference ID:</strong> {response.audit_id}
-            </div>
-            <div className="hal-answer-card__section">
-              <strong>Built-in safeguards:</strong> {response.guardrails.map(humanizeGuardrail).join(", ")}
-            </div>
-            {(response.governance_notes ?? []).length ? (
-              <div className="hal-answer-card__section">
-                <strong>Governance:</strong> {response.governance_notes.map((item) => `${item.label}: ${item.detail}`).join(" | ")}
-              </div>
+
+            <HalRecommendationBlock response={response} reviewDepth={lastRequestLane} speechControls={speechControls} />
+
+            {response ? (
+              <section className="hal-workstation-card">
+                <h2>Safeguards and session details</h2>
+                <p>
+                  <strong>Response profile:</strong> {response.voice_profile.label} · {response.voice_profile.tone}
+                </p>
+                <p>
+                  <strong>Answer lane:</strong> {humanizeLaneLabel(response.voice_profile.lane)}
+                </p>
+                {(response.voice_profile.style_notes ?? []).length ? (
+                  <p>
+                    <strong>Style notes:</strong> {response.voice_profile.style_notes.join(" ")}
+                  </p>
+                ) : null}
+                <p>
+                  <strong>Saved question:</strong> {response.sanitized_question}
+                </p>
+                <p>
+                  <strong>Built-in safeguards:</strong> {response.guardrails.map(humanizeGuardrail).join(", ")}
+                </p>
+                <p>
+                  <strong>Governance:</strong>{" "}
+                  {(response.governance_notes ?? []).length
+                    ? response.governance_notes.map((item) => `${item.label}: ${item.detail}`).join(" | ")
+                    : "No governed memory changes were saved silently."}
+                </p>
+              </section>
             ) : null}
+
             {reviewAction ? (
-              <section className="hal-review-actions">
-                <h3>Before Anything Changes</h3>
+              <section className="hal-workstation-card hal-review-actions">
+                <h2>Before Anything Changes</h2>
                 <div className="hal-review-actions__card">
                   <div className="hal-answer-card__section hal-answer-card__section--lead">{reviewAction.title}</div>
                   <div className="hal-answer-card__section">{reviewAction.confirmation_message}</div>
@@ -410,22 +408,44 @@ export default function AskHal9000Page() {
                   ) : null}
                   {actionMutation.isError ? (
                     <div className="hal-review-actions__result hal-review-actions__result--error">
-                      {actionMutation.error instanceof Error ? actionMutation.error.message : "Unable to execute the reviewed action."}
+                      {actionMutation.error instanceof Error
+                        ? actionMutation.error.message
+                        : "Unable to execute the reviewed action."}
                     </div>
                   ) : null}
                 </div>
               </section>
             ) : null}
-            <h3>What HAL Looked At</h3>
-            {response.retrieved_context.length === 0 ? <div>No supporting details were needed for this answer.</div> : null}
-            {response.retrieved_context.map((item) => (
-              <div key={item.source_id} className="hal-supporting-context-item">
-                <strong>{item.title}</strong>
-                <div>{item.excerpt}</div>
-              </div>
-            ))}
+
+            <DraftsForReviewPanel selectedDraft={selectedDraft} onDraftCreated={setSelectedDraft} />
+            <ApprovedLocalPacketsPanel
+              selectedDraft={selectedDraft}
+              selectedPacket={selectedPacket}
+              onPacketCreated={setSelectedPacket}
+            />
           </div>
-        )}
+
+          <aside className="hal-workstation-side">
+            <section className="hal-workstation-card">
+              <p className="eyebrow">Today&apos;s attention</p>
+              <h2>Office priorities</h2>
+              <ul className="hal-attention-list">
+                <li>Claims needing follow-up</li>
+                <li>Missing documentation</li>
+                <li>Narratives ready for review</li>
+                <li>Drafts awaiting approval</li>
+                <li>Local packets ready</li>
+                <li>SoftDent and QuickBooks source health</li>
+              </ul>
+            </section>
+            <HalSystemHealthPanel
+              halStatus={halStatusQuery.data}
+              financialSummary={financialSummaryQuery.data}
+              isLoading={halStatusQuery.isPending || financialSummaryQuery.isPending}
+            />
+            <HalSourcesPanel response={response} />
+          </aside>
+        </div>
       </div>
     </div>
   );

@@ -51,6 +51,12 @@ import {
   localAccountingDocumentListSchema,
   monitorMutationExecutionResultSchema,
   insuranceNarrativeWorkflowResultSchema,
+  softDentDraftArtifactSchema,
+  softDentLocalPacketArtifactSchema,
+  type SoftDentDraftArtifact,
+  type SoftDentDraftRequest,
+  type SoftDentLocalPacketArtifact,
+  type SoftDentLocalPacketRequest,
   type InsuranceNarrativeCasePacket,
   type InsuranceNarrativeDraft,
   type InsuranceNarrativeWorkflowResult,
@@ -973,7 +979,47 @@ export async function generateHalInsuranceNarrative(question: string): Promise<H
   return halInsuranceNarrativeSchema.parse(primary.payload);
 }
 
-export type { InsuranceNarrativeCasePacket, InsuranceNarrativeDraft, InsuranceNarrativeWorkflowResult };
+export async function createSoftDentDraft(payload: SoftDentDraftRequest): Promise<SoftDentDraftArtifact> {
+  const primary = await requestJson("/hal9000/softdent-drafts", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!primary.response.ok) {
+    throw buildRequestError("/api/hal9000/softdent-drafts", primary.response, primary.payload);
+  }
+  return softDentDraftArtifactSchema.parse(primary.payload);
+}
+
+export async function createSoftDentLocalPacket(
+  payload: SoftDentLocalPacketRequest,
+): Promise<SoftDentLocalPacketArtifact> {
+  const primary = await requestJson("/hal9000/softdent-local-packets", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!primary.response.ok) {
+    throw buildRequestError("/api/hal9000/softdent-local-packets", primary.response, primary.payload);
+  }
+  return softDentLocalPacketArtifactSchema.parse(primary.payload);
+}
+
+export type {
+  InsuranceNarrativeCasePacket,
+  InsuranceNarrativeDraft,
+  InsuranceNarrativeWorkflowResult,
+  SoftDentDraftArtifact,
+  SoftDentDraftRequest,
+  SoftDentLocalPacketArtifact,
+  SoftDentLocalPacketRequest,
+};
 
 export async function createInsuranceNarrativeDraftWorkflow(payload: {
   patient_ref: string;

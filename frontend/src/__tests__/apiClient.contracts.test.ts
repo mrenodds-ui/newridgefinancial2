@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clearApiBasicAuthCredentials } from "../api/basicAuth";
-import { fetchFinancialSummary, refreshHalFinancialSources } from "../api/client";
+import { createSoftDentDraft, createSoftDentLocalPacket, fetchFinancialSummary, refreshHalFinancialSources } from "../api/client";
 
 function buildJsonResponse(payload: unknown, status = 200): Response {
   return {
@@ -99,5 +99,118 @@ describe("HAL API contract parsing", () => {
     );
 
     await expect(refreshHalFinancialSources()).rejects.toThrow();
+  });
+
+  it("creates a SoftDent draft artifact with the expected payload", async () => {
+    fetchMock.mockResolvedValue(
+      buildJsonResponse({
+        draft_id: "sdd-test",
+        draft_type: "insurance_narrative_proposal",
+        patient_label: "John Doe",
+        title: "Insurance narrative proposal",
+        body: "Draft only. Requires human review. Not submitted. Not written to SoftDent.",
+        checklist_items: ["Review payer facts."],
+        source_fact_refs: ["claim:CLM-1001"],
+        missing_data_codes: ["missing_softdent_ar"],
+        limitations: ["No A/R source."],
+        review_required: true,
+        external_action_performed: false,
+      }),
+    );
+
+    await expect(
+      createSoftDentDraft({
+        patient_query: "Patient John Doe claim review",
+        draft_type: "insurance_narrative_proposal",
+        workflow_reason: "hal_workstation_review",
+        include_clinical_context: true,
+        include_ledger_context: false,
+      }),
+    ).resolves.toMatchObject({
+      draft_id: "sdd-test",
+      review_required: true,
+      external_action_performed: false,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/hal9000/softdent-drafts"),
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("insurance_narrative_proposal"),
+      }),
+    );
+  });
+
+  it("creates a SoftDent local packet artifact with attestation", async () => {
+    fetchMock.mockResolvedValue(
+      buildJsonResponse({
+        packet_id: "sdp-test",
+        source_draft_id: "sdd-test",
+        packet_type: "approved_narrative_packet",
+        patient_label: "John Doe",
+        title: "Approved narrative packet",
+        body: "Local only. Approved for internal office use. Not submitted. Not written to SoftDent.",
+        checklist_items: ["Review payer facts."],
+        source_fact_refs: ["claim:CLM-1001"],
+        missing_data_codes: ["missing_softdent_ar"],
+        limitations: ["Local only."],
+        approval_attestation: {
+          approved_by: "Billing Lead",
+          approval_note: "Reviewed for internal use only.",
+          reviewed_at_utc: "2026-06-26T18:00:00Z",
+          attestation_checked: true,
+          acknowledged_local_only: true,
+          acknowledged_not_submitted: true,
+          acknowledged_no_softdent_writeback: true,
+          acknowledged_no_external_delivery: true,
+        },
+        submission_status: "not_submitted",
+        external_action_performed: false,
+        softdent_writeback_performed: false,
+        local_only: true,
+      }),
+    );
+
+    await expect(
+      createSoftDentLocalPacket({
+        draft_artifact: {
+          draft_id: "sdd-test",
+          draft_type: "insurance_narrative_proposal",
+          patient_label: "John Doe",
+          title: "Insurance narrative proposal",
+          body: "Draft only.",
+          checklist_items: [],
+          source_fact_refs: ["claim:CLM-1001"],
+          missing_data_codes: ["missing_softdent_ar"],
+          limitations: [],
+          review_required: true,
+          external_action_performed: false,
+        },
+        packet_type: "approved_narrative_packet",
+        approval_attestation: {
+          approved_by: "Billing Lead",
+          approval_note: "Reviewed for internal use only.",
+          attestation_checked: true,
+          acknowledged_local_only: true,
+          acknowledged_not_submitted: true,
+          acknowledged_no_softdent_writeback: true,
+          acknowledged_no_external_delivery: true,
+        },
+      }),
+    ).resolves.toMatchObject({
+      packet_id: "sdp-test",
+      submission_status: "not_submitted",
+      external_action_performed: false,
+      softdent_writeback_performed: false,
+      local_only: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/hal9000/softdent-local-packets"),
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("acknowledged_no_external_delivery"),
+      }),
+    );
   });
 });

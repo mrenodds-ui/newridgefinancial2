@@ -961,6 +961,84 @@ export const halPatientDossierSchema = z.object({
   governance_notes: z.array(halGovernanceNoteSchema).default([]),
 });
 
+export const softDentDraftTypeSchema = z.enum([
+  "clinical_note_proposal",
+  "insurance_narrative_proposal",
+  "claim_follow_up_checklist",
+  "missing_document_checklist",
+  "payer_appeal_prep_summary",
+  "staff_task_recommendation",
+  "internal_patient_summary",
+]);
+
+export const softDentDraftRequestSchema = z.object({
+  patient_query: z.string().min(3),
+  claim_id: z.string().nullable().optional(),
+  draft_type: softDentDraftTypeSchema,
+  workflow_reason: z.string().default("staff_review"),
+  include_clinical_context: z.boolean().default(true),
+  include_ledger_context: z.boolean().default(false),
+});
+
+export const softDentDraftArtifactSchema = z.object({
+  draft_id: z.string(),
+  draft_type: softDentDraftTypeSchema,
+  patient_label: z.string(),
+  title: z.string(),
+  body: z.string(),
+  checklist_items: z.array(z.string()).default([]),
+  source_fact_refs: z.array(z.string()).default([]),
+  missing_data_codes: z.array(z.string()).default([]),
+  limitations: z.array(z.string()).default([]),
+  review_required: z.boolean().default(true),
+  external_action_performed: z.boolean().default(false),
+});
+
+export const softDentPacketTypeSchema = z.enum([
+  "approved_narrative_packet",
+  "appeal_prep_packet",
+  "missing_document_checklist_packet",
+  "staff_task_packet",
+  "patient_claim_review_packet",
+  "printable_internal_review_artifact",
+  "copied_draft_text_packet",
+]);
+
+export const softDentPacketApprovalAttestationSchema = z.object({
+  approved_by: z.string().min(1),
+  approval_note: z.string().min(1),
+  reviewed_at_utc: z.string().nullable().optional(),
+  attestation_checked: z.boolean(),
+  acknowledged_local_only: z.boolean(),
+  acknowledged_not_submitted: z.boolean(),
+  acknowledged_no_softdent_writeback: z.boolean(),
+  acknowledged_no_external_delivery: z.boolean(),
+});
+
+export const softDentLocalPacketRequestSchema = z.object({
+  draft_artifact: softDentDraftArtifactSchema,
+  packet_type: softDentPacketTypeSchema,
+  approval_attestation: softDentPacketApprovalAttestationSchema,
+});
+
+export const softDentLocalPacketArtifactSchema = z.object({
+  packet_id: z.string(),
+  source_draft_id: z.string(),
+  packet_type: softDentPacketTypeSchema,
+  patient_label: z.string(),
+  title: z.string(),
+  body: z.string(),
+  checklist_items: z.array(z.string()).default([]),
+  source_fact_refs: z.array(z.string()).default([]),
+  missing_data_codes: z.array(z.string()).default([]),
+  limitations: z.array(z.string()).default([]),
+  approval_attestation: softDentPacketApprovalAttestationSchema,
+  submission_status: z.literal("not_submitted"),
+  external_action_performed: z.boolean().default(false),
+  softdent_writeback_performed: z.boolean().default(false),
+  local_only: z.boolean().default(true),
+});
+
 export const journalLineSchema = z.object({
   account_code: z.string().default(""),
   account_name: z.string().default(""),
@@ -1261,3 +1339,10 @@ export const insuranceNarrativeWorkflowResultSchema = z
 export type InsuranceNarrativeCasePacket = z.infer<typeof insuranceNarrativeCasePacketSchema>;
 export type InsuranceNarrativeDraft = z.infer<typeof insuranceNarrativeDraftSchema>;
 export type InsuranceNarrativeWorkflowResult = z.infer<typeof insuranceNarrativeWorkflowResultSchema>;
+export type SoftDentDraftType = z.infer<typeof softDentDraftTypeSchema>;
+export type SoftDentDraftRequest = z.infer<typeof softDentDraftRequestSchema>;
+export type SoftDentDraftArtifact = z.infer<typeof softDentDraftArtifactSchema>;
+export type SoftDentPacketType = z.infer<typeof softDentPacketTypeSchema>;
+export type SoftDentPacketApprovalAttestation = z.infer<typeof softDentPacketApprovalAttestationSchema>;
+export type SoftDentLocalPacketRequest = z.infer<typeof softDentLocalPacketRequestSchema>;
+export type SoftDentLocalPacketArtifact = z.infer<typeof softDentLocalPacketArtifactSchema>;

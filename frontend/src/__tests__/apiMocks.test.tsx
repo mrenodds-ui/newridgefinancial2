@@ -268,7 +268,7 @@ describe("api mocks", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ask HAL" }));
 
     expect(await screen.findByText("HAL's Response")).toBeInTheDocument();
-    expect(screen.getByText(/I can help with that\./)).toBeInTheDocument();
+    expect(screen.getAllByText(/I can help with that\./).length).toBeGreaterThan(0);
     expect(screen.getByText(/Reference ID:/)).toBeInTheDocument();
     expect(screen.getByText(/Built-in safeguards:/)).toBeInTheDocument();
     expect(screen.getByText(/Verified Physical Monitor Parameters/)).toBeInTheDocument();
@@ -395,7 +395,7 @@ describe("api mocks", () => {
     resolveRequest();
 
     expect(await screen.findByText(/HAL's Response/)).toBeInTheDocument();
-    expect(screen.getByText(/HAL handled: Give me the current operating picture\./)).toBeInTheDocument();
+    expect(screen.getAllByText(/HAL handled: Give me the current operating picture\./).length).toBeGreaterThan(0);
   });
 
   it("does not submit HAL questions shorter than three characters", async () => {
@@ -421,7 +421,7 @@ describe("api mocks", () => {
 
     expect(screen.getByText("Ask at least 3 characters.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ask HAL" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Get second opinion" })).toBeDisabled();
+    expect(screen.getByLabelText("Use deeper second opinion when needed")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Ask HAL" }));
 
@@ -453,7 +453,7 @@ describe("api mocks", () => {
 
     expect(await screen.findByText("HAL's Response")).toBeInTheDocument();
     expect(capturedQuestion).toBe("What needs my attention today?");
-    expect(screen.getByText(/Here is what needs attention today\./)).toBeInTheDocument();
+    expect(screen.getAllByText(/Here is what needs attention today\./).length).toBeGreaterThan(0);
   });
 
   it("shows a generic error when HAL returns a malformed response shape", async () => {
@@ -687,7 +687,7 @@ describe("api mocks", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try Again" }));
 
     expect(await screen.findByText("HAL's Response")).toBeInTheDocument();
-    expect(screen.getByText("I retried the request and the connection is back.")).toBeInTheDocument();
+    expect(screen.getAllByText("I retried the request and the connection is back.").length).toBeGreaterThan(0);
     expect(attempts).toBe(2);
   });
 
