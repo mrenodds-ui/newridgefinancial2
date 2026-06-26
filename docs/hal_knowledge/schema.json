@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HAL knowledge/memory registry entry",
+  "description": "Governed durable operational knowledge for HAL. This is NOT a guardrail bypass list, NOT a raw-data dump, and NOT a production allowlist. Memories provide context only; auth, HalAskRequest, guardrails, and live runtime checks always win.",
+  "type": "object",
+  "required": [
+    "id",
+    "category",
+    "text",
+    "source",
+    "created_at",
+    "last_verified_at",
+    "confidence",
+    "scope",
+    "staleness_rule",
+    "sensitivity_level",
+    "status",
+    "must_not_override"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "minLength": 3,
+      "maxLength": 80
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "project_architecture",
+        "hal_runtime_lanes",
+        "known_workflows",
+        "safety_policy",
+        "insurance_narratives",
+        "softdent_exports",
+        "quickbooks_readonly",
+        "known_bugs_and_fixes",
+        "operator_playbooks",
+        "deployment_notes",
+        "test_results",
+        "future_tasks"
+      ]
+    },
+    "text": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 2000
+    },
+    "source": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 500
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_verified_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"]
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "global",
+        "hal",
+        "insurance_narratives",
+        "softdent",
+        "quickbooks",
+        "local_ai",
+        "testing",
+        "deployment"
+      ]
+    },
+    "staleness_rule": {
+      "type": "string",
+      "enum": [
+        "never",
+        "verify_monthly",
+        "runtime_check_required",
+        "expires_30d",
+        "expires_90d"
+      ]
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sensitivity_level": {
+      "type": "string",
+      "enum": ["public_docs", "internal_safe", "restricted", "prohibited"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "approved", "deprecated", "revoked"]
+    },
+    "must_not_override": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "runtime_status",
+          "auth",
+          "guardrails",
+          "source_availability",
+          "hal_ask_request"
+        ]
+      }
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 600
+    }
+  }
+}

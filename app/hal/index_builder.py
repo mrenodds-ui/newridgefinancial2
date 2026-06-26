@@ -8,6 +8,7 @@ from typing import Any
 from app.services import get_kpi_data
 
 from .financial_tools import build_financial_snapshot_documents
+from .knowledge_memory import build_knowledge_memory_documents
 from .sanitization import sanitize_hal_text
 from .storage import get_hal_storage_path
 from .vector_store import rebuild_hal_collection
@@ -74,14 +75,21 @@ def _build_local_hal_document_bundle() -> tuple[list[dict[str, str]], int]:
     source_files = _get_document_source_files()
     kpi_documents = _build_kpi_documents()
     financial_documents = build_financial_snapshot_documents()
+    knowledge_memory_documents = build_knowledge_memory_documents()
 
     documents: list[dict[str, str]] = []
     for source_path in source_files:
         documents.extend(_chunk_markdown(source_path))
     documents.extend(kpi_documents)
     documents.extend(financial_documents)
+    documents.extend(knowledge_memory_documents)
 
-    source_count = len(source_files) + len(kpi_documents) + len(financial_documents)
+    source_count = (
+        len(source_files)
+        + len(kpi_documents)
+        + len(financial_documents)
+        + len(knowledge_memory_documents)
+    )
     return documents, source_count
 
 

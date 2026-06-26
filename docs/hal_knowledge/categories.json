@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "purpose": "Category definitions for the governed HAL knowledge/memory registry. Categories describe the kind of durable operational knowledge a memory holds, not permissions or guardrail bypass rules.",
+  "categories": {
+    "project_architecture": {
+      "description": "Stable repo and service architecture facts (modules, boundaries, read-only posture).",
+      "default_staleness_rule": "never",
+      "retrieval_priority": "guidance",
+      "may_override_runtime": false
+    },
+    "hal_runtime_lanes": {
+      "description": "Local model lane URLs, profile aliases, and routing roles. Runtime health must still be checked live.",
+      "default_staleness_rule": "runtime_check_required",
+      "retrieval_priority": "guidance",
+      "may_override_runtime": false
+    },
+    "known_workflows": {
+      "description": "Approved operator workflows and review steps (read-only, local-first).",
+      "default_staleness_rule": "verify_monthly",
+      "retrieval_priority": "guidance",
+      "may_override_runtime": false
+    },
+    "safety_policy": {
+      "description": "Non-negotiable safety boundaries (no submit/send/fax/upload/Gateway, no raw CSV, no A/R inference).",
+      "default_staleness_rule": "never",
+      "retrieval_priority": "policy",
+      "may_override_runtime": false
+    },
+    "insurance_narratives": {
+      "description": "Insurance narrative workflow boundaries (local-only, review-required, not_submitted).",
+      "default_staleness_rule": "verify_monthly",
+      "retrieval_priority": "guidance",
+      "may_override_runtime": false
+    },
+    "softdent_exports": {
+      "description": "SoftDent export-file mode boundaries and missing-data rules.",
+      "default_staleness_rule": "runtime_check_required",
+      "retrieval_priority": "guidance",
+      "may_override_runtime": false
+    },
+    "quickbooks_readonly": {
+      "description": "QuickBooks read-only summary boundary; no write path.",
+      "default_staleness_rule": "verify_monthly",
+      "retrieval_priority": "guidance",
+      "may_override_runtime": false
+    },
+    "known_bugs_and_fixes": {
+      "description": "Historical incidents, root causes, and verified fixes. Historical unless re-verified.",
+      "default_staleness_rule": "verify_monthly",
+      "retrieval_priority": "historical",
+      "may_override_runtime": false
+    },
+    "operator_playbooks": {
+      "description": "Step-by-step operator playbooks for common tasks.",
+      "default_staleness_rule": "verify_monthly",
+      "retrieval_priority": "guidance",
+      "may_override_runtime": false
+    },
+    "deployment_notes": {
+      "description": "Deployment and environment notes. May become stale; runtime config wins.",
+      "default_staleness_rule": "expires_90d",
+      "retrieval_priority": "historical",
+      "may_override_runtime": false
+    },
+    "test_results": {
+      "description": "Summarized test/eval outcomes with date and environment. Not current health.",
+      "default_staleness_rule": "expires_30d",
+      "retrieval_priority": "historical",
+      "may_override_runtime": false
+    },
+    "future_tasks": {
+      "description": "Backlog items and planned work. Never proof of implemented behavior.",
+      "default_staleness_rule": "expires_30d",
+      "retrieval_priority": "backlog",
+      "may_override_runtime": false
+    }
+  }
+}

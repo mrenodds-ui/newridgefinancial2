@@ -786,6 +786,18 @@ def test_refresh_hal_index_reports_dynamic_source_count(monkeypatch, tmp_path: P
     )
     monkeypatch.setattr(
         index_builder_module,
+        "build_knowledge_memory_documents",
+        lambda: [
+            {
+                "source_id": "memory-test-fixture",
+                "title": "HAL memory: test-fixture",
+                "category": "knowledge_memory",
+                "sanitized_content": "guidance only fixture",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        index_builder_module,
         "rebuild_hal_collection",
         lambda documents: {
             "backend": "chroma",
@@ -798,8 +810,8 @@ def test_refresh_hal_index_reports_dynamic_source_count(monkeypatch, tmp_path: P
 
     payload = index_builder_module.refresh_hal_index()
 
-    assert payload["document_count"] == 8
-    assert payload["source_count"] == 7
+    assert payload["document_count"] == 9
+    assert payload["source_count"] == 8
     assert payload["storage_path"] == str(tmp_path / "hal_local.sqlite3")
 
 
