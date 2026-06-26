@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createSoftDentDraft, type SoftDentDraftArtifact, type SoftDentDraftRequest } from "../../api/client";
 import type { SoftDentDraftType } from "../../api/schemas";
 
@@ -16,15 +16,23 @@ const DRAFT_TYPES: { value: SoftDentDraftType; label: string }[] = [
 export function DraftsForReviewPanel({
   selectedDraft,
   onDraftCreated,
+  initialPatientQuery = "",
 }: {
   selectedDraft: SoftDentDraftArtifact | null;
   onDraftCreated: (draft: SoftDentDraftArtifact) => void;
+  initialPatientQuery?: string;
 }) {
-  const [patientQuery, setPatientQuery] = useState("");
+  const [patientQuery, setPatientQuery] = useState(initialPatientQuery);
   const [claimId, setClaimId] = useState("");
   const [draftType, setDraftType] = useState<SoftDentDraftType>("insurance_narrative_proposal");
   const [includeClinicalContext, setIncludeClinicalContext] = useState(true);
   const [includeLedgerContext, setIncludeLedgerContext] = useState(false);
+
+  useEffect(() => {
+    if (initialPatientQuery) {
+      setPatientQuery(initialPatientQuery);
+    }
+  }, [initialPatientQuery]);
 
   const mutation = useMutation({
     mutationFn: createSoftDentDraft,

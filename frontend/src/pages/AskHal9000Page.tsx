@@ -11,11 +11,20 @@ import {
   type SoftDentLocalPacketArtifact,
 } from "../api/client";
 import { ApprovedLocalPacketsPanel } from "../components/hal/ApprovedLocalPacketsPanel";
+import { ClaimsFollowUpPanel } from "../components/hal/ClaimsFollowUpPanel";
+import { ComplianceChecklistPanel } from "../components/hal/ComplianceChecklistPanel";
 import { DraftsForReviewPanel } from "../components/hal/DraftsForReviewPanel";
 import { HalCommandCenter } from "../components/hal/HalCommandCenter";
 import { HalRecommendationBlock } from "../components/hal/HalRecommendationBlock";
 import { HalSourcesPanel } from "../components/hal/HalSourcesPanel";
 import { HalSystemHealthPanel } from "../components/hal/HalSystemHealthPanel";
+import { HygieneRecallPanel } from "../components/hal/HygieneRecallPanel";
+import { LocalOfficeTasksPanel } from "../components/hal/LocalOfficeTasksPanel";
+import { OfficeManagerReportsPanel } from "../components/hal/OfficeManagerReportsPanel";
+import { PatientPrepPanel } from "../components/hal/PatientPrepPanel";
+import { TodaysAttentionPanel } from "../components/hal/TodaysAttentionPanel";
+import { TreatmentPlanFollowUpPanel } from "../components/hal/TreatmentPlanFollowUpPanel";
+import { VendorIssueTrackerPanel } from "../components/hal/VendorIssueTrackerPanel";
 import "../components/hal/HalWorkstation.css";
 
 const HAL_SPEECH_VOICE_KEY = "halSpeechVoice";
@@ -82,6 +91,7 @@ export default function AskHal9000Page() {
   const [useSecondOpinion, setUseSecondOpinion] = useState(false);
   const [selectedDraft, setSelectedDraft] = useState<SoftDentDraftArtifact | null>(null);
   const [selectedPacket, setSelectedPacket] = useState<SoftDentLocalPacketArtifact | null>(null);
+  const [draftPrefillQuery, setDraftPrefillQuery] = useState("");
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechRate, setSpeechRate] = useState(() => {
@@ -319,8 +329,9 @@ export default function AskHal9000Page() {
           <p className="eyebrow">HAL workstation</p>
           <h1>Ask HAL</h1>
           <p>
-            Read SoftDent facts, prepare drafts for review, approve local packets, and keep every action local:
-            still not submitted, still not written to SoftDent, and still no external delivery.
+            HAL is the dental office manager assistant: read authorized facts, prepare drafts for review, approve local
+            packets, and track local office tasks while staying local only — still not submitted, still not written to
+            SoftDent, and still no external delivery.
           </p>
         </header>
 
@@ -417,27 +428,31 @@ export default function AskHal9000Page() {
               </section>
             ) : null}
 
-            <DraftsForReviewPanel selectedDraft={selectedDraft} onDraftCreated={setSelectedDraft} />
+            <DraftsForReviewPanel
+              selectedDraft={selectedDraft}
+              onDraftCreated={setSelectedDraft}
+              initialPatientQuery={draftPrefillQuery}
+            />
             <ApprovedLocalPacketsPanel
               selectedDraft={selectedDraft}
               selectedPacket={selectedPacket}
               onPacketCreated={setSelectedPacket}
             />
+            <PatientPrepPanel onPrefillDraftQuery={setDraftPrefillQuery} />
+            <ClaimsFollowUpPanel
+              financialSummary={financialSummaryQuery.data}
+              onPrefillDraftQuery={setDraftPrefillQuery}
+            />
+            <LocalOfficeTasksPanel />
+            <TreatmentPlanFollowUpPanel />
+            <HygieneRecallPanel />
+            <ComplianceChecklistPanel />
+            <VendorIssueTrackerPanel />
+            <OfficeManagerReportsPanel />
           </div>
 
           <aside className="hal-workstation-side">
-            <section className="hal-workstation-card">
-              <p className="eyebrow">Today&apos;s attention</p>
-              <h2>Office priorities</h2>
-              <ul className="hal-attention-list">
-                <li>Claims needing follow-up</li>
-                <li>Missing documentation</li>
-                <li>Narratives ready for review</li>
-                <li>Drafts awaiting approval</li>
-                <li>Local packets ready</li>
-                <li>SoftDent and QuickBooks source health</li>
-              </ul>
-            </section>
+            <TodaysAttentionPanel />
             <HalSystemHealthPanel
               halStatus={halStatusQuery.data}
               financialSummary={financialSummaryQuery.data}

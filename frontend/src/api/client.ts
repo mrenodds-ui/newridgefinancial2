@@ -51,12 +51,25 @@ import {
   localAccountingDocumentListSchema,
   monitorMutationExecutionResultSchema,
   insuranceNarrativeWorkflowResultSchema,
+  officeManagerAttentionResponseSchema,
+  officeManagerTaskListResponseSchema,
+  officeManagerTaskMetricsResponseSchema,
+  officeManagerTaskResponseSchema,
   softDentDraftArtifactSchema,
   softDentLocalPacketArtifactSchema,
   type SoftDentDraftArtifact,
   type SoftDentDraftRequest,
   type SoftDentLocalPacketArtifact,
   type SoftDentLocalPacketRequest,
+  type OfficeManagerAttentionResponse,
+  type OfficeManagerTaskCreateRequest,
+  type OfficeManagerTaskListResponse,
+  type OfficeManagerTaskMetricsResponse,
+  type OfficeManagerTaskResponse,
+  type OfficeManagerTaskUpdateRequest,
+  type OfficeManagerTaskCategory,
+  type OfficeManagerTaskPriority,
+  type OfficeManagerTaskStatus,
   type InsuranceNarrativeCasePacket,
   type InsuranceNarrativeDraft,
   type InsuranceNarrativeWorkflowResult,
@@ -1011,6 +1024,81 @@ export async function createSoftDentLocalPacket(
   return softDentLocalPacketArtifactSchema.parse(primary.payload);
 }
 
+export async function fetchOfficeManagerAttention(): Promise<OfficeManagerAttentionResponse> {
+  const primary = await requestJson("/hal9000/office-manager/attention", {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!primary.response.ok) {
+    throw buildRequestError("/api/hal9000/office-manager/attention", primary.response, primary.payload);
+  }
+  return officeManagerAttentionResponseSchema.parse(primary.payload);
+}
+
+export async function fetchOfficeManagerTasks(options?: {
+  limit?: number;
+  status?: string;
+}): Promise<OfficeManagerTaskListResponse> {
+  const params = new URLSearchParams();
+  if (options?.limit) params.set("limit", String(options.limit));
+  if (options?.status) params.set("status", options.status);
+  const query = params.toString();
+  const primary = await requestJson(`/hal9000/office-manager/tasks${query ? `?${query}` : ""}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!primary.response.ok) {
+    throw buildRequestError("/api/hal9000/office-manager/tasks", primary.response, primary.payload);
+  }
+  return officeManagerTaskListResponseSchema.parse(primary.payload);
+}
+
+export async function createOfficeManagerTask(
+  payload: OfficeManagerTaskCreateRequest,
+): Promise<OfficeManagerTaskResponse> {
+  const primary = await requestJson("/hal9000/office-manager/tasks", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!primary.response.ok) {
+    throw buildRequestError("/api/hal9000/office-manager/tasks", primary.response, primary.payload);
+  }
+  return officeManagerTaskResponseSchema.parse(primary.payload);
+}
+
+export async function updateOfficeManagerTask(
+  taskId: string,
+  payload: OfficeManagerTaskUpdateRequest,
+): Promise<OfficeManagerTaskResponse> {
+  const primary = await requestJson(`/hal9000/office-manager/tasks/${encodeURIComponent(taskId)}`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!primary.response.ok) {
+    throw buildRequestError(`/api/hal9000/office-manager/tasks/${taskId}`, primary.response, primary.payload);
+  }
+  return officeManagerTaskResponseSchema.parse(primary.payload);
+}
+
+export async function fetchOfficeManagerTaskMetrics(): Promise<OfficeManagerTaskMetricsResponse> {
+  const primary = await requestJson("/hal9000/office-manager/tasks/metrics", {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!primary.response.ok) {
+    throw buildRequestError("/api/hal9000/office-manager/tasks/metrics", primary.response, primary.payload);
+  }
+  return officeManagerTaskMetricsResponseSchema.parse(primary.payload);
+}
+
 export type {
   InsuranceNarrativeCasePacket,
   InsuranceNarrativeDraft,
@@ -1019,6 +1107,15 @@ export type {
   SoftDentDraftRequest,
   SoftDentLocalPacketArtifact,
   SoftDentLocalPacketRequest,
+  OfficeManagerAttentionResponse,
+  OfficeManagerTaskCreateRequest,
+  OfficeManagerTaskListResponse,
+  OfficeManagerTaskMetricsResponse,
+  OfficeManagerTaskResponse,
+  OfficeManagerTaskUpdateRequest,
+  OfficeManagerTaskCategory,
+  OfficeManagerTaskPriority,
+  OfficeManagerTaskStatus,
 };
 
 export async function createInsuranceNarrativeDraftWorkflow(payload: {

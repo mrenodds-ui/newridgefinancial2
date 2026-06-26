@@ -1039,6 +1039,117 @@ export const softDentLocalPacketArtifactSchema = z.object({
   local_only: z.boolean().default(true),
 });
 
+export const officeManagerAttentionItemSchema = z.object({
+  item_id: z.string(),
+  category: z.string(),
+  severity: z.enum(["info", "warning", "critical"]).default("info"),
+  title: z.string(),
+  detail: z.string(),
+  action_hint: z.string().default(""),
+  source_key: z.string().default(""),
+  missing_data_codes: z.array(z.string()).default([]),
+  count: z.number().nullable().optional(),
+  local_only: z.boolean().default(true),
+  external_action_performed: z.boolean().default(false),
+});
+
+export const officeManagerAttentionResponseSchema = z.object({
+  generated_at_utc: z.string(),
+  summary: z.string(),
+  safety_disclaimer: z.string(),
+  items: z.array(officeManagerAttentionItemSchema).default([]),
+  missing_data_codes: z.array(z.string()).default([]),
+  local_only: z.boolean().default(true),
+  external_action_performed: z.boolean().default(false),
+  softdent_writeback_performed: z.boolean().default(false),
+  submission_status: z.literal("not_submitted").default("not_submitted"),
+});
+
+export const officeManagerTaskCategorySchema = z.enum([
+  "claim",
+  "patient_prep",
+  "documentation",
+  "treatment_plan",
+  "hygiene_recall",
+  "compliance",
+  "vendor",
+  "report",
+  "other",
+]);
+
+export const officeManagerTaskStatusSchema = z.enum(["open", "in_progress", "blocked", "completed", "dismissed"]);
+
+export const officeManagerTaskPrioritySchema = z.enum(["low", "normal", "high", "urgent"]);
+
+export const officeManagerTaskResponseSchema = z.object({
+  task_id: z.string(),
+  title: z.string(),
+  description: z.string().default(""),
+  category: officeManagerTaskCategorySchema,
+  status: officeManagerTaskStatusSchema,
+  priority: officeManagerTaskPrioritySchema,
+  patient_label: z.string().nullable().optional(),
+  claim_id: z.string().nullable().optional(),
+  source_refs: z.array(z.string()).default([]),
+  missing_data_codes: z.array(z.string()).default([]),
+  due_date: z.string().nullable().optional(),
+  assigned_to: z.string().nullable().optional(),
+  created_by: z.string(),
+  created_at_utc: z.string(),
+  updated_at_utc: z.string(),
+  local_only: z.boolean().default(true),
+  external_action_performed: z.boolean().default(false),
+  softdent_writeback_performed: z.boolean().default(false),
+});
+
+export const officeManagerTaskCreateRequestSchema = z.object({
+  title: z.string().min(3),
+  description: z.string().default(""),
+  category: officeManagerTaskCategorySchema.default("other"),
+  priority: officeManagerTaskPrioritySchema.default("normal"),
+  patient_label: z.string().nullable().optional(),
+  claim_id: z.string().nullable().optional(),
+  source_refs: z.array(z.string()).default([]),
+  missing_data_codes: z.array(z.string()).default([]),
+  due_date: z.string().nullable().optional(),
+  assigned_to: z.string().nullable().optional(),
+});
+
+export const officeManagerTaskUpdateRequestSchema = z.object({
+  title: z.string().min(3).optional(),
+  description: z.string().optional(),
+  category: officeManagerTaskCategorySchema.optional(),
+  status: officeManagerTaskStatusSchema.optional(),
+  priority: officeManagerTaskPrioritySchema.optional(),
+  patient_label: z.string().nullable().optional(),
+  claim_id: z.string().nullable().optional(),
+  source_refs: z.array(z.string()).optional(),
+  missing_data_codes: z.array(z.string()).optional(),
+  due_date: z.string().nullable().optional(),
+  assigned_to: z.string().nullable().optional(),
+});
+
+export const officeManagerTaskListResponseSchema = z.object({
+  items: z.array(officeManagerTaskResponseSchema).default([]),
+  total_count: z.number().default(0),
+  local_only: z.boolean().default(true),
+  external_action_performed: z.boolean().default(false),
+  softdent_writeback_performed: z.boolean().default(false),
+  submission_status: z.literal("not_submitted").default("not_submitted"),
+});
+
+export const officeManagerTaskMetricsResponseSchema = z.object({
+  open_count: z.number().default(0),
+  in_progress_count: z.number().default(0),
+  blocked_count: z.number().default(0),
+  completed_count: z.number().default(0),
+  dismissed_count: z.number().default(0),
+  urgent_open_count: z.number().default(0),
+  local_only: z.boolean().default(true),
+  external_action_performed: z.boolean().default(false),
+  softdent_writeback_performed: z.boolean().default(false),
+});
+
 export const journalLineSchema = z.object({
   account_code: z.string().default(""),
   account_name: z.string().default(""),
@@ -1346,3 +1457,13 @@ export type SoftDentPacketType = z.infer<typeof softDentPacketTypeSchema>;
 export type SoftDentPacketApprovalAttestation = z.infer<typeof softDentPacketApprovalAttestationSchema>;
 export type SoftDentLocalPacketRequest = z.infer<typeof softDentLocalPacketRequestSchema>;
 export type SoftDentLocalPacketArtifact = z.infer<typeof softDentLocalPacketArtifactSchema>;
+export type OfficeManagerAttentionResponse = z.infer<typeof officeManagerAttentionResponseSchema>;
+export type OfficeManagerAttentionItem = z.infer<typeof officeManagerAttentionItemSchema>;
+export type OfficeManagerTaskResponse = z.infer<typeof officeManagerTaskResponseSchema>;
+export type OfficeManagerTaskCreateRequest = z.infer<typeof officeManagerTaskCreateRequestSchema>;
+export type OfficeManagerTaskUpdateRequest = z.infer<typeof officeManagerTaskUpdateRequestSchema>;
+export type OfficeManagerTaskListResponse = z.infer<typeof officeManagerTaskListResponseSchema>;
+export type OfficeManagerTaskMetricsResponse = z.infer<typeof officeManagerTaskMetricsResponseSchema>;
+export type OfficeManagerTaskCategory = z.infer<typeof officeManagerTaskCategorySchema>;
+export type OfficeManagerTaskStatus = z.infer<typeof officeManagerTaskStatusSchema>;
+export type OfficeManagerTaskPriority = z.infer<typeof officeManagerTaskPrioritySchema>;

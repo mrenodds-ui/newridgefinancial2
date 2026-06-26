@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clearApiBasicAuthCredentials } from "../api/basicAuth";
-import { createSoftDentDraft, createSoftDentLocalPacket, fetchFinancialSummary, refreshHalFinancialSources } from "../api/client";
+import { createSoftDentDraft, createSoftDentLocalPacket, createOfficeManagerTask, fetchFinancialSummary, fetchOfficeManagerAttention, refreshHalFinancialSources } from "../api/client";
 
 function buildJsonResponse(payload: unknown, status = 200): Response {
   return {
@@ -212,5 +212,63 @@ describe("HAL API contract parsing", () => {
         body: expect.stringContaining("acknowledged_no_external_delivery"),
       }),
     );
+  });
+
+  it("loads office-manager attention with safety invariants", async () => {
+    fetchMock.mockResolvedValue(
+      buildJsonResponse({
+        generated_at_utc: "2026-06-26T20:00:00Z",
+        summary: "Attention summary",
+        safety_disclaimer: "Local only",
+        items: [],
+        missing_data_codes: ["missing_treatment_plan_export"],
+        local_only: true,
+        external_action_performed: false,
+        softdent_writeback_performed: false,
+        submission_status: "not_submitted",
+      }),
+    );
+
+    await expect(fetchOfficeManagerAttention()).resolves.toMatchObject({
+      submission_status: "not_submitted",
+      local_only: true,
+      external_action_performed: false,
+    });
+  });
+
+  it("creates a local office-manager task", async () => {
+    fetchMock.mockResolvedValue(
+      buildJsonResponse({
+        task_id: "omt-test",
+        title: "Review denial packet",
+        description: "",
+        category: "claim",
+        status: "open",
+        priority: "normal",
+        source_refs: [],
+        missing_data_codes: [],
+        created_by: "admin",
+        created_at_utc: "2026-06-26T20:00:00Z",
+        updated_at_utc: "2026-06-26T20:00:00Z",
+        local_only: true,
+        external_action_performed: false,
+        softdent_writeback_performed: false,
+      }),
+    );
+
+    await expect(
+      createOfficeManagerTask({
+        title: "Review denial packet",
+        description: "",
+        category: "claim",
+        priority: "normal",
+        source_refs: [],
+        missing_data_codes: [],
+      }),
+    ).resolves.toMatchObject({
+      task_id: "omt-test",
+      local_only: true,
+      external_action_performed: false,
+    });
   });
 });

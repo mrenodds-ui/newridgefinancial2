@@ -13,9 +13,15 @@ vi.mock("../api/client", async () => {
     createHalConversationId: vi.fn(() => "hal-test-session"),
     createSoftDentDraft: vi.fn(),
     createSoftDentLocalPacket: vi.fn(),
+    createOfficeManagerTask: vi.fn(),
     executeMonitorReviewAction: vi.fn(),
     fetchFinancialSummary: vi.fn(),
+    fetchHalPatientDossier: vi.fn(),
     fetchHalStatus: vi.fn(),
+    fetchOfficeManagerAttention: vi.fn(),
+    fetchOfficeManagerTaskMetrics: vi.fn(),
+    fetchOfficeManagerTasks: vi.fn(),
+    updateOfficeManagerTask: vi.fn(),
   };
 });
 
@@ -25,6 +31,9 @@ import {
   createSoftDentLocalPacket,
   fetchFinancialSummary,
   fetchHalStatus,
+  fetchOfficeManagerAttention,
+  fetchOfficeManagerTaskMetrics,
+  fetchOfficeManagerTasks,
 } from "../api/client";
 
 function buildHalResponse(overrides: Record<string, unknown> = {}): Awaited<ReturnType<typeof askHalQuestion>> {
@@ -129,6 +138,36 @@ beforeEach(() => {
   vi.mocked(askHalQuestion).mockResolvedValue(buildHalResponse());
   vi.mocked(createSoftDentDraft).mockResolvedValue(buildDraft());
   vi.mocked(createSoftDentLocalPacket).mockResolvedValue(buildPacket());
+  vi.mocked(fetchOfficeManagerAttention).mockResolvedValue({
+    generated_at_utc: "2026-06-26T20:00:00Z",
+    summary: "Attention summary",
+    safety_disclaimer: "Local only",
+    items: [],
+    missing_data_codes: [],
+    local_only: true,
+    external_action_performed: false,
+    softdent_writeback_performed: false,
+    submission_status: "not_submitted",
+  });
+  vi.mocked(fetchOfficeManagerTasks).mockResolvedValue({
+    items: [],
+    total_count: 0,
+    local_only: true,
+    external_action_performed: false,
+    softdent_writeback_performed: false,
+    submission_status: "not_submitted",
+  });
+  vi.mocked(fetchOfficeManagerTaskMetrics).mockResolvedValue({
+    open_count: 0,
+    in_progress_count: 0,
+    blocked_count: 0,
+    completed_count: 0,
+    dismissed_count: 0,
+    urgent_open_count: 0,
+    local_only: true,
+    external_action_performed: false,
+    softdent_writeback_performed: false,
+  });
 });
 
 afterEach(() => {
@@ -176,7 +215,7 @@ describe("HAL workstation page", () => {
 
   it("creates draft and local packet artifacts with required safety wording", async () => {
     renderPage();
-    fireEvent.change(screen.getByLabelText(/Patient \/ claim question/i), {
+    fireEvent.change(screen.getAllByLabelText(/Patient \/ claim question/i)[0], {
       target: { value: "Patient John Doe denied crown claim" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Create review draft/i }));
@@ -203,7 +242,7 @@ describe("HAL workstation page", () => {
     expect(screen.getAllByText(/not_submitted/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/External action/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("false").length).toBeGreaterThan(0);
-    expect(screen.getByText(/SoftDent writeback/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/SoftDent writeback/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Local only/i).length).toBeGreaterThan(0);
   });
 

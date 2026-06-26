@@ -400,9 +400,16 @@ from .models import (
     HalPatientDossierResponse,
     HalSoftDentDraftRequest,
     HalSoftDentDraftResponse,
+    HalSoftDentEndOfDayArResponse,
     HalSoftDentLocalPacketRequest,
     HalSoftDentLocalPacketResponse,
     HalSoftDentPacketApprovalAttestation,
+    OfficeManagerAttentionResponse,
+    OfficeManagerTaskCreateRequest,
+    OfficeManagerTaskListResponse,
+    OfficeManagerTaskMetricsResponse,
+    OfficeManagerTaskResponse,
+    OfficeManagerTaskUpdateRequest,
     JournalDraftRequest,
     JournalDraftResponse,
     LocalAccountingDocumentListResponse,
@@ -1748,6 +1755,18 @@ async def api_hal9000_softdent_drafts(
     return HalSoftDentDraftResponse.model_validate(artifact.model_dump())
 
 
+@router.get("/api/hal9000/softdent-end-of-day-ar", response_model=HalSoftDentEndOfDayArResponse)
+async def api_hal9000_softdent_end_of_day_ar(
+    user: AuthenticatedUser = Depends(
+        require_roles("hal:operator", "softdent:read", "softdent:ledger:read")
+    ),
+):
+    from app.hal.softdent_read_broker import get_softdent_read_broker
+
+    summary = get_softdent_read_broker().get_end_of_day_ar_summary(actor=user.username, roles=user.roles)
+    return HalSoftDentEndOfDayArResponse.model_validate(summary.to_public_dict())
+
+
 @router.post("/api/hal9000/softdent-local-packets", response_model=HalSoftDentLocalPacketResponse)
 async def api_hal9000_softdent_local_packets(
     payload: HalSoftDentLocalPacketRequest,
@@ -1779,6 +1798,72 @@ async def api_hal9000_softdent_local_packets(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return HalSoftDentLocalPacketResponse.model_validate(packet.model_dump())
+
+
+@router.get("/api/hal9000/office-manager/attention", response_model=OfficeManagerAttentionResponse)
+async def api_hal9000_office_manager_attention(
+    user: AuthenticatedUser = Depends(require_roles("hal:operator", "dashboard:read")),
+):
+    del user
+    from app.hal.office_manager_attention import build_office_manager_attention
+
+    return build_office_manager_attention(financial_summary=_build_financial_summary_payload())
+
+
+@router.get("/api/hal9000/office-manager/tasks", response_model=OfficeManagerTaskListResponse)
+async def api_hal9000_office_manager_tasks_list(
+    limit: int = Query(25, ge=1, le=100),
+    status: str | None = Query(None),
+    user: AuthenticatedUser = Depends(require_roles("hal:operator")),
+):
+    del user
+    from app.hal.office_manager_task_service import list_office_manager_tasks
+
+    return OfficeManagerTaskListResponse.model_validate(list_office_manager_tasks(limit=limit, status=status))
+
+
+@router.post("/api/hal9000/office-manager/tasks", response_model=OfficeManagerTaskResponse)
+async def api_hal9000_office_manager_tasks_create(
+    payload: OfficeManagerTaskCreateRequest,
+    user: AuthenticatedUser = Depends(require_roles("hal:operator")),
+):
+    from app.hal.office_manager_task_service import create_office_manager_task
+
+    return create_office_manager_task(payload, actor=user.username, roles=user.roles)
+
+
+@router.patch("/api/hal9000/office-manager/tasks/{task_id}", response_model=OfficeManagerTaskResponse)
+async def api_hal9000_office_manager_tasks_update(
+    task_id: str,
+    payload: OfficeManagerTaskUpdateRequest,
+    user: AuthenticatedUser = Depends(require_roles("hal:operator")),
+):
+    from app.hal.office_manager_task_service import update_office_manager_task
+
+    try:
+        return update_office_manager_task(task_id, payload, actor=user.username, roles=user.roles)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/api/hal9000/office-manager/tasks/metrics", response_model=OfficeManagerTaskMetricsResponse)
+async def api_hal9000_office_manager_tasks_metrics(
+    user: AuthenticatedUser = Depends(require_roles("hal:operator")),
+):
+    del user
+    from app.hal.office_manager_task_service import get_office_manager_task_metrics
+
+    metrics = get_office_manager_task_metrics()
+    return OfficeManagerTaskMetricsResponse(
+        open_count=metrics.get("open_count", 0),
+        in_progress_count=metrics.get("in_progress_count", 0),
+        blocked_count=metrics.get("blocked_count", 0),
+        completed_count=metrics.get("completed_count", 0),
+        dismissed_count=metrics.get("dismissed_count", 0),
+        urgent_open_count=metrics.get("urgent_open_count", 0),
+    )
 
 
 @router.post("/api/hal9000/chart-plan", response_model=HalChartPlanResponse)

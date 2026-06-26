@@ -164,6 +164,48 @@ def initialize_hal_storage(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS hal_office_manager_tasks (
+            task_id TEXT PRIMARY KEY,
+            created_at_utc TEXT NOT NULL,
+            updated_at_utc TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            category TEXT NOT NULL,
+            status TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            patient_label TEXT,
+            claim_id TEXT,
+            source_refs_json TEXT NOT NULL,
+            missing_data_codes_json TEXT NOT NULL,
+            due_date TEXT,
+            assigned_to TEXT,
+            local_only INTEGER NOT NULL DEFAULT 1,
+            external_action_performed INTEGER NOT NULL DEFAULT 0,
+            softdent_writeback_performed INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS hal_office_manager_task_audits (
+            event_id TEXT PRIMARY KEY,
+            created_at_utc TEXT NOT NULL,
+            task_id TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            roles_used_json TEXT NOT NULL,
+            action TEXT NOT NULL,
+            status TEXT NOT NULL,
+            title TEXT NOT NULL,
+            category TEXT NOT NULL,
+            local_only INTEGER NOT NULL DEFAULT 1,
+            external_action_performed INTEGER NOT NULL DEFAULT 0,
+            softdent_writeback_performed INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
 
 
 def _ensure_hal_conversation_state_schema(connection: sqlite3.Connection) -> None:
@@ -1050,3 +1092,247 @@ def _parse_accounting_posting_queue_cursor(cursor: str) -> tuple[str, str]:
     if not created_at_utc or not queue_id:
         raise ValueError("Posting queue cursor is invalid.")
     return created_at_utc, queue_id
+
+
+def insert_office_manager_task(entry: dict[str, Any]) -> None:
+    with hal_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO hal_office_manager_tasks (
+                task_id, created_at_utc, updated_at_utc, created_by, title, description,
+                category, status, priority, patient_label, claim_id, source_refs_json,
+                missing_data_codes_json, due_date, assigned_to, local_only,
+                external_action_performed, softdent_writeback_performed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry["task_id"],
+                entry["created_at_utc"],
+                entry["updated_at_utc"],
+                entry["created_by"],
+                entry["title"],
+                entry.get("description", ""),
+                entry["category"],
+                entry["status"],
+                entry["priority"],
+                entry.get("patient_label"),
+                entry.get("claim_id"),
+                json.dumps(entry.get("source_refs", [])),
+                json.dumps(entry.get("missing_data_codes", [])),
+                entry.get("due_date"),
+                entry.get("assigned_to"),
+                1 if entry.get("local_only", True) else 0,
+                1 if entry.get("external_action_performed") else 0,
+                1 if entry.get("softdent_writeback_performed") else 0,
+            ),
+        )
+
+
+def get_office_manager_task(task_id: str) -> dict[str, Any] | None:
+    with hal_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT task_id, created_at_utc, updated_at_utc, created_by, title, description,
+                   category, status, priority, patient_label, claim_id, source_refs_json,
+                   missing_data_codes_json, due_date, assigned_to, local_only,
+                   external_action_performed, softdent_writeback_performed
+            FROM hal_office_manager_tasks
+            WHERE task_id = ?
+            """,
+            (task_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return _map_office_manager_task_row(row)
+
+
+def update_office_manager_task(task_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    existing = get_office_manager_task(task_id)
+    if existing is None:
+        return None
+    merged = {**existing, **updates, "task_id": task_id}
+    with hal_connection() as connection:
+        connection.execute(
+            """
+            UPDATE hal_office_manager_tasks
+            SET updated_at_utc = ?, title = ?, description = ?, category = ?, status = ?,
+                priority = ?, patient_label = ?, claim_id = ?, source_refs_json = ?,
+                missing_data_codes_json = ?, due_date = ?, assigned_to = ?
+            WHERE task_id = ?
+            """,
+            (
+                merged["updated_at_utc"],
+                merged["title"],
+                merged.get("description", ""),
+                merged["category"],
+                merged["status"],
+                merged["priority"],
+                merged.get("patient_label"),
+                merged.get("claim_id"),
+                json.dumps(merged.get("source_refs", [])),
+                json.dumps(merged.get("missing_data_codes", [])),
+                merged.get("due_date"),
+                merged.get("assigned_to"),
+                task_id,
+            ),
+        )
+    return get_office_manager_task(task_id)
+
+
+def list_office_manager_tasks(*, limit: int = 25, status: str | None = None) -> tuple[list[dict[str, Any]], int]:
+    bounded_limit = max(1, min(limit, 100))
+    where_clause = ""
+    params: list[Any] = []
+    if status:
+        where_clause = "WHERE status = ?"
+        params.append(status)
+    with hal_connection() as connection:
+        total_count = int(
+            connection.execute(
+                f"SELECT COUNT(*) FROM hal_office_manager_tasks {where_clause}",
+                tuple(params),
+            ).fetchone()[0]
+        )
+        rows = connection.execute(
+            f"""
+            SELECT task_id, created_at_utc, updated_at_utc, created_by, title, description,
+                   category, status, priority, patient_label, claim_id, source_refs_json,
+                   missing_data_codes_json, due_date, assigned_to, local_only,
+                   external_action_performed, softdent_writeback_performed
+            FROM hal_office_manager_tasks
+            {where_clause}
+            ORDER BY updated_at_utc DESC
+            LIMIT ?
+            """,
+            (*params, bounded_limit),
+        ).fetchall()
+    return [_map_office_manager_task_row(row) for row in rows], total_count
+
+
+def get_office_manager_task_metrics() -> dict[str, int]:
+    with hal_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT status, priority, COUNT(*) AS count
+            FROM hal_office_manager_tasks
+            GROUP BY status, priority
+            """
+        ).fetchall()
+    metrics = {
+        "open_count": 0,
+        "in_progress_count": 0,
+        "blocked_count": 0,
+        "completed_count": 0,
+        "dismissed_count": 0,
+        "urgent_open_count": 0,
+    }
+    status_key_map = {
+        "open": "open_count",
+        "in_progress": "in_progress_count",
+        "blocked": "blocked_count",
+        "completed": "completed_count",
+        "dismissed": "dismissed_count",
+    }
+    for row in rows:
+        status = str(row["status"])
+        count = int(row["count"])
+        metric_key = status_key_map.get(status)
+        if metric_key:
+            metrics[metric_key] = count
+        if status in {"open", "in_progress", "blocked"} and str(row["priority"]) == "urgent":
+            metrics["urgent_open_count"] += count
+    return metrics
+
+
+def insert_office_manager_task_audit(entry: dict[str, Any]) -> None:
+    with hal_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO hal_office_manager_task_audits (
+                event_id, created_at_utc, task_id, actor, roles_used_json, action,
+                status, title, category, local_only, external_action_performed,
+                softdent_writeback_performed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry["event_id"],
+                entry["created_at_utc"],
+                entry["task_id"],
+                entry["actor"],
+                json.dumps(entry.get("roles_used", [])),
+                entry["action"],
+                entry["status"],
+                entry["title"],
+                entry["category"],
+                1 if entry.get("local_only", True) else 0,
+                1 if entry.get("external_action_performed") else 0,
+                1 if entry.get("softdent_writeback_performed") else 0,
+            ),
+        )
+
+
+def count_recent_softdent_draft_audits(*, since_hours: int = 168) -> int:
+    cutoff = datetime.now(timezone.utc).timestamp() - (since_hours * 3600)
+    with hal_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT created_at_utc
+            FROM hal_softdent_draft_audits
+            ORDER BY created_at_utc DESC
+            LIMIT 200
+            """
+        ).fetchall()
+    count = 0
+    for row in rows:
+        try:
+            created = datetime.fromisoformat(str(row["created_at_utc"]).replace("Z", "+00:00"))
+            if created.timestamp() >= cutoff:
+                count += 1
+        except ValueError:
+            continue
+    return count
+
+
+def count_recent_softdent_packet_audits(*, since_hours: int = 168) -> int:
+    cutoff = datetime.now(timezone.utc).timestamp() - (since_hours * 3600)
+    with hal_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT created_at_utc
+            FROM hal_softdent_packet_audits
+            ORDER BY created_at_utc DESC
+            LIMIT 200
+            """
+        ).fetchall()
+    count = 0
+    for row in rows:
+        try:
+            created = datetime.fromisoformat(str(row["created_at_utc"]).replace("Z", "+00:00"))
+            if created.timestamp() >= cutoff:
+                count += 1
+        except ValueError:
+            continue
+    return count
+
+
+def _map_office_manager_task_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "task_id": row["task_id"],
+        "created_at_utc": row["created_at_utc"],
+        "updated_at_utc": row["updated_at_utc"],
+        "created_by": row["created_by"],
+        "title": row["title"],
+        "description": row["description"],
+        "category": row["category"],
+        "status": row["status"],
+        "priority": row["priority"],
+        "patient_label": row["patient_label"],
+        "claim_id": row["claim_id"],
+        "source_refs": json.loads(row["source_refs_json"]),
+        "missing_data_codes": json.loads(row["missing_data_codes_json"]),
+        "due_date": row["due_date"],
+        "assigned_to": row["assigned_to"],
+        "local_only": bool(row["local_only"]),
+        "external_action_performed": bool(row["external_action_performed"]),
+        "softdent_writeback_performed": bool(row["softdent_writeback_performed"]),
+    }

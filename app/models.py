@@ -245,6 +245,32 @@ class HalSoftDentDraftResponse(BaseModel):
     external_action_performed: bool = False
 
 
+class HalSoftDentEndOfDayArResponse(BaseModel):
+    available: bool = False
+    report_date: str | None = None
+    generated_at: str | None = None
+    source_file: str | None = None
+    source_modified_at_utc: str | None = None
+    freshness_status: str = "unknown"
+    parse_status: str = "missing"
+    total_ar: float | None = None
+    patient_ar: float | None = None
+    insurance_ar: float | None = None
+    aging_buckets: dict[str, float | None] = Field(default_factory=dict)
+    credits: float | None = None
+    collection_total: float | None = None
+    production_total: float | None = None
+    office_scope: str | None = None
+    provider_scope: str | None = None
+    source_refs: list[str] = Field(default_factory=list)
+    missing_data_codes: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    stale_reason: str | None = None
+    page_number: int | None = None
+    page_count: int | None = None
+    source_label: str = "Daily End-of-Day report A/R"
+
+
 class HalSoftDentPacketApprovalAttestation(BaseModel):
     approved_by: str = Field(min_length=1, max_length=200)
     approval_note: str = Field(min_length=1, max_length=2000)
@@ -286,6 +312,16 @@ class HalSoftDentLocalPacketResponse(BaseModel):
     external_action_performed: bool = False
     softdent_writeback_performed: bool = False
     local_only: bool = True
+
+
+from app.hal.office_manager_models import (  # noqa: E402
+    OfficeManagerAttentionResponse,
+    OfficeManagerTaskCreateRequest,
+    OfficeManagerTaskListResponse,
+    OfficeManagerTaskMetricsResponse,
+    OfficeManagerTaskResponse,
+    OfficeManagerTaskUpdateRequest,
+)
 
 
 class HalChartPlanRequest(BaseModel):

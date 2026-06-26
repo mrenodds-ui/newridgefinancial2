@@ -14,6 +14,7 @@ from .storage import get_softdent_draft_audit as get_softdent_draft_audit_from_s
 from .storage import get_softdent_packet_audit as get_softdent_packet_audit_from_storage
 from .storage import get_softdent_record_audit as get_softdent_record_audit_from_storage
 from .storage import insert_hal_audit
+from .storage import insert_office_manager_task_audit
 from .storage import insert_softdent_draft_audit
 from .storage import insert_softdent_packet_audit
 from .storage import insert_softdent_record_audit
@@ -236,3 +237,37 @@ def get_recent_softdent_packet_audits(limit: int = 20) -> list[dict[str, Any]]:
 
 def get_softdent_packet_audit(packet_id: str) -> dict[str, Any] | None:
     return get_softdent_packet_audit_from_storage(packet_id)
+
+
+def record_office_manager_task_audit(
+    *,
+    task_id: str,
+    actor: str,
+    roles_used: list[str],
+    action: str,
+    status: str,
+    title: str,
+    category: str,
+    external_action_performed: bool = False,
+    softdent_writeback_performed: bool = False,
+) -> dict[str, Any]:
+    if external_action_performed:
+        raise ValueError("Office manager task audit cannot record an external action.")
+    if softdent_writeback_performed:
+        raise ValueError("Office manager task audit cannot record SoftDent writeback.")
+    payload: dict[str, Any] = {
+        "event_id": f"omta-{uuid4().hex[:12]}",
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "task_id": task_id,
+        "actor": actor,
+        "roles_used": list(roles_used or []),
+        "action": action,
+        "status": status,
+        "title": title,
+        "category": category,
+        "local_only": True,
+        "external_action_performed": False,
+        "softdent_writeback_performed": False,
+    }
+    insert_office_manager_task_audit(payload)
+    return payload
