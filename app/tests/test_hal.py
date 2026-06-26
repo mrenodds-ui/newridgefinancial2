@@ -1531,9 +1531,9 @@ def test_hal_question_builds_patient_insurance_narrative_from_raw_identifiers(mo
     assert any(item["source_id"] == "softdent-patient-claims-dossier" for item in payload["retrieved_context"])
     assert any(item["source_id"] == "softdent-patient-clinical-dossier" for item in payload["retrieved_context"])
     assert any(item["source_id"] == "softdent-insurance-narrative-support" for item in payload["retrieved_context"])
-    assert "raw identifiers processed only in local patient tool" in payload["guardrails"]
+    assert "authorized internal office context" in payload["guardrails"]
     assert payload["voice_profile"]["lane"] == "patient_workflow"
-    assert any(note["label"] == "Patient identifiers" for note in payload["governance_notes"])
+    assert any(note["label"] == "Patient context" for note in payload["governance_notes"])
 
 
 def test_hal_insurance_narrative_endpoint_returns_structured_response(monkeypatch):
@@ -2057,3 +2057,121 @@ def test_non_admin_cannot_review_hal_audits():
     audit_response = client.get("/api/hal9000/audits?limit=5", auth=operator_auth())
 
     assert audit_response.status_code == 403
+
+
+def test_hal_patient_ar_missing_reports_unavailable_not_zero(monkeypatch):
+    monkeypatch.setattr(hal_orchestrator, "load_softdent_ar_rows", lambda: [])
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "get_controlled_patient_context",
+        lambda question: {
+            "matched": True,
+            "snippets": [],
+            "narrative": "Matched patient export context.",
+            "summary_fields": {"patient_name": "John Doe", "claim_count": 1, "primary_claim_status": "Pending"},
+        },
+    )
+    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+
+    payload = hal_orchestrator.answer_hal_question(
+        question="What is patient John Doe outstanding A/R balance?",
+        actor="hal_operator",
+    )
+
+    assert "unavailable" in payload["answer"].lower()
+    assert "missing_softdent_ar" in payload["answer"]
+    assert "$0.00" not in payload["answer"]
+    assert "not be reported as $0" in payload["answer"]
+    assert "John Doe" in payload["answer"]
+
+
+def test_hal_memory_proposal_suggested_not_written(monkeypatch):
+    memories_path = Path(__file__).resolve().parents[2] / "docs" / "hal_knowledge" / "memories.jsonl"
+    before_lines = [line for line in memories_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "get_controlled_patient_context",
+        lambda question: {"matched": False, "snippets": [], "narrative": ""},
+    )
+
+    payload = hal_orchestrator.answer_hal_question(
+        question="Remember this stable workflow: always check payer mix before lunch.",
+        actor="hal_operator",
+    )
+
+    after_lines = [line for line in memories_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert hal_orchestrator.GOVERNED_MEMORY_PROPOSAL_PHRASE in payload["answer"]
+    assert len(after_lines) == len(before_lines)
+
+
+def test_hal_patient_answer_omits_raw_csv_mrn_and_secrets(monkeypatch):
+    monkeypatch.setattr(
+        financial_tools,
+        "load_softdent_claim_rows",
+        lambda: [
+            {
+                "PatientName": "John Doe",
+                "MRN": "778899",
+                "ClaimId": "CLM-1001",
+                "ClaimStatus": "Denied",
+                "Payer": "Delta Dental",
+            }
+        ],
+    )
+    monkeypatch.setattr(financial_tools, "load_softdent_clinical_note_rows", lambda: [])
+
+    response = client.post(
+        "/hal9000",
+        auth=operator_auth(),
+        json={"question": "Patient John Doe MRN 778899 claim status review."},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    answer = payload["answer"]
+    assert "John Doe" in answer
+    assert "778899" not in answer
+    assert "PatientName,MRN,ClaimId" not in answer
+    assert "password" not in answer.lower()
+    assert "api_key" not in answer.lower()
+
+
+def test_hal_claim_review_does_not_claim_external_submission(monkeypatch):
+    monkeypatch.setattr(
+        financial_tools,
+        "load_softdent_claim_rows",
+        lambda: [
+            {
+                "PatientName": "John Doe",
+                "ClaimId": "CLM-1001",
+                "ClaimStatus": "Denied",
+                "Payer": "Delta Dental",
+                "Procedure": "Crown buildup",
+            }
+        ],
+    )
+    monkeypatch.setattr(financial_tools, "load_softdent_clinical_note_rows", lambda: [])
+
+    response = client.post(
+        "/hal9000",
+        auth=operator_auth(),
+        json={"question": "Patient John Doe denied crown claim—should we resubmit today?"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    lowered = payload["answer"].lower()
+    assert "has been submitted" not in lowered
+    assert "was submitted" not in lowered
+    assert "i submitted" not in lowered
+    assert "fax" not in lowered or "cannot" in lowered or "review" in lowered

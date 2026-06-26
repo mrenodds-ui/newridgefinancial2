@@ -389,3 +389,85 @@ def test_second_opinion_unavailable_does_not_use_frontend_lane(monkeypatch: pyte
 
     assert payload["answer"].startswith("Second opinion unavailable.")
     assert payload["local_ai_unavailable"] is not None
+
+
+def test_deterministic_claims_second_opinion_uses_internal_staff_language(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hal_orchestrator, "require_lane_runtime", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("no model")))
+    monkeypatch.setattr(hal_orchestrator, "generate_response_result", lambda **kwargs: (_ for _ in ()).throw(AssertionError("no model")))
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "load_softdent_claim_rows",
+        lambda: [
+            {
+                "PatientName": "John Doe",
+                "ClaimId": "CLM-2026-1002",
+                "ClaimStatus": "Pending Review",
+                "Payer": "Delta Dental",
+                "Procedure": "Core buildup tooth #30",
+                "ServiceDate": "2026-06-12",
+                "ClaimAmount": 148.0,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "get_controlled_patient_context",
+        lambda question: {"matched": True, "snippets": [], "narrative": "", "summary_fields": {"patient_name": "John Doe"}},
+    )
+
+    payload = hal_orchestrator.answer_hal_second_opinion_question(
+        question="What open claims does patient John Doe have?",
+        actor="hal_operator",
+    )
+
+    assert "Next action:" in payload["answer"]
+    assert "Reason:" in payload["answer"]
+    assert "John Doe" in payload["answer"]
+    assert "no external submission performed" in payload["guardrails"]
+    assert "has been submitted" not in payload["answer"].lower()
+
+
+def test_broad_office_second_opinion_may_name_patients_when_actionable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hal_orchestrator, "require_lane_runtime", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("no model")))
+    monkeypatch.setattr(hal_orchestrator, "generate_response_result", lambda **kwargs: (_ for _ in ()).throw(AssertionError("no model")))
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "load_softdent_claim_rows",
+        lambda: [
+            {
+                "PatientName": "John Doe",
+                "ClaimId": "CLM-1",
+                "ClaimStatus": "Open",
+                "Procedure": "Crown",
+                "ClaimAmount": 100.0,
+            },
+            {
+                "PatientName": "John Doe",
+                "ClaimId": "CLM-2",
+                "ClaimStatus": "Open",
+                "Procedure": "Buildup",
+                "ClaimAmount": 50.0,
+            },
+            {
+                "PatientName": "Jane Smith",
+                "ClaimId": "CLM-3",
+                "ClaimStatus": "Open",
+                "Procedure": "Prophy",
+                "ClaimAmount": 75.0,
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "get_controlled_patient_context",
+        lambda question: {"matched": False, "snippets": [], "narrative": ""},
+    )
+
+    payload = hal_orchestrator.answer_hal_second_opinion_question(
+        question="Which patients have multiple open insurance claims?",
+        actor="hal_operator",
+    )
+
+    assert "John Doe" in payload["answer"]
+    assert "multiple open claims" in payload["answer"].lower()
+    assert "PatientName,MRN,ClaimId" not in payload["answer"]

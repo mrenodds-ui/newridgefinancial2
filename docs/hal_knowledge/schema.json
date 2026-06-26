@@ -110,6 +110,7 @@
           "auth",
           "guardrails",
           "source_availability",
+          "external_submission_policy",
           "hal_ask_request"
         ]
       }

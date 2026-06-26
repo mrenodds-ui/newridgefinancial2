@@ -1,0 +1,310 @@
+Q01 asking: What denied patient claims need follow-up?
+    -> OK looked_at=true elapsed=0.2s http=200
+Q02 asking: Which insurance claims are still pending?
+    -> OK looked_at=true elapsed=0.4s http=200
+Q03 asking: What patient claim balances need review?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q04 asking: What claim denial reasons are most common?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q05 asking: Which patients have multiple open claims?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q06 asking: What unsubmitted claims need action today?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q07 asking: What claim documentation is missing for appeals?
+    -> OK looked_at=true elapsed=0.2s http=200
+Q08 asking: Which payer claims need resubmission?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q09 asking: What patient claims lack supporting attachments?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q10 asking: What claim aging issues need operator attention?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q11 asking: Which procedures have claim mismatches?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q12 asking: What patient insurance claims failed this month?
+    -> OK looked_at=true elapsed=0.2s http=200
+Q13 asking: What claim totals are highest by payer?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q14 asking: Which patients have outstanding claim problems?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q15 asking: What appeal cases look strongest for claims?
+    -> OK looked_at=true elapsed=0.2s http=200
+Q16 asking: What claim status exports show denials?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q17 asking: Which patient claims need narrative support?
+    -> OK looked_at=true elapsed=0.2s http=200
+Q18 asking: What claim follow-up is highest priority?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q19 asking: What patient claim patterns look unusual?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q20 asking: Which claims have been pending too long?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q21 asking: What patient balances tie to denied claims?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q22 asking: What claim procedure bundles need review?
+    -> OK looked_at=true elapsed=0.3s http=200
+Q23 asking: Which patients need claim status updates?
+    -> OK looked_at=true elapsed=0.2s http=200
+Q24 asking: What insurance claim exposure is current?
+    -> OK looked_at=true elapsed=0.1s http=200
+Q25 asking: What patient claim workflows need review?
+    -> OK looked_at=true elapsed=0.3s http=200
+
+--- SUMMARY ---
+{
+  "passed": 25,
+  "failed": 0,
+  "total": 25,
+  "results": [
+    {
+      "num": 1,
+      "question": "What denied patient claims need follow-up?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.2
+    },
+    {
+      "num": 2,
+      "question": "Which insurance claims are still pending?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.4
+    },
+    {
+      "num": 3,
+      "question": "What patient claim balances need review?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 4,
+      "question": "What claim denial reasons are most common?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 5,
+      "question": "Which patients have multiple open claims?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 6,
+      "question": "What unsubmitted claims need action today?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 7,
+      "question": "What claim documentation is missing for appeals?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.2
+    },
+    {
+      "num": 8,
+      "question": "Which payer claims need resubmission?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 9,
+      "question": "What patient claims lack supporting attachments?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 10,
+      "question": "What claim aging issues need operator attention?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 11,
+      "question": "Which procedures have claim mismatches?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 12,
+      "question": "What patient insurance claims failed this month?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.2
+    },
+    {
+      "num": 13,
+      "question": "What claim totals are highest by payer?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 14,
+      "question": "Which patients have outstanding claim problems?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 15,
+      "question": "What appeal cases look strongest for claims?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.2
+    },
+    {
+      "num": 16,
+      "question": "What claim status exports show denials?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 17,
+      "question": "Which patient claims need narrative support?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.2
+    },
+    {
+      "num": 18,
+      "question": "What claim follow-up is highest priority?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 19,
+      "question": "What patient claim patterns look unusual?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 20,
+      "question": "Which claims have been pending too long?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 21,
+      "question": "What patient balances tie to denied claims?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 22,
+      "question": "What claim procedure bundles need review?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.3
+    },
+    {
+      "num": 23,
+      "question": "Which patients need claim status updates?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.2
+    },
+    {
+      "num": 24,
+      "question": "What insurance claim exposure is current?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.1
+    },
+    {
+      "num": 25,
+      "question": "What patient claim workflows need review?",
+      "ui_success": true,
+      "looked_at_present": true,
+      "review_depth_second_opinion": true,
+      "http_status": 200,
+      "error_message": null,
+      "elapsed_s": 0.3
+    }
+  ],
+  "failures": []
+}

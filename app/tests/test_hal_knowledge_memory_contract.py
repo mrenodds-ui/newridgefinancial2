@@ -64,6 +64,7 @@ MUST_NOT_OVERRIDE = {
     "auth",
     "guardrails",
     "source_availability",
+    "external_submission_policy",
     "hal_ask_request",
 }
 
@@ -172,6 +173,7 @@ def test_approved_memories_include_core_safety_rules(memories: list[dict]):
         "no-raw-csv-exposure",
         "no-ar-inference-from-totals",
         "knowledge-memory-governed-layer",
+        "hal-internal-staff-assistant-stance",
     }
     missing = required - approved_ids
     assert not missing, f"Missing approved core memories: {missing}"

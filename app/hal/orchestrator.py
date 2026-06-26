@@ -24,7 +24,7 @@ from app.ai_local_config import (
     resolve_lane_profile,
 )
 from app.evaluation.client import generate_response_result, get_ollama_runtime_status, load_json_file, run_structured_output_workflow
-from app.services import fetch_softdent_dashboard_aggregate, list_local_accounting_documents, load_softdent_claim_rows, run_ci_gates, run_rebuild_receipt, run_refresh_and_verify, run_smoke_tests
+from app.services import build_softdent_snapshot, fetch_softdent_dashboard_aggregate, list_local_accounting_documents, load_softdent_ar_rows, load_softdent_claim_rows, run_ci_gates, run_rebuild_receipt, run_refresh_and_verify, run_smoke_tests
 from .hardware_tools import build_monitor_mutation_intent, get_monitor_status
 
 from .financial_tools import ReportPeriod, get_ar_aging_report, get_balance_sheet_report, get_controlled_patient_context, get_financial_source_status, get_live_financial_context, get_profit_loss_report, get_softdent_collection_delta_status, get_softdent_payer_mix_status, get_softdent_provider_ranking_status
@@ -154,31 +154,31 @@ HAL_VOICE_PROFILES = {
     "primary": {
         "lane": "primary",
         "label": "Primary response",
-        "tone": "direct and grounded",
+        "tone": "direct and practical",
         "style_notes": [
-            "Lead with the answer.",
-            "Use verified facts before interpretation.",
-            "Keep safety language outside the main answer when the UI can carry it.",
+            "Lead with the practical answer for the signed-in office user.",
+            "Separate known facts, runtime status, and recommendations.",
+            "Use patient names when useful for authorized internal workflows.",
         ],
     },
     "second_opinion": {
         "lane": "second_opinion",
         "label": "Second opinion",
-        "tone": "slower and more evaluative",
+        "tone": "grounded and staff-assistant",
         "style_notes": [
-            "Add one extra verification angle when useful.",
-            "Call out tradeoffs and uncertainty.",
-            "Stay practical instead of verbose.",
+            "Answer like an internal teammate reviewing the case.",
+            "Add one verification angle when useful.",
+            "Call out tradeoffs, missing data, and the next safe action.",
         ],
     },
     "patient_workflow": {
         "lane": "patient_workflow",
         "label": "Patient workflow",
-        "tone": "careful and case-focused",
+        "tone": "case-focused and actionable",
         "style_notes": [
             "Stay specific to the matched patient context.",
-            "Use calm clinical-administrative wording.",
-            "Keep governance text separate from the patient narrative when possible.",
+            "Use patient names naturally for authorized office workflows.",
+            "Separate facts, recommendations, and review boundaries.",
         ],
     },
     "policy": {
@@ -186,12 +186,27 @@ HAL_VOICE_PROFILES = {
         "label": "Policy guidance",
         "tone": "measured and review-oriented",
         "style_notes": [
-            "Frame the answer as draft guidance.",
+            "Frame the answer as draft guidance for internal staff.",
             "Ground the answer in approved citations.",
             "Make the need for review explicit without sounding defensive.",
         ],
     },
 }
+
+GOVERNED_MEMORY_PROPOSAL_PHRASE = (
+    "If this should become a stable office workflow, I can propose it for governed HAL memory review—it would not be saved automatically."
+)
+
+STABLE_MEMORY_REQUEST_PHRASES = (
+    "remember this",
+    "save this",
+    "add to memory",
+    "add this to memory",
+    "make this a rule",
+    "stable workflow",
+    "office workflow",
+    "should we always",
+)
 
 
 def _voice_profile(name: str) -> dict[str, object]:
@@ -215,7 +230,10 @@ def _build_governance_notes(*, patient_context_used: bool = False, review_action
     ]
     if patient_context_used:
         notes.append(
-            _governance_note("Patient identifiers", "Raw identifiers stay inside the reviewed local patient tool and the audit trail stores the sanitized request."),
+            _governance_note(
+                "Patient context",
+                "Authorized internal office context may include patient names and matched export rows; the audit trail stores the sanitized request.",
+            ),
         )
     if review_actions_present:
         notes.append(
@@ -964,12 +982,14 @@ def _build_second_opinion_prompt(
             f"{summary_payload}\n"
         )
     return (
-        "Provide a deeper second opinion on the operator question below. "
+        "Provide a deeper second opinion for the signed-in office user. "
+        "Act like an authorized internal dental-office staff assistant, not an outside evaluator. "
         "Use only the verified local context provided. "
         "Answer immediately in no more than 60 words. "
+        "Lead with the practical answer, then reason/source basis, then next action when useful. "
         "Use 2 concise bullets when possible. "
         "Do not explain your steps. "
-        "Add one verification angle when useful, call out tradeoffs and uncertainty, and stay practical.\n\n"
+        "Add one verification angle when useful, call out missing data, and stay practical.\n\n"
         f"Question:\n{sanitized_question}"
         f"{summary_text}\n\n"
         f"Verified local context:\n{context_text}\n"
@@ -1010,10 +1030,7 @@ def _second_opinion_guardrails(
             "tier-2 mismatches raise [ALERT]",
         ]
     if patient_context_matched:
-        if deterministic_claims_fast_path:
-            guardrails.append("authorized internal office context")
-        else:
-            guardrails.append("raw identifiers processed only in local patient tool")
+        guardrails.append("authorized internal office context")
     return guardrails
 
 
@@ -1067,6 +1084,7 @@ def _build_second_opinion_response(
             else f"Answered a HAL second-opinion request for sanitized request: {sanitized_question[:140]}"
         ),
     )
+    answer = _append_governed_memory_proposal(answer, question=question)
     audit_entry = record_hal_audit(
         actor=actor,
         mode=f"{HAL_MODE}:second-opinion",
@@ -1895,6 +1913,65 @@ def _build_claim_total_answer(rows: list[dict[str, object]]) -> str:
     return "Payer exposure from the approved SoftDent claims export: " + "; ".join(f"{payer} {_format_currency(amount)}" for payer, amount in ranked) + "."
 
 
+def _should_suggest_governed_memory(question: str) -> bool:
+    lowered = question.lower()
+    return any(phrase in lowered for phrase in STABLE_MEMORY_REQUEST_PHRASES)
+
+
+def _append_governed_memory_proposal(answer: str, *, question: str) -> str:
+    if not _should_suggest_governed_memory(question):
+        return answer
+    if GOVERNED_MEMORY_PROPOSAL_PHRASE in answer:
+        return answer
+    return f"{answer.rstrip()} {GOVERNED_MEMORY_PROPOSAL_PHRASE}"
+
+
+def _format_staff_assistant_answer(
+    *,
+    practical: str,
+    reason: str | None = None,
+    next_action: str | None = None,
+    missing_data: str | None = None,
+) -> str:
+    parts = [practical.strip()]
+    if reason:
+        parts.append(f"Reason: {reason.strip()}")
+    if next_action:
+        parts.append(f"Next action: {next_action.strip()}")
+    if missing_data:
+        parts.append(f"Missing data: {missing_data.strip()}")
+    return " ".join(parts)
+
+
+def _is_patient_ar_balance_question(question: str) -> bool:
+    lowered = question.lower()
+    return "patient" in lowered and any(
+        keyword in lowered
+        for keyword in ("a/r", "accounts receivable", "balance owed", "outstanding balance", "patient balance", "patient ar")
+    )
+
+
+def _patient_level_softdent_ar_export_available() -> bool:
+    rows = load_softdent_ar_rows()
+    if not rows:
+        return False
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if any(str(row.get(key) or "").strip() for key in ("PatientName", "patient_name", "MRN", "mrn", "patient_id")):
+            return True
+    return False
+
+
+def _build_missing_patient_ar_answer(patient_name: str) -> str:
+    return _format_staff_assistant_answer(
+        practical=f"Patient A/R for {patient_name} is unavailable from the approved SoftDent exports.",
+        reason="missing_softdent_ar: no patient-level SoftDent A/R export is present, so balances must not be reported as $0 or inferred from claim totals.",
+        next_action="Import or refresh the SoftDent patient A/R export, then ask again for the balance.",
+        missing_data="SoftDent patient A/R export",
+    )
+
+
 def _build_multiple_open_patient_answer(rows: list[dict[str, object]]) -> str:
     counts: dict[str, int] = {}
     for row in rows:
@@ -1902,8 +1979,16 @@ def _build_multiple_open_patient_answer(rows: list[dict[str, object]]) -> str:
         counts[patient] = counts.get(patient, 0) + 1
     patients = [f"{patient} ({count} open claims)" for patient, count in counts.items() if count > 1]
     if patients:
-        return "Patients with multiple open claims in the approved SoftDent export: " + "; ".join(patients) + "."
-    return "The approved SoftDent claims export does not verify any patient with multiple open claims."
+        return _format_staff_assistant_answer(
+            practical="Patients with multiple open claims in the approved SoftDent export: " + "; ".join(patients) + ".",
+            reason="Counts come from open claim rows in the local SoftDent export.",
+            next_action="I would prioritize follow-up on the highest-dollar open claims first.",
+        )
+    return _format_staff_assistant_answer(
+        practical="The approved SoftDent claims export does not verify any patient with multiple open claims.",
+        reason="No patient had more than one open claim row in the reviewed export.",
+        missing_data="Confirm the claims export is current if you expected multiple open claims.",
+    )
 
 
 def _build_immediate_patient_claims_second_opinion(context_bundle: dict[str, object]) -> tuple[str, dict[str, object]]:
@@ -1916,7 +2001,11 @@ def _build_immediate_patient_claims_second_opinion(context_bundle: dict[str, obj
     }
     if not claim_rows:
         return (
-            "The approved SoftDent claims export was checked, but no readable claim rows were available for a second opinion.",
+            _format_staff_assistant_answer(
+                practical="I do not have readable claim rows in the approved SoftDent export for this second opinion.",
+                reason="The local claims export was checked but returned no usable rows.",
+                missing_data="Please confirm the SoftDent claims export is current or name the claim you want reviewed.",
+            ),
             audit_meta,
         )
 
@@ -1930,18 +2019,35 @@ def _build_immediate_patient_claims_second_opinion(context_bundle: dict[str, obj
     if any(keyword in lowered for keyword in ("total", "highest", "exposure")):
         return _build_claim_total_answer(selected_rows), audit_meta
     if "mismatch" in lowered:
-        answer = (
-            "The approved SoftDent claims export does not contain a verified mismatch field. "
-            f"Open procedure-related claims available for review: {' | '.join(_format_claim_row(row) for row in selected_rows[:3])}."
-            if selected_rows
-            else "The approved SoftDent claims export does not verify procedure mismatches or open procedure claims for this question."
+        if selected_rows:
+            practical = (
+                "The approved SoftDent claims export does not contain a verified mismatch field. "
+                f"Open procedure-related claims available for review: {' | '.join(_format_claim_row(row) for row in selected_rows[:3])}."
+            )
+        else:
+            practical = "The approved SoftDent claims export does not verify procedure mismatches or open procedure claims for this question."
+        answer = _format_staff_assistant_answer(
+            practical=practical,
+            reason="Mismatch checks require explicit fields or documentation not present in the export row shape.",
+            next_action="Compare the chart note, procedure code, and payer response before preparing an appeal packet.",
         )
         return answer, audit_meta
     if not selected_rows:
-        return f"The approved SoftDent claims export does not verify any {label} for this question.", audit_meta
+        return (
+            _format_staff_assistant_answer(
+                practical=f"The approved SoftDent claims export does not verify any {label} for this question.",
+                reason="No matching claim rows were found in the local export for the filters implied by the question.",
+                missing_data="Provide a patient name, claim ID, or payer if you want a narrower review.",
+            ),
+            audit_meta,
+        )
 
     formatted_rows = [_format_claim_row(row) for row in selected_rows[:3]]
-    answer = f"Verified {label} from the approved SoftDent claims export: " + " | ".join(formatted_rows) + "."
+    answer = _format_staff_assistant_answer(
+        practical=f"Verified {label} from the approved SoftDent export: " + " | ".join(formatted_rows) + ".",
+        reason="These rows come from the approved local SoftDent claims export reviewed for this question.",
+        next_action="I would review payer status, missing documentation, and whether an appeal or resubmission packet is needed before anything is sent.",
+    )
     return answer, audit_meta
 
 
@@ -2435,7 +2541,13 @@ def answer_hal_question(
     lowered_question = question.lower()
     if patient_context["matched"]:
         patient_summary = _build_patient_context_summary(patient_context)
-        if _is_patient_follow_up_question(question) and ("follow-up plan" in lowered_question or "follow up plan" in lowered_question):
+        summary_fields = patient_context.get("summary_fields") if isinstance(patient_context.get("summary_fields"), dict) else {}
+        patient_name = str(summary_fields.get("patient_name") or "the patient")
+        if _is_patient_ar_balance_question(question) and not _patient_level_softdent_ar_export_available():
+            answer = _build_missing_patient_ar_answer(patient_name)
+            if context_titles:
+                answer += f" Supporting context: {context_titles}."
+        elif _is_patient_follow_up_question(question) and ("follow-up plan" in lowered_question or "follow up plan" in lowered_question):
             answer = (
                 (f"Verified patient context: {patient_summary}. " if patient_summary else "")
                 + _build_patient_follow_up_plan(patient_context)
@@ -2490,11 +2602,13 @@ def answer_hal_question(
             if context_summary:
                 answer_parts.append(f"Key approved guidance: {context_summary}")
             answer_parts.append(
-                "If you need patient-specific action, use a reviewed read-only backend tool rather than sending raw identifiers to the assistant. HAL cannot run arbitrary SQL, expose raw patient records, or claim runtime or model changes that the backend did not verify."
+                "For patient-specific work, I can use authorized internal office context from reviewed SoftDent exports and dossier tools. "
+                "I cannot run arbitrary SQL, expose raw export files, or claim runtime or model changes that the backend did not verify."
             )
         answer = " ".join(part.strip() for part in answer_parts if part and part.strip())
         voice_profile = _voice_profile("primary")
         governance_notes = _build_governance_notes(review_actions_present=bool(hardware_review_actions))
+    answer = _append_governed_memory_proposal(answer, question=question)
     _update_conversation_state(
         actor=actor,
         session_id=session_id,
@@ -2535,7 +2649,7 @@ def answer_hal_question(
             "tier-1 critical actions require explicit confirmation",
             "tier-2 mismatches raise [ALERT]",
             "tier-3 assistance stays concise",
-        ] + (["raw identifiers processed only in local patient tool"] if patient_context["matched"] else []),
+        ] + (["authorized internal office context"] if patient_context["matched"] else []),
         "audit_id": audit_entry["audit_id"],
         "access_policy": get_hal_access_policy(),
         "review_actions": hardware_review_actions,
@@ -2691,9 +2805,10 @@ def answer_insurance_narrative_request(*, question: str, actor: str) -> dict[str
         "guardrails": [
             "approved local read-only scope",
             "patient-specific local tool only",
-            "raw identifiers processed only in local patient tool",
+            "authorized internal office context",
             "sanitized audit trail",
             "review before submission",
+            "no external submission performed",
         ],
         "audit_id": audit_entry["audit_id"],
         "access_policy": get_hal_access_policy(),
@@ -2737,8 +2852,9 @@ def answer_patient_dossier_request(*, question: str, actor: str) -> dict[str, ob
         "guardrails": [
             "approved local read-only scope",
             "patient-specific local tool only",
-            "raw identifiers processed only in local patient tool",
+            "authorized internal office context",
             "sanitized audit trail",
+            "no external submission performed",
         ],
         "audit_id": audit_entry["audit_id"],
         "access_policy": get_hal_access_policy(),
