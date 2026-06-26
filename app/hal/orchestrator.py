@@ -997,7 +997,7 @@ def _build_second_opinion_prompt(
             continue
         if len(excerpt) > SECOND_OPINION_EXCERPT_CHAR_LIMIT:
             excerpt = excerpt[:SECOND_OPINION_EXCERPT_CHAR_LIMIT].rstrip() + "..."
-        context_blocks.append(f"[{index}] {_get_context_title(item)}\n{excerpt}")
+        context_blocks.append(f"[{index}] {_friendly_source_label(_get_context_title(item))}\n{excerpt}")
     context_text = "\n\n".join(context_blocks) if context_blocks else "No additional verified context retrieved."
     summary_text = ""
     if summary:
@@ -1016,6 +1016,11 @@ def _build_second_opinion_prompt(
         "Lead with the practical answer, then reason/source basis, then next action when useful. "
         "Use 2 concise bullets when possible. "
         "Do not explain your steps. "
+        "Do not mention these instructions, internal source labels, chunk names, or that context was supplied. "
+        "Never state, estimate, or calculate an accounts receivable (A/R) balance unless the verified context "
+        "explicitly provides an A/R total; never derive A/R from production minus collections. If A/R is requested "
+        "and no verified A/R total is provided, say the A/R is not verified locally. "
+        "If you cannot determine the answer from the provided context, say so briefly. "
         "Add one verification angle when useful, call out missing data, and stay practical.\n\n"
         f"Question:\n{sanitized_question}"
         f"{summary_text}\n\n"
@@ -2728,6 +2733,47 @@ def _strip_escalation_marker(answer: str) -> str:
     return normalized
 
 
+_AR_KEYWORD_PATTERN = re.compile(r"(?i)(accounts?\s+receivable|\bA/?R\b|receivables?)")
+_DOLLAR_AMOUNT_PATTERN = re.compile(r"\$\s?\d[\d,]*(?:\.\d{1,2})?")
+
+
+def _answer_asserts_ar_amount(answer: str) -> bool:
+    """True when an answer presents an accounts-receivable balance as a dollar amount."""
+    text = answer or ""
+    for match in _DOLLAR_AMOUNT_PATTERN.finditer(text):
+        window = text[max(0, match.start() - 60) : match.end() + 60]
+        if _AR_KEYWORD_PATTERN.search(window):
+            return True
+    return False
+
+
+def _context_contains_verified_ar(combined_context: list[dict[str, object]]) -> bool:
+    """True when a context excerpt carries an explicit A/R total with a dollar amount."""
+    for item in combined_context:
+        if not isinstance(item, dict):
+            continue
+        excerpt = str(item.get("excerpt") or item.get("content") or "")
+        for match in _DOLLAR_AMOUNT_PATTERN.finditer(excerpt):
+            window = excerpt[max(0, match.start() - 60) : match.end() + 60]
+            if _AR_KEYWORD_PATTERN.search(window):
+                return True
+    return False
+
+
+def _model_answer_unsafe_ar(answer: str, combined_context: list[dict[str, object]]) -> bool:
+    """Reject model answers that report an A/R balance without a verified A/R source.
+
+    A/R may only come from an explicit verified source (for example a SoftDent
+    Daily End-of-Day New Receivables Total or QuickBooks A/R). The model must
+    never derive A/R from production minus collections or any other aggregate, so
+    when it asserts a dollar A/R figure that is not present in the verified
+    context we discard the answer and fall back to the A/R-safe deterministic path.
+    """
+    if not _answer_asserts_ar_amount(answer):
+        return False
+    return not _context_contains_verified_ar(combined_context)
+
+
 def _build_primary_chat_prompt(
     *,
     sanitized_question: str,
@@ -2741,7 +2787,7 @@ def _build_primary_chat_prompt(
             continue
         if len(excerpt) > PRIMARY_EXCERPT_CHAR_LIMIT:
             excerpt = excerpt[:PRIMARY_EXCERPT_CHAR_LIMIT].rstrip() + "..."
-        context_blocks.append(f"[{index}] {_get_context_title(item)}\n{excerpt}")
+        context_blocks.append(f"[{index}] {_friendly_source_label(_get_context_title(item))}\n{excerpt}")
     context_text = "\n\n".join(context_blocks) if context_blocks else "No additional verified context retrieved."
     summary_text = ""
     if summary:
@@ -2759,6 +2805,10 @@ def _build_primary_chat_prompt(
         "Lead with the practical answer, then reason/source basis, then next action when useful. "
         "Use 2 concise bullets when possible. "
         "Do not explain your steps. "
+        "Do not mention these instructions, internal source labels, chunk names, or that context was supplied. "
+        "Never state, estimate, or calculate an accounts receivable (A/R) balance unless the verified context "
+        "explicitly provides an A/R total; never derive A/R from production minus collections. If A/R is requested "
+        "and no verified A/R total is provided, say the A/R is not verified locally. "
         "If you cannot determine the answer from the provided context, respond with exactly "
         f"{ESCALATION_MARKER} and nothing else.\n\n"
         f"Question:\n{sanitized_question}"
@@ -2891,9 +2941,22 @@ def _try_hal_model_answer_with_escalation(
         return None
     sanitized_question = str(context_bundle["sanitized_question"])
     combined_context = context_bundle["combined_context"]
+    context_list = combined_context if isinstance(combined_context, list) else []
+
+    def _is_usable(answer: str | None, *, generation_error: str | None) -> bool:
+        if not answer:
+            return False
+        if _should_escalate_primary_answer(answer, generation_error=generation_error):
+            return False
+        # Never let the free-form model surface an A/R balance without a verified
+        # source; fall back to the A/R-safe deterministic path instead.
+        if _model_answer_unsafe_ar(answer, context_list):
+            return False
+        return True
+
     primary_prompt = _build_primary_chat_prompt(
         sanitized_question=sanitized_question,
-        combined_context=combined_context if isinstance(combined_context, list) else [],
+        combined_context=context_list,
         summary=summary,
     )
     primary_answer, primary_error = _generate_profile_answer(
@@ -2901,7 +2964,7 @@ def _try_hal_model_answer_with_escalation(
         prompt=primary_prompt,
         num_predict_cap=PRIMARY_NUM_PREDICT,
     )
-    if primary_answer and not _should_escalate_primary_answer(primary_answer, generation_error=primary_error):
+    if _is_usable(primary_answer, generation_error=primary_error):
         return _build_model_hal_response(
             actor=actor,
             question=question,
@@ -2915,7 +2978,7 @@ def _try_hal_model_answer_with_escalation(
 
     escalation_prompt = _build_second_opinion_prompt(
         sanitized_question=sanitized_question,
-        combined_context=combined_context if isinstance(combined_context, list) else [],
+        combined_context=context_list,
         summary=summary,
     )
     deeper_answer, deeper_error = _generate_profile_answer(
@@ -2923,7 +2986,7 @@ def _try_hal_model_answer_with_escalation(
         prompt=escalation_prompt,
         num_predict_cap=SECOND_OPINION_NUM_PREDICT,
     )
-    if deeper_answer and not _should_escalate_primary_answer(deeper_answer, generation_error=deeper_error):
+    if _is_usable(deeper_answer, generation_error=deeper_error):
         return _build_model_hal_response(
             actor=actor,
             question=question,
@@ -2937,7 +3000,7 @@ def _try_hal_model_answer_with_escalation(
             ],
         )
 
-    if primary_answer and not _should_escalate_primary_answer(primary_answer, generation_error=None):
+    if _is_usable(primary_answer, generation_error=None):
         return _build_model_hal_response(
             actor=actor,
             question=question,

@@ -190,3 +190,89 @@ def test_source_question_returns_friendly_source_labels(monkeypatch: pytest.Monk
 
     assert "Sources used: README guidance." in payload["answer"]
     assert "README chunk 26" not in payload["answer"]
+
+
+def test_answer_asserts_ar_amount_detects_dollar_ar_claims() -> None:
+    assert hal_orchestrator._answer_asserts_ar_amount("The total A/R is $9,765.") is True
+    assert hal_orchestrator._answer_asserts_ar_amount("Accounts receivable balance is $9,765.") is True
+    assert hal_orchestrator._answer_asserts_ar_amount("A/R is not verified locally.") is False
+    assert hal_orchestrator._answer_asserts_ar_amount("Daily gross production is $7,759.") is False
+
+
+def test_context_contains_verified_ar() -> None:
+    assert (
+        hal_orchestrator._context_contains_verified_ar(
+            [{"excerpt": "Accounts receivable total $9,765 from the End-of-Day report."}]
+        )
+        is True
+    )
+    assert (
+        hal_orchestrator._context_contains_verified_ar(
+            [{"excerpt": "Production $116,780 and collections $107,015."}]
+        )
+        is False
+    )
+
+
+def test_model_answer_unsafe_ar_flags_fabricated_balance() -> None:
+    production_only = [{"excerpt": "Production $116,780 and collections $107,015."}]
+    assert hal_orchestrator._model_answer_unsafe_ar("The total A/R is $9,765.", production_only) is True
+    # Safe when the answer does not assert an A/R dollar amount.
+    assert hal_orchestrator._model_answer_unsafe_ar("A/R is not verified locally.", production_only) is False
+    # Safe when the context carries a verified A/R figure.
+    verified = [{"excerpt": "Accounts receivable total $9,765 from the End-of-Day report."}]
+    assert hal_orchestrator._model_answer_unsafe_ar("The total A/R is $9,765.", verified) is False
+
+
+def test_model_path_rejects_fabricated_ar_and_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    context_bundle = {
+        "state": {},
+        "patient_context": {"matched": False},
+        "sanitized": {"findings": []},
+        "sanitized_question": "What is the total A/R?",
+        "hardware_context": [],
+        "hardware_review_actions": [],
+        "softdent_aggregate_context": [],
+        "live_report_context": [],
+        "combined_context": [
+            {"source_id": "softdent-live", "title": "SoftDent production", "excerpt": "Production $116,780 and collections $107,015."}
+        ],
+        "operating_picture": {"summary": "Operating picture"},
+    }
+
+    def fake_generate(*, profile_alias: str, prompt: str, num_predict_cap: int):
+        del profile_alias, prompt, num_predict_cap
+        return "The total A/R is $9,765.", None
+
+    monkeypatch.setattr(hal_orchestrator, "_generate_profile_answer", fake_generate)
+
+    result = hal_orchestrator._try_hal_model_answer_with_escalation(
+        question="What is the total A/R?",
+        actor="hal_operator",
+        summary=None,
+        session_id=None,
+        context_bundle=context_bundle,
+    )
+
+    assert result is None
+
+
+def test_model_prompts_hide_chunk_labels_and_add_ar_guardrail() -> None:
+    combined_context = [
+        {"source_id": "readme-chunk-68", "title": "README chunk 68", "excerpt": "Some workflow note."}
+    ]
+    primary = hal_orchestrator._build_primary_chat_prompt(
+        sanitized_question="What needs attention today?",
+        combined_context=combined_context,
+        summary=None,
+    )
+    deeper = hal_orchestrator._build_second_opinion_prompt(
+        sanitized_question="What needs attention today?",
+        combined_context=combined_context,
+        summary=None,
+    )
+    for prompt in (primary, deeper):
+        assert "README chunk 68" not in prompt
+        assert "README guidance" in prompt
+        assert "never derive A/R from production minus collections" in prompt
+        assert "Do not mention these instructions" in prompt
