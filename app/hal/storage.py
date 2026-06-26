@@ -139,6 +139,31 @@ def initialize_hal_storage(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS hal_softdent_packet_audits (
+            packet_id TEXT PRIMARY KEY,
+            source_draft_id TEXT NOT NULL,
+            created_at_utc TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            roles_used_json TEXT NOT NULL,
+            packet_type TEXT NOT NULL,
+            patient_ref_hash TEXT,
+            chart_ref_hash TEXT,
+            patient_display_name TEXT,
+            claim_ids_json TEXT NOT NULL,
+            clinical_note_ids_json TEXT NOT NULL,
+            ledger_record_ids_json TEXT NOT NULL,
+            source_fact_refs_json TEXT NOT NULL,
+            missing_data_codes_json TEXT NOT NULL,
+            approval_attestation_json TEXT NOT NULL,
+            submission_status TEXT NOT NULL,
+            external_action_performed INTEGER NOT NULL DEFAULT 0,
+            softdent_writeback_performed INTEGER NOT NULL DEFAULT 0,
+            local_only INTEGER NOT NULL DEFAULT 1
+        )
+        """
+    )
 
 
 def _ensure_hal_conversation_state_schema(connection: sqlite3.Connection) -> None:
@@ -436,6 +461,118 @@ def _map_softdent_draft_audit_row(row: sqlite3.Row) -> dict[str, Any]:
         "missing_data_codes": json.loads(row["missing_data_codes_json"]),
         "review_required": bool(row["review_required"]),
         "external_action_performed": bool(row["external_action_performed"]),
+    }
+
+
+def insert_softdent_packet_audit(entry: dict[str, Any]) -> None:
+    with hal_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO hal_softdent_packet_audits (
+                packet_id,
+                source_draft_id,
+                created_at_utc,
+                actor,
+                roles_used_json,
+                packet_type,
+                patient_ref_hash,
+                chart_ref_hash,
+                patient_display_name,
+                claim_ids_json,
+                clinical_note_ids_json,
+                ledger_record_ids_json,
+                source_fact_refs_json,
+                missing_data_codes_json,
+                approval_attestation_json,
+                submission_status,
+                external_action_performed,
+                softdent_writeback_performed,
+                local_only
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry["packet_id"],
+                entry["source_draft_id"],
+                entry["created_at_utc"],
+                entry["actor"],
+                json.dumps(entry.get("roles_used", [])),
+                entry["packet_type"],
+                entry.get("patient_ref_hash"),
+                entry.get("chart_ref_hash"),
+                entry.get("patient_display_name"),
+                json.dumps(entry.get("claim_ids", [])),
+                json.dumps(entry.get("clinical_note_ids", [])),
+                json.dumps(entry.get("ledger_record_ids", [])),
+                json.dumps(entry.get("source_fact_refs", [])),
+                json.dumps(entry.get("missing_data_codes", [])),
+                json.dumps(entry.get("approval_attestation", {})),
+                entry.get("submission_status", "not_submitted"),
+                1 if entry.get("external_action_performed") else 0,
+                1 if entry.get("softdent_writeback_performed") else 0,
+                1 if entry.get("local_only", True) else 0,
+            ),
+        )
+
+
+def get_recent_softdent_packet_audits(limit: int = 20) -> list[dict[str, Any]]:
+    bounded_limit = max(1, limit)
+    with hal_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT packet_id, source_draft_id, created_at_utc, actor, roles_used_json, packet_type,
+                   patient_ref_hash, chart_ref_hash, patient_display_name, claim_ids_json,
+                   clinical_note_ids_json, ledger_record_ids_json, source_fact_refs_json,
+                   missing_data_codes_json, approval_attestation_json, submission_status,
+                   external_action_performed, softdent_writeback_performed, local_only
+            FROM hal_softdent_packet_audits
+            ORDER BY created_at_utc DESC
+            LIMIT ?
+            """,
+            (bounded_limit,),
+        ).fetchall()
+    return [_map_softdent_packet_audit_row(row) for row in rows]
+
+
+def get_softdent_packet_audit(packet_id: str) -> dict[str, Any] | None:
+    with hal_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT packet_id, source_draft_id, created_at_utc, actor, roles_used_json, packet_type,
+                   patient_ref_hash, chart_ref_hash, patient_display_name, claim_ids_json,
+                   clinical_note_ids_json, ledger_record_ids_json, source_fact_refs_json,
+                   missing_data_codes_json, approval_attestation_json, submission_status,
+                   external_action_performed, softdent_writeback_performed, local_only
+            FROM hal_softdent_packet_audits
+            WHERE packet_id = ?
+            """,
+            (packet_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return _map_softdent_packet_audit_row(row)
+
+
+def _map_softdent_packet_audit_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "packet_id": row["packet_id"],
+        "source_draft_id": row["source_draft_id"],
+        "created_at_utc": row["created_at_utc"],
+        "actor": row["actor"],
+        "roles_used": json.loads(row["roles_used_json"]),
+        "packet_type": row["packet_type"],
+        "patient_ref_hash": row["patient_ref_hash"],
+        "chart_ref_hash": row["chart_ref_hash"],
+        "patient_display_name": row["patient_display_name"],
+        "claim_ids": json.loads(row["claim_ids_json"]),
+        "clinical_note_ids": json.loads(row["clinical_note_ids_json"]),
+        "ledger_record_ids": json.loads(row["ledger_record_ids_json"]),
+        "source_fact_refs": json.loads(row["source_fact_refs_json"]),
+        "missing_data_codes": json.loads(row["missing_data_codes_json"]),
+        "approval_attestation": json.loads(row["approval_attestation_json"]),
+        "submission_status": row["submission_status"],
+        "external_action_performed": bool(row["external_action_performed"]),
+        "softdent_writeback_performed": bool(row["softdent_writeback_performed"]),
+        "local_only": bool(row["local_only"]),
     }
 
 

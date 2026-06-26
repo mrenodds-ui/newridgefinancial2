@@ -400,6 +400,9 @@ from .models import (
     HalPatientDossierResponse,
     HalSoftDentDraftRequest,
     HalSoftDentDraftResponse,
+    HalSoftDentLocalPacketRequest,
+    HalSoftDentLocalPacketResponse,
+    HalSoftDentPacketApprovalAttestation,
     JournalDraftRequest,
     JournalDraftResponse,
     LocalAccountingDocumentListResponse,
@@ -1743,6 +1746,39 @@ async def api_hal9000_softdent_drafts(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return HalSoftDentDraftResponse.model_validate(artifact.model_dump())
+
+
+@router.post("/api/hal9000/softdent-local-packets", response_model=HalSoftDentLocalPacketResponse)
+async def api_hal9000_softdent_local_packets(
+    payload: HalSoftDentLocalPacketRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(
+        require_roles("hal:operator", "softdent:read", "softdent:patient:read", "softdent:narrative:draft")
+    ),
+):
+    del request
+    from app.hal.softdent_draft_models import SoftDentDraftArtifact
+    from app.hal.softdent_packet_models import SoftDentLocalPacketRequest, SoftDentPacketApprovalAttestation
+    from app.hal.softdent_packet_service import create_softdent_local_packet
+    from app.hal.softdent_read_broker import SoftDentAccessError
+
+    try:
+        packet = create_softdent_local_packet(
+            SoftDentLocalPacketRequest(
+                draft_artifact=SoftDentDraftArtifact.model_validate(payload.draft_artifact.model_dump()),
+                packet_type=payload.packet_type,
+            ),
+            actor=user.username,
+            roles=user.roles,
+            approval_attestation=SoftDentPacketApprovalAttestation.model_validate(
+                payload.approval_attestation.model_dump()
+            ),
+        )
+    except SoftDentAccessError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return HalSoftDentLocalPacketResponse.model_validate(packet.model_dump())
 
 
 @router.post("/api/hal9000/chart-plan", response_model=HalChartPlanResponse)

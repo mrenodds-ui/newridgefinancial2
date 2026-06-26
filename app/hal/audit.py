@@ -8,11 +8,14 @@ from uuid import uuid4
 from .storage import get_hal_audit as get_hal_audit_from_storage
 from .storage import get_recent_hal_audits as get_recent_hal_audits_from_storage
 from .storage import get_recent_softdent_draft_audits as get_recent_softdent_draft_audits_from_storage
+from .storage import get_recent_softdent_packet_audits as get_recent_softdent_packet_audits_from_storage
 from .storage import get_recent_softdent_record_audits as get_recent_softdent_record_audits_from_storage
 from .storage import get_softdent_draft_audit as get_softdent_draft_audit_from_storage
+from .storage import get_softdent_packet_audit as get_softdent_packet_audit_from_storage
 from .storage import get_softdent_record_audit as get_softdent_record_audit_from_storage
 from .storage import insert_hal_audit
 from .storage import insert_softdent_draft_audit
+from .storage import insert_softdent_packet_audit
 from .storage import insert_softdent_record_audit
 
 
@@ -168,3 +171,68 @@ def get_recent_softdent_draft_audits(limit: int = 20) -> list[dict[str, Any]]:
 
 def get_softdent_draft_audit(draft_id: str) -> dict[str, Any] | None:
     return get_softdent_draft_audit_from_storage(draft_id)
+
+
+def record_softdent_packet_audit(
+    *,
+    actor: str,
+    roles_used: list[str],
+    packet_type: str,
+    source_draft_id: str,
+    packet_id: str,
+    patient_display_name: str | None = None,
+    patient_ref_hash: str | None = None,
+    chart_ref_hash: str | None = None,
+    claim_ids: list[str] | None = None,
+    clinical_note_ids: list[str] | None = None,
+    ledger_record_ids: list[str] | None = None,
+    source_fact_refs: list[str] | None = None,
+    missing_data_codes: list[str] | None = None,
+    approval_attestation: dict[str, Any] | None = None,
+    submission_status: str = "not_submitted",
+    external_action_performed: bool = False,
+    softdent_writeback_performed: bool = False,
+    local_only: bool = True,
+) -> dict[str, Any]:
+    """Persist a local approved packet audit event.
+
+    Phase 3 packets remain local and not submitted. This wrapper rejects any
+    external action, SoftDent writeback, or non-not_submitted submission status.
+    """
+    if external_action_performed:
+        raise ValueError("SoftDent Phase 3 packet audit cannot record an external action.")
+    if softdent_writeback_performed:
+        raise ValueError("SoftDent Phase 3 packet audit cannot record SoftDent writeback.")
+    if submission_status != "not_submitted":
+        raise ValueError("SoftDent Phase 3 packet audit must keep submission_status=not_submitted.")
+    payload: dict[str, Any] = {
+        "packet_id": packet_id,
+        "source_draft_id": source_draft_id,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "actor": actor,
+        "roles_used": list(roles_used or []),
+        "packet_type": packet_type,
+        "patient_display_name": patient_display_name,
+        "patient_ref_hash": patient_ref_hash,
+        "chart_ref_hash": chart_ref_hash,
+        "claim_ids": list(claim_ids or []),
+        "clinical_note_ids": list(clinical_note_ids or []),
+        "ledger_record_ids": list(ledger_record_ids or []),
+        "source_fact_refs": list(source_fact_refs or []),
+        "missing_data_codes": list(missing_data_codes or []),
+        "approval_attestation": dict(approval_attestation or {}),
+        "submission_status": "not_submitted",
+        "external_action_performed": False,
+        "softdent_writeback_performed": False,
+        "local_only": bool(local_only),
+    }
+    insert_softdent_packet_audit(payload)
+    return payload
+
+
+def get_recent_softdent_packet_audits(limit: int = 20) -> list[dict[str, Any]]:
+    return get_recent_softdent_packet_audits_from_storage(limit=limit)
+
+
+def get_softdent_packet_audit(packet_id: str) -> dict[str, Any] | None:
+    return get_softdent_packet_audit_from_storage(packet_id)
