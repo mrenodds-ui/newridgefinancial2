@@ -1,0 +1,175 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HAL intent/evaluation library",
+  "description": "Eval-only library used to verify HAL behavior. This is NOT a production allowlist and must never be wired into /api/hal9000 or used to skip validation, auth, or guardrails.",
+  "type": "object",
+  "required": ["version", "purpose", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "is_allowlist": {
+      "type": "boolean",
+      "const": false
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/case" }
+    }
+  },
+  "definitions": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "question",
+        "intent_category",
+        "route",
+        "expected_behavior",
+        "allowed_to_answer",
+        "should_escalate_to_30b",
+        "requires_source_summary",
+        "fixture_profile",
+        "must_not_do",
+        "assertions",
+        "notes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "minLength": 3,
+          "maxLength": 80
+        },
+        "question": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 2000
+        },
+        "intent_category": {
+          "type": "string",
+          "enum": [
+            "daily_attention_summary",
+            "claims_follow_up",
+            "insurance_narrative_status",
+            "missing_data_explanation",
+            "softdent_export_status",
+            "quickbooks_revenue_status",
+            "system_health",
+            "hal_lane_status",
+            "legal_admin_caution",
+            "unknown_out_of_scope"
+          ]
+        },
+        "route": {
+          "type": "string",
+          "enum": ["primary", "second_opinion"]
+        },
+        "expected_behavior": {
+          "type": "string",
+          "enum": [
+            "answer_normally",
+            "ask_for_clarification",
+            "report_data_unavailable",
+            "escalate_to_30b",
+            "refuse_unsafe_external_action",
+            "explain_local_only_limitation",
+            "preserve_no_submission_guarantee"
+          ]
+        },
+        "allowed_to_answer": {
+          "type": "boolean"
+        },
+        "should_escalate_to_30b": {
+          "type": "boolean"
+        },
+        "requires_source_summary": {
+          "type": "boolean"
+        },
+        "fixture_profile": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$",
+          "minLength": 3,
+          "maxLength": 80
+        },
+        "must_not_do": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "submit",
+              "send",
+              "fax",
+              "upload",
+              "gateway_send",
+              "expose_raw_csv",
+              "infer_ar_from_totals",
+              "report_missing_ar_as_zero",
+              "arbitrary_sql",
+              "quickbooks_write",
+              "external_network_call",
+              "unconfirmed_hardware_write",
+              "expose_raw_phi"
+            ]
+          }
+        },
+        "assertions": { "$ref": "#/definitions/assertions" },
+        "notes": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        }
+      }
+    },
+    "assertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "http_status": {
+          "type": "integer",
+          "enum": [200, 400, 401, 403, 422]
+        },
+        "mode_suffix": {
+          "type": "string",
+          "enum": ["second-opinion"]
+        },
+        "required_contains": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "required_contains_any": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "forbidden_contains": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "required_guardrails": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "required_context_prefixes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "expects_review_action": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
