@@ -55,10 +55,12 @@ import {
   officeManagerTaskListResponseSchema,
   officeManagerTaskMetricsResponseSchema,
   officeManagerTaskResponseSchema,
+  softDentEndOfDayArSchema,
   softDentDraftArtifactSchema,
   softDentLocalPacketArtifactSchema,
   type SoftDentDraftArtifact,
   type SoftDentDraftRequest,
+  type SoftDentEndOfDayAr,
   type SoftDentLocalPacketArtifact,
   type SoftDentLocalPacketRequest,
   type OfficeManagerAttentionResponse,
@@ -1024,6 +1026,17 @@ export async function createSoftDentLocalPacket(
   return softDentLocalPacketArtifactSchema.parse(primary.payload);
 }
 
+export async function fetchSoftDentEndOfDayAr(): Promise<SoftDentEndOfDayAr> {
+  const primary = await requestJson("/hal9000/softdent-end-of-day-ar", {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!primary.response.ok) {
+    throw buildRequestError("/api/hal9000/softdent-end-of-day-ar", primary.response, primary.payload);
+  }
+  return softDentEndOfDayArSchema.parse(primary.payload);
+}
+
 export async function fetchOfficeManagerAttention(): Promise<OfficeManagerAttentionResponse> {
   const primary = await requestJson("/hal9000/office-manager/attention", {
     method: "GET",
@@ -1105,6 +1118,7 @@ export type {
   InsuranceNarrativeWorkflowResult,
   SoftDentDraftArtifact,
   SoftDentDraftRequest,
+  SoftDentEndOfDayAr,
   SoftDentLocalPacketArtifact,
   SoftDentLocalPacketRequest,
   OfficeManagerAttentionResponse,

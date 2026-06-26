@@ -994,6 +994,32 @@ export const softDentDraftArtifactSchema = z.object({
   external_action_performed: z.boolean().default(false),
 });
 
+export const softDentEndOfDayArSchema = z.object({
+  available: z.boolean().default(false),
+  report_date: z.string().nullable().optional(),
+  generated_at: z.string().nullable().optional(),
+  source_file: z.string().nullable().optional(),
+  source_modified_at_utc: z.string().nullable().optional(),
+  freshness_status: z.enum(["current", "stale", "unknown"]).default("unknown"),
+  parse_status: z.enum(["available", "limited", "missing", "invalid", "stale"]).default("missing"),
+  total_ar: z.number().nullable().optional(),
+  patient_ar: z.number().nullable().optional(),
+  insurance_ar: z.number().nullable().optional(),
+  aging_buckets: z.record(z.number().nullable()).default({}),
+  credits: z.number().nullable().optional(),
+  collection_total: z.number().nullable().optional(),
+  production_total: z.number().nullable().optional(),
+  office_scope: z.string().nullable().optional(),
+  provider_scope: z.string().nullable().optional(),
+  source_refs: z.array(z.string()).default([]),
+  missing_data_codes: z.array(z.string()).default([]),
+  limitations: z.array(z.string()).default([]),
+  stale_reason: z.string().nullable().optional(),
+  page_number: z.number().nullable().optional(),
+  page_count: z.number().nullable().optional(),
+  source_label: z.string().default("Daily End-of-Day report A/R"),
+});
+
 export const softDentPacketTypeSchema = z.enum([
   "approved_narrative_packet",
   "appeal_prep_packet",
@@ -1453,6 +1479,7 @@ export type InsuranceNarrativeWorkflowResult = z.infer<typeof insuranceNarrative
 export type SoftDentDraftType = z.infer<typeof softDentDraftTypeSchema>;
 export type SoftDentDraftRequest = z.infer<typeof softDentDraftRequestSchema>;
 export type SoftDentDraftArtifact = z.infer<typeof softDentDraftArtifactSchema>;
+export type SoftDentEndOfDayAr = z.infer<typeof softDentEndOfDayArSchema>;
 export type SoftDentPacketType = z.infer<typeof softDentPacketTypeSchema>;
 export type SoftDentPacketApprovalAttestation = z.infer<typeof softDentPacketApprovalAttestationSchema>;
 export type SoftDentLocalPacketRequest = z.infer<typeof softDentLocalPacketRequestSchema>;

@@ -24,6 +24,7 @@ from .softdent_read_broker import (
     SOFTDENT_PATIENT_READ,
     SOFTDENT_READ,
     SoftDentAccessError,
+    _has_roles,
     _normalize_roles,
     _require_roles,
     get_softdent_read_broker,
@@ -81,8 +82,65 @@ def create_softdent_draft(
         raise ValueError("No patient-specific SoftDent context matched this draft request.")
 
     artifact = _build_draft_artifact(request.draft_type, context, request=request)
+    if request.include_ledger_context:
+        _apply_report_derived_ar(artifact, actor=actor, roles=normalized_roles)
     _audit_draft(artifact=artifact, context=context, actor=actor, roles=normalized_roles, request=request)
     return artifact
+
+
+def _apply_report_derived_ar(
+    artifact: SoftDentDraftArtifact,
+    *,
+    actor: str,
+    roles: set[str],
+) -> None:
+    """Add Daily End-of-Day report-derived A/R to a draft only when verified.
+
+    A/R is included only when the report exists, has a known date, parses with an
+    A/R total, is fresh, and the caller holds ledger-read access. Otherwise a
+    limitation is added and no dollar value (never ``$0``) is shown.
+    """
+    if not _has_roles(roles, {SOFTDENT_LEDGER_READ}):
+        return
+
+    broker = get_softdent_read_broker()
+    summary = broker.get_end_of_day_ar_summary(actor=actor, roles=roles, write_audit=False)
+
+    if summary.available and summary.parse_status in {"available", "limited"} and summary.total_ar is not None:
+        ar_line = (
+            f"Daily End-of-Day report A/R (report date {summary.report_date}): "
+            f"total A/R ${summary.total_ar:,.2f}"
+        )
+        if summary.patient_ar is not None:
+            ar_line += f"; patient A/R ${summary.patient_ar:,.2f}"
+        if summary.insurance_ar is not None:
+            ar_line += f"; insurance A/R ${summary.insurance_ar:,.2f}"
+        artifact.checklist_items.append(ar_line)
+        artifact.source_fact_refs.extend(summary.source_refs)
+        artifact.limitations.append(
+            "A/R values above are report-derived from the Daily End-of-Day report last page only; verify before use."
+        )
+        if summary.parse_status == "limited":
+            artifact.limitations.append("Report-derived A/R is limited because report totals did not fully reconcile.")
+        # Drop the generic missing-AR limitation/code now that verified A/R exists.
+        artifact.missing_data_codes = [code for code in artifact.missing_data_codes if code != MISSING_SOFTDENT_AR]
+        artifact.limitations = [
+            limitation
+            for limitation in artifact.limitations
+            if limitation != "Patient A/R is unavailable from approved exports; do not state a balance or $0."
+        ]
+        return
+
+    if summary.parse_status == "stale" or summary.freshness_status == "stale":
+        artifact.limitations.append(
+            "Daily End-of-Day report A/R is stale; do not quote A/R as current. Refresh the report before relying on it."
+        )
+    else:
+        artifact.limitations.append(
+            "Daily End-of-Day report A/R is unavailable; do not state a balance or $0."
+        )
+    if MISSING_SOFTDENT_AR not in artifact.missing_data_codes:
+        artifact.missing_data_codes.append(MISSING_SOFTDENT_AR)
 
 
 def _build_draft_artifact(

@@ -19,7 +19,10 @@ missing permissions.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
+
+if TYPE_CHECKING:
+    from .softdent_end_of_day_report import SoftDentEndOfDayArSummary
 
 from .audit import record_softdent_read_audit
 from .softdent_read_models import (
@@ -401,6 +404,56 @@ class SoftDentReadBroker:
         # A real patient-level A/R source is not wired in Phase 1; remain unavailable
         # rather than fabricating balances. This branch stays conservative on purpose.
         return LedgerContext(available=False, missing_data_codes=[MISSING_SOFTDENT_AR])
+
+    def get_end_of_day_ar_summary(
+        self,
+        *,
+        actor: str | None = None,
+        roles: Iterable[str] | None = None,
+        write_audit: bool = True,
+    ) -> "SoftDentEndOfDayArSummary":
+        """Return report-derived A/R from the Daily End-of-Day report last page.
+
+        This is a separate, report-derived A/R surface. It does not change
+        ``get_ledger_context()`` behavior and never fabricates balances. When the
+        report is missing, undated, unparseable, or stale, the summary remains
+        unavailable and surfaces ``missing_softdent_ar``.
+        """
+        from .softdent_end_of_day_report import (
+            SoftDentEndOfDayArSummary,
+            get_softdent_end_of_day_report_adapter,
+        )
+
+        normalized_roles = _normalize_roles(roles)
+        try:
+            _require_roles(
+                normalized_roles,
+                {SOFTDENT_READ, SOFTDENT_LEDGER_READ},
+                action="get_end_of_day_ar_summary",
+            )
+        except SoftDentAccessError:
+            return SoftDentEndOfDayArSummary(
+                available=False,
+                parse_status="missing",
+                missing_data_codes=[MISSING_SOFTDENT_AR],
+                limitations=["Report-derived A/R requires softdent:read and softdent:ledger:read."],
+            )
+
+        summary = get_softdent_end_of_day_report_adapter().parse_latest_ar_summary()
+
+        if write_audit and actor:
+            self._audit(
+                actor=actor,
+                roles=normalized_roles,
+                workflow_reason="end_of_day_ar_summary",
+                response_mode="answer",
+                display_name="",
+                claims=[],
+                notes=[],
+                ledger_used=True,
+                missing_codes=list(summary.missing_data_codes),
+            )
+        return summary
 
     def build_narrative_source_facts(
         self,

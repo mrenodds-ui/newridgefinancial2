@@ -79,6 +79,9 @@ SOFTDENT_INSURANCE_PAYMENT_DISTRIBUTION_EXPORT_ENV = "SOFTDENT_INSURANCE_PAYMENT
 SOFTDENT_INSURANCE_CHECK_DISTRIBUTION_EXPORT_ENV = "SOFTDENT_INSURANCE_CHECK_DISTRIBUTION_EXPORT_PATH"
 SOFTDENT_TREATMENT_PLAN_EXPORT_ENV = "SOFTDENT_TREATMENT_PLAN_EXPORT_PATH"
 SOFTDENT_PAYMENT_PLAN_EXPORT_ENV = "SOFTDENT_PAYMENT_PLAN_EXPORT_PATH"
+SOFTDENT_END_OF_DAY_REPORT_PATH_ENV = "SOFTDENT_END_OF_DAY_REPORT_PATH"
+SOFTDENT_END_OF_DAY_REPORT_DIR_ENV = "SOFTDENT_END_OF_DAY_REPORT_DIR"
+SOFTDENT_EOD_AR_MAX_AGE_DAYS_ENV = "SOFTDENT_EOD_AR_MAX_AGE_DAYS"
 HAL_ALLOWED_STAGED_IMPORT_FILES = frozenset(
     file_name
     for default_names in QUICKBOOKS_EXPORT_DEFAULT_NAMES_BY_TOPIC.values()
@@ -821,6 +824,45 @@ def load_softdent_ar_rows() -> list[dict]:
     return rows
 
 
+def get_softdent_end_of_day_ar_source_status() -> dict[str, object]:
+    from app.hal.softdent_end_of_day_report import get_softdent_end_of_day_report_adapter
+
+    adapter = get_softdent_end_of_day_report_adapter()
+    inventory = adapter.inventory_reports()
+    if not inventory:
+        return {
+            "available": False,
+            "source_backend": "exports",
+            "source_file": "",
+            "modified_at_utc": "",
+            "report_date": "",
+            "generated_at": "",
+            "freshness_status": "unknown",
+            "stale_reason": "",
+            "parse_status": "missing",
+        }
+
+    latest_item = inventory[0]
+    summary = adapter.parse_latest_ar_summary()
+    return {
+        "available": bool(summary.available),
+        "source_backend": "exports",
+        "source_file": str(summary.source_file or latest_item.source_file or ""),
+        "modified_at_utc": str(summary.source_modified_at_utc or latest_item.source_modified_at_utc or ""),
+        "report_date": str(summary.report_date or latest_item.inferred_report_date or ""),
+        "generated_at": str(summary.generated_at or ""),
+        "freshness_status": summary.freshness_status,
+        "stale_reason": str(summary.stale_reason or ""),
+        "parse_status": summary.parse_status,
+    }
+
+
+def get_softdent_end_of_day_ar_summary() -> dict[str, object]:
+    from app.hal.softdent_end_of_day_report import get_softdent_end_of_day_report_adapter
+
+    return get_softdent_end_of_day_report_adapter().parse_latest_ar_summary().to_public_dict()
+
+
 def fetch_softdent_dashboard_aggregate(snapshot_path: str | None = None) -> dict[str, object]:
     rows = load_softdent_dashboard_rows()
     source_file = Path(snapshot_path).name if snapshot_path else "softdent_dashboard_data.json"
@@ -1220,6 +1262,7 @@ def get_softdent_data_coverage() -> dict[str, object]:
             required_report="payment_plans.csv or Payment plan entity/report or staged Database Extractor snapshot",
             action="Configure the automated SoftDent source pipeline to emit aggregate-only payment_plans.csv, a supported payment plan entity report, or a staged Database Extractor snapshot with count/amount/status fields.",
         ),
+        _build_softdent_end_of_day_ar_coverage_row(),
         _build_softdent_limited_coverage_row(
             key="transactionFeed",
             label="Transaction Feed",
@@ -1314,6 +1357,41 @@ def _build_softdent_base_coverage_row(
         "modifiedAtUtc": str(source_status.get("modified_at_utc") or ""),
         "rowCount": int(row_count or 0),
         "lastPeriod": str(last_period or ""),
+    }
+
+
+def _build_softdent_end_of_day_ar_coverage_row() -> dict[str, object]:
+    source_status = get_softdent_end_of_day_ar_source_status()
+    parse_status = str(source_status.get("parse_status") or "missing")
+    freshness_status = str(source_status.get("freshness_status") or "unknown")
+    available = bool(source_status.get("available"))
+    if parse_status == "stale":
+        status = "limited"
+        summary = "Daily End-of-Day report A/R is present but stale; values are labeled stale and not silently trusted."
+    elif available:
+        status = "available"
+        summary = "Daily End-of-Day report A/R is available from the last page of the approved report export."
+    elif parse_status in {"invalid", "limited"}:
+        status = "limited"
+        summary = "Daily End-of-Day report exists but A/R parsing is limited or invalid."
+    else:
+        status = "missing"
+        summary = "Daily End-of-Day report A/R is missing from the canonical SoftDent import lane."
+
+    return {
+        "key": "dailyEndOfDayAr",
+        "label": "Daily End-of-Day A/R",
+        "status": status,
+        "summary": summary,
+        "requiredReport": "Daily End-of-Day report in app/data/imports/softdent/daily_end_of_day/",
+        "action": "Stage the approved SoftDent Daily End-of-Day report export into the canonical import lane.",
+        "sourceFile": str(source_status.get("source_file") or ""),
+        "sourceBackend": str(source_status.get("source_backend") or "missing"),
+        "modifiedAtUtc": str(source_status.get("modified_at_utc") or ""),
+        "rowCount": 0,
+        "lastPeriod": str(source_status.get("report_date") or ""),
+        "freshnessStatus": freshness_status,
+        "parseStatus": parse_status,
     }
 
 

@@ -20,6 +20,7 @@ vi.mock("../api/client", async () => {
     fetchOfficeManagerAttention: vi.fn(),
     fetchOfficeManagerTaskMetrics: vi.fn(),
     fetchOfficeManagerTasks: vi.fn(),
+    fetchSoftDentEndOfDayAr: vi.fn(),
     updateOfficeManagerTask: vi.fn(),
   };
 });
@@ -32,6 +33,7 @@ import {
   fetchOfficeManagerAttention,
   fetchOfficeManagerTaskMetrics,
   fetchOfficeManagerTasks,
+  fetchSoftDentEndOfDayAr,
 } from "../api/client";
 import { defaultHalVoiceProfile } from "../api/schemas";
 
@@ -122,6 +124,31 @@ beforeEach(() => {
     external_action_performed: false,
     softdent_writeback_performed: false,
   });
+  vi.mocked(fetchSoftDentEndOfDayAr).mockResolvedValue({
+    available: false,
+    report_date: null,
+    generated_at: null,
+    source_file: "",
+    source_modified_at_utc: "",
+    freshness_status: "unknown",
+    parse_status: "missing",
+    total_ar: null,
+    patient_ar: null,
+    insurance_ar: null,
+    aging_buckets: {},
+    credits: null,
+    collection_total: null,
+    production_total: null,
+    office_scope: null,
+    provider_scope: null,
+    source_refs: [],
+    missing_data_codes: ["missing_softdent_ar"],
+    limitations: ["Daily End-of-Day report A/R is unavailable."],
+    stale_reason: null,
+    page_number: null,
+    page_count: null,
+    source_label: "Daily End-of-Day report A/R",
+  });
   vi.mocked(createOfficeManagerTask).mockResolvedValue({
     task_id: "omt-test",
     title: "Review denial packet",
@@ -188,5 +215,39 @@ describe("Office Manager Mode", () => {
     expect(await screen.findByRole("heading", { name: /Unpaid, aging, and denied claim review/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Patient \/ claim summary/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Local only/i).length).toBeGreaterThan(0);
+  });
+
+  it("labels stale Daily End-of-Day A/R without raw report text", async () => {
+    vi.mocked(fetchSoftDentEndOfDayAr).mockResolvedValueOnce({
+      available: false,
+      report_date: "2026-06-20",
+      generated_at: "2026-06-20",
+      source_file: "softdent_daily_end_of_day_latest.txt",
+      source_modified_at_utc: "2026-06-20T20:00:00Z",
+      freshness_status: "stale",
+      parse_status: "stale",
+      total_ar: 95000,
+      patient_ar: 30000,
+      insurance_ar: 65000,
+      aging_buckets: {},
+      credits: null,
+      collection_total: null,
+      production_total: null,
+      office_scope: null,
+      provider_scope: null,
+      source_refs: ["softdent_eod:2026-06-20:last_page:ar_summary"],
+      missing_data_codes: ["missing_softdent_ar"],
+      limitations: ["Stale A/R is labeled stale."],
+      stale_reason: "Report date 2026-06-20 is older than 2 day(s).",
+      page_number: 1,
+      page_count: 1,
+      source_label: "Daily End-of-Day report A/R",
+    });
+
+    renderPage();
+
+    expect(await screen.findByText(/Daily End-of-Day report A\/R is stale/i)).toBeInTheDocument();
+    expect(screen.getByText(/Report date 2026-06-20 is older than 2 day/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Accounts Receivable Summary/i)).toBeNull();
   });
 });

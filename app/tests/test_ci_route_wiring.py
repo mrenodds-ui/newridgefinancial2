@@ -9,7 +9,14 @@ _MIN_AUTH_USERS_JSON = json.dumps(
             "username": "admin",
             "display_name": "Administrator",
             "password": "password",
-            "roles": ["dashboard:read", "hal:operator", "hal:index:refresh", "admin"],
+            "roles": [
+                "dashboard:read",
+                "hal:operator",
+                "hal:index:refresh",
+                "admin",
+                "softdent:read",
+                "softdent:ledger:read",
+            ],
         }
     ]
 )

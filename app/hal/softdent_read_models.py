@@ -24,6 +24,8 @@ MISSING_SOFTDENT_PROCEDURES_EXPORT = "missing_softdent_procedures_export"
 MISSING_SOFTDENT_PAYER_STATUS = "missing_softdent_payer_status"
 MISSING_SOFTDENT_APPOINTMENTS_EXPORT = "missing_softdent_appointments_export"
 MISSING_SOFTDENT_PATIENT_MATCH = "missing_softdent_patient_match"
+MISSING_SOFTDENT_EOD_REPORT_DATE = "missing_softdent_eod_report_date"
+MISSING_SOFTDENT_EOD_REPORT = "missing_softdent_eod_report"
 
 SOFTDENT_MISSING_DATA_CODES = frozenset(
     {
@@ -35,6 +37,8 @@ SOFTDENT_MISSING_DATA_CODES = frozenset(
         MISSING_SOFTDENT_PAYER_STATUS,
         MISSING_SOFTDENT_APPOINTMENTS_EXPORT,
         MISSING_SOFTDENT_PATIENT_MATCH,
+        MISSING_SOFTDENT_EOD_REPORT_DATE,
+        MISSING_SOFTDENT_EOD_REPORT,
     }
 )
 

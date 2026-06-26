@@ -1,0 +1,13 @@
+SoftDent Daily End-of-Day Report
+Report Date: 06/26/2026
+Generated: 06/26/2026
+
+Page 1 of 1
+
+Accounts Receivable Summary
+Total A/R: ($12,345.67)
+Patient A/R: (2,345.67)
+Insurance A/R: $10,000.00
+Credits: ($500.00)
+
+End of report

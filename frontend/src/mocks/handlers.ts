@@ -1322,6 +1322,33 @@ export const handlers = [
       ],
     });
   }),
+  http.get("/api/hal9000/softdent-end-of-day-ar", () =>
+    HttpResponse.json({
+      available: false,
+      report_date: null,
+      generated_at: null,
+      source_file: "",
+      source_modified_at_utc: "",
+      freshness_status: "unknown",
+      parse_status: "missing",
+      total_ar: null,
+      patient_ar: null,
+      insurance_ar: null,
+      aging_buckets: {},
+      credits: null,
+      collection_total: null,
+      production_total: null,
+      office_scope: null,
+      provider_scope: null,
+      source_refs: [],
+      missing_data_codes: ["missing_softdent_ar"],
+      limitations: ["Daily End-of-Day report A/R is unavailable."],
+      stale_reason: null,
+      page_number: null,
+      page_count: null,
+      source_label: "Daily End-of-Day report A/R",
+    }),
+  ),
   http.post("/api/hal9000/chart-plan", async ({ request }) => {
     const payload = (await request.json()) as { question?: string };
     const question = payload.question || "";
