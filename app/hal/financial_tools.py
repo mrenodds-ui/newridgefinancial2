@@ -6,7 +6,7 @@ import re
 from pydantic import BaseModel, Field
 
 from app.config_runtime import get_env_setting
-from app.services import build_softdent_snapshot, fetch_quickbooks_sdk_summary, fetch_softdent_dashboard_aggregate, get_quickbooks_sdk_status, get_quickbooks_source_status, get_softdent_data_coverage, get_softdent_source_status, load_softdent_claim_rows, load_softdent_clinical_note_rows, get_softdent_claim_source_status, get_softdent_clinical_note_source_status
+from app.services import build_softdent_snapshot, fetch_quickbooks_sdk_summary, fetch_softdent_dashboard_aggregate, get_quickbooks_sdk_status, get_quickbooks_source_status, get_softdent_data_coverage, get_softdent_source_status, load_softdent_ar_rows, load_softdent_claim_rows, load_softdent_clinical_note_rows, get_softdent_claim_source_status, get_softdent_clinical_note_source_status
 
 from .sanitization import sanitize_hal_text
 
@@ -273,70 +273,31 @@ def get_live_financial_context(question: str) -> list[dict[str, str]]:
     return snippets
 
 
-def get_controlled_patient_context(question: str) -> dict[str, object]:
-    lowered = question.lower()
-    if not any(keyword in lowered for keyword in PATIENT_TOOL_KEYWORDS):
-        return {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}}
+def get_controlled_patient_context(
+    question: str,
+    *,
+    roles: object | None = None,
+    actor: str | None = None,
+    workflow_reason: str = "patient_context",
+    response_mode: str = "answer",
+) -> dict[str, object]:
+    """Return the legacy patient-context dict via the SoftDent Read Broker.
 
-    claim_rows = load_softdent_claim_rows()
-    note_rows = load_softdent_clinical_note_rows()
-    known_patient_names = _refresh_patient_name_registry(claim_rows=claim_rows, note_rows=note_rows)
+    The broker enforces SoftDent read roles (when ``roles`` is provided) and
+    writes a record-level audit, while preserving the historical
+    snippets/narrative/summary_fields response shape. ``roles=None`` keeps the
+    trusted internal/unit-call behavior unchanged.
+    """
+    from .softdent_read_broker import get_softdent_read_broker
 
-    signals = _extract_patient_query_signals(question, known_patient_names=known_patient_names)
-    if not signals["exact_terms"] and not signals["meaningful_tokens"]:
-        return {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}}
-
-    matched_claims = _find_matching_rows(claim_rows, signals)
-    matched_notes = _find_matching_rows(note_rows, signals)
-
-    if not matched_claims and not matched_notes:
-        return {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}}
-
-    snippets: list[dict[str, str]] = []
-    if matched_claims:
-        snippets.append(
-            _make_snippet(
-                "softdent-patient-claims-dossier",
-                "SoftDent patient claims dossier",
-                "softdent_tool",
-                _build_patient_row_excerpt(rows=matched_claims, label="claims dossier"),
-            )
-        )
-    if matched_notes:
-        snippets.append(
-            _make_snippet(
-                "softdent-patient-clinical-dossier",
-                "SoftDent patient clinical dossier",
-                "softdent_tool",
-                _build_patient_row_excerpt(rows=matched_notes, label="clinical dossier"),
-            )
-        )
-
-    narrative = _build_insurance_narrative(
-        question=question,
-        matched_claims=matched_claims,
-        matched_notes=matched_notes,
-        signals=signals,
+    broker = get_softdent_read_broker()
+    return broker.get_legacy_patient_context(
+        question,
+        actor=actor,
+        roles=roles,
+        workflow_reason=workflow_reason,
+        response_mode=response_mode,
     )
-    snippets.append(
-        _make_snippet(
-            "softdent-insurance-narrative-support",
-            "SoftDent insurance narrative support",
-            "softdent_tool",
-            narrative,
-        )
-    )
-    patient_name = _pick_first_field_value(matched_claims + matched_notes, ("patientname", "patient_name", "patient", "name"))
-    primary_status = _pick_first_field_value(matched_claims, ("claimstatus", "status"))
-    total_claim_amount = round(sum(_coerce_numeric(row.get("ClaimAmount") or row.get("amount") or row.get("balance")) for row in matched_claims), 2)
-    summary_fields = {
-        "patient_name": patient_name,
-        "claim_count": len(matched_claims),
-        "note_count": len(matched_notes),
-        "total_claim_amount": total_claim_amount,
-        "primary_claim_status": primary_status,
-    }
-    return {"matched": True, "snippets": snippets, "narrative": narrative, "summary_fields": summary_fields}
 
 
 def detect_quickbooks_topic(question: str) -> str | None:

@@ -1611,6 +1611,7 @@ async def hal9000_post(payload: HalAskRequest, request: Request, response: Respo
             actor=user.username,
             summary=payload.summary,
             session_id=session_id,
+            roles=user.roles,
         )
         response.set_cookie(HAL_SESSION_COOKIE_NAME, session_id, **_hal_session_cookie_options(request))
         return _serialize_public_hal_payload(result)
@@ -1628,6 +1629,7 @@ async def hal9000_second_opinion_post(payload: HalAskRequest, request: Request, 
             actor=user.username,
             summary=payload.summary,
             session_id=session_id,
+            roles=user.roles,
         )
         response.set_cookie(HAL_SESSION_COOKIE_NAME, session_id, **_hal_session_cookie_options(request))
         return _serialize_public_hal_payload(result)
@@ -1636,9 +1638,11 @@ async def hal9000_second_opinion_post(payload: HalAskRequest, request: Request, 
 
 
 @router.post("/api/hal9000/insurance-narrative", response_model=HalInsuranceNarrativeResponse)
-async def api_hal9000_insurance_narrative(payload: HalInsuranceNarrativeRequest, request: Request, user: AuthenticatedUser = Depends(require_roles("hal:operator"))):
+async def api_hal9000_insurance_narrative(payload: HalInsuranceNarrativeRequest, request: Request, user: AuthenticatedUser = Depends(require_roles("hal:operator", "softdent:patient:read", "softdent:narrative:draft"))):
     del request
-    return _serialize_public_hal_payload(answer_insurance_narrative_request(question=payload.question, actor=user.username))
+    return _serialize_public_hal_payload(
+        answer_insurance_narrative_request(question=payload.question, actor=user.username, roles=user.roles)
+    )
 
 
 @router.post(
@@ -1706,9 +1710,11 @@ async def api_insurance_narrative_approve_export_workflow(
 
 
 @router.post("/api/hal9000/patient-dossier", response_model=HalPatientDossierResponse)
-async def api_hal9000_patient_dossier(payload: HalPatientDossierRequest, request: Request, user: AuthenticatedUser = Depends(require_roles("hal:operator"))):
+async def api_hal9000_patient_dossier(payload: HalPatientDossierRequest, request: Request, user: AuthenticatedUser = Depends(require_roles("hal:operator", "softdent:patient:read"))):
     del request
-    return _serialize_public_hal_payload(answer_patient_dossier_request(question=payload.question, actor=user.username))
+    return _serialize_public_hal_payload(
+        answer_patient_dossier_request(question=payload.question, actor=user.username, roles=user.roles)
+    )
 
 
 @router.post("/api/hal9000/chart-plan", response_model=HalChartPlanResponse)

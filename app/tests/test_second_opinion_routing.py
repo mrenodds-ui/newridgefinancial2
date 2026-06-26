@@ -73,15 +73,15 @@ def test_second_opinion_calls_backend_lane_model(monkeypatch: pytest.MonkeyPatch
         make_require_lane_runtime_mock(expected_alias="chat_second_opinion"),
     )
     monkeypatch.setattr(hal_orchestrator, "generate_response_result", fake_generate_response_result)
-    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question, **_kwargs: [])
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {"matched": False, "snippets": [], "narrative": ""},
+        lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""},
     )
 
     payload = hal_orchestrator.answer_hal_second_opinion_question(
@@ -127,15 +127,15 @@ def test_second_opinion_prompt_is_capped_for_ui_latency(monkeypatch: pytest.Monk
         make_require_lane_runtime_mock(expected_alias="chat_second_opinion"),
     )
     monkeypatch.setattr(hal_orchestrator, "generate_response_result", fake_generate_response_result)
-    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: long_context)
-    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: long_context)
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question, **_kwargs: [])
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {"matched": False, "snippets": [], "narrative": ""},
+        lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""},
     )
 
     hal_orchestrator.answer_hal_second_opinion_question(
@@ -187,7 +187,7 @@ def test_patient_claims_second_opinion_returns_immediate_context_check(monkeypat
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {
+        lambda question, **_kwargs: {
             "matched": True,
             "snippets": [{"source_id": "claim-1", "title": "Claim 1", "excerpt": "Pending review claim evidence"}],
             "narrative": "",
@@ -251,7 +251,7 @@ def test_patient_specific_claims_second_opinion_may_include_named_patient(monkey
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {
+        lambda question, **_kwargs: {
             "matched": True,
             "snippets": [{"source_id": "claim-1", "title": "Claim 1", "excerpt": "Pending review claim evidence"}],
             "narrative": "",
@@ -285,15 +285,15 @@ def test_hal_chat_stays_deterministic_without_local_ai_generate(monkeypatch: pyt
         raise AssertionError("HAL chat must not call generate_response_result")
 
     monkeypatch.setattr(hal_orchestrator, "generate_response_result", fail_generate)
-    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question, **_kwargs: [])
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {"matched": False, "snippets": [], "narrative": ""},
+        lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""},
     )
 
     payload = hal_orchestrator.answer_hal_question(
@@ -330,15 +330,15 @@ def test_second_opinion_backend_unavailable_returns_explicit_status(monkeypatch:
 
     monkeypatch.setattr(hal_orchestrator, "require_lane_runtime", fake_require_lane_runtime)
     monkeypatch.setattr(hal_orchestrator, "generate_response_result", lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not generate")))
-    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question, **_kwargs: [])
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {"matched": False, "snippets": [], "narrative": ""},
+        lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""},
     )
 
     payload = hal_orchestrator.answer_hal_second_opinion_question(
@@ -371,15 +371,15 @@ def test_second_opinion_unavailable_does_not_use_frontend_lane(monkeypatch: pyte
 
     monkeypatch.setattr(hal_orchestrator, "require_lane_runtime", fake_require_lane_runtime)
     monkeypatch.setattr(hal_orchestrator, "generate_response_result", fail_if_frontend_lane)
-    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question, **_kwargs: [])
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {"matched": False, "snippets": [], "narrative": ""},
+        lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""},
     )
 
     payload = hal_orchestrator.answer_hal_second_opinion_question(
@@ -412,7 +412,7 @@ def test_deterministic_claims_second_opinion_uses_internal_staff_language(monkey
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {"matched": True, "snippets": [], "narrative": "", "summary_fields": {"patient_name": "John Doe"}},
+        lambda question, **_kwargs: {"matched": True, "snippets": [], "narrative": "", "summary_fields": {"patient_name": "John Doe"}},
     )
 
     payload = hal_orchestrator.answer_hal_second_opinion_question(
@@ -460,7 +460,7 @@ def test_broad_office_second_opinion_may_name_patients_when_actionable(monkeypat
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {"matched": False, "snippets": [], "narrative": ""},
+        lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""},
     )
 
     payload = hal_orchestrator.answer_hal_second_opinion_question(

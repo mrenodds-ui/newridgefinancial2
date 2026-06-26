@@ -341,3 +341,29 @@ def require_roles(*required_roles: str):
         return user
 
     return dependency
+
+
+# SoftDent Read Broker (Phase 1) read roles. ``hal:operator`` remains necessary
+# for HAL chat operations but is not sufficient for patient/clinical/ledger
+# facts; those require the corresponding SoftDent read role below.
+SOFTDENT_READ_ROLE = "softdent:read"
+SOFTDENT_PATIENT_READ_ROLE = "softdent:patient:read"
+SOFTDENT_CLINICAL_READ_ROLE = "softdent:clinical:read"
+SOFTDENT_LEDGER_READ_ROLE = "softdent:ledger:read"
+SOFTDENT_NARRATIVE_DRAFT_ROLE = "softdent:narrative:draft"
+SOFTDENT_EXPORT_REFRESH_ROLE = "softdent:export:refresh"
+
+SOFTDENT_READ_ROLES = frozenset(
+    {
+        SOFTDENT_READ_ROLE,
+        SOFTDENT_PATIENT_READ_ROLE,
+        SOFTDENT_CLINICAL_READ_ROLE,
+        SOFTDENT_LEDGER_READ_ROLE,
+        SOFTDENT_NARRATIVE_DRAFT_ROLE,
+        SOFTDENT_EXPORT_REFRESH_ROLE,
+    }
+)
+
+
+def user_has_roles(user: AuthenticatedUser, *roles: str) -> bool:
+    return frozenset(roles).issubset(user.roles)

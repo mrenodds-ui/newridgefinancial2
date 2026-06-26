@@ -890,13 +890,16 @@ def _collect_hal_question_context(
     question: str,
     actor: str,
     session_id: str | None,
+    roles: object | None = None,
 ) -> dict[str, object]:
     state = _get_conversation_state(actor, session_id)
-    patient_context = get_controlled_patient_context(question)
+    patient_context = get_controlled_patient_context(question, roles=roles, actor=actor)
     if (not bool(patient_context.get("matched"))) and _is_patient_follow_up_question(question):
         last_patient_name = str(state.get("last_patient_name") or "").strip()
         if last_patient_name:
-            patient_context = get_controlled_patient_context(f"{question} Patient {last_patient_name}")
+            patient_context = get_controlled_patient_context(
+                f"{question} Patient {last_patient_name}", roles=roles, actor=actor
+            )
     sanitized = sanitize_hal_text(question)
     sanitized_question = str(sanitized["sanitized_text"])
     retrieved_context = retrieve_relevant_context(sanitized_question)
@@ -932,9 +935,12 @@ def _collect_patient_claims_second_opinion_context(
     question: str,
     actor: str,
     session_id: str | None,
+    roles: object | None = None,
 ) -> dict[str, object]:
     state = _get_conversation_state(actor, session_id)
-    patient_context = get_controlled_patient_context(question)
+    patient_context = get_controlled_patient_context(
+        question, roles=roles, actor=actor, workflow_reason="second_opinion"
+    )
     claim_rows = load_softdent_claim_rows()
     sanitized = sanitize_hal_text(question)
     sanitized_question = str(sanitized["sanitized_text"])
@@ -2524,9 +2530,12 @@ def answer_hal_question(
     actor: str,
     summary: dict[str, object] | None = None,
     session_id: str | None = None,
+    roles: object | None = None,
 ) -> dict[str, object]:
     del summary
-    context_bundle = _collect_hal_question_context(question=question, actor=actor, session_id=session_id)
+    context_bundle = _collect_hal_question_context(
+        question=question, actor=actor, session_id=session_id, roles=roles
+    )
     state = context_bundle["state"]
     patient_context = context_bundle["patient_context"]
     sanitized = context_bundle["sanitized"]
@@ -2664,9 +2673,12 @@ def answer_hal_second_opinion_question(
     actor: str,
     summary: dict[str, object] | None = None,
     session_id: str | None = None,
+    roles: object | None = None,
 ) -> dict[str, object]:
     if _is_patient_claims_second_opinion_question(question):
-        context_bundle = _collect_patient_claims_second_opinion_context(question=question, actor=actor, session_id=session_id)
+        context_bundle = _collect_patient_claims_second_opinion_context(
+            question=question, actor=actor, session_id=session_id, roles=roles
+        )
         answer, claims_audit_meta = _build_immediate_patient_claims_second_opinion(context_bundle)
         return _build_second_opinion_response(
             actor=actor,
@@ -2677,7 +2689,9 @@ def answer_hal_second_opinion_question(
             deterministic_claims_fast_path=True,
             claims_audit_meta=claims_audit_meta,
         )
-    context_bundle = _collect_hal_question_context(question=question, actor=actor, session_id=session_id)
+    context_bundle = _collect_hal_question_context(
+        question=question, actor=actor, session_id=session_id, roles=roles
+    )
 
     if not LOCAL_MODEL_PROFILE_CONFIG_PATH.exists():
         unavailable_message = (
@@ -2772,8 +2786,10 @@ def answer_hal_second_opinion_question(
     )
 
 
-def answer_insurance_narrative_request(*, question: str, actor: str) -> dict[str, object]:
-    patient_context = get_controlled_patient_context(question)
+def answer_insurance_narrative_request(*, question: str, actor: str, roles: object | None = None) -> dict[str, object]:
+    patient_context = get_controlled_patient_context(
+        question, roles=roles, actor=actor, workflow_reason="insurance_narrative", response_mode="narrative_draft"
+    )
     sanitized = sanitize_hal_text(question)
     sanitized_question = str(sanitized["sanitized_text"])
 
@@ -2817,8 +2833,10 @@ def answer_insurance_narrative_request(*, question: str, actor: str) -> dict[str
     }
 
 
-def answer_patient_dossier_request(*, question: str, actor: str) -> dict[str, object]:
-    patient_context = get_controlled_patient_context(question)
+def answer_patient_dossier_request(*, question: str, actor: str, roles: object | None = None) -> dict[str, object]:
+    patient_context = get_controlled_patient_context(
+        question, roles=roles, actor=actor, workflow_reason="patient_dossier"
+    )
     sanitized = sanitize_hal_text(question)
     sanitized_question = str(sanitized["sanitized_text"])
 

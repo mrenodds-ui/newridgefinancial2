@@ -29,12 +29,37 @@ TEST_AUTH_USERS_JSON = json.dumps(
             "username": "admin",
             "display_name": "Administrator",
             "password": "password",
-            "roles": ["dashboard:read", "hal:operator", "hal:index:refresh", "admin"],
+            "roles": [
+                "dashboard:read",
+                "hal:operator",
+                "hal:index:refresh",
+                "admin",
+                "softdent:read",
+                "softdent:patient:read",
+                "softdent:clinical:read",
+                "softdent:ledger:read",
+                "softdent:narrative:draft",
+                "softdent:export:refresh",
+            ],
         },
         {
             "username": "hal_operator",
             "display_name": "HAL Operator",
             "password": "hal-password",
+            "roles": [
+                "dashboard:read",
+                "hal:operator",
+                "softdent:read",
+                "softdent:patient:read",
+                "softdent:clinical:read",
+                "softdent:ledger:read",
+                "softdent:narrative:draft",
+            ],
+        },
+        {
+            "username": "operator_no_softdent",
+            "display_name": "Operator Without SoftDent",
+            "password": "no-softdent-password",
             "roles": ["dashboard:read", "hal:operator"],
         },
         {
@@ -55,6 +80,10 @@ def basic_auth():
 
 def operator_auth():
     return ("hal_operator", "hal-password")
+
+
+def operator_no_softdent_auth():
+    return ("operator_no_softdent", "no-softdent-password")
 
 
 def viewer_auth():
@@ -206,18 +235,18 @@ def test_hal_question_handles_context_without_title(monkeypatch):
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(hal_orchestrator, "_get_conversation_state", lambda actor, session_id=None: {})
-    monkeypatch.setattr(hal_orchestrator, "get_controlled_patient_context", lambda question: {"matched": False, "snippets": [], "narrative": ""})
-    monkeypatch.setattr(hal_orchestrator, "sanitize_hal_text", lambda question: {"sanitized_text": question, "findings": []})
+    monkeypatch.setattr(hal_orchestrator, "get_controlled_patient_context", lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""})
+    monkeypatch.setattr(hal_orchestrator, "sanitize_hal_text", lambda question, **_kwargs: {"sanitized_text": question, "findings": []})
     monkeypatch.setattr(
         hal_orchestrator,
         "retrieve_relevant_context",
         lambda question, limit=3: [{"source_id": "retrieval-1", "excerpt": "Approved context without a title.", "category": "documentation"}],
     )
-    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "_build_hardware_review_actions", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "_build_hardware_review_actions", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question, **_kwargs: [])
     monkeypatch.setattr(hal_orchestrator, "_build_hal_operating_picture", lambda financial_sources: {"summary": "backend-verified operating picture."})
     monkeypatch.setattr(hal_orchestrator, "get_financial_source_status", lambda: {})
     monkeypatch.setattr(hal_orchestrator, "_update_conversation_state", lambda **kwargs: None)
@@ -241,7 +270,7 @@ def test_hal_question_handles_context_without_title(monkeypatch):
 def test_accounting_policy_answer_handles_context_without_title(monkeypatch):
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(hal_orchestrator, "sanitize_hal_text", lambda question: {"sanitized_text": question, "findings": []})
+    monkeypatch.setattr(hal_orchestrator, "sanitize_hal_text", lambda question, **_kwargs: {"sanitized_text": question, "findings": []})
     monkeypatch.setattr(
         hal_orchestrator,
         "retrieve_relevant_context",
@@ -306,14 +335,14 @@ def test_insurance_narrative_request_handles_supporting_context_without_source_i
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {
+        lambda question, **_kwargs: {
             "matched": True,
             "narrative": "Approved patient narrative.",
             "summary_fields": {"patient_name": "Pat Doe", "claim_count": 1, "note_count": 1},
             "snippets": [{"title": "patient-claims", "excerpt": "Approved claim context."}],
         },
     )
-    monkeypatch.setattr(hal_orchestrator, "sanitize_hal_text", lambda question: {"sanitized_text": question, "findings": []})
+    monkeypatch.setattr(hal_orchestrator, "sanitize_hal_text", lambda question, **_kwargs: {"sanitized_text": question, "findings": []})
     monkeypatch.setattr(hal_orchestrator, "get_hal_access_policy", lambda: {"mode": "local-rag-phase-1"})
 
     def fake_record_hal_audit(**kwargs):
@@ -1004,13 +1033,13 @@ def test_hal_question_includes_softdent_live_summary(canonical_softdent_dashboar
 def test_hal_question_surfaces_retrieved_guidance(monkeypatch):
     import app.hal.orchestrator as orchestrator
 
-    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question: {"matched": False, "snippets": [], "narrative": ""})
-    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question: [])
+    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""})
+    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
 
     monkeypatch.setattr(
         orchestrator,
         "retrieve_relevant_context",
-        lambda question: [
+        lambda question, **_kwargs: [
             {
                 "source_id": "softdent_bridge_automation-25",
                 "title": "softdent_bridge_automation chunk 25",
@@ -1042,9 +1071,9 @@ def test_hal_question_surfaces_retrieved_guidance(monkeypatch):
 def test_hal_question_appends_profit_loss_report_snippet(monkeypatch):
     import app.hal.orchestrator as orchestrator
 
-    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question: {"matched": False, "snippets": [], "narrative": ""})
-    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""})
+    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
     monkeypatch.setattr(orchestrator, "get_financial_source_status", lambda: {})
     monkeypatch.setattr(orchestrator, "_build_hal_operating_picture", lambda financial_sources: {"summary": "backend-verified operating picture."})
     monkeypatch.setattr(
@@ -1084,9 +1113,9 @@ def test_hal_question_appends_profit_loss_report_snippet(monkeypatch):
 def test_hal_question_appends_unconfigured_balance_sheet_snippet(monkeypatch):
     import app.hal.orchestrator as orchestrator
 
-    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question: {"matched": False, "snippets": [], "narrative": ""})
-    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""})
+    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
     monkeypatch.setattr(orchestrator, "get_financial_source_status", lambda: {})
     monkeypatch.setattr(orchestrator, "_build_hal_operating_picture", lambda financial_sources: {"summary": "backend-verified operating picture."})
     monkeypatch.setattr(
@@ -1166,9 +1195,9 @@ def test_hal_question_appends_last_month_profit_loss_snippet(monkeypatch):
             return cls(2026, 6, 16, 12, 0, 0, tzinfo=tz or timezone.utc)
 
     monkeypatch.setattr(orchestrator, "datetime", FixedDateTime)
-    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question: {"matched": False, "snippets": [], "narrative": ""})
-    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""})
+    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
     monkeypatch.setattr(orchestrator, "get_financial_source_status", lambda: {})
     monkeypatch.setattr(orchestrator, "_build_hal_operating_picture", lambda financial_sources: {"summary": "backend-verified operating picture."})
     monkeypatch.setattr(
@@ -1253,9 +1282,9 @@ def test_hal_question_includes_softdent_collection_delta_context(canonical_softd
 def test_hal_question_includes_hardware_monitor_context(monkeypatch):
     import app.hal.orchestrator as orchestrator
 
-    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question: {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}})
-    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}})
+    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
     monkeypatch.setattr(orchestrator, "get_financial_source_status", lambda: {})
     monkeypatch.setattr(orchestrator, "_build_hal_operating_picture", lambda financial_sources: {"summary": "backend-verified operating picture."})
     monkeypatch.setattr(
@@ -1288,9 +1317,9 @@ def test_hal_question_includes_hardware_monitor_context(monkeypatch):
 def test_hal_question_returns_reviewed_hardware_action_for_brightness_change(monkeypatch):
     import app.hal.orchestrator as orchestrator
 
-    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question: {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}})
-    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}})
+    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
     monkeypatch.setattr(orchestrator, "get_financial_source_status", lambda: {})
     monkeypatch.setattr(orchestrator, "_build_hal_operating_picture", lambda financial_sources: {"summary": "backend-verified operating picture."})
     monkeypatch.setattr(
@@ -1378,9 +1407,9 @@ def test_hal_follow_up_uses_last_patient_context(monkeypatch):
 def test_hal_follow_up_suppresses_operating_picture_and_summarizes_collection_action(monkeypatch, canonical_softdent_dashboard):
     import app.hal.orchestrator as orchestrator
 
-    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question: {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}})
-    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}})
+    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
 
     payload = orchestrator.answer_hal_question(
         question="Do not repeat the operating picture. Based on that collections gap, what should I do first before lunch?",
@@ -1395,9 +1424,9 @@ def test_hal_follow_up_suppresses_operating_picture_and_summarizes_collection_ac
 def test_hal_provider_question_can_identify_weakest_provider(monkeypatch, canonical_softdent_dashboard):
     import app.hal.orchestrator as orchestrator
 
-    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question: {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}})
-    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}})
+    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
 
     payload = orchestrator.answer_hal_question(
         question="Which provider looks weakest from the current SoftDent snapshot, and why?",
@@ -1413,9 +1442,9 @@ def test_hal_provider_question_can_identify_weakest_provider(monkeypatch, canoni
 def test_hal_action_summary_uses_recent_conversation_state(monkeypatch):
     import app.hal.orchestrator as orchestrator
 
-    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question: {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}})
-    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question: [])
+    monkeypatch.setattr(orchestrator, "get_controlled_patient_context", lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": "", "summary_fields": {}})
+    monkeypatch.setattr(orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
 
     orchestrator.answer_hal_question(
         question="SoftDent collections are trailing production. What should I look at first?",
@@ -2064,18 +2093,18 @@ def test_hal_patient_ar_missing_reports_unavailable_not_zero(monkeypatch):
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {
+        lambda question, **_kwargs: {
             "matched": True,
             "snippets": [],
             "narrative": "Matched patient export context.",
             "summary_fields": {"patient_name": "John Doe", "claim_count": 1, "primary_claim_status": "Pending"},
         },
     )
-    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question, **_kwargs: [])
 
     payload = hal_orchestrator.answer_hal_question(
         question="What is patient John Doe outstanding A/R balance?",
@@ -2093,15 +2122,15 @@ def test_hal_memory_proposal_suggested_not_written(monkeypatch):
     memories_path = Path(__file__).resolve().parents[2] / "docs" / "hal_knowledge" / "memories.jsonl"
     before_lines = [line for line in memories_path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
-    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question: [])
-    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question: [])
+    monkeypatch.setattr(hal_orchestrator, "retrieve_relevant_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "get_live_financial_context", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_hardware_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_softdent_aggregate_snippets", lambda question, **_kwargs: [])
+    monkeypatch.setattr(hal_orchestrator, "compile_live_report_snippets", lambda question, **_kwargs: [])
     monkeypatch.setattr(
         hal_orchestrator,
         "get_controlled_patient_context",
-        lambda question: {"matched": False, "snippets": [], "narrative": ""},
+        lambda question, **_kwargs: {"matched": False, "snippets": [], "narrative": ""},
     )
 
     payload = hal_orchestrator.answer_hal_question(
