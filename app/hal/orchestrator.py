@@ -24,7 +24,7 @@ from app.ai_local_config import (
     resolve_lane_profile,
 )
 from app.evaluation.client import generate_response_result, get_ollama_runtime_status, load_json_file, run_structured_output_workflow
-from app.services import fetch_softdent_dashboard_aggregate, list_local_accounting_documents, run_ci_gates, run_rebuild_receipt, run_refresh_and_verify, run_smoke_tests
+from app.services import fetch_softdent_dashboard_aggregate, list_local_accounting_documents, load_softdent_claim_rows, run_ci_gates, run_rebuild_receipt, run_refresh_and_verify, run_smoke_tests
 from .hardware_tools import build_monitor_mutation_intent, get_monitor_status
 
 from .financial_tools import ReportPeriod, get_ar_aging_report, get_balance_sheet_report, get_controlled_patient_context, get_financial_source_status, get_live_financial_context, get_profit_loss_report, get_softdent_collection_delta_status, get_softdent_payer_mix_status, get_softdent_provider_ranking_status
@@ -40,6 +40,10 @@ from uuid import uuid4
 
 HAL_MODE = "local-rag-phase-1"
 SECOND_OPINION_PROFILE_ALIAS = "chat_second_opinion"
+SECOND_OPINION_CONTEXT_LIMIT = 2
+SECOND_OPINION_EXCERPT_CHAR_LIMIT = 300
+SECOND_OPINION_SUMMARY_CHAR_LIMIT = 1200
+SECOND_OPINION_NUM_PREDICT = 64
 LOCAL_MODEL_PROFILE_CONFIG_PATH = Path(__file__).resolve().parents[2] / "evals" / "local_model_profiles.json"
 HAL_PHASES = [
     "Authenticate operator",
@@ -905,6 +909,36 @@ def _collect_hal_question_context(
     }
 
 
+def _collect_patient_claims_second_opinion_context(
+    *,
+    question: str,
+    actor: str,
+    session_id: str | None,
+) -> dict[str, object]:
+    state = _get_conversation_state(actor, session_id)
+    patient_context = get_controlled_patient_context(question)
+    claim_rows = load_softdent_claim_rows()
+    sanitized = sanitize_hal_text(question)
+    sanitized_question = str(sanitized["sanitized_text"])
+    patient_snippets = patient_context.get("snippets") if isinstance(patient_context, dict) else []
+    combined_context = [_build_claim_export_context_snippet(claim_rows)]
+    if isinstance(patient_snippets, list):
+        combined_context.extend(patient_snippets)
+    return {
+        "state": state,
+        "patient_context": patient_context,
+        "claim_rows": claim_rows,
+        "sanitized": sanitized,
+        "sanitized_question": sanitized_question,
+        "hardware_context": [],
+        "hardware_review_actions": [],
+        "softdent_aggregate_context": [],
+        "live_report_context": [],
+        "combined_context": combined_context,
+        "operating_picture": {},
+    }
+
+
 def _build_second_opinion_prompt(
     *,
     sanitized_question: str,
@@ -912,21 +946,29 @@ def _build_second_opinion_prompt(
     summary: dict[str, object] | None,
 ) -> str:
     context_blocks: list[str] = []
-    for index, item in enumerate(combined_context, start=1):
+    for index, item in enumerate(combined_context[:SECOND_OPINION_CONTEXT_LIMIT], start=1):
         excerpt = str(item.get("excerpt") or item.get("content") or "").strip()
         if not excerpt:
             continue
+        if len(excerpt) > SECOND_OPINION_EXCERPT_CHAR_LIMIT:
+            excerpt = excerpt[:SECOND_OPINION_EXCERPT_CHAR_LIMIT].rstrip() + "..."
         context_blocks.append(f"[{index}] {_get_context_title(item)}\n{excerpt}")
     context_text = "\n\n".join(context_blocks) if context_blocks else "No additional verified context retrieved."
     summary_text = ""
     if summary:
+        summary_payload = json.dumps(summary, indent=2, default=str)
+        if len(summary_payload) > SECOND_OPINION_SUMMARY_CHAR_LIMIT:
+            summary_payload = summary_payload[:SECOND_OPINION_SUMMARY_CHAR_LIMIT].rstrip() + "..."
         summary_text = (
             "\n\nPrior summary or dashboard context:\n"
-            f"{json.dumps(summary, indent=2, default=str)}\n"
+            f"{summary_payload}\n"
         )
     return (
         "Provide a deeper second opinion on the operator question below. "
         "Use only the verified local context provided. "
+        "Answer immediately in no more than 60 words. "
+        "Use 2 concise bullets when possible. "
+        "Do not explain your steps. "
         "Add one verification angle when useful, call out tradeoffs and uncertainty, and stay practical.\n\n"
         f"Question:\n{sanitized_question}"
         f"{summary_text}\n\n"
@@ -934,21 +976,44 @@ def _build_second_opinion_prompt(
     )
 
 
-def _second_opinion_guardrails(*, patient_context_matched: bool) -> list[str]:
-    guardrails = [
-        "approved local read-only scope",
-        "backend second-opinion model required",
-        "sanitized retrieval only",
-        "read-only data boundary",
-        "truthful runtime claims only",
-        "audit log recorded",
-        "no deterministic fallback when backend unavailable",
-        "hardware mutations require human confirmation",
-        "tier-1 critical actions require explicit confirmation",
-        "tier-2 mismatches raise [ALERT]",
-    ]
+def _second_opinion_guardrails(
+    *,
+    patient_context_matched: bool,
+    deterministic_claims_fast_path: bool = False,
+) -> list[str]:
+    if deterministic_claims_fast_path:
+        guardrails = [
+            "approved local read-only scope",
+            "deterministic local claims review used",
+            "local SoftDent export rows reviewed",
+            "no external submission performed",
+            "backend model not required for this deterministic claims answer",
+            "sanitized retrieval only",
+            "read-only data boundary",
+            "truthful runtime claims only",
+            "audit log recorded",
+            "hardware mutations require human confirmation",
+            "tier-1 critical actions require explicit confirmation",
+            "tier-2 mismatches raise [ALERT]",
+        ]
+    else:
+        guardrails = [
+            "approved local read-only scope",
+            "backend second-opinion model required",
+            "sanitized retrieval only",
+            "read-only data boundary",
+            "truthful runtime claims only",
+            "audit log recorded",
+            "no deterministic fallback when backend unavailable",
+            "hardware mutations require human confirmation",
+            "tier-1 critical actions require explicit confirmation",
+            "tier-2 mismatches raise [ALERT]",
+        ]
     if patient_context_matched:
-        guardrails.append("raw identifiers processed only in local patient tool")
+        if deterministic_claims_fast_path:
+            guardrails.append("authorized internal office context")
+        else:
+            guardrails.append("raw identifiers processed only in local patient tool")
     return guardrails
 
 
@@ -960,6 +1025,8 @@ def _build_second_opinion_response(
     context_bundle: dict[str, object],
     answer: str,
     local_ai_unavailable: str | None = None,
+    deterministic_claims_fast_path: bool = False,
+    claims_audit_meta: dict[str, object] | None = None,
 ) -> dict[str, object]:
     patient_context = context_bundle["patient_context"]
     if not isinstance(patient_context, dict):
@@ -1005,7 +1072,11 @@ def _build_second_opinion_response(
         mode=f"{HAL_MODE}:second-opinion",
         sanitized_question=sanitized_question,
         retrieval_ids=[_get_context_source_id(item) for item in combined_context if isinstance(item, dict)],
-        response_summary=answer[:180],
+        response_summary=_build_second_opinion_audit_summary(
+            answer,
+            deterministic_claims_fast_path=deterministic_claims_fast_path,
+            claims_audit_meta=claims_audit_meta,
+        ),
     )
     patient_matched = bool(patient_context.get("matched"))
     return {
@@ -1015,7 +1086,10 @@ def _build_second_opinion_response(
         "sanitized_question": sanitized_question,
         "sanitization_findings": sanitized.get("findings", []),
         "retrieved_context": combined_context,
-        "guardrails": _second_opinion_guardrails(patient_context_matched=patient_matched),
+        "guardrails": _second_opinion_guardrails(
+            patient_context_matched=patient_matched,
+            deterministic_claims_fast_path=deterministic_claims_fast_path,
+        ),
         "audit_id": audit_entry["audit_id"],
         "access_policy": get_hal_access_policy(),
         "review_actions": hardware_review_actions,
@@ -1712,6 +1786,178 @@ def _is_patient_follow_up_question(question: str) -> bool:
     return "patient" in lowered or "follow-up plan" in lowered or "follow up plan" in lowered or "do not switch patients" in lowered
 
 
+def _is_patient_claims_second_opinion_question(question: str) -> bool:
+    lowered = question.lower()
+    return any(
+        keyword in lowered
+        for keyword in (
+            "patient",
+            "claim",
+            "claims",
+            "denial",
+            "denied",
+            "insurance",
+            "payer",
+            "appeal",
+            "resubmission",
+            "attachment",
+            "narrative",
+            "procedure",
+        )
+    )
+
+
+def _claim_field(row: dict[str, object], key: str) -> str:
+    for row_key, value in row.items():
+        if row_key.lower() == key.lower() and value not in (None, ""):
+            return str(value)
+    return ""
+
+
+def _claim_amount(row: dict[str, object]) -> float:
+    try:
+        return float(_claim_field(row, "ClaimAmount") or 0)
+    except ValueError:
+        return 0.0
+
+
+def _claim_status(row: dict[str, object]) -> str:
+    return _claim_field(row, "ClaimStatus") or "Unknown"
+
+
+def _is_open_claim(row: dict[str, object]) -> bool:
+    return _claim_status(row).strip().lower() not in {"paid", "closed", "complete", "completed"}
+
+
+def _format_claim_row(row: dict[str, object]) -> str:
+    claim_id = _claim_field(row, "ClaimId") or "unknown claim"
+    patient = _claim_field(row, "PatientName") or "unknown patient"
+    status = _claim_status(row)
+    payer = _claim_field(row, "Payer") or "unknown payer"
+    amount = _format_currency(_claim_amount(row))
+    procedure = _claim_field(row, "Procedure")
+    reason = _claim_field(row, "DenialReason")
+    parts = [f"{claim_id}: {patient}", f"status {status}", f"payer {payer}", f"amount {amount}"]
+    if procedure:
+        parts.append(f"procedure {procedure}")
+    if reason:
+        parts.append(f"note {reason.rstrip('.')}")
+    return "; ".join(parts)
+
+
+def _build_claim_export_context_snippet(claim_rows: list[dict[str, object]]) -> dict[str, object]:
+    if not claim_rows:
+        excerpt = "SoftDent claims export was checked but no readable claim rows were available."
+    else:
+        formatted_rows = [_format_claim_row(row) for row in claim_rows[:5]]
+        excerpt = "SoftDent claims export summary: " + " | ".join(formatted_rows)
+    return {
+        "source_id": "softdent-claims-export-second-opinion",
+        "title": "SoftDent claims export second-opinion source",
+        "category": "softdent_tool",
+        "excerpt": excerpt,
+    }
+
+
+def _claim_rows_for_question(question: str, claim_rows: list[dict[str, object]]) -> tuple[list[dict[str, object]], str]:
+    lowered = question.lower()
+    open_rows = [row for row in claim_rows if _is_open_claim(row)]
+    denied_rows = [row for row in claim_rows if "denied" in _claim_status(row).lower()]
+    pending_rows = [row for row in claim_rows if "pending" in _claim_status(row).lower()]
+
+    if any(keyword in lowered for keyword in ("denied", "denial", "appeal", "failed")):
+        return denied_rows, "denied claims"
+    if "pending" in lowered:
+        return pending_rows, "pending claims"
+    if any(keyword in lowered for keyword in ("open", "unsubmitted", "follow-up", "follow up", "status update", "outstanding", "problem", "workflow", "action")):
+        return open_rows, "open or follow-up claims"
+    if any(keyword in lowered for keyword in ("documentation", "attachment", "narrative", "supporting")):
+        return open_rows, "claims needing documentation review"
+    if any(keyword in lowered for keyword in ("payer", "exposure", "total", "highest")):
+        return claim_rows, "claims by payer or exposure"
+    if any(keyword in lowered for keyword in ("procedure", "bundle", "mismatch")):
+        return open_rows, "procedure-related open claims"
+    if "balance" in lowered:
+        return open_rows or claim_rows, "claim balances"
+    if "paid" in lowered:
+        return [row for row in claim_rows if _claim_status(row).lower() == "paid"], "paid claims"
+    return open_rows or claim_rows, "claims in approved export"
+
+
+def _build_claim_total_answer(rows: list[dict[str, object]]) -> str:
+    totals: dict[str, float] = {}
+    for row in rows:
+        payer = _claim_field(row, "Payer") or "unknown payer"
+        totals[payer] = totals.get(payer, 0.0) + _claim_amount(row)
+    if not totals:
+        return "The approved SoftDent claims export does not contain payer totals for this question."
+    ranked = sorted(totals.items(), key=lambda item: item[1], reverse=True)
+    return "Payer exposure from the approved SoftDent claims export: " + "; ".join(f"{payer} {_format_currency(amount)}" for payer, amount in ranked) + "."
+
+
+def _build_multiple_open_patient_answer(rows: list[dict[str, object]]) -> str:
+    counts: dict[str, int] = {}
+    for row in rows:
+        patient = _claim_field(row, "PatientName") or "unknown patient"
+        counts[patient] = counts.get(patient, 0) + 1
+    patients = [f"{patient} ({count} open claims)" for patient, count in counts.items() if count > 1]
+    if patients:
+        return "Patients with multiple open claims in the approved SoftDent export: " + "; ".join(patients) + "."
+    return "The approved SoftDent claims export does not verify any patient with multiple open claims."
+
+
+def _build_immediate_patient_claims_second_opinion(context_bundle: dict[str, object]) -> tuple[str, dict[str, object]]:
+    question = str(context_bundle.get("sanitized_question") or "")
+    raw_claim_rows = context_bundle.get("claim_rows")
+    claim_rows = raw_claim_rows if isinstance(raw_claim_rows, list) else []
+    audit_meta: dict[str, object] = {
+        "label": "",
+        "selected_rows": [],
+    }
+    if not claim_rows:
+        return (
+            "The approved SoftDent claims export was checked, but no readable claim rows were available for a second opinion.",
+            audit_meta,
+        )
+
+    lowered = question.lower()
+    selected_rows, label = _claim_rows_for_question(question, claim_rows)
+    audit_meta["label"] = label
+    audit_meta["selected_rows"] = selected_rows[:3]
+    if "multiple open" in lowered or ("multiple" in lowered and "open" in lowered):
+        answer = _build_multiple_open_patient_answer([row for row in claim_rows if _is_open_claim(row)])
+        return answer, audit_meta
+    if any(keyword in lowered for keyword in ("total", "highest", "exposure")):
+        return _build_claim_total_answer(selected_rows), audit_meta
+    if "mismatch" in lowered:
+        answer = (
+            "The approved SoftDent claims export does not contain a verified mismatch field. "
+            f"Open procedure-related claims available for review: {' | '.join(_format_claim_row(row) for row in selected_rows[:3])}."
+            if selected_rows
+            else "The approved SoftDent claims export does not verify procedure mismatches or open procedure claims for this question."
+        )
+        return answer, audit_meta
+    if not selected_rows:
+        return f"The approved SoftDent claims export does not verify any {label} for this question.", audit_meta
+
+    formatted_rows = [_format_claim_row(row) for row in selected_rows[:3]]
+    answer = f"Verified {label} from the approved SoftDent claims export: " + " | ".join(formatted_rows) + "."
+    return answer, audit_meta
+
+
+def _build_second_opinion_audit_summary(
+    answer: str,
+    *,
+    deterministic_claims_fast_path: bool,
+    claims_audit_meta: dict[str, object] | None,
+) -> str:
+    del deterministic_claims_fast_path, claims_audit_meta
+    cleaned = " ".join(answer.split())
+    if "PatientName,MRN,ClaimId" in cleaned:
+        cleaned = cleaned.replace("PatientName,MRN,ClaimId", "[csv header redacted]")
+    return cleaned[:180]
+
+
 def _is_quickbooks_write_request(question: str) -> bool:
     lowered = question.lower()
     return "quickbooks" in lowered and any(keyword in lowered for keyword in ("post", "apply", "send", "update", "change"))
@@ -2305,6 +2551,18 @@ def answer_hal_second_opinion_question(
     summary: dict[str, object] | None = None,
     session_id: str | None = None,
 ) -> dict[str, object]:
+    if _is_patient_claims_second_opinion_question(question):
+        context_bundle = _collect_patient_claims_second_opinion_context(question=question, actor=actor, session_id=session_id)
+        answer, claims_audit_meta = _build_immediate_patient_claims_second_opinion(context_bundle)
+        return _build_second_opinion_response(
+            actor=actor,
+            question=question,
+            session_id=session_id,
+            context_bundle=context_bundle,
+            answer=answer,
+            deterministic_claims_fast_path=True,
+            claims_audit_meta=claims_audit_meta,
+        )
     context_bundle = _collect_hal_question_context(question=question, actor=actor, session_id=session_id)
 
     if not LOCAL_MODEL_PROFILE_CONFIG_PATH.exists():
@@ -2338,7 +2596,12 @@ def answer_hal_second_opinion_question(
 
     try:
         profile_config = load_local_model_profile_config()
-        second_opinion_profile = resolve_lane_profile(profile_config, SECOND_OPINION_PROFILE_ALIAS)
+        second_opinion_profile = dict(resolve_lane_profile(profile_config, SECOND_OPINION_PROFILE_ALIAS))
+        second_opinion_profile["num_predict"] = min(
+            int(second_opinion_profile.get("num_predict") or SECOND_OPINION_NUM_PREDICT),
+            SECOND_OPINION_NUM_PREDICT,
+        )
+        second_opinion_profile["think"] = False
     except Exception as exc:
         unavailable_message = f"Local model profile config could not be loaded: {exc}"
         return _build_second_opinion_response(

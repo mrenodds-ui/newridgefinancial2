@@ -174,6 +174,7 @@ def generate_response_result(
         system_prompt=system_prompt,
         options=build_options(profile, seed=seed),
         keep_alive=profile.get("keep_alive"),
+        think=profile.get("think"),
         timeout_seconds=timeout_seconds,
     )
     response_text = body.get("response", "")
@@ -189,6 +190,7 @@ def generate_response_result(
                 system_prompt=system_prompt,
                 options=build_options(profile, seed=seed),
                 keep_alive=profile.get("keep_alive"),
+                think=profile.get("think"),
                 timeout_seconds=timeout_seconds,
             )
             response_text = body.get("response", "")
@@ -220,6 +222,7 @@ def run_ollama_generate(
     system_prompt: str | None,
     options: dict[str, Any],
     keep_alive: str | int | None,
+    think: bool | None,
     timeout_seconds: int,
 ) -> dict[str, Any]:
     if _is_litellm_proxy_base_url(base_url):
@@ -242,6 +245,8 @@ def run_ollama_generate(
         payload["system"] = system_prompt
     if keep_alive is not None:
         payload["keep_alive"] = keep_alive
+    if think is not None:
+        payload["think"] = bool(think)
 
     response = requests.post(
         f"{base_url.rstrip('/')}/api/generate",

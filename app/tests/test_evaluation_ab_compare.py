@@ -101,7 +101,7 @@ def test_run_ab_comparison_uses_requested_profiles(monkeypatch):
 def test_generate_response_result_applies_prompt_prefix(monkeypatch):
     captured: dict[str, object] = {}
 
-    def fake_run_ollama_generate(*, base_url, model, prompt, system_prompt, options, keep_alive, timeout_seconds):
+    def fake_run_ollama_generate(*, base_url, model, prompt, system_prompt, options, keep_alive, think, timeout_seconds):
         captured.update(
             {
                 "base_url": base_url,
@@ -110,6 +110,7 @@ def test_generate_response_result_applies_prompt_prefix(monkeypatch):
                 "system_prompt": system_prompt,
                 "options": options,
                 "keep_alive": keep_alive,
+                "think": think,
                 "timeout_seconds": timeout_seconds,
             }
         )
@@ -132,6 +133,7 @@ def test_generate_response_result_applies_prompt_prefix(monkeypatch):
             "seed": 29,
             "prompt_prefix": "/no_think\n",
             "keep_alive": "30m",
+            "think": False,
             "strip_thinking_tags": True,
         },
         "What matters this morning?",
@@ -141,6 +143,7 @@ def test_generate_response_result_applies_prompt_prefix(monkeypatch):
 
     assert captured["prompt"] == "/no_think\nWhat matters this morning?"
     assert captured["keep_alive"] == "30m"
+    assert captured["think"] is False
     assert result["response_text"] == "final answer"
 
 
@@ -169,7 +172,8 @@ def test_generate_response_result_retries_after_thinking_only_output(monkeypatch
         ]
     )
 
-    def fake_run_ollama_generate(*, base_url, model, prompt, system_prompt, options, keep_alive, timeout_seconds):
+    def fake_run_ollama_generate(*, base_url, model, prompt, system_prompt, options, keep_alive, think, timeout_seconds):
+        del base_url, model, system_prompt, options, keep_alive, think, timeout_seconds
         prompts.append(prompt)
         return next(responses)
 
@@ -196,6 +200,48 @@ def test_generate_response_result_retries_after_thinking_only_output(monkeypatch
     assert result["response_text"] == "SoftDent is the first checkpoint.\n\nQuickBooks is the second checkpoint."
     assert result["metrics"]["retry_attempted"] is True
     assert result["metrics"]["initial_attempt_metrics"]["eval_count"] == 0
+
+
+def test_run_ollama_generate_sends_think_flag(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "response": "final answer",
+                "load_duration": 0,
+                "prompt_eval_duration": 0,
+                "eval_duration": 0,
+                "total_duration": 0,
+                "prompt_eval_count": 0,
+                "eval_count": 0,
+            }
+
+    def fake_post(url, *, json, timeout):
+        captured["url"] = url
+        captured["json"] = json
+        captured["timeout"] = timeout
+        return _FakeResponse()
+
+    monkeypatch.setattr(evaluation_client.requests, "post", fake_post)
+
+    body = evaluation_client.run_ollama_generate(
+        base_url="http://127.0.0.1:11435",
+        model="qwen3:30b",
+        prompt="What denied patient claims need follow-up?",
+        system_prompt=None,
+        options={"num_predict": 192},
+        keep_alive="30m",
+        think=False,
+        timeout_seconds=30,
+    )
+
+    assert body["response"] == "final answer"
+    assert captured["url"] == "http://127.0.0.1:11435/api/generate"
+    assert captured["json"]["think"] is False
 
 
 def test_generate_response_result_uses_litellm_proxy_alias_when_proxy_base_url_matches(monkeypatch):
