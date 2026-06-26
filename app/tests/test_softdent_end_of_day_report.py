@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -12,6 +13,7 @@ from app.hal.softdent_draft_service import create_softdent_draft
 from app.hal.softdent_end_of_day_report import (
     MISSING_SOFTDENT_EOD_REPORT_DATE,
     SoftDentEndOfDayReportAdapter,
+    _working_days_elapsed,
 )
 from app.hal.softdent_packet_models import (
     SoftDentLocalPacketRequest,
@@ -309,3 +311,55 @@ def test_draft_keeps_missing_ar_for_stale_report(monkeypatch: pytest.MonkeyPatch
     assert MISSING_SOFTDENT_AR in draft.missing_data_codes
     assert any("stale" in limitation.lower() for limitation in draft.limitations)
     assert "$0.00" not in " ".join([draft.body, *draft.checklist_items, *draft.limitations])
+
+
+# --- Business-day (Mon-Thu) freshness -------------------------------------
+
+def test_working_days_elapsed_ignores_closed_friday_through_sunday() -> None:
+    thursday = date(2026, 6, 25)
+    # Office is closed Fri/Sat/Sun, so no working days elapse across the weekend.
+    assert _working_days_elapsed(thursday, date(2026, 6, 26)) == 0  # Friday
+    assert _working_days_elapsed(thursday, date(2026, 6, 27)) == 0  # Saturday
+    assert _working_days_elapsed(thursday, date(2026, 6, 28)) == 0  # Sunday
+    assert _working_days_elapsed(thursday, date(2026, 6, 29)) == 1  # Monday
+    assert _working_days_elapsed(thursday, date(2026, 6, 30)) == 2  # Tuesday
+    assert _working_days_elapsed(thursday, date(2026, 7, 1)) == 3  # Wednesday
+
+
+def test_working_days_elapsed_future_report_is_zero() -> None:
+    assert _working_days_elapsed(date(2026, 6, 30), date(2026, 6, 25)) == 0
+
+
+def _freshness(report_date: str, today: date, monkeypatch: pytest.MonkeyPatch) -> tuple[str, str | None]:
+    import app.hal.softdent_end_of_day_report as eod
+
+    class _FixedDate(eod.date):
+        @classmethod
+        def today(cls):  # pragma: no cover - not used
+            return today
+
+    class _FixedDateTime(eod.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return eod.datetime(today.year, today.month, today.day, tzinfo=tz)
+
+    monkeypatch.setattr(eod, "datetime", _FixedDateTime)
+    # modified time recent enough to not trip the file-mtime branch
+    return eod._evaluate_freshness(report_date=report_date, modified_at_utc=today.isoformat())
+
+
+def test_thursday_report_is_current_through_weekend(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOFTDENT_EOD_AR_MAX_AGE_DAYS", "2")
+    for viewed in (date(2026, 6, 26), date(2026, 6, 27), date(2026, 6, 28)):  # Fri/Sat/Sun
+        status, reason = _freshness("2026-06-25", viewed, monkeypatch)
+        assert status == "current", f"viewed {viewed} reason {reason}"
+
+
+def test_thursday_report_goes_stale_after_two_working_days(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOFTDENT_EOD_AR_MAX_AGE_DAYS", "2")
+    # Monday (1) and Tuesday (2) remain current; Wednesday (3) is stale.
+    assert _freshness("2026-06-25", date(2026, 6, 29), monkeypatch)[0] == "current"
+    assert _freshness("2026-06-25", date(2026, 6, 30), monkeypatch)[0] == "current"
+    status, reason = _freshness("2026-06-25", date(2026, 7, 1), monkeypatch)
+    assert status == "stale"
+    assert "working day" in (reason or "")

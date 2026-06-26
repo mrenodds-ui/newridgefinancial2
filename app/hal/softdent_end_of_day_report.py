@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Literal
@@ -194,6 +194,30 @@ def _max_age_days() -> int:
         return max(1, int(raw))
     except ValueError:
         return 2
+
+
+# The office operates Monday through Thursday only (weekday() 0..3). Friday,
+# Saturday, and Sunday are closed, so SoftDent may not produce a DAYSHEET on
+# those days. Freshness must therefore count elapsed *working* days, not raw
+# calendar days, so a Thursday report stays current across the weekend.
+OFFICE_WORKING_WEEKDAYS = frozenset({0, 1, 2, 3})
+
+
+def _working_days_elapsed(report_day: date, today: date) -> int:
+    """Count office working days strictly after ``report_day`` through ``today``.
+
+    Closed days (Fri/Sat/Sun) do not count toward staleness. A report dated in
+    the future returns 0 elapsed working days.
+    """
+    if today <= report_day:
+        return 0
+    elapsed = 0
+    current = report_day + timedelta(days=1)
+    while current <= today:
+        if current.weekday() in OFFICE_WORKING_WEEKDAYS:
+            elapsed += 1
+        current += timedelta(days=1)
+    return elapsed
 
 
 def _utc_now_iso() -> str:
@@ -456,14 +480,23 @@ def _evaluate_freshness(*, report_date: str | None, modified_at_utc: str | None)
 
     today = datetime.now(timezone.utc).date()
     max_age = _max_age_days()
-    if (today - report_day).days > max_age:
-        return "stale", f"Report date {report_date} is older than {max_age} day(s)."
+
+    report_working_days = _working_days_elapsed(report_day, today)
+    if report_working_days > max_age:
+        return (
+            "stale",
+            f"Report date {report_date} is older than {max_age} office working day(s) "
+            "(office operates Monday-Thursday).",
+        )
 
     if modified_at_utc:
         try:
             modified_day = datetime.fromisoformat(modified_at_utc).date()
-            if (today - modified_day).days > max_age:
-                return "stale", f"Source file modified at {modified_at_utc} exceeds freshness threshold."
+            if _working_days_elapsed(modified_day, today) > max_age:
+                return (
+                    "stale",
+                    f"Source file modified at {modified_at_utc} exceeds the office working-day freshness threshold.",
+                )
         except ValueError:
             pass
 

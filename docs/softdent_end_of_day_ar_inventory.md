@@ -82,12 +82,30 @@ Daysheet date headers may appear as `Friday, June 26, 2026` (weekday + month nam
 
 Patient-level transaction rows on intermediate Daysheet pages are never parsed for A/R totals.
 
-## Freshness
+## Freshness (business-day aware)
 
-- `SOFTDENT_EOD_AR_MAX_AGE_DAYS` (default `2`)
-- `current`: report business date within threshold
-- `stale`: report parses but date or modified time exceeds threshold
+The office operates **Monday through Thursday only**. Friday, Saturday, and Sunday are
+closed, so SoftDent may not generate a DAYSHEET on those days. Freshness counts elapsed
+**office working days** (Mon–Thu), not raw calendar days, so the most recent Thursday
+report stays current across the weekend.
+
+- `SOFTDENT_EOD_AR_MAX_AGE_DAYS` (default `2`) — measured in office working days
+- `current`: report business date is within the working-day threshold
+- `stale`: more than the allowed office working days have elapsed since the report date (or file modified time)
 - `unknown`: report exists but business date cannot be determined confidently
+
+Examples (default threshold = 2 working days):
+
+| Report date | Viewed on | Working days elapsed | Result |
+| --- | --- | --- | --- |
+| Thursday | Friday | 0 | current |
+| Thursday | Sunday | 0 | current |
+| Thursday | Monday | 1 | current |
+| Thursday | Tuesday | 2 | current |
+| Thursday | Wednesday | 3 | stale |
+
+Closed days (Fri/Sat/Sun) never count toward staleness, and HAL still never implies A/R
+came from a non-working day — the report date is always shown.
 
 ## Role gate
 
