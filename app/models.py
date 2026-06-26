@@ -214,6 +214,37 @@ class HalPatientDossierResponse(BaseModel):
     governance_notes: list[HalGovernanceNote] = Field(default_factory=list)
 
 
+class HalSoftDentDraftRequest(BaseModel):
+    patient_query: str = Field(min_length=3, max_length=2000)
+    claim_id: str | None = Field(default=None, max_length=128)
+    draft_type: Literal[
+        "clinical_note_proposal",
+        "insurance_narrative_proposal",
+        "claim_follow_up_checklist",
+        "missing_document_checklist",
+        "payer_appeal_prep_summary",
+        "staff_task_recommendation",
+        "internal_patient_summary",
+    ]
+    workflow_reason: str = Field(default="staff_review", min_length=3, max_length=200)
+    include_clinical_context: bool = True
+    include_ledger_context: bool = False
+
+
+class HalSoftDentDraftResponse(BaseModel):
+    draft_id: str
+    draft_type: str
+    patient_label: str
+    title: str
+    body: str
+    checklist_items: list[str] = Field(default_factory=list)
+    source_fact_refs: list[str] = Field(default_factory=list)
+    missing_data_codes: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    review_required: bool = True
+    external_action_performed: bool = False
+
+
 class HalChartPlanRequest(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
 

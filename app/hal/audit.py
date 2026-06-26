@@ -7,9 +7,12 @@ from uuid import uuid4
 
 from .storage import get_hal_audit as get_hal_audit_from_storage
 from .storage import get_recent_hal_audits as get_recent_hal_audits_from_storage
+from .storage import get_recent_softdent_draft_audits as get_recent_softdent_draft_audits_from_storage
 from .storage import get_recent_softdent_record_audits as get_recent_softdent_record_audits_from_storage
+from .storage import get_softdent_draft_audit as get_softdent_draft_audit_from_storage
 from .storage import get_softdent_record_audit as get_softdent_record_audit_from_storage
 from .storage import insert_hal_audit
+from .storage import insert_softdent_draft_audit
 from .storage import insert_softdent_record_audit
 
 
@@ -107,3 +110,61 @@ def get_recent_softdent_read_audits(limit: int = 20) -> list[dict[str, Any]]:
 
 def get_softdent_read_audit(event_id: str) -> dict[str, Any] | None:
     return get_softdent_record_audit_from_storage(event_id)
+
+
+def record_softdent_draft_audit(
+    *,
+    actor: str,
+    roles_used: list[str],
+    draft_type: str,
+    workflow_reason: str,
+    draft_id: str,
+    patient_display_name: str | None = None,
+    patient_ref_hash: str | None = None,
+    chart_ref_hash: str | None = None,
+    claim_ids: list[str] | None = None,
+    clinical_note_ids: list[str] | None = None,
+    ledger_record_ids: list[str] | None = None,
+    source_adapter: str = "exports",
+    source_metadata: list[dict[str, Any]] | None = None,
+    missing_data_codes: list[str] | None = None,
+    review_required: bool = True,
+    external_action_performed: bool = False,
+) -> dict[str, Any]:
+    """Persist a draft-only SoftDent audit event.
+
+    Phase 2 drafts are local review artifacts only. ``external_action_performed``
+    must remain ``False`` and this wrapper does not store raw clinical note bodies,
+    raw CSV rows, or secrets.
+    """
+    if external_action_performed:
+        raise ValueError("SoftDent Phase 2 draft audit cannot record an external action.")
+    payload: dict[str, Any] = {
+        "draft_id": draft_id,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "actor": actor,
+        "roles_used": list(roles_used or []),
+        "draft_type": draft_type,
+        "workflow_reason": workflow_reason,
+        "patient_display_name": patient_display_name,
+        "patient_ref_hash": patient_ref_hash,
+        "chart_ref_hash": chart_ref_hash,
+        "claim_ids": list(claim_ids or []),
+        "clinical_note_ids": list(clinical_note_ids or []),
+        "ledger_record_ids": list(ledger_record_ids or []),
+        "source_adapter": source_adapter,
+        "source_metadata": list(source_metadata or []),
+        "missing_data_codes": list(missing_data_codes or []),
+        "review_required": bool(review_required),
+        "external_action_performed": False,
+    }
+    insert_softdent_draft_audit(payload)
+    return payload
+
+
+def get_recent_softdent_draft_audits(limit: int = 20) -> list[dict[str, Any]]:
+    return get_recent_softdent_draft_audits_from_storage(limit=limit)
+
+
+def get_softdent_draft_audit(draft_id: str) -> dict[str, Any] | None:
+    return get_softdent_draft_audit_from_storage(draft_id)

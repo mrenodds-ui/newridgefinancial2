@@ -116,6 +116,29 @@ def initialize_hal_storage(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS hal_softdent_draft_audits (
+            draft_id TEXT PRIMARY KEY,
+            created_at_utc TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            roles_used_json TEXT NOT NULL,
+            draft_type TEXT NOT NULL,
+            workflow_reason TEXT NOT NULL,
+            patient_ref_hash TEXT,
+            chart_ref_hash TEXT,
+            patient_display_name TEXT,
+            claim_ids_json TEXT NOT NULL,
+            clinical_note_ids_json TEXT NOT NULL,
+            ledger_record_ids_json TEXT NOT NULL,
+            source_adapter TEXT NOT NULL,
+            source_metadata_json TEXT NOT NULL,
+            missing_data_codes_json TEXT NOT NULL,
+            review_required INTEGER NOT NULL DEFAULT 1,
+            external_action_performed INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
 
 
 def _ensure_hal_conversation_state_schema(connection: sqlite3.Connection) -> None:
@@ -308,6 +331,112 @@ def get_softdent_record_audit(event_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
     return _map_softdent_record_audit_row(row)
+
+
+def insert_softdent_draft_audit(entry: dict[str, Any]) -> None:
+    with hal_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO hal_softdent_draft_audits (
+                draft_id,
+                created_at_utc,
+                actor,
+                roles_used_json,
+                draft_type,
+                workflow_reason,
+                patient_ref_hash,
+                chart_ref_hash,
+                patient_display_name,
+                claim_ids_json,
+                clinical_note_ids_json,
+                ledger_record_ids_json,
+                source_adapter,
+                source_metadata_json,
+                missing_data_codes_json,
+                review_required,
+                external_action_performed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry["draft_id"],
+                entry["created_at_utc"],
+                entry["actor"],
+                json.dumps(entry.get("roles_used", [])),
+                entry["draft_type"],
+                entry["workflow_reason"],
+                entry.get("patient_ref_hash"),
+                entry.get("chart_ref_hash"),
+                entry.get("patient_display_name"),
+                json.dumps(entry.get("claim_ids", [])),
+                json.dumps(entry.get("clinical_note_ids", [])),
+                json.dumps(entry.get("ledger_record_ids", [])),
+                entry.get("source_adapter", "exports"),
+                json.dumps(entry.get("source_metadata", [])),
+                json.dumps(entry.get("missing_data_codes", [])),
+                1 if entry.get("review_required", True) else 0,
+                1 if entry.get("external_action_performed") else 0,
+            ),
+        )
+
+
+def get_recent_softdent_draft_audits(limit: int = 20) -> list[dict[str, Any]]:
+    bounded_limit = max(1, limit)
+    with hal_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT draft_id, created_at_utc, actor, roles_used_json, draft_type, workflow_reason,
+                   patient_ref_hash, chart_ref_hash, patient_display_name, claim_ids_json,
+                   clinical_note_ids_json, ledger_record_ids_json, source_adapter,
+                   source_metadata_json, missing_data_codes_json, review_required,
+                   external_action_performed
+            FROM hal_softdent_draft_audits
+            ORDER BY created_at_utc DESC
+            LIMIT ?
+            """,
+            (bounded_limit,),
+        ).fetchall()
+    return [_map_softdent_draft_audit_row(row) for row in rows]
+
+
+def get_softdent_draft_audit(draft_id: str) -> dict[str, Any] | None:
+    with hal_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT draft_id, created_at_utc, actor, roles_used_json, draft_type, workflow_reason,
+                   patient_ref_hash, chart_ref_hash, patient_display_name, claim_ids_json,
+                   clinical_note_ids_json, ledger_record_ids_json, source_adapter,
+                   source_metadata_json, missing_data_codes_json, review_required,
+                   external_action_performed
+            FROM hal_softdent_draft_audits
+            WHERE draft_id = ?
+            """,
+            (draft_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return _map_softdent_draft_audit_row(row)
+
+
+def _map_softdent_draft_audit_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "draft_id": row["draft_id"],
+        "created_at_utc": row["created_at_utc"],
+        "actor": row["actor"],
+        "roles_used": json.loads(row["roles_used_json"]),
+        "draft_type": row["draft_type"],
+        "workflow_reason": row["workflow_reason"],
+        "patient_ref_hash": row["patient_ref_hash"],
+        "chart_ref_hash": row["chart_ref_hash"],
+        "patient_display_name": row["patient_display_name"],
+        "claim_ids": json.loads(row["claim_ids_json"]),
+        "clinical_note_ids": json.loads(row["clinical_note_ids_json"]),
+        "ledger_record_ids": json.loads(row["ledger_record_ids_json"]),
+        "source_adapter": row["source_adapter"],
+        "source_metadata": json.loads(row["source_metadata_json"]),
+        "missing_data_codes": json.loads(row["missing_data_codes_json"]),
+        "review_required": bool(row["review_required"]),
+        "external_action_performed": bool(row["external_action_performed"]),
+    }
 
 
 def _map_softdent_record_audit_row(row: sqlite3.Row) -> dict[str, Any]:

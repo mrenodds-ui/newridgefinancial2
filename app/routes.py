@@ -398,6 +398,8 @@ from .models import (
     InsuranceNarrativeDraftWorkflowRequest,
     HalPatientDossierRequest,
     HalPatientDossierResponse,
+    HalSoftDentDraftRequest,
+    HalSoftDentDraftResponse,
     JournalDraftRequest,
     JournalDraftResponse,
     LocalAccountingDocumentListResponse,
@@ -1715,6 +1717,32 @@ async def api_hal9000_patient_dossier(payload: HalPatientDossierRequest, request
     return _serialize_public_hal_payload(
         answer_patient_dossier_request(question=payload.question, actor=user.username, roles=user.roles)
     )
+
+
+@router.post("/api/hal9000/softdent-drafts", response_model=HalSoftDentDraftResponse)
+async def api_hal9000_softdent_drafts(
+    payload: HalSoftDentDraftRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(
+        require_roles("hal:operator", "softdent:read", "softdent:patient:read", "softdent:narrative:draft")
+    ),
+):
+    del request
+    from app.hal.softdent_draft_models import SoftDentDraftRequest
+    from app.hal.softdent_draft_service import create_softdent_draft
+    from app.hal.softdent_read_broker import SoftDentAccessError
+
+    try:
+        artifact = create_softdent_draft(
+            SoftDentDraftRequest.model_validate(payload.model_dump()),
+            actor=user.username,
+            roles=user.roles,
+        )
+    except SoftDentAccessError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return HalSoftDentDraftResponse.model_validate(artifact.model_dump())
 
 
 @router.post("/api/hal9000/chart-plan", response_model=HalChartPlanResponse)
