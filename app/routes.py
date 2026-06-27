@@ -22,7 +22,7 @@ from .auth import (
 from .config_runtime import is_local_app_environment
 from .data_pipeline import get_pull_status_payload, import_uploaded_file
 from .services import fetch_quickbooks_data
-from .hal import advance_hal_autonomy_run, answer_accounting_policy_question, answer_hal_question, answer_hal_second_opinion_question, answer_insurance_narrative_request, answer_patient_dossier_request, approve_hal_chart_plan, create_hal_autonomy_run, create_hal_chart_plan, draft_accounting_journal_entry, get_accounting_posting_queue_summary, get_hal_access_policy, get_hal_autonomy_profile, get_hal_autonomy_run_status, get_hal_index_status, get_hal_phases, get_hal_shell_commands, list_accounting_posting_queue, list_hal_audit_events, list_hal_autonomy_runs, list_hal_chart_plans, list_recent_accounting_posting_queue_activity, queue_accounting_posting_draft, refresh_local_hal_index, review_accounting_posting_queue_entry, run_fast_review_check
+from .hal import advance_hal_autonomy_run, answer_accounting_policy_question, answer_hal_question, answer_hal_second_opinion_question, answer_insurance_narrative_request, answer_patient_dossier_request, approve_hal_chart_plan, approve_hal_memory, create_hal_autonomy_run, create_hal_chart_plan, draft_accounting_journal_entry, get_accounting_posting_queue_summary, get_hal_access_policy, get_hal_autonomy_profile, get_hal_autonomy_run_status, get_hal_index_status, get_hal_phases, get_hal_shell_commands, list_accounting_posting_queue, list_governed_hal_memories, list_hal_audit_events, list_hal_autonomy_runs, list_hal_chart_plans, list_recent_accounting_posting_queue_activity, propose_hal_memory, queue_accounting_posting_draft, refresh_local_hal_index, review_accounting_posting_queue_entry, revoke_hal_memory, run_fast_review_check
 from .hal import answer_document_rag_question, ingest_document_rag_upload, list_document_rag_documents
 from .insurance_narratives.data_adapter import resolve_insurance_narrative_adapter
 from .insurance_narratives.export import NarrativeExportWorkflowError
@@ -38,6 +38,7 @@ from .hal.widget_builder import _ar_available, enforce_receivables_widget_ar_pol
 from .hal.widget_feed import get_widget_feed, record_widget_feed
 from .hal.safety import append_ai_activity_log, create_ai_workspace_handle, ensure_within_ai_workspace, resolve_ai_workspace_handle
 from .hal.posting_queue import PostingQueueStatus
+from .hal.memory_workflow import MemoryWorkflowError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -233,6 +234,33 @@ def _serialize_journal_draft_payload(payload: dict[str, object]) -> dict[str, ob
     return serialized
 
 
+def _serialize_hal_memory_payload(memory: dict[str, object]) -> dict[str, object]:
+    return {
+        "memory_id": str(memory["memory_id"]),
+        "category": str(memory["category"]),
+        "text": str(memory["text"]),
+        "source": str(memory["source"]),
+        "created_at_utc": str(memory["created_at_utc"]),
+        "last_verified_at_utc": str(memory["last_verified_at_utc"]),
+        "confidence": str(memory["confidence"]),
+        "scope": str(memory["scope"]),
+        "staleness_rule": str(memory["staleness_rule"]),
+        "expires_at_utc": memory.get("expires_at_utc"),
+        "sensitivity_level": str(memory["sensitivity_level"]),
+        "status": str(memory["status"]),
+        "must_not_override": list(memory.get("must_not_override", [])),
+        "proposed_by": str(memory["proposed_by"]),
+        "approved_by": memory.get("approved_by"),
+        "approved_at_utc": memory.get("approved_at_utc"),
+        "notes": memory.get("notes"),
+    }
+
+
+def _serialize_hal_memory_list_payload(memories: list[dict[str, object]]) -> dict[str, object]:
+    items = [_serialize_hal_memory_payload(memory) for memory in memories]
+    return {"count": len(items), "items": items}
+
+
 def _serialize_posting_queue_entry_payload(payload: dict[str, object]) -> dict[str, object]:
     serialized = dict(payload)
     serialized["review_plan_path"] = None
@@ -379,6 +407,10 @@ from .models import (
     DeltaResponse,
     FinancialSummaryResponse,
     HalAuditListResponse,
+    HalKnowledgeMemoryListResponse,
+    HalKnowledgeMemoryProposeRequest,
+    HalKnowledgeMemoryResponse,
+    HalKnowledgeMemoryReviewRequest,
     HalAutonomyProfileResponse,
     HalAutonomyRunListResponse,
     HalAutonomyRunRequest,
@@ -1578,6 +1610,67 @@ def api_hal9000_autonomy_runs_advance(
 def api_hal9000_audits(limit: int = Query(10, ge=1, le=100), user: AuthenticatedUser = Depends(require_roles("admin"))):
     del user
     return list_hal_audit_events(limit=limit)
+
+
+@router.get("/api/hal9000/knowledge/memories", response_model=HalKnowledgeMemoryListResponse)
+def api_hal9000_knowledge_memories_list(
+    status: str | None = Query(default=None),
+    limit: int = Query(100, ge=1, le=500),
+    user: AuthenticatedUser = Depends(require_roles("admin")),
+):
+    del user
+    return _serialize_hal_memory_list_payload(list_governed_hal_memories(status=status, limit=limit))
+
+
+@router.post("/api/hal9000/knowledge/memories", response_model=HalKnowledgeMemoryResponse)
+def api_hal9000_knowledge_memories_propose(
+    payload: HalKnowledgeMemoryProposeRequest,
+    user: AuthenticatedUser = Depends(require_roles("admin")),
+):
+    try:
+        return _serialize_hal_memory_payload(
+            propose_hal_memory(
+                actor=user.username,
+                text=payload.text,
+                category=payload.category,
+                source=payload.source,
+            )
+        )
+    except MemoryWorkflowError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/hal9000/knowledge/memories/{memory_id}/approve", response_model=HalKnowledgeMemoryResponse)
+def api_hal9000_knowledge_memories_approve(
+    memory_id: str,
+    payload: HalKnowledgeMemoryReviewRequest = Body(default_factory=HalKnowledgeMemoryReviewRequest),
+    user: AuthenticatedUser = Depends(require_roles("admin")),
+):
+    try:
+        return _serialize_hal_memory_payload(
+            approve_hal_memory(memory_id=memory_id, actor=user.username, note=payload.note or "")
+        )
+    except MemoryWorkflowError as exc:
+        message = str(exc)
+        status_code = 404 if message.startswith("Unknown memory id:") else 400
+        raise HTTPException(status_code=status_code, detail=message) from exc
+
+
+@router.post("/api/hal9000/knowledge/memories/{memory_id}/revoke", response_model=HalKnowledgeMemoryResponse)
+def api_hal9000_knowledge_memories_revoke(
+    memory_id: str,
+    payload: HalKnowledgeMemoryReviewRequest = Body(default_factory=HalKnowledgeMemoryReviewRequest),
+    user: AuthenticatedUser = Depends(require_roles("admin")),
+):
+    try:
+        return _serialize_hal_memory_payload(
+            revoke_hal_memory(memory_id=memory_id, actor=user.username, note=payload.note or "")
+        )
+    except MemoryWorkflowError as exc:
+        message = str(exc)
+        status_code = 404 if message.startswith("Unknown memory id:") else 400
+        raise HTTPException(status_code=status_code, detail=message) from exc
+
 
 @router.get("/api/reports/pull-status", response_model=ReportPullStatusResponse)
 def api_reports_pull_status(request: Request, user: AuthenticatedUser = Depends(require_roles("admin"))):

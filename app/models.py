@@ -716,6 +716,49 @@ class HalAuditListResponse(BaseModel):
     items: list[HalAuditEntryResponse] = Field(default_factory=list)
 
 
+HalKnowledgeMemoryCategory = Literal[
+    "known_workflows",
+    "operator_playbooks",
+    "deployment_notes",
+    "project_architecture",
+]
+
+
+class HalKnowledgeMemoryResponse(BaseModel):
+    memory_id: str
+    category: str
+    text: str
+    source: str
+    created_at_utc: str
+    last_verified_at_utc: str
+    confidence: str
+    scope: str
+    staleness_rule: str
+    expires_at_utc: str | None = None
+    sensitivity_level: str
+    status: str
+    must_not_override: list[str] = Field(default_factory=list)
+    proposed_by: str
+    approved_by: str | None = None
+    approved_at_utc: str | None = None
+    notes: str | None = None
+
+
+class HalKnowledgeMemoryListResponse(BaseModel):
+    count: int
+    items: list[HalKnowledgeMemoryResponse] = Field(default_factory=list)
+
+
+class HalKnowledgeMemoryProposeRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+    category: HalKnowledgeMemoryCategory = "known_workflows"
+    source: str = Field(default="operator API proposal", min_length=1, max_length=200)
+
+
+class HalKnowledgeMemoryReviewRequest(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+
+
 class HalStagedImportFileRequest(BaseModel):
     file_name: str = Field(min_length=3, max_length=120)
     mime_type: str = Field(min_length=3, max_length=120)
