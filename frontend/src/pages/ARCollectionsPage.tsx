@@ -11,6 +11,14 @@ import {
   selectLatestMonthlyKpi,
 } from "../components/dashboard/financialDashboardSummary";
 import { SummaryCard } from "../components/dashboard/SummaryCard";
+import "../styles/page-surface.css";
+
+const AR_SAFETY_BADGES = [
+  { label: "SoftDent Read-Only", tone: "neutral" as const },
+  { label: "Missing A/R ≠ $0", tone: "warning" as const },
+  { label: "No Payer Contact", tone: "neutral" as const },
+  { label: "Not Submitted", tone: "neutral" as const },
+];
 
 function toArField(value: unknown): number | null {
   if (value === null || value === undefined) {
@@ -27,6 +35,17 @@ function formatArCurrency(value: number | null): string {
   return value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
+function formatDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "Unavailable";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Unavailable";
+  }
+  return parsed.toLocaleString();
+}
+
 export default function ARCollectionsPage() {
   const financialSummaryQuery = useQuery({
     queryKey: ["financial-summary"],
@@ -35,7 +54,7 @@ export default function ARCollectionsPage() {
 
   if (financialSummaryQuery.isPending) {
     return (
-      <div className="dashboard-page">
+      <div className="dashboard-page ar-collections-page page-surface">
         <LoadingSpinner label="Loading A/R and collections..." />
       </div>
     );
@@ -43,7 +62,7 @@ export default function ARCollectionsPage() {
 
   if (financialSummaryQuery.isError || !financialSummaryQuery.data) {
     return (
-      <div className="dashboard-page">
+      <div className="dashboard-page ar-collections-page page-surface">
         <div className="page-state-card page-state-card--error">Unable to load live A/R data.</div>
       </div>
     );
@@ -69,75 +88,116 @@ export default function ARCollectionsPage() {
         ].filter((bucket): bucket is { name: string; value: number } => bucket.value !== null)
       : [];
   const collectionPercent = selectLatestMonthlyKpi(financialSummary.monthlyKpis)?.collection_rate ?? null;
+  const arSourceLabel = arAvailable ? "SoftDent DAYSHEET imported" : "Awaiting SoftDent A/R export";
 
   return (
-    <div className="dashboard-page">
-      <header className="page-header">
-        <p className="eyebrow">Collections</p>
-        <h1>A/R & Collections</h1>
-        <div className="dashboard-description">Cash collection health and A/R aging.</div>
+    <div className="dashboard-page ar-collections-page page-surface">
+      <header className="page-surface__hero" aria-labelledby="ar-collections-title">
+        <div className="page-surface__hero-top">
+          <div className="page-surface__hero-copy">
+            <div className="page-surface__breadcrumbs">Collections / Practice receivables</div>
+            <p className="eyebrow">Collections workspace</p>
+            <h1 id="ar-collections-title">A/R & Collections</h1>
+            <p className="dashboard-description">
+              Read-only view of dental practice receivables from approved SoftDent DAYSHEET exports. Unavailable balances stay
+              labeled unavailable — never shown as zero.
+            </p>
+          </div>
+          <div className="page-surface__badges" aria-label="Collections safety posture">
+            {AR_SAFETY_BADGES.map((badge) => (
+              <span
+                key={badge.label}
+                className={["page-surface__badge", badge.tone === "warning" ? "page-surface__badge--warning" : "page-surface__badge--neutral"].join(
+                  " ",
+                )}
+              >
+                {badge.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="page-surface__status-strip" aria-label="Collections source status">
+          <div className="page-surface__status-item">
+            <span className="page-surface__status-label">A/R source</span>
+            <span className="page-surface__status-value">{arSourceLabel}</span>
+          </div>
+          <div className="page-surface__status-item">
+            <span className="page-surface__status-label">Last refresh</span>
+            <span className="page-surface__status-value">{formatDateTime(financialSummary.latestSoftDentRefreshAt)}</span>
+          </div>
+          <div className="page-surface__status-item">
+            <span className="page-surface__status-label">Collection pace</span>
+            <span className="page-surface__status-value">
+              {collectionPercent !== null ? `${Math.round(collectionPercent)}%` : "Unavailable"}
+            </span>
+          </div>
+        </div>
       </header>
+
       <section className="dashboard-toolbar" aria-label="Collections summary">
         <div>
-          <div className="dashboard-toolbar__label">Total A/R</div>
+          <div className="dashboard-toolbar__label">Total practice A/R</div>
           <div className="dashboard-toolbar__value">{formatArCurrency(totalAr)}</div>
         </div>
         <div>
-          <div className="dashboard-toolbar__label">60+ A/R</div>
+          <div className="dashboard-toolbar__label">A/R aged 60+ days</div>
           <div className="dashboard-toolbar__value">{formatArCurrency(olderArTotal)}</div>
         </div>
         <div>
           <div className="dashboard-toolbar__label">Collection pace</div>
-          <div className="dashboard-toolbar__value">{collectionPercent !== null ? `${Math.round(collectionPercent)}%` : "N/A"}</div>
+          <div className="dashboard-toolbar__value">{collectionPercent !== null ? `${Math.round(collectionPercent)}%` : "Unavailable"}</div>
         </div>
       </section>
+
       <div className="kpi-grid">
-        <SummaryCard title="Total A/R">
+        <SummaryCard title="Total practice A/R">
           <div>
             <strong>{formatArCurrency(totalAr)}</strong>
           </div>
         </SummaryCard>
-        <SummaryCard title="90+ A/R">
+        <SummaryCard title="A/R older than 90 days">
           <div>
             <strong>{formatArCurrency(arOver90)}</strong>
           </div>
         </SummaryCard>
-        <SummaryCard title="Collection %">
+        <SummaryCard title="Collection rate">
           <div>
-            <strong>{collectionPercent !== null ? `${Math.round(collectionPercent)}%` : "N/A"}</strong>
+            <strong>{collectionPercent !== null ? `${Math.round(collectionPercent)}%` : "Unavailable"}</strong>
           </div>
         </SummaryCard>
-        <SummaryCard title="60+ A/R">
+        <SummaryCard title="A/R aged 60+ days">
           <div>
             <strong>{formatArCurrency(olderArTotal)}</strong>
           </div>
         </SummaryCard>
       </div>
+
       <div className="dashboard-charts">
-        <ChartCard title="A/R Aging">
+        <ChartCard title="A/R aging buckets">
           {arAvailable ? (
             <ARAgingBarChart data={arAging} />
           ) : (
             <div className="page-state-card page-state-card--info">No SoftDent A/R export available.</div>
           )}
         </ChartCard>
-        <ChartCard title="Collections Trend">
-          <CurrencyLineChart data={trailing12Months} lines={[{ dataKey: "collections", name: "Collections", color: "#78A86B" }]} />
+        <ChartCard title="Trailing collections trend">
+          <CurrencyLineChart data={trailing12Months} lines={[{ dataKey: "collections", name: "Collections", color: "#4c84ff" }]} />
         </ChartCard>
       </div>
-      <section className="dashboard-card">
-        <div className="dashboard-card__title">Collections Focus</div>
-        <div className="dashboard-kpi-main">{formatArCurrency(arOver90)}</div>
-        <div className="dashboard-kpi-label">A/R older than 90 days</div>
-        <div className="dashboard-kpi-support">
+
+      <section className="page-surface__focus-card" aria-label="Collections focus">
+        <div className="page-surface__focus-title">Priority follow-up</div>
+        <div className="page-surface__focus-metric">{formatArCurrency(arOver90)}</div>
+        <div className="page-surface__focus-detail">Practice A/R older than 90 days</div>
+        <div className="page-surface__focus-support">
           <span>
-            Total A/R: <strong>{formatArCurrency(totalAr)}</strong>
+            Total practice A/R: <strong>{formatArCurrency(totalAr)}</strong>
           </span>
           <span>
-            60+ aging: <strong>{formatArCurrency(olderArTotal)}</strong>
+            A/R aged 60+ days: <strong>{formatArCurrency(olderArTotal)}</strong>
           </span>
           <span>
-            Collection pace: <strong>{collectionPercent !== null ? `${Math.round(collectionPercent)}%` : "N/A"}</strong>
+            Collection pace: <strong>{collectionPercent !== null ? `${Math.round(collectionPercent)}%` : "Unavailable"}</strong>
           </span>
         </div>
       </section>

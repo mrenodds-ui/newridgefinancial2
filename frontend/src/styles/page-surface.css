@@ -1,0 +1,188 @@
+/* Shared dark/cyan glass surface for operational pages (frontend-only reskin). */
+
+.page-surface {
+  position: relative;
+  isolation: isolate;
+  color: #dbe6ff;
+}
+
+.page-surface::before {
+  content: "";
+  position: absolute;
+  inset: -8px 0 auto;
+  height: 280px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 14% 10%, rgba(74, 120, 255, 0.22), transparent 28%),
+    radial-gradient(circle at 84% 12%, rgba(84, 224, 255, 0.12), transparent 18%),
+    linear-gradient(180deg, rgba(30, 58, 130, 0.28), transparent 72%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.page-surface__breadcrumbs {
+  color: #7d93bc;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.page-surface__hero {
+  display: grid;
+  gap: 14px;
+  padding: 22px 24px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(112, 171, 255, 0.26), transparent 28%),
+    linear-gradient(180deg, rgba(17, 28, 54, 0.98), rgba(10, 18, 35, 0.98));
+  border: 1px solid rgba(103, 132, 201, 0.2);
+  box-shadow:
+    0 22px 54px rgba(2, 6, 23, 0.34),
+    inset 0 1px 0 rgba(165, 192, 255, 0.05);
+}
+
+.page-surface__hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.page-surface__hero-copy {
+  display: grid;
+  gap: 8px;
+  max-width: 72ch;
+}
+
+.page-surface__hero-copy .eyebrow {
+  color: #4c84ff;
+}
+
+.page-surface__hero-copy h1 {
+  margin: 0;
+  color: #f5f8ff;
+  letter-spacing: -0.03em;
+}
+
+.page-surface__hero-copy p,
+.page-surface__hero-copy .dashboard-description {
+  margin: 0;
+  color: #90a4cb;
+}
+
+.page-surface__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.page-surface__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 168, 107, 0.45);
+  background: rgba(21, 128, 61, 0.14);
+  color: #d7f0d0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.page-surface__badge--warning {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(120, 53, 15, 0.22);
+  color: #fde68a;
+}
+
+.page-surface__badge--neutral {
+  border-color: rgba(130, 168, 255, 0.34);
+  background: rgba(24, 45, 96, 0.5);
+  color: #eef4ff;
+}
+
+.page-surface__status-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.page-surface__status-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(82, 132, 255, 0.1), transparent 28%),
+    rgba(10, 18, 36, 0.78);
+  border: 1px solid rgba(103, 132, 201, 0.2);
+}
+
+.page-surface__status-label {
+  color: #7d91b6;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.page-surface__status-value {
+  color: #f5f8ff;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-surface__focus-card {
+  display: grid;
+  gap: 10px;
+  padding: 20px 22px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(78, 126, 255, 0.16), transparent 30%),
+    linear-gradient(180deg, rgba(14, 23, 45, 0.94), rgba(9, 16, 31, 0.98));
+  border: 1px solid rgba(107, 137, 212, 0.18);
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.28);
+}
+
+.page-surface__focus-title {
+  color: #8cb5ff;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.page-surface__focus-metric {
+  color: #f5f8ff;
+  font-family: var(--font-mono);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-surface__focus-detail {
+  color: #93a7ca;
+  font-size: 0.92rem;
+}
+
+.page-surface__focus-support {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  color: #93a7ca;
+  font-size: 0.88rem;
+}
+
+.page-surface__focus-support strong {
+  color: #f5f8ff;
+}

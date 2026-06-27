@@ -88,6 +88,8 @@ describe("ARCollectionsPage", () => {
 
     await screen.findByText("A/R & Collections");
 
+    expect(screen.getByText("Missing A/R ≠ $0")).toBeInTheDocument();
+    expect(screen.getByText("Awaiting SoftDent A/R export")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
     expect(screen.getByText("No SoftDent A/R export available.")).toBeInTheDocument();
     expect(screen.queryByText("$0")).not.toBeInTheDocument();
@@ -115,6 +117,8 @@ describe("ARCollectionsPage", () => {
 
     await screen.findByText("A/R & Collections");
 
+    expect(screen.getByText("Missing A/R ≠ $0")).toBeInTheDocument();
+    expect(screen.getByText("Awaiting SoftDent A/R export")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
     expect(screen.getByText("No SoftDent A/R export available.")).toBeInTheDocument();
     expect(screen.queryByText("$3,000")).not.toBeInTheDocument();
