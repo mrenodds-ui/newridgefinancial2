@@ -147,6 +147,11 @@
   margin: 0 0 0.75rem;
 }
 
+.hal-answer-card__section--lead {
+  white-space: pre-line;
+  line-height: 1.5;
+}
+
 .hal-today-section,
 .hal-quick-actions,
 .hal-section {

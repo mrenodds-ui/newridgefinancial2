@@ -2978,6 +2978,126 @@ def compile_live_report_snippets(question: str) -> list[dict[str, str]]:
     return snippets
 
 
+_STAFF_ANSWER_ARTIFACT_SUBSTRINGS = (
+    "No additional verified context retrieved.",
+    "No additional verified context retrieved",
+    "Use the answer above as the current staff recommendation.",
+    "No follow-up question is required yet.",
+)
+_STAFF_ANSWER_ARTIFACT_LINE_PATTERN = re.compile(
+    r"(?im)^\s*(?:we are given|according to the instructions|verified local context)\b[:\-]?.*$"
+)
+_STAFF_ANSWER_INLINE_ECHO_PATTERN = re.compile(
+    r"(?i)\b(?:we are given|according to the instructions|verified local context)\b[:\-]?\s*\"?"
+)
+
+
+def _sanitize_staff_facing_answer(answer: str) -> str:
+    """Remove leaked model/prompt template artifacts from a staff-facing answer.
+
+    This strips internal prompt echoes (for example ``We are given:`` or
+    ``Verified local context: No additional verified context retrieved.``) so the
+    main HAL answer reads like a practical office manager. Real missing-data
+    warnings are produced elsewhere in plain English and are not removed here.
+    """
+    if not answer:
+        return answer
+    text = answer
+    for substring in _STAFF_ANSWER_ARTIFACT_SUBSTRINGS:
+        text = text.replace(substring, "")
+    text = _STAFF_ANSWER_ARTIFACT_LINE_PATTERN.sub("", text)
+    text = _STAFF_ANSWER_INLINE_ECHO_PATTERN.sub("", text)
+    text = re.sub(r'""', "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text.strip()
+
+
+def _build_routine_no_context_answer_text() -> str:
+    return (
+        "I do not have a verified office snapshot yet.\n"
+        "What I can check next:\n"
+        "- DAYSHEET / A/R import status\n"
+        "- blocked claims\n"
+        "- missing SoftDent exports\n"
+        "- drafts waiting for review\n"
+        "- local office tasks\n"
+        "No patient-specific action should be taken until verified data is loaded."
+    )
+
+
+def _routine_office_has_verified_context(context_bundle: dict[str, object]) -> bool:
+    softdent_aggregate_context = context_bundle.get("softdent_aggregate_context")
+    live_report_context = context_bundle.get("live_report_context")
+    patient_context = context_bundle.get("patient_context")
+    if isinstance(softdent_aggregate_context, list) and softdent_aggregate_context:
+        return True
+    if isinstance(live_report_context, list) and live_report_context:
+        return True
+    if isinstance(patient_context, dict) and bool(patient_context.get("matched")):
+        return True
+    state = context_bundle.get("state")
+    if isinstance(state, dict):
+        action_items = [str(item).strip() for item in state.get("action_items", []) if str(item).strip()]
+        if action_items:
+            return True
+    return False
+
+
+def _build_routine_no_context_hal_response(
+    *,
+    question: str,
+    actor: str,
+    session_id: str | None,
+    context_bundle: dict[str, object],
+) -> dict[str, object]:
+    sanitized = context_bundle.get("sanitized")
+    sanitized_question = str(context_bundle.get("sanitized_question") or "")
+    findings = sanitized.get("findings", []) if isinstance(sanitized, dict) else []
+    answer = _build_routine_no_context_answer_text()
+    state = context_bundle.get("state") if isinstance(context_bundle.get("state"), dict) else _get_conversation_state(actor, session_id)
+    _update_conversation_state(
+        actor=actor,
+        session_id=session_id,
+        state=state,
+        question=question,
+        patient_context={"matched": False},
+        softdent_aggregate_context=[],
+        hardware_review_actions=[],
+    )
+    append_ai_activity_log(
+        tier="tier_2",
+        actor=actor,
+        action="hal-routine-no-context",
+        detail=f"Answered a routine office prompt without a verified snapshot for: {sanitized_question[:140]}",
+    )
+    audit_entry = record_hal_audit(
+        actor=actor,
+        mode=f"{HAL_MODE}:routine-status",
+        sanitized_question=sanitized_question,
+        retrieval_ids=[],
+        response_summary=answer[:180],
+    )
+    return {
+        "mode": f"{HAL_MODE}:routine-status",
+        "answer": answer,
+        "sanitized_question": sanitized_question,
+        "sanitization_findings": findings,
+        "retrieved_context": [],
+        "guardrails": [
+            "approved local read-only scope",
+            "deterministic server facts first",
+            "read-only data boundary",
+            "audit log recorded",
+        ],
+        "audit_id": audit_entry["audit_id"],
+        "access_policy": get_hal_access_policy(),
+        "review_actions": [],
+        "voice_profile": _voice_profile("primary"),
+        "governance_notes": _build_governance_notes(),
+    }
+
+
 def _should_escalate_primary_answer(answer: str, *, generation_error: str | None = None) -> bool:
     if generation_error:
         return True
@@ -3212,7 +3332,9 @@ def _build_model_hal_response(
     hardware_review_actions = context_bundle["hardware_review_actions"]
     softdent_aggregate_context = context_bundle["softdent_aggregate_context"]
     combined_context = context_bundle["combined_context"]
-    answer = _append_governed_memory_proposal(_strip_escalation_marker(answer), question=question)
+    answer = _append_governed_memory_proposal(
+        _sanitize_staff_facing_answer(_strip_escalation_marker(answer)), question=question
+    )
     _update_conversation_state(
         actor=actor,
         session_id=session_id,
@@ -3657,6 +3779,25 @@ def answer_hal_question(
                 model_called=False,
             )
             return result
+
+    if _is_routine_office_question(question, context_bundle) and not _routine_office_has_verified_context(context_bundle):
+        payload = _build_routine_no_context_hal_response(
+            question=question,
+            actor=actor,
+            session_id=session_id,
+            context_bundle=context_bundle,
+        )
+        elapsed_ms = int((time.monotonic() - routing_started_at) * 1000)
+        result = _attach_routing_metadata(payload, answer_lane="deterministic", routing_elapsed_ms=elapsed_ms)
+        _log_hal_routing(
+            question=question,
+            answer_lane="deterministic",
+            model_used=None,
+            escalated=False,
+            routing_elapsed_ms=elapsed_ms,
+            model_called=False,
+        )
+        return result
 
     if _is_routine_office_question(question, context_bundle):
         fast_result = _try_hal_fast_model_answer(

@@ -216,7 +216,7 @@ def test_ar_availability_uses_deterministic_status_not_model(monkeypatch: pytest
 
 def test_no_235b_or_cloud_models_used(monkeypatch: pytest.MonkeyPatch) -> None:
     context_bundle = {
-        "state": {},
+        "state": {"action_items": ["Review denied claims"]},
         "patient_context": {"matched": False},
         "sanitized": {"findings": []},
         "sanitized_question": "Summarize today's tasks",
@@ -261,3 +261,87 @@ def test_fast_model_prompt_excludes_dashboard_diagnostics() -> None:
     assert "README chunk" not in prompt
     assert "local read-only dental office manager assistant" in prompt.lower()
     assert "Open tasks: Review claims" in prompt
+
+
+def test_sanitize_staff_facing_answer_strips_prompt_artifacts() -> None:
+    raw = (
+        "We are given: \"Verified local context: No additional verified context retrieved.\" "
+        "Since there is no verified context provided, here is the practical answer.\n"
+        "According to the instructions: stay local.\n"
+        "Use the answer above as the current staff recommendation.\n"
+        "No follow-up question is required yet."
+    )
+    cleaned = hal_orchestrator._sanitize_staff_facing_answer(raw)
+    assert "We are given" not in cleaned
+    assert "According to the instructions" not in cleaned
+    assert "Verified local context" not in cleaned
+    assert "No additional verified context retrieved" not in cleaned
+    assert "Use the answer above" not in cleaned
+    assert "No follow-up question is required yet" not in cleaned
+
+
+def _empty_context_bundle(question: str) -> dict[str, object]:
+    return {
+        "state": {"action_items": []},
+        "patient_context": {"matched": False},
+        "sanitized": {"findings": [], "sanitized_text": question},
+        "sanitized_question": question,
+        "hardware_context": [],
+        "hardware_review_actions": [],
+        "softdent_aggregate_context": [],
+        "live_report_context": [],
+        "combined_context": [],
+        "operating_picture": {"summary": ""},
+    }
+
+
+def test_routine_prompt_without_context_avoids_model_and_artifacts(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "_collect_hal_question_context",
+        lambda **kwargs: _empty_context_bundle("what needs attention today"),
+    )
+
+    def fail_generate(**kwargs):
+        del kwargs
+        raise AssertionError("No model should be called for a routine prompt with no verified context")
+
+    monkeypatch.setattr(hal_orchestrator, "_generate_profile_answer", fail_generate)
+
+    payload = hal_orchestrator.answer_hal_question(
+        question="what needs attention today",
+        actor="hal_operator",
+    )
+
+    answer = payload["answer"]
+    assert payload["answer_lane"] == "deterministic"
+    assert "We are given" not in answer
+    assert "According to the instructions" not in answer
+    assert "No additional verified context retrieved" not in answer
+    assert "I do not have a verified office snapshot yet." in answer
+    assert "DAYSHEET" in answer
+    assert "blocked claims" in answer
+    assert "missing SoftDent exports" in answer
+    assert "drafts waiting for review" in answer
+    assert "local office tasks" in answer
+    assert len(answer) < 400
+
+
+def test_routine_no_context_answer_is_concise_office_manager_voice(monkeypatch: pytest.MonkeyPatch) -> None:
+    for question in ("morning huddle", "summarize today's tasks", "explain this status"):
+        monkeypatch.setattr(
+            hal_orchestrator,
+            "_collect_hal_question_context",
+            lambda **kwargs: _empty_context_bundle(question),
+        )
+        payload = hal_orchestrator.answer_hal_question(question=question, actor="hal_operator")
+        assert payload["answer_lane"] == "deterministic", question
+        assert payload["answer"].startswith("I do not have a verified office snapshot yet."), question
+
+
+def test_generic_help_remains_deterministic_and_concise() -> None:
+    payload = hal_orchestrator.answer_hal_question(question="can you help me", actor="hal_operator")
+    assert payload["answer_lane"] == "deterministic"
+    assert payload["answer"].startswith("Yes.")
+    assert "write back to SoftDent" in payload["answer"]
+    assert "We are given" not in payload["answer"]

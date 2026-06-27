@@ -32,11 +32,12 @@ def test_should_not_escalate_primary_answer_only_because_it_is_long() -> None:
 
 def test_answer_hal_question_escalates_from_24b_to_30b(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HAL_ENABLE_FAST_MODEL", "0")
+    question = "Walk me through the denied crown claim appeal reasoning"
     context_bundle = {
         "state": {},
         "patient_context": {"matched": False},
         "sanitized": {"findings": []},
-        "sanitized_question": "What needs attention today?",
+        "sanitized_question": question,
         "hardware_context": [],
         "hardware_review_actions": [],
         "softdent_aggregate_context": [],
@@ -61,7 +62,7 @@ def test_answer_hal_question_escalates_from_24b_to_30b(monkeypatch: pytest.Monke
     monkeypatch.setattr(hal_orchestrator, "_generate_profile_answer", fake_generate)
 
     payload = hal_orchestrator.answer_hal_question(
-        question="What needs attention today?",
+        question=question,
         actor="hal_operator",
     )
 
