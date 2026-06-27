@@ -295,6 +295,114 @@ def _empty_context_bundle(question: str) -> dict[str, object]:
     }
 
 
+def _docs_only_context_bundle(question: str) -> dict[str, object]:
+    bundle = _empty_context_bundle(question)
+    bundle["combined_context"] = [
+        {
+            "source_id": "readme-chunk-42",
+            "title": "README chunk 42",
+            "category": "documentation",
+            "excerpt": "HAL dashboard route docs explain how the app navigation works.",
+        },
+        {
+            "source_id": "dashboard-docs",
+            "title": "Dashboard documentation",
+            "category": "documentation",
+            "excerpt": "Automatically augments answers with live SoftDent aggregate summaries when the question asks about production.",
+        },
+    ]
+    return bundle
+
+
+def test_huddle_docs_only_context_returns_no_context_checklist(monkeypatch: pytest.MonkeyPatch) -> None:
+    question = "prepare a short morning huddle summary"
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "_collect_hal_question_context",
+        lambda **kwargs: _docs_only_context_bundle(question),
+    )
+
+    def fail_generate(**kwargs):
+        del kwargs
+        raise AssertionError("README/docs-only huddle prompt should not call a model")
+
+    monkeypatch.setattr(hal_orchestrator, "_generate_profile_answer", fail_generate)
+
+    payload = hal_orchestrator.answer_hal_question(question=question, actor="hal_operator")
+
+    assert payload["answer_lane"] == "deterministic"
+    assert payload["answer"].startswith("I do not have a verified office snapshot yet.")
+    assert "README" not in payload["answer"]
+    assert "dashboard route docs" not in payload["answer"]
+    assert "Automatically augments answers" not in payload["answer"]
+
+
+def test_narrative_docs_only_context_returns_missing_claim_facts(monkeypatch: pytest.MonkeyPatch) -> None:
+    question = "help me think through an insurance narrative for a denied crown claim using available local facts"
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "_collect_hal_question_context",
+        lambda **kwargs: _docs_only_context_bundle(question),
+    )
+
+    def fail_generate(**kwargs):
+        del kwargs
+        raise AssertionError("Docs-only narrative prompt should not use docs as model context")
+
+    monkeypatch.setattr(hal_orchestrator, "_generate_profile_answer", fail_generate)
+
+    payload = hal_orchestrator.answer_hal_question(question=question, actor="hal_operator")
+
+    assert payload["answer_lane"] == "deterministic"
+    assert "I do not have verified claim facts" in payload["answer"]
+    assert "claim status and payer" in payload["answer"]
+    assert "README" not in payload["answer"]
+    assert "dashboard route docs" not in payload["answer"]
+    assert "submit" in payload["answer"]
+    assert "write back to SoftDent" in payload["answer"]
+
+
+def test_narrative_with_real_claim_facts_routes_to_primary(monkeypatch: pytest.MonkeyPatch) -> None:
+    question = "help me think through an insurance narrative for a denied crown claim using available local facts"
+    claim_fact = {
+        "source_id": "softdent-claims-summary",
+        "title": "SoftDent claims retrieval",
+        "category": "softdent_tool",
+        "excerpt": "PatientName=John Doe; ClaimId=CLM-1001; ClaimStatus=Denied; Payer=Delta Dental; Procedure=Crown.",
+    }
+    bundle = _empty_context_bundle(question)
+    bundle["combined_context"] = [
+        {
+            "source_id": "readme-chunk-42",
+            "title": "README chunk 42",
+            "category": "documentation",
+            "excerpt": "HAL dashboard route docs explain how the app navigation works.",
+        },
+        claim_fact,
+    ]
+    calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(hal_orchestrator, "_collect_hal_question_context", lambda **kwargs: bundle)
+
+    def fake_generate(*, profile_alias: str, prompt: str, num_predict_cap: int, timeout_override=None):
+        del num_predict_cap, timeout_override
+        calls.append((profile_alias, prompt))
+        if profile_alias == "chat":
+            return "Use the denied crown claim facts to prepare a local draft for human review.", None
+        return None, "unexpected profile"
+
+    monkeypatch.setattr(hal_orchestrator, "_generate_profile_answer", fake_generate)
+
+    payload = hal_orchestrator.answer_hal_question(question=question, actor="hal_operator")
+
+    assert payload["answer_lane"] == "primary"
+    assert payload["model_used"]
+    assert calls[0][0] == "chat"
+    assert "ClaimStatus=Denied" in calls[0][1]
+    assert "README chunk" not in calls[0][1]
+    assert "dashboard route docs" not in calls[0][1]
+
+
 def test_routine_prompt_without_context_avoids_model_and_artifacts(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         hal_orchestrator,

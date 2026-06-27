@@ -1708,10 +1708,77 @@ def _should_include_context_excerpt_in_answer(item: dict[str, object], excerpt: 
     return True
 
 
+def _is_documentation_context_item(item: dict[str, object]) -> bool:
+    category = str(item.get("category") or "").strip().lower()
+    source_id = _get_context_source_id(item).lower()
+    title = _get_context_title(item).lower()
+    if category in {"documentation", "docs", "developer_note", "developer_notes"}:
+        return True
+    doc_markers = ("readme", "docs", "documentation", "dashboard doc", "route doc", "ui documentation")
+    return any(marker in source_id or marker in title for marker in doc_markers)
+
+
+def _is_source_health_diagnostic_context_item(item: dict[str, object]) -> bool:
+    category = str(item.get("category") or "").strip().lower()
+    source_id = _get_context_source_id(item).lower()
+    title = _get_context_title(item).lower()
+    excerpt = str(item.get("excerpt") or item.get("content") or "").lower()
+    if category in {"source_health", "source_diagnostic", "diagnostics"}:
+        return True
+    diagnostic_markers = (
+        "sdk summary is currently unavailable",
+        "sdk summary is unavailable",
+        "qbxml",
+        "modal dialog",
+        "source-health",
+        "source health",
+        "diagnostic",
+    )
+    return any(marker in source_id or marker in title or marker in excerpt for marker in diagnostic_markers)
+
+
+def _is_verified_operational_context_item(item: dict[str, object]) -> bool:
+    if _is_documentation_context_item(item) or _is_source_health_diagnostic_context_item(item):
+        return False
+    category = str(item.get("category") or "").strip().lower()
+    source_id = _get_context_source_id(item).lower()
+    title = _get_context_title(item).lower()
+    operational_categories = {
+        "softdent_aggregate",
+        "softdent_tool",
+        "softdent_claims",
+        "softdent_clinical_notes",
+        "patient_context",
+        "claim_context",
+        "office_task",
+        "local_task",
+        "report",
+        "financial_report",
+    }
+    if category in operational_categories:
+        return True
+    operational_markers = (
+        "softdent-live",
+        "softdent-claims",
+        "softdent-clinical",
+        "claim",
+        "clinical",
+        "patient",
+        "daysheet",
+        "end-of-day",
+        "eod",
+        "draft",
+        "task",
+        "blocked",
+        "qb-",
+    )
+    return any(marker in source_id or marker in title for marker in operational_markers)
+
+
 def _build_context_excerpt_summary(items: list[dict[str, object]], *, limit: int = 2) -> str:
     prioritized_items = sorted(
         items,
-        key=lambda item: 0 if str(item.get("category") or "") == "documentation" else 1,
+        key=lambda item: 1 if _is_documentation_context_item(item) else 0,
     )
     excerpts: list[str] = []
     seen: set[str] = set()
@@ -2266,6 +2333,106 @@ def _is_routine_office_question(question: str, context_bundle: dict[str, object]
         "what should staff",
     )
     return any(pattern in lowered for pattern in routine_patterns)
+
+
+def _is_operational_prompt(question: str, context_bundle: dict[str, object]) -> bool:
+    return (
+        _is_routine_office_question(question, context_bundle)
+        or _is_complex_hal_question(question, context_bundle)
+        or _is_ar_availability_question(question)
+        or _is_missing_exports_question(question)
+        or _is_patient_follow_up_question(question)
+        or _is_patient_ar_balance_question(question)
+    )
+
+
+def _context_has_real_office_facts(context_bundle: dict[str, object]) -> bool:
+    patient_context = context_bundle.get("patient_context")
+    if isinstance(patient_context, dict) and bool(patient_context.get("matched")):
+        return True
+
+    state = context_bundle.get("state")
+    if isinstance(state, dict):
+        action_items = [str(item).strip() for item in state.get("action_items", []) if str(item).strip()]
+        if action_items:
+            return True
+
+    for key in ("softdent_aggregate_context", "live_report_context", "combined_context"):
+        items = context_bundle.get(key)
+        if not isinstance(items, list):
+            continue
+        if any(isinstance(item, dict) and _is_verified_operational_context_item(item) for item in items):
+            return True
+    return False
+
+
+def _context_is_documentation_or_diagnostic_only(context_bundle: dict[str, object]) -> bool:
+    items = context_bundle.get("combined_context")
+    if not isinstance(items, list) or not items:
+        return False
+    dict_items = [item for item in items if isinstance(item, dict)]
+    if not dict_items:
+        return False
+    if _context_has_real_office_facts(context_bundle):
+        return False
+    return all(_is_documentation_context_item(item) or _is_source_health_diagnostic_context_item(item) for item in dict_items)
+
+
+def _is_claim_or_narrative_prompt(question: str) -> bool:
+    lowered = question.lower()
+    return any(
+        keyword in lowered
+        for keyword in (
+            "claim",
+            "denial",
+            "denied",
+            "appeal",
+            "narrative",
+            "payer",
+            "clinical note",
+        )
+    )
+
+
+def _should_allow_deterministic_short_circuit(
+    *,
+    question: str,
+    context_bundle: dict[str, object],
+    answer: str,
+    patient_matched: bool,
+) -> bool:
+    if not _deterministic_answer_is_substantive(answer, patient_matched=patient_matched):
+        return False
+
+    # These paths are authoritative server facts or safety boundaries and should
+    # remain deterministic even without model routing.
+    if (
+        _is_generic_help_request(question)
+        or _is_ar_availability_question(question)
+        or _is_missing_exports_question(question)
+        or _is_quickbooks_write_request(question)
+        or _is_action_summary_request(question)
+    ):
+        return True
+
+    if patient_matched:
+        return True
+
+    if _is_complex_hal_question(question, context_bundle):
+        # Claim/narrative reasoning should reach the primary HAL model unless a
+        # patient-specific deterministic path already matched above.
+        return False
+
+    if _is_routine_office_question(question, context_bundle):
+        # Routine operational prompts should not be satisfied by docs/source
+        # prose. They either use the fast model with real facts or the clean
+        # no-context checklist.
+        return False
+
+    if _is_operational_prompt(question, context_bundle):
+        return _context_has_real_office_facts(context_bundle)
+
+    return True
 
 
 def _deterministic_status_cache_ttl_seconds() -> float:
@@ -3026,22 +3193,21 @@ def _build_routine_no_context_answer_text() -> str:
     )
 
 
+def _build_missing_claim_facts_answer_text() -> str:
+    return (
+        "I do not have verified claim facts for that narrative yet.\n"
+        "What I need before drafting or reasoning through it:\n"
+        "- the claim status and payer\n"
+        "- denial reason or EOB notes\n"
+        "- procedure and date of service\n"
+        "- supporting clinical notes or attachments\n"
+        "I can help organize a local draft once those facts are imported or provided for human review. "
+        "I do not submit, email, fax, upload, contact payers, or write back to SoftDent."
+    )
+
+
 def _routine_office_has_verified_context(context_bundle: dict[str, object]) -> bool:
-    softdent_aggregate_context = context_bundle.get("softdent_aggregate_context")
-    live_report_context = context_bundle.get("live_report_context")
-    patient_context = context_bundle.get("patient_context")
-    if isinstance(softdent_aggregate_context, list) and softdent_aggregate_context:
-        return True
-    if isinstance(live_report_context, list) and live_report_context:
-        return True
-    if isinstance(patient_context, dict) and bool(patient_context.get("matched")):
-        return True
-    state = context_bundle.get("state")
-    if isinstance(state, dict):
-        action_items = [str(item).strip() for item in state.get("action_items", []) if str(item).strip()]
-        if action_items:
-            return True
-    return False
+    return _context_has_real_office_facts(context_bundle)
 
 
 def _build_routine_no_context_hal_response(
@@ -3080,6 +3246,60 @@ def _build_routine_no_context_hal_response(
     )
     return {
         "mode": f"{HAL_MODE}:routine-status",
+        "answer": answer,
+        "sanitized_question": sanitized_question,
+        "sanitization_findings": findings,
+        "retrieved_context": [],
+        "guardrails": [
+            "approved local read-only scope",
+            "deterministic server facts first",
+            "read-only data boundary",
+            "audit log recorded",
+        ],
+        "audit_id": audit_entry["audit_id"],
+        "access_policy": get_hal_access_policy(),
+        "review_actions": [],
+        "voice_profile": _voice_profile("primary"),
+        "governance_notes": _build_governance_notes(),
+    }
+
+
+def _build_missing_claim_facts_hal_response(
+    *,
+    question: str,
+    actor: str,
+    session_id: str | None,
+    context_bundle: dict[str, object],
+) -> dict[str, object]:
+    sanitized = context_bundle.get("sanitized")
+    sanitized_question = str(context_bundle.get("sanitized_question") or "")
+    findings = sanitized.get("findings", []) if isinstance(sanitized, dict) else []
+    answer = _build_missing_claim_facts_answer_text()
+    state = context_bundle.get("state") if isinstance(context_bundle.get("state"), dict) else _get_conversation_state(actor, session_id)
+    _update_conversation_state(
+        actor=actor,
+        session_id=session_id,
+        state=state,
+        question=question,
+        patient_context={"matched": False},
+        softdent_aggregate_context=[],
+        hardware_review_actions=[],
+    )
+    append_ai_activity_log(
+        tier="tier_2",
+        actor=actor,
+        action="hal-missing-claim-facts",
+        detail=f"Answered a claim/narrative prompt without verified claim facts for: {sanitized_question[:140]}",
+    )
+    audit_entry = record_hal_audit(
+        actor=actor,
+        mode=f"{HAL_MODE}:missing-claim-facts",
+        sanitized_question=sanitized_question,
+        retrieval_ids=[],
+        response_summary=answer[:180],
+    )
+    return {
+        "mode": f"{HAL_MODE}:missing-claim-facts",
         "answer": answer,
         "sanitized_question": sanitized_question,
         "sanitization_findings": findings,
@@ -3454,6 +3674,12 @@ def _try_hal_model_answer_with_escalation(
     sanitized_question = str(context_bundle["sanitized_question"])
     combined_context = context_bundle["combined_context"]
     context_list = combined_context if isinstance(combined_context, list) else []
+    if _is_operational_prompt(question, context_bundle):
+        context_list = [
+            item
+            for item in context_list
+            if isinstance(item, dict) and _is_verified_operational_context_item(item)
+        ]
 
     def _is_usable(answer: str | None, *, generation_error: str | None) -> bool:
         if not answer:
@@ -3583,7 +3809,14 @@ def _build_deterministic_hal_answer(
         voice_profile = _voice_profile("patient_workflow")
         governance_notes = _build_governance_notes(patient_context_used=True)
     else:
-        context_summary = _build_context_excerpt_summary(combined_context)
+        context_items_for_summary = combined_context
+        if _is_operational_prompt(question, context_bundle):
+            context_items_for_summary = [
+                item
+                for item in combined_context
+                if isinstance(item, dict) and _is_verified_operational_context_item(item)
+            ]
+        context_summary = _build_context_excerpt_summary(context_items_for_summary)
         hardware_summary = _build_hardware_answer_summary(hardware_context)
         softdent_summary = _build_softdent_answer_summary(softdent_aggregate_context)
         report_summary = _build_report_answer_summary(live_report_context)
@@ -3760,7 +3993,12 @@ def answer_hal_question(
         )
         patient_context = context_bundle.get("patient_context")
         patient_matched = bool(patient_context.get("matched")) if isinstance(patient_context, dict) else False
-        if _deterministic_answer_is_substantive(str(deterministic_result.get("answer") or ""), patient_matched=patient_matched):
+        if _should_allow_deterministic_short_circuit(
+            question=question,
+            context_bundle=context_bundle,
+            answer=str(deterministic_result.get("answer") or ""),
+            patient_matched=patient_matched,
+        ):
             if _is_ar_availability_question(question) or _is_missing_exports_question(question):
                 cache_key = f"status:{_normalize_help_question(question)}"
                 _store_cached_deterministic_response(cache_key, deterministic_result)
@@ -3817,6 +4055,29 @@ def answer_hal_question(
                 model_called=True,
             )
             return fast_result
+
+    if (
+        _is_claim_or_narrative_prompt(question)
+        and not _context_has_real_office_facts(context_bundle)
+        and _context_is_documentation_or_diagnostic_only(context_bundle)
+    ):
+        payload = _build_missing_claim_facts_hal_response(
+            question=question,
+            actor=actor,
+            session_id=session_id,
+            context_bundle=context_bundle,
+        )
+        elapsed_ms = int((time.monotonic() - routing_started_at) * 1000)
+        result = _attach_routing_metadata(payload, answer_lane="deterministic", routing_elapsed_ms=elapsed_ms)
+        _log_hal_routing(
+            question=question,
+            answer_lane="deterministic",
+            model_used=None,
+            escalated=False,
+            routing_elapsed_ms=elapsed_ms,
+            model_called=False,
+        )
+        return result
 
     model_result = _try_hal_model_answer_with_escalation(
         question=question,
