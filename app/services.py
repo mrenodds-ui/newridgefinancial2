@@ -10,6 +10,7 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 import sqlite3
 from typing import Iterable
 import winreg
@@ -46,6 +47,40 @@ except ImportError:  # pragma: no cover - exercised in environments without pywi
 
 QUICKBOOKS_SDK_APP_NAME = os.getenv("QUICKBOOKS_SDK_APP_NAME", "New Ridge HAL")
 QUICKBOOKS_SDK_TIMEOUT_SECONDS = float(os.getenv("QUICKBOOKS_SDK_TIMEOUT_SECONDS", "8"))
+# When QuickBooks is closed/blocked, the SDK subprocess can burn several seconds
+# per call before failing. HAL questions trigger this repeatedly, so we open a
+# short-lived circuit breaker after a failure: subsequent calls re-raise the same
+# error immediately instead of re-spawning the slow subprocess. A successful call
+# clears the breaker. This never fabricates data; it only short-circuits a known
+# failure to keep HAL responsive.
+QUICKBOOKS_SDK_FAILURE_COOLDOWN_SECONDS = float(os.getenv("QUICKBOOKS_SDK_FAILURE_COOLDOWN_SECONDS", "60"))
+_quickbooks_sdk_breaker_lock = threading.Lock()
+_quickbooks_sdk_breaker: dict[str, object] = {"error": None, "expires_at": 0.0}
+
+
+def _quickbooks_breaker_active_error() -> str | None:
+    if QUICKBOOKS_SDK_FAILURE_COOLDOWN_SECONDS <= 0:
+        return None
+    with _quickbooks_sdk_breaker_lock:
+        expires_at = float(_quickbooks_sdk_breaker.get("expires_at") or 0.0)
+        if expires_at > time.monotonic():
+            error = _quickbooks_sdk_breaker.get("error")
+            return str(error) if error else "QuickBooks SDK is temporarily unavailable"
+    return None
+
+
+def _record_quickbooks_breaker_failure(detail: str) -> None:
+    if QUICKBOOKS_SDK_FAILURE_COOLDOWN_SECONDS <= 0:
+        return
+    with _quickbooks_sdk_breaker_lock:
+        _quickbooks_sdk_breaker["error"] = detail
+        _quickbooks_sdk_breaker["expires_at"] = time.monotonic() + QUICKBOOKS_SDK_FAILURE_COOLDOWN_SECONDS
+
+
+def _clear_quickbooks_breaker() -> None:
+    with _quickbooks_sdk_breaker_lock:
+        _quickbooks_sdk_breaker["error"] = None
+        _quickbooks_sdk_breaker["expires_at"] = 0.0
 QUICKBOOKS_QBXML_VERSION = os.getenv("QUICKBOOKS_QBXML_VERSION", "13.0")
 MAX_QUICKBOOKS_DIAGNOSTIC_SQL_LENGTH = 10_000
 QUICKBOOKS_EXPORT_ENV_BY_TOPIC: dict[str, str] = {
@@ -164,25 +199,38 @@ def fetch_quickbooks_sdk_summary(topic: str, period_dict: dict[str, str] | None 
     if topic not in {"revenue", "expenses", "ar"}:
         raise ValueError(f"Unsupported QuickBooks SDK topic: {topic}")
 
+    cooled_error = _quickbooks_breaker_active_error()
+    if cooled_error is not None:
+        raise RuntimeError(cooled_error)
+
     command = [sys.executable, "-m", "app.quickbooks_sdk_runner", topic]
     if period_dict is not None:
         start_date, end_date = _validate_quickbooks_sdk_period(period_dict)
         command.extend([start_date, end_date])
-    completed = subprocess.run(
-        command,
-        cwd=str(_project_root()),
-        capture_output=True,
-        text=True,
-        timeout=max(int(QUICKBOOKS_SDK_TIMEOUT_SECONDS), 1) + 10,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=str(_project_root()),
+            capture_output=True,
+            text=True,
+            timeout=max(int(QUICKBOOKS_SDK_TIMEOUT_SECONDS), 1) + 10,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        detail = "QuickBooks SDK subprocess timed out or is blocked by the QuickBooks UI"
+        _record_quickbooks_breaker_failure(detail)
+        raise RuntimeError(detail) from exc
+
     if completed.returncode != 0:
         stderr = completed.stderr.strip()
         stdout = completed.stdout.strip()
         detail = stderr or stdout or f"subprocess exit code {completed.returncode}"
-        raise RuntimeError(f"QuickBooks SDK subprocess failed: {detail}")
+        full_detail = f"QuickBooks SDK subprocess failed: {detail}"
+        _record_quickbooks_breaker_failure(full_detail)
+        raise RuntimeError(full_detail)
 
     payload = completed.stdout.strip()
+    _clear_quickbooks_breaker()
     if not payload:
         return []
     try:
