@@ -43,6 +43,11 @@ def setup_function() -> None:
     os.environ["HAL_SQLITE_PATH"] = os.path.join(runtime_dir, "hal_test.sqlite3")
     os.environ["HAL_CHROMA_PATH"] = os.path.join(runtime_dir, "hal_chroma")
     clear_user_registry_cache()
+    # The lane runtime snapshot is cached for 30s by default. Clear it so each
+    # test sees the reachability state from its own monkeypatched runtime mock
+    # instead of a stale snapshot left by a previous test.
+    with hal_orchestrator._lane_runtime_cache_lock:
+        hal_orchestrator._lane_runtime_cache.clear()
 
 
 def operator_auth() -> tuple[str, str]:
