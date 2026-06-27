@@ -16,40 +16,32 @@ type NavGroup = {
 
 const navGroups: NavGroup[] = [
   {
-    label: "Overview",
+    label: "Office",
     items: [
-      { label: "Dashboard", path: "/" },
-      { label: "Ask HAL", path: "/dashboard/hal" },
-      { label: "HAL Home", path: "/hal-landing" },
-      { label: "Trends", path: "/trends" },
-      { label: "Settings", path: "/settings" },
-    ],
-  },
-  {
-    label: "Financials",
-    items: [
-      { label: "SoftDent", path: "/softdent" },
-      { label: "QuickBooks", path: "/quickbooks" },
-      { label: "Expenses", path: "/expenses" },
-      { label: "A/R", path: "/ar" },
-      { label: "EBITDA", path: "/ebitda" },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
+      { label: "Command Center", path: "/dashboard/hal" },
       { label: "Claims", path: "/claims-workbench" },
       { label: "Narratives", path: "/insurance-narratives" },
       { label: "Documents", path: "/accounting-documents" },
       { label: "Library", path: "/document-library" },
-      { label: "Policy", path: "/accounting-policy" },
-      { label: "Journal", path: "/journal-draft" },
-      { label: "Posting", path: "/posting-queue" },
+      { label: "Ask HAL", path: "/dashboard/hal" },
     ],
   },
   {
-    label: "Administration",
-    items: [{ label: "Admin", path: "/admin", requiresAdmin: true }],
+    label: "Owner / Admin",
+    items: [
+      { label: "Financial dashboard", path: "/", requiresAdmin: true },
+      { label: "SoftDent", path: "/softdent", requiresAdmin: true },
+      { label: "QuickBooks", path: "/quickbooks", requiresAdmin: true },
+      { label: "A/R details", path: "/ar", requiresAdmin: true },
+      { label: "EBITDA", path: "/ebitda", requiresAdmin: true },
+      { label: "Expenses", path: "/expenses", requiresAdmin: true },
+      { label: "Trends", path: "/trends", requiresAdmin: true },
+      { label: "Posting", path: "/posting-queue", requiresAdmin: true },
+      { label: "Journal", path: "/journal-draft", requiresAdmin: true },
+      { label: "Policy", path: "/accounting-policy", requiresAdmin: true },
+      { label: "Settings", path: "/settings" },
+      { label: "Admin", path: "/admin", requiresAdmin: true },
+    ],
   },
 ];
 
@@ -123,7 +115,7 @@ export default function Sidebar() {
             <div className="dashboard-sidebar__section-label">{group.label}</div>
             <ul className="dashboard-sidebar__nav">
               {group.items.map((item) => (
-                <li key={item.path}>
+                <li key={`${group.label}-${item.label}-${item.path}`}>
                   <NavLink
                     to={item.path}
                     className={({ isActive }) =>

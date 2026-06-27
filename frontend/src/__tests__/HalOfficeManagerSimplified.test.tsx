@@ -141,14 +141,42 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("HAL Office Manager simplified page", () => {
-  it("shows Ask HAL, Today, Quick actions, and Work queues sections", async () => {
+describe("HAL Command Center page", () => {
+  it("shows Ask HAL, Today's Mission, Automation Center, and Work Queue sections", async () => {
     renderPage();
-    expect(screen.getByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "HAL Command Center" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ask HAL" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Quick actions" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Work queues" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Today's Mission" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Automation Center" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Work Queue" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Office work" })).toBeInTheDocument();
+  });
+
+  it("renders Automation Center tiles with safe labels", () => {
+    renderPage();
+    expect(screen.getByRole("heading", { name: "Prepare Patient Call" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review Claims" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Daily A/R Check" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Morning Huddle" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Missing Documents" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create Office Task" })).toBeInTheDocument();
+  });
+
+  it("renders Work Queue buckets including blocked items in plain English", () => {
+    renderPage();
+    expect(screen.getByRole("heading", { name: "Needs Review" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ready" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Blocked" })).toBeInTheDocument();
+    expect(screen.getByText(/Claims follow-up needs claims export/i)).toBeInTheDocument();
+    expect(screen.getByText(/A\/R needs DAYSHEET import/i)).toBeInTheDocument();
+  });
+
+  it("renders the four suggested prompt chips", () => {
+    renderPage();
+    expect(screen.getByRole("button", { name: "What needs attention today?" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare morning huddle" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review claims needing follow-up" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check today's A/R" })).toBeInTheDocument();
   });
 
   it("keeps exactly one Ask HAL button", () => {
@@ -166,7 +194,7 @@ describe("HAL Office Manager simplified page", () => {
 
   it("shows staff-friendly missing labels in Today cards and never $0", async () => {
     renderPage();
-    const todayHeading = await screen.findByRole("heading", { name: "Today" });
+    const todayHeading = await screen.findByRole("heading", { name: "Today's Mission" });
     const todaySection = todayHeading.closest("section");
     expect(todaySection).not.toBeNull();
     const today = within(todaySection as HTMLElement);
@@ -179,7 +207,7 @@ describe("HAL Office Manager simplified page", () => {
 
   it("does not render submit/send/fax/upload/gateway/writeback controls", async () => {
     renderPage();
-    await screen.findByRole("heading", { name: "Today" });
+    await screen.findByRole("heading", { name: "Today's Mission" });
     expect(
       screen.queryByRole("button", {
         name: /submit|send|fax|upload|gateway|write to softdent|mark submitted/i,

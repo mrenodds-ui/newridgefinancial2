@@ -34,9 +34,9 @@ const HAL_SPEECH_RATE_KEY = "halSpeechRate";
 const HAL_QUESTION_MIN_LENGTH = 3;
 const HAL_PROMPT_SUGGESTIONS = [
   "What needs attention today?",
-  "Show today's A/R",
-  "Prep my morning huddle",
+  "Prepare morning huddle",
   "Review claims needing follow-up",
+  "Check today's A/R",
 ];
 
 function isHalQuestionSubmittable(value: string): boolean {
@@ -133,28 +133,37 @@ function describeTasksSnapshot(
   return { label: "Open tasks", value: `${open} open`, tone: open > 0 ? "ok" : "pending" };
 }
 
-function TodaySnapshotCards({
+function describeDraftsSnapshot(draftsAwaitingReview: number): SnapshotCard {
+  if (draftsAwaitingReview > 0) {
+    return { label: "Drafts", value: `${draftsAwaitingReview} awaiting review`, tone: "ok" };
+  }
+  return { label: "Drafts", value: "None awaiting review", tone: "pending" };
+}
+
+function TodaysMission({
   financialSummary,
   endOfDayAr,
   endOfDayArError,
   taskMetrics,
+  draftsAwaitingReview,
 }: {
   financialSummary?: Awaited<ReturnType<typeof fetchFinancialSummary>>;
   endOfDayAr?: Awaited<ReturnType<typeof fetchSoftDentEndOfDayAr>>;
   endOfDayArError: boolean;
   taskMetrics?: Awaited<ReturnType<typeof fetchOfficeManagerTaskMetrics>>;
+  draftsAwaitingReview: number;
 }) {
   const cards: SnapshotCard[] = [
     describeArSnapshot(endOfDayAr, endOfDayArError),
     describeClaimsSnapshot(financialSummary),
     describeTasksSnapshot(taskMetrics),
-    { label: "Reports", value: "Local drafts only", tone: "ok" },
+    describeDraftsSnapshot(draftsAwaitingReview),
   ];
 
   return (
     <section className="hal-today-section" aria-labelledby="hal-today-title">
       <h2 id="hal-today-title" className="hal-section-title">
-        Today
+        Today&apos;s Mission
       </h2>
       <div className="hal-snapshot-grid">
         {cards.map((card) => (
@@ -168,39 +177,140 @@ function TodaySnapshotCards({
   );
 }
 
-function QuickActions({
+function AutomationCenter({
   onPrefillDraftQuery,
   onAskPrefill,
 }: {
   onPrefillDraftQuery: (query: string) => void;
   onAskPrefill: (question: string) => void;
 }) {
-  const actions: { label: string; onClick: () => void }[] = [
-    { label: "Prepare patient call summary", onClick: () => onPrefillDraftQuery("patient call prep summary") },
-    { label: "Create claim follow-up draft", onClick: () => onPrefillDraftQuery("denied claim follow-up checklist") },
-    { label: "Create local office task", onClick: () => onAskPrefill("Create a local office task for staff follow-up") },
-    { label: "Review Daily End-of-Day A/R", onClick: () => onAskPrefill("Review the Daily End-of-Day A/R") },
-    { label: "Create morning huddle summary", onClick: () => onAskPrefill("Create a morning huddle summary for the office") },
+  const tiles: { title: string; description: string; action: string; onClick: () => void }[] = [
+    {
+      title: "Prepare Patient Call",
+      description: "Creates a local patient/claim summary for staff review.",
+      action: "Prepare summary",
+      onClick: () => onPrefillDraftQuery("patient call prep summary"),
+    },
+    {
+      title: "Review Claims",
+      description: "Checks claim follow-up readiness and drafts local next steps.",
+      action: "Review claims",
+      onClick: () => onPrefillDraftQuery("denied claim follow-up checklist"),
+    },
+    {
+      title: "Daily A/R Check",
+      description: "Reads the SoftDent DAYSHEET when imported.",
+      action: "Check A/R",
+      onClick: () => onAskPrefill("Check today's A/R"),
+    },
+    {
+      title: "Morning Huddle",
+      description: "Creates a short staff huddle summary.",
+      action: "Draft huddle",
+      onClick: () => onAskPrefill("Prepare morning huddle"),
+    },
+    {
+      title: "Missing Documents",
+      description: "Prepares a local review list for missing records.",
+      action: "List documents",
+      onClick: () => onPrefillDraftQuery("missing documentation checklist"),
+    },
+    {
+      title: "Create Office Task",
+      description: "Adds an internal office follow-up task.",
+      action: "Create task",
+      onClick: () => onAskPrefill("Create a local office task for staff follow-up"),
+    },
   ];
 
   return (
-    <section className="hal-quick-actions" aria-labelledby="hal-quick-actions-title">
-      <h2 id="hal-quick-actions-title" className="hal-section-title">
-        Quick actions
+    <section className="hal-automation-center" aria-labelledby="hal-automation-title">
+      <h2 id="hal-automation-title" className="hal-section-title">
+        Automation Center
       </h2>
-      <p className="hal-muted-line">Each action prepares a local draft or review item. Nothing is submitted.</p>
-      <div className="hal-quick-actions__grid">
-        {actions.map((action) => (
-          <button key={action.label} type="button" className="hal-quick-action" onClick={action.onClick}>
-            {action.label}
-          </button>
+      <div className="hal-automation-grid">
+        {tiles.map((tile) => (
+          <article key={tile.title} className="hal-automation-tile">
+            <h3>{tile.title}</h3>
+            <p>{tile.description}</p>
+            <button type="button" className="hal-automation-tile__action" onClick={tile.onClick}>
+              {tile.action}
+            </button>
+          </article>
+        ))}
+      </div>
+      <p className="hal-muted-line">Every tile prepares a local draft or review item. Nothing is submitted.</p>
+    </section>
+  );
+}
+
+type WorkQueueItem = { id: string; label: string };
+
+function WorkQueueBuckets({
+  arAvailable,
+  claimsAvailable,
+  draftsAwaitingReview,
+  packetsReady,
+}: {
+  arAvailable: boolean;
+  claimsAvailable: boolean;
+  draftsAwaitingReview: number;
+  packetsReady: number;
+}) {
+  const needsReview: WorkQueueItem[] = [];
+  if (draftsAwaitingReview > 0) {
+    needsReview.push({ id: "drafts", label: `${draftsAwaitingReview} draft(s) awaiting human review` });
+  }
+  if (packetsReady > 0) {
+    needsReview.push({ id: "packets", label: `${packetsReady} local packet(s) ready for internal use` });
+  }
+  if (needsReview.length === 0) {
+    needsReview.push({ id: "drafts-empty", label: "No drafts awaiting review yet" });
+  }
+
+  const ready: WorkQueueItem[] = [
+    { id: "ask", label: "Ask HAL" },
+    { id: "tasks", label: "Local office tasks" },
+    { id: "huddle", label: "Morning huddle draft" },
+  ];
+
+  const blocked: WorkQueueItem[] = [];
+  if (!claimsAvailable) {
+    blocked.push({ id: "claims", label: "Claims follow-up needs claims export" });
+  }
+  blocked.push({ id: "treatment", label: "Treatment plans need treatment-plan export" });
+  if (!arAvailable) {
+    blocked.push({ id: "ar", label: "A/R needs DAYSHEET import" });
+  }
+
+  const buckets: { key: string; title: string; items: WorkQueueItem[] }[] = [
+    { key: "needs-review", title: "Needs Review", items: needsReview },
+    { key: "ready", title: "Ready", items: ready },
+    { key: "blocked", title: "Blocked", items: blocked },
+  ];
+
+  return (
+    <section className="hal-section" aria-labelledby="hal-work-queue-title">
+      <h2 id="hal-work-queue-title" className="hal-section-title">
+        Work Queue
+      </h2>
+      <div className="hal-work-queue-grid">
+        {buckets.map((bucket) => (
+          <div key={bucket.key} className={`hal-queue-bucket hal-queue-bucket--${bucket.key}`}>
+            <h3>{bucket.title}</h3>
+            <ul>
+              {bucket.items.map((item) => (
+                <li key={item.id}>{item.label}</li>
+              ))}
+            </ul>
+          </div>
         ))}
       </div>
     </section>
   );
 }
 
-function WorkQueue({
+function CollapsiblePanel({
   title,
   description,
   defaultOpen = false,
@@ -326,6 +436,10 @@ export default function AskHal9000Page() {
   const reviewAction = response?.review_actions.find((item) => item.action_type === "SET_LUMINANCE");
   const taskMetrics = taskMetricsQuery.data;
   const hasOpenTasks = (taskMetrics?.open_count ?? 0) > 0 || (taskMetrics?.urgent_open_count ?? 0) > 0;
+  const draftsAwaitingReview = selectedDraft ? 1 : 0;
+  const packetsReady = selectedPacket ? 1 : 0;
+  const arAvailable = endOfDayArQuery.data?.available === true && typeof endOfDayArQuery.data?.total_ar === "number";
+  const claimsAvailable = financialSummaryQuery.data?.claimsSummary?.available === true;
 
   useEffect(() => {
     if (isAutomatedBrowserSession()) {
@@ -503,8 +617,8 @@ export default function AskHal9000Page() {
       <div className="page-content">
         <header className="page-header hal-workstation-header">
           <p className="eyebrow">HAL</p>
-          <h1>HAL Office Manager</h1>
-          <p>Ask HAL about today&apos;s office work, claims, reports, SoftDent exports, or patient prep.</p>
+          <h1>HAL Command Center</h1>
+          <p>HAL runs the front-office command center. See what needs attention, ask HAL, and prepare local drafts for review.</p>
         </header>
 
         <div className="hal-office-layout">
@@ -570,29 +684,37 @@ export default function AskHal9000Page() {
               </section>
             ) : null}
 
-            <TodaySnapshotCards
+            <TodaysMission
               financialSummary={financialSummaryQuery.data}
               endOfDayAr={endOfDayArQuery.data}
               endOfDayArError={endOfDayArQuery.isError}
               taskMetrics={taskMetricsQuery.data}
+              draftsAwaitingReview={draftsAwaitingReview}
             />
 
             <TodaysAttentionPanel />
 
-            <QuickActions onPrefillDraftQuery={setDraftPrefillQuery} onAskPrefill={askPrefilledQuestion} />
+            <AutomationCenter onPrefillDraftQuery={setDraftPrefillQuery} onAskPrefill={askPrefilledQuestion} />
 
-            <section className="hal-section" aria-labelledby="hal-work-queues-title">
-              <h2 id="hal-work-queues-title" className="hal-section-title">
-                Work queues
+            <WorkQueueBuckets
+              arAvailable={arAvailable}
+              claimsAvailable={claimsAvailable}
+              draftsAwaitingReview={draftsAwaitingReview}
+              packetsReady={packetsReady}
+            />
+
+            <section className="hal-section" aria-labelledby="hal-office-work-title">
+              <h2 id="hal-office-work-title" className="hal-section-title">
+                Office work
               </h2>
-              <WorkQueue
+              <CollapsiblePanel
                 title="Local office tasks"
                 description={hasOpenTasks ? "Open tasks need attention" : "No open tasks"}
                 defaultOpen={hasOpenTasks}
               >
                 <LocalOfficeTasksPanel />
-              </WorkQueue>
-              <WorkQueue title="Drafts and packets for review" description="Local review items only">
+              </CollapsiblePanel>
+              <CollapsiblePanel title="Drafts and packets for review" description="Local review items only">
                 <DraftsForReviewPanel
                   selectedDraft={selectedDraft}
                   onDraftCreated={setSelectedDraft}
@@ -603,31 +725,31 @@ export default function AskHal9000Page() {
                   selectedPacket={selectedPacket}
                   onPacketCreated={setSelectedPacket}
                 />
-              </WorkQueue>
-              <WorkQueue title="Claims follow-up">
+              </CollapsiblePanel>
+              <CollapsiblePanel title="Claims follow-up">
                 <ClaimsFollowUpPanel
                   financialSummary={financialSummaryQuery.data}
                   onPrefillDraftQuery={setDraftPrefillQuery}
                 />
-              </WorkQueue>
-              <WorkQueue title="Patient prep">
+              </CollapsiblePanel>
+              <CollapsiblePanel title="Patient prep">
                 <PatientPrepPanel onPrefillDraftQuery={setDraftPrefillQuery} />
-              </WorkQueue>
-              <WorkQueue title="Treatment plan follow-up">
+              </CollapsiblePanel>
+              <CollapsiblePanel title="Treatment plan follow-up">
                 <TreatmentPlanFollowUpPanel />
-              </WorkQueue>
-              <WorkQueue title="Hygiene / recall">
+              </CollapsiblePanel>
+              <CollapsiblePanel title="Hygiene / recall">
                 <HygieneRecallPanel />
-              </WorkQueue>
-              <WorkQueue title="Compliance">
+              </CollapsiblePanel>
+              <CollapsiblePanel title="Compliance">
                 <ComplianceChecklistPanel />
-              </WorkQueue>
-              <WorkQueue title="Vendor / software issues">
+              </CollapsiblePanel>
+              <CollapsiblePanel title="Vendor / software issues">
                 <VendorIssueTrackerPanel />
-              </WorkQueue>
-              <WorkQueue title="Reports">
+              </CollapsiblePanel>
+              <CollapsiblePanel title="Reports">
                 <OfficeManagerReportsPanel />
-              </WorkQueue>
+              </CollapsiblePanel>
             </section>
 
             <p className="hal-safety-footer" role="note">

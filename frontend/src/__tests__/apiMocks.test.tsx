@@ -259,7 +259,7 @@ describe("api mocks", () => {
 
     renderApp("/app/hal");
 
-    expect(await screen.findByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "HAL Command Center" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("What do you want HAL to help with?"), {
       target: {
         value: "Change brightness to 30% on the primary monitor.",
@@ -283,7 +283,7 @@ describe("api mocks", () => {
   it("resolves the legacy hal-9000 route to the current HAL page", async () => {
     renderApp("/app/hal-9000");
 
-    expect(await screen.findByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "HAL Command Center" })).toBeInTheDocument();
     expect(screen.getByLabelText("What do you want HAL to help with?")).toBeInTheDocument();
   });
 
@@ -473,7 +473,7 @@ describe("api mocks", () => {
   it("keeps the HAL page focused on the core ask-and-answer workflow", async () => {
     renderApp("/app/hal");
 
-    expect(await screen.findByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "HAL Command Center" })).toBeInTheDocument();
     expect(screen.queryByText("Chart Requests")).not.toBeInTheDocument();
     expect(screen.queryByText("Recent Chart Requests")).not.toBeInTheDocument();
     expect(screen.queryByText("Accounting Files")).not.toBeInTheDocument();
@@ -531,7 +531,7 @@ describe("api mocks", () => {
 
     renderApp("/app/hal");
 
-    expect(await screen.findByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "HAL Command Center" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("What do you want HAL to help with?"), {
       target: {
         value: "Change brightness to 30% on the primary monitor.",
@@ -605,7 +605,7 @@ describe("api mocks", () => {
     try {
       renderApp("/app/hal");
 
-      expect(await screen.findByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: "HAL Command Center" })).toBeInTheDocument();
       fireEvent.change(screen.getByLabelText("What do you want HAL to help with?"), {
         target: {
           value: "Change brightness to 30% on the primary monitor.",

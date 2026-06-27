@@ -371,10 +371,96 @@
   padding: 0.75rem;
 }
 
+.hal-automation-center {
+  margin-top: 1.5rem;
+}
+
+.hal-automation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.hal-automation-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 18px;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.hal-automation-tile h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.hal-automation-tile p {
+  margin: 0;
+  flex: 1;
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 0.92rem;
+}
+
+.hal-automation-tile__action {
+  align-self: flex-start;
+  border: 1px solid rgba(214, 177, 94, 0.55);
+  background: rgba(214, 177, 94, 0.12);
+  color: #f4e6c4;
+  border-radius: 999px;
+  padding: 0.45rem 1.1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.hal-automation-tile__action:hover {
+  background: rgba(214, 177, 94, 0.22);
+}
+
+.hal-work-queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.hal-queue-bucket {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  padding: 1rem;
+  background: rgba(2, 6, 23, 0.4);
+}
+
+.hal-queue-bucket h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.hal-queue-bucket ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.4rem;
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 0.9rem;
+}
+
+.hal-queue-bucket--blocked {
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.hal-queue-bucket--ready {
+  border-color: rgba(120, 168, 107, 0.4);
+}
+
 @media (max-width: 1100px) {
   .hal-workstation-layout,
   .hal-recommendation-grid,
-  .hal-snapshot-grid {
+  .hal-snapshot-grid,
+  .hal-automation-grid,
+  .hal-work-queue-grid {
     grid-template-columns: 1fr;
   }
 }
