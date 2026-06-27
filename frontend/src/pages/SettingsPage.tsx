@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
+
 const SETTINGS_STORAGE_KEY = "dashboardSettings";
 
 type DashboardSettings = {
@@ -86,12 +88,18 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="dashboard-page">
-      <header className="page-header">
-        <p className="eyebrow">Workspace Settings</p>
-        <h1>Settings</h1>
-        <div className="dashboard-description">Practice profile, branding, and data settings. Changes save locally in this browser.</div>
-      </header>
+    <PageSurfaceShell className="settings-page">
+      <PageSurfaceHeader
+        breadcrumbs="Owner / Workspace settings"
+        eyebrow="Workspace settings"
+        title="Settings"
+        titleId="settings-page-title"
+        description="Practice profile, branding, and data settings. Changes save locally in this browser."
+        badges={[
+          { label: "Local Browser Storage" },
+          { label: "No Cloud Sync" },
+        ]}
+      />
       <div className="page-state-card page-state-card--info settings-page__status" id="settings-save-status" role="status">
         {hasValidationErrors
           ? "Draft saved locally. Fix the highlighted fields before using these values elsewhere."
@@ -201,6 +209,6 @@ export default function SettingsPage() {
           Email: <a href="mailto:support@newridgefamily.com">support@newridgefamily.com</a>
         </div>
       </div>
-    </div>
+    </PageSurfaceShell>
   );
 }

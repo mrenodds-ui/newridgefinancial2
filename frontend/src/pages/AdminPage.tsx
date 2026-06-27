@@ -15,6 +15,7 @@ import {
 import { SoftDentCoveragePanel } from "../components/dashboard/SoftDentCoveragePanel";
 import { TransactionDiagnosticsCard } from "../components/dashboard/TransactionDiagnosticsCard";
 import { TransactionFeedStatusNotice } from "../components/dashboard/TransactionFeedStatusNotice";
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { queryClient, queryKeys } from "../queryClient";
 import { getPostingQueueActivityLineageLabel, getPostingQueueHandoffModeLabel } from "../utils/postingQueueLineage";
@@ -224,14 +225,24 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="dashboard-page admin-page">
-      <header className="admin-hero">
-        <p className="admin-eyebrow">Operations Console</p>
-        <h1>Owner Financial Dashboard</h1>
-        <p className="admin-subtitle">
-          SoftDent-fed financial dashboard with HAL retrieval visibility, audit checkpoints, and local vector index health.
-        </p>
-      </header>
+    <PageSurfaceShell className="admin-page">
+      <PageSurfaceHeader
+        breadcrumbs="Owner / Operations console"
+        eyebrow="Operations console"
+        title="Owner financial dashboard"
+        titleId="admin-page-title"
+        description="SoftDent-fed financial dashboard with HAL retrieval visibility, audit checkpoints, and local vector index health."
+        badges={[
+          { label: "Owner Access" },
+          { label: "Local Audit Trail" },
+          { label: "Read-Only Sources" },
+        ]}
+        statusItems={[
+          { label: "Last refresh", value: summary?.last_refresh_date || "Not available" },
+          { label: "HAL mode", value: halStatusQuery.data?.mode ?? "Unknown" },
+          { label: "Posting queue", value: String(postingQueueQuery.data?.items?.length ?? 0) },
+        ]}
+      />
 
       <section className="admin-toolbar">
         <button type="button" className="admin-button" onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending}>
@@ -578,6 +589,6 @@ export default function AdminPage() {
           </div>
         </article>
       </section>
-    </div>
+    </PageSurfaceShell>
   );
 }
