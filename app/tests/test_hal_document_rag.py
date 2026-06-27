@@ -9,6 +9,7 @@ import pytest
 
 import app.hal.document_rag as document_rag_module
 
+from app import ai_local_config as config
 from app.auth import clear_user_registry_cache
 
 

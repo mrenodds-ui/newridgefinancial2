@@ -31,6 +31,24 @@ def _isolate_env_from_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ai_local_config, "get_env_setting", _test_env_setting)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_softdent_eod_default_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep the operator's real local DAYSHEET drop out of tests.
+
+    ``_default_eod_report_dir`` is always scanned by the End-of-Day A/R resolver, and it
+    points at ``app/data/imports/softdent/daily_end_of_day`` where a real (gitignored)
+    DAYSHEET report may live. Tests that exercise the missing/stale A/R paths must not pick
+    up that real file. This redirects the default scan dir to an empty temp location;
+    tests that need a report still set ``SOFTDENT_END_OF_DAY_REPORT_PATH`` explicitly, which
+    is honored ahead of the default dir.
+    """
+
+    import app.hal.softdent_end_of_day_report as eod_module
+
+    empty_dir = tmp_path / "softdent_eod_default_empty"
+    monkeypatch.setattr(eod_module, "_default_eod_report_dir", lambda: empty_dir)
+
+
 @pytest.fixture
 def canonical_softdent_dashboard(monkeypatch):
     """Pin SoftDent dashboard rows to a committed deterministic fixture.
