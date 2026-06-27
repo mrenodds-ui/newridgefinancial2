@@ -960,6 +960,10 @@ def test_hal_page_summary_route_returns_financial_summary_payload(monkeypatch):
     assert payload["softDentCoverage"]["counts"] == {"missing": 7, "limited": 5, "available": 7}
     assert "softDentCoverageMetrics" in payload
     assert payload["claimsSummary"]["available"] is False
+    # Unavailable claims summary must not surface misleading $0 amounts; the
+    # null amounts are excluded by response_model_exclude_none.
+    assert payload["claimsSummary"].get("true_outstanding_claims_amount") is None
+    assert payload["claimsSummary"].get("unsubmitted_claims_amount") is None
     assert "quickBooksStatus" in payload
     assert payload["quickBooksStatus"]["lastImportedAtUtc"] == fresh_timestamp
     assert payload["quickBooksProfitLossSummary"][0]["last_imported_at_utc"] == fresh_timestamp
@@ -1995,3 +1999,49 @@ def test_validate_auth_configuration_allows_session_secret_fallback_in_developme
     clear_user_registry_cache()
 
     assert validate_auth_configuration()["user_count"] == 3
+
+
+def test_claims_summary_unavailable_metric_is_null_not_zero():
+    from app.routes import _build_softdent_claims_summary
+
+    result = _build_softdent_claims_summary(
+        {
+            "trueOutstandingClaims": {"available": False, "totalAmount": None, "itemCount": 0},
+            "unsubmittedClaims": {"available": False, "totalAmount": None, "itemCount": 0},
+        }
+    )
+    assert result["available"] is False
+    assert result["true_outstanding_claims_amount"] is None
+    assert result["true_outstanding_claims_count"] is None
+    assert result["unsubmitted_claims_amount"] is None
+    assert result["unsubmitted_claims_count"] is None
+
+
+def test_claims_summary_verified_zero_is_preserved():
+    from app.routes import _build_softdent_claims_summary
+
+    result = _build_softdent_claims_summary(
+        {
+            "trueOutstandingClaims": {"available": True, "totalAmount": 0, "itemCount": 0},
+            "unsubmittedClaims": {"available": True, "totalAmount": 0, "itemCount": 0},
+        }
+    )
+    assert result["available"] is True
+    assert result["true_outstanding_claims_amount"] == 0.0
+    assert result["unsubmitted_claims_amount"] == 0.0
+
+
+def test_claims_summary_mixed_availability_nulls_only_unavailable_metric():
+    from app.routes import _build_softdent_claims_summary
+
+    result = _build_softdent_claims_summary(
+        {
+            "trueOutstandingClaims": {"available": True, "totalAmount": 1200.5, "itemCount": 3},
+            "unsubmittedClaims": {"available": False, "totalAmount": None, "itemCount": 0},
+        }
+    )
+    assert result["available"] is True
+    assert result["true_outstanding_claims_amount"] == 1200.5
+    assert result["true_outstanding_claims_count"] == 3
+    assert result["unsubmitted_claims_amount"] is None
+    assert result["unsubmitted_claims_count"] is None

@@ -1043,10 +1043,10 @@ class SoftDentCoverageMetricsResponse(BaseModel):
 
 class ClaimsSummaryResponse(BaseModel):
     available: bool
-    true_outstanding_claims_amount: float
-    true_outstanding_claims_count: int
-    unsubmitted_claims_amount: float
-    unsubmitted_claims_count: int
+    true_outstanding_claims_amount: float | None = None
+    true_outstanding_claims_count: int | None = None
+    unsubmitted_claims_amount: float | None = None
+    unsubmitted_claims_count: int | None = None
     top_outstanding_payers: list[SoftDentCoverageMetricBreakdownRowResponse] = Field(default_factory=list)
     top_unsubmitted_payers: list[SoftDentCoverageMetricBreakdownRowResponse] = Field(default_factory=list)
 

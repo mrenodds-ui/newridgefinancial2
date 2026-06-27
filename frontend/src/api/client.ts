@@ -408,10 +408,10 @@ const softDentCoverageMetricsSchema = z
 const claimsSummarySchema = z
   .object({
     available: z.boolean(),
-    true_outstanding_claims_amount: z.number(),
-    true_outstanding_claims_count: z.number(),
-    unsubmitted_claims_amount: z.number(),
-    unsubmitted_claims_count: z.number(),
+    true_outstanding_claims_amount: z.number().nullable().optional(),
+    true_outstanding_claims_count: z.number().nullable().optional(),
+    unsubmitted_claims_amount: z.number().nullable().optional(),
+    unsubmitted_claims_count: z.number().nullable().optional(),
     top_outstanding_payers: z.array(softDentCoverageMetricBreakdownRowSchema).default([]),
     top_unsubmitted_payers: z.array(softDentCoverageMetricBreakdownRowSchema).default([]),
   })

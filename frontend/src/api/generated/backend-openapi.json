@@ -3494,19 +3494,19 @@
             "title": "Available"
           },
           "true_outstanding_claims_amount": {
-            "type": "number",
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
             "title": "True Outstanding Claims Amount"
           },
           "true_outstanding_claims_count": {
-            "type": "integer",
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "True Outstanding Claims Count"
           },
           "unsubmitted_claims_amount": {
-            "type": "number",
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
             "title": "Unsubmitted Claims Amount"
           },
           "unsubmitted_claims_count": {
-            "type": "integer",
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Unsubmitted Claims Count"
           },
           "top_outstanding_payers": {
@@ -3526,11 +3526,7 @@
         },
         "type": "object",
         "required": [
-          "available",
-          "true_outstanding_claims_amount",
-          "true_outstanding_claims_count",
-          "unsubmitted_claims_amount",
-          "unsubmitted_claims_count"
+          "available"
         ],
         "title": "ClaimsSummaryResponse"
       },

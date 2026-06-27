@@ -1524,13 +1524,13 @@ export interface components {
             /** Available */
             available: boolean;
             /** True Outstanding Claims Amount */
-            true_outstanding_claims_amount: number;
+            true_outstanding_claims_amount?: number | null;
             /** True Outstanding Claims Count */
-            true_outstanding_claims_count: number;
+            true_outstanding_claims_count?: number | null;
             /** Unsubmitted Claims Amount */
-            unsubmitted_claims_amount: number;
+            unsubmitted_claims_amount?: number | null;
             /** Unsubmitted Claims Count */
-            unsubmitted_claims_count: number;
+            unsubmitted_claims_count?: number | null;
             /** Top Outstanding Payers */
             top_outstanding_payers?: components["schemas"]["SoftDentCoverageMetricBreakdownRowResponse"][];
             /** Top Unsubmitted Payers */

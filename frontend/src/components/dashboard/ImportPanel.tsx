@@ -409,7 +409,15 @@ export default function ImportPanel() {
           <>
             <div className="dashboard-import-helper">
               {claimsSummary?.available
-                ? `Current claims totals: ${formatCurrency(claimsSummary.true_outstanding_claims_amount)} outstanding and ${formatCurrency(claimsSummary.unsubmitted_claims_amount)} unsubmitted.`
+                ? `Current claims totals: ${
+                    claimsSummary.true_outstanding_claims_amount != null
+                      ? formatCurrency(claimsSummary.true_outstanding_claims_amount)
+                      : "Unavailable"
+                  } outstanding and ${
+                    claimsSummary.unsubmitted_claims_amount != null
+                      ? formatCurrency(claimsSummary.unsubmitted_claims_amount)
+                      : "Unavailable"
+                  } unsubmitted.`
                 : "Claims totals will appear after the approved SoftDent claim files are added."}
             </div>
             <SoftDentCoveragePanel coverage={softDentCoverage} emptyMessage="SoftDent file details are unavailable right now." />

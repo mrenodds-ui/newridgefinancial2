@@ -511,12 +511,17 @@ def _build_softdent_claims_summary(metrics: object) -> dict[str, object]:
     metrics_dict = metrics if isinstance(metrics, dict) else {}
     outstanding = metrics_dict.get("trueOutstandingClaims") if isinstance(metrics_dict.get("trueOutstandingClaims"), dict) else {}
     unsubmitted = metrics_dict.get("unsubmittedClaims") if isinstance(metrics_dict.get("unsubmittedClaims"), dict) else {}
+    outstanding_available = bool(outstanding.get("available"))
+    unsubmitted_available = bool(unsubmitted.get("available"))
+    # When a claims metric is unavailable, leave amounts/counts null instead of
+    # coercing to 0.0. A verified source that genuinely reports zero still keeps
+    # its real 0 value. This prevents staff from reading "$0" as a real balance.
     return {
-        "available": bool(outstanding.get("available")) or bool(unsubmitted.get("available")),
-        "true_outstanding_claims_amount": _coerce_float(outstanding.get("totalAmount")),
-        "true_outstanding_claims_count": int(outstanding.get("itemCount") or 0),
-        "unsubmitted_claims_amount": _coerce_float(unsubmitted.get("totalAmount")),
-        "unsubmitted_claims_count": int(unsubmitted.get("itemCount") or 0),
+        "available": outstanding_available or unsubmitted_available,
+        "true_outstanding_claims_amount": _coerce_float(outstanding.get("totalAmount")) if outstanding_available else None,
+        "true_outstanding_claims_count": int(outstanding.get("itemCount") or 0) if outstanding_available else None,
+        "unsubmitted_claims_amount": _coerce_float(unsubmitted.get("totalAmount")) if unsubmitted_available else None,
+        "unsubmitted_claims_count": int(unsubmitted.get("itemCount") or 0) if unsubmitted_available else None,
         "top_outstanding_payers": outstanding.get("breakdown") if isinstance(outstanding.get("breakdown"), list) else [],
         "top_unsubmitted_payers": unsubmitted.get("breakdown") if isinstance(unsubmitted.get("breakdown"), list) else [],
     }

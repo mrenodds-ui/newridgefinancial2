@@ -16,6 +16,8 @@ export function ClaimsFollowUpPanel({
 }) {
   const claims = financialSummary?.claimsSummary;
   const available = Boolean(claims?.available);
+  const unsubmittedAvailable = claims?.unsubmitted_claims_amount != null;
+  const outstandingAvailable = claims?.true_outstanding_claims_amount != null;
   const unsubmittedCount = claims?.unsubmitted_claims_count ?? 0;
   const outstandingCount = claims?.true_outstanding_claims_count ?? 0;
 
@@ -35,13 +37,17 @@ export function ClaimsFollowUpPanel({
           <div>
             <dt>Unsubmitted claims</dt>
             <dd>
-              {unsubmittedCount} claim(s) · {formatCurrency(claims?.unsubmitted_claims_amount)}
+              {unsubmittedAvailable
+                ? `${unsubmittedCount} claim(s) · ${formatCurrency(claims?.unsubmitted_claims_amount)}`
+                : "Unavailable"}
             </dd>
           </div>
           <div>
             <dt>Outstanding claims</dt>
             <dd>
-              {outstandingCount} claim(s) · {formatCurrency(claims?.true_outstanding_claims_amount)}
+              {outstandingAvailable
+                ? `${outstandingCount} claim(s) · ${formatCurrency(claims?.true_outstanding_claims_amount)}`
+                : "Unavailable"}
             </dd>
           </div>
         </dl>
