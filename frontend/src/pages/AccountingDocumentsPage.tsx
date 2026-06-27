@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useDeferredValue, useMemo, useState } from "react";
 
 import { fetchLocalAccountingDocuments } from "../api/client";
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
 
 function humanizeCorrectionFlag(flag: string) {
   return flag.replaceAll("_", " ");
@@ -130,14 +131,24 @@ export default function AccountingDocumentsPage() {
   }, [documentsQuery.data]);
 
   return (
-    <div className="dashboard-page">
-      <header className="page-header">
-        <p className="eyebrow">Accounting OCR</p>
-        <h1>Accounting Documents</h1>
-        <div className="dashboard-description">
-          Local OCR ledger for invoices, receipts, and statements that HAL can search and reference.
-        </div>
-      </header>
+    <PageSurfaceShell className="accounting-documents-page">
+      <PageSurfaceHeader
+        breadcrumbs="Accounting / OCR ledger"
+        eyebrow="Accounting OCR"
+        title="Accounting documents"
+        titleId="accounting-documents-title"
+        description="Local OCR ledger for invoices, receipts, and statements that HAL can search and reference."
+        badges={[
+          { label: "Local-Only" },
+          { label: "Human Review Required" },
+          { label: "No Upload" },
+        ]}
+        statusItems={[
+          { label: "Visible documents", value: String(summary.totalDocuments) },
+          { label: "Needs review", value: String(summary.needsReviewCount) },
+          { label: "Visible total", value: formatCurrency(summary.totalValue, "USD") },
+        ]}
+      />
 
       <div className="kpi-grid">
         <div className="hal-answer-card">
@@ -291,6 +302,6 @@ export default function AccountingDocumentsPage() {
           ))}
         </section>
       ) : null}
-    </div>
+    </PageSurfaceShell>
   );
 }

@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { draftJournalEntry, queueAccountingPostingDraft } from "../api/client";
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
 import { DRAFT_STATUS_ENQUEUED } from "../utils/journalDraftStatus";
 
 const ACCOUNTING_MONTH_OPTIONS = [
@@ -90,13 +91,20 @@ export default function JournalDraftPage() {
   }
 
   return (
-    <div className="dashboard-page">
+    <PageSurfaceShell className="journal-draft-page">
       <div className="page-content">
-        <header className="page-header">
-          <p className="eyebrow">Accounting Copilot</p>
-          <h1>Journal Draft Review</h1>
-          <p>Create a structured draft journal entry from approved accounting input. All output is draft-only and requires human review.</p>
-        </header>
+        <PageSurfaceHeader
+          breadcrumbs="Accounting / Journal draft"
+          eyebrow="Accounting copilot"
+          title="Journal draft review"
+          titleId="journal-draft-title"
+          description="Create a structured draft journal entry from approved accounting input. All output is draft-only and requires human review."
+          badges={[
+            { label: "Draft Only" },
+            { label: "Human Review Required" },
+            { label: "No QuickBooks Writeback" },
+          ]}
+        />
         <form className="hal-form hal-form--narrative" onSubmit={handleSubmit}>
           <label htmlFor="journal-description">Transaction Description</label>
           <textarea
@@ -332,6 +340,6 @@ export default function JournalDraftPage() {
           </div>
         ) : null}
       </div>
-    </div>
+    </PageSurfaceShell>
   );
 }

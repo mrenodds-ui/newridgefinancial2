@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { type ChangeEvent, type FormEvent, useDeferredValue, useState } from "react";
 
 import { askDocumentRagQuestion, fetchDocumentRagDocuments, uploadDocumentRagDocument } from "../api/client";
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
 import { queryClient } from "../queryClient";
 
 const DOCUMENT_LIBRARY_MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -121,14 +122,24 @@ export default function DocumentLibraryPage() {
   }
 
   return (
-    <div className="dashboard-page">
-      <header className="page-header">
-        <p className="eyebrow">Reference Library</p>
-        <h1>Document Library</h1>
-        <div className="dashboard-description">
-          Upload local PDFs, notes, spreadsheets, and reference files. HAL keeps them in a private library and answers from those files only.
-        </div>
-      </header>
+    <PageSurfaceShell className="document-library-page">
+      <PageSurfaceHeader
+        breadcrumbs="Reference / Document library"
+        eyebrow="Reference library"
+        title="Document library"
+        titleId="document-library-title"
+        description="Upload local PDFs, notes, spreadsheets, and reference files. HAL keeps them in a private library and answers from those files only."
+        badges={[
+          { label: "Local-Only" },
+          { label: "Grounded Answers Only" },
+          { label: "No Cloud Fallback" },
+        ]}
+        statusItems={[
+          { label: "Matching files", value: String(documentsQuery.data?.count ?? 0) },
+          { label: "Pages indexed", value: formatCount(totalPages) },
+          { label: "Chunks indexed", value: formatCount(totalChunks) },
+        ]}
+      />
 
       <div className="kpi-grid">
         <div className="hal-answer-card">
@@ -311,6 +322,6 @@ export default function DocumentLibraryPage() {
           </div>
         ) : null}
       </section>
-    </div>
+    </PageSurfaceShell>
   );
 }

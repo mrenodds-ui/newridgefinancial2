@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { fetchAccountingPolicyAnswer } from "../api/client";
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
 
 export default function AccountingPolicyPage() {
   const [question, setQuestion] = useState("");
@@ -40,13 +41,20 @@ export default function AccountingPolicyPage() {
   const renderedResponse = responseMatchesCurrentInputs ? response : null;
 
   return (
-    <div className="dashboard-page">
+    <PageSurfaceShell className="accounting-policy-page">
       <div className="page-content">
-        <header className="page-header">
-          <p className="eyebrow">Accounting Copilot</p>
-          <h1>Accounting Policy Guidance</h1>
-          <p>Ask for draft accounting guidance grounded in approved local policy and financial documentation.</p>
-        </header>
+        <PageSurfaceHeader
+          breadcrumbs="Accounting / Policy guidance"
+          eyebrow="Accounting copilot"
+          title="Accounting policy guidance"
+          titleId="accounting-policy-title"
+          description="Ask for draft accounting guidance grounded in approved local policy and financial documentation."
+          badges={[
+            { label: "Local Policy Only" },
+            { label: "Human Review Required" },
+            { label: "Not Submitted" },
+          ]}
+        />
         <form className="hal-form hal-form--narrative" onSubmit={handleSubmit}>
           <label htmlFor="policy-question">Policy Question</label>
           <textarea
@@ -113,6 +121,6 @@ export default function AccountingPolicyPage() {
           </div>
         ) : null}
       </div>
-    </div>
+    </PageSurfaceShell>
   );
 }

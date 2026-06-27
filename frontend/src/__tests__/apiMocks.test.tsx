@@ -86,7 +86,7 @@ describe("api mocks", () => {
 
     renderApp("/app/admin");
 
-    expect(await screen.findByText("Owner Financial Dashboard")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Owner financial dashboard" })).toBeInTheDocument();
     await waitFor(() =>
       expect(
         screen.getByRole("button", {
@@ -735,7 +735,7 @@ describe("api mocks", () => {
 
     renderApp("/app/journal-draft");
 
-    expect(await screen.findByRole("heading", { name: "Journal Draft Review" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Journal draft review" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Transaction Description"), {
       target: { value: "Record prepaid insurance for June coverage." },
     });
@@ -764,7 +764,7 @@ describe("api mocks", () => {
   it("can auto-enqueue a validated local AI draft from the journal draft workflow", async () => {
     renderApp("/app/journal-draft");
 
-    expect(await screen.findByRole("heading", { name: "Journal Draft Review" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Journal draft review" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Transaction Description"), {
       target: {
         value: "Vendor invoice for dental supplies, $700 due next month.",
@@ -788,7 +788,7 @@ describe("api mocks", () => {
   it("blocks invalid journal amounts before submitting", async () => {
     renderApp("/app/journal-draft");
 
-    expect(await screen.findByRole("heading", { name: "Journal Draft Review" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Journal draft review" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Transaction Description"), {
       target: { value: "Record prepaid insurance for June coverage." },
     });
@@ -813,7 +813,7 @@ describe("api mocks", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Accounting Policy Guidance",
+        name: "Accounting policy guidance",
       }),
     ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Policy Question"), {
@@ -839,7 +839,7 @@ describe("api mocks", () => {
 
     renderApp("/app/posting-queue");
 
-    expect(await screen.findByRole("heading", { name: "Posting Queue Review" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Posting queue review" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pending Review" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approved" })).toBeInTheDocument();

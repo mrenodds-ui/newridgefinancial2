@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { fetchAccountingPostingQueue, reviewAccountingPostingQueueEntry } from "../api/client";
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
 import { getPostingQueueDetailLineageText } from "../utils/postingQueueLineage";
 import {
   POSTING_QUEUE_STATUS_APPROVED,
@@ -114,16 +115,25 @@ export default function PostingQueueReviewPage() {
   }
 
   return (
-    <div className="dashboard-page">
+    <PageSurfaceShell className="posting-queue-page">
       <div className="page-content">
-        <header className="page-header">
-          <p className="eyebrow">Accounting Copilot</p>
-          <h1>Posting Queue Review</h1>
-          <p>
-            Review locally queued QuickBooks Desktop posting drafts. Approval changes queue state only and does not post anything to
-            QuickBooks.
-          </p>
-        </header>
+        <PageSurfaceHeader
+          breadcrumbs="Accounting / Posting queue"
+          eyebrow="Accounting copilot"
+          title="Posting queue review"
+          titleId="posting-queue-title"
+          description="Review locally queued QuickBooks Desktop posting drafts. Approval changes queue state only and does not post anything to QuickBooks."
+          badges={[
+            { label: "Local Queue Only" },
+            { label: "No QuickBooks Writeback" },
+            { label: "Human Review Required" },
+          ]}
+          statusItems={[
+            { label: "Filter", value: postingQueueFilters.find((f) => f.value === activeFilter)?.label ?? "All" },
+            { label: "Visible items", value: String(items.length) },
+            { label: "Total queued", value: String(totalCount) },
+          ]}
+        />
 
         <div className="posting-queue-filter-row" aria-label="Posting queue filters">
           {postingQueueFilters.map((filter) => (
@@ -285,6 +295,6 @@ export default function PostingQueueReviewPage() {
           </div>
         ) : null}
       </div>
-    </div>
+    </PageSurfaceShell>
   );
 }

@@ -475,7 +475,7 @@ describe("API auth gate", () => {
 
     renderApp("/app/journal-draft");
 
-    expect(await screen.findByText("Journal Draft Review")).toBeInTheDocument();
+    expect(await screen.findByText("Journal draft review")).toBeInTheDocument();
     expect(screen.getByLabelText("Raw Source Text")).toBeInTheDocument();
   });
 
@@ -489,7 +489,7 @@ describe("API auth gate", () => {
     renderApp("/app/journal-draft");
 
     expect(await screen.findByText("Sign in from the dashboard banner to load the journal draft review page.")).toBeInTheDocument();
-    expect(screen.queryByText("Journal Draft Review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Journal draft review")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Raw Source Text")).not.toBeInTheDocument();
   });
 
@@ -503,7 +503,7 @@ describe("API auth gate", () => {
     renderApp("/app/journal-draft");
 
     expect(await screen.findByText(/The dashboard session could not be verified right now/i)).toBeInTheDocument();
-    expect(screen.queryByText("Journal Draft Review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Journal draft review")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Raw Source Text")).not.toBeInTheDocument();
   });
 
@@ -517,7 +517,7 @@ describe("API auth gate", () => {
     renderApp("/app/posting-queue");
 
     expect(await screen.findByText(/not authorized to load the posting queue review page/i)).toBeInTheDocument();
-    expect(screen.queryByText("Posting Queue Review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Posting queue review")).not.toBeInTheDocument();
   });
 
   it("does not render the claims workbench for operators missing dashboard read access", async () => {
@@ -542,7 +542,7 @@ describe("API auth gate", () => {
 
     renderApp("/app/accounting-policy");
 
-    expect(await screen.findByText("Accounting Policy Guidance")).toBeInTheDocument();
+    expect(await screen.findByText("Accounting policy guidance")).toBeInTheDocument();
     expect(screen.getByLabelText("Policy Question")).toBeInTheDocument();
   });
 });
