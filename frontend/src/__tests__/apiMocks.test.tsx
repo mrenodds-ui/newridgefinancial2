@@ -323,7 +323,7 @@ describe("api mocks", () => {
             mode: "local-rag-phase-1:deeper-review",
             answer: "HAL deeper review: collections are not present in the verified context.",
             sanitized_question: payload.question || "",
-            guardrails: ["approved local read-only scope", "internal 30B deeper review after frontline answer was inconclusive"],
+            guardrails: ["approved local read-only scope", "internal 14B deeper review after frontline answer was inconclusive"],
             audit_id: "hal-ask-deeper-review-1",
             voice_profile: {
               lane: "deeper_review",

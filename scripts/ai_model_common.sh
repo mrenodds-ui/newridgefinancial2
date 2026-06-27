@@ -25,9 +25,9 @@ print_vram_guidance() {
   local quant="$2"
   cat <<EOF
 VRAM guidance (${lane} lane, ${quant}):
-  - RX 9060 XT 16GB: keep context at 4096–8192; KV cache grows quickly above 8192.
-  - Frontend 24B Q4_K_M: target full GPU offload on Vulkan/Ollama when only this lane is loaded.
-  - Backend 30B Q4_K_S: prefer a separate port (:11435) with num_gpu=0 (CPU/RAM) if both lanes would contend.
+  - RX 9060 XT 16GB: keep daily context at 2048-3072; KV cache grows quickly above 4096.
+  - Frontend 14B Q4_K_M: target full GPU offload on Vulkan/Ollama when only this lane is loaded.
+  - Backend 14B Q4_K_M: prefer a separate port (:11435) with num_gpu=0 (CPU/RAM) if both lanes would contend.
   - Use AI_GPU_LAYERS=auto in .env, or set an explicit layer count for partial offload experiments.
 EOF
 }

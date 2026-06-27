@@ -3786,7 +3786,7 @@ def _try_hal_model_answer_with_escalation(
             voice_profile_name="deeper_review",
             mode_suffix="deeper-review",
             guardrail_extras=[
-                "internal 30B deeper review after frontline answer was inconclusive",
+                "internal 14B deeper review after frontline answer was inconclusive",
             ],
             answer_lane="fallback",
             model_used=get_backend_model_name(),

@@ -4,7 +4,7 @@ These JSON packets are **synthetic, de-identified** review inputs for the experi
 `fast_review` lane bakeoff (`scripts/run_fast_review_bakeoff.py`). They compare structured
 review quality and latency between:
 
-- `chat_second_opinion` → `:11435` / `qwen3:30b` (current backend default; **not** replaced)
+- `chat_second_opinion` → `:11435` / `qwen3:14b` (current backend default; **not** replaced)
 - `fast_review` → `:11437` / `Qwen3-Coder-30B-A3B-Instruct` (experimental, opt-in)
 
 ## No PHI

@@ -55,7 +55,7 @@ Optional gate overrides:
 python scripts/run_local_model_ab_eval.py --max-ttft 0.75 --max-tps-drop 0.15
 ```
 
-The default timeout budget is tuned for the checked-in two-model split, including the slower `qwen3:30b` CPU/RAM second-opinion lane. The default TTFT gate is also calibrated for that slower second-opinion path: `0.75s` is the checked-in ceiling for the resident CPU/RAM lane, while `0.5s` is still a useful stricter override when you are profiling only the fast GPU path. Override `--timeout-seconds` only when you intentionally want a tighter or looser per-request ceiling.
+The default timeout budget is tuned for the checked-in two-model split, including the slower `qwen3:14b` CPU/RAM second-opinion lane. The default TTFT gate is also calibrated for that second-opinion path: `0.75s` is the checked-in ceiling for the resident CPU/RAM lane, while `0.5s` is still a useful stricter override when you are profiling only the fast GPU path. Override `--timeout-seconds` only when you intentionally want a tighter or looser per-request ceiling.
 
 The comparison report is written to `scripts/local_model_ab_report.json`.
 It includes a top-level per-profile summary block, a candidate-vs-baseline delta block, and a flat `regression_flags` block. Structural density is tracked with regex-based sentence counting plus blank-line paragraph counting, and the report surfaces median sentence and paragraph counts using raw numeric deltas. Outside `--dry-run`, the script exits with a non-zero code when the candidate profile breaches either the TTFT ceiling or the throughput-drop budget.

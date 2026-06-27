@@ -172,7 +172,7 @@ def test_short_primary_answer_does_not_auto_escalate(monkeypatch: pytest.MonkeyP
         del prompt, num_predict_cap, timeout_override
         if profile_alias == "chat":
             return "Short but usable answer.", None
-        raise AssertionError("30B fallback should not run for a short usable primary answer")
+        raise AssertionError("14B fallback should not run for a short usable primary answer")
 
     monkeypatch.setattr(hal_orchestrator, "_collect_hal_question_context", fake_collect)
     monkeypatch.setattr(hal_orchestrator, "_generate_profile_answer", fake_generate)

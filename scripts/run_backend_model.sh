@@ -7,7 +7,7 @@ print_backend_model_help() {
   cat <<EOF
 run_backend_model.sh - start the backend Ollama or llama.cpp lane on :11435.
 
-Default model tag: qwen3:30b
+Default model tag: qwen3:14b
 Override with AI_BACKEND_MODEL or OLLAMA_BACKEND_MODEL.
 Optional custom GGUF tag via AI_BACKEND_MODEL_PATH / AI_MODEL_PATH when creating from a local file.
 EOF
@@ -22,7 +22,7 @@ ROOT="$(repo_root)"
 PORT="${AI_PORT:-11435}"
 HOST="${AI_HOST:-127.0.0.1}"
 MODEL_PATH="${AI_MODEL_PATH:-${AI_BACKEND_MODEL_PATH:-}}"
-CONTEXT_SIZE="${AI_BACKEND_CONTEXT_SIZE:-${AI_CONTEXT_SIZE:-4096}}"
+CONTEXT_SIZE="${AI_BACKEND_CONTEXT_SIZE:-${AI_CONTEXT_SIZE:-3072}}"
 RUNTIME="${AI_RUNTIME:-ollama}"
 GPU_BACKEND="${AI_GPU_BACKEND:-vulkan}"
 DEFAULT_MODEL_TAG="$(resolve_backend_model_tag)"
@@ -47,7 +47,7 @@ EOF
     echo "Created Ollama model tag: $TAG on $OLLAMA_HOST"
   fi
   echo "Starting Ollama backend lane at http://${HOST}:${PORT}"
-  echo "Pull or use: ollama pull qwen3:30b"
+  echo "Pull or use: ollama pull qwen3:14b"
   exec ollama serve
 fi
 

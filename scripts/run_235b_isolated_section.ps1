@@ -3,7 +3,7 @@
   Run one isolated 235B evaluation section (1-5) with lane isolation checks.
 
 .DESCRIPTION
-  Stops 24B/30B, starts only :11436, runs one section via run_235b_eval_section.py,
+  Stops 14B chat/review lanes, starts only :11436, runs one section via run_235b_eval_section.py,
   stops 235B, and optionally restarts normal lanes with -RestartNormalLanes.
 
   Does not run multiple sections. Review the section report before running again.
@@ -84,7 +84,7 @@ if ((Test-Path $reportPath) -and -not $OverwriteReport) {
     throw "Report already exists: $reportPath. Pass -OverwriteReport to replace it."
 }
 
-Write-Host "`n[2/10] Stop normal 24B/30B lanes"
+Write-Host "`n[2/10] Stop normal 14B lanes"
 $stopScript = Join-Path $PSScriptRoot 'stop_normal_model_lanes.ps1'
 if ($ForceStopOllamaApp) {
     & $stopScript -ForceStopOllamaApp

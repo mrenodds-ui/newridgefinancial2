@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Stop normal 24B (:11434) and 30B (:11435) Ollama lanes before a 235B evaluation.
+  Stop normal 14B chat (:11434) and 14B review (:11435) Ollama lanes before a 235B evaluation.
 
 .DESCRIPTION
   Stops model tags on each port, then stops listeners bound to :11434 and :11435.
@@ -31,6 +31,10 @@ if ($Help) {
 }
 
 $ErrorActionPreference = 'Continue'
+
+. (Join-Path $PSScriptRoot '_local_model_defaults.ps1')
+$frontendModel = Get-LocalFrontendModelName
+$backendModel = Get-LocalBackendModelName
 
 function Test-OllamaLane([string]$HostPort) {
     try {
@@ -69,19 +73,19 @@ function Stop-ListenerOnPort([int]$Port) {
     }
 }
 
-Write-Host 'Stopping normal model lanes (24B :11434, 30B :11435)...'
+Write-Host "Stopping normal model lanes (14B :11434, 14B review :11435)..."
 
-if ($PSCmdlet.ShouldProcess('mistral-small3.1:24b on :11434', 'ollama stop')) {
+if ($PSCmdlet.ShouldProcess("$frontendModel on :11434", 'ollama stop')) {
     $env:OLLAMA_HOST = '127.0.0.1:11434'
     if ((Test-OllamaLane '127.0.0.1:11434').Up) {
-        ollama stop mistral-small3.1:24b 2>$null | Out-Null
+        ollama stop $frontendModel 2>$null | Out-Null
     }
 }
 
-if ($PSCmdlet.ShouldProcess('qwen3:30b on :11435', 'ollama stop')) {
+if ($PSCmdlet.ShouldProcess("$backendModel on :11435", 'ollama stop')) {
     $env:OLLAMA_HOST = '127.0.0.1:11435'
     if ((Test-OllamaLane '127.0.0.1:11435').Up) {
-        ollama stop qwen3:30b 2>$null | Out-Null
+        ollama stop $backendModel 2>$null | Out-Null
     }
 }
 

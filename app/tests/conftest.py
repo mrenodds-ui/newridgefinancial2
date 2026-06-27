@@ -14,6 +14,23 @@ os.environ.setdefault("APP_AUTH_SESSION_SECRET", "unit-test-session-secret-not-f
 _FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
+@pytest.fixture(autouse=True)
+def _isolate_env_from_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Use process env only during tests so a populated workspace .env does not override monkeypatch."""
+
+    import app.ai_local_config as ai_local_config
+    import app.config_runtime as config_runtime
+
+    def _test_env_setting(name: str, default: str = "") -> str:
+        value = os.getenv(name)
+        if value is not None and value != "":
+            return value
+        return default
+
+    monkeypatch.setattr(config_runtime, "get_env_setting", _test_env_setting)
+    monkeypatch.setattr(ai_local_config, "get_env_setting", _test_env_setting)
+
+
 @pytest.fixture
 def canonical_softdent_dashboard(monkeypatch):
     """Pin SoftDent dashboard rows to a committed deterministic fixture.

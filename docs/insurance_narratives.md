@@ -551,7 +551,7 @@ called automatically by the drafter. Use `draft_to_fast_review_source_text(packe
 prepare deterministic checker input when staff explicitly requests a structured review.
 
 `fast_review` is **not** a default narrative writer. `chat_second_opinion` remains the production
-second-opinion path on `:11435` / `qwen3:30b`.
+second-opinion path on `:11435` / `qwen3:14b`.
 
 ## Current builder scope
 

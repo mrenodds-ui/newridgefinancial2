@@ -67,8 +67,14 @@ AI_BACKEND_BASE_URL=http://127.0.0.1:11435
 AI_FRONTEND_MODEL=qwen3:14b
 AI_BACKEND_MODEL=qwen3:14b
 AI_FRONTEND_QUANT=Q4_K_M
-AI_BACKEND_QUANT=Q4_K_S
-AI_CONTEXT_SIZE=4096
+AI_BACKEND_QUANT=Q4_K_M
+AI_CONTEXT_SIZE=3072
+AI_FRONTEND_CONTEXT_SIZE=3072
+AI_BACKEND_CONTEXT_SIZE=3072
+HAL_ENABLE_FAST_MODEL=1
+HAL_FAST_MODEL_NAME=qwen3:14b
+HAL_FAST_MODEL_TIMEOUT_SECONDS=10
+HAL_MAIN_MODEL_TIMEOUT_SECONDS=15
 ```
 
 Model weights, `.gguf` files, and caches belong under `.local_models/` or `models/` (gitignored).
@@ -90,7 +96,7 @@ All lane settings are env-driven (`app/ai_local_config.py` reads `.env`); do not
 | `AI_FRONTEND_MODEL` / `AI_BACKEND_MODEL` | Ollama model tags or LiteLLM aliases (`qwen3:14b`) |
 | `OLLAMA_FRONTEND_MODEL` / `OLLAMA_BACKEND_MODEL` | Optional model-tag overrides used by run scripts when `AI_*_MODEL` is unset |
 | `AI_FRONTEND_MODEL_PATH` / `AI_BACKEND_MODEL_PATH` | Local GGUF paths for `llama_cpp` |
-| `AI_CONTEXT_SIZE` | Shared default context (4096 recommended on 16GB) |
+| `AI_CONTEXT_SIZE` | Shared default context (3072 recommended on 16GB for daily 14B lanes) |
 | `AI_FRONTEND_CONTEXT_SIZE` / `AI_BACKEND_CONTEXT_SIZE` | Per-lane context override |
 | `AI_FRONTEND_QUANT` / `AI_BACKEND_QUANT` | Target GGUF quant labels (`Q4_K_M`, `Q4_K_S`, etc.) |
 | `AI_PORT` / `AI_HOST` | Run-script listen port and host |
@@ -112,7 +118,7 @@ Outputs are written to `.local_models/` by default (gitignored, local-only — d
 
 ## Experimental fast structured reviewer (`:11437`)
 
-**Status: experimental and opt-in.** This lane does **not** replace the production backend default (`qwen3:30b` on `:11435`) or `POST /api/hal9000/second-opinion`.
+**Status: experimental and opt-in.** This lane does **not** replace the production backend default (`qwen3:14b` on `:11435`) or `POST /api/hal9000/second-opinion`.
 
 Use the `fast_review` profile when you want a faster structured checker for:
 
@@ -122,7 +128,7 @@ Use the `fast_review` profile when you want a faster structured checker for:
 - contradiction checks
 - structured JSON review output
 
-It is **not** the default narrative writer. Benchmark structured review quality against `qwen3:30b` before promoting it.
+It is **not** the default narrative writer. Benchmark structured review quality against `qwen3:14b` before promoting it.
 
 | Item | Value |
 | --- | --- |
@@ -205,7 +211,7 @@ python scripts/run_fast_review_bakeoff.py \
 - The default report `fast_review_bakeoff_report.json` is gitignored.
 - Use `--dry-run` to resolve lanes and check health without calling models.
 
-Benchmark `fast_review` against `qwen3:30b` here before considering it for any real workflow. Do
+Benchmark `fast_review` against `qwen3:14b` here before considering it for any real workflow. Do
 **not** run the bakeoff at the same time as the isolated 235B evaluator.
 
 ## Run model servers
@@ -226,21 +232,21 @@ curl http://127.0.0.1:11435/v1/models
 
 ### Ollama (recommended)
 
-Terminal 1 — frontend 24B:
+Terminal 1 — frontend 14B chat:
 
 ```powershell
 $env:AI_PORT = '11434'
 .\scripts\run_frontend_model.ps1
-# Default tag: mistral-small3.1:24b (override with AI_FRONTEND_MODEL)
-# or: ollama pull mistral-small3.1:24b with default Ollama on :11434
+# Default tag: qwen3:14b (override with AI_FRONTEND_MODEL)
+# or: ollama pull qwen3:14b with default Ollama on :11434
 ```
 
-Terminal 2 — backend 30B on a second port:
+Terminal 2 — backend 14B review on a second port:
 
 ```powershell
 $env:AI_PORT = '11435'
 .\scripts\run_backend_model.ps1
-# Default tag: qwen3:30b (override with AI_BACKEND_MODEL)
+# Default tag: qwen3:14b (override with AI_BACKEND_MODEL)
 # or: $env:OLLAMA_HOST='127.0.0.1:11435'; ollama serve
 ```
 
@@ -250,17 +256,17 @@ $env:AI_PORT = '11435'
 AI_MODEL_PATH=.local_models/frontend/frontend-24b.Q4_K_M.gguf \
 AI_PORT=11434 AI_RUNTIME=llama_cpp AI_GPU_BACKEND=vulkan \
 ./scripts/run_frontend_model.sh
-# Default tag: mistral-small3.1:24b (override with AI_FRONTEND_MODEL)
+# Default tag: qwen3:14b (override with AI_FRONTEND_MODEL)
 
 AI_MODEL_PATH=.local_models/backend/backend-30b.Q4_K_S.gguf \
 AI_PORT=11435 AI_RUNTIME=llama_cpp AI_GPU_LAYERS=0 \
 ./scripts/run_backend_model.sh
-# Default tag: qwen3:30b (override with AI_BACKEND_MODEL)
+# Default tag: qwen3:14b (override with AI_BACKEND_MODEL)
 ```
 
 ## 235B evaluator workflow (isolated, one section at a time)
 
-Do **not** run the 24B frontend lane or 30B backend lane while the 235B evaluator is active. Resource contention on 16GB VRAM makes multi-lane 235B runs unreliable.
+Do **not** run the 14B frontend lane or 14B backend lane while the 235B evaluator is active. Resource contention on 16GB VRAM makes multi-lane 235B runs unreliable.
 
 | Step | Action |
 | --- | --- |
@@ -271,7 +277,7 @@ Do **not** run the 24B frontend lane or 30B backend lane while the 235B evaluato
 | 5 | Run **one** section: `scripts/run_235b_isolated_section.ps1 -Section N` |
 | 6 | Save **one** report (`235b_sectionN_*_report.md` at repo root). Root-level `235b_*` reports, context files, raw JSON, and legacy eval runners are gitignored by default—do not commit unless explicitly sanitized and approved. |
 | 7 | Tear down `:11436` only: `scripts/stop_235b_evaluator_lane.ps1` kills the LISTENING serve PID (not client connections). It does **not** block on `ollama stop qwen3:235b`. Exits 0 immediately if `:11436` is already down. |
-| 8 | Restart 24B/30B only if needed: `-RestartNormalLanes` on the orchestrator, or start `run_frontend_model.ps1` / `run_backend_model.ps1` manually. |
+| 8 | Restart 14B lanes only if needed: `-RestartNormalLanes` on the orchestrator, or start `run_frontend_model.ps1` / `run_backend_model.ps1` manually. |
 
 Orchestrator (single section, lane checks, optional report overwrite):
 
@@ -307,7 +313,7 @@ curl http://127.0.0.1:11435/api/tags
 Tiny completion (low temperature, few tokens):
 
 ```powershell
-curl http://127.0.0.1:11434/api/generate -d '{"model":"mistral-small3.1:24b","prompt":"Say OK","stream":false,"options":{"temperature":0,"num_predict":8}}'
+curl http://127.0.0.1:11434/api/generate -d '{"model":"qwen3:14b","prompt":"Say OK","stream":false,"options":{"temperature":0,"num_predict":8}}'
 ```
 
 ## VRAM notes
