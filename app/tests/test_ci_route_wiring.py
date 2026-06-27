@@ -22,9 +22,18 @@ _MIN_AUTH_USERS_JSON = json.dumps(
 )
 os.environ.setdefault("APP_AUTH_USERS_JSON", _MIN_AUTH_USERS_JSON)
 
-from scripts.smoke_all_routes import main as run_route_wiring_check
+from app.auth import clear_user_registry_cache  # noqa: E402
+from scripts.smoke_all_routes import main as run_route_wiring_check  # noqa: E402
 
 
 def test_ci_route_wiring():
-    exit_code = run_route_wiring_check()
-    assert exit_code == 0, "scripts/smoke_all_routes.py reported route wiring failures"
+    # Other tests mutate APP_AUTH_USERS_JSON and the cached user registry. Force
+    # the route-wiring user set and clear the cache so the admin service user is
+    # always resolvable regardless of test execution order.
+    os.environ["APP_AUTH_USERS_JSON"] = _MIN_AUTH_USERS_JSON
+    clear_user_registry_cache()
+    try:
+        exit_code = run_route_wiring_check()
+        assert exit_code == 0, "scripts/smoke_all_routes.py reported route wiring failures"
+    finally:
+        clear_user_registry_cache()
