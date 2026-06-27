@@ -26,6 +26,12 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def disable_hal_ask_model_routing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HAL_ASK_MODEL_ROUTING", "0")
+    # The financial source status payload is cached for 60s by default. Across
+    # the full suite that cache leaks between tests and ignores per-test
+    # monkeypatches, so disable it and clear any prior payload for isolation.
+    monkeypatch.setenv("FINANCIAL_SOURCE_STATUS_CACHE_SECONDS", "0")
+    financial_tools._financial_source_status_cache["payload"] = None
+    financial_tools._financial_source_status_cache["expires_at"] = 0.0
 
 TEST_RUNTIME_ROOT = Path(__file__).resolve().parent / ".hal_test_runtime"
 TEST_AUTH_USERS_JSON = json.dumps(
@@ -1801,7 +1807,10 @@ def test_hal_status_includes_live_quickbooks_revenue(monkeypatch):
             "review_flags": [],
         }
 
-    monkeypatch.setattr(financial_tools, "get_quickbooks_live_status", fake_live_status)
+    # The /status endpoint builds live_* topics from the lightweight,
+    # export-metadata variant (get_quickbooks_live_status_light), not the SDK
+    # probe. Patch the function the endpoint actually consumes.
+    monkeypatch.setattr(financial_tools, "get_quickbooks_live_status_light", fake_live_status)
 
     response = client.get("/api/hal9000/status", auth=operator_auth())
 
