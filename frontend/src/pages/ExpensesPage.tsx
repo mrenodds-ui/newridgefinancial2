@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchFinancialSummary } from "../api/client";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
 import { ChartCard } from "../components/dashboard/ChartCard";
 import { CurrencyLineChart } from "../components/dashboard/CurrencyLineChart";
 import { selectLatestProfitLoss } from "../components/dashboard/financialDashboardSummary";
@@ -24,17 +25,17 @@ export default function ExpensesPage() {
   });
   if (financialSummaryQuery.isPending) {
     return (
-      <div className="dashboard-page">
+      <PageSurfaceShell className="expenses-page">
         <LoadingSpinner label="Loading expense data..." />
-      </div>
+      </PageSurfaceShell>
     );
   }
 
   if (financialSummaryQuery.isError || !financialSummaryQuery.data) {
     return (
-      <div className="dashboard-page">
+      <PageSurfaceShell className="expenses-page">
         <div className="page-state-card page-state-card--error">Unable to load live expense data.</div>
-      </div>
+      </PageSurfaceShell>
     );
   }
 
@@ -56,56 +57,53 @@ export default function ExpensesPage() {
   const hasExpenseCategoryData = expenseCategories.length > 0;
 
   return (
-    <div className="dashboard-page">
-      <header className="page-header">
-        <p className="eyebrow">Expense Analysis</p>
-        <h1>Expenses</h1>
-        <div className="dashboard-description">Detailed overhead control and expense analysis.</div>
-      </header>
-      <section className="dashboard-toolbar" aria-label="Expense summary">
-        <div>
-          <div className="dashboard-toolbar__label">Expense share</div>
-          <div className="dashboard-toolbar__value">{expenseShare === null ? "Unavailable" : `${expenseShare}%`}</div>
-        </div>
-        <div>
-          <div className="dashboard-toolbar__label">Top category</div>
-          <div className="dashboard-toolbar__value">{topExpense}</div>
-        </div>
-        <div>
-          <div className="dashboard-toolbar__label">Monthly spend</div>
-          <div className="dashboard-toolbar__value">${latestExpenses.toLocaleString()}</div>
-        </div>
-      </section>
+    <PageSurfaceShell className="expenses-page">
+      <PageSurfaceHeader
+        breadcrumbs="Analytics / Expense analysis"
+        eyebrow="Expense analysis"
+        title="Expenses"
+        titleId="expenses-page-title"
+        description="Overhead control and category drill-down from approved QuickBooks expense exports."
+        badges={[
+          { label: "QuickBooks Read-Only" },
+          { label: "Import Cache" },
+        ]}
+        statusItems={[
+          { label: "Monthly spend", value: `$${latestExpenses.toLocaleString()}` },
+          { label: "Top category", value: topExpense },
+          { label: "Expense share", value: expenseShare === null ? "Unavailable" : `${expenseShare}%` },
+        ]}
+      />
       <div className="kpi-grid">
-        <SummaryCard title="Total Expenses">
+        <SummaryCard title="Total expenses">
           <div>
             Latest: <strong>${latestExpenses.toLocaleString()}</strong>
           </div>
         </SummaryCard>
-        <SummaryCard title="Top Expense">
+        <SummaryCard title="Top expense">
           <div>{topExpense}</div>
         </SummaryCard>
-        <SummaryCard title="Expense % of Collections">
-          <div>{expenseShare === null ? "N/A" : `${expenseShare}%`}</div>
+        <SummaryCard title="Expense share of revenue">
+          <div>{expenseShare === null ? "Unavailable" : `${expenseShare}%`}</div>
         </SummaryCard>
       </div>
       <div className="dashboard-charts">
-        <ChartCard title="Expense Categories">
+        <ChartCard title="Expense categories">
           {hasExpenseCategoryData ? (
             <HorizontalExpenseBarChart data={expenseCategories} />
           ) : (
             <div className="page-state-card page-state-card--info">Expense category detail will appear after a QuickBooks expense export is connected.</div>
           )}
         </ChartCard>
-        <ChartCard title="Monthly Expense Trend">
-          <CurrencyLineChart data={expenseTrend} lines={[{ dataKey: "expenses", name: "Expenses", color: "#C96A5B" }]} />
+        <ChartCard title="Monthly expense trend">
+          <CurrencyLineChart data={expenseTrend} lines={[{ dataKey: "expenses", name: "Expenses", color: "#4c84ff" }]} />
         </ChartCard>
       </div>
-      <section className="dashboard-card">
-        <div className="dashboard-card__title">Expense Posture</div>
-        <div className="dashboard-kpi-main">${latestExpenses.toLocaleString()}</div>
-        <div className="dashboard-kpi-label">Current monthly expenses</div>
-        <div className="dashboard-kpi-support">
+      <section className="page-surface__focus-card" aria-label="Expense posture">
+        <div className="page-surface__focus-title">Current monthly expenses</div>
+        <div className="page-surface__focus-metric">${latestExpenses.toLocaleString()}</div>
+        <div className="page-surface__focus-detail">Verified QuickBooks expense snapshot</div>
+        <div className="page-surface__focus-support">
           <span>
             Top category: <strong>{topExpense}</strong>
           </span>
@@ -117,6 +115,6 @@ export default function ExpensesPage() {
           </span>
         </div>
       </section>
-    </div>
+    </PageSurfaceShell>
   );
 }
