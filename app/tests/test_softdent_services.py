@@ -416,7 +416,11 @@ def test_get_softdent_data_coverage_reports_missing_and_limited_rows(monkeypatch
     coverage = services.get_softdent_data_coverage()
 
     assert coverage["summary"] == "Missing and limited reports explain why some dashboard charts are unavailable."
-    assert coverage["counts"] == {"missing": 7, "limited": 5, "available": 7}
+    # The Daily End-of-Day A/R coverage row is reported missing when no DAYSHEET
+    # report is imported, which brings the missing count to 8.
+    assert coverage["counts"] == {"missing": 8, "limited": 5, "available": 7}
+    eod_ar_row = next(row for row in coverage["rows"] if row["key"] == "dailyEndOfDayAr")
+    assert eod_ar_row["status"] == "missing"
 
 
 def test_get_softdent_data_coverage_handles_sparse_snapshot_payload(monkeypatch):
