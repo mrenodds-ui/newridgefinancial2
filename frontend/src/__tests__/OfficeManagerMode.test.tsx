@@ -197,7 +197,7 @@ describe("Office Manager Mode", () => {
     renderPage();
     expect(await screen.findByText(/Unsubmitted claims need follow-up/i)).toBeInTheDocument();
     expect(screen.getByText(/Treatment plan follow-up is limited/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/missing_treatment_plan_export/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Treatment plan export not imported yet/i).length).toBeGreaterThan(0);
   });
 
   it("creates a local office task without forbidden controls", async () => {

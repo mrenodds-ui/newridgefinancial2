@@ -259,7 +259,7 @@ describe("api mocks", () => {
 
     renderApp("/app/hal");
 
-    expect(await screen.findByRole("heading", { name: "Ask HAL" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("What do you want HAL to help with?"), {
       target: {
         value: "Change brightness to 30% on the primary monitor.",
@@ -267,7 +267,7 @@ describe("api mocks", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Ask HAL" }));
 
-    expect(await screen.findByText("HAL's Response")).toBeInTheDocument();
+    expect(await screen.findByText("Here's what I found")).toBeInTheDocument();
     expect(screen.getAllByText(/I can help with that\./).length).toBeGreaterThan(0);
     expect(screen.getByText(/Reference ID:/)).toBeInTheDocument();
     expect(screen.getByText(/Built-in safeguards:/)).toBeInTheDocument();
@@ -283,7 +283,7 @@ describe("api mocks", () => {
   it("resolves the legacy hal-9000 route to the current HAL page", async () => {
     renderApp("/app/hal-9000");
 
-    expect(await screen.findByRole("heading", { name: "Ask HAL" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
     expect(screen.getByLabelText("What do you want HAL to help with?")).toBeInTheDocument();
   });
 
@@ -383,7 +383,7 @@ describe("api mocks", () => {
 
     resolveRequest();
 
-    expect(await screen.findByText(/HAL's Response/)).toBeInTheDocument();
+    expect(await screen.findByText(/Here's what I found/)).toBeInTheDocument();
     expect(screen.getAllByText(/HAL handled: Give me the current operating picture\./).length).toBeGreaterThan(0);
   });
 
@@ -440,7 +440,7 @@ describe("api mocks", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Ask HAL" }));
 
-    expect(await screen.findByText("HAL's Response")).toBeInTheDocument();
+    expect(await screen.findByText("Here's what I found")).toBeInTheDocument();
     expect(capturedQuestion).toBe("What needs my attention today?");
     expect(screen.getAllByText(/Here is what needs attention today\./).length).toBeGreaterThan(0);
   });
@@ -473,7 +473,7 @@ describe("api mocks", () => {
   it("keeps the HAL page focused on the core ask-and-answer workflow", async () => {
     renderApp("/app/hal");
 
-    expect(await screen.findByRole("heading", { name: "Ask HAL" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
     expect(screen.queryByText("Chart Requests")).not.toBeInTheDocument();
     expect(screen.queryByText("Recent Chart Requests")).not.toBeInTheDocument();
     expect(screen.queryByText("Accounting Files")).not.toBeInTheDocument();
@@ -531,7 +531,7 @@ describe("api mocks", () => {
 
     renderApp("/app/hal");
 
-    expect(await screen.findByRole("heading", { name: "Ask HAL" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("What do you want HAL to help with?"), {
       target: {
         value: "Change brightness to 30% on the primary monitor.",
@@ -539,7 +539,7 @@ describe("api mocks", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Ask HAL" }));
 
-    expect(await screen.findByText("HAL's Response")).toBeInTheDocument();
+    expect(await screen.findByText("Here's what I found")).toBeInTheDocument();
     expect(screen.getByText(/Response profile:/)).toBeInTheDocument();
     expect(screen.getByText(/Governance:/)).toBeInTheDocument();
     expect(screen.getByLabelText("Voice")).toBeInTheDocument();
@@ -605,7 +605,7 @@ describe("api mocks", () => {
     try {
       renderApp("/app/hal");
 
-      expect(await screen.findByRole("heading", { name: "Ask HAL" })).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: "HAL Office Manager" })).toBeInTheDocument();
       fireEvent.change(screen.getByLabelText("What do you want HAL to help with?"), {
         target: {
           value: "Change brightness to 30% on the primary monitor.",
@@ -613,7 +613,7 @@ describe("api mocks", () => {
       });
       fireEvent.click(screen.getByRole("button", { name: "Ask HAL" }));
 
-      expect(await screen.findByText("HAL's Response")).toBeInTheDocument();
+      expect(await screen.findByText("Here's what I found")).toBeInTheDocument();
       expect(speak).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByRole("button", { name: "Read It Aloud" }));
@@ -675,7 +675,7 @@ describe("api mocks", () => {
     expect(await screen.findByText("HAL request failed: RuntimeError: upstream timeout")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try Again" }));
 
-    expect(await screen.findByText("HAL's Response")).toBeInTheDocument();
+    expect(await screen.findByText("Here's what I found")).toBeInTheDocument();
     expect(screen.getAllByText("I retried the request and the connection is back.").length).toBeGreaterThan(0);
     expect(attempts).toBe(2);
   });

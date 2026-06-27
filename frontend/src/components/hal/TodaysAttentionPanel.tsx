@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchOfficeManagerAttention } from "../../api/client";
 import { MissingDataNotice } from "./MissingDataNotice";
+import { describeMissingDataCodes } from "./missingDataLabels";
 import { OFFICE_MANAGER_SAFETY_LABELS, SafetyLabelStrip } from "./SafetyLabelStrip";
 
 export function TodaysAttentionPanel() {
@@ -39,7 +40,7 @@ export function TodaysAttentionPanel() {
                 <p>{item.detail}</p>
                 {item.action_hint ? <p className="hal-attention-item__hint">{item.action_hint}</p> : null}
                 {item.missing_data_codes.length ? (
-                  <p className="hal-missing-data-notice__codes">Missing data: {item.missing_data_codes.join(", ")}</p>
+                  <p className="hal-missing-data-notice__codes">{describeMissingDataCodes(item.missing_data_codes)}</p>
                 ) : null}
               </li>
             ))}

@@ -7,6 +7,7 @@ type HalCommandCenterProps = {
   canSubmitQuestion: boolean;
   isPending: boolean;
   onSubmit: (event: FormEvent) => void;
+  suggestions?: string[];
 };
 
 export function HalCommandCenter({
@@ -16,6 +17,7 @@ export function HalCommandCenter({
   canSubmitQuestion,
   isPending,
   onSubmit,
+  suggestions = [],
 }: HalCommandCenterProps) {
   function handleQuestionKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && event.shiftKey) {
@@ -39,13 +41,19 @@ export function HalCommandCenter({
   return (
     <section className="hal-workstation-card hal-command-center" aria-labelledby="hal-command-center-title">
       <div className="hal-workstation-card__header">
-        <p className="eyebrow">Ask HAL command center</p>
-        <h2 id="hal-command-center-title">Internal dental-office assistant</h2>
-        <p>
-          Ask in plain language. HAL can use authorized office context, SoftDent facts, drafts, local packets,
-          knowledge memory, and runtime checks while staying inside local review boundaries.
-        </p>
+        <p className="eyebrow">Ask HAL</p>
+        <h2 id="hal-command-center-title">What do you need help with?</h2>
+        <p>Ask in plain language. HAL can pull approved office data, summarize the work, and prepare review-ready next steps.</p>
       </div>
+      {suggestions.length ? (
+        <div className="hal-prompt-chips" aria-label="Suggested HAL prompts">
+          {suggestions.map((suggestion) => (
+            <button key={suggestion} type="button" onClick={() => setQuestion(suggestion)}>
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <form className="hal-command-center__form" onSubmit={onSubmit}>
         <label htmlFor="hal-question">What do you want HAL to help with?</label>
         <textarea

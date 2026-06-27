@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
 import {
   askHalQuestion,
@@ -7,6 +7,8 @@ import {
   executeMonitorReviewAction,
   fetchFinancialSummary,
   fetchHalStatus,
+  fetchOfficeManagerTaskMetrics,
+  fetchSoftDentEndOfDayAr,
   type SoftDentDraftArtifact,
   type SoftDentLocalPacketArtifact,
 } from "../api/client";
@@ -30,6 +32,12 @@ import "../components/hal/HalWorkstation.css";
 const HAL_SPEECH_VOICE_KEY = "halSpeechVoice";
 const HAL_SPEECH_RATE_KEY = "halSpeechRate";
 const HAL_QUESTION_MIN_LENGTH = 3;
+const HAL_PROMPT_SUGGESTIONS = [
+  "What needs attention today?",
+  "Show today's A/R",
+  "Prep my morning huddle",
+  "Review claims needing follow-up",
+];
 
 function isHalQuestionSubmittable(value: string): boolean {
   return value.trim().length >= HAL_QUESTION_MIN_LENGTH;
@@ -74,6 +82,146 @@ function humanizeGuardrail(flag: string) {
   }
 }
 
+function formatCurrency(value: number | null | undefined) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "Not available";
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+type SnapshotCard = {
+  label: string;
+  value: string;
+  tone: "ok" | "pending";
+};
+
+function describeArSnapshot(
+  endOfDayAr: Awaited<ReturnType<typeof fetchSoftDentEndOfDayAr>> | undefined,
+  isError: boolean,
+): SnapshotCard {
+  if (isError || !endOfDayAr) {
+    return { label: "Daily A/R", value: "DAYSHEET not imported yet", tone: "pending" };
+  }
+  if (endOfDayAr.available && typeof endOfDayAr.total_ar === "number") {
+    return { label: "Daily A/R", value: formatCurrency(endOfDayAr.total_ar), tone: "ok" };
+  }
+  if (endOfDayAr.freshness_status === "stale") {
+    return { label: "Daily A/R", value: "Last report is stale", tone: "pending" };
+  }
+  return { label: "Daily A/R", value: "DAYSHEET not imported yet", tone: "pending" };
+}
+
+function describeClaimsSnapshot(
+  financialSummary: Awaited<ReturnType<typeof fetchFinancialSummary>> | undefined,
+): SnapshotCard {
+  const claims = financialSummary?.claimsSummary;
+  if (!claims?.available) {
+    return { label: "Claims follow-up", value: "Claims export not imported yet", tone: "pending" };
+  }
+  const count = claims.unsubmitted_claims_count ?? 0;
+  return { label: "Claims follow-up", value: `${count} to review`, tone: "ok" };
+}
+
+function describeTasksSnapshot(
+  metrics: Awaited<ReturnType<typeof fetchOfficeManagerTaskMetrics>> | undefined,
+): SnapshotCard {
+  const open = metrics?.open_count ?? 0;
+  return { label: "Open tasks", value: `${open} open`, tone: open > 0 ? "ok" : "pending" };
+}
+
+function TodaySnapshotCards({
+  financialSummary,
+  endOfDayAr,
+  endOfDayArError,
+  taskMetrics,
+}: {
+  financialSummary?: Awaited<ReturnType<typeof fetchFinancialSummary>>;
+  endOfDayAr?: Awaited<ReturnType<typeof fetchSoftDentEndOfDayAr>>;
+  endOfDayArError: boolean;
+  taskMetrics?: Awaited<ReturnType<typeof fetchOfficeManagerTaskMetrics>>;
+}) {
+  const cards: SnapshotCard[] = [
+    describeArSnapshot(endOfDayAr, endOfDayArError),
+    describeClaimsSnapshot(financialSummary),
+    describeTasksSnapshot(taskMetrics),
+    { label: "Reports", value: "Local drafts only", tone: "ok" },
+  ];
+
+  return (
+    <section className="hal-today-section" aria-labelledby="hal-today-title">
+      <h2 id="hal-today-title" className="hal-section-title">
+        Today
+      </h2>
+      <div className="hal-snapshot-grid">
+        {cards.map((card) => (
+          <div key={card.label} className={`hal-snapshot-card hal-snapshot-card--${card.tone}`}>
+            <span>{card.label}</span>
+            <strong>{card.value}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function QuickActions({
+  onPrefillDraftQuery,
+  onAskPrefill,
+}: {
+  onPrefillDraftQuery: (query: string) => void;
+  onAskPrefill: (question: string) => void;
+}) {
+  const actions: { label: string; onClick: () => void }[] = [
+    { label: "Prepare patient call summary", onClick: () => onPrefillDraftQuery("patient call prep summary") },
+    { label: "Create claim follow-up draft", onClick: () => onPrefillDraftQuery("denied claim follow-up checklist") },
+    { label: "Create local office task", onClick: () => onAskPrefill("Create a local office task for staff follow-up") },
+    { label: "Review Daily End-of-Day A/R", onClick: () => onAskPrefill("Review the Daily End-of-Day A/R") },
+    { label: "Create morning huddle summary", onClick: () => onAskPrefill("Create a morning huddle summary for the office") },
+  ];
+
+  return (
+    <section className="hal-quick-actions" aria-labelledby="hal-quick-actions-title">
+      <h2 id="hal-quick-actions-title" className="hal-section-title">
+        Quick actions
+      </h2>
+      <p className="hal-muted-line">Each action prepares a local draft or review item. Nothing is submitted.</p>
+      <div className="hal-quick-actions__grid">
+        {actions.map((action) => (
+          <button key={action.label} type="button" className="hal-quick-action" onClick={action.onClick}>
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WorkQueue({
+  title,
+  description,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  description?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details className="hal-workstation-card hal-work-queue" open={defaultOpen}>
+      <summary>
+        <span className="hal-work-queue__title">{title}</span>
+        {description ? <span className="hal-work-queue__hint">{description}</span> : null}
+      </summary>
+      <div className="hal-work-queue__content">{children}</div>
+    </details>
+  );
+}
+
 function getSpeechSynthesis(): SpeechSynthesis | null {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
     return null;
@@ -116,6 +264,14 @@ export default function AskHal9000Page() {
     queryKey: ["hal-status"],
     queryFn: fetchHalStatus,
   });
+  const endOfDayArQuery = useQuery({
+    queryKey: ["softdent-end-of-day-ar"],
+    queryFn: fetchSoftDentEndOfDayAr,
+  });
+  const taskMetricsQuery = useQuery({
+    queryKey: ["office-manager-task-metrics"],
+    queryFn: fetchOfficeManagerTaskMetrics,
+  });
   const halMutation = useMutation({
     mutationFn: (nextQuestion: string) =>
       askHalQuestion(nextQuestion, {
@@ -149,12 +305,27 @@ export default function AskHal9000Page() {
     submitHalQuestion();
   }
 
+  function askPrefilledQuestion(prefilled: string) {
+    const trimmed = prefilled.trim();
+    setQuestion(trimmed);
+    if (!isHalQuestionSubmittable(trimmed) || halMutation.isPending || askInFlightRef.current) {
+      return;
+    }
+    askInFlightRef.current = true;
+    actionMutation.reset();
+    setSpeechError(null);
+    setIsSpeaking(false);
+    halMutation.mutate(trimmed);
+  }
+
   function handleRetryAsk() {
     submitHalQuestion();
   }
 
   const response = halMutation.data;
   const reviewAction = response?.review_actions.find((item) => item.action_type === "SET_LUMINANCE");
+  const taskMetrics = taskMetricsQuery.data;
+  const hasOpenTasks = (taskMetrics?.open_count ?? 0) > 0 || (taskMetrics?.urgent_open_count ?? 0) > 0;
 
   useEffect(() => {
     if (isAutomatedBrowserSession()) {
@@ -331,16 +502,12 @@ export default function AskHal9000Page() {
     <div className="dashboard-page dashboard-page--hal hal-workstation-page">
       <div className="page-content">
         <header className="page-header hal-workstation-header">
-          <p className="eyebrow">HAL workstation</p>
-          <h1>Ask HAL</h1>
-          <p>
-            HAL is the dental office manager assistant: read authorized facts, prepare drafts for review, approve local
-            packets, and track local office tasks while staying local only — still not submitted, still not written to
-            SoftDent, and still no external delivery.
-          </p>
+          <p className="eyebrow">HAL</p>
+          <h1>HAL Office Manager</h1>
+          <p>Ask HAL about today&apos;s office work, claims, reports, SoftDent exports, or patient prep.</p>
         </header>
 
-        <div className="hal-workstation-layout">
+        <div className="hal-office-layout">
           <div className="hal-workstation-main">
             <HalCommandCenter
               question={question}
@@ -349,6 +516,7 @@ export default function AskHal9000Page() {
               canSubmitQuestion={canSubmitQuestion}
               isPending={halMutation.isPending}
               onSubmit={handleAsk}
+              suggestions={HAL_PROMPT_SUGGESTIONS}
             />
 
             {halMutation.isError ? (
@@ -366,35 +534,6 @@ export default function AskHal9000Page() {
             ) : null}
 
             <HalRecommendationBlock response={response} speechControls={speechControls} />
-
-            {response ? (
-              <section className="hal-workstation-card">
-                <h2>Safeguards and session details</h2>
-                <p>
-                  <strong>Response profile:</strong> {response.voice_profile.label} · {response.voice_profile.tone}
-                </p>
-                <p>
-                  <strong>Answer lane:</strong> {humanizeLaneLabel(response.voice_profile.lane)}
-                </p>
-                {(response.voice_profile.style_notes ?? []).length ? (
-                  <p>
-                    <strong>Style notes:</strong> {response.voice_profile.style_notes.join(" ")}
-                  </p>
-                ) : null}
-                <p>
-                  <strong>Saved question:</strong> {response.sanitized_question}
-                </p>
-                <p>
-                  <strong>Built-in safeguards:</strong> {response.guardrails.map(humanizeGuardrail).join(", ")}
-                </p>
-                <p>
-                  <strong>Governance:</strong>{" "}
-                  {(response.governance_notes ?? []).length
-                    ? response.governance_notes.map((item) => `${item.label}: ${item.detail}`).join(" | ")
-                    : "No governed memory changes were saved silently."}
-                </p>
-              </section>
-            ) : null}
 
             {reviewAction ? (
               <section className="hal-workstation-card hal-review-actions">
@@ -431,38 +570,120 @@ export default function AskHal9000Page() {
               </section>
             ) : null}
 
-            <DraftsForReviewPanel
-              selectedDraft={selectedDraft}
-              onDraftCreated={setSelectedDraft}
-              initialPatientQuery={draftPrefillQuery}
-            />
-            <ApprovedLocalPacketsPanel
-              selectedDraft={selectedDraft}
-              selectedPacket={selectedPacket}
-              onPacketCreated={setSelectedPacket}
-            />
-            <PatientPrepPanel onPrefillDraftQuery={setDraftPrefillQuery} />
-            <ClaimsFollowUpPanel
+            <TodaySnapshotCards
               financialSummary={financialSummaryQuery.data}
-              onPrefillDraftQuery={setDraftPrefillQuery}
+              endOfDayAr={endOfDayArQuery.data}
+              endOfDayArError={endOfDayArQuery.isError}
+              taskMetrics={taskMetricsQuery.data}
             />
-            <LocalOfficeTasksPanel />
-            <TreatmentPlanFollowUpPanel />
-            <HygieneRecallPanel />
-            <ComplianceChecklistPanel />
-            <VendorIssueTrackerPanel />
-            <OfficeManagerReportsPanel />
-          </div>
 
-          <aside className="hal-workstation-side">
             <TodaysAttentionPanel />
-            <HalSystemHealthPanel
-              halStatus={halStatusQuery.data}
-              financialSummary={financialSummaryQuery.data}
-              isLoading={halStatusQuery.isPending || financialSummaryQuery.isPending}
-            />
-            <HalSourcesPanel response={response} />
-          </aside>
+
+            <QuickActions onPrefillDraftQuery={setDraftPrefillQuery} onAskPrefill={askPrefilledQuestion} />
+
+            <section className="hal-section" aria-labelledby="hal-work-queues-title">
+              <h2 id="hal-work-queues-title" className="hal-section-title">
+                Work queues
+              </h2>
+              <WorkQueue
+                title="Local office tasks"
+                description={hasOpenTasks ? "Open tasks need attention" : "No open tasks"}
+                defaultOpen={hasOpenTasks}
+              >
+                <LocalOfficeTasksPanel />
+              </WorkQueue>
+              <WorkQueue title="Drafts and packets for review" description="Local review items only">
+                <DraftsForReviewPanel
+                  selectedDraft={selectedDraft}
+                  onDraftCreated={setSelectedDraft}
+                  initialPatientQuery={draftPrefillQuery}
+                />
+                <ApprovedLocalPacketsPanel
+                  selectedDraft={selectedDraft}
+                  selectedPacket={selectedPacket}
+                  onPacketCreated={setSelectedPacket}
+                />
+              </WorkQueue>
+              <WorkQueue title="Claims follow-up">
+                <ClaimsFollowUpPanel
+                  financialSummary={financialSummaryQuery.data}
+                  onPrefillDraftQuery={setDraftPrefillQuery}
+                />
+              </WorkQueue>
+              <WorkQueue title="Patient prep">
+                <PatientPrepPanel onPrefillDraftQuery={setDraftPrefillQuery} />
+              </WorkQueue>
+              <WorkQueue title="Treatment plan follow-up">
+                <TreatmentPlanFollowUpPanel />
+              </WorkQueue>
+              <WorkQueue title="Hygiene / recall">
+                <HygieneRecallPanel />
+              </WorkQueue>
+              <WorkQueue title="Compliance">
+                <ComplianceChecklistPanel />
+              </WorkQueue>
+              <WorkQueue title="Vendor / software issues">
+                <VendorIssueTrackerPanel />
+              </WorkQueue>
+              <WorkQueue title="Reports">
+                <OfficeManagerReportsPanel />
+              </WorkQueue>
+            </section>
+
+            <p className="hal-safety-footer" role="note">
+              HAL is local-only and read-only. Drafts require human review. No SoftDent writeback, email, fax, upload,
+              Gateway, or payer submission.
+            </p>
+
+            <details className="hal-workstation-card hal-details-drawer">
+              <summary>Advanced details</summary>
+              <div className="hal-details-drawer__content">
+                {response ? (
+                  <section className="hal-advanced-session" aria-labelledby="hal-session-details-title">
+                    <h2 id="hal-session-details-title">Diagnostics and safeguards</h2>
+                    <p>
+                      <strong>Reference ID:</strong> {response.audit_id}
+                    </p>
+                    <p>
+                      <strong>Response profile:</strong> {response.voice_profile.label} · {response.voice_profile.tone}
+                    </p>
+                    <p>
+                      <strong>Answer lane:</strong> {humanizeLaneLabel(response.voice_profile.lane)}
+                    </p>
+                    {(response.voice_profile.style_notes ?? []).length ? (
+                      <p>
+                        <strong>Style notes:</strong> {response.voice_profile.style_notes.join(" ")}
+                      </p>
+                    ) : null}
+                    <p>
+                      <strong>Saved question:</strong> {response.sanitized_question}
+                    </p>
+                    <p>
+                      <strong>Built-in safeguards:</strong> {response.guardrails.map(humanizeGuardrail).join(", ")}
+                    </p>
+                    <p>
+                      <strong>Governance:</strong>{" "}
+                      {(response.governance_notes ?? []).length
+                        ? response.governance_notes.map((item) => `${item.label}: ${item.detail}`).join(" | ")
+                        : "No governed memory changes were saved silently."}
+                    </p>
+                  </section>
+                ) : null}
+                {(endOfDayArQuery.data?.missing_data_codes ?? []).length ? (
+                  <section className="hal-advanced-session" aria-labelledby="hal-raw-codes-title">
+                    <h2 id="hal-raw-codes-title">Missing data codes (raw)</h2>
+                    <p>{(endOfDayArQuery.data?.missing_data_codes ?? []).join(", ")}</p>
+                  </section>
+                ) : null}
+                <HalSystemHealthPanel
+                  halStatus={halStatusQuery.data}
+                  financialSummary={financialSummaryQuery.data}
+                  isLoading={halStatusQuery.isPending || financialSummaryQuery.isPending}
+                />
+                <HalSourcesPanel response={response} />
+              </div>
+            </details>
+          </div>
         </div>
       </div>
     </div>

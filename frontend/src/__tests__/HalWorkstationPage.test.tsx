@@ -240,7 +240,7 @@ describe("HAL workstation page", () => {
     expect(askHalQuestion).toHaveBeenCalledTimes(1);
 
     resolveRequest?.();
-    await waitFor(() => expect(screen.getByText(/HAL's Response/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Here's what I found/i)).toBeInTheDocument());
   });
 
   it("renders friendly source labels instead of raw README chunk IDs", async () => {

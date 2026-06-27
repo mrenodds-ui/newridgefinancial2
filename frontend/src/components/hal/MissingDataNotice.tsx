@@ -1,3 +1,5 @@
+import { describeMissingDataCodes } from "./missingDataLabels";
+
 export function MissingDataNotice({
   title,
   detail,
@@ -7,11 +9,12 @@ export function MissingDataNotice({
   detail: string;
   codes?: string[];
 }) {
+  const friendly = describeMissingDataCodes(codes);
   return (
     <div className="hal-missing-data-notice" role="status">
       <strong>{title}</strong>
       <p>{detail}</p>
-      {codes.length ? <p className="hal-missing-data-notice__codes">Missing data: {codes.join(", ")}</p> : null}
+      {friendly ? <p className="hal-missing-data-notice__codes">{friendly}</p> : null}
     </div>
   );
 }

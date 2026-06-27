@@ -43,6 +43,27 @@
   margin-bottom: 1rem;
 }
 
+.hal-prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.hal-prompt-chips button {
+  border: 1px solid rgba(214, 177, 94, 0.42);
+  border-radius: 999px;
+  background: rgba(214, 177, 94, 0.12);
+  color: #fef3c7;
+  cursor: pointer;
+  padding: 0.45rem 0.75rem;
+}
+
+.hal-prompt-chips button:hover,
+.hal-prompt-chips button:focus-visible {
+  background: rgba(214, 177, 94, 0.22);
+}
+
 .hal-command-center__form,
 .hal-draft-form {
   display: grid;
@@ -108,6 +129,160 @@
   margin: 0.15rem 0 0;
   color: #f8fafc;
   overflow-wrap: anywhere;
+}
+
+.hal-office-layout {
+  display: grid;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.hal-office-layout .hal-workstation-main {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.hal-section-title {
+  color: #f8fafc;
+  margin: 0 0 0.75rem;
+}
+
+.hal-today-section,
+.hal-quick-actions,
+.hal-section {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.hal-snapshot-card--ok strong {
+  color: #f8fafc;
+}
+
+.hal-snapshot-card--pending strong {
+  color: #fbbf24;
+  font-size: 1rem;
+}
+
+.hal-quick-actions__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.hal-quick-action {
+  border: 1px solid rgba(214, 177, 94, 0.42);
+  border-radius: 12px;
+  background: rgba(214, 177, 94, 0.12);
+  color: #fef3c7;
+  cursor: pointer;
+  padding: 0.6rem 0.85rem;
+  text-align: left;
+}
+
+.hal-quick-action:hover,
+.hal-quick-action:focus-visible {
+  background: rgba(214, 177, 94, 0.22);
+}
+
+.hal-work-queue summary {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.hal-work-queue__title {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.hal-work-queue__hint {
+  color: #cbd5e1;
+  font-size: 0.85rem;
+}
+
+.hal-work-queue__content {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.hal-safety-footer {
+  border: 1px solid rgba(120, 168, 107, 0.4);
+  border-radius: 12px;
+  background: rgba(21, 128, 61, 0.14);
+  color: #dcfce7;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.92rem;
+  margin: 0;
+}
+
+.hal-simple-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.hal-simple-section__header {
+  color: #f8fafc;
+}
+
+.hal-simple-section__header h2 {
+  margin: 0;
+}
+
+.hal-simple-section__header p:not(.eyebrow) {
+  color: #cbd5e1;
+  margin-bottom: 0;
+}
+
+.hal-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.hal-snapshot-card {
+  border: 1px solid rgba(214, 177, 94, 0.26);
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.52);
+  padding: 0.85rem;
+}
+
+.hal-snapshot-card span {
+  display: block;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  margin-bottom: 0.35rem;
+}
+
+.hal-snapshot-card strong {
+  color: #f8fafc;
+  font-size: 1.25rem;
+}
+
+.hal-muted-line {
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  margin-bottom: 0;
+}
+
+.hal-details-drawer summary {
+  color: #f8fafc;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.hal-details-drawer__content {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.hal-advanced-session {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.66);
+  padding: 0.85rem;
 }
 
 .hal-safety-strip {
@@ -198,7 +373,8 @@
 
 @media (max-width: 1100px) {
   .hal-workstation-layout,
-  .hal-recommendation-grid {
+  .hal-recommendation-grid,
+  .hal-snapshot-grid {
     grid-template-columns: 1fr;
   }
 }

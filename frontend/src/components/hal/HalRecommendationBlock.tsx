@@ -44,11 +44,9 @@ export function HalRecommendationBlock({ response, speechControls }: HalRecommen
   return (
     <section className="hal-workstation-card" aria-labelledby="hal-recommendation-title">
       <div className="hal-workstation-card__header">
-        <p className="eyebrow">Recommendation / next step</p>
-        <h2 id="hal-recommendation-title">HAL&apos;s Response</h2>
-        <p>
-          Staff-assistant response · {response.voice_profile.label}
-        </p>
+        <p className="eyebrow">HAL&apos;s answer</p>
+        <h2 id="hal-recommendation-title">Here&apos;s what I found</h2>
+        <p>Based on approved office data and the current conversation.</p>
       </div>
       {!isGenericHelp ? (
         <div className="hal-recommendation-grid">
@@ -80,9 +78,6 @@ export function HalRecommendationBlock({ response, speechControls }: HalRecommen
       ) : null}
       <div className="hal-answer-card__section hal-answer-card__section--lead">{response.answer}</div>
       {speechControls}
-      <div className="hal-answer-card__section">
-        <strong>Reference ID:</strong> {response.audit_id}
-      </div>
     </section>
   );
 }
