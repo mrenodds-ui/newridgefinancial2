@@ -6,6 +6,7 @@ import {
   createInsuranceNarrativeDraftWorkflow,
   type InsuranceNarrativeWorkflowResult,
 } from "../api/client";
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
 
 const FIXTURE_SAMPLE = {
   patientRef: "CHART-A",
@@ -121,16 +122,28 @@ export default function InsuranceNarrativesPage() {
   }
 
   return (
-    <div className="dashboard-page">
+    <PageSurfaceShell className="insurance-narratives-page">
       <div className="page-content">
-        <header className="page-header">
-          <p className="eyebrow">Insurance Narratives</p>
-          <h1>Operator Narrative Workflow</h1>
-          <p>
-            Local packet → draft → optional checker → human review → export preview only. No payer submission, email,
-            fax, or upload occurs from this page.
-          </p>
-        </header>
+        <PageSurfaceHeader
+          breadcrumbs="Billing / Narrative workflow"
+          eyebrow="Insurance narratives"
+          title="Operator narrative workflow"
+          titleId="insurance-narratives-title"
+          description="Local packet → draft → optional checker → human review → export preview only. No payer submission, email, fax, or upload occurs from this page."
+          badges={[
+            { label: "Local-Only" },
+            { label: "Human Review Required" },
+            { label: "Not Submitted" },
+            { label: "No Payer Contact" },
+          ]}
+          statusItems={[
+            { label: "Workflow stage", value: exportResult?.export ? "Export preview" : draftResult ? "Draft review" : "Scope entry" },
+            { label: "Submission status", value: exportResult?.export?.submission_status ?? "not_submitted" },
+            { label: "Checker", value: runChecker ? "Opt-in enabled" : "Off by default" },
+          ]}
+          badgesAriaLabel="Narrative workflow safety posture"
+          statusAriaLabel="Narrative workflow status"
+        />
 
         <section className="hal-answer-card" aria-labelledby="narrative-scope-heading">
           <h2 id="narrative-scope-heading">1. Scope</h2>
@@ -382,6 +395,6 @@ export default function InsuranceNarrativesPage() {
           </p>
         ) : null}
       </div>
-    </div>
+    </PageSurfaceShell>
   );
 }

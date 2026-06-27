@@ -341,7 +341,7 @@ describe("InsuranceNarrativesPage", () => {
       approval_attestation: true,
     });
 
-    expect(await screen.findByText("not_submitted")).toBeInTheDocument();
+    expect((await screen.findAllByText("not_submitted")).length).toBeGreaterThan(0);
     expect(screen.getByText(/Not submitted — local export only/i)).toBeInTheDocument();
     expect(screen.getByText(/\[fact-CLAIM-EXPORT-1-claim-status-export\]/)).toBeInTheDocument();
   });
@@ -371,7 +371,7 @@ describe("InsuranceNarrativesPage", () => {
 
     renderAppAsOperator();
 
-    expect(await screen.findByText("Operator Narrative Workflow")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Operator narrative workflow" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create draft" })).toBeInTheDocument();
   });
 });
