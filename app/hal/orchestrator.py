@@ -20,7 +20,12 @@ from app.ai_local_config import (
     get_backend_model_name,
     get_frontend_base_url,
     get_frontend_model_name,
+    get_hal_fast_model_base_url,
+    get_hal_fast_model_name,
+    get_hal_fast_model_timeout_seconds,
+    get_hal_main_model_timeout_seconds,
     get_model_routing_snapshot,
+    hal_fast_model_enabled,
     load_local_model_profile_config,
     require_lane_runtime,
     resolve_lane_profile,
@@ -42,10 +47,14 @@ from uuid import uuid4
 
 HAL_MODE = "local-rag-phase-1"
 PRIMARY_PROFILE_ALIAS = "chat"
+FAST_PROFILE_ALIAS = "chat_fast"
 PRIMARY_NUM_PREDICT = 64
 PRIMARY_CONTEXT_LIMIT = 2
 PRIMARY_EXCERPT_CHAR_LIMIT = 300
 PRIMARY_SUMMARY_CHAR_LIMIT = 600
+FAST_NUM_PREDICT = 48
+FAST_CONTEXT_LIMIT = 1
+FAST_EXCERPT_CHAR_LIMIT = 200
 ESCALATION_MARKER = "[NEEDS_ESCALATION]"
 SECOND_OPINION_PROFILE_ALIAS = "chat_second_opinion"
 SECOND_OPINION_CONTEXT_LIMIT = 2
@@ -68,6 +77,8 @@ _MINIMAL_OPERATING_PICTURE: dict[str, object] = {"summary": ""}
 _LANE_RUNTIME_CACHE_SECONDS = float(os.getenv("HAL_LANE_RUNTIME_CACHE_SECONDS", "30"))
 _lane_runtime_cache: dict[str, tuple[float, dict[str, object]]] = {}
 _lane_runtime_cache_lock = threading.Lock()
+_deterministic_status_cache: dict[str, tuple[float, dict[str, object]]] = {}
+_deterministic_status_cache_lock = threading.Lock()
 
 
 HAL_PHASES = [
@@ -186,8 +197,17 @@ HAL_VOICE_PROFILES = {
             "Use patient names when useful for authorized internal workflows.",
         ],
     },
+    "fast_office": {
+        "lane": "fast_model",
+        "label": "Ask HAL",
+        "tone": "brief and practical",
+        "style_notes": [
+            "Routine office wording with verified facts only.",
+            "Keep answers short and staff-ready.",
+        ],
+    },
     "deeper_review": {
-        "lane": "deeper_review",
+        "lane": "fallback",
         "label": "HAL needed a deeper review",
         "tone": "grounded and staff-assistant",
         "style_notes": [
@@ -2155,6 +2175,217 @@ def _is_action_summary_request(question: str) -> bool:
     return "top two action items" in lowered or ("summarize" in lowered and "without inventing anything new" in lowered)
 
 
+def _is_ar_availability_question(question: str) -> bool:
+    lowered = question.lower()
+    if not any(keyword in lowered for keyword in ("a/r", " ar ", "accounts receivable", "receivable", "daysheet")):
+        return False
+    return any(
+        keyword in lowered
+        for keyword in (
+            "available",
+            "availability",
+            "imported",
+            "status",
+            "missing",
+            "ready",
+            "can i use",
+            "is there",
+        )
+    )
+
+
+def _is_missing_exports_question(question: str) -> bool:
+    lowered = question.lower()
+    return any(
+        phrase in lowered
+        for phrase in (
+            "which exports are missing",
+            "what exports are missing",
+            "missing exports",
+            "exports missing",
+            "which sources are missing",
+            "what sources are missing",
+            "missing source",
+            "missing data sources",
+        )
+    )
+
+
+def _is_complex_hal_question(question: str, context_bundle: dict[str, object]) -> bool:
+    patient_context = context_bundle.get("patient_context")
+    if isinstance(patient_context, dict) and bool(patient_context.get("matched")):
+        return True
+    lowered = question.lower()
+    complex_keywords = (
+        "narrative",
+        "appeal",
+        "denial",
+        "denied claim",
+        "clinical note",
+        "patient dossier",
+        "packet review",
+        "conflict",
+        "contradict",
+        "legal",
+        "vendor contract",
+        "insurance letter",
+        "writeback",
+        "resubmit",
+    )
+    if any(keyword in lowered for keyword in complex_keywords):
+        return True
+    if _is_patient_follow_up_question(question):
+        return True
+    if _is_patient_ar_balance_question(question):
+        return True
+    return False
+
+
+def _is_routine_office_question(question: str, context_bundle: dict[str, object]) -> bool:
+    if _is_complex_hal_question(question, context_bundle):
+        return False
+    if _is_generic_help_request(question):
+        return False
+    if _is_ar_availability_question(question) or _is_missing_exports_question(question):
+        return False
+    lowered = question.lower()
+    routine_patterns = (
+        "what needs attention",
+        "needs attention today",
+        "summarize today",
+        "today's tasks",
+        "todays tasks",
+        "morning huddle",
+        "prepare morning huddle",
+        "explain this status",
+        "explain the status",
+        "short summary",
+        "office summary",
+        "staff focus",
+        "focus on today",
+        "what should staff",
+    )
+    return any(pattern in lowered for pattern in routine_patterns)
+
+
+def _deterministic_status_cache_ttl_seconds() -> float:
+    try:
+        return max(float(os.getenv("HAL_DETERMINISTIC_STATUS_CACHE_SECONDS", "30")), 0.0)
+    except ValueError:
+        return 30.0
+
+
+def _get_cached_deterministic_response(cache_key: str) -> dict[str, object] | None:
+    ttl = _deterministic_status_cache_ttl_seconds()
+    if ttl <= 0:
+        return None
+    with _deterministic_status_cache_lock:
+        cached = _deterministic_status_cache.get(cache_key)
+        if cached is None:
+            return None
+        expires_at, payload = cached
+        if expires_at <= time.monotonic():
+            _deterministic_status_cache.pop(cache_key, None)
+            return None
+        return dict(payload)
+
+
+def _store_cached_deterministic_response(cache_key: str, payload: dict[str, object]) -> None:
+    ttl = _deterministic_status_cache_ttl_seconds()
+    if ttl <= 0:
+        return
+    with _deterministic_status_cache_lock:
+        _deterministic_status_cache[cache_key] = (time.monotonic() + ttl, dict(payload))
+
+
+def _attach_routing_metadata(
+    payload: dict[str, object],
+    *,
+    answer_lane: str,
+    model_used: str | None = None,
+    escalated: bool = False,
+    routing_elapsed_ms: int | None = None,
+) -> dict[str, object]:
+    enriched = dict(payload)
+    enriched["answer_lane"] = answer_lane
+    enriched["model_used"] = model_used
+    enriched["escalated"] = escalated
+    if routing_elapsed_ms is not None:
+        enriched["routing_elapsed_ms"] = routing_elapsed_ms
+    return enriched
+
+
+def _log_hal_routing(
+    *,
+    question: str,
+    answer_lane: str,
+    model_used: str | None,
+    escalated: bool,
+    routing_elapsed_ms: int,
+    model_called: bool,
+) -> None:
+    category = "complex" if _is_complex_hal_question(question, {"patient_context": {"matched": False}}) else "routine"
+    if _is_generic_help_request(question):
+        category = "generic_help"
+    elif _is_ar_availability_question(question) or _is_missing_exports_question(question):
+        category = "source_status"
+    logger.info(
+        "HAL ask routing category=%s lane=%s model=%s elapsed_ms=%s model_called=%s escalated=%s",
+        category,
+        answer_lane,
+        model_used or "none",
+        routing_elapsed_ms,
+        model_called,
+        escalated,
+    )
+
+
+def _build_ar_availability_status_answer() -> str:
+    from app.services import get_softdent_end_of_day_ar_source_status
+
+    status = get_softdent_end_of_day_ar_source_status()
+    parse_status = str(status.get("parse_status") or "missing")
+    if bool(status.get("available")) and parse_status in {"available", "limited"}:
+        report_date = str(status.get("report_date") or "").strip()
+        if report_date:
+            return (
+                f"SoftDent DAYSHEET A/R is available from the imported report dated {report_date}. "
+                "Use Check today's A/R for the verified balance."
+            )
+        return "SoftDent DAYSHEET A/R is available from an imported daily end-of-day report."
+    if parse_status == "stale":
+        return (
+            "SoftDent DAYSHEET A/R report is present but stale. "
+            "Re-import today's daily end-of-day report before relying on A/R figures."
+        )
+    return (
+        "SoftDent DAYSHEET A/R is not imported yet. "
+        "Import the daily end-of-day report before using A/R figures. "
+        "A/R balances are unavailable until then."
+    )
+
+
+def _build_missing_exports_status_answer() -> str:
+    from app.services import get_softdent_data_coverage
+
+    coverage = get_softdent_data_coverage()
+    rows = coverage.get("rows") if isinstance(coverage.get("rows"), list) else []
+    missing_labels: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("status") or "").lower() == "available":
+            continue
+        label = str(row.get("label") or "").strip()
+        if label:
+            missing_labels.append(label)
+    if not missing_labels:
+        return "All tracked SoftDent exports are currently available from the approved local import lane."
+    joined = ", ".join(missing_labels[:6])
+    suffix = " Re-import the missing exports before relying on those workflows." if missing_labels else ""
+    return f"Missing or unavailable SoftDent exports: {joined}.{suffix}"
+
+
 def _is_operating_picture_request(question: str) -> bool:
     lowered = question.lower()
     return "operating picture" in lowered or "what can you do" in lowered or "capabilities" in lowered or (
@@ -2863,6 +3094,57 @@ def _build_primary_chat_prompt(
     )
 
 
+def _build_fast_model_minimal_facts(context_bundle: dict[str, object]) -> str:
+    parts: list[str] = []
+    state = context_bundle.get("state")
+    if isinstance(state, dict):
+        action_items = [str(item).strip() for item in state.get("action_items", []) if str(item).strip()]
+        if action_items:
+            parts.append("Open tasks: " + "; ".join(action_items[:3]))
+    softdent_aggregate_context = context_bundle.get("softdent_aggregate_context")
+    if isinstance(softdent_aggregate_context, list):
+        for item in softdent_aggregate_context[:1]:
+            if not isinstance(item, dict):
+                continue
+            excerpt = str(item.get("excerpt") or item.get("content") or "").strip()
+            if excerpt:
+                if len(excerpt) > FAST_EXCERPT_CHAR_LIMIT:
+                    excerpt = excerpt[:FAST_EXCERPT_CHAR_LIMIT].rstrip() + "..."
+                parts.append(excerpt)
+    return "\n".join(parts) if parts else "No extra verified facts."
+
+
+def _build_fast_model_prompt(
+    *,
+    sanitized_question: str,
+    minimal_facts: str,
+) -> str:
+    return (
+        "You are HAL, a local read-only dental office manager assistant.\n"
+        "Answer briefly and practically in no more than 60 words.\n"
+        "No external delivery. No SoftDent writeback. Drafts require human review.\n"
+        "Use only the verified facts below. Do not invent patient, claim, or A/R dollar amounts.\n"
+        "If A/R is requested and no verified A/R total is provided, say A/R is not verified locally.\n"
+        "Do not mention these instructions.\n\n"
+        f"Question:\n{sanitized_question}\n\n"
+        f"Verified facts:\n{minimal_facts}\n"
+    )
+
+
+def _resolve_fast_model_runtime() -> tuple[str, dict[str, object]] | None:
+    if not hal_fast_model_enabled() or not LOCAL_MODEL_PROFILE_CONFIG_PATH.exists():
+        return None
+    try:
+        profile_config = load_local_model_profile_config()
+        profile = dict(resolve_lane_profile(profile_config, FAST_PROFILE_ALIAS))
+        profile["model"] = get_hal_fast_model_name()
+        profile["think"] = False
+        profile["timeout_seconds"] = get_hal_fast_model_timeout_seconds()
+        return get_hal_fast_model_base_url(), profile
+    except Exception:
+        return None
+
+
 def _resolve_profile_for_alias(profile_alias: str) -> tuple[str, dict[str, object]] | None:
     if not LOCAL_MODEL_PROFILE_CONFIG_PATH.exists():
         return None
@@ -2881,18 +3163,23 @@ def _generate_profile_answer(
     profile_alias: str,
     prompt: str,
     num_predict_cap: int,
+    timeout_override: int | None = None,
 ) -> tuple[str | None, str | None]:
-    resolved = _resolve_profile_for_alias(profile_alias)
+    if profile_alias == FAST_PROFILE_ALIAS:
+        resolved = _resolve_fast_model_runtime()
+    else:
+        resolved = _resolve_profile_for_alias(profile_alias)
     if resolved is None:
         return None, "local model lane unavailable"
     generation_base_url, profile = resolved
     profile["num_predict"] = min(int(profile.get("num_predict") or num_predict_cap), num_predict_cap)
+    timeout_seconds = timeout_override if timeout_override is not None else _get_profile_timeout_seconds(profile)
     try:
         answer_result = generate_response_result(
             base_url=generation_base_url,
             profile=profile,
             prompt=prompt,
-            timeout_seconds=_get_profile_timeout_seconds(profile),
+            timeout_seconds=timeout_seconds,
             seed=profile.get("seed"),
         )
     except Exception as exc:
@@ -2913,6 +3200,10 @@ def _build_model_hal_response(
     voice_profile_name: str,
     mode_suffix: str,
     guardrail_extras: list[str],
+    answer_lane: str,
+    model_used: str | None = None,
+    escalated: bool = False,
+    routing_elapsed_ms: int | None = None,
 ) -> dict[str, object]:
     state = context_bundle["state"]
     patient_context = context_bundle["patient_context"]
@@ -2945,34 +3236,85 @@ def _build_model_hal_response(
         response_summary=answer[:180],
     )
     patient_matched = bool(patient_context.get("matched")) if isinstance(patient_context, dict) else False
-    return {
-        "mode": f"{HAL_MODE}:{mode_suffix}",
-        "answer": answer,
-        "sanitized_question": sanitized_question,
-        "sanitization_findings": sanitized.get("findings", []),
-        "retrieved_context": combined_context,
-        "guardrails": [
-            "approved local read-only scope",
-            "sanitized retrieval only",
-            "read-only data boundary",
-            "truthful runtime claims only",
-            "audit log recorded",
-            "hardware mutations require human confirmation",
-            "tier-1 critical actions require explicit confirmation",
-            "tier-2 mismatches raise [ALERT]",
-            "tier-3 assistance stays concise",
-        ]
-        + guardrail_extras
-        + (["authorized internal office context"] if patient_matched else []),
-        "audit_id": audit_entry["audit_id"],
-        "access_policy": get_hal_access_policy(),
-        "review_actions": hardware_review_actions,
-        "voice_profile": _voice_profile(voice_profile_name),
-        "governance_notes": _build_governance_notes(
-            patient_context_used=patient_matched,
-            review_actions_present=bool(hardware_review_actions),
-        ),
-    }
+    return _attach_routing_metadata(
+        {
+            "mode": f"{HAL_MODE}:{mode_suffix}",
+            "answer": answer,
+            "sanitized_question": sanitized_question,
+            "sanitization_findings": sanitized.get("findings", []),
+            "retrieved_context": combined_context,
+            "guardrails": [
+                "approved local read-only scope",
+                "sanitized retrieval only",
+                "read-only data boundary",
+                "truthful runtime claims only",
+                "audit log recorded",
+                "hardware mutations require human confirmation",
+                "tier-1 critical actions require explicit confirmation",
+                "tier-2 mismatches raise [ALERT]",
+                "tier-3 assistance stays concise",
+            ]
+            + guardrail_extras
+            + (["authorized internal office context"] if patient_matched else []),
+            "audit_id": audit_entry["audit_id"],
+            "access_policy": get_hal_access_policy(),
+            "review_actions": hardware_review_actions,
+            "voice_profile": _voice_profile(voice_profile_name),
+            "governance_notes": _build_governance_notes(
+                patient_context_used=patient_matched,
+                review_actions_present=bool(hardware_review_actions),
+            ),
+        },
+        answer_lane=answer_lane,
+        model_used=model_used,
+        escalated=escalated,
+        routing_elapsed_ms=routing_elapsed_ms,
+    )
+
+
+def _try_hal_fast_model_answer(
+    *,
+    question: str,
+    actor: str,
+    session_id: str | None,
+    context_bundle: dict[str, object],
+    routing_started_at: float,
+) -> dict[str, object] | None:
+    if not hal_fast_model_enabled() or not _hal_ask_model_routing_enabled():
+        return None
+    sanitized_question = str(context_bundle["sanitized_question"])
+    combined_context = context_bundle["combined_context"]
+    context_list = combined_context if isinstance(combined_context, list) else []
+    minimal_facts = _build_fast_model_minimal_facts(context_bundle)
+    prompt = _build_fast_model_prompt(
+        sanitized_question=sanitized_question,
+        minimal_facts=minimal_facts,
+    )
+    fast_answer, fast_error = _generate_profile_answer(
+        profile_alias=FAST_PROFILE_ALIAS,
+        prompt=prompt,
+        num_predict_cap=FAST_NUM_PREDICT,
+        timeout_override=get_hal_fast_model_timeout_seconds(),
+    )
+    if not fast_answer or _should_escalate_primary_answer(fast_answer, generation_error=fast_error):
+        return None
+    if _model_answer_unsafe_ar(fast_answer, context_list):
+        return None
+    elapsed_ms = int((time.monotonic() - routing_started_at) * 1000)
+    return _build_model_hal_response(
+        actor=actor,
+        question=question,
+        session_id=session_id,
+        context_bundle=context_bundle,
+        answer=fast_answer,
+        voice_profile_name="fast_office",
+        mode_suffix="fast-chat",
+        guardrail_extras=["fast office model response"],
+        answer_lane="fast_model",
+        model_used=get_hal_fast_model_name(),
+        escalated=False,
+        routing_elapsed_ms=elapsed_ms,
+    )
 
 
 def _try_hal_model_answer_with_escalation(
@@ -2982,9 +3324,11 @@ def _try_hal_model_answer_with_escalation(
     summary: dict[str, object] | None,
     session_id: str | None,
     context_bundle: dict[str, object],
+    routing_started_at: float | None = None,
 ) -> dict[str, object] | None:
     if not _hal_ask_model_routing_enabled():
         return None
+    started = routing_started_at or time.monotonic()
     sanitized_question = str(context_bundle["sanitized_question"])
     combined_context = context_bundle["combined_context"]
     context_list = combined_context if isinstance(combined_context, list) else []
@@ -3009,6 +3353,7 @@ def _try_hal_model_answer_with_escalation(
         profile_alias=PRIMARY_PROFILE_ALIAS,
         prompt=primary_prompt,
         num_predict_cap=PRIMARY_NUM_PREDICT,
+        timeout_override=get_hal_main_model_timeout_seconds(),
     )
     if _is_usable(primary_answer, generation_error=primary_error):
         return _build_model_hal_response(
@@ -3020,6 +3365,10 @@ def _try_hal_model_answer_with_escalation(
             voice_profile_name="primary",
             mode_suffix="chat",
             guardrail_extras=["frontline 24B model response"],
+            answer_lane="primary",
+            model_used=get_frontend_model_name(),
+            escalated=False,
+            routing_elapsed_ms=int((time.monotonic() - started) * 1000),
         )
 
     escalation_prompt = _build_second_opinion_prompt(
@@ -3044,6 +3393,10 @@ def _try_hal_model_answer_with_escalation(
             guardrail_extras=[
                 "internal 30B deeper review after frontline answer was inconclusive",
             ],
+            answer_lane="fallback",
+            model_used=get_backend_model_name(),
+            escalated=True,
+            routing_elapsed_ms=int((time.monotonic() - started) * 1000),
         )
 
     if _is_usable(primary_answer, generation_error=None):
@@ -3056,6 +3409,10 @@ def _try_hal_model_answer_with_escalation(
             voice_profile_name="primary",
             mode_suffix="chat",
             guardrail_extras=["frontline 24B model response"],
+            answer_lane="primary",
+            model_used=get_frontend_model_name(),
+            escalated=False,
+            routing_elapsed_ms=int((time.monotonic() - started) * 1000),
         )
 
     del primary_error, deeper_error
@@ -3121,6 +3478,10 @@ def _build_deterministic_hal_answer(
             answer_parts.append(_build_weakest_provider_answer(softdent_aggregate_context))
         elif _is_action_summary_request(question):
             answer_parts.append(_build_action_summary_answer([str(item) for item in state.get("action_items", []) if str(item).strip()]))
+        elif _is_ar_availability_question(question):
+            answer_parts.append(_build_ar_availability_status_answer())
+        elif _is_missing_exports_question(question):
+            answer_parts.append(_build_missing_exports_status_answer())
         if include_operating_picture and not concise_answer_frame:
             answer_parts.append(
                 "I can use sanitized financial summaries, KPI context, approved SoftDent aggregate snapshots, sanitized SoftDent claims or clinical-note exports when available, and approved QuickBooks read-only summaries only."
@@ -3212,20 +3573,63 @@ def answer_hal_question(
     session_id: str | None = None,
     roles: object | None = None,
 ) -> dict[str, object]:
+    routing_started_at = time.monotonic()
+
     if _is_generic_help_request(question):
+        cache_key = "generic_help"
+        cached = _get_cached_deterministic_response(cache_key)
+        if cached is not None:
+            elapsed_ms = int((time.monotonic() - routing_started_at) * 1000)
+            result = _attach_routing_metadata(cached, answer_lane="deterministic", routing_elapsed_ms=elapsed_ms)
+            _log_hal_routing(
+                question=question,
+                answer_lane="deterministic",
+                model_used=None,
+                escalated=False,
+                routing_elapsed_ms=elapsed_ms,
+                model_called=False,
+            )
+            return result
         sanitized = sanitize_hal_text(question)
-        return _build_generic_help_hal_response(
+        payload = _build_generic_help_hal_response(
             question=question,
             actor=actor,
             session_id=session_id,
             sanitized=sanitized,
         )
+        _store_cached_deterministic_response(cache_key, payload)
+        elapsed_ms = int((time.monotonic() - routing_started_at) * 1000)
+        result = _attach_routing_metadata(payload, answer_lane="deterministic", routing_elapsed_ms=elapsed_ms)
+        _log_hal_routing(
+            question=question,
+            answer_lane="deterministic",
+            model_used=None,
+            escalated=False,
+            routing_elapsed_ms=elapsed_ms,
+            model_called=False,
+        )
+        return result
 
     context_bundle = _collect_hal_question_context(
         question=question, actor=actor, session_id=session_id, roles=roles
     )
     deterministic_result: dict[str, object] | None = None
     if _hal_ask_fast_path_enabled():
+        if _is_ar_availability_question(question) or _is_missing_exports_question(question):
+            cache_key = f"status:{_normalize_help_question(question)}"
+            cached = _get_cached_deterministic_response(cache_key)
+            if cached is not None:
+                elapsed_ms = int((time.monotonic() - routing_started_at) * 1000)
+                result = _attach_routing_metadata(cached, answer_lane="deterministic", routing_elapsed_ms=elapsed_ms)
+                _log_hal_routing(
+                    question=question,
+                    answer_lane="deterministic",
+                    model_used=None,
+                    escalated=False,
+                    routing_elapsed_ms=elapsed_ms,
+                    model_called=False,
+                )
+                return result
         deterministic_result = _build_deterministic_hal_answer(
             question=question,
             actor=actor,
@@ -3235,7 +3639,43 @@ def answer_hal_question(
         patient_context = context_bundle.get("patient_context")
         patient_matched = bool(patient_context.get("matched")) if isinstance(patient_context, dict) else False
         if _deterministic_answer_is_substantive(str(deterministic_result.get("answer") or ""), patient_matched=patient_matched):
-            return deterministic_result
+            if _is_ar_availability_question(question) or _is_missing_exports_question(question):
+                cache_key = f"status:{_normalize_help_question(question)}"
+                _store_cached_deterministic_response(cache_key, deterministic_result)
+            elapsed_ms = int((time.monotonic() - routing_started_at) * 1000)
+            result = _attach_routing_metadata(
+                deterministic_result,
+                answer_lane="deterministic",
+                routing_elapsed_ms=elapsed_ms,
+            )
+            _log_hal_routing(
+                question=question,
+                answer_lane="deterministic",
+                model_used=None,
+                escalated=False,
+                routing_elapsed_ms=elapsed_ms,
+                model_called=False,
+            )
+            return result
+
+    if _is_routine_office_question(question, context_bundle):
+        fast_result = _try_hal_fast_model_answer(
+            question=question,
+            actor=actor,
+            session_id=session_id,
+            context_bundle=context_bundle,
+            routing_started_at=routing_started_at,
+        )
+        if fast_result is not None:
+            _log_hal_routing(
+                question=question,
+                answer_lane=str(fast_result.get("answer_lane") or "fast_model"),
+                model_used=str(fast_result.get("model_used") or get_hal_fast_model_name()),
+                escalated=bool(fast_result.get("escalated")),
+                routing_elapsed_ms=int(fast_result.get("routing_elapsed_ms") or 0),
+                model_called=True,
+            )
+            return fast_result
 
     model_result = _try_hal_model_answer_with_escalation(
         question=question,
@@ -3243,17 +3683,51 @@ def answer_hal_question(
         summary=summary,
         session_id=session_id,
         context_bundle=context_bundle,
+        routing_started_at=routing_started_at,
     )
     if model_result is not None:
+        _log_hal_routing(
+            question=question,
+            answer_lane=str(model_result.get("answer_lane") or "primary"),
+            model_used=str(model_result.get("model_used") or ""),
+            escalated=bool(model_result.get("escalated")),
+            routing_elapsed_ms=int(model_result.get("routing_elapsed_ms") or 0),
+            model_called=True,
+        )
         return model_result
     if deterministic_result is not None:
-        return deterministic_result
-    return _build_deterministic_hal_answer(
+        elapsed_ms = int((time.monotonic() - routing_started_at) * 1000)
+        result = _attach_routing_metadata(
+            deterministic_result,
+            answer_lane="deterministic",
+            routing_elapsed_ms=elapsed_ms,
+        )
+        _log_hal_routing(
+            question=question,
+            answer_lane="deterministic",
+            model_used=None,
+            escalated=False,
+            routing_elapsed_ms=elapsed_ms,
+            model_called=False,
+        )
+        return result
+    final = _build_deterministic_hal_answer(
         question=question,
         actor=actor,
         session_id=session_id,
         context_bundle=context_bundle,
     )
+    elapsed_ms = int((time.monotonic() - routing_started_at) * 1000)
+    result = _attach_routing_metadata(final, answer_lane="deterministic", routing_elapsed_ms=elapsed_ms)
+    _log_hal_routing(
+        question=question,
+        answer_lane="deterministic",
+        model_used=None,
+        escalated=False,
+        routing_elapsed_ms=elapsed_ms,
+        model_called=False,
+    )
+    return result
 
 
 def answer_hal_second_opinion_question(

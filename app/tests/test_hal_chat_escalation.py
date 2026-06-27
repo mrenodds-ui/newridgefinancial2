@@ -31,6 +31,7 @@ def test_should_not_escalate_primary_answer_only_because_it_is_long() -> None:
 
 
 def test_answer_hal_question_escalates_from_24b_to_30b(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HAL_ENABLE_FAST_MODEL", "0")
     context_bundle = {
         "state": {},
         "patient_context": {"matched": False},
@@ -48,8 +49,8 @@ def test_answer_hal_question_escalates_from_24b_to_30b(monkeypatch: pytest.Monke
         del kwargs
         return context_bundle
 
-    def fake_generate(*, profile_alias: str, prompt: str, num_predict_cap: int):
-        del prompt, num_predict_cap
+    def fake_generate(*, profile_alias: str, prompt: str, num_predict_cap: int, timeout_override=None):
+        del prompt, num_predict_cap, timeout_override
         if profile_alias == "chat":
             return "[NEEDS_ESCALATION]", None
         if profile_alias == "chat_second_opinion":
@@ -67,6 +68,8 @@ def test_answer_hal_question_escalates_from_24b_to_30b(monkeypatch: pytest.Monke
     assert payload["answer"] == "Escalated deeper review answer for staff."
     assert payload["voice_profile"]["label"] == "HAL needed a deeper review"
     assert payload["mode"].endswith(":deeper-review")
+    assert payload["answer_lane"] == "fallback"
+    assert payload["escalated"] is True
 
 
 def test_answer_hal_question_falls_back_to_deterministic_when_models_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -89,6 +92,7 @@ def test_generic_help_returns_concise_capability_answer() -> None:
     )
 
     assert payload["mode"].endswith(":generic-help")
+    assert payload["answer_lane"] == "deterministic"
     assert payload["answer"].startswith("Yes.")
     assert "local office tasks" in payload["answer"]
     assert "read-only" in payload["answer"].lower()
@@ -240,8 +244,8 @@ def test_model_path_rejects_fabricated_ar_and_falls_back(monkeypatch: pytest.Mon
         "operating_picture": {"summary": "Operating picture"},
     }
 
-    def fake_generate(*, profile_alias: str, prompt: str, num_predict_cap: int):
-        del profile_alias, prompt, num_predict_cap
+    def fake_generate(*, profile_alias: str, prompt: str, num_predict_cap: int, timeout_override=None):
+        del profile_alias, prompt, num_predict_cap, timeout_override
         return "The total A/R is $9,765.", None
 
     monkeypatch.setattr(hal_orchestrator, "_generate_profile_answer", fake_generate)

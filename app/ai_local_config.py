@@ -12,10 +12,12 @@ LOCAL_MODEL_PROFILE_CONFIG_PATH = Path(__file__).resolve().parents[1] / "evals" 
 FRONTEND_PROFILE_ALIASES = frozenset({"chat"})
 BACKEND_PROFILE_ALIASES = frozenset({"chat_second_opinion", "coder"})
 FAST_REVIEW_PROFILE_ALIASES = frozenset({"fast_review"})
+FAST_OFFICE_PROFILE_ALIASES = frozenset({"chat_fast"})
 
 DEFAULT_FRONTEND_MODEL = "mistral-small3.1:24b"
 DEFAULT_BACKEND_MODEL = "qwen3:30b"
 DEFAULT_FAST_REVIEW_MODEL = "qwen3-coder:30b"
+DEFAULT_HAL_FAST_MODEL = "qwen3:14b"
 DEFAULT_FRONTEND_BASE_URL = "http://127.0.0.1:11434"
 DEFAULT_BACKEND_BASE_URL = "http://127.0.0.1:11435"
 DEFAULT_EVALUATOR_BASE_URL = "http://127.0.0.1:11436"
@@ -154,6 +156,32 @@ def get_fast_review_model_name() -> str:
     return DEFAULT_FAST_REVIEW_MODEL
 
 
+def get_hal_fast_model_name() -> str:
+    explicit = _env("HAL_FAST_MODEL_NAME")
+    if explicit.strip():
+        return explicit.strip()
+    return DEFAULT_HAL_FAST_MODEL
+
+
+def get_hal_fast_model_base_url() -> str:
+    explicit = _env("HAL_FAST_MODEL_BASE_URL")
+    if explicit.strip():
+        return _strip_openai_suffix(explicit)
+    return get_frontend_base_url()
+
+
+def hal_fast_model_enabled() -> bool:
+    return _env("HAL_ENABLE_FAST_MODEL", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def get_hal_fast_model_timeout_seconds() -> int:
+    return _parse_positive_int(_env("HAL_FAST_MODEL_TIMEOUT_SECONDS", "12"), 12)
+
+
+def get_hal_main_model_timeout_seconds() -> int:
+    return _parse_positive_int(_env("HAL_MAIN_MODEL_TIMEOUT_SECONDS", "25"), 25)
+
+
 def get_frontend_model_path() -> str:
     return _env("AI_FRONTEND_MODEL_PATH")
 
@@ -188,9 +216,15 @@ def is_fast_review_profile_alias(alias: str) -> bool:
     return alias in FAST_REVIEW_PROFILE_ALIASES
 
 
+def is_fast_office_profile_alias(alias: str) -> bool:
+    return alias in FAST_OFFICE_PROFILE_ALIASES
+
+
 def profile_lane(alias: str) -> str:
     if is_fast_review_profile_alias(alias):
         return "fast_review"
+    if is_fast_office_profile_alias(alias):
+        return "fast_office"
     if alias in BACKEND_PROFILE_ALIASES:
         return "backend"
     if alias in FRONTEND_PROFILE_ALIASES:
@@ -199,6 +233,8 @@ def profile_lane(alias: str) -> str:
 
 
 def get_base_url_for_profile_alias(alias: str) -> str:
+    if is_fast_office_profile_alias(alias):
+        return get_hal_fast_model_base_url()
     if is_fast_review_profile_alias(alias):
         return get_fast_review_base_url()
     if profile_lane(alias) == "backend":
@@ -207,6 +243,8 @@ def get_base_url_for_profile_alias(alias: str) -> str:
 
 
 def get_model_for_profile_alias(alias: str) -> str:
+    if is_fast_office_profile_alias(alias):
+        return get_hal_fast_model_name()
     if is_fast_review_profile_alias(alias):
         return get_fast_review_model_name()
     if profile_lane(alias) == "backend":
@@ -252,7 +290,11 @@ def _apply_gpu_layer_override(profile: dict[str, Any], lane: str) -> dict[str, A
 def apply_lane_env_overrides(profile: dict[str, Any], alias: str) -> dict[str, Any]:
     lane = profile_lane(alias)
     merged = dict(profile)
-    if is_fast_review_profile_alias(alias):
+    if is_fast_office_profile_alias(alias):
+        model_name = get_hal_fast_model_name()
+        context_size = min(get_frontend_context_size(), 2048)
+        quant = get_frontend_quantization()
+    elif is_fast_review_profile_alias(alias):
         model_name = get_fast_review_model_name()
         context_size = get_backend_context_size()
         quant = get_backend_quantization()
@@ -388,9 +430,16 @@ def get_model_routing_snapshot() -> dict[str, object]:
             "quantization": get_backend_quantization(),
             "profile_aliases": sorted(FAST_REVIEW_PROFILE_ALIASES),
         },
+        "fast_office": {
+            "enabled": hal_fast_model_enabled(),
+            "base_url": get_hal_fast_model_base_url(),
+            "model": get_hal_fast_model_name(),
+            "timeout_seconds": get_hal_fast_model_timeout_seconds(),
+            "profile_aliases": sorted(FAST_OFFICE_PROFILE_ALIASES),
+        },
         "profile_base_urls": {
             alias: get_base_url_for_profile_alias(alias)
-            for alias in sorted(FRONTEND_PROFILE_ALIASES | BACKEND_PROFILE_ALIASES)
+            for alias in sorted(FRONTEND_PROFILE_ALIASES | BACKEND_PROFILE_ALIASES | FAST_OFFICE_PROFILE_ALIASES)
         },
         "optional_profile_base_urls": {
             alias: get_base_url_for_profile_alias(alias)

@@ -301,6 +301,9 @@ describe("HAL Command Center page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ask HAL" }));
     await waitFor(() => expect(askHalQuestion).toHaveBeenCalled());
 
+    expect(screen.queryByText(/Internal lane:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Model used:/i)).not.toBeInTheDocument();
+
     const summary = screen.getByText("Advanced details");
     fireEvent.click(summary);
 

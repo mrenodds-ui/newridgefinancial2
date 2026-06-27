@@ -48,7 +48,18 @@ function humanizeLabel(value: string) {
 }
 
 function humanizeLaneLabel(value: string) {
-  return value.replaceAll("_", " ");
+  switch (value) {
+    case "deterministic":
+      return "Verified local status";
+    case "fast_model":
+      return "Routine office assistant";
+    case "primary":
+      return "Main reasoning";
+    case "fallback":
+      return "Deeper review";
+    default:
+      return value.replaceAll("_", " ");
+  }
 }
 
 function humanizeGuardrail(flag: string) {
@@ -784,6 +795,21 @@ export default function AskHal9000Page() {
                     <p>
                       <strong>Answer lane:</strong> {humanizeLaneLabel(response.voice_profile.lane)}
                     </p>
+                    {response.answer_lane ? (
+                      <p>
+                        <strong>Internal lane:</strong> {humanizeLaneLabel(response.answer_lane)}
+                      </p>
+                    ) : null}
+                    {response.model_used ? (
+                      <p>
+                        <strong>Model used:</strong> {response.model_used}
+                      </p>
+                    ) : null}
+                    {typeof response.escalated === "boolean" ? (
+                      <p>
+                        <strong>Escalated:</strong> {response.escalated ? "Yes" : "No"}
+                      </p>
+                    ) : null}
                     {(response.voice_profile.style_notes ?? []).length ? (
                       <p>
                         <strong>Style notes:</strong> {response.voice_profile.style_notes.join(" ")}

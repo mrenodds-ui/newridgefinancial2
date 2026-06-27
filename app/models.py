@@ -126,6 +126,10 @@ class HalAskResponse(BaseModel):
     voice_profile: HalResponseVoiceProfile
     governance_notes: list[HalGovernanceNote] = Field(default_factory=list)
     local_ai_unavailable: str | None = None
+    answer_lane: str | None = None
+    model_used: str | None = None
+    escalated: bool = False
+    routing_elapsed_ms: int | None = None
 
 
 class HalInsuranceNarrativeRequest(BaseModel):

@@ -25,6 +25,22 @@
       "strip_thinking_tags": true,
       "system_prompt_path": "evals/prompts/mistral_chat_system.txt"
     },
+    "chat_fast": {
+      "role": "fast_office",
+      "label": "HAL Fast Office Assistant",
+      "model": "qwen3:14b",
+      "gguf_quant": "Q4_K_M",
+      "ollama_pull": "ollama pull qwen3:14b",
+      "timeout_seconds": 12,
+      "keep_alive": "15m",
+      "temperature": 0,
+      "top_p": 1,
+      "num_ctx": 2048,
+      "num_gpu": 999,
+      "seed": 23,
+      "strip_thinking_tags": true,
+      "system_prompt_path": "evals/prompts/mistral_chat_system.txt"
+    },
     "chat_second_opinion": {
       "role": "second_opinion",
       "label": "Qwen3 30B Deeper Second Opinion",

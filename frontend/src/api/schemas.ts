@@ -855,6 +855,10 @@ export const halAskResponseSchema = z.object({
   review_actions: z.array(halReviewActionSchema).default([]),
   voice_profile: halResponseVoiceProfileSchema.default(defaultHalVoiceProfile),
   governance_notes: z.array(halGovernanceNoteSchema).default([]),
+  answer_lane: z.string().nullable().optional(),
+  model_used: z.string().nullable().optional(),
+  escalated: z.boolean().optional(),
+  routing_elapsed_ms: z.number().nullable().optional(),
 });
 
 export const documentRagUploadResponseSchema = z.object({
