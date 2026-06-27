@@ -244,6 +244,28 @@ describe("HAL Command Center page", () => {
     await waitFor(() => expect(askHalQuestion).toHaveBeenCalledTimes(1));
   });
 
+  it("shows exactly one concise global safety footer", () => {
+    renderPage();
+    const footer = screen.getByText(/HAL is local-only and read-only\. Drafts require human review\./i);
+    expect(footer).toBeInTheDocument();
+    expect(footer).toHaveClass("hal-safety-footer");
+  });
+
+  it("tucks voice / read-aloud controls into a collapsed Accessibility section after an answer", async () => {
+    renderPage();
+    fireEvent.change(screen.getByLabelText(/What do you want HAL to help with/i), {
+      target: { value: "What should staff focus on today?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ask HAL" }));
+    await waitFor(() => expect(askHalQuestion).toHaveBeenCalled());
+
+    const summary = await screen.findByText(/Accessibility \(read aloud\)/i);
+    const details = summary.closest("details");
+    expect(details).not.toBeNull();
+    expect(details).not.toHaveAttribute("open");
+    expect(within(details as HTMLElement).getByRole("button", { name: "Read It Aloud" })).toBeInTheDocument();
+  });
+
   it("expands Advanced details to reveal reference ID and safeguards after an answer", async () => {
     renderPage();
     fireEvent.change(screen.getByLabelText(/What do you want HAL to help with/i), {

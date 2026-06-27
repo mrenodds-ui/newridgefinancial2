@@ -77,7 +77,12 @@ export function HalRecommendationBlock({ response, speechControls }: HalRecommen
       </div>
       ) : null}
       <div className="hal-answer-card__section hal-answer-card__section--lead">{response.answer}</div>
-      {speechControls}
+      {speechControls ? (
+        <details className="hal-accessibility">
+          <summary>Accessibility (read aloud)</summary>
+          {speechControls}
+        </details>
+      ) : null}
     </section>
   );
 }
