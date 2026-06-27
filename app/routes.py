@@ -410,6 +410,7 @@ from .models import (
     OfficeManagerTaskMetricsResponse,
     OfficeManagerTaskResponse,
     OfficeManagerTaskUpdateRequest,
+    ClaimPacketReadinessResponse,
     JournalDraftRequest,
     JournalDraftResponse,
     LocalAccountingDocumentListResponse,
@@ -1808,6 +1809,15 @@ async def api_hal9000_office_manager_attention(
     from app.hal.office_manager_attention import build_office_manager_attention
 
     return build_office_manager_attention(financial_summary=_build_financial_summary_payload())
+
+
+@router.get("/api/hal9000/claim-packet-readiness", response_model=ClaimPacketReadinessResponse)
+async def api_hal9000_claim_packet_readiness(
+    user: AuthenticatedUser = Depends(require_roles("hal:operator", "dashboard:read")),
+):
+    from app.hal.claim_packet_readiness import build_claim_packet_readiness_response
+
+    return build_claim_packet_readiness_response(actor=user.username)
 
 
 @router.get("/api/hal9000/office-manager/tasks", response_model=OfficeManagerTaskListResponse)

@@ -13,6 +13,7 @@ import {
   type SoftDentLocalPacketArtifact,
 } from "../api/client";
 import { ApprovedLocalPacketsPanel } from "../components/hal/ApprovedLocalPacketsPanel";
+import { ClaimPacketReadinessPanel } from "../components/hal/ClaimPacketReadinessPanel";
 import { ClaimsFollowUpPanel } from "../components/hal/ClaimsFollowUpPanel";
 import { ComplianceChecklistPanel } from "../components/hal/ComplianceChecklistPanel";
 import { DraftsForReviewPanel } from "../components/hal/DraftsForReviewPanel";
@@ -209,6 +210,13 @@ function AutomationCenter({
       description: "Checks claim follow-up readiness and drafts local next steps.",
       action: "Review claims",
       onClick: () => onPrefillDraftQuery("denied claim follow-up checklist"),
+    },
+    {
+      badge: "CP",
+      title: "Claim Packet Readiness",
+      description: "Checks local claim packet facts, missing items, and draft readiness.",
+      action: "Review packets",
+      onClick: () => onAskPrefill("claim packet readiness"),
     },
     {
       badge: "AR",
@@ -748,6 +756,9 @@ export default function AskHal9000Page() {
                   selectedPacket={selectedPacket}
                   onPacketCreated={setSelectedPacket}
                 />
+              </CollapsiblePanel>
+              <CollapsiblePanel title="Claim Packet Readiness" description="Local packet facts and missing items">
+                <ClaimPacketReadinessPanel onAskPrefill={askPrefilledQuestion} />
               </CollapsiblePanel>
               <CollapsiblePanel title="Claim Follow-Up">
                 <ClaimsFollowUpPanel

@@ -55,6 +55,7 @@ import {
   officeManagerTaskListResponseSchema,
   officeManagerTaskMetricsResponseSchema,
   officeManagerTaskResponseSchema,
+  claimPacketReadinessResponseSchema,
   softDentEndOfDayArSchema,
   softDentDraftArtifactSchema,
   softDentLocalPacketArtifactSchema,
@@ -72,6 +73,7 @@ import {
   type OfficeManagerTaskCategory,
   type OfficeManagerTaskPriority,
   type OfficeManagerTaskStatus,
+  type ClaimPacketReadinessResponse,
   type InsuranceNarrativeCasePacket,
   type InsuranceNarrativeDraft,
   type InsuranceNarrativeWorkflowResult,
@@ -1042,6 +1044,17 @@ export async function fetchOfficeManagerAttention(): Promise<OfficeManagerAttent
     throw buildRequestError("/api/hal9000/office-manager/attention", primary.response, primary.payload);
   }
   return officeManagerAttentionResponseSchema.parse(primary.payload);
+}
+
+export async function fetchClaimPacketReadiness(): Promise<ClaimPacketReadinessResponse> {
+  const primary = await requestJson("/hal9000/claim-packet-readiness", {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!primary.response.ok) {
+    throw buildRequestError("/api/hal9000/claim-packet-readiness", primary.response, primary.payload);
+  }
+  return claimPacketReadinessResponseSchema.parse(primary.payload);
 }
 
 export async function fetchOfficeManagerTasks(options?: {

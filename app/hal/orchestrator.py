@@ -2278,6 +2278,33 @@ def _is_missing_exports_question(question: str) -> bool:
     )
 
 
+def _is_claim_packet_readiness_question(question: str) -> bool:
+    lowered = question.lower()
+    if "claim packet readiness" in lowered:
+        return True
+    if "packet readiness" in lowered and "claim" in lowered:
+        return True
+    if "which claim packets are blocked" in lowered:
+        return True
+    if "what claims need documents" in lowered:
+        return True
+    if "claims need documents" in lowered:
+        return True
+    if "what can hal draft locally" in lowered and any(
+        token in lowered for token in ("claim", "packet", "narrative", "denial")
+    ):
+        return True
+    return any(
+        phrase in lowered
+        for phrase in (
+            "is this claim packet ready",
+            "claim packet ready",
+            "blocked claim packets",
+            "claims blocked for documents",
+        )
+    )
+
+
 def _is_complex_hal_question(question: str, context_bundle: dict[str, object]) -> bool:
     patient_context = context_bundle.get("patient_context")
     if isinstance(patient_context, dict) and bool(patient_context.get("matched")):
@@ -2314,6 +2341,8 @@ def _is_routine_office_question(question: str, context_bundle: dict[str, object]
     if _is_generic_help_request(question):
         return False
     if _is_ar_availability_question(question) or _is_missing_exports_question(question):
+        return False
+    if _is_claim_packet_readiness_question(question):
         return False
     lowered = question.lower()
     routine_patterns = (
@@ -2410,6 +2439,7 @@ def _should_allow_deterministic_short_circuit(
         _is_generic_help_request(question)
         or _is_ar_availability_question(question)
         or _is_missing_exports_question(question)
+        or _is_claim_packet_readiness_question(question)
         or _is_quickbooks_write_request(question)
         or _is_action_summary_request(question)
     ):
@@ -2494,7 +2524,7 @@ def _log_hal_routing(
     category = "complex" if _is_complex_hal_question(question, {"patient_context": {"matched": False}}) else "routine"
     if _is_generic_help_request(question):
         category = "generic_help"
-    elif _is_ar_availability_question(question) or _is_missing_exports_question(question):
+    elif _is_ar_availability_question(question) or _is_missing_exports_question(question) or _is_claim_packet_readiness_question(question):
         category = "source_status"
     logger.info(
         "HAL ask routing category=%s lane=%s model=%s elapsed_ms=%s model_called=%s escalated=%s",
@@ -2562,6 +2592,12 @@ def _build_missing_exports_status_answer() -> str:
     joined = ", ".join(missing_labels[:6])
     suffix = " Re-import the missing exports before relying on those workflows." if missing_labels else ""
     return f"Missing or unavailable SoftDent exports: {joined}.{suffix}"
+
+
+def _build_claim_packet_readiness_status_answer(*, actor: str) -> str:
+    from app.hal.claim_packet_readiness import build_claim_packet_readiness_answer
+
+    return build_claim_packet_readiness_answer(actor=actor)
 
 
 def _is_operating_picture_request(question: str) -> bool:
@@ -3837,7 +3873,11 @@ def _build_deterministic_hal_answer(
         # self-contained. They must not trail QuickBooks/source-health
         # diagnostics, raw report metrics, or retrieved context excerpts into the
         # staff-facing answer.
-        focused_status_answer = _is_ar_availability_question(question) or _is_missing_exports_question(question)
+        focused_status_answer = (
+            _is_ar_availability_question(question)
+            or _is_missing_exports_question(question)
+            or _is_claim_packet_readiness_question(question)
+        )
         include_operating_picture = _is_operating_picture_request(question) and not _is_follow_up_question(question)
         if include_operating_picture and not concise_answer_frame:
             answer_parts.append(f"{operating_picture['summary']} I answer from deterministic server facts first, then from approved local retrieval.")
@@ -3853,6 +3893,8 @@ def _build_deterministic_hal_answer(
             answer_parts.append(_build_ar_availability_status_answer())
         elif _is_missing_exports_question(question):
             answer_parts.append(_build_missing_exports_status_answer())
+        elif _is_claim_packet_readiness_question(question):
+            answer_parts.append(_build_claim_packet_readiness_status_answer(actor=actor))
         if include_operating_picture and not concise_answer_frame:
             answer_parts.append(
                 "I can use sanitized financial summaries, KPI context, approved SoftDent aggregate snapshots, sanitized SoftDent claims or clinical-note exports when available, and approved QuickBooks read-only summaries only."
@@ -3987,7 +4029,11 @@ def answer_hal_question(
     )
     deterministic_result: dict[str, object] | None = None
     if _hal_ask_fast_path_enabled():
-        if _is_ar_availability_question(question) or _is_missing_exports_question(question):
+        if (
+            _is_ar_availability_question(question)
+            or _is_missing_exports_question(question)
+            or _is_claim_packet_readiness_question(question)
+        ):
             cache_key = f"status:{_normalize_help_question(question)}"
             cached = _get_cached_deterministic_response(cache_key)
             if cached is not None:
@@ -4016,7 +4062,11 @@ def answer_hal_question(
             answer=str(deterministic_result.get("answer") or ""),
             patient_matched=patient_matched,
         ):
-            if _is_ar_availability_question(question) or _is_missing_exports_question(question):
+            if (
+            _is_ar_availability_question(question)
+            or _is_missing_exports_question(question)
+            or _is_claim_packet_readiness_question(question)
+        ):
                 cache_key = f"status:{_normalize_help_question(question)}"
                 _store_cached_deterministic_response(cache_key, deterministic_result)
             elapsed_ms = int((time.monotonic() - routing_started_at) * 1000)

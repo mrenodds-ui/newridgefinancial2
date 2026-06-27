@@ -326,6 +326,9 @@ from app.hal.office_manager_models import (  # noqa: E402
     OfficeManagerTaskResponse,
     OfficeManagerTaskUpdateRequest,
 )
+from app.hal.claim_packet_readiness_models import (  # noqa: E402
+    ClaimPacketReadinessResponse,
+)
 
 
 class HalChartPlanRequest(BaseModel):

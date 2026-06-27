@@ -1180,6 +1180,51 @@ export const officeManagerTaskMetricsResponseSchema = z.object({
   softdent_writeback_performed: z.boolean().default(false),
 });
 
+export const claimPacketReadinessSafetySchema = z.object({
+  local_only: z.boolean().default(true),
+  not_submitted: z.boolean().default(true),
+  human_review_required: z.boolean().default(true),
+  external_delivery_allowed: z.boolean().default(false),
+  softdent_writeback_allowed: z.boolean().default(false),
+  payer_contact_allowed: z.boolean().default(false),
+});
+
+export const claimPacketReadinessItemSchema = z.object({
+  packet_id: z.string(),
+  patient_ref: z.string().nullable().optional(),
+  patient_label: z.string().nullable().optional(),
+  claim_ref: z.string().nullable().optional(),
+  procedure_refs: z.array(z.string()).default([]),
+  status: z.enum(["ready", "needs_review", "blocked"]),
+  priority: z.enum(["low", "normal", "high"]).default("normal"),
+  blockers: z.array(z.string()).default([]),
+  missing_items: z.array(z.string()).default([]),
+  available_items: z.array(z.string()).default([]),
+  recommended_next_actions: z.array(z.string()).default([]),
+  can_prepare_local_draft: z.boolean().default(false),
+  local_draft_status: z.enum(["none", "draft_available", "needs_facts"]).default("none"),
+  safety: claimPacketReadinessSafetySchema,
+  source_basis: z.array(z.string()).default([]),
+  staff_summary: z.string().default(""),
+});
+
+export const claimPacketReadinessSummarySchema = z.object({
+  ready_count: z.number().default(0),
+  needs_review_count: z.number().default(0),
+  blocked_count: z.number().default(0),
+  total_count: z.number().default(0),
+});
+
+export const claimPacketReadinessResponseSchema = z.object({
+  generated_at_utc: z.string(),
+  summary: claimPacketReadinessSummarySchema,
+  items: z.array(claimPacketReadinessItemSchema).default([]),
+  safety_disclaimer: z.string(),
+  safety: claimPacketReadinessSafetySchema,
+  local_only: z.boolean().default(true),
+  submission_status: z.literal("not_submitted").default("not_submitted"),
+});
+
 export const journalLineSchema = z.object({
   account_code: z.string().default(""),
   account_name: z.string().default(""),
@@ -1498,3 +1543,6 @@ export type OfficeManagerTaskMetricsResponse = z.infer<typeof officeManagerTaskM
 export type OfficeManagerTaskCategory = z.infer<typeof officeManagerTaskCategorySchema>;
 export type OfficeManagerTaskStatus = z.infer<typeof officeManagerTaskStatusSchema>;
 export type OfficeManagerTaskPriority = z.infer<typeof officeManagerTaskPrioritySchema>;
+export type ClaimPacketReadinessResponse = z.infer<typeof claimPacketReadinessResponseSchema>;
+export type ClaimPacketReadinessItem = z.infer<typeof claimPacketReadinessItemSchema>;
+export type ClaimPacketReadinessSummary = z.infer<typeof claimPacketReadinessSummarySchema>;

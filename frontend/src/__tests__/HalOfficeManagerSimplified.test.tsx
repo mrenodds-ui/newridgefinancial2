@@ -15,6 +15,7 @@ vi.mock("../api/client", async () => {
     createSoftDentLocalPacket: vi.fn(),
     executeMonitorReviewAction: vi.fn(),
     fetchFinancialSummary: vi.fn(),
+    fetchClaimPacketReadiness: vi.fn(),
     fetchHalPatientDossier: vi.fn(),
     fetchHalStatus: vi.fn(),
     fetchOfficeManagerAttention: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("../api/client", async () => {
 import {
   askHalQuestion,
   fetchFinancialSummary,
+  fetchClaimPacketReadiness,
   fetchHalStatus,
   fetchOfficeManagerAttention,
   fetchOfficeManagerTaskMetrics,
@@ -88,6 +90,51 @@ beforeEach(() => {
     local_only: true,
     external_action_performed: false,
     softdent_writeback_performed: false,
+  });
+  vi.mocked(fetchClaimPacketReadiness).mockResolvedValue({
+    generated_at_utc: "2026-06-27T14:00:00Z",
+    summary: {
+      ready_count: 1,
+      needs_review_count: 2,
+      blocked_count: 3,
+      total_count: 6,
+    },
+    items: [
+      {
+        packet_id: "packet-blocked-1",
+        claim_ref: "CLAIM-1001",
+        status: "blocked",
+        priority: "high",
+        blockers: ["Clinical note missing"],
+        missing_items: ["Clinical note missing"],
+        available_items: [],
+        recommended_next_actions: ["Review packet facts before any operational use."],
+        can_prepare_local_draft: false,
+        local_draft_status: "needs_facts",
+        safety: {
+          local_only: true,
+          not_submitted: true,
+          human_review_required: true,
+          external_delivery_allowed: false,
+          softdent_writeback_allowed: false,
+          payer_contact_allowed: false,
+        },
+        source_basis: ["SoftDent claims export"],
+        staff_summary: "Blocked: Clinical note missing.",
+        procedure_refs: [],
+      },
+    ],
+    safety_disclaimer: "Local only",
+    safety: {
+      local_only: true,
+      not_submitted: true,
+      human_review_required: true,
+      external_delivery_allowed: false,
+      softdent_writeback_allowed: false,
+      payer_contact_allowed: false,
+    },
+    local_only: true,
+    submission_status: "not_submitted",
   });
   vi.mocked(fetchSoftDentEndOfDayAr).mockResolvedValue({
     available: false,
@@ -156,6 +203,7 @@ describe("HAL Command Center page", () => {
     renderPage();
     expect(screen.getByRole("heading", { name: "Prepare Patient Call" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Review Claims" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Claim Packet Readiness" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Daily A/R Check" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Morning Huddle" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Missing Documents" })).toBeInTheDocument();
@@ -167,7 +215,7 @@ describe("HAL Command Center page", () => {
     const automation = screen.getByRole("heading", { name: "Automation Center" }).closest("section");
     expect(automation).not.toBeNull();
     const within_ = within(automation as HTMLElement);
-    for (const badge of ["PC", "CL", "AR", "MH", "MD", "TK"]) {
+    for (const badge of ["PC", "CL", "CP", "AR", "MH", "MD", "TK"]) {
       expect(within_.getByText(badge)).toBeInTheDocument();
     }
   });
@@ -309,5 +357,22 @@ describe("HAL Command Center page", () => {
 
     expect(await screen.findByText(/hal-ref-12345/)).toBeInTheDocument();
     expect(screen.getByText(/Built-in safeguards:/i)).toBeInTheDocument();
+  });
+
+  it("renders Claim Packet Readiness counts and plain-English missing items when expanded", async () => {
+    renderPage();
+    const officeWork = screen.getByRole("heading", { name: "Office work" }).closest("section");
+    expect(officeWork).not.toBeNull();
+    const panelSummary = within(officeWork as HTMLElement).getByText("Claim Packet Readiness");
+    fireEvent.click(panelSummary);
+    const panel = await within(officeWork as HTMLElement).findByLabelText("Claim packet readiness counts");
+    expect(within(panel).getByText("Ready")).toBeInTheDocument();
+    expect(within(panel).getByText("Needs Review")).toBeInTheDocument();
+    expect(within(panel).getByText("Blocked")).toBeInTheDocument();
+    expect(within(officeWork as HTMLElement).getByText(/Blocked: Clinical note missing\./i)).toBeInTheDocument();
+    expect(within(officeWork as HTMLElement).queryByText(/missing_clinical_note/i)).toBeNull();
+    expect(within(officeWork as HTMLElement).getByRole("button", { name: "Review packet" })).toBeInTheDocument();
+    expect(within(officeWork as HTMLElement).getByRole("button", { name: "View missing items" })).toBeInTheDocument();
+    expect(within(officeWork as HTMLElement).getByRole("button", { name: "Prepare local draft" })).toBeDisabled();
   });
 });
