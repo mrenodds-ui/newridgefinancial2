@@ -18,6 +18,7 @@ import { ClaimsFollowUpPanel } from "../components/hal/ClaimsFollowUpPanel";
 import { ComplianceChecklistPanel } from "../components/hal/ComplianceChecklistPanel";
 import { DraftsForReviewPanel } from "../components/hal/DraftsForReviewPanel";
 import { HalCommandCenter } from "../components/hal/HalCommandCenter";
+import { HalControlTower } from "../components/hal/HalControlTower";
 import { HalRecommendationBlock } from "../components/hal/HalRecommendationBlock";
 import { HalSourcesPanel } from "../components/hal/HalSourcesPanel";
 import { HalSystemHealthPanel } from "../components/hal/HalSystemHealthPanel";
@@ -713,6 +714,14 @@ export default function AskHal9000Page() {
                 </div>
               </section>
             ) : null}
+
+            <HalControlTower
+              arAvailable={arAvailable}
+              claimsAvailable={claimsAvailable}
+              openTaskCount={taskMetrics?.open_count ?? 0}
+              draftsAwaitingReview={draftsAwaitingReview}
+              packetsReady={packetsReady}
+            />
 
             <TodaysMission
               financialSummary={financialSummaryQuery.data}
