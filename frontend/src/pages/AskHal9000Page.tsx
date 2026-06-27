@@ -692,8 +692,6 @@ export default function AskHal9000Page() {
               draftsAwaitingReview={draftsAwaitingReview}
             />
 
-            <TodaysAttentionPanel />
-
             <AutomationCenter onPrefillDraftQuery={setDraftPrefillQuery} onAskPrefill={askPrefilledQuestion} />
 
             <WorkQueueBuckets
@@ -707,6 +705,9 @@ export default function AskHal9000Page() {
               <h2 id="hal-office-work-title" className="hal-section-title">
                 Office work
               </h2>
+              <CollapsiblePanel title="Priorities to review" description="What needs review today (local only)">
+                <TodaysAttentionPanel />
+              </CollapsiblePanel>
               <CollapsiblePanel
                 title="Local office tasks"
                 description={hasOpenTasks ? "Open tasks need attention" : "No open tasks"}

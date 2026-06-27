@@ -192,6 +192,22 @@ describe("HAL Command Center page", () => {
     expect(details).not.toHaveAttribute("open");
   });
 
+  it("keeps the office-manager attention list collapsed by default", () => {
+    renderPage();
+    const summary = screen.getByText("Priorities to review");
+    const details = summary.closest("details");
+    expect(details).not.toBeNull();
+    expect(details).not.toHaveAttribute("open");
+  });
+
+  it("places Automation Center directly after Today's Mission in the main flow", async () => {
+    renderPage();
+    const mission = await screen.findByRole("heading", { name: "Today's Mission" });
+    const automation = screen.getByRole("heading", { name: "Automation Center" });
+    const position = mission.compareDocumentPosition(automation);
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("shows staff-friendly missing labels in Today cards and never $0", async () => {
     renderPage();
     const todayHeading = await screen.findByRole("heading", { name: "Today's Mission" });
