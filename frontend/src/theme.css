@@ -1516,6 +1516,15 @@ input[type="range"] {
     inset 0 1px 0 rgba(150, 180, 255, 0.04);
 }
 
+.app-shell--dashboard-theme .dashboard-sidebar__section--muted {
+  opacity: 0.62;
+}
+
+.app-shell--dashboard-theme .dashboard-sidebar__section--muted:hover,
+.app-shell--dashboard-theme .dashboard-sidebar__section--muted:focus-within {
+  opacity: 1;
+}
+
 .app-shell--dashboard-theme .dashboard-sidebar__section-label {
   padding: 0 4px;
   color: #7f95bf;

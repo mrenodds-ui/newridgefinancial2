@@ -12,6 +12,7 @@ type NavItem = {
 type NavGroup = {
   label: string;
   items: NavItem[];
+  muted?: boolean;
 };
 
 const navGroups: NavGroup[] = [
@@ -28,6 +29,7 @@ const navGroups: NavGroup[] = [
   },
   {
     label: "Owner / Admin",
+    muted: true,
     items: [
       { label: "Financial dashboard", path: "/", requiresAdmin: true },
       { label: "SoftDent", path: "/softdent", requiresAdmin: true },
@@ -111,7 +113,10 @@ export default function Sidebar() {
       </label>
       <nav className="dashboard-sidebar__sections" aria-label="Primary navigation">
         {visibleNavGroups.map((group) => (
-          <section key={group.label} className="dashboard-sidebar__section">
+          <section
+            key={group.label}
+            className={group.muted ? "dashboard-sidebar__section dashboard-sidebar__section--muted" : "dashboard-sidebar__section"}
+          >
             <div className="dashboard-sidebar__section-label">{group.label}</div>
             <ul className="dashboard-sidebar__nav">
               {group.items.map((item) => (

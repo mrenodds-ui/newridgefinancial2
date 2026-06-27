@@ -72,4 +72,13 @@ describe("Sidebar navigation", () => {
     expect(owner.getByRole("link", { name: "EBITDA" })).toBeInTheDocument();
     expect(owner.getByRole("link", { name: "Financial dashboard" })).toBeInTheDocument();
   });
+
+  it("de-emphasizes the Owner / Admin section but not the Office section", () => {
+    mockSession({ isAdmin: true });
+    renderSidebar();
+    const officeSection = screen.getByText("Office").closest("section");
+    const ownerSection = screen.getByText("Owner / Admin").closest("section");
+    expect(officeSection?.className).not.toContain("dashboard-sidebar__section--muted");
+    expect(ownerSection?.className).toContain("dashboard-sidebar__section--muted");
+  });
 });
