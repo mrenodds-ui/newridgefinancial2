@@ -386,7 +386,7 @@ def test_legacy_api_alias_routes_remain_available(monkeypatch):
         assert sql_query == "SELECT 1"
         return [{"value": 1}]
 
-    def fake_answer_hal_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None):
+    def fake_answer_hal_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None, roles=None, **kwargs):
         assert question == "What changed?"
         return _fake_hal_ask_response(answer="alias-ok")
 
@@ -1477,7 +1477,7 @@ def test_hal_staged_import_rejects_softdent_files(monkeypatch, tmp_path):
 def test_hal_post_forwards_optional_summary_payload(monkeypatch):
     captured: dict[str, object] = {}
 
-    def fake_answer_hal_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None):
+    def fake_answer_hal_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None, roles=None, **kwargs):
         captured["question"] = question
         captured["actor"] = actor
         captured["summary"] = summary
@@ -1531,7 +1531,7 @@ def test_hal_post_forwards_optional_summary_payload(monkeypatch):
 def test_hal_second_opinion_post_forwards_optional_summary_payload(monkeypatch):
     captured: dict[str, object] = {}
 
-    def fake_answer_hal_second_opinion_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None):
+    def fake_answer_hal_second_opinion_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None, roles=None, **kwargs):
         captured["question"] = question
         captured["actor"] = actor
         captured["summary"] = summary
@@ -1761,7 +1761,7 @@ def test_softdent_import_rejects_unreadable_text_encoding(tmp_path):
 
 
 def test_hal_post_redacts_internal_error_details(monkeypatch):
-    def fake_answer_hal_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None):
+    def fake_answer_hal_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None, roles=None, **kwargs):
         raise RuntimeError(r"C:\secrets\finance.db exploded")
 
     monkeypatch.setattr(routes_module, "answer_hal_question", fake_answer_hal_question)
@@ -1780,7 +1780,7 @@ def test_hal_post_redacts_internal_error_details(monkeypatch):
 
 
 def test_hal_second_opinion_post_redacts_internal_error_details(monkeypatch):
-    def fake_answer_hal_second_opinion_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None):
+    def fake_answer_hal_second_opinion_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None, roles=None, **kwargs):
         raise RuntimeError(r"C:\secrets\finance.db exploded")
 
     monkeypatch.setattr(routes_module, "answer_hal_second_opinion_question", fake_answer_hal_second_opinion_question)
@@ -1801,7 +1801,7 @@ def test_hal_second_opinion_post_redacts_internal_error_details(monkeypatch):
 def test_hal_post_reuses_cookie_session_and_isolates_clients(monkeypatch):
     seen_session_ids: list[str] = []
 
-    def fake_answer_hal_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None):
+    def fake_answer_hal_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None, roles=None, **kwargs):
         assert session_id is not None
         seen_session_ids.append(session_id)
         return _fake_hal_ask_response(answer=f"session={session_id}")
@@ -1825,7 +1825,7 @@ def test_hal_post_reuses_cookie_session_and_isolates_clients(monkeypatch):
 def test_hal_post_ignores_payload_session_id_when_cookie_session_exists(monkeypatch):
     seen_session_ids: list[str] = []
 
-    def fake_answer_hal_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None):
+    def fake_answer_hal_question(*, question: str, actor: str, summary: dict[str, object] | None = None, session_id: str | None = None, roles=None, **kwargs):
         assert session_id is not None
         seen_session_ids.append(session_id)
         return _fake_hal_ask_response(answer=f"session={session_id}")
