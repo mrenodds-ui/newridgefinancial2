@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchFinancialSummary } from "../api/client";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
 import { ChartCard } from "../components/dashboard/ChartCard";
 import { CurrencyBarChart } from "../components/dashboard/CurrencyBarChart";
 import { CurrencyLineChart } from "../components/dashboard/CurrencyLineChart";
@@ -39,11 +40,19 @@ export default function QuickBooksPage() {
   });
 
   if (financialSummaryQuery.isPending) {
-    return <LoadingSpinner label="Loading QuickBooks financial summary..." />;
+    return (
+      <PageSurfaceShell className="quickbooks-page">
+        <LoadingSpinner label="Loading QuickBooks financial summary..." />
+      </PageSurfaceShell>
+    );
   }
 
   if (financialSummaryQuery.isError || !financialSummaryQuery.data) {
-    return <div className="hal-answer-card">Unable to load live QuickBooks summary data.</div>;
+    return (
+      <PageSurfaceShell className="quickbooks-page">
+        <div className="page-state-card page-state-card--error">Unable to load live QuickBooks summary data.</div>
+      </PageSurfaceShell>
+    );
   }
 
   const financialSummary = financialSummaryQuery.data;
@@ -77,12 +86,24 @@ export default function QuickBooksPage() {
   const hasExpenseCategoryData = expenseCategories.length > 0;
 
   return (
-    <div className="dashboard-page">
-      <header className="page-header">
-        <p className="eyebrow">QuickBooks</p>
-        <h1>Business Financials</h1>
-        <div className="dashboard-description">Revenue, operating costs, and profit movement in one accounting view.</div>
-      </header>
+    <PageSurfaceShell className="quickbooks-page">
+      <PageSurfaceHeader
+        breadcrumbs="Data sources / QuickBooks"
+        eyebrow="Accounting feed"
+        title="Business financials"
+        titleId="quickbooks-page-title"
+        description="Revenue, operating costs, and profit movement from approved QuickBooks import exports."
+        badges={[
+          { label: "QuickBooks Read-Only" },
+          { label: "No Writeback" },
+          { label: "Import Cache" },
+        ]}
+        statusItems={[
+          { label: "Feed status", value: financialSummary.quickBooksStatus?.status ?? "Unknown" },
+          { label: "P&L months", value: String(financialSummary.quickBooksProfitLossSummary?.length ?? 0) },
+          { label: "Expense categories", value: String(expenseCategories.length) },
+        ]}
+      />
       <section className="dashboard-toolbar" aria-label="QuickBooks summary">
         <div>
           <div className="dashboard-toolbar__label">Operating margin</div>
@@ -173,6 +194,6 @@ export default function QuickBooksPage() {
           </div>
         </section>
       </div>
-    </div>
+    </PageSurfaceShell>
   );
 }

@@ -86,7 +86,7 @@ describe("SoftDentPage", () => {
 
     renderWithQuery(<SoftDentPage />);
 
-    await screen.findByRole("heading", { name: "Practice Performance" });
+    await screen.findByRole("heading", { name: "Practice performance" });
 
     expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
     expect(screen.getByText("No SoftDent A/R export available.")).toBeInTheDocument();
@@ -113,7 +113,7 @@ describe("SoftDentPage", () => {
 
     renderWithQuery(<SoftDentPage />);
 
-    await screen.findByRole("heading", { name: "Practice Performance" });
+    await screen.findByRole("heading", { name: "Practice performance" });
 
     expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
     expect(screen.getByText("No SoftDent A/R export available.")).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe("SoftDentPage", () => {
 
     renderWithQuery(<SoftDentPage />);
 
-    await screen.findByRole("heading", { name: "Practice Performance" });
+    await screen.findByRole("heading", { name: "Practice performance" });
 
     expect(screen.getAllByText("$3,000").length).toBeGreaterThan(0);
     expect(screen.getAllByText("$700").length).toBeGreaterThan(0);
@@ -170,7 +170,7 @@ describe("SoftDentPage", () => {
 
     renderWithQuery(<SoftDentPage />);
 
-    await screen.findByRole("heading", { name: "Practice Performance" });
+    await screen.findByRole("heading", { name: "Practice performance" });
 
     expect(screen.getAllByText("$0").length).toBeGreaterThan(0);
     expect(screen.queryByText("Unavailable")).not.toBeInTheDocument();

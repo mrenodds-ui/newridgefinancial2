@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatCurrency } from "../../utils/formatting";
 import { fetchFinancialSummary } from "../api/client";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { PageSurfaceHeader, PageSurfaceShell } from "../components/PageSurfaceHeader";
 import { ARAgingBarChart } from "../components/dashboard/ARAgingBarChart";
 import { ChartCard } from "../components/dashboard/ChartCard";
 import { CurrencyLineChart } from "../components/dashboard/CurrencyLineChart";
@@ -32,6 +33,17 @@ function formatArCurrency(value: number | null) {
   return formatCurrency(value);
 }
 
+function formatDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "Unavailable";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Unavailable";
+  }
+  return parsed.toLocaleString();
+}
+
 export default function SoftDentPage() {
   const financialSummaryQuery = useQuery({
     queryKey: ["financial-summary"],
@@ -40,17 +52,17 @@ export default function SoftDentPage() {
 
   if (financialSummaryQuery.isPending) {
     return (
-      <div className="dashboard-page">
+      <PageSurfaceShell className="softdent-page">
         <LoadingSpinner label="Loading SoftDent financials..." />
-      </div>
+      </PageSurfaceShell>
     );
   }
 
   if (financialSummaryQuery.isError || !financialSummaryQuery.data) {
     return (
-      <div className="dashboard-page">
+      <PageSurfaceShell className="softdent-page">
         <div className="page-state-card page-state-card--error">Unable to load live SoftDent financial data.</div>
-      </div>
+      </PageSurfaceShell>
     );
   }
 
@@ -78,23 +90,37 @@ export default function SoftDentPage() {
     : [];
 
   return (
-    <div className="dashboard-page">
-      <header className="page-header">
-        <p className="eyebrow">SoftDent</p>
-        <h1>Practice Performance</h1>
-        <div className="dashboard-description">Production, collections, and receivables from your practice-management workflow.</div>
-      </header>
+    <PageSurfaceShell className="softdent-page">
+      <PageSurfaceHeader
+        breadcrumbs="Data sources / SoftDent"
+        eyebrow="Practice management feed"
+        title="Practice performance"
+        titleId="softdent-page-title"
+        description="Production, collections, and receivables from approved SoftDent import exports. Dental A/R stays unavailable until the DAYSHEET export is present."
+        badges={[
+          { label: "SoftDent Read-Only" },
+          { label: "Missing A/R ≠ $0", tone: "warning" },
+          { label: "No Writeback" },
+        ]}
+        statusItems={[
+          { label: "A/R source", value: arAvailable ? "DAYSHEET imported" : "Awaiting DAYSHEET export" },
+          { label: "Last refresh", value: formatDateTime(financialSummary.latestSoftDentRefreshAt) },
+          { label: "Collection pace", value: collectionPercent === null ? "Unavailable" : `${collectionPercent}%` },
+        ]}
+        badgesAriaLabel="SoftDent data safety posture"
+        statusAriaLabel="SoftDent import status"
+      />
       <section className="dashboard-toolbar" aria-label="SoftDent summary">
         <div>
           <div className="dashboard-toolbar__label">Collections pace</div>
           <div className="dashboard-toolbar__value">{collectionPercent === null ? "Unavailable" : `${collectionPercent}%`}</div>
         </div>
         <div>
-          <div className="dashboard-toolbar__label">Total A/R</div>
+          <div className="dashboard-toolbar__label">Total practice A/R</div>
           <div className="dashboard-toolbar__value">{formatArCurrency(totalAr)}</div>
         </div>
         <div>
-          <div className="dashboard-toolbar__label">90+ A/R</div>
+          <div className="dashboard-toolbar__label">A/R older than 90 days</div>
           <div className="dashboard-toolbar__value">{formatArCurrency(arOver90)}</div>
         </div>
       </section>
@@ -112,10 +138,10 @@ export default function SoftDentPage() {
             Current month: <strong>{formatCurrencyValue(monthlyKpi?.collections)}</strong>
           </div>
           <div>
-            Collection %: <strong>{collectionPercent === null ? "N/A" : `${collectionPercent}%`}</strong>
+            Collection rate: <strong>{collectionPercent === null ? "Unavailable" : `${collectionPercent}%`}</strong>
           </div>
         </SummaryCard>
-        <SummaryCard title="A/R Aging">
+        <SummaryCard title="A/R aging">
           <div>
             Total: <strong>{formatArCurrency(totalAr)}</strong>
           </div>
@@ -123,7 +149,7 @@ export default function SoftDentPage() {
             90+: <strong>{formatArCurrency(arOver90)}</strong>
           </div>
         </SummaryCard>
-        <SummaryCard title="Receivables Focus">
+        <SummaryCard title="Receivables focus">
           <div>
             Current A/R: <strong>{formatArCurrency(currentBalance)}</strong>
           </div>
@@ -133,13 +159,13 @@ export default function SoftDentPage() {
         </SummaryCard>
       </div>
       <div className="dashboard-charts">
-        <ChartCard title="Production Trend">
-          <CurrencyLineChart data={trailing12Months} lines={[{ dataKey: "production", name: "Production", color: "#D6B15E" }]} />
+        <ChartCard title="Production trend">
+          <CurrencyLineChart data={trailing12Months} lines={[{ dataKey: "production", name: "Production", color: "#4c84ff" }]} />
         </ChartCard>
-        <ChartCard title="Collections Trend">
-          <CurrencyLineChart data={trailing12Months} lines={[{ dataKey: "collections", name: "Collections", color: "#78A86B" }]} />
+        <ChartCard title="Collections trend">
+          <CurrencyLineChart data={trailing12Months} lines={[{ dataKey: "collections", name: "Collections", color: "#69e6ff" }]} />
         </ChartCard>
-        <ChartCard title="A/R Aging">
+        <ChartCard title="A/R aging buckets">
           {arAvailable ? (
             <ARAgingBarChart data={arAging} />
           ) : (
@@ -147,11 +173,11 @@ export default function SoftDentPage() {
           )}
         </ChartCard>
       </div>
-      <section className="dashboard-card">
-        <div className="dashboard-card__title">Collections Focus</div>
-        <div className="dashboard-kpi-main">{formatCurrencyValue(monthlyKpi?.collections)}</div>
-        <div className="dashboard-kpi-label">Current month collections</div>
-        <div className="dashboard-kpi-support">
+      <section className="page-surface__focus-card" aria-label="Collections focus">
+        <div className="page-surface__focus-title">Current month collections</div>
+        <div className="page-surface__focus-metric">{formatCurrencyValue(monthlyKpi?.collections)}</div>
+        <div className="page-surface__focus-detail">Verified SoftDent production and collections snapshot</div>
+        <div className="page-surface__focus-support">
           <span>
             Gross production: <strong>{formatCurrencyValue(monthlyKpi?.gross_production)}</strong>
           </span>
@@ -163,6 +189,6 @@ export default function SoftDentPage() {
           </span>
         </div>
       </section>
-    </div>
+    </PageSurfaceShell>
   );
 }

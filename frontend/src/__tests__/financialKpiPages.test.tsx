@@ -138,7 +138,7 @@ describe("financial KPI pages", () => {
 
     renderWithQuery(<SoftDentPage />);
 
-    await screen.findByRole("heading", { name: "Practice Performance" });
+    await screen.findByRole("heading", { name: "Practice performance" });
 
     expect(screen.getAllByText("$900").length).toBeGreaterThan(0);
     expect(screen.getAllByText("$700").length).toBeGreaterThan(0);
