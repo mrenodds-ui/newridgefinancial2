@@ -66,6 +66,44 @@ def initialize_hal_storage(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS hal_memories (
+            memory_id TEXT PRIMARY KEY,
+            category TEXT NOT NULL,
+            text TEXT NOT NULL,
+            source TEXT NOT NULL,
+            created_at_utc TEXT NOT NULL,
+            last_verified_at_utc TEXT NOT NULL,
+            confidence TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            staleness_rule TEXT NOT NULL,
+            expires_at_utc TEXT,
+            sensitivity_level TEXT NOT NULL,
+            status TEXT NOT NULL,
+            must_not_override_json TEXT NOT NULL,
+            proposed_by TEXT NOT NULL,
+            approved_by TEXT,
+            approved_at_utc TEXT,
+            notes TEXT
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS hal_memory_events (
+            event_id TEXT PRIMARY KEY,
+            memory_id TEXT NOT NULL,
+            created_at_utc TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            previous_status TEXT,
+            new_status TEXT,
+            note TEXT NOT NULL,
+            snapshot_json TEXT NOT NULL
+        )
+        """
+    )
     _ensure_hal_conversation_state_schema(connection)
     connection.execute(
         """
@@ -318,6 +356,161 @@ def get_hal_audit(audit_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
     return _map_hal_audit_row(row)
+
+
+def insert_hal_memory(memory: dict[str, Any]) -> None:
+    with hal_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO hal_memories (
+                memory_id, category, text, source, created_at_utc, last_verified_at_utc,
+                confidence, scope, staleness_rule, expires_at_utc, sensitivity_level,
+                status, must_not_override_json, proposed_by, approved_by,
+                approved_at_utc, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                memory["memory_id"],
+                memory["category"],
+                memory["text"],
+                memory["source"],
+                memory["created_at_utc"],
+                memory["last_verified_at_utc"],
+                memory["confidence"],
+                memory["scope"],
+                memory["staleness_rule"],
+                memory.get("expires_at_utc"),
+                memory["sensitivity_level"],
+                memory["status"],
+                json.dumps(memory.get("must_not_override", [])),
+                memory["proposed_by"],
+                memory.get("approved_by"),
+                memory.get("approved_at_utc"),
+                memory.get("notes"),
+            ),
+        )
+
+
+def get_hal_memory(memory_id: str) -> dict[str, Any] | None:
+    with hal_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT memory_id, category, text, source, created_at_utc, last_verified_at_utc,
+                   confidence, scope, staleness_rule, expires_at_utc, sensitivity_level,
+                   status, must_not_override_json, proposed_by, approved_by,
+                   approved_at_utc, notes
+            FROM hal_memories
+            WHERE memory_id = ?
+            """,
+            (memory_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return _map_hal_memory_row(row)
+
+
+def list_hal_memories(*, status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    bounded_limit = max(1, min(limit, 500))
+    where_clause = ""
+    params: list[Any] = []
+    if status:
+        where_clause = "WHERE status = ?"
+        params.append(status)
+    with hal_connection() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT memory_id, category, text, source, created_at_utc, last_verified_at_utc,
+                   confidence, scope, staleness_rule, expires_at_utc, sensitivity_level,
+                   status, must_not_override_json, proposed_by, approved_by,
+                   approved_at_utc, notes
+            FROM hal_memories
+            {where_clause}
+            ORDER BY created_at_utc DESC, memory_id DESC
+            LIMIT ?
+            """,
+            (*params, bounded_limit),
+        ).fetchall()
+    return [_map_hal_memory_row(row) for row in rows]
+
+
+def update_hal_memory(memory_id: str, updates: dict[str, Any]) -> None:
+    allowed_columns = {
+        "category",
+        "text",
+        "source",
+        "last_verified_at_utc",
+        "confidence",
+        "scope",
+        "staleness_rule",
+        "expires_at_utc",
+        "sensitivity_level",
+        "status",
+        "proposed_by",
+        "approved_by",
+        "approved_at_utc",
+        "notes",
+    }
+    assignments: list[str] = []
+    values: list[Any] = []
+    for key, value in updates.items():
+        column = "last_verified_at_utc" if key == "last_verified_at" else key
+        if column not in allowed_columns:
+            continue
+        assignments.append(f"{column} = ?")
+        values.append(value)
+    if not assignments:
+        return
+    values.append(memory_id)
+    with hal_connection() as connection:
+        connection.execute(
+            f"UPDATE hal_memories SET {', '.join(assignments)} WHERE memory_id = ?",
+            tuple(values),
+        )
+
+
+def insert_hal_memory_event(event: dict[str, Any]) -> None:
+    with hal_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO hal_memory_events (
+                event_id, memory_id, created_at_utc, actor, event_type,
+                previous_status, new_status, note, snapshot_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event["event_id"],
+                event["memory_id"],
+                event["created_at_utc"],
+                event["actor"],
+                event["event_type"],
+                event.get("previous_status"),
+                event.get("new_status"),
+                event.get("note", ""),
+                json.dumps(event.get("snapshot", {})),
+            ),
+        )
+
+
+def list_hal_memory_events(*, memory_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    bounded_limit = max(1, min(limit, 200))
+    where_clause = ""
+    params: list[Any] = []
+    if memory_id:
+        where_clause = "WHERE memory_id = ?"
+        params.append(memory_id)
+    with hal_connection() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT event_id, memory_id, created_at_utc, actor, event_type,
+                   previous_status, new_status, note, snapshot_json
+            FROM hal_memory_events
+            {where_clause}
+            ORDER BY created_at_utc ASC, event_id ASC
+            LIMIT ?
+            """,
+            (*params, bounded_limit),
+        ).fetchall()
+    return [_map_hal_memory_event_row(row) for row in rows]
 
 
 def insert_softdent_record_audit(entry: dict[str, Any]) -> None:
@@ -648,6 +841,50 @@ def _map_hal_audit_row(row: sqlite3.Row) -> dict[str, Any]:
         "sanitized_question": row["sanitized_question"],
         "retrieval_ids": json.loads(row["retrieval_ids_json"]),
         "response_summary": row["response_summary"],
+    }
+
+
+def _map_hal_memory_row(row: sqlite3.Row) -> dict[str, Any]:
+    memory_id = row["memory_id"]
+    created_at = row["created_at_utc"]
+    last_verified_at = row["last_verified_at_utc"]
+    expires_at = row["expires_at_utc"]
+    return {
+        "memory_id": memory_id,
+        "id": memory_id,
+        "category": row["category"],
+        "text": row["text"],
+        "source": row["source"],
+        "created_at_utc": created_at,
+        "created_at": created_at,
+        "last_verified_at_utc": last_verified_at,
+        "last_verified_at": last_verified_at,
+        "confidence": row["confidence"],
+        "scope": row["scope"],
+        "staleness_rule": row["staleness_rule"],
+        "expires_at_utc": expires_at,
+        "expires_at": expires_at,
+        "sensitivity_level": row["sensitivity_level"],
+        "status": row["status"],
+        "must_not_override": json.loads(row["must_not_override_json"] or "[]"),
+        "proposed_by": row["proposed_by"],
+        "approved_by": row["approved_by"],
+        "approved_at_utc": row["approved_at_utc"],
+        "notes": row["notes"],
+    }
+
+
+def _map_hal_memory_event_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "event_id": row["event_id"],
+        "memory_id": row["memory_id"],
+        "created_at_utc": row["created_at_utc"],
+        "actor": row["actor"],
+        "event_type": row["event_type"],
+        "previous_status": row["previous_status"],
+        "new_status": row["new_status"],
+        "note": row["note"],
+        "snapshot": json.loads(row["snapshot_json"] or "{}"),
     }
 
 

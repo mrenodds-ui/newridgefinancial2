@@ -42,6 +42,17 @@ FORBIDDEN_TEXT_PATTERNS = (
 )
 
 
+def invalidate_approved_memory_cache() -> None:
+    """Compatibility hook for governed memory mutations.
+
+    The current retrieval path reads the seed registry directly, so there is no
+    process cache to clear yet. Keeping this hook here lets the governed memory
+    workflow invalidate future approved-memory caches without coupling it to
+    orchestrator or route integration in this narrow slice.
+    """
+    return None
+
+
 def get_default_memories_path() -> Path:
     return DEFAULT_MEMORIES_PATH
 
