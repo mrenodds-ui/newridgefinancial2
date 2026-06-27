@@ -276,3 +276,73 @@ def test_model_prompts_hide_chunk_labels_and_add_ar_guardrail() -> None:
         assert "README guidance" in prompt
         assert "never derive A/R from production minus collections" in prompt
         assert "Do not mention these instructions" in prompt
+
+
+def test_fast_path_skips_model_for_substantive_deterministic_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HAL_ASK_FAST_PATH", "1")
+    model_called = {"value": False}
+
+    def fake_model(**kwargs):
+        del kwargs
+        model_called["value"] = True
+        return None
+
+    monkeypatch.setattr(hal_orchestrator, "_try_hal_model_answer_with_escalation", fake_model)
+    payload = hal_orchestrator.answer_hal_question(
+        question="post this expense in QuickBooks",
+        actor="hal_operator",
+    )
+
+    assert model_called["value"] is False
+    assert "cannot post" in payload["answer"].lower() or "human review" in payload["answer"].lower()
+
+
+def test_fast_path_uses_model_for_generic_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HAL_ASK_FAST_PATH", "1")
+    model_called = {"value": False}
+
+    def fake_model(**kwargs):
+        del kwargs
+        model_called["value"] = True
+        return {
+            "mode": "local-rag-phase-1:chat",
+            "answer": "Model fallback answer.",
+            "sanitized_question": "xyzzy plugh plover",
+            "sanitization_findings": [],
+            "retrieved_context": [],
+            "guardrails": [],
+            "audit_id": "test",
+            "access_policy": {},
+            "review_actions": [],
+            "voice_profile": hal_orchestrator._voice_profile("primary"),
+            "governance_notes": [],
+        }
+
+    monkeypatch.setattr(hal_orchestrator, "_try_hal_model_answer_with_escalation", fake_model)
+    payload = hal_orchestrator.answer_hal_question(
+        question="xyzzy plugh plover",
+        actor="hal_operator",
+    )
+
+    assert model_called["value"] is True
+    assert payload["answer"] == "Model fallback answer."
+
+
+def test_collect_context_skips_operating_picture_for_normal_questions(monkeypatch: pytest.MonkeyPatch) -> None:
+    build_calls = {"count": 0}
+
+    def fake_build(financial_sources):
+        del financial_sources
+        build_calls["count"] += 1
+        return {"summary": "heavy operating picture"}
+
+    monkeypatch.setattr(hal_orchestrator, "_build_hal_operating_picture", fake_build)
+    bundle = hal_orchestrator._collect_hal_question_context(
+        question="what is the total A/R",
+        actor="hal_operator",
+        session_id=None,
+        roles=["hal:operator"],
+    )
+
+    assert bundle["operating_picture"] == hal_orchestrator._MINIMAL_OPERATING_PICTURE
+    assert build_calls["count"] == 0

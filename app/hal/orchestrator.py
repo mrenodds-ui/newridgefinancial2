@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import re
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -55,6 +57,17 @@ LOCAL_MODEL_PROFILE_CONFIG_PATH = Path(__file__).resolve().parents[2] / "evals" 
 
 def _hal_ask_model_routing_enabled() -> bool:
     return os.getenv("HAL_ASK_MODEL_ROUTING", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _hal_ask_fast_path_enabled() -> bool:
+    """When enabled, HAL tries the deterministic answer first and skips the local LLM when it is substantive."""
+    return os.getenv("HAL_ASK_FAST_PATH", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+_MINIMAL_OPERATING_PICTURE: dict[str, object] = {"summary": ""}
+_LANE_RUNTIME_CACHE_SECONDS = float(os.getenv("HAL_LANE_RUNTIME_CACHE_SECONDS", "30"))
+_lane_runtime_cache: dict[str, tuple[float, dict[str, object]]] = {}
+_lane_runtime_cache_lock = threading.Lock()
 
 
 HAL_PHASES = [
@@ -494,13 +507,24 @@ def _get_hal_operator_endpoints() -> list[dict[str, str]]:
 
 
 def _build_lane_runtime_snapshot(*, base_url: str, lane: str, model: str) -> dict[str, object]:
-    runtime_status = get_ollama_runtime_status(base_url, timeout_seconds=5)
-    return {
+    cache_key = f"{base_url}:{lane}:{model}"
+    if _LANE_RUNTIME_CACHE_SECONDS > 0:
+        with _lane_runtime_cache_lock:
+            cached = _lane_runtime_cache.get(cache_key)
+            if cached and cached[0] > time.monotonic():
+                return cached[1]
+
+    runtime_status = get_ollama_runtime_status(base_url, timeout_seconds=2)
+    snapshot: dict[str, object] = {
         **runtime_status,
         "lane": lane,
         "model": model,
         "api_reachable": bool(runtime_status.get("api_reachable")),
     }
+    if _LANE_RUNTIME_CACHE_SECONDS > 0:
+        with _lane_runtime_cache_lock:
+            _lane_runtime_cache[cache_key] = (time.monotonic() + _LANE_RUNTIME_CACHE_SECONDS, snapshot)
+    return snapshot
 
 
 def _build_hal_operating_picture(financial_sources: dict[str, object]) -> dict[str, object]:
@@ -937,6 +961,10 @@ def _collect_hal_question_context(
         *live_report_context,
         *retrieved_context,
     ]
+    if _needs_operating_picture_for_question(question):
+        operating_picture = _build_hal_operating_picture(get_financial_source_status())
+    else:
+        operating_picture = _MINIMAL_OPERATING_PICTURE
     return {
         "state": state,
         "patient_context": patient_context,
@@ -947,7 +975,7 @@ def _collect_hal_question_context(
         "softdent_aggregate_context": softdent_aggregate_context,
         "live_report_context": live_report_context,
         "combined_context": combined_context,
-        "operating_picture": _build_hal_operating_picture(get_financial_source_status()),
+        "operating_picture": operating_picture,
     }
 
 
@@ -2134,6 +2162,24 @@ def _is_operating_picture_request(question: str) -> bool:
     )
 
 
+def _needs_operating_picture_for_question(question: str) -> bool:
+    return _is_operating_picture_request(question) and not _is_follow_up_question(question)
+
+
+def _deterministic_answer_is_substantive(answer: str, *, patient_matched: bool) -> bool:
+    if patient_matched:
+        return True
+    normalized = answer.strip()
+    if not normalized:
+        return False
+    generic_fallback = (
+        "I can review approved local office context for a specific patient, claim, metric, or task."
+    )
+    if normalized.startswith(generic_fallback) and len(normalized) < 240:
+        return False
+    return True
+
+
 def _build_quickbooks_write_boundary_answer() -> str:
     return (
         "I cannot post that in QuickBooks myself. "
@@ -3167,19 +3213,30 @@ def answer_hal_question(
     roles: object | None = None,
 ) -> dict[str, object]:
     if _is_generic_help_request(question):
-        patient_context = get_controlled_patient_context(question, roles=roles, actor=actor)
-        if not patient_context.get("matched"):
-            sanitized = sanitize_hal_text(question)
-            return _build_generic_help_hal_response(
-                question=question,
-                actor=actor,
-                session_id=session_id,
-                sanitized=sanitized,
-            )
+        sanitized = sanitize_hal_text(question)
+        return _build_generic_help_hal_response(
+            question=question,
+            actor=actor,
+            session_id=session_id,
+            sanitized=sanitized,
+        )
 
     context_bundle = _collect_hal_question_context(
         question=question, actor=actor, session_id=session_id, roles=roles
     )
+    deterministic_result: dict[str, object] | None = None
+    if _hal_ask_fast_path_enabled():
+        deterministic_result = _build_deterministic_hal_answer(
+            question=question,
+            actor=actor,
+            session_id=session_id,
+            context_bundle=context_bundle,
+        )
+        patient_context = context_bundle.get("patient_context")
+        patient_matched = bool(patient_context.get("matched")) if isinstance(patient_context, dict) else False
+        if _deterministic_answer_is_substantive(str(deterministic_result.get("answer") or ""), patient_matched=patient_matched):
+            return deterministic_result
+
     model_result = _try_hal_model_answer_with_escalation(
         question=question,
         actor=actor,
@@ -3189,6 +3246,8 @@ def answer_hal_question(
     )
     if model_result is not None:
         return model_result
+    if deterministic_result is not None:
+        return deterministic_result
     return _build_deterministic_hal_answer(
         question=question,
         actor=actor,

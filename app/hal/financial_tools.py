@@ -1,12 +1,29 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 import re
+import threading
+import time
 
 from pydantic import BaseModel, Field
 
 from app.config_runtime import get_env_setting
-from app.services import build_softdent_snapshot, fetch_quickbooks_sdk_summary, fetch_softdent_dashboard_aggregate, get_quickbooks_sdk_status, get_quickbooks_source_status, get_softdent_data_coverage, get_softdent_source_status, load_softdent_ar_rows, load_softdent_claim_rows, load_softdent_clinical_note_rows, get_softdent_claim_source_status, get_softdent_clinical_note_source_status
+from app.services import (
+    build_softdent_snapshot,
+    fetch_quickbooks_sdk_summary,
+    fetch_softdent_dashboard_aggregate,
+    get_quickbooks_sdk_breaker_status,
+    get_quickbooks_sdk_status,
+    get_quickbooks_source_status,
+    get_softdent_claim_source_status,
+    get_softdent_clinical_note_source_status,
+    get_softdent_data_coverage,
+    get_softdent_source_status,
+    load_softdent_ar_rows,
+    load_softdent_claim_rows,
+    load_softdent_clinical_note_rows,
+)
 
 from .sanitization import sanitize_hal_text
 
@@ -481,7 +498,40 @@ def get_ar_aging_report(period: ReportPeriod) -> dict[str, object]:
     ).model_dump()
 
 
-def get_financial_source_status() -> dict[str, object]:
+def get_financial_source_status(*, force_refresh: bool = False) -> dict[str, object]:
+    cache_seconds = float(os.getenv("FINANCIAL_SOURCE_STATUS_CACHE_SECONDS", "60"))
+    if cache_seconds > 0 and not force_refresh:
+        cached = _get_cached_financial_source_status(cache_seconds)
+        if cached is not None:
+            return cached
+
+    payload = _build_financial_source_status()
+    if cache_seconds > 0:
+        _store_financial_source_status_cache(payload, cache_seconds)
+    return payload
+
+
+_financial_source_status_cache: dict[str, object] = {"payload": None, "expires_at": 0.0}
+_financial_source_status_cache_lock = threading.Lock()
+
+
+def _get_cached_financial_source_status(cache_seconds: float) -> dict[str, object] | None:
+    with _financial_source_status_cache_lock:
+        expires_at = float(_financial_source_status_cache.get("expires_at") or 0.0)
+        if expires_at > time.monotonic():
+            payload = _financial_source_status_cache.get("payload")
+            if isinstance(payload, dict):
+                return payload
+    return None
+
+
+def _store_financial_source_status_cache(payload: dict[str, object], cache_seconds: float) -> None:
+    with _financial_source_status_cache_lock:
+        _financial_source_status_cache["payload"] = payload
+        _financial_source_status_cache["expires_at"] = time.monotonic() + cache_seconds
+
+
+def _build_financial_source_status() -> dict[str, object]:
     softdent_snapshot = build_softdent_snapshot()
     softdent_available = bool(softdent_snapshot.get("available"))
     softdent_period = str(softdent_snapshot.get("period") or "")
@@ -502,9 +552,9 @@ def get_financial_source_status() -> dict[str, object]:
         "quickbooks": {
             "sdk": get_quickbooks_sdk_status(),
             "topics": get_quickbooks_topic_status(),
-            "live_revenue": get_quickbooks_live_status("revenue"),
-            "live_expenses": get_quickbooks_live_status("expenses"),
-            "live_ar": get_quickbooks_live_status("ar"),
+            "live_revenue": get_quickbooks_live_status_light("revenue"),
+            "live_expenses": get_quickbooks_live_status_light("expenses"),
+            "live_ar": get_quickbooks_live_status_light("ar"),
         },
     }
 
@@ -980,6 +1030,60 @@ def _collect_field_values(rows: list[dict], candidate_keys: tuple[str, ...], *, 
                 if len(values) >= limit:
                     return values
     return values
+
+
+def get_quickbooks_live_status_light(topic: str) -> dict[str, object]:
+    """QuickBooks topic health from approved local export metadata only (no SDK subprocess).
+
+    Used for HAL chat context and cached source-status panels so Ask HAL stays fast
+    when QuickBooks Desktop is closed. Live SDK probes remain in get_quickbooks_live_status().
+    """
+    source_status = get_quickbooks_source_status(topic)
+    breaker = get_quickbooks_sdk_breaker_status()
+    source_available = bool(source_status.get("available"))
+    source_backend = str(source_status.get("source_backend") or "missing")
+    source_file = str(source_status.get("source_file") or "")
+    modified_at_utc = str(source_status.get("modified_at_utc") or "")
+    checked_at_utc = datetime.now(timezone.utc).isoformat()
+
+    if breaker.get("active"):
+        health = "degraded"
+        excerpt = f"QuickBooks {topic} SDK summary is temporarily unavailable: {breaker.get('detail')}"
+        available = False
+        source_id = f"quickbooks-{topic}-sdk-blocked"
+    elif source_available:
+        health = "ok" if source_backend in {"sdk", "env", "export"} else "warning"
+        excerpt = (
+            f"QuickBooks approved {topic} export is available from {source_file or 'approved local source'}."
+        )
+        available = True
+        source_id = f"quickbooks-{topic}-summary"
+    else:
+        health = "degraded"
+        excerpt = f"QuickBooks {topic} summary is unavailable from the approved local sources."
+        available = False
+        source_id = f"quickbooks-{topic}-unavailable"
+
+    review_flags: list[str] = []
+    if not available:
+        review_flags.append("live quickbooks summary missing")
+    if breaker.get("active"):
+        review_flags.append("quickbooks sdk circuit breaker open")
+
+    return _with_review_metadata(
+        {
+            "topic": topic,
+            "available": available,
+            "health": health,
+            "source_backend": source_backend if available else "unavailable",
+            "source_id": source_id,
+            "source_file": source_file,
+            "modified_at_utc": modified_at_utc,
+            "excerpt": excerpt,
+            "checked_at_utc": checked_at_utc,
+        },
+        review_flags=review_flags,
+    )
 
 
 def get_quickbooks_live_status(topic: str) -> dict[str, object]:

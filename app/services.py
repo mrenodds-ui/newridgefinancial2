@@ -81,6 +81,17 @@ def _clear_quickbooks_breaker() -> None:
     with _quickbooks_sdk_breaker_lock:
         _quickbooks_sdk_breaker["error"] = None
         _quickbooks_sdk_breaker["expires_at"] = 0.0
+
+
+def get_quickbooks_sdk_breaker_status() -> dict[str, object]:
+    """Return whether the QuickBooks SDK circuit breaker is currently open."""
+    cooled_error = _quickbooks_breaker_active_error()
+    return {
+        "active": cooled_error is not None,
+        "detail": cooled_error,
+    }
+
+
 QUICKBOOKS_QBXML_VERSION = os.getenv("QUICKBOOKS_QBXML_VERSION", "13.0")
 MAX_QUICKBOOKS_DIAGNOSTIC_SQL_LENGTH = 10_000
 QUICKBOOKS_EXPORT_ENV_BY_TOPIC: dict[str, str] = {
