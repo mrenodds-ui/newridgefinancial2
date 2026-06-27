@@ -14,8 +14,8 @@ BACKEND_PROFILE_ALIASES = frozenset({"chat_second_opinion", "coder"})
 FAST_REVIEW_PROFILE_ALIASES = frozenset({"fast_review"})
 FAST_OFFICE_PROFILE_ALIASES = frozenset({"chat_fast"})
 
-DEFAULT_FRONTEND_MODEL = "mistral-small3.1:24b"
-DEFAULT_BACKEND_MODEL = "qwen3:30b"
+DEFAULT_FRONTEND_MODEL = "qwen3:14b"
+DEFAULT_BACKEND_MODEL = "qwen3:14b"
 DEFAULT_FAST_REVIEW_MODEL = "qwen3-coder:30b"
 DEFAULT_HAL_FAST_MODEL = "qwen3:14b"
 DEFAULT_FRONTEND_BASE_URL = "http://127.0.0.1:11434"
@@ -175,11 +175,11 @@ def hal_fast_model_enabled() -> bool:
 
 
 def get_hal_fast_model_timeout_seconds() -> int:
-    return _parse_positive_int(_env("HAL_FAST_MODEL_TIMEOUT_SECONDS", "12"), 12)
+    return _parse_positive_int(_env("HAL_FAST_MODEL_TIMEOUT_SECONDS", "10"), 10)
 
 
 def get_hal_main_model_timeout_seconds() -> int:
-    return _parse_positive_int(_env("HAL_MAIN_MODEL_TIMEOUT_SECONDS", "25"), 25)
+    return _parse_positive_int(_env("HAL_MAIN_MODEL_TIMEOUT_SECONDS", "15"), 15)
 
 
 def get_frontend_model_path() -> str:

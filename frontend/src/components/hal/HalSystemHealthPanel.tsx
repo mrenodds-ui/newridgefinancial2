@@ -36,11 +36,11 @@ export function HalSystemHealthPanel({
           <dd>{halStatus?.backend || "unknown"}</dd>
         </div>
         <div>
-          <dt>24B lane</dt>
+          <dt>14B chat lane</dt>
           <dd>{halStatus?.mode || "available through HAL"}</dd>
         </div>
         <div>
-          <dt>30B lane</dt>
+          <dt>14B review lane</dt>
           <dd>internal deeper review fallback</dd>
         </div>
         <div>

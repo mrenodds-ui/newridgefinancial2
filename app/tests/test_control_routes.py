@@ -85,21 +85,12 @@ def _fake_tags_payload() -> dict[str, object]:
                 },
             },
             {
-                "name": "qwen3:30b",
-                "capabilities": ["completion", "tools", "thinking"],
-                "details": {
-                    "family": "qwen3moe",
-                    "parameter_size": "30.5B",
-                    "context_length": 262144,
-                },
-            },
-            {
-                "name": "mistral-small3.1:24b",
+                "name": "qwen3:14b",
                 "capabilities": ["completion", "tools", "vision"],
                 "details": {
-                    "family": "mistral3",
-                    "parameter_size": "24.0B",
-                    "context_length": 131072,
+                    "family": "qwen3",
+                    "parameter_size": "14.8B",
+                    "context_length": 40960,
                 },
             },
         ]

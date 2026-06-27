@@ -81,7 +81,7 @@ resolve_frontend_model_tag() {
     echo "$OLLAMA_FRONTEND_MODEL"
     return 0
   fi
-  echo "mistral-small3.1:24b"
+  echo "qwen3:14b"
 }
 
 resolve_backend_model_tag() {
@@ -93,5 +93,5 @@ resolve_backend_model_tag() {
     echo "$OLLAMA_BACKEND_MODEL"
     return 0
   fi
-  echo "qwen3:30b"
+  echo "qwen3:14b"
 }

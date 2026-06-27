@@ -13,9 +13,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 AB_EVAL_SCRIPT = REPO_ROOT / "scripts" / "run_local_model_ab_eval.py"
 AB_CONFIG = {
     "profiles": {
-        "chat": {"model": "mistral-small3.1:24b", "seed": 17},
-        "coder": {"model": "qwen3:30b", "seed": 31},
-        "chat_second_opinion": {"model": "qwen3:30b", "seed": 29, "mirostat": 1},
+        "chat": {"model": "qwen3:14b", "seed": 17},
+        "coder": {"model": "qwen3:14b", "seed": 31},
+        "chat_second_opinion": {"model": "qwen3:14b", "seed": 29, "mirostat": 1},
     }
 }
 

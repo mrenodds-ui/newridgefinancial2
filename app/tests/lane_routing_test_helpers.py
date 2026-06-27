@@ -9,8 +9,8 @@ BACKEND_LANE_URL = "http://127.0.0.1:11435"
 EVALUATOR_LANE_URL = "http://127.0.0.1:11436"
 FAST_REVIEW_LANE_URL = "http://127.0.0.1:11437"
 
-FRONTEND_LANE_MODEL = "mistral-small3.1:24b"
-BACKEND_LANE_MODEL = "qwen3:30b"
+FRONTEND_LANE_MODEL = "qwen3:14b"
+BACKEND_LANE_MODEL = "qwen3:14b"
 EVALUATOR_LANE_MODEL = "qwen3:235b"
 FAST_REVIEW_LANE_MODEL = "qwen3-coder:30b"
 
@@ -34,9 +34,9 @@ def tags_payload_for_lane(lane: str) -> dict[str, object]:
                 "name": FRONTEND_LANE_MODEL,
                 "capabilities": ["completion", "tools", "vision"],
                 "details": {
-                    "family": "mistral3",
-                    "parameter_size": "24.0B",
-                    "context_length": 131072,
+                    "family": "qwen3",
+                    "parameter_size": "14.8B",
+                    "context_length": 40960,
                 },
             },
             {
@@ -55,9 +55,9 @@ def tags_payload_for_lane(lane: str) -> dict[str, object]:
                 "name": BACKEND_LANE_MODEL,
                 "capabilities": ["completion", "tools", "thinking"],
                 "details": {
-                    "family": "qwen3moe",
-                    "parameter_size": "30.5B",
-                    "context_length": 262144,
+                    "family": "qwen3",
+                    "parameter_size": "14.8B",
+                    "context_length": 40960,
                 },
             },
         ]

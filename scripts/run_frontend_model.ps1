@@ -14,7 +14,7 @@ if ($Help) {
     Write-Host @'
 run_frontend_model.ps1 - start the frontend Ollama or llama.cpp lane on :11434.
 
-Default model tag: mistral-small3.1:24b
+Default model tag: qwen3:14b
 Override with AI_FRONTEND_MODEL or OLLAMA_FRONTEND_MODEL.
 Optional custom GGUF tag via AI_FRONTEND_MODEL_PATH / AI_MODEL_PATH when creating from a local file.
 '@
@@ -28,7 +28,7 @@ $defaultModelTag = Get-LocalFrontendModelName
 if (-not $ModelPath) { $ModelPath = $env:AI_FRONTEND_MODEL_PATH }
 
 Write-Host 'Local-only: keep weights under models/ or .local_models/ (gitignored). Never commit GGUF or checkpoint files.'
-Write-Host 'VRAM: frontend 24B Q4_K_M - keep context at 4096 on 16GB AMD; use Vulkan Ollama on Windows.'
+Write-Host 'VRAM: frontend 14B Q4_K_M - keep context at 3072 on 16GB AMD; use Vulkan Ollama on Windows.'
 Write-Host "Default frontend model tag: $defaultModelTag"
 Write-Host 'This script runs in the foreground. Keep this terminal open; stopping it shuts down the frontend lane on this port.'
 Write-Host 'Health check: curl http://127.0.0.1:11434/v1/models'

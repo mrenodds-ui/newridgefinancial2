@@ -228,7 +228,7 @@ def test_hal_operating_picture_handles_empty_completion_ledger(monkeypatch):
             "installed": True,
             "running": True,
             "api_reachable": True,
-            "installed_models": ["mistral-small3.1:24b"],
+            "installed_models": ["qwen3:14b"],
             "model_count": 1,
             "error": None,
         },
@@ -864,7 +864,7 @@ def test_hal_status_includes_operating_picture(monkeypatch):
             "installed": True,
             "running": True,
             "api_reachable": True,
-            "installed_models": ["mistral-small3.1:24b", "qwen2.5-coder:14b", "qwen3:30b"],
+            "installed_models": ["qwen3:14b", "qwen2.5-coder:14b"],
             "model_count": 3,
             "error": None,
         },
@@ -881,9 +881,9 @@ def test_hal_status_includes_operating_picture(monkeypatch):
     assert len(operating_picture["file_ownership_areas"]) == 10
     assert len(operating_picture["completion_ledger"]) == 2
     assert operating_picture["completion_ledger"][-1]["entry_id"] == "unit-test-completion-ledger"
-    assert operating_picture["model_routing"]["primary"]["model"] == "mistral-small3.1:24b"
-    assert operating_picture["model_routing"]["second_opinion"]["model"] == "qwen3:30b"
-    assert operating_picture["model_routing"]["code_help"]["model"] == "qwen3:30b"
+    assert operating_picture["model_routing"]["primary"]["model"] == "qwen3:14b"
+    assert operating_picture["model_routing"]["second_opinion"]["model"] == "qwen3:14b"
+    assert operating_picture["model_routing"]["code_help"]["model"] == "qwen3:14b"
     assert any(item["path"] == "/api/hal/shell/commands" for item in operating_picture["developer_operator_endpoints"])
 
 
@@ -895,7 +895,7 @@ def test_hal_question_uses_operating_picture_voice(monkeypatch):
             "installed": True,
             "running": True,
             "api_reachable": True,
-            "installed_models": ["mistral-small3.1:24b"],
+            "installed_models": ["qwen3:14b"],
             "model_count": 1,
             "error": None,
         },

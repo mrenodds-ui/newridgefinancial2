@@ -7,13 +7,13 @@ environment_variables:
 model_list:
   - model_name: hal-chat-balanced
     litellm_params:
-      model: ollama_chat/mistral-small3.1:24b
+      model: ollama_chat/qwen3:14b
       api_base: os.environ/OLLAMA_FRONTEND_BASE_URL
       rpm: 24
       tpm: 120000
     model_info:
-      family: mistral3
-      context_length: 131072
+      family: qwen3
+      context_length: 40960
       heuristic_tags:
         - vision
         - tools
@@ -21,13 +21,13 @@ model_list:
         - faster_turnaround
   - model_name: hal-coding
     litellm_params:
-      model: ollama_chat/qwen3:30b
+      model: ollama_chat/qwen3:14b
       api_base: os.environ/OLLAMA_BACKEND_BASE_URL
       rpm: 18
       tpm: 90000
     model_info:
-      family: qwen3moe
-      context_length: 262144
+      family: qwen3
+      context_length: 40960
       heuristic_tags:
         - coding
         - long_context
@@ -49,13 +49,13 @@ model_list:
         - large_reasoning
   - model_name: hal-analysis
     litellm_params:
-      model: ollama_chat/qwen3:30b
+      model: ollama_chat/qwen3:14b
       api_base: os.environ/OLLAMA_BACKEND_BASE_URL
       rpm: 18
       tpm: 90000
     model_info:
-      family: qwen3moe
-      context_length: 262144
+      family: qwen3
+      context_length: 40960
       heuristic_tags:
         - coding
         - long_context
@@ -63,13 +63,13 @@ model_list:
         - faster_turnaround
   - model_name: hal-second-opinion
     litellm_params:
-      model: ollama_chat/qwen3:30b
+      model: ollama_chat/qwen3:14b
       api_base: os.environ/OLLAMA_BACKEND_BASE_URL
       rpm: 18
       tpm: 90000
     model_info:
-      family: qwen3moe
-      context_length: 262144
+      family: qwen3
+      context_length: 40960
       heuristic_tags:
         - coding
         - long_context
@@ -77,13 +77,13 @@ model_list:
         - faster_turnaround
   - model_name: hal-vision
     litellm_params:
-      model: ollama_chat/mistral-small3.1:24b
+      model: ollama_chat/qwen3:14b
       api_base: os.environ/OLLAMA_FRONTEND_BASE_URL
       rpm: 24
       tpm: 120000
     model_info:
-      family: mistral3
-      context_length: 131072
+      family: qwen3
+      context_length: 40960
       heuristic_tags:
         - vision
         - tools

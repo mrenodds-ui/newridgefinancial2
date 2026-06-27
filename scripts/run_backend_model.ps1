@@ -14,7 +14,7 @@ if ($Help) {
     Write-Host @'
 run_backend_model.ps1 - start the backend Ollama or llama.cpp lane on :11435.
 
-Default model tag: qwen3:30b
+Default model tag: qwen3:14b
 Override with AI_BACKEND_MODEL or OLLAMA_BACKEND_MODEL.
 Optional custom GGUF tag via AI_BACKEND_MODEL_PATH / AI_MODEL_PATH when creating from a local file.
 '@
@@ -28,7 +28,7 @@ $defaultModelTag = Get-LocalBackendModelName
 if (-not $ModelPath) { $ModelPath = $env:AI_BACKEND_MODEL_PATH }
 
 Write-Host 'Local-only: keep weights under models/ or .local_models/ (gitignored). Never commit GGUF or checkpoint files.'
-Write-Host 'VRAM: backend 30B Q4_K_S - prefer CPU/RAM or partial offload on :11435 to avoid contending with the 24B frontend lane.'
+Write-Host 'VRAM: backend 14B Q4_K_M - keep CPU/RAM on :11435 so the frontend GPU lane stays responsive.'
 Write-Host "Default backend model tag: $defaultModelTag"
 Write-Host 'This script runs in the foreground. Keep this terminal open; stopping it shuts down the backend lane on this port.'
 Write-Host 'Health check: curl http://127.0.0.1:11435/v1/models'

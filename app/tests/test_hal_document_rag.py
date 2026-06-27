@@ -101,7 +101,7 @@ def test_document_rag_upload_and_ask(monkeypatch):
         captured_prompt["prompt"] = prompt
         captured_runtime["generation_base_url"] = base_url
         assert base_url
-        assert profile["model"] == "mistral-small3.1:24b"
+        assert profile["model"] == config.DEFAULT_FRONTEND_MODEL
         assert timeout_seconds >= 1
         return {
             "response_text": "Revenue grew 12% year over year according to q2-earnings-notes.md.",

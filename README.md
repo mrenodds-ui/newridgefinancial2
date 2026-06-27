@@ -62,8 +62,8 @@ Set these in deployment configuration (not copy-pasted from `.env.example` place
 | `LITELLM_PROXY_BASE_URL` | Optional | Default local proxy is `http://127.0.0.1:4000`. Keep bind on localhost unless intentionally exposing with auth. |
 | `AI_FRONTEND_BASE_URL` / `OLLAMA_FRONTEND_BASE_URL` | Local AI enabled | Frontend lane (default `http://127.0.0.1:11434`). `AI_*` takes precedence when set. |
 | `AI_BACKEND_BASE_URL` / `OLLAMA_BACKEND_BASE_URL` | Local AI enabled | Backend/HAL lane (default `http://127.0.0.1:11435`). |
-| `AI_FRONTEND_MODEL` / `OLLAMA_FRONTEND_MODEL` | Local AI enabled | Default frontend tag: `mistral-small3.1:24b`. |
-| `AI_BACKEND_MODEL` / `OLLAMA_BACKEND_MODEL` | Local AI enabled | Default backend tag: `qwen3:30b`. |
+| `AI_FRONTEND_MODEL` / `OLLAMA_FRONTEND_MODEL` | Local AI enabled | Default frontend tag: `qwen3:14b`. |
+| `AI_BACKEND_MODEL` / `OLLAMA_BACKEND_MODEL` | Local AI enabled | Default backend tag: `qwen3:14b`. |
 
 **Operational notes:**
 
@@ -307,7 +307,7 @@ python scripts/write_rebuild_receipt.py --skip-steps --output scripts/rebuild_re
 
 For the recommended PHI-safe local AI architecture and retrieval boundary for HAL, see `docs/hal_phi_rag_architecture.md`.
 For the required authentication and audit controls before any real HAL model integration, see `docs/hal_auth_audit_plan.md`.
-For dual-lane local quantized model setup on AMD Radeon (24B frontend / 30B backend, Ollama or llama.cpp), see `docs/local_quantized_ai_setup.md`.
+For dual-lane local quantized model setup on AMD Radeon (14B frontend / 14B backend review, Ollama or llama.cpp), see `docs/local_quantized_ai_setup.md`.
 
 HAL now uses a local Chroma-backed vector store for retrieval, loads credentials from `APP_AUTH_USERS_JSON`, and exposes a read-only admin audit endpoint at `/api/hal9000/audits`.
 

@@ -1,6 +1,6 @@
 # Local Quantized AI (AMD Radeon RX 9060 XT 16GB)
 
-This repo routes **frontend-facing** HAL interactions through a **24B** model and **backend/HAL server** tasks through a **30B** model. The browser never loads models directly; React calls backend HAL APIs, which call local model runtimes.
+This repo routes **frontend-facing** HAL interactions through a **14B** model and **backend/HAL server** review through the same **14B** tag on a separate port. The browser never loads models directly; React calls backend HAL APIs, which call local model runtimes.
 
 ## Runtime selection
 
@@ -25,14 +25,14 @@ Quantized model weights and runtime outputs stay on the workstation only:
 
 ```text
 Frontend UI -> POST /api/hal9000, /api/hal9000/second-opinion, /api/hal9000/document-rag/ask -> backend HAL
-  -> AI_FRONTEND_BASE_URL (:11434) -> mistral-small3.1:24b (Q4_K_M, ctx 4096)
+  -> AI_FRONTEND_BASE_URL (:11434) -> qwen3:14b (Q4_K_M, ctx 3072)
 
 Backend HAL server tasks (journal draft parser, coder profile, second-opinion lane)
-  -> POST /api/hal9000/second-opinion uses chat_second_opinion on AI_BACKEND_BASE_URL (:11435) -> qwen3:30b
+  -> POST /api/hal9000/second-opinion uses chat_second_opinion on AI_BACKEND_BASE_URL (:11435) -> qwen3:14b
 
 Optional LiteLLM proxy (:4000)
-  -> hal-chat-balanced / hal-vision -> OLLAMA_FRONTEND_BASE_URL (:11434) -> mistral-small3.1:24b
-  -> hal-coding / hal-second-opinion / hal-analysis -> OLLAMA_BACKEND_BASE_URL (:11435) -> qwen3:30b
+  -> hal-chat-balanced / hal-vision -> OLLAMA_FRONTEND_BASE_URL (:11434) -> qwen3:14b
+  -> hal-coding / hal-second-opinion / hal-analysis -> OLLAMA_BACKEND_BASE_URL (:11435) -> qwen3:14b
   -> qwen3:235b evaluator (:11436) is isolated workflow only; no normal LiteLLM alias uses it
 
 Optional experimental fast structured reviewer (opt-in profile `fast_review` only)
@@ -64,8 +64,8 @@ AI_RUNTIME=ollama
 AI_GPU_BACKEND=vulkan
 AI_FRONTEND_BASE_URL=http://127.0.0.1:11434
 AI_BACKEND_BASE_URL=http://127.0.0.1:11435
-AI_FRONTEND_MODEL=mistral-small3.1:24b
-AI_BACKEND_MODEL=qwen3:30b
+AI_FRONTEND_MODEL=qwen3:14b
+AI_BACKEND_MODEL=qwen3:14b
 AI_FRONTEND_QUANT=Q4_K_M
 AI_BACKEND_QUANT=Q4_K_S
 AI_CONTEXT_SIZE=4096
@@ -87,7 +87,7 @@ All lane settings are env-driven (`app/ai_local_config.py` reads `.env`); do not
 | `OLLAMA_EVALUATOR_BASE_URL` | Isolated 235B evaluator on `:11436` only; not used by normal HAL or LiteLLM aliases |
 | `AI_FAST_REVIEW_BASE_URL` / `OLLAMA_FAST_REVIEW_BASE_URL` | **Experimental** fast structured reviewer on `:11437` (`fast_review` profile only; opt-in) |
 | `AI_FAST_REVIEW_MODEL` / `OLLAMA_FAST_REVIEW_MODEL` | Fast reviewer model tag. **Ollama default:** `qwen3-coder:30b`. The GGUF name `Qwen3-Coder-30B-A3B-Instruct` is not in the Ollama registry; use your exact local tag or a custom Ollama import / `llama.cpp` GGUF path. |
-| `AI_FRONTEND_MODEL` / `AI_BACKEND_MODEL` | Ollama model tags or LiteLLM aliases (`mistral-small3.1:24b`, `qwen3:30b`) |
+| `AI_FRONTEND_MODEL` / `AI_BACKEND_MODEL` | Ollama model tags or LiteLLM aliases (`qwen3:14b`) |
 | `OLLAMA_FRONTEND_MODEL` / `OLLAMA_BACKEND_MODEL` | Optional model-tag overrides used by run scripts when `AI_*_MODEL` is unset |
 | `AI_FRONTEND_MODEL_PATH` / `AI_BACKEND_MODEL_PATH` | Local GGUF paths for `llama_cpp` |
 | `AI_CONTEXT_SIZE` | Shared default context (4096 recommended on 16GB) |

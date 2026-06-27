@@ -42,8 +42,8 @@ from .models import (
 router = APIRouter()
 LITELLM_ROUTER_CONFIG_PATH = Path(__file__).resolve().parent.parent / "scripts" / "litellm_ollama_router.yaml"
 DEFAULT_LITELLM_ROUTING_STRATEGY = "simple-shuffle"
-APPROVED_HAL_PRIMARY_MODEL = "mistral-small3.1:24b"
-APPROVED_HAL_SECOND_OPINION_MODEL = "qwen3:30b"
+APPROVED_HAL_PRIMARY_MODEL = "qwen3:14b"
+APPROVED_HAL_SECOND_OPINION_MODEL = "qwen3:14b"
 
 
 @dataclass
