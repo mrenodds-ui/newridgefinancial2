@@ -453,3 +453,94 @@ def test_generic_help_remains_deterministic_and_concise() -> None:
     assert payload["answer"].startswith("Yes.")
     assert "write back to SoftDent" in payload["answer"]
     assert "We are given" not in payload["answer"]
+
+
+def _ar_question_bundle_with_qb_diagnostics(question: str) -> dict[str, object]:
+    qb_diagnostic = {
+        "source_id": "qb-ar-live",
+        "title": "QuickBooks A/R live status",
+        "category": "live_report",
+        "excerpt": (
+            "QuickBooks ar SDK summary is currently unavailable: QuickBooks SDK subprocess failed: "
+            "(-2147221164, 'Exception occurred.', (0, 'QBXMLRP2.RequestProcessor.2', ...))"
+        ),
+    }
+    bundle = _empty_context_bundle(question)
+    bundle["live_report_context"] = [qb_diagnostic]
+    bundle["combined_context"] = [qb_diagnostic]
+    return bundle
+
+
+def test_ar_availability_answer_hides_quickbooks_sdk_diagnostics(monkeypatch: pytest.MonkeyPatch) -> None:
+    question = "is A/R available"
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "_collect_hal_question_context",
+        lambda **kwargs: _ar_question_bundle_with_qb_diagnostics(question),
+    )
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "_build_ar_availability_status_answer",
+        lambda: (
+            "SoftDent DAYSHEET A/R is not imported yet.\n"
+            "A/R balances are unavailable until a current SoftDent Daily End-of-Day / DAYSHEET report is imported.\n"
+            + hal_orchestrator._build_ar_import_next_steps()
+        ),
+    )
+
+    def fail_generate(**kwargs):
+        del kwargs
+        raise AssertionError("A/R availability prompt should not call a model")
+
+    monkeypatch.setattr(hal_orchestrator, "_generate_profile_answer", fail_generate)
+
+    payload = hal_orchestrator.answer_hal_question(question=question, actor="hal_operator")
+    answer = payload["answer"]
+
+    assert payload["answer_lane"] == "deterministic"
+    assert "QuickBooks" not in answer
+    assert "SDK" not in answer
+    assert "QBXML" not in answer
+    assert "source-health" not in answer.lower()
+    # The reassurance line ("not $0") is allowed; a fabricated zero balance is not.
+    assert "is $0" not in answer
+    assert "$0.00" not in answer
+    assert "SoftDent DAYSHEET A/R is not imported yet." in answer
+    assert "Daily End-of-Day" in answer
+    assert "Missing A/R is unavailable, not $0." in answer
+    # The raw diagnostic is still retained in retrieved_context metadata (Advanced-only).
+    assert any(
+        "QBXML" in str(item.get("excerpt") or "")
+        for item in payload["retrieved_context"]
+        if isinstance(item, dict)
+    )
+
+
+def test_ar_import_next_steps_names_daysheet_source_and_not_zero() -> None:
+    text = hal_orchestrator._build_ar_import_next_steps()
+    assert "SoftDent Daily End-of-Day / DAYSHEET report" in text
+    assert "daily_end_of_day import folder" in text
+    assert "Missing A/R is unavailable, not $0." in text
+
+
+def test_missing_exports_answer_excludes_qb_report_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    question = "which exports are missing"
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "_collect_hal_question_context",
+        lambda **kwargs: _ar_question_bundle_with_qb_diagnostics(question),
+    )
+    monkeypatch.setattr(
+        hal_orchestrator,
+        "_build_missing_exports_status_answer",
+        lambda: "Missing or unavailable SoftDent exports: Claims Export.",
+    )
+
+    payload = hal_orchestrator.answer_hal_question(question=question, actor="hal_operator")
+    answer = payload["answer"]
+
+    assert payload["answer_lane"] == "deterministic"
+    assert "QBXML" not in answer
+    assert "SDK" not in answer
+    assert "QuickBooks ar SDK summary" not in answer
+    assert "Missing or unavailable SoftDent exports" in answer

@@ -2507,6 +2507,16 @@ def _log_hal_routing(
     )
 
 
+def _build_ar_import_next_steps() -> str:
+    return (
+        "What to do next:\n"
+        "- Export the latest SoftDent Daily End-of-Day / DAYSHEET report.\n"
+        "- Place it in the local daily_end_of_day import folder.\n"
+        "- Refresh HAL.\n"
+        "Missing A/R is unavailable, not $0."
+    )
+
+
 def _build_ar_availability_status_answer() -> str:
     from app.services import get_softdent_end_of_day_ar_source_status
 
@@ -2522,13 +2532,14 @@ def _build_ar_availability_status_answer() -> str:
         return "SoftDent DAYSHEET A/R is available from an imported daily end-of-day report."
     if parse_status == "stale":
         return (
-            "SoftDent DAYSHEET A/R report is present but stale. "
-            "Re-import today's daily end-of-day report before relying on A/R figures."
+            "SoftDent DAYSHEET A/R report is present but stale.\n"
+            "A/R balances are unavailable until a current SoftDent Daily End-of-Day / DAYSHEET report is imported.\n"
+            f"{_build_ar_import_next_steps()}"
         )
     return (
-        "SoftDent DAYSHEET A/R is not imported yet. "
-        "Import the daily end-of-day report before using A/R figures. "
-        "A/R balances are unavailable until then."
+        "SoftDent DAYSHEET A/R is not imported yet.\n"
+        "A/R balances are unavailable until a current SoftDent Daily End-of-Day / DAYSHEET report is imported.\n"
+        f"{_build_ar_import_next_steps()}"
     )
 
 
@@ -3822,6 +3833,11 @@ def _build_deterministic_hal_answer(
         report_summary = _build_report_answer_summary(live_report_context)
         answer_parts: list[str] = []
         concise_answer_frame = _should_use_concise_answer_frame(question)
+        # Focused status answers (A/R availability, missing exports) are
+        # self-contained. They must not trail QuickBooks/source-health
+        # diagnostics, raw report metrics, or retrieved context excerpts into the
+        # staff-facing answer.
+        focused_status_answer = _is_ar_availability_question(question) or _is_missing_exports_question(question)
         include_operating_picture = _is_operating_picture_request(question) and not _is_follow_up_question(question)
         if include_operating_picture and not concise_answer_frame:
             answer_parts.append(f"{operating_picture['summary']} I answer from deterministic server facts first, then from approved local retrieval.")
@@ -3844,19 +3860,20 @@ def _build_deterministic_hal_answer(
             answer_parts.append(
                 "Priority routing applies: Tier 1 critical actions stay proposal-only until a human explicitly confirms them; Tier 2 read-and-analyze work stays read-only and must raise [ALERT] on mismatches; Tier 3 assistance stays concise and fast."
             )
-        if hardware_summary:
-            answer_parts.append(f"Verified hardware metrics: {hardware_summary}")
-        if softdent_summary:
-            answer_parts.append(f"Verified SoftDent metrics: {softdent_summary}")
-        if report_summary:
-            answer_parts.append(f"Verified report metrics: {report_summary}")
-            for item in live_report_context:
-                if str(item.get("source_id") or "").startswith("qb-"):
-                    answer_parts.append(_get_context_title(item))
-                    break
+        if not focused_status_answer:
+            if hardware_summary:
+                answer_parts.append(f"Verified hardware metrics: {hardware_summary}")
+            if softdent_summary:
+                answer_parts.append(f"Verified SoftDent metrics: {softdent_summary}")
+            if report_summary:
+                answer_parts.append(f"Verified report metrics: {report_summary}")
+                for item in live_report_context:
+                    if str(item.get("source_id") or "").startswith("qb-"):
+                        answer_parts.append(_get_context_title(item))
+                        break
         if hardware_review_actions:
             answer_parts.append("Requested hardware changes require human confirmation before any device command is sent.")
-        if context_summary:
+        if not focused_status_answer and context_summary:
             answer_parts.append(context_summary)
         if _user_asked_for_sources(question):
             friendly_sources = _summarize_sources_for_display(combined_context)
