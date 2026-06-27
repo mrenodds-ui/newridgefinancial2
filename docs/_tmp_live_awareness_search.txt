@@ -1,7 +1,0 @@
-C:\New folder\local_dashboard_api_server.js:1115:async function buildHalLiveAwarenessSummary() {
-C:\New folder\local_dashboard_api_server.js:1242:const awareness = await buildHalLiveAwarenessSummary();
-C:\New folder\local_dashboard_api_server.js:1984:const awareness = await buildHalLiveAwarenessSummary();
-C:\New folder\local_dashboard_api_server.js:2356:buildHalLiveAwarenessSummary,
-C:\New folder\api\server\halCoreRoutes.js:512:buildHalLiveAwarenessSummary,
-C:\New folder\api\server\halCoreRoutes.js:972:const runtimeAwareness = buildHalLiveAwarenessSummary
-C:\New folder\api\server\halCoreRoutes.js:973:? await buildHalLiveAwarenessSummary()

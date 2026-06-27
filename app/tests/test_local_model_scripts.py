@@ -34,10 +34,10 @@ def _clear_model_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_app_defaults_match_expected_lane_models() -> None:
-    assert config.DEFAULT_FRONTEND_MODEL == "qwen3:14b"
-    assert config.DEFAULT_BACKEND_MODEL == "qwen3:14b"
-    assert config.get_frontend_model_name() == "qwen3:14b"
-    assert config.get_backend_model_name() == "qwen3:14b"
+    assert config.DEFAULT_FRONTEND_MODEL == "queen3:14b"
+    assert config.DEFAULT_BACKEND_MODEL == "queen3:14b"
+    assert config.get_frontend_model_name() == "queen3:14b"
+    assert config.get_backend_model_name() == "queen3:14b"
 
 
 def test_model_env_precedence_matches_app_config(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,8 +60,8 @@ def test_normal_run_scripts_use_app_default_tags() -> None:
     frontend_script_sh = (SCRIPTS_DIR / "run_frontend_model.sh").read_text(encoding="utf-8")
     backend_script_sh = (SCRIPTS_DIR / "run_backend_model.sh").read_text(encoding="utf-8")
 
-    assert "qwen3:14b" in defaults_ps1
-    assert "qwen3:14b" in defaults_sh
+    assert "queen3:14b" in defaults_ps1
+    assert "queen3:14b" in defaults_sh
     assert "Get-LocalFrontendModelName" in frontend_script_ps1
     assert "Get-LocalBackendModelName" in backend_script_ps1
     assert "resolve_frontend_model_tag" in frontend_script_sh
@@ -81,8 +81,8 @@ def test_normal_run_scripts_do_not_default_to_evaluator_model() -> None:
 
 def test_env_example_documents_actual_default_tags() -> None:
     env_example = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
-    assert "AI_FRONTEND_MODEL=qwen3:14b" in env_example
-    assert "AI_BACKEND_MODEL=qwen3:14b" in env_example
+    assert "AI_FRONTEND_MODEL=queen3:14b" in env_example
+    assert "AI_BACKEND_MODEL=queen3:14b" in env_example
     assert "# AI_FRONTEND_MODEL=frontend-24b-q4" in env_example
     assert "# AI_BACKEND_MODEL=backend-30b-q4" in env_example
 

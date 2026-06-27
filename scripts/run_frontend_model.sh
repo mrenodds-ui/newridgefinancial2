@@ -7,7 +7,7 @@ print_frontend_model_help() {
   cat <<EOF
 run_frontend_model.sh - start the frontend Ollama or llama.cpp lane on :11434.
 
-Default model tag: qwen3:14b
+Default model tag: queen3:14b
 Override with AI_FRONTEND_MODEL or OLLAMA_FRONTEND_MODEL.
 Optional custom GGUF tag via AI_FRONTEND_MODEL_PATH / AI_MODEL_PATH when creating from a local file.
 EOF
@@ -46,7 +46,7 @@ EOF
     echo "Created Ollama model tag: $TAG on $OLLAMA_HOST"
   fi
   echo "Starting Ollama (Vulkan on Windows AMD) at http://${HOST}:${PORT}"
-  echo "Pull or use: ollama pull qwen3:14b"
+  echo "Pull or use: ollama pull queen3:14b"
   exec ollama serve
 fi
 

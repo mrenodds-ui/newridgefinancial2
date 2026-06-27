@@ -25,14 +25,14 @@ Quantized model weights and runtime outputs stay on the workstation only:
 
 ```text
 Frontend UI -> POST /api/hal9000, /api/hal9000/second-opinion, /api/hal9000/document-rag/ask -> backend HAL
-  -> AI_FRONTEND_BASE_URL (:11434) -> qwen3:14b (Q4_K_M, ctx 3072)
+  -> AI_FRONTEND_BASE_URL (:11434) -> queen3:14b (Q4_K_M, ctx 3072)
 
 Backend HAL server tasks (journal draft parser, coder profile, second-opinion lane)
-  -> POST /api/hal9000/second-opinion uses chat_second_opinion on AI_BACKEND_BASE_URL (:11435) -> qwen3:14b
+  -> POST /api/hal9000/second-opinion uses chat_second_opinion on AI_BACKEND_BASE_URL (:11435) -> queen3:14b
 
 Optional LiteLLM proxy (:4000)
-  -> hal-chat-balanced / hal-vision -> OLLAMA_FRONTEND_BASE_URL (:11434) -> qwen3:14b
-  -> hal-coding / hal-second-opinion / hal-analysis -> OLLAMA_BACKEND_BASE_URL (:11435) -> qwen3:14b
+  -> hal-chat-balanced / hal-vision -> OLLAMA_FRONTEND_BASE_URL (:11434) -> queen3:14b
+  -> hal-coding / hal-second-opinion / hal-analysis -> OLLAMA_BACKEND_BASE_URL (:11435) -> queen3:14b
   -> qwen3:235b evaluator (:11436) is isolated workflow only; no normal LiteLLM alias uses it
 
 Optional experimental fast structured reviewer (opt-in profile `fast_review` only)
@@ -64,15 +64,15 @@ AI_RUNTIME=ollama
 AI_GPU_BACKEND=vulkan
 AI_FRONTEND_BASE_URL=http://127.0.0.1:11434
 AI_BACKEND_BASE_URL=http://127.0.0.1:11435
-AI_FRONTEND_MODEL=qwen3:14b
-AI_BACKEND_MODEL=qwen3:14b
+AI_FRONTEND_MODEL=queen3:14b
+AI_BACKEND_MODEL=queen3:14b
 AI_FRONTEND_QUANT=Q4_K_M
 AI_BACKEND_QUANT=Q4_K_M
 AI_CONTEXT_SIZE=3072
 AI_FRONTEND_CONTEXT_SIZE=3072
 AI_BACKEND_CONTEXT_SIZE=3072
 HAL_ENABLE_FAST_MODEL=1
-HAL_FAST_MODEL_NAME=qwen3:14b
+HAL_FAST_MODEL_NAME=queen3:14b
 HAL_FAST_MODEL_TIMEOUT_SECONDS=10
 HAL_MAIN_MODEL_TIMEOUT_SECONDS=15
 ```
@@ -93,7 +93,7 @@ All lane settings are env-driven (`app/ai_local_config.py` reads `.env`); do not
 | `OLLAMA_EVALUATOR_BASE_URL` | Isolated 235B evaluator on `:11436` only; not used by normal HAL or LiteLLM aliases |
 | `AI_FAST_REVIEW_BASE_URL` / `OLLAMA_FAST_REVIEW_BASE_URL` | **Experimental** fast structured reviewer on `:11437` (`fast_review` profile only; opt-in) |
 | `AI_FAST_REVIEW_MODEL` / `OLLAMA_FAST_REVIEW_MODEL` | Fast reviewer model tag. **Ollama default:** `qwen3-coder:30b`. The GGUF name `Qwen3-Coder-30B-A3B-Instruct` is not in the Ollama registry; use your exact local tag or a custom Ollama import / `llama.cpp` GGUF path. |
-| `AI_FRONTEND_MODEL` / `AI_BACKEND_MODEL` | Ollama model tags or LiteLLM aliases (`qwen3:14b`) |
+| `AI_FRONTEND_MODEL` / `AI_BACKEND_MODEL` | Ollama model tags or LiteLLM aliases (`queen3:14b`) |
 | `OLLAMA_FRONTEND_MODEL` / `OLLAMA_BACKEND_MODEL` | Optional model-tag overrides used by run scripts when `AI_*_MODEL` is unset |
 | `AI_FRONTEND_MODEL_PATH` / `AI_BACKEND_MODEL_PATH` | Local GGUF paths for `llama_cpp` |
 | `AI_CONTEXT_SIZE` | Shared default context (3072 recommended on 16GB for daily 14B lanes) |
@@ -118,7 +118,7 @@ Outputs are written to `.local_models/` by default (gitignored, local-only — d
 
 ## Experimental fast structured reviewer (`:11437`)
 
-**Status: experimental and opt-in.** This lane does **not** replace the production backend default (`qwen3:14b` on `:11435`) or `POST /api/hal9000/second-opinion`.
+**Status: experimental and opt-in.** This lane does **not** replace the production backend default (`queen3:14b` on `:11435`) or `POST /api/hal9000/second-opinion`.
 
 Use the `fast_review` profile when you want a faster structured checker for:
 
@@ -128,7 +128,7 @@ Use the `fast_review` profile when you want a faster structured checker for:
 - contradiction checks
 - structured JSON review output
 
-It is **not** the default narrative writer. Benchmark structured review quality against `qwen3:14b` before promoting it.
+It is **not** the default narrative writer. Benchmark structured review quality against `queen3:14b` before promoting it.
 
 | Item | Value |
 | --- | --- |
@@ -211,7 +211,7 @@ python scripts/run_fast_review_bakeoff.py \
 - The default report `fast_review_bakeoff_report.json` is gitignored.
 - Use `--dry-run` to resolve lanes and check health without calling models.
 
-Benchmark `fast_review` against `qwen3:14b` here before considering it for any real workflow. Do
+Benchmark `fast_review` against `queen3:14b` here before considering it for any real workflow. Do
 **not** run the bakeoff at the same time as the isolated 235B evaluator.
 
 ## Run model servers
@@ -237,8 +237,8 @@ Terminal 1 — frontend 14B chat:
 ```powershell
 $env:AI_PORT = '11434'
 .\scripts\run_frontend_model.ps1
-# Default tag: qwen3:14b (override with AI_FRONTEND_MODEL)
-# or: ollama pull qwen3:14b with default Ollama on :11434
+# Default tag: queen3:14b (override with AI_FRONTEND_MODEL)
+# or: ollama pull queen3:14b with default Ollama on :11434
 ```
 
 Terminal 2 — backend 14B review on a second port:
@@ -246,7 +246,7 @@ Terminal 2 — backend 14B review on a second port:
 ```powershell
 $env:AI_PORT = '11435'
 .\scripts\run_backend_model.ps1
-# Default tag: qwen3:14b (override with AI_BACKEND_MODEL)
+# Default tag: queen3:14b (override with AI_BACKEND_MODEL)
 # or: $env:OLLAMA_HOST='127.0.0.1:11435'; ollama serve
 ```
 
@@ -256,12 +256,12 @@ $env:AI_PORT = '11435'
 AI_MODEL_PATH=.local_models/frontend/frontend-24b.Q4_K_M.gguf \
 AI_PORT=11434 AI_RUNTIME=llama_cpp AI_GPU_BACKEND=vulkan \
 ./scripts/run_frontend_model.sh
-# Default tag: qwen3:14b (override with AI_FRONTEND_MODEL)
+# Default tag: queen3:14b (override with AI_FRONTEND_MODEL)
 
 AI_MODEL_PATH=.local_models/backend/backend-30b.Q4_K_S.gguf \
 AI_PORT=11435 AI_RUNTIME=llama_cpp AI_GPU_LAYERS=0 \
 ./scripts/run_backend_model.sh
-# Default tag: qwen3:14b (override with AI_BACKEND_MODEL)
+# Default tag: queen3:14b (override with AI_BACKEND_MODEL)
 ```
 
 ## 235B evaluator workflow (isolated, one section at a time)
@@ -313,7 +313,7 @@ curl http://127.0.0.1:11435/api/tags
 Tiny completion (low temperature, few tokens):
 
 ```powershell
-curl http://127.0.0.1:11434/api/generate -d '{"model":"qwen3:14b","prompt":"Say OK","stream":false,"options":{"temperature":0,"num_predict":8}}'
+curl http://127.0.0.1:11434/api/generate -d '{"model":"queen3:14b","prompt":"Say OK","stream":false,"options":{"temperature":0,"num_predict":8}}'
 ```
 
 ## VRAM notes

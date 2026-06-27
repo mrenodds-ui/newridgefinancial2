@@ -62,8 +62,8 @@ Set these in deployment configuration (not copy-pasted from `.env.example` place
 | `LITELLM_PROXY_BASE_URL` | Optional | Default local proxy is `http://127.0.0.1:4000`. Keep bind on localhost unless intentionally exposing with auth. |
 | `AI_FRONTEND_BASE_URL` / `OLLAMA_FRONTEND_BASE_URL` | Local AI enabled | Frontend lane (default `http://127.0.0.1:11434`). `AI_*` takes precedence when set. |
 | `AI_BACKEND_BASE_URL` / `OLLAMA_BACKEND_BASE_URL` | Local AI enabled | Backend/HAL lane (default `http://127.0.0.1:11435`). |
-| `AI_FRONTEND_MODEL` / `OLLAMA_FRONTEND_MODEL` | Local AI enabled | Default frontend tag: `qwen3:14b`. |
-| `AI_BACKEND_MODEL` / `OLLAMA_BACKEND_MODEL` | Local AI enabled | Default backend tag: `qwen3:14b`. |
+| `AI_FRONTEND_MODEL` / `OLLAMA_FRONTEND_MODEL` | Local AI enabled | Default frontend tag: `queen3:14b`. |
+| `AI_BACKEND_MODEL` / `OLLAMA_BACKEND_MODEL` | Local AI enabled | Default backend tag: `queen3:14b`. |
 
 **Operational notes:**
 

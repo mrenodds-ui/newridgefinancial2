@@ -78,7 +78,7 @@ def test_run_ab_comparison_uses_requested_profiles(monkeypatch):
     assert payload["regression_flags"]["any_failed"] is False
     case = payload["cases"][0]
     assert case["profile_a"]["output"] == (
-        "qwen3:14b::Verified local context for this run:\n"
+        "queen3:14b::Verified local context for this run:\n"
         "- Verified runtime summary.\n"
         "- Operator mode: deterministic_server_facts_first\n\n"
         "Use the verified local context above as authoritative for current-state questions. "
@@ -86,7 +86,7 @@ def test_run_ab_comparison_uses_requested_profiles(monkeypatch):
         "User prompt:\nWhat matters this morning?::17"
     )
     assert case["profile_b"]["output"] == (
-        "qwen3:14b::Verified local context for this run:\n"
+        "queen3:14b::Verified local context for this run:\n"
         "- Verified runtime summary.\n"
         "- Operator mode: deterministic_server_facts_first\n\n"
         "Use the verified local context above as authoritative for current-state questions. "

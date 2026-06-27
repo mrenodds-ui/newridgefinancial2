@@ -85,7 +85,7 @@ def _fake_tags_payload() -> dict[str, object]:
                 },
             },
             {
-                "name": "qwen3:14b",
+                "name": "queen3:14b",
                 "capabilities": ["completion", "tools", "vision"],
                 "details": {
                     "family": "qwen3",

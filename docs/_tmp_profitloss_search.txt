@@ -1,4 +1,0 @@
-C:\New folder\scripts\quickbooksFinancialDataService.js:533:function getProfitLossSummary(range = {}, options = {}) {
-C:\New folder\scripts\quickbooksFinancialDataService.js:652:const profitLoss = getProfitLossSummary(dateRange, { allowOverlappingFallback: !explicitRange });
-C:\New folder\scripts\quickbooksFinancialDataService.js:1006:const rows = getProfitLossSummary(dateRange, { allowOverlappingFallback: !explicitRange });
-C:\New folder\scripts\quickbooksFinancialDataService.js:1119:const profitLossRows = getProfitLossSummary(dateRange);

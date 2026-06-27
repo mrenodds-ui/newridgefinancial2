@@ -1,1 +1,0 @@
-524:function getSafeHalErrorMessage(error, fallback = "HAL request failed.") {

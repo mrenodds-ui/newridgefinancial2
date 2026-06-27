@@ -170,8 +170,8 @@ The 8 HAL/SoftDent snapshot failures reported at initial closeout were order-dep
 | No demo KPIs in unavailable SoftDent paths | Endpoint + widget builder tests with missing `latestAr` |
 | Widgets cannot imply healthy receivables without A/R | `f291048`, `test_widget_builder.py`, `test_endpoints.py` widget-update gating |
 | Frontend distinguishes real zero vs unavailable | Frontend widget/page tests |
-| Frontend lane `:11434` → `qwen3:14b` | `test_local_ai_config.py`, `test_model_routing.py`, scripts |
-| Backend lane `:11435` → `qwen3:14b` | Same |
+| Frontend lane `:11434` → `queen3:14b` | `test_local_ai_config.py`, `test_model_routing.py`, scripts |
+| Backend lane `:11435` → `queen3:14b` | Same |
 | Second opinion uses backend lane | `test_second_opinion_routing.py` |
 | LiteLLM aliases lane-split | `test_litellm_config.py` |
 | A/B eval routing lane-aware | `test_local_model_ab_eval.py` |
@@ -203,8 +203,8 @@ Production/staging checklist (see `README.md` and `docs/API.md`):
 
 | Lane | Port | Default model | Use |
 | --- | --- | --- | --- |
-| Frontend | `:11434` | `qwen3:14b` | User-facing chat |
-| Backend | `:11435` | `qwen3:14b` | HAL server tasks, second opinion |
+| Frontend | `:11434` | `queen3:14b` | User-facing chat |
+| Backend | `:11435` | `queen3:14b` | HAL server tasks, second opinion |
 | Evaluator (isolated) | `:11436` | `qwen3:235b` | Offline section audits only |
 
 Normal runtime must **not** depend on `:11436`. Long-running lane scripts are foreground processes (`run_frontend_model.ps1`, `run_backend_model.ps1`).

@@ -7,7 +7,7 @@ function Get-LocalFrontendModelName {
     if ($env:OLLAMA_FRONTEND_MODEL -and $env:OLLAMA_FRONTEND_MODEL.Trim()) {
         return $env:OLLAMA_FRONTEND_MODEL.Trim()
     }
-    return 'qwen3:14b'
+    return 'queen3:14b'
 }
 
 function Get-LocalBackendModelName {
@@ -17,5 +17,5 @@ function Get-LocalBackendModelName {
     if ($env:OLLAMA_BACKEND_MODEL -and $env:OLLAMA_BACKEND_MODEL.Trim()) {
         return $env:OLLAMA_BACKEND_MODEL.Trim()
     }
-    return 'qwen3:14b'
+    return 'queen3:14b'
 }

@@ -237,7 +237,7 @@ def write_report(report: dict[str, Any], output_path: Path) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Local-only bakeoff comparing chat_second_opinion (:11435/qwen3:14b) against the "
+            "Local-only bakeoff comparing chat_second_opinion (:11435/queen3:14b) against the "
             "experimental fast_review lane (:11437/Qwen3-Coder-30B-A3B-Instruct) on de-identified "
             "insurance narrative review packets. Never uses the :11436 evaluator lane or cloud models."
         )

@@ -7,7 +7,7 @@ print_backend_model_help() {
   cat <<EOF
 run_backend_model.sh - start the backend Ollama or llama.cpp lane on :11435.
 
-Default model tag: qwen3:14b
+Default model tag: queen3:14b
 Override with AI_BACKEND_MODEL or OLLAMA_BACKEND_MODEL.
 Optional custom GGUF tag via AI_BACKEND_MODEL_PATH / AI_MODEL_PATH when creating from a local file.
 EOF
@@ -47,7 +47,7 @@ EOF
     echo "Created Ollama model tag: $TAG on $OLLAMA_HOST"
   fi
   echo "Starting Ollama backend lane at http://${HOST}:${PORT}"
-  echo "Pull or use: ollama pull qwen3:14b"
+  echo "Pull or use: ollama pull queen3:14b"
   exec ollama serve
 fi
 

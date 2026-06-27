@@ -14,7 +14,7 @@ if ($Help) {
     Write-Host @'
 run_frontend_model.ps1 - start the frontend Ollama or llama.cpp lane on :11434.
 
-Default model tag: qwen3:14b
+Default model tag: queen3:14b
 Override with AI_FRONTEND_MODEL or OLLAMA_FRONTEND_MODEL.
 Optional custom GGUF tag via AI_FRONTEND_MODEL_PATH / AI_MODEL_PATH when creating from a local file.
 '@
