@@ -791,6 +791,47 @@ def _softdent_ar_snapshot_is_available(snapshot: Mapping[str, object]) -> bool:
     return snapshot.get("available") is True and str(snapshot.get("source") or "") == "softdent"
 
 
+def _build_softdent_latest_ar_snapshot_from_eod() -> dict[str, object] | None:
+    from app.services import get_softdent_end_of_day_ar_summary
+
+    summary = get_softdent_end_of_day_ar_summary()
+    if not summary.get("available"):
+        return None
+
+    total_ar = _coerce_float(summary.get("total_ar"))
+    if total_ar is None:
+        return None
+
+    aging_buckets = summary.get("aging_buckets")
+    aging = aging_buckets if isinstance(aging_buckets, dict) else {}
+
+    def _aging_amount(*keys: str) -> float:
+        for key in keys:
+            amount = _coerce_float(aging.get(key))
+            if amount is not None:
+                return amount
+        return 0.0
+
+    patient_ar = _coerce_float(summary.get("patient_ar"))
+    insurance_ar = _coerce_float(summary.get("insurance_ar"))
+    credit_balance = _coerce_float(summary.get("credits"))
+    report_date = str(summary.get("report_date") or "").strip()
+
+    return {
+        "as_of_date": report_date,
+        "total_ar": round(total_ar, 2),
+        "insurance_ar": round(insurance_ar, 2),
+        "patient_ar": round(patient_ar, 2),
+        "current_balance": round(_aging_amount("current", "0-30"), 2),
+        "balance_30": round(_aging_amount("31-60"), 2),
+        "balance_60": round(_aging_amount("61-90"), 2),
+        "balance_90": round(_aging_amount("90+"), 2),
+        "credit_balance": round(credit_balance, 2),
+        "available": True,
+        "source": "softdent",
+    }
+
+
 def _build_softdent_latest_ar_snapshot(*, softdent_ar_rows: list[dict[str, object]], fallback_as_of_date: str) -> dict[str, object]:
     snapshot = {
         "as_of_date": fallback_as_of_date,
@@ -987,6 +1028,10 @@ def _build_financial_summary_payload() -> dict[str, object]:
         softdent_ar_rows=load_softdent_ar_rows(),
         fallback_as_of_date=str(latest_monthly.get("year_month") if isinstance(latest_monthly, dict) else "") or generated_at[:10],
     )
+    if not _softdent_ar_snapshot_is_available(latest_ar_snapshot):
+        eod_snapshot = _build_softdent_latest_ar_snapshot_from_eod()
+        if eod_snapshot is not None:
+            latest_ar_snapshot = eod_snapshot
     latest_ar = latest_ar_snapshot if _softdent_ar_snapshot_is_available(latest_ar_snapshot) else None
     quickbooks_profit_loss = []
     if quickbooks_revenue_rows and quickbooks_expense_rows:

@@ -853,6 +853,7 @@ def test_hal_page_summary_route_returns_financial_summary_payload(monkeypatch):
     fresh_timestamp = "2026-06-18T13:45:00+00:00"
 
     monkeypatch.setattr(routes_module, "load_softdent_ar_rows", lambda: [])
+    monkeypatch.setattr(routes_module, "_build_softdent_latest_ar_snapshot_from_eod", lambda: None)
     monkeypatch.setattr(
         routes_module,
         "load_softdent_dashboard_rows",
@@ -1073,6 +1074,72 @@ def test_hal_page_summary_uses_softdent_ar_export_when_available(monkeypatch):
     }
 
 
+def test_hal_page_summary_uses_daysheet_eod_ar_when_ar_export_missing(monkeypatch):
+    fresh_timestamp = "2026-06-25T13:45:00+00:00"
+    monkeypatch.setattr(routes_module, "load_softdent_dashboard_rows", lambda: [])
+    monkeypatch.setattr(routes_module, "load_softdent_ar_rows", lambda: [])
+    monkeypatch.setattr(
+        routes_module,
+        "_build_softdent_latest_ar_snapshot_from_eod",
+        lambda: {
+            "as_of_date": "2026-06-25",
+            "total_ar": 73143.91,
+            "insurance_ar": 0.0,
+            "patient_ar": 0.0,
+            "current_balance": 0.0,
+            "balance_30": 0.0,
+            "balance_60": 0.0,
+            "balance_90": 0.0,
+            "credit_balance": 0.0,
+            "available": True,
+            "source": "softdent",
+        },
+    )
+    monkeypatch.setattr(
+        routes_module,
+        "build_softdent_snapshot",
+        lambda: {"available": True, "period": "2026-06", "provider_count": 1, "providers": [], "totals": {}},
+    )
+    monkeypatch.setattr(routes_module, "get_softdent_source_status", lambda: {"available": True, "modified_at_utc": fresh_timestamp})
+    monkeypatch.setattr(routes_module, "get_softdent_claim_source_status", lambda: {"available": False})
+    monkeypatch.setattr(routes_module, "get_softdent_clinical_note_source_status", lambda: {"available": False})
+    monkeypatch.setattr(routes_module, "get_quickbooks_sdk_status", lambda: {"com_available": True})
+    monkeypatch.setattr(routes_module, "get_softdent_coverage_metrics", lambda: {"trueOutstandingClaims": {}, "unsubmittedClaims": {}})
+    monkeypatch.setattr(routes_module, "fetch_quickbooks_sdk_summary", lambda topic: [])
+    monkeypatch.setattr(routes_module, "load_quickbooks_export_rows", lambda topic: [])
+    monkeypatch.setattr(
+        routes_module,
+        "get_financial_source_status",
+        lambda: {
+            "softdent": {
+                "available": True,
+                "coverage": {"summary": "SoftDent coverage available.", "counts": {"missing": 0, "limited": 0, "available": 1}, "rows": []},
+                "live_snapshot": {"available": True, "checked_at_utc": fresh_timestamp, "confidence_label": "verified", "review_required": False, "review_flags": [], "excerpt": "SoftDent live snapshot available."},
+                "live_claims": {"available": False, "checked_at_utc": fresh_timestamp, "confidence_label": "manual review", "review_required": True, "review_flags": [], "excerpt": "SoftDent claims export unavailable."},
+            },
+            "quickbooks": {"live_revenue": {}, "live_expenses": {}, "live_ar": {}},
+        },
+    )
+
+    response = client.get("/api/hal9000/page-summary", auth=basic_auth())
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["latestAr"] == {
+        "as_of_date": "2026-06-25",
+        "total_ar": 73143.91,
+        "insurance_ar": 0.0,
+        "patient_ar": 0.0,
+        "current_balance": 0.0,
+        "balance_30": 0.0,
+        "balance_60": 0.0,
+        "balance_90": 0.0,
+        "credit_balance": 0.0,
+        "available": True,
+        "source": "softdent",
+    }
+
+
 def test_widget_update_route_accepts_local_payload_and_surfaces_widget_feed(monkeypatch):
     monkeypatch.delenv("WIDGET_API_KEY", raising=False)
     monkeypatch.setenv("APP_ENV", "development")
@@ -1260,6 +1327,7 @@ def test_page_summary_flags_missing_quickbooks_detail_exports(monkeypatch):
         lambda: [{"period": "2026-06", "production": 1500.0, "collections": 1100.0}],
     )
     monkeypatch.setattr(routes_module, "load_softdent_ar_rows", lambda: [])
+    monkeypatch.setattr(routes_module, "_build_softdent_latest_ar_snapshot_from_eod", lambda: None)
     monkeypatch.setattr(routes_module, "get_softdent_source_status", lambda: {"available": True, "modified_at_utc": fresh_timestamp})
     monkeypatch.setattr(routes_module, "get_softdent_claim_source_status", lambda: {"available": False})
     monkeypatch.setattr(routes_module, "get_softdent_coverage_metrics", lambda: {"trueOutstandingClaims": {}, "unsubmittedClaims": {}})
