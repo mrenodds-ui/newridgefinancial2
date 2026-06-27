@@ -184,38 +184,44 @@ function AutomationCenter({
   onPrefillDraftQuery: (query: string) => void;
   onAskPrefill: (question: string) => void;
 }) {
-  const tiles: { title: string; description: string; action: string; onClick: () => void }[] = [
+  const tiles: { badge: string; title: string; description: string; action: string; onClick: () => void }[] = [
     {
+      badge: "PC",
       title: "Prepare Patient Call",
       description: "Creates a local patient/claim summary for staff review.",
       action: "Prepare summary",
       onClick: () => onPrefillDraftQuery("patient call prep summary"),
     },
     {
+      badge: "CL",
       title: "Review Claims",
       description: "Checks claim follow-up readiness and drafts local next steps.",
       action: "Review claims",
       onClick: () => onPrefillDraftQuery("denied claim follow-up checklist"),
     },
     {
+      badge: "AR",
       title: "Daily A/R Check",
       description: "Reads the SoftDent DAYSHEET when imported.",
       action: "Check A/R",
       onClick: () => onAskPrefill("Check today's A/R"),
     },
     {
+      badge: "MH",
       title: "Morning Huddle",
       description: "Creates a short staff huddle summary.",
       action: "Draft huddle",
       onClick: () => onAskPrefill("Prepare morning huddle"),
     },
     {
+      badge: "MD",
       title: "Missing Documents",
       description: "Prepares a local review list for missing records.",
       action: "List documents",
       onClick: () => onPrefillDraftQuery("missing documentation checklist"),
     },
     {
+      badge: "TK",
       title: "Create Office Task",
       description: "Adds an internal office follow-up task.",
       action: "Create task",
@@ -231,7 +237,12 @@ function AutomationCenter({
       <div className="hal-automation-grid">
         {tiles.map((tile) => (
           <article key={tile.title} className="hal-automation-tile">
-            <h3>{tile.title}</h3>
+            <div className="hal-automation-tile__head">
+              <span className="hal-automation-tile__badge" aria-hidden="true">
+                {tile.badge}
+              </span>
+              <h3>{tile.title}</h3>
+            </div>
             <p>{tile.description}</p>
             <button type="button" className="hal-automation-tile__action" onClick={tile.onClick}>
               {tile.action}
@@ -705,17 +716,17 @@ export default function AskHal9000Page() {
               <h2 id="hal-office-work-title" className="hal-section-title">
                 Office work
               </h2>
-              <CollapsiblePanel title="Priorities to review" description="What needs review today (local only)">
+              <CollapsiblePanel title="Priorities to Review" description="What needs review today (local only)">
                 <TodaysAttentionPanel />
               </CollapsiblePanel>
               <CollapsiblePanel
-                title="Local office tasks"
+                title="Local Tasks"
                 description={hasOpenTasks ? "Open tasks need attention" : "No open tasks"}
                 defaultOpen={hasOpenTasks}
               >
                 <LocalOfficeTasksPanel />
               </CollapsiblePanel>
-              <CollapsiblePanel title="Drafts and packets for review" description="Local review items only">
+              <CollapsiblePanel title="Drafts for Review" description="Local review items only">
                 <DraftsForReviewPanel
                   selectedDraft={selectedDraft}
                   onDraftCreated={setSelectedDraft}
@@ -727,25 +738,25 @@ export default function AskHal9000Page() {
                   onPacketCreated={setSelectedPacket}
                 />
               </CollapsiblePanel>
-              <CollapsiblePanel title="Claims follow-up">
+              <CollapsiblePanel title="Claim Follow-Up">
                 <ClaimsFollowUpPanel
                   financialSummary={financialSummaryQuery.data}
                   onPrefillDraftQuery={setDraftPrefillQuery}
                 />
               </CollapsiblePanel>
-              <CollapsiblePanel title="Patient prep">
+              <CollapsiblePanel title="Patient Prep">
                 <PatientPrepPanel onPrefillDraftQuery={setDraftPrefillQuery} />
               </CollapsiblePanel>
-              <CollapsiblePanel title="Treatment plan follow-up">
+              <CollapsiblePanel title="Treatment Follow-Up">
                 <TreatmentPlanFollowUpPanel />
               </CollapsiblePanel>
-              <CollapsiblePanel title="Hygiene / recall">
+              <CollapsiblePanel title="Hygiene Recall">
                 <HygieneRecallPanel />
               </CollapsiblePanel>
-              <CollapsiblePanel title="Compliance">
+              <CollapsiblePanel title="Compliance Checklist">
                 <ComplianceChecklistPanel />
               </CollapsiblePanel>
-              <CollapsiblePanel title="Vendor / software issues">
+              <CollapsiblePanel title="Vendor Issues">
                 <VendorIssueTrackerPanel />
               </CollapsiblePanel>
               <CollapsiblePanel title="Reports">

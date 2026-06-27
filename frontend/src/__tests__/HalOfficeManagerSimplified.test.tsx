@@ -162,6 +162,33 @@ describe("HAL Command Center page", () => {
     expect(screen.getByRole("heading", { name: "Create Office Task" })).toBeInTheDocument();
   });
 
+  it("renders scan-friendly initial badges on Automation Center tiles", () => {
+    renderPage();
+    const automation = screen.getByRole("heading", { name: "Automation Center" }).closest("section");
+    expect(automation).not.toBeNull();
+    const within_ = within(automation as HTMLElement);
+    for (const badge of ["PC", "CL", "AR", "MH", "MD", "TK"]) {
+      expect(within_.getByText(badge)).toBeInTheDocument();
+    }
+  });
+
+  it("renders the Work Queue after the Automation Center", () => {
+    renderPage();
+    const automation = screen.getByRole("heading", { name: "Automation Center" });
+    const workQueue = screen.getByRole("heading", { name: "Work Queue" });
+    const position = automation.compareDocumentPosition(workQueue);
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("uses staff-facing Office Work labels", () => {
+    renderPage();
+    expect(screen.getByText("Patient Prep")).toBeInTheDocument();
+    expect(screen.getByText("Claim Follow-Up")).toBeInTheDocument();
+    expect(screen.getByText("Drafts for Review")).toBeInTheDocument();
+    expect(screen.getByText("Local Tasks")).toBeInTheDocument();
+    expect(screen.getByText("Vendor Issues")).toBeInTheDocument();
+  });
+
   it("renders Work Queue buckets including blocked items in plain English", () => {
     renderPage();
     expect(screen.getByRole("heading", { name: "Needs Review" })).toBeInTheDocument();
@@ -194,7 +221,7 @@ describe("HAL Command Center page", () => {
 
   it("keeps the office-manager attention list collapsed by default", () => {
     renderPage();
-    const summary = screen.getByText("Priorities to review");
+    const summary = screen.getByText("Priorities to Review");
     const details = summary.closest("details");
     expect(details).not.toBeNull();
     expect(details).not.toHaveAttribute("open");
