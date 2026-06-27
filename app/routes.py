@@ -1758,14 +1758,47 @@ async def api_hal9000_softdent_drafts(
 
 @router.get("/api/hal9000/softdent-end-of-day-ar", response_model=HalSoftDentEndOfDayArResponse)
 async def api_hal9000_softdent_end_of_day_ar(
-    user: AuthenticatedUser = Depends(
-        require_roles("hal:operator", "softdent:read", "softdent:ledger:read")
-    ),
+    user: AuthenticatedUser = Depends(require_roles("hal:operator")),
 ):
-    from app.hal.softdent_read_broker import get_softdent_read_broker
+    """Read DAYSHEET A/R availability/status.
 
-    summary = get_softdent_read_broker().get_end_of_day_ar_summary(actor=user.username, roles=user.roles)
-    return HalSoftDentEndOfDayArResponse.model_validate(summary.to_public_dict())
+    HAL operators can read availability, freshness, and parse status so the
+    Command Center A/R tile is not hard-blocked. Raw A/R balances remain gated
+    behind ``softdent:read`` + ``softdent:ledger:read``. Missing A/R is always
+    unavailable/null, never ``$0``.
+    """
+    roles = set(user.roles)
+    can_read_balances = {"softdent:read", "softdent:ledger:read"}.issubset(roles)
+
+    if can_read_balances:
+        from app.hal.softdent_read_broker import get_softdent_read_broker
+
+        summary = get_softdent_read_broker().get_end_of_day_ar_summary(
+            actor=user.username, roles=user.roles
+        )
+        return HalSoftDentEndOfDayArResponse.model_validate(summary.to_public_dict())
+
+    # Status-only view for operators without ledger access: presence/freshness
+    # without raw balances. Balances stay null (never $0).
+    from app.services import get_softdent_end_of_day_ar_source_status
+
+    status = get_softdent_end_of_day_ar_source_status()
+    missing_codes = [] if bool(status.get("available")) else ["missing_softdent_ar"]
+    return HalSoftDentEndOfDayArResponse(
+        available=bool(status.get("available")),
+        report_date=str(status.get("report_date") or "") or None,
+        generated_at=str(status.get("generated_at") or "") or None,
+        source_file=str(status.get("source_file") or "") or None,
+        source_modified_at_utc=str(status.get("modified_at_utc") or "") or None,
+        freshness_status=str(status.get("freshness_status") or "unknown"),
+        parse_status=str(status.get("parse_status") or "missing"),
+        missing_data_codes=missing_codes,
+        limitations=[
+            "A/R balances require softdent:read and softdent:ledger:read. "
+            "This view shows DAYSHEET availability/status only."
+        ],
+        stale_reason=str(status.get("stale_reason") or "") or None,
+    )
 
 
 @router.post("/api/hal9000/softdent-local-packets", response_model=HalSoftDentLocalPacketResponse)

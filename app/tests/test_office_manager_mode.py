@@ -118,3 +118,30 @@ def test_office_manager_task_update_missing_returns_404() -> None:
         json={"status": "completed"},
     )
     assert response.status_code == 404
+
+
+def test_dayssheet_ar_status_unauthenticated_is_rejected() -> None:
+    response = client.get("/api/hal9000/softdent-end-of-day-ar")
+    assert response.status_code in (401, 403)
+
+
+def test_dayssheet_ar_status_viewer_without_hal_operator_is_forbidden() -> None:
+    response = client.get(
+        "/api/hal9000/softdent-end-of-day-ar", auth=("viewer_only", "viewer-password")
+    )
+    assert response.status_code == 403
+
+
+def test_hal_operator_can_read_daysheet_ar_status_without_ledger_role() -> None:
+    response = client.get("/api/hal9000/softdent-end-of-day-ar", auth=office_manager_auth())
+    assert response.status_code == 200
+    payload = response.json()
+    # Status-only view: balances stay gated/null, never fabricated as $0.
+    assert payload["total_ar"] is None
+    assert payload["patient_ar"] is None
+    assert payload["insurance_ar"] is None
+    assert "freshness_status" in payload
+    assert "parse_status" in payload
+    if not payload["available"]:
+        assert "missing_softdent_ar" in payload["missing_data_codes"]
+    assert any("softdent:ledger:read" in limit for limit in payload["limitations"])
