@@ -98,6 +98,68 @@ const Services = (function () {
     return clone(data);
   }
 
+  async function readProgramSnapshot() {
+    await delay(120);
+    const safe = async (fn) => {
+      try {
+        return await fn();
+      } catch {
+        return null;
+      }
+    };
+    const [financial, softdent, quickbooks, ar, claimsState, narrativesState, documentsState, libraryState] = await Promise.all([
+      safe(() => readDashboard("financial")),
+      safe(() => readDashboard("softdent")),
+      safe(() => readDashboard("quickbooks")),
+      safe(() => readDashboard("ar")),
+      safe(() => claims.list()),
+      safe(() => narratives.getState()),
+      safe(() => documents.list({})),
+      safe(() => library.search("")),
+    ]);
+    const claimsByStatus = {};
+    (claimsState?.claims || []).forEach((claim) => {
+      const key = claim.status || "Unknown";
+      claimsByStatus[key] = (claimsByStatus[key] || 0) + 1;
+    });
+    return {
+      gatheredAt: new Date().toISOString(),
+      label: "Local program snapshot (sample/persisted data)",
+      dashboards: { financial, softdent, quickbooks, ar },
+      claims: claimsState
+        ? {
+            total: claimsState.claims.length,
+            byStatus: claimsByStatus,
+            kpis: claimsState.kpis || [],
+            top: (claimsState.claims || []).slice(0, 10),
+          }
+        : null,
+      narratives: narrativesState
+        ? {
+            drafts: (narrativesState.drafts || []).length,
+            latest: (narrativesState.drafts || []).find((d) => d.latest) || (narrativesState.drafts || [])[0] || null,
+            focus: narrativesState.composer?.focus || "",
+          }
+        : null,
+      documents: documentsState
+        ? {
+            entity: documentsState.entity,
+            queueCount: (documentsState.queue || []).length,
+            posting: documentsState.posting || [],
+            period: documentsState.period || null,
+            top: (documentsState.queue || []).slice(0, 8),
+          }
+        : null,
+      library: libraryState
+        ? {
+            results: libraryState.results,
+            storage: libraryState.storage || {},
+            top: (libraryState.docs || []).slice(0, 8),
+          }
+        : null,
+    };
+  }
+
   /* ============ Claims ============ */
 
   function seedClaims() {
@@ -388,7 +450,7 @@ const Services = (function () {
     }
   }
 
-  return { readDashboard, claims, narratives, documents, library, officeManager, composeNarrative, resetAll };
+  return { readDashboard, readProgramSnapshot, claims, narratives, documents, library, officeManager, composeNarrative, resetAll };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

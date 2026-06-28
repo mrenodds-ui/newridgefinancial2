@@ -427,6 +427,20 @@ async function main() {
   assert(HalCore.laneReady(halModels, "escalate30b"), "escalation lane must be execution-ready on loopback");
   passed++;
 
+  // Full program read access
+  assert(halData.programAccess && halData.programAccess.mode === "full-read", "HAL must have full-read program access");
+  const programRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show full program snapshot");
+  assert(programRoute.intent === "program: snapshot" && programRoute.useProgramSnapshot === true, "program snapshot must route locally");
+  const ServicesMod = require(join(siteDir, "services.js"));
+  const snapshot = await ServicesMod.readProgramSnapshot();
+  const programSummary = HalCore.summarizeProgramSnapshot(snapshot, halData);
+  assert(programSummary.includes("FULL PROGRAM READ ACCESS"), "program snapshot summary must include full access header");
+  assert(programSummary.includes("Financial"), "program snapshot must include financial data");
+  assert(programSummary.includes("Claims workbench"), "program snapshot must include claims data");
+  assert(halHtml.includes("PROGRAM ACCESS"), "HAL page must show program access");
+  assert(halHtml.includes("Full read"), "HAL page must show full read access");
+  passed++;
+
   console.log(`HAL validation passed (${passed} suites)`);
 }
 

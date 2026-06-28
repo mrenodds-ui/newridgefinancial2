@@ -171,6 +171,106 @@ const HalCore = (function () {
       .join("\n");
   }
 
+  function summarizeProgramSnapshot(snapshot, halData) {
+    if (!snapshot) return registryAsText(halData);
+    const lines = [];
+    const access = (halData && halData.programAccess) || {};
+    lines.push(
+      (access.mode === "full-read" ? "FULL PROGRAM READ ACCESS" : "PROGRAM SNAPSHOT") +
+        " (local only · " +
+        (snapshot.label || "sample/persisted data") +
+        "):",
+    );
+    const fin = snapshot.dashboards && snapshot.dashboards.financial;
+    if (fin) {
+      lines.push(
+        `Financial (${fin.dateRange || "current"}): production ${fin.productionMtd?.value || "—"}, collections ${fin.metrics?.[0]?.value || "—"}, net A/R ${fin.metrics?.[1]?.value || "—"}, EBITDA ${fin.metrics?.[2]?.value || "—"}, quality ${fin.quality?.score || "—"}/100`,
+      );
+      if (fin.payerMix?.slices?.length) {
+        lines.push(
+          "Payer mix: " +
+            fin.payerMix.slices
+              .slice(0, 5)
+              .map((s) => `${s.label} ${s.pct}%`)
+              .join(", "),
+        );
+      }
+    }
+    const sd = snapshot.dashboards && snapshot.dashboards.softdent;
+    if (sd) {
+      const sdProd = (sd.glance || []).find((g) => g.label === "Production MTD");
+      const sdColl = (sd.glance || []).find((g) => g.label === "Collections MTD");
+      lines.push(
+        `SoftDent: A/R ${sd.hero?.value || "—"}, production ${sdProd?.value || "—"}, collections ${sdColl?.value || "—"}, status ${sd.status || "—"}`,
+      );
+    }
+    const qb = snapshot.dashboards && snapshot.dashboards.quickbooks;
+    if (qb) {
+      const qbRev = (qb.pl?.rows || []).find((r) => r.category === "Revenue");
+      const qbNet = (qb.pl?.rows || []).find((r) => r.category === "Net Income");
+      lines.push(
+        `QuickBooks: revenue ${qbRev?.amount || "—"}, net income ${qbNet?.amount || "—"}, sync ${qb.syncStatus || "—"}`,
+      );
+    }
+    const ar = snapshot.dashboards && snapshot.dashboards.ar;
+    if (ar) {
+      lines.push(
+        `A/R: outstanding ${ar.kpis?.[0]?.value || "—"}, follow-up lanes ${(ar.followUp || []).length}, top claims ${(ar.topClaims || []).length}`,
+      );
+    }
+    if (snapshot.claims) {
+      const statusText = Object.entries(snapshot.claims.byStatus || {})
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ");
+      lines.push(`Claims workbench: ${snapshot.claims.total} claims (${statusText})`);
+      (snapshot.claims.top || []).slice(0, 5).forEach((c) => {
+        lines.push(`  - ${c.id} · ${c.patient} · ${c.procedure} · ${c.amount} · ${c.status}`);
+      });
+    }
+    if (snapshot.narratives) {
+      lines.push(
+        `Narratives: ${snapshot.narratives.drafts} drafts · focus ${snapshot.narratives.focus || "—"} · latest ${snapshot.narratives.latest?.version || "none"}`,
+      );
+    }
+    if (snapshot.documents) {
+      lines.push(`Documents (${snapshot.documents.entity || "entity"}): ${snapshot.documents.queueCount} in queue`);
+      (snapshot.documents.posting || []).forEach((p) => lines.push(`  - ${p.label}: ${p.count}`));
+      (snapshot.documents.top || []).slice(0, 4).forEach((d) => {
+        lines.push(`  - ${d.id} · ${d.vendor} · ${d.amount} · ${d.status}`);
+      });
+    }
+    if (snapshot.library) {
+      lines.push(`Library: ${snapshot.library.results} documents indexed`);
+      (snapshot.library.top || []).slice(0, 4).forEach((d) => {
+        lines.push(`  - ${d.title} · ${d.type} · ${d.updated}`);
+      });
+    }
+    lines.push("Registry status:");
+    lines.push(registryAsText(halData));
+    if (halData.sources && halData.sources.items && halData.sources.items.length) {
+      lines.push(
+        "Source intake:",
+        ...(halData.sources.items || []).map((s) => `- ${s.label}: ${s.status} · ${s.freshness} · ${s.syncState || "unknown"}`),
+      );
+    }
+    return lines.join("\n").slice(0, 14000);
+  }
+
+  function formatProgramSnapshot(snapshot, halData) {
+    return summarizeProgramSnapshot(snapshot, halData) + "\n\n(Full program read access · local only · verify before acting)";
+  }
+
+  function matchProgramRoute(query) {
+    if (
+      /\b(program (data|access|snapshot|status)|full program|all program data|read the program|what data do you have|show program)\b/.test(
+        query,
+      )
+    ) {
+      return { type: "snapshot" };
+    }
+    return null;
+  }
+
   function modelLanesText(halModels) {
     const lanes = modelLanes(halModels);
     const anyReady = lanes.some((lane) => laneReady(halModels, lane.id));
@@ -186,48 +286,65 @@ const HalCore = (function () {
     return header + "\n" + list;
   }
 
-  function buildSystemPrompt(halData) {
+  function buildSystemPrompt(halData, programContext) {
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
-    return [
+    const access = (halData && halData.programAccess) || {};
+    const parts = [
       "You are HAL, the local read-only program manager for NewRidgeFinancial 2.0, a dental-practice financial program.",
-      "Answer briefly and only about this program and its pages. If you are unsure, say so.",
+      access.mode === "full-read"
+        ? "You have full read access to the local program snapshot below. Answer using that data when relevant."
+        : "Answer briefly and only about this program and its pages. If you are unsure, say so.",
       "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
       "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
       "If the user asks for an external action, refuse and say it needs human review.",
-      "Program pages and current status:",
-      registryAsText(halData),
-    ].join("\n");
+    ];
+    if (programContext) {
+      parts.push("Current local program snapshot:", programContext);
+    } else {
+      parts.push("Program pages and current status:", registryAsText(halData));
+    }
+    return parts.join("\n");
   }
 
-  function buildReasoningPrompt(halData) {
+  function buildReasoningPrompt(halData, programContext) {
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const priorities = (halData.priorities && halData.priorities.items) || [];
-    return [
+    const parts = [
       "You are HAL's reasoning lane for NewRidgeFinancial 2.0, a dental-practice financial program.",
       "Produce a short, structured, prioritized plan based only on the local program state below.",
       "Order work by readiness and risk: handle Needs Review and Blocked items carefully, and never advance payer-facing work without human review.",
       "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
       "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
-      "Program pages and current status:",
-      registryAsText(halData),
+    ];
+    if (programContext) {
+      parts.push("Current local program snapshot:", programContext);
+    } else {
+      parts.push("Program pages and current status:", registryAsText(halData));
+    }
+    parts.push(
       "Known operator priorities:",
       priorities.map((item, index) => `${index + 1}. ${item}`).join("\n"),
       "Respond with a brief numbered plan. Keep it under 8 steps.",
-    ].join("\n");
+    );
+    return parts.join("\n");
   }
 
-  function buildEscalationPrompt(halData) {
+  function buildEscalationPrompt(halData, programContext) {
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
-    return [
+    const parts = [
       "You are HAL's escalation lane for NewRidgeFinancial 2.0, a dental-practice financial program.",
       "Give a careful second-opinion review for a complex or high-risk question.",
       "Be conservative: call out risks, assumptions, and exactly what a human must verify before acting.",
       "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
       "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
-      "Program pages and current status:",
-      registryAsText(halData),
-      "Respond with: a short risk assessment, then a numbered list of what a human should verify.",
-    ].join("\n");
+    ];
+    if (programContext) {
+      parts.push("Current local program snapshot:", programContext);
+    } else {
+      parts.push("Program pages and current status:", registryAsText(halData));
+    }
+    parts.push("Respond with: a short risk assessment, then a numbered list of what a human should verify.");
+    return parts.join("\n");
   }
 
   function cleanModelText(text) {
@@ -875,9 +992,16 @@ const HalCore = (function () {
         intent: "help",
         lane: "local",
         text:
-          "I am the local program manager. I can open any program page, explain what each page is for, show today's priorities, start read-only work sessions, build local evidence packets, run readiness checks, report source health, simulate the firewall, and explain model lanes. I do not submit, send, or change anything.",
+          "I am the local program manager. I have full read access to all local program pages and service data. I can open any page, show a full program snapshot, explain what each page is for, show today's priorities, start read-only work sessions, build local evidence packets, run readiness checks, report source health, simulate the firewall, and use local model lanes. I do not submit, send, or change anything.",
         actions: [],
       };
+    }
+
+    const programRoute = matchProgramRoute(query);
+    if (programRoute) {
+      if (programRoute.type === "snapshot") {
+        return { intent: "program: snapshot", lane: "local", useProgramSnapshot: true, text: "", actions: [] };
+      }
     }
 
     const operatorRoute = matchOperatorRoute(query);
@@ -1114,6 +1238,9 @@ const HalCore = (function () {
     checkFirewall,
     firewallVerdict,
     registryAsText,
+    summarizeProgramSnapshot,
+    formatProgramSnapshot,
+    matchProgramRoute,
     modelLanesText,
     buildSystemPrompt,
     buildReasoningPrompt,

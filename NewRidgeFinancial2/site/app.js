@@ -456,6 +456,25 @@ function bindReadinessControls(root) {
 
 let halOperatorReport = null;
 
+let programContextCache = null;
+let programContextAt = 0;
+const PROGRAM_CONTEXT_TTL_MS = 60000;
+
+async function loadProgramSnapshot() {
+  const Svc = typeof Services !== "undefined" ? Services : window.Services;
+  if (!Svc || typeof Svc.readProgramSnapshot !== "function") return null;
+  return Svc.readProgramSnapshot();
+}
+
+async function getProgramContextText() {
+  const now = Date.now();
+  if (!programContextCache || now - programContextAt > PROGRAM_CONTEXT_TTL_MS) {
+    programContextCache = await loadProgramSnapshot();
+    programContextAt = now;
+  }
+  return HalCore.summarizeProgramSnapshot(programContextCache, halData);
+}
+
 function loadOperatorReport() {
   try {
     const saved = sessionStorage.getItem("halOperatorReport");
@@ -663,15 +682,21 @@ async function runModel(runtime, systemPrompt, userText, draftLabel) {
 }
 
 function callLocalModel(userText) {
-  return runModel(localModelConfig(), HalCore.buildSystemPrompt(halData), userText, "Local 14B draft");
+  return getProgramContextText().then((ctx) =>
+    runModel(localModelConfig(), HalCore.buildSystemPrompt(halData, ctx), userText, "Local 14B draft"),
+  );
 }
 
 function callReasoningModel(userText) {
-  return runModel(reasoningModelConfig(), HalCore.buildReasoningPrompt(halData), userText, "Local reasoning draft");
+  return getProgramContextText().then((ctx) =>
+    runModel(reasoningModelConfig(), HalCore.buildReasoningPrompt(halData, ctx), userText, "Local reasoning draft"),
+  );
 }
 
 function callEscalationModel(userText) {
-  return runModel(escalationModelConfig(), HalCore.buildEscalationPrompt(halData), userText, "Local escalation draft");
+  return getProgramContextText().then((ctx) =>
+    runModel(escalationModelConfig(), HalCore.buildEscalationPrompt(halData, ctx), userText, "Local escalation draft"),
+  );
 }
 
 function routeHalCommand(rawQuery) {
@@ -748,6 +773,19 @@ async function handleHalSubmit(query) {
   saveChatHistory();
 
   const result = routeHalCommand(trimmed);
+
+  if (result.useProgramSnapshot) {
+    const snapshot = await loadProgramSnapshot();
+    const text = snapshot
+      ? HalCore.formatProgramSnapshot(snapshot, halData)
+      : "Program snapshot unavailable. Services layer is not loaded.";
+    halChatHistory.push({ role: "hal", text, lane: "program", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
 
   if (result.useSessionStart && result.sessionId) {
     startWorkSession(result.sessionId);

@@ -168,6 +168,10 @@ const HalPage = (function () {
     const priorities = (halData.priorities && halData.priorities.items) || [];
     const nextSafeStep =
       priorities[0] || (registry.find((e) => e.nextAction) || {}).nextAction || "Review the Needs Review lane before any external step.";
+    const programAccessLabel =
+      halData.programAccess?.mode === "full-read"
+        ? "Full read · all pages and services (local)"
+        : "Registry only";
     const allowedActions = (halData.firewall && halData.firewall.allowed) || [];
     const auditList = halAudit || [];
     const lastReceipt = auditList.length ? auditList[auditList.length - 1] : null;
@@ -251,6 +255,7 @@ const HalPage = (function () {
           <section class="hp-card" data-panel="priorities" style="grid-area:insights;">
             <div class="hp-card__head"><h3>HAL INSIGHTS</h3><button type="button" class="hp-info" data-hal-drawer="priorities" title="Open priorities, recommendations, and next steps" aria-label="Open priorities, recommendations, and next steps">i</button></div>
             <ul class="hp-insight">
+              <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>PROGRAM ACCESS</b> — ${esc(programAccessLabel)} <em class="hp-muted">(writes blocked)</em></span></li>
               <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>NEXT SAFE STEP</b> — ${esc(nextSafeStep)}</span></li>
               <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>ACTIVE WORK</b> — ${esc(needsReviewCount)} in review · ${esc(blockedCount)} blocked <em class="hp-muted">(local registry)</em></span></li>
               ${insights || emptyNote("No registry insights available.")}

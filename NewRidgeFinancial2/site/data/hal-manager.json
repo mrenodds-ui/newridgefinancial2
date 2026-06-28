@@ -1,8 +1,14 @@
 {
   "status": {
     "title": "HAL Command Center",
-    "summary": "Local program manager for NewRidgeFinancial 2.0. HAL can guide staff through the pages, surface priorities, explain local status, and preserve the external-action firewall.",
-    "posture": ["Local-only", "Read-only", "Human review required", "Not submitted"]
+    "summary": "Local program manager for NewRidgeFinancial 2.0. HAL has full read access to all local program pages and service data. It can guide staff, surface priorities, explain status, and preserve the external-action firewall.",
+    "posture": ["Local-only", "Full read access", "Human review required", "Not submitted"]
+  },
+  "programAccess": {
+    "mode": "full-read",
+    "scope": ["financial", "softdent", "quickbooks", "ar", "claims", "narratives", "documents", "library", "office-manager", "hal"],
+    "writesBlocked": true,
+    "note": "HAL may read all local program pages and persisted service data. External and destructive actions remain blocked."
   },
   "controls": {
     "title": "System Controls",
@@ -10,9 +16,10 @@
   },
   "askHal": {
     "title": "Ask HAL",
-    "summary": "HAL answers from the local program registry first. Unmatched questions use the local 14B chat lane. Planning requests use the reasoning lane; second-opinion requests use the escalation lane. The firewall runs before every model.",
+    "summary": "HAL answers from the local program registry and full program snapshot. Unmatched questions use the local 14B chat lane with full read context. Planning requests use the reasoning lane; second-opinion requests use the escalation lane. The firewall runs before every model.",
     "suggestions": [
       "Show what needs attention today",
+      "Show full program snapshot",
       "What is ready to work on",
       "What is blocked",
       "Make a plan for today",
@@ -129,7 +136,7 @@
     "title": "External action firewall",
     "summary": "HAL cannot perform external actions from this program. The safety boundary is enforced before any model call.",
     "blocked": ["No email", "No fax", "No upload", "No payer contact", "No writeback", "No submission"],
-    "allowed": ["Open local program pages", "Explain local status", "Prepare review notes", "Flag missing information"],
+    "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information"],
     "examples": [
       { "text": "Open the claims workbench", "expected": "allowed" },
       { "text": "Explain A/R aging", "expected": "allowed" },
@@ -416,6 +423,7 @@
       "Open the claims workbench": "navigate: claims",
       "Review read-only source health": "sources",
       "Explain the external action firewall": "firewall",
+      "Show full program snapshot": "program: snapshot",
       "Are you connected to a model?": "model lanes"
     },
     "firewallExamples": [
