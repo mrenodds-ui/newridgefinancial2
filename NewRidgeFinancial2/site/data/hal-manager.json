@@ -16,7 +16,9 @@
       "Open the claims workbench",
       "Review read-only source health",
       "Explain the external action firewall",
-      "Are you connected to a model?"
+      "Are you connected to a model?",
+      "Start claims review",
+      "Show active session"
     ],
     "response": "I can navigate the program, explain each page, show priorities, simulate the firewall, and keep work inside the read-only safety boundary. For other questions I use local model lanes on this machine; external actions still require human review.",
     "commandExamples": [
@@ -140,6 +142,107 @@
       "Keep document posting work in review status until staff approval."
     ]
   },
+  "workSessions": {
+    "title": "Operator work sessions",
+    "summary": "Read-only guided checklists for human operators. HAL tracks progress locally in this browser session only; nothing is submitted or sent.",
+    "templates": [
+      {
+        "id": "claims-review",
+        "label": "Claims review",
+        "command": "Start claims review",
+        "targetPage": "claims",
+        "purpose": "Review claims in the Needs Review lane before any payer-facing step.",
+        "safety": "Review-only — no submission or payer transmission.",
+        "checklist": [
+          "Open Claims Workbench and identify Needs Review items",
+          "Confirm source facts match SoftDent export",
+          "Note missing documentation for staff",
+          "Stage follow-up notes — do not submit"
+        ],
+        "verify": [
+          "Claim ID and patient context confirmed",
+          "Denial reason or review flag documented",
+          "No payer contact initiated"
+        ]
+      },
+      {
+        "id": "source-freshness",
+        "label": "Source freshness review",
+        "command": "Start source freshness review",
+        "targetPage": "softdent",
+        "purpose": "Confirm read-only source freshness before relying on downstream numbers.",
+        "safety": "Read-only — no writeback to source systems.",
+        "checklist": [
+          "Check SoftDent export timestamp",
+          "Check QuickBooks sync status",
+          "Flag stale or blocked sources for staff",
+          "Document which totals are safe to reference"
+        ],
+        "verify": [
+          "SoftDent export is current for the period",
+          "QuickBooks sync completed or marked blocked",
+          "No expense totals used from blocked sync"
+        ]
+      },
+      {
+        "id": "ar-review",
+        "label": "A/R review",
+        "command": "Start A/R review",
+        "targetPage": "ar",
+        "purpose": "Identify aged balances and stage follow-up notes for staff.",
+        "safety": "Read-only — no payer contact or statements sent.",
+        "checklist": [
+          "Open A/R & Collections aging view",
+          "Identify 60+ and 90+ day balances",
+          "Cross-check against SoftDent export freshness",
+          "Draft follow-up notes for staff review"
+        ],
+        "verify": [
+          "Aging buckets reviewed for current period",
+          "High-risk balances flagged",
+          "No statements or payer contact initiated"
+        ]
+      },
+      {
+        "id": "document-review",
+        "label": "Document review",
+        "command": "Start document review",
+        "targetPage": "documents",
+        "purpose": "Review accounting document queue, extraction, and posting readiness.",
+        "safety": "Local review — no posting to ledger or writeback.",
+        "checklist": [
+          "Open Accounting Documents queue",
+          "Verify extraction accuracy per document",
+          "Confirm period assignment",
+          "Keep posting in review until staff approval"
+        ],
+        "verify": [
+          "Extraction matches source document",
+          "Period and vendor confirmed",
+          "No ledger posting performed"
+        ]
+      },
+      {
+        "id": "blocked-triage",
+        "label": "Blocked item triage",
+        "command": "Start blocked item triage",
+        "targetPage": "hal",
+        "purpose": "Triage all registry items marked Blocked or Needs review.",
+        "safety": "Read-only triage — flag blockers for human resolution.",
+        "checklist": [
+          "List all Blocked registry items",
+          "List all Needs review registry items",
+          "Identify missing information per item",
+          "Draft triage summary for staff handoff"
+        ],
+        "verify": [
+          "Each blocked item has a documented blocker",
+          "Next staff action identified per item",
+          "No external steps taken"
+        ]
+      }
+    ]
+  },
   "registry": [
     {
       "id": "financial",
@@ -247,6 +350,16 @@
     "firewallExamples": [
       { "text": "Submit the denied claim", "expected": "blocked" },
       { "text": "Open claims workbench", "expected": "allowed" }
-    ]
+    ],
+    "sessionRoutes": {
+      "Start claims review": "session: start:claims-review",
+      "Start source freshness review": "session: start:source-freshness",
+      "Start A/R review": "session: start:ar-review",
+      "Start document review": "session: start:document-review",
+      "Start blocked item triage": "session: start:blocked-triage",
+      "Show active session": "session: show",
+      "Reset work session": "session: reset"
+    },
+    "sessionFirewallTrap": "Start claims review and submit the claim"
   }
 }

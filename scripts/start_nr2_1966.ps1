@@ -46,10 +46,10 @@ Write-Host 'NewRidgeFinancial 2.0 on :1966' -ForegroundColor Green
 if ((Test-HttpOk $AppUrl) -and -not $Restart) {
     Write-Host "Already running at $AppUrl"
 } else {
-    $pid = Get-ListenerPid $Port
-    if ($pid) {
-        Write-Host "Stopping existing listener on :$Port (PID $pid)..."
-        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    $listenerPid = Get-ListenerPid $Port
+    if ($listenerPid) {
+        Write-Host "Stopping existing listener on :$Port (PID $listenerPid)..."
+        Stop-Process -Id $listenerPid -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 1
     }
 

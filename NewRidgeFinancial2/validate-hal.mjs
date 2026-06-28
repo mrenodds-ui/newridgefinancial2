@@ -98,6 +98,35 @@ async function main() {
   assert(cleaned === "Visible answer", "cleanModelText must strip thinking");
   passed++;
 
+  // Session templates
+  const sessionErrors = HalCore.validateSessionTemplates(halData);
+  assert(sessionErrors.length === 0, "session templates invalid: " + sessionErrors.join("; "));
+  assert(halData.workSessions.templates.length === 5, "must have 5 session templates");
+  passed++;
+
+  // Session routing
+  const sessionRoutes = halData.validation.sessionRoutes || {};
+  for (const [command, expectedIntent] of Object.entries(sessionRoutes)) {
+    const result = HalCore.routeHalCommand(halData, halModels, pages, command);
+    assert(result.intent === expectedIntent, `session "${command}" expected ${expectedIntent}, got ${result.intent}`);
+  }
+  passed++;
+
+  // Session firewall trap
+  const sessionTrap = HalCore.routeHalCommand(halData, halModels, pages, halData.validation.sessionFirewallTrap);
+  assert(sessionTrap.intent === "blocked: firewall", "session + submit must be blocked");
+  passed++;
+
+  // Session state helpers
+  const template = HalCore.sessionTemplateById(halData, "claims-review");
+  const session = HalCore.createSessionState(template);
+  assert(session.checklist.length === template.checklist.length, "session checklist length");
+  const toggled = HalCore.toggleSessionCheck(session, 0);
+  assert(toggled.checklist[0].done === true, "toggle check");
+  const note = HalCore.draftHandoffNote(toggled, halData);
+  assert(note.includes("human review"), "handoff note disclaimer");
+  passed++;
+
   // app.js syntax
   const { execSync } = require("node:child_process");
   execSync("node --check site/app.js", { cwd: __dirname, stdio: "pipe" });

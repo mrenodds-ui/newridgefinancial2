@@ -71,6 +71,148 @@ function saveChatHistory() {
   }
 }
 
+let halWorkSession = null;
+
+function loadWorkSession() {
+  try {
+    const saved = sessionStorage.getItem("halWorkSession");
+    if (saved) halWorkSession = JSON.parse(saved);
+  } catch (error) {
+    halWorkSession = null;
+  }
+}
+
+function saveWorkSession() {
+  try {
+    if (halWorkSession) sessionStorage.setItem("halWorkSession", JSON.stringify(halWorkSession));
+    else sessionStorage.removeItem("halWorkSession");
+  } catch (error) {
+    /* sessionStorage may be unavailable. */
+  }
+}
+
+loadWorkSession();
+
+function startWorkSession(sessionId) {
+  const template = HalCore.sessionTemplateById(halData, sessionId);
+  if (!template) return false;
+  halWorkSession = HalCore.createSessionState(template);
+  saveWorkSession();
+  logAudit("Start " + template.label, "session: start:" + sessionId);
+  return true;
+}
+
+function resetWorkSession() {
+  halWorkSession = null;
+  saveWorkSession();
+  logAudit("Reset work session", "session: reset");
+}
+
+function toggleWorkSessionCheck(checkId) {
+  if (!halWorkSession) return;
+  halWorkSession = HalCore.toggleSessionCheck(halWorkSession, Number(checkId));
+  saveWorkSession();
+  logAudit("Toggle check " + checkId, "session: check");
+}
+
+function workSessionStatusText() {
+  if (!halWorkSession) return "No active work session.";
+  const progress = HalCore.sessionProgress(halWorkSession);
+  const pending = halWorkSession.checklist.filter((c) => !c.done).length;
+  return (
+    "Active: " +
+    halWorkSession.label +
+    " (" +
+    progress +
+    "% complete, " +
+    pending +
+    " checks remaining). Safety: " +
+    halWorkSession.safety
+  );
+}
+
+function workSessionPanelHtml() {
+  const ws = halData.workSessions || { summary: "", templates: [] };
+  if (halWorkSession) {
+    const progress = HalCore.sessionProgress(halWorkSession);
+    const checks = halWorkSession.checklist
+      .map(
+        (item) =>
+          `<button class="hal-session__check${item.done ? " hal-session__check--done" : ""}" type="button" data-session-toggle="${item.id}">
+            <span class="hal-session__box">${item.done ? "✓" : ""}</span>
+            <span>${escapeHtml(item.text)}</span>
+          </button>`,
+      )
+      .join("");
+    const verify = (halWorkSession.verify || []).map((v) => `<li>${escapeHtml(v)}</li>`).join("");
+    const handoff = halWorkSession.handoffNote
+      ? `<pre class="hal-session__note">${escapeHtml(halWorkSession.handoffNote)}</pre>`
+      : "";
+    return `<div class="drawer-section hal-session">
+      <h3 class="drawer-section__title">Active work session</h3>
+      <p class="drawer-meta">${escapeHtml(halWorkSession.purpose)}</p>
+      <p class="drawer-meta">Progress: ${progress}% · ${escapeHtml(halWorkSession.safety)}</p>
+      <div class="hal-session__checks">${checks}</div>
+      ${verify ? `<ul class="drawer-checklist"><strong>Human must verify:</strong>${verify}</ul>` : ""}
+      ${handoff}
+      <div class="drawer-card__actions">
+        <button class="drawer-action drawer-action--sm" type="button" data-session-handoff>Draft handoff note</button>
+        <button class="drawer-action drawer-action--sm" type="button" data-open-page="${escapeHtml(halWorkSession.targetPage)}">Open page</button>
+        <button class="drawer-action drawer-action--sm" type="button" data-session-reset>Reset session</button>
+      </div>
+    </div>`;
+  }
+  const starters = (ws.templates || [])
+    .map(
+      (t) =>
+        `<button class="drawer-action" type="button" data-session-start="${escapeHtml(t.id)}">${escapeHtml(t.command)}</button>`,
+    )
+    .join("");
+  return `<div class="drawer-section hal-session">
+    <h3 class="drawer-section__title">Work sessions</h3>
+    <p class="drawer-meta">${escapeHtml(ws.summary || "Start a read-only guided checklist.")}</p>
+    <div class="drawer-grid">${starters}</div>
+  </div>`;
+}
+
+function bindWorkSessionControls(root) {
+  root.querySelectorAll("[data-session-start]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset.sessionStart;
+      if (startWorkSession(id)) {
+        if (currentDrawerKey) renderPanel(currentDrawerKey);
+        else openDrawer("askHal");
+      }
+    });
+  });
+  root.querySelectorAll("[data-session-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      toggleWorkSessionCheck(button.dataset.sessionToggle);
+      if (currentDrawerKey) renderPanel(currentDrawerKey);
+    });
+  });
+  root.querySelectorAll("[data-session-reset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      resetWorkSession();
+      if (currentDrawerKey) renderPanel(currentDrawerKey);
+    });
+  });
+  root.querySelectorAll("[data-session-handoff]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!halWorkSession) return;
+      halWorkSession.handoffNote = HalCore.draftHandoffNote(halWorkSession, halData);
+      saveWorkSession();
+      logAudit("Draft handoff", "session: handoff");
+      if (currentDrawerKey === "askHal") {
+        halChatHistory.push({ role: "hal", text: halWorkSession.handoffNote, lane: "session", actions: [] });
+        saveChatHistory();
+        renderChatLog();
+      }
+      if (currentDrawerKey) renderPanel(currentDrawerKey);
+    });
+  });
+}
+
 function registryList() {
   return HalCore.registryList(halData);
 }
@@ -253,6 +395,61 @@ async function handleHalSubmit(query) {
 
   const result = routeHalCommand(trimmed);
 
+  if (result.useSessionStart && result.sessionId) {
+    startWorkSession(result.sessionId);
+    halChatHistory.push({
+      role: "hal",
+      text: result.text + "\n\n" + workSessionStatusText(),
+      lane: "session",
+      actions: normalizeActions(result.actions),
+    });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
+    return;
+  }
+
+  if (result.useSessionReset) {
+    resetWorkSession();
+    halChatHistory.push({ role: "hal", text: result.text, lane: "session", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
+    return;
+  }
+
+  if (result.useSessionShow) {
+    const text = halWorkSession
+      ? workSessionStatusText() + "\n\nUse the Work Session panel to mark checks complete or draft a handoff note."
+      : "No active work session. Say \"Start claims review\" or use the Work Session panel.";
+    halChatHistory.push({ role: "hal", text, lane: "session", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
+
+  if (result.useSessionHandoff) {
+    if (!halWorkSession) {
+      halChatHistory.push({ role: "hal", text: "No active work session to draft a handoff note from.", lane: "session", actions: [] });
+    } else {
+      halWorkSession.handoffNote = HalCore.draftHandoffNote(halWorkSession, halData);
+      saveWorkSession();
+      halChatHistory.push({ role: "hal", text: halWorkSession.handoffNote, lane: "session", actions: [] });
+    }
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
+    return;
+  }
+
   if (result.useEscalation) {
     if (!escalationModelReady()) {
       halChatHistory.push({ role: "hal", text: offlineModelMessage("escalate30b"), lane: "escalate30b · offline", actions: [] });
@@ -433,7 +630,7 @@ function reasoningLanePanel() {
         `<button class="drawer-action" type="button" data-hal-command="${escapeHtml(action.command)}">${escapeHtml(action.label)}</button>`,
     )
     .join("");
-  return `${laneHtml}<div class="drawer-section"><h3 class="drawer-section__title">Actions</h3><div class="drawer-grid">${actionHtml}</div></div>`;
+  return `${laneHtml}<div class="drawer-section"><h3 class="drawer-section__title">Actions</h3><div class="drawer-grid">${actionHtml}</div></div>${workSessionPanelHtml()}`;
 }
 
 function workSurfacePanel(items) {
@@ -513,7 +710,7 @@ function prioritiesPanel() {
       return `<div class="drawer-section"><h3 class="drawer-section__title">${escapeHtml(group.label)}</h3><div class="drawer-grid">${cards || '<p class="drawer-meta">None</p>'}</div></div>`;
     })
     .join("");
-  return staticHtml + groupHtml;
+  return staticHtml + groupHtml + workSessionPanelHtml();
 }
 
 function statusPanel(data) {
@@ -559,6 +756,7 @@ function renderPanel(key) {
     drawerContent.innerHTML = `
       <p>${escapeHtml(data.summary)}</p>
       <p class="drawer-meta">Model health: ${escapeHtml(modelHealthSummary())}</p>
+      ${workSessionPanelHtml()}
       <div class="hal-chat">
         <div class="hal-chat__log" id="halChatLog"></div>
         <div class="hal-suggest" id="halSuggest"></div>
@@ -604,6 +802,8 @@ function renderPanel(key) {
     });
     renderChatLog();
     renderAuditLog();
+    bindWorkSessionControls(drawerContent);
+    bindOpenPageButtons(drawerContent);
     return;
   }
 
@@ -622,6 +822,7 @@ function renderPanel(key) {
     drawerContent.innerHTML = `<p>${escapeHtml(data.summary)}</p>${reasoningLanePanel()}`;
     bindOpenPageButtons(drawerContent);
     bindHalCommands(drawerContent);
+    bindWorkSessionControls(drawerContent);
     return;
   }
 
@@ -660,6 +861,7 @@ function renderPanel(key) {
     drawerContent.innerHTML = prioritiesPanel();
     bindOpenPageButtons(drawerContent);
     bindHalCommands(drawerContent);
+    bindWorkSessionControls(drawerContent);
     return;
   }
 

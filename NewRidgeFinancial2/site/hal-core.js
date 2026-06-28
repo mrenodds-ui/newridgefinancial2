@@ -221,6 +221,122 @@ const HalCore = (function () {
     return out.trim();
   }
 
+  function sessionTemplates(halData) {
+    const ws = halData && halData.workSessions;
+    return (ws && ws.templates) || [];
+  }
+
+  function sessionTemplateById(halData, id) {
+    return sessionTemplates(halData).find((t) => t.id === id) || null;
+  }
+
+  function findSessionTemplate(halData, query) {
+    const q = String(query).toLowerCase().trim();
+    for (const template of sessionTemplates(halData)) {
+      if (template.command && q.includes(String(template.command).toLowerCase())) return template;
+      if (template.id && q.includes(template.id.replace(/-/g, " "))) return template;
+      if (template.label && q.includes(String(template.label).toLowerCase())) return template;
+    }
+    if (/claims review/.test(q)) return sessionTemplateById(halData, "claims-review");
+    if (/source freshness|source review/.test(q)) return sessionTemplateById(halData, "source-freshness");
+    if (/a\/r review|ar review|collections review/.test(q)) return sessionTemplateById(halData, "ar-review");
+    if (/document review/.test(q)) return sessionTemplateById(halData, "document-review");
+    if (/blocked item|blocked triage/.test(q)) return sessionTemplateById(halData, "blocked-triage");
+    return null;
+  }
+
+  function createSessionState(template) {
+    const checklist = (template.checklist || []).map((text, index) => ({
+      id: index,
+      text: String(text),
+      done: false,
+    }));
+    return {
+      id: template.id,
+      label: template.label,
+      targetPage: template.targetPage,
+      purpose: template.purpose,
+      safety: template.safety,
+      checklist,
+      verify: (template.verify || []).map(String),
+      startedAt: new Date().toISOString(),
+      handoffNote: null,
+    };
+  }
+
+  function toggleSessionCheck(session, checkId) {
+    if (!session || !session.checklist) return session;
+    const next = { ...session, checklist: session.checklist.map((item) => ({ ...item })) };
+    const item = next.checklist.find((c) => c.id === checkId);
+    if (item) item.done = !item.done;
+    return next;
+  }
+
+  function sessionProgress(session) {
+    if (!session || !session.checklist || session.checklist.length === 0) return 0;
+    const done = session.checklist.filter((c) => c.done).length;
+    return Math.round((done / session.checklist.length) * 100);
+  }
+
+  function draftHandoffNote(session, halData) {
+    if (!session) return "";
+    const reg = registryById(halData, session.targetPage);
+    const pending = (session.checklist || []).filter((c) => !c.done).map((c) => c.text);
+    const completed = (session.checklist || []).filter((c) => c.done).map((c) => c.text);
+    const verify = (session.verify || []).map((v) => "- [ ] " + v).join("\n");
+    const lines = [
+      "HAL handoff note — " + session.label,
+      "Purpose: " + session.purpose,
+      "Safety: " + session.safety,
+      reg ? "Related page: " + reg.name + " (" + reg.state + ")" : "",
+      "",
+      "Completed checks:",
+      completed.length ? completed.map((c) => "- [x] " + c).join("\n") : "- (none yet)",
+      "",
+      "Remaining checks:",
+      pending.length ? pending.map((c) => "- [ ] " + c).join("\n") : "- (all complete)",
+      "",
+      "Human must verify:",
+      verify || "- (see session template)",
+      "",
+      "(Draft only · read-only · human review required before any external action)",
+    ];
+    return lines.filter(Boolean).join("\n");
+  }
+
+  function validateSessionTemplates(halData) {
+    const errors = [];
+    const registryIds = new Set(registryList(halData).map((e) => e.id));
+    for (const template of sessionTemplates(halData)) {
+      if (!template.id) errors.push("template missing id");
+      if (!template.targetPage) errors.push("template " + template.id + " missing targetPage");
+      else if (!registryIds.has(template.targetPage) && template.targetPage !== "hal") {
+        errors.push("template " + template.id + " targetPage not in registry: " + template.targetPage);
+      }
+      for (const item of template.checklist || []) {
+        if (typeof item !== "string" || !item.trim()) errors.push("template " + template.id + " has invalid checklist item");
+      }
+    }
+    return errors;
+  }
+
+  function matchSessionRoute(query) {
+    const q = String(query).toLowerCase().trim();
+    if (/show (active|current) session|active session|work session status|current work session/.test(q)) {
+      return { type: "show" };
+    }
+    if (/reset (work )?session|clear session|end session/.test(q)) {
+      return { type: "reset" };
+    }
+    if (/draft handoff|handoff note|draft session note/.test(q)) {
+      return { type: "handoff" };
+    }
+    if (/\bstart\b/.test(q) || /begin review/.test(q)) {
+      return { type: "start" };
+    }
+    return null;
+  }
+
   function routeHalCommand(halData, halModels, pages, rawQuery) {
     const query = String(rawQuery).toLowerCase().trim();
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
@@ -242,9 +358,44 @@ const HalCore = (function () {
         intent: "help",
         lane: "local",
         text:
-          "I am the local program manager. I can open any program page, explain what each page is for, show today's priorities, report read-only source health, simulate the firewall, and explain model lanes. I do not submit, send, or change anything.",
+          "I am the local program manager. I can open any program page, explain what each page is for, show today's priorities, start read-only work sessions, report source health, simulate the firewall, and explain model lanes. I do not submit, send, or change anything.",
         actions: [],
       };
+    }
+
+    const sessionRoute = matchSessionRoute(query);
+    if (sessionRoute) {
+      if (sessionRoute.type === "show") {
+        return { intent: "session: show", lane: "local", useSessionShow: true, text: "", actions: [] };
+      }
+      if (sessionRoute.type === "reset") {
+        return { intent: "session: reset", lane: "local", useSessionReset: true, text: "Work session cleared.", actions: [] };
+      }
+      if (sessionRoute.type === "handoff") {
+        return { intent: "session: handoff", lane: "local", useSessionHandoff: true, text: "", actions: [] };
+      }
+      if (sessionRoute.type === "start") {
+        const template = findSessionTemplate(halData, query);
+        if (template) {
+          const reg = registryById(halData, template.targetPage);
+          return {
+            intent: "session: start:" + template.id,
+            lane: "local",
+            useSessionStart: true,
+            sessionId: template.id,
+            text:
+              "Starting work session: " +
+              template.label +
+              ". " +
+              template.purpose +
+              " Safety: " +
+              template.safety,
+            actions: template.targetPage
+              ? [{ type: "openPage", label: "Open " + (reg ? reg.name : template.targetPage), page: template.targetPage }]
+              : [],
+          };
+        }
+      }
     }
 
     const wantsExplain = /\b(explain|what is|what's|whats|what does|tell me about|describe|purpose of)\b/.test(query);
@@ -384,6 +535,15 @@ const HalCore = (function () {
     buildEscalationPrompt,
     cleanModelText,
     routeHalCommand,
+    sessionTemplates,
+    sessionTemplateById,
+    findSessionTemplate,
+    createSessionState,
+    toggleSessionCheck,
+    sessionProgress,
+    draftHandoffNote,
+    validateSessionTemplates,
+    matchSessionRoute,
   };
 })();
 
