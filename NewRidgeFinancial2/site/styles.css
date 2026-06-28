@@ -1321,6 +1321,15 @@ body {
 .hp-conf--med { color: var(--hp-gold); }
 .hp-conf--low { color: var(--hp-ok); }
 
+/* Lead manager signals inside HAL INSIGHTS (next safe step + active work) */
+.hp-insight__lead span { color: #d7deea; }
+.hp-insight__lead b { color: var(--hp-gold); letter-spacing: 0.07em; font-size: 9px; margin-right: 4px; }
+.hp-insight__lead em { font-style: normal; color: #6f7783; font-size: 10px; }
+
+/* Allowed (local) summary under the firewall blocked list */
+.hp-fw__allowed { margin: 9px 0 0; font-size: 10px; color: #8a929e; line-height: 1.5; }
+.hp-fw__allowed b { color: var(--hp-ok); letter-spacing: 0.06em; font-size: 9px; }
+
 /* System controls */
 .hp-ctrl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .hp-ctrl__btn {

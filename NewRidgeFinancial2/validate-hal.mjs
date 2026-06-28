@@ -368,6 +368,40 @@ async function main() {
   const { execSync } = require("node:child_process");
   execSync("node --check site/app.js", { cwd: __dirname, stdio: "pipe" });
   execSync("node --check site/hal-core.js", { cwd: __dirname, stdio: "pipe" });
+  execSync("node --check site/hal-page.js", { cwd: __dirname, stdio: "pipe" });
+  passed++;
+
+  // HAL page surfaces required manager signals (no backend, local data only)
+  const HalPageMod = require(join(siteDir, "hal-page.js"));
+  let halHtml = "";
+  const halRoot = {
+    set innerHTML(value) {
+      halHtml = value;
+    },
+    get innerHTML() {
+      return halHtml;
+    },
+    querySelector() {
+      return null;
+    },
+  };
+  HalPageMod.render({
+    root: halRoot,
+    halData,
+    halModels,
+    halAudit: [{ time: "12:00:00", intent: "readiness: run", query: "Run readiness check" }],
+    halChatHistory: [],
+    halAskDraft: "",
+    halAskLoading: false,
+    halInlineFirewallResult: null,
+  });
+  assert(halHtml.includes("MODE"), "HAL page must show current mode");
+  assert(halHtml.includes("NEXT SAFE STEP"), "HAL page must surface the next safe step");
+  assert(halHtml.includes("ACTIVE WORK"), "HAL page must surface active work");
+  assert(halHtml.includes("Allowed (local)"), "HAL page must surface allowed actions");
+  assert(halHtml.includes("EXTERNAL ACTION FIREWALL") && halHtml.includes("BLOCKED"), "HAL page must surface blocked actions");
+  assert(halHtml.includes("Last local receipt"), "HAL page must surface the last local receipt");
+  assert(halHtml.includes("local sample data"), "HAL page must label sample/local data honestly");
   passed++;
 
   console.log(`HAL validation passed (${passed} suites)`);
