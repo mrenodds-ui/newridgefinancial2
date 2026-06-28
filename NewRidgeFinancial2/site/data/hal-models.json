@@ -45,10 +45,28 @@
     "activeLane": "chat14b",
     "laneExecution": "Enabled · all local models · loopback only",
     "runningModel": "none (loads on first query)",
-    "gpuStatus": "not verified",
-    "bindingStatus": "127.0.0.1 only · remote endpoints blocked",
+    "gpuStatus": "Verified · AMD Radeon RX 9060 XT · 16 GB VRAM · ROCm gfx1200 · all model layers offloaded to GPU",
+    "bindingStatus": "HAL connects 127.0.0.1 only · Ollama server binds 0.0.0.0:11434 (LAN-reachable)",
     "dataPolicy": "No patient, financial, SoftDent, QuickBooks, or sensitive raw data sent to any model",
     "allModelsEnabled": true,
+    "gpu": {
+      "verified": true,
+      "verifiedAt": "2026-06-28",
+      "device": "AMD Radeon RX 9060 XT",
+      "vendor": "AMD",
+      "library": "ROCm",
+      "compute": "gfx1200",
+      "vramGiB": 15.9,
+      "layerOffload": "41/41 layers offloaded to GPU (14B lane)",
+      "integratedGpu": "Intel Graphics present but dropped by Ollama (set OLLAMA_IGPU_ENABLE=1 to enable)",
+      "knownWarning": "rocblaslt: TensileLibrary_lazy_gfx1200.dat not loaded; non-fatal, inference still runs on GPU"
+    },
+    "runtime": {
+      "ollamaVersion": "0.30.11",
+      "modelsPath": "D:\\LocalAI\\ActiveModels",
+      "host": "0.0.0.0:11434",
+      "keepAlive": "5m"
+    },
     "availableModels": [
       "queen3:14b",
       "qwen3:14b",

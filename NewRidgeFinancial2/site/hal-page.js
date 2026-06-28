@@ -66,7 +66,7 @@ const HalPage = (function () {
           ${aiStatRow("REASONING MODEL", `${reasoningModel.model || "—"} · ${reasoningModel.available ? "available" : "missing"}`, !!reasoningModel.available)}
           ${aiStatRow("ESCALATION MODEL", `${escalationModel.model || "—"} · ${escalationModel.available ? "available" : "missing"}`, !!escalationModel.available)}
           ${aiStatRow("RUNNING MODEL", rd.runningModel || "none")}
-          ${aiStatRow("GPU STATUS", rd.gpuStatus || "not verified")}
+          ${aiStatRow("GPU STATUS", rd.gpuStatus || "not verified", rd.gpu && rd.gpu.verified === true)}
           ${aiStatRow("BINDING", rd.bindingStatus || "not verified")}
           ${aiStatRow("LANE EXECUTION", lanesLive ? rd.laneExecution || "Enabled · local loopback only" : "Disabled")}
         </dl>
