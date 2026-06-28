@@ -41,6 +41,15 @@ const FALLBACK_HAL = {
   ],
 };
 
+const FALLBACK_MODELS = {
+  config: { mode: "offline", localFirst: true, externalCallsEnabled: false, activeLane: null },
+  lanes: [
+    { id: "chat14b", name: "14B chat lane", model: "queen3:14b", role: "Staff-facing conversation", state: "Offline", willAllow: ["Explain pages in plain language", "Summarize local status"], stillBlocked: ["No external actions", "No data writeback"] },
+    { id: "reason21b", name: "21B reasoning lane", model: "planned", role: "Program review and prioritization", state: "Planned", willAllow: ["Prioritize work across pages"], stillBlocked: ["No external actions"] },
+    { id: "escalate30b", name: "30B escalation lane", model: "planned", role: "Second-opinion review", state: "Planned", willAllow: ["Second-opinion review"], stillBlocked: ["No external actions"] },
+  ],
+};
+
 const HOTSPOTS = [
   { key: "askHal", label: "Ask HAL", left: 15, top: 15, width: 45, height: 17 },
   { key: "sources", label: "Source intake", left: 8, top: 37, width: 25, height: 34 },
@@ -60,6 +69,7 @@ const drawerTitle = document.getElementById("drawerTitle");
 const drawerContent = document.getElementById("drawerContent");
 const buttons = {};
 let halData = FALLBACK_HAL;
+let halModels = FALLBACK_MODELS;
 let currentDrawerKey = null;
 
 // Ask HAL local manager: chat transcript + session audit log (local-only, no AI model).
@@ -101,6 +111,30 @@ function registryList() {
 
 function registryById(id) {
   return registryList().find((entry) => entry.id === id) || null;
+}
+
+function modelConfig() {
+  return (halModels && halModels.config) || FALLBACK_MODELS.config;
+}
+
+function modelLanes() {
+  return (halModels && halModels.lanes && halModels.lanes.length ? halModels.lanes : FALLBACK_MODELS.lanes) || [];
+}
+
+// Offline-safe model adapter. In offline mode it never makes an external call;
+// it only reports that the lane is staged but not connected.
+function consultModelLane() {
+  const config = modelConfig();
+  if (config.mode !== "online" || config.externalCallsEnabled !== true) {
+    const chat = modelLanes().find((lane) => lane.id === "chat14b");
+    const model = chat && chat.model ? chat.model : "queen3:14b";
+    return (
+      "Local data did not match that. The 14B chat lane (" +
+      model +
+      ") is staged but not connected yet, so I can only answer from the local program registry for now."
+    );
+  }
+  return "Model online mode is not implemented in this build. Staying on local-only answers.";
 }
 
 function findPage(query) {
@@ -163,6 +197,21 @@ function routeHalCommand(rawQuery) {
     return { intent: "sources", text: `Read-only source intake status:\n${list}`, actions: [] };
   }
 
+  if (/\bmodels?\b|\b14b\b|\b21b\b|\b30b\b|\bllm\b|\bai lane\b|which model|are you connected|connected to a model/.test(query)) {
+    const lanes = modelLanes();
+    const list = lanes
+      .map(
+        (lane) =>
+          `- ${lane.name} (${lane.model}) — ${lane.state}\n   Will allow: ${(lane.willAllow || []).join(", ")}\n   Still blocked: ${(lane.stillBlocked || []).join(", ")}`,
+      )
+      .join("\n");
+    return {
+      intent: "model lanes",
+      text: `Model lanes are local-only and none are connected yet:\n${list}`,
+      actions: [],
+    };
+  }
+
   if (/\bready\b/.test(query)) {
     const ready = registryList().filter((entry) => /ready/i.test(entry.state));
     const list = ready.map((entry) => `- ${entry.name}: ${entry.nextAction}`).join("\n");
@@ -218,9 +267,8 @@ function routeHalCommand(rawQuery) {
   }
 
   return {
-    intent: "unknown",
-    text:
-      'I did not catch a program action there. Try: "what is ready to work on", "what is blocked", "open claims workbench", "review source health", or "explain the firewall".',
+    intent: "model: offline",
+    text: consultModelLane(),
     actions: [],
   };
 }
@@ -518,6 +566,18 @@ fetch("data/hal-manager.json", { cache: "no-store" })
   })
   .catch(() => {
     halData = FALLBACK_HAL;
+  });
+
+fetch("data/hal-models.json", { cache: "no-store" })
+  .then((response) => {
+    if (!response.ok) throw new Error("HAL models unavailable");
+    return response.json();
+  })
+  .then((data) => {
+    halModels = data;
+  })
+  .catch(() => {
+    halModels = FALLBACK_MODELS;
   });
 
 const initial = window.location.hash.replace("#", "") || PAGES[0].id;

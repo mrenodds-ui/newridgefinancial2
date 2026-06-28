@@ -1,0 +1,58 @@
+{
+  "config": {
+    "mode": "offline",
+    "localFirst": true,
+    "externalCallsEnabled": false,
+    "activeLane": null,
+    "note": "HAL answers from the local registry first. Model lanes are staged but not connected. No external calls happen in offline mode."
+  },
+  "lanes": [
+    {
+      "id": "chat14b",
+      "name": "14B chat lane",
+      "model": "queen3:14b",
+      "role": "Staff-facing conversation and plain-language answers",
+      "state": "Offline",
+      "willAllow": [
+        "Explain pages in plain language",
+        "Summarize local read-only status",
+        "Answer general staff questions about the program"
+      ],
+      "stillBlocked": [
+        "No external actions",
+        "No data writeback",
+        "No payer contact or submission"
+      ]
+    },
+    {
+      "id": "reason21b",
+      "name": "21B reasoning lane",
+      "model": "planned",
+      "role": "Program review, prioritization, and structured reasoning",
+      "state": "Planned",
+      "willAllow": [
+        "Prioritize work across pages",
+        "Prepare structured review notes"
+      ],
+      "stillBlocked": [
+        "No external actions",
+        "No data writeback"
+      ]
+    },
+    {
+      "id": "escalate30b",
+      "name": "30B escalation lane",
+      "model": "planned",
+      "role": "Second-opinion review for complex or high-risk questions",
+      "state": "Planned",
+      "willAllow": [
+        "Second-opinion review",
+        "Complex case reasoning"
+      ],
+      "stillBlocked": [
+        "No external actions",
+        "No data writeback"
+      ]
+    }
+  ]
+}

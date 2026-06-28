@@ -30,7 +30,8 @@
       "What is blocked",
       "Open the claims workbench",
       "Review read-only source health",
-      "Explain the external action firewall"
+      "Explain the external action firewall",
+      "Are you connected to a model?"
     ],
     "response": "I can navigate the program, explain each page, show priorities, and keep work inside the read-only safety boundary. Model lanes will be added after this local manager layer is stable."
   },
