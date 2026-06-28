@@ -45,8 +45,8 @@
     "activeLane": "chat14b",
     "laneExecution": "Enabled · all local models · loopback only",
     "runningModel": "none (loads on first query)",
-    "gpuStatus": "Verified · AMD Radeon RX 9060 XT · 16 GB VRAM · ROCm gfx1200 · all model layers offloaded to GPU",
-    "bindingStatus": "HAL connects 127.0.0.1 only · Ollama server binds 0.0.0.0:11434 (LAN-reachable)",
+    "gpuStatus": "Verified · AMD Radeon RX 9060 XT · 16 GB VRAM · ROCm gfx1200 · 41/41 layers · 100% GPU · loads clean",
+    "bindingStatus": "Ollama server binds 0.0.0.0:11434 (LAN access enabled by operator) · HAL client connects 127.0.0.1 only",
     "dataPolicy": "No patient, financial, SoftDent, QuickBooks, or sensitive raw data sent to any model",
     "allModelsEnabled": true,
     "gpu": {
@@ -57,14 +57,17 @@
       "library": "ROCm",
       "compute": "gfx1200",
       "vramGiB": 15.9,
-      "layerOffload": "41/41 layers offloaded to GPU (14B lane)",
+      "layerOffload": "41/41 layers offloaded to GPU · model resident at 100% GPU",
       "integratedGpu": "Intel Graphics present but dropped by Ollama (set OLLAMA_IGPU_ENABLE=1 to enable)",
-      "knownWarning": "rocblaslt: TensileLibrary_lazy_gfx1200.dat not loaded; non-fatal, inference still runs on GPU"
+      "resolvedWarning": "rocblaslt TensileLibrary_lazy_gfx1200 lookup fixed by setting ROCBLAS_TENSILE_LIBPATH; models now load with no rocblaslt errors",
+      "lastVerifiedLoad": "queen3:14b · 100% GPU · 0 rocblaslt errors"
     },
     "runtime": {
       "ollamaVersion": "0.30.11",
       "modelsPath": "D:\\LocalAI\\ActiveModels",
       "host": "0.0.0.0:11434",
+      "lanAccess": "enabled (operator choice; not loopback-restricted)",
+      "tensileLibPath": "C:\\Users\\mreno\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\rocm_v7_1\\rocblas\\library",
       "keepAlive": "5m"
     },
     "availableModels": [
