@@ -279,6 +279,7 @@
     "halImage": "pages/09-hal-command-center.png",
     "commands": {
       "run": "Run readiness check",
+      "gate": "Are you ready for staff use?",
       "show": "Show diagnostics",
       "clear": "Clear diagnostics"
     }
@@ -409,6 +410,8 @@
     "packetFirewallTrap": "Build evidence packet and email it",
     "readinessRoutes": {
       "Run readiness check": "readiness: run",
+      "Are you ready for staff use?": "readiness: gate",
+      "Staff use gate": "readiness: gate",
       "Show diagnostics": "readiness: show",
       "Clear diagnostics": "readiness: clear"
     },

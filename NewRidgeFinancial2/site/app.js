@@ -368,10 +368,53 @@ function clearReadinessDiagnostics() {
   logAudit("Clear diagnostics", "readiness: clear");
 }
 
+function staffUseGateText() {
+  if (!halReadinessDiagnostics) {
+    return "No diagnostics available yet. Say \"Run readiness check\" first, then ask if HAL is ready for staff use.";
+  }
+  const gate = halReadinessDiagnostics.gate || HalCore.staffUseGate(halReadinessDiagnostics);
+  const lines = ["Staff use gate: " + gate.status + " — " + gate.headline, gate.detail];
+  if (gate.blockers && gate.blockers.length) {
+    lines.push("", "Blockers:", ...gate.blockers.map((entry) => "- " + entry));
+  }
+  if (gate.warnings && gate.warnings.length) {
+    lines.push("", "Warnings:", ...gate.warnings.map((entry) => "- " + entry));
+  }
+  lines.push("", "(Local diagnostic only · read-only · human review required)");
+  return lines.join("\n");
+}
+
 function readinessStatusClass(status) {
   if (status === "Pass") return "hal-ready--pass";
   if (status === "Warning") return "hal-ready--warn";
   return "hal-ready--fail";
+}
+
+function gateStatusClass(status) {
+  if (status === "Ready") return "hal-gate--pass";
+  if (status === "Ready with warnings") return "hal-gate--warn";
+  if (status === "Not ready") return "hal-gate--fail";
+  return "hal-gate--unknown";
+}
+
+function staffUseGateHtml() {
+  if (!halReadinessDiagnostics) return "";
+  const gate = halReadinessDiagnostics.gate || HalCore.staffUseGate(halReadinessDiagnostics);
+  const list = (items, label) =>
+    items && items.length
+      ? `<div class="drawer-meta"><strong>${label}</strong><ul class="hal-gate__list">${items
+          .map((entry) => `<li>${escapeHtml(entry)}</li>`)
+          .join("")}</ul></div>`
+      : "";
+  return `<div class="hal-gate ${gateStatusClass(gate.status)}">
+    <div class="hal-gate__head">
+      <strong>${escapeHtml(gate.headline)}</strong>
+      <span class="hal-gate__status">${escapeHtml(gate.status)}</span>
+    </div>
+    <p>${escapeHtml(gate.detail)}</p>
+    ${list(gate.blockers, "Blockers")}
+    ${list(gate.warnings, "Warnings")}
+  </div>`;
 }
 
 function readinessPanelHtml() {
@@ -397,10 +440,12 @@ function readinessPanelHtml() {
   return `<div class="drawer-section hal-readiness">
     <h3 class="drawer-section__title">${escapeHtml(cfg.title || "HAL readiness")}</h3>
     <p class="drawer-meta">${escapeHtml(cfg.summary || "")}</p>
+    ${staffUseGateHtml()}
     ${overall}
     <div class="drawer-grid">${cards}</div>
     <div class="drawer-card__actions">
       <button class="drawer-action drawer-action--sm" type="button" data-readiness-run>Run readiness check</button>
+      <button class="drawer-action drawer-action--sm" type="button" data-readiness-gate${halReadinessDiagnostics ? "" : " disabled"}>Staff use gate</button>
       <button class="drawer-action drawer-action--sm" type="button" data-readiness-show${halReadinessDiagnostics ? "" : " disabled"}>Show diagnostics</button>
       <button class="drawer-action drawer-action--sm" type="button" data-readiness-clear${halReadinessDiagnostics ? "" : " disabled"}>Clear diagnostics</button>
     </div>
@@ -418,6 +463,24 @@ function bindReadinessControls(root) {
     button.addEventListener("click", () => {
       if (!halReadinessDiagnostics) return;
       const text = HalCore.formatReadinessSummary(halReadinessDiagnostics);
+      if (currentDrawerKey === "askHal") {
+        halChatHistory.push({ role: "hal", text, lane: "readiness", actions: [] });
+        saveChatHistory();
+        renderChatLog();
+      } else {
+        openDrawer("askHal");
+        setTimeout(() => {
+          halChatHistory.push({ role: "hal", text, lane: "readiness", actions: [] });
+          saveChatHistory();
+          renderChatLog();
+        }, 50);
+      }
+    });
+  });
+  root.querySelectorAll("[data-readiness-gate]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!halReadinessDiagnostics) return;
+      const text = staffUseGateText();
       if (currentDrawerKey === "askHal") {
         halChatHistory.push({ role: "hal", text, lane: "readiness", actions: [] });
         saveChatHistory();
@@ -733,6 +796,17 @@ async function handleHalSubmit(query) {
       lane: "readiness",
       actions: [],
     });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
+    return;
+  }
+
+  if (result.useReadinessGate) {
+    if (!halReadinessDiagnostics) runReadinessDiagnostics();
+    halChatHistory.push({ role: "hal", text: staffUseGateText(), lane: "readiness", actions: [] });
     logAudit(trimmed, result.intent);
     saveChatHistory();
     renderChatLog();

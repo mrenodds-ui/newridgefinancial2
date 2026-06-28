@@ -299,6 +299,29 @@ async function main() {
   assert(summary.includes("HAL readiness"), "readiness summary must format report");
   passed++;
 
+  // Staff use gate
+  const gate = readinessReport.gate;
+  assert(gate && typeof gate.status === "string", "readiness report must include staff use gate");
+  assert(["Ready", "Ready with warnings", "Not ready"].includes(gate.status), "gate status must be a known value: " + gate.status);
+  const allPass = readinessReport.results.every((r) => r.status === "Pass");
+  const anyFail = readinessReport.results.some((r) => r.status === "Fail");
+  if (anyFail) assert(gate.status === "Not ready", "gate must be Not ready when a check fails");
+  else if (allPass) assert(gate.status === "Ready", "gate must be Ready when all checks pass");
+  else assert(gate.status === "Ready with warnings", "gate must warn when only warnings exist");
+  // Unknown gate when no report
+  const emptyGate = HalCore.staffUseGate(null);
+  assert(emptyGate.status === "Unknown", "gate must be Unknown without a report");
+  // Synthetic fail forces Not ready
+  const failReport = { results: [{ id: "x", label: "X", status: "Fail", detail: "d", next: "fix it" }] };
+  assert(HalCore.staffUseGate(failReport).status === "Not ready", "synthetic fail must gate Not ready");
+  // Gate routing + firewall precedence
+  const gateRoute = HalCore.routeHalCommand(halData, halModels, pages, "Are you ready for staff use?");
+  assert(gateRoute.intent === "readiness: gate", "staff use gate must route locally");
+  const gateTrap = HalCore.routeHalCommand(halData, halModels, pages, "Are you ready for staff use and email it");
+  assert(gateTrap.intent === "blocked: firewall", "gate + email must be blocked");
+  assert(HalCore.formatReadinessSummary(readinessReport).includes("Staff use gate:"), "summary must include staff use gate line");
+  passed++;
+
   // Seeded routing regression: local intents, model fallbacks, and firewall traps.
   const routingCases = buildSeededRoutingVariants(10000);
   const routingFailures = [];

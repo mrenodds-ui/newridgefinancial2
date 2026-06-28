@@ -463,10 +463,51 @@ const HalCore = (function () {
     return { id, label, status, detail, next: next || null };
   }
 
+  function staffUseGate(report) {
+    if (!report || !report.results) {
+      return {
+        status: "Unknown",
+        headline: "Readiness not run yet",
+        detail: "Run a readiness check before staff use.",
+        blockers: [],
+        warnings: [],
+      };
+    }
+    const blockers = report.results.filter((r) => r.status === "Fail");
+    const warnings = report.results.filter((r) => r.status === "Warning");
+    if (blockers.length > 0) {
+      return {
+        status: "Not ready",
+        headline: "Not ready for staff use",
+        detail: blockers.length + " blocking check(s) must be resolved before staff use.",
+        blockers: blockers.map((r) => r.label + ": " + (r.next || r.detail)),
+        warnings: warnings.map((r) => r.label + ": " + (r.next || r.detail)),
+      };
+    }
+    if (warnings.length > 0) {
+      return {
+        status: "Ready with warnings",
+        headline: "Ready with warnings",
+        detail: warnings.length + " warning(s) noted. Staff may proceed with care.",
+        blockers: [],
+        warnings: warnings.map((r) => r.label + ": " + (r.next || r.detail)),
+      };
+    }
+    return {
+      status: "Ready",
+      headline: "Ready for staff use",
+      detail: "All readiness checks passed. HAL is safe for read-only staff use.",
+      blockers: [],
+      warnings: [],
+    };
+  }
+
   function formatReadinessSummary(report) {
     if (!report || !report.results) return "No diagnostics available.";
+    const gate = staffUseGate(report);
     const lines = [
       "HAL readiness: " + report.overall,
+      "Staff use gate: " + gate.status + " — " + gate.headline,
       "Checked: " + report.ranAt,
       "",
       ...report.results.map((r) => "- [" + r.status + "] " + r.label + ": " + r.detail + (r.next ? " Next: " + r.next : "")),
@@ -622,16 +663,17 @@ const HalCore = (function () {
         ? "Warning"
         : "Pass";
 
-    return {
-      ranAt: new Date().toISOString(),
-      overall,
-      results,
-      summary: formatReadinessSummary({ overall, ranAt: new Date().toISOString(), results }),
-    };
+    const report = { ranAt: new Date().toISOString(), overall, results };
+    report.gate = staffUseGate(report);
+    report.summary = formatReadinessSummary(report);
+    return report;
   }
 
   function matchReadinessRoute(query) {
     const q = String(query).toLowerCase().trim();
+    if (/staff[\s-]?use gate|ready for staff|safe for staff|can staff use|are you ready for staff|ready to use|staff readiness/.test(q)) {
+      return { type: "gate" };
+    }
     if (/clear diagnostic|clear readiness|reset diagnostic/.test(q)) return { type: "clear" };
     if (/show diagnostic|show readiness|display diagnostic/.test(q)) return { type: "show" };
     if (/run readiness|readiness check|check hal|hal diagnostic|self[\s-]?check|diagnostic check/.test(q)) return { type: "run" };
@@ -686,6 +728,9 @@ const HalCore = (function () {
 
     const readinessRoute = matchReadinessRoute(query);
     if (readinessRoute) {
+      if (readinessRoute.type === "gate") {
+        return { intent: "readiness: gate", lane: "local", useReadinessGate: true, text: "", actions: [] };
+      }
       if (readinessRoute.type === "run") {
         return { intent: "readiness: run", lane: "local", useReadinessRun: true, text: "", actions: [] };
       }
@@ -927,6 +972,7 @@ const HalCore = (function () {
     sourceFreshnessSummary,
     readinessConfig,
     runReadinessChecks,
+    staffUseGate,
     formatReadinessSummary,
     matchReadinessRoute,
   };
