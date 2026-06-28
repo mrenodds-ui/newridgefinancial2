@@ -1467,8 +1467,12 @@ for (const page of PAGES) {
 }
 
 drawerClose.addEventListener("click", closeDrawer);
-drawer.addEventListener("click", (event) => {
-  if (event.target === drawer) closeDrawer();
+document.addEventListener("click", (event) => {
+  if (!currentDrawerKey) return;
+  const panel = drawer.querySelector(".drawer__panel");
+  if (panel && panel.contains(event.target)) return;
+  if (event.target.closest && (event.target.closest(".hotspot") || event.target.closest("#nav"))) return;
+  closeDrawer();
 });
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeDrawer();
