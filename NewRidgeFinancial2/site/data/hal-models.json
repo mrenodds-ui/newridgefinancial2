@@ -18,7 +18,15 @@
       "timeoutMs": 120000,
       "temperature": 0.3
     },
-    "note": "HAL answers from the local registry first. The external-action firewall runs before any model, so submit/email/upload/writeback never reach a model. Unmatched questions use the local 14B chat lane; explicit prioritization/planning requests use the local reasoning lane. No 21B tag is installed, so the reasoning lane maps to mistral-small3.1:24b; change config.reasoningModel.model to use a different local tag. All model use is read-only and drafts text only."
+    "escalationModel": {
+      "enabled": true,
+      "endpoint": "http://127.0.0.1:11434/api/chat",
+      "model": "qwen3:30b",
+      "timeoutMs": 180000,
+      "temperature": 0.2,
+      "think": true
+    },
+    "note": "HAL answers from the local registry first. The external-action firewall runs before any model, so submit/email/upload/writeback never reach a model. Unmatched questions use the local 14B chat lane; explicit prioritization/planning requests use the local reasoning lane; explicit second-opinion/high-risk requests use the local escalation lane. No 21B tag is installed, so the reasoning lane maps to mistral-small3.1:24b and the escalation lane maps to qwen3:30b; change config.reasoningModel.model or config.escalationModel.model to use different local tags. All model use is read-only and drafts text only."
   },
   "lanes": [
     {
@@ -56,9 +64,9 @@
     {
       "id": "escalate30b",
       "name": "30B escalation lane",
-      "model": "planned",
+      "model": "qwen3:30b",
       "role": "Second-opinion review for complex or high-risk questions",
-      "state": "Planned",
+      "state": "Connected (local)",
       "willAllow": [
         "Second-opinion review",
         "Complex case reasoning"

@@ -132,6 +132,11 @@ function reasoningModelConfig() {
   return config && config.reasoningModel ? config.reasoningModel : null;
 }
 
+function escalationModelConfig() {
+  const config = modelConfig();
+  return config && config.escalationModel ? config.escalationModel : null;
+}
+
 function runtimeReady(runtime) {
   const config = modelConfig();
   return config.mode === "online" && runtime && runtime.enabled === true && !!runtime.endpoint && !!runtime.model;
@@ -143,6 +148,10 @@ function localModelReady() {
 
 function reasoningModelReady() {
   return runtimeReady(reasoningModelConfig());
+}
+
+function escalationModelReady() {
+  return runtimeReady(escalationModelConfig());
 }
 
 // Message shown when a local lane is not reachable or not enabled.
@@ -198,6 +207,21 @@ function buildReasoningPrompt() {
   ].join("\n");
 }
 
+// Read-only grounding for the escalation lane: careful second-opinion review.
+function buildEscalationPrompt() {
+  const firewall = halData.firewall || FALLBACK_HAL.firewall;
+  return [
+    "You are HAL's escalation lane for NewRidgeFinancial 2.0, a dental-practice financial program.",
+    "Give a careful second-opinion review for a complex or high-risk question.",
+    "Be conservative: call out risks, assumptions, and exactly what a human must verify before acting.",
+    "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
+    "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
+    "Program pages and current status:",
+    registryAsText(),
+    "Respond with: a short risk assessment, then a numbered list of what a human should verify.",
+  ].join("\n");
+}
+
 // Strip optional <think> reasoning blocks some local models emit.
 function cleanModelText(text) {
   return String(text)
@@ -209,19 +233,21 @@ function cleanModelText(text) {
 async function runModel(runtime, systemPrompt, userText, draftLabel) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), runtime.timeoutMs || 60000);
+  const payload = {
+    model: runtime.model,
+    stream: false,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userText },
+    ],
+    options: { temperature: typeof runtime.temperature === "number" ? runtime.temperature : 0.2 },
+  };
+  if (typeof runtime.think === "boolean") payload.think = runtime.think;
   try {
     const response = await fetch(runtime.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: runtime.model,
-        stream: false,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userText },
-        ],
-        options: { temperature: typeof runtime.temperature === "number" ? runtime.temperature : 0.2 },
-      }),
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
     if (!response.ok) throw new Error("model http " + response.status);
@@ -241,6 +267,10 @@ function callLocalModel(userText) {
 
 function callReasoningModel(userText) {
   return runModel(reasoningModelConfig(), buildReasoningPrompt(), userText, "Local reasoning draft");
+}
+
+function callEscalationModel(userText) {
+  return runModel(escalationModelConfig(), buildEscalationPrompt(), userText, "Local escalation draft");
 }
 
 function findPage(query) {
@@ -282,6 +312,10 @@ function routeHalCommand(rawQuery) {
   }
 
   const wantsExplain = /\b(explain|what is|what's|whats|what does|tell me about|describe|purpose of)\b/.test(query);
+
+  if (/second opinion|escalat|double[\s-]?check|high[\s-]?risk|complex case|deep review|review carefully|sanity check|scrutin/.test(query)) {
+    return { intent: "escalation", text: "", useEscalation: true, prompt: rawQuery, actions: [] };
+  }
 
   if (/prioriti[sz]e|make a plan|draft a plan|\bplan (my|for|the)\b|analy[sz]e|reason through|think through|recommend|\bstrategy\b|focus first|where (do|should) (i|we) start/.test(query)) {
     return { intent: "reasoning", text: "", useReasoning: true, prompt: rawQuery, actions: [] };
@@ -452,6 +486,29 @@ async function handleHalSubmit(query) {
   halChatHistory.push({ role: "user", text: trimmed, actions: [] });
 
   const result = routeHalCommand(trimmed);
+
+  if (result.useEscalation) {
+    if (!escalationModelReady()) {
+      halChatHistory.push({ role: "hal", text: offlineModelMessage("escalate30b"), actions: [] });
+      logAudit(trimmed, "escalation: offline");
+      renderChatLog();
+      renderAuditLog();
+      return;
+    }
+    const em = escalationModelConfig();
+    const placeholder = { role: "hal", text: "Escalating locally to " + (em.model || "escalation lane") + "…", actions: [] };
+    halChatHistory.push(placeholder);
+    logAudit(trimmed, "escalation: review");
+    renderChatLog();
+    renderAuditLog();
+    try {
+      placeholder.text = await callEscalationModel(trimmed);
+    } catch (error) {
+      placeholder.text = offlineModelMessage("escalate30b");
+    }
+    renderChatLog();
+    return;
+  }
 
   if (result.useReasoning) {
     if (!reasoningModelReady()) {
