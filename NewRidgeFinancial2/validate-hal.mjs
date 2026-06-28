@@ -172,7 +172,7 @@ async function main() {
   let passed = 0;
 
   // JSON structure
-  assert(halData.registry && halData.registry.length === 9, "registry must have 9 entries");
+  assert(halData.registry && halData.registry.length === 10, "registry must have 10 entries");
   assert(halData.sources.items.length === 4, "sources must have 4 items");
   assert(halData.firewall.examples.length >= 4, "firewall examples required");
   passed++;
@@ -279,7 +279,7 @@ async function main() {
   passed++;
 
   // Readiness checks
-  assert(halData.readiness && halData.readiness.expectedRegistryCount === 9, "readiness config required");
+  assert(halData.readiness && halData.readiness.expectedRegistryCount === 10, "readiness config required");
   const readinessReport = HalCore.runReadinessChecks(halData, halModels, pages);
   assert(readinessReport && readinessReport.results && readinessReport.results.length >= 6, "readiness must return checks");
   const registryCheck = readinessReport.results.find((item) => item.id === "registry");

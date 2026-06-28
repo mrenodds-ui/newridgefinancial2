@@ -276,11 +276,11 @@
   "readiness": {
     "title": "HAL readiness",
     "summary": "Local self-check for registry, firewall, sessions, evidence packets, and model lane configuration. No external actions are performed.",
-    "expectedRegistryCount": 9,
+    "expectedRegistryCount": 10,
     "expectedHotspotCount": 8,
     "expectedSessionTemplates": 5,
     "expectedModelLanes": 3,
-    "halImage": "pages/09-hal-command-center.png",
+    "halImage": "",
     "commands": {
       "run": "Run readiness check",
       "gate": "Are you ready for staff use?",
@@ -384,6 +384,16 @@
       "nextAction": "Search for the supporting document staff need to reference.",
       "blocked": ["No upload", "No delete"],
       "related": ["documents", "narratives"]
+    },
+    {
+      "id": "office-manager",
+      "name": "Office Manager",
+      "purpose": "Staff oversight across work surfaces, sessions, and review queues.",
+      "safety": "Read-only oversight",
+      "state": "Needs review",
+      "nextAction": "Review active work sessions and blocked registry items with staff.",
+      "blocked": ["No writeback", "No external contact"],
+      "related": ["claims", "documents", "ar"]
     },
     {
       "id": "hal",

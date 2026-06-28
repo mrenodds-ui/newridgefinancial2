@@ -4,37 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NewRidgeFinancial 2.0</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=mock-1" />
   </head>
   <body>
     <div class="app">
-      <aside class="sidebar">
-        <div class="brand">
-          <svg class="tooth" viewBox="0 0 64 64" aria-hidden="true">
-            <title>New Ridge tooth logo</title>
-            <path
-              d="M20.9 7.8c4.4 0 7.1 2.4 11.1 2.4s6.7-2.4 11.1-2.4c7.8 0 13.2 6.3 13.2 15.1 0 5.4-2.4 10.4-4.7 15.2-2.2 4.6-3.4 9.7-4.4 14.7-.6 3.1-2.5 5.2-5.1 5.2-3.1 0-4.5-2.9-5.6-6.4l-2.1-6.7c-.7-2.3-1.4-3.8-2.4-3.8s-1.7 1.5-2.4 3.8l-2.1 6.7c-1.1 3.5-2.5 6.4-5.6 6.4-2.6 0-4.5-2.1-5.1-5.2-1-5-2.2-10.1-4.4-14.7-2.3-4.8-4.7-9.8-4.7-15.2C7.7 14.1 13.1 7.8 20.9 7.8Z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <div class="brand-copy">
-            <span class="brand-kicker">Mission Control</span>
-            <strong>NewRidgeFinancial 2.0</strong>
-          </div>
-        </div>
-
-        <nav class="nav" id="nav"></nav>
-
-        <div class="foot">
-          <span class="foot-label">Workspace</span>
-          <strong>Mission control</strong>
-          <span class="foot-copy">New Ridge Family Financial</span>
-        </div>
-      </aside>
+      <aside class="sidebar" id="sidebar" aria-label="Primary navigation"></aside>
 
       <main class="main">
         <header class="topbar">
@@ -49,200 +23,9 @@
 
         <section class="stage">
           <div class="page-frame" id="pageFrame">
-            <img id="pageImage" class="page-image" alt="" />
-            <div class="hotspot-layer" id="hotspotLayer" aria-label="HAL Command Center actions"></div>
-
-            <div class="hp" id="halPage" hidden>
-              <aside class="hp-rail">
-                <div class="hp-brand">
-                  <span class="hp-brand__mark" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l8 4.5v9L12 22l-8-6.5v-9L12 2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
-                  </span>
-                  <div class="hp-brand__copy">
-                    <strong>GOLD TOOTH</strong>
-                    <span>INTELLIGENCE</span>
-                  </div>
-                </div>
-
-                <nav class="hp-nav">
-                  <p class="hp-nav__label">COMMAND</p>
-                  <button type="button" class="hp-nav__item is-active" data-drawer="status"><span class="hp-nav__ico" aria-hidden="true">◆</span>HAL COMMAND CENTER<span class="hp-nav__dot" aria-hidden="true"></span></button>
-                  <button type="button" class="hp-nav__item" data-drawer="status"><span class="hp-nav__ico" aria-hidden="true">◷</span>LIVE STATUS</button>
-                  <button type="button" class="hp-nav__item" data-drawer="workSurfaces"><span class="hp-nav__ico" aria-hidden="true">▤</span>ORDERS</button>
-                  <button type="button" class="hp-nav__item" data-drawer="reasoning"><span class="hp-nav__ico" aria-hidden="true">▶</span>PLAYBOOKS</button>
-                  <button type="button" class="hp-nav__item" data-drawer="sources"><span class="hp-nav__ico" aria-hidden="true">▦</span>INTEL LIBRARY</button>
-
-                  <p class="hp-nav__label">OPERATIONS</p>
-                  <button type="button" class="hp-nav__item" data-drawer="workSurfaces"><span class="hp-nav__ico" aria-hidden="true">▥</span>WORK SURFACES</button>
-                  <button type="button" class="hp-nav__item" data-drawer="status"><span class="hp-nav__ico" aria-hidden="true">▣</span>REPORTS</button>
-                  <button type="button" class="hp-nav__item" data-drawer="sources"><span class="hp-nav__ico" aria-hidden="true">⬡</span>DATA MAP</button>
-                  <button type="button" class="hp-nav__item" data-drawer="firewall"><span class="hp-nav__ico" aria-hidden="true">⚙</span>INTEGRATIONS</button>
-
-                  <p class="hp-nav__label">ADMIN</p>
-                  <button type="button" class="hp-nav__item" data-drawer="controls"><span class="hp-nav__ico" aria-hidden="true">◍</span>USERS</button>
-                  <button type="button" class="hp-nav__item" data-drawer="controls"><span class="hp-nav__ico" aria-hidden="true">◎</span>ROLES</button>
-                  <button type="button" class="hp-nav__item" data-drawer="firewall"><span class="hp-nav__ico" aria-hidden="true">▤</span>POLICIES</button>
-                  <button type="button" class="hp-nav__item" data-drawer="status"><span class="hp-nav__ico" aria-hidden="true">▦</span>AUDIT LOG</button>
-                </nav>
-
-                <div class="hp-user">
-                  <span class="hp-avatar">KS</span>
-                  <div class="hp-user__copy">
-                    <strong>Kiera Serrano</strong>
-                    <span>Administrator</span>
-                  </div>
-                  <span class="hp-user__chev" aria-hidden="true">⌄</span>
-                </div>
-
-                <div class="hp-health">
-                  <span class="hp-health__dot" aria-hidden="true"></span>
-                  <div class="hp-health__copy">
-                    <span>SYSTEM HEALTH</span>
-                    <strong>All Systems Operational</strong>
-                  </div>
-                </div>
-              </aside>
-
-              <div class="hp-body">
-                <header class="hp-top">
-                  <div class="hp-top__brand">
-                    <span class="hp-top__mark" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-                    </span>
-                    <div class="hp-top__copy">
-                      <strong>HAL COMMAND CENTER</strong>
-                      <span>Direct. Orchestrate. Protect.</span>
-                    </div>
-                  </div>
-                  <div class="hp-top__status">
-                    <span class="hp-status"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>HAL STATUS <b>ONLINE</b></span>
-                    <span class="hp-status"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>LOCAL CORE <b>HEALTHY</b></span>
-                    <span class="hp-status hp-status--red"><i class="hp-status__dot hp-status__dot--red" aria-hidden="true"></i>FIREWALL <b>ACTIVE</b></span>
-                    <span class="hp-clock"><strong>15:42:07 UTC</strong><span>MAY 28, 2025</span></span>
-                  </div>
-                </header>
-
-                <div class="hp-grid">
-                  <section class="hp-card hp-card--ask" data-drawer="askHal" style="grid-area: ask;">
-                    <div class="hp-card__head"><h3>ASK HAL</h3><span class="hp-info" aria-hidden="true">i</span></div>
-                    <div class="hp-ask__box">
-                      <p class="hp-ask__ph">Ask HAL anything. Be direct.</p>
-                      <div class="hp-ask__bar">
-                        <span class="hp-ask__mode">MODE</span>
-                        <span class="hp-ask__sel">Auto <i aria-hidden="true">⌄</i></span>
-                        <span class="hp-ask__spacer"></span>
-                        <span class="hp-ask__ico" aria-hidden="true">⎘</span>
-                        <span class="hp-ask__ico" aria-hidden="true">⚙</span>
-                        <span class="hp-ask__send" aria-hidden="true">➤ ASK HAL</span>
-                      </div>
-                    </div>
-                    <div class="hp-chips">
-                      <span>Summarize latest intel</span>
-                      <span>Assess emerging threats</span>
-                      <span>Analyze adversary TTPs</span>
-                      <span>Draft an operation plan</span>
-                      <span>Show critical risks</span>
-                    </div>
-                  </section>
-
-                  <section class="hp-card hp-card--reason" data-drawer="reasoning" style="grid-area: reason;">
-                    <div class="hp-card__head"><h3>LOCAL REASONING CORE</h3><span class="hp-info" aria-hidden="true">i</span></div>
-                    <div class="hp-reason">
-                      <div class="hp-ring">
-                        <span class="hp-ring__ico" aria-hidden="true">⬢</span>
-                        <strong>2,847,392</strong>
-                        <span>PACKETS PROCESSED</span>
-                      </div>
-                      <dl class="hp-stats">
-                        <div><dt>STATUS</dt><dd class="hp-ok">ACTIVE</dd></div>
-                        <div><dt>LATENCY</dt><dd>18 ms</dd></div>
-                        <div><dt>THROUGHPUT</dt><dd>3,421 p/s</dd></div>
-                        <div><dt>UPTIME</dt><dd>7d 14h 32m</dd></div>
-                      </dl>
-                    </div>
-                    <p class="hp-card__foot">All reasoning stays local. No data leaves this environment.</p>
-                  </section>
-
-                  <section class="hp-card" data-drawer="sources" style="grid-area: source;">
-                    <div class="hp-card__head"><h3>SOURCE INTAKE <span class="hp-muted">(READ-ONLY)</span></h3><span class="hp-info" aria-hidden="true">i</span></div>
-                    <table class="hp-table">
-                      <thead><tr><th>SOURCE</th><th>TYPE</th><th>LAST INGESTED</th><th>STATUS</th></tr></thead>
-                      <tbody>
-                        <tr><td>SIGINT Feeds</td><td>SIGINT</td><td>28 May 2025 15:38 UTC</td><td class="hp-ok">● INGESTED</td></tr>
-                        <tr><td>Open Source Intelligence</td><td>OSINT</td><td>28 May 2025 15:36 UTC</td><td class="hp-ok">● INGESTED</td></tr>
-                        <tr><td>Internal Reporting</td><td>INTEL</td><td>28 May 2025 15:35 UTC</td><td class="hp-ok">● INGESTED</td></tr>
-                        <tr><td>Threat Research Repos</td><td>THREAT</td><td>28 May 2025 15:33 UTC</td><td class="hp-ok">● INGESTED</td></tr>
-                        <tr><td>Partner Contributions</td><td>PARTNER</td><td>28 May 2025 15:30 UTC</td><td class="hp-ok">● INGESTED</td></tr>
-                        <tr><td>Historical Archive</td><td>HISTORICAL</td><td>28 May 2025 15:20 UTC</td><td class="hp-ok">● INGESTED</td></tr>
-                      </tbody>
-                    </table>
-                    <p class="hp-card__foot">Read-only sources. Ingestion is continuous and non-intrusive.</p>
-                  </section>
-
-                  <section class="hp-card" data-drawer="workSurfaces" style="grid-area: staff;">
-                    <div class="hp-card__head"><h3>STAFF WORK SURFACES</h3><span class="hp-viewall">VIEW ALL</span></div>
-                    <ul class="hp-surf">
-                      <li><span class="hp-surf__ico" aria-hidden="true">◳</span><div class="hp-surf__main"><strong>THREAT ANALYSIS</strong><span>Active analysts</span></div><div class="hp-surf__meta"><span>Updated<br><b>2m ago</b></span><span>Items<br><b>128</b></span><i class="hp-chev" aria-hidden="true">›</i></div></li>
-                      <li><span class="hp-surf__ico" aria-hidden="true">◰</span><div class="hp-surf__main"><strong>OPERATION PLANNING</strong><span>Active analysts</span></div><div class="hp-surf__meta"><span>Updated<br><b>7m ago</b></span><span>Items<br><b>64</b></span><i class="hp-chev" aria-hidden="true">›</i></div></li>
-                      <li><span class="hp-surf__ico" aria-hidden="true">◱</span><div class="hp-surf__main"><strong>COLLECTION MANAGEMENT</strong><span>Active analysts</span></div><div class="hp-surf__meta"><span>Updated<br><b>11m ago</b></span><span>Items<br><b>93</b></span><i class="hp-chev" aria-hidden="true">›</i></div></li>
-                      <li><span class="hp-surf__ico" aria-hidden="true">◲</span><div class="hp-surf__main"><strong>STRATEGIC ASSESSMENT</strong><span>Active analysts</span></div><div class="hp-surf__meta"><span>Updated<br><b>15m ago</b></span><span>Items<br><b>77</b></span><i class="hp-chev" aria-hidden="true">›</i></div></li>
-                    </ul>
-                    <p class="hp-card__foot">Isolated work surfaces. Each space operates within strict guardrails.</p>
-                  </section>
-
-                  <section class="hp-card hp-card--fw" data-drawer="firewall" style="grid-area: firewall;">
-                    <div class="hp-card__head"><h3>EXTERNAL ACTION FIREWALL</h3><span class="hp-info" aria-hidden="true">i</span></div>
-                    <p class="hp-fw__active"><span aria-hidden="true">✓</span> ACTIVE</p>
-                    <div class="hp-fw__diagram">
-                      <div class="hp-fw__node"><span class="hp-fw__box" aria-hidden="true">▤</span>INTERNAL<br>HAL ENVIRONMENT</div>
-                      <span class="hp-fw__link" aria-hidden="true">⟷</span>
-                      <div class="hp-fw__shield" aria-hidden="true">⛉</div>
-                      <span class="hp-fw__link" aria-hidden="true">⟷</span>
-                      <div class="hp-fw__node"><span class="hp-fw__box" aria-hidden="true">☁</span>EXTERNAL SYSTEMS<br>&amp; SERVICES</div>
-                    </div>
-                    <p class="hp-fw__note">All external actions require explicit authorization.</p>
-                    <ul class="hp-fw__list">
-                      <li><span>Web Browsing</span><b>BLOCKED</b></li>
-                      <li><span>External API Calls</span><b>BLOCKED</b></li>
-                      <li><span>File Exfiltration</span><b>BLOCKED</b></li>
-                      <li><span>Email / Messaging</span><b>BLOCKED</b></li>
-                      <li><span>Code Execution (External)</span><b>BLOCKED</b></li>
-                    </ul>
-                    <p class="hp-card__foot hp-card__foot--red">No outbound actions permitted without approval.</p>
-                  </section>
-
-                  <section class="hp-card" data-drawer="status" style="grid-area: recent;">
-                    <div class="hp-card__head"><h3>RECENT HAL ACTIVITY</h3><span class="hp-info" aria-hidden="true">i</span></div>
-                    <ul class="hp-log">
-                      <li><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span>Analyzed threat cluster: Silver Lynx</span><time>15:41:22 UTC</time></li>
-                      <li><i class="hp-log__dot hp-log__dot--ok" aria-hidden="true"></i><span>Correlated 37 new IOCs from OSINT</span><time>15:39:47 UTC</time></li>
-                      <li><i class="hp-log__dot hp-log__dot--cyan" aria-hidden="true"></i><span>Updated operation plan: NIGHTGLASS</span><time>15:38:11 UTC</time></li>
-                      <li><i class="hp-log__dot hp-log__dot--ok" aria-hidden="true"></i><span>Ingested new SIGINT batch (1,204 items)</span><time>15:36:58 UTC</time></li>
-                      <li><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span>Assessed risk: Supply chain disruption</span><time>15:35:33 UTC</time></li>
-                    </ul>
-                  </section>
-
-                  <section class="hp-card" data-drawer="priorities" style="grid-area: insights;">
-                    <div class="hp-card__head"><h3>HAL INSIGHTS</h3><span class="hp-info" aria-hidden="true">i</span></div>
-                    <ul class="hp-insight">
-                      <li><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span>Increased targeting observed on logistics sector</span><b class="hp-conf hp-conf--high">High confidence</b><i class="hp-chev" aria-hidden="true">›</i></li>
-                      <li><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span>New infrastructure linked to APT-29 activity</span><b class="hp-conf hp-conf--med">Medium confidence</b><i class="hp-chev" aria-hidden="true">›</i></li>
-                      <li><i class="hp-log__dot hp-log__dot--red" aria-hidden="true"></i><span>Credential phishing campaign expanding</span><b class="hp-conf hp-conf--high">High confidence</b><i class="hp-chev" aria-hidden="true">›</i></li>
-                      <li><i class="hp-log__dot hp-log__dot--ok" aria-hidden="true"></i><span>Potential insider threat indicator detected</span><b class="hp-conf hp-conf--low">Low confidence</b><i class="hp-chev" aria-hidden="true">›</i></li>
-                    </ul>
-                  </section>
-
-                  <section class="hp-card" data-drawer="controls" style="grid-area: controls;">
-                    <div class="hp-card__head"><h3>SYSTEM CONTROLS</h3><span class="hp-info" aria-hidden="true">i</span></div>
-                    <div class="hp-ctrl">
-                      <div class="hp-ctrl__btn"><span class="hp-ctrl__ico" aria-hidden="true">⚙</span><strong>HAL Settings</strong><span>Configure HAL</span></div>
-                      <div class="hp-ctrl__btn"><span class="hp-ctrl__ico" aria-hidden="true">⛉</span><strong>Guardrails</strong><span>View / Edit</span></div>
-                      <div class="hp-ctrl__btn"><span class="hp-ctrl__ico" aria-hidden="true">⛁</span><strong>Data Handling</strong><span>Policies</span></div>
-                      <div class="hp-ctrl__btn"><span class="hp-ctrl__ico" aria-hidden="true">▦</span><strong>Audit Log</strong><span>View Activity</span></div>
-                    </div>
-                  </section>
-                </div>
-              </div>
+            <div id="appPage" class="page-view" hidden></div>
+            <div id="halPage" hidden>
+              <div id="halPageRoot" class="hp"></div>
             </div>
           </div>
         </section>
@@ -258,7 +41,13 @@
       </div>
     </aside>
 
-    <script src="hal-core.js"></script>
-    <script src="app.js"></script>
+    <script src="hal-core.js?v=mock-1"></script>
+    <script src="desktop-bridge.js?v=mock-1"></script>
+    <script src="page-sample-data.js?v=mock-1"></script>
+    <script src="components.js?v=mock-1"></script>
+    <script src="services.js?v=mock-1"></script>
+    <script src="page-views.js?v=mock-1"></script>
+    <script src="hal-page.js?v=mock-1"></script>
+    <script src="app.js?v=mock-1"></script>
   </body>
 </html>

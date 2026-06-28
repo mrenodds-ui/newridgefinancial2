@@ -1,5 +1,5 @@
 @echo off
-REM NewRidgeFinancial 2.0 on port 1966.
+REM NewRidgeFinancial 2.0 desktop app (single window, no browser).
 setlocal
 set "ROOT_DIR=%~dp0"
 cd /d "%ROOT_DIR%"

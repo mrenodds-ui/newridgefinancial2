@@ -1,32 +1,32 @@
 {
   "config": {
-    "mode": "online",
-    "localFirst": true,
+    "mode": "offline",
+    "localFirst": false,
     "externalCallsEnabled": false,
     "activeLane": "chat14b",
     "localModel": {
-      "enabled": true,
-      "endpoint": "http://127.0.0.1:11434/api/chat",
+      "enabled": false,
+      "endpoint": "",
       "model": "queen3:14b",
       "timeoutMs": 60000,
       "temperature": 0.2
     },
     "reasoningModel": {
-      "enabled": true,
-      "endpoint": "http://127.0.0.1:11434/api/chat",
+      "enabled": false,
+      "endpoint": "",
       "model": "mistral-small3.1:24b",
       "timeoutMs": 120000,
       "temperature": 0.3
     },
     "escalationModel": {
-      "enabled": true,
-      "endpoint": "http://127.0.0.1:11434/api/chat",
+      "enabled": false,
+      "endpoint": "",
       "model": "qwen3:30b",
       "timeoutMs": 180000,
       "temperature": 0.2,
       "think": true
     },
-    "note": "HAL answers from the local registry first. The external-action firewall runs before any model, so submit/email/upload/writeback never reach a model. Unmatched questions use the local 14B chat lane; explicit prioritization/planning requests use the local reasoning lane; explicit second-opinion/high-risk requests use the local escalation lane. No 21B tag is installed, so the reasoning lane maps to mistral-small3.1:24b and the escalation lane maps to qwen3:30b; change config.reasoningModel.model or config.escalationModel.model to use different local tags. All model use is read-only and drafts text only."
+    "note": "HAL answers from the local registry only by default. Local model lanes are not configured, so the desktop app does not require a localhost service. External actions remain blocked."
   },
   "lanes": [
     {
@@ -34,7 +34,7 @@
       "name": "14B chat lane",
       "model": "queen3:14b",
       "role": "Staff-facing conversation and plain-language answers",
-      "state": "Connected (local)",
+      "state": "Not configured",
       "willAllow": [
         "Explain pages in plain language",
         "Summarize local read-only status",
@@ -51,7 +51,7 @@
       "name": "21B reasoning lane",
       "model": "mistral-small3.1:24b",
       "role": "Program review, prioritization, and structured reasoning",
-      "state": "Connected (local)",
+      "state": "Not configured",
       "willAllow": [
         "Prioritize work across pages",
         "Prepare structured review notes"
@@ -66,7 +66,7 @@
       "name": "30B escalation lane",
       "model": "qwen3:30b",
       "role": "Second-opinion review for complex or high-risk questions",
-      "state": "Connected (local)",
+      "state": "Not configured",
       "willAllow": [
         "Second-opinion review",
         "Complex case reasoning"

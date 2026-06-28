@@ -1,15 +1,16 @@
 // NewRidgeFinancial 2.0 — mission-control pages.
 
 const PAGES = [
-  { id: "financial", label: "Financial dashboard", title: "Owner Financial Dashboard", image: "pages/01-financial-dashboard.png" },
-  { id: "softdent", label: "SoftDent", title: "SoftDent", image: "pages/02-softdent.png" },
-  { id: "quickbooks", label: "QuickBooks", title: "QuickBooks", image: "pages/03-quickbooks.png" },
-  { id: "ar", label: "A/R & Collections", title: "A/R & Collections", image: "pages/04-ar-collections.png" },
-  { id: "claims", label: "Claims Workbench", title: "Patient Claims Workbench", image: "pages/05-claims-workbench.png" },
-  { id: "narratives", label: "Insurance Narratives", title: "Insurance Narratives", image: "pages/06-insurance-narratives.png" },
-  { id: "documents", label: "Accounting Documents", title: "Accounting Documents", image: "pages/07-accounting-documents.png" },
-  { id: "library", label: "Document Library", title: "Document Library", image: "pages/08-document-library.png" },
-  { id: "hal", label: "HAL Command Center", title: "HAL Command Center", image: "pages/09-hal-command-center.png" },
+  { id: "financial", label: "Financial dashboard", title: "Owner Financial Dashboard", icon: "⌁" },
+  { id: "softdent", label: "SoftDent", title: "SoftDent", icon: "◫" },
+  { id: "quickbooks", label: "QuickBooks", title: "QuickBooks", icon: "$" },
+  { id: "ar", label: "A/R & Collections", title: "A/R & Collections", icon: "↻" },
+  { id: "claims", label: "Claims Workbench", title: "Patient Claims Workbench", icon: "□" },
+  { id: "narratives", label: "Insurance Narratives", title: "Insurance Narratives", icon: "✎" },
+  { id: "documents", label: "Accounting Documents", title: "Accounting Documents", icon: "▤" },
+  { id: "library", label: "Document Library", title: "Document Library", icon: "▣" },
+  { id: "office-manager", label: "Office Manager", title: "Office Manager", icon: "◎" },
+  { id: "hal", label: "HAL Command Center", title: "HAL Command Center", icon: "◇" },
 ];
 
 const FALLBACK_HAL = {
@@ -25,22 +26,12 @@ const FALLBACK_HAL = {
 
 const FALLBACK_MODELS = { config: { mode: "offline" }, lanes: [] };
 
-const HOTSPOTS = [
-  { key: "askHal", label: "Ask HAL", left: 15, top: 9, width: 50, height: 26 },
-  { key: "reasoning", label: "Local Reasoning Core", left: 67, top: 9, width: 31, height: 26 },
-  { key: "sources", label: "Source Intake", left: 15, top: 36, width: 25, height: 41 },
-  { key: "workSurfaces", label: "Staff Work Surfaces", left: 41, top: 36, width: 25, height: 41 },
-  { key: "firewall", label: "External Action Firewall", left: 67, top: 36, width: 31, height: 41 },
-  { key: "status", label: "Recent HAL Activity", left: 15, top: 79, width: 32, height: 17 },
-  { key: "priorities", label: "HAL Insights", left: 48, top: 79, width: 29, height: 17 },
-  { key: "controls", label: "System Controls", left: 78, top: 79, width: 20, height: 17 },
-];
-
-const nav = document.getElementById("nav");
-const img = document.getElementById("pageImage");
+const sidebar = document.getElementById("sidebar");
+let nav = document.getElementById("nav");
 const pageTitle = document.getElementById("pageTitle");
-const hotspotLayer = document.getElementById("hotspotLayer");
+const appPage = document.getElementById("appPage");
 const halPage = document.getElementById("halPage");
+const halPageRoot = document.getElementById("halPageRoot");
 const drawer = document.getElementById("drawer");
 const drawerClose = document.getElementById("drawerClose");
 const drawerTitle = document.getElementById("drawerTitle");
@@ -51,50 +42,21 @@ let halModels = FALLBACK_MODELS;
 let currentDrawerKey = null;
 let halChatHistory = [];
 let halAudit = [];
+let halAskDraft = "";
 
-try {
-  const savedAudit = sessionStorage.getItem("halAudit");
-  if (savedAudit) halAudit = JSON.parse(savedAudit);
-} catch (error) {
-  halAudit = [];
-}
-
-try {
-  const savedChat = sessionStorage.getItem("halChatHistory");
-  if (savedChat) halChatHistory = JSON.parse(savedChat);
-} catch (error) {
-  halChatHistory = [];
+function persistLocal(key, value) {
+  DesktopBridge.storageSet(key, value).catch(() => {});
 }
 
 function saveChatHistory() {
-  try {
-    sessionStorage.setItem("halChatHistory", JSON.stringify(halChatHistory));
-  } catch (error) {
-    /* sessionStorage may be unavailable. */
-  }
+  persistLocal("halChatHistory", halChatHistory);
 }
 
 let halWorkSession = null;
 
-function loadWorkSession() {
-  try {
-    const saved = sessionStorage.getItem("halWorkSession");
-    if (saved) halWorkSession = JSON.parse(saved);
-  } catch (error) {
-    halWorkSession = null;
-  }
-}
-
 function saveWorkSession() {
-  try {
-    if (halWorkSession) sessionStorage.setItem("halWorkSession", JSON.stringify(halWorkSession));
-    else sessionStorage.removeItem("halWorkSession");
-  } catch (error) {
-    /* sessionStorage may be unavailable. */
-  }
+  persistLocal("halWorkSession", halWorkSession);
 }
-
-loadWorkSession();
 
 function startWorkSession(sessionId) {
   const template = HalCore.sessionTemplateById(halData, sessionId);
@@ -230,14 +192,11 @@ function loadEvidencePacket() {
 
 function saveEvidencePacket() {
   try {
-    if (halEvidencePacket) sessionStorage.setItem("halEvidencePacket", JSON.stringify(halEvidencePacket));
-    else sessionStorage.removeItem("halEvidencePacket");
+    persistLocal("halEvidencePacket", halEvidencePacket);
   } catch (error) {
     /* sessionStorage may be unavailable. */
   }
 }
-
-loadEvidencePacket();
 
 function buildEvidencePacketFromSession() {
   if (!halWorkSession) return null;
@@ -332,28 +291,17 @@ function loadReadinessDiagnostics() {
 
 function saveReadinessDiagnostics() {
   try {
-    if (halReadinessDiagnostics) sessionStorage.setItem("halDiagnostics", JSON.stringify(halReadinessDiagnostics));
-    else sessionStorage.removeItem("halDiagnostics");
+    persistLocal("halDiagnostics", halReadinessDiagnostics);
   } catch (error) {
     /* sessionStorage may be unavailable. */
   }
 }
 
-loadReadinessDiagnostics();
-
 function collectReadinessRuntime() {
-  const halPage = PAGES.find((page) => page.id === "hal");
-  let sessionStorageOk = true;
-  try {
-    sessionStorage.setItem("halDiagProbe", "1");
-    sessionStorage.removeItem("halDiagProbe");
-  } catch (error) {
-    sessionStorageOk = false;
-  }
   return {
-    halImage: halPage ? halPage.image : "",
-    hotspotCount: HOTSPOTS.length,
-    sessionStorageOk,
+    halImage: "",
+    hotspotCount: 8,
+    sessionStorageOk: DesktopBridge.hasDesktopApi(),
     activeSession: halWorkSession,
   };
 }
@@ -519,14 +467,11 @@ function loadOperatorReport() {
 
 function saveOperatorReport() {
   try {
-    if (halOperatorReport) sessionStorage.setItem("halOperatorReport", JSON.stringify(halOperatorReport));
-    else sessionStorage.removeItem("halOperatorReport");
+    persistLocal("halOperatorReport", halOperatorReport);
   } catch (error) {
     /* sessionStorage may be unavailable. */
   }
 }
-
-loadOperatorReport();
 
 function runOperatorSmokeTest() {
   halOperatorReport = HalCore.runOperatorSmokeTest(halData, halModels, PAGES, collectReadinessRuntime());
@@ -735,11 +680,7 @@ function routeHalCommand(rawQuery) {
 
 function logAudit(query, intent) {
   halAudit.push({ time: new Date().toLocaleTimeString(), query, intent });
-  try {
-    sessionStorage.setItem("halAudit", JSON.stringify(halAudit));
-  } catch (error) {
-    /* sessionStorage may be unavailable. */
-  }
+  persistLocal("halAudit", halAudit);
 }
 
 function normalizeActions(actions) {
@@ -1441,63 +1382,110 @@ function closeDrawer() {
   drawer.setAttribute("aria-hidden", "true");
 }
 
-function renderHotspots(pageId) {
-  hotspotLayer.innerHTML = "";
-  hotspotLayer.classList.toggle("active", pageId === "hal");
-  if (pageId !== "hal") return;
+function renderHalScreen() {
+  if (!halPageRoot || !window.HalPage) return;
+  HalPage.render({
+    root: halPageRoot,
+    halData,
+    halModels,
+    halAudit,
+    halChatHistory,
+    halAskDraft,
+    halAskLoading: false,
+    halInlineFirewallResult: null,
+  });
+}
 
-  for (const hotspot of HOTSPOTS) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "hotspot";
-    button.setAttribute("aria-label", hotspot.label);
-    button.style.left = `${hotspot.left}%`;
-    button.style.top = `${hotspot.top}%`;
-    button.style.width = `${hotspot.width}%`;
-    button.style.height = `${hotspot.height}%`;
-    button.addEventListener("click", () => openDrawer(hotspot.key));
-    hotspotLayer.appendChild(button);
-  }
+function renderSidebar(activeId) {
+  if (!sidebar || !window.UI) return;
+  sidebar.innerHTML = UI.Sidebar({
+    activeId,
+    nav: PAGES.map((page) => ({
+      id: page.id,
+      label: page.label,
+      icon: page.icon,
+    })),
+    brand: "New Ridge Family Financial",
+    kicker: "Financial OS",
+    user: {
+      initials: "NR",
+      name: "New Ridge Owner",
+      role: "Administrator",
+    },
+    status: "All systems operational",
+  });
+  nav = document.getElementById("nav");
+  Object.keys(buttons).forEach((key) => delete buttons[key]);
+  if (!nav) return;
+  nav.querySelectorAll("[data-nav]").forEach((button) => {
+    const id = button.getAttribute("data-nav");
+    buttons[id] = button;
+    button.addEventListener("click", () => select(id));
+  });
 }
 
 function select(id) {
   const page = PAGES.find((p) => p.id === id) || PAGES[0];
-  const isHal = page.id === "hal";
+  const isHal = page.id === "hal" && !PageViews.hasPage(page.id);
   if (halPage) halPage.hidden = !isHal;
-  img.style.display = isHal ? "none" : "";
-  if (isHal) {
-    img.removeAttribute("src");
-  } else {
-    img.src = page.image;
-    img.alt = page.title;
+  if (appPage) {
+    appPage.hidden = isHal;
+    if (!isHal && PageViews.hasPage(page.id)) {
+      PageViews.renderPageView(appPage, halData, page.id, select);
+    }
   }
   pageTitle.textContent = page.title;
-  renderHotspots(isHal ? "" : page.id);
+  renderSidebar(page.id);
+  if (isHal) renderHalScreen();
   closeDrawer();
-  for (const key of Object.keys(buttons)) {
-    buttons[key].classList.toggle("active", key === page.id);
-  }
   if (window.location.hash !== "#" + page.id) {
     window.location.hash = page.id;
   }
 }
 
-for (const page of PAGES) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.textContent = page.label;
-  btn.addEventListener("click", () => select(page.id));
-  nav.appendChild(btn);
-  buttons[page.id] = btn;
-}
+renderSidebar(window.location.hash.replace("#", "") || PAGES[0].id);
 
 drawerClose.addEventListener("click", closeDrawer);
 
 if (halPage) {
+  halPage.addEventListener("submit", async (event) => {
+    if (event.target.id !== "hpAskForm") return;
+    event.preventDefault();
+    const input = document.getElementById("hpAskInput");
+    const value = input ? input.value : "";
+    halAskDraft = value;
+    await handleHalSubmit(value);
+    if (input) {
+      input.value = "";
+      halAskDraft = "";
+    }
+    renderHalScreen();
+  });
+
   halPage.addEventListener("click", (event) => {
-    const target = event.target.closest("[data-drawer]");
-    if (!target) return;
-    openDrawer(target.getAttribute("data-drawer"));
+    const drawerBtn = event.target.closest("[data-hal-drawer]");
+    if (drawerBtn) {
+      openDrawer(drawerBtn.getAttribute("data-hal-drawer"));
+      return;
+    }
+    const suggest = event.target.closest("[data-hal-suggest]");
+    if (suggest) {
+      handleHalSubmit(suggest.getAttribute("data-hal-suggest"));
+      renderHalScreen();
+      return;
+    }
+    const cmd = event.target.closest("[data-hal-cmd]");
+    if (cmd) {
+      handleHalSubmit(cmd.getAttribute("data-hal-cmd"));
+      renderHalScreen();
+    }
+  });
+}
+
+if (appPage) {
+  appPage.addEventListener("click", (event) => {
+    const navBtn = event.target.closest("[data-pv-nav]");
+    if (navBtn) select(navBtn.getAttribute("data-pv-nav"));
   });
 }
 
@@ -1507,7 +1495,7 @@ document.addEventListener("click", (event) => {
   if (panel && panel.contains(event.target)) return;
   if (
     event.target.closest &&
-    (event.target.closest(".hotspot") || event.target.closest("[data-drawer]") || event.target.closest("#nav"))
+    (event.target.closest("[data-hal-drawer]") || event.target.closest("#nav"))
   )
     return;
   closeDrawer();
@@ -1520,31 +1508,31 @@ window.addEventListener("hashchange", () => {
   if (id) select(id);
 });
 
-fetch("data/hal-manager.json", { cache: "no-store" })
-  .then((response) => {
-    if (!response.ok) throw new Error("HAL data unavailable");
-    return response.json();
-  })
-  .then((data) => {
-    halData = data;
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-  })
-  .catch(() => {
+async function loadPersistedState() {
+  halAudit = (await DesktopBridge.storageGet("halAudit")) || [];
+  halChatHistory = (await DesktopBridge.storageGet("halChatHistory")) || [];
+  halWorkSession = (await DesktopBridge.storageGet("halWorkSession")) || null;
+  halEvidencePacket = (await DesktopBridge.storageGet("halEvidencePacket")) || null;
+  halReadinessDiagnostics = (await DesktopBridge.storageGet("halDiagnostics")) || null;
+  halOperatorReport = (await DesktopBridge.storageGet("halOperatorReport")) || null;
+}
+
+async function boot() {
+  await loadPersistedState();
+  try {
+    halData = await DesktopBridge.readDataFile("hal-manager.json");
+  } catch {
     halData = FALLBACK_HAL;
-  });
-
-fetch("data/hal-models.json", { cache: "no-store" })
-  .then((response) => {
-    if (!response.ok) throw new Error("HAL models unavailable");
-    return response.json();
-  })
-  .then((data) => {
-    halModels = data;
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-  })
-  .catch(() => {
+  }
+  try {
+    halModels = await DesktopBridge.readDataFile("hal-models.json");
+  } catch {
     halModels = FALLBACK_MODELS;
-  });
+  }
+  const initial = window.location.hash.replace("#", "") || PAGES[0].id;
+  select(initial);
+}
 
-const initial = window.location.hash.replace("#", "") || PAGES[0].id;
-select(initial);
+DesktopBridge.whenReady(() => {
+  boot();
+});

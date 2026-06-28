@@ -99,6 +99,7 @@ frontend/public/softdent_dashboard_data_import.json
 # Local runtime data
 local_accounting_inbox/
 local_ai_finance/
+app_data/
 
 # Local quantized model weights and runtime artifacts (never commit)
 models/
