@@ -34,6 +34,11 @@ const FALLBACK_HAL = {
   workSurfaces: { title: "Staff work surfaces", summary: "Open and explain each program surface.", items: [] },
   firewall: { title: "External action firewall", summary: "External actions are blocked by design.", blocked: [], allowed: [] },
   priorities: { title: "Today’s operator priorities", items: [] },
+  registry: [
+    { id: "financial", name: "Financial Dashboard", purpose: "Owner-level financial view.", safety: "Read-only view", state: "Ready", nextAction: "Review production and collections.", blocked: [], related: [] },
+    { id: "claims", name: "Claims Workbench", purpose: "Claim review lanes.", safety: "Review-only", state: "Needs review", nextAction: "Work the Needs Review lane.", blocked: [], related: [] },
+    { id: "hal", name: "HAL Command Center", purpose: "Local program manager.", safety: "Local manager", state: "Ready", nextAction: "Ask HAL to open a page or show priorities.", blocked: [], related: [] },
+  ],
 };
 
 const HOTSPOTS = [
@@ -88,6 +93,14 @@ function pageInfoMap() {
   for (const item of items) map[item.target] = { label: item.label, detail: item.detail };
   for (const page of PAGES) if (!map[page.id]) map[page.id] = { label: page.label, detail: page.title };
   return map;
+}
+
+function registryList() {
+  return (halData.registry && halData.registry.length ? halData.registry : FALLBACK_HAL.registry) || [];
+}
+
+function registryById(id) {
+  return registryList().find((entry) => entry.id === id) || null;
 }
 
 function findPage(query) {
@@ -150,23 +163,56 @@ function routeHalCommand(rawQuery) {
     return { intent: "sources", text: `Read-only source intake status:\n${list}`, actions: [] };
   }
 
+  if (/\bready\b/.test(query)) {
+    const ready = registryList().filter((entry) => /ready/i.test(entry.state));
+    const list = ready.map((entry) => `- ${entry.name}: ${entry.nextAction}`).join("\n");
+    return {
+      intent: "registry: ready",
+      text: ready.length ? `Ready to work now:\n${list}` : "Nothing is marked ready right now.",
+      actions: [],
+    };
+  }
+
+  if (/\bblocked\b|needs review|waiting on/.test(query)) {
+    const waiting = registryList().filter((entry) => /blocked|needs review/i.test(entry.state));
+    const list = waiting.map((entry) => `- ${entry.name} (${entry.state}): ${entry.nextAction}`).join("\n");
+    return {
+      intent: "registry: blocked",
+      text: waiting.length ? `Waiting or needs review:\n${list}` : "Nothing is blocked right now.",
+      actions: [],
+    };
+  }
+
+  if (/read[\s-]?only|readonly/.test(query)) {
+    const readOnly = registryList().filter((entry) => /read[\s-]?only|indexed|reference|review-only|local review|manager/i.test(entry.safety));
+    const list = readOnly.map((entry) => `- ${entry.name}: ${entry.safety}`).join("\n");
+    return { intent: "registry: read-only", text: `Read-only and review-only areas:\n${list}`, actions: [] };
+  }
+
+  if (/next (step|action)|do next|what should/.test(query)) {
+    const list = registryList().map((entry) => `- ${entry.name}: ${entry.nextAction}`).join("\n");
+    return { intent: "registry: next actions", text: `Suggested next staff actions:\n${list}`, actions: [] };
+  }
+
   const pageId = findPage(query);
   if (pageId) {
     const info = pageInfoMap()[pageId];
+    const reg = registryById(pageId);
+    const status = reg ? `\nStatus: ${reg.state}. Safety: ${reg.safety}. Next: ${reg.nextAction}` : "";
     if (pageId === "hal" && !wantsExplain) {
-      const status = halData.status || FALLBACK_HAL.status;
-      return { intent: "status", text: status.summary, actions: [] };
+      const halStatus = halData.status || FALLBACK_HAL.status;
+      return { intent: "status", text: halStatus.summary + status, actions: [] };
     }
     if (wantsExplain) {
       return {
         intent: "explain: " + pageId,
-        text: `${info.label}: ${info.detail}`,
+        text: `${info.label}: ${info.detail}${status}`,
         actions: pageId === "hal" ? [] : [{ label: "Open " + info.label, page: pageId }],
       };
     }
     return {
       intent: "navigate: " + pageId,
-      text: `I can open ${info.label}. ${info.detail}`,
+      text: `I can open ${info.label}. ${info.detail}${status}`,
       actions: [{ label: "Open " + info.label, page: pageId }],
     };
   }
@@ -174,7 +220,7 @@ function routeHalCommand(rawQuery) {
   return {
     intent: "unknown",
     text:
-      'I did not catch a program action there. Try: "show priorities", "open claims workbench", "review source health", or "explain the firewall".',
+      'I did not catch a program action there. Try: "what is ready to work on", "what is blocked", "open claims workbench", "review source health", or "explain the firewall".',
     actions: [],
   };
 }

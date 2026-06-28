@@ -26,6 +26,8 @@
     "summary": "HAL is currently operating as a local program manager. AI model lanes are intentionally not connected yet.",
     "suggestions": [
       "Show what needs attention today",
+      "What is ready to work on",
+      "What is blocked",
       "Open the claims workbench",
       "Review read-only source health",
       "Explain the external action firewall"
@@ -129,5 +131,97 @@
       "Use the A/R & Collections page to identify aged balances.",
       "Keep document posting work in review status until staff approval."
     ]
-  }
+  },
+  "registry": [
+    {
+      "id": "financial",
+      "name": "Financial Dashboard",
+      "purpose": "Owner-level production, collections, A/R, EBITDA, payer mix, and provider view.",
+      "safety": "Read-only view",
+      "state": "Ready",
+      "nextAction": "Review production and collections trends for the current period.",
+      "blocked": ["No writeback to source systems"],
+      "related": ["ar", "softdent", "quickbooks"]
+    },
+    {
+      "id": "softdent",
+      "name": "SoftDent",
+      "purpose": "Practice-management source: production, collections, A/R, and export health.",
+      "safety": "Read-only source",
+      "state": "Ready",
+      "nextAction": "Confirm export freshness before relying on downstream numbers.",
+      "blocked": ["No writeback", "No patient record edits"],
+      "related": ["financial", "ar"]
+    },
+    {
+      "id": "quickbooks",
+      "name": "QuickBooks",
+      "purpose": "Accounting source: P&L, expenses, EBITDA candidates, and sync status.",
+      "safety": "Read-only source",
+      "state": "Blocked",
+      "nextAction": "Wait for the next sync refresh before trusting expense totals.",
+      "blocked": ["No writeback", "No journal entries"],
+      "related": ["financial"]
+    },
+    {
+      "id": "ar",
+      "name": "A/R & Collections",
+      "purpose": "Outstanding A/R, aging buckets, collections trend, and follow-up queue.",
+      "safety": "Read-only view",
+      "state": "Needs review",
+      "nextAction": "Identify aged balances and stage follow-up notes for staff.",
+      "blocked": ["No payer contact", "No statements sent"],
+      "related": ["financial", "claims"]
+    },
+    {
+      "id": "claims",
+      "name": "Claims Workbench",
+      "purpose": "Draft, needs-review, ready, and denied claim review lanes.",
+      "safety": "Review-only",
+      "state": "Needs review",
+      "nextAction": "Work the Needs Review lane before any payer-facing step.",
+      "blocked": ["No submission", "No payer transmission"],
+      "related": ["narratives", "ar"]
+    },
+    {
+      "id": "narratives",
+      "name": "Insurance Narratives",
+      "purpose": "Review-only narrative drafting flow and source-fact references.",
+      "safety": "Review-only",
+      "state": "Blocked",
+      "nextAction": "Wait on missing source facts before finalizing narratives.",
+      "blocked": ["No submission", "No email", "No fax"],
+      "related": ["claims", "library"]
+    },
+    {
+      "id": "documents",
+      "name": "Accounting Documents",
+      "purpose": "Document intake, extraction, posting queue review, and period summary.",
+      "safety": "Local review",
+      "state": "Needs review",
+      "nextAction": "Keep posting work in review status until staff approval.",
+      "blocked": ["No posting to ledger", "No writeback"],
+      "related": ["library", "quickbooks"]
+    },
+    {
+      "id": "library",
+      "name": "Document Library",
+      "purpose": "Searchable read-only repository and selected document preview.",
+      "safety": "Indexed reference",
+      "state": "Ready",
+      "nextAction": "Search for the supporting document staff need to reference.",
+      "blocked": ["No upload", "No delete"],
+      "related": ["documents", "narratives"]
+    },
+    {
+      "id": "hal",
+      "name": "HAL Command Center",
+      "purpose": "Local program manager that guides staff across the program safely.",
+      "safety": "Local manager",
+      "state": "Ready",
+      "nextAction": "Ask HAL to open a page, show priorities, or explain status.",
+      "blocked": ["No external actions"],
+      "related": ["claims", "ar", "documents"]
+    }
+  ]
 }
