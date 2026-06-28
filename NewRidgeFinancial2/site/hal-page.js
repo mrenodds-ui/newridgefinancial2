@@ -48,10 +48,16 @@ const HalPage = (function () {
     const inventory = rd.availableModels || [];
     const inventoryPreview = inventory.slice(0, 4).join(" · ");
     const inventoryMore = inventory.length > 4 ? ` +${inventory.length - 4} more` : "";
+    const runtimes = [cfg.localModel, cfg.reasoningModel, cfg.escalationModel];
+    const lanesLive =
+      cfg.mode === "online" &&
+      cfg.externalCallsEnabled === false &&
+      runtimes.every((runtime) => runtime && runtime.enabled && String(runtime.endpoint || "").includes("127.0.0.1"));
+    const displayLabel = lanesLive ? "(local only)" : "(display only)";
 
     return `
       <div class="hp-ai-ready">
-        <p class="hp-ai-ready__title">LOCAL AI READINESS <span class="hp-muted">(display only)</span></p>
+        <p class="hp-ai-ready__title">LOCAL AI READINESS <span class="hp-muted">${displayLabel}</span></p>
         <dl class="hp-stats hp-stats--ai">
           ${aiStatRow("LOCAL AI SERVICE", `${svc.status || "Unknown"} · ${svc.name || "—"}`, svc.status === "Detected")}
           ${aiStatRow("OLLAMA API", `${api.status || "Unknown"} · ${api.version || "—"}`, api.status === "Reachable")}
@@ -62,9 +68,9 @@ const HalPage = (function () {
           ${aiStatRow("RUNNING MODEL", rd.runningModel || "none")}
           ${aiStatRow("GPU STATUS", rd.gpuStatus || "not verified")}
           ${aiStatRow("BINDING", rd.bindingStatus || "not verified")}
-          ${aiStatRow("LANE EXECUTION", rd.laneExecution || "disabled")}
+          ${aiStatRow("LANE EXECUTION", lanesLive ? rd.laneExecution || "Enabled · local loopback only" : "Disabled")}
         </dl>
-        <p class="hp-ai-ready__inventory"><b>Available inventory:</b> ${esc(inventoryPreview)}${esc(inventoryMore)} <em class="hp-muted">(not routed)</em></p>
+        <p class="hp-ai-ready__inventory"><b>Available inventory:</b> ${esc(inventoryPreview)}${esc(inventoryMore)} <em class="hp-muted">${lanesLive ? "(routed locally on query)" : "(not routed)"}</em></p>
         <p class="hp-card__foot hp-card__foot--ai">${esc(rd.dataPolicy || "No sensitive raw data sent to any model.")}</p>
       </div>`;
   }

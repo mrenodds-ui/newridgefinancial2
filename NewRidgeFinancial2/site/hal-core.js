@@ -44,13 +44,30 @@ const HalCore = (function () {
     return (halModels && halModels.config) || { mode: "offline" };
   }
 
+  function isLocalModelEndpoint(endpoint) {
+    if (!endpoint) return false;
+    try {
+      const host = new URL(endpoint).hostname.toLowerCase();
+      return host === "127.0.0.1" || host === "localhost" || host === "::1";
+    } catch {
+      return false;
+    }
+  }
+
   function modelLanes(halModels) {
     return (halModels && halModels.lanes) || [];
   }
 
   function runtimeReady(halModels, runtime) {
     const config = modelConfig(halModels);
-    return config.mode === "online" && runtime && runtime.enabled === true && !!runtime.endpoint && !!runtime.model;
+    return (
+      config.mode === "online" &&
+      config.externalCallsEnabled === false &&
+      runtime &&
+      runtime.enabled === true &&
+      isLocalModelEndpoint(runtime.endpoint) &&
+      !!runtime.model
+    );
   }
 
   function laneRuntime(halModels, laneId) {
@@ -1088,6 +1105,7 @@ const HalCore = (function () {
     runtimeReady,
     laneRuntime,
     laneReady,
+    isLocalModelEndpoint,
     deriveModelLaneCards,
     deriveReasoningLanes,
     derivePriorityGroups,

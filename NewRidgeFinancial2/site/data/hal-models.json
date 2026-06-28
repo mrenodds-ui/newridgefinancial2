@@ -1,32 +1,32 @@
 {
   "config": {
-    "mode": "offline",
-    "localFirst": false,
+    "mode": "online",
+    "localFirst": true,
     "externalCallsEnabled": false,
     "activeLane": "chat14b",
     "localModel": {
-      "enabled": false,
-      "endpoint": "",
+      "enabled": true,
+      "endpoint": "http://127.0.0.1:11434/api/chat",
       "model": "queen3:14b",
       "timeoutMs": 60000,
       "temperature": 0.2
     },
     "reasoningModel": {
-      "enabled": false,
-      "endpoint": "",
+      "enabled": true,
+      "endpoint": "http://127.0.0.1:11434/api/chat",
       "model": "mistral-small3.1:24b",
       "timeoutMs": 120000,
       "temperature": 0.3
     },
     "escalationModel": {
-      "enabled": false,
-      "endpoint": "",
+      "enabled": true,
+      "endpoint": "http://127.0.0.1:11434/api/chat",
       "model": "qwen3:30b",
       "timeoutMs": 180000,
       "temperature": 0.2,
       "think": true
     },
-    "note": "HAL answers from the local registry only by default. Model lanes remain display-only until explicitly configured for execution. External actions remain blocked."
+    "note": "HAL routes general questions to local Ollama lanes on 127.0.0.1 only. Firewall runs before every model call. External actions and remote model endpoints remain blocked."
   },
   "readinessDisplay": {
     "label": "Operator-verified local inventory",
@@ -43,10 +43,10 @@
       "version": "0.30.11"
     },
     "activeLane": "chat14b",
-    "laneExecution": "Display-only · disabled unless explicitly configured",
-    "runningModel": "none",
+    "laneExecution": "Enabled · local loopback only",
+    "runningModel": "none (loads on first query)",
     "gpuStatus": "not verified",
-    "bindingStatus": "127.0.0.1 reachable; loopback-only not proven",
+    "bindingStatus": "127.0.0.1 only · remote endpoints blocked",
     "dataPolicy": "No patient, financial, SoftDent, QuickBooks, or sensitive raw data sent to any model",
     "availableModels": [
       "queen3:14b",
@@ -70,9 +70,9 @@
       "name": "14B chat lane",
       "model": "queen3:14b",
       "role": "Staff-facing conversation and plain-language answers",
-      "state": "Display only",
+      "state": "Configured",
       "inventoryAvailable": true,
-      "executionEnabled": false,
+      "executionEnabled": true,
       "willAllow": [
         "Explain pages in plain language",
         "Summarize local read-only status",
@@ -89,9 +89,9 @@
       "name": "21B reasoning lane",
       "model": "mistral-small3.1:24b",
       "role": "Program review, prioritization, and structured reasoning",
-      "state": "Display only",
+      "state": "Configured",
       "inventoryAvailable": true,
-      "executionEnabled": false,
+      "executionEnabled": true,
       "willAllow": [
         "Prioritize work across pages",
         "Prepare structured review notes"
@@ -106,9 +106,9 @@
       "name": "30B escalation lane",
       "model": "qwen3:30b",
       "role": "Second-opinion review for complex or high-risk questions",
-      "state": "Display only",
+      "state": "Configured",
       "inventoryAvailable": true,
-      "executionEnabled": false,
+      "executionEnabled": true,
       "willAllow": [
         "Second-opinion review",
         "Complex case reasoning"
