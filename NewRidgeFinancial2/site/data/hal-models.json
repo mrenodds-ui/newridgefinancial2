@@ -11,7 +11,14 @@
       "timeoutMs": 60000,
       "temperature": 0.2
     },
-    "note": "HAL answers from the local registry first. Only unmatched questions go to the local 14B chat lane on 127.0.0.1. The external-action firewall runs before the model, so submit/email/upload/writeback never reach it. The model is read-only: it drafts text only and takes no actions."
+    "reasoningModel": {
+      "enabled": true,
+      "endpoint": "http://127.0.0.1:11434/api/chat",
+      "model": "mistral-small3.1:24b",
+      "timeoutMs": 120000,
+      "temperature": 0.3
+    },
+    "note": "HAL answers from the local registry first. The external-action firewall runs before any model, so submit/email/upload/writeback never reach a model. Unmatched questions use the local 14B chat lane; explicit prioritization/planning requests use the local reasoning lane. No 21B tag is installed, so the reasoning lane maps to mistral-small3.1:24b; change config.reasoningModel.model to use a different local tag. All model use is read-only and drafts text only."
   },
   "lanes": [
     {
@@ -34,9 +41,9 @@
     {
       "id": "reason21b",
       "name": "21B reasoning lane",
-      "model": "planned",
+      "model": "mistral-small3.1:24b",
       "role": "Program review, prioritization, and structured reasoning",
-      "state": "Planned",
+      "state": "Connected (local)",
       "willAllow": [
         "Prioritize work across pages",
         "Prepare structured review notes"

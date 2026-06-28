@@ -83,7 +83,8 @@ try {
 }
 
 // External-action verbs always stop at the firewall and require human review.
-const BLOCKED_RE = /\b(submit|send|sends?|email|e-?mail|fax|faxes|upload|transmit|pay|approve|deny|delete|remove|writeback|write back|dispatch|mail)\b/;
+// Includes common -ing/-s forms so "submitting", "emailing", etc. are also caught.
+const BLOCKED_RE = /\b(submit|submits|submitting|send|sends|sending|email|emails|emailing|e-?mail|fax|faxes|faxing|upload|uploads|uploading|transmit|transmits|transmitting|pay|paying|approve|approves|approving|deny|denies|denying|delete|deletes|deleting|remove|removes|removing|writeback|write back|dispatch|dispatches|dispatching|mail|mailing)\b/;
 
 const PAGE_SYNONYMS = {
   financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
@@ -126,30 +127,48 @@ function localModelConfig() {
   return config && config.localModel ? config.localModel : null;
 }
 
-function localModelReady() {
+function reasoningModelConfig() {
   const config = modelConfig();
-  const lm = localModelConfig();
-  return config.mode === "online" && lm && lm.enabled === true && !!lm.endpoint && !!lm.model;
+  return config && config.reasoningModel ? config.reasoningModel : null;
 }
 
-// Message shown when the local 14B lane is not reachable or not enabled.
-function offlineModelMessage() {
-  const chat = modelLanes().find((lane) => lane.id === "chat14b");
-  const model = chat && chat.model ? chat.model : "queen3:14b";
+function runtimeReady(runtime) {
+  const config = modelConfig();
+  return config.mode === "online" && runtime && runtime.enabled === true && !!runtime.endpoint && !!runtime.model;
+}
+
+function localModelReady() {
+  return runtimeReady(localModelConfig());
+}
+
+function reasoningModelReady() {
+  return runtimeReady(reasoningModelConfig());
+}
+
+// Message shown when a local lane is not reachable or not enabled.
+function offlineModelMessage(laneId) {
+  const lane = modelLanes().find((entry) => entry.id === laneId) || modelLanes().find((entry) => entry.id === "chat14b");
+  const name = lane && lane.name ? lane.name : "local chat lane";
+  const model = lane && lane.model ? lane.model : "queen3:14b";
   return (
-    "I could not reach the local 14B chat lane (" +
+    "I could not reach the " +
+    name +
+    " (" +
     model +
     ") on this machine, so I can only answer from the local program registry right now. " +
     "Make sure the local model service is running, then try again."
   );
 }
 
-// Read-only system grounding for the local 14B lane. The model drafts text only.
-function buildSystemPrompt() {
-  const firewall = halData.firewall || FALLBACK_HAL.firewall;
-  const registryText = registryList()
+function registryAsText() {
+  return registryList()
     .map((entry) => `- ${entry.name} [${entry.state}; ${entry.safety}]: ${entry.purpose} Next: ${entry.nextAction}`)
     .join("\n");
+}
+
+// Read-only system grounding for the local 14B chat lane. The model drafts text only.
+function buildSystemPrompt() {
+  const firewall = halData.firewall || FALLBACK_HAL.firewall;
   return [
     "You are HAL, the local read-only program manager for NewRidgeFinancial 2.0, a dental-practice financial program.",
     "Answer briefly and only about this program and its pages. If you are unsure, say so.",
@@ -157,7 +176,25 @@ function buildSystemPrompt() {
     "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
     "If the user asks for an external action, refuse and say it needs human review.",
     "Program pages and current status:",
-    registryText,
+    registryAsText(),
+  ].join("\n");
+}
+
+// Read-only grounding for the reasoning lane: prioritize across program state.
+function buildReasoningPrompt() {
+  const firewall = halData.firewall || FALLBACK_HAL.firewall;
+  const priorities = (halData.priorities && halData.priorities.items) || [];
+  return [
+    "You are HAL's reasoning lane for NewRidgeFinancial 2.0, a dental-practice financial program.",
+    "Produce a short, structured, prioritized plan based only on the local program state below.",
+    "Order work by readiness and risk: handle Needs Review and Blocked items carefully, and never advance payer-facing work without human review.",
+    "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
+    "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
+    "Program pages and current status:",
+    registryAsText(),
+    "Known operator priorities:",
+    priorities.map((item, index) => `${index + 1}. ${item}`).join("\n"),
+    "Respond with a brief numbered plan. Keep it under 8 steps.",
   ].join("\n");
 }
 
@@ -169,22 +206,21 @@ function cleanModelText(text) {
     .trim();
 }
 
-async function callLocalModel(userText) {
-  const lm = localModelConfig();
+async function runModel(runtime, systemPrompt, userText, draftLabel) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), lm.timeoutMs || 60000);
+  const timer = setTimeout(() => controller.abort(), runtime.timeoutMs || 60000);
   try {
-    const response = await fetch(lm.endpoint, {
+    const response = await fetch(runtime.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: lm.model,
+        model: runtime.model,
         stream: false,
         messages: [
-          { role: "system", content: buildSystemPrompt() },
+          { role: "system", content: systemPrompt },
           { role: "user", content: userText },
         ],
-        options: { temperature: typeof lm.temperature === "number" ? lm.temperature : 0.2 },
+        options: { temperature: typeof runtime.temperature === "number" ? runtime.temperature : 0.2 },
       }),
       signal: controller.signal,
     });
@@ -193,10 +229,18 @@ async function callLocalModel(userText) {
     const raw = data && data.message && data.message.content ? data.message.content : "";
     const text = cleanModelText(raw);
     if (!text) throw new Error("empty model response");
-    return text + "\n\n(Local 14B draft · read-only · verify before acting)";
+    return text + "\n\n(" + draftLabel + " · read-only · verify before acting)";
   } finally {
     clearTimeout(timer);
   }
+}
+
+function callLocalModel(userText) {
+  return runModel(localModelConfig(), buildSystemPrompt(), userText, "Local 14B draft");
+}
+
+function callReasoningModel(userText) {
+  return runModel(reasoningModelConfig(), buildReasoningPrompt(), userText, "Local reasoning draft");
 }
 
 function findPage(query) {
@@ -239,7 +283,11 @@ function routeHalCommand(rawQuery) {
 
   const wantsExplain = /\b(explain|what is|what's|whats|what does|tell me about|describe|purpose of)\b/.test(query);
 
-  if (/\b(priorit|needs attention|attention today|what needs|to-?do|today)\b/.test(query)) {
+  if (/prioriti[sz]e|make a plan|draft a plan|\bplan (my|for|the)\b|analy[sz]e|reason through|think through|recommend|\bstrategy\b|focus first|where (do|should) (i|we) start/.test(query)) {
+    return { intent: "reasoning", text: "", useReasoning: true, prompt: rawQuery, actions: [] };
+  }
+
+  if (/\bpriorit|needs attention|attention today|what needs|to-?do|\btoday\b/.test(query)) {
     const items = (halData.priorities && halData.priorities.items) || [];
     const list = items.map((item, index) => `${index + 1}. ${item}`).join("\n");
     return { intent: "priorities", text: `Today's operator priorities:\n${list}`, actions: [] };
@@ -405,9 +453,32 @@ async function handleHalSubmit(query) {
 
   const result = routeHalCommand(trimmed);
 
+  if (result.useReasoning) {
+    if (!reasoningModelReady()) {
+      halChatHistory.push({ role: "hal", text: offlineModelMessage("reason21b"), actions: [] });
+      logAudit(trimmed, "reasoning: offline");
+      renderChatLog();
+      renderAuditLog();
+      return;
+    }
+    const rm = reasoningModelConfig();
+    const placeholder = { role: "hal", text: "Reasoning locally with " + (rm.model || "reasoning lane") + "…", actions: [] };
+    halChatHistory.push(placeholder);
+    logAudit(trimmed, "reasoning: plan");
+    renderChatLog();
+    renderAuditLog();
+    try {
+      placeholder.text = await callReasoningModel(trimmed);
+    } catch (error) {
+      placeholder.text = offlineModelMessage("reason21b");
+    }
+    renderChatLog();
+    return;
+  }
+
   if (result.useModel) {
     if (!localModelReady()) {
-      halChatHistory.push({ role: "hal", text: offlineModelMessage(), actions: [] });
+      halChatHistory.push({ role: "hal", text: offlineModelMessage("chat14b"), actions: [] });
       logAudit(trimmed, "model: offline");
       renderChatLog();
       renderAuditLog();
@@ -422,7 +493,7 @@ async function handleHalSubmit(query) {
     try {
       placeholder.text = await callLocalModel(trimmed);
     } catch (error) {
-      placeholder.text = offlineModelMessage();
+      placeholder.text = offlineModelMessage("chat14b");
     }
     renderChatLog();
     return;
