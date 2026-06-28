@@ -40,6 +40,7 @@ const nav = document.getElementById("nav");
 const img = document.getElementById("pageImage");
 const pageTitle = document.getElementById("pageTitle");
 const hotspotLayer = document.getElementById("hotspotLayer");
+const halPage = document.getElementById("halPage");
 const drawer = document.getElementById("drawer");
 const drawerClose = document.getElementById("drawerClose");
 const drawerTitle = document.getElementById("drawerTitle");
@@ -1461,10 +1462,17 @@ function renderHotspots(pageId) {
 
 function select(id) {
   const page = PAGES.find((p) => p.id === id) || PAGES[0];
-  img.src = page.image;
-  img.alt = page.title;
+  const isHal = page.id === "hal";
+  if (halPage) halPage.hidden = !isHal;
+  img.style.display = isHal ? "none" : "";
+  if (isHal) {
+    img.removeAttribute("src");
+  } else {
+    img.src = page.image;
+    img.alt = page.title;
+  }
   pageTitle.textContent = page.title;
-  renderHotspots(page.id);
+  renderHotspots(isHal ? "" : page.id);
   closeDrawer();
   for (const key of Object.keys(buttons)) {
     buttons[key].classList.toggle("active", key === page.id);
@@ -1484,11 +1492,24 @@ for (const page of PAGES) {
 }
 
 drawerClose.addEventListener("click", closeDrawer);
+
+if (halPage) {
+  halPage.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-drawer]");
+    if (!target) return;
+    openDrawer(target.getAttribute("data-drawer"));
+  });
+}
+
 document.addEventListener("click", (event) => {
   if (!currentDrawerKey) return;
   const panel = drawer.querySelector(".drawer__panel");
   if (panel && panel.contains(event.target)) return;
-  if (event.target.closest && (event.target.closest(".hotspot") || event.target.closest("#nav"))) return;
+  if (
+    event.target.closest &&
+    (event.target.closest(".hotspot") || event.target.closest("[data-drawer]") || event.target.closest("#nav"))
+  )
+    return;
   closeDrawer();
 });
 window.addEventListener("keydown", (event) => {
