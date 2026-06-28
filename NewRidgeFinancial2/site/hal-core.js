@@ -8,7 +8,7 @@ const HalCore = (function () {
 
   // Writeback / external phrases that should not false-positive on local nouns like "posting queue".
   const BLOCKED_PHRASES_RE =
-    /\bjournal entr(y|ies)\b|\bpost(s|ing|ed)?\s+(a|an|the\s+)?(journal|entry|payment|charge|transaction|invoice|claim|note|statement|ledger)\b|\b(record|make|process)\s+(a|an|the\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b/;
+    /\bjournal entr(y|ies)\b|\bpost(s|ing|ed)?\s+((a|an|the)\s+)?(journal|entry|payment|charge|transaction|invoice|claim|note|statement|ledger)\b|\b(record|make|process)\s+((a|an|the)\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b/;
 
   const PAGE_SYNONYMS = {
     financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
@@ -17,7 +17,7 @@ const HalCore = (function () {
     ar: ["a/r", "accounts receivable", "receivable", "collections", "aging", "follow-up", "follow up"],
     claims: ["claims workbench", "claims", "claim", "workbench", "denied"],
     narratives: ["narratives", "narrative", "insurance narrative"],
-    documents: ["accounting documents", "document intake", "posting queue", "extraction"],
+    documents: ["accounting documents", "documents", "document intake", "posting queue", "extraction"],
     library: ["document library", "library", "repository"],
     hal: ["hal", "command center", "yourself"],
   };
@@ -656,7 +656,10 @@ const HalCore = (function () {
   }
 
   function routeHalCommand(halData, halModels, pages, rawQuery) {
-    const query = String(rawQuery).toLowerCase().trim();
+    const query = String(rawQuery)
+      .toLowerCase()
+      .trim()
+      .replace(/^hal[,:]\s+/, "");
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
 
     if (checkFirewall(query)) {
@@ -786,7 +789,7 @@ const HalCore = (function () {
       return { intent: "priorities", lane: "local", text: `Today's operator priorities:\n${list}`, actions: [] };
     }
 
-    if (/\b(firewall|external action|boundary|guardrail|safety|are you allowed)\b/.test(query)) {
+    if (/\b(firewall|external action|boundary|guardrail|guardrails|safety|are you allowed)\b/.test(query)) {
       return {
         intent: "firewall",
         lane: "local",
@@ -822,7 +825,7 @@ const HalCore = (function () {
       };
     }
 
-    if (/\bblocked\b|needs review|waiting on/.test(query)) {
+    if (/\bblocked\b|\bblockers\b|needs review|waiting on|what is waiting/.test(query)) {
       const waiting = registryList(halData).filter((entry) => /blocked|needs review/i.test(entry.state));
       const list = waiting.map((entry) => `- ${entry.name} (${entry.state}): ${entry.nextAction}`).join("\n");
       return {
@@ -833,7 +836,7 @@ const HalCore = (function () {
       };
     }
 
-    if (/read[\s-]?only|readonly/.test(query)) {
+    if (/read[\s-]?only|readonly|local review|review-only/.test(query)) {
       const readOnly = registryList(halData).filter((entry) =>
         /read[\s-]?only|indexed|reference|review-only|local review|manager/i.test(entry.safety),
       );
@@ -841,7 +844,7 @@ const HalCore = (function () {
       return { intent: "registry: read-only", lane: "local", text: `Read-only and review-only areas:\n${list}`, actions: [] };
     }
 
-    if (/next (step|action)|do next|what should/.test(query)) {
+    if (/next (step|action|staff action)|do next|what should (i|we|staff) (do|review|check|open|work)/.test(query)) {
       const list = registryList(halData).map((entry) => `- ${entry.name}: ${entry.nextAction}`).join("\n");
       return { intent: "registry: next actions", lane: "local", text: `Suggested next staff actions:\n${list}`, actions: [] };
     }
