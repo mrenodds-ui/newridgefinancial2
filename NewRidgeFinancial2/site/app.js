@@ -55,6 +55,201 @@ const drawerTitle = document.getElementById("drawerTitle");
 const drawerContent = document.getElementById("drawerContent");
 const buttons = {};
 let halData = FALLBACK_HAL;
+let currentDrawerKey = null;
+
+// Ask HAL local manager: chat transcript + session audit log (local-only, no AI model).
+let halChatHistory = [];
+let halAudit = [];
+try {
+  const savedAudit = sessionStorage.getItem("halAudit");
+  if (savedAudit) halAudit = JSON.parse(savedAudit);
+} catch (error) {
+  halAudit = [];
+}
+
+// External-action verbs always stop at the firewall and require human review.
+const BLOCKED_RE = /\b(submit|send|sends?|email|e-?mail|fax|faxes|upload|transmit|pay|approve|deny|delete|remove|writeback|write back|dispatch|mail)\b/;
+
+const PAGE_SYNONYMS = {
+  financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
+  softdent: ["softdent", "soft dent", "practice management"],
+  quickbooks: ["quickbooks", "quick books", "p&l", "profit and loss", "expenses"],
+  ar: ["a/r", "accounts receivable", "receivable", "collections", "aging", "follow-up", "follow up"],
+  claims: ["claims workbench", "claims", "claim", "workbench", "denied"],
+  narratives: ["narratives", "narrative", "insurance narrative"],
+  documents: ["accounting documents", "document intake", "posting queue", "extraction"],
+  library: ["document library", "library", "repository"],
+  hal: ["hal", "command center", "yourself"],
+};
+
+function pageInfoMap() {
+  const map = {};
+  const items = (halData.workSurfaces && halData.workSurfaces.items) || [];
+  for (const item of items) map[item.target] = { label: item.label, detail: item.detail };
+  for (const page of PAGES) if (!map[page.id]) map[page.id] = { label: page.label, detail: page.title };
+  return map;
+}
+
+function findPage(query) {
+  let best = null;
+  let bestLen = 0;
+  for (const [id, synonyms] of Object.entries(PAGE_SYNONYMS)) {
+    for (const synonym of synonyms) {
+      if (query.includes(synonym) && synonym.length > bestLen) {
+        best = id;
+        bestLen = synonym.length;
+      }
+    }
+  }
+  return best;
+}
+
+function routeHalCommand(rawQuery) {
+  const query = rawQuery.toLowerCase().trim();
+  const firewall = halData.firewall || FALLBACK_HAL.firewall;
+
+  if (BLOCKED_RE.test(query)) {
+    return {
+      intent: "blocked: firewall",
+      text:
+        "That is an external action, so it stops at the firewall and needs human review. " +
+        firewall.summary +
+        " I can open the right page and prepare review notes, but a person has to take the external step.",
+      actions: [],
+    };
+  }
+
+  if (/\b(help|what can you do|capabilit|how do you work|what do you do)\b/.test(query)) {
+    return {
+      intent: "help",
+      text:
+        "I am the local program manager. I can open any program page, explain what each page is for, show today's priorities, report read-only source health, and explain the external-action firewall. I do not submit, send, or change anything.",
+      actions: [],
+    };
+  }
+
+  const wantsExplain = /\b(explain|what is|what's|whats|what does|tell me about|describe|purpose of)\b/.test(query);
+
+  if (/\b(priorit|needs attention|attention today|what needs|to-?do|today)\b/.test(query)) {
+    const items = (halData.priorities && halData.priorities.items) || [];
+    const list = items.map((item, index) => `${index + 1}. ${item}`).join("\n");
+    return { intent: "priorities", text: `Today's operator priorities:\n${list}`, actions: [] };
+  }
+
+  if (/\b(firewall|external action|boundary|guardrail|safety|are you allowed)\b/.test(query)) {
+    return {
+      intent: "firewall",
+      text: `${firewall.summary}\nBlocked: ${firewall.blocked.join(", ")}.\nAllowed: ${firewall.allowed.join(", ")}.`,
+      actions: [],
+    };
+  }
+
+  if (/\b(source|softdent|quickbooks|freshness|sync|intake)\b/.test(query) && !wantsExplain) {
+    const items = (halData.sources && halData.sources.items) || [];
+    const list = items.map((item) => `- ${item.label} - ${item.status}: ${item.detail}`).join("\n");
+    return { intent: "sources", text: `Read-only source intake status:\n${list}`, actions: [] };
+  }
+
+  const pageId = findPage(query);
+  if (pageId) {
+    const info = pageInfoMap()[pageId];
+    if (pageId === "hal" && !wantsExplain) {
+      const status = halData.status || FALLBACK_HAL.status;
+      return { intent: "status", text: status.summary, actions: [] };
+    }
+    if (wantsExplain) {
+      return {
+        intent: "explain: " + pageId,
+        text: `${info.label}: ${info.detail}`,
+        actions: pageId === "hal" ? [] : [{ label: "Open " + info.label, page: pageId }],
+      };
+    }
+    return {
+      intent: "navigate: " + pageId,
+      text: `I can open ${info.label}. ${info.detail}`,
+      actions: [{ label: "Open " + info.label, page: pageId }],
+    };
+  }
+
+  return {
+    intent: "unknown",
+    text:
+      'I did not catch a program action there. Try: "show priorities", "open claims workbench", "review source health", or "explain the firewall".',
+    actions: [],
+  };
+}
+
+function logAudit(query, intent) {
+  halAudit.push({ time: new Date().toLocaleTimeString(), query, intent });
+  try {
+    sessionStorage.setItem("halAudit", JSON.stringify(halAudit));
+  } catch (error) {
+    /* sessionStorage may be unavailable; audit stays in memory. */
+  }
+}
+
+function renderChatLog() {
+  const log = document.getElementById("halChatLog");
+  if (!log) return;
+  log.innerHTML = halChatHistory
+    .map((message) => {
+      const actions = (message.actions || [])
+        .map(
+          (action) =>
+            `<button class="hal-msg__action" type="button" data-open-page="${escapeHtml(action.page)}">${escapeHtml(
+              action.label,
+            )}</button>`,
+        )
+        .join("");
+      return `<div class="hal-msg hal-msg--${message.role === "user" ? "user" : "hal"}">
+        <span class="hal-msg__who">${message.role === "user" ? "You" : "HAL"}</span>
+        <div class="hal-msg__text">${escapeHtml(message.text)}</div>
+        ${actions ? `<div class="hal-msg__actions">${actions}</div>` : ""}
+      </div>`;
+    })
+    .join("");
+  log.querySelectorAll("[data-open-page]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.openPage;
+      logAudit("Open " + target, "navigate: confirmed");
+      closeDrawer();
+      select(target);
+    });
+  });
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderAuditLog() {
+  const count = document.getElementById("halAuditCount");
+  if (count) count.textContent = String(halAudit.length);
+  const el = document.getElementById("halAuditLog");
+  if (!el) return;
+  if (halAudit.length === 0) {
+    el.innerHTML = '<p class="hal-audit__empty">No actions yet this session.</p>';
+    return;
+  }
+  el.innerHTML = halAudit
+    .slice()
+    .reverse()
+    .map(
+      (entry) =>
+        `<div class="hal-audit__row"><span>${escapeHtml(entry.time)}</span><span>${escapeHtml(
+          entry.intent,
+        )}</span><span>${escapeHtml(entry.query)}</span></div>`,
+    )
+    .join("");
+}
+
+function handleHalSubmit(query) {
+  const trimmed = String(query).trim();
+  if (!trimmed) return;
+  halChatHistory.push({ role: "user", text: trimmed, actions: [] });
+  const result = routeHalCommand(trimmed);
+  halChatHistory.push({ role: "hal", text: result.text, actions: result.actions || [] });
+  logAudit(trimmed, result.intent);
+  renderChatLog();
+  renderAuditLog();
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -105,11 +300,45 @@ function renderPanel(key) {
   drawerTitle.textContent = data.title || "HAL Command Center";
 
   if (key === "askHal") {
+    if (halChatHistory.length === 0) {
+      halChatHistory.push({ role: "hal", text: data.response, actions: [] });
+    }
     drawerContent.innerHTML = `
       <p>${escapeHtml(data.summary)}</p>
-      ${chips(data.suggestions)}
-      <div class="drawer-card"><strong>HAL response</strong>${escapeHtml(data.response)}</div>
+      <div class="hal-chat">
+        <div class="hal-chat__log" id="halChatLog"></div>
+        <div class="hal-suggest" id="halSuggest"></div>
+        <form class="hal-chat__form" id="halChatForm" autocomplete="off">
+          <input id="halChatInput" class="hal-chat__input" type="text"
+            placeholder="Ask HAL to open a page, show priorities, or explain status" aria-label="Ask HAL" />
+          <button class="hal-chat__send" type="submit">Send</button>
+        </form>
+        <p class="hal-chat__note">Local manager · read-only · external actions need human review</p>
+      </div>
+      <details class="hal-audit">
+        <summary>Session log (<span id="halAuditCount">${halAudit.length}</span>)</summary>
+        <div class="hal-audit__log" id="halAuditLog"></div>
+      </details>
     `;
+    const suggest = document.getElementById("halSuggest");
+    (data.suggestions || []).forEach((text) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "status-chip hal-suggest__chip";
+      chip.textContent = text;
+      chip.addEventListener("click", () => handleHalSubmit(text));
+      suggest.appendChild(chip);
+    });
+    const form = document.getElementById("halChatForm");
+    const input = document.getElementById("halChatInput");
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const value = input.value;
+      input.value = "";
+      handleHalSubmit(value);
+    });
+    renderChatLog();
+    renderAuditLog();
     return;
   }
 
@@ -165,12 +394,14 @@ function renderPanel(key) {
 }
 
 function openDrawer(key) {
+  currentDrawerKey = key;
   renderPanel(key);
   drawer.classList.add("open");
   drawer.setAttribute("aria-hidden", "false");
 }
 
 function closeDrawer() {
+  currentDrawerKey = null;
   drawer.classList.remove("open");
   drawer.setAttribute("aria-hidden", "true");
 }
@@ -237,6 +468,7 @@ fetch("data/hal-manager.json", { cache: "no-store" })
   })
   .then((data) => {
     halData = data;
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
   })
   .catch(() => {
     halData = FALLBACK_HAL;
