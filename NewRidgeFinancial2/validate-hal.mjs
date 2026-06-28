@@ -214,7 +214,7 @@ async function main() {
   // Model lane status derived from hal-models
   const cards = HalCore.deriveModelLaneCards(halModels);
   assert(cards.length === halModels.lanes.length, "model lane cards must match configured lanes");
-  assert(cards.length >= 8, "all available local models should be exposed as lanes");
+  assert(cards.length >= 9, "all available local models plus helper should be exposed as lanes");
   for (const card of cards) {
     const lane = halModels.lanes.find((l) => l.name === card.name);
     assert(lane && card.state === lane.state, `lane state drift for ${card.name}`);
@@ -423,11 +423,14 @@ async function main() {
   assert(halHtml.includes("local only"), "HAL page must label AI lanes as local only");
   assert(halHtml.includes("Available inventory"), "HAL page must show available model inventory");
   assert(halHtml.includes("queen3:14b"), "HAL page must show configured local model inventory");
+  assert(halHtml.includes("qwen3:4b"), "HAL page must show configured helper model inventory");
   assert(halHtml.includes("mistral-small3.1:24b"), "HAL page must show reasoning model inventory");
   assert(halHtml.includes("qwen3:30b"), "HAL page must show escalation model inventory");
   assert(halModels.readinessDisplay.gpu && halModels.readinessDisplay.gpu.verified === true, "GPU must be marked verified in readiness display");
   assert(/Radeon RX 9060 XT|ROCm/i.test(halHtml), "HAL page must show the verified GPU device");
   assert(/sensitive raw data|SoftDent|QuickBooks/i.test(halHtml), "HAL page must show sensitive-data no-egress policy");
+  assert(HalCore.laneReady(halModels, "helper4b"), "helper lane must be execution-ready on loopback");
+  assert(halModels.readinessDisplay.configuredModels.helper.gpuResidentWithLocal === true, "helper lane must be verified co-resident with local lane");
   assert(HalCore.laneReady(halModels, "chat14b"), "chat lane must be execution-ready on loopback");
   assert(HalCore.laneReady(halModels, "reason21b"), "reasoning lane must be execution-ready on loopback");
   assert(HalCore.laneReady(halModels, "escalate30b"), "escalation lane must be execution-ready on loopback");
