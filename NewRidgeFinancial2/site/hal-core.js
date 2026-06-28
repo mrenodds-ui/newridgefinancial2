@@ -7,8 +7,10 @@ const HalCore = (function () {
     /\b(submit|submits|submitting|send|sends|sending|email|emails|emailing|e-?mail|fax|faxes|faxing|upload|uploads|uploading|transmit|transmits|transmitting|pay|paying|approve|approves|approving|deny|denies|denying|delete|deletes|deleting|remove|removes|removing|writeback|write back|dispatch|dispatches|dispatching|mail|mailing)\b/;
 
   // Writeback / external phrases that should not false-positive on local nouns like "posting queue".
+  // Note: drafting a journal entry is a local draft-only action (allowed); only POSTING a
+  // journal entry to the ledger is blocked. The post(...) clause below still blocks posting.
   const BLOCKED_PHRASES_RE =
-    /\bjournal entr(y|ies)\b|\bpost(s|ing|ed)?\s+((a|an|the)\s+)?(journal|entry|payment|charge|transaction|invoice|claim|note|statement|ledger)\b|\b(record|make|process)\s+((a|an|the)\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b/;
+    /\bpost(s|ing|ed)?\s+((a|an|the)\s+)?(journal|entry|payment|charge|transaction|invoice|claim|note|statement|ledger)\b|\b(record|make|process)\s+((a|an|the)\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b/;
 
   const PAGE_SYNONYMS = {
     financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
@@ -268,6 +270,63 @@ const HalCore = (function () {
     ) {
       return { type: "snapshot" };
     }
+    return null;
+  }
+
+  function parseJournalRequest(rawQuery) {
+    const text = String(rawQuery || "");
+    const amountMatch = text.replace(/,/g, "").match(/\$?\s*(\d+(?:\.\d{1,2})?)/);
+    const amount = amountMatch ? parseFloat(amountMatch[1]) : null;
+    const periodMatch = text.match(/\b(\d{4}-\d{2})\b/);
+    const period = periodMatch ? periodMatch[1] : "2025-05";
+    return { description: text, amount: amount, period: period };
+  }
+
+  // Skill routing — ported HAL capabilities (accounting, claim readiness,
+  // office-manager attention + tasks). All local, read/draft-only.
+  function matchSkillRoute(query, rawQuery) {
+    // Accounting: draft a journal entry (drafting only; posting stays blocked by firewall)
+    if (/\b(draft|prepare|create|build)\b.*\bjournal\b|\bjournal entry\b/.test(query) && !/\bpost\b/.test(query)) {
+      const parsed = parseJournalRequest(rawQuery);
+      return {
+        intent: "accounting: journal-draft",
+        lane: "local",
+        useJournalDraft: true,
+        journalRequest: parsed,
+        text: "",
+        actions: [],
+      };
+    }
+
+    // Claim packet readiness
+    if (/\b(claim|packet)\b.*\breadiness\b|\breadiness\b.*\b(claim|packet)\b|\bclaim packet\b/.test(query)) {
+      return { intent: "claims: readiness", lane: "local", useClaimReadiness: true, text: "", actions: [] };
+    }
+
+    // Office-manager attention
+    if (/\boffice[\s-]?manager\b/.test(query) && !/\btask\b/.test(query)) {
+      return { intent: "office: attention", lane: "local", useOfficeAttention: true, text: "", actions: [] };
+    }
+
+    // Office tasks: list
+    if (/\b(show|list|view|my)\b.*\btasks?\b|\btasks?\b.*\b(list|open|status)\b/.test(query)) {
+      return { intent: "tasks: list", lane: "local", useTaskList: true, text: "", actions: [] };
+    }
+
+    // Office tasks: create
+    const createTaskMatch = String(rawQuery || "").match(/\b(?:create|add|new|make)\s+(?:a\s+)?task\b[:\-\s]*(.*)$/i);
+    if (createTaskMatch) {
+      const title = createTaskMatch[1].trim();
+      return {
+        intent: "tasks: create",
+        lane: "local",
+        useTaskCreate: true,
+        taskTitle: title,
+        text: "",
+        actions: [],
+      };
+    }
+
     return null;
   }
 
@@ -1003,6 +1062,9 @@ const HalCore = (function () {
         return { intent: "program: snapshot", lane: "local", useProgramSnapshot: true, text: "", actions: [] };
       }
     }
+
+    const skillRoute = matchSkillRoute(query, rawQuery);
+    if (skillRoute) return skillRoute;
 
     const operatorRoute = matchOperatorRoute(query);
     if (operatorRoute) {

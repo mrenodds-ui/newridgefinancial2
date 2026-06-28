@@ -58,6 +58,13 @@ function saveWorkSession() {
   persistLocal("halWorkSession", halWorkSession);
 }
 
+// Local office-manager tasks (ported HAL skill). Local-only, no writeback.
+let halOfficeTasks = [];
+
+function saveOfficeTasks() {
+  persistLocal("halOfficeTasks", halOfficeTasks);
+}
+
 function startWorkSession(sessionId) {
   const template = HalCore.sessionTemplateById(halData, sessionId);
   if (!template) return false;
@@ -784,6 +791,97 @@ async function handleHalSubmit(query) {
     saveChatHistory();
     renderChatLog();
     renderAuditLog();
+    return;
+  }
+
+  if (result.useJournalDraft) {
+    const req = result.journalRequest || {};
+    let text;
+    if (req.amount == null || isNaN(req.amount) || req.amount <= 0) {
+      text =
+        "I can draft a journal entry locally (draft only — never posted). Tell me the amount and the type, e.g. " +
+        '"Draft a journal entry for $1,200 prepaid insurance" or include a period like 2025-05.';
+    } else {
+      const draft = HalSkills.draftAndValidateJournal({
+        description: req.description,
+        period: req.period,
+        amount: req.amount,
+        context: {},
+      });
+      text = HalSkills.formatJournalDraft(draft);
+    }
+    halChatHistory.push({ role: "hal", text, lane: "accounting", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
+
+  if (result.useClaimReadiness) {
+    const snapshot = await loadProgramSnapshot();
+    const claimsList = (snapshot && snapshot.claims && snapshot.claims.top) || [];
+    const resp = HalSkills.buildClaimReadinessResponse(claimsList);
+    halChatHistory.push({ role: "hal", text: HalSkills.formatClaimReadinessAnswer(resp), lane: "claims", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
+
+  if (result.useOfficeAttention) {
+    const snapshot = await loadProgramSnapshot();
+    const metrics = HalSkills.computeTaskMetrics(halOfficeTasks);
+    const resp = HalSkills.buildOfficeManagerAttention(snapshot, metrics);
+    halChatHistory.push({ role: "hal", text: HalSkills.formatOfficeManagerAttention(resp), lane: "office", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
+
+  if (result.useTaskList) {
+    const metrics = HalSkills.computeTaskMetrics(halOfficeTasks);
+    const lines = [
+      `Local office tasks (${halOfficeTasks.length}) — local only, never written to SoftDent:`,
+      `Open ${metrics.open_count} · In progress ${metrics.in_progress_count} · Blocked ${metrics.blocked_count} · Completed ${metrics.completed_count}`,
+    ];
+    if (!halOfficeTasks.length) {
+      lines.push("", 'No tasks yet. Say "Create a task: follow up on denied claim" to add one.');
+    } else {
+      lines.push("");
+      halOfficeTasks.slice(0, 12).forEach((t) => {
+        lines.push(`- [${t.status}] (${t.priority}) ${t.title}`);
+      });
+    }
+    halChatHistory.push({ role: "hal", text: lines.join("\n"), lane: "office", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
+
+  if (result.useTaskCreate) {
+    let text;
+    try {
+      const task = HalSkills.createTask({ title: result.taskTitle, category: "other" }, { actor: "local-user" });
+      halOfficeTasks.unshift(task);
+      saveOfficeTasks();
+      text =
+        `Local task created (local only, not_submitted): "${task.title}".\n` +
+        `Status: ${task.status} · Priority: ${task.priority}. Nothing was sent or written to SoftDent.`;
+    } catch (error) {
+      text = "Could not create the task: " + (error && error.message ? error.message : "invalid task.");
+    }
+    halChatHistory.push({ role: "hal", text, lane: "office", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
     return;
   }
 
@@ -1553,6 +1651,7 @@ async function loadPersistedState() {
   halEvidencePacket = (await DesktopBridge.storageGet("halEvidencePacket")) || null;
   halReadinessDiagnostics = (await DesktopBridge.storageGet("halDiagnostics")) || null;
   halOperatorReport = (await DesktopBridge.storageGet("halOperatorReport")) || null;
+  halOfficeTasks = (await DesktopBridge.storageGet("halOfficeTasks")) || [];
 }
 
 async function boot() {

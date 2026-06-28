@@ -19,6 +19,10 @@
     "summary": "HAL answers from the local program registry and full program snapshot. Unmatched questions use the local 14B chat lane with full read context. Planning requests use the reasoning lane; second-opinion requests use the escalation lane. The firewall runs before every model.",
     "suggestions": [
       "Show what needs attention today",
+      "Show office manager attention",
+      "Check claim packet readiness",
+      "Draft a journal entry for $1,200 prepaid insurance",
+      "Show my tasks",
       "Show full program snapshot",
       "What is ready to work on",
       "What is blocked",
@@ -136,7 +140,7 @@
     "title": "External action firewall",
     "summary": "HAL cannot perform external actions from this program. The safety boundary is enforced before any model call.",
     "blocked": ["No email", "No fax", "No upload", "No payer contact", "No writeback", "No submission"],
-    "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information"],
+    "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information", "Draft a journal entry (local, not posted)", "Assess claim packet readiness", "Build office-manager attention list", "Create local office tasks"],
     "examples": [
       { "text": "Open the claims workbench", "expected": "allowed" },
       { "text": "Explain A/R aging", "expected": "allowed" },
@@ -424,6 +428,10 @@
       "Review read-only source health": "sources",
       "Explain the external action firewall": "firewall",
       "Show full program snapshot": "program: snapshot",
+      "Show office manager attention": "office: attention",
+      "Check claim packet readiness": "claims: readiness",
+      "Draft a journal entry for $1,200 prepaid insurance": "accounting: journal-draft",
+      "Show my tasks": "tasks: list",
       "Are you connected to a model?": "model lanes"
     },
     "firewallExamples": [

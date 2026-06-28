@@ -441,6 +441,65 @@ async function main() {
   assert(halHtml.includes("Full read"), "HAL page must show full read access");
   passed++;
 
+  // Ported HAL skills (accounting, claim readiness, office-manager, tasks, sanitization, memory)
+  const HalSkills = require(join(siteDir, "hal-skills.js"));
+
+  // Accounting: drafting allowed through firewall; posting still blocked.
+  const draftRoute = HalCore.routeHalCommand(halData, halModels, pages, "Draft a journal entry for $1,200 prepaid insurance");
+  assert(draftRoute.intent === "accounting: journal-draft" && draftRoute.useJournalDraft === true, "journal drafting must route locally");
+  const postBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Post a journal entry to the ledger");
+  assert(postBlocked.intent === "blocked: firewall", "posting a journal entry must stay blocked");
+  const journal = HalSkills.draftAndValidateJournal({ description: "Prepaid insurance payment", period: "2025-05", amount: 1200, context: {} });
+  assert(journal.transaction_type === "prepaid_insurance", "journal type inference must work");
+  assert(journal.validation.balanced === true, "drafted journal must balance");
+  assert(journal.validation.debit_total === 1200 && journal.validation.credit_total === 1200, "journal totals must match amount");
+  assert(journal.draft_status === "draft_only" && journal.safety.posted_to_ledger === false, "journal must remain draft-only, not posted");
+  const closed = HalSkills.draftAndValidateJournal({ description: "Depreciation", period: "2025-01", amount: 500, context: {} });
+  assert(closed.validation.open_period === false, "closed period must be detected");
+
+  // Claim packet readiness
+  const readinessRoute = HalCore.routeHalCommand(halData, halModels, pages, "Check claim packet readiness");
+  assert(readinessRoute.intent === "claims: readiness" && readinessRoute.useClaimReadiness === true, "claim readiness must route locally");
+  const cprResp = HalSkills.buildClaimReadinessResponse((snapshot.claims && snapshot.claims.top) || []);
+  assert(cprResp.summary.total_count > 0, "claim readiness must assess claims");
+  assert(cprResp.submission_status === "not_submitted", "claim readiness must remain not submitted");
+  const cprText = HalSkills.formatClaimReadinessAnswer(cprResp);
+  assert(/Nothing has been submitted/.test(cprText), "claim readiness answer must include not-submitted safety");
+
+  // Office-manager attention
+  const officeRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show office manager attention");
+  assert(officeRoute.intent === "office: attention" && officeRoute.useOfficeAttention === true, "office attention must route locally");
+  const attention = HalSkills.buildOfficeManagerAttention(snapshot, HalSkills.computeTaskMetrics([]));
+  assert(attention.items.length > 0, "office attention must produce items");
+  assert(attention.submission_status === "not_submitted" && attention.local_only === true, "office attention must stay local/not-submitted");
+
+  // Office tasks (local create/update/metrics)
+  const listRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show my tasks");
+  assert(listRoute.intent === "tasks: list" && listRoute.useTaskList === true, "task list must route locally");
+  const createRoute = HalCore.routeHalCommand(halData, halModels, pages, "Create a task: follow up on denied claim");
+  assert(createRoute.intent === "tasks: create" && createRoute.useTaskCreate === true, "task create must route locally");
+  const task = HalSkills.createTask({ title: createRoute.taskTitle }, { actor: "test" });
+  assert(task.status === "open" && task.local_only === true && task.softdent_writeback_performed === false, "created task must be local-only");
+  const done = HalSkills.applyTaskUpdate(task, { status: "completed" });
+  assert(done.status === "completed", "task update must apply");
+  const metrics = HalSkills.computeTaskMetrics([task, done]);
+  assert(metrics.open_count === 1 && metrics.completed_count === 1, "task metrics must count statuses");
+
+  // Sanitization (PII redaction)
+  const san = HalSkills.sanitizeText("Call patient John Smith at 555-123-4567, MRN 12345, john@x.com on 03/12/2025");
+  assert(/PATIENT_REDACTED/.test(san.sanitizedText), "patient name must be redacted");
+  assert(/PHONE_REDACTED/.test(san.sanitizedText), "phone must be redacted");
+  assert(/EMAIL_REDACTED/.test(san.sanitizedText), "email must be redacted");
+  assert(!/john@x\.com/.test(san.sanitizedText), "raw email must not survive sanitization");
+
+  // Knowledge memory governance
+  assert(HalSkills.memoryContainsForbidden("the A/R is $0"), "forbidden memory content must be detected");
+  const goodMem = { id: "m1", status: "approved", confidence: "high", sensitivity_level: "internal", staleness_rule: "never", text: "Keep claims local." };
+  const badMem = { id: "m2", status: "draft", confidence: "low", text: "anything" };
+  assert(HalSkills.isMemoryIndexable(goodMem, {}) === true, "approved memory must be indexable");
+  assert(HalSkills.isMemoryIndexable(badMem, {}) === false, "unapproved memory must be excluded");
+  passed++;
+
   console.log(`HAL validation passed (${passed} suites)`);
 }
 
