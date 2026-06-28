@@ -327,6 +327,20 @@ const HalCore = (function () {
       };
     }
 
+    // Manager dashboard widgets (import-cache widget feed)
+    if (/\b(widgets?|widget feed|dashboard widgets|manager dashboard)\b/.test(query)) {
+      return { intent: "widgets: feed", lane: "local", useWidgetFeed: true, text: "", actions: [] };
+    }
+
+    // Document RAG / library retrieval (grounded, local-only)
+    const ragAsk =
+      /\b(search|find|look ?up|query)\b.*\b(librar|document|file|doc)/.test(query) ||
+      /\b(documents?|library|files?)\b.*\b(say|mention|contain|about)\b/.test(query) ||
+      /\bask (the )?(documents?|library)\b/.test(query);
+    if (ragAsk && !/\b(open|go to|navigate)\b/.test(query)) {
+      return { intent: "library: ask", lane: "local", useDocRag: true, ragQuestion: rawQuery, text: "", actions: [] };
+    }
+
     return null;
   }
 

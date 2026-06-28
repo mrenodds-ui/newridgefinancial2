@@ -634,6 +634,280 @@ const HalSkills = (function () {
     return [prefix].concat(indexable.map((m) => `- ${sanitizeText(m.text).sanitizedText}`)).join("\n");
   }
 
+  /* ============================================================
+   * Document RAG / retrieval — port of document_rag.py + retrieval.py
+   * (client-side keyword retrieval; no embeddings/Chroma without a backend)
+   * ========================================================== */
+
+  const RAG_GUARDRAILS = ["library documents only", "grounded answer only", "insufficient context fallback", "local only"];
+  const INSUFFICIENT_DOCUMENT_CONTEXT_ANSWER =
+    "I do not have enough grounded context in the local library to answer that.";
+  const RAG_STOPWORDS = new Set([
+    "the", "a", "an", "of", "to", "in", "on", "for", "and", "or", "is", "are", "was", "were",
+    "what", "which", "who", "how", "do", "does", "did", "show", "me", "about", "with", "this", "that",
+  ]);
+
+  function tokenize(text) {
+    return String(text || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((t) => t && !RAG_STOPWORDS.has(t));
+  }
+
+  function chunkText(text, size, overlap) {
+    const s = String(text || "");
+    const chunkSize = size || 1200;
+    const step = chunkSize - (overlap || 200);
+    if (s.length <= chunkSize) return s.trim() ? [s.trim()] : [];
+    const chunks = [];
+    for (let i = 0; i < s.length; i += step) {
+      const piece = s.slice(i, i + chunkSize).trim();
+      if (piece) chunks.push(piece);
+    }
+    return chunks;
+  }
+
+  // Build a retrieval index from library docs. Each doc contributes searchable
+  // text from its title, tags, type, and any body/excerpt fields available.
+  function buildRagIndex(docs) {
+    const entries = [];
+    (docs || []).forEach((doc, docIndex) => {
+      const title = String(doc.title || doc.source_name || `Document ${docIndex + 1}`);
+      const bodyParts = [title, doc.type || "", (doc.tags || []).join(" "), doc.by || "", doc.excerpt || doc.content || doc.body || ""];
+      const body = bodyParts.filter(Boolean).join(". ");
+      chunkText(sanitizeText(body).sanitizedText, 1200, 200).forEach((chunk, chunkIndex) => {
+        entries.push({
+          source_id: `${title}:chunk:${chunkIndex + 1}`,
+          title,
+          category: "library_document",
+          content: chunk,
+          tokens: tokenize(chunk),
+        });
+      });
+    });
+    return entries;
+  }
+
+  function queryRag(index, question, topK) {
+    const limit = topK || 4;
+    const qTokens = tokenize(question);
+    if (!qTokens.length || !index || !index.length) return [];
+    const qSet = new Set(qTokens);
+    const scored = index
+      .map((entry) => {
+        let overlap = 0;
+        const seen = new Set();
+        entry.tokens.forEach((t) => {
+          if (qSet.has(t) && !seen.has(t)) {
+            seen.add(t);
+            overlap += 1;
+          }
+        });
+        const score = overlap / qSet.size;
+        return { entry, score };
+      })
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+    return scored.map(({ entry, score }) => ({
+      source_id: entry.source_id,
+      title: entry.title,
+      category: entry.category,
+      content: entry.content,
+      excerpt: `${entry.title}: ${entry.content}`,
+      score: Math.round(score * 100) / 100,
+    }));
+  }
+
+  function buildDocumentAnswerPrompt(question, retrievedContext) {
+    const blocks = (retrievedContext || []).map((item, i) => `[${i + 1}] File: ${item.title}\nContext: ${item.excerpt}`);
+    return (
+      "You answer questions only from the local library context below. " +
+      "If the context does not support the answer, respond exactly with: " +
+      INSUFFICIENT_DOCUMENT_CONTEXT_ANSWER +
+      " Do not invent figures, dates, or file citations. Mention source file names when relevant.\n\n" +
+      `Question:\n${question}\n\n` +
+      `Library context:\n${blocks.join("\n\n")}\n`
+    );
+  }
+
+  function answerFromLibrary(question, docs, topK) {
+    const index = buildRagIndex(docs);
+    const context = queryRag(index, question, topK);
+    const grounded = context.some((c) => String(c.content || "").trim());
+    return {
+      mode: "client-keyword-rag-v1",
+      question,
+      retrieved_context: context,
+      guardrails: RAG_GUARDRAILS,
+      grounded,
+      answer: grounded ? null : INSUFFICIENT_DOCUMENT_CONTEXT_ANSWER,
+      prompt: grounded ? buildDocumentAnswerPrompt(question, context) : null,
+      local_only: true,
+    };
+  }
+
+  function formatRagResult(result) {
+    if (!result.grounded) {
+      return INSUFFICIENT_DOCUMENT_CONTEXT_ANSWER + "\n\nLibrary search is local-only and grounded; nothing was sent externally.";
+    }
+    const lines = [`Found ${result.retrieved_context.length} grounded match(es) in the local library:`, ""];
+    result.retrieved_context.forEach((c) => lines.push(`- ${c.title} (match ${c.score}) — ${c.content.slice(0, 160)}`));
+    lines.push("", "Grounded, local-only retrieval. A local model can summarize these with the grounded prompt; nothing was sent externally.");
+    return lines.join("\n");
+  }
+
+  /* ============================================================
+   * SoftDent read source status + missing-data codes
+   * — port of softdent_read_models.py honesty rules
+   * ========================================================== */
+
+  const SOFTDENT_MISSING_DATA_CODES = {
+    claims: "missing_softdent_claims_export",
+    clinicalNotes: "missing_softdent_clinical_notes_export",
+    ar: "missing_softdent_ar",
+    ledger: "missing_softdent_patient_ledger_export",
+    procedures: "missing_softdent_procedures_export",
+    eodReport: "missing_softdent_eod_report",
+  };
+
+  // Determine which SoftDent fact lanes are available from the snapshot, never
+  // fabricating a $0 A/R balance when no verified A/R source exists.
+  function softDentReadSourceStatus(snapshot) {
+    const snap = snapshot || {};
+    const claimsAvailable = !!(snap.claims && snap.claims.total > 0);
+    const ar = snap.dashboards && snap.dashboards.ar;
+    const arAvailable = !!(ar && (ar.buckets || ar.aging || ar.total));
+    const missing = [];
+    if (!claimsAvailable) missing.push(SOFTDENT_MISSING_DATA_CODES.claims);
+    if (!arAvailable) missing.push(SOFTDENT_MISSING_DATA_CODES.ar);
+    return {
+      claims_available: claimsAvailable,
+      clinical_notes_available: false,
+      ar_available: arAvailable,
+      missing_data_codes: missing,
+      note: "A/R is only reported from a verified source; HAL never fabricates a $0 balance.",
+    };
+  }
+
+  /* ============================================================
+   * Widgets — port of widget_builder.py + widget_feed.py
+   * (import-cache widget feed derived from the program snapshot)
+   * ========================================================== */
+
+  function mergeWidgetStatus() {
+    const statuses = Array.prototype.slice.call(arguments).filter(Boolean);
+    if (!statuses.length) return "FAILED";
+    if (statuses.every((s) => s === "SUCCESS")) return "SUCCESS";
+    if (statuses.some((s) => s === "SUCCESS")) return "DEGRADED";
+    return "FAILED";
+  }
+
+  function publishJobStatus(widgets) {
+    const statuses = Object.values(widgets).map((w) => String(w.status || "").toUpperCase());
+    if (statuses.length && statuses.every((s) => s === "SUCCESS")) return "SUCCESS";
+    if (statuses.some((s) => s === "SUCCESS")) return "DEGRADED";
+    return "FAILED";
+  }
+
+  function buildWidgetFeed(snapshot) {
+    const snap = snapshot || {};
+    const dashboards = snap.dashboards || {};
+    const sdStatus = softDentReadSourceStatus(snap);
+    const arAvailable = sdStatus.ar_available;
+    const claims = snap.claims || {};
+
+    const financialStatus = dashboards.financial ? "SUCCESS" : "FAILED";
+    const qbStatus = dashboards.quickbooks ? (/(blocked|stale)/i.test(String(dashboards.quickbooks.syncStatus || "")) ? "DEGRADED" : "SUCCESS") : "FAILED";
+    const softdentStatus = dashboards.softdent ? "SUCCESS" : "FAILED";
+    const claimsStatus = claims.total > 0 ? (arAvailable ? "SUCCESS" : "DEGRADED") : "FAILED";
+    const careStatus = softdentStatus === "SUCCESS" && !arAvailable ? "DEGRADED" : softdentStatus;
+    const pendingPosting = ((snap.documents && snap.documents.posting) || []).reduce(
+      (acc, p) => (/pending/i.test(p.label) ? acc + (p.count || 0) : acc),
+      0,
+    );
+
+    const widgets = {
+      practice_financial_overview: {
+        title: "Practice Financial Overview",
+        status: mergeWidgetStatus(qbStatus, softdentStatus),
+        summary: "Practice revenue from QuickBooks and production/collections from the SoftDent import cache. Dental A/R is not sourced from QuickBooks.",
+        metrics: {
+          monthly_revenue: dashboards.quickbooks ? dashboards.quickbooks.revenue || null : null,
+          production_total: dashboards.softdent ? dashboards.softdent.production || null : null,
+        },
+      },
+      accounts_payable_automation: {
+        title: "Accounts Payable Automation",
+        status: qbStatus,
+        summary: "QuickBooks expense totals and posting-queue workflow counts from the import cache.",
+        metrics: { expense_total: dashboards.quickbooks ? dashboards.quickbooks.expenses || null : null, posting_queue_pending_count: pendingPosting || null },
+      },
+      smart_claims_and_receivables: {
+        title: "Smart Claims & Receivables",
+        status: claimsStatus,
+        summary: arAvailable
+          ? "SoftDent claims and receivables totals derived from local practice operations data."
+          : "SoftDent claims totals from local data; dental A/R is unavailable until an explicit SoftDent A/R export is present.",
+        metrics: { outstanding_claim_count: claims.total || null, accounts_receivable_total: null },
+      },
+      care_delivery_performance: {
+        title: "Care Delivery Performance",
+        status: careStatus,
+        summary: arAvailable
+          ? "Practice-wide SoftDent operational balances from the import cache."
+          : "Practice-wide SoftDent operational activity from the import cache; patient A/R balances are unavailable until an explicit SoftDent A/R export is present.",
+        metrics: { patient_balance_total: null },
+      },
+    };
+
+    const feed = {
+      manager: "Import cache",
+      run_id: uid("run"),
+      generated_at: snap.gatheredAt || new Date().toISOString(),
+      widgets,
+      sources: {
+        quickbooks: { last_status: qbStatus, origin: "local" },
+        softdent: { last_status: softdentStatus, origin: "local" },
+      },
+      jobs: {},
+      local_only: true,
+    };
+    const publish = publishJobStatus(widgets);
+    feed.jobs = { import_cache_refresh: { status: publish }, widget_publish: { status: publish } };
+    return enforceReceivablesArPolicy(feed, arAvailable);
+  }
+
+  // Never present an A/R total when no verified A/R source exists; degrade instead.
+  function enforceReceivablesArPolicy(feed, arAvailable) {
+    if (arAvailable) return feed;
+    [
+      ["smart_claims_and_receivables", ["accounts_receivable_total"]],
+      ["care_delivery_performance", ["patient_balance_total"]],
+    ].forEach(([key, metricKeys]) => {
+      const widget = feed.widgets[key];
+      if (!widget || !widget.metrics) return;
+      metricKeys.forEach((m) => {
+        widget.metrics[m] = null;
+      });
+      if (String(widget.status).toUpperCase() === "SUCCESS") widget.status = "DEGRADED";
+    });
+    const publish = publishJobStatus(feed.widgets);
+    feed.jobs.import_cache_refresh = { status: publish };
+    feed.jobs.widget_publish = { status: publish };
+    return feed;
+  }
+
+  function formatWidgetFeed(feed) {
+    const lines = [`Manager dashboard widgets (${feed.manager}, local only):`, ""];
+    Object.values(feed.widgets).forEach((w) => {
+      lines.push(`[${w.status}] ${w.title} — ${w.summary}`);
+    });
+    lines.push("", `Publish job: ${feed.jobs.widget_publish.status}. Local-only; A/R shown only from a verified source.`);
+    return lines.join("\n");
+  }
+
   return {
     SAFETY_DISCLAIMER,
     // sanitization
@@ -663,6 +937,22 @@ const HalSkills = (function () {
     filterIndexableMemories,
     memoryContainsForbidden,
     memoryGuidanceText,
+    // document RAG / retrieval
+    INSUFFICIENT_DOCUMENT_CONTEXT_ANSWER,
+    RAG_GUARDRAILS,
+    chunkText,
+    buildRagIndex,
+    queryRag,
+    buildDocumentAnswerPrompt,
+    answerFromLibrary,
+    formatRagResult,
+    // softdent read status
+    SOFTDENT_MISSING_DATA_CODES,
+    softDentReadSourceStatus,
+    // widgets
+    buildWidgetFeed,
+    enforceReceivablesArPolicy,
+    formatWidgetFeed,
   };
 })();
 

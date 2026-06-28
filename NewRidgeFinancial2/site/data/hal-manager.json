@@ -22,6 +22,8 @@
       "Show office manager attention",
       "Check claim packet readiness",
       "Draft a journal entry for $1,200 prepaid insurance",
+      "Show manager dashboard widgets",
+      "Search the library for compliance",
       "Show my tasks",
       "Show full program snapshot",
       "What is ready to work on",
@@ -431,6 +433,8 @@
       "Show office manager attention": "office: attention",
       "Check claim packet readiness": "claims: readiness",
       "Draft a journal entry for $1,200 prepaid insurance": "accounting: journal-draft",
+      "Show manager dashboard widgets": "widgets: feed",
+      "Search the library for compliance": "library: ask",
       "Show my tasks": "tasks: list",
       "Are you connected to a model?": "model lanes"
     },

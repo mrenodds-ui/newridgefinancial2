@@ -864,6 +864,29 @@ async function handleHalSubmit(query) {
     return;
   }
 
+  if (result.useWidgetFeed) {
+    const snapshot = await loadProgramSnapshot();
+    const feed = HalSkills.buildWidgetFeed(snapshot);
+    halChatHistory.push({ role: "hal", text: HalSkills.formatWidgetFeed(feed), lane: "widgets", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
+
+  if (result.useDocRag) {
+    const snapshot = await loadProgramSnapshot();
+    const docs = (snapshot && snapshot.library && (snapshot.library.top || snapshot.library.docs)) || [];
+    const rag = HalSkills.answerFromLibrary(result.ragQuestion, docs, 4);
+    halChatHistory.push({ role: "hal", text: HalSkills.formatRagResult(rag), lane: "library", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
+
   if (result.useTaskCreate) {
     let text;
     try {

@@ -500,6 +500,38 @@ async function main() {
   assert(HalSkills.isMemoryIndexable(badMem, {}) === false, "unapproved memory must be excluded");
   passed++;
 
+  // Document RAG / library retrieval (grounded, local-only)
+  const ragRoute = HalCore.routeHalCommand(halData, halModels, pages, "Search the library for compliance");
+  assert(ragRoute.intent === "library: ask" && ragRoute.useDocRag === true, "library search must route locally");
+  const navLibrary = HalCore.routeHalCommand(halData, halModels, pages, "Open the document library");
+  assert(navLibrary.intent.startsWith("navigate"), "opening the library must still navigate, not trigger RAG");
+  const libDocs = (snapshot.library && (snapshot.library.top || snapshot.library.docs)) || [];
+  const ragHit = HalSkills.answerFromLibrary("compliance training", libDocs, 4);
+  assert(ragHit.grounded === true && ragHit.retrieved_context.length > 0, "RAG must find grounded matches");
+  assert(ragHit.prompt && ragHit.prompt.includes("library context"), "RAG must build a grounded answer prompt");
+  const ragMiss = HalSkills.answerFromLibrary("zzzqqq nonexistent topic", libDocs, 4);
+  assert(ragMiss.grounded === false && ragMiss.answer === HalSkills.INSUFFICIENT_DOCUMENT_CONTEXT_ANSWER, "RAG must fall back when no grounded context");
+
+  // Manager dashboard widgets (import-cache feed) + A/R honesty policy
+  const widgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show manager dashboard widgets");
+  assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
+  const feed = HalSkills.buildWidgetFeed(snapshot);
+  assert(Object.keys(feed.widgets).length === 4, "widget feed must build 4 widgets");
+  assert(feed.local_only === true, "widget feed must stay local-only");
+
+  // A/R honesty: with no verified A/R source, totals are nulled and status degrades
+  const noArFeed = HalSkills.buildWidgetFeed({ dashboards: { softdent: {}, quickbooks: { syncStatus: "ok" } }, claims: { total: 5 } });
+  assert(noArFeed.widgets.smart_claims_and_receivables.metrics.accounts_receivable_total === null, "A/R must not be fabricated without a verified source");
+  assert(noArFeed.widgets.care_delivery_performance.metrics.patient_balance_total === null, "patient A/R balance must not be fabricated");
+  assert(noArFeed.widgets.smart_claims_and_receivables.status !== "SUCCESS", "claims widget must degrade without A/R source");
+
+  // SoftDent read source status honesty (never fabricate $0 A/R)
+  const sdReal = HalSkills.softDentReadSourceStatus(snapshot);
+  assert(sdReal.ar_available === true, "report-derived A/R from the A/R dashboard must be recognized as available");
+  const sdEmpty = HalSkills.softDentReadSourceStatus({ dashboards: {}, claims: { total: 0 } });
+  assert(sdEmpty.ar_available === false && sdEmpty.missing_data_codes.includes("missing_softdent_ar"), "missing A/R must be surfaced honestly");
+  passed++;
+
   console.log(`HAL validation passed (${passed} suites)`);
 }
 
