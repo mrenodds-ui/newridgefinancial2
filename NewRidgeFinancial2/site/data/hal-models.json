@@ -43,11 +43,12 @@
       "version": "0.30.11"
     },
     "activeLane": "chat14b",
-    "laneExecution": "Enabled · local loopback only",
+    "laneExecution": "Enabled · all local models · loopback only",
     "runningModel": "none (loads on first query)",
     "gpuStatus": "not verified",
     "bindingStatus": "127.0.0.1 only · remote endpoints blocked",
     "dataPolicy": "No patient, financial, SoftDent, QuickBooks, or sensitive raw data sent to any model",
+    "allModelsEnabled": true,
     "availableModels": [
       "queen3:14b",
       "qwen3:14b",
@@ -61,7 +62,12 @@
     "configuredModels": {
       "local": { "lane": "chat14b", "model": "queen3:14b", "available": true },
       "reasoning": { "lane": "reason21b", "model": "mistral-small3.1:24b", "available": true },
-      "escalation": { "lane": "escalate30b", "model": "qwen3:30b", "available": true }
+      "escalation": { "lane": "escalate30b", "model": "qwen3:30b", "available": true },
+      "general": { "lane": "general14b", "model": "qwen3:14b", "available": true },
+      "coder": { "lane": "coder30b", "model": "qwen3-coder:30b", "available": true },
+      "coderHeavy": { "lane": "coder32b", "model": "qwen2.5-coder:32b", "available": true },
+      "deep": { "lane": "deep235b", "model": "qwen3:235b", "available": true },
+      "oss": { "lane": "oss120b", "model": "gpt-oss:120b", "available": true }
     }
   },
   "lanes": [
@@ -112,6 +118,127 @@
       "willAllow": [
         "Second-opinion review",
         "Complex case reasoning"
+      ],
+      "stillBlocked": [
+        "No external actions",
+        "No data writeback"
+      ]
+    },
+    {
+      "id": "general14b",
+      "name": "14B general lane",
+      "model": "qwen3:14b",
+      "role": "Alternate staff-facing conversation lane",
+      "state": "Configured",
+      "inventoryAvailable": true,
+      "executionEnabled": true,
+      "runtime": {
+        "enabled": true,
+        "endpoint": "http://127.0.0.1:11434/api/chat",
+        "model": "qwen3:14b",
+        "timeoutMs": 60000,
+        "temperature": 0.2
+      },
+      "willAllow": [
+        "Plain-language answers",
+        "Summarize local read-only status"
+      ],
+      "stillBlocked": [
+        "No external actions",
+        "No data writeback"
+      ]
+    },
+    {
+      "id": "coder30b",
+      "name": "30B coder lane",
+      "model": "qwen3-coder:30b",
+      "role": "Code and structured-output drafting (local)",
+      "state": "Configured",
+      "inventoryAvailable": true,
+      "executionEnabled": true,
+      "runtime": {
+        "enabled": true,
+        "endpoint": "http://127.0.0.1:11434/api/chat",
+        "model": "qwen3-coder:30b",
+        "timeoutMs": 120000,
+        "temperature": 0.2
+      },
+      "willAllow": [
+        "Draft local code and structured notes",
+        "Explain configuration in plain language"
+      ],
+      "stillBlocked": [
+        "No external actions",
+        "No data writeback"
+      ]
+    },
+    {
+      "id": "coder32b",
+      "name": "32B coder lane",
+      "model": "qwen2.5-coder:32b",
+      "role": "Heavy code/structured drafting (local)",
+      "state": "Configured",
+      "inventoryAvailable": true,
+      "executionEnabled": true,
+      "runtime": {
+        "enabled": true,
+        "endpoint": "http://127.0.0.1:11434/api/chat",
+        "model": "qwen2.5-coder:32b",
+        "timeoutMs": 150000,
+        "temperature": 0.2
+      },
+      "willAllow": [
+        "Draft larger local code/structured output",
+        "Detailed local review notes"
+      ],
+      "stillBlocked": [
+        "No external actions",
+        "No data writeback"
+      ]
+    },
+    {
+      "id": "deep235b",
+      "name": "235B deep reasoning lane",
+      "model": "qwen3:235b",
+      "role": "Deep reasoning for complex review (local, heavy)",
+      "state": "Configured",
+      "inventoryAvailable": true,
+      "executionEnabled": true,
+      "runtime": {
+        "enabled": true,
+        "endpoint": "http://127.0.0.1:11434/api/chat",
+        "model": "qwen3:235b",
+        "timeoutMs": 240000,
+        "temperature": 0.2,
+        "think": true
+      },
+      "willAllow": [
+        "Deep multi-step reasoning on complex questions",
+        "Cross-page synthesis (local, read-only)"
+      ],
+      "stillBlocked": [
+        "No external actions",
+        "No data writeback"
+      ]
+    },
+    {
+      "id": "oss120b",
+      "name": "120B open-source lane",
+      "model": "gpt-oss:120b",
+      "role": "Open-source generalist lane (local)",
+      "state": "Configured",
+      "inventoryAvailable": true,
+      "executionEnabled": true,
+      "runtime": {
+        "enabled": true,
+        "endpoint": "http://127.0.0.1:11434/api/chat",
+        "model": "gpt-oss:120b",
+        "timeoutMs": 240000,
+        "temperature": 0.2
+      },
+      "willAllow": [
+        "Generalist local answers",
+        "Alternate second-opinion review"
       ],
       "stillBlocked": [
         "No external actions",

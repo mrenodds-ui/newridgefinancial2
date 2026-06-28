@@ -213,7 +213,8 @@ async function main() {
 
   // Model lane status derived from hal-models
   const cards = HalCore.deriveModelLaneCards(halModels);
-  assert(cards.length === 3, "model lane cards must be 3");
+  assert(cards.length === halModels.lanes.length, "model lane cards must match configured lanes");
+  assert(cards.length >= 8, "all available local models should be exposed as lanes");
   for (const card of cards) {
     const lane = halModels.lanes.find((l) => l.name === card.name);
     assert(lane && card.state === lane.state, `lane state drift for ${card.name}`);
@@ -343,7 +344,7 @@ async function main() {
     assert(["Pass", "Warning", "Fail"].includes(health[key]), `drawer health for ${key} must be valid, got ${health[key]}`);
   }
   const laneDetails = HalCore.modelLaneDetails(halModels);
-  assert(laneDetails.length === 3, "model lane details must cover 3 lanes");
+  assert(laneDetails.length === halModels.lanes.length, "model lane details must cover all configured lanes");
   passed++;
 
   // Seeded routing regression: local intents, model fallbacks, and firewall traps.
@@ -413,7 +414,11 @@ async function main() {
   for (const lane of halModels.lanes) {
     assert(lane.executionEnabled === true, `lane ${lane.id} execution must be enabled`);
     assert(lane.inventoryAvailable === true, `lane ${lane.id} inventory should be marked available`);
+    assert(HalCore.laneReady(halModels, lane.id), `lane ${lane.id} must be execution-ready on loopback`);
+    const runtime = HalCore.laneRuntime(halModels, lane.id);
+    assert(runtime && HalCore.isLocalModelEndpoint(runtime.endpoint), `lane ${lane.id} runtime must be loopback-only`);
   }
+  assert(halModels.readinessDisplay.allModelsEnabled === true, "readiness display must reflect all models enabled");
   assert(halHtml.includes("LOCAL AI READINESS"), "HAL page must render AI readiness");
   assert(halHtml.includes("local only"), "HAL page must label AI lanes as local only");
   assert(halHtml.includes("Available inventory"), "HAL page must show available model inventory");

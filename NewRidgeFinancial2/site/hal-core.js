@@ -74,6 +74,9 @@ const HalCore = (function () {
 
   function laneRuntime(halModels, laneId) {
     const config = modelConfig(halModels);
+    // A lane may carry its own runtime block; prefer it so any local model can be enabled.
+    const lane = modelLanes(halModels).find((l) => l.id === laneId);
+    if (lane && lane.runtime) return lane.runtime;
     if (laneId === "chat14b") return config.localModel || null;
     if (laneId === "reason21b") return config.reasoningModel || null;
     if (laneId === "escalate30b") return config.escalationModel || null;
