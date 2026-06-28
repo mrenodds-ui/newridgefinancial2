@@ -540,6 +540,69 @@ body {
   padding-top: 6px;
 }
 
+.hal-msg__lane {
+  color: var(--cyan);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  margin-left: 8px;
+  text-transform: uppercase;
+}
+
+.drawer-section {
+  display: grid;
+  gap: 10px;
+}
+
+.drawer-section__title {
+  color: var(--text);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.drawer-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.drawer-warn {
+  color: var(--red);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.drawer-checklist {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.drawer-card--source p,
+.drawer-card--surface p,
+.drawer-card--compact p {
+  margin: 6px 0 0;
+}
+
+.drawer-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.drawer-action--sm {
+  font-size: 12px;
+  margin-top: 8px;
+  padding: 6px 10px;
+}
+
+.drawer-card--compact {
+  padding: 10px;
+}
+
 .hal-audit__row span:first-child {
   color: var(--cyan);
 }

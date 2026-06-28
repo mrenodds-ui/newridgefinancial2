@@ -13,42 +13,17 @@ const PAGES = [
 ];
 
 const FALLBACK_HAL = {
-  status: {
-    title: "HAL Command Center",
-    summary: "Local program manager for NewRidgeFinancial 2.0.",
-    posture: ["Local-only", "Read-only", "Human review required", "Not submitted"],
-    modelLanes: [
-      { name: "14B chat lane", role: "Staff-facing conversation", state: "Planned" },
-      { name: "21B reasoning lane", role: "Program review and prioritization", state: "Planned" },
-      { name: "30B escalation lane", role: "Second-opinion review", state: "Planned" },
-    ],
-  },
-  askHal: {
-    title: "Ask HAL",
-    summary: "HAL is currently operating as a local program manager.",
-    suggestions: ["Show priorities", "Open claims", "Review source health"],
-    response: "I can navigate pages, explain local status, and keep work inside the read-only boundary.",
-  },
-  sources: { title: "Read-only source intake", summary: "Source pages are read-only.", items: [] },
-  reasoning: { title: "Local reasoning core", summary: "Organizes work into Ready, Needs review, and Blocked lanes.", lanes: [] },
-  workSurfaces: { title: "Staff work surfaces", summary: "Open and explain each program surface.", items: [] },
-  firewall: { title: "External action firewall", summary: "External actions are blocked by design.", blocked: [], allowed: [] },
-  priorities: { title: "Today’s operator priorities", items: [] },
-  registry: [
-    { id: "financial", name: "Financial Dashboard", purpose: "Owner-level financial view.", safety: "Read-only view", state: "Ready", nextAction: "Review production and collections.", blocked: [], related: [] },
-    { id: "claims", name: "Claims Workbench", purpose: "Claim review lanes.", safety: "Review-only", state: "Needs review", nextAction: "Work the Needs Review lane.", blocked: [], related: [] },
-    { id: "hal", name: "HAL Command Center", purpose: "Local program manager.", safety: "Local manager", state: "Ready", nextAction: "Ask HAL to open a page or show priorities.", blocked: [], related: [] },
-  ],
+  status: { title: "HAL Command Center", summary: "Local program manager.", posture: ["Local-only", "Read-only"] },
+  askHal: { title: "Ask HAL", summary: "Local manager.", suggestions: ["Show priorities"], response: "I can navigate pages and explain status." },
+  sources: { title: "Sources", summary: "Read-only.", items: [] },
+  reasoning: { title: "Reasoning", summary: "Local lanes.", actions: [] },
+  workSurfaces: { title: "Work surfaces", summary: "Open pages.", items: [] },
+  firewall: { title: "Firewall", summary: "External actions blocked.", blocked: [], allowed: [], examples: [] },
+  priorities: { title: "Priorities", items: [] },
+  registry: [],
 };
 
-const FALLBACK_MODELS = {
-  config: { mode: "offline", localFirst: true, externalCallsEnabled: false, activeLane: null },
-  lanes: [
-    { id: "chat14b", name: "14B chat lane", model: "queen3:14b", role: "Staff-facing conversation", state: "Offline", willAllow: ["Explain pages in plain language", "Summarize local status"], stillBlocked: ["No external actions", "No data writeback"] },
-    { id: "reason21b", name: "21B reasoning lane", model: "planned", role: "Program review and prioritization", state: "Planned", willAllow: ["Prioritize work across pages"], stillBlocked: ["No external actions"] },
-    { id: "escalate30b", name: "30B escalation lane", model: "planned", role: "Second-opinion review", state: "Planned", willAllow: ["Second-opinion review"], stillBlocked: ["No external actions"] },
-  ],
-};
+const FALLBACK_MODELS = { config: { mode: "offline" }, lanes: [] };
 
 const HOTSPOTS = [
   { key: "askHal", label: "Ask HAL", left: 15, top: 15, width: 45, height: 17 },
@@ -71,10 +46,9 @@ const buttons = {};
 let halData = FALLBACK_HAL;
 let halModels = FALLBACK_MODELS;
 let currentDrawerKey = null;
-
-// Ask HAL local manager: chat transcript + session audit log (local-only, no AI model).
 let halChatHistory = [];
 let halAudit = [];
+
 try {
   const savedAudit = sessionStorage.getItem("halAudit");
   if (savedAudit) halAudit = JSON.parse(savedAudit);
@@ -82,83 +56,61 @@ try {
   halAudit = [];
 }
 
-// External-action verbs always stop at the firewall and require human review.
-// Includes common -ing/-s forms so "submitting", "emailing", etc. are also caught.
-const BLOCKED_RE = /\b(submit|submits|submitting|send|sends|sending|email|emails|emailing|e-?mail|fax|faxes|faxing|upload|uploads|uploading|transmit|transmits|transmitting|pay|paying|approve|approves|approving|deny|denies|denying|delete|deletes|deleting|remove|removes|removing|writeback|write back|dispatch|dispatches|dispatching|mail|mailing)\b/;
+try {
+  const savedChat = sessionStorage.getItem("halChatHistory");
+  if (savedChat) halChatHistory = JSON.parse(savedChat);
+} catch (error) {
+  halChatHistory = [];
+}
 
-const PAGE_SYNONYMS = {
-  financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
-  softdent: ["softdent", "soft dent", "practice management"],
-  quickbooks: ["quickbooks", "quick books", "p&l", "profit and loss", "expenses"],
-  ar: ["a/r", "accounts receivable", "receivable", "collections", "aging", "follow-up", "follow up"],
-  claims: ["claims workbench", "claims", "claim", "workbench", "denied"],
-  narratives: ["narratives", "narrative", "insurance narrative"],
-  documents: ["accounting documents", "document intake", "posting queue", "extraction"],
-  library: ["document library", "library", "repository"],
-  hal: ["hal", "command center", "yourself"],
-};
-
-function pageInfoMap() {
-  const map = {};
-  const items = (halData.workSurfaces && halData.workSurfaces.items) || [];
-  for (const item of items) map[item.target] = { label: item.label, detail: item.detail };
-  for (const page of PAGES) if (!map[page.id]) map[page.id] = { label: page.label, detail: page.title };
-  return map;
+function saveChatHistory() {
+  try {
+    sessionStorage.setItem("halChatHistory", JSON.stringify(halChatHistory));
+  } catch (error) {
+    /* sessionStorage may be unavailable. */
+  }
 }
 
 function registryList() {
-  return (halData.registry && halData.registry.length ? halData.registry : FALLBACK_HAL.registry) || [];
+  return HalCore.registryList(halData);
 }
 
 function registryById(id) {
-  return registryList().find((entry) => entry.id === id) || null;
+  return HalCore.registryById(halData, id);
 }
 
-function modelConfig() {
-  return (halModels && halModels.config) || FALLBACK_MODELS.config;
-}
-
-function modelLanes() {
-  return (halModels && halModels.lanes && halModels.lanes.length ? halModels.lanes : FALLBACK_MODELS.lanes) || [];
+function pageInfoMap() {
+  return HalCore.pageInfoMap(halData, PAGES);
 }
 
 function localModelConfig() {
-  const config = modelConfig();
-  return config && config.localModel ? config.localModel : null;
+  return HalCore.laneRuntime(halModels, "chat14b");
 }
 
 function reasoningModelConfig() {
-  const config = modelConfig();
-  return config && config.reasoningModel ? config.reasoningModel : null;
+  return HalCore.laneRuntime(halModels, "reason21b");
 }
 
 function escalationModelConfig() {
-  const config = modelConfig();
-  return config && config.escalationModel ? config.escalationModel : null;
-}
-
-function runtimeReady(runtime) {
-  const config = modelConfig();
-  return config.mode === "online" && runtime && runtime.enabled === true && !!runtime.endpoint && !!runtime.model;
+  return HalCore.laneRuntime(halModels, "escalate30b");
 }
 
 function localModelReady() {
-  return runtimeReady(localModelConfig());
+  return HalCore.laneReady(halModels, "chat14b");
 }
 
 function reasoningModelReady() {
-  return runtimeReady(reasoningModelConfig());
+  return HalCore.laneReady(halModels, "reason21b");
 }
 
 function escalationModelReady() {
-  return runtimeReady(escalationModelConfig());
+  return HalCore.laneReady(halModels, "escalate30b");
 }
 
-// Message shown when a local lane is not reachable or not enabled.
 function offlineModelMessage(laneId) {
-  const lane = modelLanes().find((entry) => entry.id === laneId) || modelLanes().find((entry) => entry.id === "chat14b");
+  const lane = HalCore.modelLanes(halModels).find((entry) => entry.id === laneId) || HalCore.modelLanes(halModels)[0];
   const name = lane && lane.name ? lane.name : "local chat lane";
-  const model = lane && lane.model ? lane.model : "queen3:14b";
+  const model = lane && lane.model ? lane.model : "local model";
   return (
     "I could not reach the " +
     name +
@@ -169,65 +121,14 @@ function offlineModelMessage(laneId) {
   );
 }
 
-function registryAsText() {
-  return registryList()
-    .map((entry) => `- ${entry.name} [${entry.state}; ${entry.safety}]: ${entry.purpose} Next: ${entry.nextAction}`)
-    .join("\n");
-}
-
-// Read-only system grounding for the local 14B chat lane. The model drafts text only.
-function buildSystemPrompt() {
-  const firewall = halData.firewall || FALLBACK_HAL.firewall;
-  return [
-    "You are HAL, the local read-only program manager for NewRidgeFinancial 2.0, a dental-practice financial program.",
-    "Answer briefly and only about this program and its pages. If you are unsure, say so.",
-    "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
-    "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
-    "If the user asks for an external action, refuse and say it needs human review.",
-    "Program pages and current status:",
-    registryAsText(),
-  ].join("\n");
-}
-
-// Read-only grounding for the reasoning lane: prioritize across program state.
-function buildReasoningPrompt() {
-  const firewall = halData.firewall || FALLBACK_HAL.firewall;
-  const priorities = (halData.priorities && halData.priorities.items) || [];
-  return [
-    "You are HAL's reasoning lane for NewRidgeFinancial 2.0, a dental-practice financial program.",
-    "Produce a short, structured, prioritized plan based only on the local program state below.",
-    "Order work by readiness and risk: handle Needs Review and Blocked items carefully, and never advance payer-facing work without human review.",
-    "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
-    "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
-    "Program pages and current status:",
-    registryAsText(),
-    "Known operator priorities:",
-    priorities.map((item, index) => `${index + 1}. ${item}`).join("\n"),
-    "Respond with a brief numbered plan. Keep it under 8 steps.",
-  ].join("\n");
-}
-
-// Read-only grounding for the escalation lane: careful second-opinion review.
-function buildEscalationPrompt() {
-  const firewall = halData.firewall || FALLBACK_HAL.firewall;
-  return [
-    "You are HAL's escalation lane for NewRidgeFinancial 2.0, a dental-practice financial program.",
-    "Give a careful second-opinion review for a complex or high-risk question.",
-    "Be conservative: call out risks, assumptions, and exactly what a human must verify before acting.",
-    "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
-    "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
-    "Program pages and current status:",
-    registryAsText(),
-    "Respond with: a short risk assessment, then a numbered list of what a human should verify.",
-  ].join("\n");
-}
-
-// Strip optional <think> reasoning blocks some local models emit.
-function cleanModelText(text) {
-  return String(text)
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/<\/?think>/gi, "")
-    .trim();
+function modelHealthSummary() {
+  const lanes = HalCore.modelLanes(halModels);
+  return lanes
+    .map((lane) => {
+      const ready = HalCore.laneReady(halModels, lane.id);
+      return `${lane.name}: ${ready ? "ready" : "offline"} (${lane.model})`;
+    })
+    .join(" · ");
 }
 
 async function runModel(runtime, systemPrompt, userText, draftLabel) {
@@ -253,7 +154,7 @@ async function runModel(runtime, systemPrompt, userText, draftLabel) {
     if (!response.ok) throw new Error("model http " + response.status);
     const data = await response.json();
     const raw = data && data.message && data.message.content ? data.message.content : "";
-    const text = cleanModelText(raw);
+    const text = HalCore.cleanModelText(raw);
     if (!text) throw new Error("empty model response");
     return text + "\n\n(" + draftLabel + " · read-only · verify before acting)";
   } finally {
@@ -262,161 +163,19 @@ async function runModel(runtime, systemPrompt, userText, draftLabel) {
 }
 
 function callLocalModel(userText) {
-  return runModel(localModelConfig(), buildSystemPrompt(), userText, "Local 14B draft");
+  return runModel(localModelConfig(), HalCore.buildSystemPrompt(halData), userText, "Local 14B draft");
 }
 
 function callReasoningModel(userText) {
-  return runModel(reasoningModelConfig(), buildReasoningPrompt(), userText, "Local reasoning draft");
+  return runModel(reasoningModelConfig(), HalCore.buildReasoningPrompt(halData), userText, "Local reasoning draft");
 }
 
 function callEscalationModel(userText) {
-  return runModel(escalationModelConfig(), buildEscalationPrompt(), userText, "Local escalation draft");
-}
-
-function findPage(query) {
-  let best = null;
-  let bestLen = 0;
-  for (const [id, synonyms] of Object.entries(PAGE_SYNONYMS)) {
-    for (const synonym of synonyms) {
-      if (query.includes(synonym) && synonym.length > bestLen) {
-        best = id;
-        bestLen = synonym.length;
-      }
-    }
-  }
-  return best;
+  return runModel(escalationModelConfig(), HalCore.buildEscalationPrompt(halData), userText, "Local escalation draft");
 }
 
 function routeHalCommand(rawQuery) {
-  const query = rawQuery.toLowerCase().trim();
-  const firewall = halData.firewall || FALLBACK_HAL.firewall;
-
-  if (BLOCKED_RE.test(query)) {
-    return {
-      intent: "blocked: firewall",
-      text:
-        "That is an external action, so it stops at the firewall and needs human review. " +
-        firewall.summary +
-        " I can open the right page and prepare review notes, but a person has to take the external step.",
-      actions: [],
-    };
-  }
-
-  if (/\b(help|what can you do|capabilit|how do you work|what do you do)\b/.test(query)) {
-    return {
-      intent: "help",
-      text:
-        "I am the local program manager. I can open any program page, explain what each page is for, show today's priorities, report read-only source health, and explain the external-action firewall. I do not submit, send, or change anything.",
-      actions: [],
-    };
-  }
-
-  const wantsExplain = /\b(explain|what is|what's|whats|what does|tell me about|describe|purpose of)\b/.test(query);
-
-  if (/second opinion|escalat|double[\s-]?check|high[\s-]?risk|complex case|deep review|review carefully|sanity check|scrutin/.test(query)) {
-    return { intent: "escalation", text: "", useEscalation: true, prompt: rawQuery, actions: [] };
-  }
-
-  if (/prioriti[sz]e|make a plan|draft a plan|\bplan (my|for|the)\b|analy[sz]e|reason through|think through|recommend|\bstrategy\b|focus first|where (do|should) (i|we) start/.test(query)) {
-    return { intent: "reasoning", text: "", useReasoning: true, prompt: rawQuery, actions: [] };
-  }
-
-  if (/\bpriorit|needs attention|attention today|what needs|to-?do|\btoday\b/.test(query)) {
-    const items = (halData.priorities && halData.priorities.items) || [];
-    const list = items.map((item, index) => `${index + 1}. ${item}`).join("\n");
-    return { intent: "priorities", text: `Today's operator priorities:\n${list}`, actions: [] };
-  }
-
-  if (/\b(firewall|external action|boundary|guardrail|safety|are you allowed)\b/.test(query)) {
-    return {
-      intent: "firewall",
-      text: `${firewall.summary}\nBlocked: ${firewall.blocked.join(", ")}.\nAllowed: ${firewall.allowed.join(", ")}.`,
-      actions: [],
-    };
-  }
-
-  if (/\b(source|softdent|quickbooks|freshness|sync|intake)\b/.test(query) && !wantsExplain) {
-    const items = (halData.sources && halData.sources.items) || [];
-    const list = items.map((item) => `- ${item.label} - ${item.status}: ${item.detail}`).join("\n");
-    return { intent: "sources", text: `Read-only source intake status:\n${list}`, actions: [] };
-  }
-
-  if (/\bmodels?\b|\b14b\b|\b21b\b|\b30b\b|\bllm\b|\bai lane\b|which model|are you connected|connected to a model/.test(query)) {
-    const lanes = modelLanes();
-    const list = lanes
-      .map(
-        (lane) =>
-          `- ${lane.name} (${lane.model}) — ${lane.state}\n   Will allow: ${(lane.willAllow || []).join(", ")}\n   Still blocked: ${(lane.stillBlocked || []).join(", ")}`,
-      )
-      .join("\n");
-    return {
-      intent: "model lanes",
-      text: `Model lanes are local-only and none are connected yet:\n${list}`,
-      actions: [],
-    };
-  }
-
-  if (/\bready\b/.test(query)) {
-    const ready = registryList().filter((entry) => /ready/i.test(entry.state));
-    const list = ready.map((entry) => `- ${entry.name}: ${entry.nextAction}`).join("\n");
-    return {
-      intent: "registry: ready",
-      text: ready.length ? `Ready to work now:\n${list}` : "Nothing is marked ready right now.",
-      actions: [],
-    };
-  }
-
-  if (/\bblocked\b|needs review|waiting on/.test(query)) {
-    const waiting = registryList().filter((entry) => /blocked|needs review/i.test(entry.state));
-    const list = waiting.map((entry) => `- ${entry.name} (${entry.state}): ${entry.nextAction}`).join("\n");
-    return {
-      intent: "registry: blocked",
-      text: waiting.length ? `Waiting or needs review:\n${list}` : "Nothing is blocked right now.",
-      actions: [],
-    };
-  }
-
-  if (/read[\s-]?only|readonly/.test(query)) {
-    const readOnly = registryList().filter((entry) => /read[\s-]?only|indexed|reference|review-only|local review|manager/i.test(entry.safety));
-    const list = readOnly.map((entry) => `- ${entry.name}: ${entry.safety}`).join("\n");
-    return { intent: "registry: read-only", text: `Read-only and review-only areas:\n${list}`, actions: [] };
-  }
-
-  if (/next (step|action)|do next|what should/.test(query)) {
-    const list = registryList().map((entry) => `- ${entry.name}: ${entry.nextAction}`).join("\n");
-    return { intent: "registry: next actions", text: `Suggested next staff actions:\n${list}`, actions: [] };
-  }
-
-  const pageId = findPage(query);
-  if (pageId) {
-    const info = pageInfoMap()[pageId];
-    const reg = registryById(pageId);
-    const status = reg ? `\nStatus: ${reg.state}. Safety: ${reg.safety}. Next: ${reg.nextAction}` : "";
-    if (pageId === "hal" && !wantsExplain) {
-      const halStatus = halData.status || FALLBACK_HAL.status;
-      return { intent: "status", text: halStatus.summary + status, actions: [] };
-    }
-    if (wantsExplain) {
-      return {
-        intent: "explain: " + pageId,
-        text: `${info.label}: ${info.detail}${status}`,
-        actions: pageId === "hal" ? [] : [{ label: "Open " + info.label, page: pageId }],
-      };
-    }
-    return {
-      intent: "navigate: " + pageId,
-      text: `I can open ${info.label}. ${info.detail}${status}`,
-      actions: [{ label: "Open " + info.label, page: pageId }],
-    };
-  }
-
-  return {
-    intent: "model: query",
-    text: "",
-    useModel: true,
-    prompt: rawQuery,
-    actions: [],
-  };
+  return HalCore.routeHalCommand(halData, halModels, PAGES, rawQuery);
 }
 
 function logAudit(query, intent) {
@@ -424,8 +183,15 @@ function logAudit(query, intent) {
   try {
     sessionStorage.setItem("halAudit", JSON.stringify(halAudit));
   } catch (error) {
-    /* sessionStorage may be unavailable; audit stays in memory. */
+    /* sessionStorage may be unavailable. */
   }
+}
+
+function normalizeActions(actions) {
+  return (actions || []).map((action) => {
+    if (action.page && !action.type) return { type: "openPage", label: action.label, page: action.page };
+    return action;
+  });
 }
 
 function renderChatLog() {
@@ -433,16 +199,17 @@ function renderChatLog() {
   if (!log) return;
   log.innerHTML = halChatHistory
     .map((message) => {
-      const actions = (message.actions || [])
-        .map(
-          (action) =>
-            `<button class="hal-msg__action" type="button" data-open-page="${escapeHtml(action.page)}">${escapeHtml(
-              action.label,
-            )}</button>`,
-        )
+      const lane = message.lane ? `<span class="hal-msg__lane">${escapeHtml(message.lane)}</span>` : "";
+      const actions = normalizeActions(message.actions)
+        .map((action) => {
+          if (action.type === "openPage") {
+            return `<button class="hal-msg__action" type="button" data-open-page="${escapeHtml(action.page)}">${escapeHtml(action.label)}</button>`;
+          }
+          return "";
+        })
         .join("");
       return `<div class="hal-msg hal-msg--${message.role === "user" ? "user" : "hal"}">
-        <span class="hal-msg__who">${message.role === "user" ? "You" : "HAL"}</span>
+        <span class="hal-msg__who">${message.role === "user" ? "You" : "HAL"}${lane}</span>
         <div class="hal-msg__text">${escapeHtml(message.text)}</div>
         ${actions ? `<div class="hal-msg__actions">${actions}</div>` : ""}
       </div>`;
@@ -473,9 +240,7 @@ function renderAuditLog() {
     .reverse()
     .map(
       (entry) =>
-        `<div class="hal-audit__row"><span>${escapeHtml(entry.time)}</span><span>${escapeHtml(
-          entry.intent,
-        )}</span><span>${escapeHtml(entry.query)}</span></div>`,
+        `<div class="hal-audit__row"><span>${escapeHtml(entry.time)}</span><span>${escapeHtml(entry.intent)}</span><span>${escapeHtml(entry.query)}</span></div>`,
     )
     .join("");
 }
@@ -484,80 +249,99 @@ async function handleHalSubmit(query) {
   const trimmed = String(query).trim();
   if (!trimmed) return;
   halChatHistory.push({ role: "user", text: trimmed, actions: [] });
+  saveChatHistory();
 
   const result = routeHalCommand(trimmed);
 
   if (result.useEscalation) {
     if (!escalationModelReady()) {
-      halChatHistory.push({ role: "hal", text: offlineModelMessage("escalate30b"), actions: [] });
+      halChatHistory.push({ role: "hal", text: offlineModelMessage("escalate30b"), lane: "escalate30b · offline", actions: [] });
       logAudit(trimmed, "escalation: offline");
+      saveChatHistory();
       renderChatLog();
       renderAuditLog();
       return;
     }
     const em = escalationModelConfig();
-    const placeholder = { role: "hal", text: "Escalating locally to " + (em.model || "escalation lane") + "…", actions: [] };
+    const placeholder = { role: "hal", text: "Escalating locally to " + (em.model || "escalation lane") + "…", lane: "escalate30b", actions: [] };
     halChatHistory.push(placeholder);
     logAudit(trimmed, "escalation: review");
+    saveChatHistory();
     renderChatLog();
     renderAuditLog();
     try {
       placeholder.text = await callEscalationModel(trimmed);
     } catch (error) {
       placeholder.text = offlineModelMessage("escalate30b");
+      placeholder.lane = "escalate30b · offline";
     }
+    saveChatHistory();
     renderChatLog();
     return;
   }
 
   if (result.useReasoning) {
     if (!reasoningModelReady()) {
-      halChatHistory.push({ role: "hal", text: offlineModelMessage("reason21b"), actions: [] });
+      halChatHistory.push({ role: "hal", text: offlineModelMessage("reason21b"), lane: "reason21b · offline", actions: [] });
       logAudit(trimmed, "reasoning: offline");
+      saveChatHistory();
       renderChatLog();
       renderAuditLog();
       return;
     }
     const rm = reasoningModelConfig();
-    const placeholder = { role: "hal", text: "Reasoning locally with " + (rm.model || "reasoning lane") + "…", actions: [] };
+    const placeholder = { role: "hal", text: "Reasoning locally with " + (rm.model || "reasoning lane") + "…", lane: "reason21b", actions: [] };
     halChatHistory.push(placeholder);
     logAudit(trimmed, "reasoning: plan");
+    saveChatHistory();
     renderChatLog();
     renderAuditLog();
     try {
       placeholder.text = await callReasoningModel(trimmed);
     } catch (error) {
       placeholder.text = offlineModelMessage("reason21b");
+      placeholder.lane = "reason21b · offline";
     }
+    saveChatHistory();
     renderChatLog();
     return;
   }
 
   if (result.useModel) {
     if (!localModelReady()) {
-      halChatHistory.push({ role: "hal", text: offlineModelMessage("chat14b"), actions: [] });
+      halChatHistory.push({ role: "hal", text: offlineModelMessage("chat14b"), lane: "chat14b · offline", actions: [] });
       logAudit(trimmed, "model: offline");
+      saveChatHistory();
       renderChatLog();
       renderAuditLog();
       return;
     }
     const lm = localModelConfig();
-    const placeholder = { role: "hal", text: "Thinking locally with " + (lm.model || "14B") + "…", actions: [] };
+    const placeholder = { role: "hal", text: "Thinking locally with " + (lm.model || "14B") + "…", lane: "chat14b", actions: [] };
     halChatHistory.push(placeholder);
     logAudit(trimmed, "model: query");
+    saveChatHistory();
     renderChatLog();
     renderAuditLog();
     try {
       placeholder.text = await callLocalModel(trimmed);
     } catch (error) {
       placeholder.text = offlineModelMessage("chat14b");
+      placeholder.lane = "chat14b · offline";
     }
+    saveChatHistory();
     renderChatLog();
     return;
   }
 
-  halChatHistory.push({ role: "hal", text: result.text, actions: result.actions || [] });
+  halChatHistory.push({
+    role: "hal",
+    text: result.text,
+    lane: result.lane || "local",
+    actions: normalizeActions(result.actions),
+  });
   logAudit(trimmed, result.intent);
+  saveChatHistory();
   renderChatLog();
   renderAuditLog();
 }
@@ -571,15 +355,184 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function cards(items) {
+function bindOpenPageButtons(root) {
+  root.querySelectorAll("[data-open-page]").forEach((button) => {
+    button.addEventListener("click", () => {
+      logAudit("Open " + button.dataset.openPage, "navigate: drawer");
+      closeDrawer();
+      select(button.dataset.openPage);
+    });
+  });
+}
+
+function bindHalCommands(root) {
+  root.querySelectorAll("[data-hal-command]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const cmd = button.dataset.halCommand;
+      if (currentDrawerKey === "askHal") {
+        handleHalSubmit(cmd);
+      } else {
+        openDrawer("askHal");
+        setTimeout(() => handleHalSubmit(cmd), 50);
+      }
+    });
+  });
+}
+
+function sourceHealthCards(items) {
   if (!items || items.length === 0) return "";
   return `<div class="drawer-grid">${items
-    .map(
-      (item) => `<div class="drawer-card"><strong>${escapeHtml(item.label || item.name)}</strong>${escapeHtml(
-        item.detail || item.role || item.state || "",
-      )}</div>`,
-    )
+    .map((item) => {
+      const warn = item.warning ? `<p class="drawer-warn">${escapeHtml(item.warning)}</p>` : "";
+      const checklist = (item.checklist || [])
+        .map((c) => `<li>${escapeHtml(c)}</li>`)
+        .join("");
+      const openBtn = item.target
+        ? `<button class="drawer-action drawer-action--sm" type="button" data-open-page="${escapeHtml(item.target)}">Open ${escapeHtml(item.label)}</button>`
+        : "";
+      return `<div class="drawer-card drawer-card--source">
+        <strong>${escapeHtml(item.label)}</strong>
+        <span class="status-chip">${escapeHtml(item.status)}</span>
+        <p>${escapeHtml(item.detail)}</p>
+        ${item.freshness ? `<p class="drawer-meta">Freshness: ${escapeHtml(item.freshness)}</p>` : ""}
+        ${item.syncState ? `<p class="drawer-meta">Sync: ${escapeHtml(item.syncState)}</p>` : ""}
+        ${warn}
+        ${checklist ? `<ul class="drawer-checklist">${checklist}</ul>` : ""}
+        ${openBtn}
+      </div>`;
+    })
     .join("")}</div>`;
+}
+
+function reasoningLanePanel() {
+  const lanes = HalCore.deriveReasoningLanes(halData);
+  const actions = (halData.reasoning && halData.reasoning.actions) || [];
+  const laneHtml = lanes
+    .map((lane) => {
+      const entries = (lane.entries || [])
+        .map(
+          (entry) =>
+            `<div class="drawer-card drawer-card--compact">
+              <strong>${escapeHtml(entry.name)}</strong>
+              <span class="status-chip${/blocked/i.test(entry.state) ? " status-chip--blocked" : ""}">${escapeHtml(entry.state)}</span>
+              <p>${escapeHtml(entry.nextAction)}</p>
+              <button class="drawer-action drawer-action--sm" type="button" data-open-page="${escapeHtml(entry.id)}">Open</button>
+            </div>`,
+        )
+        .join("");
+      return `<div class="drawer-section">
+        <h3 class="drawer-section__title">${escapeHtml(lane.label)} (${lane.count})</h3>
+        <p class="drawer-meta">${escapeHtml(lane.detail)}</p>
+        <div class="drawer-grid">${entries || '<p class="drawer-meta">None</p>'}</div>
+      </div>`;
+    })
+    .join("");
+  const actionHtml = actions
+    .map(
+      (action) =>
+        `<button class="drawer-action" type="button" data-hal-command="${escapeHtml(action.command)}">${escapeHtml(action.label)}</button>`,
+    )
+    .join("");
+  return `${laneHtml}<div class="drawer-section"><h3 class="drawer-section__title">Actions</h3><div class="drawer-grid">${actionHtml}</div></div>`;
+}
+
+function workSurfacePanel(items) {
+  if (!items || items.length === 0) return "";
+  return `<div class="drawer-grid">${items
+    .map((item) => {
+      const reg = registryById(item.target);
+      const related = reg && reg.related ? reg.related : [];
+      const relatedBtns = related
+        .map((id) => {
+          const r = registryById(id);
+          return r
+            ? `<button class="status-chip hal-suggest__chip" type="button" data-open-page="${escapeHtml(id)}">${escapeHtml(r.name)}</button>`
+            : "";
+        })
+        .join("");
+      const blocked = reg && reg.blocked ? reg.blocked.map((b) => `<span class="status-chip status-chip--blocked">${escapeHtml(b)}</span>`).join("") : "";
+      return `<div class="drawer-card drawer-card--surface">
+        <strong>${escapeHtml(item.label)}</strong>
+        <p>${escapeHtml(item.detail)}</p>
+        ${reg ? `<p class="drawer-meta">Safety: ${escapeHtml(reg.safety)} · ${escapeHtml(reg.state)}</p>` : ""}
+        ${reg ? `<p class="drawer-meta">Next: ${escapeHtml(reg.nextAction)}</p>` : ""}
+        ${blocked ? `<div>${blocked}</div>` : ""}
+        <div class="drawer-card__actions">
+          <button class="drawer-action drawer-action--sm" type="button" data-open-page="${escapeHtml(item.target)}">Open page</button>
+          <button class="drawer-action drawer-action--sm" type="button" data-hal-command="Explain ${escapeHtml(item.label)}">Explain</button>
+        </div>
+        ${relatedBtns ? `<div class="hal-suggest">${relatedBtns}</div>` : ""}
+      </div>`;
+    })
+    .join("")}</div>`;
+}
+
+function firewallPanel(data) {
+  const examples = (data.examples || [])
+    .map(
+      (ex) =>
+        `<button class="status-chip hal-suggest__chip" type="button" data-firewall-test="${escapeHtml(ex.text)}">${escapeHtml(ex.text)}</button>`,
+    )
+    .join("");
+  return `
+    <p>${escapeHtml(data.summary)}</p>
+    <div><strong>Blocked</strong>${chips(data.blocked, true)}</div>
+    <div><strong>Allowed</strong>${chips(data.allowed)}</div>
+    <div class="drawer-section">
+      <h3 class="drawer-section__title">Firewall simulator</h3>
+      <p class="drawer-meta">Type a proposed action. HAL checks the firewall before any model call.</p>
+      <form class="hal-chat__form" id="firewallSimForm" autocomplete="off">
+        <input id="firewallSimInput" class="hal-chat__input" type="text" placeholder="e.g. Submit the denied claim" aria-label="Test firewall" />
+        <button class="hal-chat__send" type="submit">Test</button>
+      </form>
+      <div class="drawer-card" id="firewallSimResult">Enter an action above to test.</div>
+      <div class="hal-suggest">${examples}</div>
+    </div>`;
+}
+
+function prioritiesPanel() {
+  const groups = HalCore.derivePriorityGroups(halData);
+  const staticItems = (halData.priorities && halData.priorities.items) || [];
+  const staticHtml = staticItems.length
+    ? `<div class="drawer-section"><h3 class="drawer-section__title">Operator notes</h3>${numbered(staticItems)}</div>`
+    : "";
+  const groupHtml = groups
+    .map((group) => {
+      const cards = group.items
+        .map(
+          (item) =>
+            `<div class="drawer-card drawer-card--compact">
+              <strong>${escapeHtml(item.name)}</strong>
+              <span class="status-chip${/blocked/i.test(item.state) ? " status-chip--blocked" : ""}">${escapeHtml(item.state)}</span>
+              <p>${escapeHtml(item.nextAction)}</p>
+              <button class="drawer-action drawer-action--sm" type="button" data-open-page="${escapeHtml(item.id)}">Open</button>
+              <button class="drawer-action drawer-action--sm" type="button" data-hal-command="Draft review note for ${escapeHtml(item.name)}">Draft note</button>
+            </div>`,
+        )
+        .join("");
+      return `<div class="drawer-section"><h3 class="drawer-section__title">${escapeHtml(group.label)}</h3><div class="drawer-grid">${cards || '<p class="drawer-meta">None</p>'}</div></div>`;
+    })
+    .join("");
+  return staticHtml + groupHtml;
+}
+
+function statusPanel(data) {
+  const laneCards = HalCore.deriveModelLaneCards(halModels);
+  return `
+    <p>${escapeHtml(data.summary)}</p>
+    ${chips(data.posture)}
+    <p class="drawer-meta">Model health: ${escapeHtml(modelHealthSummary())}</p>
+    <div class="drawer-grid">${laneCards
+      .map(
+        (lane) =>
+          `<div class="drawer-card">
+            <strong>${escapeHtml(lane.name)}</strong>
+            <span class="status-chip${lane.ready ? "" : " status-chip--blocked"}">${escapeHtml(lane.state)}${lane.ready ? " · ready" : " · offline"}</span>
+            <p>${escapeHtml(lane.role)}</p>
+            <p class="drawer-meta">Model: ${escapeHtml(lane.model)}</p>
+          </div>`,
+      )
+      .join("")}</div>`;
 }
 
 function chips(items, blocked = false) {
@@ -591,19 +544,7 @@ function chips(items, blocked = false) {
 
 function numbered(items) {
   if (!items || items.length === 0) return "";
-  return `<div class="drawer-grid">${items.map((item) => `<div class="drawer-card">${escapeHtml(item)}</div>`).join("")}</div>`;
-}
-
-function surfaceActions(items) {
-  if (!items || items.length === 0) return "";
-  return `<div class="drawer-grid">${items
-    .map(
-      (item) =>
-        `<button class="drawer-action" type="button" data-target-page="${escapeHtml(item.target)}"><strong>${escapeHtml(
-          item.label,
-        )}</strong>${escapeHtml(item.detail)}</button>`,
-    )
-    .join("")}</div>`;
+  return `<div class="drawer-grid">${items.map((item, i) => `<div class="drawer-card">${i + 1}. ${escapeHtml(item)}</div>`).join("")}</div>`;
 }
 
 function renderPanel(key) {
@@ -612,10 +553,12 @@ function renderPanel(key) {
 
   if (key === "askHal") {
     if (halChatHistory.length === 0) {
-      halChatHistory.push({ role: "hal", text: data.response, actions: [] });
+      halChatHistory.push({ role: "hal", text: data.response, lane: "local", actions: [] });
+      saveChatHistory();
     }
     drawerContent.innerHTML = `
       <p>${escapeHtml(data.summary)}</p>
+      <p class="drawer-meta">Model health: ${escapeHtml(modelHealthSummary())}</p>
       <div class="hal-chat">
         <div class="hal-chat__log" id="halChatLog"></div>
         <div class="hal-suggest" id="halSuggest"></div>
@@ -630,7 +573,10 @@ function renderPanel(key) {
         <summary>Session log (<span id="halAuditCount">${halAudit.length}</span>)</summary>
         <div class="hal-audit__log" id="halAuditLog"></div>
       </details>
-    `;
+      <details class="hal-audit">
+        <summary>Command examples</summary>
+        <div class="hal-suggest" id="halExamples"></div>
+      </details>`;
     const suggest = document.getElementById("halSuggest");
     (data.suggestions || []).forEach((text) => {
       const chip = document.createElement("button");
@@ -640,10 +586,18 @@ function renderPanel(key) {
       chip.addEventListener("click", () => handleHalSubmit(text));
       suggest.appendChild(chip);
     });
-    const form = document.getElementById("halChatForm");
-    const input = document.getElementById("halChatInput");
-    form.addEventListener("submit", (event) => {
+    const examples = document.getElementById("halExamples");
+    (data.commandExamples || []).forEach((text) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "status-chip hal-suggest__chip";
+      chip.textContent = text;
+      chip.addEventListener("click", () => handleHalSubmit(text));
+      examples.appendChild(chip);
+    });
+    document.getElementById("halChatForm").addEventListener("submit", (event) => {
       event.preventDefault();
+      const input = document.getElementById("halChatInput");
       const value = input.value;
       input.value = "";
       handleHalSubmit(value);
@@ -654,54 +608,62 @@ function renderPanel(key) {
   }
 
   if (key === "status") {
-    drawerContent.innerHTML = `
-      <p>${escapeHtml(data.summary)}</p>
-      ${chips(data.posture)}
-      ${cards(data.modelLanes)}
-    `;
+    drawerContent.innerHTML = statusPanel(data);
+    return;
+  }
+
+  if (key === "sources") {
+    drawerContent.innerHTML = `<p>${escapeHtml(data.summary)}</p>${sourceHealthCards(data.items)}`;
+    bindOpenPageButtons(drawerContent);
     return;
   }
 
   if (key === "reasoning") {
-    drawerContent.innerHTML = `
-      <p>${escapeHtml(data.summary)}</p>
-      ${cards(data.lanes)}
-    `;
+    drawerContent.innerHTML = `<p>${escapeHtml(data.summary)}</p>${reasoningLanePanel()}`;
+    bindOpenPageButtons(drawerContent);
+    bindHalCommands(drawerContent);
     return;
   }
 
   if (key === "workSurfaces") {
-    drawerContent.innerHTML = `
-      <p>${escapeHtml(data.summary)}</p>
-      ${surfaceActions(data.items)}
-    `;
-    drawerContent.querySelectorAll("[data-target-page]").forEach((button) => {
+    drawerContent.innerHTML = `<p>${escapeHtml(data.summary)}</p>${workSurfacePanel(data.items)}`;
+    bindOpenPageButtons(drawerContent);
+    bindHalCommands(drawerContent);
+    return;
+  }
+
+  if (key === "firewall") {
+    drawerContent.innerHTML = firewallPanel(data);
+    const form = document.getElementById("firewallSimForm");
+    const input = document.getElementById("firewallSimInput");
+    const result = document.getElementById("firewallSimResult");
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const verdict = HalCore.firewallVerdict(input.value, data);
+      result.innerHTML = `<strong>${verdict.allowed ? "Allowed" : "Blocked"}</strong><p>${escapeHtml(verdict.text)}</p>`;
+      logAudit(input.value, verdict.intent);
+      renderAuditLog();
+    });
+    drawerContent.querySelectorAll("[data-firewall-test]").forEach((button) => {
       button.addEventListener("click", () => {
-        closeDrawer();
-        select(button.dataset.targetPage);
+        input.value = button.dataset.firewallTest;
+        const verdict = HalCore.firewallVerdict(input.value, data);
+        result.innerHTML = `<strong>${verdict.allowed ? "Allowed" : "Blocked"}</strong><p>${escapeHtml(verdict.text)}</p>`;
+        logAudit(input.value, verdict.intent);
+        renderAuditLog();
       });
     });
     return;
   }
 
-  if (key === "firewall") {
-    drawerContent.innerHTML = `
-      <p>${escapeHtml(data.summary)}</p>
-      <div><strong>Blocked</strong>${chips(data.blocked, true)}</div>
-      <div><strong>Allowed</strong>${chips(data.allowed)}</div>
-    `;
-    return;
-  }
-
   if (key === "priorities") {
-    drawerContent.innerHTML = numbered(data.items);
+    drawerContent.innerHTML = prioritiesPanel();
+    bindOpenPageButtons(drawerContent);
+    bindHalCommands(drawerContent);
     return;
   }
 
-  drawerContent.innerHTML = `
-    <p>${escapeHtml(data.summary)}</p>
-    ${cards(data.items)}
-  `;
+  drawerContent.innerHTML = `<p>${escapeHtml(data.summary || "")}</p>`;
 }
 
 function openDrawer(key) {
@@ -792,6 +754,7 @@ fetch("data/hal-models.json", { cache: "no-store" })
   })
   .then((data) => {
     halModels = data;
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
   })
   .catch(() => {
     halModels = FALLBACK_MODELS;

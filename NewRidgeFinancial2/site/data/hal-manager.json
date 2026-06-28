@@ -2,28 +2,11 @@
   "status": {
     "title": "HAL Command Center",
     "summary": "Local program manager for NewRidgeFinancial 2.0. HAL can guide staff through the pages, surface priorities, explain local status, and preserve the external-action firewall.",
-    "posture": ["Local-only", "Read-only", "Human review required", "Not submitted"],
-    "modelLanes": [
-      {
-        "name": "14B chat lane",
-        "role": "Staff-facing conversation and plain-language answers",
-        "state": "Connected (local)"
-      },
-      {
-        "name": "21B reasoning lane",
-        "role": "Program review, prioritization, and structured reasoning",
-        "state": "Planned"
-      },
-      {
-        "name": "30B escalation lane",
-        "role": "Second-opinion review for complex or high-risk questions",
-        "state": "Planned"
-      }
-    ]
+    "posture": ["Local-only", "Read-only", "Human review required", "Not submitted"]
   },
   "askHal": {
     "title": "Ask HAL",
-    "summary": "HAL answers from the local program registry first. Unmatched questions use the local 14B chat lane (queen3:14b) on this machine. HAL stays read-only and the external-action firewall runs before any model call.",
+    "summary": "HAL answers from the local program registry first. Unmatched questions use the local 14B chat lane. Planning requests use the reasoning lane; second-opinion requests use the escalation lane. The firewall runs before every model.",
     "suggestions": [
       "Show what needs attention today",
       "What is ready to work on",
@@ -35,58 +18,72 @@
       "Explain the external action firewall",
       "Are you connected to a model?"
     ],
-    "response": "I can navigate the program, explain each page, show priorities, and keep work inside the read-only safety boundary. For other questions I use the local 14B chat lane on this machine, and external actions still require human review."
+    "response": "I can navigate the program, explain each page, show priorities, simulate the firewall, and keep work inside the read-only safety boundary. For other questions I use local model lanes on this machine; external actions still require human review.",
+    "commandExamples": [
+      "Open claims workbench",
+      "Explain QuickBooks",
+      "What is ready to work on",
+      "Make a plan for today"
+    ]
   },
   "sources": {
     "title": "Read-only source intake",
-    "summary": "Source pages are treated as read-only views. HAL can explain status and route staff to the right page, but it cannot write back.",
+    "summary": "Source pages are read-only views. HAL reports freshness and sync posture; it cannot write back.",
     "items": [
       {
         "label": "SoftDent",
+        "target": "softdent",
         "status": "Read-only",
-        "detail": "Production, collections, A/R, and export health."
+        "detail": "Production, collections, A/R, and export health.",
+        "freshness": "Last export: today 06:12 AM",
+        "syncState": "Current",
+        "warning": null,
+        "checklist": ["Confirm export timestamp", "Verify production totals match period", "Check A/R export completeness"]
       },
       {
         "label": "QuickBooks",
+        "target": "quickbooks",
         "status": "Read-only",
-        "detail": "P&L, expenses, EBITDA candidates, and sync status."
+        "detail": "P&L, expenses, EBITDA candidates, and sync status.",
+        "freshness": "Last sync: pending",
+        "syncState": "Blocked — sync not complete",
+        "warning": "Do not rely on expense totals until sync completes.",
+        "checklist": ["Check sync schedule", "Confirm P&L period", "Verify no pending journal entries"]
       },
       {
         "label": "Documents",
+        "target": "documents",
         "status": "Local review",
-        "detail": "Accounting document queue, extraction, and review status."
+        "detail": "Accounting document queue, extraction, and review status.",
+        "freshness": "Queue updated today",
+        "syncState": "Local only",
+        "warning": "Posting remains in review until staff approval.",
+        "checklist": ["Review extraction accuracy", "Confirm period assignment", "Stage notes for staff"]
       },
       {
         "label": "Library",
+        "target": "library",
         "status": "Indexed reference",
-        "detail": "Policies, statements, claims, clinical files, and reports."
+        "detail": "Policies, statements, claims, clinical files, and reports.",
+        "freshness": "Index current",
+        "syncState": "Read-only",
+        "warning": null,
+        "checklist": ["Search for supporting document", "Verify document version", "Reference only — no upload"]
       }
     ]
   },
   "reasoning": {
     "title": "Local reasoning core",
-    "summary": "The reasoning core is staged but model-free. It organizes local program state into Ready, Needs review, and Blocked lanes.",
-    "lanes": [
-      {
-        "label": "Ready",
-        "count": 9,
-        "detail": "Pages and queues that can be reviewed immediately."
-      },
-      {
-        "label": "Needs review",
-        "count": 4,
-        "detail": "Items that require staff confirmation before any next step."
-      },
-      {
-        "label": "Blocked",
-        "count": 2,
-        "detail": "Items waiting on missing information or external systems."
-      }
+    "summary": "Work is organized from the live program registry into Ready, Needs review, and Blocked lanes. Use the buttons below to generate a local plan or request a second opinion.",
+    "actions": [
+      { "label": "Make a plan for today", "command": "Make a plan for today", "lane": "reason21b" },
+      { "label": "Explain blockers", "command": "What is blocked", "lane": "local" },
+      { "label": "Second opinion on blocked items", "command": "Second opinion on blocked QuickBooks and narratives", "lane": "escalate30b" }
     ]
   },
   "workSurfaces": {
     "title": "Staff work surfaces",
-    "summary": "HAL can open each program surface and explain what staff should use it for.",
+    "summary": "Open each program surface, review safety rules, and see the next staff action.",
     "items": [
       {
         "label": "Financial Dashboard",
@@ -122,12 +119,20 @@
   },
   "firewall": {
     "title": "External action firewall",
-    "summary": "HAL cannot perform external actions from this program. The safety boundary is enforced by design.",
+    "summary": "HAL cannot perform external actions from this program. The safety boundary is enforced before any model call.",
     "blocked": ["No email", "No fax", "No upload", "No payer contact", "No writeback", "No submission"],
-    "allowed": ["Open local program pages", "Explain local status", "Prepare review notes", "Flag missing information"]
+    "allowed": ["Open local program pages", "Explain local status", "Prepare review notes", "Flag missing information"],
+    "examples": [
+      { "text": "Open the claims workbench", "expected": "allowed" },
+      { "text": "Explain A/R aging", "expected": "allowed" },
+      { "text": "Submit the denied claim", "expected": "blocked" },
+      { "text": "Email the payer about this claim", "expected": "blocked" },
+      { "text": "Upload the narrative to the portal", "expected": "blocked" },
+      { "text": "Make a plan for today", "expected": "allowed" }
+    ]
   },
   "priorities": {
-    "title": "Today’s operator priorities",
+    "title": "Today's operator priorities",
     "items": [
       "Review claims in the Needs Review lane before any payer-facing work.",
       "Check SoftDent and QuickBooks read-only source freshness.",
@@ -226,5 +231,22 @@
       "blocked": ["No external actions"],
       "related": ["claims", "ar", "documents"]
     }
-  ]
+  ],
+  "validation": {
+    "suggestionRoutes": {
+      "Show what needs attention today": "priorities",
+      "What is ready to work on": "registry: ready",
+      "What is blocked": "registry: blocked",
+      "Make a plan for today": "reasoning",
+      "Second opinion on a complex case": "escalation",
+      "Open the claims workbench": "navigate: claims",
+      "Review read-only source health": "sources",
+      "Explain the external action firewall": "firewall",
+      "Are you connected to a model?": "model lanes"
+    },
+    "firewallExamples": [
+      { "text": "Submit the denied claim", "expected": "blocked" },
+      { "text": "Open claims workbench", "expected": "allowed" }
+    ]
+  }
 }
