@@ -316,6 +316,130 @@ function bindEvidencePacketControls(root) {
   });
 }
 
+let halReadinessDiagnostics = null;
+
+function loadReadinessDiagnostics() {
+  try {
+    const saved = sessionStorage.getItem("halDiagnostics");
+    if (saved) halReadinessDiagnostics = JSON.parse(saved);
+  } catch (error) {
+    halReadinessDiagnostics = null;
+  }
+}
+
+function saveReadinessDiagnostics() {
+  try {
+    if (halReadinessDiagnostics) sessionStorage.setItem("halDiagnostics", JSON.stringify(halReadinessDiagnostics));
+    else sessionStorage.removeItem("halDiagnostics");
+  } catch (error) {
+    /* sessionStorage may be unavailable. */
+  }
+}
+
+loadReadinessDiagnostics();
+
+function collectReadinessRuntime() {
+  const halPage = PAGES.find((page) => page.id === "hal");
+  let sessionStorageOk = true;
+  try {
+    sessionStorage.setItem("halDiagProbe", "1");
+    sessionStorage.removeItem("halDiagProbe");
+  } catch (error) {
+    sessionStorageOk = false;
+  }
+  return {
+    halImage: halPage ? halPage.image : "",
+    hotspotCount: HOTSPOTS.length,
+    sessionStorageOk,
+    activeSession: halWorkSession,
+  };
+}
+
+function runReadinessDiagnostics() {
+  halReadinessDiagnostics = HalCore.runReadinessChecks(halData, halModels, PAGES, collectReadinessRuntime());
+  saveReadinessDiagnostics();
+  logAudit("Run readiness check", "readiness: run");
+  return halReadinessDiagnostics;
+}
+
+function clearReadinessDiagnostics() {
+  halReadinessDiagnostics = null;
+  saveReadinessDiagnostics();
+  logAudit("Clear diagnostics", "readiness: clear");
+}
+
+function readinessStatusClass(status) {
+  if (status === "Pass") return "hal-ready--pass";
+  if (status === "Warning") return "hal-ready--warn";
+  return "hal-ready--fail";
+}
+
+function readinessPanelHtml() {
+  const cfg = halData.readiness || { title: "HAL readiness", summary: "" };
+  const cards = halReadinessDiagnostics
+    ? halReadinessDiagnostics.results
+        .map(
+          (item) =>
+            `<div class="drawer-card hal-ready-card ${readinessStatusClass(item.status)}">
+              <div class="hal-ready-card__head">
+                <strong>${escapeHtml(item.label)}</strong>
+                <span class="hal-ready-card__status">${escapeHtml(item.status)}</span>
+              </div>
+              <p>${escapeHtml(item.detail)}</p>
+              ${item.next ? `<p class="drawer-meta">Next: ${escapeHtml(item.next)}</p>` : ""}
+            </div>`,
+        )
+        .join("")
+    : `<p class="drawer-meta">No diagnostics run yet. Click Run Readiness Check or ask HAL to check itself.</p>`;
+  const overall = halReadinessDiagnostics
+    ? `<p class="drawer-meta">Overall: <strong>${escapeHtml(halReadinessDiagnostics.overall)}</strong> · ${escapeHtml(halReadinessDiagnostics.ranAt)}</p>`
+    : "";
+  return `<div class="drawer-section hal-readiness">
+    <h3 class="drawer-section__title">${escapeHtml(cfg.title || "HAL readiness")}</h3>
+    <p class="drawer-meta">${escapeHtml(cfg.summary || "")}</p>
+    ${overall}
+    <div class="drawer-grid">${cards}</div>
+    <div class="drawer-card__actions">
+      <button class="drawer-action drawer-action--sm" type="button" data-readiness-run>Run readiness check</button>
+      <button class="drawer-action drawer-action--sm" type="button" data-readiness-show${halReadinessDiagnostics ? "" : " disabled"}>Show diagnostics</button>
+      <button class="drawer-action drawer-action--sm" type="button" data-readiness-clear${halReadinessDiagnostics ? "" : " disabled"}>Clear diagnostics</button>
+    </div>
+  </div>`;
+}
+
+function bindReadinessControls(root) {
+  root.querySelectorAll("[data-readiness-run]").forEach((button) => {
+    button.addEventListener("click", () => {
+      runReadinessDiagnostics();
+      if (currentDrawerKey) renderPanel(currentDrawerKey);
+    });
+  });
+  root.querySelectorAll("[data-readiness-show]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!halReadinessDiagnostics) return;
+      const text = HalCore.formatReadinessSummary(halReadinessDiagnostics);
+      if (currentDrawerKey === "askHal") {
+        halChatHistory.push({ role: "hal", text, lane: "readiness", actions: [] });
+        saveChatHistory();
+        renderChatLog();
+      } else {
+        openDrawer("askHal");
+        setTimeout(() => {
+          halChatHistory.push({ role: "hal", text, lane: "readiness", actions: [] });
+          saveChatHistory();
+          renderChatLog();
+        }, 50);
+      }
+    });
+  });
+  root.querySelectorAll("[data-readiness-clear]").forEach((button) => {
+    button.addEventListener("click", () => {
+      clearReadinessDiagnostics();
+      if (currentDrawerKey) renderPanel(currentDrawerKey);
+    });
+  });
+}
+
 function registryList() {
   return HalCore.registryList(halData);
 }
@@ -593,6 +717,45 @@ async function handleHalSubmit(query) {
   if (result.usePacketClear) {
     clearEvidencePacket();
     halChatHistory.push({ role: "hal", text: result.text, lane: "packet", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
+    return;
+  }
+
+  if (result.useReadinessRun) {
+    const report = runReadinessDiagnostics();
+    halChatHistory.push({
+      role: "hal",
+      text: HalCore.formatReadinessSummary(report),
+      lane: "readiness",
+      actions: [],
+    });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
+    return;
+  }
+
+  if (result.useReadinessShow) {
+    const text = halReadinessDiagnostics
+      ? HalCore.formatReadinessSummary(halReadinessDiagnostics)
+      : "No diagnostics available yet. Say \"Run readiness check\" or use the Readiness panel.";
+    halChatHistory.push({ role: "hal", text, lane: "readiness", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
+
+  if (result.useReadinessClear) {
+    clearReadinessDiagnostics();
+    halChatHistory.push({ role: "hal", text: result.text, lane: "readiness", actions: [] });
     logAudit(trimmed, result.intent);
     saveChatHistory();
     renderChatLog();
@@ -880,7 +1043,8 @@ function statusPanel(data) {
             <p class="drawer-meta">Model: ${escapeHtml(lane.model)}</p>
           </div>`,
       )
-      .join("")}</div>`;
+      .join("")}</div>
+    ${readinessPanelHtml()}`;
 }
 
 function chips(items, blocked = false) {
@@ -909,6 +1073,7 @@ function renderPanel(key) {
       <p class="drawer-meta">Model health: ${escapeHtml(modelHealthSummary())}</p>
       ${workSessionPanelHtml()}
       ${evidencePacketPanelHtml()}
+      ${readinessPanelHtml()}
       <div class="hal-chat">
         <div class="hal-chat__log" id="halChatLog"></div>
         <div class="hal-suggest" id="halSuggest"></div>
@@ -956,12 +1121,14 @@ function renderPanel(key) {
     renderAuditLog();
     bindWorkSessionControls(drawerContent);
     bindEvidencePacketControls(drawerContent);
+    bindReadinessControls(drawerContent);
     bindOpenPageButtons(drawerContent);
     return;
   }
 
   if (key === "status") {
     drawerContent.innerHTML = statusPanel(data);
+    bindReadinessControls(drawerContent);
     return;
   }
 

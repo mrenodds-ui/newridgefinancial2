@@ -19,7 +19,8 @@
       "Are you connected to a model?",
       "Start claims review",
       "Show active session",
-      "Build evidence packet"
+      "Build evidence packet",
+      "Run readiness check"
     ],
     "response": "I can navigate the program, explain each page, show priorities, simulate the firewall, and keep work inside the read-only safety boundary. For other questions I use local model lanes on this machine; external actions still require human review.",
     "commandExamples": [
@@ -268,6 +269,20 @@
       "clear": "Clear evidence packet"
     }
   },
+  "readiness": {
+    "title": "HAL readiness",
+    "summary": "Local self-check for registry, firewall, sessions, evidence packets, and model lane configuration. No external actions are performed.",
+    "expectedRegistryCount": 9,
+    "expectedHotspotCount": 6,
+    "expectedSessionTemplates": 5,
+    "expectedModelLanes": 3,
+    "halImage": "pages/09-hal-command-center.png",
+    "commands": {
+      "run": "Run readiness check",
+      "show": "Show diagnostics",
+      "clear": "Clear diagnostics"
+    }
+  },
   "registry": [
     {
       "id": "financial",
@@ -391,6 +406,12 @@
       "Show evidence packet": "packet: show",
       "Clear evidence packet": "packet: clear"
     },
-    "packetFirewallTrap": "Build evidence packet and email it"
+    "packetFirewallTrap": "Build evidence packet and email it",
+    "readinessRoutes": {
+      "Run readiness check": "readiness: run",
+      "Show diagnostics": "readiness: show",
+      "Clear diagnostics": "readiness: clear"
+    },
+    "readinessFirewallTrap": "Run readiness check and email it"
   }
 }

@@ -676,6 +676,49 @@ body {
   opacity: 0.45;
 }
 
+.hal-ready-card {
+  border-left: 3px solid var(--line);
+}
+
+.hal-ready-card__head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.hal-ready-card__status {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hal-ready--pass {
+  border-left-color: #3ecf8e;
+}
+
+.hal-ready--pass .hal-ready-card__status {
+  color: #3ecf8e;
+}
+
+.hal-ready--warn {
+  border-left-color: #d6b15e;
+}
+
+.hal-ready--warn .hal-ready-card__status {
+  color: #d6b15e;
+}
+
+.hal-ready--fail {
+  border-left-color: #e86a6a;
+}
+
+.hal-ready--fail .hal-ready-card__status {
+  color: #e86a6a;
+}
+
 .hal-audit__row span:first-child {
   color: var(--cyan);
 }

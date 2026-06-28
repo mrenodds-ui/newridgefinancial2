@@ -438,6 +438,195 @@ const HalCore = (function () {
     return null;
   }
 
+  function readinessConfig(halData) {
+    return (halData && halData.readiness) || {
+      expectedRegistryCount: 9,
+      expectedHotspotCount: 6,
+      expectedSessionTemplates: 5,
+      expectedModelLanes: 3,
+      halImage: "pages/09-hal-command-center.png",
+    };
+  }
+
+  function readinessItem(id, label, status, detail, next) {
+    return { id, label, status, detail, next: next || null };
+  }
+
+  function formatReadinessSummary(report) {
+    if (!report || !report.results) return "No diagnostics available.";
+    const lines = [
+      "HAL readiness: " + report.overall,
+      "Checked: " + report.ranAt,
+      "",
+      ...report.results.map((r) => "- [" + r.status + "] " + r.label + ": " + r.detail + (r.next ? " Next: " + r.next : "")),
+      "",
+      "(Local diagnostic only · read-only · human review required)",
+    ];
+    return lines.join("\n");
+  }
+
+  function runReadinessChecks(halData, halModels, pages, runtime) {
+    const cfg = readinessConfig(halData);
+    const results = [];
+
+    const regCount = registryList(halData).length;
+    results.push(
+      readinessItem(
+        "registry",
+        "Program registry",
+        regCount === cfg.expectedRegistryCount ? "Pass" : "Fail",
+        regCount + " of " + cfg.expectedRegistryCount + " pages registered",
+        regCount === cfg.expectedRegistryCount ? null : "Check hal-manager.json registry entries.",
+      ),
+    );
+
+    const sessionErrors = validateSessionTemplates(halData);
+    const sessionCount = sessionTemplates(halData).length;
+    results.push(
+      readinessItem(
+        "sessions",
+        "Work session templates",
+        sessionErrors.length === 0 && sessionCount === cfg.expectedSessionTemplates ? "Pass" : "Fail",
+        sessionCount + " templates; " + sessionErrors.length + " validation issue(s)",
+        sessionErrors.length ? sessionErrors.join("; ") : null,
+      ),
+    );
+
+    const firewallTrap = routeHalCommand(halData, halModels, pages, "submit the claim");
+    results.push(
+      readinessItem(
+        "firewall",
+        "External-action firewall",
+        firewallTrap.intent === "blocked: firewall" ? "Pass" : "Fail",
+        firewallTrap.intent === "blocked: firewall" ? "Submit/email/upload blocked before models" : "Firewall did not block test verb",
+        firewallTrap.intent === "blocked: firewall" ? null : "Review BLOCKED_RE in hal-core.js.",
+      ),
+    );
+
+    let routeFails = 0;
+    const suggestions = (halData.validation && halData.validation.suggestionRoutes) || {};
+    for (const [suggestion, expected] of Object.entries(suggestions)) {
+      const routed = routeHalCommand(halData, halModels, pages, suggestion);
+      if (routed.intent !== expected && !String(routed.intent).startsWith(expected)) routeFails++;
+    }
+    results.push(
+      readinessItem(
+        "routes",
+        "Suggestion routing",
+        routeFails === 0 ? "Pass" : "Fail",
+        Object.keys(suggestions).length - routeFails + " of " + Object.keys(suggestions).length + " routes match fixtures",
+        routeFails ? "Update validation.suggestionRoutes or routeHalCommand." : null,
+      ),
+    );
+
+    const packetCfg = packetConfig(halData);
+    const packetFieldCount = (halData.evidencePackets && halData.evidencePackets.fields && halData.evidencePackets.fields.length) || 0;
+    results.push(
+      readinessItem(
+        "packets",
+        "Evidence packet config",
+        packetFieldCount >= 10 && packetCfg.disclaimer ? "Pass" : "Warning",
+        packetFieldCount + " packet fields configured",
+        packetFieldCount < 10 ? "Check evidencePackets.fields in hal-manager.json." : null,
+      ),
+    );
+
+    const lanes = modelLanes(halModels);
+    const mode = modelConfig(halModels).mode || "offline";
+    const lanesReady = lanes.filter((lane) => laneReady(halModels, lane.id)).length;
+    results.push(
+      readinessItem(
+        "models",
+        "Model lane configuration",
+        lanes.length === cfg.expectedModelLanes ? "Pass" : "Warning",
+        lanes.length + " lanes configured; mode=" + mode + "; " + lanesReady + " ready on this machine",
+        lanesReady === 0 && mode === "online" ? "Start Ollama locally or set mode offline in hal-models.json." : null,
+      ),
+    );
+
+    if (runtime && typeof runtime === "object") {
+      if (runtime.halImage) {
+        const ok = String(runtime.halImage).includes(cfg.halImage);
+        results.push(
+          readinessItem(
+            "hal-image",
+            "HAL page image",
+            ok ? "Pass" : "Fail",
+            runtime.halImage,
+            ok ? null : "Hard refresh (Ctrl+Shift+R) or restart on port 1966.",
+          ),
+        );
+      }
+      if (typeof runtime.hotspotCount === "number") {
+        const ok = runtime.hotspotCount === cfg.expectedHotspotCount;
+        results.push(
+          readinessItem(
+            "hotspots",
+            "HAL hotspot layer",
+            ok ? "Pass" : "Fail",
+            runtime.hotspotCount + " hotspots active (expected " + cfg.expectedHotspotCount + ")",
+            ok ? null : "Open #hal and hard refresh if hotspots are missing.",
+          ),
+        );
+      }
+      if (runtime.sessionStorageOk === true) {
+        results.push(readinessItem("storage", "Browser session storage", "Pass", "sessionStorage available", null));
+      } else if (runtime.sessionStorageOk === false) {
+        results.push(
+          readinessItem(
+            "storage",
+            "Browser session storage",
+            "Warning",
+            "sessionStorage unavailable",
+            "Use a normal browser window; private mode may block persistence.",
+          ),
+        );
+      }
+      if (runtime.activeSession) {
+        results.push(
+          readinessItem(
+            "active-session",
+            "Active work session",
+            "Pass",
+            "Session: " + runtime.activeSession.label + " (" + sessionProgress(runtime.activeSession) + "% complete)",
+            null,
+          ),
+        );
+      } else {
+        results.push(
+          readinessItem(
+            "active-session",
+            "Active work session",
+            "Warning",
+            "No active work session",
+            "Start a session before building an evidence packet.",
+          ),
+        );
+      }
+    }
+
+    const overall = results.some((r) => r.status === "Fail")
+      ? "Fail"
+      : results.some((r) => r.status === "Warning")
+        ? "Warning"
+        : "Pass";
+
+    return {
+      ranAt: new Date().toISOString(),
+      overall,
+      results,
+      summary: formatReadinessSummary({ overall, ranAt: new Date().toISOString(), results }),
+    };
+  }
+
+  function matchReadinessRoute(query) {
+    const q = String(query).toLowerCase().trim();
+    if (/clear diagnostic|clear readiness/.test(q)) return { type: "clear" };
+    if (/show diagnostic|show readiness/.test(q)) return { type: "show" };
+    if (/run readiness|readiness check|check hal|hal diagnostic|self[\s-]?check|diagnostic check/.test(q)) return { type: "run" };
+    return null;
+  }
+
   function matchSessionRoute(query) {
     const q = String(query).toLowerCase().trim();
     if (/show (active|current) session|active session|work session status|current work session/.test(q)) {
@@ -476,9 +665,28 @@ const HalCore = (function () {
         intent: "help",
         lane: "local",
         text:
-          "I am the local program manager. I can open any program page, explain what each page is for, show today's priorities, start read-only work sessions, build local evidence packets, report source health, simulate the firewall, and explain model lanes. I do not submit, send, or change anything.",
+          "I am the local program manager. I can open any program page, explain what each page is for, show today's priorities, start read-only work sessions, build local evidence packets, run readiness checks, report source health, simulate the firewall, and explain model lanes. I do not submit, send, or change anything.",
         actions: [],
       };
+    }
+
+    const readinessRoute = matchReadinessRoute(query);
+    if (readinessRoute) {
+      if (readinessRoute.type === "run") {
+        return { intent: "readiness: run", lane: "local", useReadinessRun: true, text: "", actions: [] };
+      }
+      if (readinessRoute.type === "show") {
+        return { intent: "readiness: show", lane: "local", useReadinessShow: true, text: "", actions: [] };
+      }
+      if (readinessRoute.type === "clear") {
+        return {
+          intent: "readiness: clear",
+          lane: "local",
+          useReadinessClear: true,
+          text: "Diagnostics cleared.",
+          actions: [],
+        };
+      }
     }
 
     const packetRoute = matchPacketRoute(query);
@@ -687,6 +895,10 @@ const HalCore = (function () {
     formatEvidencePacketText,
     validateEvidencePacket,
     sourceFreshnessSummary,
+    readinessConfig,
+    runReadinessChecks,
+    formatReadinessSummary,
+    matchReadinessRoute,
   };
 })();
 

@@ -144,6 +144,27 @@ async function main() {
   assert(packetTrap.intent === "blocked: firewall", "packet + email must be blocked");
   passed++;
 
+  // Readiness checks
+  assert(halData.readiness && halData.readiness.expectedRegistryCount === 9, "readiness config required");
+  const readinessReport = HalCore.runReadinessChecks(halData, halModels, pages);
+  assert(readinessReport && readinessReport.results && readinessReport.results.length >= 6, "readiness must return checks");
+  const registryCheck = readinessReport.results.find((item) => item.id === "registry");
+  assert(registryCheck && registryCheck.status === "Pass", "registry readiness must pass");
+  const firewallCheck = readinessReport.results.find((item) => item.id === "firewall");
+  assert(firewallCheck && firewallCheck.status === "Pass", "firewall readiness must pass");
+  const routesCheck = readinessReport.results.find((item) => item.id === "routes");
+  assert(routesCheck && routesCheck.status === "Pass", "route fixture readiness must pass");
+  const readinessRoutes = halData.validation.readinessRoutes || {};
+  for (const [command, expectedIntent] of Object.entries(readinessRoutes)) {
+    const result = HalCore.routeHalCommand(halData, halModels, pages, command);
+    assert(result.intent === expectedIntent, `readiness "${command}" expected ${expectedIntent}, got ${result.intent}`);
+  }
+  const readinessTrap = HalCore.routeHalCommand(halData, halModels, pages, halData.validation.readinessFirewallTrap);
+  assert(readinessTrap.intent === "blocked: firewall", "readiness + email must be blocked");
+  const summary = HalCore.formatReadinessSummary(readinessReport);
+  assert(summary.includes("HAL readiness"), "readiness summary must format report");
+  passed++;
+
   // app.js syntax
   const { execSync } = require("node:child_process");
   execSync("node --check site/app.js", { cwd: __dirname, stdio: "pipe" });
