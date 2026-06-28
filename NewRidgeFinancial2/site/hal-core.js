@@ -6,6 +6,10 @@ const HalCore = (function () {
   const BLOCKED_RE =
     /\b(submit|submits|submitting|send|sends|sending|email|emails|emailing|e-?mail|fax|faxes|faxing|upload|uploads|uploading|transmit|transmits|transmitting|pay|paying|approve|approves|approving|deny|denies|denying|delete|deletes|deleting|remove|removes|removing|writeback|write back|dispatch|dispatches|dispatching|mail|mailing)\b/;
 
+  // Writeback / external phrases that should not false-positive on local nouns like "posting queue".
+  const BLOCKED_PHRASES_RE =
+    /\bjournal entr(y|ies)\b|\bpost(s|ing|ed)?\s+(a|an|the\s+)?(journal|entry|payment|charge|transaction|invoice|claim|note|statement|ledger)\b|\b(record|make|process)\s+(a|an|the\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b/;
+
   const PAGE_SYNONYMS = {
     financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
     softdent: ["softdent", "soft dent", "practice management"],
@@ -121,7 +125,8 @@ const HalCore = (function () {
   }
 
   function checkFirewall(query) {
-    return BLOCKED_RE.test(String(query).toLowerCase().trim());
+    const q = String(query).toLowerCase().trim();
+    return BLOCKED_RE.test(q) || BLOCKED_PHRASES_RE.test(q);
   }
 
   function firewallVerdict(query, firewall) {
@@ -660,7 +665,7 @@ const HalCore = (function () {
       };
     }
 
-    if (/\b(help|what can you do|capabilit|how do you work|what do you do)\b/.test(query)) {
+    if (/\b(help|what can you do|capabilit\w*|how do you work|what do you do|what are you able to)\b/.test(query)) {
       return {
         intent: "help",
         lane: "local",
@@ -744,6 +749,22 @@ const HalCore = (function () {
     }
 
     const wantsExplain = /\b(explain|what is|what's|whats|what does|tell me about|describe|purpose of)\b/.test(query);
+
+    // Explicit navigation wins over source/status keyword matching (e.g. "Open SoftDent").
+    if (/\b(open|go to|navigate to|take me to|launch)\b/.test(query) && !wantsExplain) {
+      const navId = findPage(query);
+      if (navId) {
+        const navInfo = pageInfoMap(halData, pages)[navId] || { label: navId, detail: "" };
+        const navReg = registryById(halData, navId);
+        const navStatus = navReg ? `\nStatus: ${navReg.state}. Safety: ${navReg.safety}. Next: ${navReg.nextAction}` : "";
+        return {
+          intent: "navigate: " + navId,
+          lane: "local",
+          text: `I can open ${navInfo.label}. ${navInfo.detail}${navStatus}`,
+          actions: [{ type: "openPage", label: "Open " + navInfo.label, page: navId }],
+        };
+      }
+    }
 
     if (/second opinion|escalat|double[\s-]?check|high[\s-]?risk|complex case|deep review|review carefully|sanity check|scrutin/.test(query)) {
       return { intent: "escalation", lane: "escalate30b", text: "", useEscalation: true, prompt: rawQuery, actions: [] };
