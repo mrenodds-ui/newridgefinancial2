@@ -1,7 +1,7 @@
 """Retired legacy host for New Ridge Family Financial.
 
-The mockup pages moved to NewRidgeFinancial 2.0 (port 8096).
-Use StartNewRidgeFinancial2.bat or scripts/start_program_2.ps1.
+NewRidgeFinancial 2.0 runs separately on port 1966.
+Use StartNewRidgeFinancial2.bat.
 """
 
 from fastapi import FastAPI
@@ -11,11 +11,11 @@ app = FastAPI(title="New Ridge Family Financial (retired)")
 
 _RETIRED = {
     "status": "retired",
-    "message": "This legacy program no longer serves the UI.",
+    "message": "This legacy program is for reference only.",
     "use_instead": {
         "program": "NewRidgeFinancial 2.0",
         "start": "StartNewRidgeFinancial2.bat",
-        "url": "http://127.0.0.1:8096/app",
+        "url": "http://127.0.0.1:1966/",
     },
 }
 

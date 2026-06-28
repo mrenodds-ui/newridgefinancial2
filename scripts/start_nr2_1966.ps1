@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Start NewRidgeFinancial 2.0 mock pages on port 1966.
+  Start NewRidgeFinancial 2.0 on port 1966.
 #>
 [CmdletBinding()]
 param(
@@ -38,10 +38,10 @@ function Resolve-Python {
 }
 
 if (-not (Test-Path (Join-Path $SiteDir 'index.html'))) {
-    throw "Mock pages not found at $SiteDir"
+    throw "NewRidgeFinancial 2.0 site not found at $SiteDir"
 }
 
-Write-Host 'NewRidgeFinancial 2.0 — mock pages on :1966' -ForegroundColor Green
+Write-Host 'NewRidgeFinancial 2.0 on :1966' -ForegroundColor Green
 
 if ((Test-HttpOk $AppUrl) -and -not $Restart) {
     Write-Host "Already running at $AppUrl"
