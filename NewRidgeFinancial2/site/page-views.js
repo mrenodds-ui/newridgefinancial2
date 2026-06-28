@@ -38,17 +38,7 @@ const PageViews = (function () {
     hal: { eyebrow: "HAL Command Center", subtitle: "Direct. Orchestrate. Protect.", chips: ["Local manager", "Read-only", "External firewall"] },
   };
 
-  const MOCK_IMAGES = {
-    financial: "pages/01-financial-dashboard.png",
-    softdent: "pages/02-softdent.png",
-    quickbooks: "pages/03-quickbooks.png",
-    ar: "pages/04-ar-collections.png",
-    claims: "pages/05-claims-workbench.png",
-    narratives: "pages/06-insurance-narratives.png",
-    documents: "pages/07-accounting-documents.png",
-    library: "pages/08-document-library.png",
-    hal: "pages/09-hal-command-center.png",
-  };
+  const MOCK_IMAGES = {};
 
   const MOCK_NAV = [
     ["financial", "Financial Dashboard"],
@@ -104,7 +94,7 @@ const PageViews = (function () {
 
   function topBar(state, actions, safetyOverride) {
     if (!U) return "";
-    const allActions = [toolbarBtn("Refresh", "↻", { "data-pv-refresh": "1" }), ...(actions || [])];
+    const allActions = actions || [];
     return U.TopBar({
       title: state.title,
       subtitle: state.subtitle,
@@ -235,44 +225,254 @@ const PageViews = (function () {
 
   /* ============ Page renderers ============ */
 
+  /* Fixed-scale money area chart for the Production MTD card. */
+  function finAreaChart(values, maxVal) {
+    const w = 320, h = 116, pad = { t: 8, r: 6, b: 6, l: 6 };
+    const max = maxVal || Math.max(...values), min = 0, range = max - min || 1;
+    const innerW = w - pad.l - pad.r, innerH = h - pad.t - pad.b;
+    const xAt = (i) => pad.l + (i / (values.length - 1)) * innerW;
+    const yAt = (v) => pad.t + innerH - ((v - min) / range) * innerH;
+    const line = values.map((v, i) => `${i ? "L" : "M"}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
+    const area = `${line} L${xAt(values.length - 1).toFixed(1)},${(pad.t + innerH).toFixed(1)} L${pad.l},${(pad.t + innerH).toFixed(1)} Z`;
+    return `<svg class="pv-fin-area" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Production MTD trend">
+      <defs><linearGradient id="finProdFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(214,177,94,0.35)"/><stop offset="100%" stop-color="rgba(214,177,94,0)"/></linearGradient></defs>
+      <path d="${area}" fill="url(#finProdFill)"/>
+      <path d="${line}" fill="none" stroke="#d6b15e" stroke-width="2"/>
+    </svg>`;
+  }
+
+  /* Fixed-scale dual-line chart for the 12-Month Trend card. */
+  function finTrendChart(production, average, maxVal) {
+    const w = 460, h = 150, pad = { t: 8, r: 8, b: 6, l: 6 };
+    const max = maxVal || Math.max(...production, ...average), min = 0, range = max - min || 1;
+    const innerW = w - pad.l - pad.r, innerH = h - pad.t - pad.b;
+    const xAt = (i, len) => pad.l + (i / (len - 1)) * innerW;
+    const yAt = (v) => pad.t + innerH - ((v - min) / range) * innerH;
+    const grid = [0, 1, 2, 3, 4, 5, 6].map((t) => { const y = pad.t + (innerH * t) / 6; return `<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${w - pad.r}" y2="${y.toFixed(1)}" class="pv-chart-line"/>`; }).join("");
+    const path = (vals) => vals.map((v, i) => `${i ? "L" : "M"}${xAt(i, vals.length).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
+    const dots = production.map((v, i) => `<circle cx="${xAt(i, production.length).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="2.6" fill="#d6b15e"/>`).join("");
+    return `<svg class="pv-fin-line" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="12 month production trend">
+      ${grid}
+      <path d="${path(average)}" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="5 4"/>
+      <path d="${path(production)}" fill="none" stroke="#d6b15e" stroke-width="2.5"/>
+      ${dots}
+    </svg>`;
+  }
+
+  function trendArrow(dir) {
+    return dir === "down" ? "↓" : "↑";
+  }
+
   async function renderFinancial(state) {
     const d = await Svc.readDashboard("financial");
-    const kpis = d.kpis.map((k) => Object.assign({}, k, { spark: k.label === "Production MTD" ? [980, 1020, 1080, 1120, 1180, 1234] : null }));
-    const trend = svgLineChart([{ values: d.productionTrend.production, color: "#d6b15e" }, { values: d.productionTrend.average, color: "#64748b", dashed: true }], d.productionTrend.labels);
-    const ytd = d.productionTrend.ytd.map((y) => `<div class="pv-ytd"><span>${esc(y.label)}</span><strong>${esc(y.value)}</strong></div>`).join("");
-    const freshness = d.freshness.map((f) => `<div class="pv-fresh"><span class="pv-fresh__sys">${esc(f.system)}</span><span class="pv-fresh__status ${f.status === "Synced" ? "pv-fresh__status--ok" : "pv-fresh__status--warn"}">${esc(f.status)}</span><span class="pv-fresh__time">${esc(f.time)}</span><span class="pv-fresh__freq">(${esc(f.freq)})</span></div>`).join("");
-    const qualityCats = d.quality.categories.map((c) => `<div class="pv-qcat"><span>${esc(c.label)}</span><strong>${c.score}/100</strong></div>`).join("");
-    const providerTotal = d.providers.reduce((s, p) => s + (parseFloat(String(p.amount).replace(/[$,]/g, "")) || 0), 0);
+    const p = d.productionMtd;
+
+    const prodCard = `
+      <section class="pv-card pv-fin-prod">
+        <div class="pv-card__head"><h3>Production MTD <i class="pv-info">ⓘ</i></h3></div>
+        <div class="pv-fin-prod__grid">
+          <div class="pv-fin-prod__left">
+            <strong class="pv-fin-prod__value">${esc(p.value)}</strong>
+            <div class="pv-fin-prod__delta"><span class="pv-trend pv-trend--${esc(p.trendDir)}">${trendArrow(p.trendDir)} ${esc(p.trend)}</span></div>
+            <span class="pv-fin-prod__vs">${esc(p.vs)}</span>
+          </div>
+          <div class="pv-fin-prod__chart">
+            <div class="pv-fin-prod__y">${p.chart.yLabels.map((l) => `<span>${esc(l)}</span>`).join("")}</div>
+            <div class="pv-fin-prod__plot">
+              ${finAreaChart(p.chart.values, 1500)}
+              <div class="pv-fin-prod__x">${p.chart.xLabels.map((l) => `<span>${esc(l)}</span>`).join("")}</div>
+            </div>
+          </div>
+        </div>
+      </section>`;
+
+    const metricCol = (m) => `
+      <div class="pv-fin-metric">
+        <span class="pv-fin-metric__label">${esc(m.label)} <i class="pv-info">ⓘ</i></span>
+        <strong class="pv-fin-metric__value pv-kpi--${esc(m.tone)}">${esc(m.value)}</strong>
+        <span class="pv-trend pv-trend--${esc(m.trendDir)}">${trendArrow(m.trendDir)} ${esc(m.trend)}</span>
+        <span class="pv-fin-metric__vs">${esc(m.vs)}</span>
+        <div class="pv-fin-metric__sub">
+          <span class="pv-fin-metric__sublabel">${esc(m.subLabel)}</span>
+          <span class="pv-fin-metric__subval">${esc(m.subValue)} <em class="pv-trend pv-trend--${esc(m.subTrendDir)}">${esc(m.subTrend)}</em></span>
+        </div>
+      </div>`;
+    const metricsCard = `<section class="pv-card pv-fin-metrics">${d.metrics.map(metricCol).join("")}</section>`;
+
+    const t = d.productionTrend;
+    const ytd = t.ytd.map((y) => `<div class="pv-ytd"><span>${esc(y.label)}</span><strong>${esc(y.value)}</strong><em class="pv-trend pv-trend--${esc(y.trendDir)}">${trendArrow(y.trendDir)} ${esc(y.trend)}</em></div>`).join("");
+    const trendCard = card(
+      "Production — 12 Month Trend",
+      `<div class="pv-fin-trend">
+        <div class="pv-fin-trend__y">${t.yLabels.map((l) => `<span>${esc(l)}</span>`).join("")}</div>
+        <div class="pv-fin-trend__plot">${finTrendChart(t.production, t.average, 1400)}<div class="pv-fin-trend__x">${t.labels.map((l) => `<span>${esc(l)}</span>`).join("")}</div></div>
+      </div>
+      <div class="pv-fin-legend"><span><i class="pv-swatch" style="background:#d6b15e"></i> Production</span><span><i class="pv-swatch pv-swatch--dash" style="background:#64748b"></i> 12 Mo. Avg.</span></div>
+      <div class="pv-ytd-row">${ytd}</div>`,
+      "pv-card--chart",
+    );
+
+    const pm = d.payerMix;
+    let acc = 0;
+    const stops = pm.slices.map((s) => { const a = acc; acc += s.pct; return `${s.color} ${a}% ${acc}%`; }).join(", ");
+    const payerLegend = pm.slices.map((s) => `<div class="pv-payer"><span class="pv-payer__dot" style="background:${s.color}"></span><span class="pv-payer__label">${esc(s.label)}</span><span class="pv-payer__vals"><strong class="pv-payer__pct" style="color:${s.color}">${s.pct}%</strong><em class="pv-payer__amt">${esc(s.amount)}</em></span></div>`).join("");
+    const payerCard = card(
+      "Payer Mix — MTD Collections",
+      `<div class="pv-payer-wrap">
+        <div class="pv-donut-chart" style="background:conic-gradient(${stops})"><div class="pv-donut-chart__hole"><strong>${esc(pm.total)}</strong><span>Total</span></div></div>
+        <div class="pv-payer-legend">${payerLegend}</div>
+      </div>
+      <div class="pv-payer-foot"><span>INSURANCE COLLECTION RATE</span><strong>${esc(pm.rate)}</strong><em class="pv-trend pv-trend--up">${esc(pm.rateTrend)}</em></div>`,
+      "pv-card--donut",
+    );
+
+    const prov = d.providers;
+    const provMax = Math.max(...prov.rows.map((r) => r.pct), 1);
+    const provBars = prov.rows.map((r) => `<div class="pv-hbar"><span class="pv-hbar__label">${esc(r.name)}</span><div class="pv-hbar__track"><span class="pv-hbar__fill" style="width:${(r.pct / provMax) * 100}%"></span></div><span class="pv-hbar__val">${esc(r.amount)}</span><span class="pv-hbar__pct">${r.pct}%</span></div>`).join("");
+    const providerCard = card(
+      "Production by Provider — MTD",
+      `<div class="pv-hbars">${provBars}</div><div class="pv-total-row"><span>Total</span><strong>${esc(prov.total.amount)}</strong><em>${prov.total.pct}%</em></div>`,
+      "pv-card--bars",
+    );
+
+    const freshCells = d.freshness.map((f) => {
+      const ok = f.status === "Synced";
+      return `<article class="pv-fresh-cell">
+        <span class="pv-fresh-cell__sys">${esc(f.system)}</span>
+        <span class="pv-fresh-cell__status ${ok ? "pv-fresh-cell__status--ok" : "pv-fresh-cell__status--warn"}">${ok ? "✓" : "⚠"} ${esc(f.status)}</span>
+        <span class="pv-fresh-cell__date">${esc(f.date)} ${esc(f.time)}</span>
+        <span class="pv-fresh-cell__freq">(${esc(f.freq)})</span>
+      </article>`;
+    }).join("");
+    const freshCard = card("Data Freshness", `<div class="pv-fresh-cards">${freshCells}</div>`, "pv-card--half");
+
+    const qualityCats = d.quality.categories.map((c) => `<div class="pv-qcat"><span>✓ ${esc(c.label)}</span><strong>${c.score}/100</strong></div>`).join("");
+    const qualityCard = card(
+      "Data Quality Score",
+      `<div class="pv-quality"><div class="pv-quality__ring pv-quality__ring--green"><strong>${d.quality.score}</strong><span>/100</span></div><div class="pv-quality__cats">${qualityCats}</div></div><a class="pv-gold-link" href="#">View Data Quality →</a>`,
+      "pv-card--half",
+    );
+
+    const header = U.TopBar({
+      title: "Owner Financial Dashboard",
+      subtitle: state.subtitle,
+      safety: state.safety,
+      demo: true,
+      actions: [toolbarDate(d.dateRange), toolbarBtn(d.compareRange, "▾"), toolbarBtn("Filters", "⛃")],
+    });
     return `
-      ${topBar(state, [toolbarDate(d.dateRange), toolbarBtn(d.compareRange, "▾"), toolbarBtn("Filters", "⛃")])}
-      ${kpiRow(kpis)}
+      ${header}
+      <div class="pv-fin-top">${prodCard}${metricsCard}</div>
       <div class="pv-bento pv-bento--financial">
-        ${card("Production — 12 Month Trend", `${trend}<div class="pv-ytd-row">${ytd}</div>`, "pv-card--chart")}
-        ${card("Payer Mix — MTD Collections", conicDonut(d.payerMix.slices, `<strong>${esc(d.payerMix.total)}</strong><span>Total</span>`) + `<p class="pv-card-foot">${esc(d.payerMix.footer)}</p>`, "pv-card--donut")}
-        ${card("Production by Provider — MTD", hBarChart(d.providers, "amount", "name", "pct") + `<div class="pv-total-row"><span>Total</span><strong>$${providerTotal.toLocaleString()}</strong><em>100%</em></div>`, "pv-card--bars")}
-        ${card("Data Freshness", `<div class="pv-fresh-grid">${freshness}</div>`, "pv-card--half")}
-        ${card("Data Quality Score", `<div class="pv-quality"><div class="pv-quality__ring"><strong>${d.quality.score}</strong><span>/ 100</span></div><div class="pv-quality__cats">${qualityCats}</div></div><a class="pv-gold-link" href="#">View Data Quality →</a>`, "pv-card--half")}
+        ${trendCard}
+        ${payerCard}
+        ${providerCard}
+        ${freshCard}
+        ${qualityCard}
       </div>
       ${pageFooter(`<em>${esc(d.footer.disclaimer)}</em>`, `Last refreshed: ${esc(d.footer.refreshed)} ↻`)}
     `;
   }
 
+  function softdentSparkline(values) {
+    const w = 260, h = 78, pad = { t: 6, r: 4, b: 4, l: 4 };
+    const min = Math.min(...values) * 0.92, max = Math.max(...values) * 1.04, range = max - min || 1;
+    const innerW = w - pad.l - pad.r, innerH = h - pad.t - pad.b;
+    const xAt = (i) => pad.l + (i / (values.length - 1)) * innerW;
+    const yAt = (v) => pad.t + innerH - ((v - min) / range) * innerH;
+    const line = values.map((v, i) => `${i ? "L" : "M"}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
+    const area = `${line} L${xAt(values.length - 1).toFixed(1)},${(pad.t + innerH).toFixed(1)} L${pad.l},${(pad.t + innerH).toFixed(1)} Z`;
+    return `<svg class="pv-softdent-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="Daysheet A/R trend">
+      <defs><linearGradient id="sdHeroFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(214,177,94,0.34)"/><stop offset="100%" stop-color="rgba(214,177,94,0)"/></linearGradient></defs>
+      <path d="${area}" fill="url(#sdHeroFill)"/><path d="${line}" fill="none" stroke="#d6b15e" stroke-width="2.4"/>
+    </svg>`;
+  }
+
   async function renderSoftdent(state) {
     const d = await Svc.readDashboard("softdent");
-    const hero = `<div class="pv-hero pv-hero--rich"><span class="pv-hero__label">${esc(d.hero.label)}</span><strong class="pv-hero__value">${esc(d.hero.value)}</strong><span class="pv-trend ${trendClass(d.hero.trendDir)}">${esc(d.hero.trend)}</span>${svgSparkline([280, 295, 302, 310, 315, 318], "#d6b15e")}<div class="pv-sub-metrics">${d.subMetrics.map((m) => `<div><span>${esc(m.label)}</span><strong>${esc(m.value)}</strong></div>`).join("")}</div></div>`;
-    const agingList = d.aging.map((a) => `<div class="pv-aging-row"><span>${esc(a.bucket)}</span><strong>${esc(a.amount)}</strong><em>${a.pct}%</em></div>`).join("");
+    const header = U.TopBar({
+      title: "SoftDent",
+      subtitle: `System of Record: ${d.source || "SoftDent"}`,
+      safety: state.safety,
+      demo: true,
+      actions: [toolbarDate(d.date), toolbarBtn("Filters", "⛃"), toolbarBtn("⋯", "")],
+    });
+
+    const hero = `<section class="pv-card pv-sd-hero">
+      <div class="pv-card__head"><h3>${esc(d.hero.label)} <i class="pv-info">ⓘ</i></h3><span class="pv-trend pv-trend--${esc(d.hero.trendDir)}">↑ ${esc(d.hero.trend)}</span></div>
+      <div class="pv-sd-hero__body">
+        <div class="pv-sd-hero__value"><strong>${esc(d.hero.value)}</strong><span>${esc(d.hero.subtitle)}</span></div>
+        <div class="pv-sd-hero__spark">${softdentSparkline(d.hero.spark || [1, 2, 3])}</div>
+      </div>
+      <div class="pv-sd-submetrics">${d.subMetrics.map((m) => `<div><span>${esc(m.label)}</span><strong>${esc(m.value)}</strong></div>`).join("")}</div>
+    </section>`;
+
+    const agingColors = ["#78a86b", "#d6b15e", "#f0a868", "#e97854", "#8b5cf6"];
+    let agingAcc = 0;
+    const agingStops = d.aging.map((a, i) => { const start = agingAcc; agingAcc += a.pct; return `${agingColors[i]} ${start}% ${agingAcc}%`; }).join(", ");
+    const agingRows = d.aging.map((a, i) => `<div class="pv-sd-aging-row"><span><i style="background:${agingColors[i]}"></i>${esc(a.bucket)}</span><strong>${esc(a.amount)}</strong><em>${a.pct}%</em></div>`).join("");
+    const agingCard = `<section class="pv-card pv-sd-aging">
+      <div class="pv-card__head"><h3>A/R Aging Buckets <i class="pv-info">ⓘ</i></h3></div>
+      <div class="pv-sd-aging__grid">
+        <div class="pv-sd-aging__rows">${agingRows}<div class="pv-sd-aging-row pv-sd-aging-row--total"><span>Total</span><strong>${esc(d.hero.value)}</strong><em>100%</em></div></div>
+        <div class="pv-donut-chart pv-sd-aging__donut" style="background:conic-gradient(${agingStops})"><div class="pv-donut-chart__hole"><strong>${esc(d.hero.value)}</strong><span>Total A/R</span></div></div>
+      </div>
+    </section>`;
+
     const resp = d.responsibility;
-    const respDonut = conicDonut([{ label: "Insurance", pct: resp.insurance.pct, amount: resp.insurance.amount, color: "#7dd3fc" }, { label: "Patient Responsibility", pct: resp.patient.pct, amount: resp.patient.amount, color: "#d6b15e" }], `<strong>${esc(resp.total)}</strong><span>Total A/R</span>`);
-    const exportRows = d.exports.map((e) => [esc(e.name), esc(e.source), esc(e.dataset), badge(e.status, "ok"), esc(e.completed), esc(e.records), esc(e.size), `<span class="pv-table-actions">⬇ 👁</span>`]);
+    const respStops = `#3f73e6 0% ${resp.insurance.pct}%, #d6b15e ${resp.insurance.pct}% 100%`;
+    const responsibilityCard = `<section class="pv-card pv-sd-resp">
+      <div class="pv-card__head"><h3>Insurance vs Patient Responsibility <i class="pv-info">ⓘ</i></h3></div>
+      <div class="pv-sd-resp__grid">
+        <div class="pv-donut-chart pv-sd-resp__donut" style="background:conic-gradient(${respStops})"><div class="pv-donut-chart__hole"><strong>${esc(resp.total)}</strong><span>Total A/R</span></div></div>
+        <div class="pv-sd-resp__legend">
+          <div><span><i style="background:#3f73e6"></i>Insurance</span><strong>${esc(resp.insurance.amount)}</strong><em>${resp.insurance.pct}%</em></div>
+          <div><span><i style="background:#d6b15e"></i>Patient Responsibility</span><strong>${esc(resp.patient.amount)}</strong><em>${resp.patient.pct}%</em></div>
+          <footer><span>Est. Collectability (Patient)</span><strong>${esc(resp.collectability)}</strong><span>Est. Collectable</span><strong>${esc(resp.collectable)}</strong></footer>
+        </div>
+      </div>
+    </section>`;
+
+    const sourceHealth = `<section class="pv-card pv-sd-health">
+      <div class="pv-card__head"><h3>Source Health <span>(Read-Only)</span> <i class="pv-info">ⓘ</i></h3></div>
+      <div class="pv-sd-health__grid">
+        <div class="pv-sd-shield">♢</div>
+        <div class="pv-sd-health__rows">${d.health.map((h) => `<div><span>✓ ${esc(h.label)}</span><strong>${esc(h.value)}</strong></div>`).join("")}</div>
+      </div>
+      <p class="pv-sd-readonly">This is a read-only connection.<br/>All data is sourced from SoftDent.</p>
+    </section>`;
+
+    const glanceIcons = ["♧", "♤", "⌄", "▣", "$", "⇩"];
+    const glance = `<section class="pv-card pv-sd-glance">
+      <div class="pv-card__head"><h3>At a Glance <i class="pv-info">ⓘ</i></h3></div>
+      <div class="pv-sd-glance__rows">${d.glance.map((g, i) => `<div><span>${glanceIcons[i] || "•"} ${esc(g.label)}</span><strong>${esc(g.value)}</strong></div>`).join("")}</div>
+    </section>`;
+
+    const exportRows = d.exports.map((e) => [
+      esc(e.name),
+      esc(e.source),
+      esc(e.dataset),
+      badge(e.status, "ok"),
+      esc(e.completed),
+      esc(e.records),
+      esc(e.size),
+      `<span class="pv-table-actions">⇩  ▤</span>`,
+    ]);
+    const exportsCard = card(
+      "Recent Exports",
+      U.Table({ columns: ["Export Name", "Source", "Data Set", "Status", "Completed", "Records", "File Size", "Actions"], rows: exportRows }) + `<a class="pv-gold-link pv-sd-export-link" href="#">View all exports →</a>`,
+      "pv-card--wide pv-sd-exports",
+    );
+
     return `
-      ${topBar(state, [toolbarDate(d.date), toolbarBtn("Filters", "⛃"), toolbarBtn("⋯", "")])}
+      ${header}
       <div class="pv-bento pv-bento--softdent">
-        <div class="pv-bento__hero">${hero}</div>
-        ${card("A/R Aging Buckets", `<div class="pv-aging-split"><div class="pv-aging-list">${agingList}</div>${conicDonut(d.aging.map((a, i) => ({ label: a.bucket, pct: a.pct, color: ["#d6b15e", "#7dd3fc", "#78a86b", "#a78bfa", "#64748b"][i] })), `<strong>${esc(d.hero.value)}</strong>`, 140)}</div>`, "pv-card--wide")}
-        ${card("Insurance vs Patient Responsibility", respDonut + `<p class="pv-card-foot">Est. Collectability (Patient): <strong class="pv-trend--up">${esc(resp.collectability)}</strong> · Est. Collectable: ${esc(resp.collectable)}</p>`)}
-        ${card("Source Health (Read-Only)", `<div class="pv-shield">🛡</div><div class="pv-health-list">${d.health.map((h) => `<div class="pv-health-row ${h.ok ? "pv-health-row--ok" : ""}"><span>${esc(h.label)}</span><strong>${esc(h.value)}</strong></div>`).join("")}</div>`)}
-        ${card("At a Glance", `<div class="pv-glance-list">${d.glance.map((g) => `<div class="pv-glance-row"><span>${esc(g.label)}</span><strong>${esc(g.value)}</strong></div>`).join("")}</div>`)}
-        ${card("Recent Exports", U.Table({ columns: ["Export Name", "Source", "Data Set", "Status", "Completed", "Records", "File Size", "Actions"], rows: exportRows }) + `<a class="pv-gold-link" href="#">View all exports →</a>`, "pv-card--wide")}
+        ${hero}
+        ${agingCard}
+        ${responsibilityCard}
+        ${sourceHealth}
+        ${glance}
+        ${exportsCard}
       </div>`;
   }
 
@@ -572,7 +772,8 @@ const PageViews = (function () {
       <div class="pv-bento pv-bento--documents">
         ${card("Document Intake & Posting Queue", `<div class="pv-search"><input type="search" class="pv-input" id="doc-search" placeholder="Search documents…" value="${esc(filter.query || "")}" /><button class="pv-button" type="button" data-doc-filter="1">Apply</button><select class="pv-input" id="doc-status"><option value="All"${!filter.status || filter.status === "All" ? " selected" : ""}>All statuses</option><option value="Pending Review"${filter.status === "Pending Review" ? " selected" : ""}>Pending Review</option><option value="Ready to Post"${filter.status === "Ready to Post" ? " selected" : ""}>Ready to Post</option><option value="Posted"${filter.status === "Posted" ? " selected" : ""}>Posted</option></select></div>${U.Table({ columns: ["ID", "Document Type", "Vendor / Entity", "Document Date", "Amount", "Status", "Age (Days)"], rows: queueRows, emptyTitle: "No documents match", emptyMessage: "Try clearing filters or refreshing." })}`, "pv-card--queue")}
         ${card("Selected Document Preview", preview.vendor ? `<div class="pv-invoice-preview"><div class="pv-invoice-preview__head">${esc(preview.vendor)}</div><p>Invoice # ${esc(preview.invoice)}</p><p>Date: ${esc(preview.date)}</p><p class="pv-invoice-preview__total">Total ${esc(preview.total)}</p></div><footer class="pv-preview-foot">${esc(preview.file || "")} · ${esc(preview.pages || "")} · Uploaded ${esc(preview.uploaded || "")}</footer>` : U.EmptyState({ title: "No document selected", message: "Select a row to preview." }), "pv-card--preview")}
-        ${card("Posting Queue Review", `<div class="pv-post-grid">${posting.map((p) => `<article class="pv-post-card pv-post-card--${p.tone}"><span>${esc(p.label)}</span><strong>${p.count}</strong>${p.amount ? `<em>${esc(String(p.amount))}</em>` : ""}</article>`).join("")}</div>`, "pv-card--wide")}
+        ${card("Posting Queue Review", `<div class="pv-post-grid">${posting.map((p) => `<article class="pv-post-card pv-post-card--${p.tone}"><span>${esc(p.label)}</span><strong>${p.count}</strong>${p.amount ? `<em>${esc(String(p.amount))}</em>` : ""}</article>`).join("")}</div><div class="pv-review-workload"><span>Review Workload</span><div><i style="width:${esc(period.reviewedPct || 24)}%"></i></div><em>${esc(period.reviewedPct || 24)}%</em></div><a class="pv-gold-link" href="#">View All Documents →</a>`, "pv-card--wide")}
+        ${card("Period Summary", `<div class="pv-period-summary"><dl>${[["Period", period.label], ["Documents", period.documents], ["Total Amount", period.totalAmount], ["Posted Amount", period.postedAmount], ["Pending Amount", period.pendingAmount]].map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v || "—")}</dd></div>`).join("")}</dl>${conicDonut([{ label: "Posted", pct: period.postedPct || 88, color: "#3f73e6" }, { label: "Pending", pct: period.pendingPct || 11, color: "#d6b15e" }, { label: "Ready to Post", pct: period.readyPct || 1, color: "#78a86b" }], `<strong>${esc(period.postedPct || 88)}%</strong><span>Posted</span>`, 142)}</div><a class="pv-gold-link" href="#">View Period Close →</a>`, "pv-card--period")}
         ${selectedId ? `<div class="pv-doc-actions">${U.FormField({ id: "doc-new-status", name: "status", label: "Update status", type: "select", value: (data.queue.find((q) => q.id === selectedId) || {}).status, options: ["Pending Review", "Ready to Post", "Posted"] })} ${U.Button({ label: "Save status", variant: "primary", attrs: { "data-doc-save": selectedId } })} ${U.Button({ label: "Remove", attrs: { "data-doc-delete": selectedId } })}</div>` : ""}
       </div>`;
   }
@@ -729,6 +930,7 @@ const PageViews = (function () {
   }
 
   function hasPage(pageId) {
+    if (pageId === "hal") return false;
     return Boolean(MOCK_IMAGES[pageId] || PAGE_OUTLINES[pageId]);
   }
 
