@@ -127,6 +127,23 @@ async function main() {
   assert(note.includes("human review"), "handoff note disclaimer");
   passed++;
 
+  // Evidence packets
+  const noPacket = HalCore.buildEvidencePacket(null, halData, halModels);
+  assert(noPacket === null, "cannot build packet without session");
+  const sessionForPacket = HalCore.createSessionState(template);
+  const packet = HalCore.buildEvidencePacket(sessionForPacket, halData, halModels);
+  assert(packet !== null, "packet must build from session");
+  const packetErrors = HalCore.validateEvidencePacket(packet, halData);
+  assert(packetErrors.length === 0, "packet validation: " + packetErrors.join("; "));
+  const packetRoutes = halData.validation.packetRoutes || {};
+  for (const [command, expectedIntent] of Object.entries(packetRoutes)) {
+    const result = HalCore.routeHalCommand(halData, halModels, pages, command);
+    assert(result.intent === expectedIntent, `packet "${command}" expected ${expectedIntent}, got ${result.intent}`);
+  }
+  const packetTrap = HalCore.routeHalCommand(halData, halModels, pages, halData.validation.packetFirewallTrap);
+  assert(packetTrap.intent === "blocked: firewall", "packet + email must be blocked");
+  passed++;
+
   // app.js syntax
   const { execSync } = require("node:child_process");
   execSync("node --check site/app.js", { cwd: __dirname, stdio: "pipe" });

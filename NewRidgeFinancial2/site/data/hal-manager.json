@@ -18,7 +18,8 @@
       "Explain the external action firewall",
       "Are you connected to a model?",
       "Start claims review",
-      "Show active session"
+      "Show active session",
+      "Build evidence packet"
     ],
     "response": "I can navigate the program, explain each page, show priorities, simulate the firewall, and keep work inside the read-only safety boundary. For other questions I use local model lanes on this machine; external actions still require human review.",
     "commandExamples": [
@@ -243,6 +244,30 @@
       }
     ]
   },
+  "evidencePackets": {
+    "title": "Local evidence packets",
+    "summary": "Assemble a read-only review packet from the active work session. Packets stay in this browser only — copy text manually if needed; HAL never emails or uploads.",
+    "disclaimer": "Draft only · read-only · human review required before any external action",
+    "fields": [
+      "sessionLabel",
+      "progress",
+      "purpose",
+      "safety",
+      "completedChecks",
+      "remainingChecks",
+      "verifyList",
+      "registryState",
+      "sourceFreshness",
+      "firewallReminder",
+      "handoffNote",
+      "disclaimer"
+    ],
+    "commands": {
+      "build": "Build evidence packet",
+      "show": "Show evidence packet",
+      "clear": "Clear evidence packet"
+    }
+  },
   "registry": [
     {
       "id": "financial",
@@ -360,6 +385,12 @@
       "Show active session": "session: show",
       "Reset work session": "session: reset"
     },
-    "sessionFirewallTrap": "Start claims review and submit the claim"
+    "sessionFirewallTrap": "Start claims review and submit the claim",
+    "packetRoutes": {
+      "Build evidence packet": "packet: build",
+      "Show evidence packet": "packet: show",
+      "Clear evidence packet": "packet: clear"
+    },
+    "packetFirewallTrap": "Build evidence packet and email it"
   }
 }

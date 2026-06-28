@@ -104,6 +104,7 @@ function startWorkSession(sessionId) {
 
 function resetWorkSession() {
   halWorkSession = null;
+  clearEvidencePacket();
   saveWorkSession();
   logAudit("Reset work session", "session: reset");
 }
@@ -209,6 +210,108 @@ function bindWorkSessionControls(root) {
         renderChatLog();
       }
       if (currentDrawerKey) renderPanel(currentDrawerKey);
+    });
+  });
+}
+
+let halEvidencePacket = null;
+
+function loadEvidencePacket() {
+  try {
+    const saved = sessionStorage.getItem("halEvidencePacket");
+    if (saved) halEvidencePacket = JSON.parse(saved);
+  } catch (error) {
+    halEvidencePacket = null;
+  }
+}
+
+function saveEvidencePacket() {
+  try {
+    if (halEvidencePacket) sessionStorage.setItem("halEvidencePacket", JSON.stringify(halEvidencePacket));
+    else sessionStorage.removeItem("halEvidencePacket");
+  } catch (error) {
+    /* sessionStorage may be unavailable. */
+  }
+}
+
+loadEvidencePacket();
+
+function buildEvidencePacketFromSession() {
+  if (!halWorkSession) return null;
+  halEvidencePacket = HalCore.buildEvidencePacket(halWorkSession, halData, halModels);
+  saveEvidencePacket();
+  if (halEvidencePacket) logAudit("Build evidence packet", "packet: build");
+  return halEvidencePacket;
+}
+
+function clearEvidencePacket() {
+  halEvidencePacket = null;
+  saveEvidencePacket();
+  logAudit("Clear evidence packet", "packet: clear");
+}
+
+function evidencePacketPanelHtml() {
+  const ep = halData.evidencePackets || { summary: "", commands: {} };
+  const packetBody = halEvidencePacket
+    ? `<pre class="hal-packet__body" id="halPacketBody">${escapeHtml(halEvidencePacket.text)}</pre>`
+    : `<p class="drawer-meta">No evidence packet built yet.${halWorkSession ? " Click Build Packet to assemble one from the active session." : " Start a work session first."}</p>`;
+  const buildDisabled = halWorkSession ? "" : " disabled";
+  const actionBtns = halEvidencePacket
+    ? `<button class="drawer-action drawer-action--sm" type="button" data-packet-copy>Copy packet text</button>
+       <button class="drawer-action drawer-action--sm" type="button" data-packet-show>Show in chat</button>
+       <button class="drawer-action drawer-action--sm" type="button" data-packet-clear>Clear packet</button>`
+    : `<button class="drawer-action drawer-action--sm" type="button" data-packet-build${buildDisabled}>Build packet</button>`;
+  return `<div class="drawer-section hal-packet">
+    <h3 class="drawer-section__title">${escapeHtml(ep.title || "Evidence packet")}</h3>
+    <p class="drawer-meta">${escapeHtml(ep.summary || "")}</p>
+    ${packetBody}
+    <div class="drawer-card__actions">${actionBtns}</div>
+  </div>`;
+}
+
+function bindEvidencePacketControls(root) {
+  root.querySelectorAll("[data-packet-build]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!buildEvidencePacketFromSession()) return;
+      if (currentDrawerKey) renderPanel(currentDrawerKey);
+    });
+  });
+  root.querySelectorAll("[data-packet-clear]").forEach((button) => {
+    button.addEventListener("click", () => {
+      clearEvidencePacket();
+      if (currentDrawerKey) renderPanel(currentDrawerKey);
+    });
+  });
+  root.querySelectorAll("[data-packet-copy]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!halEvidencePacket || !halEvidencePacket.text) return;
+      try {
+        await navigator.clipboard.writeText(halEvidencePacket.text);
+        logAudit("Copy packet text", "packet: copy");
+        renderAuditLog();
+      } catch (error) {
+        logAudit("Copy packet failed", "packet: copy-failed");
+        renderAuditLog();
+      }
+    });
+  });
+  root.querySelectorAll("[data-packet-show]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!halEvidencePacket) return;
+      if (currentDrawerKey === "askHal") {
+        halChatHistory.push({ role: "hal", text: halEvidencePacket.text, lane: "packet", actions: [] });
+        saveChatHistory();
+        renderChatLog();
+      } else {
+        openDrawer("askHal");
+        setTimeout(() => {
+          halChatHistory.push({ role: "hal", text: halEvidencePacket.text, lane: "packet", actions: [] });
+          saveChatHistory();
+          renderChatLog();
+        }, 50);
+      }
+      logAudit("Show evidence packet", "packet: show");
+      renderAuditLog();
     });
   });
 }
@@ -450,6 +553,54 @@ async function handleHalSubmit(query) {
     return;
   }
 
+  if (result.usePacketBuild) {
+    if (!halWorkSession) {
+      halChatHistory.push({
+        role: "hal",
+        text: "No active work session. Start a session first (for example, \"Start claims review\"), then build an evidence packet.",
+        lane: "packet",
+        actions: [],
+      });
+    } else {
+      const packet = buildEvidencePacketFromSession();
+      halChatHistory.push({
+        role: "hal",
+        text: packet ? packet.text : "Could not build evidence packet.",
+        lane: "packet",
+        actions: [],
+      });
+    }
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
+    return;
+  }
+
+  if (result.usePacketShow) {
+    const text = halEvidencePacket
+      ? halEvidencePacket.text
+      : "No evidence packet built yet. Start a work session and say \"Build evidence packet\".";
+    halChatHistory.push({ role: "hal", text, lane: "packet", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
+
+  if (result.usePacketClear) {
+    clearEvidencePacket();
+    halChatHistory.push({ role: "hal", text: result.text, lane: "packet", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
+    return;
+  }
+
   if (result.useEscalation) {
     if (!escalationModelReady()) {
       halChatHistory.push({ role: "hal", text: offlineModelMessage("escalate30b"), lane: "escalate30b · offline", actions: [] });
@@ -630,7 +781,7 @@ function reasoningLanePanel() {
         `<button class="drawer-action" type="button" data-hal-command="${escapeHtml(action.command)}">${escapeHtml(action.label)}</button>`,
     )
     .join("");
-  return `${laneHtml}<div class="drawer-section"><h3 class="drawer-section__title">Actions</h3><div class="drawer-grid">${actionHtml}</div></div>${workSessionPanelHtml()}`;
+  return `${laneHtml}<div class="drawer-section"><h3 class="drawer-section__title">Actions</h3><div class="drawer-grid">${actionHtml}</div></div>${workSessionPanelHtml()}${evidencePacketPanelHtml()}`;
 }
 
 function workSurfacePanel(items) {
@@ -710,7 +861,7 @@ function prioritiesPanel() {
       return `<div class="drawer-section"><h3 class="drawer-section__title">${escapeHtml(group.label)}</h3><div class="drawer-grid">${cards || '<p class="drawer-meta">None</p>'}</div></div>`;
     })
     .join("");
-  return staticHtml + groupHtml + workSessionPanelHtml();
+  return staticHtml + groupHtml + workSessionPanelHtml() + evidencePacketPanelHtml();
 }
 
 function statusPanel(data) {
@@ -757,6 +908,7 @@ function renderPanel(key) {
       <p>${escapeHtml(data.summary)}</p>
       <p class="drawer-meta">Model health: ${escapeHtml(modelHealthSummary())}</p>
       ${workSessionPanelHtml()}
+      ${evidencePacketPanelHtml()}
       <div class="hal-chat">
         <div class="hal-chat__log" id="halChatLog"></div>
         <div class="hal-suggest" id="halSuggest"></div>
@@ -803,6 +955,7 @@ function renderPanel(key) {
     renderChatLog();
     renderAuditLog();
     bindWorkSessionControls(drawerContent);
+    bindEvidencePacketControls(drawerContent);
     bindOpenPageButtons(drawerContent);
     return;
   }
@@ -823,6 +976,7 @@ function renderPanel(key) {
     bindOpenPageButtons(drawerContent);
     bindHalCommands(drawerContent);
     bindWorkSessionControls(drawerContent);
+    bindEvidencePacketControls(drawerContent);
     return;
   }
 
@@ -862,6 +1016,7 @@ function renderPanel(key) {
     bindOpenPageButtons(drawerContent);
     bindHalCommands(drawerContent);
     bindWorkSessionControls(drawerContent);
+    bindEvidencePacketControls(drawerContent);
     return;
   }
 

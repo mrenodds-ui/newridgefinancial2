@@ -320,6 +320,124 @@ const HalCore = (function () {
     return errors;
   }
 
+  function packetConfig(halData) {
+    return (halData && halData.evidencePackets) || {
+      disclaimer: "Draft only · read-only · human review required before any external action",
+    };
+  }
+
+  function sourceFreshnessSummary(halData) {
+    const items = (halData.sources && halData.sources.items) || [];
+    return items
+      .map((item) => {
+        const fresh = item.freshness ? " · " + item.freshness : "";
+        const sync = item.syncState ? " · " + item.syncState : "";
+        return "- " + item.label + ": " + item.status + fresh + sync;
+      })
+      .join("\n");
+  }
+
+  function formatEvidencePacketText(packet) {
+    if (!packet) return "";
+    const lines = [
+      "HAL EVIDENCE PACKET — " + packet.sessionLabel,
+      "Built: " + packet.builtAt,
+      "Progress: " + packet.progress + "%",
+      "",
+      "Purpose: " + packet.purpose,
+      "Safety: " + packet.safety,
+      "",
+      "Completed checks:",
+      packet.completedChecks.length ? packet.completedChecks.map((c) => "- [x] " + c).join("\n") : "- (none)",
+      "",
+      "Remaining checks:",
+      packet.remainingChecks.length ? packet.remainingChecks.map((c) => "- [ ] " + c).join("\n") : "- (all complete)",
+      "",
+      "Human must verify:",
+      packet.verifyList.length ? packet.verifyList.map((v) => "- [ ] " + v).join("\n") : "- (see session)",
+      "",
+      "Registry state:",
+      packet.registryState || "- (none)",
+      "",
+      "Source freshness:",
+      packet.sourceFreshness || "- (none)",
+      "",
+      "Firewall reminder:",
+      packet.firewallReminder,
+      "",
+    ];
+    if (packet.handoffNote) {
+      lines.push("Handoff note:", packet.handoffNote, "");
+    }
+    if (packet.modelNote) {
+      lines.push("Model lanes:", packet.modelNote, "");
+    }
+    lines.push("(" + packet.disclaimer + ")");
+    return lines.join("\n");
+  }
+
+  function buildEvidencePacket(session, halData, halModels) {
+    if (!session) return null;
+    const reg = registryById(halData, session.targetPage);
+    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
+    const cfg = packetConfig(halData);
+    const completedChecks = (session.checklist || []).filter((c) => c.done).map((c) => c.text);
+    const remainingChecks = (session.checklist || []).filter((c) => !c.done).map((c) => c.text);
+    const registryState = reg
+      ? reg.name + " [" + reg.state + "; " + reg.safety + "] — " + reg.nextAction + ". Blocked: " + (reg.blocked || []).join(", ")
+      : null;
+    const packet = {
+      builtAt: new Date().toISOString(),
+      sessionLabel: session.label,
+      progress: sessionProgress(session),
+      purpose: session.purpose,
+      safety: session.safety,
+      completedChecks,
+      remainingChecks,
+      verifyList: (session.verify || []).map(String),
+      registryState,
+      sourceFreshness: sourceFreshnessSummary(halData),
+      firewallReminder: "Blocked external actions: " + (firewall.blocked || []).join(", "),
+      handoffNote: session.handoffNote || null,
+      modelNote: halModels ? "Local model lanes only; firewall runs before every lane." : null,
+      disclaimer: cfg.disclaimer || "Draft only · read-only · human review required before any external action",
+    };
+    packet.text = formatEvidencePacketText(packet);
+    return packet;
+  }
+
+  function validateEvidencePacket(packet, halData) {
+    const errors = [];
+    if (!packet) {
+      errors.push("packet is null");
+      return errors;
+    }
+    if (!packet.sessionLabel) errors.push("missing sessionLabel");
+    if (typeof packet.progress !== "number") errors.push("missing progress");
+    if (!packet.safety) errors.push("missing safety");
+    if (!Array.isArray(packet.completedChecks)) errors.push("missing completedChecks");
+    if (!Array.isArray(packet.remainingChecks)) errors.push("missing remainingChecks");
+    if (!Array.isArray(packet.verifyList)) errors.push("missing verifyList");
+    if (!packet.registryState) errors.push("missing registryState");
+    if (!packet.sourceFreshness) errors.push("missing sourceFreshness");
+    if (!packet.firewallReminder) errors.push("missing firewallReminder");
+    if (!packet.disclaimer || !/human review/i.test(packet.disclaimer)) {
+      errors.push("disclaimer must mention human review");
+    }
+    if (!packet.text || !packet.text.includes(packet.sessionLabel)) {
+      errors.push("packet text must include session label");
+    }
+    return errors;
+  }
+
+  function matchPacketRoute(query) {
+    const q = String(query).toLowerCase().trim();
+    if (/clear evidence packet|clear packet/.test(q)) return { type: "clear" };
+    if (/show evidence packet|show packet/.test(q)) return { type: "show" };
+    if (/build evidence packet|build packet|create evidence packet/.test(q)) return { type: "build" };
+    return null;
+  }
+
   function matchSessionRoute(query) {
     const q = String(query).toLowerCase().trim();
     if (/show (active|current) session|active session|work session status|current work session/.test(q)) {
@@ -358,9 +476,28 @@ const HalCore = (function () {
         intent: "help",
         lane: "local",
         text:
-          "I am the local program manager. I can open any program page, explain what each page is for, show today's priorities, start read-only work sessions, report source health, simulate the firewall, and explain model lanes. I do not submit, send, or change anything.",
+          "I am the local program manager. I can open any program page, explain what each page is for, show today's priorities, start read-only work sessions, build local evidence packets, report source health, simulate the firewall, and explain model lanes. I do not submit, send, or change anything.",
         actions: [],
       };
+    }
+
+    const packetRoute = matchPacketRoute(query);
+    if (packetRoute) {
+      if (packetRoute.type === "build") {
+        return { intent: "packet: build", lane: "local", usePacketBuild: true, text: "", actions: [] };
+      }
+      if (packetRoute.type === "show") {
+        return { intent: "packet: show", lane: "local", usePacketShow: true, text: "", actions: [] };
+      }
+      if (packetRoute.type === "clear") {
+        return {
+          intent: "packet: clear",
+          lane: "local",
+          usePacketClear: true,
+          text: "Evidence packet cleared.",
+          actions: [],
+        };
+      }
     }
 
     const sessionRoute = matchSessionRoute(query);
@@ -544,6 +681,12 @@ const HalCore = (function () {
     draftHandoffNote,
     validateSessionTemplates,
     matchSessionRoute,
+    matchPacketRoute,
+    packetConfig,
+    buildEvidencePacket,
+    formatEvidencePacketText,
+    validateEvidencePacket,
+    sourceFreshnessSummary,
   };
 })();
 
