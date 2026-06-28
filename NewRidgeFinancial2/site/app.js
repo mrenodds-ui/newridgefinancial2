@@ -503,6 +503,126 @@ function bindReadinessControls(root) {
   });
 }
 
+let halOperatorReport = null;
+
+function loadOperatorReport() {
+  try {
+    const saved = sessionStorage.getItem("halOperatorReport");
+    if (saved) halOperatorReport = JSON.parse(saved);
+  } catch (error) {
+    halOperatorReport = null;
+  }
+}
+
+function saveOperatorReport() {
+  try {
+    if (halOperatorReport) sessionStorage.setItem("halOperatorReport", JSON.stringify(halOperatorReport));
+    else sessionStorage.removeItem("halOperatorReport");
+  } catch (error) {
+    /* sessionStorage may be unavailable. */
+  }
+}
+
+loadOperatorReport();
+
+function runOperatorSmokeTest() {
+  halOperatorReport = HalCore.runOperatorSmokeTest(halData, halModels, PAGES, collectReadinessRuntime());
+  saveOperatorReport();
+  logAudit("Run operator smoke test", "operator: smoke");
+  return halOperatorReport;
+}
+
+function clearOperatorReport() {
+  halOperatorReport = null;
+  saveOperatorReport();
+  logAudit("Clear operator report", "operator: clear");
+}
+
+function staffHandoffSummaryText() {
+  return HalCore.buildHandoffSummary(halData, halModels, {
+    readiness: halReadinessDiagnostics,
+    session: halWorkSession,
+    packet: halEvidencePacket,
+    smoke: halOperatorReport,
+  });
+}
+
+function operatorPanelHtml() {
+  const cfg = halData.operator || { title: "Operator acceptance", summary: "" };
+  const steps = halOperatorReport
+    ? halOperatorReport.steps
+        .map(
+          (step) =>
+            `<div class="drawer-card hal-ready-card ${readinessStatusClass(step.status)}">
+              <div class="hal-ready-card__head">
+                <strong>${escapeHtml(step.label)}</strong>
+                <span class="hal-ready-card__status">${escapeHtml(step.status)}</span>
+              </div>
+              <p>${escapeHtml(step.detail)}</p>
+            </div>`,
+        )
+        .join("")
+    : `<p class="drawer-meta">No smoke test run yet. Click Run Smoke Test to verify HAL end-to-end.</p>`;
+  const overall = halOperatorReport
+    ? `<p class="drawer-meta">Smoke result: <strong>${escapeHtml(halOperatorReport.overall)}</strong> · ${escapeHtml(halOperatorReport.ranAt)}</p>`
+    : "";
+  return `<div class="drawer-section hal-operator">
+    <h3 class="drawer-section__title">${escapeHtml(cfg.title || "Operator acceptance")}</h3>
+    <p class="drawer-meta">${escapeHtml(cfg.summary || "")}</p>
+    ${overall}
+    <div class="drawer-grid">${steps}</div>
+    <div class="drawer-card__actions">
+      <button class="drawer-action drawer-action--sm" type="button" data-operator-smoke>Run smoke test</button>
+      <button class="drawer-action drawer-action--sm" type="button" data-operator-handoff>Staff handoff summary</button>
+      <button class="drawer-action drawer-action--sm" type="button" data-operator-clear${halOperatorReport ? "" : " disabled"}>Clear smoke report</button>
+    </div>
+  </div>`;
+}
+
+function postToHalChat(text, lane) {
+  if (currentDrawerKey === "askHal") {
+    halChatHistory.push({ role: "hal", text, lane, actions: [] });
+    saveChatHistory();
+    renderChatLog();
+  } else {
+    openDrawer("askHal");
+    setTimeout(() => {
+      halChatHistory.push({ role: "hal", text, lane, actions: [] });
+      saveChatHistory();
+      renderChatLog();
+    }, 50);
+  }
+}
+
+function bindOperatorControls(root) {
+  root.querySelectorAll("[data-operator-smoke]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const report = runOperatorSmokeTest();
+      postToHalChat(HalCore.formatSmokeTestSummary(report), "operator");
+      if (currentDrawerKey) renderPanel(currentDrawerKey);
+    });
+  });
+  root.querySelectorAll("[data-operator-handoff]").forEach((button) => {
+    button.addEventListener("click", () => {
+      logAudit("Staff handoff summary", "operator: handoff-summary");
+      postToHalChat(staffHandoffSummaryText(), "operator");
+    });
+  });
+  root.querySelectorAll("[data-operator-clear]").forEach((button) => {
+    button.addEventListener("click", () => {
+      clearOperatorReport();
+      if (currentDrawerKey) renderPanel(currentDrawerKey);
+    });
+  });
+}
+
+function drawerHealthBadge(key) {
+  const health = HalCore.deriveDrawerHealth(halData, halModels, PAGES, halReadinessDiagnostics);
+  const status = health[key];
+  if (!status) return "";
+  return `<span class="hal-badge ${readinessStatusClass(status)}" title="Readiness: ${escapeHtml(status)}">${escapeHtml(status)}</span>`;
+}
+
 function registryList() {
   return HalCore.registryList(halData);
 }
@@ -838,6 +958,26 @@ async function handleHalSubmit(query) {
     return;
   }
 
+  if (result.useSmokeTest) {
+    const report = runOperatorSmokeTest();
+    halChatHistory.push({ role: "hal", text: HalCore.formatSmokeTestSummary(report), lane: "operator", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (currentDrawerKey) renderPanel(currentDrawerKey);
+    return;
+  }
+
+  if (result.useHandoffSummary) {
+    halChatHistory.push({ role: "hal", text: staffHandoffSummaryText(), lane: "operator", actions: [] });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    return;
+  }
+
   if (result.useEscalation) {
     if (!escalationModelReady()) {
       halChatHistory.push({ role: "hal", text: offlineModelMessage("escalate30b"), lane: "escalate30b · offline", actions: [] });
@@ -1102,23 +1242,25 @@ function prioritiesPanel() {
 }
 
 function statusPanel(data) {
-  const laneCards = HalCore.deriveModelLaneCards(halModels);
+  const laneDetails = HalCore.modelLaneDetails(halModels);
   return `
     <p>${escapeHtml(data.summary)}</p>
     ${chips(data.posture)}
     <p class="drawer-meta">Model health: ${escapeHtml(modelHealthSummary())}</p>
-    <div class="drawer-grid">${laneCards
+    <div class="drawer-grid">${laneDetails
       .map(
         (lane) =>
           `<div class="drawer-card">
             <strong>${escapeHtml(lane.name)}</strong>
             <span class="status-chip${lane.ready ? "" : " status-chip--blocked"}">${escapeHtml(lane.state)}${lane.ready ? " · ready" : " · offline"}</span>
             <p>${escapeHtml(lane.role)}</p>
-            <p class="drawer-meta">Model: ${escapeHtml(lane.model)}</p>
+            <p class="drawer-meta">Model: ${escapeHtml(lane.model)} · mode: ${escapeHtml(lane.mode)}</p>
+            ${lane.nextStep ? `<p class="drawer-meta">Next: ${escapeHtml(lane.nextStep)}</p>` : ""}
           </div>`,
       )
       .join("")}</div>
-    ${readinessPanelHtml()}`;
+    ${readinessPanelHtml()}
+    ${operatorPanelHtml()}`;
 }
 
 function chips(items, blocked = false) {
@@ -1135,7 +1277,8 @@ function numbered(items) {
 
 function renderPanel(key) {
   const data = halData[key] || halData.status;
-  drawerTitle.textContent = data.title || "HAL Command Center";
+  const badge = drawerHealthBadge(key);
+  drawerTitle.innerHTML = `${escapeHtml(data.title || "HAL Command Center")}${badge}`;
 
   if (key === "askHal") {
     if (halChatHistory.length === 0) {
@@ -1148,6 +1291,7 @@ function renderPanel(key) {
       ${workSessionPanelHtml()}
       ${evidencePacketPanelHtml()}
       ${readinessPanelHtml()}
+      ${operatorPanelHtml()}
       <div class="hal-chat">
         <div class="hal-chat__log" id="halChatLog"></div>
         <div class="hal-suggest" id="halSuggest"></div>
@@ -1196,6 +1340,7 @@ function renderPanel(key) {
     bindWorkSessionControls(drawerContent);
     bindEvidencePacketControls(drawerContent);
     bindReadinessControls(drawerContent);
+    bindOperatorControls(drawerContent);
     bindOpenPageButtons(drawerContent);
     return;
   }
@@ -1203,6 +1348,7 @@ function renderPanel(key) {
   if (key === "status") {
     drawerContent.innerHTML = statusPanel(data);
     bindReadinessControls(drawerContent);
+    bindOperatorControls(drawerContent);
     return;
   }
 

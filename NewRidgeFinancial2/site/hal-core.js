@@ -669,6 +669,142 @@ const HalCore = (function () {
     return report;
   }
 
+  function smokeStep(id, label, status, detail) {
+    return { id, label, status, detail };
+  }
+
+  function formatSmokeTestSummary(report) {
+    if (!report || !report.steps) return "No smoke test available.";
+    const lines = [
+      "HAL operator smoke test: " + report.overall,
+      "Ran: " + report.ranAt,
+      "",
+      ...report.steps.map((s) => "- [" + s.status + "] " + s.label + ": " + s.detail),
+      "",
+      "(Local end-to-end check · read-only · no external action performed)",
+    ];
+    return lines.join("\n");
+  }
+
+  function runOperatorSmokeTest(halData, halModels, pages, runtime) {
+    const steps = [];
+
+    const readiness = runReadinessChecks(halData, halModels, pages, runtime);
+    steps.push(
+      smokeStep(
+        "readiness",
+        "Readiness check runs",
+        readiness && readiness.results.length ? "Pass" : "Fail",
+        readiness ? "Overall " + readiness.overall + " across " + readiness.results.length + " checks" : "No readiness report",
+      ),
+    );
+
+    const help = routeHalCommand(halData, halModels, pages, "what can you do?");
+    steps.push(smokeStep("ask", "Ask HAL responds locally", help.intent === "help" ? "Pass" : "Fail", "Intent: " + help.intent));
+
+    const nav = routeHalCommand(halData, halModels, pages, "open claims workbench");
+    steps.push(smokeStep("navigate", "Open a program page", nav.intent === "navigate: claims" ? "Pass" : "Fail", "Intent: " + nav.intent));
+
+    const template = sessionTemplateById(halData, "claims-review");
+    const session = template ? createSessionState(template) : null;
+    steps.push(
+      smokeStep("session", "Start a work session", session ? "Pass" : "Fail", session ? "Session: " + session.label : "No claims-review template"),
+    );
+
+    const packet = session ? buildEvidencePacket(session, halData, halModels) : null;
+    const packetErrors = packet ? validateEvidencePacket(packet, halData) : ["no packet"];
+    steps.push(
+      smokeStep(
+        "packet",
+        "Build evidence packet",
+        packet && packetErrors.length === 0 ? "Pass" : "Fail",
+        packet ? packetErrors.length + " validation issue(s)" : "No packet built",
+      ),
+    );
+
+    const blocked = routeHalCommand(halData, halModels, pages, "submit the claim");
+    steps.push(
+      smokeStep("firewall", "Firewall blocks external action", blocked.intent === "blocked: firewall" ? "Pass" : "Fail", "Intent: " + blocked.intent),
+    );
+
+    const overall = steps.some((s) => s.status === "Fail") ? "Fail" : steps.some((s) => s.status === "Warning") ? "Warning" : "Pass";
+    const report = { ranAt: new Date().toISOString(), overall, steps };
+    report.summary = formatSmokeTestSummary(report);
+    return report;
+  }
+
+  function buildHandoffSummary(halData, halModels, context) {
+    const ctx = context || {};
+    const readiness = ctx.readiness || null;
+    const session = ctx.session || null;
+    const packet = ctx.packet || null;
+    const smoke = ctx.smoke || null;
+    const gate = readiness ? readiness.gate || staffUseGate(readiness) : null;
+    const blocked = registryList(halData).filter((entry) => /blocked|needs review/i.test(entry.state));
+    const lines = [
+      "HAL STAFF HANDOFF SUMMARY",
+      "Generated: " + new Date().toISOString(),
+      "",
+      "Readiness: " + (readiness ? readiness.overall : "not run yet"),
+      "Staff use gate: " + (gate ? gate.status + " — " + gate.headline : "not run yet"),
+      "Operator smoke test: " + (smoke ? smoke.overall : "not run yet"),
+      "",
+      "Active work session: " + (session ? session.label + " (" + sessionProgress(session) + "% complete)" : "none"),
+      "Evidence packet: " + (packet ? "built " + packet.builtAt : "none"),
+      "",
+      "Blocked / needs review:",
+      blocked.length ? blocked.map((entry) => "- " + entry.name + " (" + entry.state + "): " + entry.nextAction).join("\n") : "- (none)",
+      "",
+      "Next staff actions:",
+      registryList(halData)
+        .map((entry) => "- " + entry.name + ": " + entry.nextAction)
+        .join("\n"),
+      "",
+      "(Read-only summary · HAL performs no external action · human review required)",
+    ];
+    return lines.join("\n");
+  }
+
+  function deriveDrawerHealth(halData, halModels, pages, readiness) {
+    const report = readiness || runReadinessChecks(halData, halModels, pages);
+    const byId = {};
+    for (const item of report.results) byId[item.id] = item.status;
+    const worst = (...statuses) => (statuses.includes("Fail") ? "Fail" : statuses.includes("Warning") ? "Warning" : "Pass");
+    const sourceItems = (halData.sources && halData.sources.items) || [];
+    const sourcesStatus = sourceItems.some((s) => s.warning) ? "Warning" : "Pass";
+    return {
+      askHal: worst(byId.routes || "Pass", byId.registry || "Pass"),
+      sources: sourcesStatus,
+      reasoning: worst(byId.models || "Pass"),
+      workSurfaces: worst(byId.sessions || "Pass", byId.packets || "Pass"),
+      firewall: worst(byId.firewall || "Pass"),
+      priorities: "Pass",
+      status: report.overall,
+    };
+  }
+
+  function modelLaneDetails(halModels) {
+    const mode = modelConfig(halModels).mode || "offline";
+    return modelLanes(halModels).map((lane) => {
+      const ready = laneReady(halModels, lane.id);
+      let nextStep = null;
+      if (!ready) {
+        nextStep =
+          mode === "online"
+            ? "Start Ollama locally and confirm " + (lane.model || "the model") + " is pulled."
+            : "Set mode to online in hal-models.json once a local model is available.";
+      }
+      return { id: lane.id, name: lane.name, role: lane.role, model: lane.model, state: lane.state, ready, mode, nextStep };
+    });
+  }
+
+  function matchOperatorRoute(query) {
+    const q = String(query).toLowerCase().trim();
+    if (/smoke test|operator test|acceptance test|end[\s-]?to[\s-]?end (test|check)|operator check/.test(q)) return { type: "smoke" };
+    if (/staff handoff summary|handoff summary|staff summary|handoff report/.test(q)) return { type: "handoff-summary" };
+    return null;
+  }
+
   function matchReadinessRoute(query) {
     const q = String(query).toLowerCase().trim();
     if (/staff[\s-]?use gate|ready for staff|safe for staff|can staff use|are you ready for staff|ready to use|staff readiness/.test(q)) {
@@ -724,6 +860,16 @@ const HalCore = (function () {
           "I am the local program manager. I can open any program page, explain what each page is for, show today's priorities, start read-only work sessions, build local evidence packets, run readiness checks, report source health, simulate the firewall, and explain model lanes. I do not submit, send, or change anything.",
         actions: [],
       };
+    }
+
+    const operatorRoute = matchOperatorRoute(query);
+    if (operatorRoute) {
+      if (operatorRoute.type === "smoke") {
+        return { intent: "operator: smoke", lane: "local", useSmokeTest: true, text: "", actions: [] };
+      }
+      if (operatorRoute.type === "handoff-summary") {
+        return { intent: "operator: handoff-summary", lane: "local", useHandoffSummary: true, text: "", actions: [] };
+      }
     }
 
     const readinessRoute = matchReadinessRoute(query);
@@ -975,6 +1121,12 @@ const HalCore = (function () {
     staffUseGate,
     formatReadinessSummary,
     matchReadinessRoute,
+    runOperatorSmokeTest,
+    formatSmokeTestSummary,
+    buildHandoffSummary,
+    deriveDrawerHealth,
+    modelLaneDetails,
+    matchOperatorRoute,
   };
 })();
 

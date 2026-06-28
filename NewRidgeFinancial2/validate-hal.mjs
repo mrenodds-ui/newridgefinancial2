@@ -322,6 +322,30 @@ async function main() {
   assert(HalCore.formatReadinessSummary(readinessReport).includes("Staff use gate:"), "summary must include staff use gate line");
   passed++;
 
+  // Operator smoke test + handoff summary
+  const smoke = HalCore.runOperatorSmokeTest(halData, halModels, pages);
+  assert(smoke && Array.isArray(smoke.steps) && smoke.steps.length === 6, "smoke test must return 6 steps");
+  assert(smoke.steps.every((s) => s.status === "Pass"), "all smoke steps must pass: " + smoke.steps.filter((s) => s.status !== "Pass").map((s) => s.label).join(", "));
+  assert(smoke.overall === "Pass", "smoke overall must be Pass");
+  assert(HalCore.formatSmokeTestSummary(smoke).includes("operator smoke test"), "smoke summary must format");
+  const operatorRoutes = halData.validation.operatorRoutes || {};
+  for (const [command, expectedIntent] of Object.entries(operatorRoutes)) {
+    const routed = HalCore.routeHalCommand(halData, halModels, pages, command);
+    assert(routed.intent === expectedIntent, `operator "${command}" expected ${expectedIntent}, got ${routed.intent}`);
+  }
+  const operatorTrap = HalCore.routeHalCommand(halData, halModels, pages, halData.validation.operatorFirewallTrap);
+  assert(operatorTrap.intent === "blocked: firewall", "operator smoke + email must be blocked");
+  const handoff = HalCore.buildHandoffSummary(halData, halModels, { readiness: readinessReport, smoke });
+  assert(handoff.includes("STAFF HANDOFF SUMMARY"), "handoff summary must format");
+  assert(/human review/i.test(handoff), "handoff summary must mention human review");
+  const health = HalCore.deriveDrawerHealth(halData, halModels, pages, readinessReport);
+  for (const key of ["askHal", "sources", "reasoning", "workSurfaces", "firewall", "priorities"]) {
+    assert(["Pass", "Warning", "Fail"].includes(health[key]), `drawer health for ${key} must be valid, got ${health[key]}`);
+  }
+  const laneDetails = HalCore.modelLaneDetails(halModels);
+  assert(laneDetails.length === 3, "model lane details must cover 3 lanes");
+  passed++;
+
   // Seeded routing regression: local intents, model fallbacks, and firewall traps.
   const routingCases = buildSeededRoutingVariants(10000);
   const routingFailures = [];

@@ -284,6 +284,22 @@
       "clear": "Clear diagnostics"
     }
   },
+  "operator": {
+    "title": "Operator acceptance",
+    "summary": "Run a local end-to-end smoke test and assemble a read-only staff handoff summary. No external actions are performed.",
+    "smokeSteps": [
+      "Readiness check runs",
+      "Ask HAL responds locally",
+      "Open a program page",
+      "Start a work session",
+      "Build evidence packet",
+      "Firewall blocks external action"
+    ],
+    "commands": {
+      "smoke": "Run operator smoke test",
+      "handoff": "Staff handoff summary"
+    }
+  },
   "registry": [
     {
       "id": "financial",
@@ -415,6 +431,13 @@
       "Show diagnostics": "readiness: show",
       "Clear diagnostics": "readiness: clear"
     },
-    "readinessFirewallTrap": "Run readiness check and email it"
+    "readinessFirewallTrap": "Run readiness check and email it",
+    "operatorRoutes": {
+      "Run operator smoke test": "operator: smoke",
+      "Acceptance test": "operator: smoke",
+      "Staff handoff summary": "operator: handoff-summary",
+      "Handoff summary": "operator: handoff-summary"
+    },
+    "operatorFirewallTrap": "Run operator smoke test and email it"
   }
 }
