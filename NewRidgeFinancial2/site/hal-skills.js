@@ -14,9 +14,20 @@
  * Browser + Node compatible (no DOM).
  */
 const HalSkills = (function () {
+  const PROGRAM_SCHEMA_VERSION = "nr2-hal-skill-v1";
   const SAFETY_DISCLAIMER =
     "Local office-manager workflow only. Draft only where applicable. Requires human review. " +
     "Local only. not_submitted. Not written to SoftDent. No email/fax/upload action performed. No external delivery.";
+
+  function skillMeta(kind, source) {
+    return {
+      schema: PROGRAM_SCHEMA_VERSION,
+      kind,
+      source: source || "hal-skills",
+      localOnly: true,
+      generatedAt: new Date().toISOString(),
+    };
+  }
 
   /* ============================================================
    * Sanitization — port of sanitization.py
@@ -95,36 +106,36 @@ const HalSkills = (function () {
 
   const TRANSACTION_TYPE_TEMPLATES = {
     prepaid_insurance: [
-      { account_code: "1310", account_name: "Prepaid Insurance", debit: "amount", credit: 0 },
-      { account_code: "1010", account_name: "Cash", debit: 0, credit: "amount" },
+      { accountCode: "1310", accountName: "Prepaid Insurance", debit: "amount", credit: 0 },
+      { accountCode: "1010", accountName: "Cash", debit: 0, credit: "amount" },
     ],
     depreciation: [
-      { account_code: "6100", account_name: "Depreciation Expense", debit: "amount", credit: 0 },
-      { account_code: "1590", account_name: "Accumulated Depreciation", debit: 0, credit: "amount" },
+      { accountCode: "6100", accountName: "Depreciation Expense", debit: "amount", credit: 0 },
+      { accountCode: "1590", accountName: "Accumulated Depreciation", debit: 0, credit: "amount" },
     ],
     patient_cash_receipt: [
-      { account_code: "1010", account_name: "Cash", debit: "amount", credit: 0 },
-      { account_code: "1100", account_name: "Accounts Receivable", debit: 0, credit: "amount" },
+      { accountCode: "1010", accountName: "Cash", debit: "amount", credit: 0 },
+      { accountCode: "1100", accountName: "Accounts Receivable", debit: 0, credit: "amount" },
     ],
     equipment_purchase: [
-      { account_code: "1500", account_name: "Equipment", debit: "amount", credit: 0 },
-      { account_code: "1010", account_name: "Cash", debit: 0, credit: "amount" },
+      { accountCode: "1500", accountName: "Equipment", debit: "amount", credit: 0 },
+      { accountCode: "1010", accountName: "Cash", debit: 0, credit: "amount" },
     ],
     vendor_bill: [
-      { account_code: "5200", account_name: "Dental Supplies Expense", debit: "amount", credit: 0 },
-      { account_code: "2100", account_name: "Accounts Payable", debit: 0, credit: "amount" },
+      { accountCode: "5200", accountName: "Dental Supplies Expense", debit: "amount", credit: 0 },
+      { accountCode: "2100", accountName: "Accounts Payable", debit: 0, credit: "amount" },
     ],
     payroll_accrual: [
-      { account_code: "6200", account_name: "Payroll Expense", debit: "amount", credit: 0 },
-      { account_code: "2200", account_name: "Accrued Expenses", debit: 0, credit: "amount" },
+      { accountCode: "6200", accountName: "Payroll Expense", debit: "amount", credit: 0 },
+      { accountCode: "2200", accountName: "Accrued Expenses", debit: 0, credit: "amount" },
     ],
     supplies_accrual: [
-      { account_code: "5200", account_name: "Dental Supplies Expense", debit: "amount", credit: 0 },
-      { account_code: "2200", account_name: "Accrued Expenses", debit: 0, credit: "amount" },
+      { accountCode: "5200", accountName: "Dental Supplies Expense", debit: "amount", credit: 0 },
+      { accountCode: "2200", accountName: "Accrued Expenses", debit: 0, credit: "amount" },
     ],
     patient_service_revenue: [
-      { account_code: "1100", account_name: "Accounts Receivable", debit: "amount", credit: 0 },
-      { account_code: "4000", account_name: "Patient Service Revenue", debit: 0, credit: "amount" },
+      { accountCode: "1100", accountName: "Accounts Receivable", debit: "amount", credit: 0 },
+      { accountCode: "4000", accountName: "Patient Service Revenue", debit: 0, credit: "amount" },
     ],
   };
 
@@ -164,12 +175,12 @@ const HalSkills = (function () {
     const type = inferTransactionType(description, context || {});
     const template = TRANSACTION_TYPE_TEMPLATES[type];
     return template.map((line) => ({
-      account_code: line.account_code,
-      account_name: line.account_name,
+      accountCode: line.accountCode,
+      accountName: line.accountName,
       debit: round2(line.debit === "amount" ? amount : line.debit),
       credit: round2(line.credit === "amount" ? amount : line.credit),
       memo: description,
-      transaction_type: type,
+      transactionType: type,
     }));
   }
 
@@ -200,7 +211,7 @@ const HalSkills = (function () {
     const creditTotal = round2(credit.values.reduce((a, b) => a + b, 0));
     const balanced = debitTotal === creditTotal && invalidAmountFields.length === 0;
     const missingAccounts = lines
-      .map((line) => String(line.account_code || ""))
+      .map((line) => String(line.accountCode || ""))
       .filter((code) => !Object.prototype.hasOwnProperty.call(coa, code));
     const hasNegative = debit.values.concat(credit.values).some((v) => v < 0);
     const issues = [];
@@ -211,11 +222,11 @@ const HalSkills = (function () {
     if (hasNegative) issues.push("Journal line amounts must be non-negative.");
     return {
       balanced,
-      debit_total: debitTotal,
-      credit_total: creditTotal,
-      open_period: openPeriod,
-      account_validation_passed: missingAccounts.length === 0,
-      amount_validation_passed: !hasNegative && invalidAmountFields.length === 0,
+      debitTotal,
+      creditTotal,
+      openPeriod,
+      accountValidationPassed: missingAccounts.length === 0,
+      amountValidationPassed: !hasNegative && invalidAmountFields.length === 0,
       issues,
     };
   }
@@ -226,29 +237,30 @@ const HalSkills = (function () {
     const openPeriod = isPeriodOpen(period);
     const validation = buildJournalValidation({ lines, chartOfAccounts: CHART_OF_ACCOUNTS, openPeriod });
     return {
+      meta: skillMeta("accounting.journalDraft", "accounting"),
       description,
       period,
       amount,
-      transaction_type: lines[0] ? lines[0].transaction_type : "patient_service_revenue",
+      transactionType: lines[0] ? lines[0].transactionType : "patient_service_revenue",
       lines,
       validation,
-      draft_status: "draft_only",
-      posting_status: "pending_review",
-      safety: { local_only: true, not_submitted: true, human_review_required: true, posted_to_ledger: false },
+      draftStatus: "draftOnly",
+      postingStatus: "pendingReview",
+      safety: { localOnly: true, notSubmitted: true, humanReviewRequired: true, postedToLedger: false },
     };
   }
 
   function formatJournalDraft(draft) {
     const lines = [
-      `Journal draft (local · draft only · not posted) — ${draft.transaction_type.replace(/_/g, " ")}:`,
-      `Period ${draft.period} · ${draft.validation.open_period ? "OPEN" : "CLOSED"}`,
+      `Journal draft (local · draft only · not posted) — ${draft.transactionType.replace(/_/g, " ")}:`,
+      `Period ${draft.period} · ${draft.validation.openPeriod ? "OPEN" : "CLOSED"}`,
     ];
     draft.lines.forEach((l) => {
       const dr = l.debit ? `Dr ${l.debit.toFixed(2)}` : "";
       const cr = l.credit ? `Cr ${l.credit.toFixed(2)}` : "";
-      lines.push(`  ${l.account_code} ${l.account_name}: ${dr}${cr}`);
+      lines.push(`  ${l.accountCode} ${l.accountName}: ${dr}${cr}`);
     });
-    lines.push(`Balanced: ${draft.validation.balanced ? "yes" : "no"} (Dr ${draft.validation.debit_total} / Cr ${draft.validation.credit_total})`);
+    lines.push(`Balanced: ${draft.validation.balanced ? "yes" : "no"} (Dr ${draft.validation.debitTotal} / Cr ${draft.validation.creditTotal})`);
     if (draft.validation.issues.length) lines.push("Issues: " + draft.validation.issues.join("; "));
     lines.push("Stays in the posting queue for human review. Nothing posted to the ledger.");
     return lines.join("\n");
@@ -304,35 +316,35 @@ const HalSkills = (function () {
     else summary = missing.length ? `Blocked: ${missing[0]}.` : "Blocked until required local facts are available.";
 
     return {
-      packet_id: `cpr-${claim.id || "unknown"}`,
-      claim_ref: claim.id || null,
-      patient_label: claim.patient || null,
+      packetId: `cpr-${claim.id || "unknown"}`,
+      claimRef: claim.id || null,
+      patientLabel: claim.patient || null,
       status: readiness,
       priority,
       blockers: readiness === "blocked" ? missing.slice() : [],
-      missing_items: missing,
-      recommended_next_actions: Array.from(new Set(actions)),
-      can_prepare_local_draft: canPrepareDraft,
-      local_draft_status: canPrepareDraft ? "draft_available" : "needs_facts",
-      staff_summary: summary,
-      safety: { local_only: true, not_submitted: true, human_review_required: true, external_delivery_allowed: false },
+      missingItems: missing,
+      recommendedNextActions: Array.from(new Set(actions)),
+      canPrepareLocalDraft: canPrepareDraft,
+      localDraftStatus: canPrepareDraft ? "draftAvailable" : "needsFacts",
+      staffSummary: summary,
+      safety: { localOnly: true, notSubmitted: true, humanReviewRequired: true, externalDeliveryAllowed: false },
     };
   }
 
   function buildClaimReadinessResponse(claimsList) {
     const items = (claimsList || []).map(assessClaimReadiness);
     return {
-      generated_at_utc: new Date().toISOString(),
+      meta: skillMeta("claims.readiness", "claims"),
       summary: {
-        ready_count: items.filter((i) => i.status === "ready").length,
-        needs_review_count: items.filter((i) => i.status === "needs_review").length,
-        blocked_count: items.filter((i) => i.status === "blocked").length,
-        total_count: items.length,
+        readyCount: items.filter((i) => i.status === "ready").length,
+        needsReviewCount: items.filter((i) => i.status === "needs_review").length,
+        blockedCount: items.filter((i) => i.status === "blocked").length,
+        totalCount: items.length,
       },
       items,
-      safety_disclaimer: SAFETY_DISCLAIMER,
-      local_only: true,
-      submission_status: "not_submitted",
+      safetyDisclaimer: SAFETY_DISCLAIMER,
+      localOnly: true,
+      submissionStatus: "notSubmitted",
     };
   }
 
@@ -340,9 +352,9 @@ const HalSkills = (function () {
     const s = resp.summary;
     const lines = [
       "Claim packet readiness (local only):",
-      `- Ready: ${s.ready_count}`,
-      `- Needs review: ${s.needs_review_count}`,
-      `- Blocked: ${s.blocked_count}`,
+      `- Ready: ${s.readyCount}`,
+      `- Needs review: ${s.needsReviewCount}`,
+      `- Blocked: ${s.blockedCount}`,
       "",
       "HAL can prepare a local packet and draft. Staff must review before use. Nothing has been submitted or sent.",
     ];
@@ -350,7 +362,7 @@ const HalSkills = (function () {
     if (examples.length) {
       lines.push("", "Examples:");
       examples.forEach((item) => {
-        const headline = item.claim_ref ? `${item.claim_ref}: ${item.staff_summary}` : item.staff_summary;
+        const headline = item.claimRef ? `${item.claimRef}: ${item.staffSummary}` : item.staffSummary;
         lines.push(`- ${headline}`);
       });
     }
@@ -373,23 +385,23 @@ const HalSkills = (function () {
       const review = (claims.byStatus && (claims.byStatus["Needs Review"] || claims.byStatus.needsReview)) || 0;
       if (denied > 0) {
         items.push({
-          item_id: "claims-denied",
+          itemId: "claims-denied",
           category: "claims_follow_up",
           severity: denied >= 3 ? "warning" : "info",
           title: "Denied claims need follow-up",
           detail: `${denied} denied claim(s) are visible in the local claims workbench.`,
-          action_hint: "Use Claims Workbench to prepare a local review draft. No payer contact.",
+          actionHint: "Use Claims Workbench to prepare a local review draft. No payer contact.",
           count: denied,
         });
       }
       if (review > 0) {
         items.push({
-          item_id: "claims-needs-review",
+          itemId: "claims-needs-review",
           category: "claims_follow_up",
           severity: review >= 5 ? "warning" : "info",
           title: "Claims in the Needs Review lane",
           detail: `${review} claim(s) await staff review before any payer-facing step.`,
-          action_hint: "Work the Needs Review lane first. Nothing is submitted.",
+          actionHint: "Work the Needs Review lane first. Nothing is submitted.",
           count: review,
         });
       }
@@ -402,12 +414,12 @@ const HalSkills = (function () {
       const pending = (documents.posting.find((p) => /pending/i.test(p.label)) || {}).count || 0;
       if (pending > 0) {
         items.push({
-          item_id: "posting-queue-pending",
+          itemId: "posting-queue-pending",
           category: "revenue",
           severity: "info",
           title: "Accounting posting queue needs review",
           detail: `${pending} local posting-queue item(s) remain pending human review.`,
-          action_hint: "Review the accounting posting queue before month-end close.",
+          actionHint: "Review the accounting posting queue before month-end close.",
           count: pending,
         });
       }
@@ -417,26 +429,26 @@ const HalSkills = (function () {
     if (qb && /blocked|stale|pending/i.test(String(qb.syncStatus || qb.lastSync || ""))) {
       // QuickBooks registry state is Blocked in the program; surface as revenue attention.
       items.push({
-        item_id: "quickbooks-source-health",
+        itemId: "quickbooks-source-health",
         category: "revenue",
         severity: "warning",
         title: "QuickBooks source needs attention",
         detail: "QuickBooks sync is not current; expense and revenue totals may be stale.",
-        action_hint: "Review revenue inputs before month-end office-manager summaries.",
+        actionHint: "Review revenue inputs before month-end office-manager summaries.",
       });
     }
 
     if (taskMetrics) {
       const openTasks =
-        (taskMetrics.open_count || 0) + (taskMetrics.in_progress_count || 0) + (taskMetrics.blocked_count || 0);
+        (taskMetrics.openCount || 0) + (taskMetrics.inProgressCount || 0) + (taskMetrics.blockedCount || 0);
       if (openTasks > 0) {
         items.push({
-          item_id: "local-office-tasks-open",
+          itemId: "local-office-tasks-open",
           category: "local_tasks",
-          severity: (taskMetrics.urgent_open_count || 0) > 0 ? "warning" : "info",
+          severity: (taskMetrics.urgentOpenCount || 0) > 0 ? "warning" : "info",
           title: "Unresolved local office tasks",
           detail: `${openTasks} local office task(s) remain open, in progress, or blocked.`,
-          action_hint: "Work local tasks inside this app only. No SoftDent writeback or external delivery.",
+          actionHint: "Work local tasks inside this app only. No SoftDent writeback or external delivery.",
           count: openTasks,
         });
       }
@@ -449,17 +461,17 @@ const HalSkills = (function () {
       ["vendor-tracker-local-only", "vendor", "Vendor and software issues are local-only", "Vendor/software issue tracking uses local records in this app only.", "missing_vendor_tracker_source"],
     ].forEach(([id, category, title, detail, code]) => {
       missingCodes.add(code);
-      items.push({ item_id: id, category, severity: "info", title, detail, action_hint: "Use local office tasks until a real export source is approved.", missing_data_codes: [code] });
+      items.push({ itemId: id, category, severity: "info", title, detail, actionHint: "Use local office tasks until a real export source is approved.", missingDataCodes: [code] });
     });
 
     return {
-      generated_at_utc: new Date().toISOString(),
+      meta: skillMeta("office.attention", "officeManager"),
       summary: `${items.length} office-manager attention item(s) are visible. All actions remain local only, not submitted, and not written to SoftDent.`,
-      safety_disclaimer: SAFETY_DISCLAIMER,
+      safetyDisclaimer: SAFETY_DISCLAIMER,
       items,
-      missing_data_codes: Array.from(missingCodes).sort(),
-      local_only: true,
-      submission_status: "not_submitted",
+      missingDataCodes: Array.from(missingCodes).sort(),
+      localOnly: true,
+      submissionStatus: "notSubmitted",
     };
   }
 
@@ -469,7 +481,7 @@ const HalSkills = (function () {
       const sev = item.severity === "critical" ? "[!]" : item.severity === "warning" ? "[*]" : "[i]";
       lines.push(`${sev} ${item.title}${item.count ? ` (${item.count})` : ""} — ${item.detail}`);
     });
-    lines.push("", resp.safety_disclaimer);
+    lines.push("", resp.safetyDisclaimer);
     return lines.join("\n");
   }
 
@@ -504,24 +516,25 @@ const HalSkills = (function () {
     const category = VALID_TASK_CATEGORIES.has(req.category) ? req.category : "other";
     const priority = VALID_TASK_PRIORITIES.has(req.priority) ? req.priority : "normal";
     return {
-      task_id: uid("omt"),
+      meta: skillMeta("office.task", "officeManager"),
+      taskId: uid("omt"),
       title,
       description: String((req && req.description) || "").trim(),
       category,
       status: "open",
       priority,
-      patient_label: req.patient_label || null,
-      claim_id: req.claim_id || null,
-      source_refs: (req.source_refs || []).slice(),
-      missing_data_codes: (req.missing_data_codes || []).slice(),
-      due_date: req.due_date || null,
-      assigned_to: req.assigned_to || null,
-      created_by: actor,
-      created_at_utc: now,
-      updated_at_utc: now,
-      local_only: true,
-      external_action_performed: false,
-      softdent_writeback_performed: false,
+      patientLabel: req.patientLabel || req.patient_label || null,
+      claimId: req.claimId || req.claim_id || null,
+      sourceRefs: (req.sourceRefs || req.source_refs || []).slice(),
+      missingDataCodes: (req.missingDataCodes || req.missing_data_codes || []).slice(),
+      dueDate: req.dueDate || req.due_date || null,
+      assignedTo: req.assignedTo || req.assigned_to || null,
+      createdBy: actor,
+      createdAt: now,
+      updatedAt: now,
+      localOnly: true,
+      externalActionPerformed: false,
+      softdentWritebackPerformed: false,
     };
   }
 
@@ -546,12 +559,12 @@ const HalSkills = (function () {
       if (!VALID_TASK_PRIORITIES.has(updates.priority)) throw new Error(`Unsupported task priority: ${updates.priority}`);
       next.priority = updates.priority;
     }
-    ["patient_label", "claim_id", "due_date", "assigned_to"].forEach((field) => {
+    ["patientLabel", "claimId", "dueDate", "assignedTo"].forEach((field) => {
       if (updates[field] != null) next[field] = updates[field];
     });
-    if (updates.source_refs != null) next.source_refs = updates.source_refs.slice();
-    if (updates.missing_data_codes != null) next.missing_data_codes = updates.missing_data_codes.slice();
-    next.updated_at_utc = new Date().toISOString();
+    if (updates.sourceRefs != null) next.sourceRefs = updates.sourceRefs.slice();
+    if (updates.missingDataCodes != null) next.missingDataCodes = updates.missingDataCodes.slice();
+    next.updatedAt = new Date().toISOString();
     return next;
   }
 
@@ -559,15 +572,16 @@ const HalSkills = (function () {
     const list = tasks || [];
     const count = (status) => list.filter((t) => t.status === status).length;
     return {
-      open_count: count("open"),
-      in_progress_count: count("in_progress"),
-      blocked_count: count("blocked"),
-      completed_count: count("completed"),
-      dismissed_count: count("dismissed"),
-      urgent_open_count: list.filter((t) => t.status === "open" && t.priority === "urgent").length,
-      local_only: true,
-      external_action_performed: false,
-      softdent_writeback_performed: false,
+      meta: skillMeta("office.taskMetrics", "officeManager"),
+      openCount: count("open"),
+      inProgressCount: count("in_progress"),
+      blockedCount: count("blocked"),
+      completedCount: count("completed"),
+      dismissedCount: count("dismissed"),
+      urgentOpenCount: list.filter((t) => t.status === "open" && t.priority === "urgent").length,
+      localOnly: true,
+      externalActionPerformed: false,
+      softdentWritebackPerformed: false,
     };
   }
 
@@ -678,7 +692,7 @@ const HalSkills = (function () {
       const body = bodyParts.filter(Boolean).join(". ");
       chunkText(sanitizeText(body).sanitizedText, 1200, 200).forEach((chunk, chunkIndex) => {
         entries.push({
-          source_id: `${title}:chunk:${chunkIndex + 1}`,
+          sourceId: `${title}:chunk:${chunkIndex + 1}`,
           title,
           category: "library_document",
           content: chunk,
@@ -711,7 +725,7 @@ const HalSkills = (function () {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
     return scored.map(({ entry, score }) => ({
-      source_id: entry.source_id,
+      sourceId: entry.sourceId,
       title: entry.title,
       category: entry.category,
       content: entry.content,
@@ -737,14 +751,15 @@ const HalSkills = (function () {
     const context = queryRag(index, question, topK);
     const grounded = context.some((c) => String(c.content || "").trim());
     return {
+      meta: skillMeta("library.ask", "library"),
       mode: "client-keyword-rag-v1",
       question,
-      retrieved_context: context,
+      retrievedContext: context,
       guardrails: RAG_GUARDRAILS,
       grounded,
       answer: grounded ? null : INSUFFICIENT_DOCUMENT_CONTEXT_ANSWER,
       prompt: grounded ? buildDocumentAnswerPrompt(question, context) : null,
-      local_only: true,
+      localOnly: true,
     };
   }
 
@@ -752,8 +767,8 @@ const HalSkills = (function () {
     if (!result.grounded) {
       return INSUFFICIENT_DOCUMENT_CONTEXT_ANSWER + "\n\nLibrary search is local-only and grounded; nothing was sent externally.";
     }
-    const lines = [`Found ${result.retrieved_context.length} grounded match(es) in the local library:`, ""];
-    result.retrieved_context.forEach((c) => lines.push(`- ${c.title} (match ${c.score}) — ${c.content.slice(0, 160)}`));
+    const lines = [`Found ${result.retrievedContext.length} grounded match(es) in the local library:`, ""];
+    result.retrievedContext.forEach((c) => lines.push(`- ${c.title} (match ${c.score}) — ${c.content.slice(0, 160)}`));
     lines.push("", "Grounded, local-only retrieval. A local model can summarize these with the grounded prompt; nothing was sent externally.");
     return lines.join("\n");
   }
@@ -783,10 +798,11 @@ const HalSkills = (function () {
     if (!claimsAvailable) missing.push(SOFTDENT_MISSING_DATA_CODES.claims);
     if (!arAvailable) missing.push(SOFTDENT_MISSING_DATA_CODES.ar);
     return {
-      claims_available: claimsAvailable,
-      clinical_notes_available: false,
-      ar_available: arAvailable,
-      missing_data_codes: missing,
+      meta: skillMeta("softdent.readStatus", "softdent"),
+      claimsAvailable,
+      clinicalNotesAvailable: false,
+      arAvailable,
+      missingDataCodes: missing,
       note: "A/R is only reported from a verified source; HAL never fabricates a $0 balance.",
     };
   }
@@ -815,7 +831,7 @@ const HalSkills = (function () {
     const snap = snapshot || {};
     const dashboards = snap.dashboards || {};
     const sdStatus = softDentReadSourceStatus(snap);
-    const arAvailable = sdStatus.ar_available;
+    const arAvailable = sdStatus.arAvailable;
     const claims = snap.claims || {};
 
     const financialStatus = dashboards.financial ? "SUCCESS" : "FAILED";
@@ -829,53 +845,54 @@ const HalSkills = (function () {
     );
 
     const widgets = {
-      practice_financial_overview: {
+      practiceFinancialOverview: {
         title: "Practice Financial Overview",
         status: mergeWidgetStatus(qbStatus, softdentStatus),
         summary: "Practice revenue from QuickBooks and production/collections from the SoftDent import cache. Dental A/R is not sourced from QuickBooks.",
         metrics: {
-          monthly_revenue: dashboards.quickbooks ? dashboards.quickbooks.revenue || null : null,
-          production_total: dashboards.softdent ? dashboards.softdent.production || null : null,
+          monthlyRevenue: dashboards.quickbooks ? dashboards.quickbooks.revenue || null : null,
+          productionTotal: dashboards.softdent ? dashboards.softdent.production || null : null,
         },
       },
-      accounts_payable_automation: {
+      accountsPayableAutomation: {
         title: "Accounts Payable Automation",
         status: qbStatus,
         summary: "QuickBooks expense totals and posting-queue workflow counts from the import cache.",
-        metrics: { expense_total: dashboards.quickbooks ? dashboards.quickbooks.expenses || null : null, posting_queue_pending_count: pendingPosting || null },
+        metrics: { expenseTotal: dashboards.quickbooks ? dashboards.quickbooks.expenses || null : null, postingQueuePendingCount: pendingPosting || null },
       },
-      smart_claims_and_receivables: {
+      smartClaimsAndReceivables: {
         title: "Smart Claims & Receivables",
         status: claimsStatus,
         summary: arAvailable
           ? "SoftDent claims and receivables totals derived from local practice operations data."
           : "SoftDent claims totals from local data; dental A/R is unavailable until an explicit SoftDent A/R export is present.",
-        metrics: { outstanding_claim_count: claims.total || null, accounts_receivable_total: null },
+        metrics: { outstandingClaimCount: claims.total || null, accountsReceivableTotal: null },
       },
-      care_delivery_performance: {
+      careDeliveryPerformance: {
         title: "Care Delivery Performance",
         status: careStatus,
         summary: arAvailable
           ? "Practice-wide SoftDent operational balances from the import cache."
           : "Practice-wide SoftDent operational activity from the import cache; patient A/R balances are unavailable until an explicit SoftDent A/R export is present.",
-        metrics: { patient_balance_total: null },
+        metrics: { patientBalanceTotal: null },
       },
     };
 
     const feed = {
+      meta: skillMeta("widgets.feed", "programSnapshot"),
       manager: "Import cache",
-      run_id: uid("run"),
-      generated_at: snap.gatheredAt || new Date().toISOString(),
+      runId: uid("run"),
+      generatedAt: snap.gatheredAt || new Date().toISOString(),
       widgets,
       sources: {
-        quickbooks: { last_status: qbStatus, origin: "local" },
-        softdent: { last_status: softdentStatus, origin: "local" },
+        quickbooks: { lastStatus: qbStatus, origin: "local" },
+        softdent: { lastStatus: softdentStatus, origin: "local" },
       },
       jobs: {},
-      local_only: true,
+      localOnly: true,
     };
     const publish = publishJobStatus(widgets);
-    feed.jobs = { import_cache_refresh: { status: publish }, widget_publish: { status: publish } };
+    feed.jobs = { importCacheRefresh: { status: publish }, widgetPublish: { status: publish } };
     return enforceReceivablesArPolicy(feed, arAvailable);
   }
 
@@ -883,8 +900,8 @@ const HalSkills = (function () {
   function enforceReceivablesArPolicy(feed, arAvailable) {
     if (arAvailable) return feed;
     [
-      ["smart_claims_and_receivables", ["accounts_receivable_total"]],
-      ["care_delivery_performance", ["patient_balance_total"]],
+      ["smartClaimsAndReceivables", ["accountsReceivableTotal"]],
+      ["careDeliveryPerformance", ["patientBalanceTotal"]],
     ].forEach(([key, metricKeys]) => {
       const widget = feed.widgets[key];
       if (!widget || !widget.metrics) return;
@@ -894,8 +911,8 @@ const HalSkills = (function () {
       if (String(widget.status).toUpperCase() === "SUCCESS") widget.status = "DEGRADED";
     });
     const publish = publishJobStatus(feed.widgets);
-    feed.jobs.import_cache_refresh = { status: publish };
-    feed.jobs.widget_publish = { status: publish };
+    feed.jobs.importCacheRefresh = { status: publish };
+    feed.jobs.widgetPublish = { status: publish };
     return feed;
   }
 
@@ -904,7 +921,7 @@ const HalSkills = (function () {
     Object.values(feed.widgets).forEach((w) => {
       lines.push(`[${w.status}] ${w.title} — ${w.summary}`);
     });
-    lines.push("", `Publish job: ${feed.jobs.widget_publish.status}. Local-only; A/R shown only from a verified source.`);
+    lines.push("", `Publish job: ${feed.jobs.widgetPublish.status}. Local-only; A/R shown only from a verified source.`);
     return lines.join("\n");
   }
 

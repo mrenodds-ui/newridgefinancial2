@@ -846,7 +846,7 @@ async function handleHalSubmit(query) {
     const metrics = HalSkills.computeTaskMetrics(halOfficeTasks);
     const lines = [
       `Local office tasks (${halOfficeTasks.length}) — local only, never written to SoftDent:`,
-      `Open ${metrics.open_count} · In progress ${metrics.in_progress_count} · Blocked ${metrics.blocked_count} · Completed ${metrics.completed_count}`,
+      `Open ${metrics.openCount} · In progress ${metrics.inProgressCount} · Blocked ${metrics.blockedCount} · Completed ${metrics.completedCount}`,
     ];
     if (!halOfficeTasks.length) {
       lines.push("", 'No tasks yet. Say "Create a task: follow up on denied claim" to add one.');

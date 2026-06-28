@@ -450,19 +450,23 @@ async function main() {
   const postBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Post a journal entry to the ledger");
   assert(postBlocked.intent === "blocked: firewall", "posting a journal entry must stay blocked");
   const journal = HalSkills.draftAndValidateJournal({ description: "Prepaid insurance payment", period: "2025-05", amount: 1200, context: {} });
-  assert(journal.transaction_type === "prepaid_insurance", "journal type inference must work");
+  assert(journal.meta && journal.meta.schema === "nr2-hal-skill-v1", "journal draft must use the NewRidge skill schema envelope");
+  assert(journal.transactionType === "prepaid_insurance", "journal type inference must work");
   assert(journal.validation.balanced === true, "drafted journal must balance");
-  assert(journal.validation.debit_total === 1200 && journal.validation.credit_total === 1200, "journal totals must match amount");
-  assert(journal.draft_status === "draft_only" && journal.safety.posted_to_ledger === false, "journal must remain draft-only, not posted");
+  assert(journal.validation.debitTotal === 1200 && journal.validation.creditTotal === 1200, "journal totals must match amount");
+  assert(journal.draftStatus === "draftOnly" && journal.safety.postedToLedger === false, "journal must remain draft-only, not posted");
+  assert(journal.lines[0].accountCode === "1310" && journal.lines[0].accountName === "Prepaid Insurance", "journal lines must use camelCase account fields");
   const closed = HalSkills.draftAndValidateJournal({ description: "Depreciation", period: "2025-01", amount: 500, context: {} });
-  assert(closed.validation.open_period === false, "closed period must be detected");
+  assert(closed.validation.openPeriod === false, "closed period must be detected");
 
   // Claim packet readiness
   const readinessRoute = HalCore.routeHalCommand(halData, halModels, pages, "Check claim packet readiness");
   assert(readinessRoute.intent === "claims: readiness" && readinessRoute.useClaimReadiness === true, "claim readiness must route locally");
   const cprResp = HalSkills.buildClaimReadinessResponse((snapshot.claims && snapshot.claims.top) || []);
-  assert(cprResp.summary.total_count > 0, "claim readiness must assess claims");
-  assert(cprResp.submission_status === "not_submitted", "claim readiness must remain not submitted");
+  assert(cprResp.meta && cprResp.meta.schema === "nr2-hal-skill-v1", "claim readiness must use the NewRidge skill schema envelope");
+  assert(cprResp.summary.totalCount > 0, "claim readiness must assess claims");
+  assert(cprResp.submissionStatus === "notSubmitted", "claim readiness must remain not submitted");
+  assert("claimRef" in cprResp.items[0] && "staffSummary" in cprResp.items[0], "claim readiness items must use camelCase fields");
   const cprText = HalSkills.formatClaimReadinessAnswer(cprResp);
   assert(/Nothing has been submitted/.test(cprText), "claim readiness answer must include not-submitted safety");
 
@@ -471,7 +475,8 @@ async function main() {
   assert(officeRoute.intent === "office: attention" && officeRoute.useOfficeAttention === true, "office attention must route locally");
   const attention = HalSkills.buildOfficeManagerAttention(snapshot, HalSkills.computeTaskMetrics([]));
   assert(attention.items.length > 0, "office attention must produce items");
-  assert(attention.submission_status === "not_submitted" && attention.local_only === true, "office attention must stay local/not-submitted");
+  assert(attention.submissionStatus === "notSubmitted" && attention.localOnly === true, "office attention must stay local/not-submitted");
+  assert("itemId" in attention.items[0] && "actionHint" in attention.items[0], "office attention items must use camelCase fields");
 
   // Office tasks (local create/update/metrics)
   const listRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show my tasks");
@@ -479,11 +484,12 @@ async function main() {
   const createRoute = HalCore.routeHalCommand(halData, halModels, pages, "Create a task: follow up on denied claim");
   assert(createRoute.intent === "tasks: create" && createRoute.useTaskCreate === true, "task create must route locally");
   const task = HalSkills.createTask({ title: createRoute.taskTitle }, { actor: "test" });
-  assert(task.status === "open" && task.local_only === true && task.softdent_writeback_performed === false, "created task must be local-only");
+  assert(task.status === "open" && task.localOnly === true && task.softdentWritebackPerformed === false, "created task must be local-only");
+  assert(task.taskId && task.createdAt && task.updatedAt, "created task must use program-style taskId/createdAt/updatedAt fields");
   const done = HalSkills.applyTaskUpdate(task, { status: "completed" });
   assert(done.status === "completed", "task update must apply");
   const metrics = HalSkills.computeTaskMetrics([task, done]);
-  assert(metrics.open_count === 1 && metrics.completed_count === 1, "task metrics must count statuses");
+  assert(metrics.openCount === 1 && metrics.completedCount === 1, "task metrics must count statuses");
 
   // Sanitization (PII redaction)
   const san = HalSkills.sanitizeText("Call patient John Smith at 555-123-4567, MRN 12345, john@x.com on 03/12/2025");
@@ -507,7 +513,8 @@ async function main() {
   assert(navLibrary.intent.startsWith("navigate"), "opening the library must still navigate, not trigger RAG");
   const libDocs = (snapshot.library && (snapshot.library.top || snapshot.library.docs)) || [];
   const ragHit = HalSkills.answerFromLibrary("compliance training", libDocs, 4);
-  assert(ragHit.grounded === true && ragHit.retrieved_context.length > 0, "RAG must find grounded matches");
+  assert(ragHit.grounded === true && ragHit.retrievedContext.length > 0, "RAG must find grounded matches");
+  assert("sourceId" in ragHit.retrievedContext[0], "RAG results must use camelCase sourceId");
   assert(ragHit.prompt && ragHit.prompt.includes("library context"), "RAG must build a grounded answer prompt");
   const ragMiss = HalSkills.answerFromLibrary("zzzqqq nonexistent topic", libDocs, 4);
   assert(ragMiss.grounded === false && ragMiss.answer === HalSkills.INSUFFICIENT_DOCUMENT_CONTEXT_ANSWER, "RAG must fall back when no grounded context");
@@ -517,19 +524,20 @@ async function main() {
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
   assert(Object.keys(feed.widgets).length === 4, "widget feed must build 4 widgets");
-  assert(feed.local_only === true, "widget feed must stay local-only");
+  assert(feed.localOnly === true && feed.runId && feed.generatedAt, "widget feed must use program-style runId/generatedAt/localOnly fields");
+  assert(feed.jobs.widgetPublish && feed.sources.quickbooks.lastStatus, "widget feed jobs/sources must use camelCase fields");
 
   // A/R honesty: with no verified A/R source, totals are nulled and status degrades
   const noArFeed = HalSkills.buildWidgetFeed({ dashboards: { softdent: {}, quickbooks: { syncStatus: "ok" } }, claims: { total: 5 } });
-  assert(noArFeed.widgets.smart_claims_and_receivables.metrics.accounts_receivable_total === null, "A/R must not be fabricated without a verified source");
-  assert(noArFeed.widgets.care_delivery_performance.metrics.patient_balance_total === null, "patient A/R balance must not be fabricated");
-  assert(noArFeed.widgets.smart_claims_and_receivables.status !== "SUCCESS", "claims widget must degrade without A/R source");
+  assert(noArFeed.widgets.smartClaimsAndReceivables.metrics.accountsReceivableTotal === null, "A/R must not be fabricated without a verified source");
+  assert(noArFeed.widgets.careDeliveryPerformance.metrics.patientBalanceTotal === null, "patient A/R balance must not be fabricated");
+  assert(noArFeed.widgets.smartClaimsAndReceivables.status !== "SUCCESS", "claims widget must degrade without A/R source");
 
   // SoftDent read source status honesty (never fabricate $0 A/R)
   const sdReal = HalSkills.softDentReadSourceStatus(snapshot);
-  assert(sdReal.ar_available === true, "report-derived A/R from the A/R dashboard must be recognized as available");
+  assert(sdReal.arAvailable === true, "report-derived A/R from the A/R dashboard must be recognized as available");
   const sdEmpty = HalSkills.softDentReadSourceStatus({ dashboards: {}, claims: { total: 0 } });
-  assert(sdEmpty.ar_available === false && sdEmpty.missing_data_codes.includes("missing_softdent_ar"), "missing A/R must be surfaced honestly");
+  assert(sdEmpty.arAvailable === false && sdEmpty.missingDataCodes.includes("missing_softdent_ar"), "missing A/R must be surfaced honestly");
   passed++;
 
   console.log(`HAL validation passed (${passed} suites)`);
