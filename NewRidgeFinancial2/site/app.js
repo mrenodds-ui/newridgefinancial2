@@ -26,12 +26,14 @@ const FALLBACK_HAL = {
 const FALLBACK_MODELS = { config: { mode: "offline" }, lanes: [] };
 
 const HOTSPOTS = [
-  { key: "askHal", label: "Ask HAL", left: 15, top: 15, width: 45, height: 17 },
-  { key: "sources", label: "Source intake", left: 8, top: 37, width: 25, height: 34 },
-  { key: "reasoning", label: "Reasoning core", left: 36, top: 37, width: 28, height: 34 },
-  { key: "workSurfaces", label: "Work surfaces", left: 67, top: 37, width: 27, height: 34 },
-  { key: "firewall", label: "External firewall", left: 9, top: 76, width: 84, height: 15 },
-  { key: "priorities", label: "Priorities", left: 66, top: 13, width: 28, height: 19 },
+  { key: "askHal", label: "Ask HAL", left: 15, top: 9, width: 50, height: 26 },
+  { key: "reasoning", label: "Local Reasoning Core", left: 67, top: 9, width: 31, height: 26 },
+  { key: "sources", label: "Source Intake", left: 15, top: 36, width: 25, height: 41 },
+  { key: "workSurfaces", label: "Staff Work Surfaces", left: 41, top: 36, width: 25, height: 41 },
+  { key: "firewall", label: "External Action Firewall", left: 67, top: 36, width: 31, height: 41 },
+  { key: "status", label: "Recent HAL Activity", left: 15, top: 79, width: 32, height: 17 },
+  { key: "priorities", label: "HAL Insights", left: 48, top: 79, width: 29, height: 17 },
+  { key: "controls", label: "System Controls", left: 78, top: 79, width: 20, height: 17 },
 ];
 
 const nav = document.getElementById("nav");
@@ -1263,6 +1265,14 @@ function statusPanel(data) {
     ${operatorPanelHtml()}`;
 }
 
+function controlsPanel(data) {
+  return `
+    <p>${escapeHtml(data.summary)}</p>
+    ${staffUseGateHtml()}
+    ${readinessPanelHtml()}
+    ${operatorPanelHtml()}`;
+}
+
 function chips(items, blocked = false) {
   if (!items || items.length === 0) return "";
   return `<div>${items
@@ -1347,6 +1357,13 @@ function renderPanel(key) {
 
   if (key === "status") {
     drawerContent.innerHTML = statusPanel(data);
+    bindReadinessControls(drawerContent);
+    bindOperatorControls(drawerContent);
+    return;
+  }
+
+  if (key === "controls") {
+    drawerContent.innerHTML = controlsPanel(data);
     bindReadinessControls(drawerContent);
     bindOperatorControls(drawerContent);
     return;

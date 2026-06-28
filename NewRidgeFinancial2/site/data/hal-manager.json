@@ -4,6 +4,10 @@
     "summary": "Local program manager for NewRidgeFinancial 2.0. HAL can guide staff through the pages, surface priorities, explain local status, and preserve the external-action firewall.",
     "posture": ["Local-only", "Read-only", "Human review required", "Not submitted"]
   },
+  "controls": {
+    "title": "System Controls",
+    "summary": "Read-only operator console. Run the acceptance smoke test, check the staff-use gate, and assemble a handoff summary. HAL changes no settings and takes no external action."
+  },
   "askHal": {
     "title": "Ask HAL",
     "summary": "HAL answers from the local program registry first. Unmatched questions use the local 14B chat lane. Planning requests use the reasoning lane; second-opinion requests use the escalation lane. The firewall runs before every model.",
@@ -273,7 +277,7 @@
     "title": "HAL readiness",
     "summary": "Local self-check for registry, firewall, sessions, evidence packets, and model lane configuration. No external actions are performed.",
     "expectedRegistryCount": 9,
-    "expectedHotspotCount": 6,
+    "expectedHotspotCount": 8,
     "expectedSessionTemplates": 5,
     "expectedModelLanes": 3,
     "halImage": "pages/09-hal-command-center.png",

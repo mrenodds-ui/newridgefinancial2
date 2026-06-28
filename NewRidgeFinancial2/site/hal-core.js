@@ -780,6 +780,7 @@ const HalCore = (function () {
       firewall: worst(byId.firewall || "Pass"),
       priorities: "Pass",
       status: report.overall,
+      controls: report.overall,
     };
   }
 
