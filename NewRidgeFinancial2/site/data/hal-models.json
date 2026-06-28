@@ -26,7 +26,43 @@
       "temperature": 0.2,
       "think": true
     },
-    "note": "HAL answers from the local registry only by default. Local model lanes are not configured, so the desktop app does not require a localhost service. External actions remain blocked."
+    "note": "HAL answers from the local registry only by default. Model lanes remain display-only until explicitly configured for execution. External actions remain blocked."
+  },
+  "readinessDisplay": {
+    "label": "Operator-verified local inventory",
+    "verifiedAt": "2026-06-28",
+    "localAiService": {
+      "status": "Detected",
+      "name": "Ollama",
+      "path": "C:\\Users\\mreno\\AppData\\Local\\Programs\\Ollama\\ollama.exe",
+      "process": "ollama.exe serve"
+    },
+    "api": {
+      "status": "Reachable",
+      "endpoint": "http://127.0.0.1:11434/api/version",
+      "version": "0.30.11"
+    },
+    "activeLane": "chat14b",
+    "laneExecution": "Display-only · disabled unless explicitly configured",
+    "runningModel": "none",
+    "gpuStatus": "not verified",
+    "bindingStatus": "127.0.0.1 reachable; loopback-only not proven",
+    "dataPolicy": "No patient, financial, SoftDent, QuickBooks, or sensitive raw data sent to any model",
+    "availableModels": [
+      "queen3:14b",
+      "qwen3:14b",
+      "qwen3-coder:30b",
+      "qwen2.5-coder:32b",
+      "qwen3:235b",
+      "gpt-oss:120b",
+      "qwen3:30b",
+      "mistral-small3.1:24b"
+    ],
+    "configuredModels": {
+      "local": { "lane": "chat14b", "model": "queen3:14b", "available": true },
+      "reasoning": { "lane": "reason21b", "model": "mistral-small3.1:24b", "available": true },
+      "escalation": { "lane": "escalate30b", "model": "qwen3:30b", "available": true }
+    }
   },
   "lanes": [
     {
@@ -34,7 +70,9 @@
       "name": "14B chat lane",
       "model": "queen3:14b",
       "role": "Staff-facing conversation and plain-language answers",
-      "state": "Not configured",
+      "state": "Display only",
+      "inventoryAvailable": true,
+      "executionEnabled": false,
       "willAllow": [
         "Explain pages in plain language",
         "Summarize local read-only status",
@@ -51,7 +89,9 @@
       "name": "21B reasoning lane",
       "model": "mistral-small3.1:24b",
       "role": "Program review, prioritization, and structured reasoning",
-      "state": "Not configured",
+      "state": "Display only",
+      "inventoryAvailable": true,
+      "executionEnabled": false,
       "willAllow": [
         "Prioritize work across pages",
         "Prepare structured review notes"
@@ -66,7 +106,9 @@
       "name": "30B escalation lane",
       "model": "qwen3:30b",
       "role": "Second-opinion review for complex or high-risk questions",
-      "state": "Not configured",
+      "state": "Display only",
+      "inventoryAvailable": true,
+      "executionEnabled": false,
       "willAllow": [
         "Second-opinion review",
         "Complex case reasoning"

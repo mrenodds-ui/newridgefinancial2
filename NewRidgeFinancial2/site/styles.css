@@ -1257,6 +1257,17 @@ body {
 .hp-stats dd { margin: 0; font-size: 13px; color: #e6e9ef; font-weight: 600; }
 .hp-stats dd.hp-ok { color: var(--hp-ok); }
 
+/* Local AI readiness (display-only inventory inside Reasoning Core) */
+.hp-ai-ready { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); }
+.hp-ai-ready__title { margin: 0 0 8px; font-size: 9px; letter-spacing: 0.12em; color: #9aa3b0; font-weight: 700; }
+.hp-stats--ai { gap: 8px; }
+.hp-stats--ai div { padding-bottom: 4px; }
+.hp-stats--ai dt { font-size: 9px; }
+.hp-stats--ai dd { font-size: 11px; }
+.hp-ai-ready__inventory { margin: 8px 0 0; font-size: 10px; color: #8a929e; line-height: 1.45; }
+.hp-ai-ready__inventory b { color: var(--hp-gold); letter-spacing: 0.06em; font-size: 9px; }
+.hp-card__foot--ai { margin-top: 8px; color: #7d8694; }
+
 /* Source table */
 .hp-table { width: 100%; border-collapse: collapse; font-size: 11px; }
 .hp-table th {

@@ -404,6 +404,28 @@ async function main() {
   assert(halHtml.includes("local sample data"), "HAL page must label sample/local data honestly");
   passed++;
 
+  // AI readiness display is read-only; model execution remains disabled
+  assert(halModels.config.localModel.enabled === false, "local model execution must stay disabled");
+  assert(halModels.config.reasoningModel.enabled === false, "reasoning model execution must stay disabled");
+  assert(halModels.config.escalationModel.enabled === false, "escalation model execution must stay disabled");
+  assert(halModels.config.mode === "offline", "HAL must remain in offline/registry-only mode");
+  for (const lane of halModels.lanes) {
+    assert(lane.executionEnabled === false, `lane ${lane.id} execution must stay disabled`);
+    assert(lane.inventoryAvailable === true, `lane ${lane.id} inventory should be marked available`);
+  }
+  assert(halHtml.includes("LOCAL AI READINESS"), "HAL page must render AI readiness");
+  assert(halHtml.includes("display only"), "HAL page must label AI readiness as display only");
+  assert(halHtml.includes("Available inventory"), "HAL page must show available model inventory");
+  assert(halHtml.includes("queen3:14b"), "HAL page must show configured local model inventory");
+  assert(halHtml.includes("mistral-small3.1:24b"), "HAL page must show reasoning model inventory");
+  assert(halHtml.includes("qwen3:30b"), "HAL page must show escalation model inventory");
+  assert(halHtml.includes("not verified"), "HAL page must mark GPU/binding as unverified where applicable");
+  assert(/sensitive raw data|SoftDent|QuickBooks/i.test(halHtml), "HAL page must show sensitive-data no-egress policy");
+  assert(!HalCore.laneReady(halModels, "chat14b"), "chat lane must not be execution-ready");
+  assert(!HalCore.laneReady(halModels, "reason21b"), "reasoning lane must not be execution-ready");
+  assert(!HalCore.laneReady(halModels, "escalate30b"), "escalation lane must not be execution-ready");
+  passed++;
+
   console.log(`HAL validation passed (${passed} suites)`);
 }
 

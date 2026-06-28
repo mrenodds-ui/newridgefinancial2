@@ -30,6 +30,45 @@ const HalPage = (function () {
     return `<p class="hp-live-note">${esc(message)}</p>`;
   }
 
+  function aiStatRow(label, value, ok) {
+    return `<div><dt>${esc(label)}</dt><dd${ok ? ' class="hp-ok"' : ""}>${esc(value)}</dd></div>`;
+  }
+
+  function aiReadinessHtml(halModels) {
+    const rd = halModels && halModels.readinessDisplay;
+    if (!rd) return emptyNote("Local AI readiness not configured.");
+
+    const cfg = (halModels && halModels.config) || {};
+    const svc = rd.localAiService || {};
+    const api = rd.api || {};
+    const cm = rd.configuredModels || {};
+    const localModel = cm.local || {};
+    const reasoningModel = cm.reasoning || {};
+    const escalationModel = cm.escalation || {};
+    const inventory = rd.availableModels || [];
+    const inventoryPreview = inventory.slice(0, 4).join(" · ");
+    const inventoryMore = inventory.length > 4 ? ` +${inventory.length - 4} more` : "";
+
+    return `
+      <div class="hp-ai-ready">
+        <p class="hp-ai-ready__title">LOCAL AI READINESS <span class="hp-muted">(display only)</span></p>
+        <dl class="hp-stats hp-stats--ai">
+          ${aiStatRow("LOCAL AI SERVICE", `${svc.status || "Unknown"} · ${svc.name || "—"}`, svc.status === "Detected")}
+          ${aiStatRow("OLLAMA API", `${api.status || "Unknown"} · ${api.version || "—"}`, api.status === "Reachable")}
+          ${aiStatRow("ACTIVE LANE", rd.activeLane || cfg.activeLane || "—")}
+          ${aiStatRow("LOCAL MODEL", `${localModel.model || cfg.localModel?.model || "—"} · ${localModel.available ? "available" : "missing"}`, !!localModel.available)}
+          ${aiStatRow("REASONING MODEL", `${reasoningModel.model || "—"} · ${reasoningModel.available ? "available" : "missing"}`, !!reasoningModel.available)}
+          ${aiStatRow("ESCALATION MODEL", `${escalationModel.model || "—"} · ${escalationModel.available ? "available" : "missing"}`, !!escalationModel.available)}
+          ${aiStatRow("RUNNING MODEL", rd.runningModel || "none")}
+          ${aiStatRow("GPU STATUS", rd.gpuStatus || "not verified")}
+          ${aiStatRow("BINDING", rd.bindingStatus || "not verified")}
+          ${aiStatRow("LANE EXECUTION", rd.laneExecution || "disabled")}
+        </dl>
+        <p class="hp-ai-ready__inventory"><b>Available inventory:</b> ${esc(inventoryPreview)}${esc(inventoryMore)} <em class="hp-muted">(not routed)</em></p>
+        <p class="hp-card__foot hp-card__foot--ai">${esc(rd.dataPolicy || "No sensitive raw data sent to any model.")}</p>
+      </div>`;
+  }
+
   function render(ctx) {
     const root = ctx.root;
     if (!root) return;
@@ -179,6 +218,7 @@ const HalPage = (function () {
                 <div><dt>BLOCKED</dt><dd>${esc(blockedCount)}</dd></div>
               </dl>
             </div>
+            ${aiReadinessHtml(halModels)}
             <p class="hp-card__foot">All reasoning stays local. No data leaves this environment.</p>
             <div class="hp-chips">${(halData.reasoning?.actions || []).map((a) => `<button type="button" class="hp-action" data-hal-cmd="${esc(a.command)}">${esc(a.label)}</button>`).join("") || emptyNote("No reasoning actions configured.")}</div>
           </section>
