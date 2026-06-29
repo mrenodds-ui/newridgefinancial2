@@ -34,7 +34,7 @@
 
   "announceBroadcastTemplate": "I should inform you. A broadcast message has arrived from {sender}.",
 
-  "announceScope": "to_me_or_everyone",
+  "announceScope": "all",
 
   "suppressBell": true,
 
@@ -51,6 +51,8 @@
   "voiceVolume": 90,
 
   "inboxPath": "",
+
+  "stationInboxPath": "",
 
   "inboxMax": 50
 

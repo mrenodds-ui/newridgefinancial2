@@ -9,6 +9,7 @@ No separate backend server, no localhost API, no external browser.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -16,6 +17,7 @@ ROOT = Path(__file__).resolve().parent
 REPO_ROOT = ROOT.parent
 SITE_DIR = ROOT / "site"
 DATA_DIR = REPO_ROOT / "app_data" / "nr2"
+SIDENOTES_HUB_DATA_DIR = Path(os.environ.get("NR2_SIDENOTES_HUB_DATA", r"C:\softdent\HAL-SideNotes-Workstation\data"))
 INDEX_HTML = SITE_DIR / "index.html"
 
 
@@ -37,6 +39,13 @@ class DesktopApi:
         }
 
     def read_data_file(self, name: str) -> str:
+        # SideNotes station inbox files are produced by workstation helpers.
+        # Prefer the shared SoftDent hub so every workstation can focus on the
+        # same folder; other app data remains locked to site/data.
+        if name.startswith("sidenotes-inbox"):
+            hub_path = SIDENOTES_HUB_DATA_DIR / name
+            if hub_path.is_file():
+                return hub_path.read_text(encoding="utf-8")
         path = self.site_dir / "data" / name
         if not path.is_file():
             raise FileNotFoundError(f"Data file not found: {name}")

@@ -26,12 +26,12 @@ const PageViews = (function () {
   const Svc = resolveSvc();
 
   const PAGE_OUTLINES = {
-    financial: { eyebrow: "Owner financial dashboard", subtitle: "Mission control for practice performance.", chips: ["Read-only review", "No writeback"] },
-    softdent: { eyebrow: "SoftDent", subtitle: "System of Record: SoftDent", chips: ["Read-only", "No writeback"] },
-    quickbooks: { eyebrow: "QuickBooks", subtitle: "Financials synced from QuickBooks Online (Read-Only)", chips: ["Read-only sync", "Owner review"] },
+    financial: { eyebrow: "Owner financial dashboard", subtitle: "Mission control for practice performance.", chips: ["Read-only review", "SoftDent/QB read-only"] },
+    softdent: { eyebrow: "SoftDent", subtitle: "System of Record: SoftDent", chips: ["Read-only source", "HAL reads only"] },
+    quickbooks: { eyebrow: "QuickBooks", subtitle: "Financials synced from QuickBooks Online (Read-Only)", chips: ["Read-only source", "HAL reads only"] },
     ar: { eyebrow: "A/R & collections", subtitle: "Accounts receivable and collections oversight.", chips: ["SoftDent read-only", "No payer contact"] },
     claims: { eyebrow: "Patient claims workbench", subtitle: "Intelligent claim lifecycle management and readiness control.", chips: ["Local-only", "Human review required", "No payer submission"] },
-    narratives: { eyebrow: "Insurance narratives", subtitle: "Compose and manage insurance narratives with full control and visibility.", chips: ["Draft only", "Human review required", "No writeback"] },
+    narratives: { eyebrow: "Insurance narratives", subtitle: "Compose and manage insurance narratives with full control and visibility.", chips: ["Draft only", "Human review required", "No submission"] },
     documents: { eyebrow: "Accounting documents", subtitle: "Document intake, review, and posting queue management.", chips: ["Review-gated", "Journal draft only"] },
     library: { eyebrow: "Document library", subtitle: "Centralized repository for mission critical documents and resources.", chips: ["Policies", "Statements", "Claims", "Clinical", "Reports"] },
     "office-manager": { eyebrow: "Office Manager", subtitle: "Staff oversight and work-surface coordination.", chips: ["Staff oversight", "Read-only", "Approval required"] },
@@ -69,7 +69,7 @@ const PageViews = (function () {
       eyebrow: (outline && outline.eyebrow) || "Program page",
       subtitle: (outline && outline.subtitle) || (reg && reg.purpose) || "",
       chips: (outline && outline.chips) || [],
-      safety: (reg && reg.safety) || "Read-only · No writeback",
+      safety: (reg && reg.safety) || "Read-only · HAL reads source data only",
       registryState: (reg && reg.state) || "unknown",
       dataSource: "services",
       seedDataUsed: true,
@@ -497,7 +497,7 @@ const PageViews = (function () {
         ${card("Monthly Expenses", `<span class="pv-card-range">Last 12 Months</span>` + vBarChart(d.monthlyExpenses.labels, d.monthlyExpenses.values) + `<span class="pv-legend-inline"><i style="background:#d6b15e"></i> Operating Expenses</span>`, "pv-card--bars")}
         ${card("Expense Categories (YTD)", conicDonut(d.expenseCategories.slices, `<strong>${esc(d.expenseCategories.total)}</strong><span>Total</span>`) + `<a class="pv-gold-link" href="#">View all categories →</a>`, "pv-card--cats")}
         ${card("EBITDA Candidates", `<p class="pv-muted">Expenses that may be add-backs for EBITDA normalization</p>` + U.Table({ columns: ["Category / Description", "YTD Amount", "Type", "Action"], rows: ebitdaRows }) + `<div class="pv-total-row"><span>Total Potential Add-Backs</span><strong class="pv-gold">${esc(d.ebitdaTotal)}</strong></div><a class="pv-gold-link" href="#">Manage EBITDA Adjustments →</a>`, "pv-card--wide")}
-        ${card("QuickBooks Sync", syncRows + `<p class="pv-lock-note">🔒 This is a read-only connection. No data is written to QuickBooks.</p><a class="pv-gold-link" href="#">Manage Integration →</a>`, "pv-card--sync")}
+        ${card("QuickBooks Sync", syncRows + `<p class="pv-lock-note">🔒 Read-only connection. HAL cannot post to QuickBooks.</p><a class="pv-gold-link" href="#">Manage Integration →</a>`, "pv-card--sync")}
       </div>`;
   }
 
@@ -663,7 +663,7 @@ const PageViews = (function () {
           <article class="pv-card"><div class="pv-card__head"><h3>Draft History</h3><span>${(data.drafts || []).length} drafts</span></div>${U.Table({ columns: ["Version", "Modified", "Key Points", "Length", "Focus", "Modified By"], rows: histRows, emptyTitle: "No drafts yet", emptyMessage: "Save or generate a narrative to build history." })}</article>
         </div>
       </div>
-      <div class="pv-safety-foot">🛡 <strong>Safety mode active</strong> · No narratives are submitted automatically. No writeback to PMS or clearinghouse.</div>`;
+      <div class="pv-safety-foot">🛡 <strong>Safety mode active</strong> · No narratives are submitted automatically. HAL reads SoftDent and QuickBooks only.</div>`;
   }
 
   function readComposerForm(container) {
@@ -866,10 +866,47 @@ const PageViews = (function () {
 
   async function renderOfficeManager(state, halData) {
     const surfaces = await Svc.officeManager.surfaces(halData);
-    if (!surfaces.length) return `${topBar(state)}${U.EmptyState({ title: "No work surfaces", message: "HAL registry has no linked work surfaces yet." })}`;
+    let widgetFeed = halData && halData.runtime && halData.runtime.widgetFeed;
+    if (!widgetFeed && typeof HalSkills !== "undefined") {
+      try {
+        const snap = await Svc.readProgramSnapshot();
+        widgetFeed = HalSkills.buildWidgetFeed(snap);
+      } catch {
+        widgetFeed = null;
+      }
+    }
+    const widgetHtml = widgetFeed
+      ? card(
+          "HAL manager widgets",
+          `<div class="pv-work-grid pv-widget-grid">${(typeof HalSkills !== "undefined" && HalSkills.WIDGET_ORDER ? HalSkills.WIDGET_ORDER : Object.keys(widgetFeed.widgets || {}))
+            .map((key) => {
+              const w = widgetFeed.widgets[key];
+              if (!w) return "";
+              const metrics =
+                typeof HalSkills !== "undefined" && HalSkills.formatWidgetMetrics
+                  ? HalSkills.formatWidgetMetrics(w)
+                  : "";
+              return `<article class="pv-work-card pv-widget-card" data-pv-nav="${esc(w.navTarget || "")}" tabindex="0">
+                <strong>${esc(w.title)}</strong>
+                <span>${esc(w.status)}</span>
+                <p>${esc(metrics)}</p>
+                <em>${esc(w.summary)}</em>
+              </article>`;
+            })
+            .join("")}</div>`,
+          "pv-card--wide",
+          String(
+            (typeof HalSkills !== "undefined" && HalSkills.WIDGET_ORDER ? HalSkills.WIDGET_ORDER : Object.keys(widgetFeed.widgets || {})).length,
+          ),
+        )
+      : "";
+    if (!surfaces.length && !widgetHtml) {
+      return `${topBar(state)}${U.EmptyState({ title: "No work surfaces", message: "HAL registry has no linked work surfaces yet." })}`;
+    }
     return `
       ${topBar(state)}
-      ${card("Work surfaces", `<div class="pv-work-grid">${surfaces.map((s) => `<article class="pv-work-card" data-pv-nav="${esc(s.target)}" tabindex="0"><strong>${esc(s.label)}</strong><span>${esc(s.state)}</span><p>${esc(s.detail)}</p>${s.nextAction ? `<em>${esc(s.nextAction)}</em>` : ""}</article>`).join("")}</div>`, "pv-card--wide", String(surfaces.length))}`;
+      ${widgetHtml}
+      ${surfaces.length ? card("Work surfaces", `<div class="pv-work-grid">${surfaces.map((s) => `<article class="pv-work-card" data-pv-nav="${esc(s.target)}" tabindex="0"><strong>${esc(s.label)}</strong><span>${esc(s.state)}</span><p>${esc(s.detail)}</p>${s.nextAction ? `<em>${esc(s.nextAction)}</em>` : ""}</article>`).join("")}</div>`, "pv-card--wide", String(surfaces.length)) : ""}`;
   }
 
   const PAGE_RENDERERS = {

@@ -1,8 +1,9 @@
 # HAL SideNotes Watcher
 
-A small **local** helper that lets HAL announce incoming **SideNotesIM** messages
-out loud, and (optionally) suppress the SideNotesIM bell so HAL's voice is the
-alert.
+A small helper that lets HAL announce incoming **SideNotesIM** messages out
+loud, and (optionally) suppress the SideNotesIM bell so HAL's voice is the
+alert. It can run on one workstation or on every workstation for LAN-wide
+SideNotes monitoring.
 
 It watches the SideNotesIM message database (`history.vdb`) for newly-arrived
 messages and, for each one:
@@ -15,8 +16,10 @@ messages and, for each one:
 
 The helper **never reads the message body** (`dMessage`). It only reads routing
 metadata — sender, recipient, message id, date/time, and the unread flag — and
-everything stays on this machine. Nothing is sent over the network. HAL
-announces only the **sender** and the words _"new message"_, never the contents.
+everything stays on this machine unless you configure the inbox output to a
+shared office folder for LAN-wide monitoring. Even then, only routing metadata is
+written; HAL announces only the **sender** and the words _"new message"_, never
+the contents.
 
 ## How it works
 
@@ -36,9 +39,42 @@ SideNotesIM  ──writes──►  %APPDATA%\SideNotesIM\history.vdb
                                   │
               ┌──────────────────────────────┼────────────────────┐
               ▼                              ▼                     ▼
-   SAPI -> processed HAL WAV          mute bell (opt)     site/data/sidenotes-inbox.json
+   SAPI -> processed HAL WAV          mute bell (opt)     C:\softdent\HAL-SideNotes-Workstation\data
  "Good afternoon... from X"                                  (HAL reads this)
 ```
+
+## Network-wide monitoring
+
+For true local-network coverage, run this helper on each SideNotesIM station and
+point every station at the shared SoftDent hub:
+`C:\softdent\HAL-SideNotes-Workstation\data`.
+
+Each helper writes:
+
+- the normal `sidenotes-inbox.json` for backward compatibility
+- a station-specific file such as `sidenotes-inbox-room-2.json`,
+  `sidenotes-inbox-frontdesk-1.json`, or `sidenotes-inbox-office-manager.json`
+
+The HAL screen reads and merges these station inboxes:
+
+- `sidenotes-inbox-server.json`
+- `sidenotes-inbox-room-2.json`
+- `sidenotes-inbox-room-3.json`
+- `sidenotes-inbox-room-4.json`
+- `sidenotes-inbox-room-5.json`
+- `sidenotes-inbox-frontdesk-1.json`
+- `sidenotes-inbox-frontdesk-2.json`
+- `sidenotes-inbox-office-manager.json`
+
+Recommended station setup:
+
+1. Copy `sidenotes-helper` to each workstation.
+2. Set `myStation` to that computer's SideNotesIM station name.
+3. Set `stationInboxPath` to `C:\softdent\HAL-SideNotes-Workstation\data`
+   (or the UNC path that reaches the same shared folder).
+4. Leave `announceScope` as `all` to publish every routing record that station
+   sees locally.
+5. Restart the helper on each workstation.
 
 ## Run it
 
@@ -68,7 +104,7 @@ history is **not** re-announced.
 | `processedAudio` | `true` | Render speech to WAV, then locally lower/slow/smooth/compress it for a closer HAL tone |
 | `announceTemplate` | HAL-style direct message phrase | Spoken text for direct messages |
 | `announceBroadcastTemplate` | HAL-style broadcast phrase | Spoken text for "Everyone" messages |
-| `announceScope` | `to_me_or_everyone` | `to_me_or_everyone` or `all` |
+| `announceScope` | `all` | `to_me_or_everyone` or `all`; use `all` for LAN-wide station feeds |
 | `suppressBell` | `true` | Mute the SideNotesIM bell while running (restored on exit) |
 | `duckMusic` | `true` | Lower background music during each announcement, then restore |
 | `duckMusicProcesses` | `["Pandora.exe"]` | App executables to duck (add `msedge.exe` / `chrome.exe` for Pandora in a browser) |
@@ -76,6 +112,7 @@ history is **not** re-announced.
 | `voiceHint` | `""` | Substring to pick a voice (e.g. `Zira`); blank = default |
 | `voiceRate` / `voiceVolume` | `-6` / `90` | SAPI rate (-10..10) and volume (0..100), before HAL WAV processing |
 | `inboxPath` | _(auto)_ | Where the HAL inbox JSON is written |
+| `stationInboxPath` | _(auto)_ | Station-specific inbox path; blank = `sidenotes-inbox-<station>.json` next to `inboxPath` |
 | `inboxMax` | `50` | Max recent messages kept in the inbox |
 
 > To stop muting the SideNotesIM bell, set `"suppressBell": false`.

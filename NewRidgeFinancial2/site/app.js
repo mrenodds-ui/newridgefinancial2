@@ -58,7 +58,7 @@ function saveWorkSession() {
   persistLocal("halWorkSession", halWorkSession);
 }
 
-// Local office-manager tasks (ported HAL skill). Local-only, no writeback.
+// Local office-manager tasks (ported HAL skill). Local-only; HAL reads SoftDent and QuickBooks only.
 let halOfficeTasks = [];
 
 function saveOfficeTasks() {
@@ -71,7 +71,20 @@ let halSideNoteMonitorTimer = null;
 // Live SideNotesIM feed captured by the local watcher helper (routing only).
 let halSideNotesInbox = null;
 let halSideNotesAnnouncedIds = new Set();
+// HAL manager dashboard widgets (derived from program snapshot).
+let halWidgetFeed = null;
 const SIDENOTE_MONITOR_MS = 8000;
+const SIDENOTE_INBOX_FILES = [
+  "sidenotes-inbox.json",
+  "sidenotes-inbox-server.json",
+  "sidenotes-inbox-room-2.json",
+  "sidenotes-inbox-room-3.json",
+  "sidenotes-inbox-room-4.json",
+  "sidenotes-inbox-room-5.json",
+  "sidenotes-inbox-frontdesk-1.json",
+  "sidenotes-inbox-frontdesk-2.json",
+  "sidenotes-inbox-office-manager.json",
+];
 
 function saveSideNotes() {
   persistLocal("halSideNotes", halSideNotes);
@@ -79,18 +92,75 @@ function saveSideNotes() {
   refreshSideNoteMonitor({ patchUi: true });
 }
 
-// Read the SideNotesIM inbox written by the local watcher helper. The file
-// only exists while/after the helper has run; absence means "helper offline".
-async function loadSideNotesInbox() {
+async function tryReadSideNotesInbox(name) {
   try {
-    const data = await DesktopBridge.readDataFile("sidenotes-inbox.json");
-    if (data && Array.isArray(data.items)) {
-      halSideNotesInbox = data;
-      maybeAnnounceSideNotesInbox(data);
-    }
+    const data = await DesktopBridge.readDataFile(name);
+    return data && Array.isArray(data.items) ? data : null;
   } catch {
-    halSideNotesInbox = null; // helper not running / no inbox yet
+    return null;
   }
+}
+
+function mergeSideNotesInboxes(inboxes) {
+  const valid = inboxes.filter(Boolean);
+  if (!valid.length) return null;
+  const monitorRows = valid
+    .map((inbox) => inbox.monitor || null)
+    .filter(Boolean)
+    .map((mon) => Object.assign({}, mon, { live: isSideNotesWatcherLive({ monitor: mon }) }));
+  const liveRows = monitorRows.filter((mon) => mon.live);
+  const itemsByKey = new Map();
+  valid.forEach((inbox) => {
+    const station = (inbox.monitor && inbox.monitor.station) || "Unknown";
+    (inbox.items || []).forEach((item) => {
+      if (!item) return;
+      const key = `${station}::${item.id || item.rowId || ""}::${item.date || ""}::${item.time || ""}`;
+      if (!itemsByKey.has(key)) {
+        itemsByKey.set(
+          key,
+          Object.assign({}, item, {
+            sourceStation: item.sourceStation || station,
+            announceId: key,
+          }),
+        );
+      }
+    });
+  });
+  const checkedAt = monitorRows
+    .map((mon) => mon.checkedAt)
+    .filter(Boolean)
+    .sort()
+    .pop();
+  return {
+    meta: { schema: "nr2-sidenotes-inbox-v1", source: "SideNotesIM", localOnly: true, merged: true },
+    generatedAt: checkedAt || new Date().toISOString(),
+    monitor: {
+      checkedAt,
+      station: liveRows.length > 1 ? "Network" : (liveRows[0] && liveRows[0].station) || (monitorRows[0] && monitorRows[0].station) || "Network",
+      status: liveRows.length ? "live" : "offline",
+      announce: liveRows.some((mon) => mon.announce),
+      bellSuppressed: liveRows.some((mon) => mon.bellSuppressed),
+      voiceStyle: (liveRows.find((mon) => mon.voiceStyle) || monitorRows.find((mon) => mon.voiceStyle) || {}).voiceStyle || "",
+      duckMusic: liveRows.some((mon) => mon.duckMusic),
+      stationCount: liveRows.length,
+      totalStations: monitorRows.length,
+      stations: monitorRows,
+    },
+    items: Array.from(itemsByKey.values()).sort((a, b) => {
+      const aText = [a.date, a.time, a.rowId].filter(Boolean).join(" ");
+      const bText = [b.date, b.time, b.rowId].filter(Boolean).join(" ");
+      return aText.localeCompare(bText);
+    }),
+  };
+}
+
+// Read the SideNotesIM inboxes written by workstation watcher helpers. Missing
+// station files are expected until that PC has the helper installed/running.
+async function loadSideNotesInbox() {
+  const inboxes = await Promise.all(SIDENOTE_INBOX_FILES.map(tryReadSideNotesInbox));
+  const data = mergeSideNotesInboxes(inboxes);
+  halSideNotesInbox = data;
+  if (data) maybeAnnounceSideNotesInbox(data);
   return halSideNotesInbox;
 }
 
@@ -108,13 +178,14 @@ function maybeAnnounceSideNotesInbox(inbox) {
   // When the watcher is speaking via SAPI, skip browser TTS to avoid doubling up.
   if (helperSpeaks) {
     inbox.items.forEach((m) => {
-      if (m && m.id) halSideNotesAnnouncedIds.add(m.id);
+      if (m && (m.announceId || m.id)) halSideNotesAnnouncedIds.add(m.announceId || m.id);
     });
     return;
   }
   for (const item of inbox.items) {
-    if (!item || !item.id || halSideNotesAnnouncedIds.has(item.id)) continue;
-    halSideNotesAnnouncedIds.add(item.id);
+    const announceId = item && (item.announceId || item.id);
+    if (!item || !announceId || halSideNotesAnnouncedIds.has(announceId)) continue;
+    halSideNotesAnnouncedIds.add(announceId);
     HalVoice.announceSidenote(item.senderLabel || item.sender, !!item.broadcast);
   }
 }
@@ -147,6 +218,7 @@ function startSideNoteMonitor() {
   // this cannot run while the app is fully closed; HAL re-checks on next open.)
   halSideNoteMonitorTimer = setInterval(async () => {
     await loadSideNotesInbox();
+    await refreshHalWidgetFeed();
     refreshSideNoteMonitor({ patchUi: true });
   }, SIDENOTE_MONITOR_MS);
 }
@@ -568,6 +640,18 @@ let programContextCache = null;
 let programContextAt = 0;
 const PROGRAM_CONTEXT_TTL_MS = 60000;
 
+async function refreshHalWidgetFeed(snapshot) {
+  if (!window.HalSkills) return halWidgetFeed;
+  const snap = snapshot || (await loadProgramSnapshot());
+  if (!snap) {
+    halWidgetFeed = null;
+    return null;
+  }
+  halWidgetFeed = HalSkills.buildWidgetFeed(snap);
+  halData.runtime = Object.assign({}, halData.runtime || {}, { widgetFeed: halWidgetFeed });
+  return halWidgetFeed;
+}
+
 async function loadProgramSnapshot() {
   const Svc = typeof Services !== "undefined" ? Services : window.Services;
   if (!Svc || typeof Svc.readProgramSnapshot !== "function") return null;
@@ -575,7 +659,7 @@ async function loadProgramSnapshot() {
   if (!base) return null;
   const monitor = halSideNoteMonitor || (window.HalSkills ? HalSkills.buildSideNoteMonitor(halSideNotes) : null);
   const active = halSideNotes.filter((n) => n.status !== "archived");
-  return Object.assign({}, base, {
+  const snapshot = Object.assign({}, base, {
     sideNotes: {
       total: halSideNotes.length,
       activeCount: active.length,
@@ -589,6 +673,12 @@ async function loadProgramSnapshot() {
       })),
     },
   });
+  if (window.HalSkills) {
+    halWidgetFeed = HalSkills.buildWidgetFeed(snapshot);
+    halData.runtime = Object.assign({}, halData.runtime || {}, { widgetFeed: halWidgetFeed });
+    snapshot.widgets = halWidgetFeed;
+  }
+  return snapshot;
 }
 
 async function getProgramContextText() {
@@ -963,7 +1053,7 @@ async function handleHalSubmit(query) {
   if (result.useTaskList) {
     const metrics = HalSkills.computeTaskMetrics(halOfficeTasks);
     const lines = [
-      `Local office tasks (${halOfficeTasks.length}) — local only, never written to SoftDent:`,
+      `Local office tasks (${halOfficeTasks.length}) — local only; HAL reads SoftDent and QuickBooks only:`,
       `Open ${metrics.openCount} · In progress ${metrics.inProgressCount} · Blocked ${metrics.blockedCount} · Completed ${metrics.completedCount}`,
     ];
     if (!halOfficeTasks.length) {
@@ -1017,7 +1107,7 @@ async function handleHalSubmit(query) {
     const noteText = result.sideNoteText || "";
     if (noteText.length < 2) {
       text =
-        'I can add a local sidenote (local only — never written to SoftDent). Say "Add sidenote: recall patient about claim" or type in the sidenotes panel below.';
+        'I can add a local sidenote (local only; HAL reads SoftDent and QuickBooks only). Say "Add sidenote: recall patient about claim" or type in the sidenotes panel below.';
     } else {
       try {
         const note = addSideNote(noteText);
@@ -1039,12 +1129,32 @@ async function handleHalSubmit(query) {
 
   if (result.useWidgetFeed) {
     const snapshot = await loadProgramSnapshot();
-    const feed = HalSkills.buildWidgetFeed(snapshot);
+    const feed = snapshot.widgets || HalSkills.buildWidgetFeed(snapshot);
+    halWidgetFeed = feed;
     halChatHistory.push({ role: "hal", text: HalSkills.formatWidgetFeed(feed), lane: "widgets", actions: [] });
     logAudit(trimmed, result.intent);
     saveChatHistory();
     renderChatLog();
     renderAuditLog();
+    renderHalScreen();
+    return;
+  }
+
+  if (result.useWidgetShow && result.widgetKey) {
+    const snapshot = await loadProgramSnapshot();
+    const feed = snapshot.widgets || HalSkills.buildWidgetFeed(snapshot);
+    halWidgetFeed = feed;
+    halChatHistory.push({
+      role: "hal",
+      text: HalSkills.formatWidgetDetail(feed, result.widgetKey),
+      lane: "widgets",
+      actions: [{ label: "Open related page", command: `navigate: ${feed.widgets[result.widgetKey]?.navTarget || ""}` }],
+    });
+    logAudit(trimmed, result.intent);
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    renderHalScreen();
     return;
   }
 
@@ -1068,7 +1178,7 @@ async function handleHalSubmit(query) {
       saveOfficeTasks();
       text =
         `Local task created (local only, not_submitted): "${task.title}".\n` +
-        `Status: ${task.status} · Priority: ${task.priority}. Nothing was sent or written to SoftDent.`;
+        `Status: ${task.status} · Priority: ${task.priority}. Local only; HAL reads SoftDent and QuickBooks only.`;
     } catch (error) {
       text = "Could not create the task: " + (error && error.message ? error.message : "invalid task.");
     }
@@ -1777,6 +1887,7 @@ function renderHalScreen() {
     halSideNotes,
     halSideNoteMonitor: halSideNoteMonitor || (window.HalSkills ? HalSkills.buildSideNoteMonitor(halSideNotes) : null),
     halSideNotesInbox,
+    halWidgetFeed,
   });
   typewriteLastHalMessage();
 }
@@ -1885,6 +1996,12 @@ if (halPage) {
       if (window.HalVoice) HalVoice.test();
       return;
     }
+    const widgetNav = event.target.closest("[data-hal-widget-nav]");
+    if (widgetNav) {
+      const target = widgetNav.getAttribute("data-hal-widget-nav");
+      if (target) select(target);
+      return;
+    }
     const sideNoteAdd = event.target.closest("[data-hal-sidenote-add]");
     if (sideNoteAdd) {
       const input = document.getElementById("hpSideNoteInput");
@@ -1978,6 +2095,7 @@ async function boot() {
   } catch {
     halModels = FALLBACK_MODELS;
   }
+  await refreshHalWidgetFeed();
   // Start HAL's sidenote watch app-wide so monitoring continues even when the
   // HAL panel is not the visible page. (Frontend-only: stops when the app is
   // closed; HAL re-checks persisted notes on the next launch.)
@@ -1995,6 +2113,7 @@ if (typeof window !== "undefined") {
     if (event && event.key && event.key !== "halSideNotes") return;
     halSideNotes = (await DesktopBridge.storageGet("halSideNotes")) || halSideNotes;
     programContextCache = null;
+    await refreshHalWidgetFeed();
     refreshSideNoteMonitor({ patchUi: true });
   });
 }

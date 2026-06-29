@@ -8,3 +8,6 @@ watcher_state.json
 work/
 *.vdb
 *.log
+
+# Built workstation package (large; contains bundled runtime)
+dist/

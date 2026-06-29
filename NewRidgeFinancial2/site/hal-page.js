@@ -43,8 +43,12 @@ const HalPage = (function () {
     const statusBadge = online
       ? '<span class="hp-sn-badge hp-sn-badge--ok">LIVE</span>'
       : '<span class="hp-sn-badge hp-sn-badge--off">OFFLINE</span>';
+    const stationText =
+      mon.stationCount && mon.stationCount > 1
+        ? `${mon.stationCount}/${mon.totalStations || mon.stationCount} stations live`
+        : `station ${mon.station || "—"}`;
     const flags = online
-      ? `<span class="hp-sn-stat">${mon.announce ? "voice on" : "voice off"} · ${mon.bellSuppressed ? "bell muted" : "bell on"} · station ${esc(mon.station || "—")}${mon.voiceStyle === "hal9000" ? " · HAL 9000 voice" : ""}</span>`
+      ? `<span class="hp-sn-stat">${mon.announce ? "voice on" : "voice off"} · ${mon.bellSuppressed ? "bell muted" : "bell on"} · ${esc(stationText)}${mon.voiceStyle === "hal9000" ? " · HAL 9000 voice" : ""}</span>`
       : '<span class="hp-sn-stat">watcher not running</span>';
     const voiceBtn =
       '<button type="button" class="hp-sn-voice" data-hal-voice-test title="Test HAL 9000 voice" aria-label="Test HAL 9000 voice">◇ TEST VOICE</button>';
@@ -66,10 +70,11 @@ const HalPage = (function () {
           const when = esc([m.date, m.time].filter(Boolean).join(" "));
           const sender = m.senderLabel || m.sender || "Unknown";
           const recipient = m.recipientLabel || m.recipient || "—";
+          const source = m.sourceStation ? ` · via ${esc(m.sourceStation)}` : "";
           return `<li class="hp-sn-item hp-sn-item--live">
               ${dot}${kind}
               <span class="hp-sn-item__text"><strong>${esc(sender)}</strong> <span class="hp-sn-arrow">→ ${esc(recipient)}</span></span>
-              <span class="hp-sn-item__meta">${when}</span>
+              <span class="hp-sn-item__meta">${when}${source}</span>
             </li>`;
         })
         .join("");
@@ -119,7 +124,61 @@ const HalPage = (function () {
         <input class="hp-sn-input" id="hpSideNoteInput" type="text" maxlength="500" placeholder="Quick sidenote — local only, HAL monitors changes" aria-label="Add sidenote" />
         <button type="button" class="hp-sn-add" data-hal-sidenote-add>+ ADD</button>
       </form>
-      <p class="hp-sn-foot">Local scratch notes · not submitted · not written to SoftDent</p>
+      <p class="hp-sn-foot">Local scratch notes · not submitted · HAL reads SoftDent and QuickBooks only</p>
+    </div>`;
+  }
+
+  function widgetMetricsText(widget) {
+    if (typeof HalSkills !== "undefined" && HalSkills.formatWidgetMetrics) {
+      return HalSkills.formatWidgetMetrics(widget);
+    }
+    const metrics = (widget && widget.metrics) || {};
+    const pairs = Object.entries(metrics)
+      .filter(([, v]) => v !== null && v !== undefined && v !== "")
+      .map(([k, v]) => `${k}: ${v}`);
+    return pairs.length ? pairs.join(" · ") : "No verified metrics in this snapshot.";
+  }
+
+  function widgetStatusClass(status) {
+    const s = String(status || "").toUpperCase();
+    if (s === "SUCCESS") return "hp-wg-badge--ok";
+    if (s === "DEGRADED") return "hp-wg-badge--warn";
+    return "hp-wg-badge--off";
+  }
+
+  function widgetsMonitorHtml(halWidgetFeed) {
+    if (!halWidgetFeed || !halWidgetFeed.widgets) {
+      return `<div class="hp-widgets" data-panel="widgets">
+        <div class="hp-sn-head"><h4>MANAGER DASHBOARD WIDGETS</h4><span class="hp-sn-badge hp-sn-badge--off">NO FEED</span></div>
+        <p class="hp-sn-empty">Widget feed not loaded yet. Ask HAL to show manager dashboard widgets.</p>
+      </div>`;
+    }
+    const order =
+      typeof HalSkills !== "undefined" && HalSkills.WIDGET_ORDER
+        ? HalSkills.WIDGET_ORDER
+        : Object.keys(halWidgetFeed.widgets);
+    const cards = order
+      .map((key) => {
+        const w = halWidgetFeed.widgets[key];
+        if (!w) return "";
+        const nav = w.navTarget || "";
+        return `<article class="hp-wg-card" data-hal-widget-key="${esc(key)}">
+          <div class="hp-wg-head">
+            <strong>${esc(w.title)}</strong>
+            <span class="hp-wg-badge ${widgetStatusClass(w.status)}">${esc(w.status)}</span>
+          </div>
+          <p class="hp-wg-metrics">${esc(widgetMetricsText(w))}</p>
+          <p class="hp-wg-summary">${esc(w.summary)}</p>
+          <button type="button" class="hp-wg-open" data-hal-widget-nav="${esc(nav)}">OPEN PAGE</button>
+        </article>`;
+      })
+      .join("");
+    const publish = (halWidgetFeed.jobs && halWidgetFeed.jobs.widgetPublish && halWidgetFeed.jobs.widgetPublish.status) || "—";
+    const widgetCount = typeof HalSkills !== "undefined" && HalSkills.WIDGET_ORDER ? HalSkills.WIDGET_ORDER.length : Object.keys(halWidgetFeed.widgets || {}).length;
+    return `<div class="hp-widgets" data-panel="widgets">
+      <div class="hp-sn-head"><h4>MANAGER DASHBOARD WIDGETS</h4><span class="hp-sn-stat">${widgetCount} widgets · import cache · publish ${esc(publish)}</span></div>
+      <div class="hp-wg-grid">${cards}</div>
+      <p class="hp-sn-foot">HAL-managed widgets · local only · A/R from verified sources only</p>
     </div>`;
   }
 
@@ -171,7 +230,7 @@ const HalPage = (function () {
   function render(ctx) {
     const root = ctx.root;
     if (!root) return;
-    const { halData, halModels, halAudit, halChatHistory, halAskDraft, halAskLoading, halInlineFirewallResult, halSideNotes, halSideNoteMonitor, halSideNotesInbox } = ctx;
+    const { halData, halModels, halAudit, halChatHistory, halAskDraft, halAskLoading, halInlineFirewallResult, halSideNotes, halSideNoteMonitor, halSideNotesInbox, halWidgetFeed } = ctx;
     const suggestions = (halData.askHal?.suggestions || []).slice(0, 5);
     const messages = (halChatHistory || []).slice(-4);
     const chatHtml = messages.length
@@ -410,6 +469,7 @@ const HalPage = (function () {
               <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>ACTIVE WORK</b> — ${esc(needsReviewCount)} in review · ${esc(blockedCount)} blocked <em class="hp-muted">(local registry)</em></span></li>
               ${insights || emptyNote("No registry insights available.")}
             </ul>
+            ${widgetsMonitorHtml(halWidgetFeed)}
           </section>
           <section class="hp-card" data-panel="controls" style="grid-area:controls;">
             <div class="hp-card__head"><h3>SYSTEM CONTROLS</h3><button type="button" class="hp-info" data-hal-drawer="controls" title="Open system controls: readiness, smoke test, and local receipts" aria-label="Open system controls: readiness, smoke test, and local receipts">i</button></div>
@@ -428,7 +488,7 @@ const HalPage = (function () {
     if (input && halAskDraft) input.value = halAskDraft;
   }
 
-  return { render, sideNotesMonitorHtml };
+  return { render, sideNotesMonitorHtml, widgetsMonitorHtml };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

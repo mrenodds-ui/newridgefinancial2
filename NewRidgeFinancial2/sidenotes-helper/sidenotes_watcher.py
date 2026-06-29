@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -33,6 +34,11 @@ STATE_PATH = HERE / "watcher_state.json"
 
 def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def station_slug(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
+    return slug or "unknown"
 
 
 def load_config() -> dict:
@@ -80,6 +86,10 @@ def load_config() -> dict:
     cfg.setdefault("inboxPath", "")
     if not cfg["inboxPath"]:
         cfg["inboxPath"] = str(DEFAULT_INBOX)
+    cfg.setdefault("stationInboxPath", "")
+    if not cfg["stationInboxPath"]:
+        inbox_dir = Path(cfg["inboxPath"]).parent
+        cfg["stationInboxPath"] = str(inbox_dir / f"sidenotes-inbox-{station_slug(cfg['myStation'])}.json")
     cfg.setdefault("inboxMax", 50)
     from announcer import apply_voice_style
 
@@ -165,11 +175,25 @@ def write_inbox(inbox_path: str, items: list[dict], monitor: dict) -> None:
         log(f"inbox write error: {exc}")
 
 
+def write_inboxes(cfg: dict, items: list[dict], monitor: dict) -> None:
+    paths = [cfg["inboxPath"], cfg.get("stationInboxPath", "")]
+    written: set[str] = set()
+    for path in paths:
+        if not path:
+            continue
+        norm = os.path.normcase(os.path.abspath(path))
+        if norm in written:
+            continue
+        written.add(norm)
+        write_inbox(path, items, monitor)
+
+
 def main() -> int:
     cfg = load_config()
     log("HAL SideNotes watcher starting (local only; message body never read).")
     log(f"history: {cfg['historyPath']}")
     log(f"inbox:   {cfg['inboxPath']}")
+    log(f"station: {cfg['stationInboxPath']}")
 
     if not os.path.isfile(cfg["historyPath"]):
         log("ERROR: history.vdb not found. Is SideNotesIM installed for this user?")
@@ -250,7 +274,7 @@ def main() -> int:
         }
 
     # Write an initial inbox so the HAL UI immediately reflects "helper live".
-    write_inbox(cfg["inboxPath"], inbox_items, current_monitor())
+    write_inboxes(cfg, inbox_items, current_monitor())
     last_heartbeat = time.monotonic()
     log("watching for new messages... (Ctrl+C to stop)")
 
@@ -315,13 +339,13 @@ def main() -> int:
 
                 state["seenIds"] = list(seen_ids)[-500:]
                 save_state(state)
-                write_inbox(cfg["inboxPath"], inbox_items, current_monitor())
+                write_inboxes(cfg, inbox_items, current_monitor())
                 last_heartbeat = time.monotonic()
 
             # Heartbeat: refresh checkedAt periodically so the HAL UI can tell a
             # running watcher from a stale inbox file left by a stopped one.
             if time.monotonic() - last_heartbeat >= heartbeat_seconds:
-                write_inbox(cfg["inboxPath"], inbox_items, current_monitor())
+                write_inboxes(cfg, inbox_items, current_monitor())
                 last_heartbeat = time.monotonic()
             time.sleep(poll)
     except KeyboardInterrupt:

@@ -10,7 +10,7 @@ const HalCore = (function () {
   // Note: drafting a journal entry is a local draft-only action (allowed); only POSTING a
   // journal entry to the ledger is blocked. The post(...) clause below still blocks posting.
   const BLOCKED_PHRASES_RE =
-    /\bpost(s|ing|ed)?\s+((a|an|the)\s+)?(journal|entry|payment|charge|transaction|invoice|claim|note|statement|ledger)\b|\b(record|make|process)\s+((a|an|the)\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b/;
+    /\bpost(s|ing|ed)?\s+((a|an|the)\s+)?(journal|entry|payment|charge|transaction|invoice|claim|note|statement|ledger)\b|\bpost(s|ing|ed)?\s+to\s+quickbooks\b|\bquickbooks\s+post(ing|ed)?\b|\b(record|make|process)\s+((a|an|the)\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b|\bwrite(s|ing)?\s+to\s+softdent\b|\bsoftdent\s+write(s|ing|back)?\b|\bupdate\s+softdent\b|\bsync\s+to\s+softdent\b/;
 
   const PAGE_SYNONYMS = {
     financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
@@ -26,7 +26,15 @@ const HalCore = (function () {
 
   const FALLBACK_FIREWALL = {
     summary: "External actions are blocked by design.",
-    blocked: ["No email", "No fax", "No upload", "No payer contact", "No writeback", "No submission"],
+    blocked: [
+      "No email",
+      "No fax",
+      "No upload",
+      "No payer contact",
+      "SoftDent read-only",
+      "QuickBooks read-only",
+      "No submission",
+    ],
     allowed: ["Open local program pages", "Explain local status", "Prepare review notes", "Flag missing information"],
   };
 
@@ -260,6 +268,18 @@ const HalCore = (function () {
         lines.push(`  - [${n.status}/${n.priority}] ${n.text}`);
       });
     }
+    if (snapshot.widgets) {
+      const summarize =
+        typeof HalSkills !== "undefined" && HalSkills.summarizeWidgetFeed ? HalSkills.summarizeWidgetFeed : null;
+      if (summarize) {
+        lines.push("Manager widgets (HAL):");
+        summarize(snapshot.widgets)
+          .split("\n")
+          .forEach((line) => {
+            if (line) lines.push(`  ${line}`);
+          });
+      }
+    }
     lines.push("Registry status:");
     lines.push(registryAsText(halData));
     if (halData.sources && halData.sources.items && halData.sources.items.length) {
@@ -366,6 +386,37 @@ const HalCore = (function () {
     }
 
     // Manager dashboard widgets (import-cache widget feed)
+    const widgetRoutes = [
+      { pattern: /\b(financial overview|practice financial|financial)\b.*\bwidget\b|\bwidget\b.*\b(financial overview|practice financial|financial)\b/, key: "practiceFinancialOverview" },
+      { pattern: /\b(production trend|ytd production|production mtd)\b.*\bwidget\b|\bwidget\b.*\b(production trend|ytd production)\b/, key: "financialProductionTrend" },
+      { pattern: /\b(payer mix|collection rate|collections mix)\b.*\bwidget\b|\bwidget\b.*\b(payer mix|collection rate)\b/, key: "payerMixAndCollections" },
+      { pattern: /\b(provider performance|provider production|provider breakdown)\b.*\bwidget\b|\bwidget\b.*\b(provider performance|provider production)\b/, key: "providerPerformance" },
+      { pattern: /\b(data freshness|data quality|quality score)\b.*\bwidget\b|\bwidget\b.*\b(data freshness|data quality|quality score)\b/, key: "dataFreshnessQuality" },
+      { pattern: /\b(ebitda|normalization|add-?back)\b.*\bwidget\b|\bwidget\b.*\b(ebitda|normalization|add-?back)\b/, key: "ebitdaNormalization" },
+      { pattern: /\b(p&l|profit and loss|gross profit|cogs)\b.*\bwidget\b|\bwidget\b.*\b(p&l|profit and loss|gross profit|cogs)\b/, key: "quickbooksProfitLossDetail" },
+      { pattern: /\b(quickbooks|qb)\b.*\b(sync|widget)\b|\bwidget\b.*\b(quickbooks|qb)\b.*\bsync\b|\bsync\b.*\bwidget\b.*\bquickbooks\b/, key: "quickbooksSyncHealth" },
+      { pattern: /\b(accounts payable|a\/?p(?: automation)?)\b.*\bwidget\b|\bwidget\b.*\b(accounts payable|a\/?p)\b/, key: "accountsPayableAutomation" },
+      { pattern: /\b(document intake|intake queue|document queue)\b.*\bwidget\b|\bwidget\b.*\b(document intake|intake queue|document queue)\b/, key: "documentIntakeQueue" },
+      { pattern: /\b(document preview|selected document|invoice preview)\b.*\bwidget\b|\bwidget\b.*\b(document preview|selected document|invoice preview)\b/, key: "documentPreview" },
+      { pattern: /\b(period close|posting review|posting queue)\b.*\bwidget\b|\bwidget\b.*\b(period close|posting)\b/, key: "periodCloseAndPosting" },
+      { pattern: /\b(claims pipeline|claim pipeline|kanban|claim lanes)\b.*\bwidget\b|\bwidget\b.*\b(claims pipeline|claim pipeline|kanban|claim lanes)\b/, key: "claimsPipeline" },
+      { pattern: /\b(claims|receivables)\b.*\bwidget\b|\bwidget\b.*\b(claims|receivables)\b/, key: "smartClaimsAndReceivables" },
+      { pattern: /\b(claim readiness|safety posture|safety)\b.*\bwidget\b|\bwidget\b.*\b(claim readiness|safety)\b/, key: "claimReadinessAndSafety" },
+      { pattern: /\b(a\/?r aging|collections|follow-?up queue)\b.*\bwidget\b|\bwidget\b.*\b(a\/?r aging|collections)\b/, key: "arAgingAndCollections" },
+      { pattern: /\b(top outstanding|outstanding claims|top claims)\b.*\bwidget\b|\bwidget\b.*\b(top outstanding|outstanding claims|top claims)\b/, key: "arOutstandingClaims" },
+      { pattern: /\b(care delivery|clinical(?: performance)?)\b.*\bwidget\b|\bwidget\b.*\b(care delivery|clinical)\b/, key: "careDeliveryPerformance" },
+      { pattern: /\b(softdent aging|daysheet aging|softdent a\/?r)\b.*\bwidget\b|\bwidget\b.*\b(softdent aging|daysheet aging|softdent a\/?r)\b/, key: "softdentArAging" },
+      { pattern: /\b(insurance vs patient|patient responsibility|insurance responsibility|responsibility split)\b.*\bwidget\b|\bwidget\b.*\b(insurance vs patient|patient responsibility|responsibility split)\b/, key: "softdentResponsibility" },
+      { pattern: /\b(softdent source health|softdent health|source health)\b.*\bwidget\b|\bwidget\b.*\b(softdent source health|softdent health|source health)\b/, key: "softdentSourceHealth" },
+      { pattern: /\b(softdent exports?|export history)\b.*\bwidget\b|\bwidget\b.*\b(softdent exports?|export history)\b/, key: "softdentExportHistory" },
+      { pattern: /\b(narrative|narratives|insurance narrative)\b.*\bwidget\b|\bwidget\b.*\b(narrative|narratives|insurance narrative)\b/, key: "narrativeWorkflow" },
+      { pattern: /\b(document library|library|indexed documents|storage)\b.*\bwidget\b|\bwidget\b.*\b(document library|library|indexed documents|storage)\b/, key: "documentLibrary" },
+    ];
+    for (const route of widgetRoutes) {
+      if (route.pattern.test(query)) {
+        return { intent: `widgets: show:${route.key}`, lane: "local", useWidgetShow: true, widgetKey: route.key, text: "", actions: [] };
+      }
+    }
     if (/\b(widgets?|widget feed|dashboard widgets|manager dashboard)\b/.test(query)) {
       return { intent: "widgets: feed", lane: "local", useWidgetFeed: true, text: "", actions: [] };
     }

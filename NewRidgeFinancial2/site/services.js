@@ -130,7 +130,10 @@ const Services = (function () {
         ? {
             total: claimsState.claims.length,
             byStatus: claimsByStatus,
+            laneTotals: claimsState.laneTotals || {},
             kpis: claimsState.kpis || [],
+            readiness: claimsState.readiness || null,
+            safety: claimsState.safety || null,
             top: (claimsState.claims || []).slice(0, 10),
           }
         : null,

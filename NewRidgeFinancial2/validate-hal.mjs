@@ -403,9 +403,46 @@ async function main() {
         { id: "M1", rowId: 1616, sender: "Room 4", recipient: "Server", broadcast: false, date: "6/28/2026", time: "6:49:24 PM", unread: true },
       ],
     },
+    halWidgetFeed: {
+      manager: "Import cache",
+      jobs: { widgetPublish: { status: "SUCCESS" } },
+      widgets: {
+        practiceFinancialOverview: {
+          title: "Practice Financial Overview",
+          status: "SUCCESS",
+          summary: "Practice revenue from QuickBooks and production/collections from the SoftDent import cache.",
+          navTarget: "financial",
+          metrics: { monthlyRevenue: "$120,000" },
+        },
+        accountsPayableAutomation: {
+          title: "Accounts Payable Automation",
+          status: "SUCCESS",
+          summary: "QuickBooks expense totals and posting-queue workflow counts.",
+          navTarget: "documents",
+          metrics: { expenseTotal: "$45,000" },
+        },
+        smartClaimsAndReceivables: {
+          title: "Smart Claims & Receivables",
+          status: "SUCCESS",
+          summary: "SoftDent claims and receivables totals.",
+          navTarget: "claims",
+          metrics: { outstandingClaimCount: 12 },
+        },
+        careDeliveryPerformance: {
+          title: "Care Delivery Performance",
+          status: "DEGRADED",
+          summary: "Practice-wide SoftDent operational balances.",
+          navTarget: "softdent",
+          metrics: { patientBalanceTotal: "$8,500" },
+        },
+      },
+    },
   });
   assert(halHtml.includes("MODE"), "HAL page must show current mode");
   assert(halHtml.includes("SIDENOTESIM MONITOR"), "HAL page must render the SideNotesIM live monitor");
+  assert(halHtml.includes("MANAGER DASHBOARD WIDGETS"), "HAL page must render manager dashboard widgets");
+  assert(halHtml.includes("Practice Financial Overview"), "HAL page must render financial widget");
+  assert(halHtml.includes("OPEN PAGE"), "HAL page must render widget navigation controls");
   assert(halHtml.includes("HAL 9000 voice"), "HAL page must show HAL 9000 voice mode");
   assert(halHtml.includes("TEST VOICE"), "HAL page must render HAL voice test control");
   assert(halHtml.includes("Room 4"), "HAL page must render live SideNotesIM message senders");
@@ -471,6 +508,10 @@ async function main() {
   assert(draftRoute.intent === "accounting: journal-draft" && draftRoute.useJournalDraft === true, "journal drafting must route locally");
   const postBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Post a journal entry to the ledger");
   assert(postBlocked.intent === "blocked: firewall", "posting a journal entry must stay blocked");
+  const qbPostBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Post to QuickBooks");
+  assert(qbPostBlocked.intent === "blocked: firewall", "Post to QuickBooks must be blocked");
+  const softdentWriteBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Write to SoftDent");
+  assert(softdentWriteBlocked.intent === "blocked: firewall", "Write to SoftDent must be blocked");
   const journal = HalSkills.draftAndValidateJournal({ description: "Prepaid insurance payment", period: "2025-05", amount: 1200, context: {} });
   assert(journal.meta && journal.meta.schema === "nr2-hal-skill-v1", "journal draft must use the NewRidge skill schema envelope");
   assert(journal.transactionType === "prepaid_insurance", "journal type inference must work");
@@ -566,7 +607,9 @@ async function main() {
   const widgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show manager dashboard widgets");
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
-  assert(Object.keys(feed.widgets).length === 4, "widget feed must build 4 widgets");
+  assert(Object.keys(feed.widgets).length === 24, "widget feed must build 24 widgets");
+  assert(feed.widgets.ebitdaNormalization && feed.widgets.arAgingAndCollections && feed.widgets.narrativeWorkflow && feed.widgets.documentLibrary, "widget feed must include all extended page widgets");
+  assert(feed.widgets.claimReadinessAndSafety.metrics.readinessOverall, "claim readiness widget must surface readiness score");
   assert(feed.localOnly === true && feed.runId && feed.generatedAt, "widget feed must use program-style runId/generatedAt/localOnly fields");
   assert(feed.jobs.widgetPublish && feed.sources.quickbooks.lastStatus, "widget feed jobs/sources must use camelCase fields");
 
@@ -575,6 +618,11 @@ async function main() {
   assert(noArFeed.widgets.smartClaimsAndReceivables.metrics.accountsReceivableTotal === null, "A/R must not be fabricated without a verified source");
   assert(noArFeed.widgets.careDeliveryPerformance.metrics.patientBalanceTotal === null, "patient A/R balance must not be fabricated");
   assert(noArFeed.widgets.smartClaimsAndReceivables.status !== "SUCCESS", "claims widget must degrade without A/R source");
+
+  const finWidgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "show financial widget");
+  assert(finWidgetRoute.intent === "widgets: show:practiceFinancialOverview" && finWidgetRoute.widgetKey === "practiceFinancialOverview", "individual widget commands must route locally");
+  const arWidgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "show ar aging widget");
+  assert(arWidgetRoute.widgetKey === "arAgingAndCollections", "A/R aging widget must route locally");
 
   // SoftDent read source status honesty (never fabricate $0 A/R)
   const sdReal = HalSkills.softDentReadSourceStatus(snapshot);

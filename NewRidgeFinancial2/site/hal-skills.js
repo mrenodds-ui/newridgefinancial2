@@ -6,8 +6,8 @@
  * posting queue, claim packet readiness, office-manager attention + tasks,
  * knowledge memory, and PII sanitization.
  *
- * Everything here is local-only and read/draft-only. No external action, no
- * SoftDent/QuickBooks writeback, no submission. The HAL firewall still runs
+ * Everything here is local-only and read/draft-only. HAL only reads data from
+ * SoftDent and QuickBooks; no external action or submission. The HAL firewall still runs
  * before any model call; these skills never perform external or destructive
  * operations.
  *
@@ -17,7 +17,7 @@ const HalSkills = (function () {
   const PROGRAM_SCHEMA_VERSION = "nr2-hal-skill-v1";
   const SAFETY_DISCLAIMER =
     "Local office-manager workflow only. Draft only where applicable. Requires human review. " +
-    "Local only. not_submitted. Not written to SoftDent. No email/fax/upload action performed. No external delivery.";
+    "Local only. not_submitted. HAL reads SoftDent and QuickBooks only. No posting, writes, email/fax/upload, or external delivery.";
 
   function skillMeta(kind, source) {
     return {
@@ -262,7 +262,7 @@ const HalSkills = (function () {
     });
     lines.push(`Balanced: ${draft.validation.balanced ? "yes" : "no"} (Dr ${draft.validation.debitTotal} / Cr ${draft.validation.creditTotal})`);
     if (draft.validation.issues.length) lines.push("Issues: " + draft.validation.issues.join("; "));
-    lines.push("Stays in the posting queue for human review. Nothing posted to the ledger.");
+    lines.push("Stays in the local review queue only. HAL reads QuickBooks only.");
     return lines.join("\n");
   }
 
@@ -448,7 +448,7 @@ const HalSkills = (function () {
           severity: (taskMetrics.urgentOpenCount || 0) > 0 ? "warning" : "info",
           title: "Unresolved local office tasks",
           detail: `${openTasks} local office task(s) remain open, in progress, or blocked.`,
-          actionHint: "Work local tasks inside this app only. No SoftDent writeback or external delivery.",
+          actionHint: "Work local tasks inside this app only. HAL reads SoftDent and QuickBooks only; no posting, writes, or external delivery.",
           count: openTasks,
         });
       }
@@ -466,7 +466,7 @@ const HalSkills = (function () {
 
     return {
       meta: skillMeta("office.attention", "officeManager"),
-      summary: `${items.length} office-manager attention item(s) are visible. All actions remain local only, not submitted, and not written to SoftDent.`,
+      summary: `${items.length} office-manager attention item(s) are visible. All actions remain local only and not submitted. HAL reads SoftDent and QuickBooks only.`,
       safetyDisclaimer: SAFETY_DISCLAIMER,
       items,
       missingDataCodes: Array.from(missingCodes).sort(),
@@ -597,7 +597,7 @@ const HalSkills = (function () {
   function formatSideNotesList(notes) {
     const active = (notes || []).filter((n) => n.status !== "archived");
     const lines = [
-      `Local sidenotes (${active.length} active · local only, never written to SoftDent):`,
+      `Local sidenotes (${active.length} active · local only):`,
     ];
     if (!active.length) {
       lines.push("", 'No sidenotes yet. Say "Add sidenote: follow up on hygiene recall" to add one.');
@@ -937,6 +937,107 @@ const HalSkills = (function () {
    * (import-cache widget feed derived from the program snapshot)
    * ========================================================== */
 
+  const WIDGET_NAV = {
+    practiceFinancialOverview: "financial",
+    financialProductionTrend: "financial",
+    payerMixAndCollections: "financial",
+    providerPerformance: "financial",
+    dataFreshnessQuality: "financial",
+    ebitdaNormalization: "financial",
+    quickbooksProfitLossDetail: "quickbooks",
+    quickbooksSyncHealth: "quickbooks",
+    accountsPayableAutomation: "documents",
+    documentIntakeQueue: "documents",
+    documentPreview: "documents",
+    periodCloseAndPosting: "documents",
+    smartClaimsAndReceivables: "claims",
+    claimsPipeline: "claims",
+    claimReadinessAndSafety: "claims",
+    careDeliveryPerformance: "softdent",
+    softdentArAging: "softdent",
+    softdentResponsibility: "softdent",
+    softdentSourceHealth: "softdent",
+    softdentExportHistory: "softdent",
+    arAgingAndCollections: "ar",
+    arOutstandingClaims: "ar",
+    narrativeWorkflow: "narratives",
+    documentLibrary: "library",
+  };
+
+  const WIDGET_ORDER = [
+    "practiceFinancialOverview",
+    "financialProductionTrend",
+    "payerMixAndCollections",
+    "providerPerformance",
+    "dataFreshnessQuality",
+    "ebitdaNormalization",
+    "quickbooksProfitLossDetail",
+    "quickbooksSyncHealth",
+    "accountsPayableAutomation",
+    "documentIntakeQueue",
+    "documentPreview",
+    "periodCloseAndPosting",
+    "smartClaimsAndReceivables",
+    "claimsPipeline",
+    "claimReadinessAndSafety",
+    "arAgingAndCollections",
+    "arOutstandingClaims",
+    "careDeliveryPerformance",
+    "softdentArAging",
+    "softdentResponsibility",
+    "softdentSourceHealth",
+    "softdentExportHistory",
+    "narrativeWorkflow",
+    "documentLibrary",
+  ];
+
+  function plAmount(dashboard, category) {
+    const row = ((dashboard && dashboard.pl && dashboard.pl.rows) || []).find((r) => r.category === category);
+    return row ? row.amount || null : null;
+  }
+
+  function glanceValue(dashboard, label) {
+    const row = ((dashboard && dashboard.glance) || []).find((g) => g.label === label);
+    return row ? row.value || null : null;
+  }
+
+  function metricValue(value) {
+    if (value === null || value === undefined || value === "") return null;
+    return value;
+  }
+
+  function kpiValue(kpis, label) {
+    const row = (kpis || []).find((k) => String(k.label || "").toLowerCase() === String(label || "").toLowerCase());
+    return row ? metricValue(row.value) : null;
+  }
+
+  function sumCounts(rows) {
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const total = rows.reduce((acc, row) => acc + (Number(row.count) || 0), 0);
+    return total > 0 ? total : null;
+  }
+
+  function lastSeriesValue(series) {
+    if (!series) return null;
+    const values = Array.isArray(series) ? series : series.values;
+    if (!Array.isArray(values) || !values.length) return null;
+    return metricValue(values[values.length - 1]);
+  }
+
+  function firstItem(items) {
+    return Array.isArray(items) && items.length ? items[0] : null;
+  }
+
+  function healthyCount(rows) {
+    if (!Array.isArray(rows) || !rows.length) return null;
+    return rows.filter((row) => row && row.ok !== false && !/fail|error|blocked/i.test(String(row.value || row.status || ""))).length;
+  }
+
+  function rowAmount(rows, label) {
+    const row = (rows || []).find((r) => String(r.category || r.label || "").toLowerCase() === String(label || "").toLowerCase());
+    return row ? metricValue(row.amount || row.value) : null;
+  }
+
   function mergeWidgetStatus() {
     const statuses = Array.prototype.slice.call(arguments).filter(Boolean);
     if (!statuses.length) return "FAILED";
@@ -968,38 +1069,348 @@ const HalSkills = (function () {
       (acc, p) => (/pending/i.test(p.label) ? acc + (p.count || 0) : acc),
       0,
     );
+    const fin = dashboards.financial || {};
+    const sd = dashboards.softdent || {};
+    const qb = dashboards.quickbooks || {};
+    const arDash = dashboards.ar || {};
+    const docs = snap.documents || {};
+    const claimsSnap = snap.claims || {};
+    const narratives = snap.narratives || {};
+    const library = snap.library || {};
+    const monthlyRevenue = metricValue(qb.revenue || plAmount(qb, "Revenue") || fin.productionMtd?.value);
+    const monthlyNetIncome = metricValue(plAmount(qb, "Net Income"));
+    const expenseTotal = metricValue(qb.expenses || plAmount(qb, "Expenses"));
+    const productionTotal = metricValue(sd.production || glanceValue(sd, "Production MTD") || fin.productionMtd?.value);
+    const collectionsTotal = metricValue(sd.collections || glanceValue(sd, "Collections MTD"));
+    const accountsReceivableTotal = metricValue(arDash.kpis?.[0]?.value || sd.hero?.value);
+    const patientBalanceTotal = metricValue(arDash.kpis?.[0]?.value || sd.hero?.value);
+    const arStatus = arDash.kpis ? (arAvailable ? "SUCCESS" : "DEGRADED") : "FAILED";
+    const docsStatus = docs.period || docs.queueCount ? "SUCCESS" : "FAILED";
+    const claimsReadinessStatus =
+      !claimsSnap.readiness && !claimsSnap.total ? "FAILED" : claimsSnap.total > 0 ? "SUCCESS" : "DEGRADED";
+    const narrativeStatus = snap.narratives ? "SUCCESS" : "FAILED";
+    const libraryStatus = snap.library ? "SUCCESS" : "FAILED";
 
     const widgets = {
       practiceFinancialOverview: {
+        key: "practiceFinancialOverview",
         title: "Practice Financial Overview",
         status: mergeWidgetStatus(qbStatus, softdentStatus),
         summary: "Practice revenue from QuickBooks and production/collections from the SoftDent import cache. Dental A/R is not sourced from QuickBooks.",
+        navTarget: WIDGET_NAV.practiceFinancialOverview,
         metrics: {
-          monthlyRevenue: dashboards.quickbooks ? dashboards.quickbooks.revenue || null : null,
-          productionTotal: dashboards.softdent ? dashboards.softdent.production || null : null,
+          monthlyRevenue,
+          monthlyNetIncome,
+          productionTotal,
+          collectionsTotal,
+        },
+      },
+      financialProductionTrend: {
+        key: "financialProductionTrend",
+        title: "Production Trend & YTD",
+        status: financialStatus,
+        summary: "Production trend and year-to-date production/collections indicators from the financial dashboard cache.",
+        navTarget: WIDGET_NAV.financialProductionTrend,
+        metrics: {
+          productionMtd: metricValue(fin.productionMtd?.value),
+          productionTrendLatest: lastSeriesValue(fin.productionTrend?.production),
+          ytdProduction: metricValue((fin.productionTrend?.ytd || []).find((m) => m.label === "YTD Production")?.value),
+          ytdCollectionRate: metricValue((fin.productionTrend?.ytd || []).find((m) => m.label === "YTD Collection Rate")?.value),
+        },
+      },
+      payerMixAndCollections: {
+        key: "payerMixAndCollections",
+        title: "Payer Mix & Collections",
+        status: financialStatus,
+        summary: "Payer mix, collection rate, and top payer share from the owner financial dashboard.",
+        navTarget: WIDGET_NAV.payerMixAndCollections,
+        metrics: {
+          payerMixTotal: metricValue(fin.payerMix?.total),
+          collectionRate: metricValue(fin.payerMix?.rate || (fin.metrics || []).find((m) => m.subLabel === "Collection Rate")?.subValue),
+          topPayer: metricValue(firstItem(fin.payerMix?.slices)?.label),
+          topPayerShare: metricValue(firstItem(fin.payerMix?.slices)?.pct != null ? `${firstItem(fin.payerMix?.slices).pct}%` : null),
+        },
+      },
+      providerPerformance: {
+        key: "providerPerformance",
+        title: "Provider Performance",
+        status: financialStatus,
+        summary: "Provider production split from the owner financial dashboard.",
+        navTarget: WIDGET_NAV.providerPerformance,
+        metrics: {
+          providerCount: metricValue((fin.providers?.rows || []).length || null),
+          topProvider: metricValue(firstItem(fin.providers?.rows)?.name),
+          topProviderProduction: metricValue(firstItem(fin.providers?.rows)?.amount),
+          providerTotal: metricValue(fin.providers?.total?.amount),
+        },
+      },
+      dataFreshnessQuality: {
+        key: "dataFreshnessQuality",
+        title: "Data Freshness & Quality",
+        status: financialStatus,
+        summary: "Source freshness and dashboard quality score for the financial program inputs.",
+        navTarget: WIDGET_NAV.dataFreshnessQuality,
+        metrics: {
+          qualityScore: metricValue(fin.quality?.score != null ? `${fin.quality.score}%` : null),
+          syncedSources: healthyCount(fin.freshness),
+          delayedSource: metricValue((fin.freshness || []).find((f) => /delay|stale|error/i.test(String(f.status || "")))?.system),
+          refreshedAt: metricValue(fin.footer?.refreshed),
+        },
+      },
+      ebitdaNormalization: {
+        key: "ebitdaNormalization",
+        title: "EBITDA Normalization",
+        status: mergeWidgetStatus(qbStatus, financialStatus),
+        summary: "Potential EBITDA add-backs and expense-category totals from the financial and QuickBooks import cache.",
+        navTarget: WIDGET_NAV.ebitdaNormalization,
+        metrics: {
+          ebitdaAddBackTotal: metricValue(qb.ebitdaTotal),
+          ebitdaCandidateCount: metricValue((qb.ebitdaCandidates || []).length || null),
+          expenseCategoriesTotal: metricValue(qb.expenseCategories?.total),
+        },
+      },
+      quickbooksProfitLossDetail: {
+        key: "quickbooksProfitLossDetail",
+        title: "QuickBooks P&L Detail",
+        status: qbStatus,
+        summary: "Revenue, gross profit, COGS, operating expenses, and margin detail from the read-only QuickBooks P&L cache.",
+        navTarget: WIDGET_NAV.quickbooksProfitLossDetail,
+        metrics: {
+          revenue: rowAmount(qb.pl?.rows, "Revenue"),
+          cogs: rowAmount(qb.pl?.rows, "Cost of Goods Sold"),
+          grossProfit: rowAmount(qb.pl?.rows, "Gross Profit"),
+          operatingExpenses: rowAmount(qb.pl?.rows, "Operating Expenses"),
+          netIncome: rowAmount(qb.pl?.rows, "Net Income"),
+        },
+      },
+      quickbooksSyncHealth: {
+        key: "quickbooksSyncHealth",
+        title: "QuickBooks Sync Health",
+        status: qbStatus,
+        summary: "QuickBooks connection status, last sync, and trailing expense trend from the import cache.",
+        navTarget: WIDGET_NAV.quickbooksSyncHealth,
+        metrics: {
+          syncStatus: metricValue(qb.syncStatus || qb.sync?.status),
+          lastSync: metricValue(qb.lastSync || qb.sync?.lastSync),
+          monthlyExpensesLatest: lastSeriesValue(qb.monthlyExpenses),
+          netIncomeYtd: monthlyNetIncome,
         },
       },
       accountsPayableAutomation: {
+        key: "accountsPayableAutomation",
         title: "Accounts Payable Automation",
         status: qbStatus,
-        summary: "QuickBooks expense totals and posting-queue workflow counts from the import cache.",
-        metrics: { expenseTotal: dashboards.quickbooks ? dashboards.quickbooks.expenses || null : null, postingQueuePendingCount: pendingPosting || null },
+        summary: "QuickBooks expense totals and local document review-queue counts from the import cache.",
+        navTarget: WIDGET_NAV.accountsPayableAutomation,
+        metrics: {
+          expenseTotal,
+          postingQueuePendingCount: pendingPosting || null,
+        },
+      },
+      documentIntakeQueue: {
+        key: "documentIntakeQueue",
+        title: "Document Intake Queue",
+        status: docsStatus,
+        summary: "Document intake queue status counts and oldest visible item from the accounting documents cache.",
+        navTarget: WIDGET_NAV.documentIntakeQueue,
+        metrics: {
+          queueCount: metricValue(docs.queueCount),
+          pendingReviewCount: metricValue((docs.posting || []).find((p) => /pending/i.test(p.label))?.count),
+          readyToPostCount: metricValue((docs.posting || []).find((p) => /ready/i.test(p.label))?.count),
+          oldestVisibleAgeDays: metricValue(Math.max.apply(null, (docs.top || []).map((d) => Number(d.age) || 0)) || null),
+        },
+      },
+      documentPreview: {
+        key: "documentPreview",
+        title: "Selected Document Preview",
+        status: docsStatus,
+        summary: "Current selected or first visible accounting document preview metadata. Review only; HAL reads QuickBooks only.",
+        navTarget: WIDGET_NAV.documentPreview,
+        metrics: {
+          selectedDocumentId: metricValue(firstItem(docs.top)?.id),
+          vendor: metricValue(firstItem(docs.top)?.vendor),
+          amount: metricValue(firstItem(docs.top)?.amount),
+          status: metricValue(firstItem(docs.top)?.status),
+        },
+      },
+      periodCloseAndPosting: {
+        key: "periodCloseAndPosting",
+        title: "Period Close & Posting",
+        status: docsStatus,
+        summary: "Accounting period close posture and document posting progress from the documents workbench cache.",
+        navTarget: WIDGET_NAV.periodCloseAndPosting,
+        metrics: {
+          periodLabel: metricValue(docs.period?.label),
+          documentsInPeriod: metricValue(docs.period?.documents),
+          postedPct: metricValue(docs.period?.postedPct != null ? `${docs.period.postedPct}%` : null),
+          pendingAmount: metricValue(docs.period?.pending),
+        },
       },
       smartClaimsAndReceivables: {
+        key: "smartClaimsAndReceivables",
         title: "Smart Claims & Receivables",
         status: claimsStatus,
         summary: arAvailable
           ? "SoftDent claims and receivables totals derived from local practice operations data."
           : "SoftDent claims totals from local data; dental A/R is unavailable until an explicit SoftDent A/R export is present.",
-        metrics: { outstandingClaimCount: claims.total || null, accountsReceivableTotal: null },
+        navTarget: WIDGET_NAV.smartClaimsAndReceivables,
+        metrics: {
+          outstandingClaimCount: claims.total || null,
+          accountsReceivableTotal,
+        },
+      },
+      claimsPipeline: {
+        key: "claimsPipeline",
+        title: "Claims Pipeline",
+        status: claimsSnap.total > 0 ? "SUCCESS" : "FAILED",
+        summary: "Claim lifecycle lane counts from the local claims workbench. Payer submission remains locked.",
+        navTarget: WIDGET_NAV.claimsPipeline,
+        metrics: {
+          totalClaims: metricValue(claimsSnap.total),
+          draftCount: metricValue(claimsSnap.byStatus?.Draft || claimsSnap.laneTotals?.Draft),
+          needsReviewCount: metricValue(claimsSnap.byStatus?.["Needs Review"] || claimsSnap.laneTotals?.["Needs Review"]),
+          readyCount: metricValue(claimsSnap.byStatus?.Ready || claimsSnap.laneTotals?.Ready),
+          deniedCount: metricValue(claimsSnap.byStatus?.Denied || claimsSnap.laneTotals?.Denied),
+        },
+      },
+      claimReadinessAndSafety: {
+        key: "claimReadinessAndSafety",
+        title: "Claim Readiness & Safety",
+        status: claimsReadinessStatus,
+        summary: "Claim packet readiness score and local safety posture from the claims workbench cache. Submission remains locked.",
+        navTarget: WIDGET_NAV.claimReadinessAndSafety,
+        metrics: {
+          readinessOverall: metricValue(claimsSnap.readiness?.overall || kpiValue(claimsSnap.kpis, "Claim Readiness")),
+          safetyPosture: metricValue(claimsSnap.safety),
+          needsReviewCount: metricValue(claimsSnap.byStatus?.["Needs Review"] || claimsSnap.laneTotals?.["Needs Review"]),
+          deniedCount: metricValue(claimsSnap.byStatus?.Denied || claimsSnap.laneTotals?.Denied),
+        },
+      },
+      arAgingAndCollections: {
+        key: "arAgingAndCollections",
+        title: "A/R Aging & Collections",
+        status: arStatus,
+        summary: arAvailable
+          ? "A/R aging buckets, collections trend, and follow-up queue counts from the A/R dashboard cache."
+          : "A/R dashboard cache is present but verified dental A/R totals are unavailable until an explicit SoftDent A/R export is present.",
+        navTarget: WIDGET_NAV.arAgingAndCollections,
+        metrics: {
+          totalOutstanding: metricValue(kpiValue(arDash.kpis, "Total Outstanding")),
+          aging90PlusPct: metricValue(kpiValue(arDash.kpis, "90+ Days %")),
+          collectionsThisPeriod: metricValue(kpiValue(arDash.kpis, "Collections This 30 Days")),
+          followUpQueueCount: sumCounts(arDash.followUp),
+        },
+      },
+      arOutstandingClaims: {
+        key: "arOutstandingClaims",
+        title: "Top Outstanding Claims",
+        status: arStatus,
+        summary: arAvailable
+          ? "Top outstanding claims list and oldest claim age from the A/R dashboard cache."
+          : "Top claims list is available, but verified dental A/R totals stay hidden until an explicit SoftDent A/R export is present.",
+        navTarget: WIDGET_NAV.arOutstandingClaims,
+        metrics: {
+          topClaimCount: metricValue((arDash.topClaims || []).length || null),
+          topClaimId: metricValue(firstItem(arDash.topClaims)?.claim),
+          topClaimOutstanding: metricValue(firstItem(arDash.topClaims)?.outstanding),
+          oldestClaimDays: metricValue(Math.max.apply(null, (arDash.topClaims || []).map((c) => Number(c.days) || 0)) || null),
+        },
       },
       careDeliveryPerformance: {
+        key: "careDeliveryPerformance",
         title: "Care Delivery Performance",
         status: careStatus,
         summary: arAvailable
           ? "Practice-wide SoftDent operational balances from the import cache."
           : "Practice-wide SoftDent operational activity from the import cache; patient A/R balances are unavailable until an explicit SoftDent A/R export is present.",
-        metrics: { patientBalanceTotal: null },
+        navTarget: WIDGET_NAV.careDeliveryPerformance,
+        metrics: {
+          patientBalanceTotal,
+          providerCount: metricValue((fin.providers?.rows || []).length || null),
+          patientCount: metricValue(glanceValue(sd, "Total Patients")),
+        },
+      },
+      softdentArAging: {
+        key: "softdentArAging",
+        title: "SoftDent A/R Aging",
+        status: arAvailable ? softdentStatus : "DEGRADED",
+        summary: arAvailable
+          ? "SoftDent daysheet A/R aging buckets from the local import cache."
+          : "SoftDent aging buckets are withheld from HAL until a verified A/R export is present.",
+        navTarget: WIDGET_NAV.softdentArAging,
+        metrics: {
+          totalAr: metricValue(sd.hero?.value),
+          currentBucket: metricValue((sd.aging || []).find((a) => /0-30|current/i.test(a.bucket || ""))?.amount),
+          ninetyPlusBucket: metricValue((sd.aging || []).find((a) => /90|120/i.test(a.bucket || ""))?.amount),
+          bucketCount: metricValue((sd.aging || []).length || null),
+        },
+      },
+      softdentResponsibility: {
+        key: "softdentResponsibility",
+        title: "Insurance vs Patient Responsibility",
+        status: arAvailable ? softdentStatus : "DEGRADED",
+        summary: arAvailable
+          ? "Insurance/patient A/R split and collectability from the SoftDent dashboard cache."
+          : "Responsibility split is withheld until a verified SoftDent A/R export is present.",
+        navTarget: WIDGET_NAV.softdentResponsibility,
+        metrics: {
+          insuranceAmount: metricValue(sd.responsibility?.insurance?.amount),
+          patientAmount: metricValue(sd.responsibility?.patient?.amount),
+          collectability: metricValue(sd.responsibility?.collectability),
+          collectableAmount: metricValue(sd.responsibility?.collectable),
+        },
+      },
+      softdentSourceHealth: {
+        key: "softdentSourceHealth",
+        title: "SoftDent Source Health",
+        status: softdentStatus,
+        summary: "SoftDent connection, data freshness, daysheet load, and scheduled export health.",
+        navTarget: WIDGET_NAV.softdentSourceHealth,
+        metrics: {
+          healthyChecks: healthyCount(sd.health),
+          totalChecks: metricValue((sd.health || []).length || null),
+          connection: metricValue((sd.health || []).find((h) => h.label === "Connection")?.value || sd.status),
+          nextExport: metricValue((sd.health || []).find((h) => h.label === "Next Scheduled Export")?.value),
+        },
+      },
+      softdentExportHistory: {
+        key: "softdentExportHistory",
+        title: "SoftDent Export History",
+        status: softdentStatus,
+        summary: "Latest SoftDent export jobs, datasets, and record counts from the local import cache.",
+        navTarget: WIDGET_NAV.softdentExportHistory,
+        metrics: {
+          exportCount: metricValue((sd.exports || []).length || null),
+          latestExport: metricValue(firstItem(sd.exports)?.name),
+          latestStatus: metricValue(firstItem(sd.exports)?.status),
+          latestRecords: metricValue(firstItem(sd.exports)?.records),
+        },
+      },
+      narrativeWorkflow: {
+        key: "narrativeWorkflow",
+        title: "Insurance Narrative Workflow",
+        status: narrativeStatus,
+        summary: "Insurance narrative composer, draft count, latest draft, and focus mode. Draft only; no payer submission.",
+        navTarget: WIDGET_NAV.narrativeWorkflow,
+        metrics: {
+          draftCount: metricValue(narratives.drafts),
+          latestDraft: metricValue(narratives.latest?.version),
+          focus: metricValue(narratives.focus),
+          modifiedBy: metricValue(narratives.latest?.by),
+        },
+      },
+      documentLibrary: {
+        key: "documentLibrary",
+        title: "Document Library",
+        status: libraryStatus,
+        summary: "Indexed document library volume, storage posture, and most recent visible document from the local library cache.",
+        navTarget: WIDGET_NAV.documentLibrary,
+        metrics: {
+          indexedDocuments: metricValue(library.storage?.indexed || library.results),
+          storageUsedPct: metricValue(library.storage?.usedPct != null ? `${library.storage.usedPct}%` : null),
+          storageCapacity: metricValue(library.storage?.capacity),
+          topDocument: metricValue(firstItem(library.top)?.title),
+        },
       },
     };
 
@@ -1027,6 +1438,10 @@ const HalSkills = (function () {
     [
       ["smartClaimsAndReceivables", ["accountsReceivableTotal"]],
       ["careDeliveryPerformance", ["patientBalanceTotal"]],
+      ["arAgingAndCollections", ["totalOutstanding", "aging90PlusPct", "collectionsThisPeriod"]],
+      ["arOutstandingClaims", ["topClaimOutstanding"]],
+      ["softdentArAging", ["totalAr", "currentBucket", "ninetyPlusBucket"]],
+      ["softdentResponsibility", ["insuranceAmount", "patientAmount", "collectability", "collectableAmount"]],
     ].forEach(([key, metricKeys]) => {
       const widget = feed.widgets[key];
       if (!widget || !widget.metrics) return;
@@ -1041,13 +1456,56 @@ const HalSkills = (function () {
     return feed;
   }
 
+  function formatWidgetMetricLabel(key) {
+    return String(key || "")
+      .replace(/([A-Z])/g, " $1")
+      .replace(/^./, (c) => c.toUpperCase())
+      .trim();
+  }
+
+  function formatWidgetMetrics(widget) {
+    const metrics = (widget && widget.metrics) || {};
+    const pairs = Object.entries(metrics)
+      .filter(([, v]) => v !== null && v !== undefined && v !== "")
+      .map(([k, v]) => `${formatWidgetMetricLabel(k)}: ${v}`);
+    return pairs.length ? pairs.join(" · ") : "No verified metrics in this snapshot.";
+  }
+
   function formatWidgetFeed(feed) {
     const lines = [`Manager dashboard widgets (${feed.manager}, local only):`, ""];
-    Object.values(feed.widgets).forEach((w) => {
+    WIDGET_ORDER.forEach((key) => {
+      const w = feed.widgets[key];
+      if (!w) return;
       lines.push(`[${w.status}] ${w.title} — ${w.summary}`);
+      lines.push(`  ${formatWidgetMetrics(w)}`);
     });
     lines.push("", `Publish job: ${feed.jobs.widgetPublish.status}. Local-only; A/R shown only from a verified source.`);
     return lines.join("\n");
+  }
+
+  function formatWidgetDetail(feed, widgetKey) {
+    const w = feed && feed.widgets && feed.widgets[widgetKey];
+    if (!w) return "Widget not found in the current feed.";
+    const lines = [
+      `${w.title} [${w.status}]`,
+      w.summary,
+      "",
+      formatWidgetMetrics(w),
+      "",
+      `Related page: ${w.navTarget || "—"} · local only · not submitted.`,
+    ];
+    return lines.join("\n");
+  }
+
+  function summarizeWidgetFeed(feed) {
+    if (!feed || !feed.widgets) return "";
+    return WIDGET_ORDER.map((key) => {
+      const w = feed.widgets[key];
+      if (!w) return "";
+      return `[${w.status}] ${w.title}: ${formatWidgetMetrics(w)}`;
+    })
+      .filter(Boolean)
+      .join("\n");
   }
 
   return {
@@ -1099,9 +1557,14 @@ const HalSkills = (function () {
     SOFTDENT_MISSING_DATA_CODES,
     softDentReadSourceStatus,
     // widgets
+    WIDGET_NAV,
+    WIDGET_ORDER,
     buildWidgetFeed,
     enforceReceivablesArPolicy,
     formatWidgetFeed,
+    formatWidgetDetail,
+    formatWidgetMetrics,
+    summarizeWidgetFeed,
   };
 })();
 

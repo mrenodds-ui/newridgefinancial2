@@ -142,15 +142,17 @@
   },
   "firewall": {
     "title": "External action firewall",
-    "summary": "HAL cannot perform external actions from this program. The safety boundary is enforced before any model call.",
-    "blocked": ["No email", "No fax", "No upload", "No payer contact", "No writeback", "No submission"],
-    "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information", "Draft a journal entry (local, not posted)", "Assess claim packet readiness", "Build office-manager attention list", "Create local office tasks", "Monitor local sidenotes", "Add local sidenotes"],
+    "summary": "HAL only reads data from SoftDent and QuickBooks. It cannot perform external actions from this program, and the safety boundary is enforced before any model call.",
+    "blocked": ["No email", "No fax", "No upload", "No payer contact", "SoftDent read-only", "QuickBooks read-only", "No submission"],
+    "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information", "Draft a journal entry (local review only)", "Assess claim packet readiness", "Build office-manager attention list", "Create local office tasks", "Monitor local sidenotes", "Add local sidenotes"],
     "examples": [
       { "text": "Open the claims workbench", "expected": "allowed" },
       { "text": "Explain A/R aging", "expected": "allowed" },
       { "text": "Submit the denied claim", "expected": "blocked" },
       { "text": "Email the payer about this claim", "expected": "blocked" },
       { "text": "Upload the narrative to the portal", "expected": "blocked" },
+      { "text": "Post to QuickBooks", "expected": "blocked" },
+      { "text": "Write to SoftDent", "expected": "blocked" },
       { "text": "Make a plan for today", "expected": "allowed" }
     ]
   },
@@ -160,7 +162,7 @@
       "Review claims in the Needs Review lane before any payer-facing work.",
       "Check SoftDent and QuickBooks read-only source freshness.",
       "Use the A/R & Collections page to identify aged balances.",
-      "Keep document posting work in review status until staff approval."
+      "Keep accounting document review work in queue until staff approval."
     ]
   },
   "workSessions": {
@@ -192,7 +194,7 @@
         "command": "Start source freshness review",
         "targetPage": "softdent",
         "purpose": "Confirm read-only source freshness before relying on downstream numbers.",
-        "safety": "Read-only — no writeback to source systems.",
+        "safety": "Read-only — HAL only reads data from SoftDent and QuickBooks.",
         "checklist": [
           "Check SoftDent export timestamp",
           "Check QuickBooks sync status",
@@ -230,7 +232,7 @@
         "command": "Start document review",
         "targetPage": "documents",
         "purpose": "Review accounting document queue, extraction, and posting readiness.",
-        "safety": "Local review — no posting to ledger or writeback.",
+        "safety": "Local review only — HAL only reads data from SoftDent and QuickBooks.",
         "checklist": [
           "Open Accounting Documents queue",
           "Verify extraction accuracy per document",
@@ -327,7 +329,7 @@
       "safety": "Read-only view",
       "state": "Ready",
       "nextAction": "Review production and collections trends for the current period.",
-      "blocked": ["No writeback to source systems"],
+      "blocked": ["SoftDent read-only", "QuickBooks read-only"],
       "related": ["ar", "softdent", "quickbooks"]
     },
     {
@@ -337,7 +339,7 @@
       "safety": "Read-only source",
       "state": "Ready",
       "nextAction": "Confirm export freshness before relying on downstream numbers.",
-      "blocked": ["No writeback", "No patient record edits"],
+      "blocked": ["SoftDent read-only", "No patient record edits"],
       "related": ["financial", "ar"]
     },
     {
@@ -347,7 +349,7 @@
       "safety": "Read-only source",
       "state": "Blocked",
       "nextAction": "Wait for the next sync refresh before trusting expense totals.",
-      "blocked": ["No writeback", "No journal entries"],
+      "blocked": ["QuickBooks read-only", "No journal entries to QuickBooks"],
       "related": ["financial"]
     },
     {
@@ -387,7 +389,7 @@
       "safety": "Local review",
       "state": "Needs review",
       "nextAction": "Keep posting work in review status until staff approval.",
-      "blocked": ["No posting to ledger", "No writeback"],
+      "blocked": ["SoftDent read-only", "QuickBooks read-only"],
       "related": ["library", "quickbooks"]
     },
     {
@@ -407,7 +409,7 @@
       "safety": "Read-only oversight",
       "state": "Needs review",
       "nextAction": "Review active work sessions and blocked registry items with staff.",
-      "blocked": ["No writeback", "No external contact"],
+      "blocked": ["SoftDent read-only", "No external contact"],
       "related": ["claims", "documents", "ar"]
     },
     {

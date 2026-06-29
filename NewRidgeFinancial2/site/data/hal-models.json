@@ -123,7 +123,8 @@
       ],
       "stillBlocked": [
         "No external actions",
-        "No data writeback",
+        "QuickBooks read-only",
+        "SoftDent read-only",
         "No payer contact or submission"
       ]
     },
@@ -142,7 +143,8 @@
       ],
       "stillBlocked": [
         "No external actions",
-        "No data writeback",
+        "QuickBooks read-only",
+        "SoftDent read-only",
         "No payer contact or submission"
       ]
     },
@@ -160,7 +162,8 @@
       ],
       "stillBlocked": [
         "No external actions",
-        "No data writeback"
+        "QuickBooks read-only",
+        "SoftDent read-only"
       ]
     },
     {
@@ -177,7 +180,8 @@
       ],
       "stillBlocked": [
         "No external actions",
-        "No data writeback"
+        "QuickBooks read-only",
+        "SoftDent read-only"
       ]
     },
     {
@@ -201,7 +205,8 @@
       ],
       "stillBlocked": [
         "No external actions",
-        "No data writeback"
+        "QuickBooks read-only",
+        "SoftDent read-only"
       ]
     },
     {
@@ -225,7 +230,8 @@
       ],
       "stillBlocked": [
         "No external actions",
-        "No data writeback"
+        "QuickBooks read-only",
+        "SoftDent read-only"
       ]
     },
     {
@@ -249,7 +255,8 @@
       ],
       "stillBlocked": [
         "No external actions",
-        "No data writeback"
+        "QuickBooks read-only",
+        "SoftDent read-only"
       ]
     },
     {
@@ -274,7 +281,8 @@
       ],
       "stillBlocked": [
         "No external actions",
-        "No data writeback"
+        "QuickBooks read-only",
+        "SoftDent read-only"
       ]
     },
     {
@@ -298,7 +306,8 @@
       ],
       "stillBlocked": [
         "No external actions",
-        "No data writeback"
+        "QuickBooks read-only",
+        "SoftDent read-only"
       ]
     }
   ]
