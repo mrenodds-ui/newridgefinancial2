@@ -1,7 +1,6 @@
 /**
  * NewRidgeFinancial 2.0 — program pages built from shared UI components + Services.
- * Visual layout matches PNG mockups; data comes from the service layer (seeded once,
- * then persisted). Interactive pages support real CRUD, validation, and async states.
+ * Visual layout matches PNG mockups; data comes from imports or empty shells.
  */
 const PageViews = (function () {
   function resolveUI() {
@@ -72,8 +71,15 @@ const PageViews = (function () {
       safety: (reg && reg.safety) || "Read-only · HAL reads source data only",
       registryState: (reg && reg.state) || "unknown",
       dataSource: "services",
-      seedDataUsed: true,
+      seedDataUsed: false,
     };
+  }
+
+  function dataBadgeFor(record) {
+    const empty = typeof EmptyStates !== "undefined" ? EmptyStates : null;
+    if (empty && typeof empty.dataBadge === "function") return empty.dataBadge(record && record.dataSource);
+    if (record && record.dataSource === "import") return "Import data";
+    return "No data loaded";
   }
 
   function stateTone(state) {
@@ -92,14 +98,14 @@ const PageViews = (function () {
       </article>`;
   }
 
-  function topBar(state, actions, safetyOverride) {
+  function topBar(state, actions, safetyOverride, dataBadge) {
     if (!U) return "";
     const allActions = actions || [];
     return U.TopBar({
       title: state.title,
       subtitle: state.subtitle,
       safety: safetyOverride || state.safety,
-      demo: true,
+      dataBadge: dataBadge || "",
       actions: allActions || [],
     });
   }
@@ -314,7 +320,9 @@ const PageViews = (function () {
 
     const pm = d.payerMix;
     let acc = 0;
-    const stops = pm.slices.map((s) => { const a = acc; acc += s.pct; return `${s.color} ${a}% ${acc}%`; }).join(", ");
+    const stops = pm.slices.length
+      ? pm.slices.map((s) => { const a = acc; acc += s.pct; return `${s.color} ${a}% ${acc}%`; }).join(", ")
+      : "#64748b 0% 100%";
     const payerLegend = pm.slices.map((s) => `<div class="pv-payer"><span class="pv-payer__dot" style="background:${s.color}"></span><span class="pv-payer__label">${esc(s.label)}</span><span class="pv-payer__vals"><strong class="pv-payer__pct" style="color:${s.color}">${s.pct}%</strong><em class="pv-payer__amt">${esc(s.amount)}</em></span></div>`).join("");
     const payerCard = card(
       "Payer Mix — MTD Collections",
@@ -327,7 +335,7 @@ const PageViews = (function () {
     );
 
     const prov = d.providers;
-    const provMax = Math.max(...prov.rows.map((r) => r.pct), 1);
+    const provMax = prov.rows.length ? Math.max(...prov.rows.map((r) => r.pct), 1) : 1;
     const provBars = prov.rows.map((r) => `<div class="pv-hbar"><span class="pv-hbar__label">${esc(r.name)}</span><div class="pv-hbar__track"><span class="pv-hbar__fill" style="width:${(r.pct / provMax) * 100}%"></span></div><span class="pv-hbar__val">${esc(r.amount)}</span><span class="pv-hbar__pct">${r.pct}%</span></div>`).join("");
     const providerCard = card(
       "Production by Provider — MTD",
@@ -357,7 +365,7 @@ const PageViews = (function () {
       title: "Owner Financial Dashboard",
       subtitle: state.subtitle,
       safety: state.safety,
-      demo: true,
+      dataBadge: dataBadgeFor(d),
       actions: [toolbarDate(d.dateRange), toolbarBtn(d.compareRange, "▾"), toolbarBtn("Filters", "⛃")],
     });
     return `
@@ -394,7 +402,7 @@ const PageViews = (function () {
       title: "SoftDent",
       subtitle: `System of Record: ${d.source || "SoftDent"}`,
       safety: state.safety,
-      demo: true,
+      dataBadge: dataBadgeFor(d),
       actions: [toolbarDate(d.date), toolbarBtn("Filters", "⛃"), toolbarBtn("⋯", "")],
     });
 
@@ -491,7 +499,7 @@ const PageViews = (function () {
     const ebitdaRows = d.ebitdaCandidates.map((r) => [esc(r.desc), esc(r.amount), badge(r.type, r.typeTone), `<a class="pv-gold-link" href="#">Review</a>`]);
     const syncRows = Object.entries(d.sync).map(([k, v]) => `<div class="pv-sync-row"><span>${esc(k.replace(/([A-Z])/g, " $1"))}</span><strong>${k === "status" ? badge(v, "ok") : esc(v)}</strong></div>`).join("");
     return `
-      ${topBar(state, [`<span class="pv-sync-badge">${badge(d.syncStatus, "ok")} Last sync: ${esc(d.lastSync)}</span>`, toolbarBtn("View in QuickBooks", "↗")])}
+      ${topBar(state, [`<span class="pv-sync-badge">${badge(d.syncStatus, "ok")} Last sync: ${esc(d.lastSync)}</span>`, toolbarBtn("View in QuickBooks", "↗")], null, dataBadgeFor(d))}
       <div class="pv-bento pv-bento--quickbooks">
         ${card(`P&L Summary (YTD)`, `<span class="pv-card-range">${esc(d.pl.range)}</span>` + plList, "pv-card--pl")}
         ${card("Monthly Expenses", `<span class="pv-card-range">Last 12 Months</span>` + vBarChart(d.monthlyExpenses.labels, d.monthlyExpenses.values) + `<span class="pv-legend-inline"><i style="background:#d6b15e"></i> Operating Expenses</span>`, "pv-card--bars")}
@@ -507,7 +515,7 @@ const PageViews = (function () {
     const claimRows = d.topClaims.map((c) => [esc(c.claim), esc(c.patient), esc(c.insurance), esc(c.dos), esc(c.billed), esc(c.outstanding), `<span class="pv-days-warn">${c.days}</span>`]);
     const followUp = d.followUp.map((f) => `<div class="pv-follow"><div class="pv-follow__head"><span class="pv-follow__dot pv-follow__dot--${f.tone}"></span><strong>${esc(f.status)}</strong><span>${f.count} total</span><a class="pv-gold-link" href="#">View All</a></div>${f.items.map((i) => `<div class="pv-follow__item"><span>${esc(i.label)}</span><em>${i.count} claims</em><span class="pv-chev">›</span></div>`).join("")}</div>`).join("");
     return `
-      ${topBar(state, [toolbarDate(d.dateRange), toolbarBtn("Filters", "⛃"), toolbarBtn("Export", "⬆")])}
+      ${topBar(state, [toolbarDate(d.dateRange), toolbarBtn("Filters", "⛃"), toolbarBtn("Export", "⬆")], null, dataBadgeFor(d))}
       ${kpiRow(d.kpis)}
       <div class="pv-bento pv-bento--ar">
         ${card("Aging Buckets", `<div class="pv-aging-cards">${agingCards}</div>`)}
@@ -533,7 +541,7 @@ const PageViews = (function () {
     }).join("");
     const claimRec = (data.claims || []).find((c) => c.id === selectedId);
     const det = (data.detailById || {})[selectedId] || (claimRec
-      ? { id: claimRec.id, patient: claimRec.patient, dob: claimRec.dob, age: "—", insurance: "—", billed: claimRec.amount, dos: "—", procedure: claimRec.procedure, code: claimRec.procedure, provider: "—", npi: "—", validation: 0, alert: "Local workbench only · payer submission locked." }
+      ? { id: claimRec.id, patient: claimRec.patient, dob: claimRec.dob, age: "—", insurance: "—", billed: claimRec.amount, dos: "—", procedure: claimRec.procedure, code: claimRec.procedure, provider: "Dr. Michael Reno", npi: "—", validation: 0, alert: "Local workbench only · payer submission locked." }
       : null);
     const currentStatus = claimRec ? claimRec.status : "Draft";
     const detailPane = det ? `
@@ -561,7 +569,7 @@ const PageViews = (function () {
       </aside>` : `<aside class="pv-claim-detail">${U.EmptyState({ title: "Select a claim", message: "Choose a claim card to view details and update status." })}</aside>`;
     const readiness = data.readiness || { overall: "—", slices: [] };
     return `
-      ${topBar(state, [`<span class="pv-safety-chip">Safety Posture: ${esc(data.safety)}</span>`, toolbarBtn("Actions", "▾"), U.Button({ label: "New claim", variant: "primary", attrs: { "data-claim-create": "1" } })])}
+      ${topBar(state, [`<span class="pv-safety-chip">Safety Posture: ${esc(data.safety)}</span>`, toolbarBtn("Actions", "▾"), U.Button({ label: "New claim", variant: "primary", attrs: { "data-claim-create": "1" } })], null, dataBadgeFor(data))}
       ${kpiRow(data.kpis || [])}
       <div class="pv-claims-layout">
         <section class="pv-card pv-card--wide pv-claims-main">
@@ -578,7 +586,7 @@ const PageViews = (function () {
   }
 
   async function wireClaims(container, state, onNavigate) {
-    let selectedId = "CLM-0009712";
+    let selectedId = null;
     async function refresh() {
       const slot = container.querySelector(".pv-body") || container;
       slot.innerHTML = U.LoadingState({ label: "Updating claims…" });
@@ -641,7 +649,7 @@ const PageViews = (function () {
     const keyPointsHtml = (comp.keyPoints || []).map((p, i) => `<div class="pv-keypoint"><input type="checkbox" checked disabled /><span>${esc(p)}</span><button type="button" data-kp-remove="${i}">×</button></div>`).join("");
     const histRows = (data.drafts || []).map((h) => [h.latest ? `<strong>${esc(h.version)} Latest</strong>` : esc(h.version), esc(h.modified), String(h.points), esc(h.length), esc(h.focus), `${esc(h.by)} <button type="button" class="pv-gold-link" data-draft-delete="${esc(h.version)}">Delete</button>`]);
     return `
-      ${topBar(state, [toolbarBtn("View Only", "👁"), toolbarBtn("?", "")])}
+      ${topBar(state, [toolbarBtn("View Only", "👁"), toolbarBtn("?", "")], null, dataBadgeFor({ dataSource: (data.drafts || []).length || data.draftText ? "persisted" : "empty" }))}
       <div class="pv-patient-bar">${[["Patient", bar.patient], ["DOB", bar.dob], ["Claim #", bar.claim], ["Insurance", bar.insurance], ["DOS", bar.dos], ["Procedure", bar.procedure], ["Status", badge(bar.status, "warn")]].map(([l, v]) => `<div><span>${esc(l)}</span>${typeof v === "string" && v.startsWith("<") ? v : `<strong>${esc(v)}</strong>`}</div>`).join("")}</div>
       <div class="pv-two-pane pv-two-pane--narratives">
         <article class="pv-card" id="narrative-composer">
@@ -768,7 +776,7 @@ const PageViews = (function () {
     const posting = data.posting || [];
     const period = data.period || {};
     return `
-      ${topBar(state, [badge("Read-Only", "warn"), `<span class="pv-entity">Entity: ${esc(data.entity)}</span>`])}
+      ${topBar(state, [badge("Read-Only", "warn"), `<span class="pv-entity">Entity: ${esc(data.entity || "—")}</span>`], null, dataBadgeFor({ dataSource: (data.queue || []).length ? "persisted" : "empty" }))}
       <div class="pv-bento pv-bento--documents">
         ${card("Document Intake & Posting Queue", `<div class="pv-search"><input type="search" class="pv-input" id="doc-search" placeholder="Search documents…" value="${esc(filter.query || "")}" /><button class="pv-button" type="button" data-doc-filter="1">Apply</button><select class="pv-input" id="doc-status"><option value="All"${!filter.status || filter.status === "All" ? " selected" : ""}>All statuses</option><option value="Pending Review"${filter.status === "Pending Review" ? " selected" : ""}>Pending Review</option><option value="Ready to Post"${filter.status === "Ready to Post" ? " selected" : ""}>Ready to Post</option><option value="Posted"${filter.status === "Posted" ? " selected" : ""}>Posted</option></select></div>${U.Table({ columns: ["ID", "Document Type", "Vendor / Entity", "Document Date", "Amount", "Status", "Age (Days)"], rows: queueRows, emptyTitle: "No documents match", emptyMessage: "Try clearing filters or refreshing." })}`, "pv-card--queue")}
         ${card("Selected Document Preview", preview.vendor ? `<div class="pv-invoice-preview"><div class="pv-invoice-preview__head">${esc(preview.vendor)}</div><p>Invoice # ${esc(preview.invoice)}</p><p>Date: ${esc(preview.date)}</p><p class="pv-invoice-preview__total">Total ${esc(preview.total)}</p></div><footer class="pv-preview-foot">${esc(preview.file || "")} · ${esc(preview.pages || "")} · Uploaded ${esc(preview.uploaded || "")}</footer>` : U.EmptyState({ title: "No document selected", message: "Select a row to preview." }), "pv-card--preview")}
@@ -779,7 +787,7 @@ const PageViews = (function () {
   }
 
   async function wireDocuments(container, state, onNavigate) {
-    let selectedId = "DOC-2025-05891";
+    let selectedId = null;
     let filter = { query: "", status: "All" };
     async function refresh() {
       const slot = container.querySelector(".pv-body") || container;
@@ -820,24 +828,42 @@ const PageViews = (function () {
   }
 
   /* ---- Library (interactive search) ---- */
+  function libraryDetailPane(det) {
+    if (!det || !det.title) {
+      return U.EmptyState({ title: "Select a document", message: "Click a card to view details." });
+    }
+    const metaRows = [
+      ["Classification", det.classification],
+      ["Document Type", det.docType],
+      ["Uploaded By", det.uploadedBy],
+      ["Date Added", det.dateAdded],
+      ["Checksum", det.checksum],
+      ["File Path", det.path],
+    ].filter(([, v]) => v);
+    return `<div class="pv-detail-head"><span class="pv-file-icon pv-file-icon--${esc(det.tone || "red")}">${esc(det.type || "PDF")}</span><div><strong>${esc(det.title)}</strong><span>${esc(det.type)} · ${esc(det.size)}</span></div>${badge("Read-Only", "muted")}</div>
+      <div class="pv-tabs"><span class="pv-tab pv-tab--active">Preview</span><span class="pv-tab">Details</span><span class="pv-tab">Activity</span></div>
+      <div class="pv-doc-preview-frame">${U.EmptyState({ title: "Preview unavailable", message: "Attach a local file to preview document content." })}</div>
+      ${metaRows.length ? `<dl class="pv-detail-list">${metaRows.map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}`;
+  }
+
   function libraryBody(state, data, selectedTitle, query, typeFilter) {
-    const docCards = (data.docs || []).map((doc) => `<article class="pv-doc-card${doc.title === selectedTitle ? " pv-doc-card--selected" : ""}" data-lib-doc="${esc(doc.title)}" tabindex="0"><div class="pv-doc-card__head"><span class="pv-file-icon pv-file-icon--${doc.tone}">${esc(doc.type)}</span>${badge("Read-Only", "demo")}</div><strong>${esc(doc.title)}</strong><span>${esc(doc.type)} · ${esc(doc.size)}</span><div class="pv-chips">${(doc.tags || []).map((t) => `<span class="pv-chip">${esc(t)}</span>`).join("")}</div><footer>Updated ${esc(doc.updated)} · ${esc(doc.by)}</footer></article>`).join("");
+    const docCards = (data.docs || []).map((doc) => `<article class="pv-doc-card${doc.title === selectedTitle ? " pv-doc-card--selected" : ""}" data-lib-doc="${esc(doc.title)}" tabindex="0"><div class="pv-doc-card__head"><span class="pv-file-icon pv-file-icon--${doc.tone}">${esc(doc.type)}</span>${badge("Read-Only", "muted")}</div><strong>${esc(doc.title)}</strong><span>${esc(doc.type)} · ${esc(doc.size)}</span><div class="pv-chips">${(doc.tags || []).map((t) => `<span class="pv-chip">${esc(t)}</span>`).join("")}</div><footer>Updated ${esc(doc.updated)} · ${esc(doc.by)}</footer></article>`).join("");
     const det = data.detail || {};
     return `
-      ${topBar(state, [`<span class="pv-storage"><strong>${(data.results || 0).toLocaleString()}</strong> Documents · ${data.storage?.usedPct || 0}% of ${esc(data.storage?.capacity || "")}</span>`])}
+      ${topBar(state, [`<span class="pv-storage"><strong>${(data.results || 0).toLocaleString()}</strong> Documents · ${data.storage?.usedPct || 0}% of ${esc(data.storage?.capacity || "—")}</span>`], null, dataBadgeFor({ dataSource: (data.docs || []).length ? "persisted" : "empty" }))}
       <div class="pv-library-layout">
         <div class="pv-library-main">
           <div class="pv-search pv-search--library"><input type="search" class="pv-input" id="lib-search" placeholder="Search documents…" value="${esc(query || "")}" /><button class="pv-button" type="button" data-lib-search="1">Search</button><a class="pv-gold-link" href="#" data-lib-reset="1">Reset Filters</a></div>
           <div class="pv-filter-row"><select class="pv-input" id="lib-type"><option value="All">Document Type</option>${["PDF", "DOCX", "XLSX", "PPTX"].map((t) => `<option value="${t}"${typeFilter === t ? " selected" : ""}>${t}</option>`).join("")}</select></div>
           <div class="pv-results-head"><strong class="pv-gold">${(data.results || 0).toLocaleString()} RESULTS</strong></div>
-          <div class="pv-doc-grid pv-doc-grid--rich">${docCards || U.EmptyState({ title: "No documents found", message: "Adjust search or filters." })}</div>
+          <div class="pv-doc-grid pv-doc-grid--rich">${docCards || U.EmptyState({ title: "No documents found", message: "Adjust search or add documents to the local library." })}</div>
         </div>
-        <aside class="pv-library-detail">${det.title ? `<div class="pv-detail-head"><span class="pv-file-icon pv-file-icon--red">${esc(det.type || "PDF")}</span><div><strong>${esc(det.title)}</strong><span>${esc(det.type)} · ${esc(det.size)}</span></div>${badge("Read-Only", "demo")}</div><div class="pv-tabs"><span class="pv-tab pv-tab--active">Preview</span><span class="pv-tab">Details</span><span class="pv-tab">Activity</span></div><div class="pv-doc-preview-frame"><div class="pv-doc-preview-cover"><div class="pv-phoenix">🦅</div><strong>OPERATION PHOENIX</strong><span>MISSION BRIEFING</span></div></div><dl class="pv-detail-list">${[["Classification", det.classification], ["Document Type", det.docType], ["Mission", det.mission], ["Uploaded By", det.uploadedBy], ["Date Added", det.dateAdded], ["Checksum", det.checksum], ["File Path", det.path]].filter(([, v]) => v).map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : U.EmptyState({ title: "Select a document", message: "Click a card to preview details." })}</aside>
+        <aside class="pv-library-detail">${libraryDetailPane(det)}</aside>
       </div>`;
   }
 
   async function wireLibrary(container, state, onNavigate) {
-    let selectedTitle = "Operation Phoenix Briefing";
+    let selectedTitle = null;
     let query = "";
     let typeFilter = "All";
     async function refresh() {
@@ -981,7 +1007,8 @@ const PageViews = (function () {
     if (!U || !Svc) return pageShell(state, "<p>UI/Services unavailable</p>");
     if (pageId === "claims") {
       const data = await Svc.claims.list();
-      return pageShell(state, claimsBody(state, data, "CLM-0009712"));
+      const selectedId = data.claims[0]?.id || null;
+      return pageShell(state, claimsBody(state, data, selectedId));
     }
     if (pageId === "narratives") {
       const data = await Svc.narratives.getState();
@@ -990,13 +1017,15 @@ const PageViews = (function () {
     }
     if (pageId === "documents") {
       const list = await Svc.documents.list({ query: "", status: "All" });
-      const detail = await Svc.documents.get("DOC-2025-05891");
-      return pageShell(state, documentsBody(state, Object.assign({}, list, { preview: detail.preview }), "DOC-2025-05891", { query: "", status: "All" }));
+      const selectedId = list.queue[0]?.id || null;
+      const detail = selectedId ? await Svc.documents.get(selectedId) : { preview: null };
+      return pageShell(state, documentsBody(state, Object.assign({}, list, { preview: detail.preview }), selectedId, { query: "", status: "All" }));
     }
     if (pageId === "library") {
       const data = await Svc.library.search("", { type: "All" });
-      const detail = (await Svc.library.get("Operation Phoenix Briefing")).detail;
-      return pageShell(state, libraryBody(state, Object.assign({}, data, { detail }), "Operation Phoenix Briefing", "", "All"));
+      const selectedTitle = data.docs[0]?.title || null;
+      const detail = selectedTitle ? (await Svc.library.get(selectedTitle)).detail : null;
+      return pageShell(state, libraryBody(state, Object.assign({}, data, { detail }), selectedTitle, "", "All"));
     }
     const renderFn = PAGE_RENDERERS[pageId];
     if (renderFn) return pageShell(state, await renderFn(state, halData));

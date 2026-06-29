@@ -7,14 +7,14 @@
     "localModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "queen3:14b",
-      "timeoutMs": 60000,
+      "model": "mistral-small3.1:24b-fast",
+      "timeoutMs": 120000,
       "temperature": 0.2
     },
     "reasoningModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "mistral-small3.1:24b",
+      "model": "mistral-small3.1:24b-fast",
       "timeoutMs": 120000,
       "temperature": 0.3
     },
@@ -26,7 +26,7 @@
       "temperature": 0.2,
       "think": true
     },
-    "note": "HAL routes general questions to local Ollama lanes on 127.0.0.1 only. Firewall runs before every model call. External actions and remote model endpoints remain blocked."
+    "note": "HAL routes general questions to local Ollama lanes on 127.0.0.1 only. Its top priority is program monitoring, correct data placement, accounting/Excel-style review, and recommendations. Firewall runs before every model call. External actions and remote model endpoints remain blocked."
   },
   "readinessDisplay": {
     "label": "Operator-verified local inventory",
@@ -44,8 +44,8 @@
     },
     "activeLane": "chat14b",
     "laneExecution": "Enabled · all local models · loopback only",
-    "runningModel": "queen3:14b + qwen3:4b helper resident at 100% GPU (verified)",
-    "gpuStatus": "Verified · AMD Radeon RX 9060 XT · 16 GB VRAM · ROCm gfx1200 · 14B + 4B helper co-resident · 100% GPU · loads clean",
+    "runningModel": "mistral-small3.1:24b-fast (text-only Q4_K_S) shared chat/helper resident at 100% GPU",
+    "gpuStatus": "Verified · AMD Radeon RX 9060 XT · 16 GB VRAM · ROCm gfx1200 · 24B fast Q4_K_S lane · ~14 GB VRAM · 8192 ctx",
     "bindingStatus": "Ollama server binds 0.0.0.0:11434 (LAN access enabled by operator) · HAL client connects 127.0.0.1 only",
     "dataPolicy": "No patient, financial, SoftDent, QuickBooks, or sensitive raw data sent to any model",
     "allModelsEnabled": true,
@@ -60,7 +60,7 @@
       "layerOffload": "41/41 layers offloaded to GPU · model resident at 100% GPU",
       "integratedGpu": "Intel Graphics present but dropped by Ollama (set OLLAMA_IGPU_ENABLE=1 to enable)",
       "resolvedWarning": "rocblaslt TensileLibrary_lazy_gfx1200 lookup fixed by setting ROCBLAS_TENSILE_LIBPATH; models now load with no rocblaslt errors",
-      "lastVerifiedLoad": "queen3:14b + qwen3:4b · both 100% GPU · 0 rocblaslt errors"
+      "lastVerifiedLoad": "mistral-small3.1:24b-fast · Q4_K_S text-only · pinned resident · ~14 GB VRAM · 8192 ctx · no expiry"
     },
     "runtime": {
       "ollamaVersion": "0.30.11",
@@ -68,7 +68,7 @@
       "host": "0.0.0.0:11434",
       "lanAccess": "enabled (operator choice; not loopback-restricted)",
       "tensileLibPath": "C:\\Users\\mreno\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\rocm_v7_1\\rocblas\\library",
-      "keepAlive": "5m"
+      "keepAlive": "-1 via HAL model warmup automation"
     },
     "availableModels": [
       "queen3:14b",
@@ -79,12 +79,13 @@
       "qwen3:235b",
       "gpt-oss:120b",
       "qwen3:30b",
+      "mistral-small3.1:24b-fast",
       "mistral-small3.1:24b"
     ],
     "configuredModels": {
-      "local": { "lane": "chat14b", "model": "queen3:14b", "available": true },
-      "helper": { "lane": "helper4b", "model": "qwen3:4b", "available": true, "gpuResidentWithLocal": true },
-      "reasoning": { "lane": "reason21b", "model": "mistral-small3.1:24b", "available": true },
+      "local": { "lane": "chat14b", "model": "mistral-small3.1:24b-fast", "available": true },
+      "helper": { "lane": "helper24b", "model": "mistral-small3.1:24b-fast", "available": true, "gpuResidentWithLocal": true },
+      "reasoning": { "lane": "reason21b", "model": "mistral-small3.1:24b-fast", "available": true },
       "escalation": { "lane": "escalate30b", "model": "qwen3:30b", "available": true },
       "general": { "lane": "general14b", "model": "qwen3:14b", "available": true },
       "coder": { "lane": "coder30b", "model": "qwen3-coder:30b", "available": true },
@@ -95,31 +96,32 @@
   },
   "lanes": [
     {
-      "id": "helper4b",
-      "name": "4B helper lane",
-      "model": "qwen3:4b",
-      "role": "Always-available small helper for quick local summaries and low-risk staff questions",
+      "id": "helper24b",
+      "name": "24B helper lane",
+      "model": "mistral-small3.1:24b-fast",
+      "role": "Always-available strongest practical helper for local summaries, routing checks, and staff questions",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "qwen3:4b",
-        "timeoutMs": 45000,
+        "model": "mistral-small3.1:24b-fast",
+        "timeoutMs": 120000,
         "temperature": 0.2
       },
       "gpuFit": {
         "verified": true,
-        "coResidentWith": "queen3:14b",
+        "coResidentWith": "chat14b shared 24B model",
         "processor": "100% GPU",
-        "residentSize": "3.2 GB",
-        "context": 4096
+        "residentSize": "14 GB",
+        "context": 8192,
+        "quantization": "Q4_K_S text-only"
       },
       "willAllow": [
-        "Fast local summaries",
-        "Quick low-risk helper answers",
-        "Small classification and routing checks"
+        "Strongest practical local summaries on this GPU",
+        "Higher-quality helper answers",
+        "Classification and routing checks using the shared 24B model"
       ],
       "stillBlocked": [
         "No external actions",
@@ -130,15 +132,16 @@
     },
     {
       "id": "chat14b",
-      "name": "14B chat lane",
-      "model": "queen3:14b",
-      "role": "Staff-facing conversation and plain-language answers",
+      "name": "24B chat lane",
+      "model": "mistral-small3.1:24b-fast",
+      "role": "Staff-facing conversation, program monitoring summaries, and stronger plain-language recommendations",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "willAllow": [
         "Explain pages in plain language",
         "Summarize local read-only status",
+        "Recommend next safe staff actions from the program snapshot",
         "Answer general staff questions about the program"
       ],
       "stillBlocked": [
@@ -150,15 +153,17 @@
     },
     {
       "id": "reason21b",
-      "name": "21B reasoning lane",
-      "model": "mistral-small3.1:24b",
-      "role": "Program review, prioritization, and structured reasoning",
+      "name": "24B reasoning lane",
+      "model": "mistral-small3.1:24b-fast",
+      "role": "Program monitoring, accounting/Excel-style data review, prioritization, and structured recommendations",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "willAllow": [
         "Prioritize work across pages",
-        "Prepare structured review notes"
+        "Place imported data into the right review context",
+        "Apply accounting and Excel-style checks to imported tables",
+        "Prepare structured recommendations and review notes"
       ],
       "stillBlocked": [
         "No external actions",
@@ -170,7 +175,7 @@
       "id": "escalate30b",
       "name": "30B escalation lane",
       "model": "qwen3:30b",
-      "role": "Second-opinion review for complex or high-risk questions",
+      "role": "Second-opinion review for complex or high-risk accounting, data, and recommendation questions",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,

@@ -73,8 +73,9 @@ const UI = (function () {
   function TopBar(opts) {
     const o = opts || {};
     const actions = (o.actions && o.actions.length) ? `<div class="pv-toolbar">${o.actions.join("")}</div>` : "";
+    const badge = o.dataBadge ? `<span class="pv-badge pv-badge--import">${esc(o.dataBadge)}</span>` : "";
     const safety = o.safety
-      ? `<div class="pv__safety">${o.demo === false ? "" : `<span class="pv-badge pv-badge--demo">Sample data</span>`}<span class="pv-safety-note">🛡 ${esc(o.safety)}</span></div>`
+      ? `<div class="pv__safety">${badge}<span class="pv-safety-note">🛡 ${esc(o.safety)}</span></div>`
       : "";
     return `
       <header class="pv__header">

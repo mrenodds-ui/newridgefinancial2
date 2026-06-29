@@ -918,7 +918,12 @@ const HalSkills = (function () {
     const snap = snapshot || {};
     const claimsAvailable = !!(snap.claims && snap.claims.total > 0);
     const ar = snap.dashboards && snap.dashboards.ar;
-    const arAvailable = !!(ar && (ar.buckets || ar.aging || ar.total));
+    const arAvailable = !!(
+      ar &&
+      ((Array.isArray(ar.buckets) && ar.buckets.length) ||
+        (Array.isArray(ar.aging) && ar.aging.length) ||
+        ar.total)
+    );
     const missing = [];
     if (!claimsAvailable) missing.push(SOFTDENT_MISSING_DATA_CODES.claims);
     if (!arAvailable) missing.push(SOFTDENT_MISSING_DATA_CODES.ar);
@@ -990,6 +995,33 @@ const HalSkills = (function () {
     "narrativeWorkflow",
     "documentLibrary",
   ];
+
+  const WIDGET_FILL_REQUIREMENTS = {
+    practiceFinancialOverview: ["SoftDent dashboard export with production/collections", "QuickBooks revenue/P&L export"],
+    financialProductionTrend: ["SoftDent dashboard export with current period production", "Period labels for trend comparison"],
+    payerMixAndCollections: ["SoftDent collections and payer mix fields", "Verified collection-rate source"],
+    providerPerformance: ["SoftDent dashboard export for Dr. Michael Reno"],
+    dataFreshnessQuality: ["Current SoftDent export timestamps", "Current QuickBooks export timestamps"],
+    ebitdaNormalization: ["QuickBooks expenses export", "Staff-reviewed EBITDA add-back categories"],
+    quickbooksProfitLossDetail: ["QuickBooks revenue/P&L export", "QuickBooks expenses export"],
+    quickbooksSyncHealth: ["QuickBooks import files copied into the canonical import folder"],
+    accountsPayableAutomation: ["Local accounting document queue", "QuickBooks expenses or vendor document imports"],
+    documentIntakeQueue: ["Local accounting documents added to the document queue"],
+    documentPreview: ["Selected local document metadata and extracted fields"],
+    periodCloseAndPosting: ["Accounting document period assignment", "Human-reviewed posting readiness"],
+    smartClaimsAndReceivables: ["SoftDent claims export", "Verified SoftDent A/R export"],
+    claimsPipeline: ["SoftDent claims export with claim status values"],
+    claimReadinessAndSafety: ["SoftDent claims export", "Local claim readiness checks"],
+    arAgingAndCollections: ["Verified SoftDent A/R aging export"],
+    arOutstandingClaims: ["SoftDent claims export with balances or verified A/R export"],
+    careDeliveryPerformance: ["SoftDent dashboard export", "Verified patient balance/A/R source"],
+    softdentArAging: ["Verified SoftDent A/R aging export"],
+    softdentResponsibility: ["SoftDent dashboard export with insurance and patient responsibility values"],
+    softdentSourceHealth: ["SoftDent dashboard, claims, clinical notes, and optional A/R export files"],
+    softdentExportHistory: ["SoftDent export files in the canonical import folder"],
+    narrativeWorkflow: ["Local narrative drafts or claim source facts from SoftDent claims"],
+    documentLibrary: ["Local library documents or indexed document metadata"],
+  };
 
   function plAmount(dashboard, category) {
     const row = ((dashboard && dashboard.pl && dashboard.pl.rows) || []).find((r) => r.category === category);
@@ -1471,6 +1503,12 @@ const HalSkills = (function () {
     return pairs.length ? pairs.join(" · ") : "No verified metrics in this snapshot.";
   }
 
+  function widgetMissingMetrics(widget) {
+    return Object.entries((widget && widget.metrics) || {})
+      .filter(([, value]) => value === null || value === undefined || value === "" || value === "—")
+      .map(([key]) => formatWidgetMetricLabel(key));
+  }
+
   function formatWidgetFeed(feed) {
     const lines = [`Manager dashboard widgets (${feed.manager}, local only):`, ""];
     WIDGET_ORDER.forEach((key) => {
@@ -1481,6 +1519,220 @@ const HalSkills = (function () {
     });
     lines.push("", `Publish job: ${feed.jobs.widgetPublish.status}. Local-only; A/R shown only from a verified source.`);
     return lines.join("\n");
+  }
+
+  function formatWidgetFillSuggestions(feed) {
+    if (!feed || !feed.widgets) return "No widget feed is available yet. Refresh imports, then ask again.";
+    const lines = [
+      "Suggestions to fill all manager widgets (real data only):",
+      "",
+      "Start with these sources:",
+      "1. SoftDent dashboard export for production, collections, responsibility split, and provider performance.",
+      "2. SoftDent claims export plus verified SoftDent A/R aging export for claims, receivables, and aging widgets.",
+      "3. QuickBooks revenue/P&L and expenses exports for financial, EBITDA, and sync-health widgets.",
+      "4. Local accounting documents, narrative drafts, and library documents for document/narrative/library widgets.",
+      "",
+      "Widget-by-widget fill list:",
+    ];
+    WIDGET_ORDER.forEach((key) => {
+      const widget = feed.widgets[key];
+      if (!widget) return;
+      const requirements = WIDGET_FILL_REQUIREMENTS[key] || ["Verified local/import data for this widget"];
+      const missing = widgetMissingMetrics(widget);
+      const status = String(widget.status || "UNKNOWN").toUpperCase();
+      const prefix = status === "SUCCESS" ? "Keep filled" : "Fill";
+      lines.push(`- [${status}] ${widget.title}: ${prefix} with ${requirements.join("; ")}.`);
+      if (missing.length) lines.push(`  Missing/empty metrics: ${missing.join(", ")}.`);
+    });
+    lines.push("", "HAL must leave blanks as blanks until the real export or local record exists. Nothing is mocked, posted, or written back.");
+    return lines.join("\n");
+  }
+
+  function formatWidgetMissingData(feed) {
+    if (!feed || !feed.widgets) return "No widget feed is available yet. Refresh imports, then ask again.";
+    const lines = ["Missing data by widget (real data only):", ""];
+    WIDGET_ORDER.forEach((key) => {
+      const widget = feed.widgets[key];
+      if (!widget) return;
+      const missing = widgetMissingMetrics(widget);
+      const requirements = WIDGET_FILL_REQUIREMENTS[key] || ["Verified local/import data for this widget"];
+      if (String(widget.status).toUpperCase() === "SUCCESS" && !missing.length) {
+        lines.push(`- [SUCCESS] ${widget.title}: filled from current verified data.`);
+      } else {
+        lines.push(`- [${widget.status}] ${widget.title}: ${missing.length ? missing.join(", ") : "source is incomplete or degraded"}.`);
+        lines.push(`  Needed: ${requirements.join("; ")}.`);
+      }
+    });
+    lines.push("", "Do not fill these with estimates. Import or add the real source data first.");
+    return lines.join("\n");
+  }
+
+  function formatWidgetFillPriority(feed) {
+    if (!feed || !feed.widgets) return "No widget feed is available yet. Refresh imports, then ask again.";
+    const priority = [
+      "softdentSourceHealth",
+      "quickbooksSyncHealth",
+      "practiceFinancialOverview",
+      "quickbooksProfitLossDetail",
+      "dataFreshnessQuality",
+      "arAgingAndCollections",
+      "smartClaimsAndReceivables",
+      "claimsPipeline",
+      "claimReadinessAndSafety",
+      "providerPerformance",
+      "payerMixAndCollections",
+      "financialProductionTrend",
+      "softdentArAging",
+      "softdentResponsibility",
+      "careDeliveryPerformance",
+      "ebitdaNormalization",
+      "accountsPayableAutomation",
+      "documentIntakeQueue",
+      "documentPreview",
+      "periodCloseAndPosting",
+      "narrativeWorkflow",
+      "documentLibrary",
+      "softdentExportHistory",
+      "arOutstandingClaims",
+    ];
+    const lines = ["Priority order to fill widgets:", ""];
+    priority.forEach((key, index) => {
+      const widget = feed.widgets[key];
+      if (!widget) return;
+      const missing = widgetMissingMetrics(widget);
+      lines.push(`${index + 1}. [${widget.status}] ${widget.title} — ${(WIDGET_FILL_REQUIREMENTS[key] || []).join("; ") || "verified local/import data"}`);
+      if (missing.length) lines.push(`   Missing: ${missing.join(", ")}.`);
+    });
+    lines.push("", "Rationale: source health first, then owner financials, A/R and claims, then accounting documents, narratives, and library context.");
+    return lines.join("\n");
+  }
+
+  function formatImportChecklist(feed) {
+    const qbStatus = feed?.sources?.quickbooks?.lastStatus || "UNKNOWN";
+    const sdStatus = feed?.sources?.softdent?.lastStatus || "UNKNOWN";
+    return [
+      "Import checklist to fill widgets:",
+      "",
+      `1. SoftDent dashboard export -> app/data/imports/softdent/ (current status: ${sdStatus})`,
+      "   Fills: production, collections, provider performance for Dr. Michael Reno, responsibility split, SoftDent source health.",
+      "2. SoftDent claims export -> app/data/imports/softdent/",
+      "   Fills: claims pipeline, claim readiness, outstanding claims, narrative source facts.",
+      "3. Verified SoftDent A/R aging export -> app/data/imports/softdent/",
+      "   Fills: A/R aging, receivables, patient/insurance balances. HAL will not fabricate A/R.",
+      `4. QuickBooks revenue/P&L export -> app/data/imports/quickbooks/ (current status: ${qbStatus})`,
+      "   Fills: practice financial overview, P&L detail, revenue, net income.",
+      "5. QuickBooks expenses export -> app/data/imports/quickbooks/",
+      "   Fills: expenses, EBITDA candidates, accounting review queue.",
+      "6. Local accounting documents, library files, and narrative drafts.",
+      "   Fills: document intake, selected document preview, period close, narrative workflow, document library.",
+      "",
+      "After copying files, ask HAL: refresh imports. HAL reads only; nothing is written back.",
+    ].join("\n");
+  }
+
+  function formatDataQualityCheck(feed) {
+    if (!feed || !feed.widgets) return "No widget feed is available yet. Refresh imports, then ask again.";
+    const failed = WIDGET_ORDER.map((key) => feed.widgets[key]).filter((w) => w && String(w.status).toUpperCase() === "FAILED");
+    const degraded = WIDGET_ORDER.map((key) => feed.widgets[key]).filter((w) => w && String(w.status).toUpperCase() === "DEGRADED");
+    const lines = [
+      "Data quality check before recommendations:",
+      "",
+      `Widget publish status: ${feed.jobs?.widgetPublish?.status || "UNKNOWN"}`,
+      `Failed widgets: ${failed.length}`,
+      `Degraded widgets: ${degraded.length}`,
+      "",
+      "Checks HAL should perform:",
+      "1. Confirm SoftDent and QuickBooks import freshness before using totals.",
+      "2. Leave A/R blank unless a verified SoftDent A/R export exists.",
+      "3. Confirm provider performance is only Dr. Michael Reno.",
+      "4. Compare SoftDent production/collections to QuickBooks revenue only as a review signal, not as proof they must match.",
+      "5. Flag blanks, conflicting periods, missing claim statuses, and missing document metadata before recommendations.",
+    ];
+    if (degraded.length) lines.push("", "Degraded: " + degraded.map((w) => w.title).join(", "));
+    if (failed.length) lines.push("Failed: " + failed.map((w) => w.title).join(", "));
+    return lines.join("\n");
+  }
+
+  function formatEmptyWidgetExplanation(feed, question) {
+    if (!feed || !feed.widgets) return "No widget feed is available yet. Refresh imports, then ask again.";
+    const q = String(question || "").toLowerCase();
+    const matchedKey =
+      WIDGET_ORDER.find((key) => q.includes(String(feed.widgets[key]?.title || "").toLowerCase())) ||
+      WIDGET_ORDER.find((key) => key && q.includes(key.toLowerCase()));
+    const keys = matchedKey ? [matchedKey] : WIDGET_ORDER.filter((key) => String(feed.widgets[key]?.status || "").toUpperCase() !== "SUCCESS");
+    const lines = [matchedKey ? "Why this widget is empty or incomplete:" : "Why widgets are empty or incomplete:", ""];
+    keys.forEach((key) => {
+      const widget = feed.widgets[key];
+      if (!widget) return;
+      const missing = widgetMissingMetrics(widget);
+      lines.push(`- [${widget.status}] ${widget.title}: ${widget.summary}`);
+      lines.push(`  Needs: ${(WIDGET_FILL_REQUIREMENTS[key] || ["verified local/import data"]).join("; ")}.`);
+      if (missing.length) lines.push(`  Missing metrics: ${missing.join(", ")}.`);
+    });
+    lines.push("", "If a widget is SUCCESS but visually blank, refresh imports and reopen the related page.");
+    return lines.join("\n");
+  }
+
+  function formatDailyOwnerBriefing(feed, snapshot) {
+    const widgets = (feed && feed.widgets) || {};
+    const fin = widgets.practiceFinancialOverview;
+    const ar = widgets.arAgingAndCollections;
+    const claims = widgets.claimsPipeline;
+    const qb = widgets.quickbooksSyncHealth;
+    const sd = widgets.softdentSourceHealth;
+    const recommendations = [
+      "Refresh imports first if source health is degraded or failed.",
+      "Review A/R only from verified SoftDent A/R export.",
+      "Work claims in Needs Review before any payer-facing step.",
+      "Use accounting review queue for QuickBooks/documents before any posting decision.",
+    ];
+    return [
+      "Daily owner briefing (local read-only):",
+      "",
+      `Financial: ${fin ? `[${fin.status}] ${formatWidgetMetrics(fin)}` : "No financial widget."}`,
+      `QuickBooks: ${qb ? `[${qb.status}] ${formatWidgetMetrics(qb)}` : "No QuickBooks widget."}`,
+      `SoftDent: ${sd ? `[${sd.status}] ${formatWidgetMetrics(sd)}` : "No SoftDent widget."}`,
+      `A/R: ${ar ? `[${ar.status}] ${formatWidgetMetrics(ar)}` : "No A/R widget."}`,
+      `Claims: ${claims ? `[${claims.status}] ${formatWidgetMetrics(claims)}` : "No claims widget."}`,
+      `Snapshot: ${snapshot?.label || "local snapshot"} at ${snapshot?.gatheredAt || feed?.generatedAt || "—"}`,
+      "",
+      "Recommendations:",
+      recommendations.map((r, i) => `${i + 1}. ${r}`).join("\n"),
+    ].join("\n");
+  }
+
+  function formatAccountingReviewQueue(feed) {
+    const widgets = (feed && feed.widgets) || {};
+    const keys = ["quickbooksSyncHealth", "quickbooksProfitLossDetail", "ebitdaNormalization", "accountsPayableAutomation", "documentIntakeQueue", "documentPreview", "periodCloseAndPosting"];
+    const lines = ["Accounting review queue:", ""];
+    keys.forEach((key) => {
+      const widget = widgets[key];
+      if (!widget) return;
+      lines.push(`- [${widget.status}] ${widget.title}: ${formatWidgetMetrics(widget)}`);
+      const missing = widgetMissingMetrics(widget);
+      if (missing.length) lines.push(`  Review needed: ${missing.join(", ")}.`);
+    });
+    lines.push("", "Keep all posting decisions in human review. HAL may draft notes but cannot post to QuickBooks.");
+    return lines.join("\n");
+  }
+
+  function formatExcelReconciliation(feed) {
+    const widgets = (feed && feed.widgets) || {};
+    return [
+      "Excel-style reconciliation plan:",
+      "",
+      "1. Source tabs: SoftDent dashboard, SoftDent claims, verified SoftDent A/R, QuickBooks P&L, QuickBooks expenses, local documents.",
+      "2. Normalize columns: period, source, category, amount, claim status, payer, provider (Dr. Michael Reno), document status.",
+      "3. Sort/filter: failed or degraded widgets first, then missing metrics, then oldest/stalest source.",
+      "4. Compare: SoftDent production vs collections, QuickBooks revenue vs SoftDent collections, verified A/R vs claims balances, expenses vs documents.",
+      "5. Pivot/group: claims by status, A/R by aging bucket, documents by posting readiness, expenses by add-back category.",
+      "6. Exception list: blanks, mismatched periods, missing A/R, missing claim status, missing QuickBooks expense file, missing document metadata.",
+      "",
+      `Current financial widget: ${widgets.practiceFinancialOverview ? `[${widgets.practiceFinancialOverview.status}] ${formatWidgetMetrics(widgets.practiceFinancialOverview)}` : "not available"}`,
+      `Current A/R widget: ${widgets.arAgingAndCollections ? `[${widgets.arAgingAndCollections.status}] ${formatWidgetMetrics(widgets.arAgingAndCollections)}` : "not available"}`,
+      "",
+      "HAL should recommend from verified values only and leave unknowns blank.",
+    ].join("\n");
   }
 
   function formatWidgetDetail(feed, widgetKey) {
@@ -1562,6 +1814,15 @@ const HalSkills = (function () {
     buildWidgetFeed,
     enforceReceivablesArPolicy,
     formatWidgetFeed,
+    formatWidgetFillSuggestions,
+    formatWidgetMissingData,
+    formatWidgetFillPriority,
+    formatImportChecklist,
+    formatDataQualityCheck,
+    formatEmptyWidgetExplanation,
+    formatDailyOwnerBriefing,
+    formatAccountingReviewQueue,
+    formatExcelReconciliation,
     formatWidgetDetail,
     formatWidgetMetrics,
     summarizeWidgetFeed,

@@ -73,6 +73,18 @@ let halSideNotesInbox = null;
 let halSideNotesAnnouncedIds = new Set();
 // HAL manager dashboard widgets (derived from program snapshot).
 let halWidgetFeed = null;
+let halStressTest = {
+  running: false,
+  total: 2000000,
+  processed: 0,
+  failureTotal: 0,
+  distinctFailures: 0,
+  intentCount: 0,
+  rate: 0,
+  status: "Idle",
+  topFailures: [],
+};
+let halStressRunner = null;
 const SIDENOTE_MONITOR_MS = 8000;
 const SIDENOTE_INBOX_FILES = [
   "sidenotes-inbox.json",
@@ -89,6 +101,7 @@ const SIDENOTE_INBOX_FILES = [
 function saveSideNotes() {
   persistLocal("halSideNotes", halSideNotes);
   programContextCache = null;
+  programSnapshotCache = null;
   refreshSideNoteMonitor({ patchUi: true });
 }
 
@@ -638,7 +651,10 @@ let halOperatorReport = null;
 
 let programContextCache = null;
 let programContextAt = 0;
+let programSnapshotCache = null;
+let programSnapshotAt = 0;
 const PROGRAM_CONTEXT_TTL_MS = 60000;
+const PROGRAM_SNAPSHOT_TTL_MS = 45000;
 
 async function refreshHalWidgetFeed(snapshot) {
   if (!window.HalSkills) return halWidgetFeed;
@@ -679,6 +695,15 @@ async function loadProgramSnapshot() {
     snapshot.widgets = halWidgetFeed;
   }
   return snapshot;
+}
+
+async function loadCachedProgramSnapshot() {
+  const now = Date.now();
+  if (!programSnapshotCache || now - programSnapshotAt > PROGRAM_SNAPSHOT_TTL_MS) {
+    programSnapshotCache = await loadProgramSnapshot();
+    programSnapshotAt = now;
+  }
+  return programSnapshotCache;
 }
 
 async function getProgramContextText() {
@@ -898,7 +923,7 @@ async function runModel(runtime, systemPrompt, userText, draftLabel) {
 
 function callLocalModel(userText) {
   return getProgramContextText().then((ctx) =>
-    runModel(localModelConfig(), HalCore.buildSystemPrompt(halData, ctx), userText, "Local 14B draft"),
+    runModel(localModelConfig(), HalCore.buildSystemPrompt(halData, ctx), userText, "Local 24B draft"),
   );
 }
 
@@ -981,480 +1006,114 @@ function renderAuditLog() {
     .join("");
 }
 
+function buildHalAgentCtx() {
+  return {
+    halData,
+    halModels,
+    pages: PAGES,
+    halOfficeTasks,
+    halWorkSession,
+    halEvidencePacket,
+    halReadinessDiagnostics,
+    halSideNotes,
+    halSideNoteMonitor,
+    Services: typeof Services !== "undefined" ? Services : window.Services,
+    ImportLoader: window.ImportLoader,
+    loadProgramSnapshot: loadCachedProgramSnapshot,
+    loadProgramSnapshotRaw: loadProgramSnapshot,
+    refreshHalWidgetFeed,
+    getProgramContextText,
+    workSessionStatusText,
+    runReadinessDiagnostics,
+    staffUseGateText,
+    staffHandoffSummaryText,
+    runOperatorSmokeTest,
+    runModel,
+    localModelReady,
+    reasoningModelReady,
+    escalationModelReady,
+    offlineModelMessage,
+    localModelConfig,
+    reasoningModelConfig,
+    escalationModelConfig,
+    persistGet: (key) => DesktopBridge.storageGet(key),
+    persistSet: (key, value) => persistLocal(key, value),
+    getCurrentPage: () => window.location.hash.replace("#", "") || PAGES[0].id,
+    clearProgramContextCache: () => {
+      programContextCache = null;
+      programSnapshotCache = null;
+    },
+    setHalWidgetFeed: (feed) => {
+      halWidgetFeed = feed;
+    },
+    refreshSideNoteMonitor,
+    addSideNote,
+    addOfficeTask: (task) => {
+      halOfficeTasks.unshift(task);
+      saveOfficeTasks();
+      programSnapshotCache = null;
+    },
+    startWorkSession,
+    resetWorkSession,
+    draftSessionHandoff: () => {
+      halWorkSession.handoffNote = HalCore.draftHandoffNote(halWorkSession, halData);
+      saveWorkSession();
+    },
+    buildEvidencePacketFromSession,
+    clearEvidencePacket,
+    clearReadinessDiagnostics,
+    normalizeActions,
+    executeRoute: async (result, trimmed, toolResults) => {
+      if (!window.HalRouteExec) return null;
+      return HalRouteExec.execute(result, trimmed, toolResults, buildHalAgentCtx());
+    },
+  };
+}
+
 async function handleHalSubmit(query) {
   const trimmed = String(query).trim();
   if (!trimmed) return;
   halChatHistory.push({ role: "user", text: trimmed, actions: [] });
   saveChatHistory();
 
-  const result = routeHalCommand(trimmed);
-
-  if (result.useProgramSnapshot) {
-    const snapshot = await loadProgramSnapshot();
-    const text = snapshot
-      ? HalCore.formatProgramSnapshot(snapshot, halData)
-      : "Program snapshot unavailable. Services layer is not loaded.";
-    halChatHistory.push({ role: "hal", text, lane: "program", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.useJournalDraft) {
-    const req = result.journalRequest || {};
-    let text;
-    if (req.amount == null || isNaN(req.amount) || req.amount <= 0) {
-      text =
-        "I can draft a journal entry locally (draft only — never posted). Tell me the amount and the type, e.g. " +
-        '"Draft a journal entry for $1,200 prepaid insurance" or include a period like 2025-05.';
-    } else {
-      const draft = HalSkills.draftAndValidateJournal({
-        description: req.description,
-        period: req.period,
-        amount: req.amount,
-        context: {},
-      });
-      text = HalSkills.formatJournalDraft(draft);
-    }
-    halChatHistory.push({ role: "hal", text, lane: "accounting", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.useClaimReadiness) {
-    const snapshot = await loadProgramSnapshot();
-    const claimsList = (snapshot && snapshot.claims && snapshot.claims.top) || [];
-    const resp = HalSkills.buildClaimReadinessResponse(claimsList);
-    halChatHistory.push({ role: "hal", text: HalSkills.formatClaimReadinessAnswer(resp), lane: "claims", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.useOfficeAttention) {
-    const snapshot = await loadProgramSnapshot();
-    const metrics = HalSkills.computeTaskMetrics(halOfficeTasks);
-    const resp = HalSkills.buildOfficeManagerAttention(snapshot, metrics);
-    halChatHistory.push({ role: "hal", text: HalSkills.formatOfficeManagerAttention(resp), lane: "office", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.useTaskList) {
-    const metrics = HalSkills.computeTaskMetrics(halOfficeTasks);
-    const lines = [
-      `Local office tasks (${halOfficeTasks.length}) — local only; HAL reads SoftDent and QuickBooks only:`,
-      `Open ${metrics.openCount} · In progress ${metrics.inProgressCount} · Blocked ${metrics.blockedCount} · Completed ${metrics.completedCount}`,
-    ];
-    if (!halOfficeTasks.length) {
-      lines.push("", 'No tasks yet. Say "Create a task: follow up on denied claim" to add one.');
-    } else {
-      lines.push("");
-      halOfficeTasks.slice(0, 12).forEach((t) => {
-        lines.push(`- [${t.status}] (${t.priority}) ${t.title}`);
-      });
-    }
-    halChatHistory.push({ role: "hal", text: lines.join("\n"), lane: "office", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.useSideNoteMonitor) {
-    refreshSideNoteMonitor();
-    halChatHistory.push({
-      role: "hal",
-      text: HalSkills.formatSideNoteMonitor(halSideNoteMonitor, halSideNotes),
-      lane: "sidenotes",
-      actions: [],
-    });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    renderHalScreen();
-    return;
-  }
-
-  if (result.useSideNoteList) {
-    halChatHistory.push({
-      role: "hal",
-      text: HalSkills.formatSideNotesList(halSideNotes),
-      lane: "sidenotes",
-      actions: [],
-    });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.useSideNoteCreate) {
-    let text = "";
-    const noteText = result.sideNoteText || "";
-    if (noteText.length < 2) {
-      text =
-        'I can add a local sidenote (local only; HAL reads SoftDent and QuickBooks only). Say "Add sidenote: recall patient about claim" or type in the sidenotes panel below.';
-    } else {
-      try {
-        const note = addSideNote(noteText);
-        text =
-          `Local sidenote added (local only, not_submitted): "${note.text.slice(0, 120)}".\n` +
-          `HAL is monitoring ${halSideNotes.filter((n) => n.status !== "archived").length} active sidenote(s).`;
-      } catch (err) {
-        text = `Could not add sidenote: ${err.message || err}`;
-      }
-    }
-    halChatHistory.push({ role: "hal", text, lane: "sidenotes", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    renderHalScreen();
-    return;
-  }
-
-  if (result.useWidgetFeed) {
-    const snapshot = await loadProgramSnapshot();
-    const feed = snapshot.widgets || HalSkills.buildWidgetFeed(snapshot);
-    halWidgetFeed = feed;
-    halChatHistory.push({ role: "hal", text: HalSkills.formatWidgetFeed(feed), lane: "widgets", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    renderHalScreen();
-    return;
-  }
-
-  if (result.useWidgetShow && result.widgetKey) {
-    const snapshot = await loadProgramSnapshot();
-    const feed = snapshot.widgets || HalSkills.buildWidgetFeed(snapshot);
-    halWidgetFeed = feed;
-    halChatHistory.push({
-      role: "hal",
-      text: HalSkills.formatWidgetDetail(feed, result.widgetKey),
-      lane: "widgets",
-      actions: [{ label: "Open related page", command: `navigate: ${feed.widgets[result.widgetKey]?.navTarget || ""}` }],
-    });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    renderHalScreen();
-    return;
-  }
-
-  if (result.useDocRag) {
-    const snapshot = await loadProgramSnapshot();
-    const docs = (snapshot && snapshot.library && (snapshot.library.top || snapshot.library.docs)) || [];
-    const rag = HalSkills.answerFromLibrary(result.ragQuestion, docs, 4);
-    halChatHistory.push({ role: "hal", text: HalSkills.formatRagResult(rag), lane: "library", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.useTaskCreate) {
-    let text;
-    try {
-      const task = HalSkills.createTask({ title: result.taskTitle, category: "other" }, { actor: "local-user" });
-      halOfficeTasks.unshift(task);
-      saveOfficeTasks();
-      text =
-        `Local task created (local only, not_submitted): "${task.title}".\n` +
-        `Status: ${task.status} · Priority: ${task.priority}. Local only; HAL reads SoftDent and QuickBooks only.`;
-    } catch (error) {
-      text = "Could not create the task: " + (error && error.message ? error.message : "invalid task.");
-    }
-    halChatHistory.push({ role: "hal", text, lane: "office", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-    return;
-  }
-
-  if (result.useSessionStart && result.sessionId) {
-    startWorkSession(result.sessionId);
-    halChatHistory.push({
-      role: "hal",
-      text: result.text + "\n\n" + workSessionStatusText(),
-      lane: "session",
-      actions: normalizeActions(result.actions),
-    });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-    return;
-  }
-
-  if (result.useSessionReset) {
-    resetWorkSession();
-    halChatHistory.push({ role: "hal", text: result.text, lane: "session", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-    return;
-  }
-
-  if (result.useSessionShow) {
-    const text = halWorkSession
-      ? workSessionStatusText() + "\n\nUse the Work Session panel to mark checks complete or draft a handoff note."
-      : "No active work session. Say \"Start claims review\" or use the Work Session panel.";
-    halChatHistory.push({ role: "hal", text, lane: "session", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.useSessionHandoff) {
-    if (!halWorkSession) {
-      halChatHistory.push({ role: "hal", text: "No active work session to draft a handoff note from.", lane: "session", actions: [] });
-    } else {
-      halWorkSession.handoffNote = HalCore.draftHandoffNote(halWorkSession, halData);
-      saveWorkSession();
-      halChatHistory.push({ role: "hal", text: halWorkSession.handoffNote, lane: "session", actions: [] });
-    }
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-    return;
-  }
-
-  if (result.usePacketBuild) {
-    if (!halWorkSession) {
-      halChatHistory.push({
-        role: "hal",
-        text: "No active work session. Start a session first (for example, \"Start claims review\"), then build an evidence packet.",
-        lane: "packet",
-        actions: [],
-      });
-    } else {
-      const packet = buildEvidencePacketFromSession();
-      halChatHistory.push({
-        role: "hal",
-        text: packet ? packet.text : "Could not build evidence packet.",
-        lane: "packet",
-        actions: [],
-      });
-    }
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-    return;
-  }
-
-  if (result.usePacketShow) {
-    const text = halEvidencePacket
-      ? halEvidencePacket.text
-      : "No evidence packet built yet. Start a work session and say \"Build evidence packet\".";
-    halChatHistory.push({ role: "hal", text, lane: "packet", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.usePacketClear) {
-    clearEvidencePacket();
-    halChatHistory.push({ role: "hal", text: result.text, lane: "packet", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-    return;
-  }
-
-  if (result.useReadinessRun) {
-    const report = runReadinessDiagnostics();
-    halChatHistory.push({
-      role: "hal",
-      text: HalCore.formatReadinessSummary(report),
-      lane: "readiness",
-      actions: [],
-    });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-    return;
-  }
-
-  if (result.useReadinessGate) {
-    if (!halReadinessDiagnostics) runReadinessDiagnostics();
-    halChatHistory.push({ role: "hal", text: staffUseGateText(), lane: "readiness", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-    return;
-  }
-
-  if (result.useReadinessShow) {
-    const text = halReadinessDiagnostics
-      ? HalCore.formatReadinessSummary(halReadinessDiagnostics)
-      : "No diagnostics available yet. Say \"Run readiness check\" or use the Readiness panel.";
-    halChatHistory.push({ role: "hal", text, lane: "readiness", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.useReadinessClear) {
-    clearReadinessDiagnostics();
-    halChatHistory.push({ role: "hal", text: result.text, lane: "readiness", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-    return;
-  }
-
-  if (result.useSmokeTest) {
-    const report = runOperatorSmokeTest();
-    halChatHistory.push({ role: "hal", text: HalCore.formatSmokeTestSummary(report), lane: "operator", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    if (currentDrawerKey) renderPanel(currentDrawerKey);
-    return;
-  }
-
-  if (result.useHandoffSummary) {
-    halChatHistory.push({ role: "hal", text: staffHandoffSummaryText(), lane: "operator", actions: [] });
-    logAudit(trimmed, result.intent);
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    return;
-  }
-
-  if (result.useEscalation) {
-    if (!escalationModelReady()) {
-      halChatHistory.push({ role: "hal", text: offlineModelMessage("escalate30b"), lane: "escalate30b · offline", actions: [] });
-      logAudit(trimmed, "escalation: offline");
-      saveChatHistory();
-      renderChatLog();
-      renderAuditLog();
-      return;
-    }
-    const em = escalationModelConfig();
-    const placeholder = { role: "hal", text: "Escalating locally to " + (em.model || "escalation lane") + "…", lane: "escalate30b", actions: [] };
+  const preRoute = routeHalCommand(trimmed);
+  const isModelLane = !!(preRoute.useModel || preRoute.useReasoning || preRoute.useEscalation);
+  let placeholder = null;
+  if (isModelLane && window.HalAgent) {
+    const lane = preRoute.lane || "chat14b";
+    const label = preRoute.useEscalation ? "Escalating" : preRoute.useReasoning ? "Reasoning" : "Thinking";
+    placeholder = { role: "hal", text: label + " locally…", lane, actions: [] };
     halChatHistory.push(placeholder);
-    logAudit(trimmed, "escalation: review");
     saveChatHistory();
     renderChatLog();
-    renderAuditLog();
-    try {
-      placeholder.text = await callEscalationModel(trimmed);
-    } catch (error) {
-      placeholder.text = offlineModelMessage("escalate30b");
-      placeholder.lane = "escalate30b · offline";
-    }
-    saveChatHistory();
-    renderChatLog();
-    return;
   }
 
-  if (result.useReasoning) {
-    if (!reasoningModelReady()) {
-      halChatHistory.push({ role: "hal", text: offlineModelMessage("reason21b"), lane: "reason21b · offline", actions: [] });
-      logAudit(trimmed, "reasoning: offline");
-      saveChatHistory();
-      renderChatLog();
-      renderAuditLog();
-      return;
-    }
-    const rm = reasoningModelConfig();
-    const placeholder = { role: "hal", text: "Reasoning locally with " + (rm.model || "reasoning lane") + "…", lane: "reason21b", actions: [] };
-    halChatHistory.push(placeholder);
-    logAudit(trimmed, "reasoning: plan");
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    try {
-      placeholder.text = await callReasoningModel(trimmed);
-    } catch (error) {
-      placeholder.text = offlineModelMessage("reason21b");
-      placeholder.lane = "reason21b · offline";
-    }
-    saveChatHistory();
-    renderChatLog();
-    return;
+  let outcome = null;
+  if (window.HalAgent) {
+    outcome = await HalAgent.processQuery(trimmed, buildHalAgentCtx());
+  } else {
+    outcome = await HalRouteExec.execute(preRoute, trimmed, {}, buildHalAgentCtx());
   }
+  if (!outcome) return;
 
-  if (result.useModel) {
-    if (!localModelReady()) {
-      halChatHistory.push({ role: "hal", text: offlineModelMessage("chat14b"), lane: "chat14b · offline", actions: [] });
-      logAudit(trimmed, "model: offline");
-      saveChatHistory();
-      renderChatLog();
-      renderAuditLog();
-      return;
-    }
-    const lm = localModelConfig();
-    const placeholder = { role: "hal", text: "Thinking locally with " + (lm.model || "14B") + "…", lane: "chat14b", actions: [] };
-    halChatHistory.push(placeholder);
-    logAudit(trimmed, "model: query");
-    saveChatHistory();
-    renderChatLog();
-    renderAuditLog();
-    try {
-      placeholder.text = await callLocalModel(trimmed);
-    } catch (error) {
-      placeholder.text = offlineModelMessage("chat14b");
-      placeholder.lane = "chat14b · offline";
-    }
-    saveChatHistory();
-    renderChatLog();
-    return;
+  if (placeholder) {
+    placeholder.text = outcome.text;
+    placeholder.lane = outcome.lane || placeholder.lane;
+    placeholder.actions = normalizeActions(outcome.actions);
+  } else {
+    halChatHistory.push({
+      role: "hal",
+      text: outcome.text,
+      lane: outcome.lane || "local",
+      actions: normalizeActions(outcome.actions),
+    });
   }
-
-  halChatHistory.push({
-    role: "hal",
-    text: result.text,
-    lane: result.lane || "local",
-    actions: normalizeActions(result.actions),
-  });
-  logAudit(trimmed, result.intent);
+  logAudit(trimmed, outcome.intent);
   saveChatHistory();
   renderChatLog();
   renderAuditLog();
+  if (outcome.refreshHal) renderHalScreen();
+  if (outcome.refreshPanel && currentDrawerKey) renderPanel(currentDrawerKey);
 }
 
 function escapeHtml(value) {
@@ -1873,6 +1532,144 @@ function typewriteLastHalMessage() {
   }, typeDelayMs);
 }
 
+function updateHalStressUi() {
+  const panel = document.getElementById("hpStressPanel");
+  if (!panel) return;
+  const st = halStressTest;
+  const total = Number(st.total) || 0;
+  const processed = Number(st.processed) || 0;
+  const pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+
+  const set = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+
+  set("hpStressStatus", st.status || "Idle");
+  set("hpStressProcessed", processed.toLocaleString());
+  set("hpStressTotal", total.toLocaleString());
+  set("hpStressRate", st.rate ? st.rate.toLocaleString() + " q/s" : "—");
+  set("hpStressFailures", String(st.failureTotal || 0));
+  set("hpStressDistinct", String(st.distinctFailures || 0));
+  set("hpStressIntents", st.intentCount ? String(st.intentCount) : "—");
+
+  const bar = document.getElementById("hpStressBar");
+  if (bar) bar.style.width = pct + "%";
+
+  const statusEl = document.getElementById("hpStressStatus");
+  if (statusEl) {
+    statusEl.className = "hp-stress__status";
+    if (st.status === "Pass") statusEl.classList.add("hp-stress__status--ok");
+    else if (st.status === "Fail") statusEl.classList.add("hp-stress__status--fail");
+    else if (st.running) statusEl.classList.add("hp-stress__status--run");
+  }
+
+  const failEl = document.getElementById("hpStressFailures");
+  if (failEl) failEl.classList.toggle("hp-stress__fail-num", !!st.failureTotal);
+
+  const list = document.getElementById("hpStressFailList");
+  if (list && Array.isArray(st.topFailures)) {
+    list.innerHTML = st.topFailures.length
+      ? st.topFailures
+          .slice(0, 12)
+          .map(
+            (f) =>
+              `<li><span class="hp-stress__fail-count">${escapeHtml(String(f.count))}×</span> <code>${escapeHtml(f.stage)}</code> — ${escapeHtml(f.error)}<br><em class="hp-muted">${escapeHtml(String(f.example || "").slice(0, 120))}</em></li>`,
+          )
+          .join("")
+      : '<li class="hp-stress__empty">No failures yet.</li>';
+  }
+
+  const runBtn = document.getElementById("hpStressRun");
+  const stopBtn = document.getElementById("hpStressStop");
+  const countInput = document.getElementById("hpStressCount");
+  if (runBtn) runBtn.disabled = !!st.running;
+  if (stopBtn) stopBtn.disabled = !st.running;
+  if (countInput) countInput.disabled = !!st.running;
+}
+
+async function startHalStressTest(count) {
+  if (halStressTest.running || !window.HalStressHarness || !window.HalSkills) return;
+  const total = Math.max(100, Number(count) || 2000000);
+  const snapshot = await loadProgramSnapshot();
+  const feed = (snapshot && snapshot.widgets) || HalSkills.buildWidgetFeed(snapshot);
+
+  halStressRunner = HalStressHarness.createRunner({
+    count: total,
+    HalCore,
+    HalSkills,
+    HalAgent: window.HalAgent,
+    halData,
+    halModels,
+    pages: PAGES,
+    snapshot,
+    feed,
+  });
+
+  halStressTest = {
+    running: true,
+    total,
+    processed: 0,
+    failureTotal: 0,
+    distinctFailures: 0,
+    intentCount: 0,
+    rate: 0,
+    status: "Running",
+    topFailures: [],
+  };
+  updateHalStressUi();
+
+  const batchSize = total >= 1000000 ? 100000 : total >= 100000 ? 50000 : 10000;
+  const started = performance.now();
+  let lastUi = started;
+
+  function pump() {
+    if (!halStressRunner || !halStressTest.running) return;
+    const state = halStressRunner.runChunk(batchSize);
+    const summary = halStressRunner.summary();
+    const elapsed = (performance.now() - started) / 1000;
+    halStressTest.processed = state.processed;
+    halStressTest.failureTotal = summary.failureTotal;
+    halStressTest.distinctFailures = summary.distinctFailures;
+    halStressTest.intentCount = Object.keys(summary.intentCounts).length;
+    halStressTest.rate = elapsed > 0 ? Math.round(state.processed / elapsed) : 0;
+    halStressTest.topFailures = summary.topFailures;
+
+    const now = performance.now();
+    if (now - lastUi > 120 || state.done) {
+      updateHalStressUi();
+      lastUi = now;
+    }
+
+    if (state.done) {
+      halStressTest.running = false;
+      halStressTest.status = summary.failureTotal ? "Fail" : "Pass";
+      halStressRunner = null;
+      updateHalStressUi();
+      return;
+    }
+    setTimeout(pump, 0);
+  }
+
+  setTimeout(pump, 0);
+}
+
+function stopHalStressTest() {
+  if (halStressRunner) halStressRunner.cancel();
+  if (!halStressTest.running) return;
+  halStressTest.running = false;
+  halStressTest.status = "Stopped";
+  if (halStressRunner) {
+    const summary = halStressRunner.summary();
+    halStressTest.processed = summary.processed;
+    halStressTest.failureTotal = summary.failureTotal;
+    halStressTest.distinctFailures = summary.distinctFailures;
+    halStressTest.topFailures = summary.topFailures;
+    halStressRunner = null;
+  }
+  updateHalStressUi();
+}
+
 function renderHalScreen() {
   if (!halPageRoot || !window.HalPage) return;
   HalPage.render({
@@ -1888,6 +1685,8 @@ function renderHalScreen() {
     halSideNoteMonitor: halSideNoteMonitor || (window.HalSkills ? HalSkills.buildSideNoteMonitor(halSideNotes) : null),
     halSideNotesInbox,
     halWidgetFeed,
+    halStressTest,
+    halAgentHealth: window.HalAgent ? HalAgent.getHealth() : null,
   });
   typewriteLastHalMessage();
 }
@@ -1996,6 +1795,18 @@ if (halPage) {
       if (window.HalVoice) HalVoice.test();
       return;
     }
+    const stressRun = event.target.closest("[data-hal-stress-run]");
+    if (stressRun) {
+      const countInput = document.getElementById("hpStressCount");
+      const count = countInput ? parseInt(countInput.value, 10) : 2000000;
+      startHalStressTest(count);
+      return;
+    }
+    const stressStop = event.target.closest("[data-hal-stress-stop]");
+    if (stressStop) {
+      stopHalStressTest();
+      return;
+    }
     const widgetNav = event.target.closest("[data-hal-widget-nav]");
     if (widgetNav) {
       const target = widgetNav.getAttribute("data-hal-widget-nav");
@@ -2096,6 +1907,7 @@ async function boot() {
     halModels = FALLBACK_MODELS;
   }
   await refreshHalWidgetFeed();
+  if (window.HalAgent) await HalAgent.loadMemory(buildHalAgentCtx());
   // Start HAL's sidenote watch app-wide so monitoring continues even when the
   // HAL panel is not the visible page. (Frontend-only: stops when the app is
   // closed; HAL re-checks persisted notes on the next launch.)

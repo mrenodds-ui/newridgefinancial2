@@ -65,7 +65,14 @@ const DesktopBridge = (function () {
     return { mode: "file", version: "2.0" };
   }
 
-  return { hasDesktopApi, whenReady, readDataFile, storageGet, storageSet, getAppInfo };
+  async function getImportBundle() {
+    if (hasDesktopApi() && window.pywebview.api.get_import_bundle) {
+      return window.pywebview.api.get_import_bundle();
+    }
+    return null;
+  }
+
+  return { hasDesktopApi, whenReady, readDataFile, storageGet, storageSet, getAppInfo, getImportBundle };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

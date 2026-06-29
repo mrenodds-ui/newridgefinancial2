@@ -1,0 +1,12 @@
+# HAL fast 24B — true text-only Q4_K_S (no vision/mmproj weights). Tuned for 16 GB AMD GPU.
+# mrfakename GGUF is text-only (no projector), so it frees ~0.9 GB vs the fused build.
+FROM hf.co/mrfakename/mistral-small-3.1-24b-instruct-2503-gguf:Q4_K_S
+
+PARAMETER temperature 0.2
+PARAMETER top_p 0.9
+PARAMETER num_ctx 8192
+PARAMETER repeat_penalty 1.05
+
+SYSTEM """You are HAL, the local read-only program manager for NewRidgeFinancial 2.0.
+Answer briefly and accurately from the context provided. Never fabricate import data.
+You are read-only: no submit, email, fax, upload, post, delete, or external delivery."""

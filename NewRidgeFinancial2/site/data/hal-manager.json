@@ -1,14 +1,25 @@
 {
   "status": {
     "title": "HAL Command Center",
-    "summary": "Local program manager for NewRidgeFinancial 2.0. HAL has full read access to all local program pages and service data. It can guide staff, surface priorities, explain status, and preserve the external-action firewall.",
+    "summary": "Local program manager for NewRidgeFinancial 2.0. HAL's top priority is to monitor the program, place the correct data using accounting and Excel knowledge, and make recommendations while preserving the external-action firewall.",
     "posture": ["Local-only", "Full read access", "Human review required", "Not submitted"]
+  },
+  "topPriority": {
+    "title": "HAL top priority",
+    "summary": "Monitor the full program, organize the correct SoftDent and QuickBooks import data through accounting and Excel-style review, and recommend the next safe staff action.",
+    "focus": [
+      "Monitor program health, source freshness, review queues, items needing review, and local sidenotes.",
+      "Place the correct data into the right financial, A/R, claims, and accounting-document views.",
+      "Use accounting knowledge to validate totals, periods, journal-draft logic, A/R risk, EBITDA candidates, and posting readiness.",
+      "Use Excel-style knowledge to structure, reconcile, compare, sort, filter, and summarize imported tables without fabricating missing values.",
+      "Make clear recommendations and next steps for staff review while staying read-only."
+    ]
   },
   "programAccess": {
     "mode": "full-read",
     "scope": ["financial", "softdent", "quickbooks", "ar", "claims", "narratives", "documents", "library", "office-manager", "hal"],
     "writesBlocked": true,
-    "note": "HAL may read all local program pages and persisted service data. External and destructive actions remain blocked."
+    "note": "HAL may read all local program pages and persisted service data to monitor, organize, analyze, and recommend. External and destructive actions remain blocked."
   },
   "controls": {
     "title": "System Controls",
@@ -16,13 +27,23 @@
   },
   "askHal": {
     "title": "Ask HAL",
-    "summary": "HAL answers from the local program registry and full program snapshot. Unmatched questions use the local 14B chat lane with full read context. Planning requests use the reasoning lane; second-opinion requests use the escalation lane. The firewall runs before every model.",
+    "summary": "HAL answers from the local program registry and full program snapshot using an agent loop: plan → local tools → answer → self-check. Its primary job is program monitoring, correct data placement, accounting/Excel-style analysis, and recommendations. Unmatched questions use the local 24B shared chat/helper lane with tool-enriched context. Planning requests use the reasoning lane; second-opinion requests use the escalation lane. The firewall runs before every model. Recent conversation and local preferences are remembered on this device.",
     "suggestions": [
       "Show what needs attention today",
+      "Recommend the next accounting review",
       "Show office manager attention",
       "Check claim packet readiness",
       "Draft a journal entry for $1,200 prepaid insurance",
       "Show manager dashboard widgets",
+      "Suggest how to fill all widgets",
+      "Show missing data by widget",
+      "Prioritize widgets to fill first",
+      "Show import checklist",
+      "Check data quality before recommendations",
+      "Explain why this widget is empty",
+      "Build daily owner briefing",
+      "Show accounting review queue",
+      "Show Excel-style reconciliation",
       "Search the library for compliance",
       "Show my tasks",
       "Monitor sidenotes",
@@ -41,7 +62,7 @@
       "Build evidence packet",
       "Run readiness check"
     ],
-    "response": "I can navigate the program, explain each page, show priorities, simulate the firewall, and keep work inside the read-only safety boundary. For other questions I use local model lanes on this machine; external actions still require human review.",
+    "response": "I monitor the program, place the correct data in the right financial and accounting views, apply accounting and Excel-style review, and recommend next safe actions. I plan each question, run local tools, self-check my answer, and remember recent context on this device. I can navigate the program, explain each page, show full snapshots, show priorities, review source freshness, draft read-only work notes, build evidence packets, check claim readiness, draft journal-entry review notes, show widget-filling guidance, build owner briefings, reconcile imported tables, search the local library, list tasks, monitor sidenotes, simulate the firewall, and report local AI model status. For other questions I use local model lanes on this machine; external actions still require human review.",
     "commandExamples": [
       "Open claims workbench",
       "Explain QuickBooks",
@@ -69,8 +90,8 @@
         "status": "Read-only",
         "detail": "P&L, expenses, EBITDA candidates, and sync status.",
         "freshness": "Last sync: pending",
-        "syncState": "Blocked — sync not complete",
-        "warning": "Do not rely on expense totals until sync completes.",
+        "syncState": "Needs import review — sync not complete",
+        "warning": "Review import status before relying on expense totals.",
         "checklist": ["Check sync schedule", "Confirm P&L period", "Verify no pending journal entries"]
       },
       {
@@ -97,11 +118,12 @@
   },
   "reasoning": {
     "title": "Local reasoning core",
-    "summary": "Work is organized from the live program registry into Ready, Needs review, and Blocked lanes. Use the buttons below to generate a local plan or request a second opinion.",
+    "summary": "Work is organized from the live program registry into Ready and Needs review lanes. HAL uses accounting and Excel-style review to place correct data, reconcile what is available, identify missing values, and recommend the next safe staff action.",
     "actions": [
       { "label": "Make a plan for today", "command": "Make a plan for today", "lane": "reason21b" },
-      { "label": "Explain blockers", "command": "What is blocked", "lane": "local" },
-      { "label": "Second opinion on blocked items", "command": "Second opinion on blocked QuickBooks and narratives", "lane": "escalate30b" }
+      { "label": "Recommend accounting review", "command": "Recommend the next accounting review", "lane": "reason21b" },
+      { "label": "Explain review items", "command": "What needs review", "lane": "local" },
+      { "label": "Second opinion on review items", "command": "Second opinion on QuickBooks and narratives review", "lane": "escalate30b" }
     ]
   },
   "workSurfaces": {
@@ -159,6 +181,9 @@
   "priorities": {
     "title": "Today's operator priorities",
     "items": [
+      "Monitor the full program and recommend the next safe action from current source freshness, queues, and blockers.",
+      "Place correct SoftDent and QuickBooks import data into the right financial, A/R, claims, and accounting views.",
+      "Use accounting and Excel-style review to reconcile totals, organize tables, identify missing values, and flag questionable data.",
       "Review claims in the Needs Review lane before any payer-facing work.",
       "Check SoftDent and QuickBooks read-only source freshness.",
       "Use the A/R & Collections page to identify aged balances.",
@@ -198,12 +223,12 @@
         "checklist": [
           "Check SoftDent export timestamp",
           "Check QuickBooks sync status",
-          "Flag stale or blocked sources for staff",
+          "Flag stale or incomplete sources for staff",
           "Document which totals are safe to reference"
         ],
         "verify": [
           "SoftDent export is current for the period",
-          "QuickBooks sync completed or marked blocked",
+          "QuickBooks sync completed or marked needs review",
           "No expense totals used from blocked sync"
         ]
       },
@@ -247,19 +272,19 @@
       },
       {
         "id": "blocked-triage",
-        "label": "Blocked item triage",
-        "command": "Start blocked item triage",
+        "label": "Review item triage",
+        "command": "Start review item triage",
         "targetPage": "hal",
-        "purpose": "Triage all registry items marked Blocked or Needs review.",
-        "safety": "Read-only triage — flag blockers for human resolution.",
+        "purpose": "Triage all registry items marked Needs review.",
+        "safety": "Read-only triage — flag review reasons for human resolution.",
         "checklist": [
-          "List all Blocked registry items",
           "List all Needs review registry items",
+          "Confirm no registry item is left in Blocked state",
           "Identify missing information per item",
           "Draft triage summary for staff handoff"
         ],
         "verify": [
-          "Each blocked item has a documented blocker",
+          "Each review item has a documented reason",
           "Next staff action identified per item",
           "No external steps taken"
         ]
@@ -347,8 +372,8 @@
       "name": "QuickBooks",
       "purpose": "Accounting source: P&L, expenses, EBITDA candidates, and sync status.",
       "safety": "Read-only source",
-      "state": "Blocked",
-      "nextAction": "Wait for the next sync refresh before trusting expense totals.",
+      "state": "Needs review",
+      "nextAction": "Refresh QuickBooks imports and verify P&L and expense totals before recommendations.",
       "blocked": ["QuickBooks read-only", "No journal entries to QuickBooks"],
       "related": ["financial"]
     },
@@ -377,8 +402,8 @@
       "name": "Insurance Narratives",
       "purpose": "Review-only narrative drafting flow and source-fact references.",
       "safety": "Review-only",
-      "state": "Blocked",
-      "nextAction": "Wait on missing source facts before finalizing narratives.",
+      "state": "Needs review",
+      "nextAction": "Draft narratives locally from available source facts and flag any missing facts for staff review.",
       "blocked": ["No submission", "No email", "No fax"],
       "related": ["claims", "library"]
     },
@@ -408,7 +433,7 @@
       "purpose": "Staff oversight across work surfaces, sessions, and review queues.",
       "safety": "Read-only oversight",
       "state": "Needs review",
-      "nextAction": "Review active work sessions and blocked registry items with staff.",
+      "nextAction": "Review active work sessions and needs-review registry items with staff.",
       "blocked": ["SoftDent read-only", "No external contact"],
       "related": ["claims", "documents", "ar"]
     },
@@ -429,6 +454,7 @@
       "What is ready to work on": "registry: ready",
       "What is blocked": "registry: blocked",
       "Make a plan for today": "reasoning",
+      "Recommend the next accounting review": "reasoning",
       "Second opinion on a complex case": "escalation",
       "Open the claims workbench": "navigate: claims",
       "Review read-only source health": "sources",
@@ -438,6 +464,15 @@
       "Check claim packet readiness": "claims: readiness",
       "Draft a journal entry for $1,200 prepaid insurance": "accounting: journal-draft",
       "Show manager dashboard widgets": "widgets: feed",
+      "Suggest how to fill all widgets": "widgets: fill-suggestions",
+      "Show missing data by widget": "widgets: missing-data",
+      "Prioritize widgets to fill first": "widgets: fill-priority",
+      "Show import checklist": "imports: checklist",
+      "Check data quality before recommendations": "data-quality: check",
+      "Explain why this widget is empty": "widgets: explain-empty",
+      "Build daily owner briefing": "briefing: owner-daily",
+      "Show accounting review queue": "accounting: review-queue",
+      "Show Excel-style reconciliation": "reconciliation: excel-style",
       "Search the library for compliance": "library: ask",
       "Show my tasks": "tasks: list",
       "Are you connected to a model?": "model lanes"
@@ -451,6 +486,7 @@
       "Start source freshness review": "session: start:source-freshness",
       "Start A/R review": "session: start:ar-review",
       "Start document review": "session: start:document-review",
+      "Start review item triage": "session: start:blocked-triage",
       "Start blocked item triage": "session: start:blocked-triage",
       "Show active session": "session: show",
       "Reset work session": "session: reset"

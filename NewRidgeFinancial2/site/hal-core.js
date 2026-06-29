@@ -4,13 +4,13 @@
  */
 const HalCore = (function () {
   const BLOCKED_RE =
-    /\b(submit|submits|submitting|send|sends|sending|email|emails|emailing|e-?mail|fax|faxes|faxing|upload|uploads|uploading|transmit|transmits|transmitting|pay|paying|approve|approves|approving|deny|denies|denying|delete|deletes|deleting|remove|removes|removing|writeback|write back|dispatch|dispatches|dispatching|mail|mailing)\b/;
+    /\b(submit|submits|submitting|send|sends|sending|email|emails|emailing|e-?mail|fax|faxes|faxing|upload|uploads|uploading|transmit|transmits|transmitting|pay|pays|paying|approve|approves|approving|deny|denies|denying|delete|deletes|deleting|remove|removes|removing|writeback|write back|dispatch|dispatches|dispatching|mail|mailing|wire|wires|wiring)\b/;
 
   // Writeback / external phrases that should not false-positive on local nouns like "posting queue".
   // Note: drafting a journal entry is a local draft-only action (allowed); only POSTING a
   // journal entry to the ledger is blocked. The post(...) clause below still blocks posting.
   const BLOCKED_PHRASES_RE =
-    /\bpost(s|ing|ed)?\s+((a|an|the)\s+)?(journal|entry|payment|charge|transaction|invoice|claim|note|statement|ledger)\b|\bpost(s|ing|ed)?\s+to\s+quickbooks\b|\bquickbooks\s+post(ing|ed)?\b|\b(record|make|process)\s+((a|an|the)\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b|\bwrite(s|ing)?\s+to\s+softdent\b|\bsoftdent\s+write(s|ing|back)?\b|\bupdate\s+softdent\b|\bsync\s+to\s+softdent\b/;
+    /\bpost(s|ing|ed)?\s+(?:(?:a|an|the|this|that)\s+)?(?:[a-z]+\s+){0,3}?(journal|entry|entries|payment|charge|transaction|invoice|claim|note|statement|ledger|document|documents|record|records|refund|refunds|narrative|narratives|deposit|bill|check|payer)\b|\bpost(s|ing|ed)?\s+to\s+quickbooks\b|\bquickbooks\s+post(ing|ed)?\b|\b(record|make|process)\s+((a|an|the)\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b|\bwrite(s|ing)?\s+to\s+softdent\b|\bsoftdent\s+write(s|ing|back)?\b|\bupdate\s+softdent\b|\bsync\s+to\s+softdent\b/;
 
   const PAGE_SYNONYMS = {
     financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
@@ -191,7 +191,7 @@ const HalCore = (function () {
     lines.push(
       (access.mode === "full-read" ? "FULL PROGRAM READ ACCESS" : "PROGRAM SNAPSHOT") +
         " (local only · " +
-        (snapshot.label || "sample/persisted data") +
+        (snapshot.label || "import/persisted data") +
         "):",
     );
     const fin = snapshot.dashboards && snapshot.dashboards.financial;
@@ -386,6 +386,37 @@ const HalCore = (function () {
     }
 
     // Manager dashboard widgets (import-cache widget feed)
+    if (/\bmissing data\b.*\bwidgets?\b|\bwidgets?\b.*\bmissing data\b|\bmissing\b.*\bby widget\b/.test(query)) {
+      return { intent: "widgets: missing-data", lane: "local", useWidgetGuidance: true, widgetGuidance: "missingData", text: "", actions: [] };
+    }
+    if (/\bprioriti[sz]e\b.*\bwidgets?\b|\bwidgets?\b.*\b(fill first|priority|prioriti[sz]e)\b/.test(query)) {
+      return { intent: "widgets: fill-priority", lane: "local", useWidgetGuidance: true, widgetGuidance: "fillPriority", text: "", actions: [] };
+    }
+    if (/\bimport checklist\b|\bchecklist\b.*\b(imports?|softdent|quickbooks)\b/.test(query)) {
+      return { intent: "imports: checklist", lane: "local", useWidgetGuidance: true, widgetGuidance: "importChecklist", text: "", actions: [] };
+    }
+    if (/\bdata quality\b.*\b(recommend|check|review)|\bcheck\b.*\bdata quality\b/.test(query)) {
+      return { intent: "data-quality: check", lane: "local", useWidgetGuidance: true, widgetGuidance: "dataQuality", text: "", actions: [] };
+    }
+    if (/\bwhy\b.*\bwidgets?\b.*\b(empty|blank|missing|incomplete)\b|\bexplain\b.*\bwidgets?\b.*\b(empty|blank|missing|incomplete)\b/.test(query)) {
+      return { intent: "widgets: explain-empty", lane: "local", useWidgetGuidance: true, widgetGuidance: "explainEmpty", prompt: rawQuery, text: "", actions: [] };
+    }
+    if (/\bdaily owner briefing\b|\bowner briefing\b|\bdaily briefing\b/.test(query)) {
+      return { intent: "briefing: owner-daily", lane: "local", useWidgetGuidance: true, widgetGuidance: "dailyOwnerBriefing", text: "", actions: [] };
+    }
+    if (/\baccounting review queue\b|\bshow accounting review\b|\bquickbooks\b.*\bdocuments\b.*\breview\b/.test(query)) {
+      return { intent: "accounting: review-queue", lane: "local", useWidgetGuidance: true, widgetGuidance: "accountingReviewQueue", text: "", actions: [] };
+    }
+    if (/\bexcel\b.*\breconciliation\b|\breconciliation\b.*\bexcel\b|\bexcel-style reconciliation\b/.test(query)) {
+      return { intent: "reconciliation: excel-style", lane: "local", useWidgetGuidance: true, widgetGuidance: "excelReconciliation", text: "", actions: [] };
+    }
+    if (
+      /\b(fill|populate|complete)\b.*\b(all\s+)?(widgets?|dashboard widgets|manager dashboard)\b/.test(query) ||
+      /\b(suggest|suggestions?|recommend)\b.*\b(fill|populate|complete)\b.*\b(widgets?|dashboard widgets)\b/.test(query) ||
+      /\b(suggest|suggestions?|recommend)\b.*\b(widgets?|dashboard widgets)\b/.test(query)
+    ) {
+      return { intent: "widgets: fill-suggestions", lane: "local", useWidgetFillSuggestions: true, text: "", actions: [] };
+    }
     const widgetRoutes = [
       { pattern: /\b(financial overview|practice financial|financial)\b.*\bwidget\b|\bwidget\b.*\b(financial overview|practice financial|financial)\b/, key: "practiceFinancialOverview" },
       { pattern: /\b(production trend|ytd production|production mtd)\b.*\bwidget\b|\bwidget\b.*\b(production trend|ytd production)\b/, key: "financialProductionTrend" },
@@ -451,11 +482,15 @@ const HalCore = (function () {
   function buildSystemPrompt(halData, programContext) {
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const access = (halData && halData.programAccess) || {};
+    const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
     const parts = [
       "You are HAL, the local read-only program manager for NewRidgeFinancial 2.0, a dental-practice financial program.",
+      topPriority ? `Top priority: ${topPriority}` : "Top priority: monitor the program, place correct data, and recommend next safe staff actions.",
       access.mode === "full-read"
         ? "You have full read access to the local program snapshot below. Answer using that data when relevant."
         : "Answer briefly and only about this program and its pages. If you are unsure, say so.",
+      "Use accounting and Excel-style review to organize imported data, compare totals and periods, reconcile available values, identify missing fields, and make recommendations.",
+      "Never fabricate missing SoftDent, QuickBooks, A/R, claims, document, or library data; say what is missing and what staff should verify.",
       "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
       "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
       "If the user asks for an external action, refuse and say it needs human review.",
@@ -471,10 +506,14 @@ const HalCore = (function () {
   function buildReasoningPrompt(halData, programContext) {
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const priorities = (halData.priorities && halData.priorities.items) || [];
+    const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
     const parts = [
       "You are HAL's reasoning lane for NewRidgeFinancial 2.0, a dental-practice financial program.",
+      topPriority ? `Top priority: ${topPriority}` : "Top priority: monitor the program, place correct data, and recommend next safe staff actions.",
       "Produce a short, structured, prioritized plan based only on the local program state below.",
+      "Use accounting and Excel-style reasoning: verify source freshness, put imported rows in the correct financial/accounting context, reconcile totals and periods, sort or group what matters, and call out blanks or conflicts.",
       "Order work by readiness and risk: handle Needs Review and Blocked items carefully, and never advance payer-facing work without human review.",
+      "Recommendations must say what data supports them and what data is still missing.",
       "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
       "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
     ];
@@ -486,7 +525,7 @@ const HalCore = (function () {
     parts.push(
       "Known operator priorities:",
       priorities.map((item, index) => `${index + 1}. ${item}`).join("\n"),
-      "Respond with a brief numbered plan. Keep it under 8 steps.",
+      "Respond with a brief numbered plan. Keep it under 8 steps and include recommendations.",
     );
     return parts.join("\n");
   }
@@ -542,7 +581,7 @@ const HalCore = (function () {
     if (/source freshness|source review/.test(q)) return sessionTemplateById(halData, "source-freshness");
     if (/a\/r review|ar review|collections review/.test(q)) return sessionTemplateById(halData, "ar-review");
     if (/document review/.test(q)) return sessionTemplateById(halData, "document-review");
-    if (/blocked item|blocked triage/.test(q)) return sessionTemplateById(halData, "blocked-triage");
+    if (/review item|review triage|blocked item|blocked triage/.test(q)) return sessionTemplateById(halData, "blocked-triage");
     return null;
   }
 
@@ -1154,7 +1193,7 @@ const HalCore = (function () {
         intent: "help",
         lane: "local",
         text:
-          "I am the local program manager. I have full read access to all local program pages and service data. I can open any page, show a full program snapshot, explain what each page is for, show today's priorities, start read-only work sessions, build local evidence packets, run readiness checks, report source health, simulate the firewall, and use local model lanes. I do not submit, send, or change anything.",
+          "I am HAL, the local read-only program manager for NewRidgeFinancial 2.0. My top priority is to monitor the program, place correct data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action. I have full read access to local program pages and service data. I run an agent loop: plan the question, gather local tool data, answer, and self-check before responding. I can: open and explain pages; show the full program snapshot; show priorities and source health; start read-only work sessions; build local evidence packets; run readiness checks; check claim packet readiness; draft journal-entry review notes; show manager dashboard widgets; explain missing widget data; prioritize widget imports; build daily owner briefings; show accounting review queues; perform Excel-style reconciliation; search the local library; list and create local tasks; monitor, list, and create sidenotes; report local AI model lanes; and simulate the external-action firewall. I use the local 24B shared chat/helper model for unmatched questions and keep reasoning/escalation local. I remember recent conversation context and local office preferences. I do not submit, send, upload, post, delete, or change outside systems.",
         actions: [],
       };
     }
@@ -1294,6 +1333,13 @@ const HalCore = (function () {
         text: `${firewall.summary}\nBlocked: ${firewall.blocked.join(", ")}.\nAllowed: ${firewall.allowed.join(", ")}.`,
         actions: [],
       };
+    }
+
+    if (/\b(refresh|reload)\b.*\b(imports?|softdent|quickbooks)\b|\bimports?\b.*\b(refresh|reload|status)\b|\bsoftdent\b.*\bimports?\b|\bquickbooks\b.*\bimports?\b/.test(query)) {
+      if (/\b(refresh|reload)\b/.test(query)) {
+        return { intent: "imports: refresh", lane: "local", useImportRefresh: true, text: "", actions: [] };
+      }
+      return { intent: "imports: status", lane: "local", useImportStatus: true, text: "", actions: [] };
     }
 
     if (/\b(source|softdent|quickbooks|freshness|sync|intake|source health)\b/.test(query) && !wantsExplain) {

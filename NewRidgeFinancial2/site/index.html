@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NewRidgeFinancial 2.0</title>
-    <link rel="stylesheet" href="styles.css?v=hal-35" />
+    <link rel="stylesheet" href="styles.css?v=hal-46" />
   </head>
   <body>
     <div class="app">
@@ -41,15 +41,23 @@
       </div>
     </aside>
 
-    <script src="hal-core.js?v=hal-35"></script>
-    <script src="hal-skills.js?v=hal-35"></script>
-    <script src="desktop-bridge.js?v=hal-35"></script>
-    <script src="page-sample-data.js?v=hal-35"></script>
-    <script src="components.js?v=hal-35"></script>
-    <script src="services.js?v=hal-35"></script>
-    <script src="page-views.js?v=hal-35"></script>
-    <script src="hal-page.js?v=hal-35"></script>
-    <script src="hal-voice.js?v=hal-35"></script>
-    <script src="app.js?v=hal-35"></script>
+    <!-- Foundation: no HAL deps -->
+    <script src="empty-states.js?v=hal-46"></script>
+    <script src="import-loader.js?v=hal-46"></script>
+    <script src="desktop-bridge.js?v=hal-46"></script>
+    <!-- HAL core libraries (must load before HAL consumers) -->
+    <script src="hal-core.js?v=hal-46"></script>
+    <script src="hal-skills.js?v=hal-46"></script>
+    <!-- HAL consumers: agent loop, route executor, stress harness -->
+    <script src="hal-agent.js?v=hal-46"></script>
+    <script src="hal-route-exec.js?v=hal-46"></script>
+    <script src="hal-stress-harness.js?v=hal-46"></script>
+    <!-- UI + app shell -->
+    <script src="components.js?v=hal-46"></script>
+    <script src="services.js?v=hal-46"></script>
+    <script src="page-views.js?v=hal-46"></script>
+    <script src="hal-page.js?v=hal-46"></script>
+    <script src="hal-voice.js?v=hal-46"></script>
+    <script src="app.js?v=hal-46"></script>
   </body>
 </html>

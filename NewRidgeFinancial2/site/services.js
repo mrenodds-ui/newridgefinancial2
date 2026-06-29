@@ -1,28 +1,25 @@
 /**
  * Service / data layer for NewRidgeFinancial 2.0.
  *
- * One shared service layer for the whole app. Read paths return data for the
- * dashboards; write paths (claims, narratives, documents) perform real
- * create/update/delete against a local persisted store (SQLite via the desktop
- * bridge, or sessionStorage in browser dev).
- *
- * Initial contents are seeded ONCE from page-sample-data.js. This seed is
- * clearly demo data; after first run the persisted store is the source of
- * truth and reflects real user edits.
+ * Read paths use SoftDent / QuickBooks imports or empty shells.
+ * Write paths (claims, narratives, documents) persist locally via the desktop bridge.
  */
 const Services = (function () {
   const isNode = typeof window === "undefined";
 
-  function resolveSample() {
-    if (typeof PageSampleData !== "undefined") return PageSampleData;
-    if (typeof window !== "undefined" && window.PageSampleData) return window.PageSampleData;
+  function resolveEmptyStates() {
+    if (typeof EmptyStates !== "undefined") return EmptyStates;
+    if (typeof window !== "undefined" && window.EmptyStates) return window.EmptyStates;
     try {
-      return require("./page-sample-data.js");
+      return require("./empty-states.js");
     } catch {
-      return { get: () => null };
+      return { dashboard: () => null, store: () => ({}) };
     }
   }
-  const SAMPLE = resolveSample();
+
+  function primaryProvider() {
+    return resolveEmptyStates().PRIMARY_PROVIDER || "Dr. Michael Reno";
+  }
 
   function bridge() {
     if (typeof DesktopBridge !== "undefined") return DesktopBridge;
@@ -44,9 +41,38 @@ const Services = (function () {
   }
 
   const mem = {};
-  const KEY = (k) => `nr2:${k}`;
+  const KEY = (k) => `nr2:v2:${k}`;
+  let importBundleCache = null;
+  let importBundleAt = 0;
+  const IMPORT_CACHE_TTL_MS = 30000;
 
-  async function load(key, seedFn) {
+  function resolveImportLoader() {
+    if (typeof ImportLoader !== "undefined") return ImportLoader;
+    if (typeof window !== "undefined" && window.ImportLoader) return window.ImportLoader;
+    try {
+      return require("./import-loader.js");
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadImportBundle(force) {
+    const loader = resolveImportLoader();
+    if (!loader || !loader.shouldLoadImports()) return null;
+    const now = Date.now();
+    if (!force && importBundleCache && now - importBundleAt < IMPORT_CACHE_TTL_MS) {
+      return importBundleCache;
+    }
+    try {
+      importBundleCache = await loader.loadBundle();
+      importBundleAt = now;
+      return importBundleCache;
+    } catch {
+      return null;
+    }
+  }
+
+  async function load(key, emptyFn) {
     if (mem[key]) return mem[key];
     const br = bridge();
     if (br) {
@@ -57,19 +83,19 @@ const Services = (function () {
           return saved;
         }
       } catch {
-        /* fall through to seed */
+        /* fall through */
       }
     }
-    const seeded = seedFn();
-    mem[key] = seeded;
+    const initial = emptyFn();
+    mem[key] = initial;
     if (br) {
       try {
-        await br.storageSet(KEY(key), seeded);
+        await br.storageSet(KEY(key), initial);
       } catch {
         /* persistence optional */
       }
     }
-    return seeded;
+    return initial;
   }
 
   async function save(key, value) {
@@ -89,7 +115,13 @@ const Services = (function () {
 
   async function readDashboard(pageId) {
     await delay(180);
-    const data = SAMPLE.get(pageId);
+    const loader = resolveImportLoader();
+    const bundle = await loadImportBundle(false);
+    if (loader && typeof loader.buildDashboard === "function") {
+      return clone(loader.buildDashboard(pageId, bundle));
+    }
+    const empty = resolveEmptyStates();
+    const data = empty.dashboard(pageId);
     if (!data) {
       const err = new Error(`No data source configured for ${pageId}`);
       err.code = "NO_DATA";
@@ -122,9 +154,15 @@ const Services = (function () {
       const key = claim.status || "Unknown";
       claimsByStatus[key] = (claimsByStatus[key] || 0) + 1;
     });
+    const loader = resolveImportLoader();
+    const bundle = await loadImportBundle(false);
+    const usingImports = Boolean(loader && bundle && loader.hasImportData(bundle));
     return {
       gatheredAt: new Date().toISOString(),
-      label: "Local program snapshot (sample/persisted data)",
+      label: usingImports
+        ? "Local program snapshot (SoftDent/QuickBooks imports + persisted data)"
+        : "Local program snapshot (imports unavailable — empty or persisted local data only)",
+      importBundle: usingImports ? { loadedAt: bundle.loadedAt, softdentDir: bundle.softdent?.dir, quickbooksDir: bundle.quickbooks?.dir } : null,
       dashboards: { financial, softdent, quickbooks, ar },
       claims: claimsState
         ? {
@@ -165,30 +203,22 @@ const Services = (function () {
 
   /* ============ Claims ============ */
 
-  function seedClaims() {
-    const src = SAMPLE.get("claims") || {};
-    const lanes = src.lanes || {};
-    const list = [];
-    Object.entries(lanes).forEach(([status, lane]) => {
-      (lane.cards || []).forEach((c) => list.push(Object.assign({}, c, { status })));
-    });
-    return {
-      claims: list,
-      laneTotals: Object.fromEntries(Object.entries(lanes).map(([k, v]) => [k, v.count || (v.cards || []).length])),
-      kpis: src.kpis || [],
-      readiness: src.readiness || null,
-      safety: src.safety || "Read-Only Mode",
-      detailById: src.detail ? { [src.detail.id]: src.detail } : {},
-    };
+  function emptyClaims() {
+    return clone(resolveEmptyStates().store("claims"));
   }
 
   const claims = {
     async list() {
       await delay();
-      return clone(await load("claims", seedClaims));
+      const loader = resolveImportLoader();
+      const bundle = await loadImportBundle(false);
+      if (loader && bundle && bundle.softdent && bundle.softdent.claims && bundle.softdent.claims.rows && bundle.softdent.claims.rows.length) {
+        return clone(loader.mergeClaimsState(emptyClaims(), bundle));
+      }
+      return clone(await load("claims", emptyClaims));
     },
     async get(id) {
-      const state = await load("claims", seedClaims);
+      const state = await load("claims", emptyClaims);
       const claim = (state.claims || []).find((c) => c.id === id) || null;
       const detail =
         (state.detailById || {})[id] ||
@@ -198,12 +228,12 @@ const Services = (function () {
               patient: claim.patient,
               dob: claim.dob,
               age: "—",
-              insurance: "—",
+              insurance: claim.payer || "—",
               billed: claim.amount,
-              dos: "—",
+              dos: claim.serviceDate || "—",
               procedure: claim.procedure,
               code: claim.procedure,
-              provider: "—",
+              provider: primaryProvider(),
               npi: "—",
               validation: 0,
               alert: "Local workbench only · payer submission locked.",
@@ -213,7 +243,7 @@ const Services = (function () {
     },
     async updateStatus(id, status) {
       await delay(160);
-      const state = clone(await load("claims", seedClaims));
+      const state = clone(await load("claims", emptyClaims));
       const claim = (state.claims || []).find((c) => c.id === id);
       if (!claim) throw new Error("Claim not found");
       claim.status = status;
@@ -222,7 +252,7 @@ const Services = (function () {
     },
     async remove(id) {
       await delay(160);
-      const state = clone(await load("claims", seedClaims));
+      const state = clone(await load("claims", emptyClaims));
       const before = state.claims.length;
       state.claims = state.claims.filter((c) => c.id !== id);
       if (state.claims.length === before) throw new Error("Claim not found");
@@ -231,7 +261,7 @@ const Services = (function () {
     },
     async create(data) {
       await delay(160);
-      const state = clone(await load("claims", seedClaims));
+      const state = clone(await load("claims", emptyClaims));
       const claim = Object.assign(
         { id: uid("CLM"), status: "Draft", patient: "New Patient", dob: "—", procedure: "—", amount: "$0.00", age: "just now" },
         data || {},
@@ -244,20 +274,8 @@ const Services = (function () {
 
   /* ============ Narratives ============ */
 
-  function seedNarratives() {
-    const src = SAMPLE.get("narratives") || {};
-    return {
-      context: src.patientBar || {},
-      composer: {
-        tone: (src.composer && src.composer.tone) || "Professional",
-        length: (src.composer && src.composer.length) || "Standard",
-        focus: (src.composer && src.composer.focus) || "Medical Necessity",
-        keyPoints: ((src.composer && src.composer.keyPoints) || []).slice(),
-        context: (src.composer && src.composer.context) || "",
-      },
-      draftText: src.draft || "",
-      drafts: (src.history || []).map((h) => clone(h)),
-    };
+  function emptyNarratives() {
+    return clone(resolveEmptyStates().store("narratives"));
   }
 
   function composeNarrative(payload) {
@@ -277,7 +295,7 @@ const Services = (function () {
   const narratives = {
     async getState() {
       await delay();
-      return clone(await load("narratives", seedNarratives));
+      return clone(await load("narratives", emptyNarratives));
     },
     async generate(payload) {
       await delay(420);
@@ -285,7 +303,7 @@ const Services = (function () {
     },
     async saveDraft(payload) {
       await delay(200);
-      const state = clone(await load("narratives", seedNarratives));
+      const state = clone(await load("narratives", emptyNarratives));
       const nextNum = state.drafts.length + 1;
       state.drafts.forEach((d) => (d.latest = false));
       const draft = {
@@ -313,7 +331,7 @@ const Services = (function () {
     },
     async deleteDraft(version) {
       await delay(160);
-      const state = clone(await load("narratives", seedNarratives));
+      const state = clone(await load("narratives", emptyNarratives));
       state.drafts = state.drafts.filter((d) => d.version !== version);
       if (state.drafts.length && !state.drafts.some((d) => d.latest)) state.drafts[0].latest = true;
       await save("narratives", state);
@@ -323,14 +341,8 @@ const Services = (function () {
 
   /* ============ Documents ============ */
 
-  function seedDocuments() {
-    const src = SAMPLE.get("documents") || {};
-    return {
-      entity: src.entity || "",
-      queue: (src.queue || []).map((q) => clone(q)),
-      previewById: src.preview && src.queue && src.queue[0] ? { [src.queue[0].id]: src.preview } : {},
-      period: clone(src.period || {}),
-    };
+  function emptyDocuments() {
+    return clone(resolveEmptyStates().store("documents"));
   }
 
   function recomputePosting(queue) {
@@ -347,7 +359,7 @@ const Services = (function () {
   const documents = {
     async list(filter) {
       await delay();
-      const state = clone(await load("documents", seedDocuments));
+      const state = clone(await load("documents", emptyDocuments));
       let queue = state.queue;
       if (filter && filter.query) {
         const q = filter.query.toLowerCase();
@@ -359,7 +371,7 @@ const Services = (function () {
       return clone({ entity: state.entity, queue, posting: recomputePosting(state.queue), period: state.period });
     },
     async get(id) {
-      const state = await load("documents", seedDocuments);
+      const state = await load("documents", emptyDocuments);
       const doc = (state.queue || []).find((d) => d.id === id) || null;
       const preview =
         (state.previewById || {})[id] ||
@@ -370,7 +382,7 @@ const Services = (function () {
     },
     async updateStatus(id, status) {
       await delay(160);
-      const state = clone(await load("documents", seedDocuments));
+      const state = clone(await load("documents", emptyDocuments));
       const doc = (state.queue || []).find((d) => d.id === id);
       if (!doc) throw new Error("Document not found");
       doc.status = status;
@@ -380,7 +392,7 @@ const Services = (function () {
     },
     async remove(id) {
       await delay(160);
-      const state = clone(await load("documents", seedDocuments));
+      const state = clone(await load("documents", emptyDocuments));
       state.queue = state.queue.filter((d) => d.id !== id);
       await save("documents", state);
       return true;
@@ -389,21 +401,14 @@ const Services = (function () {
 
   /* ============ Library ============ */
 
-  function seedLibrary() {
-    const src = SAMPLE.get("library") || {};
-    return {
-      results: src.results || (src.docs || []).length,
-      storage: src.storage || {},
-      filters: src.filters || [],
-      docs: (src.docs || []).map((d) => clone(d)),
-      detailById: src.detail ? { [src.detail.title]: src.detail } : {},
-    };
+  function emptyLibrary() {
+    return clone(resolveEmptyStates().store("library"));
   }
 
   const library = {
     async search(query, filters) {
       await delay();
-      const state = clone(await load("library", seedLibrary));
+      const state = clone(await load("library", emptyLibrary));
       let docs = state.docs;
       if (query) {
         const q = query.toLowerCase();
@@ -415,7 +420,7 @@ const Services = (function () {
       return clone({ results: docs.length, storage: state.storage, filters: state.filters, docs });
     },
     async get(title) {
-      const state = await load("library", seedLibrary);
+      const state = await load("library", emptyLibrary);
       const doc = (state.docs || []).find((d) => d.title === title) || null;
       const detail =
         (state.detailById || {})[title] ||
@@ -453,7 +458,19 @@ const Services = (function () {
     }
   }
 
-  return { readDashboard, readProgramSnapshot, claims, narratives, documents, library, officeManager, composeNarrative, resetAll };
+  return {
+    readDashboard,
+    readProgramSnapshot,
+    loadImportBundle,
+    refreshImports: () => loadImportBundle(true),
+    claims,
+    narratives,
+    documents,
+    library,
+    officeManager,
+    composeNarrative,
+    resetAll,
+  };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

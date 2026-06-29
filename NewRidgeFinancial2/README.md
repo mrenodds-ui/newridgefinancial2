@@ -20,8 +20,10 @@ server and does not open Chrome.
 ```
 NewRidgeFinancial2/
   desktop_app.py     single-window pywebview app launcher
+  import_loader.py   reads SoftDent / QuickBooks export files for HAL
   local_store.py     local SQLite state store
   site/
+    import-loader.js maps import files into dashboard shapes HAL uses
     index.html        desktop app shell
     styles.css        mission-control shell styling
     app.js            internal routing and local app state
@@ -33,3 +35,28 @@ NewRidgeFinancial2/
 ## Stop
 
 `StopNewRidgeFinancial2.bat`
+
+## SoftDent / QuickBooks imports (read-only)
+
+In desktop mode, HAL automatically reads local export files from:
+
+- `app/data/imports/softdent/` (dashboard, claims, clinical notes, optional A/R)
+- `app/data/imports/quickbooks/` (revenue/P&L, expenses, optional A/R)
+
+Override with `SOFTDENT_IMPORT_DIR` or `QUICKBOOKS_IMPORT_DIR` if needed.
+
+When imports are missing, dashboards show empty shells — there is no bundled mock or demo data.
+
+Automation is in `import-automation/`:
+
+- `Sync-HAL-Imports.ps1` copies approved SoftDent and QuickBooks exports into HAL's canonical import folders.
+- `Register-HAL-Import-Automation.ps1` registers a Windows scheduled task that runs the sync every 5 minutes.
+
+Default source folders:
+
+- SoftDent: `C:\Users\mreno\SoftDentBridge\exports`
+- QuickBooks: `C:\Users\mreno\QuickBooksExports`
+
+After files are copied, ask HAL **"refresh imports"** or restart the app. HAL reads only — nothing is posted or written back to SoftDent or QuickBooks.
+
+HAL's top priority is to monitor the program, place correct import data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action.

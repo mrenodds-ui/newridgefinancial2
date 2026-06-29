@@ -227,11 +227,79 @@ const HalPage = (function () {
       </div>`;
   }
 
+  function stressTestHtml(st) {
+    const s = st || {};
+    const total = Number(s.total) || 2000000;
+    const processed = Number(s.processed) || 0;
+    const pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+    const running = !!s.running;
+    const status = s.status || (running ? "Running" : processed > 0 && !s.failureTotal ? "Pass" : processed > 0 ? "Fail" : "Idle");
+    const statusClass = status === "Pass" ? "hp-stress__status--ok" : status === "Fail" ? "hp-stress__status--fail" : running ? "hp-stress__status--run" : "";
+    const failures = Array.isArray(s.topFailures) ? s.topFailures : [];
+    const failRows = failures.length
+      ? failures
+          .slice(0, 12)
+          .map(
+            (f) =>
+              `<li><span class="hp-stress__fail-count">${esc(f.count)}×</span> <code>${esc(f.stage)}</code> — ${esc(f.error)}<br><em class="hp-muted">${esc(String(f.example || "").slice(0, 120))}</em></li>`,
+          )
+          .join("")
+      : '<li class="hp-stress__empty">No failures yet.</li>';
+
+    return `<div class="hp-stress" id="hpStressPanel">
+      <div class="hp-stress__head">
+        <h4>ASK HAL STRESS TEST</h4>
+        <span class="hp-stress__status ${statusClass}" id="hpStressStatus">${esc(status)}</span>
+      </div>
+      <p class="hp-stress__note">Routes, handlers, agent planner, and self-check — no live model calls. Generates questions on the fly so 2M+ runs stay in memory.</p>
+      <div class="hp-stress__row">
+        <label class="hp-stress__label" for="hpStressCount">Questions</label>
+        <input class="hp-stress__input" id="hpStressCount" type="number" min="100" step="1000" value="${esc(total)}" ${running ? "disabled" : ""} />
+        <button type="button" class="hp-stress__run" id="hpStressRun" data-hal-stress-run ${running ? "disabled" : ""}>Run</button>
+        <button type="button" class="hp-stress__stop" id="hpStressStop" data-hal-stress-stop ${running ? "" : "disabled"}>Stop</button>
+      </div>
+      <div class="hp-stress__bar" aria-hidden="true"><span class="hp-stress__bar-fill" id="hpStressBar" style="width:${pct}%"></span></div>
+      <dl class="hp-stress__stats">
+        <div><dt>Processed</dt><dd id="hpStressProcessed">${esc(processed.toLocaleString())}</dd></div>
+        <div><dt>Total</dt><dd id="hpStressTotal">${esc(total.toLocaleString())}</dd></div>
+        <div><dt>Rate</dt><dd id="hpStressRate">${esc(s.rate ? s.rate.toLocaleString() + " q/s" : "—")}</dd></div>
+        <div><dt>Failures</dt><dd id="hpStressFailures" class="${s.failureTotal ? "hp-stress__fail-num" : ""}">${esc(String(s.failureTotal || 0))}</dd></div>
+        <div><dt>Distinct</dt><dd id="hpStressDistinct">${esc(String(s.distinctFailures || 0))}</dd></div>
+        <div><dt>Intents</dt><dd id="hpStressIntents">${esc(String(s.intentCount || "—"))}</dd></div>
+      </dl>
+      <ul class="hp-stress__failures" id="hpStressFailList">${failRows}</ul>
+    </div>`;
+  }
+
+  function agentHealthHtml(health, models, inbox) {
+    const h = health || {};
+    const rd = (models && models.readinessDisplay) || {};
+    const inboxLive = inbox && inbox.monitor ? "Live" : "Offline";
+    const selfCheckClass = String(h.lastSelfCheck || "").startsWith("pass") || h.lastSelfCheck === "none" ? "hp-ok" : "hp-stress__fail-num";
+    return `<div class="hp-agent-health">
+      <div class="hp-stress__head">
+        <h4>HAL RUNTIME HEALTH</h4>
+        <span class="hp-stress__status hp-stress__status--ok">${esc(h.architectureVersion || "hal-agent")}</span>
+      </div>
+      <dl class="hp-stress__stats">
+        <div><dt>Model</dt><dd>${esc((rd.configuredModels && rd.configuredModels.local && rd.configuredModels.local.model) || rd.runningModel || "—")}</dd></div>
+        <div><dt>GPU</dt><dd>${esc(rd.gpuStatus || "—")}</dd></div>
+        <div><dt>Budget</dt><dd>${esc(h.budget ? `${h.budget.maxTools} tools · ${h.budget.maxRecentTurns} turns` : "—")}</dd></div>
+        <div><dt>Last Intent</dt><dd>${esc(h.lastIntent || "—")}</dd></div>
+        <div><dt>Self-Check</dt><dd class="${selfCheckClass}">${esc(h.lastSelfCheck || "none")}</dd></div>
+        <div><dt>Repairs</dt><dd class="${h.repairCount ? "hp-stress__fail-num" : ""}">${esc(String(h.repairCount || 0))}</dd></div>
+        <div><dt>Latency</dt><dd>${esc(h.lastLatencyMs ? h.lastLatencyMs + " ms" : "—")}</dd></div>
+        <div><dt>SideNotes</dt><dd>${esc(inboxLive)}</dd></div>
+      </dl>
+      <p class="hp-card__foot hp-muted">Agent uses cached snapshots, bounded tools, local memory, and self-check before final answers.</p>
+    </div>`;
+  }
+
   function render(ctx) {
     const root = ctx.root;
     if (!root) return;
-    const { halData, halModels, halAudit, halChatHistory, halAskDraft, halAskLoading, halInlineFirewallResult, halSideNotes, halSideNoteMonitor, halSideNotesInbox, halWidgetFeed } = ctx;
-    const suggestions = (halData.askHal?.suggestions || []).slice(0, 5);
+    const { halData, halModels, halAudit, halChatHistory, halAskDraft, halAskLoading, halInlineFirewallResult, halSideNotes, halSideNoteMonitor, halSideNotesInbox, halWidgetFeed, halStressTest, halAgentHealth } = ctx;
+    const suggestions = (halData.askHal?.suggestions || []).slice(0, 12);
     const messages = (halChatHistory || []).slice(-4);
     const chatHtml = messages.length
       ? messages
@@ -318,6 +386,9 @@ const HalPage = (function () {
     // and the local audit log for the last local receipt/status.
     const needsReviewCount = tally((s) => s.includes("review"));
     const priorities = (halData.priorities && halData.priorities.items) || [];
+    const topPriority =
+      (halData.topPriority && halData.topPriority.summary) ||
+      "Monitor the program, place correct data, and recommend the next safe staff action.";
     const nextSafeStep =
       priorities[0] || (registry.find((e) => e.nextAction) || {}).nextAction || "Review the Needs Review lane before any external step.";
     const programAccessLabel =
@@ -443,7 +514,7 @@ const HalPage = (function () {
           <section class="hp-card" data-panel="sources" style="grid-area:source;">
             <div class="hp-card__head"><h3>SOURCE INTAKE <span class="hp-muted">(READ-ONLY)</span></h3><button type="button" class="hp-info" data-hal-drawer="sources" title="Open source intake detail" aria-label="Open source intake detail">i</button></div>
             <table class="hp-table"><thead><tr><th>SOURCE</th><th>TYPE</th><th>FRESHNESS</th><th>STATUS</th></tr></thead><tbody>${sourceRows || `<tr><td colspan="4">No sources configured</td></tr>`}</tbody></table>
-            <p class="hp-card__foot hp-muted">Freshness shown is local sample data — no live ingestion in this build.</p>
+            <p class="hp-card__foot hp-muted">Freshness reflects local SoftDent and QuickBooks import files only.</p>
             ${sideNotesMonitorHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox)}
           </section>
           <section class="hp-card" data-panel="workSurfaces" style="grid-area:staff;">
@@ -464,6 +535,7 @@ const HalPage = (function () {
           <section class="hp-card" data-panel="priorities" style="grid-area:insights;">
             <div class="hp-card__head"><h3>HAL INSIGHTS</h3><button type="button" class="hp-info" data-hal-drawer="priorities" title="Open priorities, recommendations, and next steps" aria-label="Open priorities, recommendations, and next steps">i</button></div>
             <ul class="hp-insight">
+              <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>TOP PRIORITY</b> — ${esc(topPriority)}</span></li>
               <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>PROGRAM ACCESS</b> — ${esc(programAccessLabel)} <em class="hp-muted">(writes blocked)</em></span></li>
               <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>NEXT SAFE STEP</b> — ${esc(nextSafeStep)}</span></li>
               <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>ACTIVE WORK</b> — ${esc(needsReviewCount)} in review · ${esc(blockedCount)} blocked <em class="hp-muted">(local registry)</em></span></li>
@@ -480,6 +552,8 @@ const HalPage = (function () {
               <button type="button" class="hp-ctrl__btn" data-hal-drawer="status"><span class="hp-ctrl__ico">▦</span><strong>Audit log</strong><span>${auditList.length ? esc("Last " + (lastReceipt.time || "—")) : "0 actions"}</span></button>
             </div>
             <p class="hp-card__foot">Last local receipt: ${esc(lastReceiptText)} · receipts stay on this device.</p>
+            ${agentHealthHtml(halAgentHealth, halModels, halSideNotesInbox)}
+            ${stressTestHtml(halStressTest)}
           </section>
         </div>
       </div>`;

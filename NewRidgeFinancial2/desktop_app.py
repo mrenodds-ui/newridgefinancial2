@@ -46,6 +46,10 @@ class DesktopApi:
             hub_path = SIDENOTES_HUB_DATA_DIR / name
             if hub_path.is_file():
                 return hub_path.read_text(encoding="utf-8")
+            # The watcher helper may not be running on this workstation. Return an
+            # empty inbox instead of raising so HAL stays quiet and the desktop
+            # log is not flooded with FileNotFoundError tracebacks.
+            return json.dumps({"items": [], "monitor": None})
         path = self.site_dir / "data" / name
         if not path.is_file():
             raise FileNotFoundError(f"Data file not found: {name}")
@@ -61,6 +65,11 @@ class DesktopApi:
             raise ValueError("storage_set requires valid JSON") from exc
         self.store.set(key, value_json)
         return True
+
+    def get_import_bundle(self) -> dict:
+        from import_loader import load_import_bundle
+
+        return load_import_bundle()
 
 
 def main() -> int:

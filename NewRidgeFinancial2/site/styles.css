@@ -1815,6 +1815,51 @@ body {
 .hp-ctrl__btn strong { font-size: 11px; color: #e6e9ef; }
 .hp-ctrl__btn span { font-size: 9px; color: #6f7783; }
 
+/* HAL stress test (System Controls) */
+.hp-stress {
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hp-line);
+}
+.hp-agent-health {
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hp-line);
+}
+.hp-stress__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.hp-stress__head h4 { margin: 0; font-size: 10px; letter-spacing: 0.12em; color: var(--hp-gold); }
+.hp-stress__status { font-size: 9px; letter-spacing: 0.08em; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--hp-line); color: #8a929e; }
+.hp-stress__status--run { color: #7ec8ff; border-color: #3a5f7a; }
+.hp-stress__status--ok { color: var(--hp-ok); border-color: #2d5a3a; }
+.hp-stress__status--fail { color: #f08080; border-color: #6a3030; }
+.hp-stress__note { margin: 0 0 10px; font-size: 9px; color: #6f7783; line-height: 1.45; }
+.hp-stress__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.hp-stress__label { font-size: 9px; color: #8a929e; letter-spacing: 0.06em; }
+.hp-stress__input {
+  width: 120px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--hp-line);
+  background: var(--hp-card-2); color: #e6e9ef; font-size: 11px;
+}
+.hp-stress__run, .hp-stress__stop {
+  padding: 6px 12px; border-radius: 6px; border: 1px solid var(--hp-line); font-size: 10px;
+  letter-spacing: 0.06em; cursor: pointer; background: var(--hp-card-2); color: #e6e9ef;
+}
+.hp-stress__run { border-color: #3a5f3a; color: var(--hp-ok); }
+.hp-stress__stop { border-color: #6a3030; color: #f08080; }
+.hp-stress__run:disabled, .hp-stress__stop:disabled { opacity: 0.45; cursor: not-allowed; }
+.hp-stress__bar { height: 6px; border-radius: 999px; background: #1a1f28; overflow: hidden; margin-bottom: 10px; }
+.hp-stress__bar-fill { display: block; height: 100%; background: linear-gradient(90deg, #2d6a4f, var(--hp-gold)); transition: width 0.15s ease; }
+.hp-stress__stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 10px;
+}
+.hp-stress__stats dt { font-size: 8px; color: #6f7783; letter-spacing: 0.08em; margin: 0; }
+.hp-stress__stats dd { margin: 2px 0 0; font-size: 11px; color: #e6e9ef; font-variant-numeric: tabular-nums; }
+.hp-stress__fail-num { color: #f08080; }
+.hp-stress__failures {
+  margin: 0; padding: 0; list-style: none; max-height: 140px; overflow: auto;
+  border: 1px solid var(--hp-line); border-radius: 8px; background: #0f1218;
+}
+.hp-stress__failures li { padding: 8px 10px; border-bottom: 1px solid var(--hp-line); font-size: 9px; line-height: 1.45; color: #b8bec8; }
+.hp-stress__failures li:last-child { border-bottom: none; }
+.hp-stress__fail-count { color: #f08080; font-weight: 700; margin-right: 4px; }
+.hp-stress__failures code { font-size: 8px; color: #9ab; }
+.hp-stress__empty { color: #6f7783; font-style: italic; }
+
 @media (max-width: 1080px) {
   .hp { grid-template-columns: 1fr; }
   .hp-rail { flex-direction: row; flex-wrap: wrap; align-items: center; }
@@ -2198,6 +2243,11 @@ body {
   color: var(--gold);
   border-color: rgba(214, 177, 94, 0.45);
   background: rgba(214, 177, 94, 0.1);
+}
+.pv-badge--import {
+  color: var(--teal, #6ec9b8);
+  border-color: rgba(110, 201, 184, 0.45);
+  background: rgba(110, 201, 184, 0.1);
 }
 .pv-sample-banner {
   align-items: center;
