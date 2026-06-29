@@ -27,10 +27,101 @@ body {
   font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
 }
 
+.runtime-banner {
+  align-items: center;
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.16), rgba(214, 177, 94, 0.12));
+  border-bottom: 1px solid rgba(248, 113, 113, 0.35);
+  color: var(--text);
+  display: flex;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 18px;
+  position: relative;
+  z-index: 30;
+}
+
+.runtime-banner strong {
+  color: var(--red);
+  flex: 0 0 auto;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.runtime-banner span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .app {
   display: grid;
   grid-template-columns: 268px 1fr;
   height: 100vh;
+}
+
+.runtime-banner + .app {
+  height: calc(100vh - 44px);
+}
+
+.proactive-banner {
+  align-items: center;
+  background: linear-gradient(90deg, rgba(214, 177, 94, 0.18), rgba(100, 116, 139, 0.1));
+  border-bottom: 1px solid rgba(214, 177, 94, 0.35);
+  color: var(--text);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  min-height: 44px;
+  padding: 10px 18px;
+  position: relative;
+  z-index: 29;
+}
+
+.proactive-banner strong {
+  color: var(--gold);
+  flex: 0 0 auto;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.proactive-banner span {
+  color: var(--muted);
+  flex: 1 1 280px;
+  font-size: 13px;
+}
+
+.proactive-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.proactive-banner__btn {
+  background: var(--gold);
+  border: none;
+  border-radius: 6px;
+  color: #111;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+}
+
+.proactive-banner__btn--ghost {
+  background: transparent;
+  border: 1px solid rgba(214, 177, 94, 0.45);
+  color: var(--text);
+}
+
+.proactive-banner + .app,
+.runtime-banner + .proactive-banner + .app {
+  height: calc(100vh - 44px);
+}
+
+.runtime-banner + .proactive-banner + .app {
+  height: calc(100vh - 88px);
 }
 
 /* Sidebar */

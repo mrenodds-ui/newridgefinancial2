@@ -314,7 +314,7 @@ const HalPage = (function () {
   function render(ctx) {
     const root = ctx.root;
     if (!root) return;
-    const { halData, halModels, halAudit, halChatHistory, halAskDraft, halAskLoading, halInlineFirewallResult, halSideNotes, halSideNoteMonitor, halSideNotesInbox, halWidgetFeed, halStressTest, halAgentHealth } = ctx;
+    const { halData, halModels, halAudit, halChatHistory, halAskDraft, halAskLoading, halInlineFirewallResult, halSideNotes, halSideNoteMonitor, halSideNotesInbox, halWidgetFeed, halProactiveBriefing, halStressTest, halAgentHealth } = ctx;
     const suggestions = (halData.askHal?.suggestions || []).slice(0, 12);
     const messages = (halChatHistory || []).slice(-4);
     const chatHtml = messages.length
@@ -419,7 +419,20 @@ const HalPage = (function () {
       (halData.topPriority && halData.topPriority.summary) ||
       "Monitor the program, place correct data, and recommend the next safe staff action.";
     const nextSafeStep =
-      priorities[0] || (registry.find((e) => e.nextAction) || {}).nextAction || "Review the Needs Review lane before any external step.";
+      (halProactiveBriefing && halProactiveBriefing.topAction && halProactiveBriefing.topAction.title) ||
+      priorities[0] ||
+      (registry.find((e) => e.nextAction) || {}).nextAction ||
+      "Review the Needs Review lane before any external step.";
+    const proactiveInsight =
+      halProactiveBriefing && halProactiveBriefing.recommendations && halProactiveBriefing.recommendations.length
+        ? halProactiveBriefing.recommendations
+            .slice(0, 3)
+            .map(
+              (item) =>
+                `<li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>${esc(item.severity.toUpperCase())}</b> — ${esc(item.title)}</span></li>`,
+            )
+            .join("")
+        : "";
     const programAccessLabel =
       halData.programAccess?.mode === "full-read"
         ? "Full read · all pages and services (local)"
@@ -567,6 +580,7 @@ const HalPage = (function () {
               <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>TOP PRIORITY</b> — ${esc(topPriority)}</span></li>
               <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>PROGRAM ACCESS</b> — ${esc(programAccessLabel)} <em class="hp-muted">(writes blocked)</em></span></li>
               <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>NEXT SAFE STEP</b> — ${esc(nextSafeStep)}</span></li>
+              ${proactiveInsight}
               <li class="hp-insight__lead"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>ACTIVE WORK</b> — ${esc(needsReviewCount)} in review · ${esc(blockedCount)} blocked <em class="hp-muted">(local registry)</em></span></li>
               ${insights || emptyNote("No registry insights available.")}
             </ul>

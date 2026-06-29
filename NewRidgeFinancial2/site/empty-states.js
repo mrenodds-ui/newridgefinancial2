@@ -100,6 +100,13 @@ const EmptyStates = (function () {
       topClaims: [],
       followUp: [],
     },
+    practice: {
+      dataSource: "empty",
+      configured: { newPatients: false, treatmentPlans: false, caseAcceptance: false },
+      newPatients: { count: null, period: null, status: "Not Configured" },
+      treatmentPlans: { presented: null, accepted: null, presentedValue: null, status: "Not Configured" },
+      caseAcceptance: { rate: null, presented: null, accepted: null, status: "Not Configured" },
+    },
   };
 
   const STORES = {

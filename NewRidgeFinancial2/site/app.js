@@ -49,6 +49,36 @@ function persistLocal(key, value) {
   DesktopBridge.storageSet(key, value).catch(() => {});
 }
 
+function isDesktopMode() {
+  return Boolean(window.DesktopBridge && DesktopBridge.hasDesktopApi && DesktopBridge.hasDesktopApi());
+}
+
+function desktopRequiredMessage(feature) {
+  if (window.DesktopBridge && DesktopBridge.desktopRequiredMessage) {
+    return DesktopBridge.desktopRequiredMessage(feature);
+  }
+  return `${feature || "This feature"} requires the NR2 desktop app. Browser mode is a UI preview only.`;
+}
+
+function renderRuntimeModeBanner() {
+  if (isDesktopMode()) {
+    const existing = document.getElementById("runtimeModeBanner");
+    if (existing) existing.remove();
+    return;
+  }
+  let banner = document.getElementById("runtimeModeBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "runtimeModeBanner";
+    banner.className = "runtime-banner";
+    document.body.prepend(banner);
+  }
+  banner.innerHTML = `
+    <strong>Browser preview mode</strong>
+    <span>${escapeHtml(desktopRequiredMessage("Full NR2 data access"))}</span>
+  `;
+}
+
 function saveChatHistory() {
   persistLocal("halChatHistory", halChatHistory);
 }
@@ -63,7 +93,99 @@ function saveWorkSession() {
 let halOfficeTasks = [];
 
 function saveOfficeTasks() {
+  if (typeof OfficeTaskStore !== "undefined") {
+    OfficeTaskStore.save(halOfficeTasks);
+    return;
+  }
   persistLocal("halOfficeTasks", halOfficeTasks);
+}
+
+let halWidgetRefreshInFlight = null;
+let sideNoteMonitorTickInFlight = false;
+
+function invalidateProgramCaches(reason) {
+  programContextCache = null;
+  const Svc = typeof Services !== "undefined" ? Services : window.Services;
+  if (Svc && typeof Svc.invalidateSnapshot === "function") Svc.invalidateSnapshot();
+  if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate(reason || "app");
+}
+
+// HAL proactive program assessment (independent local recommendations).
+let halProactiveBriefing = null;
+
+async function runHalProactiveCycle(options) {
+  if (!window.HalProactive) return null;
+  try {
+    halProactiveBriefing = await HalProactive.runCycle(buildHalAgentCtx(), options);
+    if (halProactiveBriefing) {
+      halData.runtime = Object.assign({}, halData.runtime || {}, {
+        proactiveBriefing: halProactiveBriefing,
+        officeManager: halProactiveBriefing.officeManager || null,
+      });
+    }
+    renderProactiveBanner();
+    if (currentDrawerKey === "priorities") renderPanel("priorities");
+    return halProactiveBriefing;
+  } catch {
+    return null;
+  }
+}
+
+function renderProactiveBanner() {
+  if (typeof document === "undefined" || !window.HalProactive) return;
+  const existing = document.getElementById("halProactiveBanner");
+  if (existing) existing.remove();
+  const briefing = halProactiveBriefing || HalProactive.getLastBriefing();
+  if (!HalProactive.shouldSurfaceBanner(briefing)) return;
+  const top = briefing.topAction;
+  const acted = briefing.placement && briefing.placement.refreshed;
+  const banner = document.createElement("div");
+  banner.id = "halProactiveBanner";
+  banner.className = "proactive-banner";
+  const label = acted ? "HAL placed data" : "HAL is fixing";
+  const message = acted
+    ? briefing.headline || "HAL refreshed imports and placed updated data into dashboards."
+    : top
+      ? `${top.title} — ${top.rationale}`
+      : briefing.headline || "HAL is monitoring program data.";
+  banner.innerHTML = `<strong>${escapeHtml(label)}</strong><span>${escapeHtml(message)}</span>`;
+  const actions = document.createElement("div");
+  actions.className = "proactive-banner__actions";
+  if (top && top.action && top.action.type === "navigate" && top.action.target) {
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.className = "proactive-banner__btn";
+    openBtn.textContent = `Open ${top.action.target}`;
+    openBtn.addEventListener("click", () => select(top.action.target));
+    actions.appendChild(openBtn);
+  }
+  const askBtn = document.createElement("button");
+  askBtn.type = "button";
+  askBtn.className = "proactive-banner__btn proactive-banner__btn--ghost";
+  askBtn.textContent = "Ask HAL why";
+  askBtn.addEventListener("click", () => {
+    openDrawer("askHal");
+    setTimeout(() => handleHalSubmit("What should HAL do for the program right now?"), 50);
+  });
+  actions.appendChild(askBtn);
+  banner.appendChild(actions);
+  const app = document.querySelector(".app");
+  if (app && app.parentNode) app.parentNode.insertBefore(banner, app);
+}
+
+function scheduleHalWidgetRefresh(snapshot) {
+  if (halWidgetRefreshInFlight) return halWidgetRefreshInFlight;
+  halWidgetRefreshInFlight = refreshHalWidgetFeed(snapshot)
+    .then(async (feed) => {
+      await runHalProactiveCycle();
+      renderHalScreen();
+      if (currentDrawerKey === "sources") renderPanel("sources");
+      return feed;
+    })
+    .finally(() => {
+      halWidgetRefreshInFlight = null;
+    });
+  return halWidgetRefreshInFlight;
 }
 
 let halSideNotes = [];
@@ -101,9 +223,9 @@ const SIDENOTE_INBOX_FILES = [
 
 function saveSideNotes() {
   persistLocal("halSideNotes", halSideNotes);
-  programContextCache = null;
-  programSnapshotCache = null;
+  invalidateProgramCaches("side-notes");
   refreshSideNoteMonitor({ patchUi: true });
+  scheduleHalWidgetRefresh();
 }
 
 async function tryReadSideNotesInbox(name) {
@@ -231,9 +353,14 @@ function startSideNoteMonitor() {
   // only patches the DOM when the HAL panel happens to be mounted. (No backend:
   // this cannot run while the app is fully closed; HAL re-checks on next open.)
   halSideNoteMonitorTimer = setInterval(async () => {
-    await loadSideNotesInbox();
-    await refreshHalWidgetFeed();
-    refreshSideNoteMonitor({ patchUi: true });
+    if (sideNoteMonitorTickInFlight) return;
+    sideNoteMonitorTickInFlight = true;
+    try {
+      await loadSideNotesInbox();
+      refreshSideNoteMonitor({ patchUi: true });
+    } finally {
+      sideNoteMonitorTickInFlight = false;
+    }
   }, SIDENOTE_MONITOR_MS);
 }
 
@@ -494,7 +621,8 @@ function saveReadinessDiagnostics() {
 function collectReadinessRuntime() {
   return {
     halImage: "",
-    sessionStorageOk: DesktopBridge.hasDesktopApi(),
+    storageMode: isDesktopMode() ? "sqlite" : "sessionStorage",
+    desktopBridgeOk: isDesktopMode(),
     activeSession: halWorkSession,
   };
 }
@@ -651,10 +779,7 @@ let halOperatorReport = null;
 
 let programContextCache = null;
 let programContextAt = 0;
-let programSnapshotCache = null;
-let programSnapshotAt = 0;
 const PROGRAM_CONTEXT_TTL_MS = 60000;
-const PROGRAM_SNAPSHOT_TTL_MS = 45000;
 
 async function refreshHalWidgetFeed(snapshot) {
   if (!window.HalSkills) return halWidgetFeed;
@@ -698,12 +823,7 @@ async function loadProgramSnapshot() {
 }
 
 async function loadCachedProgramSnapshot() {
-  const now = Date.now();
-  if (!programSnapshotCache || now - programSnapshotAt > PROGRAM_SNAPSHOT_TTL_MS) {
-    programSnapshotCache = await loadProgramSnapshot();
-    programSnapshotAt = now;
-  }
-  return programSnapshotCache;
+  return loadProgramSnapshot();
 }
 
 async function getProgramContextText() {
@@ -854,6 +974,10 @@ function escalationModelConfig() {
   return HalCore.laneRuntime(halModels, "escalate30b");
 }
 
+function ossModelConfig() {
+  return HalCore.laneRuntime(halModels, "oss120b");
+}
+
 function localModelReady() {
   return HalCore.laneReady(halModels, "chat14b");
 }
@@ -864,6 +988,10 @@ function reasoningModelReady() {
 
 function escalationModelReady() {
   return HalCore.laneReady(halModels, "escalate30b");
+}
+
+function ossModelReady() {
+  return HalCore.laneReady(halModels, "oss120b");
 }
 
 function offlineModelMessage(laneId) {
@@ -1049,6 +1177,11 @@ function buildHalAgentCtx(extras) {
     halModels,
     pages: PAGES,
     halOfficeTasks,
+    getOfficeTasks: async () => {
+      if (typeof OfficeTaskStore !== "undefined") return OfficeTaskStore.list();
+      const snap = await loadCachedProgramSnapshot();
+      return (snap && snap.officeTasks) || halOfficeTasks || [];
+    },
     halWorkSession,
     halEvidencePacket,
     halReadinessDiagnostics,
@@ -1069,26 +1202,43 @@ function buildHalAgentCtx(extras) {
     localModelReady,
     reasoningModelReady,
     escalationModelReady,
+    ossModelReady,
     offlineModelMessage,
     localModelConfig,
     reasoningModelConfig,
     escalationModelConfig,
+    ossModelConfig,
     persistGet: (key) => DesktopBridge.storageGet(key),
     persistSet: (key, value) => persistLocal(key, value),
     getCurrentPage: () => window.location.hash.replace("#", "") || PAGES[0].id,
     clearProgramContextCache: () => {
-      programContextCache = null;
-      programSnapshotCache = null;
+      invalidateProgramCaches("hal-agent");
     },
+    invalidateProgramCaches,
     setHalWidgetFeed: (feed) => {
       halWidgetFeed = feed;
     },
     refreshSideNoteMonitor,
     addSideNote,
-    addOfficeTask: (task) => {
-      halOfficeTasks.unshift(task);
-      saveOfficeTasks();
-      programSnapshotCache = null;
+    addOfficeTask: async (task) => {
+      if (typeof OfficeTaskStore !== "undefined") {
+        halOfficeTasks = await OfficeTaskStore.add(task);
+      } else {
+        halOfficeTasks.unshift(task);
+        saveOfficeTasks();
+      }
+      invalidateProgramCaches("office-task");
+      scheduleHalWidgetRefresh();
+    },
+    setOfficeTasks: async (tasks) => {
+      if (typeof OfficeTaskStore !== "undefined" && typeof OfficeTaskStore.replaceAll === "function") {
+        halOfficeTasks = await OfficeTaskStore.replaceAll(tasks);
+      } else {
+        halOfficeTasks = Array.isArray(tasks) ? tasks.slice() : [];
+        saveOfficeTasks();
+      }
+      invalidateProgramCaches("office-task");
+      scheduleHalWidgetRefresh();
     },
     startWorkSession,
     resetWorkSession,
@@ -1099,6 +1249,7 @@ function buildHalAgentCtx(extras) {
     buildEvidencePacketFromSession,
     clearEvidencePacket,
     clearReadinessDiagnostics,
+    runProactiveCycle: (options) => runHalProactiveCycle(options),
     normalizeActions,
     executeRoute: async (result, trimmed, toolResults) => {
       if (!window.HalRouteExec) return null;
@@ -1214,6 +1365,15 @@ function bindHalCommands(root) {
   });
 }
 
+function runtimeIssuesDrawerHtml() {
+  if (typeof RuntimeIssues === "undefined") return "";
+  const issues = RuntimeIssues.list().slice(0, 6);
+  if (!issues.length) return "";
+  return `<div class="drawer-card drawer-card--warn"><strong>Runtime issues</strong><ul class="drawer-checklist">${issues
+    .map((item) => `<li>${escapeHtml(item.source)}: ${escapeHtml(item.message)}</li>`)
+    .join("")}</ul></div>`;
+}
+
 function drawerSourceItems() {
   const staticItems = (halData.sources && halData.sources.items) || [];
   const live = halWidgetFeed && halWidgetFeed.sourceHealth;
@@ -1222,13 +1382,16 @@ function drawerSourceItems() {
   return Object.keys(live).map((key) => {
     const h = live[key] || {};
     const fallback = staticItems.find((item) => item.target === key) || {};
+    const connectionStatus = h.connectionStatus || (h.hasData ? "Connected" : fallback.status || "Missing");
     return {
       label: fallback.label || labels[key] || key,
       target: key,
-      status: h.hasData ? "Read-only" : fallback.status || "Awaiting data",
-      detail: fallback.detail || (h.hasData ? "Imported data loaded from local export cache." : "No import data loaded yet."),
+      status: connectionStatus,
+      detail: h.detail || fallback.detail || (h.hasData ? "Imported data loaded from local export cache." : "No import data loaded yet."),
       freshness: h.freshness || fallback.freshness || null,
       syncState: h.syncState || fallback.syncState || null,
+      datasetSummary: h.datasetSummary || null,
+      datasetLines: h.datasetLines || [],
       warning: h.hasData ? null : fallback.warning || null,
       checklist: fallback.checklist || [],
     };
@@ -1243,6 +1406,9 @@ function sourceHealthCards(items) {
       const checklist = (item.checklist || [])
         .map((c) => `<li>${escapeHtml(c)}</li>`)
         .join("");
+      const datasetLines = (item.datasetLines || [])
+        .map((line) => `<li>${escapeHtml(line)}</li>`)
+        .join("");
       const openBtn = item.target
         ? `<button class="drawer-action drawer-action--sm" type="button" data-open-page="${escapeHtml(item.target)}">Open ${escapeHtml(item.label)}</button>`
         : "";
@@ -1250,9 +1416,11 @@ function sourceHealthCards(items) {
         <strong>${escapeHtml(item.label)}</strong>
         <span class="status-chip">${escapeHtml(item.status)}</span>
         <p>${escapeHtml(item.detail)}</p>
+        ${item.datasetSummary ? `<p class="drawer-meta">Datasets: ${escapeHtml(item.datasetSummary)}</p>` : ""}
         ${item.freshness ? `<p class="drawer-meta">Freshness: ${escapeHtml(item.freshness)}</p>` : ""}
         ${item.syncState ? `<p class="drawer-meta">Sync: ${escapeHtml(item.syncState)}</p>` : ""}
         ${warn}
+        ${datasetLines ? `<ul class="drawer-checklist">${datasetLines}</ul>` : ""}
         ${checklist ? `<ul class="drawer-checklist">${checklist}</ul>` : ""}
         ${openBtn}
       </div>`;
@@ -1346,6 +1514,34 @@ function firewallPanel(data) {
     </div>`;
 }
 
+function proactiveBriefingPanelHtml() {
+  if (!window.HalProactive) return "";
+  const briefing = halProactiveBriefing || HalProactive.getLastBriefing();
+  if (!briefing) return "";
+  const recs = briefing.recommendations || [];
+  const cards = recs.length
+    ? recs
+        .slice(0, 6)
+        .map(
+          (item) =>
+            `<div class="drawer-card drawer-card--compact">
+              <strong>${escapeHtml(item.title)}</strong>
+              <span class="status-chip${item.severity === "critical" ? " status-chip--blocked" : ""}">${escapeHtml(item.severity)}</span>
+              <p>${escapeHtml(item.rationale)}</p>
+              ${
+                item.action && item.action.type === "navigate"
+                  ? `<button class="drawer-action drawer-action--sm" type="button" data-open-page="${escapeHtml(item.action.target)}">Open ${escapeHtml(item.action.target)}</button>`
+                  : item.action && item.action.command
+                    ? `<button class="drawer-action drawer-action--sm" type="button" data-hal-command="${escapeHtml(item.action.command)}">${escapeHtml(item.action.command)}</button>`
+                    : ""
+              }
+            </div>`,
+        )
+        .join("")
+    : `<p class="drawer-meta">${escapeHtml(briefing.headline)}</p>`;
+  return `<div class="drawer-section"><h3 class="drawer-section__title">HAL proactive assessment</h3><p class="drawer-meta">${escapeHtml(briefing.independenceNote)}</p><div class="drawer-grid">${cards}</div></div>`;
+}
+
 function prioritiesPanel() {
   const groups = HalCore.derivePriorityGroups(halData);
   const staticItems = (halData.priorities && halData.priorities.items) || [];
@@ -1369,7 +1565,7 @@ function prioritiesPanel() {
       return `<div class="drawer-section"><h3 class="drawer-section__title">${escapeHtml(group.label)}</h3><div class="drawer-grid">${cards || '<p class="drawer-meta">None</p>'}</div></div>`;
     })
     .join("");
-  return staticHtml + groupHtml + workSessionPanelHtml() + evidencePacketPanelHtml();
+  return proactiveBriefingPanelHtml() + staticHtml + groupHtml + workSessionPanelHtml() + evidencePacketPanelHtml();
 }
 
 function statusPanel(data) {
@@ -1499,7 +1695,7 @@ function renderPanel(key) {
   }
 
   if (key === "sources") {
-    drawerContent.innerHTML = `<p>${escapeHtml(data.summary)}</p>${sourceHealthCards(drawerSourceItems())}`;
+    drawerContent.innerHTML = `<p>${escapeHtml(data.summary)}</p>${sourceHealthCards(drawerSourceItems())}${runtimeIssuesDrawerHtml()}`;
     bindOpenPageButtons(drawerContent);
     return;
   }
@@ -1788,6 +1984,7 @@ function renderHalScreen() {
     halSideNoteMonitor: halSideNoteMonitor || (window.HalSkills ? HalSkills.buildSideNoteMonitor(halSideNotes) : null),
     halSideNotesInbox,
     halWidgetFeed,
+    halProactiveBriefing,
     halStressTest,
     halAgentHealth: window.HalAgent ? HalAgent.getHealth() : null,
   });
@@ -1841,6 +2038,7 @@ function select(id) {
   }
 }
 
+renderRuntimeModeBanner();
 renderSidebar(window.location.hash.replace("#", "") || PAGES[0].id);
 
 drawerClose.addEventListener("click", closeDrawer);
@@ -1991,27 +2189,37 @@ async function loadPersistedState() {
   halEvidencePacket = (await DesktopBridge.storageGet("halEvidencePacket")) || null;
   halReadinessDiagnostics = (await DesktopBridge.storageGet("halDiagnostics")) || null;
   halOperatorReport = (await DesktopBridge.storageGet("halOperatorReport")) || null;
-  halOfficeTasks = (await DesktopBridge.storageGet("halOfficeTasks")) || [];
+  if (typeof OfficeTaskStore !== "undefined") {
+    halOfficeTasks = await OfficeTaskStore.load();
+  } else {
+    halOfficeTasks = (await DesktopBridge.storageGet("halOfficeTasks")) || [];
+  }
   halSideNotes = (await DesktopBridge.storageGet("halSideNotes")) || [];
   halSideNoteMonitor = (await DesktopBridge.storageGet("halSideNoteMonitor")) || null;
   refreshSideNoteMonitor();
 }
 
 async function refreshImportsInBackground() {
+  if (typeof ImportCoordinator !== "undefined") {
+    try {
+      await ImportCoordinator.refresh({ reason: "background" });
+    } catch {
+      /* background import sync optional */
+    }
+    return;
+  }
   if (!window.Services || typeof Services.refreshImports !== "function") return;
   try {
     await Services.refreshImports();
-    programSnapshotCache = null;
-    programContextCache = null;
-    await refreshHalWidgetFeed();
-    if (currentDrawerKey === "sources") renderPanel("sources");
-    renderHalScreen();
+    invalidateProgramCaches("import-refresh");
+    await scheduleHalWidgetRefresh();
   } catch {
     /* background import sync optional */
   }
 }
 
 async function boot() {
+  renderRuntimeModeBanner();
   await loadPersistedState();
   try {
     halData = await DesktopBridge.readDataFile("hal-manager.json");
@@ -2020,15 +2228,40 @@ async function boot() {
   }
   try {
     halModels = await DesktopBridge.readDataFile("hal-models.json");
-  } catch {
+  } catch (err) {
+    if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("app.boot", err, { file: "hal-models.json" });
     halModels = FALLBACK_MODELS;
   }
-  await refreshHalWidgetFeed();
+  if (typeof OfficeTaskStore !== "undefined") {
+    OfficeTaskStore.onChange((tasks) => {
+      halOfficeTasks = tasks;
+      invalidateProgramCaches("office-tasks");
+      scheduleHalWidgetRefresh();
+    });
+  }
+  if (typeof ImportCoordinator !== "undefined") {
+    ImportCoordinator.onComplete(() => {
+      invalidateProgramCaches("import-refresh");
+      scheduleHalWidgetRefresh();
+    });
+  }
   if (window.HalAgent) await HalAgent.loadMemory(buildHalAgentCtx());
+  if (window.HalProactive && typeof HalProactive.startPlacementTimer === "function") {
+    HalProactive.startPlacementTimer(buildHalAgentCtx);
+  }
   startSideNoteMonitor();
   const initial = window.location.hash.replace("#", "") || PAGES[0].id;
   select(initial);
-  refreshImportsInBackground();
+  runHalProactiveCycle({ force: true }).catch(() => {
+    /* proactive cycle optional on boot */
+  });
+  if (typeof ImportCoordinator !== "undefined") {
+    ImportCoordinator.refresh({ reason: "boot" }).catch(() => {
+      /* boot import optional */
+    });
+  } else {
+    refreshImportsInBackground();
+  }
 }
 
 // Pick up sidenote edits made in another tab/window of the app (browser dev
@@ -2039,8 +2272,8 @@ if (typeof window !== "undefined") {
   window.addEventListener("storage", async (event) => {
     if (event && event.key && event.key !== "halSideNotes") return;
     halSideNotes = (await DesktopBridge.storageGet("halSideNotes")) || halSideNotes;
-    programContextCache = null;
-    await refreshHalWidgetFeed();
+    invalidateProgramCaches("side-notes-storage");
+    scheduleHalWidgetRefresh();
     refreshSideNoteMonitor({ patchUi: true });
   });
 }

@@ -42,6 +42,46 @@ const ImportLoader = (function () {
   const QB_EXPENSE_NAMES = ["quickbooks_expenses.csv", "quickbooks_expense_detail.csv", "quickbooks_expenses.json"];
   const QB_EXPENSE_CATEGORY_NAMES = ["quickbooks_expense_categories.csv"];
   const QB_AR_NAMES = ["quickbooks_ar.csv", "quickbooks_accounts_receivable.csv", "quickbooks_aging.csv"];
+  const SOFTDENT_NEW_PATIENTS_NAMES = ["softdent_new_patients.csv", "softdent_new_patients.json", "new_patients.csv"];
+  const SOFTDENT_TREATMENT_PLANS_NAMES = [
+    "treatment_plan_summary.csv",
+    "softdent_treatment_plan_summary.csv",
+    "treatment_plan_summary.json",
+  ];
+  const SOFTDENT_CASE_ACCEPTANCE_NAMES = ["case_acceptance.csv", "softdent_case_acceptance.csv", "case_acceptance.json"];
+
+  function loadManifestDatasets() {
+    if (!isNode) return null;
+    try {
+      const fs = require("node:fs");
+      const pathMod = require("node:path");
+      const manifestPath = pathMod.join(__dirname, "..", "import-manifest.json");
+      const payload = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      if (payload.version !== 1) return null;
+      return payload.datasets || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function manifestFilenames(key, fallback) {
+    const datasets = loadManifestDatasets();
+    const entry = datasets && datasets[key];
+    if (entry && Array.isArray(entry.filenames) && entry.filenames.length) return entry.filenames;
+    return fallback;
+  }
+
+  const MANIFEST_SOFTDENT_DASHBOARD_NAMES = manifestFilenames("softdent.dashboard", SOFTDENT_DASHBOARD_NAMES);
+  const MANIFEST_SOFTDENT_CLAIMS_NAMES = manifestFilenames("softdent.claims", SOFTDENT_CLAIMS_NAMES);
+  const MANIFEST_SOFTDENT_CLINICAL_NAMES = manifestFilenames("softdent.clinicalNotes", SOFTDENT_CLINICAL_NAMES);
+  const MANIFEST_SOFTDENT_AR_NAMES = manifestFilenames("softdent.ar", SOFTDENT_AR_NAMES);
+  const MANIFEST_QB_REVENUE_NAMES = manifestFilenames("quickbooks.revenue", QB_REVENUE_NAMES);
+  const MANIFEST_QB_EXPENSE_NAMES = manifestFilenames("quickbooks.expenses", QB_EXPENSE_NAMES);
+  const MANIFEST_QB_EXPENSE_CATEGORY_NAMES = manifestFilenames("quickbooks.expenseCategories", QB_EXPENSE_CATEGORY_NAMES);
+  const MANIFEST_QB_AR_NAMES = manifestFilenames("quickbooks.ar", QB_AR_NAMES);
+  const MANIFEST_SOFTDENT_NEW_PATIENTS_NAMES = manifestFilenames("softdent.newPatients", SOFTDENT_NEW_PATIENTS_NAMES);
+  const MANIFEST_SOFTDENT_TREATMENT_PLANS_NAMES = manifestFilenames("softdent.treatmentPlans", SOFTDENT_TREATMENT_PLANS_NAMES);
+  const MANIFEST_SOFTDENT_CASE_ACCEPTANCE_NAMES = manifestFilenames("softdent.caseAcceptance", SOFTDENT_CASE_ACCEPTANCE_NAMES);
 
   function bridge() {
     if (typeof DesktopBridge !== "undefined") return DesktopBridge;
@@ -119,7 +159,7 @@ const ImportLoader = (function () {
   function dashboardImportDepth(pageId, patch) {
     if (pageId === "financial") {
       const hasTrend = Array.isArray(patch.productionTrend?.production) && patch.productionTrend.production.length > 1;
-      const hasPayer = Array.isArray(patch.payerMix?.segments) && patch.payerMix.segments.length > 0;
+      const hasPayer = Array.isArray(patch.payerMix?.slices) && patch.payerMix.slices.length > 0;
       const hasQuality = patch.quality && patch.quality.score > 0;
       if (!hasTrend || !hasPayer || !hasQuality) return "partial";
       return "complete";
@@ -137,7 +177,7 @@ const ImportLoader = (function () {
       return "complete";
     }
     if (pageId === "ar") {
-      const hasTrend = Array.isArray(patch.collectionsTrend?.values) && patch.collectionsTrend.values.length > 0;
+      const hasTrend = Array.isArray(patch.collectionsTrend?.current) && patch.collectionsTrend.current.length > 0;
       const hasTopClaims = Array.isArray(patch.topClaims) && patch.topClaims.length > 0;
       if (!hasTrend || !hasTopClaims) return "partial";
       return "complete";
@@ -145,21 +185,56 @@ const ImportLoader = (function () {
     return "complete";
   }
 
-  function readCsvRows(text) {
-    const lines = String(text || "")
-      .replace(/\r\n/g, "\n")
-      .split("\n")
-      .filter((line) => line.trim());
-    if (!lines.length) return [];
-    const headers = lines[0].split(",").map((h) => h.trim());
-    return lines.slice(1).map((line) => {
-      const cells = line.split(",");
-      const row = {};
+  function parseCsvRfc(text) {
+    const rows = [];
+    let row = [];
+    let field = "";
+    let inQuotes = false;
+    const src = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    for (let i = 0; i < src.length; i += 1) {
+      const ch = src[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (src[i + 1] === '"') {
+            field += '"';
+            i += 1;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          field += ch;
+        }
+        continue;
+      }
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ",") {
+        row.push(field);
+        field = "";
+      } else if (ch === "\n") {
+        row.push(field);
+        field = "";
+        if (row.some((cell) => String(cell).trim())) rows.push(row);
+        row = [];
+      } else {
+        field += ch;
+      }
+    }
+    row.push(field);
+    if (row.some((cell) => String(cell).trim())) rows.push(row);
+    if (!rows.length) return [];
+    const headers = rows[0].map((h) => String(h).trim());
+    return rows.slice(1).map((cells) => {
+      const out = {};
       headers.forEach((header, index) => {
-        row[header] = (cells[index] || "").trim();
+        out[header] = (cells[index] || "").trim();
       });
-      return row;
+      return out;
     });
+  }
+
+  function readCsvRows(text) {
+    return parseCsvRfc(text);
   }
 
   function extractJsonRows(payload) {
@@ -175,20 +250,40 @@ const ImportLoader = (function () {
   function readTabularFile(path, fs) {
     const raw = fs.readFileSync(path, "utf8");
     if (path.toLowerCase().endsWith(".json")) return extractJsonRows(JSON.parse(raw));
+    const sidecar = path.replace(/\.csv$/i, ".json");
+    if (sidecar !== path && fs.existsSync(sidecar)) {
+      try {
+        const sidecarStat = fs.statSync(sidecar);
+        const csvStat = fs.statSync(path);
+        if (sidecarStat.mtimeMs >= csvStat.mtimeMs) {
+          return extractJsonRows(JSON.parse(fs.readFileSync(sidecar, "utf8")));
+        }
+      } catch {
+        /* fall through to CSV */
+      }
+    }
     return readCsvRows(raw);
   }
 
-  function firstExisting(dir, names, fs) {
+  function newestExisting(dir, names, fs) {
+    const pathMod = require("node:path");
+    let best = null;
+    let bestMtime = -1;
     for (const name of names) {
-      const candidate = require("node:path").join(dir, name);
-      if (fs.existsSync(candidate)) return candidate;
+      const candidate = pathMod.join(dir, name);
+      if (!fs.existsSync(candidate)) continue;
+      const mtime = fs.statSync(candidate).mtimeMs;
+      if (mtime > bestMtime) {
+        best = candidate;
+        bestMtime = mtime;
+      }
     }
-    return null;
+    return best;
   }
 
   function loadDatasetNode(dir, names, fs) {
     if (!dir || !fs.existsSync(dir)) return null;
-    const path = firstExisting(dir, names, fs);
+    const path = newestExisting(dir, names, fs);
     if (!path) return null;
     const stat = fs.statSync(path);
     return {
@@ -200,40 +295,46 @@ const ImportLoader = (function () {
 
   async function loadBundleNode() {
     const fs = require("node:fs");
-    return {
+    return attachBundleDiagnostics({
       loadedAt: new Date().toISOString(),
       softdent: {
         dir: REPO_IMPORT_SOFTDENT,
-        dashboard: loadDatasetNode(REPO_IMPORT_SOFTDENT, SOFTDENT_DASHBOARD_NAMES, fs),
-        claims: loadDatasetNode(REPO_IMPORT_SOFTDENT, SOFTDENT_CLAIMS_NAMES, fs),
-        clinicalNotes: loadDatasetNode(REPO_IMPORT_SOFTDENT, SOFTDENT_CLINICAL_NAMES, fs),
-        ar: loadDatasetNode(REPO_IMPORT_SOFTDENT, SOFTDENT_AR_NAMES, fs),
+        dashboard: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_DASHBOARD_NAMES, fs),
+        claims: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_CLAIMS_NAMES, fs),
+        clinicalNotes: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_CLINICAL_NAMES, fs),
+        ar: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_AR_NAMES, fs),
+        newPatients: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_NEW_PATIENTS_NAMES, fs),
+        treatmentPlans: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_TREATMENT_PLANS_NAMES, fs),
+        caseAcceptance: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_CASE_ACCEPTANCE_NAMES, fs),
       },
       quickbooks: {
         dir: REPO_IMPORT_QUICKBOOKS,
-        revenue: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, QB_REVENUE_NAMES, fs),
-        expenses: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, QB_EXPENSE_NAMES, fs),
-        expenseCategories: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, QB_EXPENSE_CATEGORY_NAMES, fs),
-        ar: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, QB_AR_NAMES, fs),
+        revenue: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, MANIFEST_QB_REVENUE_NAMES, fs),
+        expenses: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, MANIFEST_QB_EXPENSE_NAMES, fs),
+        expenseCategories: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, MANIFEST_QB_EXPENSE_CATEGORY_NAMES, fs),
+        ar: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, MANIFEST_QB_AR_NAMES, fs),
       },
-    };
+    });
   }
 
+  // Browser file:// without pywebview returns null — use the desktop bridge or Node (NR2_LOAD_IMPORTS=1).
   async function loadBundle(force) {
     const br = bridge();
+    let bundle = null;
     if (br) {
-      if (force && br.refreshImports) return br.refreshImports();
-      if (br.getImportBundle) return br.getImportBundle();
+      if (force && br.refreshImports) bundle = await br.refreshImports();
+      else if (br.getImportBundle) bundle = await br.getImportBundle();
     }
-    if (isNode && process.env.NR2_LOAD_IMPORTS === "1") return loadBundleNode();
-    return null;
+    if (!bundle && isNode && process.env.NR2_LOAD_IMPORTS === "1") bundle = await loadBundleNode();
+    return bundle ? attachBundleDiagnostics(bundle) : null;
   }
 
   function hasSoftdentImport(bundle) {
     const sd = bundle && bundle.softdent;
     return Boolean(
       (sd && sd.dashboard && sd.dashboard.rows && sd.dashboard.rows.length) ||
-        (sd && sd.claims && sd.claims.rows && sd.claims.rows.length),
+        (sd && sd.claims && sd.claims.rows && sd.claims.rows.length) ||
+        (sd && sd.ar && sd.ar.rows && sd.ar.rows.length),
     );
   }
 
@@ -302,6 +403,110 @@ const ImportLoader = (function () {
       if (match && row[match] !== undefined && row[match] !== "") return row[match];
     }
     return null;
+  }
+
+  function diagnosticsApi() {
+    if (typeof ImportDiagnostics !== "undefined") return ImportDiagnostics;
+    if (typeof window !== "undefined" && window.ImportDiagnostics) return window.ImportDiagnostics;
+    try {
+      return require("./import-diagnostics.js");
+    } catch {
+      return null;
+    }
+  }
+
+  function attachBundleDiagnostics(bundle) {
+    if (!bundle || bundle.diagnostics) return bundle;
+    const diag = diagnosticsApi();
+    if (diag && typeof diag.evaluateBundle === "function") {
+      bundle.diagnostics = diag.evaluateBundle(bundle);
+    }
+    return bundle;
+  }
+
+  function buildProductionTrendFromRows(rows) {
+    const periods = (rows || [])
+      .map((row) => ({
+        period: String(row.period || "").trim(),
+        production: Number(row.production) || 0,
+        collections: Number(row.collections) || 0,
+      }))
+      .filter((row) => row.period);
+    if (periods.length < 2) return null;
+    periods.sort((a, b) => a.period.localeCompare(b.period));
+    const production = periods.map((row) => row.production);
+    const average = production.map((_, index) => {
+      const slice = production.slice(0, index + 1);
+      return slice.reduce((acc, value) => acc + value, 0) / slice.length;
+    });
+    const maxProd = Math.max(...production, 0);
+    const yStep = maxProd > 0 ? Math.ceil(maxProd / 2 / 1000) * 1000 : 50000;
+    return {
+      yLabels: [`$${Math.round(yStep / 1000)}k`, `$${Math.round((yStep * 2) / 1000)}k`],
+      labels: periods.map((row) => row.period),
+      production,
+      average,
+      ytd: [
+        { label: "YTD Production", value: formatMoney(production.reduce((acc, value) => acc + value, 0)) },
+        {
+          label: "YTD Collection Rate",
+          value: (() => {
+            const prod = production.reduce((acc, value) => acc + value, 0);
+            const coll = periods.reduce((acc, row) => acc + row.collections, 0);
+            return prod > 0 ? `${((coll / prod) * 100).toFixed(1)}%` : "—";
+          })(),
+        },
+      ],
+    };
+  }
+
+  function buildPayerMixFromAggregate(aggregate) {
+    const insurance = aggregate.totals.insurance || 0;
+    const patient = aggregate.totals.patient || 0;
+    const total = insurance + patient;
+    if (total <= 0) return null;
+    const production = aggregate.totals.production || 0;
+    const collections = aggregate.totals.collections || 0;
+    return {
+      total: formatMoney(total),
+      rate: production > 0 ? `${((collections / production) * 100).toFixed(1)}%` : "—",
+      rateTrend: "Imported",
+      slices: [
+        { label: "Insurance", pct: Math.round((insurance / total) * 1000) / 10 },
+        { label: "Patient", pct: Math.round((patient / total) * 1000) / 10 },
+      ].filter((slice) => slice.pct > 0),
+    };
+  }
+
+  function buildMonthlyExpensesFromRows(rows) {
+    const monthly = (rows || [])
+      .map((row) => ({
+        label: String(pickField(row, ["Month", "month", "Period", "period", "Date", "date"]) || "").trim(),
+        amount: coerceFloat(pickField(row, ["Amount", "amount", "TotalExpense", "Expenses", "Expense"])),
+      }))
+      .filter((row) => row.label && row.amount !== null);
+    if (monthly.length < 2) return null;
+    monthly.sort((a, b) => a.label.localeCompare(b.label));
+    return {
+      labels: monthly.map((row) => row.label),
+      values: monthly.map((row) => row.amount),
+    };
+  }
+
+  function buildQuickbooksArSummary(arRows) {
+    const buckets = (arRows || [])
+      .map((row) => ({
+        bucket: String(pickField(row, ["Bucket", "bucket", "AgingBucket", "Range", "range"]) || "Total"),
+        amount: coerceFloat(pickField(row, ["Balance", "balance", "Amount", "amount", "AccountsReceivable"])),
+      }))
+      .filter((row) => row.amount !== null);
+    if (!buckets.length) {
+      const total = coerceFloat(pickField((arRows || [])[0] || {}, ["AccountsReceivable", "TotalAR", "total_ar"]));
+      if (total === null) return null;
+      return { total, buckets: [{ bucket: "Total", amount: total }] };
+    }
+    const total = buckets.reduce((acc, row) => acc + row.amount, 0);
+    return { total, buckets };
   }
 
   function quickbooksTotals(bundle) {
@@ -421,8 +626,23 @@ const ImportLoader = (function () {
         { label: "Connection", value: "Imported", ok: true },
         { label: "Data Freshness", value: formatFreshness(modifiedAt), ok: true },
         { label: "Dashboard Export", value: sd.dashboard ? sd.dashboard.sourceFile : "Missing", ok: Boolean(sd.dashboard) },
-        { label: "Claims Export", value: sd.claims ? sd.claims.sourceFile : "Missing", ok: Boolean(sd.claims && sd.claims.rows && sd.claims.rows.length) },
+        {
+          label: "Claims Export",
+          value: sd.claims && sd.claims.rows && sd.claims.rows.length ? sd.claims.sourceFile : "Missing — awaiting SoftDent claims export",
+          ok: Boolean(sd.claims && sd.claims.rows && sd.claims.rows.length),
+        },
+        {
+          label: "Clinical Notes",
+          value:
+            sd.clinicalNotes && sd.clinicalNotes.rows && sd.clinicalNotes.rows.length
+              ? sd.clinicalNotes.sourceFile
+              : "Missing — awaiting SoftDent clinical notes export",
+          ok: Boolean(sd.clinicalNotes && sd.clinicalNotes.rows && sd.clinicalNotes.rows.length),
+        },
         { label: "A/R Export", value: hasAr ? sd.ar.sourceFile : "Not loaded", ok: hasAr },
+        ...(aggregate.totals.production > 0 && aggregate.totals.collections === 0
+          ? [{ label: "Collections", value: "Source reports $0 collections for this period", ok: false }]
+          : []),
       ],
       glance,
       exports,
@@ -471,6 +691,9 @@ const ImportLoader = (function () {
           })),
         }
       : undefined;
+    const monthlyExpenses = buildMonthlyExpensesFromRows(totals.expenseRows);
+    const arRows = ((bundle.quickbooks && bundle.quickbooks.ar) || {}).rows || [];
+    const arSummary = buildQuickbooksArSummary(arRows);
     return assignPatch(emptyDashboard("quickbooks"), {
       pageId: "quickbooks",
       dataSource: "import",
@@ -480,6 +703,18 @@ const ImportLoader = (function () {
       revenue: totals.revenue,
       expenses: totals.expenses,
       ...(expenseCategoryDonut ? { expenseCategories: expenseCategoryDonut } : {}),
+      ...(monthlyExpenses ? { monthlyExpenses } : {}),
+      ...(arSummary
+        ? {
+            ar: {
+              total: formatMoney(arSummary.total),
+              buckets: arSummary.buckets.map((bucket) => ({
+                bucket: bucket.bucket,
+                amount: formatMoney(bucket.amount),
+              })),
+            },
+          }
+        : {}),
       pl: {
         range: `Imported ${formatFreshness(totals.modifiedAt)}`,
         rows,
@@ -496,11 +731,14 @@ const ImportLoader = (function () {
 
   function buildFinancialDashboard(bundle, softdent, quickbooks) {
     if (!hasSoftdentImport(bundle) && !hasQuickbooksImport(bundle)) return null;
-    const aggregate = aggregateDashboard(normalizeDashboardRows(((bundle.softdent && bundle.softdent.dashboard) || {}).rows || []));
+    const dashboardRows = normalizeDashboardRows(((bundle.softdent && bundle.softdent.dashboard) || {}).rows || []);
+    const aggregate = aggregateDashboard(dashboardRows);
     const qb = quickbooksTotals(bundle);
     const production = aggregate.totals.production || null;
     const collections = aggregate.totals.collections || null;
     const collectionRate = production && collections !== null ? `${((collections / production) * 100).toFixed(1)}%` : "—";
+    const productionTrend = buildProductionTrendFromRows(dashboardRows);
+    const payerMix = buildPayerMixFromAggregate(aggregate);
     return assignPatch(emptyDashboard("financial"), {
       pageId: "financial",
       dataSource: "import",
@@ -512,8 +750,14 @@ const ImportLoader = (function () {
         trend: "Imported",
         trendDir: "up",
         vs: softdent ? `SoftDent import · ${formatFreshness(softdent.importedAt)}` : "SoftDent import",
-        chart: { yLabels: ["$0", "$50k", "$100k"], xLabels: ["Import"], values: [production || 0] },
+        chart: {
+          yLabels: productionTrend ? productionTrend.yLabels : ["$0", "$50k", "$100k"],
+          xLabels: productionTrend ? productionTrend.labels : ["Import"],
+          values: productionTrend ? productionTrend.production : [production || 0],
+        },
       },
+      ...(productionTrend ? { productionTrend } : {}),
+      ...(payerMix ? { payerMix } : {}),
       metrics: [
         {
           label: "Collections MTD",
@@ -583,6 +827,51 @@ const ImportLoader = (function () {
     return "Draft";
   }
 
+  function buildTopClaimsFromImport(rows) {
+    return (rows || [])
+      .map((row) => ({
+        claim: String(pickField(row, ["ClaimId", "claimId", "id"]) || ""),
+        patient: String(pickField(row, ["PatientName", "patient"]) || "Unknown"),
+        insurance: String(pickField(row, ["Payer", "payer", "Insurance", "insurance"]) || "—"),
+        dos: String(pickField(row, ["ServiceDate", "serviceDate", "DOS", "dos"]) || "—"),
+        billed: formatMoney(pickField(row, ["ClaimAmount", "amount", "Billed", "billed"])),
+        outstanding: formatMoney(pickField(row, ["Outstanding", "outstanding", "Balance", "balance", "ClaimAmount", "amount"])),
+        days: String(pickField(row, ["Days", "days", "Age", "age"]) || "—"),
+        status: mapClaimStatus(pickField(row, ["ClaimStatus", "status"])),
+      }))
+      .filter((row) => row.claim)
+      .slice(0, 10);
+  }
+
+  function buildFollowUpFromImport(rows) {
+    const lanes = { "Needs Review": [], Denied: [], Draft: [] };
+    (rows || []).forEach((row) => {
+      const status = mapClaimStatus(pickField(row, ["ClaimStatus", "status"]));
+      if (!lanes[status]) return;
+      lanes[status].push({
+        label: `${String(pickField(row, ["PatientName", "patient"]) || "Unknown")} · ${String(pickField(row, ["ClaimId", "claimId", "id"]) || "")}`,
+        count: 1,
+      });
+    });
+    return Object.entries(lanes)
+      .filter(([, items]) => items.length > 0)
+      .map(([status, items]) => ({
+        status,
+        count: items.length,
+        tone: status === "Denied" ? "red" : status === "Needs Review" ? "warn" : "muted",
+        items: items.slice(0, 5),
+      }));
+  }
+
+  function mapAgingForAr(aging) {
+    return (aging || []).map((entry) => ({
+      label: entry.label || entry.bucket || "—",
+      bucket: entry.bucket || entry.label || "—",
+      amount: entry.amount,
+      pct: entry.pct,
+    }));
+  }
+
   function mergeClaimsState(state, bundle) {
     const rows = ((bundle.softdent && bundle.softdent.claims) || {}).rows || [];
     if (!rows.length) return state;
@@ -632,8 +921,75 @@ const ImportLoader = (function () {
     });
   }
 
+  function sumFieldRows(rows, fieldNames) {
+    return (rows || []).reduce((acc, row) => acc + (coerceFloat(pickField(row, fieldNames)) || 0), 0);
+  }
+
+  function buildPracticeDashboard(bundle) {
+    const sd = (bundle && bundle.softdent) || {};
+    const npRows = (sd.newPatients && sd.newPatients.rows) || [];
+    const tpRows = (sd.treatmentPlans && sd.treatmentPlans.rows) || [];
+    const caRows = (sd.caseAcceptance && sd.caseAcceptance.rows) || [];
+    const hasNp = npRows.length > 0;
+    const hasTp = tpRows.length > 0;
+    const hasCa = caRows.length > 0;
+    const emptyPractice = {
+      pageId: "practice",
+      dataSource: "empty",
+      configured: { newPatients: false, treatmentPlans: false, caseAcceptance: false },
+      newPatients: { count: null, period: null, status: "Not Configured" },
+      treatmentPlans: { presented: null, accepted: null, presentedValue: null, status: "Not Configured" },
+      caseAcceptance: { rate: null, presented: null, accepted: null, status: "Not Configured" },
+    };
+    if (!hasNp && !hasTp && !hasCa) {
+      return assignPatch(emptyDashboard("practice"), emptyPractice);
+    }
+    const npCount = hasNp
+      ? coerceFloat(pickField(npRows[0], ["Count", "count", "NewPatients", "newPatients", "Total"])) || sumFieldRows(npRows, ["Count", "count", "NewPatients"])
+      : null;
+    const npPeriod = hasNp ? String(pickField(npRows[0], ["Period", "period", "Month", "month"]) || "—") : null;
+    const presented = hasTp ? sumFieldRows(tpRows, ["Presented", "presented", "PlansPresented", "TxPresented"]) : null;
+    const accepted = hasTp ? sumFieldRows(tpRows, ["Accepted", "accepted", "PlansAccepted", "TxAccepted"]) : null;
+    const presentedValue = hasTp ? sumFieldRows(tpRows, ["Amount", "amount", "PresentedValue", "TotalAmount"]) : null;
+    let caRate = hasCa ? pickField(caRows[0], ["AcceptanceRate", "acceptanceRate", "Rate", "rate"]) : null;
+    let caPresented = hasCa ? coerceFloat(pickField(caRows[0], ["Presented", "presented", "PlansPresented"])) : null;
+    let caAccepted = hasCa ? coerceFloat(pickField(caRows[0], ["Accepted", "accepted", "PlansAccepted"])) : null;
+    if (!hasCa && presented > 0 && accepted != null) {
+      caPresented = presented;
+      caAccepted = accepted;
+      caRate = `${((accepted / presented) * 100).toFixed(1)}%`;
+    }
+    return assignPatch(emptyDashboard("practice"), {
+      pageId: "practice",
+      dataSource: "import",
+      importedAt: bundle.loadedAt,
+      configured: { newPatients: hasNp, treatmentPlans: hasTp, caseAcceptance: hasCa || Boolean(caRate) },
+      newPatients: hasNp
+        ? { count: npCount, period: npPeriod, status: "Connected" }
+        : { count: null, period: null, status: "Not Configured" },
+      treatmentPlans: hasTp
+        ? {
+            presented,
+            accepted,
+            presentedValue: formatMoney(presentedValue),
+            status: "Connected",
+          }
+        : { presented: null, accepted: null, presentedValue: null, status: "Not Configured" },
+      caseAcceptance:
+        hasCa || caRate
+          ? {
+              rate: caRate,
+              presented: caPresented,
+              accepted: caAccepted,
+              status: hasCa ? "Connected" : "Derived",
+            }
+          : { rate: null, presented: null, accepted: null, status: "Not Configured" },
+    });
+  }
+
   function buildDashboard(pageId, bundle) {
     const empty = emptyDashboard(pageId);
+    if (pageId === "practice") return buildPracticeDashboard(bundle || {});
     if (!bundle || !hasImportData(bundle)) return empty;
     const softdent = buildSoftdentDashboard(bundle);
     const quickbooks = buildQuickbooksDashboard(bundle);
@@ -644,9 +1000,12 @@ const ImportLoader = (function () {
     if (pageId === "financial") return buildFinancialDashboard(bundle, softdent, quickbooks) || empty;
     if (pageId === "ar") {
       if (softdent && softdent.hero && softdent.hero.value !== "—") {
-        const aging = softdent.aging || [];
-        const total = coerceFloat(softdent.hero.value);
-        const ninetyPlus = aging.find((a) => /^\s*(90\+|90\s*\+)/i.test(String(a.bucket || "")));
+        const aging = mapAgingForAr(softdent.aging || []);
+        const claimRows = ((bundle.softdent && bundle.softdent.claims) || {}).rows || [];
+        const topClaims = buildTopClaimsFromImport(claimRows);
+        const followUp = buildFollowUpFromImport(claimRows);
+        const collectionsMtd = softdent.collections;
+        const ninetyPlus = aging.find((a) => /^\s*(90\+|90\s*\+)/i.test(String(a.bucket || a.label || "")));
         const ninetyPlusPct = ninetyPlus && ninetyPlus.pct != null ? `${ninetyPlus.pct}%` : "—";
         return assignPatch(emptyDashboard("ar"), {
           pageId: "ar",
@@ -655,11 +1014,23 @@ const ImportLoader = (function () {
           total: softdent.hero.value,
           buckets: aging,
           aging,
+          topClaims,
+          followUp,
+          collectionsTrend: { labels: [], current: [], prior: [] },
+          collectionsTrendEmpty: "Awaiting collections trend export.",
+          topClaimsEmpty: topClaims.length
+            ? null
+            : "Awaiting SoftDent claims export for outstanding claim detail.",
+          followUpEmpty: followUp.length ? null : "Awaiting SoftDent claims export for follow-up lanes.",
           kpis: [
             { label: "Total Outstanding", value: softdent.hero.value, tone: "gold" },
             { label: "vs. Prior 30 Days", value: "Imported", tone: "muted" },
             { label: "90+ Days %", value: ninetyPlusPct, tone: "warn" },
-            { label: "Collections This 30 Days", value: formatMoney(((softdent.collections || 0) * 30) / 30), tone: "green" },
+            {
+              label: "Collections MTD",
+              value: formatMoney(collectionsMtd),
+              tone: collectionsMtd > 0 ? "green" : "muted",
+            },
           ],
         });
       }
@@ -670,28 +1041,66 @@ const ImportLoader = (function () {
 
   function formatImportStatus(bundle) {
     if (!bundle) return "No import bundle loaded.";
+    const diagApi = diagnosticsApi();
+    const diagnostics = bundle.diagnostics || (diagApi ? diagApi.evaluateBundle(bundle) : null);
     const lines = [`Import bundle loaded ${formatFreshness(bundle.loadedAt)}.`];
     const sync = bundle.syncStatus || {};
     if (sync.attempted) {
       lines.push(`Sync: ${sync.ok ? "OK" : "FAILED"}${sync.error ? ` (${sync.error})` : ""}`);
+    }
+    if (diagnostics && diagnostics.summary) {
+      const summary = diagnostics.summary;
+      lines.push(
+        `Dataset health: ${summary.connected} connected, ${summary.partial} partial, ${summary.stale} stale, ${summary.missing} missing, ${summary.notConfigured} not configured.`,
+      );
+      if (diagApi && typeof diagApi.formatDatasetLines === "function") {
+        lines.push("", "Dataset diagnostics:");
+        diagApi.formatDatasetLines(diagnostics).forEach((line) => lines.push(`  ${line.replace(/^- /, "")}`));
+      }
     }
     const sd = bundle.softdent || {};
     const qb = bundle.quickbooks || {};
     lines.push(
       `SoftDent dir: ${sd.dir || "—"}`,
       `  dashboard: ${sd.dashboard ? `${sd.dashboard.sourceFile} (${(sd.dashboard.rows || []).length} rows)` : "missing"}`,
-      `  claims: ${sd.claims ? `${sd.claims.sourceFile} (${(sd.claims.rows || []).length} rows)` : "missing"}`,
-      `  clinical notes: ${sd.clinicalNotes ? `${sd.clinicalNotes.sourceFile} (${(sd.clinicalNotes.rows || []).length} rows)` : "missing"}`,
+      `  claims: ${sd.claims ? `${sd.claims.sourceFile} (${(sd.claims.rows || []).length} rows)` : "missing — awaiting SoftDent claims export"}`,
+      `  clinical notes: ${sd.clinicalNotes ? `${sd.clinicalNotes.sourceFile} (${(sd.clinicalNotes.rows || []).length} rows)` : "missing — awaiting SoftDent clinical notes export"}`,
       `  ar: ${sd.ar ? `${sd.ar.sourceFile} (${(sd.ar.rows || []).length} rows)` : "missing"}`,
       `QuickBooks dir: ${qb.dir || "—"}`,
       `  revenue: ${qb.revenue ? `${qb.revenue.sourceFile} (${(qb.revenue.rows || []).length} rows)` : "missing"}`,
       `  expenses: ${qb.expenses ? `${qb.expenses.sourceFile} (${(qb.expenses.rows || []).length} rows)` : "missing"}`,
-      `  ar: ${qb.ar ? `${qb.ar.sourceFile} (${(qb.ar.rows || []).length} rows)` : "missing"}`,
+      `  expense categories: ${qb.expenseCategories ? `${qb.expenseCategories.sourceFile} (${(qb.expenseCategories.rows || []).length} rows)` : "missing"}`,
+      `  ar: ${qb.ar ? `${qb.ar.sourceFile} (${(qb.ar.rows || []).length} rows)` : "not configured — no automated QuickBooks A/R collector"}`,
       "",
       "HAL reads SoftDent and QuickBooks only. Nothing is posted or written back.",
     );
+    if (bundle.upstreamHealth && bundle.upstreamHealth.systems) {
+      lines.push("", "Upstream automation:");
+      Object.keys(bundle.upstreamHealth.systems).forEach((system) => {
+        const report = bundle.upstreamHealth.systems[system];
+        lines.push(`  ${system}: ${report.configuredRootCount || 0} export root(s) configured`);
+        (report.datasets || []).forEach((item) => {
+          if (item.stale) {
+            lines.push(`    - ${item.datasetKey}: upstream stale${item.collectorHint ? ` (${item.collectorHint})` : ""}`);
+          }
+        });
+      });
+    }
     if (sync.attempted && !sync.ok && sync.error) {
       lines.push("", `Last sync error: ${sync.error}`);
+    }
+    const syncResult = sync.result || {};
+    if (Array.isArray(syncResult.warnings) && syncResult.warnings.length) {
+      lines.push("", "Sync warnings:");
+      syncResult.warnings.forEach((warning) => lines.push(`  - ${warning}`));
+    }
+    const runtime = typeof globalThis !== "undefined" ? globalThis.RuntimeIssues : typeof RuntimeIssues !== "undefined" ? RuntimeIssues : null;
+    if (runtime) {
+      const importIssues = runtime.list().filter((item) => /import|sync|manifest/i.test(item.source));
+      if (importIssues.length) {
+        lines.push("", "Runtime import issues:");
+        importIssues.slice(0, 5).forEach((item) => lines.push(`  - ${item.source}: ${item.message}`));
+      }
     }
     return lines.join("\n");
   }
@@ -700,6 +1109,8 @@ const ImportLoader = (function () {
     shouldLoadImports,
     PRIMARY_PROVIDER,
     loadBundle,
+    readCsvRows,
+    parseCsvRfc,
     hasImportData,
     hasSoftdentImport,
     hasQuickbooksImport,
@@ -707,6 +1118,7 @@ const ImportLoader = (function () {
     emptyDashboard,
     mergeClaimsState,
     formatImportStatus,
+    attachBundleDiagnostics,
   };
 })();
 

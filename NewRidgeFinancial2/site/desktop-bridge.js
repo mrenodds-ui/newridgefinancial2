@@ -4,7 +4,17 @@
  */
 const DesktopBridge = (function () {
   function hasDesktopApi() {
+    if (typeof window === "undefined") return false;
     return Boolean(window.pywebview && window.pywebview.api);
+  }
+
+  function runtimeMode() {
+    return hasDesktopApi() ? "desktop" : "browser-dev";
+  }
+
+  function desktopRequiredMessage(feature) {
+    const label = feature || "This feature";
+    return `${label} requires the NR2 desktop app. Browser/file mode is a UI preview only: imports, SQLite storage, SideNotes hub files, and import sync are unavailable. Launch with scripts/start_nr2_1966.ps1.`;
   }
 
   function whenReady(callback) {
@@ -72,6 +82,13 @@ const DesktopBridge = (function () {
     return null;
   }
 
+  async function getImportSyncStatus() {
+    if (hasDesktopApi() && window.pywebview.api.get_import_sync_status) {
+      return window.pywebview.api.get_import_sync_status();
+    }
+    return { status: "idle" };
+  }
+
   async function refreshImports() {
     if (hasDesktopApi() && window.pywebview.api.refresh_imports) {
       return window.pywebview.api.refresh_imports();
@@ -79,7 +96,19 @@ const DesktopBridge = (function () {
     return getImportBundle();
   }
 
-  return { hasDesktopApi, whenReady, readDataFile, storageGet, storageSet, getAppInfo, getImportBundle, refreshImports };
+  return {
+    hasDesktopApi,
+    runtimeMode,
+    desktopRequiredMessage,
+    whenReady,
+    readDataFile,
+    storageGet,
+    storageSet,
+    getAppInfo,
+    getImportBundle,
+    getImportSyncStatus,
+    refreshImports,
+  };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

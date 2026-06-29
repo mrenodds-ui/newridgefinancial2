@@ -17,7 +17,7 @@ const HalAgent = (function () {
   };
 
   const SAFETY_POLICY = {
-    summary: "HAL is read-only. Draft only. Human review required. No external delivery.",
+    summary: "HAL is the internal office manager. Local coordination only. External firewall locked. Human review required for outbound actions.",
     blocked: [
       "submit", "email", "fax", "upload", "transmit", "pay", "post", "delete",
       "remove", "dispatch", "mail", "wire", "writeback", "payer contact",
@@ -26,12 +26,16 @@ const HalAgent = (function () {
       "open local pages", "read program snapshot", "explain status",
       "prepare review notes", "draft journal entries locally", "create local tasks",
       "monitor sidenotes", "run readiness checks", "search local library",
+      "refresh local imports", "place verified data into local dashboards/widgets",
+      "prioritize office work", "publish daily office briefings",
     ],
     rules: [
+      "HAL is the internal office manager; external writeback and outbound actions remain blocked.",
       "Never fabricate missing import data; say what is missing.",
       "Never claim an external action was performed.",
       "If data is stale or unavailable, say so before recommending.",
       "Cite which local source or tool informed the answer when possible.",
+      "When planning or prioritizing, prefer the proactive office manager assessment over generic advice.",
     ],
   };
 
@@ -54,6 +58,21 @@ const HalAgent = (function () {
         return { ok: true, summary: HalSkills.formatWidgetFeed(feed).slice(0, 3000), feed };
       },
     },
+    read_widget_contract: {
+      label: "Read enforced widget contract",
+      run: async () => {
+        const contract =
+          typeof WidgetContract !== "undefined"
+            ? WidgetContract
+            : typeof window !== "undefined" && window.WidgetContract
+              ? window.WidgetContract
+              : null;
+        if (!contract || typeof contract.formatAllContractsForHal !== "function") {
+          return { ok: false, summary: "Widget contract unavailable." };
+        }
+        return { ok: true, summary: contract.formatAllContractsForHal().slice(0, 4000) };
+      },
+    },
     read_source_health: {
       label: "Read source intake health",
       run: async (ctx) => {
@@ -61,7 +80,11 @@ const HalAgent = (function () {
         const feed =
           (snap && snap.widgets) || (window.HalSkills && HalSkills.buildWidgetFeed(snap)) || ctx.halWidgetFeed || {};
         const staticItems = (ctx.halData.sources && ctx.halData.sources.items) || [];
-        const summary = HalSkills.formatSourceHealthText(feed.sourceHealth, staticItems);
+        let summary = HalSkills.formatSourceHealthText(feed.sourceHealth, staticItems);
+        const issues = snap && snap.runtimeIssues;
+        if (issues && issues.length) {
+          summary += "\n\nRuntime issues:\n" + issues.map((item) => `- ${item.source}: ${item.message}`).join("\n");
+        }
         return { ok: true, summary };
       },
     },
@@ -79,11 +102,15 @@ const HalAgent = (function () {
       label: "Read local office tasks",
       run: async (ctx) => {
         if (!window.HalSkills) return { ok: false, summary: "Task tools unavailable." };
-        const metrics = HalSkills.computeTaskMetrics(ctx.halOfficeTasks || []);
+        const tasks =
+          typeof ctx.getOfficeTasks === "function"
+            ? await ctx.getOfficeTasks()
+            : (await ctx.loadProgramSnapshot())?.officeTasks || ctx.halOfficeTasks || [];
+        const metrics = HalSkills.computeTaskMetrics(tasks);
         const lines = [
           `Open ${metrics.openCount} · In progress ${metrics.inProgressCount} · Blocked ${metrics.blockedCount}`,
         ];
-        (ctx.halOfficeTasks || []).slice(0, 8).forEach((t) => lines.push(`- [${t.status}] ${t.title}`));
+        tasks.slice(0, 8).forEach((t) => lines.push(`- [${t.status}] ${t.title}`));
         return { ok: true, summary: lines.join("\n") };
       },
     },
@@ -120,6 +147,43 @@ const HalAgent = (function () {
       run: async (ctx) => {
         const report = ctx.runReadinessDiagnostics();
         return { ok: true, summary: HalCore.formatReadinessSummary(report).slice(0, 3000) };
+      },
+    },
+    read_proactive_briefing: {
+      label: "Read proactive program assessment",
+      run: async (ctx) => {
+        if (!window.HalProactive) return { ok: false, summary: "Proactive manager unavailable." };
+        const briefing =
+          (ctx.runProactiveCycle && (await ctx.runProactiveCycle())) ||
+          HalProactive.getLastBriefing() ||
+          (await HalProactive.runCycle(ctx));
+        if (!briefing) return { ok: false, summary: "Proactive briefing unavailable." };
+        return { ok: true, summary: HalProactive.formatProactiveBriefing(briefing).slice(0, 4000), briefing };
+      },
+    },
+    read_office_briefing: {
+      label: "Read daily office manager briefing",
+      run: async (ctx) => {
+        const officeApi =
+          typeof HalOfficeManager !== "undefined"
+            ? HalOfficeManager
+            : typeof window !== "undefined" && window.HalOfficeManager
+              ? window.HalOfficeManager
+              : null;
+        if (!officeApi) return { ok: false, summary: "Office manager briefing unavailable." };
+        let briefing =
+          (ctx.runProactiveCycle && (await ctx.runProactiveCycle())) ||
+          (window.HalProactive && HalProactive.getLastBriefing()) ||
+          null;
+        const snap = (await ctx.loadProgramSnapshot()) || {};
+        const state =
+          (briefing && briefing.officeManager) ||
+          officeApi.buildOfficeManagerState(snap, ctx, briefing || { officePriorities: officeApi.buildOfficePriorities(snap, ctx) });
+        return {
+          ok: true,
+          summary: officeApi.formatDailyOfficeBriefing(state, snap).slice(0, 4000),
+          officeManager: state,
+        };
       },
     },
   };
@@ -181,6 +245,7 @@ const HalAgent = (function () {
     if (route.useModel) return "open_chat";
     if (route.useReasoning) return "planning";
     if (route.useEscalation) return "escalation";
+    if (route.useOss) return "oss_review";
     if (/widget|import|briefing|reconciliation/i.test(query)) return "widget_analysis";
     if (/task|office|attention/i.test(query)) return "office_ops";
     if (/claim|denied|packet/i.test(query)) return "claims";
@@ -206,11 +271,14 @@ const HalAgent = (function () {
       };
     }
 
-    if (route.useProgramSnapshot || route.useModel || route.useReasoning || route.useEscalation) {
+    if (route.useProgramSnapshot || route.useModel || route.useReasoning || route.useEscalation || route.useOss) {
       tools.push("read_program_snapshot");
     }
     if (route.useWidgetFeed || route.useWidgetGuidance || route.useWidgetShow || route.useWidgetFillSuggestions) {
       tools.push("read_widget_feed");
+    }
+    if (route.useWidgetContract || /\b(widget contract|what does .*widget need|which dataset|which field|data source for .*widget)\b/i.test(query)) {
+      tools.push("read_widget_contract");
     }
     if (route.useClaimReadiness || (/\b(claim|denied|packet)\b/i.test(query) && !route.text)) {
       tools.push("read_claims_summary");
@@ -240,6 +308,19 @@ const HalAgent = (function () {
     if (route.useReadinessRun || route.useReadinessGate || /\breadiness\b/i.test(query)) {
       tools.push("run_readiness_check");
     }
+    if (
+      route.useProactiveBriefing ||
+      route.useReasoning ||
+      /\b(proactive|what should hal|what's best|best for the program|think about the program|program health)\b/i.test(query)
+    ) {
+      tools.push("read_proactive_briefing");
+    }
+    if (
+      route.useOfficeBriefing ||
+      /\b(daily office briefing|office manager briefing|office briefing|what should staff do today)\b/i.test(query)
+    ) {
+      tools.push("read_office_briefing");
+    }
     if (intent === "firewall" || /\bfirewall\b/i.test(query)) tools.push("explain_firewall");
 
     const uniqueTools = [...new Set(tools)].slice(0, AGENT_BUDGET.maxTools);
@@ -249,7 +330,7 @@ const HalAgent = (function () {
       needsData: uniqueTools.length > 0,
       tools: uniqueTools,
       isUnsafe: false,
-      useModelEnhancement: !!(route.useModel || route.useReasoning || route.useEscalation),
+      useModelEnhancement: !!(route.useModel || route.useReasoning || route.useEscalation || route.useOss),
       needsClarification: !route.text && !hasUseFlag(route),
       lane: route.lane,
       intent,
@@ -449,6 +530,12 @@ const HalAgent = (function () {
       const text = await ctx.runModel(em, combinedPrompt, query, "Local escalation draft");
       return { text, lane: "escalate30b" };
     }
+    if (route.useOss) {
+      if (!ctx.ossModelReady()) return { text: ctx.offlineModelMessage("oss120b"), lane: "oss120b · offline" };
+      const om = ctx.ossModelConfig();
+      const text = await ctx.runModel(om, combinedPrompt, query, "Local OSS draft", onToken);
+      return { text, lane: "oss120b" };
+    }
     if (route.useReasoning) {
       if (!ctx.reasoningModelReady()) return { text: ctx.offlineModelMessage("reason21b"), lane: "reason21b · offline" };
       const rm = ctx.reasoningModelConfig();
@@ -481,7 +568,7 @@ const HalAgent = (function () {
 
     const route = HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, trimmed);
     const plan = buildPlan(trimmed, route, workingMemory, longTermMemory);
-    const isModelLane = !!(route.useModel || route.useReasoning || route.useEscalation);
+    const isModelLane = !!(route.useModel || route.useReasoning || route.useEscalation || route.useOss);
 
     // Instant local-command path: deterministic routes that need no tools and no
     // model run straight through the executor so they answer with zero extra
@@ -525,7 +612,10 @@ const HalAgent = (function () {
             intent: route.intent,
           };
         }
-      } catch {
+      } catch (error) {
+        if (typeof RuntimeIssues !== "undefined") {
+          RuntimeIssues.record("hal-agent.model", error, { lane: route.lane, intent: route.intent });
+        }
         outcome = null;
       }
     }

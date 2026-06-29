@@ -22,6 +22,7 @@ const Services = (function () {
   }
 
   function bridge() {
+    if (typeof globalThis !== "undefined" && globalThis.DesktopBridge) return globalThis.DesktopBridge;
     if (typeof DesktopBridge !== "undefined") return DesktopBridge;
     if (typeof window !== "undefined" && window.DesktopBridge) return window.DesktopBridge;
     return null;
@@ -29,6 +30,7 @@ const Services = (function () {
 
   function delay(ms) {
     if (isNode) return Promise.resolve();
+    if (typeof window !== "undefined" && !window.__NR2_SIMULATE_LATENCY__) return Promise.resolve();
     return new Promise((resolve) => setTimeout(resolve, ms || 220));
   }
 
@@ -45,6 +47,13 @@ const Services = (function () {
   let importBundleCache = null;
   let importBundleAt = 0;
   const IMPORT_CACHE_TTL_MS = 30000;
+  const SNAPSHOT_INVALIDATING_KEYS = new Set(["claims", "narratives", "documents", "library"]);
+
+  function invalidateSnapshotForKey(key) {
+    if (SNAPSHOT_INVALIDATING_KEYS.has(key) && typeof SnapshotStore !== "undefined") {
+      SnapshotStore.invalidate(`local:${key}`);
+    }
+  }
 
   function resolveImportLoader() {
     if (typeof ImportLoader !== "undefined") return ImportLoader;
@@ -71,9 +80,79 @@ const Services = (function () {
       importBundleCache = await loader.loadBundle(Boolean(force));
       importBundleAt = now;
       return importBundleCache;
-    } catch {
+    } catch (err) {
+      if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.loadImportBundle", err);
       return null;
     }
+  }
+
+  async function waitForImportSync(br, maxMs) {
+    if (!br || typeof br.getImportSyncStatus !== "function") return null;
+    const deadline = Date.now() + (maxMs || 120000);
+    let status = await br.getImportSyncStatus();
+    while (status && status.status === "running" && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      status = await br.getImportSyncStatus();
+    }
+    return status;
+  }
+
+  async function refreshImports(options) {
+    const opts = options || {};
+    const reason = opts.reason || "manual";
+    const skipWait = reason === "boot" || reason === "background" || opts.waitForCompletion === false;
+    const br = bridge();
+    importBundleCache = null;
+    importBundleAt = 0;
+    try {
+      if (br && typeof br.refreshImports === "function") {
+        const kickoff = await br.refreshImports();
+        if (kickoff && kickoff.status === "running") {
+          if (!skipWait) {
+            const finalStatus = await waitForImportSync(br, opts.maxWaitMs || 120000);
+            if (finalStatus && finalStatus.status === "failed") {
+              const err = new Error(finalStatus.error || "Import sync failed");
+              if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.refreshImports", err, finalStatus);
+            }
+          } else {
+            const bundle = await loadImportBundle(false);
+            if (bundle) {
+              return Object.assign({}, bundle, {
+                syncStatus: Object.assign({}, bundle.syncStatus || {}, { status: "running", attempted: true }),
+              });
+            }
+            return {
+              loadedAt: new Date().toISOString(),
+              softdent: {},
+              quickbooks: {},
+              syncStatus: { status: "running", attempted: true },
+            };
+          }
+        } else if (kickoff && kickoff.status === "failed") {
+          const err = new Error(kickoff.error || "Import sync failed");
+          if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.refreshImports", err, kickoff);
+        }
+      }
+      return await loadImportBundle(true);
+    } catch (err) {
+      if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.refreshImports", err, opts);
+      throw err;
+    }
+  }
+
+  function buildDashboardsFromBundle(bundle) {
+    const loader = resolveImportLoader();
+    const empty = resolveEmptyStates();
+    const pageIds = ["financial", "softdent", "quickbooks", "ar", "practice"];
+    const dashboards = {};
+    pageIds.forEach((pageId) => {
+      if (loader && bundle && typeof loader.buildDashboard === "function") {
+        dashboards[pageId] = clone(loader.buildDashboard(pageId, bundle) || empty.dashboard(pageId));
+      } else {
+        dashboards[pageId] = clone(empty.dashboard(pageId));
+      }
+    });
+    return dashboards;
   }
 
   async function load(key, emptyFn) {
@@ -104,6 +183,7 @@ const Services = (function () {
 
   async function save(key, value) {
     mem[key] = value;
+    invalidateSnapshotForKey(key);
     const br = bridge();
     if (br) {
       try {
@@ -119,6 +199,12 @@ const Services = (function () {
 
   async function readDashboard(pageId) {
     await delay(180);
+    if (typeof SnapshotStore !== "undefined") {
+      const cached = SnapshotStore.peek();
+      if (cached && cached.dashboards && cached.dashboards[pageId]) {
+        return clone(cached.dashboards[pageId]);
+      }
+    }
     const loader = resolveImportLoader();
     const bundle = await loadImportBundle(false);
     if (loader && typeof loader.buildDashboard === "function") {
@@ -134,33 +220,55 @@ const Services = (function () {
     return clone(data);
   }
 
-  async function readProgramSnapshot() {
+  async function readOfficeTasks() {
+    if (typeof OfficeTaskStore !== "undefined") {
+      return OfficeTaskStore.list();
+    }
+    const desktop = bridge();
+    if (desktop && typeof desktop.storageGet === "function") {
+      try {
+        return (await desktop.storageGet("halOfficeTasks")) || [];
+      } catch (err) {
+        if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.readOfficeTasks", err);
+        return [];
+      }
+    }
+    return [];
+  }
+
+  async function buildProgramSnapshotCore() {
     await delay(120);
     const safe = async (fn) => {
       try {
         return await fn();
-      } catch {
+      } catch (err) {
+        if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.readProgramSnapshot", err);
         return null;
       }
     };
-    const [financial, softdent, quickbooks, ar, claimsState, narrativesState, documentsState, libraryState] = await Promise.all([
-      safe(() => readDashboard("financial")),
-      safe(() => readDashboard("softdent")),
-      safe(() => readDashboard("quickbooks")),
-      safe(() => readDashboard("ar")),
+    const loader = resolveImportLoader();
+    const bundle = await loadImportBundle(false);
+    const dashboards = buildDashboardsFromBundle(bundle);
+    const [claimsState, narrativesState, documentsState, libraryState, officeTasks] = await Promise.all([
       safe(() => claims.list()),
       safe(() => narratives.getState()),
       safe(() => documents.list({})),
       safe(() => library.search("")),
+      safe(() => readOfficeTasks()),
     ]);
     const claimsByStatus = {};
     (claimsState?.claims || []).forEach((claim) => {
       const key = claim.status || "Unknown";
       claimsByStatus[key] = (claimsByStatus[key] || 0) + 1;
     });
-    const loader = resolveImportLoader();
-    const bundle = await loadImportBundle(false);
     const usingImports = Boolean(loader && bundle && loader.hasImportData(bundle));
+    const desktop = bridge();
+    const officeTasksSourceAvailable =
+      typeof OfficeTaskStore !== "undefined"
+        ? OfficeTaskStore.isConfigured()
+        : Boolean(desktop && typeof desktop.storageGet === "function");
+    const runtimeIssues =
+      typeof RuntimeIssues !== "undefined" ? RuntimeIssues.list().slice(0, 8) : [];
     return {
       gatheredAt: new Date().toISOString(),
       label: usingImports
@@ -170,13 +278,20 @@ const Services = (function () {
         ? {
             loadedAt: bundle.loadedAt,
             syncStatus: bundle.syncStatus || null,
+            diagnostics: bundle.diagnostics || null,
             softdent: bundle.softdent,
             quickbooks: bundle.quickbooks,
             softdentDir: bundle.softdent?.dir,
             quickbooksDir: bundle.quickbooks?.dir,
           }
         : null,
-      dashboards: { financial, softdent, quickbooks, ar },
+      dashboards: {
+        financial: dashboards.financial,
+        softdent: dashboards.softdent,
+        quickbooks: dashboards.quickbooks,
+        ar: dashboards.ar,
+        practice: dashboards.practice,
+      },
       claims: claimsState
         ? {
             total: claimsState.claims.length,
@@ -212,8 +327,17 @@ const Services = (function () {
             docs: libraryState.docs || [],
           }
         : null,
-      officeTasks: [],
+      officeTasks: officeTasks || [],
+      officeTasksState: officeTasksSourceAvailable ? (officeTasks && officeTasks.length ? "loaded" : "empty") : "not_configured",
+      runtimeIssues,
     };
+  }
+
+  async function readProgramSnapshot() {
+    if (typeof SnapshotStore !== "undefined") {
+      return SnapshotStore.get(() => buildProgramSnapshotCore());
+    }
+    return buildProgramSnapshotCore();
   }
 
   /* ============ Claims ============ */
@@ -504,6 +628,24 @@ const Services = (function () {
       });
       return items;
     },
+    async consoleState(halData) {
+      await delay();
+      const runtime = (halData && halData.runtime) || {};
+      if (runtime.officeManager) return runtime.officeManager;
+      const officeApi =
+        typeof HalOfficeManager !== "undefined"
+          ? HalOfficeManager
+          : typeof globalThis !== "undefined" && globalThis.HalOfficeManager
+            ? globalThis.HalOfficeManager
+            : null;
+      if (!officeApi) return null;
+      try {
+        const snap = await readProgramSnapshot();
+        return officeApi.buildOfficeManagerState(snap, {}, null);
+      } catch {
+        return null;
+      }
+    },
   };
 
   async function resetAll() {
@@ -523,8 +665,13 @@ const Services = (function () {
   return {
     readDashboard,
     readProgramSnapshot,
+    buildProgramSnapshotCore,
+    buildDashboardsFromBundle,
     loadImportBundle,
-    refreshImports: () => loadImportBundle(true),
+    refreshImports,
+    invalidateSnapshot: () => {
+      if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate("services");
+    },
     claims,
     narratives,
     documents,
@@ -540,4 +687,7 @@ if (typeof module !== "undefined" && module.exports) {
 }
 if (typeof window !== "undefined") {
   window.Services = Services;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.Services = Services;
 }

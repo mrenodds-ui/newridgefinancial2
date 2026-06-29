@@ -73,7 +73,6 @@
     "availableModels": [
       "qwen3:14b",
       "qwen3:4b",
-      "qwen3:14b",
       "qwen3-coder:30b",
       "qwen2.5-coder:32b",
       "qwen3:235b",

@@ -51,6 +51,7 @@ function buildRoutingRegressionCases() {
   addMany(["Clear evidence packet", "clear local packet"], "packet: clear");
   addMany(["Make a plan for today", "Prioritize my work", "Where should I start?"], "reasoning");
   addMany(["Second opinion on a complex case", "Escalate this denial", "Do a deep review"], "escalation");
+  addMany(["Run this through 120b", "Use gpt-oss 120b for this", "HAL run through 120b"], "oss");
 
   const pageNames = {
     financial: ["financial dashboard", "financial"],
@@ -365,6 +366,7 @@ async function main() {
   assert(laneCounts.chat14b > 0, "routing regression must include model fallback cases");
   assert(laneCounts.reason21b > 0, "routing regression must include reasoning lane cases");
   assert(laneCounts.escalate30b > 0, "routing regression must include escalation lane cases");
+  assert(laneCounts.oss120b > 0, "routing regression must include oss120b lane cases");
   passed++;
 
   // app.js syntax
@@ -486,6 +488,9 @@ async function main() {
   assert(HalCore.laneReady(halModels, "chat14b"), "chat lane must be execution-ready on loopback");
   assert(HalCore.laneReady(halModels, "reason21b"), "reasoning lane must be execution-ready on loopback");
   assert(HalCore.laneReady(halModels, "escalate30b"), "escalation lane must be execution-ready on loopback");
+  assert(HalCore.laneReady(halModels, "oss120b"), "oss120b lane must be execution-ready on loopback");
+  const ossRoute = HalCore.routeHalCommand(halData, halModels, pages, "run this through 120b");
+  assert(ossRoute.lane === "oss120b" && ossRoute.useOss === true, "120b queries must route to oss120b lane");
   passed++;
 
   // Full program read access
@@ -504,6 +509,7 @@ async function main() {
 
   // Ported HAL skills (accounting, claim readiness, office-manager, tasks, sanitization, memory)
   const HalSkills = require(join(siteDir, "hal-skills.js"));
+  const WidgetContract = require(join(siteDir, "widget-contract.js"));
 
   // Accounting: drafting allowed through firewall; posting still blocked.
   const draftRoute = HalCore.routeHalCommand(halData, halModels, pages, "Draft a journal entry for $1,200 prepaid insurance");
@@ -621,11 +627,32 @@ async function main() {
   const widgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show manager dashboard widgets");
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
-  assert(Object.keys(feed.widgets).length === 24, "widget feed must build 24 widgets");
+  assert(Object.keys(feed.widgets).length === 27, "widget feed must build 27 widgets");
   assert(feed.widgets.ebitdaNormalization && feed.widgets.arAgingAndCollections && feed.widgets.narrativeWorkflow && feed.widgets.documentLibrary, "widget feed must include all extended page widgets");
   assert(feed.widgets.claimReadinessAndSafety, "widget feed must include claim readiness widget");
+  assert(feed.widgets.newPatients && feed.widgets.treatmentPlanSummary && feed.widgets.caseAcceptance, "widget feed must include practice-performance widgets");
+  assert(feed.accountingExcelValidation && feed.accountingExcelValidation.status, "widget feed must run accounting/excel commit validation before publish");
   assert(feed.localOnly === true && feed.runId && feed.generatedAt, "widget feed must use program-style runId/generatedAt/localOnly fields");
-  assert(feed.jobs.widgetPublish && feed.sources.quickbooks.lastStatus, "widget feed jobs/sources must use camelCase fields");
+  assert(feed.jobs.widgetPublish && feed.jobs.widgetPublish.validation && feed.sources.quickbooks.lastStatus, "widget feed jobs/sources must use camelCase fields");
+
+  const crossSourceFeed = HalSkills.buildWidgetFeed({
+    dashboards: {
+      financial: { dataSource: "import", productionMtd: { value: 123456 } },
+      softdent: { dataSource: "import", production: 123456, collections: 100000 },
+      quickbooks: { dataSource: "empty" },
+      practice: { dataSource: "empty" },
+    },
+  });
+  const crossOverview = crossSourceFeed.widgets.practiceFinancialOverview;
+  assert(crossOverview.metrics.monthlyRevenue !== 123456, "monthlyRevenue must not borrow SoftDent production when QuickBooks revenue is absent");
+  assert(
+    crossOverview.metrics.monthlyRevenue === WidgetContract.MISSING || crossOverview.metrics.monthlyRevenue === null,
+    "monthlyRevenue must be explicitly missing when QuickBooks revenue is absent",
+  );
+
+  const contractRoute = HalCore.routeHalCommand(halData, halModels, pages, "what does the financial widget need?");
+  assert(contractRoute.intent === "widgets: contract" && contractRoute.useWidgetContract === true, "widget contract questions must route locally");
+  assert(WidgetContract.formatContractForHal("practiceFinancialOverview").includes("quickbooks.revenue"), "HAL widget contract must describe required datasets");
 
   // A/R honesty: with no verified A/R source, totals are nulled and status degrades
   const noArFeed = HalSkills.buildWidgetFeed({ dashboards: { softdent: {}, quickbooks: { syncStatus: "ok" } }, claims: { total: 5 } });
@@ -760,6 +787,348 @@ async function main() {
   };
   const execHelp = await HalRouteExec.execute(helpRoute, "what can you do?", {}, mockCtx);
   assert(execHelp && execHelp.text.includes("agent loop"), "route exec must return help text");
+  passed++;
+
+  // Structural stabilization guarantees
+  require(join(siteDir, "runtime-issues.js"));
+  require(join(siteDir, "snapshot-store.js"));
+  require(join(siteDir, "import-coordinator.js"));
+  require(join(siteDir, "office-task-store.js"));
+  const DesktopBridge = require(join(siteDir, "desktop-bridge.js"));
+  const Services = require(join(siteDir, "services.js"));
+  const ImportCoordinatorMod = require(join(siteDir, "import-coordinator.js"));
+  const SnapshotStoreMod = require(join(siteDir, "snapshot-store.js"));
+  const RuntimeIssuesMod = require(join(siteDir, "runtime-issues.js"));
+  global.Services = Services;
+  global.RuntimeIssues = RuntimeIssuesMod;
+  global.SnapshotStore = SnapshotStoreMod;
+  global.ImportCoordinator = ImportCoordinatorMod;
+  global.DesktopBridge = DesktopBridge;
+
+  RuntimeIssuesMod.clear();
+  RuntimeIssuesMod.record("services.refreshImports", new Error("sync timeout"), { status: "failed" });
+  const statusWithIssue = ImportLoader.formatImportStatus({
+    loadedAt: new Date().toISOString(),
+    syncStatus: { attempted: true, ok: false, error: "copy failed" },
+    softdent: {},
+    quickbooks: {},
+  });
+  assert(statusWithIssue.includes("sync timeout") || statusWithIssue.includes("copy failed"), "import status must surface sync/runtime errors");
+
+  const quotedRows = ImportLoader.readCsvRows('name,note\n"Smith, Jane",paid');
+  assert(quotedRows.length === 1 && quotedRows[0].name === "Smith, Jane", "CSV parser must handle quoted commas");
+
+  const arOnlyBundle = { softdent: { ar: { rows: [{ bucket: "0-30", amount: "100" }] } }, quickbooks: {} };
+  assert(ImportLoader.hasSoftdentImport(arOnlyBundle) === true, "AR-only SoftDent imports must count as import data");
+
+  let refreshCalls = 0;
+  const originalRefresh = Services.refreshImports;
+  Services.refreshImports = async () => {
+    refreshCalls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    return { loadedAt: new Date().toISOString(), softdent: {}, quickbooks: {} };
+  };
+  const p1 = ImportCoordinatorMod.refresh({ reason: "validator" });
+  const p2 = ImportCoordinatorMod.refresh({ reason: "validator-dup" });
+  assert(p1 === p2, "ImportCoordinator must single-flight concurrent refresh requests");
+  await p1;
+  assert(refreshCalls === 1, "single-flight refresh must call Services.refreshImports once");
+  Services.refreshImports = originalRefresh;
+
+  SnapshotStoreMod.invalidate("validator");
+  const snap1 = await SnapshotStoreMod.get(() => Services.buildProgramSnapshotCore());
+  const snap2 = await SnapshotStoreMod.get(() => {
+    throw new Error("should not rebuild within TTL");
+  });
+  assert(snap1 === snap2, "SnapshotStore must reuse cached snapshot within TTL");
+  assert(snap1.dashboards && snap1.dashboards.financial && snap1.dashboards.ar, "program snapshot must include all dashboards from one bundle build");
+
+  const runningRefreshCtx = Object.assign({}, mockCtx, {
+    Services: {
+      refreshImports: async () => {
+        throw new Error("should not be called when coordinator handles refresh");
+      },
+      loadImportBundle: async () => ({
+        loadedAt: new Date().toISOString(),
+        syncStatus: { status: "running" },
+        softdent: {},
+        quickbooks: {},
+      }),
+      invalidateSnapshot: () => SnapshotStoreMod.invalidate("hal-route"),
+    },
+    ImportLoader,
+    loadProgramSnapshot: async () => ({ widgets: {}, claims: { top: [] }, library: { top: [] } }),
+    clearProgramContextCache: () => null,
+  });
+  Services.refreshImports = async () => ({
+    loadedAt: new Date().toISOString(),
+    syncStatus: { status: "success", ok: true },
+    softdent: {},
+    quickbooks: {},
+  });
+  const desktopBridgeForRoute = global.DesktopBridge;
+  global.DesktopBridge = Object.assign({}, DesktopBridge, { hasDesktopApi: () => true });
+  const refreshExec = await HalRouteExec.execute(importRefreshRoute, "refresh imports", {}, runningRefreshCtx);
+  assert(refreshExec && refreshExec.text.includes("Import bundle"), "import refresh route must not throw when sync is running");
+  global.DesktopBridge = desktopBridgeForRoute;
+
+  // Follow-up audit fixes (H1–L4)
+  Services.refreshImports = originalRefresh;
+  SnapshotStoreMod.invalidate("audit-fixes");
+  await SnapshotStoreMod.get(() => Services.buildProgramSnapshotCore());
+  assert(SnapshotStoreMod.status().hasSnapshot, "snapshot must cache after build");
+  await Services.narratives.saveDraft({ keyPoints: ["audit"], text: "validator draft", focus: "Medical Necessity" });
+  assert(!SnapshotStoreMod.status().hasSnapshot, "local narratives save must invalidate SnapshotStore");
+
+  const appSrc = readFileSync(join(siteDir, "app.js"), "utf8");
+  assert(!appSrc.includes("PROGRAM_SNAPSHOT_TTL_MS"), "HAL must not use app-level snapshot TTL cache");
+  assert(appSrc.includes("return loadProgramSnapshot()"), "loadCachedProgramSnapshot must delegate to Services snapshot path");
+  assert(appSrc.includes("runtimeIssuesDrawerHtml"), "sources drawer must surface runtime issues");
+
+  await SnapshotStoreMod.get(() => Services.buildProgramSnapshotCore());
+  const snapCached = SnapshotStoreMod.peek();
+  const dashFromSnap = await Services.readDashboard("financial");
+  assert(
+    snapCached && snapCached.dashboards && dashFromSnap && dashFromSnap.productionMtd,
+    "readDashboard must read from cached snapshot dashboards",
+  );
+
+  const priorBridge = global.DesktopBridge;
+  global.DesktopBridge = {
+    refreshImports: async () => ({ status: "running" }),
+    getImportBundle: async () => ({
+      loadedAt: new Date().toISOString(),
+      softdent: {},
+      quickbooks: {},
+      syncStatus: { ok: true },
+    }),
+  };
+  const bootStart = Date.now();
+  const bootBundle = await Services.refreshImports({ reason: "boot" });
+  assert(Date.now() - bootStart < 3000, "boot import refresh must not block on running sync");
+  assert(bootBundle.syncStatus && bootBundle.syncStatus.status === "running", "boot refresh must report running sync honestly");
+  global.DesktopBridge = priorBridge;
+
+  delete process.env.NR2_LOAD_IMPORTS;
+  const browserOnlyBundle = await ImportLoader.loadBundle();
+  assert(browserOnlyBundle === null, "browser-only import load without bridge must return null");
+  process.env.NR2_LOAD_IMPORTS = "1";
+
+  const browserStorageReadiness = HalCore.runReadinessChecks(halData, halModels, pages, { storageMode: "sessionStorage" });
+  const browserStorage = browserStorageReadiness.results.find((item) => item.id === "storage");
+  assert(browserStorage && browserStorage.status === "Warning" && browserStorage.label.includes("Browser preview"), "browser mode readiness must report degraded preview storage");
+  const desktopStorageReadiness = HalCore.runReadinessChecks(halData, halModels, pages, { storageMode: "sqlite", desktopBridgeOk: true });
+  const desktopStorage = desktopStorageReadiness.results.find((item) => item.id === "storage");
+  assert(desktopStorage && desktopStorage.status === "Pass" && desktopStorage.label.includes("Desktop SQLite"), "desktop mode readiness must report SQLite storage");
+
+  const priorDesktopBridge = global.DesktopBridge;
+  global.window = global.window || {};
+  global.DesktopBridge = Object.assign({}, DesktopBridge, {
+    hasDesktopApi: () => false,
+    desktopRequiredMessage: (feature) => `${feature} requires the NR2 desktop app.`,
+  });
+  const browserImportExec = await HalRouteExec.execute(importRefreshRoute, "refresh imports", {}, Object.assign({}, mockCtx, { Services, ImportLoader }));
+  assert(browserImportExec.text.includes("requires the NR2 desktop app"), "HAL import route must clearly block browser-only refresh");
+  global.DesktopBridge = priorDesktopBridge;
+
+  // Financial automation contract and diagnostics
+  const ImportDiagnostics = require(join(siteDir, "import-diagnostics.js"));
+  const manifest = JSON.parse(readFileSync(join(__dirname, "import-manifest.json"), "utf8"));
+  assert(manifest.datasets["softdent.dashboard"].requiredFields.includes("production"), "manifest must declare dashboard required fields");
+  assert(manifest.datasets["quickbooks.ar"].automated === false, "QuickBooks A/R must be marked not automated until collector exists");
+
+  const freshBundle = {
+    loadedAt: new Date().toISOString(),
+    softdent: {
+      dashboard: {
+        sourceFile: "softdent_dashboard_data.json",
+        modifiedAt: new Date().toISOString(),
+        rows: [{ production: 1000, collections: 800, period: "2026-06" }],
+      },
+      claims: null,
+      clinicalNotes: null,
+      ar: {
+        sourceFile: "softdent_ar_aging.csv",
+        modifiedAt: new Date().toISOString(),
+        rows: [{ Bucket: "Current", Balance: 100 }],
+      },
+    },
+    quickbooks: {
+      revenue: {
+        sourceFile: "quickbooks_revenue.csv",
+        modifiedAt: new Date().toISOString(),
+        rows: [{ TotalIncome: 5000 }],
+      },
+      expenses: {
+        sourceFile: "quickbooks_expenses.csv",
+        modifiedAt: new Date().toISOString(),
+        rows: [{ TotalExpense: 3000 }],
+      },
+      expenseCategories: null,
+      ar: null,
+    },
+  };
+  const diagnostics = ImportDiagnostics.evaluateBundle(freshBundle, manifest);
+  assert(diagnostics.summary.connected >= 2, "connected datasets must be reported for valid financial imports");
+  const qbAr = diagnostics.datasets.find((item) => item.datasetKey === "quickbooks.ar");
+  assert(qbAr && qbAr.status === "not_configured", "QuickBooks A/R must report not configured without automated collector");
+
+  const staleBundle = JSON.parse(JSON.stringify(freshBundle));
+  staleBundle.softdent.dashboard.modifiedAt = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const staleDiagnostics = ImportDiagnostics.evaluateBundle(staleBundle, manifest);
+  const staleDashboard = staleDiagnostics.datasets.find((item) => item.datasetKey === "softdent.dashboard");
+  assert(staleDashboard && staleDashboard.status === "stale", "stale dashboard files must report stale status");
+
+  const partialBundle = JSON.parse(JSON.stringify(freshBundle));
+  partialBundle.softdent.dashboard.rows = [{ collections: 10 }];
+  const partialDiagnostics = ImportDiagnostics.evaluateBundle(partialBundle, manifest);
+  const partialDashboard = partialDiagnostics.datasets.find((item) => item.datasetKey === "softdent.dashboard");
+  assert(partialDashboard && partialDashboard.status === "partial", "missing required fields must report partial status");
+
+  const trendBundle = {
+    loadedAt: new Date().toISOString(),
+    softdent: {
+      dashboard: {
+        sourceFile: "softdent_dashboard_data.json",
+        modifiedAt: new Date().toISOString(),
+        rows: [
+          { production: 1000, collections: 800, period: "2026-04", insurance: 600, patient: 200 },
+          { production: 1200, collections: 900, period: "2026-05", insurance: 700, patient: 200 },
+        ],
+      },
+    },
+    quickbooks: { revenue: freshBundle.quickbooks.revenue, expenses: freshBundle.quickbooks.expenses },
+  };
+  const financialDash = ImportLoader.buildDashboard("financial", attachDiagnosticsBundle(trendBundle));
+  function attachDiagnosticsBundle(bundle) {
+    bundle.diagnostics = ImportDiagnostics.evaluateBundle(bundle, manifest);
+    return bundle;
+  }
+  assert(financialDash && financialDash.productionTrend && financialDash.productionTrend.production.length > 1, "financial dashboard must build production trend from multi-period imports");
+  assert(financialDash.payerMix && financialDash.payerMix.slices.length > 0, "financial dashboard must build payer mix when insurance/patient present");
+
+  const qbArBundle = {
+    loadedAt: new Date().toISOString(),
+    quickbooks: {
+      revenue: freshBundle.quickbooks.revenue,
+      expenses: freshBundle.quickbooks.expenses,
+      ar: {
+        sourceFile: "quickbooks_ar.csv",
+        modifiedAt: new Date().toISOString(),
+        rows: [{ Bucket: "Current", Balance: 2500 }],
+      },
+    },
+  };
+  const qbDash = ImportLoader.buildDashboard("quickbooks", qbArBundle);
+  assert(qbDash && qbDash.ar && qbDash.ar.total, "QuickBooks dashboard must parse A/R when file is present");
+
+  const statusText = ImportLoader.formatImportStatus(attachDiagnosticsBundle(freshBundle));
+  assert(statusText.includes("Dataset health:"), "import status must include dataset-level health summary");
+  assert(statusText.includes("not configured"), "import status must explain QuickBooks A/R automation posture");
+
+  const sourceText = HalSkills.formatSourceHealthText(
+    {
+      softdent: {
+        hasData: true,
+        connectionStatus: "Connected",
+        detail: "2/4 datasets connected.",
+        datasetSummary: "2/4 connected",
+        datasetLines: ["softdent.dashboard: Connected"],
+      },
+    },
+    [],
+  );
+  assert(sourceText.includes("Connected"), "HAL source health must use Connected/Partial/Stale language");
+
+  const HalProactive = require(join(siteDir, "hal-proactive.js"));
+  const proactiveSnapshot = {
+    gatheredAt: new Date().toISOString(),
+    dashboards: { financial: { dataSource: "empty" } },
+    importBundle: {
+      diagnostics: {
+        datasets: [
+          {
+            datasetKey: "softdent.dashboard",
+            system: "softdent",
+            status: "stale",
+            severity: "critical",
+            detail: "Dataset is stale.",
+            collectorHint: "Bridge sync task",
+          },
+        ],
+        summary: { connected: 0, partial: 0, stale: 1, missing: 0, notConfigured: 0 },
+      },
+    },
+    officeTasks: [],
+    widgets: { widgets: {} },
+    runtimeIssues: [],
+  };
+  const proactiveBriefing = HalProactive.buildProactiveBriefing(proactiveSnapshot, mockCtx);
+  assert(proactiveBriefing.topAction && proactiveBriefing.recommendations.length > 0, "HAL proactive manager must recommend actions from program state");
+  assert(
+    HalProactive.formatProactiveBriefing(proactiveBriefing).includes("HAL internal office manager"),
+    "proactive briefing must format office manager role",
+  );
+  const proactiveRoute = HalCore.routeHalCommand(halData, halModels, pages, "What should HAL do for the program?");
+  assert(proactiveRoute.useProactiveBriefing === true, "proactive questions must route to proactive briefing");
+
+  let halAutoRefreshCalled = false;
+  const priorPlacementBridge = global.DesktopBridge;
+  const priorPlacementCoordinator = global.ImportCoordinator;
+  global.DesktopBridge = {
+    hasDesktopApi: () => true,
+  };
+  global.ImportCoordinator = undefined;
+  const placement = await HalProactive.runAutonomousPlacement(
+    {
+      Services: {
+        refreshImports: async () => {
+          halAutoRefreshCalled = true;
+        },
+      },
+      clearProgramContextCache: () => {},
+      invalidateProgramCaches: () => {},
+    },
+    {
+      datasets: [{ datasetKey: "softdent.dashboard", automated: true, status: "stale" }],
+    },
+  );
+  assert(placement.refreshed === true && halAutoRefreshCalled === true, "HAL proactive cycle must refresh stale automated datasets when desktop bridge is available");
+  global.DesktopBridge = priorPlacementBridge;
+  global.ImportCoordinator = priorPlacementCoordinator;
+  const writebackBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Write back to SoftDent");
+  assert(writebackBlocked.intent === "blocked: firewall", "autonomous placement must not enable external writeback");
+
+  const emptyDiag = ImportDiagnostics.evaluateBundle({ softdent: {}, quickbooks: {} }, manifest);
+  ["softdent.newPatients", "softdent.treatmentPlans", "softdent.caseAcceptance"].forEach((datasetKey) => {
+    const item = emptyDiag.datasets.find((row) => row.datasetKey === datasetKey);
+    assert(item && item.status === "not_configured", `${datasetKey} must report not_configured until exports exist`);
+    assert(item.collectorHint, `${datasetKey} must include collector guidance`);
+  });
+  const practiceFeed = HalSkills.buildWidgetFeed({
+    dashboards: { practice: { dataSource: "empty" }, financial: { dataSource: "empty" }, softdent: { dataSource: "empty" }, quickbooks: { dataSource: "empty" } },
+    importBundle: { diagnostics: emptyDiag },
+  });
+  assert(practiceFeed.widgets.newPatients.metrics.newPatientCount === "Not Configured", "new patients widget must stay honest when export is not configured");
+
+  const HalOfficeManager = require(join(siteDir, "hal-office-manager.js"));
+  assert(HalOfficeManager.ROLE_SUMMARY.includes("internal office manager"), "HAL must define internal office manager role");
+  const officePriorities = HalOfficeManager.buildOfficePriorities(proactiveSnapshot, { halSideNotes: [{ status: "open", priority: "high", text: "Recall patient" }] });
+  assert(officePriorities.length > 0, "office manager must build priorities from program state");
+  const officeState = HalOfficeManager.buildOfficeManagerState(proactiveSnapshot, {}, { officePriorities, placement: { refreshed: false }, autoTasks: { created: [] } });
+  const officeBrief = HalOfficeManager.formatDailyOfficeBriefing(officeState, proactiveSnapshot);
+  assert(officeBrief.includes("Human must approve"), "daily office briefing must state human approval boundaries");
+  assert(officeBrief.includes("Top office priorities"), "daily office briefing must list priorities");
+  const officeBriefingRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show daily office briefing");
+  assert(officeBriefingRoute.useOfficeBriefing === true, "daily office briefing must route locally");
+  assert(HalAgent.SAFETY_POLICY.summary.includes("internal office manager"), "agent safety policy must describe office manager role");
+
+  const upsertOne = HalSkills.upsertHalTask([], { title: "HAL: Repair import", sourceId: "import-stale-softdent.dashboard", notes: "stale" }, { actor: "hal-proactive" });
+  const upsertTwo = HalSkills.upsertHalTask(upsertOne.tasks, { title: "HAL: Repair import updated", sourceId: "import-stale-softdent.dashboard", notes: "still stale" }, { actor: "hal-proactive" });
+  assert(upsertOne.created === true && upsertTwo.created === false && upsertTwo.tasks.length === 1, "HAL tasks must upsert by sourceId without duplicates");
+  const resolved = HalSkills.autoResolveHalTasks(upsertTwo.tasks, []);
+  assert(resolved[0].status === "completed", "HAL tasks must auto-resolve when source issue disappears");
+
   passed++;
 
   console.log(`HAL validation passed (${passed} suites)`);

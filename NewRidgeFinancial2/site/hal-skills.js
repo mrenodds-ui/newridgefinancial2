@@ -16,8 +16,8 @@
 const HalSkills = (function () {
   const PROGRAM_SCHEMA_VERSION = "nr2-hal-skill-v1";
   const SAFETY_DISCLAIMER =
-    "Local office-manager workflow only. Draft only where applicable. Requires human review. " +
-    "Local only. not_submitted. HAL reads SoftDent and QuickBooks only. No posting, writes, email/fax/upload, or external delivery.";
+    "HAL internal office manager (local only). External firewall locked. Draft only where applicable. Requires human review. " +
+    "HAL may refresh imports, place validated data, and manage local tasks. No posting, writeback, email/fax/upload, or external delivery.";
 
   function skillMeta(kind, source) {
     return {
@@ -642,11 +642,11 @@ const HalSkills = (function () {
     const priority = VALID_TASK_PRIORITIES.has(req.priority) ? req.priority : "normal";
     return {
       meta: skillMeta("office.task", "officeManager"),
-      taskId: uid("omt"),
+      taskId: req.taskId || uid("omt"),
       title,
-      description: String((req && req.description) || "").trim(),
+      description: String((req && req.description) || req.notes || "").trim(),
       category,
-      status: "open",
+      status: VALID_TASK_STATUSES.has(req.status) ? req.status : "open",
       priority,
       patientLabel: req.patientLabel || req.patient_label || null,
       claimId: req.claimId || req.claim_id || null,
@@ -654,13 +654,69 @@ const HalSkills = (function () {
       missingDataCodes: (req.missingDataCodes || req.missing_data_codes || []).slice(),
       dueDate: req.dueDate || req.due_date || null,
       assignedTo: req.assignedTo || req.assigned_to || null,
+      source: req.source || null,
+      sourceId: req.sourceId || req.source_id || null,
+      surface: req.surface || null,
+      dueHint: req.dueHint || req.due_hint || null,
+      blockingReason: req.blockingReason || req.blocking_reason || null,
+      halGenerated: req.halGenerated === true || (opts && opts.actor === "hal-proactive") || (opts && opts.actor === "hal-office-manager"),
+      lastObservedAt: req.lastObservedAt || req.last_observed_at || now,
+      resolvedWhen: req.resolvedWhen || req.resolved_when || null,
+      notes: String((req && req.notes) || "").trim() || null,
       createdBy: actor,
-      createdAt: now,
+      createdAt: req.createdAt || now,
       updatedAt: now,
       localOnly: true,
       externalActionPerformed: false,
       softdentWritebackPerformed: false,
     };
+  }
+
+  function findTaskBySourceId(tasks, sourceId) {
+    const key = String(sourceId || "").trim();
+    if (!key) return null;
+    return (tasks || []).find((task) => String(task.sourceId || "") === key) || null;
+  }
+
+  function upsertHalTask(tasks, req, opts) {
+    const list = Array.isArray(tasks) ? tasks.slice() : [];
+    const sourceId = req && (req.sourceId || req.source_id);
+    const existing = sourceId ? findTaskBySourceId(list, sourceId) : null;
+    const now = new Date().toISOString();
+    if (existing) {
+      const next = applyTaskUpdate(existing, {
+        title: req.title,
+        description: req.description || req.notes,
+        priority: req.priority,
+        status: existing.status === "completed" || existing.status === "dismissed" ? "open" : existing.status,
+        sourceRefs: req.sourceRefs,
+        missingDataCodes: req.missingDataCodes,
+      });
+      next.source = req.source || next.source;
+      next.surface = req.surface || next.surface;
+      next.dueHint = req.dueHint || next.dueHint;
+      next.blockingReason = req.blockingReason || next.blockingReason;
+      next.halGenerated = true;
+      next.lastObservedAt = now;
+      next.notes = req.notes || next.notes;
+      const index = list.findIndex((task) => task.taskId === existing.taskId);
+      if (index >= 0) list[index] = next;
+      return { task: next, created: false, tasks: list };
+    }
+    const created = createTask(req, opts);
+    list.unshift(created);
+    return { task: created, created: true, tasks: list };
+  }
+
+  function autoResolveHalTasks(tasks, activeSourceIds) {
+    const active = new Set((activeSourceIds || []).map((id) => String(id)));
+    const now = new Date().toISOString();
+    return (tasks || []).map((task) => {
+      if (!task.halGenerated || !task.sourceId) return task;
+      if (task.status !== "open" && task.status !== "blocked") return task;
+      if (active.has(String(task.sourceId))) return task;
+      return applyTaskUpdate(task, { status: "completed", resolvedWhen: now });
+    });
   }
 
   function applyTaskUpdate(existing, updates) {
@@ -689,6 +745,17 @@ const HalSkills = (function () {
     });
     if (updates.sourceRefs != null) next.sourceRefs = updates.sourceRefs.slice();
     if (updates.missingDataCodes != null) next.missingDataCodes = updates.missingDataCodes.slice();
+    if (updates.source != null) next.source = updates.source;
+    if (updates.sourceId != null) next.sourceId = updates.sourceId;
+    if (updates.surface != null) next.surface = updates.surface;
+    if (updates.dueHint != null) next.dueHint = updates.dueHint;
+    if (updates.blockingReason != null) next.blockingReason = updates.blockingReason;
+    if (updates.lastObservedAt != null) next.lastObservedAt = updates.lastObservedAt;
+    if (updates.resolvedWhen != null) next.resolvedWhen = updates.resolvedWhen;
+    if (updates.notes != null) next.notes = updates.notes;
+    if (updates.status === "completed" || updates.status === "dismissed") {
+      next.resolvedWhen = updates.resolvedWhen || new Date().toISOString();
+    }
     next.updatedAt = new Date().toISOString();
     return next;
   }
@@ -951,16 +1018,56 @@ const HalSkills = (function () {
       const live = (sourceHealth || {})[key] || {};
       const fallback = staticByTarget[key] || {};
       const label = fallback.label || labels[key] || key;
-      if (live.hasData) {
+      const connectionStatus = live.connectionStatus || (live.hasData ? "Connected" : fallback.status || "Missing");
+      if (live.hasData || live.connectionStatus) {
         const freshness = live.freshness ? ` Freshness: ${live.freshness}.` : "";
         const sync = live.syncState ? ` Sync: ${live.syncState}.` : "";
-        return `- ${label} — Read-only: imported data present.${freshness}${sync} Widget status: ${live.status || "SUCCESS"}.`;
+        const datasetSummary = live.datasetSummary ? ` Datasets: ${live.datasetSummary}.` : "";
+        const datasetLines = Array.isArray(live.datasetLines) && live.datasetLines.length ? `\n${live.datasetLines.map((line) => `    ${line}`).join("\n")}` : "";
+        return `- ${label} — ${connectionStatus}: ${live.detail || "Imported data present."}${freshness}${sync}${datasetSummary}${datasetLines}`;
       }
       const extra = fallback.freshness ? ` Freshness: ${fallback.freshness}.` : "";
       const warn = fallback.warning ? ` Warning: ${fallback.warning}` : "";
-      return `- ${label} — ${fallback.status || "Awaiting data"}: ${fallback.detail || "No import data loaded yet."}${extra}${warn}`;
+      const datasetLines = Array.isArray(live.datasetLines) && live.datasetLines.length ? `\n${live.datasetLines.map((line) => `    ${line}`).join("\n")}` : "";
+      return `- ${label} — ${connectionStatus}: ${live.detail || fallback.detail || "No import data loaded yet."}${extra}${warn}${datasetLines}`;
     });
     return lines.length ? `Read-only source intake status:\n${lines.join("\n")}` : "No source intake items configured.";
+  }
+
+  function importDiagnosticsApi() {
+    if (typeof ImportDiagnostics !== "undefined") return ImportDiagnostics;
+    if (typeof window !== "undefined" && window.ImportDiagnostics) return window.ImportDiagnostics;
+    try {
+      return require("./import-diagnostics.js");
+    } catch {
+      return null;
+    }
+  }
+
+  function systemImportHealth(bundle, system) {
+    const diagApi = importDiagnosticsApi();
+    const diagnostics = (bundle && bundle.diagnostics) || (diagApi && bundle ? diagApi.evaluateBundle(bundle) : null);
+    if (!diagnostics || !Array.isArray(diagnostics.datasets)) {
+      return { connectionStatus: "Missing", datasetSummary: "0/0 connected", datasetLines: [], detail: "No import diagnostics available." };
+    }
+    const items = diagnostics.datasets.filter((item) => item.system === system);
+    const summary = diagApi && typeof diagApi.systemSummary === "function" ? diagApi.systemSummary(diagnostics, system) : null;
+    const statusLabel = summary && diagApi ? diagApi.statusLabel(summary.status) : "Missing";
+    const connected = items.filter((item) => item.status === "connected").length;
+    const datasetLines = items.map((item) => {
+      const label = diagApi ? diagApi.statusLabel(item.status) : item.status;
+      return `${item.datasetKey}: ${label}`;
+    });
+    let detail = `${connected}/${items.length} datasets connected.`;
+    const worst = items.find((item) => item.status === "missing" || item.status === "stale") || items.find((item) => item.status === "partial");
+    if (worst && worst.detail) detail = worst.detail;
+    return {
+      connectionStatus: statusLabel,
+      datasetSummary: `${connected}/${items.length} connected`,
+      datasetLines,
+      detail,
+      items,
+    };
   }
 
   /* ============================================================
@@ -989,6 +1096,9 @@ const HalSkills = (function () {
     softdentResponsibility: "softdent",
     softdentSourceHealth: "softdent",
     softdentExportHistory: "softdent",
+    newPatients: "softdent",
+    treatmentPlanSummary: "softdent",
+    caseAcceptance: "softdent",
     arAgingAndCollections: "ar",
     arOutstandingClaims: "ar",
     narrativeWorkflow: "narratives",
@@ -1018,6 +1128,9 @@ const HalSkills = (function () {
     "softdentResponsibility",
     "softdentSourceHealth",
     "softdentExportHistory",
+    "newPatients",
+    "treatmentPlanSummary",
+    "caseAcceptance",
     "narrativeWorkflow",
     "documentLibrary",
   ];
@@ -1045,9 +1158,55 @@ const HalSkills = (function () {
     softdentResponsibility: ["SoftDent dashboard export with insurance and patient responsibility values"],
     softdentSourceHealth: ["SoftDent dashboard, claims, clinical notes, and optional A/R export files"],
     softdentExportHistory: ["SoftDent export files in the canonical import folder"],
+    newPatients: ["SoftDent new patient export (not yet automated)"],
+    treatmentPlanSummary: ["SoftDent treatment_plan_summary.csv export (not yet automated)"],
+    caseAcceptance: ["SoftDent case acceptance export or derived treatment plan summary"],
     narrativeWorkflow: ["Local narrative drafts or claim source facts from SoftDent claims"],
     documentLibrary: ["Local library documents or indexed document metadata"],
   };
+
+  function widgetContractApi() {
+    if (typeof WidgetContract !== "undefined") return WidgetContract;
+    if (typeof window !== "undefined" && window.WidgetContract) return window.WidgetContract;
+    try {
+      return require("./widget-contract.js");
+    } catch {
+      return null;
+    }
+  }
+
+  function buildContractContext(snapshot, dashboards) {
+    const diagApi =
+      typeof ImportDiagnostics !== "undefined"
+        ? ImportDiagnostics
+        : typeof window !== "undefined" && window.ImportDiagnostics
+          ? window.ImportDiagnostics
+          : null;
+    const bundle = snapshot && snapshot.importBundle;
+    const diagnostics =
+      (bundle && bundle.diagnostics) || (bundle && diagApi ? diagApi.evaluateBundle(bundle) : null);
+    return {
+      dashboards: dashboards || snapshot.dashboards || {},
+      diagnostics,
+    };
+  }
+
+  function buildContractWidget(widgetKey, contractCtx, fallbackStatus, summary) {
+    const contract = widgetContractApi();
+    if (!contract) return null;
+    const built = contract.buildWidgetMetrics(widgetKey, contractCtx);
+    if (!built.contract) return null;
+    const status = contract.widgetStatusFromStates(built.states);
+    return {
+      key: widgetKey,
+      title: built.contract.title || widgetKey,
+      status: status === "SUCCESS" ? status : fallbackStatus === "SUCCESS" ? "DEGRADED" : status,
+      summary,
+      navTarget: built.contract.navTarget || WIDGET_NAV[widgetKey],
+      metrics: built.metrics,
+      metricStates: built.states,
+    };
+  }
 
   function plAmount(dashboard, category) {
     const row = ((dashboard && dashboard.pl && dashboard.pl.rows) || []).find((r) => r.category === category);
@@ -1111,6 +1270,153 @@ const HalSkills = (function () {
     return "FAILED";
   }
 
+  function parseMetricNumber(value) {
+    if (value === null || value === undefined || value === "" || value === "—" || value === "Not Configured") return null;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    const raw = String(value).replace(/[$,%\s,]/g, "");
+    if (!raw || raw === "-" || raw === "—") return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function nearlyEqual(a, b, tolerance) {
+    if (a === null || b === null) return true;
+    const allowed = Math.max(Number(tolerance) || 1, Math.abs(a) * 0.01, Math.abs(b) * 0.01);
+    return Math.abs(a - b) <= allowed;
+  }
+
+  function ratioDiff(a, b) {
+    if (a === null || b === null) return 0;
+    const denom = Math.max(Math.abs(a), Math.abs(b), 1);
+    return Math.abs(a - b) / denom;
+  }
+
+  function addCommitIssue(issues, widgetKey, metricKey, severity, message) {
+    issues.push({ widgetKey, metricKey, severity, message });
+  }
+
+  function degradeWidgetForCommitValidation(feed, issue) {
+    const widget = feed.widgets && feed.widgets[issue.widgetKey];
+    if (!widget) return;
+    widget.commitValidation = widget.commitValidation || { status: "PASS", issues: [] };
+    widget.commitValidation.issues.push(issue);
+    widget.commitValidation.status = "REVIEW";
+    if (issue.severity === "warning" && String(widget.status || "").toUpperCase() === "SUCCESS") {
+      widget.status = "DEGRADED";
+    }
+  }
+
+  function applyAccountingExcelCommitValidation(feed, snapshot) {
+    if (!feed || !feed.widgets) return feed;
+    const widgets = feed.widgets;
+    const issues = [];
+    const overview = widgets.practiceFinancialOverview && widgets.practiceFinancialOverview.metrics;
+    const qbDetail = widgets.quickbooksProfitLossDetail && widgets.quickbooksProfitLossDetail.metrics;
+    const payer = widgets.payerMixAndCollections && widgets.payerMixAndCollections.metrics;
+    const treatment = widgets.treatmentPlanSummary && widgets.treatmentPlanSummary.metrics;
+    const caseAcceptance = widgets.caseAcceptance && widgets.caseAcceptance.metrics;
+
+    if (overview) {
+      const revenue = parseMetricNumber(overview.monthlyRevenue);
+      const netIncome = parseMetricNumber(overview.monthlyNetIncome);
+      const production = parseMetricNumber(overview.productionTotal);
+      const collections = parseMetricNumber(overview.collectionsTotal);
+      const expenses = parseMetricNumber((snapshot.dashboards?.quickbooks || {}).expenses);
+      if (revenue !== null && expenses !== null && netIncome !== null && !nearlyEqual(revenue - expenses, netIncome, 1)) {
+        addCommitIssue(
+          issues,
+          "practiceFinancialOverview",
+          "monthlyNetIncome",
+          "warning",
+          "QuickBooks revenue minus expenses does not reconcile to net income.",
+        );
+      }
+      if (production !== null && collections !== null && collections > production * 1.15) {
+        addCommitIssue(
+          issues,
+          "practiceFinancialOverview",
+          "collectionsTotal",
+          "warning",
+          "SoftDent collections are more than 115% of production for the period.",
+        );
+      }
+      if (revenue !== null && collections !== null && ratioDiff(revenue, collections) > 0.4) {
+        addCommitIssue(
+          issues,
+          "practiceFinancialOverview",
+          "monthlyRevenue",
+          "info",
+          "QuickBooks revenue and SoftDent collections differ by more than 40%; verify period alignment.",
+        );
+      }
+    }
+
+    if (qbDetail) {
+      const revenue = parseMetricNumber(qbDetail.revenue);
+      const cogs = parseMetricNumber(qbDetail.cogs);
+      const grossProfit = parseMetricNumber(qbDetail.grossProfit);
+      const operatingExpenses = parseMetricNumber(qbDetail.operatingExpenses);
+      const netIncome = parseMetricNumber(qbDetail.netIncome);
+      if (revenue !== null && cogs !== null && grossProfit !== null && !nearlyEqual(revenue - cogs, grossProfit, 1)) {
+        addCommitIssue(issues, "quickbooksProfitLossDetail", "grossProfit", "warning", "QuickBooks gross profit does not equal revenue minus COGS.");
+      }
+      if (grossProfit !== null && operatingExpenses !== null && netIncome !== null && !nearlyEqual(grossProfit - operatingExpenses, netIncome, 1)) {
+        addCommitIssue(issues, "quickbooksProfitLossDetail", "netIncome", "warning", "QuickBooks net income does not equal gross profit minus operating expenses.");
+      }
+    }
+
+    if (payer) {
+      const rate = parseMetricNumber(payer.collectionRate);
+      const topShare = parseMetricNumber(payer.topPayerShare);
+      if (rate !== null && (rate < 0 || rate > 100)) {
+        addCommitIssue(issues, "payerMixAndCollections", "collectionRate", "warning", "Collection rate must be between 0% and 100%.");
+      }
+      if (topShare !== null && (topShare < 0 || topShare > 100)) {
+        addCommitIssue(issues, "payerMixAndCollections", "topPayerShare", "warning", "Top payer share must be between 0% and 100%.");
+      }
+    }
+
+    if (treatment) {
+      const presented = parseMetricNumber(treatment.plansPresented);
+      const accepted = parseMetricNumber(treatment.plansAccepted);
+      if (presented !== null && accepted !== null && accepted > presented) {
+        addCommitIssue(issues, "treatmentPlanSummary", "plansAccepted", "warning", "Accepted treatment plans cannot exceed presented treatment plans.");
+      }
+    }
+
+    if (caseAcceptance) {
+      const rate = parseMetricNumber(caseAcceptance.acceptanceRate);
+      const accepted = parseMetricNumber(caseAcceptance.acceptedCount);
+      const presented = parseMetricNumber(caseAcceptance.presentedCount);
+      if (rate !== null && (rate < 0 || rate > 100)) {
+        addCommitIssue(issues, "caseAcceptance", "acceptanceRate", "warning", "Case acceptance rate must be between 0% and 100%.");
+      }
+      if (accepted !== null && presented !== null && accepted > presented) {
+        addCommitIssue(issues, "caseAcceptance", "acceptedCount", "warning", "Accepted cases cannot exceed presented cases.");
+      }
+    }
+
+    Object.values(widgets).forEach((widget) => {
+      if (!widget) return;
+      widget.commitValidation = widget.commitValidation || { status: "PASS", issues: [] };
+    });
+    issues.forEach((issue) => degradeWidgetForCommitValidation(feed, issue));
+    const warningCount = issues.filter((issue) => issue.severity === "warning").length;
+    feed.accountingExcelValidation = {
+      status: warningCount ? "REVIEW" : "PASS",
+      checkedAt: feed.generatedAt || new Date().toISOString(),
+      checks: [
+        "QuickBooks P&L arithmetic",
+        "Revenue/expense/net-income reconciliation",
+        "SoftDent production/collections reasonableness",
+        "Percent and count bounds",
+        "Treatment-plan and case-acceptance consistency",
+      ],
+      issues,
+    };
+    return feed;
+  }
+
   function buildWidgetFeed(snapshot) {
     const snap = snapshot || {};
     const dashboards = snap.dashboards || {};
@@ -1145,15 +1451,73 @@ const HalSkills = (function () {
     const sd = dashboards.softdent || {};
     const qb = dashboards.quickbooks || {};
     const arDash = dashboards.ar || {};
+    const practiceDash = dashboards.practice || {};
+    const contractCtx = buildContractContext(snap, {
+      financial: fin,
+      softdent: sd,
+      quickbooks: qb,
+      ar: arDash,
+      practice: practiceDash,
+    });
     const docs = snap.documents || {};
     const claimsSnap = snap.claims || {};
     const narratives = snap.narratives || {};
     const library = snap.library || {};
-    const monthlyRevenue = metricValue(qb.revenue || plAmount(qb, "Revenue") || fin.productionMtd?.value);
-    const monthlyNetIncome = metricValue(plAmount(qb, "Net Income"));
+    const overviewWidget = buildContractWidget(
+      "practiceFinancialOverview",
+      contractCtx,
+      mergeWidgetStatus(qbStatus, softdentStatus),
+      "Practice revenue from QuickBooks and production/collections from the SoftDent import cache. Dental A/R is not sourced from QuickBooks.",
+    );
+    const trendWidget = buildContractWidget(
+      "financialProductionTrend",
+      contractCtx,
+      financialStatus,
+      "Production trend and year-to-date production/collections indicators from the financial dashboard cache.",
+    );
+    const payerWidget = buildContractWidget(
+      "payerMixAndCollections",
+      contractCtx,
+      financialStatus,
+      "Payer mix, collection rate, and top payer share from the owner financial dashboard.",
+    );
+    const providerWidget = buildContractWidget(
+      "providerPerformance",
+      contractCtx,
+      financialStatus,
+      "Provider production split from the owner financial dashboard.",
+    );
+    const newPatientsWidget = buildContractWidget(
+      "newPatients",
+      contractCtx,
+      "FAILED",
+      "New patient counts from SoftDent when an export is configured.",
+    );
+    const treatmentWidget = buildContractWidget(
+      "treatmentPlanSummary",
+      contractCtx,
+      "FAILED",
+      "Treatment plan presented/accepted summary from SoftDent when an export is configured.",
+    );
+    const caseAcceptanceWidget = buildContractWidget(
+      "caseAcceptance",
+      contractCtx,
+      "FAILED",
+      "Case acceptance rate from SoftDent when an export is configured or derived from treatment plans.",
+    );
+    const monthlyRevenue = overviewWidget
+      ? overviewWidget.metrics.monthlyRevenue
+      : metricValue(qb.revenue);
+    const monthlyNetIncome = overviewWidget
+      ? overviewWidget.metrics.monthlyNetIncome
+      : metricValue(plAmount(qb, "Net Income"));
     const expenseTotal = metricValue(qb.expenses || plAmount(qb, "Expenses"));
-    const productionTotal = metricValue(sd.production || glanceValue(sd, "Production MTD") || fin.productionMtd?.value);
-    const collectionsTotal = metricValue(sd.collections || glanceValue(sd, "Collections MTD"));
+    const productionTotal = overviewWidget
+      ? overviewWidget.metrics.productionTotal
+      : metricValue(sd.production || glanceValue(sd, "Production MTD"));
+    const collectionsTotal = overviewWidget
+      ? overviewWidget.metrics.collectionsTotal
+      : metricValue(sd.collections || glanceValue(sd, "Collections MTD"));
     const accountsReceivableTotal = metricValue(arDash.kpis?.[0]?.value || sd.hero?.value);
     const patientBalanceTotal = metricValue(arDash.kpis?.[0]?.value || sd.hero?.value);
     const arStatus = arDash.kpis ? (arAvailable ? (dashPartial(arDash) ? "DEGRADED" : "SUCCESS") : "DEGRADED") : "FAILED";
@@ -1167,7 +1531,7 @@ const HalSkills = (function () {
     const libraryStatus = libraryDocCount > 0 ? "SUCCESS" : "FAILED";
 
     const widgets = {
-      practiceFinancialOverview: {
+      practiceFinancialOverview: overviewWidget || {
         key: "practiceFinancialOverview",
         title: "Practice Financial Overview",
         status: mergeWidgetStatus(qbStatus, softdentStatus),
@@ -1180,7 +1544,7 @@ const HalSkills = (function () {
           collectionsTotal,
         },
       },
-      financialProductionTrend: {
+      financialProductionTrend: trendWidget || {
         key: "financialProductionTrend",
         title: "Production Trend & YTD",
         status: financialStatus,
@@ -1193,7 +1557,7 @@ const HalSkills = (function () {
           ytdCollectionRate: metricValue((fin.productionTrend?.ytd || []).find((m) => m.label === "YTD Collection Rate")?.value),
         },
       },
-      payerMixAndCollections: {
+      payerMixAndCollections: payerWidget || {
         key: "payerMixAndCollections",
         title: "Payer Mix & Collections",
         status: financialStatus,
@@ -1206,7 +1570,7 @@ const HalSkills = (function () {
           topPayerShare: metricValue(firstItem(fin.payerMix?.slices)?.pct != null ? `${firstItem(fin.payerMix?.slices).pct}%` : null),
         },
       },
-      providerPerformance: {
+      providerPerformance: providerWidget || {
         key: "providerPerformance",
         title: "Provider Performance",
         status: financialStatus,
@@ -1461,6 +1825,41 @@ const HalSkills = (function () {
           latestRecords: metricValue(firstItem(sd.exports)?.records),
         },
       },
+      newPatients: newPatientsWidget || {
+        key: "newPatients",
+        title: "New Patients",
+        status: "FAILED",
+        summary: "New patient counts from SoftDent when the export is configured. Until then, HAL reports Not Configured.",
+        navTarget: WIDGET_NAV.newPatients,
+        metrics: {
+          newPatientCount: "Not Configured",
+          period: "Not Configured",
+        },
+      },
+      treatmentPlanSummary: treatmentWidget || {
+        key: "treatmentPlanSummary",
+        title: "Treatment Plan Summary",
+        status: "FAILED",
+        summary: "Treatment plan presented/accepted summary from SoftDent when the export is configured.",
+        navTarget: WIDGET_NAV.treatmentPlanSummary,
+        metrics: {
+          plansPresented: "Not Configured",
+          plansAccepted: "Not Configured",
+          presentedValue: "Not Configured",
+        },
+      },
+      caseAcceptance: caseAcceptanceWidget || {
+        key: "caseAcceptance",
+        title: "Case Acceptance",
+        status: "FAILED",
+        summary: "Case acceptance rate from SoftDent when the export is configured or derived from treatment plans.",
+        navTarget: WIDGET_NAV.caseAcceptance,
+        metrics: {
+          acceptanceRate: "Not Configured",
+          acceptedCount: "Not Configured",
+          presentedCount: "Not Configured",
+        },
+      },
       narrativeWorkflow: {
         key: "narrativeWorkflow",
         title: "Insurance Narrative Workflow",
@@ -1509,16 +1908,27 @@ const HalSkills = (function () {
       (sd.health || []).find((h) => /freshness/i.test(String(h.label || "")))?.value ||
       firstItem(sd.exports)?.completed ||
       (hasData(sd) ? sd.date : null);
+    const bundle = snap.importBundle || null;
+    const softdentImportHealth = systemImportHealth(bundle, "softdent");
+    const quickbooksImportHealth = systemImportHealth(bundle, "quickbooks");
     feed.sourceHealth = {
       softdent: {
         status: softdentStatus,
         hasData: hasData(sd),
+        connectionStatus: softdentImportHealth.connectionStatus,
+        datasetSummary: softdentImportHealth.datasetSummary,
+        datasetLines: softdentImportHealth.datasetLines,
+        detail: softdentImportHealth.detail,
         freshness: hasData(sd) ? sdFreshness || "Imported" : null,
         syncState: hasData(sd) ? "Imported · read-only" : null,
       },
       quickbooks: {
         status: qbStatus,
         hasData: hasData(qb),
+        connectionStatus: quickbooksImportHealth.connectionStatus,
+        datasetSummary: quickbooksImportHealth.datasetSummary,
+        datasetLines: quickbooksImportHealth.datasetLines,
+        detail: quickbooksImportHealth.detail,
         freshness: hasData(qb) ? qb.lastSync || qb.sync?.lastSync || "Imported" : null,
         syncState: hasData(qb) ? qb.syncStatus || qb.sync?.status || "Connected" : null,
       },
@@ -1588,15 +1998,29 @@ const HalSkills = (function () {
         itemsLabel: "P&L rows",
       },
       "office-manager": {
-        status: (snap.officeTasks && snap.officeTasks.length) || (claimsSnap.total > 0) ? "DEGRADED" : "FAILED",
-        updated: null,
+        status:
+          snap.officeTasks && snap.officeTasks.length
+            ? "SUCCESS"
+            : snap.officeTasksState === "not_configured"
+              ? claimsSnap.total > 0
+                ? "DEGRADED"
+                : "FAILED"
+              : "DEGRADED",
+        updated: snap.officeTasks && snap.officeTasks.length ? "Local tasks loaded" : null,
         items: (snap.officeTasks && snap.officeTasks.length) || null,
         itemsLabel: "tasks",
       },
     };
 
-    const publish = publishJobStatus(widgets);
-    feed.jobs = { importCacheRefresh: { status: publish }, widgetPublish: { status: publish } };
+    applyAccountingExcelCommitValidation(feed, snap);
+    const publish = publishJobStatus(feed.widgets);
+    feed.jobs = {
+      importCacheRefresh: { status: publish },
+      widgetPublish: {
+        status: publish,
+        validation: feed.accountingExcelValidation ? feed.accountingExcelValidation.status : "PASS",
+      },
+    };
     return enforceReceivablesArPolicy(feed, arAvailable);
   }
 
@@ -1924,6 +2348,9 @@ const HalSkills = (function () {
     sideNoteFingerprint,
     // office-manager tasks
     createTask,
+    findTaskBySourceId,
+    upsertHalTask,
+    autoResolveHalTasks,
     applyTaskUpdate,
     computeTaskMetrics,
     // knowledge memory

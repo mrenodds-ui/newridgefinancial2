@@ -14,17 +14,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from import_loader import (
-    QUICKBOOKS_EXPENSE_NAMES,
+from import_contract import (
+    QUICKBOOKS_AR_NAMES,
     QUICKBOOKS_EXPENSE_CATEGORY_NAMES,
+    QUICKBOOKS_EXPENSE_NAMES,
     QUICKBOOKS_REVENUE_NAMES,
     SOFTDENT_AR_NAMES,
+    SOFTDENT_CASE_ACCEPTANCE_NAMES,
     SOFTDENT_CLAIMS_NAMES,
     SOFTDENT_CLINICAL_NAMES,
     SOFTDENT_DASHBOARD_NAMES,
-    quickbooks_import_dir,
-    softdent_import_dir,
+    SOFTDENT_NEW_PATIENTS_NAMES,
+    SOFTDENT_TREATMENT_PLANS_NAMES,
 )
+
+from import_loader import quickbooks_import_dir, softdent_import_dir
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -117,6 +121,20 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) ->
             writer.writerow({key: row.get(key, "") for key in fieldnames})
 
 
+def _write_csv_json_sidecar(csv_path: Path) -> None:
+    """Normalize CSV rows to JSON sidecar for consistent JS/Python reads."""
+    if not csv_path.is_file() or csv_path.suffix.lower() != ".csv":
+        return
+    try:
+        rows = list(csv.DictReader(csv_path.open("r", encoding="utf-8-sig", newline="")))
+    except Exception:
+        return
+    sidecar = csv_path.with_suffix(".json")
+    if sidecar.is_file() and sidecar.stat().st_mtime >= csv_path.stat().st_mtime:
+        return
+    _write_json(sidecar, rows)
+
+
 def _copy_if_newer(source: Path, destination: Path) -> bool:
     if not source.is_file():
         return False
@@ -166,6 +184,8 @@ def _sync_named_exports(roots: list[Path], destination: Path, names: tuple[str, 
     dest = destination / newest.name
     if _copy_if_newer(newest, dest):
         copied.append(dest.name)
+        if dest.suffix.lower() == ".csv":
+            _write_csv_json_sidecar(dest)
     return copied
 
 
@@ -309,6 +329,31 @@ def _purge_sample_cache(destination: Path) -> list[str]:
     return removed
 
 
+def _load_dataset_for_diag(directory: Path, names: tuple[str, ...]) -> dict[str, Any] | None:
+    path = _find_newest(directory, names) if directory.is_dir() else None
+    if path is None:
+        return None
+    try:
+        rows: list[dict[str, Any]] = []
+        if path.suffix.lower() == ".json":
+            payload = _read_json(path)
+            if isinstance(payload, list):
+                rows = [row for row in payload if isinstance(row, dict)]
+            elif isinstance(payload, dict):
+                rows = payload.get("notes") or payload.get("claims") or payload.get("rows") or []
+                if not isinstance(rows, list):
+                    rows = []
+        elif path.suffix.lower() == ".csv":
+            rows = list(csv.DictReader(path.open("r", encoding="utf-8-sig", newline="")))
+        return {
+            "sourceFile": path.name,
+            "modifiedAt": datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat(),
+            "rows": rows,
+        }
+    except Exception:
+        return {"sourceFile": path.name, "modifiedAt": "", "rows": []}
+
+
 def sync_imports() -> dict[str, Any]:
     """Pull the newest real export files into HAL import folders."""
     softdent_dest = softdent_import_dir()
@@ -320,22 +365,67 @@ def sync_imports() -> dict[str, Any]:
         "syncedAt": datetime.now(timezone.utc).isoformat(),
         "softdent": {"copied": [], "generated": [], "removed": []},
         "quickbooks": {"copied": [], "generated": []},
+        "sourceRoots": {"softdent": [], "quickbooks": []},
+        "warnings": [],
     }
 
     result["softdent"]["removed"] = _purge_sample_cache(softdent_dest)
 
     softdent_roots = _softdent_source_roots()
+    quickbooks_roots = _quickbooks_source_roots()
+    result["sourceRoots"]["softdent"] = [str(path) for path in softdent_roots]
+    result["sourceRoots"]["quickbooks"] = [str(path) for path in quickbooks_roots]
+    if not softdent_roots:
+        result["warnings"].append(
+            "No SoftDent export roots found. Configure NR2_SOFTDENT_EXPORT_SOURCE or SOFTDENT_SOURCE_DIR."
+        )
+    if not quickbooks_roots:
+        result["warnings"].append(
+            "No QuickBooks export roots found. Configure NR2_QUICKBOOKS_EXPORT_SOURCE or QUICKBOOKS_SOURCE_DIR."
+        )
+
     result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_DASHBOARD_NAMES, _is_sample_dashboard))
     result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_CLAIMS_NAMES, _is_sample_claims))
     result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_CLINICAL_NAMES, _is_sample_clinical))
     result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_AR_NAMES))
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_NEW_PATIENTS_NAMES))
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_TREATMENT_PLANS_NAMES))
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_CASE_ACCEPTANCE_NAMES))
     result["softdent"]["generated"].extend(_sync_softdent_pipeline_exports(softdent_dest))
 
-    quickbooks_roots = _quickbooks_source_roots()
     result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_roots, quickbooks_dest, QUICKBOOKS_REVENUE_NAMES))
     result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_roots, quickbooks_dest, QUICKBOOKS_EXPENSE_NAMES))
     result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_roots, quickbooks_dest, QUICKBOOKS_EXPENSE_CATEGORY_NAMES))
+    result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_roots, quickbooks_dest, QUICKBOOKS_AR_NAMES))
     result["quickbooks"]["generated"].extend(_sync_quickbooks_sdk_summary(quickbooks_dest))
+
+    try:
+        from import_diagnostics import check_upstream_health, evaluate_bundle
+
+        softdent_dest = softdent_import_dir()
+        quickbooks_dest = quickbooks_import_dir()
+        bundle_for_diag = {
+            "loadedAt": result["syncedAt"],
+            "softdent": {
+                "dashboard": _load_dataset_for_diag(softdent_dest, SOFTDENT_DASHBOARD_NAMES),
+                "claims": _load_dataset_for_diag(softdent_dest, SOFTDENT_CLAIMS_NAMES),
+                "clinicalNotes": _load_dataset_for_diag(softdent_dest, SOFTDENT_CLINICAL_NAMES),
+                "ar": _load_dataset_for_diag(softdent_dest, SOFTDENT_AR_NAMES),
+                "newPatients": _load_dataset_for_diag(softdent_dest, SOFTDENT_NEW_PATIENTS_NAMES),
+                "treatmentPlans": _load_dataset_for_diag(softdent_dest, SOFTDENT_TREATMENT_PLANS_NAMES),
+                "caseAcceptance": _load_dataset_for_diag(softdent_dest, SOFTDENT_CASE_ACCEPTANCE_NAMES),
+            },
+            "quickbooks": {
+                "revenue": _load_dataset_for_diag(quickbooks_dest, QUICKBOOKS_REVENUE_NAMES),
+                "expenses": _load_dataset_for_diag(quickbooks_dest, QUICKBOOKS_EXPENSE_NAMES),
+                "expenseCategories": _load_dataset_for_diag(quickbooks_dest, QUICKBOOKS_EXPENSE_CATEGORY_NAMES),
+                "ar": _load_dataset_for_diag(quickbooks_dest, QUICKBOOKS_AR_NAMES),
+            },
+        }
+        result["diagnostics"] = evaluate_bundle(bundle_for_diag)
+        result["upstreamHealth"] = check_upstream_health()
+    except Exception as exc:
+        result["warnings"].append(f"Import diagnostics unavailable: {exc}")
 
     return result
 

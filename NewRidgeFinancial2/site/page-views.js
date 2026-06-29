@@ -33,7 +33,7 @@ const PageViews = (function () {
     narratives: { eyebrow: "Insurance narratives", subtitle: "Compose and manage insurance narratives with full control and visibility.", chips: ["Draft only", "Human review required", "No submission"] },
     documents: { eyebrow: "Accounting documents", subtitle: "Document intake, review, and posting queue management.", chips: ["Review-gated", "Journal draft only"] },
     library: { eyebrow: "Document library", subtitle: "Centralized repository for mission critical documents and resources.", chips: ["Policies", "Statements", "Claims", "Clinical", "Reports"] },
-    "office-manager": { eyebrow: "Office Manager", subtitle: "Staff oversight and work-surface coordination.", chips: ["Staff oversight", "Read-only", "Approval required"] },
+    "office-manager": { eyebrow: "Office Manager", subtitle: "HAL-owned internal coordination console.", chips: ["HAL office manager", "Local tasks", "External firewall locked"] },
     hal: { eyebrow: "HAL Command Center", subtitle: "Direct. Orchestrate. Protect.", chips: ["Local manager", "Read-only", "External firewall"] },
   };
 
@@ -196,8 +196,20 @@ const PageViews = (function () {
   }
 
   /* ---- Mount helper ---- */
+  let mountGeneration = 0;
+
+  function mountStillCurrent(generation, container, slotId, pageId) {
+    if (generation !== mountGeneration) return false;
+    if (!container.querySelector(`#${slotId}`)) return false;
+    if (typeof window === "undefined" || !window.location) return true;
+    const hash = window.location.hash || "";
+    if (!hash || hash === "#") return true;
+    return hash.replace("#", "") === pageId;
+  }
+
   async function mountPage(container, state, renderFn, onNavigate) {
     if (!container) return;
+    const generation = ++mountGeneration;
     const slotId = `pv-body-${state.pageId}`;
     container.innerHTML = pageShell(state, `<div class="pv-body" id="${slotId}">${U ? U.LoadingState({ label: "Loading page data…" }) : "Loading…"}</div>`);
     wireCommon(container, state, onNavigate, () => mountPage(container, state, renderFn, onNavigate));
@@ -206,8 +218,10 @@ const PageViews = (function () {
     try {
       if (!Svc) throw new Error("Services layer unavailable");
       const html = await renderFn(state, slot);
+      if (!mountStillCurrent(generation, container, slotId, state.pageId)) return;
       if (slot) slot.innerHTML = html;
     } catch (err) {
+      if (!mountStillCurrent(generation, container, slotId, state.pageId)) return;
       if (slot) slot.innerHTML = U ? U.ErrorState({ message: err.message || String(err), title: "Unable to load page" }) : esc(err.message);
       const retry = slot && slot.querySelector("[data-retry]");
       if (retry) retry.addEventListener("click", () => mountPage(container, state, renderFn, onNavigate));
@@ -512,16 +526,39 @@ const PageViews = (function () {
 
   async function renderAr(state) {
     const d = await Svc.readDashboard("ar");
-    const agingCards = d.aging.map((a) => `<article class="pv-aging-card${a.active ? " pv-aging-card--active" : ""}" data-aging-bucket="${esc(a.label)}"><span>${esc(a.label)}</span><strong>${esc(a.amount)}</strong><em>${a.pct}%</em>${svgSparkline([a.pct, a.pct * 0.9, a.pct * 1.1, a.pct], "#d6b15e")}</article>`).join("");
-    const claimRows = d.topClaims.map((c) => [esc(c.claim), esc(c.patient), esc(c.insurance), esc(c.dos), esc(c.billed), esc(c.outstanding), `<span class="pv-days-warn">${c.days}</span>`]);
-    const followUp = d.followUp.map((f) => `<div class="pv-follow"><div class="pv-follow__head"><span class="pv-follow__dot pv-follow__dot--${f.tone}"></span><strong>${esc(f.status)}</strong><span>${f.count} total</span><a class="pv-gold-link" href="#">View All</a></div>${f.items.map((i) => `<div class="pv-follow__item"><span>${esc(i.label)}</span><em>${i.count} claims</em><span class="pv-chev">›</span></div>`).join("")}</div>`).join("");
+    const agingCards = d.aging.map((a) => `<article class="pv-aging-card${a.active ? " pv-aging-card--active" : ""}" data-aging-bucket="${esc(a.label || a.bucket)}"><span>${esc(a.label || a.bucket)}</span><strong>${esc(a.amount)}</strong><em>${a.pct}%</em>${svgSparkline([a.pct, a.pct * 0.9, a.pct * 1.1, a.pct], "#d6b15e")}</article>`).join("");
+    const trendBody =
+      d.collectionsTrend && Array.isArray(d.collectionsTrend.current) && d.collectionsTrend.current.length
+        ? svgLineChart(
+            [
+              { values: d.collectionsTrend.current, color: "#d6b15e" },
+              { values: d.collectionsTrend.prior, color: "#64748b", dashed: true },
+            ],
+            d.collectionsTrend.labels,
+          ) + `<span class="pv-legend-inline"><i style="background:#d6b15e"></i> Collections <i style="background:#64748b"></i> Prior 30 Days</span>`
+        : `<p class="pv-muted">${esc(d.collectionsTrendEmpty || "Awaiting collections trend export.")}</p>`;
+    const claimRows = (d.topClaims || []).map((c) => [esc(c.claim), esc(c.patient), esc(c.insurance), esc(c.dos), esc(c.billed), esc(c.outstanding), `<span class="pv-days-warn">${c.days}</span>`]);
+    const claimsBody =
+      claimRows.length > 0
+        ? U.Table({ columns: ["Claim #", "Patient", "Insurance", "DOS", "Billed", "Outstanding", "Days"], rows: claimRows }) +
+          `<a class="pv-gold-link" href="#">View All Claims ›</a>`
+        : `<p class="pv-muted">${esc(d.topClaimsEmpty || "Awaiting SoftDent claims export for outstanding claim detail.")}</p>`;
+    const followUp =
+      (d.followUp || []).length > 0
+        ? d.followUp
+            .map(
+              (f) =>
+                `<div class="pv-follow"><div class="pv-follow__head"><span class="pv-follow__dot pv-follow__dot--${f.tone}"></span><strong>${esc(f.status)}</strong><span>${f.count} total</span><a class="pv-gold-link" href="#">View All</a></div>${f.items.map((i) => `<div class="pv-follow__item"><span>${esc(i.label)}</span><em>${i.count} claims</em><span class="pv-chev">›</span></div>`).join("")}</div>`,
+            )
+            .join("")
+        : `<p class="pv-muted">${esc(d.followUpEmpty || "Awaiting SoftDent claims export for follow-up lanes.")}</p>`;
     return `
       ${topBar(state, [toolbarDate(d.dateRange), toolbarBtn("Filters", "⛃"), toolbarBtn("Export", "⬆")], null, dataBadgeFor(d))}
       ${kpiRow(d.kpis)}
       <div class="pv-bento pv-bento--ar">
         ${card("Aging Buckets", `<div class="pv-aging-cards">${agingCards}</div>`)}
-        ${card("Collections Trend", svgLineChart([{ values: d.collectionsTrend.current, color: "#d6b15e" }, { values: d.collectionsTrend.prior, color: "#64748b", dashed: true }], d.collectionsTrend.labels) + `<span class="pv-legend-inline"><i style="background:#d6b15e"></i> Collections <i style="background:#64748b"></i> Prior 30 Days</span>`, "pv-card--chart")}
-        ${card("Top Outstanding Claims", U.Table({ columns: ["Claim #", "Patient", "Insurance", "DOS", "Billed", "Outstanding", "Days"], rows: claimRows }) + `<a class="pv-gold-link" href="#">View All Claims ›</a>`, "pv-card--wide")}
+        ${card("Collections Trend", trendBody, "pv-card--chart")}
+        ${card("Top Outstanding Claims", claimsBody, "pv-card--wide")}
         ${card("Follow-up Queue", followUp)}
       </div>`;
   }
@@ -902,48 +939,108 @@ const PageViews = (function () {
     container.querySelector("[data-lib-reset]")?.addEventListener("click", (e) => { e.preventDefault(); setQ(""); setType("All"); refresh(); });
   }
 
+  function officePostureTone(posture) {
+    if (posture === "healthy") return "ok";
+    if (posture === "needs_attention") return "red";
+    return "warn";
+  }
+
+  function groupOfficePriorities(priorities) {
+    const groups = {
+      revenue: [],
+      claims: [],
+      ar: [],
+      accounting: [],
+      data_sources: [],
+      local_tasks: [],
+      sidenotes: [],
+    };
+    (priorities || []).forEach((item) => {
+      const key = groups[item.category] ? item.category : "data_sources";
+      groups[key].push(item);
+    });
+    return [
+      { id: "revenue", label: "Revenue" },
+      { id: "claims", label: "Claims" },
+      { id: "ar", label: "A/R" },
+      { id: "accounting", label: "Accounting Docs" },
+      { id: "data_sources", label: "Data Sources" },
+      { id: "local_tasks", label: "Local Tasks" },
+      { id: "sidenotes", label: "Sidenotes" },
+    ]
+      .map((group) => ({ label: group.label, items: groups[group.id] || [] }))
+      .filter((group) => group.items.length);
+  }
+
   async function renderOfficeManager(state, halData) {
     const surfaces = await Svc.officeManager.surfaces(halData);
-    let widgetFeed = halData && halData.runtime && halData.runtime.widgetFeed;
-    if (!widgetFeed && typeof HalSkills !== "undefined") {
-      try {
-        const snap = await Svc.readProgramSnapshot();
-        widgetFeed = HalSkills.buildWidgetFeed(snap);
-      } catch {
-        widgetFeed = null;
-      }
-    }
-    const widgetHtml = widgetFeed
-      ? card(
-          "HAL manager widgets",
-          `<div class="pv-work-grid pv-widget-grid">${(typeof HalSkills !== "undefined" && HalSkills.WIDGET_ORDER ? HalSkills.WIDGET_ORDER : Object.keys(widgetFeed.widgets || {}))
-            .map((key) => {
-              const w = widgetFeed.widgets[key];
-              if (!w) return "";
-              const metrics =
-                typeof HalSkills !== "undefined" && HalSkills.formatWidgetMetrics
-                  ? HalSkills.formatWidgetMetrics(w)
-                  : "";
-              return `<article class="pv-work-card pv-widget-card" data-pv-nav="${esc(w.navTarget || "")}" tabindex="0">
-                <strong>${esc(w.title)}</strong>
-                <span>${esc(w.status)}</span>
-                <p>${esc(metrics)}</p>
-                <em>${esc(w.summary)}</em>
-              </article>`;
-            })
-            .join("")}</div>`,
-          "pv-card--wide",
-          String(
-            (typeof HalSkills !== "undefined" && HalSkills.WIDGET_ORDER ? HalSkills.WIDGET_ORDER : Object.keys(widgetFeed.widgets || {})).length,
-          ),
-        )
-      : "";
-    if (!surfaces.length && !widgetHtml) {
-      return `${topBar(state)}${U.EmptyState({ title: "No work surfaces", message: "HAL registry has no linked work surfaces yet." })}`;
-    }
+    const consoleState = (await Svc.officeManager.consoleState(halData)) || (halData && halData.runtime && halData.runtime.officeManager) || null;
+    const snap = await Svc.readProgramSnapshot().catch(() => null);
+    const tasks = (snap && snap.officeTasks) || [];
+    const halTasks = tasks.filter((task) => task.halGenerated);
+    const priorities = (consoleState && consoleState.priorities) || [];
+    const grouped = groupOfficePriorities(priorities);
+    const posture = (consoleState && consoleState.posture) || "monitor";
+    const priorityCards = grouped
+      .map(
+        (group) => `
+        <section class="pv-office-group">
+          <h3 class="pv-office-group__title">${esc(group.label)}</h3>
+          <div class="pv-work-grid">
+            ${group.items
+              .map(
+                (item) => `<article class="pv-work-card pv-office-card" data-pv-nav="${esc(item.navTarget || item.surface || "")}" tabindex="0">
+                  <strong>${esc(item.title)}</strong>
+                  <span class="pv-badge pv-badge--${esc(item.severity)}">${esc(item.severity)}</span>
+                  <p>${esc(item.detail)}</p>
+                  <em>${esc(item.actionHint || "")}</em>
+                  ${item.evidence && item.evidence.length ? `<small>${esc(item.evidence.join(" · "))}</small>` : ""}
+                </article>`,
+              )
+              .join("")}
+          </div>
+        </section>`,
+      )
+      .join("");
+    const halDid = ((consoleState && consoleState.halDid) || []).map((item) => `<li>${esc(item)}</li>`).join("");
+    const humanApprove = ((consoleState && consoleState.humanMustApprove) || []).map((item) => `<li>${esc(item)}</li>`).join("");
+    const taskCards = halTasks
+      .slice(0, 12)
+      .map(
+        (task) => `<article class="pv-work-card pv-office-task-card">
+          <strong>${esc(task.title)}</strong>
+          <span>${esc(task.status)} · ${esc(task.priority)}</span>
+          <p>${esc(task.notes || task.description || "")}</p>
+          ${task.sourceId ? `<small>source: ${esc(task.sourceId)}</small>` : ""}
+        </article>`,
+      )
+      .join("");
+    const boundaryHtml = card(
+      "HAL boundaries",
+      `<div class="pv-office-boundaries">
+        <div><h4>HAL did</h4><ul>${halDid || "<li>Monitoring imports, widgets, and local queues.</li>"}</ul></div>
+        <div><h4>Human must approve</h4><ul>${humanApprove || "<li>All external writeback and outbound actions.</li>"}</ul></div>
+      </div>`,
+      "pv-card--wide",
+    );
+    const priorityHtml = priorityCards
+      ? card("HAL priorities", priorityCards, "pv-card--wide", String(priorities.length))
+      : card("HAL priorities", U.EmptyState({ title: "No urgent priorities", message: "HAL is monitoring the program and will surface work here." }), "pv-card--wide");
+    const taskHtml = card(
+      "HAL-managed local tasks",
+      taskCards || U.EmptyState({ title: "No HAL tasks yet", message: "HAL will create local tasks when issues are detected." }),
+      "pv-card--wide",
+      String(halTasks.length),
+    );
+    const actions = [
+      toolbarBtn("Daily office briefing", "📋", { "data-hal-command": "Show daily office briefing" }),
+      toolbarBtn("Office attention", "◎", { "data-hal-command": "Show office manager attention" }),
+    ].join("");
     return `
-      ${topBar(state)}
-      ${widgetHtml}
+      ${topBar(state, [actions], consoleState && consoleState.summary ? consoleState.summary : state.safety, badge(posture === "healthy" ? "Healthy" : posture === "needs_attention" ? "Needs attention" : "Monitor", officePostureTone(posture)))}
+      ${boundaryHtml}
+      ${priorityHtml}
+      ${taskHtml}
       ${surfaces.length ? card("Work surfaces", `<div class="pv-work-grid">${surfaces.map((s) => `<article class="pv-work-card" data-pv-nav="${esc(s.target)}" tabindex="0"><strong>${esc(s.label)}</strong><span>${esc(s.state)}</span><p>${esc(s.detail)}</p>${s.nextAction ? `<em>${esc(s.nextAction)}</em>` : ""}</article>`).join("")}</div>`, "pv-card--wide", String(surfaces.length)) : ""}`;
   }
 

@@ -1,13 +1,40 @@
 [CmdletBinding()]
 param(
     [switch]$Watch,
-    [int]$DebounceMs = 750
+    [int]$DebounceMs = 750,
+    [string]$SoftDentSource,
+    [string]$QuickBooksSource
 )
 
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$repoRoot = Split-Path -Parent $projectRoot
 $importSyncScript = Join-Path $projectRoot "import_sync.py"
+
+function Import-DotEnvFile {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { return }
+    Get-Content $Path | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line.StartsWith("#")) { return }
+        $idx = $line.IndexOf("=")
+        if ($idx -lt 1) { return }
+        $name = $line.Substring(0, $idx).Trim()
+        $value = $line.Substring($idx + 1).Trim()
+        if ($name) { Set-Item -Path "Env:$name" -Value $value }
+    }
+}
+
+Import-DotEnvFile (Join-Path $repoRoot ".env")
+Import-DotEnvFile (Join-Path $projectRoot ".env")
+
+if (-not [string]::IsNullOrWhiteSpace($SoftDentSource)) {
+    $env:NR2_SOFTDENT_EXPORT_SOURCE = $SoftDentSource
+}
+if (-not [string]::IsNullOrWhiteSpace($QuickBooksSource)) {
+    $env:NR2_QUICKBOOKS_EXPORT_SOURCE = $QuickBooksSource
+}
 
 function Invoke-Nr2ImportSync {
     if (-not (Test-Path $importSyncScript)) {

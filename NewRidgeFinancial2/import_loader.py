@@ -9,53 +9,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from import_contract import (
+    QUICKBOOKS_AR_NAMES,
+    QUICKBOOKS_EXPENSE_CATEGORY_NAMES,
+    QUICKBOOKS_EXPENSE_NAMES,
+    QUICKBOOKS_REVENUE_NAMES,
+    SOFTDENT_AR_NAMES,
+    SOFTDENT_CASE_ACCEPTANCE_NAMES,
+    SOFTDENT_CLAIMS_NAMES,
+    SOFTDENT_CLINICAL_NAMES,
+    SOFTDENT_DASHBOARD_NAMES,
+    SOFTDENT_NEW_PATIENTS_NAMES,
+    SOFTDENT_TREATMENT_PLANS_NAMES,
+    manifest_warnings,
+)
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-# Canonical NR2 import cache (gitignored). Lives under repo-root app/data/imports
-# by design — not the retired FastAPI app runtime.
-
-SOFTDENT_DASHBOARD_NAMES = (
-    "softdent_dashboard_data.json",
-    "softdent_dashboard_export.json",
-    "softdent_dashboard_data.csv",
-    "softdent_dashboard_export.csv",
-)
-SOFTDENT_CLAIMS_NAMES = (
-    "softdent_claims_export.csv",
-    "softdent_claims_data.csv",
-    "softdent_claims_export.json",
-    "softdent_claims_data.json",
-)
-SOFTDENT_CLINICAL_NAMES = (
-    "softdent_clinical_notes_data.json",
-    "softdent_clinical_notes_export.json",
-)
-SOFTDENT_AR_NAMES = (
-    "softdent_ar_aging.csv",
-    "softdent_accounts_receivable.csv",
-    "softdent_ar_aging.json",
-    "patient_aging.csv",
-    "ar_aging.csv",
-)
-QUICKBOOKS_REVENUE_NAMES = (
-    "quickbooks_revenue.csv",
-    "quickbooks_revenue.json",
-    "quickbooks_profit_and_loss.csv",
-    "quickbooks_profit_loss.csv",
-)
-QUICKBOOKS_EXPENSE_NAMES = (
-    "quickbooks_expenses.csv",
-    "quickbooks_expense_detail.csv",
-    "quickbooks_expenses.json",
-)
-QUICKBOOKS_EXPENSE_CATEGORY_NAMES = (
-    "quickbooks_expense_categories.csv",
-)
-QUICKBOOKS_AR_NAMES = (
-    "quickbooks_ar.csv",
-    "quickbooks_accounts_receivable.csv",
-    "quickbooks_aging.csv",
-)
 
 
 def _import_dir(env_name: str, default_rel: str) -> Path:
@@ -104,6 +73,14 @@ def _read_tabular(path: Path) -> list[dict[str, Any]]:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
         return _extract_json_rows(payload)
     if suffix == ".csv":
+        sidecar = path.with_suffix(".json")
+        if sidecar.is_file() and sidecar.stat().st_mtime >= path.stat().st_mtime:
+            try:
+                payload = json.loads(sidecar.read_text(encoding="utf-8-sig"))
+                if isinstance(payload, list):
+                    return [row for row in payload if isinstance(row, dict)]
+            except json.JSONDecodeError:
+                pass
         return _read_csv_rows(path)
     return []
 
@@ -139,6 +116,7 @@ def load_import_bundle(*, sync: bool = True) -> dict[str, Any]:
         "ok": True,
         "error": None,
         "result": None,
+        "warnings": manifest_warnings(),
     }
     if sync:
         try:
@@ -159,6 +137,9 @@ def load_import_bundle(*, sync: bool = True) -> dict[str, Any]:
             "claims": _load_dataset(softdent_dir, SOFTDENT_CLAIMS_NAMES),
             "clinicalNotes": _load_dataset(softdent_dir, SOFTDENT_CLINICAL_NAMES),
             "ar": _load_dataset(softdent_dir, SOFTDENT_AR_NAMES),
+            "newPatients": _load_dataset(softdent_dir, SOFTDENT_NEW_PATIENTS_NAMES),
+            "treatmentPlans": _load_dataset(softdent_dir, SOFTDENT_TREATMENT_PLANS_NAMES),
+            "caseAcceptance": _load_dataset(softdent_dir, SOFTDENT_CASE_ACCEPTANCE_NAMES),
         },
         "quickbooks": {
             "dir": str(quickbooks_dir),
@@ -168,4 +149,16 @@ def load_import_bundle(*, sync: bool = True) -> dict[str, Any]:
             "ar": _load_dataset(quickbooks_dir, QUICKBOOKS_AR_NAMES),
         },
     }
+    try:
+        from import_diagnostics import check_upstream_health, evaluate_bundle
+
+        bundle["diagnostics"] = evaluate_bundle(bundle)
+        bundle["upstreamHealth"] = check_upstream_health()
+        if sync_status.get("result") and isinstance(sync_status["result"], dict):
+            sync_status["result"].setdefault("diagnostics", bundle["diagnostics"])
+            sync_status["result"].setdefault("upstreamHealth", bundle["upstreamHealth"])
+    except Exception as exc:
+        sync_status.setdefault("warnings", [])
+        if isinstance(sync_status["warnings"], list):
+            sync_status["warnings"].append(f"Import diagnostics unavailable: {exc}")
     return bundle

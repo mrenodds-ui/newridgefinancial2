@@ -3,6 +3,18 @@
  * Used by HalAgent after planning and tool enrichment.
  */
 const HalRouteExec = (function () {
+  function resolveImportCoordinator() {
+    if (typeof globalThis !== "undefined" && globalThis.ImportCoordinator) return globalThis.ImportCoordinator;
+    if (typeof ImportCoordinator !== "undefined") return ImportCoordinator;
+    return null;
+  }
+
+  async function resolveOfficeTasks(ctx) {
+    if (ctx && typeof ctx.getOfficeTasks === "function") return ctx.getOfficeTasks();
+    const snapshot = ctx && typeof ctx.loadProgramSnapshot === "function" ? await ctx.loadProgramSnapshot() : null;
+    return (snapshot && snapshot.officeTasks) || (ctx && ctx.halOfficeTasks) || [];
+  }
+
   function outcome(text, lane, intent, actions, extra) {
     return Object.assign(
       {
@@ -26,16 +38,59 @@ const HalRouteExec = (function () {
       return outcome(text, "program", result.intent);
     }
 
+    if (result.useProactiveBriefing) {
+      const Proactive = typeof HalProactive !== "undefined" ? HalProactive : window.HalProactive;
+      if (!Proactive) return outcome("Proactive HAL manager is not loaded.", "hal", result.intent);
+      const briefing =
+        (ctx.runProactiveCycle && (await ctx.runProactiveCycle())) ||
+        Proactive.getLastBriefing() ||
+        (await Proactive.runCycle(ctx));
+      const text = briefing ? Proactive.formatProactiveBriefing(briefing) : "Proactive briefing unavailable.";
+      return outcome(text, "hal", result.intent, [], { refreshHal: true });
+    }
+
     if (result.useImportRefresh || result.useImportStatus) {
+      const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
+      if (!desktop || !desktop.hasDesktopApi || !desktop.hasDesktopApi()) {
+        const message =
+          desktop && desktop.desktopRequiredMessage
+            ? desktop.desktopRequiredMessage("Import status and refresh")
+            : "Import status and refresh require the NR2 desktop app. Browser mode is a UI preview only.";
+        return outcome(message, "imports", result.intent, [], { refreshHal: false });
+      }
       const Svc = ctx.Services;
       let text = "Import loader is not available in this runtime.";
-      if (Svc && typeof Svc.refreshImports === "function" && ctx.ImportLoader) {
-        const bundle = result.useImportRefresh ? await Svc.refreshImports() : await Svc.loadImportBundle();
+      if (Svc && ctx.ImportLoader) {
+        let bundle = null;
+        let refreshError = null;
+        if (result.useImportRefresh) {
+          const coord = resolveImportCoordinator();
+          try {
+            if (coord) {
+              bundle = await coord.refresh({ reason: "hal-route" });
+            } else if (typeof Svc.refreshImports === "function") {
+              bundle = await Svc.refreshImports();
+            }
+          } catch (err) {
+            refreshError = err;
+            if (typeof Svc.loadImportBundle === "function") {
+              bundle = await Svc.loadImportBundle();
+            }
+          }
+          if (bundle) {
+            if (typeof Svc.invalidateSnapshot === "function") Svc.invalidateSnapshot();
+            ctx.clearProgramContextCache();
+            await ctx.refreshHalWidgetFeed(await ctx.loadProgramSnapshot());
+          }
+        } else if (typeof Svc.loadImportBundle === "function") {
+          bundle = await Svc.loadImportBundle();
+        }
         text = ctx.ImportLoader.formatImportStatus(bundle);
         if (result.useImportRefresh && bundle) {
-          ctx.clearProgramContextCache();
-          await ctx.refreshHalWidgetFeed(await ctx.loadProgramSnapshot());
           text += "\n\nImport cache refreshed. Widgets and dashboards now use the latest local export files.";
+        }
+        if (refreshError) {
+          text += `\n\nRefresh error: ${refreshError.message || refreshError}`;
         }
       }
       return outcome(text, "imports", result.intent, [], { refreshHal: true });
@@ -46,7 +101,11 @@ const HalRouteExec = (function () {
       const feed =
         (snapshot && snapshot.widgets) || (window.HalSkills && HalSkills.buildWidgetFeed(snapshot)) || ctx.halWidgetFeed || {};
       const staticItems = (ctx.halData.sources && ctx.halData.sources.items) || [];
-      const text = HalSkills.formatSourceHealthText(feed.sourceHealth, staticItems);
+      let text = HalSkills.formatSourceHealthText(feed.sourceHealth, staticItems);
+      const issues = snapshot && snapshot.runtimeIssues;
+      if (issues && issues.length) {
+        text += "\n\nRuntime issues:\n" + issues.map((item) => `- ${item.source}: ${item.message}`).join("\n");
+      }
       return outcome(text, "sources", result.intent, [], { refreshHal: false });
     }
 
@@ -81,22 +140,42 @@ const HalRouteExec = (function () {
 
     if (result.useOfficeAttention) {
       const snapshot = await ctx.loadProgramSnapshot();
-      const metrics = HalSkills.computeTaskMetrics(ctx.halOfficeTasks || []);
+      const tasks = await resolveOfficeTasks(ctx);
+      const metrics = HalSkills.computeTaskMetrics(tasks);
       const resp = HalSkills.buildOfficeManagerAttention(snapshot, metrics);
       return outcome(HalSkills.formatOfficeManagerAttention(resp), "office", result.intent);
     }
 
+    if (result.useOfficeBriefing) {
+      const officeApi =
+        typeof HalOfficeManager !== "undefined"
+          ? HalOfficeManager
+          : typeof window !== "undefined" && window.HalOfficeManager
+            ? window.HalOfficeManager
+            : null;
+      if (!officeApi) return outcome("Office manager briefing unavailable.", "office", result.intent);
+      const tool = toolResults && toolResults.read_office_briefing;
+      if (tool && tool.summary) return outcome(tool.summary, "office", result.intent, [], { refreshHal: true });
+      const snapshot = await ctx.loadProgramSnapshot();
+      const briefing = window.HalProactive && HalProactive.getLastBriefing ? HalProactive.getLastBriefing() : null;
+      const state =
+        (briefing && briefing.officeManager) ||
+        officeApi.buildOfficeManagerState(snapshot, ctx, briefing || { officePriorities: officeApi.buildOfficePriorities(snapshot, ctx) });
+      return outcome(officeApi.formatDailyOfficeBriefing(state, snapshot), "office", result.intent, [], { refreshHal: true });
+    }
+
     if (result.useTaskList) {
-      const metrics = HalSkills.computeTaskMetrics(ctx.halOfficeTasks || []);
+      const tasks = await resolveOfficeTasks(ctx);
+      const metrics = HalSkills.computeTaskMetrics(tasks);
       const lines = [
-        `Local office tasks (${(ctx.halOfficeTasks || []).length}) — local only; HAL reads SoftDent and QuickBooks only:`,
+        `Local office tasks (${tasks.length}) — local only; HAL reads SoftDent and QuickBooks only:`,
         `Open ${metrics.openCount} · In progress ${metrics.inProgressCount} · Blocked ${metrics.blockedCount} · Completed ${metrics.completedCount}`,
       ];
-      if (!(ctx.halOfficeTasks || []).length) {
+      if (!tasks.length) {
         lines.push("", 'No tasks yet. Say "Create a task: follow up on denied claim" to add one.');
       } else {
         lines.push("");
-        (ctx.halOfficeTasks || []).slice(0, 12).forEach((t) => lines.push(`- [${t.status}] (${t.priority}) ${t.title}`));
+        tasks.slice(0, 12).forEach((t) => lines.push(`- [${t.status}] (${t.priority}) ${t.title}`));
       }
       return outcome(lines.join("\n"), "office", result.intent);
     }
@@ -146,6 +225,20 @@ const HalRouteExec = (function () {
       const feed = await widgetFeed();
       ctx.setHalWidgetFeed(feed);
       return outcome(HalSkills.formatWidgetFeed(feed), "widgets", result.intent, [], { refreshHal: true });
+    }
+
+    if (result.useWidgetContract) {
+      const contract =
+        typeof WidgetContract !== "undefined"
+          ? WidgetContract
+          : typeof window !== "undefined" && window.WidgetContract
+            ? window.WidgetContract
+            : null;
+      const text =
+        contract && typeof contract.formatAllContractsForHal === "function"
+          ? contract.formatAllContractsForHal()
+          : "Widget contract unavailable.";
+      return outcome(text, "widgets", result.intent, [], { refreshHal: true });
     }
 
     if (result.useWidgetFillSuggestions) {

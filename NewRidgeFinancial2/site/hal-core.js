@@ -197,9 +197,17 @@ const HalCore = (function () {
     );
     const fin = snapshot.dashboards && snapshot.dashboards.financial;
     if (fin) {
-      lines.push(
-        `Financial (${fin.dateRange || "current"}): production ${fin.productionMtd?.value || "—"}, collections ${fin.metrics?.[0]?.value || "—"}, net A/R ${fin.metrics?.[1]?.value || "—"}, EBITDA ${fin.metrics?.[2]?.value || "—"}, quality ${fin.quality?.score || "—"}/100`,
-      );
+      const metricValue = (re) => ((fin.metrics || []).find((m) => re.test(String(m.label || ""))) || {}).value || "—";
+      const ebitdaMetric = (fin.metrics || []).find((m) => /ebitda/i.test(String(m.label || "")));
+      const finParts = [
+        `production ${fin.productionMtd?.value || "—"}`,
+        `collections ${metricValue(/collections/i)}`,
+        `QB revenue ${metricValue(/quickbooks revenue|revenue/i)}`,
+        `QB net income ${metricValue(/net income/i)}`,
+      ];
+      if (ebitdaMetric) finParts.push(`EBITDA ${ebitdaMetric.value || "—"}`);
+      if (fin.quality?.score) finParts.push(`quality ${fin.quality.score}/100`);
+      lines.push(`Financial (${fin.dateRange || "current"}): ${finParts.join(", ")}`);
       if (fin.payerMix?.slices?.length) {
         lines.push(
           "Payer mix: " +
@@ -390,6 +398,9 @@ const HalCore = (function () {
     if (/\bmissing data\b.*\bwidgets?\b|\bwidgets?\b.*\bmissing data\b|\bmissing\b.*\bby widget\b/.test(query)) {
       return { intent: "widgets: missing-data", lane: "local", useWidgetGuidance: true, widgetGuidance: "missingData", text: "", actions: [] };
     }
+    if (/\bwidget contract\b|\bwhat does\b.*\bwidget\b.*\bneed\b|\bwhich dataset\b.*\bwidget\b|\bwhich field\b.*\bwidget\b|\bdata source\b.*\bwidget\b/.test(query)) {
+      return { intent: "widgets: contract", lane: "local", useWidgetContract: true, text: "", actions: [] };
+    }
     if (/\bprioriti[sz]e\b.*\bwidgets?\b|\bwidgets?\b.*\b(fill first|priority|prioriti[sz]e)\b/.test(query)) {
       return { intent: "widgets: fill-priority", lane: "local", useWidgetGuidance: true, widgetGuidance: "fillPriority", text: "", actions: [] };
     }
@@ -402,8 +413,11 @@ const HalCore = (function () {
     if (/\bwhy\b.*\bwidgets?\b.*\b(empty|blank|missing|incomplete)\b|\bexplain\b.*\bwidgets?\b.*\b(empty|blank|missing|incomplete)\b/.test(query)) {
       return { intent: "widgets: explain-empty", lane: "local", useWidgetGuidance: true, widgetGuidance: "explainEmpty", prompt: rawQuery, text: "", actions: [] };
     }
-    if (/\bdaily owner briefing\b|\bowner briefing\b|\bdaily briefing\b/.test(query)) {
+    if (/\bdaily owner briefing\b|\bowner briefing\b/.test(query)) {
       return { intent: "briefing: owner-daily", lane: "local", useWidgetGuidance: true, widgetGuidance: "dailyOwnerBriefing", text: "", actions: [] };
+    }
+    if (/\bdaily office briefing\b|\boffice manager briefing\b|\boffice briefing\b/.test(query)) {
+      return { intent: "briefing: office-daily", lane: "local", useOfficeBriefing: true, text: "", actions: [] };
     }
     if (/\baccounting review queue\b|\bshow accounting review\b|\bquickbooks\b.*\bdocuments\b.*\breview\b/.test(query)) {
       return { intent: "accounting: review-queue", lane: "local", useWidgetGuidance: true, widgetGuidance: "accountingReviewQueue", text: "", actions: [] };
@@ -944,18 +958,22 @@ const HalCore = (function () {
           ),
         );
       }
-      if (runtime.sessionStorageOk === true) {
-        results.push(readinessItem("storage", "Browser session storage", "Pass", "sessionStorage available", null));
-      } else if (runtime.sessionStorageOk === false) {
+      if (runtime.storageMode === "sqlite" || runtime.desktopBridgeOk === true) {
+        results.push(readinessItem("storage", "Desktop SQLite storage", "Pass", "pywebview bridge active; SQLite-backed persistence available", null));
+      } else if (runtime.storageMode === "sessionStorage") {
         results.push(
           readinessItem(
             "storage",
-            "Browser session storage",
+            "Browser preview storage",
             "Warning",
-            "sessionStorage unavailable",
-            "Use a normal browser window; private mode may block persistence.",
+            "sessionStorage fallback only; imports, SQLite storage, SideNotes hub files, and import sync are unavailable",
+            "Launch NR2 with scripts/start_nr2_1966.ps1 for desktop mode.",
           ),
         );
+      } else if (runtime.sessionStorageOk === true) {
+        results.push(readinessItem("storage", "Browser session storage", "Pass", "sessionStorage available", null));
+      } else if (runtime.sessionStorageOk === false) {
+        results.push(readinessItem("storage", "Browser session storage", "Warning", "sessionStorage unavailable", "Use a normal browser window; private mode may block persistence."));
       }
       if (runtime.activeSession) {
         results.push(
@@ -1300,6 +1318,10 @@ const HalCore = (function () {
       }
     }
 
+    if (/\b(120b|gpt-oss|oss120b)\b/i.test(query) || /\brun\b.*\b120b\b/i.test(query)) {
+      return { intent: "oss", lane: "oss120b", text: "", useOss: true, prompt: rawQuery, actions: [] };
+    }
+
     if (/second opinion|escalat|double[\s-]?check|high[\s-]?risk|complex case|deep review|review carefully|sanity check|scrutin/.test(query)) {
       return { intent: "escalation", lane: "escalate30b", text: "", useEscalation: true, prompt: rawQuery, actions: [] };
     }
@@ -1319,10 +1341,16 @@ const HalCore = (function () {
       };
     }
 
-    if (/\bpriorit|needs attention|attention today|what needs attention|to-?do|\btoday\b/.test(query)) {
-      const items = (halData.priorities && halData.priorities.items) || [];
-      const list = items.map((item, index) => `${index + 1}. ${item}`).join("\n");
-      return { intent: "priorities", lane: "local", text: `Today's operator priorities:\n${list}`, actions: [] };
+    if (
+      /\b(proactive|what should hal|what's best|best for the program|think about the program|program health|hal recommend)\b/.test(
+        query,
+      )
+    ) {
+      return { intent: "proactive: briefing", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
+    }
+
+    if (/\bpriorit|needs attention|attention today|what needs attention|what should (i|we) do|to-?do|\btoday\b/.test(query)) {
+      return { intent: "priorities", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
     }
 
     if (/\b(firewall|external action|boundary|guardrail|guardrails|safety|are you allowed)\b/.test(query)) {

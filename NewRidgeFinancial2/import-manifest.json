@@ -4,31 +4,110 @@
     "softdent": "app/data/imports/softdent",
     "quickbooks": "app/data/imports/quickbooks"
   },
+  "upstreamRoots": {
+    "softdent": {
+      "envVars": ["NR2_SOFTDENT_EXPORT_SOURCE", "SOFTDENT_SOURCE_DIR"],
+      "defaultPaths": [
+        "C:\\ProgramData\\Sensei Gateway Client\\DataSync",
+        "C:\\Users\\mreno\\SoftDentBridge\\exports",
+        "C:\\SoftDentFinancialExports",
+        "C:\\NewRidgeBridge\\exports"
+      ],
+      "collectorHints": {
+        "bridge_aggregate": "New Ridge SoftDent Bridge Sync scheduled task",
+        "account_aging_jsonl": "SoftDent financial pipeline (account_aging.jsonl)",
+        "daysheet_jsonl": "SoftDent daysheet export pipeline"
+      }
+    },
+    "quickbooks": {
+      "envVars": ["NR2_QUICKBOOKS_EXPORT_SOURCE", "QUICKBOOKS_SOURCE_DIR"],
+      "defaultPaths": [
+        "C:\\Users\\mreno\\QuickBooksExports",
+        "C:\\SoftDentFinancialExports"
+      ],
+      "collectorHints": {
+        "qb_sdk_summary": "QuickBooks SDK refresh scheduled task",
+        "qb_sdk_expense_categories": "QuickBooks SDK expense category probe"
+      }
+    }
+  },
   "datasets": {
     "softdent.dashboard": {
+      "system": "softdent",
+      "bundleKey": "dashboard",
       "filenames": [
         "softdent_dashboard_data.json",
         "softdent_dashboard_export.json",
         "softdent_dashboard_data.csv",
         "softdent_dashboard_export.csv"
       ],
-      "generatedBy": ["bridge_aggregate", "daysheet_jsonl"]
+      "sourceOwner": "softdent_bridge",
+      "generatedBy": ["bridge_aggregate", "daysheet_jsonl"],
+      "freshnessMaxMinutes": 120,
+      "severity": "critical",
+      "automated": true,
+      "requiredFields": ["production"],
+      "optionalFields": ["collections", "insurance", "patient", "provider", "period"],
+      "fieldAliases": {
+        "production": ["production", "Production", "grossProduction", "netProduction"],
+        "collections": ["collections", "Collections"],
+        "insurance": ["insurance", "Insurance"],
+        "patient": ["patient", "Patient"],
+        "provider": ["provider", "Provider", "providerName", "ProviderName"],
+        "period": ["period", "Period"]
+      }
     },
     "softdent.claims": {
+      "system": "softdent",
+      "bundleKey": "claims",
       "filenames": [
         "softdent_claims_export.csv",
         "softdent_claims_data.csv",
         "softdent_claims_export.json",
         "softdent_claims_data.json"
-      ]
+      ],
+      "sourceOwner": "softdent_bridge",
+      "generatedBy": [],
+      "freshnessMaxMinutes": 1440,
+      "severity": "warning",
+      "automated": true,
+      "requiredFields": ["ClaimId"],
+      "optionalFields": ["PatientName", "Payer", "ServiceDate", "ClaimAmount", "ClaimStatus", "Procedure", "DenialReason"],
+      "fieldAliases": {
+        "ClaimId": ["ClaimId", "claimId", "id"],
+        "PatientName": ["PatientName", "patient"],
+        "Payer": ["Payer", "payer", "Insurance", "insurance"],
+        "ServiceDate": ["ServiceDate", "serviceDate", "DOS", "dos"],
+        "ClaimAmount": ["ClaimAmount", "amount", "Billed", "billed"],
+        "ClaimStatus": ["ClaimStatus", "status"],
+        "Procedure": ["Procedure", "procedure"],
+        "DenialReason": ["DenialReason", "denialReason"]
+      }
     },
     "softdent.clinicalNotes": {
+      "system": "softdent",
+      "bundleKey": "clinicalNotes",
       "filenames": [
         "softdent_clinical_notes_data.json",
         "softdent_clinical_notes_export.json"
-      ]
+      ],
+      "sourceOwner": "softdent_bridge",
+      "generatedBy": [],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": true,
+      "requiredFields": [],
+      "optionalFields": ["PatientName", "Provider", "NoteDate", "NoteText"],
+      "fieldAliases": {
+        "PatientName": ["PatientName", "patient"],
+        "Provider": ["Provider", "provider"],
+        "NoteDate": ["NoteDate", "noteDate", "Date", "date"],
+        "NoteText": ["NoteText", "noteText", "Text", "text"]
+      }
     },
     "softdent.ar": {
+      "system": "softdent",
+      "bundleKey": "ar",
       "filenames": [
         "softdent_ar_aging.csv",
         "softdent_accounts_receivable.csv",
@@ -36,32 +115,232 @@
         "patient_aging.csv",
         "ar_aging.csv"
       ],
-      "generatedBy": ["account_aging_jsonl"]
+      "sourceOwner": "account_aging_jsonl",
+      "generatedBy": ["account_aging_jsonl"],
+      "freshnessMaxMinutes": 120,
+      "severity": "critical",
+      "automated": true,
+      "requiredFields": ["Bucket"],
+      "optionalFields": ["Balance", "Amount"],
+      "fieldAliases": {
+        "Bucket": ["Bucket", "bucket", "AgingBucket", "Range", "range"],
+        "Balance": ["Balance", "balance", "Amount", "amount", "total"]
+      }
     },
     "quickbooks.revenue": {
+      "system": "quickbooks",
+      "bundleKey": "revenue",
       "filenames": [
         "quickbooks_revenue.csv",
         "quickbooks_revenue.json",
         "quickbooks_profit_and_loss.csv",
         "quickbooks_profit_loss.csv"
       ],
-      "generatedBy": ["qb_sdk_summary"]
+      "sourceOwner": "qb_sdk_summary",
+      "generatedBy": ["qb_sdk_summary"],
+      "freshnessMaxMinutes": 1440,
+      "severity": "critical",
+      "automated": true,
+      "requiredFields": ["TotalIncome"],
+      "optionalFields": ["Amount", "Income", "Revenue", "Month", "Period"],
+      "fieldAliases": {
+        "TotalIncome": ["TotalIncome", "Income", "Revenue", "total_income", "Amount", "amount"],
+        "Month": ["Month", "month", "Period", "period"]
+      }
     },
     "quickbooks.expenses": {
+      "system": "quickbooks",
+      "bundleKey": "expenses",
       "filenames": [
         "quickbooks_expenses.csv",
         "quickbooks_expense_detail.csv",
-        "quickbooks_expense_categories.csv",
         "quickbooks_expenses.json"
       ],
-      "generatedBy": ["qb_sdk_summary", "qb_sdk_expense_categories"]
+      "sourceOwner": "qb_sdk_summary",
+      "generatedBy": ["qb_sdk_summary", "qb_sdk_expense_categories"],
+      "freshnessMaxMinutes": 1440,
+      "severity": "critical",
+      "automated": true,
+      "requiredFields": ["TotalExpense"],
+      "optionalFields": ["Amount", "Expenses", "Expense", "Month", "Period"],
+      "fieldAliases": {
+        "TotalExpense": ["TotalExpense", "Expenses", "Expense", "total_expense", "Amount", "amount"],
+        "Month": ["Month", "month", "Period", "period"]
+      }
+    },
+    "quickbooks.expenseCategories": {
+      "system": "quickbooks",
+      "bundleKey": "expenseCategories",
+      "filenames": [
+        "quickbooks_expense_categories.csv"
+      ],
+      "sourceOwner": "qb_sdk_expense_categories",
+      "generatedBy": ["qb_sdk_expense_categories"],
+      "freshnessMaxMinutes": 1440,
+      "severity": "warning",
+      "automated": true,
+      "requiredFields": ["Category"],
+      "optionalFields": ["Amount"],
+      "fieldAliases": {
+        "Category": ["Category", "category"],
+        "Amount": ["Amount", "amount"]
+      }
     },
     "quickbooks.ar": {
+      "system": "quickbooks",
+      "bundleKey": "ar",
       "filenames": [
         "quickbooks_ar.csv",
         "quickbooks_accounts_receivable.csv",
         "quickbooks_aging.csv"
-      ]
+      ],
+      "sourceOwner": null,
+      "generatedBy": [],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": false,
+      "requiredFields": ["Bucket"],
+      "optionalFields": ["Balance", "Amount", "AccountsReceivable"],
+      "fieldAliases": {
+        "Bucket": ["Bucket", "bucket", "AgingBucket", "Range", "range"],
+        "Balance": ["Balance", "balance", "Amount", "amount", "AccountsReceivable"],
+        "AccountsReceivable": ["AccountsReceivable", "accountsReceivable", "TotalAR", "total_ar"]
+      },
+      "note": "QuickBooks A/R is not yet produced by an automated collector; NR2 will load it when a file appears."
+    },
+    "softdent.newPatients": {
+      "system": "softdent",
+      "bundleKey": "newPatients",
+      "filenames": [
+        "softdent_new_patients.csv",
+        "softdent_new_patients.json",
+        "new_patients.csv"
+      ],
+      "sourceOwner": null,
+      "generatedBy": [],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": false,
+      "requiredFields": ["Count"],
+      "optionalFields": ["Period", "NewPatients", "newPatients"],
+      "fieldAliases": {
+        "Count": ["Count", "count", "NewPatients", "newPatients", "Total"],
+        "Period": ["Period", "period", "Month", "month"]
+      },
+      "note": "New patient counts require a SoftDent export; not yet automated."
+    },
+    "softdent.treatmentPlans": {
+      "system": "softdent",
+      "bundleKey": "treatmentPlans",
+      "filenames": [
+        "treatment_plan_summary.csv",
+        "softdent_treatment_plan_summary.csv",
+        "treatment_plan_summary.json"
+      ],
+      "sourceOwner": null,
+      "generatedBy": [],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": false,
+      "requiredFields": [],
+      "optionalFields": ["Presented", "Accepted", "Amount", "CaseCount"],
+      "fieldAliases": {
+        "Presented": ["Presented", "presented", "PlansPresented", "TxPresented"],
+        "Accepted": ["Accepted", "accepted", "PlansAccepted", "TxAccepted"],
+        "Amount": ["Amount", "amount", "PresentedValue", "TotalAmount"],
+        "CaseCount": ["CaseCount", "caseCount", "Count", "count"]
+      },
+      "note": "Treatment plan summary export documented but not yet produced by an automated collector."
+    },
+    "softdent.caseAcceptance": {
+      "system": "softdent",
+      "bundleKey": "caseAcceptance",
+      "filenames": [
+        "case_acceptance.csv",
+        "softdent_case_acceptance.csv",
+        "case_acceptance.json"
+      ],
+      "sourceOwner": null,
+      "generatedBy": [],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": false,
+      "requiredFields": [],
+      "optionalFields": ["AcceptanceRate", "Presented", "Accepted", "Rate"],
+      "fieldAliases": {
+        "AcceptanceRate": ["AcceptanceRate", "acceptanceRate", "Rate", "rate"],
+        "Presented": ["Presented", "presented", "PlansPresented"],
+        "Accepted": ["Accepted", "accepted", "PlansAccepted"]
+      },
+      "note": "Case acceptance requires a dedicated export or derived treatment-plan summary; not yet automated."
+    }
+  },
+  "widgets": {
+    "practiceFinancialOverview": {
+      "title": "Practice Financial Overview",
+      "navTarget": "financial",
+      "metrics": {
+        "monthlyRevenue": { "dataset": "quickbooks.revenue", "dashboard": "quickbooks", "path": "revenue" },
+        "monthlyNetIncome": { "dataset": "quickbooks.revenue", "dashboard": "quickbooks", "compute": "qbNetIncome" },
+        "productionTotal": { "dataset": "softdent.dashboard", "dashboard": "softdent", "path": "production" },
+        "collectionsTotal": { "dataset": "softdent.dashboard", "dashboard": "softdent", "path": "collections" }
+      }
+    },
+    "financialProductionTrend": {
+      "title": "Production Trend & YTD",
+      "navTarget": "financial",
+      "metrics": {
+        "productionMtd": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "productionMtd.value" },
+        "productionTrendLatest": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "productionTrend.production", "index": -1 },
+        "ytdProduction": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "productionTrend.ytd", "label": "YTD Production" },
+        "ytdCollectionRate": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "productionTrend.ytd", "label": "YTD Collection Rate" }
+      }
+    },
+    "payerMixAndCollections": {
+      "title": "Payer Mix & Collections",
+      "navTarget": "financial",
+      "metrics": {
+        "payerMixTotal": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "payerMix.total" },
+        "collectionRate": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "payerMix.rate" },
+        "topPayer": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "payerMix.slices", "index": 0, "subpath": "label" },
+        "topPayerShare": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "payerMix.slices", "index": 0, "subpath": "pct", "suffix": "%" }
+      }
+    },
+    "providerPerformance": {
+      "title": "Provider Performance",
+      "navTarget": "financial",
+      "metrics": {
+        "providerCount": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "providers.rows", "length": true },
+        "topProvider": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "providers.rows", "index": 0, "subpath": "name" },
+        "topProviderProduction": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "providers.rows", "index": 0, "subpath": "amount" },
+        "providerTotal": { "dataset": "softdent.dashboard", "dashboard": "financial", "path": "providers.total.amount" }
+      }
+    },
+    "newPatients": {
+      "title": "New Patients",
+      "navTarget": "softdent",
+      "metrics": {
+        "newPatientCount": { "dataset": "softdent.newPatients", "dashboard": "practice", "path": "newPatients.count" },
+        "period": { "dataset": "softdent.newPatients", "dashboard": "practice", "path": "newPatients.period" }
+      }
+    },
+    "treatmentPlanSummary": {
+      "title": "Treatment Plan Summary",
+      "navTarget": "softdent",
+      "metrics": {
+        "plansPresented": { "dataset": "softdent.treatmentPlans", "dashboard": "practice", "path": "treatmentPlans.presented" },
+        "plansAccepted": { "dataset": "softdent.treatmentPlans", "dashboard": "practice", "path": "treatmentPlans.accepted" },
+        "presentedValue": { "dataset": "softdent.treatmentPlans", "dashboard": "practice", "path": "treatmentPlans.presentedValue" }
+      }
+    },
+    "caseAcceptance": {
+      "title": "Case Acceptance",
+      "navTarget": "softdent",
+      "metrics": {
+        "acceptanceRate": { "dataset": "softdent.caseAcceptance", "dashboard": "practice", "path": "caseAcceptance.rate" },
+        "acceptedCount": { "dataset": "softdent.caseAcceptance", "dashboard": "practice", "path": "caseAcceptance.accepted" },
+        "presentedCount": { "dataset": "softdent.caseAcceptance", "dashboard": "practice", "path": "caseAcceptance.presented" }
+      }
     }
   }
 }

@@ -1,0 +1,19 @@
+name: Validate NR2
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Validate HAL
+        run: node NewRidgeFinancial2/validate-hal.mjs
+      - name: Validate pages
+        run: node NewRidgeFinancial2/validate-pages.mjs

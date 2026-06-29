@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -29,6 +31,14 @@ class DesktopApi:
 
         self.site_dir = site_dir
         self.store = LocalStore(data_dir)
+        self._sync_lock = threading.Lock()
+        self._sync_state: dict = {
+            "status": "idle",
+            "startedAt": None,
+            "completedAt": None,
+            "error": None,
+            "result": None,
+        }
 
     def get_app_info(self) -> dict:
         return {
@@ -39,9 +49,6 @@ class DesktopApi:
         }
 
     def read_data_file(self, name: str) -> str:
-        # SideNotes station inbox files are produced by workstation helpers.
-        # Prefer the shared SoftDent hub so every workstation can focus on the
-        # same folder; other app data remains locked to site/data.
         if name.startswith("sidenotes-inbox"):
             hub_path = SIDENOTES_HUB_DATA_DIR / name
             if hub_path.is_file():
@@ -71,10 +78,48 @@ class DesktopApi:
 
         return load_import_bundle(sync=False)
 
-    def refresh_imports(self) -> dict:
-        from import_loader import load_import_bundle
+    def get_import_sync_status(self) -> dict:
+        with self._sync_lock:
+            return dict(self._sync_state)
 
-        return load_import_bundle(sync=True)
+    def _run_import_sync(self) -> None:
+        from import_sync import sync_imports
+
+        try:
+            result = sync_imports()
+            with self._sync_lock:
+                self._sync_state = {
+                    "status": "success",
+                    "startedAt": self._sync_state.get("startedAt"),
+                    "completedAt": datetime.now(timezone.utc).isoformat(),
+                    "error": None,
+                    "result": result,
+                }
+        except Exception as exc:
+            with self._sync_lock:
+                self._sync_state = {
+                    "status": "failed",
+                    "startedAt": self._sync_state.get("startedAt"),
+                    "completedAt": datetime.now(timezone.utc).isoformat(),
+                    "error": str(exc),
+                    "result": None,
+                }
+
+    def refresh_imports(self) -> dict:
+        with self._sync_lock:
+            if self._sync_state.get("status") == "running":
+                return dict(self._sync_state)
+            self._sync_state = {
+                "status": "running",
+                "startedAt": datetime.now(timezone.utc).isoformat(),
+                "completedAt": None,
+                "error": None,
+                "result": None,
+            }
+            state = dict(self._sync_state)
+        thread = threading.Thread(target=self._run_import_sync, daemon=True)
+        thread.start()
+        return state
 
 
 def main() -> int:
