@@ -1,0 +1,10 @@
+# Bundled 32-bit Python runtime (large, machine-specific)
+py32/
+
+# Local runtime state
+watcher_state.json
+
+# Probe scripts and any copied office data (never commit message data)
+work/
+*.vdb
+*.log

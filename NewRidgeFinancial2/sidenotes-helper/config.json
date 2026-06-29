@@ -1,0 +1,58 @@
+{
+
+  "historyPath": "",
+
+  "simDir": "C:\\Program Files (x86)\\SideNotesIM",
+
+  "myStation": "Server",
+
+  "pollSeconds": 2.0,
+
+  "announce": true,
+
+  "voiceStyle": "hal9000",
+
+  "processedAudio": true,
+
+  "announceVaried": true,
+
+  "announceVariants": [],
+
+  "announceBroadcastVariants": [],
+
+  "stationPeople": {
+    "room 2": "Mayci",
+    "room 3": "Nicole",
+    "room 4": "Nicole",
+    "room 5": "Nicole",
+    "frontdesk 1": "Andrea and Jeannie",
+    "frontdesk 2": "Andrea and Jeannie",
+    "office manager": "Steve"
+  },
+
+  "announceTemplate": "Good afternoon. I have a message for you from {sender}.",
+
+  "announceBroadcastTemplate": "I should inform you. A broadcast message has arrived from {sender}.",
+
+  "announceScope": "to_me_or_everyone",
+
+  "suppressBell": true,
+
+  "duckMusic": true,
+
+  "duckMusicProcesses": ["Pandora.exe"],
+
+  "duckMusicLevel": 0.14,
+
+  "voiceHint": "David",
+
+  "voiceRate": -6,
+
+  "voiceVolume": 90,
+
+  "inboxPath": "",
+
+  "inboxMax": 50
+
+}
+
