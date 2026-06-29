@@ -395,8 +395,21 @@ async function main() {
     halAskDraft: "",
     halAskLoading: false,
     halInlineFirewallResult: null,
+    halSideNotes: [],
+    halSideNoteMonitor: { activeCount: 0, openCount: 0, pinnedCount: 0, highPriorityCount: 0, checkedAt: new Date().toISOString() },
+    halSideNotesInbox: {
+      monitor: { checkedAt: new Date().toISOString(), lastRowId: 1616, announce: true, bellSuppressed: true, station: "Server", status: "live", voiceStyle: "hal9000" },
+      items: [
+        { id: "M1", rowId: 1616, sender: "Room 4", recipient: "Server", broadcast: false, date: "6/28/2026", time: "6:49:24 PM", unread: true },
+      ],
+    },
   });
   assert(halHtml.includes("MODE"), "HAL page must show current mode");
+  assert(halHtml.includes("SIDENOTESIM MONITOR"), "HAL page must render the SideNotesIM live monitor");
+  assert(halHtml.includes("HAL 9000 voice"), "HAL page must show HAL 9000 voice mode");
+  assert(halHtml.includes("TEST VOICE"), "HAL page must render HAL voice test control");
+  assert(halHtml.includes("Room 4"), "HAL page must render live SideNotesIM message senders");
+  assert(halHtml.includes("LOCAL NOTES"), "HAL page must render the local notes section");
   assert(halHtml.includes("NEXT SAFE STEP"), "HAL page must surface the next safe step");
   assert(halHtml.includes("ACTIVE WORK"), "HAL page must surface active work");
   assert(halHtml.includes("Allowed (local)"), "HAL page must surface allowed actions");
@@ -499,6 +512,27 @@ async function main() {
   assert(done.status === "completed", "task update must apply");
   const metrics = HalSkills.computeTaskMetrics([task, done]);
   assert(metrics.openCount === 1 && metrics.completedCount === 1, "task metrics must count statuses");
+
+  // HAL sidenotes (local monitor, create/list)
+  const snMonitorRoute = HalCore.routeHalCommand(halData, halModels, pages, "Monitor sidenotes");
+  assert(snMonitorRoute.intent === "sidenotes: monitor" && snMonitorRoute.useSideNoteMonitor === true, "sidenote monitor must route locally");
+  const snListRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show sidenotes");
+  assert(snListRoute.intent === "sidenotes: list" && snListRoute.useSideNoteList === true, "sidenote list must route locally");
+  const snCreateRoute = HalCore.routeHalCommand(halData, halModels, pages, "Add sidenote: follow up on hygiene recall");
+  assert(snCreateRoute.intent === "sidenotes: create" && snCreateRoute.useSideNoteCreate === true, "sidenote create must route locally");
+  const sn = HalSkills.createSideNote({ text: "Recall patient about claim" }, { actor: "test" });
+  assert(sn.noteId && sn.localOnly === true && sn.softdentWritebackPerformed === false, "created sidenote must be local-only");
+  const mon1 = HalSkills.buildSideNoteMonitor([sn]);
+  const pinned = HalSkills.applySideNoteUpdate(sn, { status: "pinned" });
+  const mon2 = HalSkills.buildSideNoteMonitor([pinned], mon1);
+  assert(mon2.hasChanges === true && mon2.pinnedCount === 1, "sidenote monitor must detect changes");
+  const snSummary = HalCore.summarizeProgramSnapshot(
+    Object.assign({}, snapshot, {
+      sideNotes: { activeCount: 1, monitor: mon2, top: [{ status: "pinned", priority: "normal", text: "Recall patient" }] },
+    }),
+    halData,
+  );
+  assert(snSummary.includes("Sidenotes (HAL monitor)"), "program snapshot must include sidenotes summary");
 
   // Sanitization (PII redaction)
   const san = HalSkills.sanitizeText("Call patient John Smith at 555-123-4567, MRN 12345, john@x.com on 03/12/2025");

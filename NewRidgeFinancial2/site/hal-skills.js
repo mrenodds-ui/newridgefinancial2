@@ -486,6 +486,131 @@ const HalSkills = (function () {
   }
 
   /* ============================================================
+   * HAL sidenotes — local staff scratch notes monitored by HAL
+   * (pure helpers; persistence handled by the app via DesktopBridge)
+   * ========================================================== */
+
+  const VALID_SIDENOTE_STATUSES = new Set(["open", "pinned", "archived"]);
+  const VALID_SIDENOTE_PRIORITIES = new Set(["low", "normal", "high"]);
+
+  function sideNoteFingerprint(notes) {
+    return (notes || [])
+      .map((n) => `${n.noteId}:${n.updatedAt || ""}:${n.status || ""}`)
+      .sort()
+      .join("|");
+  }
+
+  function createSideNote(req, opts) {
+    const now = new Date().toISOString();
+    const actor = (opts && opts.actor) || "local-user";
+    const text = sanitizeText(String((req && req.text) || "").trim());
+    if (text.length < 2) throw new Error("Sidenote text must be at least 2 characters.");
+    const status = VALID_SIDENOTE_STATUSES.has(req.status) ? req.status : "open";
+    const priority = VALID_SIDENOTE_PRIORITIES.has(req.priority) ? req.priority : "normal";
+    const tags = Array.isArray(req.tags) ? req.tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 8) : [];
+    return {
+      meta: skillMeta("hal.sidenote", "hal"),
+      noteId: uid("sn"),
+      text,
+      status,
+      priority,
+      tags,
+      createdBy: actor,
+      createdAt: now,
+      updatedAt: now,
+      localOnly: true,
+      externalActionPerformed: false,
+      softdentWritebackPerformed: false,
+    };
+  }
+
+  function applySideNoteUpdate(existing, updates) {
+    if (!existing) throw new Error("Sidenote not found.");
+    const next = Object.assign({}, existing);
+    if (updates.text != null) {
+      const t = sanitizeText(String(updates.text).trim());
+      if (t.length < 2) throw new Error("Sidenote text must be at least 2 characters.");
+      next.text = t;
+    }
+    if (updates.status != null) {
+      if (!VALID_SIDENOTE_STATUSES.has(updates.status)) throw new Error(`Unsupported sidenote status: ${updates.status}`);
+      next.status = updates.status;
+    }
+    if (updates.priority != null) {
+      if (!VALID_SIDENOTE_PRIORITIES.has(updates.priority)) throw new Error(`Unsupported sidenote priority: ${updates.priority}`);
+      next.priority = updates.priority;
+    }
+    if (updates.tags != null) next.tags = updates.tags.slice();
+    next.updatedAt = new Date().toISOString();
+    return next;
+  }
+
+  function buildSideNoteMonitor(notes, prevMonitor) {
+    const list = notes || [];
+    const active = list.filter((n) => n.status !== "archived");
+    const fingerprint = sideNoteFingerprint(list);
+    const prevFp = prevMonitor && prevMonitor.fingerprint;
+    const recentThresholdMs = 24 * 60 * 60 * 1000;
+    const recent = active
+      .filter((n) => Date.now() - Date.parse(n.updatedAt || n.createdAt || 0) < recentThresholdMs)
+      .sort((a, b) => Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0))
+      .slice(0, 6);
+    return {
+      meta: skillMeta("hal.sidenoteMonitor", "hal"),
+      checkedAt: new Date().toISOString(),
+      fingerprint,
+      hasChanges: !!(prevFp && prevFp !== fingerprint),
+      totalCount: list.length,
+      activeCount: active.length,
+      openCount: active.filter((n) => n.status === "open").length,
+      pinnedCount: active.filter((n) => n.status === "pinned").length,
+      highPriorityCount: active.filter((n) => n.priority === "high").length,
+      archivedCount: list.length - active.length,
+      recent,
+      localOnly: true,
+      externalActionPerformed: false,
+      softdentWritebackPerformed: false,
+    };
+  }
+
+  function formatSideNoteMonitor(monitor, notes) {
+    const m = monitor || buildSideNoteMonitor(notes || []);
+    const lines = [
+      "HAL sidenotes monitor (local only · not submitted · HAL watches persisted storage):",
+      `Checked ${m.checkedAt || "—"} · ${m.activeCount} active · ${m.openCount} open · ${m.pinnedCount} pinned · ${m.highPriorityCount} high priority`,
+    ];
+    if (m.hasChanges) lines.push("", "Changes detected since the last monitor check.");
+    const active = (notes || []).filter((n) => n.status !== "archived");
+    if (!active.length) {
+      lines.push("", 'No active sidenotes. Add one below or say "Add sidenote: recall patient about claim".');
+    } else {
+      lines.push("", "Active notes:");
+      active.slice(0, 12).forEach((n) => {
+        const tagStr = n.tags && n.tags.length ? ` [${n.tags.join(", ")}]` : "";
+        lines.push(`- [${n.status}/${n.priority}] ${n.text.slice(0, 160)}${tagStr}`);
+      });
+    }
+    lines.push("", SAFETY_DISCLAIMER);
+    return lines.join("\n");
+  }
+
+  function formatSideNotesList(notes) {
+    const active = (notes || []).filter((n) => n.status !== "archived");
+    const lines = [
+      `Local sidenotes (${active.length} active · local only, never written to SoftDent):`,
+    ];
+    if (!active.length) {
+      lines.push("", 'No sidenotes yet. Say "Add sidenote: follow up on hygiene recall" to add one.');
+    } else {
+      lines.push("");
+      active.slice(0, 15).forEach((n) => {
+        lines.push(`- [${n.status}] (${n.priority}) ${n.text}`);
+      });
+    }
+    return lines.join("\n");
+  }
+
+  /* ============================================================
    * Office-manager tasks — port of office_manager_task_service.py
    * (pure helpers; persistence handled by the app via DesktopBridge)
    * ========================================================== */
@@ -944,6 +1069,13 @@ const HalSkills = (function () {
     // office-manager attention
     buildOfficeManagerAttention,
     formatOfficeManagerAttention,
+    // HAL sidenotes
+    createSideNote,
+    applySideNoteUpdate,
+    buildSideNoteMonitor,
+    formatSideNoteMonitor,
+    formatSideNotesList,
+    sideNoteFingerprint,
     // office-manager tasks
     createTask,
     applyTaskUpdate,

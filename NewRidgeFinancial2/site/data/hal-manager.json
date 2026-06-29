@@ -25,6 +25,8 @@
       "Show manager dashboard widgets",
       "Search the library for compliance",
       "Show my tasks",
+      "Monitor sidenotes",
+      "Show sidenotes",
       "Show full program snapshot",
       "What is ready to work on",
       "What is blocked",
@@ -142,7 +144,7 @@
     "title": "External action firewall",
     "summary": "HAL cannot perform external actions from this program. The safety boundary is enforced before any model call.",
     "blocked": ["No email", "No fax", "No upload", "No payer contact", "No writeback", "No submission"],
-    "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information", "Draft a journal entry (local, not posted)", "Assess claim packet readiness", "Build office-manager attention list", "Create local office tasks"],
+    "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information", "Draft a journal entry (local, not posted)", "Assess claim packet readiness", "Build office-manager attention list", "Create local office tasks", "Monitor local sidenotes", "Add local sidenotes"],
     "examples": [
       { "text": "Open the claims workbench", "expected": "allowed" },
       { "text": "Explain A/R aging", "expected": "allowed" },

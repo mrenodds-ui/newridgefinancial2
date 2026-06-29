@@ -250,6 +250,16 @@ const HalCore = (function () {
         lines.push(`  - ${d.title} · ${d.type} · ${d.updated}`);
       });
     }
+    if (snapshot.sideNotes) {
+      const sn = snapshot.sideNotes;
+      const mon = sn.monitor || {};
+      lines.push(
+        `Sidenotes (HAL monitor): ${sn.activeCount ?? sn.total ?? 0} active · ${mon.openCount ?? "—"} open · ${mon.pinnedCount ?? "—"} pinned · ${mon.highPriorityCount ?? "—"} high priority`,
+      );
+      (sn.top || []).slice(0, 5).forEach((n) => {
+        lines.push(`  - [${n.status}/${n.priority}] ${n.text}`);
+      });
+    }
     lines.push("Registry status:");
     lines.push(registryAsText(halData));
     if (halData.sources && halData.sources.items && halData.sources.items.length) {
@@ -309,6 +319,31 @@ const HalCore = (function () {
     // Office-manager attention
     if (/\boffice[\s-]?manager\b/.test(query) && !/\btask\b/.test(query)) {
       return { intent: "office: attention", lane: "local", useOfficeAttention: true, text: "", actions: [] };
+    }
+
+    // Sidenotes: monitor
+    if (/\b(monitor|watch|check|status)\b.*\bsidenotes?\b|\bsidenotes?\b.*\b(monitor|watch|status)\b/.test(query)) {
+      return { intent: "sidenotes: monitor", lane: "local", useSideNoteMonitor: true, text: "", actions: [] };
+    }
+
+    // Sidenotes: list
+    if (/\b(show|list|view)\b.*\bsidenotes?\b|\bsidenotes?\b.*\b(list|open)\b/.test(query)) {
+      return { intent: "sidenotes: list", lane: "local", useSideNoteList: true, text: "", actions: [] };
+    }
+
+    // Sidenotes: create
+    const sideNoteMatch =
+      String(rawQuery || "").match(/\b(?:add|create|new|make)\s+sidenote\b[:\-\s]*(.*)$/i) ||
+      String(rawQuery || "").match(/\bsidenote\b[:\-\s]+(.*)$/i);
+    if (sideNoteMatch) {
+      return {
+        intent: "sidenotes: create",
+        lane: "local",
+        useSideNoteCreate: true,
+        sideNoteText: sideNoteMatch[1].trim(),
+        text: "",
+        actions: [],
+      };
     }
 
     // Office tasks: list
