@@ -200,7 +200,7 @@ const ImportLoader = (function () {
 
   function normalizeDashboardRows(rows) {
     return (rows || []).map((row, index) => ({
-      provider: PRIMARY_PROVIDER,
+      provider: String(row.provider || row.Provider || row.providerName || row.ProviderName || PRIMARY_PROVIDER).trim() || PRIMARY_PROVIDER,
       period: String(row.period || row.Period || ""),
       production: coerceFloat(row.production || row.Production) || 0,
       collections: coerceFloat(row.collections || row.Collections) || 0,
@@ -222,19 +222,26 @@ const ImportLoader = (function () {
     );
     const periods = rows.map((row) => row.period).filter(Boolean);
     const period = periods.length ? periods.sort().slice(-1)[0] : "";
-    const providerRow = rows.length
-      ? [
-          {
-            provider: PRIMARY_PROVIDER,
-            period,
-            production: totals.production,
-            collections: totals.collections,
-            insurance: totals.insurance,
-            patient: totals.patient,
-          },
-        ]
-      : [];
-    return { totals, period, rows: providerRow };
+    const byProvider = {};
+    rows.forEach((row) => {
+      const provider = row.provider || PRIMARY_PROVIDER;
+      if (!byProvider[provider]) {
+        byProvider[provider] = {
+          provider,
+          period,
+          production: 0,
+          collections: 0,
+          insurance: 0,
+          patient: 0,
+        };
+      }
+      byProvider[provider].production += row.production;
+      byProvider[provider].collections += row.collections;
+      byProvider[provider].insurance += row.insurance;
+      byProvider[provider].patient += row.patient;
+    });
+    const providerRows = Object.values(byProvider).sort((a, b) => b.production - a.production);
+    return { totals, period, rows: providerRows };
   }
 
   function pickField(row, names) {
@@ -249,14 +256,20 @@ const ImportLoader = (function () {
   function quickbooksTotals(bundle) {
     const revenueRows = ((bundle.quickbooks && bundle.quickbooks.revenue) || {}).rows || [];
     const expenseRows = ((bundle.quickbooks && bundle.quickbooks.expenses) || {}).rows || [];
+    const totalFromRows = (rows, totalFields, amountFields) => {
+      const first = rows[0] || {};
+      const explicitTotal = coerceFloat(pickField(first, totalFields));
+      if (explicitTotal !== null) return explicitTotal;
+      return rows.reduce((acc, row) => acc + (coerceFloat(pickField(row, amountFields)) || 0), 0);
+    };
+    let revenue = totalFromRows(revenueRows, ["TotalIncome", "Income", "Revenue", "total_income"], ["Amount", "amount", "Total"]);
+    let expenses = totalFromRows(
+      expenseRows,
+      ["TotalExpense", "Expenses", "Expense", "total_expense"],
+      ["Amount", "amount", "Total"],
+    );
     const firstRevenue = revenueRows[0] || {};
     const firstExpense = expenseRows[0] || {};
-    let revenue =
-      coerceFloat(pickField(firstRevenue, ["TotalIncome", "Income", "Revenue", "total_income", "amount"])) ||
-      revenueRows.reduce((acc, row) => acc + (coerceFloat(pickField(row, ["Amount", "amount", "Total"])) || 0), 0);
-    let expenses =
-      coerceFloat(pickField(firstExpense, ["TotalExpense", "Expenses", "Expense", "total_expense", "amount"])) ||
-      expenseRows.reduce((acc, row) => acc + (coerceFloat(pickField(row, ["Amount", "amount", "Total"])) || 0), 0);
     if (!revenue && expenseRows.length) {
       revenue = coerceFloat(pickField(firstExpense, ["TotalIncome", "Income", "Revenue"])) || revenue;
     }
@@ -277,8 +290,14 @@ const ImportLoader = (function () {
     const dashboardRows = normalizeDashboardRows((sd.dashboard && sd.dashboard.rows) || []);
     const aggregate = aggregateDashboard(dashboardRows);
     const arRows = (sd.ar && sd.ar.rows) || [];
-    const arTotal = arRows.reduce((acc, row) => acc + (coerceFloat(pickField(row, ["Amount", "Balance", "amount", "total"])) || 0), 0);
-    const hasAr = arTotal > 0;
+    const arBuckets = arRows
+      .map((row) => ({
+        bucket: String(pickField(row, ["Bucket", "bucket", "AgingBucket", "Range", "range"]) || "Total"),
+        amount: coerceFloat(pickField(row, ["Amount", "Balance", "amount", "total"])),
+      }))
+      .filter((row) => row.amount !== null);
+    const arTotal = arBuckets.reduce((acc, row) => acc + row.amount, 0);
+    const hasAr = arBuckets.length > 0 && arTotal > 0;
     const modifiedAt = (sd.dashboard && sd.dashboard.modifiedAt) || bundle.loadedAt;
     const exports = [];
     ["dashboard", "claims", "clinicalNotes", "ar"].forEach((key) => {
@@ -335,9 +354,13 @@ const ImportLoader = (function () {
             { label: "Insurance", value: formatMoney(aggregate.totals.insurance) },
             { label: "Patient", value: formatMoney(aggregate.totals.patient) },
           ],
-      aging: [],
+      aging: arBuckets.map((bucket) => ({
+        bucket: bucket.bucket,
+        amount: formatMoney(bucket.amount),
+        pct: arTotal ? Math.round((bucket.amount / arTotal) * 1000) / 10 : 0,
+      })),
       responsibility: {
-            total: "—",
+            total: hasAr ? formatMoney(arTotal) : "—",
             insurance: { amount: formatMoney(aggregate.totals.insurance), pct: 0 },
             patient: { amount: formatMoney(aggregate.totals.patient), pct: 0 },
             collectability: "—",
@@ -542,10 +565,22 @@ const ImportLoader = (function () {
     if (pageId === "financial") return buildFinancialDashboard(bundle, softdent, quickbooks) || empty;
     if (pageId === "ar") {
       if (softdent && softdent.hero && softdent.hero.value !== "—") {
+        const aging = softdent.aging || [];
+        const total = coerceFloat(softdent.hero.value);
+        const ninetyPlus = aging.find((a) => /^\s*(90\+|90\s*\+)/i.test(String(a.bucket || "")));
+        const ninetyPlusPct = ninetyPlus && ninetyPlus.pct != null ? `${ninetyPlus.pct}%` : "—";
         return assignPatch(emptyDashboard("ar"), {
           dataSource: "import",
           importedAt: bundle.loadedAt,
-          kpis: [{ label: "Total Outstanding", value: softdent.hero.value, tone: "gold" }],
+          total: softdent.hero.value,
+          buckets: aging,
+          aging,
+          kpis: [
+            { label: "Total Outstanding", value: softdent.hero.value, tone: "gold" },
+            { label: "vs. Prior 30 Days", value: "Imported", tone: "muted" },
+            { label: "90+ Days %", value: ninetyPlusPct, tone: "warn" },
+            { label: "Collections This 30 Days", value: formatMoney(((softdent.collections || 0) * 30) / 30), tone: "green" },
+          ],
         });
       }
       return empty;

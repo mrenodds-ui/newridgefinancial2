@@ -49,7 +49,8 @@ for (const page of FUNCTIONAL_PAGES) {
     assert.ok(html.includes(check), `${page.id} must include ${check}`);
   }
   if (page.id === "financial") {
-    assert.ok(html.includes("Dr. Michael Reno"), "financial page must show Dr. Michael Reno as the only provider");
+    assert.ok(html.includes("Dr. Adams"), "financial page must show imported provider rows");
+    assert.ok(html.includes("Hygiene Team"), "financial page must preserve non-doctor provider rows");
   }
 }
 

@@ -1092,9 +1092,15 @@ const HalSkills = (function () {
     const arAvailable = sdStatus.arAvailable;
     const claims = snap.claims || {};
 
-    const financialStatus = dashboards.financial ? "SUCCESS" : "FAILED";
-    const qbStatus = dashboards.quickbooks ? (/(blocked|stale)/i.test(String(dashboards.quickbooks.syncStatus || "")) ? "DEGRADED" : "SUCCESS") : "FAILED";
-    const softdentStatus = dashboards.softdent ? "SUCCESS" : "FAILED";
+    // A dashboard object always exists (empty shells are returned for missing
+    // sources), so health must be judged by whether real import data is present
+    // — not by mere object existence — or empty widgets falsely read SUCCESS.
+    const dashHasData = (d) => Boolean(d && (d.dataSource === "import" || d.dataSource === "persisted"));
+    const financialStatus = dashHasData(dashboards.financial) ? "SUCCESS" : "FAILED";
+    const qbStatus = dashHasData(dashboards.quickbooks)
+      ? (/(blocked|stale)/i.test(String(dashboards.quickbooks.syncStatus || "")) ? "DEGRADED" : "SUCCESS")
+      : "FAILED";
+    const softdentStatus = dashHasData(dashboards.softdent) ? "SUCCESS" : "FAILED";
     const claimsStatus = claims.total > 0 ? (arAvailable ? "SUCCESS" : "DEGRADED") : "FAILED";
     const careStatus = softdentStatus === "SUCCESS" && !arAvailable ? "DEGRADED" : softdentStatus;
     const pendingPosting = ((snap.documents && snap.documents.posting) || []).reduce(
@@ -1373,7 +1379,7 @@ const HalSkills = (function () {
         metrics: {
           totalAr: metricValue(sd.hero?.value),
           currentBucket: metricValue((sd.aging || []).find((a) => /0-30|current/i.test(a.bucket || ""))?.amount),
-          ninetyPlusBucket: metricValue((sd.aging || []).find((a) => /90|120/i.test(a.bucket || ""))?.amount),
+          ninetyPlusBucket: metricValue((sd.aging || []).find((a) => /^\s*(90\+|90\s*\+|120)/i.test(a.bucket || ""))?.amount),
           bucketCount: metricValue((sd.aging || []).length || null),
         },
       },

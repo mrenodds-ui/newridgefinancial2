@@ -673,8 +673,8 @@ async function main() {
     assert(Array.isArray(claimsState.claims) && claimsState.claims.length > 0, "softdent claims import must merge into claims state");
     const finDash = ImportLoader.buildDashboard("financial", importBundle);
     assert(finDash && finDash.dataSource === "import", "financial dashboard must map from import files");
-    assert(finDash.providers.rows.length === 1, "financial dashboard must show exactly one provider");
-    assert(finDash.providers.rows[0].name === "Dr. Michael Reno", "financial dashboard provider must be Dr. Michael Reno");
+    assert(finDash.providers.rows.length >= 3, "financial dashboard must preserve imported provider rows");
+    assert(finDash.providers.rows.some((row) => row.name === "Dr. Adams"), "financial dashboard must include imported providers");
   }
   delete process.env.NR2_LOAD_IMPORTS;
   passed++;

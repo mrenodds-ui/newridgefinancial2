@@ -24,6 +24,16 @@ Override HAL import destinations with `SOFTDENT_IMPORT_DIR` or `QUICKBOOKS_IMPOR
 powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\import-automation\Sync-HAL-Imports.ps1
 ```
 
+## Seed Starter Import Files
+
+If QuickBooks or SoftDent A/R widgets are empty and no live exports exist yet, copy the tracked read-only samples into HAL's import folders:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\import-automation\Seed-HAL-Import-Samples.ps1
+```
+
+Use `-Force` to overwrite existing destination files.
+
 ## Watch Continuously
 
 ```powershell
