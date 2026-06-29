@@ -26,6 +26,22 @@ const HalPage = (function () {
     return "unknown";
   }
 
+  // Live import health → source-intake status label.
+  function mapLiveSourceStatus(live) {
+    if (!live || !live.hasData) return "not loaded";
+    if (live.status === "SUCCESS") return "current";
+    if (live.status === "DEGRADED") return "needs review";
+    return "not loaded";
+  }
+
+  // Widget status → friendly staff-surface state.
+  function mapSurfaceState(status) {
+    if (status === "SUCCESS") return "Ready";
+    if (status === "DEGRADED") return "Needs review";
+    if (status === "FAILED") return "No data";
+    return "unknown";
+  }
+
   function emptyNote(message) {
     return `<p class="hp-live-note">${esc(message)}</p>`;
   }
@@ -313,29 +329,42 @@ const HalPage = (function () {
           .join("")
       : emptyNote("No HAL responses yet. Ask a question to begin.");
 
+    const liveSources = (halWidgetFeed && halWidgetFeed.sourceHealth) || {};
     const sourceRows = ((halData.sources && halData.sources.items) || [])
       .map((item) => {
-        const status = mapSourceStatus(item);
+        const live = liveSources[item.target];
+        // Prefer live import freshness/status; fall back to static config only
+        // when no import data is present for this source.
+        const useLive = live && live.hasData;
+        const freshness = useLive ? live.freshness : item.freshness || "Not available";
+        const statusKey = useLive ? mapLiveSourceStatus(live) : mapSourceStatus(item);
         return `<tr>
           <td>${esc(item.label)}</td>
           <td>${esc(item.status || "unknown")}</td>
-          <td>${esc(item.freshness || "Not available")}</td>
-          <td>${esc(formatStatus(status))}</td>
+          <td>${esc(freshness || "Not available")}</td>
+          <td>${esc(formatStatus(statusKey))}</td>
         </tr>`;
       })
       .join("");
 
+    const liveSurfaces = (halWidgetFeed && halWidgetFeed.surfaceCounts) || {};
     const surfaces = ((halData.workSurfaces && halData.workSurfaces.items) || [])
       .map((item) => {
         const reg = (halData.registry || []).find((e) => e.id === item.target);
-        const state = reg ? reg.state : "unknown";
+        const live = liveSurfaces[item.target];
+        const state = live ? mapSurfaceState(live.status) : reg ? reg.state : "unknown";
+        const updated = live && live.updated ? live.updated : "Not available";
+        const items =
+          live && live.items != null
+            ? `${live.items}${live.itemsLabel ? " " + live.itemsLabel : ""}`
+            : "—";
         return `<li>
           <span class="hp-surf__ico" aria-hidden="true">◳</span>
           <div class="hp-surf__main"><strong>${esc(item.label)}</strong><span>${esc(item.detail || "")}</span></div>
           <div class="hp-surf__meta">
             <span>State<br><b>${esc(state)}</b></span>
-            <span>Updated<br><b>Not available</b></span>
-            <span>Items<br><b>—</b></span>
+            <span>Updated<br><b>${esc(updated)}</b></span>
+            <span>Items<br><b>${esc(items)}</b></span>
           </div>
         </li>`;
       })

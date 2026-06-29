@@ -1465,6 +1465,81 @@ const HalSkills = (function () {
       jobs: {},
       localOnly: true,
     };
+    // Live source freshness/status for the Source Intake panel — driven by the
+    // actual import bundle so the panel never reports a stale hardcoded state.
+    const hasData = (dash) => Boolean(dash && (dash.dataSource === "import" || dash.dataSource === "persisted"));
+    const sdFreshness =
+      (sd.health || []).find((h) => /freshness/i.test(String(h.label || "")))?.value ||
+      firstItem(sd.exports)?.completed ||
+      (hasData(sd) ? sd.date : null);
+    feed.sourceHealth = {
+      softdent: {
+        status: softdentStatus,
+        hasData: hasData(sd),
+        freshness: hasData(sd) ? sdFreshness || "Imported" : null,
+        syncState: hasData(sd) ? "Imported · read-only" : null,
+      },
+      quickbooks: {
+        status: qbStatus,
+        hasData: hasData(qb),
+        freshness: hasData(qb) ? qb.lastSync || qb.sync?.lastSync || "Imported" : null,
+        syncState: hasData(qb) ? qb.syncStatus || qb.sync?.status || "Connected" : null,
+      },
+      documents: {
+        status: docsStatus,
+        hasData: docsStatus === "SUCCESS",
+        freshness: docsStatus === "SUCCESS" ? "Queue loaded" : null,
+        syncState: docsStatus === "SUCCESS" ? "Local review" : null,
+      },
+      library: {
+        status: libraryStatus,
+        hasData: libraryStatus === "SUCCESS",
+        freshness: libraryStatus === "SUCCESS" ? "Index current" : null,
+        syncState: libraryStatus === "SUCCESS" ? "Read-only" : null,
+      },
+    };
+
+    // Live per-surface state for the Staff Work Surfaces panel (was hardcoded
+    // "Not available" / "—"). Keyed by the page target each surface opens.
+    feed.surfaceCounts = {
+      financial: {
+        status: financialStatus,
+        updated: financialStatus === "SUCCESS" ? metricValue(fin.footer?.refreshed) || "Imported" : null,
+        items: (fin.providers?.rows || []).length || null,
+        itemsLabel: "providers",
+      },
+      claims: {
+        status: claimsSnap.total > 0 ? "SUCCESS" : "FAILED",
+        updated: claimsSnap.total > 0 ? "Imported" : null,
+        items: claimsSnap.total || null,
+        itemsLabel: "claims",
+      },
+      narratives: {
+        status: narrativeStatus,
+        updated: narratives.drafts ? "Draft saved" : null,
+        items: narratives.drafts || null,
+        itemsLabel: "drafts",
+      },
+      documents: {
+        status: docsStatus,
+        updated: docsStatus === "SUCCESS" ? "Queue loaded" : null,
+        items: docs.queueCount || null,
+        itemsLabel: "in queue",
+      },
+      ar: {
+        status: arStatus,
+        updated: arAvailable ? "Imported" : null,
+        items: (arDash.aging || arDash.buckets || []).length || null,
+        itemsLabel: "aging buckets",
+      },
+      library: {
+        status: libraryStatus,
+        updated: libraryStatus === "SUCCESS" ? "Index current" : null,
+        items: library.results || library.storage?.indexed || null,
+        itemsLabel: "documents",
+      },
+    };
+
     const publish = publishJobStatus(widgets);
     feed.jobs = { importCacheRefresh: { status: publish }, widgetPublish: { status: publish } };
     return enforceReceivablesArPolicy(feed, arAvailable);
