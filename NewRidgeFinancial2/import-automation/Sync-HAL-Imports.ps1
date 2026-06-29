@@ -1,7 +1,5 @@
 [CmdletBinding()]
 param(
-    [string]$SoftDentSource = $env:NR2_SOFTDENT_EXPORT_SOURCE,
-    [string]$QuickBooksSource = $env:NR2_QUICKBOOKS_EXPORT_SOURCE,
     [switch]$Watch,
     [int]$DebounceMs = 750
 )
@@ -9,117 +7,27 @@ param(
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$repoRoot = Split-Path -Parent $projectRoot
+$importSyncScript = Join-Path $projectRoot "import_sync.py"
 
-if ([string]::IsNullOrWhiteSpace($SoftDentSource)) {
-    $SoftDentSource = "C:\Users\mreno\SoftDentBridge\exports"
-}
-
-if ([string]::IsNullOrWhiteSpace($QuickBooksSource)) {
-    $QuickBooksSource = "C:\Users\mreno\QuickBooksExports"
-}
-
-$softDentFiles = @(
-    "softdent_dashboard_data.json",
-    "softdent_dashboard_export.json",
-    "softdent_dashboard_data.csv",
-    "softdent_claims_export.csv",
-    "softdent_claims_data.csv",
-    "softdent_claims_export.json",
-    "softdent_clinical_notes_data.json",
-    "softdent_clinical_notes_export.json",
-    "softdent_ar_aging.csv",
-    "softdent_accounts_receivable.csv",
-    "softdent_ar_aging.json",
-    "patient_aging.csv",
-    "ar_aging.csv"
-)
-
-$quickBooksFiles = @(
-    "quickbooks_revenue.csv",
-    "quickbooks_revenue.json",
-    "quickbooks_profit_and_loss.csv",
-    "quickbooks_profit_loss.csv",
-    "quickbooks_expenses.csv",
-    "quickbooks_expense_detail.csv",
-    "quickbooks_expense_categories.csv",
-    "quickbooks_expenses.json",
-    "quickbooks_ar.csv",
-    "quickbooks_accounts_receivable.csv",
-    "quickbooks_aging.csv"
-)
-
-function Resolve-ImportDirectory {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$EnvName,
-        [Parameter(Mandatory = $true)]
-        [string]$DefaultRelative
-    )
-
-    $configured = [Environment]::GetEnvironmentVariable($EnvName)
-    if ([string]::IsNullOrWhiteSpace($configured)) {
-        return (Join-Path $repoRoot $DefaultRelative)
+function Invoke-Nr2ImportSync {
+    if (-not (Test-Path $importSyncScript)) {
+        throw "NR2 import sync not found: $importSyncScript"
     }
-
-    if ([System.IO.Path]::IsPathRooted($configured)) {
-        return $configured
-    }
-
-    return (Join-Path $repoRoot $configured)
-}
-
-function Copy-ApprovedFiles {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$SourceDir,
-        [Parameter(Mandatory = $true)]
-        [string]$DestinationDir,
-        [Parameter(Mandatory = $true)]
-        [string[]]$ApprovedFiles,
-        [Parameter(Mandatory = $true)]
-        [string]$SourceName
-    )
-
-    if (-not (Test-Path $SourceDir)) {
-        New-Item -ItemType Directory -Path $SourceDir -Force | Out-Null
-        Write-Host "$SourceName source folder created: $SourceDir"
-    }
-
-    New-Item -ItemType Directory -Path $DestinationDir -Force | Out-Null
-
-    $copied = 0
-    foreach ($fileName in $ApprovedFiles) {
-        $sourceFile = Join-Path $SourceDir $fileName
-        if (-not (Test-Path $sourceFile)) {
-            continue
+    Write-Host "Running NR2 import sync: $importSyncScript"
+    Push-Location $projectRoot
+    try {
+        & python $importSyncScript
+        if ($LASTEXITCODE -ne 0) {
+            throw "import_sync.py exited with code $LASTEXITCODE"
         }
-
-        $destinationFile = Join-Path $DestinationDir $fileName
-        Copy-Item $sourceFile $destinationFile -Force
-        $copied += 1
-        Write-Host "Imported $SourceName file: $fileName -> $DestinationDir"
+    } finally {
+        Pop-Location
     }
-
-    if ($copied -eq 0) {
-        Write-Host "No approved $SourceName files found in $SourceDir"
-    }
-
-    return $copied
 }
 
-function Sync-HalImports {
-    $softDentDestination = Resolve-ImportDirectory -EnvName "SOFTDENT_IMPORT_DIR" -DefaultRelative "app\data\imports\softdent"
-    $quickBooksDestination = Resolve-ImportDirectory -EnvName "QUICKBOOKS_IMPORT_DIR" -DefaultRelative "app\data\imports\quickbooks"
-
-    $softDentCopied = Copy-ApprovedFiles -SourceDir $SoftDentSource -DestinationDir $softDentDestination -ApprovedFiles $softDentFiles -SourceName "SoftDent"
-    $quickBooksCopied = Copy-ApprovedFiles -SourceDir $QuickBooksSource -DestinationDir $quickBooksDestination -ApprovedFiles $quickBooksFiles -SourceName "QuickBooks"
-
-    Write-Host "HAL import sync complete. SoftDent files: $softDentCopied. QuickBooks files: $quickBooksCopied."
-    Write-Host "Read-only boundary: this script copies export files only. It never writes to SoftDent or QuickBooks."
-}
-
-Sync-HalImports
+Invoke-Nr2ImportSync
+Write-Host "HAL import sync complete (Python authority)."
+Write-Host "Read-only boundary: sync copies and transforms export files only. It never writes to SoftDent or QuickBooks."
 
 if (-not $Watch) {
     return
@@ -134,17 +42,26 @@ function Request-Sync {
     }
     $global:lastSyncAt = $now
     Start-Sleep -Milliseconds $DebounceMs
-    Sync-HalImports
+    Invoke-Nr2ImportSync
 }
 
-$watchers = @()
-foreach ($source in @($SoftDentSource, $QuickBooksSource)) {
-    if (-not (Test-Path $source)) {
-        New-Item -ItemType Directory -Path $source -Force | Out-Null
-    }
+$watchRoots = @(
+    $env:NR2_SOFTDENT_EXPORT_SOURCE,
+    $env:SOFTDENT_SOURCE_DIR,
+    "C:\Users\mreno\SoftDentBridge\exports",
+    "C:\SoftDentFinancialExports",
+    "C:\NewRidgeBridge\exports",
+    $env:NR2_QUICKBOOKS_EXPORT_SOURCE,
+    "C:\Users\mreno\QuickBooksExports"
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 
+$watchers = @()
+foreach ($source in $watchRoots) {
+    if (-not (Test-Path $source)) {
+        continue
+    }
     $watcher = New-Object System.IO.FileSystemWatcher $source, "*.*"
-    $watcher.IncludeSubdirectories = $false
+    $watcher.IncludeSubdirectories = $true
     $watcher.EnableRaisingEvents = $true
     Register-ObjectEvent $watcher Created -Action { Request-Sync } | Out-Null
     Register-ObjectEvent $watcher Changed -Action { Request-Sync } | Out-Null
@@ -152,9 +69,12 @@ foreach ($source in @($SoftDentSource, $QuickBooksSource)) {
     $watchers += $watcher
 }
 
-Write-Host "Watching import folders:"
-Write-Host "  SoftDent:   $SoftDentSource"
-Write-Host "  QuickBooks: $QuickBooksSource"
+Write-Host "Watching NR2 import source roots:"
+foreach ($source in $watchRoots) {
+    if (Test-Path $source) {
+        Write-Host "  $source"
+    }
+}
 Write-Host "Press Ctrl+C to stop."
 
 while ($true) {

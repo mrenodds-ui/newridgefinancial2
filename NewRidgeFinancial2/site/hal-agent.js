@@ -57,15 +57,12 @@ const HalAgent = (function () {
     read_source_health: {
       label: "Read source intake health",
       run: async (ctx) => {
-        const items = (ctx.halData.sources && ctx.halData.sources.items) || [];
-        const list = items
-          .map((item) => {
-            const extra = item.freshness ? ` Freshness: ${item.freshness}.` : "";
-            const warn = item.warning ? ` Warning: ${item.warning}` : "";
-            return `- ${item.label} — ${item.status}: ${item.detail}${extra}${warn}`;
-          })
-          .join("\n");
-        return { ok: true, summary: list || "No source intake items configured." };
+        const snap = await ctx.loadProgramSnapshot();
+        const feed =
+          (snap && snap.widgets) || (window.HalSkills && HalSkills.buildWidgetFeed(snap)) || ctx.halWidgetFeed || {};
+        const staticItems = (ctx.halData.sources && ctx.halData.sources.items) || [];
+        const summary = HalSkills.formatSourceHealthText(feed.sourceHealth, staticItems);
+        return { ok: true, summary };
       },
     },
     read_claims_summary: {
@@ -215,14 +212,26 @@ const HalAgent = (function () {
     if (route.useWidgetFeed || route.useWidgetGuidance || route.useWidgetShow || route.useWidgetFillSuggestions) {
       tools.push("read_widget_feed");
     }
-    if (route.useClaimReadiness || /\b(claim|denied|packet)\b/i.test(query)) tools.push("read_claims_summary");
-    if (route.useOfficeAttention || route.useTaskList || route.useTaskCreate || /\b(task|office manager|attention)\b/i.test(query)) {
+    if (route.useClaimReadiness || (/\b(claim|denied|packet)\b/i.test(query) && !route.text)) {
+      tools.push("read_claims_summary");
+    }
+    if (
+      (route.useOfficeAttention || route.useTaskList || route.useTaskCreate) &&
+      /\b(task|office manager|attention)\b/i.test(query) &&
+      !route.text
+    ) {
       tools.push("read_tasks");
     }
-    if (route.useDocRag || /\b(library|search|compliance|policy)\b/i.test(query)) {
+    if (route.useDocRag || (/\b(library|search|compliance|policy)\b/i.test(query) && !route.text)) {
       tools.push("search_document_library");
     }
-    if (route.useImportStatus || route.useImportRefresh || /\b(source|freshness|import|softdent|quickbooks)\b/i.test(query)) {
+    if (
+      !route.useSourceHealth &&
+      !route.useImportStatus &&
+      !route.useImportRefresh &&
+      /\b(source|freshness|import|softdent|quickbooks)\b/i.test(query) &&
+      !route.text
+    ) {
       tools.push("read_source_health");
     }
     if (working.activeWorkSession || route.useSessionShow || route.useSessionHandoff || route.usePacketBuild || route.usePacketShow) {

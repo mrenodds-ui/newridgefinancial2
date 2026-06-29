@@ -1,3 +1,10 @@
+# RETIRED — NewRidgeFinancial 2.0 uses NewRidgeFinancial2\import-automation\Sync-HAL-Imports.ps1
+Write-Error @"
+RETIRED: This legacy SoftDent bridge watcher is no longer used.
+Use: NewRidgeFinancial2\import-automation\Sync-HAL-Imports.ps1 -Watch
+"@
+exit 1
+
 # SoftDent Bridge Automation Script
 # Watches the bridge export drop for dashboard, claims, and clinical note files and copies them into the canonical SoftDent import directory.
 

@@ -71,7 +71,7 @@
       "keepAlive": "-1 via HAL model warmup automation"
     },
     "availableModels": [
-      "queen3:14b",
+      "qwen3:14b",
       "qwen3:4b",
       "qwen3:14b",
       "qwen3-coder:30b",

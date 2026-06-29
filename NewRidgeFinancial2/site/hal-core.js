@@ -21,6 +21,7 @@ const HalCore = (function () {
     narratives: ["narratives", "narrative", "insurance narrative"],
     documents: ["accounting documents", "documents", "document intake", "posting queue", "extraction"],
     library: ["document library", "library", "repository"],
+    "office-manager": ["office manager", "office-manager", "office attention", "staff attention"],
     hal: ["hal", "command center", "yourself"],
   };
 
@@ -786,11 +787,10 @@ const HalCore = (function () {
 
   function readinessConfig(halData) {
     return (halData && halData.readiness) || {
-      expectedRegistryCount: 9,
-      expectedHotspotCount: 6,
+      expectedRegistryCount: 10,
       expectedSessionTemplates: 5,
       expectedModelLanes: 3,
-      halImage: "pages/09-hal-command-center.png",
+      halImage: "",
     };
   }
 
@@ -940,19 +940,7 @@ const HalCore = (function () {
             "HAL page image",
             ok ? "Pass" : "Fail",
             runtime.halImage,
-            ok ? null : "Hard refresh (Ctrl+Shift+R) or restart on port 1966.",
-          ),
-        );
-      }
-      if (typeof runtime.hotspotCount === "number") {
-        const ok = runtime.hotspotCount === cfg.expectedHotspotCount;
-        results.push(
-          readinessItem(
-            "hotspots",
-            "HAL hotspot layer",
-            ok ? "Pass" : "Fail",
-            runtime.hotspotCount + " hotspots active (expected " + cfg.expectedHotspotCount + ")",
-            ok ? null : "Open #hal and hard refresh if hotspots are missing.",
+            ok ? null : "Hard refresh (Ctrl+Shift+R) or restart the desktop app.",
           ),
         );
       }
@@ -1320,7 +1308,18 @@ const HalCore = (function () {
       return { intent: "reasoning", lane: "reason21b", text: "", useReasoning: true, prompt: rawQuery, actions: [] };
     }
 
-    if (/\bpriorit|needs attention|attention today|what needs|to-?do|\btoday\b/.test(query)) {
+    if (/\bblocked\b|\bblockers\b|needs review|waiting on|what is waiting/.test(query)) {
+      const waiting = registryList(halData).filter((entry) => /blocked|needs review/i.test(entry.state));
+      const list = waiting.map((entry) => `- ${entry.name} (${entry.state}): ${entry.nextAction}`).join("\n");
+      return {
+        intent: "registry: blocked",
+        lane: "local",
+        text: waiting.length ? `Waiting or needs review:\n${list}` : "Nothing is blocked right now.",
+        actions: waiting.map((entry) => ({ type: "openPage", label: "Open " + entry.name, page: entry.id })),
+      };
+    }
+
+    if (/\bpriorit|needs attention|attention today|what needs attention|to-?do|\btoday\b/.test(query)) {
       const items = (halData.priorities && halData.priorities.items) || [];
       const list = items.map((item, index) => `${index + 1}. ${item}`).join("\n");
       return { intent: "priorities", lane: "local", text: `Today's operator priorities:\n${list}`, actions: [] };
@@ -1343,15 +1342,7 @@ const HalCore = (function () {
     }
 
     if (/\b(source|softdent|quickbooks|freshness|sync|intake|source health)\b/.test(query) && !wantsExplain) {
-      const items = (halData.sources && halData.sources.items) || [];
-      const list = items
-        .map((item) => {
-          const extra = item.freshness ? ` Freshness: ${item.freshness}.` : "";
-          const warn = item.warning ? ` Warning: ${item.warning}` : "";
-          return `- ${item.label} — ${item.status}: ${item.detail}${extra}${warn}`;
-        })
-        .join("\n");
-      return { intent: "sources", lane: "local", text: `Read-only source intake status:\n${list}`, actions: [] };
+      return { intent: "sources", lane: "local", useSourceHealth: true, text: "", actions: [] };
     }
 
     if (/\bmodels?\b|\b14b\b|\b21b\b|\b30b\b|\bllm\b|\bai lane\b|which model|are you connected|connected to a model/.test(query)) {
@@ -1366,17 +1357,6 @@ const HalCore = (function () {
         lane: "local",
         text: ready.length ? `Ready to work now:\n${list}` : "Nothing is marked ready right now.",
         actions: ready.map((entry) => ({ type: "openPage", label: "Open " + entry.name, page: entry.id })),
-      };
-    }
-
-    if (/\bblocked\b|\bblockers\b|needs review|waiting on|what is waiting/.test(query)) {
-      const waiting = registryList(halData).filter((entry) => /blocked|needs review/i.test(entry.state));
-      const list = waiting.map((entry) => `- ${entry.name} (${entry.state}): ${entry.nextAction}`).join("\n");
-      return {
-        intent: "registry: blocked",
-        lane: "local",
-        text: waiting.length ? `Waiting or needs review:\n${list}` : "Nothing is blocked right now.",
-        actions: waiting.map((entry) => ({ type: "openPage", label: "Open " + entry.name, page: entry.id })),
       };
     }
 

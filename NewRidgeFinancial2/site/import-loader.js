@@ -17,17 +17,30 @@ const ImportLoader = (function () {
     "softdent_dashboard_data.json",
     "softdent_dashboard_export.json",
     "softdent_dashboard_data.csv",
+    "softdent_dashboard_export.csv",
   ];
-  const SOFTDENT_CLAIMS_NAMES = ["softdent_claims_export.csv", "softdent_claims_data.csv", "softdent_claims_export.json"];
+  const SOFTDENT_CLAIMS_NAMES = [
+    "softdent_claims_export.csv",
+    "softdent_claims_data.csv",
+    "softdent_claims_export.json",
+    "softdent_claims_data.json",
+  ];
   const SOFTDENT_CLINICAL_NAMES = ["softdent_clinical_notes_data.json", "softdent_clinical_notes_export.json"];
-  const SOFTDENT_AR_NAMES = ["softdent_ar_aging.csv", "softdent_accounts_receivable.csv", "softdent_ar_aging.json"];
+  const SOFTDENT_AR_NAMES = [
+    "softdent_ar_aging.csv",
+    "softdent_accounts_receivable.csv",
+    "softdent_ar_aging.json",
+    "patient_aging.csv",
+    "ar_aging.csv",
+  ];
   const QB_REVENUE_NAMES = [
     "quickbooks_revenue.csv",
     "quickbooks_revenue.json",
     "quickbooks_profit_and_loss.csv",
     "quickbooks_profit_loss.csv",
   ];
-  const QB_EXPENSE_NAMES = ["quickbooks_expenses.csv", "quickbooks_expense_detail.csv", "quickbooks_expense_categories.csv"];
+  const QB_EXPENSE_NAMES = ["quickbooks_expenses.csv", "quickbooks_expense_detail.csv", "quickbooks_expenses.json"];
+  const QB_EXPENSE_CATEGORY_NAMES = ["quickbooks_expense_categories.csv"];
   const QB_AR_NAMES = ["quickbooks_ar.csv", "quickbooks_accounts_receivable.csv", "quickbooks_aging.csv"];
 
   function bridge() {
@@ -95,7 +108,41 @@ const ImportLoader = (function () {
   }
 
   function assignPatch(base, patch) {
-    return Object.assign(deepClone(base || {}), patch || {});
+    const merged = Object.assign(deepClone(base || {}), patch || {});
+    if (merged.dataSource === "import" && !merged.importDepth) {
+      const pageId = merged.pageId || (patch && patch.pageId) || "";
+      merged.importDepth = dashboardImportDepth(pageId, merged);
+    }
+    return merged;
+  }
+
+  function dashboardImportDepth(pageId, patch) {
+    if (pageId === "financial") {
+      const hasTrend = Array.isArray(patch.productionTrend?.production) && patch.productionTrend.production.length > 1;
+      const hasPayer = Array.isArray(patch.payerMix?.segments) && patch.payerMix.segments.length > 0;
+      const hasQuality = patch.quality && patch.quality.score > 0;
+      if (!hasTrend || !hasPayer || !hasQuality) return "partial";
+      return "complete";
+    }
+    if (pageId === "quickbooks") {
+      const hasCategories = Array.isArray(patch.expenseCategories?.slices) && patch.expenseCategories.slices.length > 0;
+      const hasMonthly = Array.isArray(patch.monthlyExpenses) && patch.monthlyExpenses.length > 0;
+      if (!hasCategories && !hasMonthly) return "partial";
+      return "complete";
+    }
+    if (pageId === "softdent") {
+      const hasCollections = Number(patch.collections || 0) > 0;
+      const claimsOk = (patch.health || []).some((h) => /claims/i.test(String(h.label || "")) && h.ok);
+      if (!hasCollections || !claimsOk) return "partial";
+      return "complete";
+    }
+    if (pageId === "ar") {
+      const hasTrend = Array.isArray(patch.collectionsTrend?.values) && patch.collectionsTrend.values.length > 0;
+      const hasTopClaims = Array.isArray(patch.topClaims) && patch.topClaims.length > 0;
+      if (!hasTrend || !hasTopClaims) return "partial";
+      return "complete";
+    }
+    return "complete";
   }
 
   function readCsvRows(text) {
@@ -166,14 +213,18 @@ const ImportLoader = (function () {
         dir: REPO_IMPORT_QUICKBOOKS,
         revenue: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, QB_REVENUE_NAMES, fs),
         expenses: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, QB_EXPENSE_NAMES, fs),
+        expenseCategories: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, QB_EXPENSE_CATEGORY_NAMES, fs),
         ar: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, QB_AR_NAMES, fs),
       },
     };
   }
 
-  async function loadBundle() {
+  async function loadBundle(force) {
     const br = bridge();
-    if (br && br.getImportBundle) return br.getImportBundle();
+    if (br) {
+      if (force && br.refreshImports) return br.refreshImports();
+      if (br.getImportBundle) return br.getImportBundle();
+    }
     if (isNode && process.env.NR2_LOAD_IMPORTS === "1") return loadBundleNode();
     return null;
   }
@@ -376,7 +427,7 @@ const ImportLoader = (function () {
       glance,
       exports,
     };
-    return assignPatch(emptyDashboard("softdent"), patch);
+    return assignPatch(emptyDashboard("softdent"), Object.assign({ pageId: "softdent" }, patch));
   }
 
   function buildQuickbooksDashboard(bundle) {
@@ -396,13 +447,39 @@ const ImportLoader = (function () {
         highlight: true,
       },
     ];
+    const categoryRows = ((bundle.quickbooks && bundle.quickbooks.expenseCategories) || {}).rows || [];
+    const expenseCategories = categoryRows
+      .map((row) => ({
+        label: String(pickField(row, ["Category", "category"]) || ""),
+        amount: formatMoney(pickField(row, ["Amount", "amount"])),
+        pct: 0,
+      }))
+      .filter((row) => row.label);
+    const categoryTotal = categoryRows.reduce((acc, row) => acc + (coerceFloat(pickField(row, ["Amount", "amount"])) || 0), 0);
+    expenseCategories.forEach((row) => {
+      const amt = coerceFloat(row.amount);
+      row.pct = categoryTotal && amt !== null ? Math.round((amt / categoryTotal) * 1000) / 10 : 0;
+    });
+    const donutColors = ["#d6b15e", "#64748b", "#94a3b8", "#cbd5e1", "#e2e8f0"];
+    const expenseCategoryDonut = expenseCategories.length
+      ? {
+          total: formatMoney(categoryTotal || totals.expenses),
+          slices: expenseCategories.map((row, index) => ({
+            label: row.label,
+            pct: row.pct,
+            color: donutColors[index % donutColors.length],
+          })),
+        }
+      : undefined;
     return assignPatch(emptyDashboard("quickbooks"), {
+      pageId: "quickbooks",
       dataSource: "import",
       importedAt: totals.modifiedAt,
       syncStatus: "Connected",
       lastSync: formatFreshness(totals.modifiedAt),
       revenue: totals.revenue,
       expenses: totals.expenses,
+      ...(expenseCategoryDonut ? { expenseCategories: expenseCategoryDonut } : {}),
       pl: {
         range: `Imported ${formatFreshness(totals.modifiedAt)}`,
         rows,
@@ -425,6 +502,7 @@ const ImportLoader = (function () {
     const collections = aggregate.totals.collections || null;
     const collectionRate = production && collections !== null ? `${((collections / production) * 100).toFixed(1)}%` : "—";
     return assignPatch(emptyDashboard("financial"), {
+      pageId: "financial",
       dataSource: "import",
       importedAt: bundle.loadedAt,
       dateRange: aggregate.period ? `Period ${aggregate.period}` : `Imported ${formatFreshness(bundle.loadedAt)}`,
@@ -549,7 +627,8 @@ const ImportLoader = (function () {
         { label: "Ready / Paid", value: formatCount(lanes.Ready.count), trend: "Imported" },
       ],
       lanes,
-      safety: "Read-Only Mode · Imported from SoftDent",
+      claimsMode: "import-readonly",
+      safety: "Import read-only · payer submission locked.",
     });
   }
 
@@ -570,6 +649,7 @@ const ImportLoader = (function () {
         const ninetyPlus = aging.find((a) => /^\s*(90\+|90\s*\+)/i.test(String(a.bucket || "")));
         const ninetyPlusPct = ninetyPlus && ninetyPlus.pct != null ? `${ninetyPlus.pct}%` : "—";
         return assignPatch(emptyDashboard("ar"), {
+          pageId: "ar",
           dataSource: "import",
           importedAt: bundle.loadedAt,
           total: softdent.hero.value,
@@ -591,6 +671,10 @@ const ImportLoader = (function () {
   function formatImportStatus(bundle) {
     if (!bundle) return "No import bundle loaded.";
     const lines = [`Import bundle loaded ${formatFreshness(bundle.loadedAt)}.`];
+    const sync = bundle.syncStatus || {};
+    if (sync.attempted) {
+      lines.push(`Sync: ${sync.ok ? "OK" : "FAILED"}${sync.error ? ` (${sync.error})` : ""}`);
+    }
     const sd = bundle.softdent || {};
     const qb = bundle.quickbooks || {};
     lines.push(
@@ -606,6 +690,9 @@ const ImportLoader = (function () {
       "",
       "HAL reads SoftDent and QuickBooks only. Nothing is posted or written back.",
     );
+    if (sync.attempted && !sync.ok && sync.error) {
+      lines.push("", `Last sync error: ${sync.error}`);
+    }
     return lines.join("\n");
   }
 

@@ -894,7 +894,7 @@ const HalSkills = (function () {
     }
     const lines = [`Found ${result.retrievedContext.length} grounded match(es) in the local library:`, ""];
     result.retrievedContext.forEach((c) => lines.push(`- ${c.title} (match ${c.score}) — ${c.content.slice(0, 160)}`));
-    lines.push("", "Grounded, local-only retrieval. A local model can summarize these with the grounded prompt; nothing was sent externally.");
+    lines.push("", "Library search results (local snippets only — not a synthesized answer):");
     return lines.join("\n");
   }
 
@@ -916,6 +916,8 @@ const HalSkills = (function () {
   // fabricating a $0 A/R balance when no verified A/R source exists.
   function softDentReadSourceStatus(snapshot) {
     const snap = snapshot || {};
+    const bundle = snap.importBundle || {};
+    const clinicalRows = (bundle.softdent && bundle.softdent.clinicalNotes && bundle.softdent.clinicalNotes.rows) || [];
     const claimsAvailable = !!(snap.claims && snap.claims.total > 0);
     const ar = snap.dashboards && snap.dashboards.ar;
     const arAvailable = !!(
@@ -926,15 +928,39 @@ const HalSkills = (function () {
     );
     const missing = [];
     if (!claimsAvailable) missing.push(SOFTDENT_MISSING_DATA_CODES.claims);
+    if (!clinicalRows.length) missing.push(SOFTDENT_MISSING_DATA_CODES.clinicalNotes);
     if (!arAvailable) missing.push(SOFTDENT_MISSING_DATA_CODES.ar);
     return {
       meta: skillMeta("softdent.readStatus", "softdent"),
       claimsAvailable,
-      clinicalNotesAvailable: false,
+      clinicalNotesAvailable: clinicalRows.length > 0,
       arAvailable,
       missingDataCodes: missing,
       note: "A/R is only reported from a verified source; HAL never fabricates a $0 balance.",
     };
+  }
+
+  function formatSourceHealthText(sourceHealth, staticItems) {
+    const staticByTarget = {};
+    (staticItems || []).forEach((item) => {
+      if (item && item.target) staticByTarget[item.target] = item;
+    });
+    const labels = { softdent: "SoftDent", quickbooks: "QuickBooks", documents: "Documents", library: "Library" };
+    const keys = Object.keys(sourceHealth || {}).length ? Object.keys(sourceHealth) : Object.keys(staticByTarget);
+    const lines = keys.map((key) => {
+      const live = (sourceHealth || {})[key] || {};
+      const fallback = staticByTarget[key] || {};
+      const label = fallback.label || labels[key] || key;
+      if (live.hasData) {
+        const freshness = live.freshness ? ` Freshness: ${live.freshness}.` : "";
+        const sync = live.syncState ? ` Sync: ${live.syncState}.` : "";
+        return `- ${label} — Read-only: imported data present.${freshness}${sync} Widget status: ${live.status || "SUCCESS"}.`;
+      }
+      const extra = fallback.freshness ? ` Freshness: ${fallback.freshness}.` : "";
+      const warn = fallback.warning ? ` Warning: ${fallback.warning}` : "";
+      return `- ${label} — ${fallback.status || "Awaiting data"}: ${fallback.detail || "No import data loaded yet."}${extra}${warn}`;
+    });
+    return lines.length ? `Read-only source intake status:\n${lines.join("\n")}` : "No source intake items configured.";
   }
 
   /* ============================================================
@@ -1096,11 +1122,19 @@ const HalSkills = (function () {
     // sources), so health must be judged by whether real import data is present
     // — not by mere object existence — or empty widgets falsely read SUCCESS.
     const dashHasData = (d) => Boolean(d && (d.dataSource === "import" || d.dataSource === "persisted"));
-    const financialStatus = dashHasData(dashboards.financial) ? "SUCCESS" : "FAILED";
+    const dashPartial = (d) => Boolean(d && d.importDepth === "partial");
+    const widgetStatusFromDash = (d) => {
+      if (!dashHasData(d)) return "FAILED";
+      if (dashPartial(d)) return "DEGRADED";
+      return "SUCCESS";
+    };
+    const financialStatus = widgetStatusFromDash(dashboards.financial);
     const qbStatus = dashHasData(dashboards.quickbooks)
-      ? (/(blocked|stale)/i.test(String(dashboards.quickbooks.syncStatus || "")) ? "DEGRADED" : "SUCCESS")
+      ? dashPartial(dashboards.quickbooks) || /(blocked|stale)/i.test(String(dashboards.quickbooks.syncStatus || ""))
+        ? "DEGRADED"
+        : "SUCCESS"
       : "FAILED";
-    const softdentStatus = dashHasData(dashboards.softdent) ? "SUCCESS" : "FAILED";
+    const softdentStatus = widgetStatusFromDash(dashboards.softdent);
     const claimsStatus = claims.total > 0 ? (arAvailable ? "SUCCESS" : "DEGRADED") : "FAILED";
     const careStatus = softdentStatus === "SUCCESS" && !arAvailable ? "DEGRADED" : softdentStatus;
     const pendingPosting = ((snap.documents && snap.documents.posting) || []).reduce(
@@ -1122,12 +1156,15 @@ const HalSkills = (function () {
     const collectionsTotal = metricValue(sd.collections || glanceValue(sd, "Collections MTD"));
     const accountsReceivableTotal = metricValue(arDash.kpis?.[0]?.value || sd.hero?.value);
     const patientBalanceTotal = metricValue(arDash.kpis?.[0]?.value || sd.hero?.value);
-    const arStatus = arDash.kpis ? (arAvailable ? "SUCCESS" : "DEGRADED") : "FAILED";
-    const docsStatus = docs.period || docs.queueCount ? "SUCCESS" : "FAILED";
+    const arStatus = arDash.kpis ? (arAvailable ? (dashPartial(arDash) ? "DEGRADED" : "SUCCESS") : "DEGRADED") : "FAILED";
+    const docsQueueCount = Number(docs.queueCount || (docs.queue && docs.queue.length) || 0);
+    const narrativeDraftCount = Number((narratives.drafts && narratives.drafts.length) || narratives.drafts || 0);
+    const libraryDocCount = Number(library.results || library.storage?.indexed || (library.docs && library.docs.length) || 0);
+    const docsStatus = docsQueueCount > 0 ? "SUCCESS" : "FAILED";
     const claimsReadinessStatus =
       !claimsSnap.readiness && !claimsSnap.total ? "FAILED" : claimsSnap.total > 0 ? "SUCCESS" : "DEGRADED";
-    const narrativeStatus = snap.narratives ? "SUCCESS" : "FAILED";
-    const libraryStatus = snap.library ? "SUCCESS" : "FAILED";
+    const narrativeStatus = narrativeDraftCount > 0 ? "SUCCESS" : "FAILED";
+    const libraryStatus = libraryDocCount > 0 ? "SUCCESS" : "FAILED";
 
     const widgets = {
       practiceFinancialOverview: {
@@ -1487,15 +1524,15 @@ const HalSkills = (function () {
       },
       documents: {
         status: docsStatus,
-        hasData: docsStatus === "SUCCESS",
-        freshness: docsStatus === "SUCCESS" ? "Queue loaded" : null,
-        syncState: docsStatus === "SUCCESS" ? "Local review" : null,
+        hasData: docsQueueCount > 0,
+        freshness: docsQueueCount > 0 ? "Queue loaded" : null,
+        syncState: docsQueueCount > 0 ? "Local review" : null,
       },
       library: {
         status: libraryStatus,
-        hasData: libraryStatus === "SUCCESS",
-        freshness: libraryStatus === "SUCCESS" ? "Index current" : null,
-        syncState: libraryStatus === "SUCCESS" ? "Read-only" : null,
+        hasData: libraryDocCount > 0,
+        freshness: libraryDocCount > 0 ? "Index current" : null,
+        syncState: libraryDocCount > 0 ? "Read-only" : null,
       },
     };
 
@@ -1534,9 +1571,27 @@ const HalSkills = (function () {
       },
       library: {
         status: libraryStatus,
-        updated: libraryStatus === "SUCCESS" ? "Index current" : null,
-        items: library.results || library.storage?.indexed || null,
+        updated: libraryDocCount > 0 ? "Index current" : null,
+        items: libraryDocCount || null,
         itemsLabel: "documents",
+      },
+      softdent: {
+        status: softdentStatus,
+        updated: softdentStatus !== "FAILED" ? metricValue(fin.footer?.refreshed) || "Imported" : null,
+        items: (sd.providers?.rows || fin.providers?.rows || []).length || null,
+        itemsLabel: "providers",
+      },
+      quickbooks: {
+        status: qbStatus,
+        updated: qbStatus !== "FAILED" ? qb.lastSync || "Imported" : null,
+        items: (qb.pl && qb.pl.rows && qb.pl.rows.length) || null,
+        itemsLabel: "P&L rows",
+      },
+      "office-manager": {
+        status: (snap.officeTasks && snap.officeTasks.length) || (claimsSnap.total > 0) ? "DEGRADED" : "FAILED",
+        updated: null,
+        items: (snap.officeTasks && snap.officeTasks.length) || null,
+        itemsLabel: "tasks",
       },
     };
 
@@ -1889,6 +1944,7 @@ const HalSkills = (function () {
     // softdent read status
     SOFTDENT_MISSING_DATA_CODES,
     softDentReadSourceStatus,
+    formatSourceHealthText,
     // widgets
     WIDGET_NAV,
     WIDGET_ORDER,

@@ -76,6 +76,7 @@ const PageViews = (function () {
   }
 
   function dataBadgeFor(record) {
+    if (record && record.importDepth === "partial") return "Partial import";
     const empty = typeof EmptyStates !== "undefined" ? EmptyStates : null;
     if (empty && typeof empty.dataBadge === "function") return empty.dataBadge(record && record.dataSource);
     if (record && record.dataSource === "import") return "Import data";
@@ -344,7 +345,7 @@ const PageViews = (function () {
     );
 
     const freshCells = d.freshness.map((f) => {
-      const ok = f.status === "Synced";
+      const ok = f.status === "Synced" || f.status === "Imported";
       return `<article class="pv-fresh-cell">
         <span class="pv-fresh-cell__sys">${esc(f.system)}</span>
         <span class="pv-fresh-cell__status ${ok ? "pv-fresh-cell__status--ok" : "pv-fresh-cell__status--warn"}">${ok ? "✓" : "⚠"} ${esc(f.status)}</span>
@@ -531,6 +532,7 @@ const PageViews = (function () {
   }
 
   function claimsBody(state, data, selectedId) {
+    const importReadOnly = data.claimsMode === "import-readonly";
     const lanes = ["Draft", "Needs Review", "Ready", "Denied"];
     const byLane = Object.fromEntries(lanes.map((l) => [l, []]));
     (data.claims || []).forEach((c) => { if (byLane[c.status]) byLane[c.status].push(c); });
@@ -541,7 +543,7 @@ const PageViews = (function () {
     }).join("");
     const claimRec = (data.claims || []).find((c) => c.id === selectedId);
     const det = (data.detailById || {})[selectedId] || (claimRec
-      ? { id: claimRec.id, patient: claimRec.patient, dob: claimRec.dob, age: "—", insurance: "—", billed: claimRec.amount, dos: "—", procedure: claimRec.procedure, code: claimRec.procedure, provider: "Dr. Michael Reno", npi: "—", validation: 0, alert: "Local workbench only · payer submission locked." }
+      ? { id: claimRec.id, patient: claimRec.patient, dob: claimRec.dob, age: "—", insurance: "—", billed: claimRec.amount, dos: "—", procedure: claimRec.procedure, code: claimRec.procedure, provider: "Dr. Michael Reno", npi: "—", validation: 0, alert: importReadOnly ? "SoftDent import read-only · edits disabled." : "Local workbench only · payer submission locked." }
       : null);
     const currentStatus = claimRec ? claimRec.status : "Draft";
     const detailPane = det ? `
@@ -562,14 +564,24 @@ const PageViews = (function () {
           <div><dt>Validation Score</dt><dd><div class="pv-progress"><span style="width:${det.validation}%"></span></div> ${det.validation}/100</dd></div>
         </dl>
         <div class="pv-detail-alert">${esc(det.alert)}</div>
-        <div class="pv-claim-actions">
+        ${
+          importReadOnly
+            ? ""
+            : `<div class="pv-claim-actions">
           <label class="pv-field"><span class="pv-field__label">Move to lane</span><select class="pv-input" data-claim-status="${esc(selectedId)}">${lanes.map((l) => `<option value="${esc(l)}"${currentStatus === l ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
           ${U.Button({ label: "Delete claim", variant: "secondary", attrs: { "data-claim-delete": selectedId } })}
-        </div>
+        </div>`
+        }
       </aside>` : `<aside class="pv-claim-detail">${U.EmptyState({ title: "Select a claim", message: "Choose a claim card to view details and update status." })}</aside>`;
     const readiness = data.readiness || { overall: "—", slices: [] };
+    const newClaimBtn = importReadOnly
+      ? ""
+      : U.Button({ label: "New claim", variant: "primary", attrs: { "data-claim-create": "1" } });
+    const safetyItems = importReadOnly
+      ? "<li>✓ Imported from SoftDent (read-only)</li><li>✓ Validation runs locally</li><li class=\"pv-checklist--lock\">🔒 Payer submission locked</li>"
+      : "<li>✓ Claims can be created and edited</li><li>✓ Validation runs locally</li><li class=\"pv-checklist--lock\">🔒 Payer submission locked</li>";
     return `
-      ${topBar(state, [`<span class="pv-safety-chip">Safety Posture: ${esc(data.safety)}</span>`, toolbarBtn("Actions", "▾"), U.Button({ label: "New claim", variant: "primary", attrs: { "data-claim-create": "1" } })], null, dataBadgeFor(data))}
+      ${topBar(state, [`<span class="pv-safety-chip">Safety Posture: ${esc(data.safety)}</span>`, toolbarBtn("Actions", "▾"), newClaimBtn], null, dataBadgeFor(data))}
       ${kpiRow(data.kpis || [])}
       <div class="pv-claims-layout">
         <section class="pv-card pv-card--wide pv-claims-main">
@@ -577,7 +589,7 @@ const PageViews = (function () {
           <div class="pv-kanban">${kanban}</div>
           <div class="pv-claims-bottom">
             ${card("Claim Readiness", conicDonut(readiness.slices, `<strong>${esc(readiness.overall)}</strong><span>Overall Readiness</span>`, 140), "pv-card--inline")}
-            ${card("Safety Posture", `<div class="pv-shield pv-shield--gold">🛡</div><ul class="pv-checklist"><li>✓ Claims can be created and edited</li><li>✓ Validation runs locally</li><li class="pv-checklist--lock">🔒 Payer submission locked</li></ul>`, "pv-card--inline")}
+            ${card("Safety Posture", `<div class="pv-shield pv-shield--gold">🛡</div><ul class="pv-checklist">${safetyItems}</ul>`, "pv-card--inline")}
           </div>
         </section>
         ${detailPane}

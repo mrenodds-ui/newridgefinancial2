@@ -1,3 +1,7 @@
+# RETIRED — production policy forbids demo/sample import data.
+Write-Error "RETIRED: Demo mode is forbidden. Use NewRidgeFinancial2\import-automation\Sync-HAL-Imports.ps1 for live exports."
+exit 1
+
 # SoftDent demo-mode activation script
 # Clears canonical SoftDent import files, regenerates canonical sample exports, and imports them.
 

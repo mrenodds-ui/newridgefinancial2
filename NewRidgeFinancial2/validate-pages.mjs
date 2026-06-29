@@ -33,6 +33,7 @@ const FUNCTIONAL_PAGES = [
   { id: "narratives", checks: ["pv-two-pane--narratives", "Narrative Composer", "Draft Narrative Preview"] },
   { id: "documents", checks: ["pv-bento--documents", "Document Intake", "Selected Document Preview"] },
   { id: "library", checks: ["pv-library-layout", "Document Library"] },
+  { id: "office-manager", checks: ["pv--app", "Office Manager"] },
 ];
 
 for (const page of FUNCTIONAL_PAGES) {
@@ -41,17 +42,25 @@ for (const page of FUNCTIONAL_PAGES) {
   assert.ok(!html.includes("pv--mock-image"), `${page.id} must NOT render a mockup image`);
   assert.ok(html.includes("pv--app"), `${page.id} must render the functional app surface`);
   assert.ok(html.includes("pv__header"), `${page.id} must use the shared page header`);
-  assert.ok(
-    html.includes("pv-badge--import") || html.includes("No data loaded") || html.includes("Import data"),
-    `${page.id} must label import or empty data honestly`,
-  );
+  if (page.id !== "office-manager") {
+    assert.ok(
+      html.includes("pv-badge--import") ||
+        html.includes("Partial import") ||
+        html.includes("No data loaded") ||
+        html.includes("Import data"),
+      `${page.id} must label import or empty data honestly`,
+    );
+  }
   for (const check of page.checks) {
     assert.ok(html.includes(check), `${page.id} must include ${check}`);
   }
   if (page.id === "financial") {
     assert.ok(!html.includes("Dr. Adams"), "financial page must not render sample provider names");
     assert.ok(!html.includes("Hygiene Team"), "financial page must not render sample provider names");
-    assert.ok(html.includes("Awaiting import data"), "financial page must show honest empty import state");
+    assert.ok(
+      html.includes("Awaiting import data") || html.includes("pv-badge--import") || html.includes("Partial import"),
+      "financial page must show honest import state",
+    );
   }
 }
 

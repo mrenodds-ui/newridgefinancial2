@@ -46,9 +46,9 @@ class DesktopApi:
             hub_path = SIDENOTES_HUB_DATA_DIR / name
             if hub_path.is_file():
                 return hub_path.read_text(encoding="utf-8")
-            # The watcher helper may not be running on this workstation. Return an
-            # empty inbox instead of raising so HAL stays quiet and the desktop
-            # log is not flooded with FileNotFoundError tracebacks.
+            site_fallback = self.site_dir / "data" / name
+            if site_fallback.is_file():
+                return site_fallback.read_text(encoding="utf-8")
             return json.dumps({"items": [], "monitor": None})
         path = self.site_dir / "data" / name
         if not path.is_file():
@@ -69,7 +69,12 @@ class DesktopApi:
     def get_import_bundle(self) -> dict:
         from import_loader import load_import_bundle
 
-        return load_import_bundle()
+        return load_import_bundle(sync=False)
+
+    def refresh_imports(self) -> dict:
+        from import_loader import load_import_bundle
+
+        return load_import_bundle(sync=True)
 
 
 def main() -> int:

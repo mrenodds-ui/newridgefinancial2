@@ -20,7 +20,9 @@ server and does not open Chrome.
 ```
 NewRidgeFinancial2/
   desktop_app.py     single-window pywebview app launcher
+  import_sync.py     syncs live SoftDent/QuickBooks exports into import cache
   import_loader.py   reads SoftDent / QuickBooks export files for HAL
+  import-manifest.json shared import filename contract (Python + JS)
   local_store.py     local SQLite state store
   site/
     import-loader.js maps import files into dashboard shapes HAL uses

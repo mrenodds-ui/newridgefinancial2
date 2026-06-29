@@ -43,6 +43,7 @@ let currentDrawerKey = null;
 let halChatHistory = [];
 let halAudit = [];
 let halAskDraft = "";
+let halAskLoading = false;
 
 function persistLocal(key, value) {
   DesktopBridge.storageSet(key, value).catch(() => {});
@@ -493,7 +494,6 @@ function saveReadinessDiagnostics() {
 function collectReadinessRuntime() {
   return {
     halImage: "",
-    hotspotCount: 8,
     sessionStorageOk: DesktopBridge.hasDesktopApi(),
     activeSession: halWorkSession,
   };
@@ -1109,7 +1109,9 @@ function buildHalAgentCtx(extras) {
 
 async function handleHalSubmit(query) {
   const trimmed = String(query).trim();
-  if (!trimmed) return;
+  if (!trimmed || halAskLoading) return;
+  halAskLoading = true;
+  renderHalScreen();
   halChatHistory.push({ role: "user", text: trimmed, actions: [] });
   saveChatHistory();
 
@@ -1149,7 +1151,11 @@ async function handleHalSubmit(query) {
   } else {
     outcome = await HalRouteExec.execute(preRoute, trimmed, {}, buildHalAgentCtx());
   }
-  if (!outcome) return;
+  if (!outcome) {
+    halAskLoading = false;
+    renderHalScreen();
+    return;
+  }
 
   if (placeholder) {
     placeholder.text = outcome.text;
@@ -1171,6 +1177,8 @@ async function handleHalSubmit(query) {
   renderAuditLog();
   if (outcome.refreshHal) renderHalScreen();
   if (outcome.refreshPanel && currentDrawerKey) renderPanel(currentDrawerKey);
+  halAskLoading = false;
+  renderHalScreen();
 }
 
 function escapeHtml(value) {
@@ -1203,6 +1211,27 @@ function bindHalCommands(root) {
         setTimeout(() => handleHalSubmit(cmd), 50);
       }
     });
+  });
+}
+
+function drawerSourceItems() {
+  const staticItems = (halData.sources && halData.sources.items) || [];
+  const live = halWidgetFeed && halWidgetFeed.sourceHealth;
+  if (!live) return staticItems;
+  const labels = { softdent: "SoftDent", quickbooks: "QuickBooks", documents: "Documents", library: "Library" };
+  return Object.keys(live).map((key) => {
+    const h = live[key] || {};
+    const fallback = staticItems.find((item) => item.target === key) || {};
+    return {
+      label: fallback.label || labels[key] || key,
+      target: key,
+      status: h.hasData ? "Read-only" : fallback.status || "Awaiting data",
+      detail: fallback.detail || (h.hasData ? "Imported data loaded from local export cache." : "No import data loaded yet."),
+      freshness: h.freshness || fallback.freshness || null,
+      syncState: h.syncState || fallback.syncState || null,
+      warning: h.hasData ? null : fallback.warning || null,
+      checklist: fallback.checklist || [],
+    };
   });
 }
 
@@ -1470,7 +1499,7 @@ function renderPanel(key) {
   }
 
   if (key === "sources") {
-    drawerContent.innerHTML = `<p>${escapeHtml(data.summary)}</p>${sourceHealthCards(data.items)}`;
+    drawerContent.innerHTML = `<p>${escapeHtml(data.summary)}</p>${sourceHealthCards(drawerSourceItems())}`;
     bindOpenPageButtons(drawerContent);
     return;
   }
@@ -1753,7 +1782,7 @@ function renderHalScreen() {
     halAudit,
     halChatHistory,
     halAskDraft,
-    halAskLoading: false,
+    halAskLoading,
     halInlineFirewallResult: null,
     halSideNotes,
     halSideNoteMonitor: halSideNoteMonitor || (window.HalSkills ? HalSkills.buildSideNoteMonitor(halSideNotes) : null),
@@ -1968,6 +1997,20 @@ async function loadPersistedState() {
   refreshSideNoteMonitor();
 }
 
+async function refreshImportsInBackground() {
+  if (!window.Services || typeof Services.refreshImports !== "function") return;
+  try {
+    await Services.refreshImports();
+    programSnapshotCache = null;
+    programContextCache = null;
+    await refreshHalWidgetFeed();
+    if (currentDrawerKey === "sources") renderPanel("sources");
+    renderHalScreen();
+  } catch {
+    /* background import sync optional */
+  }
+}
+
 async function boot() {
   await loadPersistedState();
   try {
@@ -1982,12 +2025,10 @@ async function boot() {
   }
   await refreshHalWidgetFeed();
   if (window.HalAgent) await HalAgent.loadMemory(buildHalAgentCtx());
-  // Start HAL's sidenote watch app-wide so monitoring continues even when the
-  // HAL panel is not the visible page. (Frontend-only: stops when the app is
-  // closed; HAL re-checks persisted notes on the next launch.)
   startSideNoteMonitor();
   const initial = window.location.hash.replace("#", "") || PAGES[0].id;
   select(initial);
+  refreshImportsInBackground();
 }
 
 // Pick up sidenote edits made in another tab/window of the app (browser dev

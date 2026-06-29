@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "cacheDirs": {
+    "softdent": "app/data/imports/softdent",
+    "quickbooks": "app/data/imports/quickbooks"
+  },
+  "datasets": {
+    "softdent.dashboard": {
+      "filenames": [
+        "softdent_dashboard_data.json",
+        "softdent_dashboard_export.json",
+        "softdent_dashboard_data.csv",
+        "softdent_dashboard_export.csv"
+      ],
+      "generatedBy": ["bridge_aggregate", "daysheet_jsonl"]
+    },
+    "softdent.claims": {
+      "filenames": [
+        "softdent_claims_export.csv",
+        "softdent_claims_data.csv",
+        "softdent_claims_export.json",
+        "softdent_claims_data.json"
+      ]
+    },
+    "softdent.clinicalNotes": {
+      "filenames": [
+        "softdent_clinical_notes_data.json",
+        "softdent_clinical_notes_export.json"
+      ]
+    },
+    "softdent.ar": {
+      "filenames": [
+        "softdent_ar_aging.csv",
+        "softdent_accounts_receivable.csv",
+        "softdent_ar_aging.json",
+        "patient_aging.csv",
+        "ar_aging.csv"
+      ],
+      "generatedBy": ["account_aging_jsonl"]
+    },
+    "quickbooks.revenue": {
+      "filenames": [
+        "quickbooks_revenue.csv",
+        "quickbooks_revenue.json",
+        "quickbooks_profit_and_loss.csv",
+        "quickbooks_profit_loss.csv"
+      ],
+      "generatedBy": ["qb_sdk_summary"]
+    },
+    "quickbooks.expenses": {
+      "filenames": [
+        "quickbooks_expenses.csv",
+        "quickbooks_expense_detail.csv",
+        "quickbooks_expense_categories.csv",
+        "quickbooks_expenses.json"
+      ],
+      "generatedBy": ["qb_sdk_summary", "qb_sdk_expense_categories"]
+    },
+    "quickbooks.ar": {
+      "filenames": [
+        "quickbooks_ar.csv",
+        "quickbooks_accounts_receivable.csv",
+        "quickbooks_aging.csv"
+      ]
+    }
+  }
+}

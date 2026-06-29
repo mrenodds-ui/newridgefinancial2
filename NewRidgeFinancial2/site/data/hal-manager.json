@@ -89,9 +89,9 @@
         "target": "quickbooks",
         "status": "Read-only",
         "detail": "P&L, expenses, EBITDA candidates, and sync status.",
-        "freshness": "Last sync: pending",
-        "syncState": "Needs import review — sync not complete",
-        "warning": "Review import status before relying on expense totals.",
+        "freshness": "Import-driven",
+        "syncState": "See HAL source health for live status",
+        "warning": null,
         "checklist": ["Check sync schedule", "Confirm P&L period", "Verify no pending journal entries"]
       },
       {
@@ -319,7 +319,6 @@
     "title": "HAL readiness",
     "summary": "Local self-check for registry, firewall, sessions, evidence packets, and model lane configuration. No external actions are performed.",
     "expectedRegistryCount": 10,
-    "expectedHotspotCount": 8,
     "expectedSessionTemplates": 5,
     "expectedModelLanes": 3,
     "halImage": "",

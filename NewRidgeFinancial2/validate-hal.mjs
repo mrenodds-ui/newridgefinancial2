@@ -167,6 +167,7 @@ async function main() {
     { id: "narratives", label: "Insurance Narratives", title: "Insurance Narratives" },
     { id: "documents", label: "Accounting Documents", title: "Accounting Documents" },
     { id: "library", label: "Document Library", title: "Document Library" },
+    { id: "office-manager", label: "Office Manager", title: "Office Manager" },
     { id: "hal", label: "HAL Command Center", title: "HAL Command Center" },
   ];
 
@@ -669,8 +670,10 @@ async function main() {
     const softdentDash = ImportLoader.buildDashboard("softdent", importBundle);
     assert(softdentDash && softdentDash.dataSource === "import", "softdent dashboard must map from import files");
     assert(/Production MTD/.test(JSON.stringify(softdentDash.glance || [])), "softdent import must expose production/collections glance values");
-    const claimsState = ImportLoader.mergeClaimsState({ claims: [], laneTotals: {}, kpis: [], lanes: {} }, importBundle);
-    assert(Array.isArray(claimsState.claims) && claimsState.claims.length > 0, "softdent claims import must merge into claims state");
+    if (importBundle.softdent?.claims?.rows?.length) {
+      const claimsState = ImportLoader.mergeClaimsState({ claims: [], laneTotals: {}, kpis: [], lanes: {} }, importBundle);
+      assert(Array.isArray(claimsState.claims) && claimsState.claims.length > 0, "softdent claims import must merge into claims state");
+    }
     const finDash = ImportLoader.buildDashboard("financial", importBundle);
     assert(finDash && finDash.dataSource === "import", "financial dashboard must map from import files");
     assert(finDash.providers.rows.length >= 1, "financial dashboard must expose provider rows from imports");

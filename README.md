@@ -1,18 +1,13 @@
 # NewRidgeFinancial 2.0
 
-Active program: **NewRidgeFinancial 2.0**.
+Active program: **NewRidgeFinancial 2.0** — a single-window **pywebview desktop app**.
 
-This repository now runs as a simple local program:
+- No React/Vite runtime
+- No FastAPI backend
+- No localhost HTTP server
+- Local SQLite + import cache only
 
-- no React or Vite active runtime
-- no FastAPI backend dependency
-- no database dependency
-- no API dependency
-- no frontend/backend coupling
-- local static server only, bound to `127.0.0.1:1966`
-
-The old program is kept for reference only. It is not used to render the active
-program.
+Legacy code under `_legacy/` and `frontend/` is reference only.
 
 ## Run
 
@@ -22,48 +17,44 @@ Double-click:
 StartNewRidgeFinancial2.bat
 ```
 
-Then open:
+Or:
 
-```text
-http://127.0.0.1:1966/
+```powershell
+scripts\start_nr2_1966.ps1
 ```
 
-## Stop
+The launcher loads repo-root `.env` when present, then starts `NewRidgeFinancial2/desktop_app.py`.
 
-Double-click:
+## Stop
 
 ```text
 StopNewRidgeFinancial2.bat
 ```
 
-## Active Program Files
+(`StopDashboard.bat` only kills old port listeners — it does not stop the desktop app.)
+
+## Import data
+
+Live SoftDent / QuickBooks exports sync into:
 
 ```text
-NewRidgeFinancial2/
-  serve.py
-  site/
-    index.html
-    styles.css
-    app.js
-    pages/
-      01-financial-dashboard.png
-      02-softdent.png
-      03-quickbooks.png
-      04-ar-collections.png
-      05-claims-workbench.png
-      06-insurance-narratives.png
-      07-accounting-documents.png
-      08-document-library.png
-      09-hal-command-center.png
+app/data/imports/softdent/
+app/data/imports/quickbooks/
 ```
 
-## Legacy Reference
+Sync authority: `NewRidgeFinancial2/import_sync.py`  
+Automation: `NewRidgeFinancial2/import-automation/Sync-HAL-Imports.ps1`
 
-The old application code is reference-only:
+Legacy `scripts/sync_softdent_bridge.ps1` is **retired**.
 
-- `_legacy/`
-- `app/`
-- `frontend/`
-- old API/docs/test assets
+## Layout
 
-Do not use the legacy program to render NewRidgeFinancial 2.0.
+| Path | Role |
+|------|------|
+| `NewRidgeFinancial2/desktop_app.py` | Desktop launcher |
+| `NewRidgeFinancial2/import_sync.py` | Export → import cache sync |
+| `NewRidgeFinancial2/import_loader.py` | Import cache reader |
+| `app/data/imports/` | Canonical import cache (gitignored) |
+| `app_data/nr2/` | Desktop SQLite state |
+
+See `NewRidgeFinancial2/README.md` for page/HAL details.

@@ -60,11 +60,15 @@ const Services = (function () {
     const loader = resolveImportLoader();
     if (!loader || !loader.shouldLoadImports()) return null;
     const now = Date.now();
+    if (force) {
+      importBundleCache = null;
+      importBundleAt = 0;
+    }
     if (!force && importBundleCache && now - importBundleAt < IMPORT_CACHE_TTL_MS) {
       return importBundleCache;
     }
     try {
-      importBundleCache = await loader.loadBundle();
+      importBundleCache = await loader.loadBundle(Boolean(force));
       importBundleAt = now;
       return importBundleCache;
     } catch {
@@ -162,7 +166,16 @@ const Services = (function () {
       label: usingImports
         ? "Local program snapshot (SoftDent/QuickBooks imports + persisted data)"
         : "Local program snapshot (imports unavailable — empty or persisted local data only)",
-      importBundle: usingImports ? { loadedAt: bundle.loadedAt, softdentDir: bundle.softdent?.dir, quickbooksDir: bundle.quickbooks?.dir } : null,
+      importBundle: bundle
+        ? {
+            loadedAt: bundle.loadedAt,
+            syncStatus: bundle.syncStatus || null,
+            softdent: bundle.softdent,
+            quickbooks: bundle.quickbooks,
+            softdentDir: bundle.softdent?.dir,
+            quickbooksDir: bundle.quickbooks?.dir,
+          }
+        : null,
       dashboards: { financial, softdent, quickbooks, ar },
       claims: claimsState
         ? {
@@ -196,8 +209,10 @@ const Services = (function () {
             results: libraryState.results,
             storage: libraryState.storage || {},
             top: (libraryState.docs || []).slice(0, 8),
+            docs: libraryState.docs || [],
           }
         : null,
+      officeTasks: [],
     };
   }
 
@@ -207,17 +222,52 @@ const Services = (function () {
     return clone(resolveEmptyStates().store("claims"));
   }
 
+  function claimsImportActive(bundle) {
+    return Boolean(bundle && bundle.softdent && bundle.softdent.claims && bundle.softdent.claims.rows && bundle.softdent.claims.rows.length);
+  }
+
   const claims = {
     async list() {
       await delay();
       const loader = resolveImportLoader();
       const bundle = await loadImportBundle(false);
-      if (loader && bundle && bundle.softdent && bundle.softdent.claims && bundle.softdent.claims.rows && bundle.softdent.claims.rows.length) {
-        return clone(loader.mergeClaimsState(emptyClaims(), bundle));
+      if (loader && claimsImportActive(bundle)) {
+        const merged = clone(loader.mergeClaimsState(emptyClaims(), bundle));
+        merged.claimsMode = "import-readonly";
+        merged.safety = "Import read-only · payer submission locked.";
+        return merged;
       }
-      return clone(await load("claims", emptyClaims));
+      const local = clone(await load("claims", emptyClaims));
+      local.claimsMode = "local-workbench";
+      return local;
     },
     async get(id) {
+      const loader = resolveImportLoader();
+      const bundle = await loadImportBundle(false);
+      if (loader && claimsImportActive(bundle)) {
+        const state = loader.mergeClaimsState(emptyClaims(), bundle);
+        const claim = (state.claims || []).find((c) => c.id === id) || null;
+        const detail =
+          (state.detailById || {})[id] ||
+          (claim
+            ? {
+                id: claim.id,
+                patient: claim.patient,
+                dob: claim.dob,
+                age: "—",
+                insurance: claim.payer || "—",
+                billed: claim.amount,
+                dos: claim.serviceDate || "—",
+                procedure: claim.procedure,
+                code: claim.procedure,
+                provider: primaryProvider(),
+                npi: "—",
+                validation: 0,
+                alert: "SoftDent import read-only · edits disabled.",
+              }
+            : null);
+        return clone({ claim, detail, claimsMode: "import-readonly" });
+      }
       const state = await load("claims", emptyClaims);
       const claim = (state.claims || []).find((c) => c.id === id) || null;
       const detail =
@@ -243,6 +293,10 @@ const Services = (function () {
     },
     async updateStatus(id, status) {
       await delay(160);
+      const bundle = await loadImportBundle(false);
+      if (claimsImportActive(bundle)) {
+        throw new Error("Claims are read-only while SoftDent claims import is active.");
+      }
       const state = clone(await load("claims", emptyClaims));
       const claim = (state.claims || []).find((c) => c.id === id);
       if (!claim) throw new Error("Claim not found");
@@ -252,6 +306,10 @@ const Services = (function () {
     },
     async remove(id) {
       await delay(160);
+      const bundle = await loadImportBundle(false);
+      if (claimsImportActive(bundle)) {
+        throw new Error("Claims are read-only while SoftDent claims import is active.");
+      }
       const state = clone(await load("claims", emptyClaims));
       const before = state.claims.length;
       state.claims = state.claims.filter((c) => c.id !== id);
@@ -261,6 +319,10 @@ const Services = (function () {
     },
     async create(data) {
       await delay(160);
+      const bundle = await loadImportBundle(false);
+      if (claimsImportActive(bundle)) {
+        throw new Error("Claims are read-only while SoftDent claims import is active.");
+      }
       const state = clone(await load("claims", emptyClaims));
       const claim = Object.assign(
         { id: uid("CLM"), status: "Draft", patient: "New Patient", dob: "—", procedure: "—", amount: "$0.00", age: "just now" },

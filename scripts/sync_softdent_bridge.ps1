@@ -1,3 +1,11 @@
+# RETIRED — NewRidgeFinancial 2.0 uses NewRidgeFinancial2\import-automation\Sync-HAL-Imports.ps1
+Write-Error @"
+RETIRED: This legacy SoftDent bridge sync script is no longer used.
+Use: NewRidgeFinancial2\import-automation\Sync-HAL-Imports.ps1
+Unregister scheduled task: New Ridge SoftDent Bridge Sync
+"@
+exit 1
+
 # SoftDent Bridge Sync Script
 # Copies the bridge export files into the canonical SoftDent import directory.
 

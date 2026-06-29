@@ -41,6 +41,15 @@ const HalRouteExec = (function () {
       return outcome(text, "imports", result.intent, [], { refreshHal: true });
     }
 
+    if (result.useSourceHealth) {
+      const snapshot = await ctx.loadProgramSnapshot();
+      const feed =
+        (snapshot && snapshot.widgets) || (window.HalSkills && HalSkills.buildWidgetFeed(snapshot)) || ctx.halWidgetFeed || {};
+      const staticItems = (ctx.halData.sources && ctx.halData.sources.items) || [];
+      const text = HalSkills.formatSourceHealthText(feed.sourceHealth, staticItems);
+      return outcome(text, "sources", result.intent, [], { refreshHal: false });
+    }
+
     if (result.useJournalDraft) {
       const req = result.journalRequest || {};
       let text;
@@ -170,7 +179,7 @@ const HalRouteExec = (function () {
         HalSkills.formatWidgetDetail(feed, result.widgetKey),
         "widgets",
         result.intent,
-        [{ label: "Open related page", command: `navigate: ${feed.widgets[result.widgetKey]?.navTarget || ""}` }],
+        [{ label: "Open related page", page: feed.widgets[result.widgetKey]?.navTarget || "" }],
         { refreshHal: true },
       );
     }

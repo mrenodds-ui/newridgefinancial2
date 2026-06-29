@@ -14,6 +14,23 @@ $AppDir = Join-Path $Root 'NewRidgeFinancial2'
 $SiteDir = Join-Path $AppDir 'site'
 $DesktopScript = Join-Path $AppDir 'desktop_app.py'
 
+function Import-DotEnvFile {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { return }
+    Get-Content $Path | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line.StartsWith('#')) { return }
+        $idx = $line.IndexOf('=')
+        if ($idx -lt 1) { return }
+        $name = $line.Substring(0, $idx).Trim()
+        $value = $line.Substring($idx + 1).Trim()
+        if ($name) { Set-Item -Path "Env:$name" -Value $value }
+    }
+}
+
+Import-DotEnvFile (Join-Path $Root '.env')
+Import-DotEnvFile (Join-Path $AppDir '.env')
+
 function Resolve-Python {
     $candidates = @(
         (Join-Path $Root '.venv\Scripts\python.exe'),
@@ -44,4 +61,4 @@ $pidFile = Join-Path $dataDir 'nr2-desktop.pid'
 
 $process = Start-Process -FilePath $python -ArgumentList @($DesktopScript) -WorkingDirectory $AppDir -WindowStyle Normal -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -PassThru
 Set-Content -Path $pidFile -Value $process.Id
-Write-Host 'Desktop app launched (single window, no browser, no localhost server).' -ForegroundColor Green
+Write-Host 'Desktop app launched (single pywebview window — no HTTP server).' -ForegroundColor Green

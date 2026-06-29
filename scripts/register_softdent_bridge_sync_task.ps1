@@ -1,3 +1,7 @@
+# RETIRED — use NewRidgeFinancial2\import-automation\Register-HAL-Import-Automation.ps1
+Write-Error "RETIRED: Unregister 'New Ridge SoftDent Bridge Sync' and use Register-HAL-Import-Automation.ps1 instead."
+exit 1
+
 [CmdletBinding()]
 param(
     [string]$TaskName = 'New Ridge SoftDent Bridge Sync',

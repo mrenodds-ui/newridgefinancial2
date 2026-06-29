@@ -1,3 +1,10 @@
+# RETIRED — production policy forbids sample/demo import data.
+Write-Error @"
+RETIRED: Sample seeding is forbidden in NewRidgeFinancial 2.0.
+Use live SoftDent and QuickBooks exports via NewRidgeFinancial2\import-automation\Sync-HAL-Imports.ps1
+"@
+exit 1
+
 # SoftDent sample data seed script
 # Regenerates the canonical sample exports and imports them into the canonical SoftDent import directory.
 

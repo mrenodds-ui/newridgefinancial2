@@ -1,4 +1,14 @@
+"""RETIRED — NR2 desktop uses NewRidgeFinancial2/import_sync.py instead."""
 from __future__ import annotations
+
+import sys
+
+print(
+    "RETIRED: refresh_from_softdent_and_verify.py targets the retired FastAPI backend.\n"
+    "Use: python NewRidgeFinancial2/import_sync.py",
+    file=sys.stderr,
+)
+raise SystemExit(1)
 
 from contextlib import contextmanager
 import json
