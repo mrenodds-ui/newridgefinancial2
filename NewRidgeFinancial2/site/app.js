@@ -890,12 +890,13 @@ function modelHealthSummary() {
     .join(" · ");
 }
 
-async function runModel(runtime, systemPrompt, userText, draftLabel) {
+async function runModel(runtime, systemPrompt, userText, draftLabel, onToken) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), runtime.timeoutMs || 60000);
+  const wantStream = typeof onToken === "function";
   const payload = {
     model: runtime.model,
-    stream: false,
+    stream: wantStream,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userText },
@@ -911,8 +912,44 @@ async function runModel(runtime, systemPrompt, userText, draftLabel) {
       signal: controller.signal,
     });
     if (!response.ok) throw new Error("model http " + response.status);
-    const data = await response.json();
-    const raw = data && data.message && data.message.content ? data.message.content : "";
+
+    let raw = "";
+    if (wantStream && response.body && typeof response.body.getReader === "function") {
+      // Ollama streams newline-delimited JSON; emit each delta for live display.
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl;
+        while ((nl = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, nl).trim();
+          buffer = buffer.slice(nl + 1);
+          if (!line) continue;
+          let chunk;
+          try {
+            chunk = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          const delta = chunk && chunk.message && chunk.message.content ? chunk.message.content : "";
+          if (delta) {
+            raw += delta;
+            try {
+              onToken(HalCore.cleanModelText(raw));
+            } catch {
+              /* display callback is best-effort */
+            }
+          }
+        }
+      }
+    } else {
+      const data = await response.json();
+      raw = data && data.message && data.message.content ? data.message.content : "";
+    }
+
     const text = HalCore.cleanModelText(raw);
     if (!text) throw new Error("empty model response");
     return text + "\n\n(" + draftLabel + " · read-only · verify before acting)";
@@ -1006,8 +1043,8 @@ function renderAuditLog() {
     .join("");
 }
 
-function buildHalAgentCtx() {
-  return {
+function buildHalAgentCtx(extras) {
+  return Object.assign({
     halData,
     halModels,
     pages: PAGES,
@@ -1067,7 +1104,7 @@ function buildHalAgentCtx() {
       if (!window.HalRouteExec) return null;
       return HalRouteExec.execute(result, trimmed, toolResults, buildHalAgentCtx());
     },
-  };
+  }, extras || {});
 }
 
 async function handleHalSubmit(query) {
@@ -1079,18 +1116,36 @@ async function handleHalSubmit(query) {
   const preRoute = routeHalCommand(trimmed);
   const isModelLane = !!(preRoute.useModel || preRoute.useReasoning || preRoute.useEscalation);
   let placeholder = null;
+  let streamRenderAt = 0;
   if (isModelLane && window.HalAgent) {
     const lane = preRoute.lane || "chat14b";
     const label = preRoute.useEscalation ? "Escalating" : preRoute.useReasoning ? "Reasoning" : "Thinking";
     placeholder = { role: "hal", text: label + " locally…", lane, actions: [] };
     halChatHistory.push(placeholder);
     saveChatHistory();
+    // Show the placeholder on both surfaces and suppress the typewriter so live
+    // streamed tokens are written directly instead of being re-animated.
+    halTypeSig = halChatHistory.length + ":" + placeholder.text.length;
     renderChatLog();
+    renderHalScreen();
   }
+
+  // Live token stream → write straight into the visible HAL bubbles, throttled.
+  const onToken = placeholder
+    ? (partial) => {
+        if (!partial) return;
+        placeholder.text = partial;
+        const now = Date.now();
+        if (now - streamRenderAt < 60) return;
+        streamRenderAt = now;
+        renderChatLog();
+        setInlineHalStreamingText(partial);
+      }
+    : undefined;
 
   let outcome = null;
   if (window.HalAgent) {
-    outcome = await HalAgent.processQuery(trimmed, buildHalAgentCtx());
+    outcome = await HalAgent.processQuery(trimmed, buildHalAgentCtx(onToken ? { onToken } : null));
   } else {
     outcome = await HalRouteExec.execute(preRoute, trimmed, {}, buildHalAgentCtx());
   }
@@ -1100,6 +1155,8 @@ async function handleHalSubmit(query) {
     placeholder.text = outcome.text;
     placeholder.lane = outcome.lane || placeholder.lane;
     placeholder.actions = normalizeActions(outcome.actions);
+    // We already showed the streamed text; stop the typewriter from replaying it.
+    halTypeSig = halChatHistory.length + ":" + String(outcome.text).length;
   } else {
     halChatHistory.push({
       role: "hal",
@@ -1485,6 +1542,23 @@ function closeDrawer() {
 
 let halTypeSig = null;
 let halTypeTimer = null;
+
+function setInlineHalStreamingText(text) {
+  if (!halPageRoot) return;
+  const box = halPageRoot.querySelector(".hp-inline-chat");
+  if (!box) return;
+  const rows = box.querySelectorAll(".hp-chat-row--hal");
+  if (!rows.length) return;
+  const p = rows[rows.length - 1].querySelector("p");
+  if (!p) return;
+  if (halTypeTimer) {
+    clearInterval(halTypeTimer);
+    halTypeTimer = null;
+  }
+  p.classList.remove("hp-typing");
+  p.textContent = text;
+  box.scrollTop = box.scrollHeight;
+}
 
 function typewriteLastHalMessage() {
   if (!halPageRoot) return;

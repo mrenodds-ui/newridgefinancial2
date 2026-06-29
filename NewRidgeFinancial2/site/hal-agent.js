@@ -130,6 +130,8 @@ const HalAgent = (function () {
   let workingMemory = createWorkingMemory();
   let longTermMemory = createLongTermMemory();
   let repairLog = [];
+  let memoryLoaded = false;
+  let memoryDirty = false;
   let health = {
     architectureVersion: ARCHITECTURE_VERSION,
     budget: AGENT_BUDGET,
@@ -366,6 +368,7 @@ const HalAgent = (function () {
     if (meta && meta.tools) workingMemory.lastTools = meta.tools;
     if (meta && meta.focus) workingMemory.focus = meta.focus;
     workingMemory.updatedAt = new Date().toISOString();
+    memoryDirty = true;
   }
 
   function logRepair(entry, persistFn) {
@@ -375,11 +378,14 @@ const HalAgent = (function () {
     health.repairCount = repairLog.length;
     health.lastSelfCheck = "repair:" + (entry.issues || []).join(",");
     health.updatedAt = row.at;
+    memoryDirty = true;
     if (typeof persistFn === "function") persistFn(REPAIR_KEY, repairLog);
     return row;
   }
 
   async function loadMemory(ctx) {
+    // Load exactly once per session; subsequent queries reuse in-memory state.
+    memoryLoaded = true;
     if (!ctx || typeof ctx.persistGet !== "function") return;
     try {
       const savedWorking = await ctx.persistGet(WORKING_KEY);
@@ -394,34 +400,56 @@ const HalAgent = (function () {
   }
 
   async function saveMemory(ctx) {
-    if (!ctx || typeof ctx.persistSet !== "function") return;
+    // Only write when something actually changed; callers fire-and-forget this
+    // off the response hot path.
+    if (!ctx || typeof ctx.persistSet !== "function" || !memoryDirty) return;
+    memoryDirty = false;
     longTermMemory.updatedAt = new Date().toISOString();
-    await ctx.persistSet(WORKING_KEY, workingMemory);
-    await ctx.persistSet(MEMORY_KEY, longTermMemory);
-    await ctx.persistSet(REPAIR_KEY, repairLog);
+    try {
+      await ctx.persistSet(WORKING_KEY, workingMemory);
+      await ctx.persistSet(MEMORY_KEY, longTermMemory);
+      await ctx.persistSet(REPAIR_KEY, repairLog);
+    } catch {
+      memoryDirty = true; // retry on the next turn
+    }
   }
 
-  async function enhanceModelCall(ctx, route, query, plan, toolResults) {
-    const programContext = await ctx.getProgramContextText();
+  async function enhanceModelCall(ctx, route, query, plan, toolResults, onToken) {
     const agentPrompt = buildAgentSystemPrompt(ctx, plan, toolResults, workingMemory, longTermMemory);
-    const combinedPrompt = agentPrompt + (programContext ? "\n\nFull program context:\n" + programContext.slice(0, 6000) : "");
+
+    // De-dup: when a snapshot-bearing tool already ran, its summary is in the
+    // agent prompt, so do NOT also append the full program context (it would
+    // double the prompt and slow time-to-first-token).
+    const snapshotToolRan = (plan.tools || []).some(
+      (t) => t === "read_program_snapshot" || t === "read_widget_feed" || t === "read_claims_summary",
+    );
+    // The fast chat lane gets a tighter context cap for snappier first tokens;
+    // the deeper reasoning/escalation lanes keep the full budget.
+    const ctxCap = route.useModel ? 3000 : AGENT_BUDGET.maxModelContextChars;
+    let combinedPrompt = agentPrompt;
+    if (!snapshotToolRan) {
+      const programContext = await ctx.getProgramContextText();
+      if (programContext) combinedPrompt += "\n\nProgram context:\n" + programContext.slice(0, ctxCap);
+    }
 
     if (route.useEscalation) {
       if (!ctx.escalationModelReady()) return { text: ctx.offlineModelMessage("escalate30b"), lane: "escalate30b · offline" };
       const em = ctx.escalationModelConfig();
+      // Escalation runs a hidden think pass; skip streaming so raw reasoning is
+      // not flashed to the user before it is cleaned out.
       const text = await ctx.runModel(em, combinedPrompt, query, "Local escalation draft");
       return { text, lane: "escalate30b" };
     }
     if (route.useReasoning) {
       if (!ctx.reasoningModelReady()) return { text: ctx.offlineModelMessage("reason21b"), lane: "reason21b · offline" };
       const rm = ctx.reasoningModelConfig();
-      const text = await ctx.runModel(rm, combinedPrompt, query, "Local reasoning plan");
+      const text = await ctx.runModel(rm, combinedPrompt, query, "Local reasoning plan", onToken);
       return { text, lane: "reason21b" };
     }
     if (route.useModel) {
       if (!ctx.localModelReady()) return { text: ctx.offlineModelMessage("chat14b"), lane: "chat14b · offline" };
       const lm = ctx.localModelConfig();
-      const text = await ctx.runModel(lm, combinedPrompt, query, "Local chat draft");
+      const text = await ctx.runModel(lm, combinedPrompt, query, "Local chat draft", onToken);
       return { text, lane: "chat14b" };
     }
     return null;
@@ -436,19 +464,50 @@ const HalAgent = (function () {
     if (!trimmed) return null;
     const startedAt = Date.now();
 
-    await loadMemory(ctx);
+    // Lazy memory: load once per session, never on the per-query hot path again.
+    if (!memoryLoaded) await loadMemory(ctx);
     workingMemory.currentPage = ctx.getCurrentPage ? ctx.getCurrentPage() : null;
     workingMemory.activeWorkSession = !!(ctx.halWorkSession);
     recordTurn("user", trimmed, { focus: workingMemory.currentPage });
 
     const route = HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, trimmed);
     const plan = buildPlan(trimmed, route, workingMemory, longTermMemory);
+    const isModelLane = !!(route.useModel || route.useReasoning || route.useEscalation);
+
+    // Instant local-command path: deterministic routes that need no tools and no
+    // model run straight through the executor so they answer with zero extra
+    // latency (template responses are inherently within the safety policy).
+    if (!isModelLane && !plan.useModelEnhancement && (!plan.tools || plan.tools.length === 0)) {
+      const fast = await ctx.executeRoute(route, trimmed, {});
+      if (fast) {
+        recordTurn("hal", fast.text, { intent: fast.intent, tools: [] });
+        health = {
+          architectureVersion: ARCHITECTURE_VERSION,
+          budget: AGENT_BUDGET,
+          lastIntent: route.intent,
+          lastQuestionType: plan.questionType,
+          lastTools: [],
+          lastSelfCheck: "instant",
+          lastLatencyMs: Date.now() - startedAt,
+          lastModelLane: null,
+          repairCount: repairLog.length,
+          updatedAt: new Date().toISOString(),
+        };
+        saveMemory(ctx);
+        return Object.assign({}, fast, {
+          plan,
+          toolResults: {},
+          selfCheck: { pass: true, issues: [], instant: true },
+        });
+      }
+    }
+
     const toolResults = plan.tools.length ? await runTools(plan.tools, ctx, trimmed) : {};
 
     let outcome;
     if (plan.useModelEnhancement) {
       try {
-        const enhanced = await enhanceModelCall(ctx, route, trimmed, plan, toolResults);
+        const enhanced = await enhanceModelCall(ctx, route, trimmed, plan, toolResults, ctx.onToken);
         if (enhanced) {
           outcome = {
             text: enhanced.text,
@@ -494,7 +553,7 @@ const HalAgent = (function () {
       repairCount: repairLog.length,
       updatedAt: new Date().toISOString(),
     };
-    await saveMemory(ctx);
+    saveMemory(ctx);
 
     return Object.assign({}, outcome, {
       plan,
@@ -526,6 +585,7 @@ const HalAgent = (function () {
   function updatePreferences(patch, persistFn) {
     longTermMemory.preferences = Object.assign({}, longTermMemory.preferences, patch || {});
     longTermMemory.updatedAt = new Date().toISOString();
+    memoryDirty = true;
     if (typeof persistFn === "function") persistFn(MEMORY_KEY, longTermMemory);
     return longTermMemory.preferences;
   }
