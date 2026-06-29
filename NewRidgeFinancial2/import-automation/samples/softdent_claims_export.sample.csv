@@ -1,0 +1,4 @@
+PatientName,MRN,ClaimId,ClaimStatus,Payer,Procedure,ServiceDate,DenialReason,ClaimAmount
+John Doe,778899,CLM-2026-1001,Denied,Delta Dental,Crown build-up tooth #30,2026-06-12,"Carrier requested clearer documentation of fracture, recurrent decay, and full-coverage necessity.",215.75
+John Doe,778899,CLM-2026-1002,Pending Review,Delta Dental,Core buildup tooth #30,2026-06-12,Awaiting supplemental narrative and supporting clinical notes.,148.0
+Maria Santos,882211,CLM-2026-1044,Paid,MetLife,Periodontal scaling and root planing,2026-06-09,Paid per plan benefits.,486.5

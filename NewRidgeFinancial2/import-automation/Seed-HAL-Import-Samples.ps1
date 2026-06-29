@@ -12,13 +12,17 @@ $samplesDir = Join-Path $automationRoot "samples"
 $softDentDestination = Join-Path $repoRoot "app\data\imports\softdent"
 $quickBooksDestination = Join-Path $repoRoot "app\data\imports\quickbooks"
 
+# Source = tracked sample filename in samples\. DestName = canonical import
+# filename HAL reads. SoftDent samples use a .sample suffix so they can be
+# tracked without tripping the PHI-protection .gitignore rules for the real
+# softdent_* export filenames.
 $seedFiles = @(
-    @{ Source = "softdent_dashboard_data.json"; DestinationDir = $softDentDestination },
-    @{ Source = "softdent_claims_export.csv"; DestinationDir = $softDentDestination },
-    @{ Source = "softdent_clinical_notes_data.json"; DestinationDir = $softDentDestination },
-    @{ Source = "softdent_ar_aging.csv"; DestinationDir = $softDentDestination },
-    @{ Source = "quickbooks_revenue.csv"; DestinationDir = $quickBooksDestination },
-    @{ Source = "quickbooks_expenses.csv"; DestinationDir = $quickBooksDestination }
+    @{ Source = "softdent_dashboard_data.sample.json"; DestName = "softdent_dashboard_data.json"; DestinationDir = $softDentDestination },
+    @{ Source = "softdent_claims_export.sample.csv"; DestName = "softdent_claims_export.csv"; DestinationDir = $softDentDestination },
+    @{ Source = "softdent_clinical_notes_data.sample.json"; DestName = "softdent_clinical_notes_data.json"; DestinationDir = $softDentDestination },
+    @{ Source = "softdent_ar_aging.csv"; DestName = "softdent_ar_aging.csv"; DestinationDir = $softDentDestination },
+    @{ Source = "quickbooks_revenue.csv"; DestName = "quickbooks_revenue.csv"; DestinationDir = $quickBooksDestination },
+    @{ Source = "quickbooks_expenses.csv"; DestName = "quickbooks_expenses.csv"; DestinationDir = $quickBooksDestination }
 )
 
 New-Item -ItemType Directory -Path $softDentDestination -Force | Out-Null
@@ -29,7 +33,7 @@ $seeded = 0
 $refreshed = 0
 foreach ($entry in $seedFiles) {
     $sourceFile = Join-Path $samplesDir $entry.Source
-    $destinationFile = Join-Path $entry.DestinationDir $entry.Source
+    $destinationFile = Join-Path $entry.DestinationDir $entry.DestName
     if (-not (Test-Path $sourceFile)) {
         throw "Missing sample file: $sourceFile"
     }

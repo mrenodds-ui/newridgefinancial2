@@ -1,0 +1,26 @@
+[
+  {
+    "provider": "Dr. Adams",
+    "period": "2026-06",
+    "production": 55250.0,
+    "collections": 50125.0,
+    "insurance": 30875.0,
+    "patient": 19250.0
+  },
+  {
+    "provider": "Dr. Lee",
+    "period": "2026-06",
+    "production": 42890.0,
+    "collections": 39410.0,
+    "insurance": 24150.0,
+    "patient": 15260.0
+  },
+  {
+    "provider": "Hygiene Team",
+    "period": "2026-06",
+    "production": 18640.0,
+    "collections": 17480.0,
+    "insurance": 10410.0,
+    "patient": 7070.0
+  }
+]
