@@ -49,8 +49,9 @@ for (const page of FUNCTIONAL_PAGES) {
     assert.ok(html.includes(check), `${page.id} must include ${check}`);
   }
   if (page.id === "financial") {
-    assert.ok(html.includes("Dr. Adams"), "financial page must show imported provider rows");
-    assert.ok(html.includes("Hygiene Team"), "financial page must preserve non-doctor provider rows");
+    assert.ok(!html.includes("Dr. Adams"), "financial page must not render sample provider names");
+    assert.ok(!html.includes("Hygiene Team"), "financial page must not render sample provider names");
+    assert.ok(html.includes("Awaiting import data"), "financial page must show honest empty import state");
   }
 }
 

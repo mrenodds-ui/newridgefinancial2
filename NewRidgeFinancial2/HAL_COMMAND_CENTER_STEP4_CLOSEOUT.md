@@ -23,14 +23,14 @@
 - Last local receipt/status — Audit log tile + System Controls footer, from the local audit log.
 - Accessible detail — every card `(i)` button has a `title`/`aria-label` naming its drawer content.
 
-## Local-only / sample data clearly labeled
-- Source Intake freshness: "local sample data — no live ingestion in this build."
-- Work Surfaces: `Updated: Not available`, `Items: —`.
+## Local-only / real import state only
+- Source Intake freshness is populated only from real local SoftDent/QuickBooks export files.
+- Work Surfaces show live import-derived timestamps/counts when real exports are present; otherwise they show unavailable/empty states.
 - Last receipt: "No local receipt this session" until a local action runs.
 - Active work counts labeled `(local registry)`.
 
 ## Backend / API gaps identified (NOT built)
-- No live source ingestion (SoftDent/QuickBooks freshness, work-surface counts/timestamps).
+- No backend source ingestion; desktop mode reads only local SoftDent/QuickBooks export files copied into the approved import folders.
 - Full active work-session/readiness/operator receipts are reachable via the drawer; surfacing
   them on the page would require passing more state from `app.js` (intentionally not changed).
 
