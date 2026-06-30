@@ -13,6 +13,8 @@ from document_sync import (
     NR2_DATA_DIR,
     _recompute_period,
     _status_tone,
+    hal_financial_numbers_only,
+    is_financial_summary_document,
     resolve_accounting_db_path,
 )
 from local_store import LocalStore
@@ -67,6 +69,14 @@ def _clear_accounting_review_flags() -> dict[str, Any]:
 
 def advance_pending_documents(store: LocalStore | None = None) -> dict[str, Any]:
     store = store or LocalStore(NR2_DATA_DIR)
+    if hal_financial_numbers_only():
+        return {
+            "ok": True,
+            "advanced": 0,
+            "skipped": True,
+            "reason": "financial-numbers-only mode",
+            "queueCount": len((_load_json_store(store, DOCUMENTS_KEY, {}) or {}).get("queue") or []),
+        }
     accounting = _clear_accounting_review_flags()
     state = _load_json_store(
         store,
@@ -172,25 +182,32 @@ def seed_narrative_draft(store: LocalStore | None = None, *, force: bool = False
 
 def seed_document_library(store: LocalStore | None = None, *, force: bool = False) -> dict[str, Any]:
     store = store or LocalStore(NR2_DATA_DIR)
-    library = _load_json_store(
-        store,
-        LIBRARY_KEY,
-        {"results": 0, "storage": {}, "filters": [], "docs": [], "detailById": {}},
-    )
-    existing_titles = {str(doc.get("title") or "") for doc in library.get("docs") or []}
-    if existing_titles and not force:
-        return {
-            "ok": True,
-            "seeded": False,
-            "reason": "library already populated",
-            "docCount": len(existing_titles),
-        }
+    financial_only = hal_financial_numbers_only()
+    if financial_only:
+        library = {"results": 0, "storage": {}, "filters": [], "docs": [], "detailById": {}}
+        existing_titles: set[str] = set()
+    else:
+        library = _load_json_store(
+            store,
+            LIBRARY_KEY,
+            {"results": 0, "storage": {}, "filters": [], "docs": [], "detailById": {}},
+        )
+        existing_titles = {str(doc.get("title") or "") for doc in library.get("docs") or []}
+        if existing_titles and not force:
+            return {
+                "ok": True,
+                "seeded": False,
+                "reason": "library already populated",
+                "docCount": len(existing_titles),
+            }
 
     documents = _load_json_store(store, DOCUMENTS_KEY, {"queue": [], "previewById": {}})
     queue = documents.get("queue") or []
     previews = documents.get("previewById") or {}
     added = 0
     for doc in queue:
+        if hal_financial_numbers_only() and not is_financial_summary_document(doc):
+            continue
         vendor = str(doc.get("vendor") or "Document").strip()
         doc_id = str(doc.get("id") or "").strip()
         title = f"{doc_id} — {vendor}" if doc_id else vendor
@@ -228,7 +245,7 @@ def seed_document_library(store: LocalStore | None = None, *, force: bool = Fals
     library["results"] = len(library.get("docs") or [])
     library["storage"] = {
         "indexed": library["results"],
-        "source": "document queue",
+        "source": "financial summaries" if financial_only else "document queue",
         "refreshedAt": datetime.now(timezone.utc).isoformat(),
     }
     _save_json_store(store, LIBRARY_KEY, library)

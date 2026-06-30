@@ -20,6 +20,23 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 NR2_DATA_DIR = REPO_ROOT / "app_data" / "nr2"
 DOCUMENTS_KEY = "nr2:v2:documents"
 
+FINANCIAL_DOC_TYPES = frozenset({"Statement", "Production Summary", "A/R Aging"})
+FINANCIAL_SOURCE_KINDS = frozenset({"monthlyExpenses", "monthlyRevenue", "arAging", "dashboard"})
+
+
+def hal_financial_numbers_only() -> bool:
+    """When true, HAL syncs aggregate financial rows only — not OCR invoices or bill line items."""
+    raw = os.environ.get("NR2_HAL_FINANCIAL_NUMBERS_ONLY", "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
+def is_financial_summary_document(doc: dict[str, Any]) -> bool:
+    kind = str(doc.get("sourceKind") or "").strip()
+    if kind in FINANCIAL_SOURCE_KINDS:
+        return True
+    doc_type = str(doc.get("type") or "").strip()
+    return doc_type in FINANCIAL_DOC_TYPES
+
 
 def _env_path(name: str, default: Path | None = None) -> Path | None:
     configured = os.environ.get(name, "").strip()
@@ -359,11 +376,13 @@ def _apply_source_import(store: Any, state: dict[str, Any]) -> dict[str, Any]:
 
 
 def sync_accounting_documents(store: Any) -> dict[str, Any]:
-    """Merge OCR ledger rows into the NR2 document intake queue."""
+    """Merge financial summary rows into the NR2 document intake queue."""
+    financial_only = hal_financial_numbers_only()
     db_path = resolve_accounting_db_path()
     archive_dir = resolve_archive_path()
     result: dict[str, Any] = {
         "syncedAt": datetime.now(timezone.utc).isoformat(),
+        "financialNumbersOnly": financial_only,
         "dbPath": str(db_path) if db_path else None,
         "inboxPath": str(resolve_inbox_path()),
         "archivePath": str(archive_dir),
@@ -373,6 +392,16 @@ def sync_accounting_documents(store: Any) -> dict[str, Any]:
         "manualKept": 0,
         "warnings": [],
     }
+    if financial_only:
+        result["warnings"].append(
+            "HAL financial-numbers-only mode: OCR invoices and bill line items are not synced into Documents."
+        )
+        state = _load_documents_state(store)
+        result["sourceImport"] = _apply_source_import(store, state)
+        result["state"] = state
+        result["queueCount"] = len(state.get("queue") or [])
+        return result
+
     if not db_path:
         result["warnings"].append("No accounting document database found yet. Drop files in the NR2 document inbox for OCR.")
         state = _load_documents_state(store)

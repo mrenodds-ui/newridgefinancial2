@@ -1,8 +1,10 @@
-"""Import SoftDent and QuickBooks export rows into the Documents page queue.
+"""Import SoftDent and QuickBooks financial summary rows into the Documents page queue.
 
 Reads the canonical import cache under app_data/nr2/document_inbox and converts
-verified tabular exports into document-intake rows the Accounting Documents page
-can review alongside OCR inbox items.
+monthly revenue/expense totals, A/R aging buckets, and production/collections
+dashboard rows into document-intake summaries. Individual invoices, OCR scans,
+expense-category bill rows, and claim rows are excluded when HAL financial-numbers-only
+mode is active (default).
 """
 
 from __future__ import annotations
@@ -11,7 +13,16 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from document_sync import DOCUMENTS_KEY, _age_days, _format_money, _load_documents_state, _recompute_period, _status_tone
+from document_sync import (
+    DOCUMENTS_KEY,
+    _age_days,
+    _format_money,
+    _load_documents_state,
+    _recompute_period,
+    _status_tone,
+    hal_financial_numbers_only,
+    is_financial_summary_document,
+)
 
 
 def _slug(value: str, limit: int = 32) -> str:
@@ -127,27 +138,28 @@ def build_source_import_documents(bundle: dict[str, Any] | None = None) -> dict[
     qb = (bundle or {}).get("quickbooks") or {}
     sd = (bundle or {}).get("softdent") or {}
 
-    expense_categories = _rows_from_dataset(qb.get("expenseCategories"))
-    for index, row in enumerate(expense_categories[:40]):
-        category = _short_category_label(str(_pick(row, "Category", "category") or f"Category {index + 1}"))
-        amount = _parse_amount(_pick(row, "Amount", "amount", "TotalExpense", "Total"))
-        source_file = str((qb.get("expenseCategories") or {}).get("sourceFile") or "quickbooks_expense_categories.csv")
-        doc_id = f"QB-CAT-{_slug(category)}"
-        doc, preview = _document_entry(
-            doc_id=doc_id,
-            doc_type="Bill",
-            vendor=category,
-            date=today,
-            amount=amount,
-            status="Ready to Post",
-            source_system="quickbooks",
-            source_file=source_file,
-            source_kind="expenseCategory",
-            text_preview=f"QuickBooks expense category import · {category}",
-        )
-        queue.append(doc)
-        previews[doc_id] = preview
-        counts["quickbooks"] += 1
+    if not hal_financial_numbers_only():
+        expense_categories = _rows_from_dataset(qb.get("expenseCategories"))
+        for index, row in enumerate(expense_categories[:40]):
+            category = _short_category_label(str(_pick(row, "Category", "category") or f"Category {index + 1}"))
+            amount = _parse_amount(_pick(row, "Amount", "amount", "TotalExpense", "Total"))
+            source_file = str((qb.get("expenseCategories") or {}).get("sourceFile") or "quickbooks_expense_categories.csv")
+            doc_id = f"QB-CAT-{_slug(category)}"
+            doc, preview = _document_entry(
+                doc_id=doc_id,
+                doc_type="Bill",
+                vendor=category,
+                date=today,
+                amount=amount,
+                status="Ready to Post",
+                source_system="quickbooks",
+                source_file=source_file,
+                source_kind="expenseCategory",
+                text_preview=f"QuickBooks expense category import · {category}",
+            )
+            queue.append(doc)
+            previews[doc_id] = preview
+            counts["quickbooks"] += 1
 
     for row in _rows_from_dataset(qb.get("expenses")):
         period = str(_pick(row, "Period", "period", "Month", "month") or "unknown")
@@ -191,28 +203,29 @@ def build_source_import_documents(bundle: dict[str, Any] | None = None) -> dict[
         previews[doc_id] = preview
         counts["quickbooks"] += 1
 
-    for row in _rows_from_dataset(sd.get("claims"))[:50]:
-        claim_id = str(_pick(row, "ClaimId", "claimId", "id") or "").strip()
-        patient = str(_pick(row, "PatientName", "patient", "Patient") or "Unknown Patient").strip()
-        amount = _parse_amount(_pick(row, "ClaimAmount", "amount", "Amount", "Billed"))
-        service_date = _parse_date(_pick(row, "ServiceDate", "serviceDate", "DOS", "date"), today)
-        source_file = str((sd.get("claims") or {}).get("sourceFile") or "softdent_claims_export.csv")
-        doc_id = f"SD-CLM-{_slug(claim_id or patient)}"
-        doc, preview = _document_entry(
-            doc_id=doc_id,
-            doc_type="Claim",
-            vendor=patient,
-            date=service_date,
-            amount=amount,
-            status="Pending Review",
-            source_system="softdent",
-            source_file=source_file,
-            source_kind="claim",
-            text_preview=f"SoftDent claim import · {claim_id or patient}",
-        )
-        queue.append(doc)
-        previews[doc_id] = preview
-        counts["softdent"] += 1
+    if not hal_financial_numbers_only():
+        for row in _rows_from_dataset(sd.get("claims"))[:50]:
+            claim_id = str(_pick(row, "ClaimId", "claimId", "id") or "").strip()
+            patient = str(_pick(row, "PatientName", "patient", "Patient") or "Unknown Patient").strip()
+            amount = _parse_amount(_pick(row, "ClaimAmount", "amount", "Amount", "Billed"))
+            service_date = _parse_date(_pick(row, "ServiceDate", "serviceDate", "DOS", "date"), today)
+            source_file = str((sd.get("claims") or {}).get("sourceFile") or "softdent_claims_export.csv")
+            doc_id = f"SD-CLM-{_slug(claim_id or patient)}"
+            doc, preview = _document_entry(
+                doc_id=doc_id,
+                doc_type="Claim",
+                vendor=patient,
+                date=service_date,
+                amount=amount,
+                status="Pending Review",
+                source_system="softdent",
+                source_file=source_file,
+                source_kind="claim",
+                text_preview=f"SoftDent claim import · {claim_id or patient}",
+            )
+            queue.append(doc)
+            previews[doc_id] = preview
+            counts["softdent"] += 1
 
     for row in _rows_from_dataset(sd.get("ar")):
         bucket = str(_pick(row, "Bucket", "bucket", "AgingBucket", "Range") or "Total")
@@ -275,16 +288,19 @@ def build_source_import_documents(bundle: dict[str, Any] | None = None) -> dict[
 
 def merge_source_documents(state: dict[str, Any], source_payload: dict[str, Any]) -> dict[str, Any]:
     """Merge source-import documents into an existing documents state."""
+    financial_only = hal_financial_numbers_only()
     manual_queue = [
         doc
         for doc in list(state.get("queue") or [])
-        if not doc.get("autoImported") or not str(doc.get("sourceSystem") or "").strip()
+        if not doc.get("autoImported")
     ]
-    ocr_queue = [
-        doc
-        for doc in list(state.get("queue") or [])
-        if doc.get("autoImported") and not str(doc.get("sourceSystem") or "").strip()
-    ]
+    ocr_queue: list[dict[str, Any]] = []
+    if not financial_only:
+        ocr_queue = [
+            doc
+            for doc in list(state.get("queue") or [])
+            if doc.get("autoImported") and not str(doc.get("sourceSystem") or "").strip()
+        ]
     manual_ids = {str(doc.get("id") or "") for doc in manual_queue}
     manual_previews = {
         key: value for key, value in dict(state.get("previewById") or {}).items() if key in manual_ids

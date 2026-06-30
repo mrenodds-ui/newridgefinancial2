@@ -1285,7 +1285,7 @@ const HalSkills = (function () {
     quickbooksProfitLossDetail: ["QuickBooks revenue/P&L export", "QuickBooks expenses export"],
     quickbooksSyncHealth: ["QuickBooks import files copied into the canonical import folder"],
     accountsPayableAutomation: ["Local accounting document queue", "QuickBooks expenses or vendor document imports"],
-    documentIntakeQueue: ["SoftDent and QuickBooks export rows synced into the document queue", "Automated OCR inbox sync", "Optional manual Add document entries"],
+    documentIntakeQueue: ["SoftDent and QuickBooks financial summary rows synced into the document queue", "Optional manual Add document entries"],
     documentPreview: ["Selected local document metadata and extracted fields"],
     periodCloseAndPosting: ["Accounting document period assignment", "Human-reviewed posting readiness"],
     smartClaimsAndReceivables: ["SoftDent claims export", "Verified SoftDent A/R export"],
@@ -1818,7 +1818,7 @@ const HalSkills = (function () {
         key: "documentIntakeQueue",
         title: "Document Intake Queue",
         status: docsStatus,
-        summary: "Document intake queue from OCR inbox plus SoftDent and QuickBooks export rows in the local documents cache.",
+        summary: "Financial summary queue from SoftDent and QuickBooks import cache (monthly totals, A/R aging, production/collections). Individual invoices are not imported.",
         navTarget: WIDGET_NAV.documentIntakeQueue,
         metrics: {
           queueCount: metricValue(docs.queueCount),
@@ -2383,7 +2383,7 @@ const HalSkills = (function () {
   function datasetNextAction(contract, diag, missingMetrics) {
     if (contract.local) {
       if (contract.label === "Local accounting documents") {
-        return "Drop invoices/receipts into app_data/nr2/document_inbox — the OCR runner syncs them into Documents automatically. Use Add document only for manual entries.";
+        return "HAL reads financial numbers from SoftDent and QuickBooks import cache only — not individual invoices. Use Add document for manual entries.";
       }
       return `Add ${contract.label.toLowerCase()} in the app — no import file is required.`;
     }

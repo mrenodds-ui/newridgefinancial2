@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import unittest
 from unittest.mock import patch
 
@@ -10,7 +11,14 @@ from document_source_import import build_source_import_documents, merge_source_d
 
 
 class DocumentSourceImportTests(unittest.TestCase):
-    def test_builds_rows_from_sample_bundle(self) -> None:
+    def setUp(self) -> None:
+        self._env_patch = patch.dict(os.environ, {"NR2_HAL_FINANCIAL_NUMBERS_ONLY": "1"}, clear=False)
+        self._env_patch.start()
+
+    def tearDown(self) -> None:
+        self._env_patch.stop()
+
+    def test_builds_financial_summary_rows_from_sample_bundle(self) -> None:
         bundle = {
             "quickbooks": {
                 "expenseCategories": {
@@ -27,6 +35,10 @@ class DocumentSourceImportTests(unittest.TestCase):
                 },
             },
             "softdent": {
+                "claims": {
+                    "sourceFile": "softdent_claims_export.csv",
+                    "rows": [{"ClaimId": "CLM-1", "PatientName": "Jane Doe", "ClaimAmount": "500"}],
+                },
                 "ar": {
                     "sourceFile": "softdent_ar_aging.csv",
                     "rows": [{"Bucket": "Current", "Balance": "42965.29"}],
@@ -38,44 +50,55 @@ class DocumentSourceImportTests(unittest.TestCase):
             },
         }
         payload = build_source_import_documents(bundle)
-        self.assertGreaterEqual(payload["counts"]["quickbooks"], 3)
-        self.assertGreaterEqual(payload["counts"]["softdent"], 2)
+        self.assertEqual(payload["counts"]["quickbooks"], 2)
+        self.assertEqual(payload["counts"]["softdent"], 2)
         ids = {doc["id"] for doc in payload["queue"]}
-        self.assertIn("QB-CAT-LABORATORY-FEES", ids)
+        self.assertNotIn("QB-CAT-LABORATORY-FEES", ids)
+        self.assertNotIn("SD-CLM-CLM-1", ids)
         self.assertIn("QB-EXP-2026-06", ids)
+        self.assertIn("QB-REV-2026-06", ids)
         self.assertIn("SD-AR-CURRENT", ids)
         self.assertIn("SD-DASH-2026-06", ids)
         for doc in payload["queue"]:
             self.assertTrue(doc.get("autoImported"))
             self.assertIn(doc.get("sourceSystem"), ("quickbooks", "softdent"))
 
-    def test_merge_preserves_manual_rows(self) -> None:
+    def test_merge_preserves_manual_rows_and_drops_old_source_rows(self) -> None:
         state = {
             "entity": "Test",
             "queue": [
                 {"id": "MANUAL-1", "type": "Invoice", "vendor": "Manual Vendor", "autoImported": False},
                 {"id": "QB-CAT-OLD", "type": "Bill", "vendor": "Old", "autoImported": True, "sourceSystem": "quickbooks"},
+                {"id": "GL-OLD", "type": "Invoice", "vendor": "OCR", "autoImported": True},
             ],
             "previewById": {"MANUAL-1": {"vendor": "MANUAL"}},
         }
         payload = {
             "queue": [
-                {"id": "QB-CAT-NEW", "type": "Bill", "vendor": "New", "autoImported": True, "sourceSystem": "quickbooks"},
+                {
+                    "id": "QB-EXP-2026-06",
+                    "type": "Statement",
+                    "vendor": "QuickBooks Operating Expenses",
+                    "autoImported": True,
+                    "sourceSystem": "quickbooks",
+                    "sourceKind": "monthlyExpenses",
+                },
             ],
-            "previewById": {"QB-CAT-NEW": {"vendor": "NEW"}},
+            "previewById": {"QB-EXP-2026-06": {"vendor": "NEW"}},
         }
         merged = merge_source_documents(state, payload)
         ids = [doc["id"] for doc in merged["queue"]]
         self.assertEqual(ids[0], "MANUAL-1")
-        self.assertIn("QB-CAT-NEW", ids)
+        self.assertIn("QB-EXP-2026-06", ids)
         self.assertNotIn("QB-CAT-OLD", ids)
+        self.assertNotIn("GL-OLD", ids)
 
-    def test_sync_writes_to_local_store(self) -> None:
+    def test_sync_writes_financial_rows_to_local_store(self) -> None:
         bundle = {
             "quickbooks": {
-                "expenseCategories": {
-                    "sourceFile": "quickbooks_expense_categories.csv",
-                    "rows": [{"Category": "Rent", "Amount": "1000"}],
+                "expenses": {
+                    "sourceFile": "quickbooks_expenses.csv",
+                    "rows": [{"Period": "2026-06", "TotalExpense": "2500"}],
                 },
             },
             "softdent": {},
@@ -98,7 +121,7 @@ class DocumentSourceImportTests(unittest.TestCase):
         raw = store.get("nr2:v2:documents")
         self.assertIsNotNone(raw)
         state = json.loads(raw or "{}")
-        self.assertTrue(any(doc.get("sourceSystem") == "quickbooks" for doc in state.get("queue") or []))
+        self.assertTrue(any(doc.get("sourceKind") == "monthlyExpenses" for doc in state.get("queue") or []))
 
 
 if __name__ == "__main__":

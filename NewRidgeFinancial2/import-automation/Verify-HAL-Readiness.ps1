@@ -205,14 +205,14 @@ Add-Check "2" "local.documents" "Documents page queue" ($docQueueCount -gt 0) `
     $(if ($docQueueCount -gt 0) {
         "Queue: $docQueueCount - QB $($docSources.quickbooks) - SD $($docSources.softdent) - OCR $($docSources.ocr) - pending review: $pendingReview"
     } else {
-        "Empty - run Pull or drop exports + OCR inbox files"
+        "Empty - run Pull to sync SoftDent and QuickBooks financial summaries"
     }) `
-    "Ask HAL: Pull SoftDent and QuickBooks data - review pending OCR invoices in Documents page"
+    "Ask HAL: Pull SoftDent and QuickBooks data - financial numbers only (no invoice import)"
 
 if ($pendingReview -gt 0) {
     Add-Check "2" "local.documents.review" "Staff: pending document review" $false `
-        "$pendingReview invoice(s) still Pending Review" `
-        "Open Accounting Documents - review Glidewell / Prairie Dental rows before period close"
+        "$pendingReview row(s) still Pending Review" `
+        "Open Accounting Documents - review pending financial summary rows before period close"
 }
 
 # --- Phase 3: optional ---

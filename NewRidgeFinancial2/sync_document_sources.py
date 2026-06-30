@@ -1,9 +1,7 @@
 """Pull SoftDent/QuickBooks exports into the Documents page queue.
 
-Runs import_sync (upstream export pull + cache refresh) then merges source rows
-into nr2:v2:documents via document_sync (OCR ledger + document_source_import).
-
-Designed for manual runs and the 30-minute scheduled task.
+Runs import_sync (upstream export pull + cache refresh) then merges financial
+summary rows into nr2:v2:documents via document_sync (OCR invoices skipped by default).
 """
 
 from __future__ import annotations
