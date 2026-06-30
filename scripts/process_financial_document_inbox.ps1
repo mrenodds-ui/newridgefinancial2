@@ -8,10 +8,10 @@ param(
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $InboxPath) {
-    $InboxPath = Join-Path $scriptRoot "..\local_accounting_inbox"
+    $InboxPath = Join-Path $scriptRoot "..\app_data\nr2\document_inbox"
 }
 if (-not $ArchivePath) {
-    $ArchivePath = Join-Path $scriptRoot "..\local_accounting_inbox\processed"
+    $ArchivePath = Join-Path $scriptRoot "..\app_data\nr2\document_inbox\processed"
 }
 if (-not $PythonExe) {
     $PythonExe = Join-Path $scriptRoot "..\.venv\Scripts\python.exe"

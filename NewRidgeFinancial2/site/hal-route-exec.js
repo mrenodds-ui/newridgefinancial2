@@ -49,6 +49,118 @@ const HalRouteExec = (function () {
       return outcome(text, "hal", result.intent, [], { refreshHal: true });
     }
 
+    if (result.useForceWidgetPlacement) {
+      if (ctx.forceWidgetPlacement) {
+        const placement = await ctx.forceWidgetPlacement({ reason: "hal-chat" });
+        const feed = ctx.halWidgetFeed || {};
+        const widgets = feed.widgets || {};
+        const ready = Object.keys(widgets).filter((key) => widgets[key] && widgets[key].status === "SUCCESS").length;
+        const total = Object.keys(widgets).length;
+        const text = [
+          placement && placement.placementNote ? placement.placementNote : "HAL forced widget placement.",
+          "",
+          `Widgets ready: ${ready}/${total}`,
+          window.HalSkills ? HalSkills.formatWidgetFeed(feed) : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+        return outcome(text, "widgets", result.intent, [], { refreshHal: true });
+      }
+      return outcome("Force widget placement is unavailable in this runtime.", "widgets", result.intent, [], { refreshHal: false });
+    }
+
+    if (result.usePracticeSourceCatalog) {
+      const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
+      if (!desktop || !desktop.hasDesktopApi || !desktop.hasDesktopApi()) {
+        const message =
+          desktop && desktop.desktopRequiredMessage
+            ? desktop.desktopRequiredMessage("Direct QuickBooks and SoftDent source access")
+            : "Direct source access requires the NR2 desktop app.";
+        return outcome(message, "sources", result.intent, [], { refreshHal: false });
+      }
+      let catalog = null;
+      if (typeof desktop.listPracticeSourceCatalog === "function") {
+        catalog = await desktop.listPracticeSourceCatalog();
+      }
+      const text = HalSkills.formatPracticeSourceCatalog(catalog);
+      return outcome(text, "sources", result.intent, [], { refreshHal: false });
+    }
+
+    if (result.usePracticeSourcePull) {
+      const Svc = ctx.Services;
+      if (!Svc || typeof Svc.pullPracticeSources !== "function") {
+        return outcome("Practice source pull requires Services.pullPracticeSources in the desktop app.", "sources", result.intent, [], {
+          refreshHal: false,
+        });
+      }
+      try {
+        const payload = await Svc.pullPracticeSources({ reason: "hal-route", fullPull: Boolean(result.practiceSourceFullPull) });
+        if (typeof Svc.invalidateSnapshot === "function") Svc.invalidateSnapshot();
+        ctx.clearProgramContextCache();
+        await ctx.refreshHalWidgetFeed(await ctx.loadProgramSnapshot());
+        const text = HalSkills.formatPracticeSourcePullResult(payload);
+        return outcome(text, "sources", result.intent, [], { refreshHal: true });
+      } catch (err) {
+        return outcome(`Practice source pull failed: ${err.message || err}`, "sources", result.intent, [], { refreshHal: false });
+      }
+    }
+
+    if (result.useNarrativeForClaim) {
+      const snapshot = await ctx.loadProgramSnapshot();
+      const text = HalSkills.formatNarrativeForClaim(snapshot, trimmed);
+      return outcome(text, "narratives", result.intent, [], { refreshHal: false });
+    }
+
+    if (result.useHalJobRequirements) {
+      const snapshot = await ctx.loadProgramSnapshot();
+      const feed = (snapshot && snapshot.widgets) || HalSkills.buildWidgetFeed(snapshot);
+      const text = HalSkills.formatHalJobRequirements(feed, snapshot);
+      return outcome(text, "hal", result.intent, [], { refreshHal: false });
+    }
+
+    if (result.useWidgetPeriodRequirements) {
+      const snapshot = await ctx.loadProgramSnapshot();
+      const text = HalSkills.formatWidgetPeriodRequirements(snapshot);
+      return outcome(text, "periods", result.intent, [], { refreshHal: false });
+    }
+
+    if (result.useCognitivePathways) {
+      const text = HalSkills.formatCognitivePathways(ctx.halData);
+      return outcome(text, "hal", result.intent, [], { refreshHal: false });
+    }
+
+    if (result.useSourceSystemGuide) {
+      const snapshot = await ctx.loadProgramSnapshot();
+      const text = HalSkills.formatSourceSystemGuide(snapshot);
+      return outcome(text, "sources", result.intent, [], { refreshHal: false });
+    }
+
+    if (result.usePracticeSourceFetch) {
+      const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
+      if (!desktop || !desktop.hasDesktopApi || !desktop.hasDesktopApi()) {
+        const message =
+          desktop && desktop.desktopRequiredMessage
+            ? desktop.desktopRequiredMessage("Direct QuickBooks and SoftDent source access")
+            : "Direct source access requires the NR2 desktop app.";
+        return outcome(message, "sources", result.intent, [], { refreshHal: false });
+      }
+      const request = result.practiceSourceRequest || (HalSkills.resolvePracticeSourceRequest ? HalSkills.resolvePracticeSourceRequest(trimmed) : {});
+      let payload = null;
+      if (typeof desktop.fetchPracticeSource === "function") {
+        payload = await desktop.fetchPracticeSource(request.system, request.resource, {
+          refreshCache: Boolean(request.refreshCache),
+        });
+      }
+      const text = HalSkills.formatPracticeSourceFetch(payload, request);
+      const refreshHal = Boolean(payload && payload.ok && request.refreshCache);
+      if (refreshHal && ctx.Services && typeof ctx.Services.invalidateSnapshot === "function") {
+        ctx.Services.invalidateSnapshot();
+        ctx.clearProgramContextCache();
+        await ctx.refreshHalWidgetFeed(await ctx.loadProgramSnapshot());
+      }
+      return outcome(text, "sources", result.intent, [], { refreshHal });
+    }
+
     if (result.useImportRefresh || result.useImportStatus) {
       const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
       if (!desktop || !desktop.hasDesktopApi || !desktop.hasDesktopApi()) {
@@ -241,6 +353,26 @@ const HalRouteExec = (function () {
       return outcome(text, "widgets", result.intent, [], { refreshHal: true });
     }
 
+    if (result.useWidgetMasterChart) {
+      const chart =
+        typeof HalWidgetMasterChart !== "undefined"
+          ? HalWidgetMasterChart
+          : typeof window !== "undefined" && window.HalWidgetMasterChart
+            ? window.HalWidgetMasterChart
+            : (() => {
+                try {
+                  return require("./hal-widget-master-chart.js");
+                } catch {
+                  return null;
+                }
+              })();
+      const text =
+        chart && typeof chart.formatForHal === "function"
+          ? chart.formatForHal()
+          : "Widget master chart unavailable.";
+      return outcome(text, "widgets", result.intent, [], { refreshHal: true });
+    }
+
     if (result.useWidgetFillSuggestions) {
       const feed = await widgetFeed();
       ctx.setHalWidgetFeed(feed);
@@ -253,13 +385,15 @@ const HalRouteExec = (function () {
       ctx.setHalWidgetFeed(feed);
       const formatters = {
         missingData: () => HalSkills.formatWidgetMissingData(feed),
+        sourceTrace: () => HalSkills.formatWidgetSourceTrace(feed, snapshot),
         fillPriority: () => HalSkills.formatWidgetFillPriority(feed),
-        importChecklist: () => HalSkills.formatImportChecklist(feed),
+        importChecklist: () => HalSkills.formatImportChecklist(feed, snapshot),
         dataQuality: () => HalSkills.formatDataQualityCheck(feed),
         explainEmpty: () => HalSkills.formatEmptyWidgetExplanation(feed, result.prompt || trimmed),
         dailyOwnerBriefing: () => HalSkills.formatDailyOwnerBriefing(feed, snapshot),
-        accountingReviewQueue: () => HalSkills.formatAccountingReviewQueue(feed),
-        excelReconciliation: () => HalSkills.formatExcelReconciliation(feed),
+        accountingReviewQueue: () => HalSkills.formatAccountingReviewQueue(feed, snapshot),
+        documentExcelWorkbook: () => HalSkills.formatDocumentExcelWorkbook(feed, snapshot),
+        excelReconciliation: () => HalSkills.formatExcelReconciliation(feed, snapshot),
       };
       const formatter = formatters[result.widgetGuidance] || (() => HalSkills.formatWidgetFillSuggestions(feed));
       return outcome(formatter(), "widgets", result.intent, [], { refreshHal: true });

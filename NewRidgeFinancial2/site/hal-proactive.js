@@ -13,6 +13,18 @@ const HalProactive = (function () {
   let lastBriefing = null;
   let lastPlacementAt = 0;
   let placementTimer = null;
+  let lastRefreshSignature = null;
+
+  // Fingerprint of dataset statuses. When this is unchanged between cycles a
+  // repeat auto-refresh cannot improve anything (the upstream exports have not
+  // changed), so HAL skips it instead of refreshing every cycle forever.
+  function diagnosticsSignature(diagnostics) {
+    if (!diagnostics || !Array.isArray(diagnostics.datasets)) return "";
+    return diagnostics.datasets
+      .map((item) => `${item.datasetKey || item.system || "?"}:${item.status}`)
+      .sort()
+      .join("|");
+  }
 
   function hasDesktopApi() {
     const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : typeof window !== "undefined" ? window.DesktopBridge : null;
@@ -21,21 +33,49 @@ const HalProactive = (function () {
 
   function needsAutonomousRefresh(diagnostics) {
     if (!diagnostics || !Array.isArray(diagnostics.datasets)) return false;
+    // Automated datasets that are missing, stale, or only partially loaded
+    // should trigger a refresh so HAL keeps trying to fill widgets. Datasets
+    // marked not_configured are automated === false and stay excluded — there
+    // is no collector to run for them.
     return diagnostics.datasets.some(
-      (item) => item.automated !== false && (item.status === "missing" || item.status === "stale"),
+      (item) =>
+        item.automated !== false &&
+        (item.status === "missing" || item.status === "stale" || item.status === "partial"),
     );
   }
 
-  async function runAutonomousPlacement(ctx, diagnostics) {
+  async function runAutonomousPlacement(ctx, diagnostics, options) {
+    const force = options && options.force;
     if (!hasDesktopApi()) {
       return { placed: false, reason: "browser-only", refreshed: false };
     }
-    if (!needsAutonomousRefresh(diagnostics)) {
+    const halData = (ctx && ctx.halData) || {};
+    const pullApproved = halData.practiceSourcePull ? halData.practiceSourcePull.approved !== false : true;
+    if (pullApproved) {
+      try {
+        const Svc = ctx && ctx.Services;
+        if (Svc && typeof Svc.pullPracticeSources === "function") {
+          await Svc.pullPracticeSources({ reason: force ? "hal-force" : "hal-auto" });
+        } else {
+          const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
+          if (desktop && typeof desktop.pullPracticeSources === "function") {
+            await desktop.pullPracticeSources();
+          }
+        }
+      } catch {
+        /* direct source pull optional; import refresh below may still help */
+      }
+    }
+    if (!force && !needsAutonomousRefresh(diagnostics)) {
       return { placed: true, reason: "data-current", refreshed: false };
     }
     const now = Date.now();
-    if (lastPlacementAt && now - lastPlacementAt < CYCLE_MIN_MS) {
+    if (!force && lastPlacementAt && now - lastPlacementAt < CYCLE_MIN_MS) {
       return { placed: false, reason: "throttled", refreshed: false };
+    }
+    const signature = diagnosticsSignature(diagnostics);
+    if (!force && signature && signature === lastRefreshSignature) {
+      return { placed: true, reason: "no-upstream-change", refreshed: false };
     }
     try {
       const coord =
@@ -55,6 +95,7 @@ const HalProactive = (function () {
       if (ctx && typeof ctx.invalidateProgramCaches === "function") ctx.invalidateProgramCaches("hal-auto");
       else if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate("hal-auto");
       lastPlacementAt = now;
+      lastRefreshSignature = signature;
       return { placed: true, reason: "import-refresh-complete", refreshed: true };
     } catch (err) {
       return { placed: false, reason: err && err.message ? err.message : "placement-failed", refreshed: false };
@@ -298,6 +339,15 @@ const HalProactive = (function () {
       briefing.programPosture = "monitor";
     } else if (placement && placement.placed && placement.reason === "data-current") {
       briefing.headline = "HAL verified imports — data is current in dashboards and widgets.";
+    } else if (placement && placement.placed && placement.reason === "no-upstream-change") {
+      briefing.headline = "HAL checked imports — no upstream export changes since the last refresh.";
+      briefing.programPosture = "monitor";
+    } else if (placement && placement.reason === "throttled") {
+      briefing.headline = "HAL placement is waiting — refresh was throttled. Use Force HAL placement if you just added exports.";
+      briefing.programPosture = "monitor";
+    } else if (placement && !placement.placed && placement.reason === "browser-only") {
+      briefing.headline = "HAL placement needs the desktop app — browser preview cannot refresh imports.";
+      briefing.programPosture = "monitor";
     }
     return briefing;
   }
@@ -483,12 +533,20 @@ const HalProactive = (function () {
       (snapshot.importBundle && diagApi ? diagApi.evaluateBundle(snapshot.importBundle) : null);
 
     let placement = { placed: false, reason: "skipped", refreshed: false };
+    const forcePlacement = options && options.forcePlacement;
     if (!skipPlacement) {
-      placement = await runAutonomousPlacement(ctx, initialDiagnostics);
-      if (placement.refreshed && typeof ctx.loadProgramSnapshot === "function") {
+      placement = await runAutonomousPlacement(ctx, initialDiagnostics, { force: forcePlacement });
+      if ((placement.refreshed || forcePlacement) && typeof ctx.loadProgramSnapshot === "function") {
         snapshot = await ctx.loadProgramSnapshot();
         if (ctx && typeof ctx.refreshHalWidgetFeed === "function") {
           await ctx.refreshHalWidgetFeed(snapshot);
+        }
+        if (forcePlacement && !placement.refreshed) {
+          placement = Object.assign({}, placement, {
+            placed: true,
+            reason: placement.reason === "data-current" ? "force-widget-feed" : placement.reason,
+            refreshed: true,
+          });
         }
       }
     }

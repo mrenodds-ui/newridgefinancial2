@@ -32,6 +32,11 @@ from import_loader import quickbooks_import_dir, softdent_import_dir
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+def _auto_pull_exports_enabled() -> bool:
+    """Pull upstream SoftDent/QuickBooks exports into document-inbox cache folders."""
+    return os.environ.get("NR2_AUTO_PULL_EXPORTS", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
 SOFTDENT_BRIDGE_EXPORTS = Path(r"C:\Users\mreno\SoftDentBridge\exports")
 NEW_RIDGE_BRIDGE_EXPORTS = Path(r"C:\NewRidgeBridge\exports")
 SOFTDENT_FINANCIAL_EXPORTS = Path(r"C:\SoftDentFinancialExports")
@@ -55,7 +60,9 @@ def _env_path(name: str, default: Path | None = None) -> Path | None:
     return default.resolve() if default else None
 
 
-def _softdent_source_roots() -> list[Path]:
+def _softdent_external_roots() -> list[Path]:
+    if not _auto_pull_exports_enabled():
+        return []
     roots: list[Path] = []
     for candidate in (
         _env_path("NR2_SOFTDENT_EXPORT_SOURCE"),
@@ -69,7 +76,9 @@ def _softdent_source_roots() -> list[Path]:
     return roots
 
 
-def _quickbooks_source_roots() -> list[Path]:
+def _quickbooks_external_roots() -> list[Path]:
+    if not _auto_pull_exports_enabled():
+        return []
     roots: list[Path] = []
     for candidate in (
         _env_path("NR2_QUICKBOOKS_EXPORT_SOURCE"),
@@ -80,6 +89,57 @@ def _quickbooks_source_roots() -> list[Path]:
         if candidate and candidate.is_dir() and candidate not in roots:
             roots.append(candidate)
     return roots
+
+
+def _stage_external_artifacts(softdent_dest: Path, quickbooks_dest: Path) -> list[str]:
+    """Copy upstream probe/bridge artifacts into document-inbox folders HAL reads."""
+    if not _auto_pull_exports_enabled():
+        return []
+    staged: list[str] = []
+    for source, target in (
+        (QB_SDK_SUMMARY, quickbooks_dest / "quickbooks_sdk_report_probe_summary.json"),
+        (BRIDGE_AGGREGATE_JSON, softdent_dest / "softdent_bridge_latest.json"),
+    ):
+        if source.is_file() and _copy_if_newer(source, target):
+            staged.append(target.name)
+    return staged
+
+
+def _migrate_legacy_import_dirs() -> list[str]:
+    """One-time copy from legacy app/data/imports into document-inbox import folders."""
+    migrated: list[str] = []
+    pairs = (
+        (REPO_ROOT / "app" / "data" / "imports" / "softdent", softdent_import_dir()),
+        (REPO_ROOT / "app" / "data" / "imports" / "quickbooks", quickbooks_import_dir()),
+    )
+    for legacy, dest in pairs:
+        dest.mkdir(parents=True, exist_ok=True)
+        if not legacy.is_dir():
+            continue
+        for src in legacy.iterdir():
+            if not src.is_file():
+                continue
+            target = dest / src.name
+            if not target.is_file() or src.stat().st_mtime > target.stat().st_mtime:
+                shutil.copy2(src, target)
+                migrated.append(f"{dest.name}/{src.name}")
+    return migrated
+
+
+def _resolve_qb_probe_payload(quickbooks_dest: Path) -> dict[str, Any] | None:
+    for path in (
+        quickbooks_dest / "quickbooks_sdk_report_probe_summary.json",
+        _find_newest(quickbooks_dest, ("quickbooks_sdk_report_probe_summary.json",)),
+    ):
+        if path and path.is_file():
+            payload = _read_json(path)
+            if isinstance(payload, dict):
+                return payload
+    if _auto_pull_exports_enabled() and QB_SDK_SUMMARY.is_file():
+        payload = _read_json(QB_SDK_SUMMARY)
+        if isinstance(payload, dict):
+            return payload
+    return None
 
 
 def _read_json(path: Path) -> object | None:
@@ -148,13 +208,57 @@ def _copy_if_newer(source: Path, destination: Path) -> bool:
 def _find_newest(root: Path, names: tuple[str, ...]) -> Path | None:
     if not root.is_dir():
         return None
+    wanted = {name.casefold() for name in names}
     matches: list[Path] = []
-    for path in root.rglob("*"):
-        if path.is_file() and path.name.casefold() in {name.casefold() for name in names}:
-            matches.append(path)
+    try:
+        for path in root.iterdir():
+            if path.is_file() and path.name.casefold() in wanted:
+                matches.append(path)
+            elif path.is_dir():
+                for nested in path.iterdir():
+                    if nested.is_file() and nested.name.casefold() in wanted:
+                        matches.append(nested)
+    except OSError:
+        return None
     if not matches:
         return None
     return max(matches, key=lambda item: item.stat().st_mtime)
+
+
+def _sync_bulk_prefix_exports(roots: list[Path], destination: Path, prefix: str) -> list[str]:
+    """Copy matching export files from upstream roots (full HAL pull, shallow scan only)."""
+    copied: list[str] = []
+    allowed_suffixes = {".csv", ".json", ".jsonl"}
+    seen: set[str] = set()
+    prefix_lower = prefix.lower()
+    for root in roots:
+        if not root.is_dir():
+            continue
+        candidates: list[Path] = []
+        try:
+            for path in root.iterdir():
+                if path.is_file() and path.name.lower().startswith(prefix_lower) and path.suffix.lower() in allowed_suffixes:
+                    candidates.append(path)
+                elif path.is_dir():
+                    for nested in path.iterdir():
+                        if (
+                            nested.is_file()
+                            and nested.name.lower().startswith(prefix_lower)
+                            and nested.suffix.lower() in allowed_suffixes
+                        ):
+                            candidates.append(nested)
+        except OSError:
+            continue
+        for path in candidates:
+            if path.name in seen:
+                continue
+            dest = destination / path.name
+            if _copy_if_newer(path, dest):
+                copied.append(dest.name)
+                seen.add(path.name)
+                if dest.suffix.lower() == ".csv":
+                    _write_csv_json_sidecar(dest)
+    return copied
 
 
 def _sync_named_exports(roots: list[Path], destination: Path, names: tuple[str, ...], reject_fn=None) -> list[str]:
@@ -247,15 +351,39 @@ def _build_ar_rows_from_normalized(normalized: dict[str, Any]) -> list[dict[str,
     ]
 
 
+def _trim_rows_to_relevant_periods(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    from import_cache_ttl import relevant_period_labels
+
+    allowed = set(relevant_period_labels())
+    trimmed: list[dict[str, Any]] = []
+    for row in rows:
+        period = str(row.get("period") or row.get("Period") or row.get("year_month") or "").strip()
+        if not period:
+            trimmed.append(row)
+            continue
+        key = period[:7] if len(period) >= 7 else period
+        if key in allowed:
+            trimmed.append(row)
+    return trimmed if trimmed else rows[:1]
+
+
 def _sync_softdent_pipeline_exports(destination: Path) -> list[str]:
     written: list[str] = []
-    bridge_rows = _build_dashboard_from_bridge(BRIDGE_AGGREGATE_JSON)
+    bridge_path = destination / "softdent_bridge_latest.json"
+    if not bridge_path.is_file():
+        bridge_path = _find_newest(destination, ("softdent_bridge_latest.json",))
+    if (not bridge_path or not bridge_path.is_file()) and _auto_pull_exports_enabled():
+        bridge_path = BRIDGE_AGGREGATE_JSON if BRIDGE_AGGREGATE_JSON.is_file() else None
+    bridge_rows = _build_dashboard_from_bridge(bridge_path) if bridge_path and bridge_path.is_file() else None
     if bridge_rows and not _is_sample_dashboard(bridge_rows):
+        bridge_rows = _trim_rows_to_relevant_periods(bridge_rows)
         dashboard_path = destination / "softdent_dashboard_data.json"
         _write_json(dashboard_path, bridge_rows)
         written.append(dashboard_path.name)
 
-    aging_jsonl = _find_newest(SOFTDENT_FINANCIAL_EXPORTS, ("account_aging.jsonl",))
+    aging_jsonl = _find_newest(destination, ("account_aging.jsonl",))
+    if not aging_jsonl and _auto_pull_exports_enabled():
+        aging_jsonl = _find_newest(SOFTDENT_FINANCIAL_EXPORTS, ("account_aging.jsonl",))
     if aging_jsonl:
         normalized = _jsonl_practice_total(aging_jsonl)
         if normalized:
@@ -263,11 +391,28 @@ def _sync_softdent_pipeline_exports(destination: Path) -> list[str]:
             ar_path = destination / "softdent_ar_aging.csv"
             _write_csv(ar_path, ar_rows, ["Bucket", "Balance"])
             written.append(ar_path.name)
+    try:
+        from softdent_dashboard_period_sync import sync_dashboard_period_rows
+
+        period_sync = sync_dashboard_period_rows()
+        if period_sync.get("ok") and period_sync.get("path"):
+            written.append("softdent_dashboard_data.json")
+    except Exception:
+        pass
     return written
 
 
 def _sync_quickbooks_sdk_summary(destination: Path) -> list[str]:
-    payload = _read_json(QB_SDK_SUMMARY)
+    payload: dict[str, Any] | None = None
+    probe_path = _find_newest(destination, ("quickbooks_sdk_report_probe_summary.json",))
+    if probe_path:
+        read = _read_json(probe_path)
+        if isinstance(read, dict):
+            payload = read
+    if payload is None and _auto_pull_exports_enabled() and QB_SDK_SUMMARY.is_file():
+        read = _read_json(QB_SDK_SUMMARY)
+        if isinstance(read, dict):
+            payload = read
     if not isinstance(payload, dict):
         return []
     if str(payload.get("status") or "").upper() != "QUICKBOOKS_SDK_REPORT_DATA_AVAILABLE":
@@ -354,8 +499,29 @@ def _load_dataset_for_diag(directory: Path, names: tuple[str, ...]) -> dict[str,
         return {"sourceFile": path.name, "modifiedAt": "", "rows": []}
 
 
-def sync_imports() -> dict[str, Any]:
+def _full_pull_enabled(full_pull: bool | None = None) -> bool:
+    if full_pull is not None:
+        return bool(full_pull)
+    return os.environ.get("NR2_HAL_FULL_PULL", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
     """Pull the newest real export files into HAL import folders."""
+    full_pull = _full_pull_enabled(full_pull)
+    from import_cache_ttl import (
+        enforce_quickbooks_period_files,
+        purge_expired_ocr_files,
+        purge_if_expired,
+        relevant_period_labels,
+        write_manifest,
+    )
+    from quickbooks_monthly_sync import sync_quickbooks_monthly_exports
+
+    purge_result = purge_if_expired()
+    removed_ocr_files = purge_expired_ocr_files()
+    if removed_ocr_files:
+        purge_result = dict(purge_result)
+        purge_result["removedOcrFiles"] = removed_ocr_files
     softdent_dest = softdent_import_dir()
     quickbooks_dest = quickbooks_import_dir()
     softdent_dest.mkdir(parents=True, exist_ok=True)
@@ -363,41 +529,116 @@ def sync_imports() -> dict[str, Any]:
 
     result: dict[str, Any] = {
         "syncedAt": datetime.now(timezone.utc).isoformat(),
+        "fullPull": full_pull,
         "softdent": {"copied": [], "generated": [], "removed": []},
-        "quickbooks": {"copied": [], "generated": []},
+        "quickbooks": {"copied": [], "generated": [], "monthly": {}},
         "sourceRoots": {"softdent": [], "quickbooks": []},
         "warnings": [],
     }
 
-    result["softdent"]["removed"] = _purge_sample_cache(softdent_dest)
-
-    softdent_roots = _softdent_source_roots()
-    quickbooks_roots = _quickbooks_source_roots()
-    result["sourceRoots"]["softdent"] = [str(path) for path in softdent_roots]
-    result["sourceRoots"]["quickbooks"] = [str(path) for path in quickbooks_roots]
-    if not softdent_roots:
+    if full_pull:
+        result["softdent"]["removed"] = []
+        result["warnings"].append("Full HAL pull — skipped sample-cache purge so bridge exports can load.")
+    else:
+        result["softdent"]["removed"] = _purge_sample_cache(softdent_dest)
+    migrated = _migrate_legacy_import_dirs()
+    if migrated:
         result["warnings"].append(
-            "No SoftDent export roots found. Configure NR2_SOFTDENT_EXPORT_SOURCE or SOFTDENT_SOURCE_DIR."
-        )
-    if not quickbooks_roots:
-        result["warnings"].append(
-            "No QuickBooks export roots found. Configure NR2_QUICKBOOKS_EXPORT_SOURCE or QUICKBOOKS_SOURCE_DIR."
+            f"Migrated {len(migrated)} legacy import file(s) into document-inbox folders."
         )
 
-    result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_DASHBOARD_NAMES, _is_sample_dashboard))
-    result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_CLAIMS_NAMES, _is_sample_claims))
-    result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_CLINICAL_NAMES, _is_sample_clinical))
-    result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_AR_NAMES))
-    result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_NEW_PATIENTS_NAMES))
-    result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_TREATMENT_PLANS_NAMES))
-    result["softdent"]["copied"].extend(_sync_named_exports(softdent_roots, softdent_dest, SOFTDENT_CASE_ACCEPTANCE_NAMES))
+    softdent_external = _softdent_external_roots()
+    quickbooks_external = _quickbooks_external_roots()
+    result["sourceRoots"]["softdent"] = [str(path) for path in softdent_external]
+    result["sourceRoots"]["quickbooks"] = [str(path) for path in quickbooks_external]
+    result["importDestinations"] = {
+        "softdent": str(softdent_dest),
+        "quickbooks": str(quickbooks_dest),
+    }
+    result["autoPull"] = _auto_pull_exports_enabled()
+    result["importMode"] = "document-inbox-cache"
+    if _auto_pull_exports_enabled():
+        result["warnings"].append(
+            "Auto-pull copies upstream SoftDent/QuickBooks exports into "
+            f"{softdent_dest.relative_to(REPO_ROOT)} and "
+            f"{quickbooks_dest.relative_to(REPO_ROOT)} (document page). HAL reads only from those folders."
+        )
+        if not softdent_external:
+            result["warnings"].append(
+                "No SoftDent auto-pull roots found. Configure NR2_SOFTDENT_EXPORT_SOURCE or SOFTDENT_SOURCE_DIR, "
+                "or drop files manually in the document-inbox softdent folder."
+            )
+        if not quickbooks_external:
+            result["warnings"].append(
+                "No QuickBooks auto-pull roots found. Configure NR2_QUICKBOOKS_EXPORT_SOURCE or QUICKBOOKS_SOURCE_DIR, "
+                "or drop files manually in the document-inbox quickbooks folder."
+            )
+    else:
+        result["warnings"].append(
+            "Auto-pull disabled (NR2_AUTO_PULL_EXPORTS=0). Drop SoftDent exports in "
+            f"{softdent_dest.relative_to(REPO_ROOT)} and QuickBooks exports in "
+            f"{quickbooks_dest.relative_to(REPO_ROOT)}."
+        )
+
+    staged = _stage_external_artifacts(softdent_dest, quickbooks_dest)
+    if staged:
+        result["softdent"]["copied"].extend([name for name in staged if name.startswith("softdent")])
+        result["quickbooks"]["copied"].extend([name for name in staged if name.startswith("quickbooks")])
+
+    if full_pull:
+        result["softdent"]["copied"].extend(_sync_bulk_prefix_exports(softdent_external, softdent_dest, "softdent_"))
+        result["quickbooks"]["copied"].extend(_sync_bulk_prefix_exports(quickbooks_external, quickbooks_dest, "quickbooks_"))
+        result["warnings"].append(
+            "Full HAL pull enabled — copied all softdent_* and quickbooks_* exports from upstream roots."
+        )
+
+    dashboard_reject = None if full_pull else _is_sample_dashboard
+    claims_reject = None if full_pull else _is_sample_claims
+    clinical_reject = None if full_pull else _is_sample_clinical
+
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_DASHBOARD_NAMES, dashboard_reject))
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_CLAIMS_NAMES, claims_reject))
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_CLINICAL_NAMES, clinical_reject))
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_AR_NAMES))
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_NEW_PATIENTS_NAMES))
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_TREATMENT_PLANS_NAMES))
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_CASE_ACCEPTANCE_NAMES))
     result["softdent"]["generated"].extend(_sync_softdent_pipeline_exports(softdent_dest))
 
-    result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_roots, quickbooks_dest, QUICKBOOKS_REVENUE_NAMES))
-    result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_roots, quickbooks_dest, QUICKBOOKS_EXPENSE_NAMES))
-    result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_roots, quickbooks_dest, QUICKBOOKS_EXPENSE_CATEGORY_NAMES))
-    result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_roots, quickbooks_dest, QUICKBOOKS_AR_NAMES))
-    result["quickbooks"]["generated"].extend(_sync_quickbooks_sdk_summary(quickbooks_dest))
+    result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_REVENUE_NAMES))
+    result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_EXPENSE_NAMES))
+    result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_EXPENSE_CATEGORY_NAMES))
+    result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_AR_NAMES))
+    probe_payload = _resolve_qb_probe_payload(quickbooks_dest)
+    monthly_result = sync_quickbooks_monthly_exports(
+        quickbooks_dest,
+        probe_payload=probe_payload if isinstance(probe_payload, dict) else None,
+    )
+    result["quickbooks"]["monthly"] = monthly_result
+    if monthly_result.get("written"):
+        result["quickbooks"]["generated"].extend(monthly_result["written"])
+    else:
+        result["quickbooks"]["generated"].extend(_sync_quickbooks_sdk_summary(quickbooks_dest))
+
+    qb_periods = list(monthly_result.get("periods") or [])
+    sd_periods = relevant_period_labels()
+    result["cache"] = write_manifest(
+        synced_at=result["syncedAt"],
+        periods={"quickbooks": qb_periods, "softdent": sd_periods},
+        purge_result=purge_result,
+    )
+    if purge_result.get("purged"):
+        result["warnings"].append(
+            f"Import cache was purged after {purge_result.get('reason', 'retention')} — fresh relevant periods only."
+        )
+    if removed_ocr_files:
+        result["warnings"].append(
+            f"Removed {len(removed_ocr_files)} OCR archive file(s) older than retention window."
+        )
+
+    trimmed = enforce_quickbooks_period_files(quickbooks_dest)
+    if trimmed:
+        result["quickbooks"]["generated"].extend(trimmed)
 
     try:
         from import_diagnostics import check_upstream_health, evaluate_bundle
@@ -422,7 +663,7 @@ def sync_imports() -> dict[str, Any]:
                 "ar": _load_dataset_for_diag(quickbooks_dest, QUICKBOOKS_AR_NAMES),
             },
         }
-        result["diagnostics"] = evaluate_bundle(bundle_for_diag)
+        result["diagnostics"] = evaluate_bundle(bundle_for_diag, deep=True)
         result["upstreamHealth"] = check_upstream_health()
     except Exception as exc:
         result["warnings"].append(f"Import diagnostics unavailable: {exc}")

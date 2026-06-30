@@ -113,6 +113,8 @@ const Services = (function () {
             if (finalStatus && finalStatus.status === "failed") {
               const err = new Error(finalStatus.error || "Import sync failed");
               if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.refreshImports", err, finalStatus);
+            } else if (finalStatus && finalStatus.result && finalStatus.result.documents) {
+              applySyncedDocumentsState(finalStatus.result.documents);
             }
           } else {
             const bundle = await loadImportBundle(false);
@@ -136,6 +138,33 @@ const Services = (function () {
       return await loadImportBundle(true);
     } catch (err) {
       if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.refreshImports", err, opts);
+      throw err;
+    }
+  }
+
+  async function pullPracticeSources(options) {
+    const opts = options || {};
+    const br = bridge();
+    importBundleCache = null;
+    importBundleAt = 0;
+    if (!br || typeof br.pullPracticeSources !== "function") {
+      const err = new Error("Practice source pull requires the NR2 desktop app.");
+      if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.pullPracticeSources", err);
+      throw err;
+    }
+    try {
+      const result = await br.pullPracticeSources({ fullPull: Boolean(opts.fullPull) });
+      if (result && result.documents && result.documents.state) {
+        applySyncedDocumentsState(result.documents);
+      } else if (typeof br.syncAccountingDocuments === "function") {
+        await ensureDocumentsSynced();
+      }
+      importBundleCache = null;
+      importBundleAt = 0;
+      if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate("practice-source-pull");
+      return result;
+    } catch (err) {
+      if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.pullPracticeSources", err, opts);
       throw err;
     }
   }
@@ -167,6 +196,10 @@ const Services = (function () {
         }
       } catch {
         /* fall through */
+      }
+      if (br.hasDesktopApi && br.hasDesktopApi()) {
+        // Desktop store may not be readable yet; do not cache an empty shell.
+        return emptyFn();
       }
     }
     const initial = emptyFn();
@@ -295,6 +328,7 @@ const Services = (function () {
       claims: claimsState
         ? {
             total: claimsState.claims.length,
+            claims: claimsState.claims || [],
             byStatus: claimsByStatus,
             laneTotals: claimsState.laneTotals || {},
             kpis: claimsState.kpis || [],
@@ -311,13 +345,18 @@ const Services = (function () {
           }
         : null,
       documents: documentsState
-        ? {
-            entity: documentsState.entity,
-            queueCount: (documentsState.queue || []).length,
-            posting: documentsState.posting || [],
-            period: documentsState.period || null,
-            top: (documentsState.queue || []).slice(0, 8),
-          }
+        ? (() => {
+            const summary = summarizeDocumentQueueForHal(documentsState.queue || []);
+            return {
+              entity: documentsState.entity,
+              queueCount: (documentsState.queue || []).length,
+              posting: documentsState.posting || [],
+              period: documentsState.period || null,
+              sourceCounts: summary.sourceCounts,
+              top: summary.top,
+              workbookSample: summary.workbookSample,
+            };
+          })()
         : null,
       library: libraryState
         ? {
@@ -485,6 +524,12 @@ const Services = (function () {
     },
     async generate(payload) {
       await delay(420);
+      const claim = payload && payload.claim;
+      const lib = typeof HalNarrativeLibrary !== "undefined" ? HalNarrativeLibrary : null;
+      if (claim && lib && typeof lib.selectBestNarrativeForClaim === "function") {
+        const selection = lib.selectBestNarrativeForClaim(claim);
+        if (selection && selection.selected && selection.selected.text) return selection.selected.text;
+      }
       return composeNarrative(payload || {});
     },
     async saveDraft(payload) {
@@ -542,8 +587,126 @@ const Services = (function () {
     return out;
   }
 
+  function parseMoney(value) {
+    const amount = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(amount) ? amount : 0;
+  }
+
+  function formatMoney(value) {
+    const amount = parseMoney(value);
+    if (!amount) return "—";
+    return amount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  }
+
+  function recomputeDocumentPeriod(queue) {
+    const total = (queue || []).reduce((acc, doc) => acc + parseMoney(doc.amount), 0);
+    const posted = (queue || []).filter((doc) => doc.status === "Posted").reduce((acc, doc) => acc + parseMoney(doc.amount), 0);
+    const pending = Math.max(0, total - posted);
+    const ready = (queue || []).filter((doc) => doc.status === "Ready to Post").length;
+    const postedCount = (queue || []).filter((doc) => doc.status === "Posted").length;
+    const count = (queue || []).length || 0;
+    return {
+      label: new Date().toISOString().slice(0, 7),
+      documents: count,
+      totalAmount: formatMoney(total),
+      postedAmount: formatMoney(posted),
+      pendingAmount: formatMoney(pending),
+      reviewedPct: count ? Math.round(((postedCount + ready) / count) * 100) : 0,
+      postedPct: count ? Math.round((postedCount / count) * 100) : 0,
+      pendingPct: count ? Math.round(((queue || []).filter((doc) => doc.status === "Pending Review").length / count) * 100) : 0,
+      readyPct: count ? Math.round((ready / count) * 100) : 0,
+    };
+  }
+
+  function documentAgeDays(dateValue) {
+    const then = Date.parse(dateValue);
+    if (!Number.isFinite(then)) return 0;
+    return Math.max(0, Math.round((Date.now() - then) / 86400000));
+  }
+
+  function classifyDocumentSource(doc) {
+    const system = String((doc && doc.sourceSystem) || "").trim().toLowerCase();
+    if (system === "quickbooks" || system === "softdent") return system;
+    if (doc && doc.autoImported) return "ocr";
+    return "manual";
+  }
+
+  function summarizeDocumentQueueForHal(queue) {
+    const list = Array.isArray(queue) ? queue : [];
+    const sourceCounts = { quickbooks: 0, softdent: 0, ocr: 0, manual: 0 };
+    list.forEach((doc) => {
+      sourceCounts[classifyDocumentSource(doc)] += 1;
+    });
+    const top = [];
+    const seenSources = new Set();
+    list.forEach((doc) => {
+      const source = classifyDocumentSource(doc);
+      if (!seenSources.has(source) && top.length < 8) {
+        seenSources.add(source);
+        top.push(doc);
+      }
+    });
+    list.forEach((doc) => {
+      if (top.length >= 8) return;
+      if (!top.some((item) => item.id === doc.id)) top.push(doc);
+    });
+    const workbookSample = list.slice(0, 20).map((doc) => ({
+      id: doc.id,
+      vendor: doc.vendor,
+      type: doc.type,
+      date: doc.date,
+      amount: doc.amount,
+      status: doc.status,
+      age: doc.age,
+      autoImported: doc.autoImported,
+      sourceSystem: doc.sourceSystem || classifyDocumentSource(doc),
+      sourceFile: doc.sourceFile || null,
+    }));
+    return { sourceCounts, top, workbookSample };
+  }
+
+  function applySyncedDocumentsState(syncResult) {
+    if (!syncResult || typeof syncResult !== "object") return;
+    const state = syncResult.state;
+    if (!state || typeof state !== "object") return;
+    mem.documents = state;
+    notifyDocumentsSynced(syncResult);
+  }
+
+  function notifyDocumentsSynced(result) {
+    if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
+    const state = (result && result.state) || mem.documents || null;
+    const queueCount = state && Array.isArray(state.queue) ? state.queue.length : (result && result.queueCount) || 0;
+    try {
+      window.dispatchEvent(
+        new CustomEvent("nr2:documents-synced", {
+          detail: { queueCount, syncedAt: (result && result.syncedAt) || new Date().toISOString() },
+        }),
+      );
+    } catch {
+      /* event dispatch optional */
+    }
+  }
+
+  async function ensureDocumentsSynced() {
+    const br = bridge();
+    if (!br || typeof br.syncAccountingDocuments !== "function") return;
+    try {
+      const result = await br.syncAccountingDocuments();
+      if (result && result.state && typeof result.state === "object") {
+        applySyncedDocumentsState(result);
+        return;
+      }
+      delete mem.documents;
+      notifyDocumentsSynced(result);
+    } catch (err) {
+      if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.ensureDocumentsSynced", err);
+    }
+  }
+
   const documents = {
     async list(filter) {
+      await ensureDocumentsSynced();
       await delay();
       const state = clone(await load("documents", emptyDocuments));
       let queue = state.queue;
@@ -566,6 +729,40 @@ const Services = (function () {
           : null);
       return clone({ doc, preview });
     },
+    async add(input) {
+      await delay(160);
+      const state = clone(await load("documents", emptyDocuments));
+      const payload = input || {};
+      const id = String(payload.id || uid("DOC")).trim();
+      const status = payload.status || "Pending Review";
+      const date = payload.date || new Date().toISOString().slice(0, 10);
+      const doc = {
+        id,
+        type: payload.type || "Accounting Document",
+        vendor: payload.vendor || "Unassigned Vendor",
+        date,
+        amount: payload.amount ? formatMoney(payload.amount) : "—",
+        status,
+        statusTone: status === "Posted" ? "info" : status === "Ready to Post" ? "ok" : "warn",
+        age: documentAgeDays(date),
+      };
+      state.queue = [doc].concat(state.queue || []);
+      state.previewById = Object.assign({}, state.previewById || {}, {
+        [id]: {
+          vendor: doc.vendor.toUpperCase(),
+          invoice: id,
+          date: doc.date,
+          total: doc.amount,
+          file: payload.fileName || `${id}.pdf`,
+          pages: payload.pages || "1 of 1",
+          uploaded: new Date().toISOString().slice(0, 10),
+        },
+      });
+      state.entity = state.entity || "New Ridge Family Financial";
+      state.period = recomputeDocumentPeriod(state.queue);
+      await save("documents", state);
+      return clone(doc);
+    },
     async updateStatus(id, status) {
       await delay(160);
       const state = clone(await load("documents", emptyDocuments));
@@ -573,6 +770,7 @@ const Services = (function () {
       if (!doc) throw new Error("Document not found");
       doc.status = status;
       doc.statusTone = status === "Posted" ? "info" : status === "Ready to Post" ? "ok" : "warn";
+      state.period = recomputeDocumentPeriod(state.queue);
       await save("documents", state);
       return clone(doc);
     },
@@ -580,6 +778,7 @@ const Services = (function () {
       await delay(160);
       const state = clone(await load("documents", emptyDocuments));
       state.queue = state.queue.filter((d) => d.id !== id);
+      state.period = recomputeDocumentPeriod(state.queue);
       await save("documents", state);
       return true;
     },
@@ -669,6 +868,7 @@ const Services = (function () {
     buildDashboardsFromBundle,
     loadImportBundle,
     refreshImports,
+    pullPracticeSources,
     invalidateSnapshot: () => {
       if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate("services");
     },

@@ -30,6 +30,8 @@ const HalAgent = (function () {
       "prioritize office work", "publish daily office briefings",
     ],
     rules: [
+      "Apply metacognition: self-check every answer against tool results and missing-data rules before responding.",
+      "Use mental time travel: compare required calendar months (current + prior) to loaded SoftDent/QuickBooks exports for trend and close widgets.",
       "HAL is the internal office manager; external writeback and outbound actions remain blocked.",
       "Never fabricate missing import data; say what is missing.",
       "Never claim an external action was performed.",
@@ -71,6 +73,27 @@ const HalAgent = (function () {
           return { ok: false, summary: "Widget contract unavailable." };
         }
         return { ok: true, summary: contract.formatAllContractsForHal().slice(0, 4000) };
+      },
+    },
+    read_widget_master_chart: {
+      label: "Read widget master chart",
+      run: async () => {
+        const chart =
+          typeof HalWidgetMasterChart !== "undefined"
+            ? HalWidgetMasterChart
+            : typeof window !== "undefined" && window.HalWidgetMasterChart
+              ? window.HalWidgetMasterChart
+              : (() => {
+                  try {
+                    return require("./hal-widget-master-chart.js");
+                  } catch {
+                    return null;
+                  }
+                })();
+        if (!chart || typeof chart.formatForHal !== "function") {
+          return { ok: false, summary: "Widget master chart unavailable." };
+        }
+        return { ok: true, summary: chart.formatForHal().slice(0, 6000), chart: chart.all ? chart.all() : null };
       },
     },
     read_source_health: {
@@ -279,6 +302,9 @@ const HalAgent = (function () {
     }
     if (route.useWidgetContract || /\b(widget contract|what does .*widget need|which dataset|which field|data source for .*widget)\b/i.test(query)) {
       tools.push("read_widget_contract");
+    }
+    if (route.useWidgetMasterChart || /\b(widget master chart|master widget chart|widget map|widget guide|all widgets chart)\b/i.test(query)) {
+      tools.push("read_widget_master_chart");
     }
     if (route.useClaimReadiness || (/\b(claim|denied|packet)\b/i.test(query) && !route.text)) {
       tools.push("read_claims_summary");

@@ -1,8 +1,8 @@
 {
   "version": 1,
   "cacheDirs": {
-    "softdent": "app/data/imports/softdent",
-    "quickbooks": "app/data/imports/quickbooks"
+    "softdent": "app_data/nr2/document_inbox/softdent",
+    "quickbooks": "app_data/nr2/document_inbox/quickbooks"
   },
   "upstreamRoots": {
     "softdent": {
@@ -13,6 +13,7 @@
         "C:\\SoftDentFinancialExports",
         "C:\\NewRidgeBridge\\exports"
       ],
+      "cacheDir": "app_data/nr2/document_inbox/softdent",
       "collectorHints": {
         "bridge_aggregate": "New Ridge SoftDent Bridge Sync scheduled task",
         "account_aging_jsonl": "SoftDent financial pipeline (account_aging.jsonl)",
@@ -25,6 +26,7 @@
         "C:\\Users\\mreno\\QuickBooksExports",
         "C:\\SoftDentFinancialExports"
       ],
+      "cacheDir": "app_data/nr2/document_inbox/quickbooks",
       "collectorHints": {
         "qb_sdk_summary": "QuickBooks SDK refresh scheduled task",
         "qb_sdk_expense_categories": "QuickBooks SDK expense category probe"
@@ -132,9 +134,7 @@
       "bundleKey": "revenue",
       "filenames": [
         "quickbooks_revenue.csv",
-        "quickbooks_revenue.json",
-        "quickbooks_profit_and_loss.csv",
-        "quickbooks_profit_loss.csv"
+        "quickbooks_revenue.json"
       ],
       "sourceOwner": "qb_sdk_summary",
       "generatedBy": ["qb_sdk_summary"],
@@ -146,6 +146,27 @@
       "fieldAliases": {
         "TotalIncome": ["TotalIncome", "Income", "Revenue", "total_income", "Amount", "amount"],
         "Month": ["Month", "month", "Period", "period"]
+      }
+    },
+    "quickbooks.profitAndLoss": {
+      "system": "quickbooks",
+      "bundleKey": "profitAndLoss",
+      "filenames": [
+        "quickbooks_profit_and_loss.csv",
+        "quickbooks_profit_loss.csv"
+      ],
+      "sourceOwner": "qb_sdk_summary",
+      "generatedBy": ["qb_sdk_summary"],
+      "freshnessMaxMinutes": 1440,
+      "severity": "critical",
+      "automated": true,
+      "requiredFields": ["NetIncome"],
+      "optionalFields": ["TotalIncome", "TotalExpense", "Period", "Month"],
+      "fieldAliases": {
+        "NetIncome": ["NetIncome", "net_income", "Net Income"],
+        "TotalIncome": ["TotalIncome", "Income", "Revenue", "total_income"],
+        "TotalExpense": ["TotalExpense", "Expenses", "Expense", "total_expense"],
+        "Period": ["Period", "period", "Month", "month"]
       }
     },
     "quickbooks.expenses": {

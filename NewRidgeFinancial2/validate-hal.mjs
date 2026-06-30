@@ -509,7 +509,21 @@ async function main() {
 
   // Ported HAL skills (accounting, claim readiness, office-manager, tasks, sanitization, memory)
   const HalSkills = require(join(siteDir, "hal-skills.js"));
+  const HalNarrativeLibrary = require(join(siteDir, "hal-narrative-library.js"));
+  const HalPeriodRequirements = require(join(siteDir, "hal-period-requirements.js"));
+  const narrativeLibrary = HalNarrativeLibrary.buildGenericDraftLibrary();
+  assert(narrativeLibrary.length === 100, "MemoAI narrative library must contain 100 generic drafts");
+  const narrativeRoute = HalCore.routeHalCommand(halData, halModels, pages, "Draft narrative for claim CLM-2026-1001");
+  assert(narrativeRoute.intent === "narratives: select-for-claim" && narrativeRoute.useNarrativeForClaim === true, "claim narrative selection must route locally");
+  const periodRoute = HalCore.routeHalCommand(halData, halModels, pages, "What periods do widgets need");
+  assert(periodRoute.intent === "periods: widget-requirements" && periodRoute.useWidgetPeriodRequirements === true, "widget period requirements must route locally");
+  const periodAnalysis = HalPeriodRequirements.analyzeWidgetPeriods(snapshot);
+  assert(Array.isArray(periodAnalysis.requiredPeriods) && periodAnalysis.requiredPeriods.length === 2, "period analysis must require current + prior month");
+  const cognitiveRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show HAL cognitive pathways");
+  assert(cognitiveRoute.intent === "hal: cognitive-pathways" && cognitiveRoute.useCognitivePathways === true, "cognitive pathways must route locally");
+  assert((halData.cognitivePathways && halData.cognitivePathways.cognitive && halData.cognitivePathways.cognitive.length) >= 5, "hal-manager must define cognitive characteristics");
   const WidgetContract = require(join(siteDir, "widget-contract.js"));
+  const HalWidgetMasterChart = require(join(siteDir, "hal-widget-master-chart.js"));
 
   // Accounting: drafting allowed through firewall; posting still blocked.
   const draftRoute = HalCore.routeHalCommand(halData, halModels, pages, "Draft a journal entry for $1,200 prepaid insurance");
@@ -628,6 +642,14 @@ async function main() {
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
   assert(Object.keys(feed.widgets).length === 27, "widget feed must build 27 widgets");
+  const masterChart = HalWidgetMasterChart.all();
+  assert(masterChart.length === HalSkills.WIDGET_ORDER.length, "widget master chart must cover every HAL widget");
+  assert(masterChart.every((row) => row.page && row.purpose && row.expectedData.length && row.readyWhen), "widget master chart rows must include page, purpose, expected data, and ready criteria");
+  assert(
+    HalSkills.WIDGET_ORDER.every((key) => masterChart.some((row) => row.key === key)),
+    "widget master chart must stay aligned with WIDGET_ORDER",
+  );
+  assert(HalWidgetMasterChart.formatForHal().includes("HAL Widget Master Chart"), "widget master chart must format for HAL guidance");
   assert(feed.widgets.ebitdaNormalization && feed.widgets.arAgingAndCollections && feed.widgets.narrativeWorkflow && feed.widgets.documentLibrary, "widget feed must include all extended page widgets");
   assert(feed.widgets.claimReadinessAndSafety, "widget feed must include claim readiness widget");
   assert(feed.widgets.newPatients && feed.widgets.treatmentPlanSummary && feed.widgets.caseAcceptance, "widget feed must include practice-performance widgets");
@@ -653,12 +675,63 @@ async function main() {
   const contractRoute = HalCore.routeHalCommand(halData, halModels, pages, "what does the financial widget need?");
   assert(contractRoute.intent === "widgets: contract" && contractRoute.useWidgetContract === true, "widget contract questions must route locally");
   assert(WidgetContract.formatContractForHal("practiceFinancialOverview").includes("quickbooks.revenue"), "HAL widget contract must describe required datasets");
+  const masterChartRoute = HalCore.routeHalCommand(halData, halModels, pages, "show the widget master chart");
+  assert(masterChartRoute.intent === "widgets: master-chart" && masterChartRoute.useWidgetMasterChart === true, "widget master chart questions must route locally");
 
   // A/R honesty: with no verified A/R source, totals are nulled and status degrades
   const noArFeed = HalSkills.buildWidgetFeed({ dashboards: { softdent: {}, quickbooks: { syncStatus: "ok" } }, claims: { total: 5 } });
   assert(noArFeed.widgets.smartClaimsAndReceivables.metrics.accountsReceivableTotal === null, "A/R must not be fabricated without a verified source");
   assert(noArFeed.widgets.careDeliveryPerformance.metrics.patientBalanceTotal === null, "patient A/R balance must not be fabricated");
   assert(noArFeed.widgets.smartClaimsAndReceivables.status !== "SUCCESS", "claims widget must degrade without A/R source");
+
+  // Document widgets must reflect local document data honestly (not blanket FAILED)
+  const docsPresentFeed = HalSkills.buildWidgetFeed({
+    dashboards: { softdent: {}, quickbooks: {} },
+    documents: {
+      queueCount: 4,
+      top: [{ id: "GL-1", vendor: "Glidewell", amount: "$221.40", status: "Pending Review", age: 14 }],
+      posting: [{ label: "Pending Review", count: 4 }],
+      period: { label: "2026-06", documents: 4, postedPct: 0 },
+    },
+  });
+  assert(docsPresentFeed.widgets.documentIntakeQueue.status === "SUCCESS", "document intake widget must read SUCCESS when queue and period metrics are loaded");
+  assert(docsPresentFeed.widgets.accountsPayableAutomation.status === "DEGRADED", "AP automation must degrade (not FAILED) when documents exist but QuickBooks is empty");
+
+  const docsReadyFeed = HalSkills.buildWidgetFeed({
+    dashboards: { softdent: {}, quickbooks: {} },
+    documents: {
+      queueCount: 2,
+      top: [{ id: "GL-1", vendor: "Glidewell", amount: "$221.40", status: "Posted", age: 3 }],
+      posting: [{ label: "Posted", count: 2 }],
+      period: { label: "2026-06", documents: 2, postedPct: 100 },
+    },
+  });
+  assert(docsReadyFeed.widgets.documentIntakeQueue.status === "SUCCESS", "fully posted documents with period metrics must read SUCCESS");
+
+  const docsEmptyFeed = HalSkills.buildWidgetFeed({ dashboards: { softdent: {}, quickbooks: {} }, documents: { queueCount: 0 } });
+  assert(docsEmptyFeed.widgets.documentIntakeQueue.status === "FAILED", "empty document queue must remain No data yet (FAILED)");
+
+  const importHealth = HalSkills.formatImportHealthSummary({
+    importBundle: {
+      diagnostics: {
+        datasets: [
+          { datasetKey: "softdent.claims", status: "missing", detail: "Dataset file not found in import cache." },
+          { datasetKey: "softdent.dashboard", status: "partial", detail: "Current month only; prior month export missing for trend/YTD widgets." },
+        ],
+      },
+    },
+  });
+  assert(importHealth.includes("softdent.claims"), "import health must name missing SoftDent exports");
+  assert(importHealth.includes("prior month export missing"), "import health must explain one-month SoftDent dashboard");
+  const checklist = HalSkills.formatImportChecklist(feed, snapshot);
+  assert(checklist.includes("prior month"), "import checklist must mention prior month for SoftDent dashboard");
+
+  const sourceGuide = HalSkills.formatSourceSystemGuide(snapshot);
+  assert(sourceGuide.includes("SoftDent vs QuickBooks"), "source system guide must name both systems");
+  assert(sourceGuide.includes("Do NOT use this source for"), "source system guide must list boundaries");
+  assert(sourceGuide.includes("dental A/R aging"), "source system guide must mention dental A/R boundary");
+  const sourceGuideRoute = HalCore.routeHalCommand(halData, halModels, pages, "Explain SoftDent vs QuickBooks");
+  assert(sourceGuideRoute.intent === "sources: system guide" && sourceGuideRoute.useSourceSystemGuide === true, "SoftDent vs QuickBooks questions must route to source system guide");
 
   const finWidgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "show financial widget");
   assert(finWidgetRoute.intent === "widgets: show:practiceFinancialOverview" && finWidgetRoute.widgetKey === "practiceFinancialOverview", "individual widget commands must route locally");
@@ -671,13 +744,15 @@ async function main() {
   assert(fillText.includes("SoftDent dashboard export") && fillText.includes("QuickBooks revenue/P&L"), "widget fill suggestions must cite source exports");
   const widgetGuidanceCases = [
     ["Show missing data by widget", "widgets: missing-data", "missingData", HalSkills.formatWidgetMissingData(feed), "Missing data by widget"],
+    ["Trace widgets", "widgets: source-trace", "sourceTrace", HalSkills.formatWidgetSourceTrace(feed, snapshot), "HAL widget source trace"],
     ["Prioritize widgets to fill first", "widgets: fill-priority", "fillPriority", HalSkills.formatWidgetFillPriority(feed), "Priority order to fill widgets"],
-    ["Show import checklist", "imports: checklist", "importChecklist", HalSkills.formatImportChecklist(feed), "Import checklist"],
+    ["Show import checklist", "imports: checklist", "importChecklist", HalSkills.formatImportChecklist(feed, snapshot), "Import checklist"],
     ["Check data quality before recommendations", "data-quality: check", "dataQuality", HalSkills.formatDataQualityCheck(feed), "Data quality check"],
     ["Explain why this widget is empty", "widgets: explain-empty", "explainEmpty", HalSkills.formatEmptyWidgetExplanation(feed, "Explain why this widget is empty"), "Why widgets are empty"],
     ["Build daily owner briefing", "briefing: owner-daily", "dailyOwnerBriefing", HalSkills.formatDailyOwnerBriefing(feed, snapshot), "Daily owner briefing"],
-    ["Show accounting review queue", "accounting: review-queue", "accountingReviewQueue", HalSkills.formatAccountingReviewQueue(feed), "Accounting review queue"],
-    ["Show Excel-style reconciliation", "reconciliation: excel-style", "excelReconciliation", HalSkills.formatExcelReconciliation(feed), "Excel-style reconciliation"],
+    ["Show accounting review queue", "accounting: review-queue", "accountingReviewQueue", HalSkills.formatAccountingReviewQueue(feed, snapshot), "Accounting review queue"],
+    ["Work document workbook", "documents: excel-workbook", "documentExcelWorkbook", HalSkills.formatDocumentExcelWorkbook(feed, snapshot), "Accounting document workbook"],
+    ["Show Excel-style reconciliation", "reconciliation: excel-style", "excelReconciliation", HalSkills.formatExcelReconciliation(feed, snapshot), "Excel-style reconciliation"],
   ];
   widgetGuidanceCases.forEach(([command, expectedIntent, expectedGuidance, output, expectedText]) => {
     const route = HalCore.routeHalCommand(halData, halModels, pages, command);
@@ -689,6 +764,29 @@ async function main() {
   assert(importStatusRoute.intent === "imports: status" && importStatusRoute.useImportStatus === true, "import status must route locally");
   const importRefreshRoute = HalCore.routeHalCommand(halData, halModels, pages, "refresh imports");
   assert(importRefreshRoute.intent === "imports: refresh" && importRefreshRoute.useImportRefresh === true, "import refresh must route locally");
+
+  const sourceCatalogRoute = HalCore.routeHalCommand(halData, halModels, pages, "what can you get from quickbooks and softdent");
+  assert(sourceCatalogRoute.intent === "sources: catalog" && sourceCatalogRoute.usePracticeSourceCatalog === true, "practice source catalog must route locally");
+  const qbFetchRoute = HalCore.routeHalCommand(halData, halModels, pages, "fetch quickbooks revenue directly");
+  assert(qbFetchRoute.intent === "sources: fetch:quickbooks" && qbFetchRoute.usePracticeSourceFetch === true, "direct quickbooks fetch must route locally");
+  assert(qbFetchRoute.practiceSourceRequest.resource === "revenue", "quickbooks revenue query must resolve revenue resource");
+  const sdFetchRoute = HalCore.routeHalCommand(halData, halModels, pages, "pull softdent claims from source");
+  assert(sdFetchRoute.intent === "sources: fetch:softdent" && sdFetchRoute.usePracticeSourceFetch === true, "direct softdent fetch must route locally");
+  const catalogText = HalSkills.formatPracticeSourceCatalog({
+    policy: "read-only",
+    autoPullEnabled: true,
+    cacheDirs: { softdent: "app_data/nr2/document_inbox/softdent", quickbooks: "app_data/nr2/document_inbox/quickbooks" },
+    systems: {
+      quickbooks: { resources: { revenue: "QuickBooks revenue (live SDK)" } },
+      softdent: { resources: { claims: "SoftDent claims export" } },
+    },
+  });
+  assert(catalogText.includes("Authorized practice source catalog"), "practice source catalog formatter must describe authorized access");
+  const fetchText = HalSkills.formatPracticeSourceFetch(
+    { ok: true, system: "quickbooks", resource: "revenue", sourceKind: "quickbooks-sdk", rows: [{ TotalIncome: 1000 }], rowCount: 1, fetchedAt: new Date().toISOString() },
+    { system: "quickbooks", resource: "revenue" },
+  );
+  assert(fetchText.includes("authorized practice employee"), "practice source fetch formatter must confirm read-only employee access");
 
   process.env.NR2_LOAD_IMPORTS = "1";
   const ImportLoader = require(join(siteDir, "import-loader.js"));

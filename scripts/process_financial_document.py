@@ -162,7 +162,12 @@ def default_db_path() -> Path:
     if hal_path:
         return Path(hal_path).expanduser().resolve()
 
-    return project_root() / "hal_local.sqlite3"
+    nr2_db = project_root() / "app_data" / "nr2" / "accounting_documents.sqlite3"
+    nr2_db.parent.mkdir(parents=True, exist_ok=True)
+    legacy = project_root() / "hal_local.sqlite3"
+    if not nr2_db.is_file() and legacy.is_file():
+        shutil.copy2(legacy, nr2_db)
+    return nr2_db
 
 
 def parse_args() -> argparse.Namespace:

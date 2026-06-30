@@ -59,11 +59,42 @@ const PageViews = (function () {
     return ((halData && halData.registry) || []).find((e) => e.id === pageId) || null;
   }
 
-  function buildPageState(halData, pageId) {
+  function halWidgetsApi() {
+    if (typeof HalPageWidgets !== "undefined") return HalPageWidgets;
+    if (typeof window !== "undefined" && window.HalPageWidgets) return window.HalPageWidgets;
+    try {
+      return require("./hal-page-widgets.js");
+    } catch {
+      return null;
+    }
+  }
+
+  function pilotWidgetsApi() {
+    if (typeof HalPilotWidgets !== "undefined") return HalPilotWidgets;
+    if (typeof window !== "undefined" && window.HalPilotWidgets) return window.HalPilotWidgets;
+    try {
+      return require("./hal-pilot-widgets.js");
+    } catch {
+      return null;
+    }
+  }
+
+  let activeHalFeed = null;
+
+  function setHalFeed(feed) {
+    activeHalFeed = feed || null;
+  }
+
+  function halFeed(state) {
+    return (state && state.halWidgetFeed) || activeHalFeed || null;
+  }
+
+  function buildPageState(halData, pageId, halWidgetFeed) {
     const outline = PAGE_OUTLINES[pageId] || null;
     const reg = registryEntry(halData, pageId);
     return {
       pageId,
+      halWidgetFeed: halWidgetFeed || null,
       title: (reg && reg.name) || (outline && outline.eyebrow) || pageId,
       eyebrow: (outline && outline.eyebrow) || "Program page",
       subtitle: (outline && outline.subtitle) || (reg && reg.purpose) || "",
@@ -112,7 +143,28 @@ const PageViews = (function () {
   }
 
   function toolbarDate(label) {
-    return U ? U.Button({ label, icon: "📅", variant: "toolbar", disabled: true }) : "";
+    const icon = typeof AppIcons !== "undefined" ? AppIcons.widget("dataFreshnessQuality") : "";
+    return U ? U.Button({ label, icon, variant: "toolbar", disabled: true }) : "";
+  }
+
+  function uiIcon(key) {
+    return typeof AppIcons !== "undefined" ? AppIcons.ui(key) : "";
+  }
+
+  function practiceMetricValue(value, status) {
+    if (status === "Not Configured") return "Not configured";
+    if (value === null || value === undefined || value === "") return "—";
+    return value;
+  }
+
+  function practiceWidgetCard(title, rows, widgetKey, state) {
+    const body = rows
+      .map(
+        ([label, value]) =>
+          `<div class="pv-practice-metric"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`,
+      )
+      .join("");
+    return card(title, `<div class="pv-practice-metrics">${body}</div>`, "pv-card--practice", null, widgetKey, state);
   }
 
   function toolbarBtn(label, icon, attrs) {
@@ -123,8 +175,44 @@ const PageViews = (function () {
     return U ? U.StatusBadge(text, tone) : esc(text);
   }
 
-  function card(title, body, cls, headRight) {
+  function card(title, body, cls, headRight, widgetKey, state) {
+    const feed = halFeed(state);
+    const HW = halWidgetsApi();
+    if (HW && widgetKey) {
+      return HW.wrapCard({
+        title,
+        body,
+        className: cls,
+        headRight,
+        widgetKey,
+        feed,
+        Card: U ? U.Card : null,
+      });
+    }
     return U ? U.Card({ title, body, className: cls, headRight }) : body;
+  }
+
+  function halStrip(state) {
+    const HW = halWidgetsApi();
+    if (!HW) return "";
+    return HW.pageStrip(state.pageId, halFeed(state));
+  }
+
+  function halCommandSurface(state) {
+    const pilot = pilotWidgetsApi();
+    if (!pilot || typeof pilot.plainCommandPalette !== "function") return "";
+    const pageId = state && state.pageId ? state.pageId : "global";
+    const title = state && state.title ? state.title : pageId;
+    return `<div class="pv-hal-command-wrap">${pilot.plainCommandPalette({
+      pageId,
+      widgetKey: "halCommandPalette",
+      includeForce: true,
+      commands: [
+        `Ask HAL about ${title}`,
+        `Explain widgets on ${title}`,
+        "Show data sources",
+      ],
+    })}</div>`;
   }
 
   /* ---- Chart / visualization helpers (render real service data) ---- */
@@ -220,6 +308,8 @@ const PageViews = (function () {
       const html = await renderFn(state, slot);
       if (!mountStillCurrent(generation, container, slotId, state.pageId)) return;
       if (slot) slot.innerHTML = html;
+      const pilot = pilotWidgetsApi();
+      if (pilot && typeof pilot.init === "function") pilot.init(container);
     } catch (err) {
       if (!mountStillCurrent(generation, container, slotId, state.pageId)) return;
       if (slot) slot.innerHTML = U ? U.ErrorState({ message: err.message || String(err), title: "Unable to load page" }) : esc(err.message);
@@ -232,6 +322,8 @@ const PageViews = (function () {
     container.querySelectorAll("[data-pv-nav]").forEach((btn) => btn.addEventListener("click", () => onNavigate && onNavigate(btn.getAttribute("data-pv-nav"))));
     const ref = container.querySelector("[data-pv-refresh]");
     if (ref) ref.addEventListener("click", refresh);
+    const pilot = pilotWidgetsApi();
+    if (pilot && typeof pilot.init === "function") pilot.init(container);
   }
 
   function wireModal(container) {
@@ -287,9 +379,9 @@ const PageViews = (function () {
   async function renderFinancial(state) {
     const d = await Svc.readDashboard("financial");
     const p = d.productionMtd;
+    const feed = halFeed(state);
 
-    const prodCard = `
-      <section class="pv-card pv-fin-prod">
+    const prodInner = `
         <div class="pv-card__head"><h3>Production MTD <i class="pv-info">ⓘ</i></h3></div>
         <div class="pv-fin-prod__grid">
           <div class="pv-fin-prod__left">
@@ -304,8 +396,11 @@ const PageViews = (function () {
               <div class="pv-fin-prod__x">${p.chart.xLabels.map((l) => `<span>${esc(l)}</span>`).join("")}</div>
             </div>
           </div>
-        </div>
-      </section>`;
+        </div>`;
+    const HW = halWidgetsApi();
+    const prodCard = HW
+      ? HW.wrapSection(prodInner, "financialProductionTrend", feed, "pv-fin-prod")
+      : `<section class="pv-card pv-fin-prod">${prodInner}</section>`;
 
     const metricCol = (m) => `
       <div class="pv-fin-metric">
@@ -318,7 +413,13 @@ const PageViews = (function () {
           <span class="pv-fin-metric__subval">${esc(m.subValue)} <em class="pv-trend pv-trend--${esc(m.subTrendDir)}">${esc(m.subTrend)}</em></span>
         </div>
       </div>`;
-    const metricsCard = `<section class="pv-card pv-fin-metrics">${d.metrics.map(metricCol).join("")}</section>`;
+    const pilot = pilotWidgetsApi();
+    const metricsInner = pilot && typeof pilot.financialOverviewChart === "function"
+      ? pilot.financialOverviewChart(d.metrics)
+      : d.metrics.map(metricCol).join("");
+    const metricsCard = HW
+      ? HW.wrapSection(metricsInner, "practiceFinancialOverview", feed, "pv-fin-metrics")
+      : `<section class="pv-card pv-fin-metrics">${metricsInner}</section>`;
 
     const t = d.productionTrend;
     const ytd = t.ytd.map((y) => `<div class="pv-ytd"><span>${esc(y.label)}</span><strong>${esc(y.value)}</strong><em class="pv-trend pv-trend--${esc(y.trendDir)}">${trendArrow(y.trendDir)} ${esc(y.trend)}</em></div>`).join("");
@@ -331,6 +432,9 @@ const PageViews = (function () {
       <div class="pv-fin-legend"><span><i class="pv-swatch" style="background:#d6b15e"></i> Production</span><span><i class="pv-swatch pv-swatch--dash" style="background:#64748b"></i> 12 Mo. Avg.</span></div>
       <div class="pv-ytd-row">${ytd}</div>`,
       "pv-card--chart",
+      null,
+      "financialProductionTrend",
+      state,
     );
 
     const pm = d.payerMix;
@@ -347,6 +451,9 @@ const PageViews = (function () {
       </div>
       <div class="pv-payer-foot"><span>INSURANCE COLLECTION RATE</span><strong>${esc(pm.rate)}</strong><em class="pv-trend pv-trend--up">${esc(pm.rateTrend)}</em></div>`,
       "pv-card--donut",
+      null,
+      "payerMixAndCollections",
+      state,
     );
 
     const prov = d.providers;
@@ -356,6 +463,9 @@ const PageViews = (function () {
       "Production by Provider — MTD",
       `<div class="pv-hbars">${provBars}</div><div class="pv-total-row"><span>Total</span><strong>${esc(prov.total.amount)}</strong><em>${prov.total.pct}%</em></div>`,
       "pv-card--bars",
+      null,
+      "providerPerformance",
+      state,
     );
 
     const freshCells = d.freshness.map((f) => {
@@ -367,13 +477,19 @@ const PageViews = (function () {
         <span class="pv-fresh-cell__freq">(${esc(f.freq)})</span>
       </article>`;
     }).join("");
-    const freshCard = card("Data Freshness", `<div class="pv-fresh-cards">${freshCells}</div>`, "pv-card--half");
+    const freshnessInner = pilot && typeof pilot.freshnessGrid === "function"
+      ? pilot.freshnessGrid(d.freshness, d.quality)
+      : `<div class="pv-fresh-cards">${freshCells}</div>`;
+    const freshCard = card("Data Freshness", freshnessInner, "pv-card--half", null, "dataFreshnessQuality", state);
 
     const qualityCats = d.quality.categories.map((c) => `<div class="pv-qcat"><span>✓ ${esc(c.label)}</span><strong>${c.score}/100</strong></div>`).join("");
     const qualityCard = card(
       "Data Quality Score",
       `<div class="pv-quality"><div class="pv-quality__ring pv-quality__ring--green"><strong>${d.quality.score}</strong><span>/100</span></div><div class="pv-quality__cats">${qualityCats}</div></div><a class="pv-gold-link" href="#">View Data Quality →</a>`,
       "pv-card--half",
+      null,
+      "dataFreshnessQuality",
+      state,
     );
 
     const header = U.TopBar({
@@ -381,10 +497,12 @@ const PageViews = (function () {
       subtitle: state.subtitle,
       safety: state.safety,
       dataBadge: dataBadgeFor(d),
-      actions: [toolbarDate(d.dateRange), toolbarBtn(d.compareRange, "▾"), toolbarBtn("Filters", "⛃")],
+      actions: [toolbarDate(d.dateRange), toolbarBtn(d.compareRange, uiIcon("chevronDown")), toolbarBtn("Filters", uiIcon("filter"))],
     });
     return `
       ${header}
+      ${halStrip(state)}
+      ${halCommandSurface(state)}
       <div class="pv-fin-top">${prodCard}${metricsCard}</div>
       <div class="pv-bento pv-bento--financial">
         ${trendCard}
@@ -412,39 +530,46 @@ const PageViews = (function () {
   }
 
   async function renderSoftdent(state) {
-    const d = await Svc.readDashboard("softdent");
+    const [d, practice] = await Promise.all([Svc.readDashboard("softdent"), Svc.readDashboard("practice")]);
+    const feed = halFeed(state);
+    const HW = halWidgetsApi();
+    const pilot = pilotWidgetsApi();
     const header = U.TopBar({
       title: "SoftDent",
       subtitle: `System of Record: ${d.source || "SoftDent"}`,
       safety: state.safety,
       dataBadge: dataBadgeFor(d),
-      actions: [toolbarDate(d.date), toolbarBtn("Filters", "⛃"), toolbarBtn("⋯", "")],
+      actions: [toolbarDate(d.date), toolbarBtn("Filters", uiIcon("filter")), toolbarBtn("More", uiIcon("more"))],
     });
 
-    const hero = `<section class="pv-card pv-sd-hero">
+    const heroInner = `
       <div class="pv-card__head"><h3>${esc(d.hero.label)} <i class="pv-info">ⓘ</i></h3><span class="pv-trend pv-trend--${esc(d.hero.trendDir)}">↑ ${esc(d.hero.trend)}</span></div>
       <div class="pv-sd-hero__body">
         <div class="pv-sd-hero__value"><strong>${esc(d.hero.value)}</strong><span>${esc(d.hero.subtitle)}</span></div>
         <div class="pv-sd-hero__spark">${softdentSparkline(d.hero.spark || [1, 2, 3])}</div>
       </div>
-      <div class="pv-sd-submetrics">${d.subMetrics.map((m) => `<div><span>${esc(m.label)}</span><strong>${esc(m.value)}</strong></div>`).join("")}</div>
-    </section>`;
+      <div class="pv-sd-submetrics">${d.subMetrics.map((m) => `<div><span>${esc(m.label)}</span><strong>${esc(m.value)}</strong></div>`).join("")}</div>`;
+    const hero = HW
+      ? HW.wrapSection(heroInner, "careDeliveryPerformance", feed, "pv-sd-hero")
+      : `<section class="pv-card pv-sd-hero">${heroInner}</section>`;
 
     const agingColors = ["#78a86b", "#d6b15e", "#f0a868", "#e97854", "#8b5cf6"];
     let agingAcc = 0;
     const agingStops = d.aging.map((a, i) => { const start = agingAcc; agingAcc += a.pct; return `${agingColors[i]} ${start}% ${agingAcc}%`; }).join(", ");
     const agingRows = d.aging.map((a, i) => `<div class="pv-sd-aging-row"><span><i style="background:${agingColors[i]}"></i>${esc(a.bucket)}</span><strong>${esc(a.amount)}</strong><em>${a.pct}%</em></div>`).join("");
-    const agingCard = `<section class="pv-card pv-sd-aging">
+    const agingInner = `
       <div class="pv-card__head"><h3>A/R Aging Buckets <i class="pv-info">ⓘ</i></h3></div>
       <div class="pv-sd-aging__grid">
         <div class="pv-sd-aging__rows">${agingRows}<div class="pv-sd-aging-row pv-sd-aging-row--total"><span>Total</span><strong>${esc(d.hero.value)}</strong><em>100%</em></div></div>
         <div class="pv-donut-chart pv-sd-aging__donut" style="background:conic-gradient(${agingStops})"><div class="pv-donut-chart__hole"><strong>${esc(d.hero.value)}</strong><span>Total A/R</span></div></div>
-      </div>
-    </section>`;
+      </div>`;
+    const agingCard = HW
+      ? HW.wrapSection(agingInner, "softdentArAging", feed, "pv-sd-aging")
+      : `<section class="pv-card pv-sd-aging">${agingInner}</section>`;
 
     const resp = d.responsibility;
     const respStops = `#3f73e6 0% ${resp.insurance.pct}%, #d6b15e ${resp.insurance.pct}% 100%`;
-    const responsibilityCard = `<section class="pv-card pv-sd-resp">
+    const responsibilityInner = `
       <div class="pv-card__head"><h3>Insurance vs Patient Responsibility <i class="pv-info">ⓘ</i></h3></div>
       <div class="pv-sd-resp__grid">
         <div class="pv-donut-chart pv-sd-resp__donut" style="background:conic-gradient(${respStops})"><div class="pv-donut-chart__hole"><strong>${esc(resp.total)}</strong><span>Total A/R</span></div></div>
@@ -453,23 +578,61 @@ const PageViews = (function () {
           <div><span><i style="background:#d6b15e"></i>Patient Responsibility</span><strong>${esc(resp.patient.amount)}</strong><em>${resp.patient.pct}%</em></div>
           <footer><span>Est. Collectability (Patient)</span><strong>${esc(resp.collectability)}</strong><span>Est. Collectable</span><strong>${esc(resp.collectable)}</strong></footer>
         </div>
-      </div>
-    </section>`;
+      </div>`;
+    const responsibilityCard = HW
+      ? HW.wrapSection(responsibilityInner, "softdentResponsibility", feed, "pv-sd-resp")
+      : `<section class="pv-card pv-sd-resp">${responsibilityInner}</section>`;
 
-    const sourceHealth = `<section class="pv-card pv-sd-health">
+    const sourceHealthInner = `
       <div class="pv-card__head"><h3>Source Health <span>(Read-Only)</span> <i class="pv-info">ⓘ</i></h3></div>
       <div class="pv-sd-health__grid">
-        <div class="pv-sd-shield">♢</div>
+        <div class="pv-sd-shield">${typeof AppIcons !== "undefined" ? AppIcons.widget("softdentSourceHealth") : "♢"}</div>
         <div class="pv-sd-health__rows">${d.health.map((h) => `<div><span>✓ ${esc(h.label)}</span><strong>${esc(h.value)}</strong></div>`).join("")}</div>
       </div>
-      <p class="pv-sd-readonly">This is a read-only connection.<br/>All data is sourced from SoftDent.</p>
-    </section>`;
+      <div class="pv-sd-glance__rows pv-sd-glance__rows--inline">${(d.glance || [])
+        .map((g, i) => {
+          const icon = typeof AppIcons !== "undefined" ? AppIcons.glance(i) : "•";
+          return `<div><span class="pv-sd-glance__label">${icon} ${esc(g.label)}</span><strong>${esc(g.value)}</strong></div>`;
+        })
+        .join("")}</div>
+      <p class="pv-sd-readonly">This is a read-only connection.<br/>All data is sourced from SoftDent.</p>`;
+    const sourceHealth = HW
+      ? HW.wrapSection(sourceHealthInner, "softdentSourceHealth", feed, "pv-sd-health")
+      : `<section class="pv-card pv-sd-health">${sourceHealthInner}</section>`;
 
-    const glanceIcons = ["♧", "♤", "⌄", "▣", "$", "⇩"];
-    const glance = `<section class="pv-card pv-sd-glance">
-      <div class="pv-card__head"><h3>At a Glance <i class="pv-info">ⓘ</i></h3></div>
-      <div class="pv-sd-glance__rows">${d.glance.map((g, i) => `<div><span>${glanceIcons[i] || "•"} ${esc(g.label)}</span><strong>${esc(g.value)}</strong></div>`).join("")}</div>
-    </section>`;
+    const np = practice.newPatients || {};
+    const tp = practice.treatmentPlans || {};
+    const ca = practice.caseAcceptance || {};
+    const newPatientsCard = practiceWidgetCard(
+      "New Patients",
+      [
+        ["Count", practiceMetricValue(np.count, np.status)],
+        ["Period", practiceMetricValue(np.period, np.status)],
+        ["Status", np.status || "—"],
+      ],
+      "newPatients",
+      state,
+    );
+    const treatmentCard = practiceWidgetCard(
+      "Treatment Plan Summary",
+      [
+        ["Presented", practiceMetricValue(tp.presented, tp.status)],
+        ["Accepted", practiceMetricValue(tp.accepted, tp.status)],
+        ["Presented value", practiceMetricValue(tp.presentedValue, tp.status)],
+      ],
+      "treatmentPlanSummary",
+      state,
+    );
+    const caseCard = practiceWidgetCard(
+      "Case Acceptance",
+      [
+        ["Rate", practiceMetricValue(ca.rate, ca.status)],
+        ["Presented", practiceMetricValue(ca.presented, ca.status)],
+        ["Accepted", practiceMetricValue(ca.accepted, ca.status)],
+      ],
+      "caseAcceptance",
+      state,
+    );
 
     const exportRows = d.exports.map((e) => [
       esc(e.name),
@@ -479,28 +642,47 @@ const PageViews = (function () {
       esc(e.completed),
       esc(e.records),
       esc(e.size),
-      `<span class="pv-table-actions">⇩  ▤</span>`,
+      `<span class="pv-table-actions">${typeof AppIcons !== "undefined" ? AppIcons.widget("softdentExportHistory") : ""}</span>`,
     ]);
+    const exportsInner = pilot && typeof pilot.plainDataGrid === "function"
+      ? pilot.plainDataGrid({
+          pageId: "softdent",
+          widgetKey: "softdentExportHistory",
+          title: "Recent Exports",
+          library: "AG Grid plain",
+          columns: ["Export", "Source", "Data Set", "Status", "Completed", "Records", "Size"],
+          rows: d.exports.map((e) => [e.name, e.source, e.dataset, e.status, e.completed, e.records, e.size]),
+          halAction: "Open SoftDent import diagnostics for the selected export",
+          hint: "select export -> HAL report",
+          empty: "Awaiting SoftDent export history.",
+        }) + `<a class="pv-gold-link pv-sd-export-link" href="#">View all exports →</a>`
+      : U.Table({ columns: ["Export Name", "Source", "Data Set", "Status", "Completed", "Records", "File Size", "Actions"], rows: exportRows }) + `<a class="pv-gold-link pv-sd-export-link" href="#">View all exports →</a>`;
     const exportsCard = card(
       "Recent Exports",
-      U.Table({ columns: ["Export Name", "Source", "Data Set", "Status", "Completed", "Records", "File Size", "Actions"], rows: exportRows }) + `<a class="pv-gold-link pv-sd-export-link" href="#">View all exports →</a>`,
+      exportsInner,
       "pv-card--wide pv-sd-exports",
+      null,
+      "softdentExportHistory",
+      state,
     );
 
     return `
       ${header}
+      ${halStrip(state)}
+      ${halCommandSurface(state)}
       <div class="pv-bento pv-bento--softdent">
         ${hero}
         ${agingCard}
         ${responsibilityCard}
         ${sourceHealth}
-        ${glance}
+        <div class="pv-sd-practice">${newPatientsCard}${treatmentCard}${caseCard}</div>
         ${exportsCard}
       </div>`;
   }
 
   async function renderQuickbooks(state) {
     const d = await Svc.readDashboard("quickbooks");
+    const pilot = pilotWidgetsApi();
     const plList = `<div class="pv-pl">${d.pl.rows
       .map(
         (r) =>
@@ -513,19 +695,47 @@ const PageViews = (function () {
       .join("")}</div>`;
     const ebitdaRows = d.ebitdaCandidates.map((r) => [esc(r.desc), esc(r.amount), badge(r.type, r.typeTone), `<a class="pv-gold-link" href="#">Review</a>`]);
     const syncRows = Object.entries(d.sync).map(([k, v]) => `<div class="pv-sync-row"><span>${esc(k.replace(/([A-Z])/g, " $1"))}</span><strong>${k === "status" ? badge(v, "ok") : esc(v)}</strong></div>`).join("");
+    const plInner = pilot && typeof pilot.plainDataGrid === "function"
+      ? `<span class="pv-card-range">${esc(d.pl.range)}</span>` + pilot.plainDataGrid({
+          pageId: "quickbooks",
+          widgetKey: "quickbooksProfitLossDetail",
+          title: "P&L Summary",
+          library: "AG Grid plain",
+          columns: ["Category", "Amount", "Change"],
+          rows: d.pl.rows.map((r) => [r.category, r.amount, [r.change, r.sub].filter(Boolean).join(" ")]),
+          halAction: "Explain the selected QuickBooks P&L line",
+          hint: "select P&L row -> HAL report",
+        })
+      : `<span class="pv-card-range">${esc(d.pl.range)}</span>` + plList;
+    const ebitdaInner = pilot && typeof pilot.plainDataGrid === "function"
+      ? `<p class="pv-muted">Expenses that may be add-backs for EBITDA normalization</p>` + pilot.plainDataGrid({
+          pageId: "quickbooks",
+          widgetKey: "ebitdaNormalization",
+          title: "EBITDA Candidates",
+          library: "AG Grid plain",
+          columns: ["Category / Description", "YTD Amount", "Type", "Action"],
+          rows: d.ebitdaCandidates.map((r) => [r.desc, r.amount, r.type, "Review"]),
+          halAction: "Review the selected EBITDA add-back candidate",
+          hint: "select add-back -> HAL report",
+          flash: "gold",
+        }) + `<div class="pv-total-row"><span>Total Potential Add-Backs</span><strong class="pv-gold">${esc(d.ebitdaTotal)}</strong></div><a class="pv-gold-link" href="#">Manage EBITDA Adjustments →</a>`
+      : `<p class="pv-muted">Expenses that may be add-backs for EBITDA normalization</p>` + U.Table({ columns: ["Category / Description", "YTD Amount", "Type", "Action"], rows: ebitdaRows }) + `<div class="pv-total-row"><span>Total Potential Add-Backs</span><strong class="pv-gold">${esc(d.ebitdaTotal)}</strong></div><a class="pv-gold-link" href="#">Manage EBITDA Adjustments →</a>`;
     return `
-      ${topBar(state, [`<span class="pv-sync-badge">${badge(d.syncStatus, "ok")} Last sync: ${esc(d.lastSync)}</span>`, toolbarBtn("View in QuickBooks", "↗")], null, dataBadgeFor(d))}
+      ${topBar(state, [`<span class="pv-sync-badge">${badge(d.syncStatus, "ok")} Last sync: ${esc(d.lastSync)}</span>`, toolbarBtn("View in QuickBooks", uiIcon("externalLink"))], null, dataBadgeFor(d))}
+      ${halStrip(state)}
+      ${halCommandSurface(state)}
       <div class="pv-bento pv-bento--quickbooks">
-        ${card(`P&L Summary (YTD)`, `<span class="pv-card-range">${esc(d.pl.range)}</span>` + plList, "pv-card--pl")}
-        ${card("Monthly Expenses", `<span class="pv-card-range">Last 12 Months</span>` + vBarChart(d.monthlyExpenses.labels, d.monthlyExpenses.values) + `<span class="pv-legend-inline"><i style="background:#d6b15e"></i> Operating Expenses</span>`, "pv-card--bars")}
-        ${card("Expense Categories (YTD)", conicDonut(d.expenseCategories.slices, `<strong>${esc(d.expenseCategories.total)}</strong><span>Total</span>`) + `<a class="pv-gold-link" href="#">View all categories →</a>`, "pv-card--cats")}
-        ${card("EBITDA Candidates", `<p class="pv-muted">Expenses that may be add-backs for EBITDA normalization</p>` + U.Table({ columns: ["Category / Description", "YTD Amount", "Type", "Action"], rows: ebitdaRows }) + `<div class="pv-total-row"><span>Total Potential Add-Backs</span><strong class="pv-gold">${esc(d.ebitdaTotal)}</strong></div><a class="pv-gold-link" href="#">Manage EBITDA Adjustments →</a>`, "pv-card--wide")}
-        ${card("QuickBooks Sync", syncRows + `<p class="pv-lock-note">🔒 Read-only connection. HAL cannot post to QuickBooks.</p><a class="pv-gold-link" href="#">Manage Integration →</a>`, "pv-card--sync")}
+        ${card(`P&L Summary (YTD)`, plInner, "pv-card--pl", null, "quickbooksProfitLossDetail", state)}
+        ${card("Monthly Expenses", `<span class="pv-card-range">Last 12 Months</span>` + vBarChart(d.monthlyExpenses.labels, d.monthlyExpenses.values) + `<span class="pv-legend-inline"><i style="background:#d6b15e"></i> Operating Expenses</span>`, "pv-card--bars", null, "quickbooksSyncHealth", state)}
+        ${card("Expense Categories (YTD)", conicDonut(d.expenseCategories.slices, `<strong>${esc(d.expenseCategories.total)}</strong><span>Total</span>`) + `<a class="pv-gold-link" href="#">View all categories →</a>`, "pv-card--cats", null, "quickbooksProfitLossDetail", state)}
+        ${card("EBITDA Candidates", ebitdaInner, "pv-card--wide", null, "ebitdaNormalization", state)}
+        ${card("QuickBooks Sync", syncRows + `<p class="pv-lock-note">${uiIcon("lock")} Read-only connection. HAL cannot post to QuickBooks.</p><a class="pv-gold-link" href="#">Manage Integration →</a>`, "pv-card--sync", null, "quickbooksSyncHealth", state)}
       </div>`;
   }
 
   async function renderAr(state) {
     const d = await Svc.readDashboard("ar");
+    const pilot = pilotWidgetsApi();
     const agingCards = d.aging.map((a) => `<article class="pv-aging-card${a.active ? " pv-aging-card--active" : ""}" data-aging-bucket="${esc(a.label || a.bucket)}"><span>${esc(a.label || a.bucket)}</span><strong>${esc(a.amount)}</strong><em>${a.pct}%</em>${svgSparkline([a.pct, a.pct * 0.9, a.pct * 1.1, a.pct], "#d6b15e")}</article>`).join("");
     const trendBody =
       d.collectionsTrend && Array.isArray(d.collectionsTrend.current) && d.collectionsTrend.current.length
@@ -552,14 +762,45 @@ const PageViews = (function () {
             )
             .join("")
         : `<p class="pv-muted">${esc(d.followUpEmpty || "Awaiting SoftDent claims export for follow-up lanes.")}</p>`;
+    const topClaimsInner = pilot && typeof pilot.plainDataGrid === "function"
+      ? pilot.plainDataGrid({
+          pageId: "ar",
+          widgetKey: "arOutstandingClaims",
+          title: "Top Outstanding Claims",
+          library: "AG Grid plain",
+          columns: ["Claim #", "Patient", "Insurance", "DOS", "Billed", "Outstanding", "Days"],
+          rows: (d.topClaims || []).map((c) => [c.claim, c.patient, c.insurance, c.dos, c.billed, c.outstanding, c.days]),
+          halAction: "Open follow-up context for the selected outstanding claim",
+          hint: "select claim -> HAL report",
+          empty: d.topClaimsEmpty || "Awaiting SoftDent claims export for outstanding claim detail.",
+          flash: "red",
+        }) + `<a class="pv-gold-link" href="#">View All Claims ›</a>`
+      : claimsBody;
+    const followUpInner = pilot && typeof pilot.plainKanban === "function"
+      ? pilot.plainKanban({
+          pageId: "ar",
+          widgetKey: "smartClaimsAndReceivables",
+          title: "Follow-up Queue",
+          library: "SortableJS Kanban plain",
+          lanes: (d.followUp || [{ status: "Awaiting claims", tone: "warn", count: 0, items: [] }]).map((f) => ({
+            name: f.status,
+            tone: f.tone === "red" ? "red" : f.tone === "ok" ? "ok" : "warn",
+            cards: (f.items || []).map((i) => ({ title: i.label, detail: `${i.count} claims`, meta: `${f.count} total` })),
+            empty: d.followUpEmpty || "Awaiting SoftDent claims export for follow-up lanes.",
+          })),
+          halAction: "Review the selected A/R follow-up lane",
+        })
+      : followUp;
     return `
-      ${topBar(state, [toolbarDate(d.dateRange), toolbarBtn("Filters", "⛃"), toolbarBtn("Export", "⬆")], null, dataBadgeFor(d))}
+      ${topBar(state, [toolbarDate(d.dateRange), toolbarBtn("Filters", uiIcon("filter")), toolbarBtn("Export", uiIcon("export"))], null, dataBadgeFor(d))}
+      ${halStrip(state)}
+      ${halCommandSurface(state)}
       ${kpiRow(d.kpis)}
       <div class="pv-bento pv-bento--ar">
-        ${card("Aging Buckets", `<div class="pv-aging-cards">${agingCards}</div>`)}
-        ${card("Collections Trend", trendBody, "pv-card--chart")}
-        ${card("Top Outstanding Claims", claimsBody, "pv-card--wide")}
-        ${card("Follow-up Queue", followUp)}
+        ${card("Aging Buckets", `<div class="pv-aging-cards">${agingCards}</div>`, null, null, "arAgingAndCollections", state)}
+        ${card("Collections Trend", trendBody, "pv-card--chart", null, "arAgingAndCollections", state)}
+        ${card("Top Outstanding Claims", topClaimsInner, "pv-card--wide", null, "arOutstandingClaims", state)}
+        ${card("Follow-up Queue", followUpInner, null, null, "smartClaimsAndReceivables", state)}
       </div>`;
   }
 
@@ -569,15 +810,37 @@ const PageViews = (function () {
   }
 
   function claimsBody(state, data, selectedId) {
+    const pilot = pilotWidgetsApi();
     const importReadOnly = data.claimsMode === "import-readonly";
     const lanes = ["Draft", "Needs Review", "Ready", "Denied"];
     const byLane = Object.fromEntries(lanes.map((l) => [l, []]));
     (data.claims || []).forEach((c) => { if (byLane[c.status]) byLane[c.status].push(c); });
-    const kanban = lanes.map((name) => {
+    const legacyKanban = lanes.map((name) => {
       const tone = name === "Denied" ? "red" : name === "Ready" ? "ok" : name === "Needs Review" ? "warn" : "muted";
       const cards = byLane[name] || [];
       return `<div class="pv-lane pv-lane--${tone}"><div class="pv-lane__title"><span>${esc(name)}</span><strong>${cards.length}</strong></div>${cards.map((c) => claimCardHtml(c, c.id === selectedId)).join("")}</div>`;
     }).join("");
+    const kanban = pilot && typeof pilot.plainKanban === "function"
+      ? pilot.plainKanban({
+          pageId: "claims",
+          widgetKey: "claimsPipeline",
+          title: "Claims pipeline",
+          library: "SortableJS Kanban plain",
+          lanes: lanes.map((name) => ({
+            name,
+            tone: name === "Denied" ? "red" : name === "Ready" ? "ok" : name === "Needs Review" ? "warn" : "muted",
+            cards: (byLane[name] || []).map((c) => ({
+              id: c.id,
+              title: c.id,
+              detail: `${c.patient} · ${c.procedure}`,
+              meta: `${c.amount} · ${c.age || ""}`,
+              halAction: `Review claim ${c.id} in the claims pipeline`,
+            })),
+            empty: "No claims in this lane.",
+          })),
+          halAction: "Review selected claim pipeline card",
+        })
+      : legacyKanban;
     const claimRec = (data.claims || []).find((c) => c.id === selectedId);
     const det = (data.detailById || {})[selectedId] || (claimRec
       ? { id: claimRec.id, patient: claimRec.patient, dob: claimRec.dob, age: "—", insurance: "—", billed: claimRec.amount, dos: "—", procedure: claimRec.procedure, code: claimRec.procedure, provider: "Dr. Michael Reno", npi: "—", validation: 0, alert: importReadOnly ? "SoftDent import read-only · edits disabled." : "Local workbench only · payer submission locked." }
@@ -615,20 +878,21 @@ const PageViews = (function () {
       ? ""
       : U.Button({ label: "New claim", variant: "primary", attrs: { "data-claim-create": "1" } });
     const safetyItems = importReadOnly
-      ? "<li>✓ Imported from SoftDent (read-only)</li><li>✓ Validation runs locally</li><li class=\"pv-checklist--lock\">🔒 Payer submission locked</li>"
-      : "<li>✓ Claims can be created and edited</li><li>✓ Validation runs locally</li><li class=\"pv-checklist--lock\">🔒 Payer submission locked</li>";
+      ? `<li>✓ Imported from SoftDent (read-only)</li><li>✓ Validation runs locally</li><li class="pv-checklist--lock">${uiIcon("lock")} Payer submission locked</li>`
+      : `<li>✓ Claims can be created and edited</li><li>✓ Validation runs locally</li><li class="pv-checklist--lock">${uiIcon("lock")} Payer submission locked</li>`;
+    const safetyIcon = typeof AppIcons !== "undefined" ? AppIcons.widget("claimReadinessAndSafety") : "";
+    const pipelineBody = `<div class="pv-kanban">${kanban}</div>
+        <div class="pv-claims-bottom">
+          ${card("Claim Readiness", conicDonut(readiness.slices, `<strong>${esc(readiness.overall)}</strong><span>Overall Readiness</span>`, 140), "pv-card--inline", null, "claimReadinessAndSafety", state)}
+          ${card("Safety Posture", `<div class="pv-shield pv-shield--gold">${safetyIcon}</div><ul class="pv-checklist">${safetyItems}</ul>`, "pv-card--inline", null, "claimReadinessAndSafety", state)}
+        </div>`;
     return `
-      ${topBar(state, [`<span class="pv-safety-chip">Safety Posture: ${esc(data.safety)}</span>`, toolbarBtn("Actions", "▾"), newClaimBtn], null, dataBadgeFor(data))}
+      ${topBar(state, [`<span class="pv-safety-chip">Safety Posture: ${esc(data.safety)}</span>`, toolbarBtn("Actions", uiIcon("chevronDown")), newClaimBtn], null, dataBadgeFor(data))}
+      ${halStrip(state)}
+      ${halCommandSurface(state)}
       ${kpiRow(data.kpis || [])}
       <div class="pv-claims-layout">
-        <section class="pv-card pv-card--wide pv-claims-main">
-          <div class="pv-card__head"><h3>Claims pipeline</h3></div>
-          <div class="pv-kanban">${kanban}</div>
-          <div class="pv-claims-bottom">
-            ${card("Claim Readiness", conicDonut(readiness.slices, `<strong>${esc(readiness.overall)}</strong><span>Overall Readiness</span>`, 140), "pv-card--inline")}
-            ${card("Safety Posture", `<div class="pv-shield pv-shield--gold">🛡</div><ul class="pv-checklist">${safetyItems}</ul>`, "pv-card--inline")}
-          </div>
-        </section>
+        ${card("Claims pipeline", pipelineBody, "pv-card--wide pv-claims-main", null, "claimsPipeline", state)}
         ${detailPane}
       </div>
       ${U.Modal({ id: "claim-create-modal", open: false, title: "Create claim", body: `<form id="claim-create-form" class="pv-form-grid">${U.FormField({ id: "cc-patient", name: "patient", label: "Patient name", required: true })}${U.FormField({ id: "cc-procedure", name: "procedure", label: "Procedure code", required: true })}${U.FormField({ id: "cc-amount", name: "amount", label: "Amount", placeholder: "$0.00", required: true })}</form>`, footer: `${U.Button({ label: "Cancel", attrs: { "data-modal-close": "claim-create-modal" } })} ${U.Button({ label: "Create", variant: "primary", attrs: { "data-claim-submit": "1" } })}` })}`;
@@ -693,16 +957,32 @@ const PageViews = (function () {
   let narrativeWorking = null;
 
   function narrativesBody(state, data) {
+    const HW = halWidgetsApi();
+    const pilot = pilotWidgetsApi();
+    const narrativeWidget = HW ? HW.widgetFromFeed(halFeed(state), "narrativeWorkflow") : null;
     const bar = data.context || {};
     const comp = narrativeWorking || data.composer;
-    const keyPointsHtml = (comp.keyPoints || []).map((p, i) => `<div class="pv-keypoint"><input type="checkbox" checked disabled /><span>${esc(p)}</span><button type="button" data-kp-remove="${i}">×</button></div>`).join("");
+    const editorAssist = pilot && typeof pilot.plainEditor === "function"
+      ? pilot.plainEditor({
+          pageId: "narratives",
+          widgetKey: "narrativeWorkflow",
+          title: "HAL narrative authoring surface",
+          body: "Plain Tiptap-style surface: HAL drafts, highlights inserted clauses, and reports focus/selection events.",
+          clauses: (comp.keyPoints || []).slice(0, 4),
+          halAction: "Review HAL-assisted narrative clauses",
+        })
+      : "";
+    const keyPointsHtml = (comp.keyPoints || []).map((p, i) => `<div class="pv-keypoint"><input type="checkbox" checked disabled /><span>${esc(p)}</span><button type="button" data-kp-remove="${i}" aria-label="Remove key point">${uiIcon("close")}</button></div>`).join("");
     const histRows = (data.drafts || []).map((h) => [h.latest ? `<strong>${esc(h.version)} Latest</strong>` : esc(h.version), esc(h.modified), String(h.points), esc(h.length), esc(h.focus), `${esc(h.by)} <button type="button" class="pv-gold-link" data-draft-delete="${esc(h.version)}">Delete</button>`]);
     return `
       ${topBar(state, [toolbarBtn("View Only", "👁"), toolbarBtn("?", "")], null, dataBadgeFor({ dataSource: (data.drafts || []).length || data.draftText ? "persisted" : "empty" }))}
+      ${halStrip(state)}
+      ${halCommandSurface(state)}
       <div class="pv-patient-bar">${[["Patient", bar.patient], ["DOB", bar.dob], ["Claim #", bar.claim], ["Insurance", bar.insurance], ["DOS", bar.dos], ["Procedure", bar.procedure], ["Status", badge(bar.status, "warn")]].map(([l, v]) => `<div><span>${esc(l)}</span>${typeof v === "string" && v.startsWith("<") ? v : `<strong>${esc(v)}</strong>`}</div>`).join("")}</div>
       <div class="pv-two-pane pv-two-pane--narratives">
-        <article class="pv-card" id="narrative-composer">
-          <div class="pv-card__head"><h3>Narrative Composer</h3><span>${U.Button({ label: "AI Assist", variant: "secondary", className: "pv-pill pv-pill--purple", disabled: true })} <button type="button" class="pv-gold-link" data-narrative-clear="1">Clear</button></span></div>
+        <article class="pv-card pv-hal-widget" data-hal-widget-key="narrativeWorkflow" id="narrative-composer">
+          <div class="pv-card__head"><h3>Narrative Composer</h3><span>${HW ? HW.halBadge("narrativeWorkflow", narrativeWidget) : ""} ${U.Button({ label: "AI Assist", variant: "secondary", className: "pv-pill pv-pill--purple", disabled: true })} <button type="button" class="pv-gold-link" data-narrative-clear="1">Clear</button></span></div>
+          ${editorAssist}
           <div class="pv-composer-fields">
             ${U.FormField({ id: "n-tone", name: "tone", label: "Tone", type: "select", value: comp.tone, options: ["Professional", "Clinical", "Concise"] })}
             ${U.FormField({ id: "n-length", name: "length", label: "Length", type: "select", value: comp.length, options: ["Brief", "Standard", "Detailed"] })}
@@ -717,10 +997,10 @@ const PageViews = (function () {
         </article>
         <div class="pv-narratives-right">
           <article class="pv-card"><div class="pv-card__head"><h3>Draft Narrative Preview</h3>${U.Button({ label: "Copy", attrs: { "data-narrative-copy": "1" } })}</div><div class="pv-draft-box" data-draft-preview>${esc(data.draftText || "Generate or save a draft to preview.")}</div><p class="pv-lock-note">ℹ This narrative has not been submitted and has not been written back to any system.</p></article>
-          <article class="pv-card"><div class="pv-card__head"><h3>Draft History</h3><span>${(data.drafts || []).length} drafts</span></div>${U.Table({ columns: ["Version", "Modified", "Key Points", "Length", "Focus", "Modified By"], rows: histRows, emptyTitle: "No drafts yet", emptyMessage: "Save or generate a narrative to build history." })}</article>
+          ${card("Draft History", U.Table({ columns: ["Version", "Modified", "Key Points", "Length", "Focus", "Modified By"], rows: histRows, emptyTitle: "No drafts yet", emptyMessage: "Save or generate a narrative to build history." }), null, String((data.drafts || []).length), "narrativeWorkflow", state)}
         </div>
       </div>
-      <div class="pv-safety-foot">🛡 <strong>Safety mode active</strong> · No narratives are submitted automatically. HAL reads SoftDent and QuickBooks only.</div>`;
+      <div class="pv-safety-foot">${uiIcon("shield")} <strong>Safety mode active</strong> · No narratives are submitted automatically. HAL reads SoftDent and QuickBooks only.</div>`;
   }
 
   function readComposerForm(container) {
@@ -803,7 +1083,7 @@ const PageViews = (function () {
     });
     container.querySelector("[data-narrative-copy]")?.addEventListener("click", () => {
       const text = container.querySelector("[data-draft-preview]")?.textContent;
-      if (text && navigator.clipboard) navigator.clipboard.writeText(text);
+      if (text) DesktopBridge.writeClipboard(text);
     });
     container.querySelectorAll("[data-draft-delete]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -815,7 +1095,30 @@ const PageViews = (function () {
   }
 
   /* ---- Documents (interactive) ---- */
+  function documentPreviewFooter(preview) {
+    if (preview && preview.sourceExpired) {
+      return `<footer class="pv-preview-foot pv-preview-foot--warn">Source file expired (retention) · Uploaded ${esc(preview.uploaded || "—")}</footer>`;
+    }
+    if (preview && preview.file) {
+      return `<footer class="pv-preview-foot">${esc(preview.file)} · ${esc(preview.pages || "")} · Uploaded ${esc(preview.uploaded || "")}</footer>`;
+    }
+    return `<footer class="pv-preview-foot">Read-only preview · Uploaded ${esc((preview && preview.uploaded) || "—")}</footer>`;
+  }
+
+  function documentPreviewExtractedBlock(preview) {
+    if (!preview) return "";
+    const parts = [];
+    if (preview.fileUnavailable) {
+      parts.push(`<p class="pv-preview-expired">${esc(preview.fileUnavailable)}</p>`);
+    }
+    if (preview.textPreview) {
+      parts.push(`<pre class="pv-preview-text">${esc(preview.textPreview)}</pre>`);
+    }
+    return parts.join("");
+  }
+
   function documentsBody(state, data, selectedId, filter) {
+    const pilot = pilotWidgetsApi();
     const queueRows = data.queue.map((q) => ({
       key: q.id,
       className: q.id === selectedId ? "pv-row-selected" : "",
@@ -824,13 +1127,66 @@ const PageViews = (function () {
     const preview = data.preview || {};
     const posting = data.posting || [];
     const period = data.period || {};
+    const addDocModal = U.Modal({
+      id: "document-intake-modal",
+      open: false,
+      title: "Add accounting document",
+      body: `<form id="document-intake-form" class="pv-form-grid">
+        ${U.FormField({ id: "doc-add-vendor", name: "vendor", label: "Vendor / entity", required: true, placeholder: "Vendor name" })}
+        ${U.FormField({ id: "doc-add-type", name: "type", label: "Document type", type: "select", value: "Invoice", options: ["Invoice", "Bill", "Statement", "Receipt", "Other"] })}
+        ${U.FormField({ id: "doc-add-date", name: "date", label: "Document date", type: "date", value: new Date().toISOString().slice(0, 10), required: true })}
+        ${U.FormField({ id: "doc-add-amount", name: "amount", label: "Amount", placeholder: "$0.00" })}
+        ${U.FormField({ id: "doc-add-status", name: "status", label: "Status", type: "select", value: "Pending Review", options: ["Pending Review", "Ready to Post", "Posted"] })}
+        ${U.FormField({ id: "doc-add-file", name: "fileName", label: "File name / reference", placeholder: "invoice.pdf" })}
+      </form><p class="pv-lock-note">Local intake only. HAL stores this queue in the desktop app and does not post to QuickBooks.</p>`,
+      footer: `${U.Button({ label: "Cancel", attrs: { "data-modal-close": "document-intake-modal" } })} ${U.Button({ label: "Add document", variant: "primary", attrs: { "data-doc-add-submit": "1" } })}`,
+    });
+    const queueInner = pilot && typeof pilot.plainDataGrid === "function"
+      ? `<div class="pv-search"><input type="search" class="pv-input" id="doc-search" placeholder="Search documents…" value="${esc(filter.query || "")}" /><button class="pv-button" type="button" data-doc-filter="1">Apply</button><button class="pv-button pv-button--primary" type="button" data-doc-add-open="1">Add document</button><select class="pv-input" id="doc-status"><option value="All"${!filter.status || filter.status === "All" ? " selected" : ""}>All statuses</option><option value="Pending Review"${filter.status === "Pending Review" ? " selected" : ""}>Pending Review</option><option value="Ready to Post"${filter.status === "Ready to Post" ? " selected" : ""}>Ready to Post</option><option value="Posted"${filter.status === "Posted" ? " selected" : ""}>Posted</option></select></div>` + pilot.plainDataGrid({
+          pageId: "documents",
+          widgetKey: "documentIntakeQueue",
+          title: "Document Intake & Posting Queue",
+          library: "AG Grid plain",
+          columns: ["ID", "Type", "Vendor", "Date", "Amount", "Status", "Age"],
+          rows: data.queue.map((q) => [q.id, q.type, q.vendor, q.date, q.amount, q.status, q.age]),
+          rowKeys: data.queue.map((q) => q.id),
+          selectedKey: selectedId,
+          halAction: "Preview and classify the selected accounting document",
+          hint: "select document -> HAL report",
+          empty: "No documents match.",
+        })
+      : `<div class="pv-search"><input type="search" class="pv-input" id="doc-search" placeholder="Search documents…" value="${esc(filter.query || "")}" /><button class="pv-button" type="button" data-doc-filter="1">Apply</button><button class="pv-button pv-button--primary" type="button" data-doc-add-open="1">Add document</button><select class="pv-input" id="doc-status"><option value="All"${!filter.status || filter.status === "All" ? " selected" : ""}>All statuses</option><option value="Pending Review"${filter.status === "Pending Review" ? " selected" : ""}>Pending Review</option><option value="Ready to Post"${filter.status === "Ready to Post" ? " selected" : ""}>Ready to Post</option><option value="Posted"${filter.status === "Posted" ? " selected" : ""}>Posted</option></select></div>${U.Table({ columns: ["ID", "Document Type", "Vendor / Entity", "Document Date", "Amount", "Status", "Age (Days)"], rows: queueRows, emptyTitle: "No documents match", emptyMessage: "Try clearing filters or refreshing." })}`;
+    const previewInner = pilot && typeof pilot.plainPdf === "function"
+      ? pilot.plainPdf({
+          pageId: "documents",
+          widgetKey: "documentPreview",
+          title: preview.vendor ? `${preview.vendor} · Invoice ${preview.invoice || "—"}` : "No document selected",
+          body: preview.vendor
+            ? `${preview.sourceExpired ? "Source file expired — extracted fields only. " : ""}Date ${preview.date || "—"} · Total ${preview.total || "—"}${preview.textPreview ? ` · ${preview.textPreview.slice(0, 120)}${preview.textPreview.length > 120 ? "…" : ""}` : ""}`
+            : "Select a document row to preview extracted fields.",
+          footer: preview.sourceExpired
+            ? "Source file expired (retention) — re-drop file in document inbox for PDF preview"
+            : preview.file
+              ? `${preview.file} · ${preview.pages || ""} · Uploaded ${preview.uploaded || ""}`
+              : "Read-only PDF.js-style preview",
+          value: preview.total || "",
+          halAction: "Explain the selected accounting document preview",
+        }) + documentPreviewExtractedBlock(preview)
+      : preview.vendor
+        ? `<div class="pv-invoice-preview"><div class="pv-invoice-preview__head">${esc(preview.vendor)}</div><p>Invoice # ${esc(preview.invoice)}</p><p>Date: ${esc(preview.date)}</p><p class="pv-invoice-preview__total">Total ${esc(preview.total)}</p>${documentPreviewExtractedBlock(preview)}</div>${documentPreviewFooter(preview)}`
+        : U.EmptyState({ title: "No document selected", message: "Select a row to preview." });
+    const exportDropHint = `<aside class="pv-export-drop-hint" role="note"><strong>Source exports land here (manual drop or auto-pull):</strong> SoftDent → <code>app_data/nr2/document_inbox/softdent</code> · QuickBooks → <code>app_data/nr2/document_inbox/quickbooks</code> · Invoices/receipts → <code>app_data/nr2/document_inbox</code> (root). Auto-pull copies upstream files into the softdent/quickbooks folders; HAL reads only from there.</aside>`;
     return `
+      ${addDocModal}
       ${topBar(state, [badge("Read-Only", "warn"), `<span class="pv-entity">Entity: ${esc(data.entity || "—")}</span>`], null, dataBadgeFor({ dataSource: (data.queue || []).length ? "persisted" : "empty" }))}
+      ${halStrip(state)}
+      ${halCommandSurface(state)}
+      ${exportDropHint}
       <div class="pv-bento pv-bento--documents">
-        ${card("Document Intake & Posting Queue", `<div class="pv-search"><input type="search" class="pv-input" id="doc-search" placeholder="Search documents…" value="${esc(filter.query || "")}" /><button class="pv-button" type="button" data-doc-filter="1">Apply</button><select class="pv-input" id="doc-status"><option value="All"${!filter.status || filter.status === "All" ? " selected" : ""}>All statuses</option><option value="Pending Review"${filter.status === "Pending Review" ? " selected" : ""}>Pending Review</option><option value="Ready to Post"${filter.status === "Ready to Post" ? " selected" : ""}>Ready to Post</option><option value="Posted"${filter.status === "Posted" ? " selected" : ""}>Posted</option></select></div>${U.Table({ columns: ["ID", "Document Type", "Vendor / Entity", "Document Date", "Amount", "Status", "Age (Days)"], rows: queueRows, emptyTitle: "No documents match", emptyMessage: "Try clearing filters or refreshing." })}`, "pv-card--queue")}
-        ${card("Selected Document Preview", preview.vendor ? `<div class="pv-invoice-preview"><div class="pv-invoice-preview__head">${esc(preview.vendor)}</div><p>Invoice # ${esc(preview.invoice)}</p><p>Date: ${esc(preview.date)}</p><p class="pv-invoice-preview__total">Total ${esc(preview.total)}</p></div><footer class="pv-preview-foot">${esc(preview.file || "")} · ${esc(preview.pages || "")} · Uploaded ${esc(preview.uploaded || "")}</footer>` : U.EmptyState({ title: "No document selected", message: "Select a row to preview." }), "pv-card--preview")}
-        ${card("Posting Queue Review", `<div class="pv-post-grid">${posting.map((p) => `<article class="pv-post-card pv-post-card--${p.tone}"><span>${esc(p.label)}</span><strong>${p.count}</strong>${p.amount ? `<em>${esc(String(p.amount))}</em>` : ""}</article>`).join("")}</div><div class="pv-review-workload"><span>Review Workload</span><div><i style="width:${esc(period.reviewedPct || 24)}%"></i></div><em>${esc(period.reviewedPct || 24)}%</em></div><a class="pv-gold-link" href="#">View All Documents →</a>`, "pv-card--wide")}
-        ${card("Period Summary", `<div class="pv-period-summary"><dl>${[["Period", period.label], ["Documents", period.documents], ["Total Amount", period.totalAmount], ["Posted Amount", period.postedAmount], ["Pending Amount", period.pendingAmount]].map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v || "—")}</dd></div>`).join("")}</dl>${conicDonut([{ label: "Posted", pct: period.postedPct || 88, color: "#3f73e6" }, { label: "Pending", pct: period.pendingPct || 11, color: "#d6b15e" }, { label: "Ready to Post", pct: period.readyPct || 1, color: "#78a86b" }], `<strong>${esc(period.postedPct || 88)}%</strong><span>Posted</span>`, 142)}</div><a class="pv-gold-link" href="#">View Period Close →</a>`, "pv-card--period")}
+        ${card("Document Intake & Posting Queue", queueInner, "pv-card--queue", null, "documentIntakeQueue", state)}
+        ${card("Selected Document Preview", previewInner, "pv-card--preview", null, "documentPreview", state)}
+        ${card("Posting Queue Review", `<div class="pv-post-grid">${posting.map((p) => `<article class="pv-post-card pv-post-card--${p.tone}"><span>${esc(p.label)}</span><strong>${p.count}</strong>${p.amount ? `<em>${esc(String(p.amount))}</em>` : ""}</article>`).join("")}</div><div class="pv-review-workload"><span>Review Workload</span><div><i style="width:${esc(period.reviewedPct || 24)}%"></i></div><em>${esc(period.reviewedPct || 24)}%</em></div><a class="pv-gold-link" href="#">View All Documents →</a>`, "pv-card--wide", null, "accountsPayableAutomation", state)}
+        ${card("Period Summary", `<div class="pv-period-summary"><dl>${[["Period", period.label], ["Documents", period.documents], ["Total Amount", period.totalAmount], ["Posted Amount", period.postedAmount], ["Pending Amount", period.pendingAmount]].map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v || "—")}</dd></div>`).join("")}</dl>${conicDonut([{ label: "Posted", pct: period.postedPct || 88, color: "#3f73e6" }, { label: "Pending", pct: period.pendingPct || 11, color: "#d6b15e" }, { label: "Ready to Post", pct: period.readyPct || 1, color: "#78a86b" }], `<strong>${esc(period.postedPct || 88)}%</strong><span>Posted</span>`, 142)}</div><a class="pv-gold-link" href="#">View Period Close →</a>`, "pv-card--period", null, "periodCloseAndPosting", state)}
         ${selectedId ? `<div class="pv-doc-actions">${U.FormField({ id: "doc-new-status", name: "status", label: "Update status", type: "select", value: (data.queue.find((q) => q.id === selectedId) || {}).status, options: ["Pending Review", "Ready to Post", "Posted"] })} ${U.Button({ label: "Save status", variant: "primary", attrs: { "data-doc-save": selectedId } })} ${U.Button({ label: "Remove", attrs: { "data-doc-delete": selectedId } })}</div>` : ""}
       </div>`;
   }
@@ -857,8 +1213,39 @@ const PageViews = (function () {
 
   function wireDocumentsInteractions(container, state, onNavigate, refresh, getSelected, setSelected, getFilter, setFilter) {
     wireCommon(container, state, onNavigate, refresh);
+    wireModal(container);
+    container.querySelector("[data-doc-add-open]")?.addEventListener("click", () => {
+      const modal = container.querySelector("#document-intake-modal");
+      if (modal) { modal.classList.add("pv-modal--open"); modal.setAttribute("aria-hidden", "false"); }
+    });
+    container.querySelector("[data-doc-add-submit]")?.addEventListener("click", async () => {
+      const payload = {
+        vendor: container.querySelector("#doc-add-vendor")?.value || "",
+        type: container.querySelector("#doc-add-type")?.value || "Invoice",
+        date: container.querySelector("#doc-add-date")?.value || new Date().toISOString().slice(0, 10),
+        amount: container.querySelector("#doc-add-amount")?.value || "",
+        status: container.querySelector("#doc-add-status")?.value || "Pending Review",
+        fileName: container.querySelector("#doc-add-file")?.value || "",
+      };
+      if (!String(payload.vendor).trim()) {
+        alert("Vendor / entity is required.");
+        return;
+      }
+      try {
+        const doc = await Svc.documents.add(payload);
+        setSelected(doc.id);
+        const modal = container.querySelector("#document-intake-modal");
+        if (modal) { modal.classList.remove("pv-modal--open"); modal.setAttribute("aria-hidden", "true"); }
+        refresh();
+      } catch (e) {
+        alert(e.message);
+      }
+    });
     container.querySelectorAll("[data-row]").forEach((row) => {
       row.addEventListener("click", () => { setSelected(row.getAttribute("data-row")); refresh(); });
+    });
+    container.querySelectorAll(".pv-hal-grid__row[data-row-key]").forEach((row) => {
+      row.addEventListener("click", () => { setSelected(row.getAttribute("data-row-key")); refresh(); });
     });
     container.querySelector("[data-doc-filter]")?.addEventListener("click", () => {
       setFilter({ query: container.querySelector("#doc-search")?.value || "", status: container.querySelector("#doc-status")?.value || "All" });
@@ -896,18 +1283,35 @@ const PageViews = (function () {
   }
 
   function libraryBody(state, data, selectedTitle, query, typeFilter) {
+    const HW = halWidgetsApi();
+    const pilot = pilotWidgetsApi();
+    const libraryWidget = HW ? HW.widgetFromFeed(halFeed(state), "documentLibrary") : null;
     const docCards = (data.docs || []).map((doc) => `<article class="pv-doc-card${doc.title === selectedTitle ? " pv-doc-card--selected" : ""}" data-lib-doc="${esc(doc.title)}" tabindex="0"><div class="pv-doc-card__head"><span class="pv-file-icon pv-file-icon--${doc.tone}">${esc(doc.type)}</span>${badge("Read-Only", "muted")}</div><strong>${esc(doc.title)}</strong><span>${esc(doc.type)} · ${esc(doc.size)}</span><div class="pv-chips">${(doc.tags || []).map((t) => `<span class="pv-chip">${esc(t)}</span>`).join("")}</div><footer>Updated ${esc(doc.updated)} · ${esc(doc.by)}</footer></article>`).join("");
     const det = data.detail || {};
+    const detailInner = pilot && typeof pilot.plainPdf === "function"
+      ? pilot.plainPdf({
+          pageId: "library",
+          widgetKey: "documentLibrary",
+          title: det.title || "Select a document",
+          body: det.title ? `${det.docType || det.type || "Document"} · ${det.classification || "Read-only library item"}` : "Click a library card to preview document metadata.",
+          footer: det.path || "PDF.js-style local preview",
+          value: det.checksum || "",
+          halAction: "Explain the selected document library item",
+        })
+      : libraryDetailPane(det);
     return `
       ${topBar(state, [`<span class="pv-storage"><strong>${(data.results || 0).toLocaleString()}</strong> Documents · ${data.storage?.usedPct || 0}% of ${esc(data.storage?.capacity || "—")}</span>`], null, dataBadgeFor({ dataSource: (data.docs || []).length ? "persisted" : "empty" }))}
-      <div class="pv-library-layout">
+      ${halStrip(state)}
+      ${halCommandSurface(state)}
+      <div class="pv-library-layout pv-hal-widget" data-hal-widget-key="documentLibrary">
+        ${HW ? `<div class="pv-hal-widget__chrome">${HW.halBadge("documentLibrary", libraryWidget)}</div>${HW.halNote(libraryWidget)}` : ""}
         <div class="pv-library-main">
           <div class="pv-search pv-search--library"><input type="search" class="pv-input" id="lib-search" placeholder="Search documents…" value="${esc(query || "")}" /><button class="pv-button" type="button" data-lib-search="1">Search</button><a class="pv-gold-link" href="#" data-lib-reset="1">Reset Filters</a></div>
           <div class="pv-filter-row"><select class="pv-input" id="lib-type"><option value="All">Document Type</option>${["PDF", "DOCX", "XLSX", "PPTX"].map((t) => `<option value="${t}"${typeFilter === t ? " selected" : ""}>${t}</option>`).join("")}</select></div>
           <div class="pv-results-head"><strong class="pv-gold">${(data.results || 0).toLocaleString()} RESULTS</strong></div>
           <div class="pv-doc-grid pv-doc-grid--rich">${docCards || U.EmptyState({ title: "No documents found", message: "Adjust search or add documents to the local library." })}</div>
         </div>
-        <aside class="pv-library-detail">${libraryDetailPane(det)}</aside>
+        <aside class="pv-library-detail">${detailInner}</aside>
       </div>`;
   }
 
@@ -973,6 +1377,7 @@ const PageViews = (function () {
   }
 
   async function renderOfficeManager(state, halData) {
+    const pilot = pilotWidgetsApi();
     const surfaces = await Svc.officeManager.surfaces(halData);
     const consoleState = (await Svc.officeManager.consoleState(halData)) || (halData && halData.runtime && halData.runtime.officeManager) || null;
     const snap = await Svc.readProgramSnapshot().catch(() => null);
@@ -1022,26 +1427,92 @@ const PageViews = (function () {
         <div><h4>Human must approve</h4><ul>${humanApprove || "<li>All external writeback and outbound actions.</li>"}</ul></div>
       </div>`,
       "pv-card--wide",
+      null,
+      "officeManagerBoundaries",
+      state,
     );
-    const priorityHtml = priorityCards
-      ? card("HAL priorities", priorityCards, "pv-card--wide", String(priorities.length))
-      : card("HAL priorities", U.EmptyState({ title: "No urgent priorities", message: "HAL is monitoring the program and will surface work here." }), "pv-card--wide");
+    const priorityWidget = pilot && typeof pilot.plainKanban === "function"
+      ? pilot.plainKanban({
+          pageId: "office-manager",
+          widgetKey: "officeManagerPriorities",
+          title: "HAL priorities",
+          library: "SortableJS Kanban plain",
+          lanes: (grouped.length ? grouped : [{ label: "Monitoring", items: [] }]).map((group) => ({
+            name: group.label,
+            tone: group.items.some((item) => item.severity === "red" || item.severity === "critical") ? "red" : "warn",
+            cards: group.items.map((item) => ({
+              title: item.title,
+              detail: item.detail,
+              meta: item.actionHint || "",
+              halAction: item.actionHint || `Open ${item.title}`,
+            })),
+            empty: "No urgent priorities in this lane.",
+          })),
+          halAction: "Review selected HAL office priority",
+        })
+      : priorityCards;
+    const priorityHtml = priorityWidget
+      ? card("HAL priorities", priorityWidget, "pv-card--wide", String(priorities.length), "officeManagerPriorities", state)
+      : card(
+          "HAL priorities",
+          U.EmptyState({ title: "No urgent priorities", message: "HAL is monitoring the program and will surface work here." }),
+          "pv-card--wide",
+          null,
+          "officeManagerPriorities",
+          state,
+        );
+    const taskTimeline = pilot && typeof pilot.plainTimeline === "function"
+      ? pilot.plainTimeline({
+          pageId: "office-manager",
+          widgetKey: "officeManagerTasks",
+          title: "HAL-managed local tasks",
+          library: "vis-timeline plain",
+          items: halTasks.slice(0, 12).map((task) => ({
+            time: task.status,
+            title: task.title,
+            detail: task.notes || task.description || "",
+            tone: task.priority === "high" ? "red" : task.status === "done" ? "ok" : "warn",
+            halAction: `Review HAL task ${task.title}`,
+          })),
+          empty: "HAL will create local tasks when issues are detected.",
+        })
+      : taskCards || U.EmptyState({ title: "No HAL tasks yet", message: "HAL will create local tasks when issues are detected." });
     const taskHtml = card(
       "HAL-managed local tasks",
-      taskCards || U.EmptyState({ title: "No HAL tasks yet", message: "HAL will create local tasks when issues are detected." }),
+      taskTimeline,
       "pv-card--wide",
       String(halTasks.length),
+      "officeManagerTasks",
+      state,
     );
+    const officeHalMark = typeof AppIcons !== "undefined" ? AppIcons.hal() : "";
     const actions = [
-      toolbarBtn("Daily office briefing", "📋", { "data-hal-command": "Show daily office briefing" }),
-      toolbarBtn("Office attention", "◎", { "data-hal-command": "Show office manager attention" }),
+      toolbarBtn("Daily office briefing", typeof AppIcons !== "undefined" ? AppIcons.widget("narrativeWorkflow") : "", {
+        "data-hal-command": "Show daily office briefing",
+      }),
+      toolbarBtn("Office attention", typeof AppIcons !== "undefined" ? AppIcons.nav("office-manager") : "", {
+        "data-hal-command": "Show office manager attention",
+      }),
     ].join("");
     return `
       ${topBar(state, [actions], consoleState && consoleState.summary ? consoleState.summary : state.safety, badge(posture === "healthy" ? "Healthy" : posture === "needs_attention" ? "Needs attention" : "Monitor", officePostureTone(posture)))}
+      <div class="pv-hal-strip pv-hal-strip--ok" role="status"><span class="pv-hal-strip__mark">${officeHalMark}</span><strong>HAL</strong><span>Office manager console · internal coordination only</span></div>
+      ${halCommandSurface(state)}
       ${boundaryHtml}
       ${priorityHtml}
       ${taskHtml}
-      ${surfaces.length ? card("Work surfaces", `<div class="pv-work-grid">${surfaces.map((s) => `<article class="pv-work-card" data-pv-nav="${esc(s.target)}" tabindex="0"><strong>${esc(s.label)}</strong><span>${esc(s.state)}</span><p>${esc(s.detail)}</p>${s.nextAction ? `<em>${esc(s.nextAction)}</em>` : ""}</article>`).join("")}</div>`, "pv-card--wide", String(surfaces.length)) : ""}`;
+      ${
+        surfaces.length
+          ? card(
+              "Work surfaces",
+              `<div class="pv-work-grid">${surfaces.map((s) => `<article class="pv-work-card" data-pv-nav="${esc(s.target)}" tabindex="0"><strong>${esc(s.label)}</strong><span>${esc(s.state)}</span><p>${esc(s.detail)}</p>${s.nextAction ? `<em>${esc(s.nextAction)}</em>` : ""}</article>`).join("")}</div>`,
+              "pv-card--wide",
+              String(surfaces.length),
+              "officeManagerSurfaces",
+              state,
+            )
+          : ""
+      }`;
   }
 
   const PAGE_RENDERERS = {
@@ -1071,8 +1542,9 @@ const PageViews = (function () {
     }
   }
 
-  function renderPageView(container, halData, pageId, onNavigate) {
+  function renderPageView(container, halData, pageId, onNavigate, halWidgetFeed) {
     if (!container) return;
+    setHalFeed(halWidgetFeed);
 
     if (MOCK_IMAGES[pageId]) {
       renderMockImage(container, pageId, onNavigate);
@@ -1080,7 +1552,7 @@ const PageViews = (function () {
     }
 
     if (!U || !Svc) return;
-    const state = buildPageState(halData, pageId);
+    const state = buildPageState(halData, pageId, halWidgetFeed);
 
     if (INTERACTIVE_PAGES.has(pageId)) {
       container.innerHTML = pageShell(state, `<div class="pv-body">${U.LoadingState({ label: "Loading…" })}</div>`);
@@ -1094,7 +1566,7 @@ const PageViews = (function () {
     const renderFn = PAGE_RENDERERS[pageId];
     if (!renderFn) {
       container.innerHTML = pageShell(state, `${topBar(state)}${U.EmptyState({ title: "Page not configured", message: `No renderer for ${pageId}.` })}`);
-      wireCommon(container, state, onNavigate, () => renderPageView(container, halData, pageId, onNavigate));
+      wireCommon(container, state, onNavigate, () => renderPageView(container, halData, pageId, onNavigate, halWidgetFeed));
       return;
     }
 
@@ -1107,12 +1579,12 @@ const PageViews = (function () {
   }
 
   /** Async full HTML preview for tests and drift comparison. */
-  async function previewPageHtml(halData, pageId) {
+  async function previewPageHtml(halData, pageId, halWidgetFeed) {
     if (MOCK_IMAGES[pageId]) {
       const nav = MOCK_NAV.map(([id, label]) => `<button type="button" data-pv-nav="${esc(id)}">${esc(label)}</button>`).join("");
       return `<article class="pv-mock-page pv--${esc(pageId)} pv--mock-image" data-pv-page="${esc(pageId)}"><img class="pv-mock-page__image" src="${esc(MOCK_IMAGES[pageId])}" alt="${esc(pageId)} mockup" /><nav class="pv-mock-nav">${nav}</nav></article>`;
     }
-    const state = buildPageState(halData, pageId);
+    const state = buildPageState(halData, pageId, halWidgetFeed);
     if (!U || !Svc) return pageShell(state, "<p>UI/Services unavailable</p>");
     if (pageId === "claims") {
       const data = await Svc.claims.list();
@@ -1141,7 +1613,7 @@ const PageViews = (function () {
     return pageShell(state, U.EmptyState({ title: "Page not configured", message: pageId }));
   }
 
-  return { PAGE_OUTLINES, buildPageState, renderPageView, previewPageHtml, hasPage, stateTone };
+  return { PAGE_OUTLINES, buildPageState, renderPageView, previewPageHtml, hasPage, stateTone, setHalFeed };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

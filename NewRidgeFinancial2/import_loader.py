@@ -13,6 +13,7 @@ from import_contract import (
     QUICKBOOKS_AR_NAMES,
     QUICKBOOKS_EXPENSE_CATEGORY_NAMES,
     QUICKBOOKS_EXPENSE_NAMES,
+    QUICKBOOKS_PL_NAMES,
     QUICKBOOKS_REVENUE_NAMES,
     SOFTDENT_AR_NAMES,
     SOFTDENT_CASE_ACCEPTANCE_NAMES,
@@ -25,6 +26,9 @@ from import_contract import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+NR2_DATA_DIR = REPO_ROOT / "app_data" / "nr2"
+DEFAULT_SOFTDENT_IMPORT_REL = "app_data/nr2/document_inbox/softdent"
+DEFAULT_QUICKBOOKS_IMPORT_REL = "app_data/nr2/document_inbox/quickbooks"
 
 
 def _import_dir(env_name: str, default_rel: str) -> Path:
@@ -38,11 +42,11 @@ def _import_dir(env_name: str, default_rel: str) -> Path:
 
 
 def softdent_import_dir() -> Path:
-    return _import_dir("SOFTDENT_IMPORT_DIR", "app/data/imports/softdent")
+    return _import_dir("SOFTDENT_IMPORT_DIR", DEFAULT_SOFTDENT_IMPORT_REL)
 
 
 def quickbooks_import_dir() -> Path:
-    return _import_dir("QUICKBOOKS_IMPORT_DIR", "app/data/imports/quickbooks")
+    return _import_dir("QUICKBOOKS_IMPORT_DIR", DEFAULT_QUICKBOOKS_IMPORT_REL)
 
 
 def _mtime_iso(path: Path) -> str:
@@ -110,7 +114,7 @@ def _load_dataset(directory: Path, names: tuple[str, ...]) -> dict[str, Any] | N
     }
 
 
-def load_import_bundle(*, sync: bool = True) -> dict[str, Any]:
+def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, Any]:
     sync_status: dict[str, Any] = {
         "attempted": sync,
         "ok": True,
@@ -145,6 +149,7 @@ def load_import_bundle(*, sync: bool = True) -> dict[str, Any]:
             "dir": str(quickbooks_dir),
             "revenue": _load_dataset(quickbooks_dir, QUICKBOOKS_REVENUE_NAMES),
             "expenses": _load_dataset(quickbooks_dir, QUICKBOOKS_EXPENSE_NAMES),
+            "profitAndLoss": _load_dataset(quickbooks_dir, QUICKBOOKS_PL_NAMES),
             "expenseCategories": _load_dataset(quickbooks_dir, QUICKBOOKS_EXPENSE_CATEGORY_NAMES),
             "ar": _load_dataset(quickbooks_dir, QUICKBOOKS_AR_NAMES),
         },
@@ -152,11 +157,15 @@ def load_import_bundle(*, sync: bool = True) -> dict[str, Any]:
     try:
         from import_diagnostics import check_upstream_health, evaluate_bundle
 
-        bundle["diagnostics"] = evaluate_bundle(bundle)
-        bundle["upstreamHealth"] = check_upstream_health()
+        # `deep` controls the expensive recursive upstream-directory scan. The UI
+        # hot path (get_import_bundle) calls with deep=False so dashboards render
+        # immediately; background/sync paths pass deep=True for full diagnostics.
+        bundle["diagnostics"] = evaluate_bundle(bundle, deep=deep)
+        bundle["upstreamHealth"] = check_upstream_health() if deep else None
         if sync_status.get("result") and isinstance(sync_status["result"], dict):
             sync_status["result"].setdefault("diagnostics", bundle["diagnostics"])
-            sync_status["result"].setdefault("upstreamHealth", bundle["upstreamHealth"])
+            if bundle["upstreamHealth"] is not None:
+                sync_status["result"].setdefault("upstreamHealth", bundle["upstreamHealth"])
     except Exception as exc:
         sync_status.setdefault("warnings", [])
         if isinstance(sync_status["warnings"], list):

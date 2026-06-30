@@ -37,13 +37,15 @@ _FALLBACK_DATASET_NAMES: dict[str, tuple[str, ...]] = {
     "quickbooks.revenue": (
         "quickbooks_revenue.csv",
         "quickbooks_revenue.json",
-        "quickbooks_profit_and_loss.csv",
-        "quickbooks_profit_loss.csv",
     ),
     "quickbooks.expenses": (
         "quickbooks_expenses.csv",
         "quickbooks_expense_detail.csv",
         "quickbooks_expenses.json",
+    ),
+    "quickbooks.profitAndLoss": (
+        "quickbooks_profit_and_loss.csv",
+        "quickbooks_profit_loss.csv",
     ),
     "quickbooks.expenseCategories": (
         "quickbooks_expense_categories.csv",
@@ -176,6 +178,7 @@ SOFTDENT_CLINICAL_NAMES = _MANIFEST_NAMES["softdent.clinicalNotes"]
 SOFTDENT_AR_NAMES = _MANIFEST_NAMES["softdent.ar"]
 QUICKBOOKS_REVENUE_NAMES = _MANIFEST_NAMES["quickbooks.revenue"]
 QUICKBOOKS_EXPENSE_NAMES = _MANIFEST_NAMES["quickbooks.expenses"]
+QUICKBOOKS_PL_NAMES = _MANIFEST_NAMES["quickbooks.profitAndLoss"]
 QUICKBOOKS_EXPENSE_CATEGORY_NAMES = _MANIFEST_NAMES["quickbooks.expenseCategories"]
 QUICKBOOKS_AR_NAMES = _MANIFEST_NAMES["quickbooks.ar"]
 SOFTDENT_NEW_PATIENTS_NAMES = _MANIFEST_NAMES["softdent.newPatients"]

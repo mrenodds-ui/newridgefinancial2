@@ -1,16 +1,16 @@
 // NewRidgeFinancial 2.0 — mission-control pages.
 
 const PAGES = [
-  { id: "financial", label: "Financial dashboard", title: "Owner Financial Dashboard", icon: "⌁" },
-  { id: "softdent", label: "SoftDent", title: "SoftDent", icon: "◫" },
-  { id: "quickbooks", label: "QuickBooks", title: "QuickBooks", icon: "$" },
-  { id: "ar", label: "A/R & Collections", title: "A/R & Collections", icon: "↻" },
-  { id: "claims", label: "Claims Workbench", title: "Patient Claims Workbench", icon: "□" },
-  { id: "narratives", label: "Insurance Narratives", title: "Insurance Narratives", icon: "✎" },
-  { id: "documents", label: "Accounting Documents", title: "Accounting Documents", icon: "▤" },
-  { id: "library", label: "Document Library", title: "Document Library", icon: "▣" },
-  { id: "office-manager", label: "Office Manager", title: "Office Manager", icon: "◎" },
-  { id: "hal", label: "HAL Command Center", title: "HAL Command Center", icon: "◇" },
+  { id: "financial", label: "Financial dashboard", title: "Owner Financial Dashboard" },
+  { id: "softdent", label: "SoftDent", title: "SoftDent" },
+  { id: "quickbooks", label: "QuickBooks", title: "QuickBooks" },
+  { id: "ar", label: "A/R & Collections", title: "A/R & Collections" },
+  { id: "claims", label: "Claims Workbench", title: "Patient Claims Workbench" },
+  { id: "narratives", label: "Insurance Narratives", title: "Insurance Narratives" },
+  { id: "documents", label: "Accounting Documents", title: "Accounting Documents" },
+  { id: "library", label: "Document Library", title: "Document Library" },
+  { id: "office-manager", label: "Office Manager", title: "Office Manager" },
+  { id: "hal", label: "HAL Command Center", title: "HAL Command Center" },
 ];
 
 const FALLBACK_HAL = {
@@ -102,6 +102,7 @@ function saveOfficeTasks() {
 
 let halWidgetRefreshInFlight = null;
 let sideNoteMonitorTickInFlight = false;
+let halLiveWidgetEvents = [];
 
 function invalidateProgramCaches(reason) {
   programContextCache = null;
@@ -180,6 +181,10 @@ function scheduleHalWidgetRefresh(snapshot) {
       await runHalProactiveCycle();
       renderHalScreen();
       if (currentDrawerKey === "sources") renderPanel("sources");
+      const currentId = (window.location.hash || "").replace("#", "") || PAGES[0].id;
+      if (currentId !== "hal" && appPage && !appPage.hidden && PageViews && PageViews.hasPage(currentId)) {
+        PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed);
+      }
       return feed;
     })
     .finally(() => {
@@ -368,6 +373,29 @@ function stopSideNoteMonitor() {
   if (!halSideNoteMonitorTimer) return;
   clearInterval(halSideNoteMonitorTimer);
   halSideNoteMonitorTimer = null;
+}
+
+let documentSyncListenerBound = false;
+let documentSourceRefreshTimer = null;
+const DOCUMENT_SOURCE_REFRESH_MS = 30 * 60 * 1000;
+
+function startDocumentSyncListener() {
+  if (documentSyncListenerBound || typeof window === "undefined") return;
+  documentSyncListenerBound = true;
+  window.addEventListener("nr2:documents-synced", () => {
+    invalidateProgramCaches("documents-synced");
+    scheduleHalWidgetRefresh();
+  });
+}
+
+function startDocumentSourceRefreshTimer() {
+  if (documentSourceRefreshTimer || typeof window === "undefined") return;
+  if (!window.Services || typeof Services.documents?.list !== "function") return;
+  documentSourceRefreshTimer = setInterval(() => {
+    Services.documents.list({}).catch(() => {
+      /* background document sync optional */
+    });
+  }, DOCUMENT_SOURCE_REFRESH_MS);
 }
 
 function addSideNote(text) {
@@ -569,7 +597,7 @@ function bindEvidencePacketControls(root) {
     button.addEventListener("click", async () => {
       if (!halEvidencePacket || !halEvidencePacket.text) return;
       try {
-        await navigator.clipboard.writeText(halEvidencePacket.text);
+        await DesktopBridge.writeClipboard(halEvidencePacket.text);
         logAudit("Copy packet text", "packet: copy");
         renderAuditLog();
       } catch (error) {
@@ -791,6 +819,107 @@ async function refreshHalWidgetFeed(snapshot) {
   halWidgetFeed = HalSkills.buildWidgetFeed(snap);
   halData.runtime = Object.assign({}, halData.runtime || {}, { widgetFeed: halWidgetFeed });
   return halWidgetFeed;
+}
+
+function flashHalWidgets(pageId) {
+  const bridge = typeof HalLiveWidgetBridge !== "undefined" ? HalLiveWidgetBridge : window.HalLiveWidgetBridge;
+  if (!bridge || typeof bridge.flashElement !== "function" || !appPage) return;
+  const scope = pageId ? appPage.querySelector(`[data-pv-page="${pageId}"]`) || appPage : appPage;
+  scope.querySelectorAll("[data-hal-widget-key]").forEach((el) => bridge.flashElement(el, "cyan"));
+}
+
+function showHalActionNotice(message, tone) {
+  if (typeof document === "undefined" || !message) return;
+  const existing = document.getElementById("halActionNotice");
+  if (existing) existing.remove();
+  const notice = document.createElement("div");
+  notice.id = "halActionNotice";
+  notice.className = `hal-action-notice hal-action-notice--${tone || "info"}`;
+  notice.setAttribute("role", "status");
+  const closeIcon = typeof AppIcons !== "undefined" ? AppIcons.ui("close") : "";
+  notice.innerHTML = `<span>${escapeHtml(message)}</span><button type="button" class="hal-action-notice__close" aria-label="Dismiss">${closeIcon}</button>`;
+  notice.querySelector(".hal-action-notice__close").addEventListener("click", () => notice.remove());
+  const app = document.querySelector(".app");
+  if (app && app.parentNode) app.parentNode.insertBefore(notice, app);
+  window.setTimeout(() => {
+    if (notice.isConnected) notice.remove();
+  }, 8000);
+}
+
+async function forceHalWidgetPlacement(detail) {
+  const pageId =
+    (detail && detail.pageId) ||
+    (window.location.hash || "").replace("#", "") ||
+    (PAGES[0] && PAGES[0].id) ||
+    "financial";
+  let placementNote = "";
+
+  invalidateProgramCaches("hal-force-widget-placement");
+
+  const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+  if (desktop && desktop.hasDesktopApi && desktop.hasDesktopApi()) {
+    try {
+      if (typeof ImportCoordinator !== "undefined") {
+        await ImportCoordinator.refresh({ reason: "hal-force-place" });
+      } else if (typeof Services !== "undefined" && Services.refreshImports) {
+        await Services.refreshImports({ reason: "hal-force-place", waitForCompletion: true });
+      }
+      placementNote = "Imports refreshed and widget feed rebuilt.";
+    } catch (err) {
+      placementNote = `Import refresh issue: ${err && err.message ? err.message : String(err)}. Rebuilt widget feed from cached data.`;
+    }
+  } else {
+    placementNote = "Browser preview: rebuilt widget feed from available preview data only.";
+  }
+
+  const snapshot = await loadProgramSnapshot();
+  await refreshHalWidgetFeed(snapshot);
+
+  if (window.HalProactive) {
+    halProactiveBriefing = await HalProactive.runCycle(buildHalAgentCtx(), { force: true, forcePlacement: true });
+    if (halProactiveBriefing) {
+      halData.runtime = Object.assign({}, halData.runtime || {}, {
+        proactiveBriefing: halProactiveBriefing,
+        officeManager: halProactiveBriefing.officeManager || null,
+        lastWidgetPlacement: {
+          at: new Date().toISOString(),
+          pageId,
+          reason: (detail && detail.reason) || "user-force",
+        },
+      });
+      renderProactiveBanner();
+    }
+  }
+
+  await scheduleHalWidgetRefresh(snapshot);
+  flashHalWidgets(pageId);
+  showHalActionNotice(placementNote, desktop && desktop.hasDesktopApi && desktop.hasDesktopApi() ? "info" : "warn");
+
+  return { placementNote, feed: halWidgetFeed, pageId };
+}
+
+function handleHalLiveWidgetEvent(event) {
+  const detail = event && event.detail ? event.detail : null;
+  if (!detail || !detail.widgetKey) return;
+  const record = Object.assign(
+    {
+      at: new Date().toISOString(),
+      pageId: "unknown",
+      library: "custom",
+      eventType: "interaction",
+      payload: {},
+      halAction: "Record widget interaction",
+    },
+    detail,
+  );
+  halLiveWidgetEvents.unshift(record);
+  if (halLiveWidgetEvents.length > 40) halLiveWidgetEvents.length = 40;
+  halData.runtime = Object.assign({}, halData.runtime || {}, {
+    liveWidgetEvents: halLiveWidgetEvents.slice(0, 20),
+    lastLiveWidgetEvent: record,
+  });
+  invalidateProgramCaches("hal-live-widget-event");
+  scheduleHalWidgetRefresh();
 }
 
 async function loadProgramSnapshot() {
@@ -1018,6 +1147,46 @@ function modelHealthSummary() {
     .join(" · ");
 }
 
+function naturalVoiceConfig() {
+  const config = HalCore.modelConfig(halModels);
+  return (config && config.naturalVoice) || {};
+}
+
+function modelRuntimeOptions(runtime) {
+  const voice = naturalVoiceConfig();
+  const profile = voice.sampling || {};
+  const options = Object.assign(
+    {
+      temperature: typeof runtime.temperature === "number" ? runtime.temperature : 0.2,
+    },
+    runtime.options || {},
+    profile,
+  );
+
+  ["temperature", "min_p", "top_p", "repeat_penalty", "presence_penalty", "frequency_penalty", "num_ctx"].forEach((key) => {
+    if (typeof options[key] === "string") {
+      const parsed = Number(options[key]);
+      if (Number.isFinite(parsed)) options[key] = parsed;
+    }
+  });
+  return options;
+}
+
+function modelMessages(systemPrompt, userText) {
+  const voice = naturalVoiceConfig();
+  const styleRules = Array.isArray(voice.instructions) ? voice.instructions.filter(Boolean) : [];
+  const prechat = Array.isArray(voice.fewShotMessages) ? voice.fewShotMessages : [];
+  const system = styleRules.length ? systemPrompt + "\n\nVoice and cadence:\n" + styleRules.map((line) => "- " + line).join("\n") : systemPrompt;
+  return [{ role: "system", content: system }]
+    .concat(
+      prechat
+        .filter((msg) => msg && (msg.role === "user" || msg.role === "assistant") && msg.content)
+        .slice(0, 8)
+        .map((msg) => ({ role: msg.role, content: String(msg.content) })),
+    )
+    .concat([{ role: "user", content: userText }]);
+}
+
 async function runModel(runtime, systemPrompt, userText, draftLabel, onToken) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), runtime.timeoutMs || 60000);
@@ -1025,11 +1194,8 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken) {
   const payload = {
     model: runtime.model,
     stream: wantStream,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userText },
-    ],
-    options: { temperature: typeof runtime.temperature === "number" ? runtime.temperature : 0.2 },
+    messages: modelMessages(systemPrompt, userText),
+    options: modelRuntimeOptions(runtime),
   };
   if (typeof runtime.think === "boolean") payload.think = runtime.think;
   try {
@@ -1185,6 +1351,7 @@ function buildHalAgentCtx(extras) {
     halWorkSession,
     halEvidencePacket,
     halReadinessDiagnostics,
+    halLiveWidgetEvents,
     halSideNotes,
     halSideNoteMonitor,
     Services: typeof Services !== "undefined" ? Services : window.Services,
@@ -1250,6 +1417,7 @@ function buildHalAgentCtx(extras) {
     clearEvidencePacket,
     clearReadinessDiagnostics,
     runProactiveCycle: (options) => runHalProactiveCycle(options),
+    forceWidgetPlacement: (detail) => forceHalWidgetPlacement(detail),
     normalizeActions,
     executeRoute: async (result, trimmed, toolResults) => {
       if (!window.HalRouteExec) return null;
@@ -1998,7 +2166,7 @@ function renderSidebar(activeId) {
     nav: PAGES.map((page) => ({
       id: page.id,
       label: page.label,
-      icon: page.icon,
+      icon: typeof AppIcons !== "undefined" ? AppIcons.nav(page.id) : "",
     })),
     brand: "New Ridge Family Financial",
     kicker: "Financial OS",
@@ -2026,7 +2194,7 @@ function select(id) {
   if (appPage) {
     appPage.hidden = isHal;
     if (!isHal && PageViews.hasPage(page.id)) {
-      PageViews.renderPageView(appPage, halData, page.id, select);
+      PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed);
     }
   }
   pageTitle.textContent = page.title;
@@ -2080,6 +2248,22 @@ if (halPage) {
   });
 
   halPage.addEventListener("click", async (event) => {
+    const copyResponse = event.target.closest("[data-hal-copy-response]");
+    if (copyResponse) {
+      const row = copyResponse.closest(".hp-chat-row");
+      const text = row && row.querySelector("p") ? row.querySelector("p").textContent : "";
+      if (text) {
+        DesktopBridge.writeClipboard(text)
+          .then((ok) => {
+            if (ok) logAudit("Copy HAL response", "clipboard: hal-response");
+            renderAuditLog();
+          })
+          .catch(() => {
+            /* clipboard optional */
+          });
+      }
+      return;
+    }
     const drawerBtn = event.target.closest("[data-hal-drawer]");
     if (drawerBtn) {
       openDrawer(drawerBtn.getAttribute("data-hal-drawer"));
@@ -2158,6 +2342,21 @@ if (halPage) {
 
 if (appPage) {
   appPage.addEventListener("click", (event) => {
+    const configure = event.target.closest("[data-hal-configure-export]");
+    if (configure) {
+      const widgetKey = configure.getAttribute("data-hal-configure-export") || "this widget";
+      const labelMap = {
+        newPatients: "SoftDent new patient export",
+        treatmentPlanSummary: "SoftDent treatment plan summary export",
+        caseAcceptance: "SoftDent case acceptance export",
+      };
+      select("softdent");
+      showHalActionNotice(
+        `${labelMap[widgetKey] || "Source export"} is not configured yet. Add the export file to the SoftDent import folder, then run Force HAL placement.`,
+        "warn",
+      );
+      return;
+    }
     const navBtn = event.target.closest("[data-pv-nav]");
     if (navBtn) select(navBtn.getAttribute("data-pv-nav"));
   });
@@ -2180,6 +2379,12 @@ window.addEventListener("keydown", (event) => {
 window.addEventListener("hashchange", () => {
   const id = window.location.hash.replace("#", "");
   if (id) select(id);
+});
+window.addEventListener("hal-live-widget-event", handleHalLiveWidgetEvent);
+window.addEventListener("hal-force-widget-placement", (event) => {
+  forceHalWidgetPlacement((event && event.detail) || {}).catch(() => {
+    /* force placement optional */
+  });
 });
 
 async function loadPersistedState() {
@@ -2241,8 +2446,10 @@ async function boot() {
   }
   if (typeof ImportCoordinator !== "undefined") {
     ImportCoordinator.onComplete(() => {
-      invalidateProgramCaches("import-refresh");
-      scheduleHalWidgetRefresh();
+      forceHalWidgetPlacement({ reason: "import-complete" }).catch(() => {
+        invalidateProgramCaches("import-refresh");
+        scheduleHalWidgetRefresh();
+      });
     });
   }
   if (window.HalAgent) await HalAgent.loadMemory(buildHalAgentCtx());
@@ -2250,17 +2457,24 @@ async function boot() {
     HalProactive.startPlacementTimer(buildHalAgentCtx);
   }
   startSideNoteMonitor();
+  startDocumentSyncListener();
+  startDocumentSourceRefreshTimer();
+  await refreshHalWidgetFeed().catch(() => {
+    /* widget feed optional on boot */
+  });
   const initial = window.location.hash.replace("#", "") || PAGES[0].id;
   select(initial);
-  runHalProactiveCycle({ force: true }).catch(() => {
-    /* proactive cycle optional on boot */
-  });
   if (typeof ImportCoordinator !== "undefined") {
-    ImportCoordinator.refresh({ reason: "boot" }).catch(() => {
-      /* boot import optional */
-    });
+    ImportCoordinator.refresh({ reason: "boot" })
+      .then(() => forceHalWidgetPlacement({ reason: "boot" }))
+      .catch(() => forceHalWidgetPlacement({ reason: "boot-fallback" }));
   } else {
     refreshImportsInBackground();
+    forceHalWidgetPlacement({ reason: "boot" }).catch(() => {
+      runHalProactiveCycle({ force: true, forcePlacement: true }).catch(() => {
+        /* proactive cycle optional on boot */
+      });
+    });
   }
 }
 
@@ -2279,5 +2493,6 @@ if (typeof window !== "undefined") {
 }
 
 DesktopBridge.whenReady(() => {
+  DesktopBridge.installClipboardHandlers();
   boot();
 });

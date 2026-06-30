@@ -43,6 +43,18 @@ const UI = (function () {
     return `<span class="pv-pill pv-pill--${esc(t)}">${esc(text)}</span>`;
   }
 
+  function renderIcon(icon, className) {
+    if (!icon) return "";
+    const cls = className || "app-ico";
+    if (typeof AppIcons !== "undefined" && AppIcons.isSvg(icon)) {
+      return `<span class="${esc(className || "pv-btn-ico")}">${icon}</span>`;
+    }
+    if (String(icon).includes("<svg")) {
+      return `<span class="${esc(className || "pv-btn-ico")}">${icon}</span>`;
+    }
+    return `<span class="${esc(className || "pv-btn-ico")}">${esc(icon)}</span>`;
+  }
+
   /* ---- Button ---- */
   function Button(opts) {
     const o = opts || {};
@@ -53,7 +65,7 @@ const UI = (function () {
         : variant === "toolbar"
           ? "pv-toolbar__btn"
           : `pv-button${variant === "primary" ? " pv-button--primary" : ""}${variant === "ghost" ? " pv-button--ghost" : ""}`;
-    const icon = o.icon ? `<span class="pv-btn-ico">${esc(o.icon)}</span>` : "";
+    const icon = o.icon ? renderIcon(o.icon, "pv-btn-ico") : "";
     const tag = variant === "link" ? "button" : "button";
     return `<${tag} class="${cls}${o.className ? " " + esc(o.className) : ""}" type="${esc(o.type || "button")}"${o.disabled ? " disabled" : ""}${attrs(o.attrs)}>${icon}${esc(o.label)}</${tag}>`;
   }
@@ -74,8 +86,10 @@ const UI = (function () {
     const o = opts || {};
     const actions = (o.actions && o.actions.length) ? `<div class="pv-toolbar">${o.actions.join("")}</div>` : "";
     const badge = o.dataBadge ? `<span class="pv-badge pv-badge--import">${esc(o.dataBadge)}</span>` : "";
+    const safetyIcon =
+      typeof AppIcons !== "undefined" ? renderIcon(AppIcons.ui("shield"), "pv-safety-note__ico") : "";
     const safety = o.safety
-      ? `<div class="pv__safety">${badge}<span class="pv-safety-note">🛡 ${esc(o.safety)}</span></div>`
+      ? `<div class="pv__safety">${badge}<span class="pv-safety-note">${safetyIcon}${esc(o.safety)}</span></div>`
       : "";
     return `
       <header class="pv__header">
@@ -94,7 +108,7 @@ const UI = (function () {
       .map(
         (item) =>
           `<button type="button" class="nav-item${item.id === o.activeId ? " active" : ""}" data-nav="${esc(item.id)}">
-            ${item.icon ? `<span class="nav-item__ico">${esc(item.icon)}</span>` : ""}
+            ${item.icon ? renderIcon(item.icon, "nav-item__ico") : ""}
             <span class="nav-item__label">${esc(item.label)}</span>
             ${item.badge ? `<span class="nav-item__badge">${esc(item.badge)}</span>` : ""}
           </button>`,
@@ -120,7 +134,7 @@ const UI = (function () {
             <strong>${esc(user.name || "New Ridge Owner")}</strong>
             <span>${esc(user.role || "Administrator")}</span>
           </span>
-          <span class="foot-chev">⌄</span>
+          <span class="foot-chev">${typeof AppIcons !== "undefined" ? AppIcons.ui("chevronDown") : ""}</span>
         </div>
         <div class="foot-status">
           <span class="foot-status__dot"></span>
@@ -208,7 +222,7 @@ const UI = (function () {
         <div class="pv-modal__panel">
           <div class="pv-modal__head">
             <h3>${esc(o.title || "")}</h3>
-            <button class="pv-modal__close" type="button" data-modal-close="${esc(o.id)}" aria-label="Close">×</button>
+            <button class="pv-modal__close" type="button" data-modal-close="${esc(o.id)}" aria-label="Close">${typeof AppIcons !== "undefined" ? AppIcons.ui("close") : ""}</button>
           </div>
           <div class="pv-modal__body">${o.body || ""}</div>
           ${o.footer ? `<div class="pv-modal__foot">${o.footer}</div>` : ""}
@@ -221,7 +235,7 @@ const UI = (function () {
     const o = opts || {};
     return `
       <div class="pv-state pv-state--empty" role="status">
-        <div class="pv-state__icon">${o.icon || "🗂"}</div>
+        <div class="pv-state__icon">${o.icon || (typeof AppIcons !== "undefined" ? AppIcons.ui("empty") : "")}</div>
         <strong class="pv-state__title">${esc(o.title || "Nothing here yet")}</strong>
         <p class="pv-state__msg">${esc(o.message || "")}</p>
         ${o.action || ""}
@@ -244,7 +258,7 @@ const UI = (function () {
     const retry = o.retryLabel !== null ? Button({ label: o.retryLabel || "Retry", variant: "secondary", attrs: { "data-retry": "1" } }) : "";
     return `
       <div class="pv-state pv-state--error" role="alert">
-        <div class="pv-state__icon">⚠️</div>
+        <div class="pv-state__icon">${typeof AppIcons !== "undefined" ? AppIcons.ui("error") : ""}</div>
         <strong class="pv-state__title">${esc(o.title || "Something went wrong")}</strong>
         <p class="pv-state__msg">${esc(o.message || "Please try again.")}</p>
         ${o.onRetry === false ? "" : retry}

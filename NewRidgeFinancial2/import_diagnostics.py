@@ -191,6 +191,9 @@ def evaluate_dataset(
     elif row_count == 0:
         status = STATUS_PARTIAL
         detail = "Dataset file present but contains no rows."
+    elif dataset_key == "softdent.dashboard" and row_count == 1 and status == STATUS_CONNECTED:
+        status = STATUS_PARTIAL
+        detail = "Current month only; prior month export missing for trend/YTD widgets."
 
     if upstream_file and upstream_file.get("ageMinutes") is not None:
         upstream_age = int(upstream_file["ageMinutes"])
@@ -218,13 +221,25 @@ def evaluate_dataset(
     }
 
 
-def evaluate_bundle(bundle: dict[str, Any], *, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
+def evaluate_bundle(
+    bundle: dict[str, Any],
+    *,
+    manifest: dict[str, Any] | None = None,
+    deep: bool = False,
+) -> dict[str, Any]:
+    """Evaluate the import cache against dataset contracts.
+
+    When ``deep`` is False (the default, used on the UI hot path) this skips the
+    recursive upstream-directory scan entirely so dashboards load instantly.
+    Pass ``deep=True`` from background/sync paths to also locate the newest
+    matching upstream export for each dataset.
+    """
     manifest = manifest or load_manifest_payload()
     datasets_manifest = manifest.get("datasets") or {}
     items: list[dict[str, Any]] = []
     by_status: dict[str, int] = {}
-    softdent_roots = _resolve_upstream_roots("softdent", manifest)
-    quickbooks_roots = _resolve_upstream_roots("quickbooks", manifest)
+    softdent_roots = _resolve_upstream_roots("softdent", manifest) if deep else None
+    quickbooks_roots = _resolve_upstream_roots("quickbooks", manifest) if deep else None
 
     for dataset_key in _FALLBACK_DATASET_NAMES:
         contract = datasets_manifest.get(dataset_key)

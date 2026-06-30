@@ -39,13 +39,23 @@ class DesktopApi:
             "error": None,
             "result": None,
         }
+        # Cached upstream-health report. The full scan recursively walks the
+        # SoftDent/QuickBooks export trees and is far too slow for the UI hot
+        # path, so it is computed off-thread and attached to bundles when ready.
+        self._upstream_lock = threading.Lock()
+        self._upstream_cache: dict | None = None
+        self._upstream_thread: threading.Thread | None = None
 
     def get_app_info(self) -> dict:
+        from document_sync import resolve_archive_path, resolve_inbox_path
+
         return {
             "mode": "desktop",
             "version": "2.0",
             "dataDir": str(self.store.data_dir),
             "dbPath": str(self.store.db_path),
+            "documentInbox": str(resolve_inbox_path()),
+            "documentArchive": str(resolve_archive_path()),
         }
 
     def read_data_file(self, name: str) -> str:
@@ -73,20 +83,52 @@ class DesktopApi:
         self.store.set(key, value_json)
         return True
 
+    def _refresh_upstream_health_async(self) -> None:
+        def worker() -> None:
+            try:
+                from import_diagnostics import check_upstream_health
+
+                health = check_upstream_health()
+                with self._upstream_lock:
+                    self._upstream_cache = health
+            except Exception:
+                pass
+            finally:
+                with self._upstream_lock:
+                    self._upstream_thread = None
+
+        with self._upstream_lock:
+            if self._upstream_thread is not None and self._upstream_thread.is_alive():
+                return
+            thread = threading.Thread(target=worker, daemon=True)
+            self._upstream_thread = thread
+        thread.start()
+
     def get_import_bundle(self) -> dict:
         from import_loader import load_import_bundle
 
-        return load_import_bundle(sync=False)
+        # Fast path: read the local import cache and run contract diagnostics
+        # without the recursive upstream scan so dashboards render immediately.
+        bundle = load_import_bundle(sync=False, deep=False)
+        with self._upstream_lock:
+            cached = self._upstream_cache
+        if cached is not None:
+            bundle["upstreamHealth"] = cached
+        # Refresh the upstream report in the background for the next read.
+        self._refresh_upstream_health_async()
+        return bundle
 
     def get_import_sync_status(self) -> dict:
         with self._sync_lock:
             return dict(self._sync_state)
 
     def _run_import_sync(self) -> None:
+        from document_sync import sync_accounting_documents
         from import_sync import sync_imports
 
         try:
             result = sync_imports()
+            result["documents"] = sync_accounting_documents(self.store)
             with self._sync_lock:
                 self._sync_state = {
                     "status": "success",
@@ -105,6 +147,43 @@ class DesktopApi:
                     "result": None,
                 }
 
+    def sync_accounting_documents(self) -> dict:
+        from document_sync import sync_accounting_documents
+
+        return sync_accounting_documents(self.store)
+
+    def clipboard_read(self) -> str:
+        """Return system clipboard text (Windows desktop shell)."""
+        try:
+            import tkinter as tk
+
+            root = tk.Tk()
+            root.withdraw()
+            try:
+                return str(root.clipboard_get())
+            except tk.TclError:
+                return ""
+            finally:
+                root.destroy()
+        except Exception:
+            return ""
+
+    def clipboard_write(self, text: str) -> bool:
+        """Write text to the system clipboard."""
+        payload = "" if text is None else str(text)
+        try:
+            import tkinter as tk
+
+            root = tk.Tk()
+            root.withdraw()
+            root.clipboard_clear()
+            root.clipboard_append(payload)
+            root.update()
+            root.destroy()
+            return True
+        except Exception:
+            return False
+
     def refresh_imports(self) -> dict:
         with self._sync_lock:
             if self._sync_state.get("status") == "running":
@@ -121,6 +200,30 @@ class DesktopApi:
         thread.start()
         return state
 
+    def list_practice_source_catalog(self) -> dict:
+        from practice_source_access import list_catalog
+
+        return list_catalog()
+
+    def fetch_practice_source(self, system: str, resource: str, options_json: str = "{}") -> dict:
+        from practice_source_access import fetch
+
+        try:
+            options = json.loads(options_json) if options_json else {}
+        except json.JSONDecodeError:
+            options = {}
+        if not isinstance(options, dict):
+            options = {}
+        return fetch(system, resource, options)
+
+    def pull_practice_sources(self, options: str = "{}") -> dict:
+        from practice_source_access import pull_all_practice_sources
+        import json as _json
+
+        opts = _json.loads(options or "{}") if isinstance(options, str) else (options or {})
+        full = bool(opts.get("fullPull"))
+        return pull_all_practice_sources(full=full)
+
 
 def main() -> int:
     if not INDEX_HTML.is_file():
@@ -134,6 +237,12 @@ def main() -> int:
         return 1
 
     api = DesktopApi(SITE_DIR, DATA_DIR)
+    try:
+        from document_sync import sync_accounting_documents
+
+        sync_accounting_documents(api.store)
+    except Exception as exc:
+        print(f"Startup document sync failed: {exc}", file=sys.stderr)
     window = webview.create_window(
         "NewRidgeFinancial 2.0",
         INDEX_HTML.as_uri(),
@@ -141,6 +250,9 @@ def main() -> int:
         height=920,
         min_size=(1024, 700),
         js_api=api,
+        # Allow selecting page text so staff can copy values out of widgets.
+        # pywebview injects `user-select: none` unless this is enabled.
+        text_select=True,
     )
     webview.start(debug=False)
     return 0

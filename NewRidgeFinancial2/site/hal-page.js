@@ -12,6 +12,10 @@ const HalPage = (function () {
       .replaceAll("'", "&#039;");
   }
 
+  function uiIcon(key) {
+    return typeof AppIcons !== "undefined" ? AppIcons.ui(key) : "";
+  }
+
   function formatStatus(value) {
     return String(value || "unknown")
       .replace(/_/g, " ")
@@ -67,7 +71,7 @@ const HalPage = (function () {
       ? `<span class="hp-sn-stat">${mon.announce ? "voice on" : "voice off"} · ${mon.bellSuppressed ? "bell muted" : "bell on"} · ${esc(stationText)}${mon.voiceStyle === "hal9000" ? " · HAL 9000 voice" : ""}</span>`
       : '<span class="hp-sn-stat">watcher not running</span>';
     const voiceBtn =
-      '<button type="button" class="hp-sn-voice" data-hal-voice-test title="Test HAL 9000 voice" aria-label="Test HAL 9000 voice">◇ TEST VOICE</button>';
+      `<button type="button" class="hp-sn-voice" data-hal-voice-test title="Test HAL 9000 voice" aria-label="Test HAL 9000 voice">${uiIcon("voice")} TEST VOICE</button>`;
     const checked = online && mon.checkedAt ? esc(mon.checkedAt.slice(11, 19)) + " UTC" : "—";
     let listHtml;
     if (!online) {
@@ -122,8 +126,8 @@ const HalPage = (function () {
             (n) => `<li class="hp-sn-item hp-sn-item--${esc(n.status)}">
               <span class="hp-sn-item__text">${esc(n.text)}</span>
               <span class="hp-sn-item__meta">${esc(n.priority)}</span>
-              <button type="button" class="hp-sn-btn" data-hal-sidenote-pin="${esc(n.noteId)}" title="Pin or unpin" aria-label="Pin or unpin sidenote">${n.status === "pinned" ? "◎" : "○"}</button>
-              <button type="button" class="hp-sn-btn hp-sn-btn--dim" data-hal-sidenote-archive="${esc(n.noteId)}" title="Archive" aria-label="Archive sidenote">✕</button>
+              <button type="button" class="hp-sn-btn" data-hal-sidenote-pin="${esc(n.noteId)}" title="Pin or unpin" aria-label="Pin or unpin sidenote">${n.status === "pinned" ? uiIcon("pin") : uiIcon("unpin")}</button>
+              <button type="button" class="hp-sn-btn hp-sn-btn--dim" data-hal-sidenote-archive="${esc(n.noteId)}" title="Archive" aria-label="Archive sidenote">${uiIcon("close")}</button>
             </li>`,
           )
           .join("")
@@ -180,6 +184,7 @@ const HalPage = (function () {
         const nav = w.navTarget || "";
         return `<article class="hp-wg-card" data-hal-widget-key="${esc(key)}">
           <div class="hp-wg-head">
+            <span class="hp-wg-ico">${typeof AppIcons !== "undefined" ? AppIcons.widget(key) : ""}</span>
             <strong>${esc(w.title)}</strong>
             <span class="hp-wg-badge ${widgetStatusClass(w.status)}">${esc(w.status)}</span>
           </div>
@@ -316,13 +321,17 @@ const HalPage = (function () {
     if (!root) return;
     const { halData, halModels, halAudit, halChatHistory, halAskDraft, halAskLoading, halInlineFirewallResult, halSideNotes, halSideNoteMonitor, halSideNotesInbox, halWidgetFeed, halProactiveBriefing, halStressTest, halAgentHealth } = ctx;
     const suggestions = (halData.askHal?.suggestions || []).slice(0, 12);
-    const messages = (halChatHistory || []).slice(-4);
+    // One message at a time: only the most recent turn is shown (no scrolling).
+    const messages = (halChatHistory || []).slice(-1);
     const chatHtml = messages.length
       ? messages
           .map(
             (m) =>
               `<div class="hp-chat-row hp-chat-row--${m.role === "user" ? "user" : "hal"}">
-                <span>${m.role === "user" ? "You" : "HAL"}${m.lane ? ` · ${esc(m.lane)}` : ""}</span>
+                <div class="hp-chat-row__head">
+                  <span>${m.role === "user" ? "You" : "HAL"}${m.lane ? ` · ${esc(m.lane)}` : ""}</span>
+                  ${m.role === "hal" ? `<button type="button" class="hp-chat-copy" data-hal-copy-response title="Copy response (Ctrl+C also works)">Copy</button>` : ""}
+                </div>
                 <p>${esc(m.text)}</p>
               </div>`,
           )
@@ -536,6 +545,7 @@ const HalPage = (function () {
                   <span class="hp-ring__iris"></span>
                   <span class="hp-ring__lens-glow"></span>
                   <span class="hp-ring__lens-hot"></span>
+                  <span class="hp-ring__iris-core"></span>
                   <span class="hp-ring__lens-glint"></span>
                   <div class="hp-ring__lens-data">
                     <span class="hp-ring__state">${esc(ringStateLabel)}</span>

@@ -987,12 +987,13 @@ const HalSkills = (function () {
     const clinicalRows = (bundle.softdent && bundle.softdent.clinicalNotes && bundle.softdent.clinicalNotes.rows) || [];
     const claimsAvailable = !!(snap.claims && snap.claims.total > 0);
     const ar = snap.dashboards && snap.dashboards.ar;
+    const arRows = (bundle.softdent && bundle.softdent.ar && bundle.softdent.ar.rows) || [];
     const arAvailable = !!(
       ar &&
       ((Array.isArray(ar.buckets) && ar.buckets.length) ||
         (Array.isArray(ar.aging) && ar.aging.length) ||
         ar.total)
-    );
+    ) || arRows.length > 0;
     const missing = [];
     if (!claimsAvailable) missing.push(SOFTDENT_MISSING_DATA_CODES.claims);
     if (!clinicalRows.length) missing.push(SOFTDENT_MISSING_DATA_CODES.clinicalNotes);
@@ -1005,6 +1006,145 @@ const HalSkills = (function () {
       missingDataCodes: missing,
       note: "A/R is only reported from a verified source; HAL never fabricates a $0 balance.",
     };
+  }
+
+  const SOURCE_SYSTEM_PROFILES = {
+    softdent: {
+      label: "SoftDent",
+      role: "Practice management system of record",
+      owns: [
+        "Daily production and collections",
+        "Insurance claims pipeline and claim status",
+        "Verified dental A/R aging buckets",
+        "Patient vs insurance responsibility splits",
+        "Clinical notes, treatment plans, and case acceptance (when exported)",
+      ],
+      doesNotOwn: [
+        "General-ledger revenue or net income",
+        "Operating expense categories or payroll GL totals",
+        "QuickBooks journal entries or posting",
+      ],
+      importDir: "app_data/nr2/document_inbox/softdent",
+      pages: ["softdent", "ar", "claims", "practice"],
+      documentTypes: ["Claim", "A/R Aging", "Production Summary"],
+    },
+    quickbooks: {
+      label: "QuickBooks",
+      role: "Accounting system of record",
+      owns: [
+        "Monthly revenue and P&L",
+        "Operating expenses and expense categories",
+        "Net income and accounting-period financial totals",
+        "Vendor-bill style expense pivots for review",
+      ],
+      doesNotOwn: [
+        "Chairside production or collections",
+        "Claim lifecycle or payer submission status",
+        "Dental A/R aging buckets or per-patient balances",
+      ],
+      importDir: "app_data/nr2/document_inbox/quickbooks",
+      pages: ["quickbooks", "financial"],
+      documentTypes: ["Bill", "Statement"],
+    },
+  };
+
+  function documentQueueSourceKey(doc) {
+    const system = String((doc && doc.sourceSystem) || "").trim().toLowerCase();
+    if (system === "quickbooks" || system === "softdent") return system;
+    if (doc && doc.autoImported) return "ocr";
+    return "manual";
+  }
+
+  function formatSourceSystemGuide(snapshot) {
+    const snap = snapshot || {};
+    const bundle = snap.importBundle || {};
+    const sd = snap.dashboards && snap.dashboards.softdent;
+    const qb = snap.dashboards && snap.dashboards.quickbooks;
+    const docs = snap.documents || {};
+    const lines = [
+      "SoftDent vs QuickBooks — source boundary guide (read-only):",
+      "",
+      "These are two different systems. HAL keeps them separate and never treats their totals as interchangeable.",
+      "",
+    ];
+
+    Object.entries(SOURCE_SYSTEM_PROFILES).forEach(([key, profile]) => {
+      lines.push(`${profile.label} (${profile.role})`);
+      lines.push(`  Import cache: ${profile.importDir}`);
+      lines.push(`  Program pages: ${profile.pages.join(", ")}`);
+      lines.push("  HAL uses this source for:");
+      profile.owns.forEach((item) => lines.push(`    - ${item}`));
+      lines.push("  Do NOT use this source for:");
+      profile.doesNotOwn.forEach((item) => lines.push(`    - ${item}`));
+      lines.push("");
+    });
+
+    lines.push("Reconciliation rules (review signals only — not proof they must match):");
+    lines.push("- SoftDent production/collections vs QuickBooks revenue: compare periods before flagging drift.");
+    lines.push("- SoftDent verified A/R aging vs claims balances: dental receivables only — never QuickBooks A/R.");
+    lines.push("- Document queue QuickBooks rows (Bills/Statements) vs QuickBooks expense categories.");
+    lines.push("- Document queue SoftDent rows (Claims/A/R/Production) vs SoftDent exports — not QuickBooks.");
+    lines.push("");
+
+    lines.push("Live snapshot (current program data):");
+    if (sd) {
+      const sdProd = (sd.glance || []).find((g) => g.label === "Production MTD");
+      const sdColl = (sd.glance || []).find((g) => g.label === "Collections MTD");
+      lines.push(
+        `- SoftDent: production ${sdProd?.value || "—"}, collections ${sdColl?.value || "—"}, A/R hero ${sd.hero?.value || "—"}, status ${sd.status || "—"}`,
+      );
+    } else {
+      lines.push("- SoftDent: no dashboard data loaded.");
+    }
+    if (qb) {
+      const qbRev = (qb.pl?.rows || []).find((r) => r.category === "Revenue");
+      const qbNet = (qb.pl?.rows || []).find((r) => r.category === "Net Income");
+      lines.push(
+        `- QuickBooks: revenue ${qbRev?.amount || "—"}, net income ${qbNet?.amount || "—"}, sync ${qb.syncStatus || "—"}`,
+      );
+    } else {
+      lines.push("- QuickBooks: no P&L data loaded.");
+    }
+
+    const sdDatasets = bundle.softdent || {};
+    const qbDatasets = bundle.quickbooks || {};
+    const sdLoaded = ["dashboard", "claims", "ar", "clinicalNotes"].filter((name) => {
+      const ds = sdDatasets[name];
+      return ds && Array.isArray(ds.rows) && ds.rows.length;
+    });
+    const qbLoaded = ["revenue", "expenses", "expenseCategories", "profitAndLoss"].filter((name) => {
+      const ds = qbDatasets[name];
+      return ds && Array.isArray(ds.rows) && ds.rows.length;
+    });
+    lines.push(`- SoftDent import files loaded: ${sdLoaded.length ? sdLoaded.join(", ") : "none"}`);
+    lines.push(`- QuickBooks import files loaded: ${qbLoaded.length ? qbLoaded.join(", ") : "none"}`);
+
+    if (docs.queueCount) {
+      const counts = docs.sourceCounts || {};
+      lines.push(
+        "",
+        `Documents page queue (${docs.queueCount} total): QuickBooks ${counts.quickbooks || 0}, SoftDent ${counts.softdent || 0}, OCR ${counts.ocr || 0}, manual ${counts.manual || 0}`,
+      );
+      const sample = docs.workbookSample || docs.top || [];
+      const bySource = { softdent: [], quickbooks: [], ocr: [], manual: [] };
+      sample.forEach((doc) => {
+        const key = documentQueueSourceKey(doc);
+        if (bySource[key]) bySource[key].push(doc);
+      });
+      ["softdent", "quickbooks", "ocr", "manual"].forEach((key) => {
+        if (!bySource[key].length) return;
+        const label = key === "ocr" ? "OCR inbox" : key === "manual" ? "Manual" : SOURCE_SYSTEM_PROFILES[key]?.label || key;
+        lines.push(`  ${label} document rows (sample):`);
+        bySource[key].slice(0, 4).forEach((doc) => {
+          lines.push(`    - ${doc.id} · ${doc.vendor || "—"} · ${doc.amount || "—"} · ${doc.status || "—"}`);
+        });
+      });
+    } else {
+      lines.push("", "Documents page queue: empty — OCR inbox, manual add, or import sync needed.");
+    }
+
+    lines.push("", "HAL reads both systems locally only. Nothing is posted or written back.");
+    return lines.join("\n");
   }
 
   function formatSourceHealthText(sourceHealth, staticItems) {
@@ -1081,14 +1221,14 @@ const HalSkills = (function () {
     payerMixAndCollections: "financial",
     providerPerformance: "financial",
     dataFreshnessQuality: "financial",
-    ebitdaNormalization: "financial",
+    ebitdaNormalization: "quickbooks",
     quickbooksProfitLossDetail: "quickbooks",
     quickbooksSyncHealth: "quickbooks",
     accountsPayableAutomation: "documents",
     documentIntakeQueue: "documents",
     documentPreview: "documents",
     periodCloseAndPosting: "documents",
-    smartClaimsAndReceivables: "claims",
+    smartClaimsAndReceivables: "ar",
     claimsPipeline: "claims",
     claimReadinessAndSafety: "claims",
     careDeliveryPerformance: "softdent",
@@ -1145,7 +1285,7 @@ const HalSkills = (function () {
     quickbooksProfitLossDetail: ["QuickBooks revenue/P&L export", "QuickBooks expenses export"],
     quickbooksSyncHealth: ["QuickBooks import files copied into the canonical import folder"],
     accountsPayableAutomation: ["Local accounting document queue", "QuickBooks expenses or vendor document imports"],
-    documentIntakeQueue: ["Local accounting documents added to the document queue"],
+    documentIntakeQueue: ["SoftDent and QuickBooks export rows synced into the document queue", "Automated OCR inbox sync", "Optional manual Add document entries"],
     documentPreview: ["Selected local document metadata and extracted fields"],
     periodCloseAndPosting: ["Accounting document period assignment", "Human-reviewed posting readiness"],
     smartClaimsAndReceivables: ["SoftDent claims export", "Verified SoftDent A/R export"],
@@ -1396,6 +1536,21 @@ const HalSkills = (function () {
       }
     }
 
+    const docs = snapshot && snapshot.documents;
+    const docQueue = widgets.documentIntakeQueue;
+    if (docs && docQueue && docs.queueCount > 0) {
+      const pendingDocs = (docs.top || []).filter((doc) => String(doc.status || "").toLowerCase().includes("pending"));
+      if (pendingDocs.length && docs.queueCount >= 3) {
+        addCommitIssue(
+          issues,
+          "documentIntakeQueue",
+          "queueCount",
+          "info",
+          `${pendingDocs.length} visible document(s) are still Pending Review; reconcile against QuickBooks expenses before posting.`,
+        );
+      }
+    }
+
     Object.values(widgets).forEach((widget) => {
       if (!widget) return;
       widget.commitValidation = widget.commitValidation || { status: "PASS", issues: [] };
@@ -1524,7 +1679,17 @@ const HalSkills = (function () {
     const docsQueueCount = Number(docs.queueCount || (docs.queue && docs.queue.length) || 0);
     const narrativeDraftCount = Number((narratives.drafts && narratives.drafts.length) || narratives.drafts || 0);
     const libraryDocCount = Number(library.results || library.storage?.indexed || (library.docs && library.docs.length) || 0);
-    const docsStatus = docsQueueCount > 0 ? "SUCCESS" : "FAILED";
+    const docsPendingCount = Number(
+      (docs.posting || []).find((p) => /pending/i.test(p.label))?.count || 0,
+    );
+    const docsPeriodReady = Boolean(docs.period && docs.period.label && docs.period.documents);
+    const docsDataReady = docsQueueCount > 0 && docsPeriodReady;
+    const docsStatus = docsDataReady ? "SUCCESS" : docsQueueCount > 0 ? "DEGRADED" : "FAILED";
+    const qbDocImportCount = Number(docs.sourceCounts?.quickbooks || 0);
+    const apDataReady =
+      qbStatus === "SUCCESS" ||
+      (expenseTotal != null && expenseTotal !== WidgetContract.MISSING && expenseTotal !== "—") ||
+      qbDocImportCount > 0;
     const claimsReadinessStatus =
       !claimsSnap.readiness && !claimsSnap.total ? "FAILED" : claimsSnap.total > 0 ? "SUCCESS" : "DEGRADED";
     const narrativeStatus = narrativeDraftCount > 0 ? "SUCCESS" : "FAILED";
@@ -1637,8 +1802,11 @@ const HalSkills = (function () {
       },
       accountsPayableAutomation: {
         key: "accountsPayableAutomation",
+        // Reflects both QuickBooks expenses and the local document queue. When
+        // documents exist but QuickBooks data is missing, show partial rather
+        // than a false "No data yet".
+        status: apDataReady ? "SUCCESS" : docsQueueCount > 0 ? "DEGRADED" : qbStatus,
         title: "Accounts Payable Automation",
-        status: qbStatus,
         summary: "QuickBooks expense totals and local document review-queue counts from the import cache.",
         navTarget: WIDGET_NAV.accountsPayableAutomation,
         metrics: {
@@ -1650,12 +1818,15 @@ const HalSkills = (function () {
         key: "documentIntakeQueue",
         title: "Document Intake Queue",
         status: docsStatus,
-        summary: "Document intake queue status counts and oldest visible item from the accounting documents cache.",
+        summary: "Document intake queue from OCR inbox plus SoftDent and QuickBooks export rows in the local documents cache.",
         navTarget: WIDGET_NAV.documentIntakeQueue,
         metrics: {
           queueCount: metricValue(docs.queueCount),
           pendingReviewCount: metricValue((docs.posting || []).find((p) => /pending/i.test(p.label))?.count),
           readyToPostCount: metricValue((docs.posting || []).find((p) => /ready/i.test(p.label))?.count),
+          quickbooksImportCount: metricValue(docs.sourceCounts?.quickbooks),
+          softdentImportCount: metricValue(docs.sourceCounts?.softdent),
+          ocrImportCount: metricValue(docs.sourceCounts?.ocr),
           oldestVisibleAgeDays: metricValue(Math.max.apply(null, (docs.top || []).map((d) => Number(d.age) || 0)) || null),
         },
       },
@@ -1682,7 +1853,7 @@ const HalSkills = (function () {
           periodLabel: metricValue(docs.period?.label),
           documentsInPeriod: metricValue(docs.period?.documents),
           postedPct: metricValue(docs.period?.postedPct != null ? `${docs.period.postedPct}%` : null),
-          pendingAmount: metricValue(docs.period?.pending),
+          pendingAmount: metricValue(docs.period?.pendingAmount || docs.period?.pending),
         },
       },
       smartClaimsAndReceivables: {
@@ -2012,6 +2183,71 @@ const HalSkills = (function () {
       },
     };
 
+    const officeAttention = Object.values(feed.widgets || {}).filter((widget) => {
+      const status = String(widget && widget.status || "").toUpperCase();
+      return status === "FAILED" || status === "DEGRADED";
+    });
+    const officeTasks = Array.isArray(snap.officeTasks) ? snap.officeTasks : [];
+    const officeTasksStatus =
+      officeTasks.length > 0
+        ? "SUCCESS"
+        : snap.officeTasksState === "not_configured"
+          ? "DEGRADED"
+          : "FAILED";
+    feed.officeWidgets = {
+      officeManagerBoundaries: {
+        key: "officeManagerBoundaries",
+        title: "HAL Boundaries",
+        status: "SUCCESS",
+        summary: "HAL is local-only and read-only for external actions; human approval remains required.",
+        navTarget: "office-manager",
+        metrics: {
+          mode: "Local only",
+          externalWriteback: "Blocked",
+          humanApproval: "Required",
+        },
+      },
+      officeManagerPriorities: {
+        key: "officeManagerPriorities",
+        title: "HAL Priorities",
+        status: officeAttention.length > 0 ? "DEGRADED" : "SUCCESS",
+        summary: officeAttention.length
+          ? "HAL is tracking widgets that need data or review and grouping them for office-manager attention."
+          : "HAL is monitoring the program with no urgent widget priorities in this snapshot.",
+        navTarget: "office-manager",
+        metrics: {
+          attentionItems: officeAttention.length || 0,
+          failedWidgets: officeAttention.filter((w) => String(w.status).toUpperCase() === "FAILED").length,
+          partialWidgets: officeAttention.filter((w) => String(w.status).toUpperCase() === "DEGRADED").length,
+        },
+      },
+      officeManagerTasks: {
+        key: "officeManagerTasks",
+        title: "HAL-managed Local Tasks",
+        status: officeTasksStatus,
+        summary: officeTasks.length
+          ? "HAL-created local tasks are loaded from the office task store."
+          : "HAL will create local tasks when import, widget, or review issues need follow-up.",
+        navTarget: "office-manager",
+        metrics: {
+          taskCount: officeTasks.length || 0,
+          highPriority: officeTasks.filter((task) => task.priority === "high").length || 0,
+          taskStore: snap.officeTasksState || "unknown",
+        },
+      },
+      officeManagerSurfaces: {
+        key: "officeManagerSurfaces",
+        title: "Work Surfaces",
+        status: "SUCCESS",
+        summary: "Office Manager work-surface links route staff to the local pages HAL monitors.",
+        navTarget: "office-manager",
+        metrics: {
+          surfaces: Object.keys(feed.surfaceCounts || {}).length,
+          localOnly: "Yes",
+        },
+      },
+    };
+
     applyAccountingExcelCommitValidation(feed, snap);
     const publish = publishJobStatus(feed.widgets);
     feed.jobs = {
@@ -2067,6 +2303,192 @@ const HalSkills = (function () {
     return Object.entries((widget && widget.metrics) || {})
       .filter(([, value]) => value === null || value === undefined || value === "" || value === "—")
       .map(([key]) => formatWidgetMetricLabel(key));
+  }
+
+  function widgetPresentMetrics(widget) {
+    return Object.entries((widget && widget.metrics) || {})
+      .filter(([, value]) => !(value === null || value === undefined || value === "" || value === "—"))
+      .map(([key]) => formatWidgetMetricLabel(key));
+  }
+
+  /* ==========================================================
+   * Diagnostic source trace — maps each widget back to the exact
+   * import dataset/file/fields it needs, the live diagnostics status,
+   * and the single concrete next action. Real data only; nothing is
+   * fabricated. Mirrors import-manifest.json so it works at runtime
+   * in the desktop app where the JS manifest loader is unavailable.
+   * ========================================================== */
+  const DATASET_CONTRACTS = {
+    "softdent.dashboard": { label: "SoftDent dashboard export", files: ["softdent_dashboard_data.json"], importDir: "app_data/nr2/document_inbox/softdent", required: ["production"], optional: ["collections", "insurance", "patient", "provider", "period"], automated: true },
+    "softdent.claims": { label: "SoftDent claims export", files: ["softdent_claims_export.csv"], importDir: "app_data/nr2/document_inbox/softdent", required: ["ClaimId"], optional: ["PatientName", "Payer", "ServiceDate", "ClaimAmount", "ClaimStatus"], automated: true },
+    "softdent.clinicalNotes": { label: "SoftDent clinical notes export", files: ["softdent_clinical_notes_data.json"], importDir: "app_data/nr2/document_inbox/softdent", required: [], optional: ["PatientName", "Provider", "NoteDate", "NoteText"], automated: true },
+    "softdent.ar": { label: "SoftDent A/R aging export", files: ["softdent_ar_aging.csv"], importDir: "app_data/nr2/document_inbox/softdent", required: ["Bucket"], optional: ["Balance"], automated: true },
+    "softdent.newPatients": { label: "SoftDent new patients export", files: ["softdent_new_patients.csv"], importDir: "app_data/nr2/document_inbox/softdent", required: ["Count"], optional: ["Period"], automated: false },
+    "softdent.treatmentPlans": { label: "SoftDent treatment plan summary export", files: ["treatment_plan_summary.csv"], importDir: "app_data/nr2/document_inbox/softdent", required: [], optional: ["Presented", "Accepted", "Amount"], automated: false },
+    "softdent.caseAcceptance": { label: "SoftDent case acceptance export", files: ["case_acceptance.csv"], importDir: "app_data/nr2/document_inbox/softdent", required: [], optional: ["AcceptanceRate", "Presented", "Accepted"], automated: false },
+    "quickbooks.revenue": { label: "QuickBooks revenue/P&L export", files: ["quickbooks_revenue.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["TotalIncome"], optional: ["Month"], automated: true },
+    "quickbooks.expenses": { label: "QuickBooks expenses export", files: ["quickbooks_expenses.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["TotalExpense"], optional: ["Month"], automated: true },
+    "quickbooks.expenseCategories": { label: "QuickBooks expense categories export", files: ["quickbooks_expense_categories.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["Category"], optional: ["Amount"], automated: true },
+    "quickbooks.ar": { label: "QuickBooks A/R export", files: ["quickbooks_ar.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["Bucket"], optional: ["Balance"], automated: false },
+    "local:documents": { label: "Local accounting documents", files: ["app_data/nr2/document_inbox (drop)", "app_data/nr2/document_inbox/softdent", "app_data/nr2/document_inbox/quickbooks", "document_source_import.py", "sync_document_sources.py", "app_data/nr2/accounting_documents.sqlite3 (OCR ledger)", "nr2:v2:documents (desktop store)"], importDir: "app_data/nr2/document_inbox", required: [], optional: [], automated: true, local: true },
+    "local:narratives": { label: "Local narrative drafts", files: ["(local narrative drafts)"], importDir: "local records", required: [], optional: [], automated: true, local: true },
+    "local:library": { label: "Local library documents", files: ["(local indexed library)"], importDir: "local records", required: [], optional: [], automated: true, local: true },
+  };
+
+  const WIDGET_DATASETS = {
+    practiceFinancialOverview: ["quickbooks.revenue", "softdent.dashboard"],
+    financialProductionTrend: ["softdent.dashboard"],
+    payerMixAndCollections: ["softdent.dashboard"],
+    providerPerformance: ["softdent.dashboard"],
+    dataFreshnessQuality: ["softdent.dashboard", "quickbooks.revenue"],
+    ebitdaNormalization: ["quickbooks.expenses", "quickbooks.expenseCategories"],
+    quickbooksProfitLossDetail: ["quickbooks.revenue", "quickbooks.expenses"],
+    quickbooksSyncHealth: ["quickbooks.revenue", "quickbooks.expenses"],
+    accountsPayableAutomation: ["local:documents", "quickbooks.expenses"],
+    documentIntakeQueue: ["local:documents"],
+    documentPreview: ["local:documents"],
+    periodCloseAndPosting: ["local:documents"],
+    smartClaimsAndReceivables: ["softdent.claims", "softdent.ar"],
+    claimsPipeline: ["softdent.claims"],
+    claimReadinessAndSafety: ["softdent.claims"],
+    arAgingAndCollections: ["softdent.ar"],
+    arOutstandingClaims: ["softdent.claims", "softdent.ar"],
+    careDeliveryPerformance: ["softdent.dashboard", "softdent.ar"],
+    softdentArAging: ["softdent.ar"],
+    softdentResponsibility: ["softdent.dashboard"],
+    softdentSourceHealth: ["softdent.dashboard", "softdent.claims", "softdent.clinicalNotes", "softdent.ar"],
+    softdentExportHistory: ["softdent.dashboard", "softdent.claims", "softdent.ar"],
+    newPatients: ["softdent.newPatients"],
+    treatmentPlanSummary: ["softdent.treatmentPlans"],
+    caseAcceptance: ["softdent.caseAcceptance"],
+    narrativeWorkflow: ["local:narratives", "softdent.claims"],
+    documentLibrary: ["local:library"],
+  };
+
+  function diagnosticsByDatasetKey(snapshot) {
+    const bundle = snapshot && snapshot.importBundle;
+    const diagnostics =
+      (bundle && bundle.diagnostics) ||
+      (bundle && typeof ImportDiagnostics !== "undefined" ? ImportDiagnostics.evaluateBundle(bundle) : null) ||
+      (bundle && typeof window !== "undefined" && window.ImportDiagnostics ? window.ImportDiagnostics.evaluateBundle(bundle) : null);
+    const map = {};
+    if (diagnostics && Array.isArray(diagnostics.datasets)) {
+      diagnostics.datasets.forEach((item) => {
+        if (item && item.datasetKey) map[item.datasetKey] = item;
+      });
+    }
+    return map;
+  }
+
+  function datasetNextAction(contract, diag, missingMetrics) {
+    if (contract.local) {
+      if (contract.label === "Local accounting documents") {
+        return "Drop invoices/receipts into app_data/nr2/document_inbox — the OCR runner syncs them into Documents automatically. Use Add document only for manual entries.";
+      }
+      return `Add ${contract.label.toLowerCase()} in the app — no import file is required.`;
+    }
+    const file = (contract.files && contract.files[0]) || "the export file";
+    const status = diag ? diag.status : "missing";
+    if (!contract.automated || status === "not_configured") {
+      return `Enable and export ${file} (not yet automated) into ${contract.importDir}.`;
+    }
+    if (status === "missing" || !diag || !diag.found) {
+      if (diag && diag.upstreamFile) {
+        return `Upstream ${file} exists but was not copied — run "refresh imports".`;
+      }
+      return `Add ${file} into ${contract.importDir}, then run "refresh imports".`;
+    }
+    if (status === "stale") {
+      return `Re-export ${file} (current copy is stale), then run "refresh imports".`;
+    }
+    const failures = (diag && diag.requiredFieldFailures) || [];
+    if (failures.length) {
+      return `Export ${file} including required fields: ${failures.join(", ")}.`;
+    }
+    if (diag && diag.rowCount === 0) {
+      return `Export ${file} with at least one data row.`;
+    }
+    if (missingMetrics && missingMetrics.length) {
+      return `Export ${file} with populated values for: ${missingMetrics.join(", ")}.`;
+    }
+    return `Verify ${file} contains complete current-period values.`;
+  }
+
+  function buildWidgetSourceTrace(feed, snapshot) {
+    if (!feed || !feed.widgets) return [];
+    const diagMap = diagnosticsByDatasetKey(snapshot);
+    return WIDGET_ORDER.map((key) => {
+      const widget = feed.widgets[key];
+      if (!widget) return null;
+      const status = String(widget.status || "FAILED").toUpperCase();
+      const present = widgetPresentMetrics(widget);
+      const missing = widgetMissingMetrics(widget);
+      const datasetKeys = WIDGET_DATASETS[key] || [];
+      const sources = datasetKeys.map((dk) => {
+        const contract = DATASET_CONTRACTS[dk] || { label: dk, files: [], importDir: "", required: [], optional: [], automated: true };
+        const diag = diagMap[dk] || null;
+        return {
+          datasetKey: dk,
+          label: contract.label,
+          files: contract.files || [],
+          requiredFields: contract.required || [],
+          local: Boolean(contract.local),
+          diagnosticStatus: diag ? diag.status : contract.local ? "local" : "missing",
+          found: diag ? Boolean(diag.found) : false,
+          rowCount: diag ? diag.rowCount || 0 : 0,
+          sourceFile: diag ? diag.sourceFile : null,
+          missingFields: diag ? diag.requiredFieldFailures || [] : [],
+          detail: diag ? diag.detail : null,
+        };
+      });
+      let nextAction;
+      if (status === "SUCCESS") {
+        nextAction = "Filled from current verified data — no action needed.";
+      } else {
+        const ranked = ["missing", "not_configured", "partial", "stale", "connected", "local"];
+        const worst = sources
+          .slice()
+          .sort((a, b) => ranked.indexOf(a.diagnosticStatus) - ranked.indexOf(b.diagnosticStatus))[0];
+        const contract = worst ? DATASET_CONTRACTS[worst.datasetKey] : null;
+        nextAction = contract ? datasetNextAction(contract, diagMap[worst.datasetKey] || null, missing) : "Add the required source data.";
+      }
+      return { key, title: widget.title || key, status, presentMetrics: present, missingMetrics: missing, sources, nextAction };
+    }).filter(Boolean);
+  }
+
+  function formatWidgetSourceTrace(feed, snapshot) {
+    if (!feed || !feed.widgets) return "No widget feed is available yet. Refresh imports, then ask again.";
+    const trace = buildWidgetSourceTrace(feed, snapshot);
+    const counts = trace.reduce(
+      (acc, t) => {
+        if (t.status === "SUCCESS") acc.ready += 1;
+        else if (t.status === "DEGRADED") acc.partial += 1;
+        else acc.empty += 1;
+        return acc;
+      },
+      { ready: 0, partial: 0, empty: 0 },
+    );
+    const lines = [
+      "HAL widget source trace (real data only — each widget mapped to its exact source):",
+      `Summary: ${counts.ready} ready · ${counts.partial} partial · ${counts.empty} waiting on a source.`,
+      "",
+    ];
+    trace.forEach((t) => {
+      lines.push(`[${t.status}] ${t.title}`);
+      t.sources.forEach((s) => {
+        const fileText = s.files && s.files.length ? s.files.join(", ") : "(local records)";
+        const statusBit = s.local ? "local records" : `${s.diagnosticStatus}${s.found ? `, ${s.rowCount} row(s)` : ", file not found"}`;
+        const reqBit = s.requiredFields && s.requiredFields.length ? ` · requires: ${s.requiredFields.join(", ")}` : "";
+        const missBit = s.missingFields && s.missingFields.length ? ` · missing fields: ${s.missingFields.join(", ")}` : "";
+        lines.push(`  Source: ${s.label} (${fileText}) — ${statusBit}${reqBit}${missBit}`);
+      });
+      if (t.presentMetrics.length) lines.push(`  Found: ${t.presentMetrics.join(", ")}`);
+      if (t.missingMetrics.length) lines.push(`  Empty: ${t.missingMetrics.join(", ")}`);
+      lines.push(`  Next: ${t.nextAction}`);
+      lines.push("");
+    });
+    lines.push("HAL leaves blanks as blanks until the real export or local record exists. Nothing is mocked, posted, or written back.");
+    return lines.join("\n");
   }
 
   function formatWidgetFeed(feed) {
@@ -2167,27 +2589,303 @@ const HalSkills = (function () {
     return lines.join("\n");
   }
 
-  function formatImportChecklist(feed) {
+  function formatImportHealthSummary(snapshot) {
+    const diag = (snapshot && snapshot.importBundle && snapshot.importBundle.diagnostics) || (snapshot && snapshot.diagnostics);
+    const datasets = (diag && diag.datasets) || [];
+    const lines = ["Import health summary (missing exports are source-data tasks, not software bugs):", ""];
+    if (!datasets.length) {
+      lines.push("- Diagnostics not available yet. Refresh imports, then ask again.");
+      return lines.join("\n");
+    }
+    const needsAction = datasets.filter((d) => {
+      const status = String((d && d.status) || "").toLowerCase();
+      return status === "missing" || status === "not_configured" || status === "partial" || status === "stale";
+    });
+    if (!needsAction.length) {
+      lines.push("- All configured import datasets are connected for the current cache.");
+      return lines.join("\n");
+    }
+    needsAction.forEach((d) => {
+      const label = d.datasetKey || d.bundleKey || "dataset";
+      const status = String(d.status || "unknown").toUpperCase();
+      const detail = d.detail || "Export required before related widgets can populate.";
+      lines.push(`- [${status}] ${label}: ${detail}`);
+      if (d.collectorHint) lines.push(`  Collector: ${d.collectorHint}`);
+    });
+    lines.push("", "HAL will not fabricate missing SoftDent claims, clinical notes, new patients, treatment plans, or case acceptance.");
+    return lines.join("\n");
+  }
+
+  function formatCognitivePathways(halData) {
+    const block = (halData && halData.cognitivePathways) || {};
+    const pathways = (halData && halData.pathways) || [];
+    const lines = [
+      block.title || "HAL cognitive & social characteristics",
+      block.summary || "",
+      "",
+      "Cognitive:",
+    ];
+    (block.cognitive || []).forEach((item) => {
+      lines.push(`- ${item.label}: ${item.practice}`);
+    });
+    lines.push("", "Social & cultural:");
+    (block.social || []).forEach((item) => {
+      lines.push(`- ${item.label}: ${item.practice}`);
+    });
+    if (pathways.length) {
+      lines.push("", "High-priority pathways:");
+      pathways
+        .slice()
+        .sort((a, b) => (a.priority || 99) - (b.priority || 99))
+        .forEach((p) => {
+          lines.push(`- [P${p.priority}] ${p.title}: ${p.summary}`);
+        });
+    }
+    return lines.filter(Boolean).join("\n");
+  }
+
+  function formatWidgetPeriodRequirements(snapshot) {
+    const lib = typeof HalPeriodRequirements !== "undefined" ? HalPeriodRequirements : globalThis.HalPeriodRequirements;
+    if (lib && typeof lib.formatWidgetPeriodRequirements === "function") {
+      return lib.formatWidgetPeriodRequirements(snapshot);
+    }
+    return "Widget period requirements module is not loaded.";
+  }
+
+  function formatPracticeSourcePullResult(payload) {
+    if (!payload) {
+      return "Practice source pull unavailable. Launch the NR2 desktop app with staff approval enabled.";
+    }
+    if (payload.approved === false) {
+      return `Practice source pull blocked: ${payload.error || "Not approved."}`;
+    }
+    const summary = payload.summary || {};
+    const lines = [
+      "Authorized practice source pull complete (read-only · nothing written back):",
+      "",
+      `Mode: ${payload.fullPull ? "FULL (100% upstream exports + live resource scan)" : "standard"}`,
+      `SoftDent resources OK: ${summary.softdentResourcesOk ?? "—"}`,
+      `QuickBooks resources OK: ${summary.quickbooksResourcesOk ?? "—"}`,
+      `Claims verified: ${summary.claimsOk ? "yes" : "no"} (${summary.claimsRowCount ?? 0} row(s))`,
+      `Narrative template library: ${summary.narrativeTemplates ?? 100} generic MemoAI-guided drafts`,
+      `Document queue count: ${summary.documentQueueCount ?? "—"}`,
+    ];
+    const claims = payload.claimsVerification || {};
+    if (claims.claimIds && claims.claimIds.length) {
+      lines.push(`Claim IDs loaded: ${claims.claimIds.slice(0, 6).join(", ")}${claims.claimIds.length > 6 ? "…" : ""}`);
+    }
+    if (payload.narrativeLibrary && Array.isArray(payload.narrativeLibrary.selections) && payload.narrativeLibrary.selections.length) {
+      lines.push("", "Best narrative match per claim (staff review required):");
+      payload.narrativeLibrary.selections.slice(0, 4).forEach((sel) => {
+        const pick = sel.selected || {};
+        lines.push(`- ${sel.claimRef || "—"} → ${pick.id || "—"} (${pick.focus || "—"}, score ${sel.score ?? 0})`);
+      });
+    }
+    if (payload.importSync && payload.importSync.syncedAt) {
+      lines.push("", `Import cache synced at: ${payload.importSync.syncedAt}`);
+    }
+    lines.push("", "Next: ask HAL to draft narrative for a claim, show manager dashboard widgets, or work document workbook.");
+    return lines.join("\n");
+  }
+
+  function formatNarrativeForClaim(snapshot, query) {
+    const lib = typeof HalNarrativeLibrary !== "undefined" ? HalNarrativeLibrary : globalThis.HalNarrativeLibrary;
+    if (!lib) return "Narrative library is not loaded in this runtime.";
+    const claim = lib.resolveClaimFromQuery(query, snapshot);
+    if (!claim) return "No claims are visible yet. Run a full practice source pull and verify the SoftDent claims export.";
+    const selection = lib.selectBestNarrativeForClaim(claim);
+    return lib.formatNarrativeSelectionAnswer(selection, claim);
+  }
+
+  function formatHalJobRequirements(feed, snapshot) {
+    const snap = snapshot || {};
+    const widgets = (feed && feed.widgets) || {};
+    const bundle = snap.importBundle || {};
+    const failed = WIDGET_ORDER.filter((key) => widgets[key] && String(widgets[key].status).toUpperCase() === "FAILED").map(
+      (key) => widgets[key],
+    );
+    const degraded = WIDGET_ORDER.filter((key) => widgets[key] && String(widgets[key].status).toUpperCase() === "DEGRADED").map(
+      (key) => widgets[key],
+    );
+    const missing = formatWidgetMissingData(feed);
+    const lines = [
+      "HAL job requirements — what I still need to do my work (local read-only only):",
+      "",
+      `Widget posture: ${failed.length} failed · ${degraded.length} degraded · ${WIDGET_ORDER.length - failed.length - degraded.length} ready`,
+    ];
+    if (snap.documents && snap.documents.queueCount) {
+      lines.push(
+        `Documents page: ${snap.documents.queueCount} rows loaded (QuickBooks ${snap.documents.sourceCounts?.quickbooks || 0}, SoftDent ${snap.documents.sourceCounts?.softdent || 0}, OCR ${snap.documents.sourceCounts?.ocr || 0}).`,
+      );
+    } else {
+      lines.push("Documents page: queue empty — run practice source pull or drop OCR files in document inbox.");
+    }
+    lines.push("", "Still missing or partial for full widget coverage:");
+    if (failed.length) {
+      failed.slice(0, 12).forEach((widget) => {
+        lines.push(`- [FAILED] ${widget.title}: ${widget.summary || ""}`);
+        const gaps = widgetMissingMetrics(widget);
+        if (gaps.length) lines.push(`  Needs: ${gaps.join(", ")}`);
+      });
+    }
+    if (degraded.length) {
+      degraded.slice(0, 8).forEach((widget) => {
+        lines.push(`- [DEGRADED] ${widget.title}`);
+        const gaps = widgetMissingMetrics(widget);
+        if (gaps.length) lines.push(`  Needs: ${gaps.join(", ")}`);
+      });
+    }
+    if (!failed.length && !degraded.length) {
+      lines.push("- None — all canonical widgets have verified data in the current snapshot.");
+    }
+    lines.push("", "Staff actions (exports / configuration):");
+    const checklist = formatImportChecklist(feed, snapshot);
+    const actionLines = checklist
+      .split("\n")
+      .filter((line) => /^\d+\./.test(line.trim()) || line.includes("Fills:") || line.includes("Needs current"))
+      .slice(0, 10);
+    if (actionLines.length) actionLines.forEach((line) => lines.push(line));
+    else lines.push("- Keep SoftDent and QuickBooks exports fresh in document_inbox folders.");
+    lines.push("", "Operational review (not missing data):");
+    if (snap.documents && snap.documents.posting) {
+      const pending = (snap.documents.posting.find((p) => /pending/i.test(p.label)) || {}).count || 0;
+      if (pending) lines.push(`- ${pending} document(s) still Pending Review before posting.`);
+    }
+    lines.push("- Posting to QuickBooks remains human-reviewed only.");
+    lines.push("", missing ? "Missing-data detail:" : "");
+    if (missing) lines.push(missing);
+    return lines.filter(Boolean).join("\n");
+  }
+
+  function formatImportChecklist(feed, snapshot) {
     const qbStatus = feed?.sources?.quickbooks?.lastStatus || "UNKNOWN";
     const sdStatus = feed?.sources?.softdent?.lastStatus || "UNKNOWN";
+    const health = snapshot ? formatImportHealthSummary(snapshot) : "";
     return [
       "Import checklist to fill widgets:",
       "",
-      `1. SoftDent dashboard export -> app/data/imports/softdent/ (current status: ${sdStatus})`,
+      "HAL reads SoftDent/QuickBooks exports only from document-inbox folders below. Auto-pull copies upstream exports into those same folders.",
+      "",
+      `1. SoftDent dashboard export -> app_data/nr2/document_inbox/softdent/ (current status: ${sdStatus})`,
       "   Fills: production, collections, provider performance for Dr. Michael Reno, responsibility split, SoftDent source health.",
-      "2. SoftDent claims export -> app/data/imports/softdent/",
+      "   Needs current AND prior month rows for trend/YTD widgets (partial if only one month present).",
+      "2. SoftDent claims export -> app_data/nr2/document_inbox/softdent/",
       "   Fills: claims pipeline, claim readiness, outstanding claims, narrative source facts.",
-      "3. Verified SoftDent A/R aging export -> app/data/imports/softdent/",
+      "3. Verified SoftDent A/R aging export -> app_data/nr2/document_inbox/softdent/",
       "   Fills: A/R aging, receivables, patient/insurance balances. HAL will not fabricate A/R.",
-      `4. QuickBooks revenue/P&L export -> app/data/imports/quickbooks/ (current status: ${qbStatus})`,
+      `4. QuickBooks revenue/P&L export -> app_data/nr2/document_inbox/quickbooks/ (current status: ${qbStatus})`,
       "   Fills: practice financial overview, P&L detail, revenue, net income.",
-      "5. QuickBooks expenses export -> app/data/imports/quickbooks/",
+      "5. QuickBooks expenses export -> app_data/nr2/document_inbox/quickbooks/",
       "   Fills: expenses, EBITDA candidates, accounting review queue.",
-      "6. Local accounting documents, library files, and narrative drafts.",
+      "6. SoftDent new patients, treatment plans, and case acceptance exports (if those widgets are needed).",
+      "7. Local accounting documents, library files, and narrative drafts.",
       "   Fills: document intake, selected document preview, period close, narrative workflow, document library.",
       "",
+      health ? `${health}\n` : "",
       "After copying files, ask HAL: refresh imports. HAL reads only; nothing is written back.",
     ].join("\n");
+  }
+
+  function resolvePracticeSourceRequest(query) {
+    const q = String(query || "").toLowerCase();
+    let system = null;
+    if (/\bquickbooks\b|\bqb\b/.test(q)) system = "quickbooks";
+    if (/\bsoftdent\b|\bsoft dent\b/.test(q)) system = system || "softdent";
+    let resource = "catalog";
+    if (/\b(catalog|what can (you|hal)|everything|anything|list resources)\b/.test(q)) resource = "catalog";
+    else if (/\ball\b/.test(q) && system) resource = "all";
+    else if (/\bclaims?\b/.test(q)) resource = "claims";
+    else if (/\bclinical\b/.test(q)) resource = "clinical_notes";
+    else if (/\bbridge\b/.test(q)) resource = "bridge";
+    else if (/\bnew patients?\b/.test(q)) resource = "new_patients";
+    else if (/\btreatment plan/.test(q)) resource = "treatment_plans";
+    else if (/\bcase acceptance\b/.test(q)) resource = "case_acceptance";
+    else if (/\bprobe\b/.test(q)) resource = "probe_summary";
+    else if (/\bmonthly\b|\bpnl\b|\bp&l\b|profit/.test(q)) resource = /\bquickbooks\b|\bqb\b/.test(q) ? "monthly_pnl" : "dashboard";
+    else if (/\brevenue\b|\bincome\b/.test(q)) resource = /\bquickbooks\b|\bqb\b/.test(q) ? "revenue" : "dashboard";
+    else if (/\bexpenses?\b/.test(q)) resource = "expenses";
+    else if (/\bexpense categor/.test(q)) resource = "expense_categories";
+    else if (/\ba\/?r\b|\breceivable/.test(q)) resource = /\bsoftdent\b/.test(q) ? "ar" : "ar";
+    else if (/\bdashboard\b|\bproduction\b|\bcollections\b/.test(q)) resource = "dashboard";
+    const refreshCache = /\b(refresh|stage|pull fresh|sync)\b/.test(q);
+    return { system: system || "catalog", resource, refreshCache };
+  }
+
+  function formatPracticeSourceCatalog(catalog) {
+    if (!catalog || !catalog.systems) {
+      return "Practice source catalog unavailable. Use the NR2 desktop app to query QuickBooks and SoftDent directly.";
+    }
+    const lines = [
+      "Authorized practice source catalog (read-only direct access):",
+      "",
+      catalog.policy || "HAL may read upstream sources locally; nothing is posted back.",
+      "",
+      `Auto-pull into document page: ${catalog.autoPullEnabled ? "enabled" : "disabled"}`,
+      `SoftDent cache: ${catalog.cacheDirs?.softdent || "—"}`,
+      `QuickBooks cache: ${catalog.cacheDirs?.quickbooks || "—"}`,
+      "",
+      "QuickBooks resources HAL can fetch directly:",
+    ];
+    Object.entries(catalog.systems.quickbooks?.resources || {}).forEach(([key, label]) => {
+      lines.push(`- ${key}: ${label}`);
+    });
+    lines.push("", "SoftDent resources HAL can fetch directly:");
+    Object.entries(catalog.systems.softdent?.resources || {}).forEach(([key, label]) => {
+      lines.push(`- ${key}: ${label}`);
+    });
+    lines.push(
+      "",
+      "Examples:",
+      '- "fetch quickbooks revenue directly"',
+      '- "pull softdent claims from source"',
+      '- "get everything from quickbooks"',
+      '- "refresh and fetch quickbooks monthly pnl"',
+    );
+    return lines.join("\n");
+  }
+
+  function formatPracticeSourceFetch(result, request) {
+    if (!result) {
+      return "Direct source fetch unavailable. Launch the NR2 desktop app and ensure QuickBooks Desktop / SoftDent exports are reachable.";
+    }
+    const lines = [
+      "Authorized direct source fetch (read-only):",
+      "",
+      `System: ${result.system || request?.system || "—"}`,
+      `Resource: ${result.resource || request?.resource || "—"}`,
+      `Fetched: ${result.fetchedAt || "—"}`,
+    ];
+    if (result.refreshResult) {
+      lines.push("Import cache refreshed before fetch.");
+    }
+    if (result.results) {
+      lines.push("", "Batch results:");
+      Object.entries(result.results).forEach(([key, item]) => {
+        lines.push(`- ${key}: ${item.ok ? `ok (${item.rowCount ?? "?"} rows)` : `failed — ${item.error || "unknown"}`}`);
+      });
+      return lines.join("\n");
+    }
+    if (!result.ok) {
+      lines.push("", `Failed: ${result.error || "unknown error"}`);
+      return lines.join("\n");
+    }
+    lines.push(`Source: ${result.sourceKind || result.label || "direct"}`);
+    if (result.sourcePath) lines.push(`Path: ${result.sourcePath}`);
+    if (result.sourceFile) lines.push(`File: ${result.sourceFile}`);
+    if (result.rowCount != null) lines.push(`Rows: ${result.rowCount}`);
+    if (Array.isArray(result.rows) && result.rows.length) {
+      lines.push("", "Sample rows:");
+      result.rows.slice(0, 5).forEach((row, index) => {
+        lines.push(`${index + 1}. ${JSON.stringify(row)}`);
+      });
+      if (result.rows.length > 5) lines.push(`… ${result.rows.length - 5} more row(s) not shown.`);
+    } else if (result.payload && typeof result.payload === "object") {
+      lines.push("", "Payload sample:", JSON.stringify(result.payload, null, 2).slice(0, 1200));
+    } else if (result.monthly) {
+      lines.push("", "Monthly sync:", JSON.stringify(result.monthly, null, 2).slice(0, 1200));
+    }
+    lines.push("", "HAL read this directly as an authorized practice employee. Nothing was posted back.");
+    return lines.join("\n");
   }
 
   function formatDataQualityCheck(feed) {
@@ -2261,7 +2959,7 @@ const HalSkills = (function () {
     ].join("\n");
   }
 
-  function formatAccountingReviewQueue(feed) {
+  function formatAccountingReviewQueue(feed, snapshot) {
     const widgets = (feed && feed.widgets) || {};
     const keys = ["quickbooksSyncHealth", "quickbooksProfitLossDetail", "ebitdaNormalization", "accountsPayableAutomation", "documentIntakeQueue", "documentPreview", "periodCloseAndPosting"];
     const lines = ["Accounting review queue:", ""];
@@ -2272,24 +2970,120 @@ const HalSkills = (function () {
       const missing = widgetMissingMetrics(widget);
       if (missing.length) lines.push(`  Review needed: ${missing.join(", ")}.`);
     });
-    lines.push("", "Keep all posting decisions in human review. HAL may draft notes but cannot post to QuickBooks.");
+    const docs = snapshot && snapshot.documents;
+    if (docs && docs.queueCount) {
+      lines.push("", `Document intake queue: ${docs.queueCount} item(s) ready for accounting/Excel review.`);
+      if (docs.sourceCounts) {
+        lines.push(
+          `  Sources: QuickBooks ${docs.sourceCounts.quickbooks || 0}, SoftDent ${docs.sourceCounts.softdent || 0}, OCR ${docs.sourceCounts.ocr || 0}, manual ${docs.sourceCounts.manual || 0}`,
+        );
+      }
+      (docs.top || []).slice(0, 5).forEach((doc) => {
+        const source = doc.sourceSystem ? ` · ${doc.sourceSystem}` : "";
+        lines.push(`  - ${doc.id || "DOC"} | ${doc.vendor || "Vendor"} | ${doc.amount || "—"} | ${doc.status || "Pending Review"}${source}`);
+      });
+    }
+    lines.push("", "Keep all posting decisions in human review. HAL may draft notes and Excel-style workbooks but cannot post to QuickBooks.");
     return lines.join("\n");
   }
 
-  function formatExcelReconciliation(feed) {
+  function formatDocumentExcelWorkbook(feed, snapshot) {
     const widgets = (feed && feed.widgets) || {};
+    const docs = (snapshot && snapshot.documents) || {};
+    const qb = (snapshot && snapshot.dashboards && snapshot.dashboards.quickbooks) || {};
+    const allRows = docs.workbookSample || docs.top || [];
+    const queueBySource = { softdent: [], quickbooks: [], ocr: [], manual: [] };
+    allRows.forEach((doc) => {
+      const key = documentQueueSourceKey(doc);
+      if (queueBySource[key]) queueBySource[key].push(doc);
+    });
+    const queue = allRows;
+    const docTotal = queue.reduce((acc, doc) => acc + (parseMetricNumber(doc.amount) || 0), 0);
+    const monthlyRevenue = qb.monthlyRevenue;
+    const monthlyExpenses = qb.monthlyExpenses;
+    const lines = [
+      "Accounting document workbook (Excel-style, local review only):",
+      "",
+      "Tab 1 — Document Intake Queue (by source system)",
+      `Rows: ${docs.queueCount || queue.length || 0}`,
+      "SoftDent rows = practice ops. QuickBooks rows = accounting. OCR/manual = scanned or staff-added documents.",
+    ];
+    if (!queue.length) {
+      lines.push("- No documents in queue. Drop files in app_data/nr2/document_inbox or use Add document.");
+    } else {
+      const renderSourceBlock = (title, rows) => {
+        if (!rows.length) return;
+        lines.push("", `${title} (${rows.length} visible in sample)`);
+        lines.push("Columns: ID | Vendor | Type | Date | Amount | Status | Age (days)");
+        rows.slice(0, 8).forEach((doc) => {
+          lines.push(
+            `- ${doc.id || "DOC"} | ${doc.vendor || "—"} | ${doc.type || "—"} | ${doc.date || "—"} | ${doc.amount || "—"} | ${doc.status || "Pending Review"} | ${doc.age != null ? doc.age : "—"}`,
+          );
+        });
+      };
+      renderSourceBlock("SoftDent document imports", queueBySource.softdent);
+      renderSourceBlock("QuickBooks document imports", queueBySource.quickbooks);
+      renderSourceBlock("OCR inbox documents", queueBySource.ocr);
+      renderSourceBlock("Manual documents", queueBySource.manual);
+      lines.push(`Queue total (visible rows): ${docTotal ? `$${docTotal.toFixed(2)}` : "—"}`);
+    }
+    lines.push("", "Tab 2 — QuickBooks Monthly P&L");
+    if (monthlyRevenue && monthlyExpenses && monthlyRevenue.labels && monthlyExpenses.labels) {
+      const periods = monthlyRevenue.labels;
+      periods.forEach((label, index) => {
+        const revenue = monthlyRevenue.values[index];
+        const expense = monthlyExpenses.values[index];
+        const net = revenue != null && expense != null ? revenue - expense : null;
+        lines.push(`- ${label}: revenue $${Number(revenue || 0).toLocaleString()} | expenses $${Number(expense || 0).toLocaleString()} | net ${net != null ? `$${net.toLocaleString()}` : "—"}`);
+      });
+      lines.push("", "Import cache policy: current + prior month only; cache purges after 7 days so totals do not stack.");
+    } else {
+      lines.push("- Monthly QuickBooks series not available yet. Refresh imports after monthly P&L export fills.");
+      const qbWidget = widgets.quickbooksProfitLossDetail;
+      if (qbWidget) lines.push(`- Current P&L widget: [${qbWidget.status}] ${formatWidgetMetrics(qbWidget)}`);
+    }
+    lines.push("", "Tab 3 — Expense Category Pivot");
+    const ebitda = widgets.ebitdaNormalization;
+    if (ebitda && ebitda.metrics && ebitda.metrics.topAddBackCategory) {
+      lines.push(`- Top add-back category: ${ebitda.metrics.topAddBackCategory}`);
+      lines.push(`- Add-back total: ${ebitda.metrics.addBackTotal || "—"}`);
+    } else {
+      lines.push("- Expense category pivot waiting on QuickBooks expense categories import.");
+    }
+    lines.push("", "Tab 4 — Reconciliation & Exceptions");
+    lines.push("- Match document vendor/amount to QuickBooks expense categories before posting.");
+    lines.push("- Flag documents in Pending Review before period close.");
+    if (feed.accountingExcelValidation && feed.accountingExcelValidation.issues && feed.accountingExcelValidation.issues.length) {
+      feed.accountingExcelValidation.issues.slice(0, 6).forEach((issue) => {
+        lines.push(`- [${issue.severity}] ${issue.widgetKey}: ${issue.message}`);
+      });
+    } else {
+      lines.push("- No accounting/excel validation exceptions on current widget feed.");
+    }
+    lines.push("", "HAL recommendation: review Tab 1 documents against Tab 2 monthly expenses and Tab 3 categories. Posting remains human-reviewed only.");
+    return lines.join("\n");
+  }
+
+  function formatExcelReconciliation(feed, snapshot) {
+    const widgets = (feed && feed.widgets) || {};
+    const docs = snapshot && snapshot.documents;
     return [
       "Excel-style reconciliation plan:",
       "",
-      "1. Source tabs: SoftDent dashboard, SoftDent claims, verified SoftDent A/R, QuickBooks P&L, QuickBooks expenses, local documents.",
+      "1. Source tabs: SoftDent dashboard, SoftDent claims, verified SoftDent A/R, QuickBooks monthly P&L, QuickBooks expenses, local accounting documents.",
       "2. Normalize columns: period, source, category, amount, claim status, payer, provider (Dr. Michael Reno), document status.",
       "3. Sort/filter: failed or degraded widgets first, then missing metrics, then oldest/stalest source.",
-      "4. Compare: SoftDent production vs collections, QuickBooks revenue vs SoftDent collections, verified A/R vs claims balances, expenses vs documents.",
+      "4. Compare: SoftDent production vs collections, QuickBooks revenue vs SoftDent collections, verified A/R vs claims balances, document queue amounts vs QuickBooks expenses.",
       "5. Pivot/group: claims by status, A/R by aging bucket, documents by posting readiness, expenses by add-back category.",
-      "6. Exception list: blanks, mismatched periods, missing A/R, missing claim status, missing QuickBooks expense file, missing document metadata.",
+      "6. Exception list: blanks, mismatched periods, missing A/R, missing claim status, missing QuickBooks monthly series, missing document metadata.",
       "",
       `Current financial widget: ${widgets.practiceFinancialOverview ? `[${widgets.practiceFinancialOverview.status}] ${formatWidgetMetrics(widgets.practiceFinancialOverview)}` : "not available"}`,
       `Current A/R widget: ${widgets.arAgingAndCollections ? `[${widgets.arAgingAndCollections.status}] ${formatWidgetMetrics(widgets.arAgingAndCollections)}` : "not available"}`,
+      docs && docs.queueCount
+        ? `Document intake queue: ${docs.queueCount} document(s) for vendor/amount matching.`
+        : "Document intake queue: empty — OCR inbox or Add document needed.",
+      "",
+      "Ask HAL: work document workbook — for a document-by-document Excel-style review against QuickBooks.",
       "",
       "HAL should recommend from verified values only and leave unknowns blank.",
     ].join("\n");
@@ -2375,17 +3169,32 @@ const HalSkills = (function () {
     // widgets
     WIDGET_NAV,
     WIDGET_ORDER,
+    WIDGET_FILL_REQUIREMENTS,
     buildWidgetFeed,
     enforceReceivablesArPolicy,
     formatWidgetFeed,
     formatWidgetFillSuggestions,
     formatWidgetMissingData,
+    buildWidgetSourceTrace,
+    formatWidgetSourceTrace,
     formatWidgetFillPriority,
     formatImportChecklist,
+    formatImportHealthSummary,
+    formatSourceSystemGuide,
+    formatPracticeSourcePullResult,
+    formatNarrativeForClaim,
+    formatHalJobRequirements,
+    formatWidgetPeriodRequirements,
+    formatCognitivePathways,
+    SOURCE_SYSTEM_PROFILES,
+    resolvePracticeSourceRequest,
+    formatPracticeSourceCatalog,
+    formatPracticeSourceFetch,
     formatDataQualityCheck,
     formatEmptyWidgetExplanation,
     formatDailyOwnerBriefing,
     formatAccountingReviewQueue,
+    formatDocumentExcelWorkbook,
     formatExcelReconciliation,
     formatWidgetDetail,
     formatWidgetMetrics,
@@ -2395,6 +3204,9 @@ const HalSkills = (function () {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = HalSkills;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.HalSkills = HalSkills;
 }
 if (typeof window !== "undefined") {
   window.HalSkills = HalSkills;

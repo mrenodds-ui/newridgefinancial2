@@ -15,11 +15,102 @@
       "Make clear recommendations and next steps for staff review while staying read-only."
     ]
   },
+  "cognitivePathways": {
+    "priority": 1,
+    "title": "HAL cognitive & social characteristics (high-priority pathways)",
+    "summary": "HAL reasons about complex practice-financial concepts, reflects on its own analysis, plans across time periods, and cooperates with staff using symbolic language — always read-only and review-required.",
+    "cognitive": [
+      {
+        "id": "abstract-reasoning",
+        "label": "Abstract Reasoning",
+        "practice": "Think deeply about accounting vs practice-management boundaries, period alignment, EBITDA logic, and claims readiness — not just surface totals."
+      },
+      {
+        "id": "self-awareness",
+        "label": "Self-Awareness",
+        "practice": "Know HAL is a local read-only assistant separate from SoftDent, QuickBooks, and staff; never confuse imported cache with live systems."
+      },
+      {
+        "id": "metacognition",
+        "label": "Metacognition",
+        "practice": "Think about thinking: self-check answers, state confidence, name missing data, and revise when tools contradict an earlier assumption."
+      },
+      {
+        "id": "mental-time-travel",
+        "label": "Mental Time Travel",
+        "practice": "Use current + prior month import policy, remember what was synced, and plan recommendations for period close and far-term widget coverage."
+      },
+      {
+        "id": "creativity-imagination",
+        "label": "Creativity & Imagination",
+        "practice": "Draft narrative options, briefing structures, and review plans that do not exist until staff approve them — never auto-submit."
+      }
+    ],
+    "social": [
+      {
+        "id": "symbolic-language",
+        "label": "Symbolic Language",
+        "practice": "Communicate with precise accounting terms, widget names, claim IDs, and period labels staff can verify."
+      },
+      {
+        "id": "culture-knowledge",
+        "label": "Culture & Accumulative Knowledge",
+        "practice": "Apply MemoAI/knowledge memories, import manifests, and prior sync context; pass findings forward in briefings and handoffs."
+      },
+      {
+        "id": "empathy-moral-compass",
+        "label": "Empathy & Moral Compass",
+        "practice": "Understand staff workload and patient/claim context; refuse unsafe external actions; require human review before payer steps."
+      },
+      {
+        "id": "hyper-social-cooperation",
+        "label": "Hyper-Social Cooperation",
+        "practice": "Coordinate across office manager, claims, documents, and sidenotes surfaces with shared priorities and clear next actions."
+      }
+    ]
+  },
+  "pathways": [
+    {
+      "id": "metacognition-period-planning",
+      "priority": 1,
+      "title": "Period & widget time planning",
+      "command": "What periods do widgets need",
+      "intent": "periods: widget-requirements",
+      "characteristics": ["metacognition", "mental-time-travel", "abstract-reasoning"],
+      "summary": "Determine required calendar months vs loaded SoftDent/QuickBooks exports for each widget."
+    },
+    {
+      "id": "metacognition-self-check",
+      "priority": 2,
+      "title": "Self-check before recommending",
+      "characteristics": ["metacognition", "self-awareness", "empathy-moral-compass"],
+      "summary": "Verify tool results, missing data, and firewall posture before any recommendation."
+    },
+    {
+      "id": "mental-time-travel-close",
+      "priority": 3,
+      "title": "Period close forward planning",
+      "characteristics": ["mental-time-travel", "symbolic-language", "culture-knowledge"],
+      "summary": "Compare document queue period, import months, and posting readiness for month-end."
+    },
+    {
+      "id": "cooperative-office-briefing",
+      "priority": 4,
+      "title": "Cooperative office briefing",
+      "characteristics": ["hyper-social-cooperation", "empathy-moral-compass", "creativity-imagination"],
+      "summary": "Build daily owner briefings that staff can act on together without external automation."
+    }
+  ],
   "programAccess": {
     "mode": "full-read",
     "scope": ["financial", "softdent", "quickbooks", "ar", "claims", "narratives", "documents", "library", "office-manager", "hal"],
     "writesBlocked": true,
     "note": "HAL may read all local program pages and persisted service data to monitor, organize, analyze, and recommend. External and destructive actions remain blocked."
+  },
+  "practiceSourcePull": {
+    "approved": true,
+    "summary": "Staff approved HAL to pull SoftDent and QuickBooks directly into the local import cache (read-only). Nothing is written back to either system.",
+    "onBoot": true
   },
   "controls": {
     "title": "System Controls",
@@ -39,10 +130,17 @@
       "Show missing data by widget",
       "Prioritize widgets to fill first",
       "Show import checklist",
+      "Explain SoftDent vs QuickBooks",
+      "Pull SoftDent and QuickBooks data",
+      "Pull all SoftDent and QuickBooks data",
+      "Draft narrative for claim CLM-2026-1001",
+      "What do you need to do your job",
+      "What periods do widgets need",
       "Check data quality before recommendations",
       "Explain why this widget is empty",
       "Build daily owner briefing",
       "Show accounting review queue",
+      "Work document workbook",
       "Show Excel-style reconciliation",
       "Search the library for compliance",
       "Show my tasks",
@@ -67,7 +165,8 @@
       "Open claims workbench",
       "Explain QuickBooks",
       "What is ready to work on",
-      "Make a plan for today"
+      "Make a plan for today",
+      "Trace widgets"
     ]
   },
   "sources": {
@@ -78,7 +177,7 @@
         "label": "SoftDent",
         "target": "softdent",
         "status": "Read-only",
-        "detail": "Production, collections, A/R, and export health.",
+        "detail": "Practice management: production, collections, claims, verified dental A/R. Not accounting GL.",
         "freshness": "Last export: today 06:12 AM",
         "syncState": "Current",
         "warning": null,
@@ -88,7 +187,7 @@
         "label": "QuickBooks",
         "target": "quickbooks",
         "status": "Read-only",
-        "detail": "P&L, expenses, EBITDA candidates, and sync status.",
+        "detail": "Accounting GL: P&L, expenses, expense categories, net income. Not chairside production or dental A/R.",
         "freshness": "Import-driven",
         "syncState": "See HAL source health for live status",
         "warning": null,
@@ -166,7 +265,7 @@
     "title": "External action firewall",
     "summary": "HAL only reads data from SoftDent and QuickBooks. It cannot perform external actions from this program, and the safety boundary is enforced before any model call.",
     "blocked": ["No email", "No fax", "No upload", "No payer contact", "SoftDent read-only", "QuickBooks read-only", "No submission"],
-    "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information", "Draft a journal entry (local review only)", "Assess claim packet readiness", "Build office-manager attention list", "Create local office tasks", "Monitor local sidenotes", "Add local sidenotes"],
+    "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information", "Draft a journal entry (local review only)", "Assess claim packet readiness", "Build office-manager attention list", "Create local office tasks", "Monitor local sidenotes", "Add local sidenotes", "Read QuickBooks and SoftDent directly (authorized practice employee, read-only)"],
     "examples": [
       { "text": "Open the claims workbench", "expected": "allowed" },
       { "text": "Explain A/R aging", "expected": "allowed" },
@@ -467,10 +566,17 @@
       "Show missing data by widget": "widgets: missing-data",
       "Prioritize widgets to fill first": "widgets: fill-priority",
       "Show import checklist": "imports: checklist",
+      "Explain SoftDent vs QuickBooks": "sources: system guide",
+      "Pull SoftDent and QuickBooks data": "sources: pull-approved",
+      "Pull all SoftDent and QuickBooks data": "sources: pull-approved",
+      "Draft narrative for claim CLM-2026-1001": "narratives: select-for-claim",
+      "What do you need to do your job": "hal: job-requirements",
+      "What periods do widgets need": "periods: widget-requirements",
       "Check data quality before recommendations": "data-quality: check",
       "Explain why this widget is empty": "widgets: explain-empty",
       "Build daily owner briefing": "briefing: owner-daily",
       "Show accounting review queue": "accounting: review-queue",
+      "Work document workbook": "documents: excel-workbook",
       "Show Excel-style reconciliation": "reconciliation: excel-style",
       "Search the library for compliance": "library: ask",
       "Show my tasks": "tasks: list",

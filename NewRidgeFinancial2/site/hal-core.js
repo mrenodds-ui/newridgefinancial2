@@ -208,6 +208,9 @@ const HalCore = (function () {
       if (ebitdaMetric) finParts.push(`EBITDA ${ebitdaMetric.value || "—"}`);
       if (fin.quality?.score) finParts.push(`quality ${fin.quality.score}/100`);
       lines.push(`Financial (${fin.dateRange || "current"}): ${finParts.join(", ")}`);
+      lines.push(
+        "Source boundary: SoftDent = practice ops (production, claims, dental A/R). QuickBooks = accounting GL (revenue, expenses, P&L). Totals are related but not interchangeable.",
+      );
       if (fin.payerMix?.slices?.length) {
         lines.push(
           "Payer mix: " +
@@ -256,9 +259,16 @@ const HalCore = (function () {
     }
     if (snapshot.documents) {
       lines.push(`Documents (${snapshot.documents.entity || "entity"}): ${snapshot.documents.queueCount} in queue`);
+      if (snapshot.documents.sourceCounts) {
+        const counts = snapshot.documents.sourceCounts;
+        lines.push(
+          `  Sources: QuickBooks ${counts.quickbooks || 0}, SoftDent ${counts.softdent || 0}, OCR ${counts.ocr || 0}, manual ${counts.manual || 0}`,
+        );
+      }
       (snapshot.documents.posting || []).forEach((p) => lines.push(`  - ${p.label}: ${p.count}`));
       (snapshot.documents.top || []).slice(0, 4).forEach((d) => {
-        lines.push(`  - ${d.id} · ${d.vendor} · ${d.amount} · ${d.status}`);
+        const source = d.sourceSystem ? ` · ${d.sourceSystem}` : "";
+        lines.push(`  - ${d.id} · ${d.vendor} · ${d.amount} · ${d.status}${source}`);
       });
     }
     if (snapshot.library) {
@@ -395,8 +405,21 @@ const HalCore = (function () {
     }
 
     // Manager dashboard widgets (import-cache widget feed)
+    if (
+      /\b(period|periods|time period|month)\b.*\b(widget|need|require|data|coverage)\b/.test(query) ||
+      /\bwhat periods\b.*\b(widget|need|require)\b/.test(query) ||
+      /\bwidget period requirements\b/.test(query)
+    ) {
+      return { intent: "periods: widget-requirements", lane: "local", useWidgetPeriodRequirements: true, text: "", actions: [] };
+    }
+    if (/\b(source trace|trace widgets?|widget trace|diagnostic trace|diagnose widgets?|trace (the )?sources?)\b/.test(query)) {
+      return { intent: "widgets: source-trace", lane: "local", useWidgetGuidance: true, widgetGuidance: "sourceTrace", text: "", actions: [] };
+    }
     if (/\bmissing data\b.*\bwidgets?\b|\bwidgets?\b.*\bmissing data\b|\bmissing\b.*\bby widget\b/.test(query)) {
       return { intent: "widgets: missing-data", lane: "local", useWidgetGuidance: true, widgetGuidance: "missingData", text: "", actions: [] };
+    }
+    if (/\b(widget master chart|master widget chart|all widgets chart|widget map|widget guide|where\b.*widgets?\b.*\bdata)\b/.test(query)) {
+      return { intent: "widgets: master-chart", lane: "local", useWidgetMasterChart: true, text: "", actions: [] };
     }
     if (/\bwidget contract\b|\bwhat does\b.*\bwidget\b.*\bneed\b|\bwhich dataset\b.*\bwidget\b|\bwhich field\b.*\bwidget\b|\bdata source\b.*\bwidget\b/.test(query)) {
       return { intent: "widgets: contract", lane: "local", useWidgetContract: true, text: "", actions: [] };
@@ -421,6 +444,9 @@ const HalCore = (function () {
     }
     if (/\baccounting review queue\b|\bshow accounting review\b|\bquickbooks\b.*\bdocuments\b.*\breview\b/.test(query)) {
       return { intent: "accounting: review-queue", lane: "local", useWidgetGuidance: true, widgetGuidance: "accountingReviewQueue", text: "", actions: [] };
+    }
+    if (/\b(document workbook|work documents|excel documents|accounting documents workbook|work the documents)\b/.test(query)) {
+      return { intent: "documents: excel-workbook", lane: "local", useWidgetGuidance: true, widgetGuidance: "documentExcelWorkbook", text: "", actions: [] };
     }
     if (/\bexcel\b.*\breconciliation\b|\breconciliation\b.*\bexcel\b|\bexcel-style reconciliation\b/.test(query)) {
       return { intent: "reconciliation: excel-style", lane: "local", useWidgetGuidance: true, widgetGuidance: "excelReconciliation", text: "", actions: [] };
@@ -494,18 +520,31 @@ const HalCore = (function () {
     return header + "\n" + list;
   }
 
+  function cognitivePathwaysText(halData) {
+    const block = (halData && halData.cognitivePathways) || {};
+    const lines = [
+      "HAL cognitive & social characteristics (high-priority pathways):",
+      block.summary || "Reason deeply, self-check, plan across periods, and cooperate with staff — read-only always.",
+    ];
+    (block.cognitive || []).forEach((item) => lines.push(`- ${item.label}: ${item.practice}`));
+    (block.social || []).forEach((item) => lines.push(`- ${item.label}: ${item.practice}`));
+    return lines.join("\n");
+  }
+
   function buildSystemPrompt(halData, programContext) {
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const access = (halData && halData.programAccess) || {};
     const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
     const parts = [
       "You are HAL, the local read-only program manager for NewRidgeFinancial 2.0, a dental-practice financial program.",
+      cognitivePathwaysText(halData),
       topPriority ? `Top priority: ${topPriority}` : "Top priority: monitor the program, place correct data, and recommend next safe staff actions.",
       access.mode === "full-read"
         ? "You have full read access to the local program snapshot below. Answer using that data when relevant."
         : "Answer briefly and only about this program and its pages. If you are unsure, say so.",
       "Use accounting and Excel-style review to organize imported data, compare totals and periods, reconcile available values, identify missing fields, and make recommendations.",
       "Never fabricate missing SoftDent, QuickBooks, A/R, claims, document, or library data; say what is missing and what staff should verify.",
+      "SoftDent and QuickBooks are separate systems: SoftDent = practice ops (production, claims, verified dental A/R). QuickBooks = accounting GL (revenue, expenses, P&L). Never treat their totals as the same number.",
       "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
       "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
       "If the user asks for an external action, refuse and say it needs human review.",
@@ -524,6 +563,7 @@ const HalCore = (function () {
     const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
     const parts = [
       "You are HAL's reasoning lane for NewRidgeFinancial 2.0, a dental-practice financial program.",
+      cognitivePathwaysText(halData),
       topPriority ? `Top priority: ${topPriority}` : "Top priority: monitor the program, place correct data, and recommend next safe staff actions.",
       "Produce a short, structured, prioritized plan based only on the local program state below.",
       "Use accounting and Excel-style reasoning: verify source freshness, put imported rows in the correct financial/accounting context, reconcile totals and periods, sort or group what matters, and call out blanks or conflicts.",
@@ -1362,11 +1402,100 @@ const HalCore = (function () {
       };
     }
 
+    if (
+      /\b(what can (you|hal)|catalog|list resources|available resources)\b.*\b(quickbooks|softdent|source|upstream)\b/.test(query) ||
+      /\b(quickbooks|softdent)\b.*\b(what can (you|hal)|catalog|list resources)\b/.test(query)
+    ) {
+      return { intent: "sources: catalog", lane: "local", usePracticeSourceCatalog: true, text: "", actions: [] };
+    }
+
+    if (
+      (/\b(fetch|pull|get|read|query|retrieve)\b/.test(query) &&
+        (/\b(direct|live|upstream|source)\b/.test(query) || /\b(revenue|expenses|claims|dashboard|ar|p&l|profit|clinical|bridge|monthly)\b/.test(query)) &&
+        /\b(quickbooks|softdent|qb)\b/.test(query)) ||
+      /\b(fetch|pull|get)\b.*\b(quickbooks|softdent|qb)\b.*\b(revenue|expenses|claims|dashboard|ar|p&l|profit|clinical|bridge|monthly|all)\b/.test(query)
+    ) {
+      const skills =
+        typeof HalSkills !== "undefined"
+          ? HalSkills
+          : typeof globalThis !== "undefined" && globalThis.HalSkills
+            ? globalThis.HalSkills
+            : typeof window !== "undefined" && window.HalSkills
+              ? window.HalSkills
+              : null;
+      const practiceSystem = /\bsoftdent\b|\bsoft dent\b/.test(query)
+        ? "softdent"
+        : /\bquickbooks\b|\bqb\b/.test(query)
+          ? "quickbooks"
+          : "quickbooks";
+      const req =
+        skills && skills.resolvePracticeSourceRequest
+          ? skills.resolvePracticeSourceRequest(query)
+          : { system: practiceSystem, resource: "revenue", refreshCache: /\b(refresh|sync)\b/.test(query) };
+      if (!req.system || req.system === "catalog") req.system = practiceSystem;
+      return {
+        intent: `sources: fetch:${req.system || "quickbooks"}`,
+        lane: "local",
+        usePracticeSourceFetch: true,
+        practiceSourceRequest: req,
+        text: "",
+        actions: [],
+      };
+    }
+
     if (/\b(refresh|reload)\b.*\b(imports?|softdent|quickbooks)\b|\bimports?\b.*\b(refresh|reload|status)\b|\bsoftdent\b.*\bimports?\b|\bquickbooks\b.*\bimports?\b/.test(query)) {
       if (/\b(refresh|reload)\b/.test(query)) {
         return { intent: "imports: refresh", lane: "local", useImportRefresh: true, text: "", actions: [] };
       }
       return { intent: "imports: status", lane: "local", useImportStatus: true, text: "", actions: [] };
+    }
+
+    if (
+      /\b(pull|sync|refresh)\b.*\b(softdent|quickbooks|practice sources?|upstream)\b|\b(softdent|quickbooks)\b.*\b(pull|sync|refresh)\b.*\b(direct|source|approved|cache|all|100%|full)\b/.test(
+        query,
+      )
+    ) {
+      const fullPull = /\b(full|100%|all data|everything)\b/.test(query);
+      return { intent: "sources: pull-approved", lane: "local", usePracticeSourcePull: true, practiceSourceFullPull: fullPull, text: "", actions: [] };
+    }
+
+    if (
+      /\b(draft|select|pick|best|generate)\b.*\b(narrative|letter)\b/.test(query) &&
+      (/\bclaim\b|\bCLM[-\w]+\b/i.test(query) || /\bfor\b.*\bclaim\b/.test(query))
+    ) {
+      return { intent: "narratives: select-for-claim", lane: "local", useNarrativeForClaim: true, text: "", actions: [] };
+    }
+
+    if (/\b(cognitive|metacognition|how do you think|characteristics|pathways)\b/.test(query)) {
+      return { intent: "hal: cognitive-pathways", lane: "local", useCognitivePathways: true, text: "", actions: [] };
+    }
+
+    if (
+      /\bwhat do you need\b|\bwhat do i need to provide\b|\bthings you need\b|\bwhat.*need.*\b(job|work)\b|\blist.*\b(need|missing|requirements)\b.*\bhal\b/.test(
+        query,
+      )
+    ) {
+      return { intent: "hal: job-requirements", lane: "local", useHalJobRequirements: true, text: "", actions: [] };
+    }
+
+    if (
+      /\b(difference|different|vs\.?|versus|compare|between)\b.*\b(softdent|quickbooks)\b.*\b(softdent|quickbooks)\b/.test(query) ||
+      /\bwhat (data|information|numbers?)\b.*\b(comes from|is in|live in)\b.*\b(softdent|quickbooks)\b/.test(query) ||
+      /\b(softdent|quickbooks)\b.*\b(data|source|system|export)\b.*\b(mean|for|used|own|difference)\b/.test(query) ||
+      /\bexplain\b.*\b(softdent|quickbooks)\b.*\b(source|data|system|difference|vs)\b/.test(query) ||
+      /\bwhich (system|source)\b.*\b(ar|revenue|production|claims|expenses)\b/.test(query) ||
+      /\bsoftdent\b.*\bvs\b.*\bquickbooks\b/.test(query) ||
+      /\bquickbooks\b.*\bvs\b.*\bsoftdent\b/.test(query)
+    ) {
+      return { intent: "sources: system guide", lane: "local", useSourceSystemGuide: true, text: "", actions: [] };
+    }
+
+    if (
+      /\b(force|push|place|fill|refresh)\b.*\b(widget|dashboard|data)\b|\b(widget|dashboard)\b.*\b(force|push|place|fill|refresh)\b|\bplace data\b|\bpush data\b/.test(
+        query,
+      )
+    ) {
+      return { intent: "widgets: force placement", lane: "local", useForceWidgetPlacement: true, text: "", actions: [] };
     }
 
     if (/\b(source|softdent|quickbooks|freshness|sync|intake|source health)\b/.test(query) && !wantsExplain) {

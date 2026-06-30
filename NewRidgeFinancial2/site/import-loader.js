@@ -7,10 +7,10 @@ const ImportLoader = (function () {
   const PRIMARY_PROVIDER = "Dr. Michael Reno";
   const isNode = typeof window === "undefined";
   const REPO_IMPORT_SOFTDENT = isNode
-    ? require("node:path").join(__dirname, "..", "..", "app", "data", "imports", "softdent")
+    ? require("node:path").join(__dirname, "..", "..", "app_data", "nr2", "document_inbox", "softdent")
     : null;
   const REPO_IMPORT_QUICKBOOKS = isNode
-    ? require("node:path").join(__dirname, "..", "..", "app", "data", "imports", "quickbooks")
+    ? require("node:path").join(__dirname, "..", "..", "app_data", "nr2", "document_inbox", "quickbooks")
     : null;
 
   const SOFTDENT_DASHBOARD_NAMES = [
@@ -36,6 +36,8 @@ const ImportLoader = (function () {
   const QB_REVENUE_NAMES = [
     "quickbooks_revenue.csv",
     "quickbooks_revenue.json",
+  ];
+  const QB_PL_NAMES = [
     "quickbooks_profit_and_loss.csv",
     "quickbooks_profit_loss.csv",
   ];
@@ -76,6 +78,7 @@ const ImportLoader = (function () {
   const MANIFEST_SOFTDENT_CLINICAL_NAMES = manifestFilenames("softdent.clinicalNotes", SOFTDENT_CLINICAL_NAMES);
   const MANIFEST_SOFTDENT_AR_NAMES = manifestFilenames("softdent.ar", SOFTDENT_AR_NAMES);
   const MANIFEST_QB_REVENUE_NAMES = manifestFilenames("quickbooks.revenue", QB_REVENUE_NAMES);
+  const MANIFEST_QB_PL_NAMES = manifestFilenames("quickbooks.profitAndLoss", QB_PL_NAMES);
   const MANIFEST_QB_EXPENSE_NAMES = manifestFilenames("quickbooks.expenses", QB_EXPENSE_NAMES);
   const MANIFEST_QB_EXPENSE_CATEGORY_NAMES = manifestFilenames("quickbooks.expenseCategories", QB_EXPENSE_CATEGORY_NAMES);
   const MANIFEST_QB_AR_NAMES = manifestFilenames("quickbooks.ar", QB_AR_NAMES);
@@ -310,6 +313,7 @@ const ImportLoader = (function () {
       quickbooks: {
         dir: REPO_IMPORT_QUICKBOOKS,
         revenue: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, MANIFEST_QB_REVENUE_NAMES, fs),
+        profitAndLoss: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, MANIFEST_QB_PL_NAMES, fs),
         expenses: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, MANIFEST_QB_EXPENSE_NAMES, fs),
         expenseCategories: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, MANIFEST_QB_EXPENSE_CATEGORY_NAMES, fs),
         ar: loadDatasetNode(REPO_IMPORT_QUICKBOOKS, MANIFEST_QB_AR_NAMES, fs),
@@ -478,11 +482,11 @@ const ImportLoader = (function () {
     };
   }
 
-  function buildMonthlyExpensesFromRows(rows) {
+  function buildMonthlySeriesFromRows(rows, amountFields) {
     const monthly = (rows || [])
       .map((row) => ({
         label: String(pickField(row, ["Month", "month", "Period", "period", "Date", "date"]) || "").trim(),
-        amount: coerceFloat(pickField(row, ["Amount", "amount", "TotalExpense", "Expenses", "Expense"])),
+        amount: coerceFloat(pickField(row, amountFields)),
       }))
       .filter((row) => row.label && row.amount !== null);
     if (monthly.length < 2) return null;
@@ -491,6 +495,14 @@ const ImportLoader = (function () {
       labels: monthly.map((row) => row.label),
       values: monthly.map((row) => row.amount),
     };
+  }
+
+  function buildMonthlyExpensesFromRows(rows) {
+    return buildMonthlySeriesFromRows(rows, ["Amount", "amount", "TotalExpense", "Expenses", "Expense"]);
+  }
+
+  function buildMonthlyRevenueFromRows(rows) {
+    return buildMonthlySeriesFromRows(rows, ["Amount", "amount", "TotalIncome", "Income", "Revenue", "total_income"]);
   }
 
   function buildQuickbooksArSummary(arRows) {
@@ -513,6 +525,22 @@ const ImportLoader = (function () {
     const revenueRows = ((bundle.quickbooks && bundle.quickbooks.revenue) || {}).rows || [];
     const expenseRows = ((bundle.quickbooks && bundle.quickbooks.expenses) || {}).rows || [];
     const totalFromRows = (rows, totalFields, amountFields) => {
+      const periodized = (rows || []).filter((row) =>
+        String(pickField(row, ["Month", "month", "Period", "period", "Date", "date"]) || "").trim(),
+      );
+      if (periodized.length >= 1) {
+        const sorted = periodized
+          .slice()
+          .sort((a, b) =>
+            String(pickField(b, ["Month", "month", "Period", "period", "Date", "date"]) || "").localeCompare(
+              String(pickField(a, ["Month", "month", "Period", "period", "Date", "date"]) || ""),
+            ),
+          );
+        const latest = sorted[0] || {};
+        const explicit = coerceFloat(pickField(latest, totalFields));
+        if (explicit !== null) return explicit;
+        return coerceFloat(pickField(latest, amountFields));
+      }
       const first = rows[0] || {};
       const explicitTotal = coerceFloat(pickField(first, totalFields));
       if (explicitTotal !== null) return explicitTotal;
@@ -692,6 +720,7 @@ const ImportLoader = (function () {
         }
       : undefined;
     const monthlyExpenses = buildMonthlyExpensesFromRows(totals.expenseRows);
+    const monthlyRevenue = buildMonthlyRevenueFromRows(totals.revenueRows);
     const arRows = ((bundle.quickbooks && bundle.quickbooks.ar) || {}).rows || [];
     const arSummary = buildQuickbooksArSummary(arRows);
     return assignPatch(emptyDashboard("quickbooks"), {
@@ -704,6 +733,7 @@ const ImportLoader = (function () {
       expenses: totals.expenses,
       ...(expenseCategoryDonut ? { expenseCategories: expenseCategoryDonut } : {}),
       ...(monthlyExpenses ? { monthlyExpenses } : {}),
+      ...(monthlyRevenue ? { monthlyRevenue } : {}),
       ...(arSummary
         ? {
             ar: {
@@ -816,6 +846,17 @@ const ImportLoader = (function () {
         disclaimer: "Imported from local SoftDent and QuickBooks export files. HAL reads only; nothing is written back.",
         refreshed: formatFreshness(bundle.loadedAt),
       },
+      ...(productionTrend && payerMix
+        ? {
+            quality: {
+              score: 88,
+              categories: [
+                { label: "Production trend", value: "Imported" },
+                { label: "Payer mix", value: "Imported" },
+              ],
+            },
+          }
+        : {}),
     });
   }
 
@@ -1068,6 +1109,7 @@ const ImportLoader = (function () {
       `  ar: ${sd.ar ? `${sd.ar.sourceFile} (${(sd.ar.rows || []).length} rows)` : "missing"}`,
       `QuickBooks dir: ${qb.dir || "—"}`,
       `  revenue: ${qb.revenue ? `${qb.revenue.sourceFile} (${(qb.revenue.rows || []).length} rows)` : "missing"}`,
+      `  profit and loss: ${qb.profitAndLoss ? `${qb.profitAndLoss.sourceFile} (${(qb.profitAndLoss.rows || []).length} rows)` : "missing"}`,
       `  expenses: ${qb.expenses ? `${qb.expenses.sourceFile} (${(qb.expenses.rows || []).length} rows)` : "missing"}`,
       `  expense categories: ${qb.expenseCategories ? `${qb.expenseCategories.sourceFile} (${(qb.expenseCategories.rows || []).length} rows)` : "missing"}`,
       `  ar: ${qb.ar ? `${qb.ar.sourceFile} (${(qb.ar.rows || []).length} rows)` : "not configured — no automated QuickBooks A/R collector"}`,

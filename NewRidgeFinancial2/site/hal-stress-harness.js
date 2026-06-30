@@ -181,13 +181,15 @@ const HalStressHarness = (function () {
       if (result.useWidgetGuidance) {
         const formatters = {
           missingData: () => HalSkills.formatWidgetMissingData(feed),
+          sourceTrace: () => HalSkills.formatWidgetSourceTrace(feed, snapshot),
           fillPriority: () => HalSkills.formatWidgetFillPriority(feed),
-          importChecklist: () => HalSkills.formatImportChecklist(feed),
+          importChecklist: () => HalSkills.formatImportChecklist(feed, snapshot),
           dataQuality: () => HalSkills.formatDataQualityCheck(feed),
           explainEmpty: () => HalSkills.formatEmptyWidgetExplanation(feed, result.prompt || trimmed),
           dailyOwnerBriefing: () => HalSkills.formatDailyOwnerBriefing(feed, snapshot),
-          accountingReviewQueue: () => HalSkills.formatAccountingReviewQueue(feed),
-          excelReconciliation: () => HalSkills.formatExcelReconciliation(feed),
+          accountingReviewQueue: () => HalSkills.formatAccountingReviewQueue(feed, snapshot),
+          documentExcelWorkbook: () => HalSkills.formatDocumentExcelWorkbook(feed, snapshot),
+          excelReconciliation: () => HalSkills.formatExcelReconciliation(feed, snapshot),
         };
         const formatter = formatters[result.widgetGuidance] || (() => HalSkills.formatWidgetFillSuggestions(feed));
         return formatter();
