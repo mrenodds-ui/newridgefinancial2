@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -140,6 +141,51 @@ def _derive_case_acceptance(tp_rows: list[dict[str, Any]]) -> list[dict[str, Any
 
 
 from softdent_dashboard_period_sync import diagnose_collections_gap
+
+
+def _practice_dataset(
+    rows: list[dict[str, Any]],
+    *,
+    db_path: Path,
+    source_file: str,
+) -> dict[str, Any]:
+    return {
+        "sourceFile": source_file,
+        "sourcePath": str(db_path),
+        "modifiedAt": datetime.fromtimestamp(db_path.stat().st_mtime, tz=timezone.utc).isoformat(),
+        "rows": rows,
+        "readSource": "direct",
+        "sourceKind": "analytics-db",
+    }
+
+
+def read_practice_export_datasets(db_path: Path | None = None) -> dict[str, dict[str, Any] | None]:
+    """In-memory practice widget rows from the analytics DB (no document-inbox write)."""
+    db_path = db_path or resolve_analytics_db()
+    out: dict[str, dict[str, Any] | None] = {
+        "newPatients": None,
+        "treatmentPlans": None,
+        "caseAcceptance": None,
+    }
+    if not db_path or not db_path.is_file():
+        return out
+
+    periods = relevant_period_labels()
+    conn = sqlite3.connect(db_path)
+    try:
+        np_rows = _aggregate_new_patients(conn, periods)
+        tp_rows = _aggregate_treatment_plans(conn, periods)
+        ca_rows = _derive_case_acceptance(tp_rows) if tp_rows else []
+    finally:
+        conn.close()
+
+    if np_rows:
+        out["newPatients"] = _practice_dataset(np_rows, db_path=db_path, source_file="softdent_new_patients.csv")
+    if tp_rows:
+        out["treatmentPlans"] = _practice_dataset(tp_rows, db_path=db_path, source_file="treatment_plan_summary.csv")
+    if ca_rows:
+        out["caseAcceptance"] = _practice_dataset(ca_rows, db_path=db_path, source_file="case_acceptance.csv")
+    return out
 
 
 def sync_practice_exports(db_path: Path | None = None, destination: Path | None = None) -> dict[str, Any]:

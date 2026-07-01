@@ -74,7 +74,7 @@ const HalPage = (function () {
     if (q.includes("snapshot") || q.includes("program") || q.includes("blocked") || q.includes("ready")) {
       return cardIcon("hal");
     }
-    if (q.includes("task")) return widgetIcon("officeManagerTasks");
+    if (q.includes("task")) return widgetIcon("officeManagerPriorities");
     if (q.includes("library") || q.includes("search") || q.includes("narrative")) return navIcon("narratives");
     if (q.includes("readiness") || q.includes("smoke") || q.includes("handoff")) return uiIcon("check");
     if (q.includes("monitor")) return uiIcon("monitor");
@@ -112,22 +112,6 @@ const HalPage = (function () {
     return String(value || "unknown")
       .replace(/_/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-
-  function mapSourceStatus(item) {
-    const sync = String(item.syncState || "").toLowerCase();
-    if (sync.includes("blocked")) return "blocked";
-    if (sync.includes("pending")) return "pending";
-    if (item.warning) return "error";
-    return "unknown";
-  }
-
-  // Live import health → source-intake status label.
-  function mapLiveSourceStatus(live) {
-    if (!live || !live.hasData) return "not loaded";
-    if (live.status === "SUCCESS") return "current";
-    if (live.status === "DEGRADED") return "needs review";
-    return "not loaded";
   }
 
   // Widget status → friendly staff-surface state.
@@ -263,7 +247,10 @@ const HalPage = (function () {
       : '<li class="hp-sn-empty">No local notes — add one below or ask HAL.</li>';
     return `<div class="hp-sidenotes-monitor" data-panel="sidenotes">
       ${liveSideNotesHtml(halSideNotesInbox)}
-      ${stationRosterHtml(halSideNotesInbox)}
+      <details class="hp-details">
+        <summary>Workstation watchers</summary>
+        ${stationRosterHtml(halSideNotesInbox)}
+      </details>
       <div class="hp-sn-head hp-sn-head--local">
         <h4>LOCAL NOTES</h4>
         ${changeBadge}
@@ -472,315 +459,81 @@ const HalPage = (function () {
     </div>`;
   }
 
+  function canvasHelpers() {
+    return {
+      esc,
+      uiIcon,
+      widgetIcon,
+      navIcon,
+      cardIconRaw,
+      cardHead,
+      actionChip,
+      promptIcon,
+      emptyNote,
+      sideNotesProgramCardHtml,
+      aiReadinessHtml,
+      agentHealthHtml,
+      stressTestHtml,
+      surfNavTarget,
+      surfNavIcon,
+      mapSurfaceState,
+    };
+  }
+
   function render(ctx) {
     const root = ctx.root;
     if (!root) return;
-    const { halData, halModels, halAudit, halChatHistory, halAskDraft, halAskLoading, halInlineFirewallResult, halSideNotes, halSideNoteMonitor, halSideNotesInbox, halWidgetFeed, halProactiveBriefing, halStressTest, halAgentHealth, sidenotesHubPath } = ctx;
-    const suggestions = (halData.askHal?.suggestions || []).slice(0, 12);
-    // One message at a time: only the most recent turn is shown (no scrolling).
-    const messages = (halChatHistory || []).slice(-1);
-    const chatHtml = messages.length
-      ? messages
-          .map(
-            (m) =>
-              `<div class="hp-chat-row hp-chat-row--${m.role === "user" ? "user" : "hal"}">
-                <div class="hp-chat-row__head">
-                  <span>${m.role === "user" ? "You" : "HAL"}${m.lane ? ` · ${esc(m.lane)}` : ""}</span>
-                  ${m.role === "hal" ? `<button type="button" class="hp-chat-copy" data-hal-copy-response title="Copy response (Ctrl+C also works)">${uiIcon("copy")} Copy</button>` : ""}
-                </div>
-                <p>${esc(m.text)}</p>
-              </div>`,
-          )
-          .join("")
-      : emptyNote("No HAL responses yet. Ask a question to begin.");
-
-    const liveSources = (halWidgetFeed && halWidgetFeed.sourceHealth) || {};
-    const sourceRows = ((halData.sources && halData.sources.items) || [])
-      .map((item) => {
-        const live = liveSources[item.target];
-        // Prefer live import freshness/status; fall back to static config only
-        // when no import data is present for this source.
-        const useLive = live && live.hasData;
-        const freshness = useLive ? live.freshness : item.freshness || "Not available";
-        const statusKey = useLive ? mapLiveSourceStatus(live) : mapSourceStatus(item);
-        const sourceCmd = `Review read-only source health for ${item.label}`;
-        return `<tr class="hp-table__row--active" data-hal-source-nav="${esc(item.target)}" data-hal-cmd="${esc(sourceCmd)}" role="button" tabindex="0" title="${esc(sourceCmd)} · click arrow to open page">
-          <td><span class="hp-table__label">${navIcon(item.target)}<span>${esc(item.label)}</span></span></td>
-          <td>${esc(item.status || "unknown")}</td>
-          <td>${esc(freshness || "Not available")}</td>
-          <td>${esc(formatStatus(statusKey))}</td>
-          <td class="hp-table__go"><button type="button" class="hp-table__open" data-hal-source-open="${esc(item.target)}" title="Open ${esc(item.label)}" aria-label="Open ${esc(item.label)}">${uiIcon("chevronRight")}</button></td>
-        </tr>`;
-      })
-      .join("");
-
-    const liveSurfaces = (halWidgetFeed && halWidgetFeed.surfaceCounts) || {};
-    const surfaces = ((halData.workSurfaces && halData.workSurfaces.items) || [])
-      .map((item) => {
-        const reg = (halData.registry || []).find((e) => e.id === item.target);
-        const live = liveSurfaces[item.target];
-        const state = live ? mapSurfaceState(live.status) : reg ? reg.state : "unknown";
-        const updated = live && live.updated ? live.updated : "Not available";
-        const items =
-          live && live.items != null
-            ? `${live.items}${live.itemsLabel ? " " + live.itemsLabel : ""}`
-            : "—";
-        const surfCmd = `Explain the ${item.label} work surface and what staff should do next`;
-        const surfOpen = surfNavTarget(item);
-        return `<li class="hp-surf__row" data-hal-surf-nav="${esc(surfOpen)}" data-hal-cmd="${esc(surfCmd)}" role="button" tabindex="0" title="${esc(surfCmd)}">
-          <span class="hp-surf__ico" aria-hidden="true">${surfNavIcon(item)}</span>
-          <div class="hp-surf__main"><strong>${esc(item.label)}</strong><span>${esc(item.detail || "")}</span></div>
-          <div class="hp-surf__meta">
-            <span>State<br><b>${esc(state)}</b></span>
-            <span>Updated<br><b>${esc(updated)}</b></span>
-            <span>Items<br><b>${esc(items)}</b></span>
-          </div>
-          <button type="button" class="hp-surf__chev" data-hal-surf-open="${esc(surfOpen)}" title="Open ${esc(item.label)}" aria-label="Open ${esc(item.label)}">${uiIcon("chevronRight")}</button>
-        </li>`;
-      })
-      .join("");
-
-    const activity = (halAudit || []).slice(-5).reverse();
-    const activityHtml = activity.length
-      ? activity
-          .map(
-            (row) =>
-              `<li class="hp-log__row--active" data-hal-activity-cmd="${esc(row.query || row.label || "")}" role="button" tabindex="0" title="Ask HAL again"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span>${esc(row.query || row.label || "")}</span><time>${esc(row.time || "")}</time></li>`,
-          )
-          .join("")
-      : emptyNote("No HAL activity in this session yet.");
-
-    const insights = (halData.registry || [])
-      .filter((e) => e.nextAction)
-      .slice(0, 4)
-      .map((e) => {
-        const conf =
-          String(e.state).toLowerCase() === "blocked"
-            ? "high"
-            : String(e.state).toLowerCase().includes("review")
-              ? "medium"
-              : "low";
-        const insightCmd = `Open ${e.name} and ${e.nextAction}`;
-        return `<li class="hp-insight__row--active" data-hal-insight-nav="${esc(e.id)}" data-hal-cmd="${esc(insightCmd)}" role="button" tabindex="0" title="${esc(insightCmd)}"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span>${esc(e.name)}: ${esc(e.nextAction)}</span><b class="hp-conf hp-conf--${conf === "high" ? "high" : conf === "medium" ? "med" : "low"}">${esc(conf)} confidence</b><button type="button" class="hp-insight__open" data-hal-insight-open="${esc(e.id)}" title="Open ${esc(e.name)}" aria-label="Open ${esc(e.name)}">${uiIcon("chevronRight")}</button></li>`;
-      })
-      .join("");
-
-    const blocked = (halData.firewall?.blocked || []).slice(0, 5);
-    const fwList = blocked
-      .map((item) => {
-        const fwCmd = `Explain why "${item}" is blocked by the firewall`;
-        return `<li class="hp-fw__row--active" data-hal-cmd="${esc(fwCmd)}" role="button" tabindex="0" title="${esc(fwCmd)}"><span>${esc(item)}</span><b>BLOCKED</b></li>`;
-      })
-      .join("");
-
-    const now = new Date();
+    const { halData, halModels, halWidgetFeed } = ctx;
     const registry = halData.registry || [];
     const tally = (pred) => registry.filter((e) => pred(String(e.state || "").toLowerCase())).length;
     const readyCount = tally((s) => s === "ready");
     const blockedCount = tally((s) => s === "blocked");
-    // HAL is a local read-only manager: it is online/healthy whenever its
-    // program registry has loaded. Individual lane states are surfaced
-    // separately as READY / BLOCKED counts below, not as HAL's own health.
     const halLoaded = registry.length > 0;
     const halStatusLabel = halLoaded ? "ONLINE" : "OFFLINE";
     const coreStatusLabel = halLoaded ? "HEALTHY" : "CHECK";
-    const modeLabel = halModels?.config?.mode === "online" ? "Auto" : "Registry-only";
+    const now = new Date();
+    const importMode =
+      (ctx.halProgramSnapshot && ctx.halProgramSnapshot.importBundle && ctx.halProgramSnapshot.importBundle.importMode) ||
+      (halWidgetFeed && halWidgetFeed.importMode) ||
+      "";
+    const directBadge =
+      importMode === "direct-first" ? `<span class="pv-badge pv-badge--import">Direct-first</span>` : "";
 
-    // Manager signals derived from data already in ctx (no backend):
-    // priorities/registry for next step + active work, firewall for allowed,
-    // and the local audit log for the last local receipt/status.
-    const needsReviewCount = tally((s) => s.includes("review"));
-    const priorities = (halData.priorities && halData.priorities.items) || [];
-    const topPriority =
-      (halData.topPriority && halData.topPriority.summary) ||
-      "Monitor the program, place correct data, and recommend the next safe staff action.";
-    const nextSafeStep =
-      (halProactiveBriefing && halProactiveBriefing.topAction && halProactiveBriefing.topAction.title) ||
-      priorities[0] ||
-      (registry.find((e) => e.nextAction) || {}).nextAction ||
-      "Review the Needs Review lane before any external step.";
-    const proactiveInsight =
-      halProactiveBriefing && halProactiveBriefing.recommendations && halProactiveBriefing.recommendations.length
-        ? halProactiveBriefing.recommendations
-            .slice(0, 3)
-            .map(
-              (item) =>
-                `<li class="hp-insight__lead hp-insight__row--active" data-hal-cmd="Explain ${esc(item.title)}" role="button" tabindex="0" title="Ask HAL about this recommendation"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>${esc(item.severity.toUpperCase())}</b> — ${esc(item.title)}</span></li>`,
-            )
-            .join("")
-        : "";
-    const programAccessLabel =
-      halData.programAccess?.mode === "full-read"
-        ? "Full read · all pages and services (local)"
-        : "Registry only";
-    const allowedActions = (halData.firewall && halData.firewall.allowed) || [];
-    const auditList = halAudit || [];
-    const lastReceipt = auditList.length ? auditList[auditList.length - 1] : null;
-    const lastReceiptText = lastReceipt
-      ? `${lastReceipt.time || ""} · ${lastReceipt.intent || lastReceipt.query || "local action"}`.trim()
-      : "No local receipt this session";
-
-    // HAL orb state: color/tempo variants while thinking or on warning.
-    // Derived from data already in ctx (no backend, no polling).
-    const liveUnread = !!(
-      halSideNotesInbox &&
-      Array.isArray(halSideNotesInbox.items) &&
-      halSideNotesInbox.items.some((m) => m && m.unread)
-    );
-    const hasWarning =
-      blockedCount > 0 ||
-      liveUnread ||
-      !!(halSideNoteMonitor && (halSideNoteMonitor.hasChanges || halSideNoteMonitor.highPriorityCount > 0)) ||
-      !!(halInlineFirewallResult && /block/i.test(halInlineFirewallResult.text || ""));
-    const ringState = !halLoaded
-      ? "offline"
-      : halAskLoading
-        ? "thinking"
-        : hasWarning
-          ? "warning"
-          : "ready";
-    const ringStateLabel =
-      ringState === "thinking"
-        ? "THINKING"
-        : ringState === "warning"
-          ? "ATTENTION"
-          : ringState === "offline"
-            ? "OFFLINE"
-            : "READY";
-    const activeLaneModel =
-      (halModels?.lanes || []).find((l) => l.id === halModels?.config?.activeLane)?.model ||
-      halModels?.config?.localModel?.model ||
-      "local";
-    const ringTitle = `HAL ${ringStateLabel} · ${readyCount} ready · ${blockedCount} blocked · active lane ${activeLaneModel} · click for reasoning detail`;
-
-    // HUD gauge: ready/blocked arcs around the rim, scaled to the registry.
-    const gaugeR = 46;
-    const gaugeC = 2 * Math.PI * gaugeR;
-    const totalTracked = Math.max(registry.length, 1);
-    const readyLen = (readyCount / totalTracked) * gaugeC;
-    const blockedLen = (blockedCount / totalTracked) * gaugeC;
-    const gaugeSvg = `
-      <svg class="hp-ring__gauge" viewBox="0 0 100 100" aria-hidden="true">
-        <circle class="hp-ring__gauge-track" cx="50" cy="50" r="${gaugeR}"></circle>
-        <circle class="hp-ring__gauge-arc hp-ring__gauge-ready" cx="50" cy="50" r="${gaugeR}" stroke-dasharray="${readyLen.toFixed(2)} ${(gaugeC - readyLen).toFixed(2)}"></circle>
-        <circle class="hp-ring__gauge-arc hp-ring__gauge-blocked" cx="50" cy="50" r="${gaugeR}" stroke-dasharray="${blockedLen.toFixed(2)} ${(gaugeC - blockedLen).toFixed(2)}" stroke-dashoffset="${(-readyLen).toFixed(2)}"></circle>
-      </svg>`;
-
-    const toothMark = `
-      <svg class="hp-top__tooth" viewBox="0 0 64 64" aria-hidden="true">
-        <path d="M20.9 7.8c4.4 0 7.1 2.4 11.1 2.4s6.7-2.4 11.1-2.4c7.8 0 13.2 6.3 13.2 15.1 0 5.4-2.4 10.4-4.7 15.2-2.2 4.6-3.4 9.7-4.4 14.7-.6 3.1-2.5 5.2-5.1 5.2-3.1 0-4.5-2.9-5.6-6.4l-2.1-6.7c-.7-2.3-1.4-3.8-2.4-3.8s-1.7 1.5-2.4 3.8l-2.1 6.7c-1.1 3.5-2.5 6.4-5.6 6.4-2.6 0-4.5-2.1-5.1-5.2-1-5-2.2-10.1-4.4-14.7-2.3-4.8-4.7-9.8-4.7-15.2C7.7 14.1 13.1 7.8 20.9 7.8Z"
-          fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>`;
-
-    root.innerHTML = `
-      <div class="hp-body">
-        <header class="hp-top">
-          <div class="hp-top__brand">
-            <button type="button" class="hp-top__mark hp-top__mark--btn" data-hal-cmd="What can you do" title="Ask HAL what it can do" aria-label="Ask HAL what it can do">${toothMark}</button>
-            <div class="hp-top__copy"><strong>HAL COMMAND CENTER</strong><span>Direct. Orchestrate. Protect.</span></div>
-          </div>
-          <div class="hp-top__status">
+    const halStatusToolbar = `
             <button type="button" class="hp-status hp-status--btn" data-hal-cmd="What can you do" title="Ask HAL what it can do"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>HAL STATUS <b>${esc(halStatusLabel)}</b></button>
             <button type="button" class="hp-status hp-status--btn" data-hal-cmd="Run readiness check" title="Run local readiness check"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>LOCAL CORE <b>${esc(coreStatusLabel)}</b></button>
             <button type="button" class="hp-status hp-status--btn hp-status--red" data-hal-cmd="Explain the external action firewall" title="Explain the external action firewall"><i class="hp-status__dot hp-status__dot--red" aria-hidden="true"></i>FIREWALL <b>ACTIVE</b></button>
-            <span class="hp-clock"><strong>${esc(now.toISOString().slice(11, 19))} UTC</strong><span>${esc(now.toISOString().slice(0, 10))}</span></span>
-          </div>
-        </header>
-        <div class="hp-grid">
-          <section class="hp-card hp-card--ask" data-panel="askHal" style="grid-area:ask;">
-            ${cardHead("ASK HAL", "askHal", "Open Ask HAL detail and command examples", cardIconRaw("hal"))}
-            <form class="hp-ask__box hp-live-form" id="hpAskForm">
-              <textarea class="hp-live-input hp-live-textarea" id="hpAskInput" rows="3" enterkeyhint="send" placeholder="Ask HAL anything. Be direct.  (Enter to send · Shift+Enter for a new line)" aria-label="Ask HAL">${esc(halAskDraft || "")}</textarea>
-              <div class="hp-ask__bar">
-                <span class="hp-ask__mode">MODE</span>
-                <span class="hp-ask__sel">${esc(halModels?.config?.mode === "online" ? "Auto" : "Registry only")}</span>
-                <span class="hp-ask__hint" aria-hidden="true">↵ Enter to send</span>
-                <button class="hp-ask__send hp-live-send" type="submit" ${halAskLoading ? "disabled" : ""}>${halAskLoading ? "…" : `${uiIcon("send")} SEND`}</button>
-              </div>
-            </form>
-            <div class="hp-inline-chat">${chatHtml}</div>
-            <div class="hp-chips hp-live-actions">${suggestions.map((s) => actionChip(s, `data-hal-suggest="${esc(s)}"`)).join("")}</div>
-          </section>
-          <section class="hp-card hp-card--reason" data-panel="reasoning" style="grid-area:reason;">
-            ${cardHead("LOCAL REASONING CORE", "reasoning", "Open reasoning detail: active work session, plan, and evidence packet", cardIconRaw("widget", "officeManagerBoundaries"))}
-            <div class="hp-reason">
-              <div class="hp-ring hp-ring--${ringState}" data-hal-drawer="reasoning" data-hal-ring-cmd="Make a plan for today" role="button" tabindex="0" title="${esc(ringTitle)} · double-click for today's plan" aria-label="${esc(ringTitle)}">
-                ${gaugeSvg}
-                <span class="hp-ring__bezel" aria-hidden="true"></span>
-                <span class="hp-ring__radar" aria-hidden="true"></span>
-                <div class="hp-ring__lens" aria-hidden="true">
-                  <span class="hp-ring__iris"></span>
-                  <span class="hp-ring__lens-glow"></span>
-                  <span class="hp-ring__lens-hot"></span>
-                  <span class="hp-ring__iris-core"></span>
-                  <span class="hp-ring__lens-glint"></span>
-                  <div class="hp-ring__lens-data">
-                    <span class="hp-ring__state">${esc(ringStateLabel)}</span>
-                  </div>
-                </div>
-              </div>
-              <dl class="hp-stats">
-                <div><dt>STATUS</dt><dd class="${halLoaded ? "hp-ok" : ""}">${esc(halLoaded ? "Active" : "Idle")}</dd></div>
-                <div><dt>MODE</dt><dd>${esc(modeLabel)}</dd></div>
-                <div><dt>READY</dt><dd class="hp-ok">${esc(readyCount)}</dd></div>
-                <div><dt>BLOCKED</dt><dd>${esc(blockedCount)}</dd></div>
-              </dl>
-            </div>
-            ${aiReadinessHtml(halModels)}
-            <p class="hp-card__foot">All reasoning stays local. No data leaves this environment.</p>
-            <div class="hp-chips">${(halData.reasoning?.actions || []).map((a) => actionChip(a.label, `data-hal-cmd="${esc(a.command)}"`)).join("") || emptyNote("No reasoning actions configured.")}</div>
-          </section>
-          <section class="hp-card" data-panel="sources" style="grid-area:source;">
-            ${cardHead('SOURCE INTAKE <span class="hp-muted">(READ-ONLY)</span>', "sources", "Open source intake detail", cardIconRaw("widget", "dataFreshnessQuality"))}
-            <table class="hp-table"><thead><tr><th>SOURCE</th><th>TYPE</th><th>FRESHNESS</th><th>STATUS</th><th aria-label="Open"></th></tr></thead><tbody>${sourceRows || `<tr><td colspan="5">No sources configured</td></tr>`}</tbody></table>
-            <p class="hp-card__foot hp-muted">Freshness reflects local SoftDent and QuickBooks import files only.</p>
-          </section>
-          ${sideNotesProgramCardHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox, sidenotesHubPath)}
-          <section class="hp-card" data-panel="workSurfaces" style="grid-area:staff;">
-            ${cardHead("STAFF WORK SURFACES", "workSurfaces", "Open staff work surfaces detail", cardIconRaw("ui", "surface"))}
-            <ul class="hp-surf">${surfaces || emptyNote("No work surfaces configured.")}</ul>
-          </section>
-          <section class="hp-card hp-card--fw" data-panel="firewall" style="grid-area:firewall;">
-            ${cardHead("EXTERNAL ACTION FIREWALL", "firewall", "Open firewall detail: allowed actions, blocked actions, and simulator", cardIconRaw("ui", "shield"))}
-            <button type="button" class="hp-fw__active hp-fw__active--btn" data-hal-cmd="Explain the external action firewall" title="Explain the external action firewall">${uiIcon("check")} ENFORCED (read-only program)</button>
-            <ul class="hp-fw__list">${fwList}</ul>
-            <p class="hp-fw__allowed"><b>Allowed (local):</b> ${allowedActions.length ? allowedActions.slice(0, 6).map(esc).join(" · ") : "Open pages · Explain status · Prepare notes"}</p>
-            ${halInlineFirewallResult ? `<p class="hp-live-note">${esc(halInlineFirewallResult.text || "")}</p>` : ""}
-          </section>
-          <section class="hp-card" data-panel="status" style="grid-area:recent;">
-            ${cardHead("RECENT HAL ACTIVITY", "status", "Open recent activity and local audit log", cardIconRaw("ui", "activity"))}
-            <ul class="hp-log">${activityHtml}</ul>
-          </section>
-          <section class="hp-card" data-panel="priorities" style="grid-area:insights;">
-            ${cardHead("HAL INSIGHTS", "priorities", "Open priorities, recommendations, and next steps", cardIconRaw("ui", "insights"))}
-            <ul class="hp-insight">
-              <li class="hp-insight__lead hp-insight__row--active" data-hal-cmd="Show full program snapshot" role="button" tabindex="0" title="Show full program snapshot"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>TOP PRIORITY</b> — ${esc(topPriority)}</span></li>
-              <li class="hp-insight__lead hp-insight__row--active" data-hal-cmd="Explain the external action firewall" role="button" tabindex="0" title="Explain program access rules"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>PROGRAM ACCESS</b> — ${esc(programAccessLabel)} <em class="hp-muted">(writes blocked)</em></span></li>
-              <li class="hp-insight__lead hp-insight__row--active" data-hal-cmd="What needs review" role="button" tabindex="0" title="What needs review"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>NEXT SAFE STEP</b> — ${esc(nextSafeStep)}</span></li>
-              ${proactiveInsight}
-              <li class="hp-insight__lead hp-insight__row--active" data-hal-cmd="What needs review" role="button" tabindex="0" title="What needs review"><i class="hp-log__dot hp-log__dot--gold" aria-hidden="true"></i><span><b>ACTIVE WORK</b> — ${esc(needsReviewCount)} in review · ${esc(blockedCount)} blocked <em class="hp-muted">(local registry)</em></span></li>
-              ${insights || emptyNote("No registry insights available.")}
-            </ul>
-            ${widgetsMonitorHtml(halWidgetFeed)}
-          </section>
-          <section class="hp-card" data-panel="controls" style="grid-area:controls;">
-            ${cardHead("SYSTEM CONTROLS", "controls", "Open system controls: readiness, smoke test, and local receipts", cardIconRaw("ui", "check"))}
-            <div class="hp-ctrl">
-              <button type="button" class="hp-ctrl__btn" data-hal-cmd="Run readiness check"><span class="hp-ctrl__ico">${uiIcon("check")}</span><strong>Readiness</strong><span class="hp-ctrl__detail">Local check</span></button>
-              <button type="button" class="hp-ctrl__btn" data-hal-cmd="Run operator smoke test"><span class="hp-ctrl__ico">${uiIcon("smoke")}</span><strong>Smoke test</strong><span class="hp-ctrl__detail">Local only</span></button>
-              <button type="button" class="hp-ctrl__btn" data-hal-cmd="Staff handoff summary"><span class="hp-ctrl__ico">${uiIcon("handoff")}</span><strong>Handoff</strong><span class="hp-ctrl__detail">Build summary</span></button>
-              <button type="button" class="hp-ctrl__btn" data-hal-cmd="Monitor sidenotes"><span class="hp-ctrl__ico">${navIcon("sidenotes")}</span><strong>SideNotes</strong><span class="hp-ctrl__detail">Live monitor</span></button>
-              <button type="button" class="hp-ctrl__btn" data-hal-drawer="status"><span class="hp-ctrl__ico">${uiIcon("audit")}</span><strong>Audit log</strong><span class="hp-ctrl__detail">${auditList.length ? esc("Last " + (lastReceipt.time || "—")) : "0 actions"}</span></button>
-            </div>
-            <p class="hp-card__foot">Last local receipt: ${esc(lastReceiptText)} · receipts stay on this device.</p>
-            ${agentHealthHtml(halAgentHealth, halModels, halSideNotesInbox)}
-            ${stressTestHtml(halStressTest)}
-          </section>
-        </div>
-      </div>`;
+            ${directBadge}
+            <span class="hp-clock"><strong>${esc(now.toISOString().slice(11, 19))} UTC</strong><span>${esc(now.toISOString().slice(0, 10))}</span></span>`;
+
+    const gridClass =
+      typeof HalPageCanvas !== "undefined" && HalPageCanvas.gridClassName ? HalPageCanvas.gridClassName() : "hp-grid hp-grid--hal-102";
+    const hpGridHtml =
+      typeof HalPageCanvas !== "undefined" && HalPageCanvas.render
+        ? HalPageCanvas.render(ctx, canvasHelpers())
+        : widgetsMonitorHtml(halWidgetFeed);
+
+    const halBodyInner = `<div class="hp-body"><div class="${gridClass}">${hpGridHtml}</div></div>`;
+    const halState =
+      typeof PageViews !== "undefined" && PageViews.buildPageState
+        ? PageViews.buildPageState(halData, "hal", halWidgetFeed, ctx.halProgramSnapshot)
+        : { pageId: "hal", halData, halWidgetFeed, programSnapshot: ctx.halProgramSnapshot };
+    const PC = typeof PageChrome !== "undefined" ? PageChrome : null;
+    if (PC && typeof PC.pageContent === "function") {
+      root.innerHTML = `<article class="pv pv--hal pv--app pv--canvas" data-pv-page="hal">${PC.pageContent(halState, halBodyInner, {
+        toolbarActions: halStatusToolbar,
+        dataBadge: halLoaded
+          ? `<span class="pv-badge pv-badge--import">${esc(readyCount)} ready · ${esc(blockedCount)} blocked</span>`
+          : `<span class="pv-badge pv-badge--warn">Registry offline</span>`,
+      })}</article>`;
+      const pilot = typeof HalPilotWidgets !== "undefined" ? HalPilotWidgets : null;
+      if (pilot && typeof pilot.init === "function") pilot.init(root);
+    } else {
+      root.innerHTML = halBodyInner;
+    }
 
     const input = root.querySelector("#hpAskInput");
-    if (input && halAskDraft) input.value = halAskDraft;
+    if (input && ctx.halAskDraft) input.value = ctx.halAskDraft;
   }
 
   return { render, sideNotesMonitorHtml, sideNotesProgramCardHtml, widgetsMonitorHtml, isSideNotesInboxLive, surfNavTarget };

@@ -60,9 +60,7 @@ def _env_path(name: str, default: Path | None = None) -> Path | None:
     return default.resolve() if default else None
 
 
-def _softdent_external_roots() -> list[Path]:
-    if not _auto_pull_exports_enabled():
-        return []
+def _softdent_upstream_candidates() -> list[Path]:
     roots: list[Path] = []
     for candidate in (
         _env_path("NR2_SOFTDENT_EXPORT_SOURCE"),
@@ -70,15 +68,36 @@ def _softdent_external_roots() -> list[Path]:
         SOFTDENT_BRIDGE_EXPORTS,
         SOFTDENT_FINANCIAL_EXPORTS,
         NEW_RIDGE_BRIDGE_EXPORTS,
+        _env_path("SOFTDENT_REPORT_EXPORTS", Path(r"C:\SoftDentReportExports")),
     ):
         if candidate and candidate.is_dir() and candidate not in roots:
             roots.append(candidate)
     return roots
 
 
-def _quickbooks_external_roots() -> list[Path]:
+def _softdent_external_roots() -> list[Path]:
     if not _auto_pull_exports_enabled():
         return []
+    return _softdent_upstream_candidates()
+
+
+def _softdent_direct_read_roots() -> list[Path]:
+    """Upstream folders for pipeline/direct-first reads (independent of auto-pull copy)."""
+    try:
+        from practice_source_access import direct_first_imports_enabled
+    except Exception:
+        direct_first_imports_enabled = None
+    direct_on = (
+        direct_first_imports_enabled()
+        if callable(direct_first_imports_enabled)
+        else os.environ.get("NR2_DIRECT_FIRST_IMPORTS", "1").strip().lower() not in {"0", "false", "no", "off"}
+    )
+    if direct_on or _auto_pull_exports_enabled():
+        return _softdent_upstream_candidates()
+    return []
+
+
+def _quickbooks_upstream_candidates() -> list[Path]:
     roots: list[Path] = []
     for candidate in (
         _env_path("NR2_QUICKBOOKS_EXPORT_SOURCE"),
@@ -89,6 +108,27 @@ def _quickbooks_external_roots() -> list[Path]:
         if candidate and candidate.is_dir() and candidate not in roots:
             roots.append(candidate)
     return roots
+
+
+def _quickbooks_external_roots() -> list[Path]:
+    if not _auto_pull_exports_enabled():
+        return []
+    return _quickbooks_upstream_candidates()
+
+
+def _quickbooks_direct_read_roots() -> list[Path]:
+    try:
+        from practice_source_access import direct_first_imports_enabled
+    except Exception:
+        direct_first_imports_enabled = None
+    direct_on = (
+        direct_first_imports_enabled()
+        if callable(direct_first_imports_enabled)
+        else os.environ.get("NR2_DIRECT_FIRST_IMPORTS", "1").strip().lower() not in {"0", "false", "no", "off"}
+    )
+    if direct_on or _auto_pull_exports_enabled():
+        return _quickbooks_upstream_candidates()
+    return []
 
 
 def _stage_external_artifacts(softdent_dest: Path, quickbooks_dest: Path) -> list[str]:

@@ -76,6 +76,110 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def direct_first_imports_enabled() -> bool:
+    """When enabled, widgets read newest upstream exports directly (cache is fallback only)."""
+    return os.environ.get("NR2_DIRECT_FIRST_IMPORTS", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def direct_first_write_cache_enabled() -> bool:
+    """Optional: copy direct reads into document-inbox on manual refresh."""
+    return os.environ.get("NR2_DIRECT_FIRST_WRITE_CACHE", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _payload_to_dataset(payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not payload or not payload.get("ok"):
+        return None
+    rows = payload.get("rows")
+    if not isinstance(rows, list) or not rows:
+        derived = payload.get("derivedDashboardRows")
+        rows = derived if isinstance(derived, list) else []
+    if not rows:
+        monthly = payload.get("monthly")
+        if isinstance(monthly, dict):
+            pl_rows = monthly.get("profitAndLossRows") or monthly.get("rows")
+            if isinstance(pl_rows, list) and pl_rows:
+                rows = pl_rows
+    if not rows:
+        return None
+    source_path = str(payload.get("sourcePath") or "").strip()
+    source_file = str(payload.get("sourceFile") or (Path(source_path).name if source_path else "") or "direct-read")
+    modified_at = str(payload.get("modifiedAt") or _utc_now())
+    dataset: dict[str, Any] = {
+        "sourceFile": source_file,
+        "modifiedAt": modified_at,
+        "rows": rows,
+        "readSource": "direct",
+        "sourceKind": payload.get("sourceKind") or "direct",
+    }
+    if source_path:
+        dataset["sourcePath"] = source_path
+    return dataset
+
+
+def assemble_direct_import_sections() -> dict[str, Any]:
+    """Build import-loader dataset sections by scanning upstream roots (no cache copy)."""
+    try:
+        from import_direct_pipeline import (
+            load_upstream_export_dataset,
+            pipeline_first_imports_enabled,
+            resolve_quickbooks_dataset,
+            resolve_softdent_dataset,
+        )
+
+        if pipeline_first_imports_enabled():
+            return {
+                "softdent": {
+                    "dashboard": resolve_softdent_dataset("dashboard", SOFTDENT_DASHBOARD_NAMES),
+                    "claims": resolve_softdent_dataset("claims", SOFTDENT_CLAIMS_NAMES),
+                    "clinicalNotes": resolve_softdent_dataset("clinicalNotes", SOFTDENT_CLINICAL_NAMES),
+                    "ar": resolve_softdent_dataset("ar", SOFTDENT_AR_NAMES),
+                    "newPatients": resolve_softdent_dataset("newPatients", SOFTDENT_NEW_PATIENTS_NAMES),
+                    "treatmentPlans": resolve_softdent_dataset("treatmentPlans", SOFTDENT_TREATMENT_PLANS_NAMES),
+                    "caseAcceptance": resolve_softdent_dataset("caseAcceptance", SOFTDENT_CASE_ACCEPTANCE_NAMES),
+                },
+                "quickbooks": {
+                    "revenue": resolve_quickbooks_dataset("revenue", QUICKBOOKS_REVENUE_NAMES),
+                    "expenses": resolve_quickbooks_dataset("expenses", QUICKBOOKS_EXPENSE_NAMES),
+                    "profitAndLoss": resolve_quickbooks_dataset("profitAndLoss", QUICKBOOKS_PL_NAMES),
+                    "expenseCategories": resolve_quickbooks_dataset("expenseCategories", QUICKBOOKS_EXPENSE_CATEGORY_NAMES),
+                    "ar": load_upstream_export_dataset("quickbooks", QUICKBOOKS_AR_NAMES),
+                },
+            }
+    except Exception:
+        pass
+
+    softdent: dict[str, Any | None] = {}
+    quickbooks: dict[str, Any | None] = {}
+
+    softdent["dashboard"] = _payload_to_dataset(_fetch_softdent("dashboard", {}))
+    if not softdent["dashboard"]:
+        softdent["dashboard"] = _payload_to_dataset(_fetch_softdent("bridge", {}))
+
+    for key, resource in (
+        ("claims", "claims"),
+        ("clinicalNotes", "clinical_notes"),
+        ("newPatients", "new_patients"),
+        ("treatmentPlans", "treatment_plans"),
+        ("caseAcceptance", "case_acceptance"),
+    ):
+        softdent[key] = _payload_to_dataset(_fetch_softdent(resource, {}))
+
+    softdent["ar"] = _payload_to_dataset(_fetch_softdent("ar", {}))
+    if not softdent["ar"]:
+        softdent["ar"] = _payload_to_dataset(_fetch_softdent("pipeline_ar", {}))
+
+    for key, resource in (
+        ("revenue", "revenue_export"),
+        ("expenses", "expenses_export"),
+        ("profitAndLoss", "profit_and_loss"),
+        ("expenseCategories", "expense_categories"),
+        ("ar", "ar_export"),
+    ):
+        quickbooks[key] = _payload_to_dataset(_fetch_quickbooks(resource, {}))
+
+    return {"softdent": softdent, "quickbooks": quickbooks}
+
+
 def _scan_roots(system: str) -> list[Path]:
     roots: list[Path] = []
     if system == "quickbooks":
@@ -171,6 +275,8 @@ def list_catalog() -> dict[str, Any]:
             "Reads are local-only; nothing is posted or written back."
         ),
         "autoPullEnabled": _auto_pull_exports_enabled(),
+        "directFirstImports": direct_first_imports_enabled(),
+        "directFirstWriteCache": direct_first_write_cache_enabled(),
         "cacheDirs": {
             "softdent": str(softdent_import_dir()),
             "quickbooks": str(quickbooks_import_dir()),
@@ -481,9 +587,17 @@ def fetch(system: str, resource: str, options: dict[str, Any] | None = None) -> 
         return list_catalog()
 
     if opts.get("refreshCache"):
-        from import_sync import sync_imports
+        if direct_first_imports_enabled():
+            from import_loader import load_import_bundle
 
-        opts["refreshResult"] = sync_imports()
+            opts["refreshResult"] = {
+                "directFirst": True,
+                "bundle": load_import_bundle(sync=False, deep=False),
+            }
+        else:
+            from import_sync import sync_imports
+
+            opts["refreshResult"] = sync_imports()
 
     envelope: dict[str, Any] = {
         "authorized": True,

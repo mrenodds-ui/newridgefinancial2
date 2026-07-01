@@ -374,11 +374,21 @@ async function main() {
   execSync("node --check site/app.js", { cwd: __dirname, stdio: "pipe" });
   execSync("node --check site/hal-core.js", { cwd: __dirname, stdio: "pipe" });
   execSync("node --check site/hal-page.js", { cwd: __dirname, stdio: "pipe" });
+  execSync("node --check site/hal-page-schema.js", { cwd: __dirname, stdio: "pipe" });
+  execSync("node --check site/hal-page-canvas.js", { cwd: __dirname, stdio: "pipe" });
   passed++;
 
   // HAL page surfaces required manager signals (no backend, local data only)
   require(join(siteDir, "icons.js"));
   globalThis.AppIcons = require(join(siteDir, "icons.js"));
+  require(join(siteDir, "page-schema.js"));
+  require(join(siteDir, "hal-page-schema.js"));
+  require(join(siteDir, "hal-page-canvas.js"));
+  require(join(siteDir, "components.js"));
+  require(join(siteDir, "hal-pilot-widgets.js"));
+  require(join(siteDir, "hal-page-widgets.js"));
+  require(join(siteDir, "page-chrome.js"));
+  require(join(siteDir, "page-views.js"));
   const HalPageMod = require(join(siteDir, "hal-page.js"));
   let halHtml = "";
   const halRoot = {
@@ -390,6 +400,9 @@ async function main() {
     },
     querySelector() {
       return null;
+    },
+    querySelectorAll() {
+      return [];
     },
   };
   HalPageMod.render({
@@ -443,34 +456,43 @@ async function main() {
         },
       },
     },
+    halProgramSnapshot: {
+      importBundle: {
+        importMode: "direct-first",
+        directFirst: true,
+        diagnostics: { summary: { connected: 4, partial: 1, missing: 2 } },
+      },
+    },
     sidenotesHubPath: "C:\\softdent\\HAL-SideNotes-Workstation\\data",
   });
   assert(halHtml.includes("SIDENOTES PROGRAM"), "HAL page must render the dedicated SideNotes program card");
   assert(halHtml.includes("SIDENOTESIM MONITOR"), "HAL page must render the SideNotesIM live monitor");
   assert(halHtml.includes("data-hal-surf-nav=\"sidenotes\""), "HAL page must wire SideNotes work surface navigation");
   assert(halHtml.includes("data-hal-surf-open="), "HAL page must wire work surface open chevrons");
-  assert(halHtml.includes("data-hal-source-nav="), "HAL page must wire source intake rows to HAL");
   assert(halHtml.includes("hp-wg-card--active"), "HAL page must wire widget cards to HAL");
   assert(halHtml.includes("data-hal-activity-cmd="), "HAL page must wire activity log replay to HAL");
   assert(halHtml.includes("hp-status--btn"), "HAL page must wire status chips to HAL");
+  assert(halHtml.includes("pv-canvas-hero"), "HAL page must use the canvas page hero");
   assert(halHtml.includes("hp-action--icon"), "HAL page must render icon-backed prompt chips");
-  assert(halHtml.includes("data-hal-source-open"), "HAL page must wire source row open controls");
   assert(halHtml.includes("<svg") && halHtml.includes('class="app-ico"'), "HAL page must render SVG icons");
   assert(halHtml.includes("hp-card__ico"), "HAL page must render section header icons");
   assert(halHtml.includes("hp-ctrl__ico"), "HAL page must render system control icons");
-  assert(halHtml.includes("MANAGER DASHBOARD WIDGETS"), "HAL page must render manager dashboard widgets");
+  assert(halHtml.includes("hp-grid--hal-102"), "HAL page must use hal-102 schema grid");
+  assert(halHtml.includes("Financial Widgets"), "HAL page must render financial widget group");
   assert(halHtml.includes("Practice Financial Overview"), "HAL page must render financial widget");
-  assert(halHtml.includes("OPEN PAGE"), "HAL page must render widget navigation controls");
+  assert(halHtml.includes("data-hal-widget-nav="), "HAL page must render widget navigation controls");
+  assert(halHtml.includes('id="hpAskForm"'), "HAL page must keep Ask HAL chat form");
+  assert(halHtml.includes('id="hpAskInput"'), "HAL page must keep Ask HAL chat input");
+  assert(halHtml.includes("IMPORT & SOURCE HEALTH"), "HAL page must render import health panel");
   assert(halHtml.includes("HAL 9000 voice"), "HAL page must show HAL 9000 voice mode");
   assert(halHtml.includes("TEST VOICE"), "HAL page must render HAL voice test control");
   assert(halHtml.includes("Room 4"), "HAL page must render live SideNotesIM message senders");
   assert(halHtml.includes("LOCAL NOTES"), "HAL page must render the local notes section");
-  assert(halHtml.includes("NEXT SAFE STEP"), "HAL page must surface the next safe step");
-  assert(halHtml.includes("ACTIVE WORK"), "HAL page must surface active work");
-  assert(halHtml.includes("Allowed (local)"), "HAL page must surface allowed actions");
-  assert(halHtml.includes("EXTERNAL ACTION FIREWALL") && halHtml.includes("BLOCKED"), "HAL page must surface blocked actions");
-  assert(halHtml.includes("Last local receipt"), "HAL page must surface the last local receipt");
-  assert(halHtml.includes("import files only") || halHtml.includes("Import data"), "HAL page must label import-only data honestly");
+  assert(halHtml.includes("PROGRAM POSTURE"), "HAL page must surface program posture");
+  assert(halHtml.includes("TRUST & FIREWALL"), "HAL page must surface firewall policy");
+  assert(halHtml.includes("BLOCKED"), "HAL page must surface blocked actions");
+  assert(halHtml.includes("Last receipt:"), "HAL page must surface the last local receipt");
+  assert(halHtml.includes("direct-first") || halHtml.includes("Direct-first"), "HAL page must label direct-first import mode");
   passed++;
 
   // AI readiness display; local model lanes enabled on loopback only
@@ -666,7 +688,7 @@ async function main() {
   const widgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show manager dashboard widgets");
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
-  assert(Object.keys(feed.widgets).length === 27, "widget feed must build 27 widgets");
+  assert(Object.keys(feed.widgets).length === 23, "widget feed must build 23 operational widgets");
   const masterChart = HalWidgetMasterChart.all();
   assert(masterChart.length === HalSkills.WIDGET_ORDER.length, "widget master chart must cover every HAL widget");
   assert(masterChart.every((row) => row.page && row.purpose && row.expectedData.length && row.readyWhen), "widget master chart rows must include page, purpose, expected data, and ready criteria");
@@ -676,7 +698,7 @@ async function main() {
   );
   assert(HalWidgetMasterChart.formatForHal().includes("HAL Widget Master Chart"), "widget master chart must format for HAL guidance");
   assert(feed.widgets.ebitdaNormalization && feed.widgets.arAgingAndCollections && feed.widgets.narrativeWorkflow && feed.widgets.documentLibrary, "widget feed must include all extended page widgets");
-  assert(feed.widgets.claimReadinessAndSafety, "widget feed must include claim readiness widget");
+  assert(feed.widgets.journalPostingQueue && feed.widgets.smartClaimsAndReceivables, "widget feed must include journal posting and smart claims widgets");
   assert(feed.widgets.newPatients && feed.widgets.treatmentPlanSummary && feed.widgets.caseAcceptance, "widget feed must include practice-performance widgets");
   assert(feed.accountingExcelValidation && feed.accountingExcelValidation.status, "widget feed must run accounting/excel commit validation before publish");
   assert(feed.localOnly === true && feed.runId && feed.generatedAt, "widget feed must use program-style runId/generatedAt/localOnly fields");

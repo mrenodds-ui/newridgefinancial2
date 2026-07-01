@@ -2,8 +2,8 @@
 """
 NewRidgeFinancial 2.0 — single-window desktop program.
 
-One process, one window, local UI assets, local SQLite storage.
-No separate backend server, no localhost API, no external browser.
+One process, one window, local UI assets served over loopback HTTP, local SQLite storage.
+No external browser tab; pywebview hosts the site/ bundle.
 """
 
 from __future__ import annotations
@@ -21,6 +21,24 @@ SITE_DIR = ROOT / "site"
 DATA_DIR = REPO_ROOT / "app_data" / "nr2"
 SIDENOTES_HUB_DATA_DIR = Path(os.environ.get("NR2_SIDENOTES_HUB_DATA", r"C:\softdent\HAL-SideNotes-Workstation\data"))
 INDEX_HTML = SITE_DIR / "index.html"
+BUILD_MANIFEST = ROOT / "nr2-build.json"
+
+
+def load_build_manifest() -> dict:
+    if BUILD_MANIFEST.is_file():
+        try:
+            data = json.loads(BUILD_MANIFEST.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            pass
+    return {"assetVersion": "hal-94", "schemaVersion": "hal-94"}
+
+
+_BUILD = load_build_manifest()
+DESIGN_SCHEMA_VERSION = str(_BUILD.get("schemaVersion") or _BUILD.get("assetVersion") or "hal-94")
+ASSET_VERSION = str(_BUILD.get("assetVersion") or DESIGN_SCHEMA_VERSION)
+WEBVIEW_STORAGE_DIR = DATA_DIR / "webview" / DESIGN_SCHEMA_VERSION
 
 
 class DesktopApi:
@@ -52,12 +70,24 @@ class DesktopApi:
         return {
             "mode": "desktop",
             "version": "2.0",
-            "dataDir": str(self.store.data_dir),
+            "designSchemaVersion": DESIGN_SCHEMA_VERSION,
+            "assetVersion": ASSET_VERSION,
+            "siteDir": str(self.site_dir),
+            "repoRoot": str(REPO_ROOT),
+            "indexHtml": str(INDEX_HTML),
             "dbPath": str(self.store.db_path),
             "documentInbox": str(resolve_inbox_path()),
             "documentArchive": str(resolve_archive_path()),
             "sidenotesHub": str(SIDENOTES_HUB_DATA_DIR),
+            "dataDir": str(self.store.data_dir),
+            "directFirstImports": self._direct_first_imports_enabled(),
         }
+
+    @staticmethod
+    def _direct_first_imports_enabled() -> bool:
+        from import_loader import direct_first_imports_enabled
+
+        return direct_first_imports_enabled()
 
     def read_data_file(self, name: str) -> str:
         if name.startswith("sidenotes-inbox"):
@@ -117,8 +147,8 @@ class DesktopApi:
     def get_import_bundle(self) -> dict:
         from import_loader import load_import_bundle
 
-        # Fast path: read the local import cache and run contract diagnostics
-        # without the recursive upstream scan so dashboards render immediately.
+        # Direct-first: scan upstream export roots for the newest files (cache fallback).
+        # sync=False keeps dashboard loads fast; manual refresh re-scans upstream.
         bundle = load_import_bundle(sync=False, deep=False)
         with self._upstream_lock:
             cached = self._upstream_cache
@@ -134,11 +164,26 @@ class DesktopApi:
 
     def _run_import_sync(self) -> None:
         from document_sync import sync_accounting_documents
-        from import_sync import sync_imports
+        from import_loader import direct_first_imports_enabled, load_import_bundle
 
         try:
-            result = sync_imports()
-            result["documents"] = sync_accounting_documents(self.store)
+            if direct_first_imports_enabled():
+                bundle = load_import_bundle(sync=True, deep=True)
+                documents = sync_accounting_documents(self.store)
+                result = {
+                    "directFirst": True,
+                    "importMode": bundle.get("importMode"),
+                    "diagnostics": bundle.get("diagnostics"),
+                    "documents": documents,
+                }
+                sync_result = bundle.get("syncStatus", {}).get("result")
+                if isinstance(sync_result, dict):
+                    result["directRefresh"] = sync_result
+            else:
+                from import_sync import sync_imports
+
+                result = sync_imports()
+                result["documents"] = sync_accounting_documents(self.store)
             with self._sync_lock:
                 self._sync_state = {
                     "status": "success",
@@ -349,9 +394,20 @@ def main() -> int:
         sync_accounting_documents(api.store)
     except Exception as exc:
         print(f"Startup document sync failed: {exc}", file=sys.stderr)
+    WEBVIEW_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    default_port = 8765
+    http_port = int(os.environ.get("NR2_HTTP_PORT", str(default_port)))
+    print(
+        f"NR2 desktop: schema={DESIGN_SCHEMA_VERSION} site={SITE_DIR} storage={WEBVIEW_STORAGE_DIR}",
+        file=sys.stderr,
+    )
+    print(
+        f"NR2 desktop: UI at http://127.0.0.1:{http_port}/ (pywebview http_server=True).",
+        file=sys.stderr,
+    )
     window = webview.create_window(
-        "NewRidgeFinancial 2.0",
-        INDEX_HTML.as_uri(),
+        f"NewRidgeFinancial 2.0 ({DESIGN_SCHEMA_VERSION})",
+        str(INDEX_HTML),
         width=1440,
         height=920,
         min_size=(1024, 700),
@@ -360,7 +416,13 @@ def main() -> int:
         # pywebview injects `user-select: none` unless this is enabled.
         text_select=True,
     )
-    webview.start(debug=False)
+    webview.start(
+        debug=False,
+        http_server=True,
+        http_port=http_port,
+        private_mode=True,
+        storage_path=str(WEBVIEW_STORAGE_DIR),
+    )
     return 0
 
 

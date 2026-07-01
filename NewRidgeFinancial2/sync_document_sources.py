@@ -31,12 +31,26 @@ def sync_document_sources(*, pull_imports: bool = True, full_pull: bool | None =
         full_pull = os.environ.get("NR2_HAL_FULL_PULL", "").strip().lower() in {"1", "true", "yes", "on"}
 
     if pull_imports:
-        from import_sync import sync_imports
+        from import_loader import direct_first_imports_enabled, load_import_bundle
 
-        result["importSync"] = sync_imports(full_pull=full_pull)
-        import_warnings = result["importSync"].get("warnings") if isinstance(result["importSync"], dict) else None
-        if isinstance(import_warnings, list):
-            result["warnings"].extend(import_warnings)
+        if direct_first_imports_enabled():
+            bundle = load_import_bundle(sync=True, deep=True)
+            result["importSync"] = {
+                "directFirst": True,
+                "importMode": bundle.get("importMode"),
+                "diagnostics": bundle.get("diagnostics"),
+                "syncStatus": bundle.get("syncStatus"),
+            }
+            import_warnings = bundle.get("syncStatus", {}).get("warnings") if isinstance(bundle.get("syncStatus"), dict) else None
+            if isinstance(import_warnings, list):
+                result["warnings"].extend(import_warnings)
+        else:
+            from import_sync import sync_imports
+
+            result["importSync"] = sync_imports(full_pull=full_pull)
+            import_warnings = result["importSync"].get("warnings") if isinstance(result["importSync"], dict) else None
+            if isinstance(import_warnings, list):
+                result["warnings"].extend(import_warnings)
 
     store = LocalStore(NR2_DATA_DIR)
     documents = sync_accounting_documents(store)

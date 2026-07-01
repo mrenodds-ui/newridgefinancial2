@@ -114,23 +114,130 @@ def _load_dataset(directory: Path, names: tuple[str, ...]) -> dict[str, Any] | N
         file_sha = sha256_file(path)
     except Exception:
         pass
-    return {
+    dataset = {
         "sourceFile": path.name,
         "modifiedAt": _mtime_iso(path),
         "sha256": file_sha,
         "rows": rows,
+        "readSource": "cache",
     }
+    return dataset
+
+
+def direct_first_imports_enabled() -> bool:
+    try:
+        from practice_source_access import direct_first_imports_enabled as _enabled
+
+        return _enabled()
+    except Exception:
+        return os.environ.get("NR2_DIRECT_FIRST_IMPORTS", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _dataset_has_rows(dataset: dict[str, Any] | None) -> bool:
+    if not dataset:
+        return False
+    rows = dataset.get("rows")
+    return isinstance(rows, list) and len(rows) > 0
+
+
+def _resolve_dataset(
+    direct: dict[str, Any] | None,
+    cached: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    try:
+        from import_direct_pipeline import pipeline_first_imports_enabled, pick_freshest_dataset
+
+        if pipeline_first_imports_enabled():
+            picked = pick_freshest_dataset(direct, cached)
+            if picked:
+                if picked is cached and _dataset_has_rows(cached):
+                    cached = dict(cached)
+                    cached["readSource"] = "cache"
+                return picked
+    except Exception:
+        pass
+    if _dataset_has_rows(direct):
+        return direct
+    if _dataset_has_rows(cached):
+        return cached
+    return direct or cached
+
+
+def _load_direct_sections() -> dict[str, Any]:
+    from practice_source_access import assemble_direct_import_sections
+
+    return assemble_direct_import_sections()
+
+
+def _write_direct_sections_to_cache(sections: dict[str, Any]) -> dict[str, Any]:
+    """Optional cache mirror for external tools that still read document-inbox files."""
+    written: list[str] = []
+    errors: list[str] = []
+    softdent_dir = softdent_import_dir()
+    quickbooks_dir = quickbooks_import_dir()
+    softdent_dir.mkdir(parents=True, exist_ok=True)
+    quickbooks_dir.mkdir(parents=True, exist_ok=True)
+
+    def _write_dataset(directory: Path, dataset: dict[str, Any] | None) -> None:
+        if not _dataset_has_rows(dataset):
+            return
+        source_path = str(dataset.get("sourcePath") or "").strip()
+        source_file = str(dataset.get("sourceFile") or "").strip()
+        if source_path:
+            src = Path(source_path)
+            if src.is_file():
+                dest = directory / (source_file or src.name)
+                try:
+                    if not dest.is_file() or src.stat().st_mtime > dest.stat().st_mtime:
+                        import shutil
+
+                        shutil.copy2(src, dest)
+                        written.append(str(dest.relative_to(REPO_ROOT)))
+                except OSError as exc:
+                    errors.append(f"{dest.name}: {exc}")
+                return
+        if source_file.endswith(".json"):
+            dest = directory / source_file
+            try:
+                dest.write_text(json.dumps(dataset.get("rows") or [], indent=2), encoding="utf-8")
+                written.append(str(dest.relative_to(REPO_ROOT)))
+            except OSError as exc:
+                errors.append(f"{dest.name}: {exc}")
+        elif source_file.endswith(".csv") and _dataset_has_rows(dataset):
+            dest = directory / source_file
+            try:
+                rows = dataset.get("rows") or []
+                if rows and isinstance(rows[0], dict):
+                    with dest.open("w", encoding="utf-8", newline="") as handle:
+                        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+                        writer.writeheader()
+                        writer.writerows(rows)
+                    written.append(str(dest.relative_to(REPO_ROOT)))
+            except OSError as exc:
+                errors.append(f"{dest.name}: {exc}")
+
+    for dataset in ((sections.get("softdent") or {}).values()):
+        if isinstance(dataset, dict):
+            _write_dataset(softdent_dir, dataset)
+    for dataset in ((sections.get("quickbooks") or {}).values()):
+        if isinstance(dataset, dict):
+            _write_dataset(quickbooks_dir, dataset)
+
+    return {"written": written, "errors": errors}
 
 
 def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, Any]:
+    direct_first = direct_first_imports_enabled()
     sync_status: dict[str, Any] = {
-        "attempted": sync,
+        "attempted": sync and not direct_first,
         "ok": True,
         "error": None,
         "result": None,
         "warnings": manifest_warnings(),
+        "importMode": "direct-first" if direct_first else "cache",
+        "directFirst": direct_first,
     }
-    if sync:
+    if sync and not direct_first:
         try:
             from import_sync import sync_imports
 
@@ -138,28 +245,65 @@ def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, An
         except Exception as exc:
             sync_status["ok"] = False
             sync_status["error"] = str(exc)
+    elif sync and direct_first:
+        try:
+            from practice_source_access import direct_first_write_cache_enabled
+
+            sections = _load_direct_sections()
+            sync_status["attempted"] = True
+            sync_status["result"] = {"directFirst": True, "refreshedAt": datetime.now(timezone.utc).isoformat()}
+            if direct_first_write_cache_enabled():
+                sync_status["result"]["cacheWrite"] = _write_direct_sections_to_cache(sections)
+        except Exception as exc:
+            sync_status["ok"] = False
+            sync_status["error"] = str(exc)
     softdent_dir = softdent_import_dir()
     quickbooks_dir = quickbooks_import_dir()
+    direct_sections: dict[str, Any] | None = None
+    if direct_first:
+        try:
+            direct_sections = _load_direct_sections()
+        except Exception as exc:
+            sync_status.setdefault("warnings", [])
+            if isinstance(sync_status["warnings"], list):
+                sync_status["warnings"].append(f"Direct import read failed: {exc}")
+
+    def _softdent(key: str, names: tuple[str, ...]) -> dict[str, Any] | None:
+        cached = _load_dataset(softdent_dir, names)
+        direct = None
+        if direct_sections:
+            direct = (direct_sections.get("softdent") or {}).get(key)
+        return _resolve_dataset(direct if isinstance(direct, dict) else None, cached)
+
+    def _quickbooks(key: str, names: tuple[str, ...]) -> dict[str, Any] | None:
+        cached = _load_dataset(quickbooks_dir, names)
+        direct = None
+        if direct_sections:
+            direct = (direct_sections.get("quickbooks") or {}).get(key)
+        return _resolve_dataset(direct if isinstance(direct, dict) else None, cached)
+
     bundle: dict[str, Any] = {
         "loadedAt": datetime.now(timezone.utc).isoformat(),
+        "importMode": "direct-first" if direct_first else "cache",
+        "directFirst": direct_first,
         "syncStatus": sync_status,
         "softdent": {
             "dir": str(softdent_dir),
-            "dashboard": _load_dataset(softdent_dir, SOFTDENT_DASHBOARD_NAMES),
-            "claims": _load_dataset(softdent_dir, SOFTDENT_CLAIMS_NAMES),
-            "clinicalNotes": _load_dataset(softdent_dir, SOFTDENT_CLINICAL_NAMES),
-            "ar": _load_dataset(softdent_dir, SOFTDENT_AR_NAMES),
-            "newPatients": _load_dataset(softdent_dir, SOFTDENT_NEW_PATIENTS_NAMES),
-            "treatmentPlans": _load_dataset(softdent_dir, SOFTDENT_TREATMENT_PLANS_NAMES),
-            "caseAcceptance": _load_dataset(softdent_dir, SOFTDENT_CASE_ACCEPTANCE_NAMES),
+            "dashboard": _softdent("dashboard", SOFTDENT_DASHBOARD_NAMES),
+            "claims": _softdent("claims", SOFTDENT_CLAIMS_NAMES),
+            "clinicalNotes": _softdent("clinicalNotes", SOFTDENT_CLINICAL_NAMES),
+            "ar": _softdent("ar", SOFTDENT_AR_NAMES),
+            "newPatients": _softdent("newPatients", SOFTDENT_NEW_PATIENTS_NAMES),
+            "treatmentPlans": _softdent("treatmentPlans", SOFTDENT_TREATMENT_PLANS_NAMES),
+            "caseAcceptance": _softdent("caseAcceptance", SOFTDENT_CASE_ACCEPTANCE_NAMES),
         },
         "quickbooks": {
             "dir": str(quickbooks_dir),
-            "revenue": _load_dataset(quickbooks_dir, QUICKBOOKS_REVENUE_NAMES),
-            "expenses": _load_dataset(quickbooks_dir, QUICKBOOKS_EXPENSE_NAMES),
-            "profitAndLoss": _load_dataset(quickbooks_dir, QUICKBOOKS_PL_NAMES),
-            "expenseCategories": _load_dataset(quickbooks_dir, QUICKBOOKS_EXPENSE_CATEGORY_NAMES),
-            "ar": _load_dataset(quickbooks_dir, QUICKBOOKS_AR_NAMES),
+            "revenue": _quickbooks("revenue", QUICKBOOKS_REVENUE_NAMES),
+            "expenses": _quickbooks("expenses", QUICKBOOKS_EXPENSE_NAMES),
+            "profitAndLoss": _quickbooks("profitAndLoss", QUICKBOOKS_PL_NAMES),
+            "expenseCategories": _quickbooks("expenseCategories", QUICKBOOKS_EXPENSE_CATEGORY_NAMES),
+            "ar": _quickbooks("ar", QUICKBOOKS_AR_NAMES),
         },
     }
     try:
