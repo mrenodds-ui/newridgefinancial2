@@ -1,6 +1,6 @@
 """Retired legacy host for New Ridge Family Financial.
 
-NewRidgeFinancial 2.0 runs separately on port 1966.
+NewRidgeFinancial 2.0 runs separately on port 8765.
 Use StartNewRidgeFinancial2.bat.
 """
 
@@ -15,7 +15,7 @@ _RETIRED = {
     "use_instead": {
         "program": "NewRidgeFinancial 2.0",
         "start": "StartNewRidgeFinancial2.bat",
-        "url": "http://127.0.0.1:1966/",
+        "url": "http://127.0.0.1:8765/",
     },
 }
 

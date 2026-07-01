@@ -14,6 +14,7 @@ const HalCore = (function () {
 
   const PAGE_SYNONYMS = {
     financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
+    taxes: ["tax plan", "tax planning", "book to tax", "book-to-tax", "1120-s", "1120s", "k-1", "kansas tax", "federal tax", "reasonable compensation", "k-120s", "pte tax", "pass-through", "quarterly estimate", "1040-es"],
     softdent: ["softdent", "soft dent", "practice management"],
     quickbooks: ["quickbooks", "quick books", "p&l", "profit and loss", "expenses"],
     ar: ["a/r", "accounts receivable", "receivable", "collections", "aging", "follow-up", "follow up"],
@@ -478,24 +479,25 @@ const HalCore = (function () {
       { pattern: /\b(production trend|ytd production|production mtd)\b.*\bwidget\b|\bwidget\b.*\b(production trend|ytd production)\b/, key: "financialProductionTrend" },
       { pattern: /\b(payer mix|collection rate|collections mix)\b.*\bwidget\b|\bwidget\b.*\b(payer mix|collection rate)\b/, key: "payerMixAndCollections" },
       { pattern: /\b(provider performance|provider production|provider breakdown)\b.*\bwidget\b|\bwidget\b.*\b(provider performance|provider production)\b/, key: "providerPerformance" },
-      { pattern: /\b(data freshness|data quality|quality score)\b.*\bwidget\b|\bwidget\b.*\b(data freshness|data quality|quality score)\b/, key: "dataFreshnessQuality" },
+      { pattern: /\b(data freshness|data quality|quality score)\b.*\bwidget\b|\bwidget\b.*\b(data freshness|data quality|quality score)\b/, key: "practiceFinancialOverview" },
       { pattern: /\b(ebitda|normalization|add-?back)\b.*\bwidget\b|\bwidget\b.*\b(ebitda|normalization|add-?back)\b/, key: "ebitdaNormalization" },
       { pattern: /\b(p&l|profit and loss|gross profit|cogs)\b.*\bwidget\b|\bwidget\b.*\b(p&l|profit and loss|gross profit|cogs)\b/, key: "quickbooksProfitLossDetail" },
-      { pattern: /\b(quickbooks|qb)\b.*\b(sync|widget)\b|\bwidget\b.*\b(quickbooks|qb)\b.*\bsync\b|\bsync\b.*\bwidget\b.*\bquickbooks\b/, key: "quickbooksSyncHealth" },
+      { pattern: /\b(quickbooks|qb)\b.*\b(sync|widget)\b|\bwidget\b.*\b(quickbooks|qb)\b.*\bsync\b|\bsync\b.*\bwidget\b.*\bquickbooks\b/, key: "quickbooksProfitLossDetail" },
       { pattern: /\b(accounts payable|a\/?p(?: automation)?)\b.*\bwidget\b|\bwidget\b.*\b(accounts payable|a\/?p)\b/, key: "accountsPayableAutomation" },
       { pattern: /\b(document intake|intake queue|document queue)\b.*\bwidget\b|\bwidget\b.*\b(document intake|intake queue|document queue)\b/, key: "documentIntakeQueue" },
       { pattern: /\b(document preview|selected document|invoice preview)\b.*\bwidget\b|\bwidget\b.*\b(document preview|selected document|invoice preview)\b/, key: "documentPreview" },
-      { pattern: /\b(period close|posting review|posting queue)\b.*\bwidget\b|\bwidget\b.*\b(period close|posting)\b/, key: "periodCloseAndPosting" },
+      { pattern: /\b(period close|posting review|posting queue|journal entries?)\b.*\bwidget\b|\bwidget\b.*\b(period close|posting|journal entries?)\b/, key: "periodCloseAndPosting" },
+      { pattern: /\b(journal posting queue|journal queue)\b.*\bwidget\b|\bwidget\b.*\b(journal posting queue|journal queue)\b/, key: "journalPostingQueue" },
       { pattern: /\b(claims pipeline|claim pipeline|kanban|claim lanes)\b.*\bwidget\b|\bwidget\b.*\b(claims pipeline|claim pipeline|kanban|claim lanes)\b/, key: "claimsPipeline" },
       { pattern: /\b(claims|receivables)\b.*\bwidget\b|\bwidget\b.*\b(claims|receivables)\b/, key: "smartClaimsAndReceivables" },
-      { pattern: /\b(claim readiness|safety posture|safety)\b.*\bwidget\b|\bwidget\b.*\b(claim readiness|safety)\b/, key: "claimReadinessAndSafety" },
+      { pattern: /\b(claim readiness|safety posture|safety)\b.*\bwidget\b|\bwidget\b.*\b(claim readiness|safety)\b/, key: "claimsPipeline" },
       { pattern: /\b(a\/?r aging|collections|follow-?up queue)\b.*\bwidget\b|\bwidget\b.*\b(a\/?r aging|collections)\b/, key: "arAgingAndCollections" },
       { pattern: /\b(top outstanding|outstanding claims|top claims)\b.*\bwidget\b|\bwidget\b.*\b(top outstanding|outstanding claims|top claims)\b/, key: "arOutstandingClaims" },
       { pattern: /\b(care delivery|clinical(?: performance)?)\b.*\bwidget\b|\bwidget\b.*\b(care delivery|clinical)\b/, key: "careDeliveryPerformance" },
       { pattern: /\b(softdent aging|daysheet aging|softdent a\/?r)\b.*\bwidget\b|\bwidget\b.*\b(softdent aging|daysheet aging|softdent a\/?r)\b/, key: "softdentArAging" },
       { pattern: /\b(insurance vs patient|patient responsibility|insurance responsibility|responsibility split)\b.*\bwidget\b|\bwidget\b.*\b(insurance vs patient|patient responsibility|responsibility split)\b/, key: "softdentResponsibility" },
-      { pattern: /\b(softdent source health|softdent health|source health)\b.*\bwidget\b|\bwidget\b.*\b(softdent source health|softdent health|source health)\b/, key: "softdentSourceHealth" },
-      { pattern: /\b(softdent exports?|export history)\b.*\bwidget\b|\bwidget\b.*\b(softdent exports?|export history)\b/, key: "softdentExportHistory" },
+      { pattern: /\b(softdent source health|softdent health|source health)\b.*\bwidget\b|\bwidget\b.*\b(softdent source health|softdent health|source health)\b/, key: "careDeliveryPerformance" },
+      { pattern: /\b(softdent exports?|export history)\b.*\bwidget\b|\bwidget\b.*\b(softdent exports?|export history)\b/, key: "careDeliveryPerformance" },
       { pattern: /\b(narrative|narratives|insurance narrative)\b.*\bwidget\b|\bwidget\b.*\b(narrative|narratives|insurance narrative)\b/, key: "narrativeWorkflow" },
       { pattern: /\b(document library|library|indexed documents|storage)\b.*\bwidget\b|\bwidget\b.*\b(document library|library|indexed documents|storage)\b/, key: "documentLibrary" },
     ];
@@ -1033,7 +1035,7 @@ const HalCore = (function () {
             "Browser preview storage",
             "Warning",
             "sessionStorage fallback only; imports, SQLite storage, SideNotes hub files, and import sync are unavailable",
-            "Launch NR2 with scripts/start_nr2_1966.ps1 for desktop mode.",
+            "Launch NR2 with StartProgram.bat for desktop mode (http://127.0.0.1:8765/).",
           ),
         );
       } else if (runtime.sessionStorageOk === true) {
@@ -1273,7 +1275,7 @@ const HalCore = (function () {
         intent: "help",
         lane: "local",
         text:
-          "I am HAL, the local read-only program manager for NewRidgeFinancial 2.0. My top priority is to monitor the program, place correct data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action. I have full read access to local program pages and service data. I run an agent loop: plan the question, gather local tool data, answer, and self-check before responding. I can: open and explain pages; show the full program snapshot; show priorities and source health; start read-only work sessions; build local evidence packets; run readiness checks; check claim packet readiness; draft journal-entry review notes; show manager dashboard widgets; explain missing widget data; prioritize widget imports; build daily owner briefings; show accounting review queues; perform Excel-style reconciliation; search the local library; research public web reference material for practice operations (sanitized — no patient data sent); save durable learned facts when you say Remember this: ...; list and create local tasks; monitor, list, and create sidenotes; report local AI model lanes; and simulate the external-action firewall. I use local GPU chat and helper models for unmatched questions, reasoning on demand, and keep escalation local. I remember recent conversation context, approved learned facts, and local office preferences. I do not submit, send, upload, post, delete, or change outside systems.",
+          "I am HAL, the local read-only program manager for NewRidgeFinancial 2.0. My top priority is to monitor the program, place correct data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action. I have full read access to local program pages and service data. I run an agent loop: plan the question, gather local tool data, answer, and self-check before responding. I can: open and explain pages; show the full program snapshot; show priorities and source health; start read-only work sessions; build local evidence packets; run readiness checks; check claim packet readiness; draft journal-entry review notes; show manager dashboard widgets; explain missing widget data; prioritize widget imports; build daily owner briefings; show accounting review queues; perform Excel-style reconciliation; search the local library; research public web reference material for practice operations (sanitized — no patient data sent); save durable learned facts when you say Remember this: ...; list and create local tasks; monitor, list, and create sidenotes; report local AI model lanes; and simulate the external-action firewall. I use local GPU chat and helper models for unmatched questions, 24B reasoning on demand for plans and insurance narratives, and keep escalation local. I remember recent conversation context, approved learned facts, and local office preferences. I do not submit, send, upload, post, delete, or change outside systems.",
         actions: [],
       };
     }
@@ -1416,6 +1418,21 @@ const HalCore = (function () {
       };
     }
 
+    if (
+      /\b(draft|select|pick|best|generate)\b.*\b(narrative|letter)\b/.test(query) &&
+      (/\bclaim\b|\bCLM[-\w]+\b/i.test(query) || /\bfor\b.*\bclaim\b/.test(query))
+    ) {
+      return { intent: "narratives: select-for-claim", lane: "local", useNarrativeForClaim: true, text: "", actions: [] };
+    }
+
+    if (
+      !wantsExplain &&
+      (/\b(review|fact[\s-]?check)\s+(this\s+|the\s+|my\s+)?(insurance\s+)?narrative/i.test(query) ||
+        /\b(appeal letter|crown narrative|perio narrative)\b/i.test(query))
+    ) {
+      return { intent: "reasoning: narrative", lane: "reason21b", text: "", useReasoning: true, prompt: rawQuery, actions: [] };
+    }
+
     if (/prioriti[sz]e|make a plan|draft a plan|\bplan (my|for|the)\b|analy[sz]e|reason through|think through|recommend|\bstrategy\b|focus first|where (do|should) (i|we) start/.test(query)) {
       return { intent: "reasoning", lane: "reason21b", text: "", useReasoning: true, prompt: rawQuery, actions: [] };
     }
@@ -1507,13 +1524,6 @@ const HalCore = (function () {
     ) {
       const fullPull = /\b(full|100%|all data|everything)\b/.test(query);
       return { intent: "sources: pull-approved", lane: "local", usePracticeSourcePull: true, practiceSourceFullPull: fullPull, text: "", actions: [] };
-    }
-
-    if (
-      /\b(draft|select|pick|best|generate)\b.*\b(narrative|letter)\b/.test(query) &&
-      (/\bclaim\b|\bCLM[-\w]+\b/i.test(query) || /\bfor\b.*\bclaim\b/.test(query))
-    ) {
-      return { intent: "narratives: select-for-claim", lane: "local", useNarrativeForClaim: true, text: "", actions: [] };
     }
 
     if (/\b(cognitive|metacognition|how do you think|characteristics|pathways)\b/.test(query)) {

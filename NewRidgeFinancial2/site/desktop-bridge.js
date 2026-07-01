@@ -14,7 +14,7 @@ const DesktopBridge = (function () {
 
   function desktopRequiredMessage(feature) {
     const label = feature || "This feature";
-    return `${label} requires the NR2 desktop app. Browser/file mode is a UI preview only: imports, SQLite storage, SideNotes hub files, and import sync are unavailable. Launch with scripts/start_nr2_1966.ps1.`;
+    return `${label} requires the NR2 desktop app. Browser/file mode is a UI preview only: imports, SQLite storage, SideNotes hub files, and import sync are unavailable. Launch StartProgram.bat (http://127.0.0.1:8765/).`;
   }
 
   function whenReady(callback) {
@@ -417,6 +417,23 @@ const DesktopBridge = (function () {
     );
   }
 
+  async function getTaxPlan() {
+    if (hasDesktopApi() && window.pywebview.api.get_tax_plan) {
+      return window.pywebview.api.get_tax_plan();
+    }
+    if (typeof TaxEngine !== "undefined" && TaxEngine.buildTaxPlanFromSnapshot) {
+      const snap =
+        typeof SnapshotStore !== "undefined" && SnapshotStore.getCached
+          ? SnapshotStore.getCached()
+          : typeof globalThis !== "undefined"
+            ? globalThis.__nr2ProgramSnapshot
+            : null;
+      const feed = typeof globalThis !== "undefined" ? globalThis.__nr2HalWidgetFeed : null;
+      return TaxEngine.buildTaxPlanFromSnapshot(snap, feed);
+    }
+    return null;
+  }
+
   return {
     hasDesktopApi,
     runtimeMode,
@@ -443,6 +460,7 @@ const DesktopBridge = (function () {
     listHalMemories,
     rememberHalFact,
     rememberHalWebFindings,
+    getTaxPlan,
     readClipboard,
     writeClipboard,
     installClipboardHandlers,

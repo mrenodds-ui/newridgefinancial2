@@ -1,22 +1,23 @@
 <#
 .SYNOPSIS
-  Retired launcher for the legacy New Ridge Family Financial program.
-
-.DESCRIPTION
-  The legacy program has been archived to _legacy/ for reference only.
-  Use NewRidgeFinancial 2.0 instead (StartNewRidgeFinancial2.bat).
+  Start Program — launch NewRidgeFinancial 2.0 desktop app (pywebview, no browser).
 #>
 [CmdletBinding()]
-param()
+param(
+    [switch]$SkipModelWarmup,
+    [switch]$Restart,
+    [switch]$SkipValidation
+)
 
 $ErrorActionPreference = 'Stop'
-$Root = Split-Path $PSScriptRoot -Parent
+$StartScript = Join-Path $PSScriptRoot 'start_nr2_desktop.ps1'
+if (-not (Test-Path $StartScript)) {
+    throw "Desktop start script not found: $StartScript"
+}
 
-Write-Host "The legacy New Ridge Family Financial program is retired (reference only)." -ForegroundColor Yellow
-Write-Host ""
-Write-Host "Use NewRidgeFinancial 2.0 instead:" -ForegroundColor Cyan
-Write-Host "  Start: $Root\StartNewRidgeFinancial2.bat"
-Write-Host "  URL:   http://127.0.0.1:1966/"
-Write-Host ""
-Write-Host "Legacy code remains in _legacy/ for reference only."
-exit 1
+$argsList = @()
+if ($SkipModelWarmup) { $argsList += '-SkipModelWarmup' }
+if ($Restart) { $argsList += '-Restart' }
+if ($SkipValidation) { $argsList += '-SkipValidation' }
+
+& $StartScript @argsList

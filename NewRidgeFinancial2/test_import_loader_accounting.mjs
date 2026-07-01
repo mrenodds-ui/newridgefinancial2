@@ -23,6 +23,17 @@ const mismatch = comparePeriodAlignment("2026-06", "2026-05", true, true);
 assert.equal(mismatch.aligned, false);
 assert.match(mismatch.message, /Period mismatch/);
 
+const ahead = comparePeriodAlignment("2026-07", "2026-06", true, true, new Date("2026-07-01T12:00:00Z"));
+assert.equal(ahead.aligned, true);
+assert.equal(ahead.comparablePeriod, "2026-06");
+
+const pendingHealth = assessCollectionHealth(
+  [{ period: "2026-06", production: 171796.9, collectionsPending: true }],
+  "2026-06",
+);
+assert.equal(pendingHealth.pending, true);
+assert.equal(pendingHealth.healthy, true);
+
 const aggregateMissing = {
   totals: { production: 168790, collections: 0, collectionsReported: false, insurance: 0, patient: 0 },
 };

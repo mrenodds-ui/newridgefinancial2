@@ -27,6 +27,14 @@ Reasoning uses `mistral-small3.1:24b-fast` on demand (not dual-resident with 8B+
 powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Install-HAL-Mistral-24B-Fast.ps1
 ```
 
+Speed-first single-lane layout (8B only pinned — more VRAM headroom):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Install-HAL-GPU-Chat-Lane.ps1 -UnpinHelper
+```
+
+Then set `fastModel.enabled` to `false` in `site/data/hal-models.json`.
+
 The model names are read live from `..\site\data\hal-models.json`, so they stay
 in sync with the program config.
 

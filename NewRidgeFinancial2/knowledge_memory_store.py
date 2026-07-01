@@ -36,6 +36,7 @@ VALID_CATEGORIES = {
     "deployment_notes",
     "test_results",
     "future_tasks",
+    "tax_accounting",
 }
 
 
@@ -91,8 +92,28 @@ def infer_memory_category(text: str) -> str:
     lower = text.lower()
     if any(token in lower for token in ("softdent", "daysheet", "carestream", "sensei")):
         return "softdent_exports"
-    if "quickbooks" in lower or "p&l" in lower or "journal entry" in lower:
+    if any(token in lower for token in ("quickbooks", "p&l", "journal entry")):
         return "quickbooks_readonly"
+    if any(
+        token in lower
+        for token in (
+            "1120-s",
+            "1120s",
+            "k-1",
+            "k-120s",
+            "s corp",
+            "s-corp",
+            "kansas tax",
+            "federal tax",
+            "reasonable compensation",
+            "pte tax",
+            "pass-through",
+            "estimated tax",
+            "section 199a",
+            "qbi",
+        )
+    ):
+        return "tax_accounting"
     if any(token in lower for token in ("narrative", "insurance", "claim", "payer", "denial")):
         return "insurance_narratives"
     if any(token in lower for token in ("firewall", "must not", "never submit", "read-only")):
@@ -110,6 +131,8 @@ def infer_memory_scope(text: str, category: str) -> str:
         return "quickbooks"
     if category == "insurance_narratives":
         return "insurance_narratives"
+    if category == "tax_accounting" or any(token in lower for token in ("1120-s", "k-120s", "s corp", "s-corp", "kansas tax")):
+        return "taxes"
     return "hal"
 
 

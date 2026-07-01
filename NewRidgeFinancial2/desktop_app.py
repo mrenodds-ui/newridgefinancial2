@@ -375,6 +375,13 @@ class DesktopApi:
             findings = []
         return remember_web_findings(findings, query=str(query or ""), actor="Staff")
 
+    def get_tax_plan(self) -> dict:
+        from import_loader import load_import_bundle
+        from tax_engine import build_tax_plan_from_bundle
+
+        bundle = load_import_bundle(sync=False, deep=False)
+        return build_tax_plan_from_bundle(bundle)
+
 
 def main() -> int:
     if not INDEX_HTML.is_file():
@@ -397,17 +404,20 @@ def main() -> int:
     WEBVIEW_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
     default_port = 8765
     http_port = int(os.environ.get("NR2_HTTP_PORT", str(default_port)))
+    index_url = f"http://127.0.0.1:{http_port}/index.html"
     print(
         f"NR2 desktop: schema={DESIGN_SCHEMA_VERSION} site={SITE_DIR} storage={WEBVIEW_STORAGE_DIR}",
         file=sys.stderr,
     )
     print(
-        f"NR2 desktop: UI at http://127.0.0.1:{http_port}/ (pywebview http_server=True).",
+        f"NR2 desktop: UI at {index_url} (pywebview http_server=True).",
         file=sys.stderr,
     )
+    from nr2_http_server import NR2BottleServer
+
     window = webview.create_window(
         f"NewRidgeFinancial 2.0 ({DESIGN_SCHEMA_VERSION})",
-        str(INDEX_HTML),
+        index_url,
         width=1440,
         height=920,
         min_size=(1024, 700),
@@ -422,6 +432,7 @@ def main() -> int:
         http_port=http_port,
         private_mode=True,
         storage_path=str(WEBVIEW_STORAGE_DIR),
+        server=NR2BottleServer,
     )
     return 0
 

@@ -15,7 +15,7 @@
       ],
       "cacheDir": "app_data/nr2/document_inbox/softdent",
       "collectorHints": {
-        "bridge_aggregate": "New Ridge SoftDent Bridge Sync scheduled task",
+        "bridge_aggregate": "New Ridge Bridge Aggregate Generator + NR2 HAL Import Sync",
         "account_aging_jsonl": "SoftDent financial pipeline (account_aging.jsonl)",
         "daysheet_jsonl": "SoftDent daysheet export pipeline"
       }

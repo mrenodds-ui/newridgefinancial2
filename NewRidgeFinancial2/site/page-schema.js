@@ -3,7 +3,7 @@
  * Single source of truth for nav, page chrome, HAL commands, and widget inventory.
  */
 const PageSchema = (function () {
-  const SCHEMA_VERSION = "hal-102";
+  const SCHEMA_VERSION = "hal-104";
 
   const PRACTICE = {
     name: "New Ridge Family Dental",
@@ -15,7 +15,7 @@ const PageSchema = (function () {
   };
 
   const NAV_GROUPS = [
-    { section: "Overview", pages: ["financial", "hal"] },
+    { section: "Overview", pages: ["financial", "taxes", "hal"] },
     { section: "Clinical", pages: ["softdent", "narratives", "claims"] },
     { section: "Revenue", pages: ["ar", "quickbooks"] },
     { section: "Operations", pages: ["documents", "library", "office-manager"] },
@@ -41,6 +41,30 @@ const PageSchema = (function () {
         { key: "financialProductionTrend", title: "Production MTD & 12-Month Trend" },
         { key: "payerMixAndCollections", title: "Payer Mix & Collection Rate" },
         { key: "providerPerformance", title: "Production by Provider" },
+      ],
+    },
+    taxes: {
+      id: "taxes",
+      label: "Taxes",
+      title: "S Corporation Tax Planning",
+      subtitle: "Federal and Kansas owner-level tax checklist for the practice S corp",
+      accent: "blue",
+      filters: ["Tax year 2025", "S corporation", "Kansas"],
+      commands: [
+        "Show book-to-tax bridge",
+        "Model reasonable comp at $220K",
+        "Summarize quarterly tax estimates",
+        "Compare distributions vs W-2 wages",
+      ],
+      safety: "Read-only · HAL tax engine + MemoAI · CPA review required before filing",
+      insight: {
+        tone: "info",
+        title: "Tax engine models book-to-tax from QuickBooks",
+        body: "HAL computes K-1 estimates, reasonable-comp scenarios, and quarterly vouchers from your import. MemoAI cites federal and Kansas S corp rules. Confirm all amounts with your CPA before filing.",
+      },
+      widgets: [
+        { key: "quickbooksProfitLossDetail", title: "Book Income (QuickBooks YTD)" },
+        { key: "ebitdaNormalization", title: "Owner Add-backs & Adjustments" },
       ],
     },
     softdent: {

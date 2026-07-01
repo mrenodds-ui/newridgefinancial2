@@ -133,6 +133,9 @@ const WidgetContract = (function () {
       const net = Number(revenue) - Number(expenses);
       return { value: Number.isFinite(net) ? net : MISSING, state: "ok", dataset: datasetKey };
     }
+    if (binding.path === "collections" && dash.collectionsPending) {
+      return { value: "Pending export", state: "ok", dataset: datasetKey };
+    }
     let raw = getPath(dash, binding.path);
     if (binding.label && Array.isArray(raw)) {
       const row = raw.find((item) => String(item.label || "") === binding.label);

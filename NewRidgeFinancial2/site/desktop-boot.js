@@ -1,0 +1,119 @@
+/**
+ * Desktop boot gate — verify schema shell loaded and all assets share one build version.
+ * Runs after page-schema.js + page-chrome.js, before app.js.
+ */
+(function () {
+  const errors = [];
+
+  function readScriptAssetVersions() {
+    const versions = new Set();
+    document.querySelectorAll('script[src*=".js"]').forEach((node) => {
+      const src = node.getAttribute("src") || "";
+      if (!src || src.startsWith("http")) return;
+      const match = src.match(/[?&]v=([^&]+)/);
+      if (match) versions.add(match[1]);
+    });
+    return versions;
+  }
+
+  function expectedSchemaVersion() {
+    if (typeof PageSchema !== "undefined" && PageSchema.SCHEMA_VERSION) {
+      return String(PageSchema.SCHEMA_VERSION);
+    }
+    return null;
+  }
+
+  function renderBootFailure(message, details) {
+    const frame = document.getElementById("pageFrame");
+    const sidebar = document.getElementById("sidebar");
+    if (sidebar) {
+      sidebar.innerHTML =
+        '<div class="sidebar__boot-error"><strong>Desktop boot failed</strong><p>Restart Start Program.</p></div>';
+    }
+    if (!frame) return;
+    const detailHtml = (details || [])
+      .map((line) => `<li>${String(line).replace(/</g, "&lt;")}</li>`)
+      .join("");
+    frame.innerHTML =
+      `<div class="pv-state pv-state--error nr2-boot-error" role="alert">` +
+      `<strong class="pv-state__title">${String(message).replace(/</g, "&lt;")}</strong>` +
+      (detailHtml ? `<ul class="pv-state__list">${detailHtml}</ul>` : "") +
+      `<p class="pv-state__msg">Close the window and launch <strong>Start Program</strong> again. If this persists, run scripts/Refresh-NR2-DesktopShortcut.ps1.</p>` +
+      `</div>`;
+  }
+
+  const schemaVersion = expectedSchemaVersion();
+  if (!schemaVersion) {
+    errors.push("page-schema.js did not define PageSchema.SCHEMA_VERSION.");
+  }
+  if (typeof PageChrome === "undefined") {
+    errors.push("page-chrome.js failed to load (PageChrome is undefined).");
+  }
+  if (typeof PageSchema === "undefined" || typeof PageSchema.navPages !== "function") {
+    errors.push("page-schema.js failed to load (PageSchema.navPages missing).");
+  }
+
+  const assetVersions = readScriptAssetVersions();
+  if (assetVersions.size > 1) {
+    errors.push(`Mixed asset cache versions in index.html: ${Array.from(assetVersions).sort().join(", ")}.`);
+  }
+  if (schemaVersion && assetVersions.size === 1 && !assetVersions.has(schemaVersion)) {
+    errors.push(
+      `Schema version ${schemaVersion} does not match script cache bust ${Array.from(assetVersions)[0]}.`,
+    );
+  }
+
+  const boot = {
+    ready: errors.length === 0,
+    errors,
+    assetVersion: assetVersions.size === 1 ? Array.from(assetVersions)[0] : null,
+    schemaVersion,
+    async verifyBuildManifest() {
+      try {
+        const res = await fetch("nr2-build.json", { cache: "no-store" });
+        if (!res.ok) return { ok: true, skipped: true };
+        const manifest = await res.json();
+        const manifestVersion = manifest && (manifest.schemaVersion || manifest.assetVersion);
+        if (manifestVersion && schemaVersion && manifestVersion !== schemaVersion) {
+          return {
+            ok: false,
+            mode: "manifest",
+            manifestVersion,
+            jsVersion: schemaVersion,
+          };
+        }
+        return { ok: true, manifestVersion: manifestVersion || null };
+      } catch {
+        return { ok: true, skipped: true };
+      }
+    },
+    async verifyDesktopManifest() {
+      const manifestCheck = await boot.verifyBuildManifest();
+      if (!manifestCheck.ok) return manifestCheck;
+      if (!window.DesktopBridge || !DesktopBridge.hasDesktopApi || !DesktopBridge.hasDesktopApi()) {
+        return { ok: true, mode: "browser-dev" };
+      }
+      try {
+        const info = await DesktopBridge.getAppInfo();
+        const pyVersion = info && (info.designSchemaVersion || info.assetVersion);
+        if (pyVersion && schemaVersion && pyVersion !== schemaVersion) {
+          return {
+            ok: false,
+            mode: "desktop",
+            pythonVersion: pyVersion,
+            jsVersion: schemaVersion,
+          };
+        }
+        return { ok: true, mode: "desktop", pythonVersion: pyVersion || null };
+      } catch (err) {
+        return { ok: false, mode: "desktop", error: String(err && err.message ? err.message : err) };
+      }
+    },
+  };
+
+  if (!boot.ready) {
+    renderBootFailure("Design schema failed to load", errors);
+  }
+
+  globalThis.NR2Boot = boot;
+})();

@@ -365,7 +365,9 @@ const ImportLoader = (function () {
 
   function normalizeDashboardRows(rows) {
     return (rows || []).map((row) => {
-      const collectionsReported = row.collectionsReported !== false && row.CollectionsReported !== false;
+      const collectionsPending = row.collectionsPending === true || row.CollectionsPending === true;
+      const collectionsReported =
+        !collectionsPending && row.collectionsReported !== false && row.CollectionsReported !== false;
       const parsedCollections = coerceFloat(row.collections ?? row.Collections);
       return {
         provider: String(row.provider || row.Provider || row.providerName || row.ProviderName || PRIMARY_PROVIDER).trim() || PRIMARY_PROVIDER,
@@ -373,10 +375,63 @@ const ImportLoader = (function () {
         production: coerceFloat(row.production || row.Production) || 0,
         collections: collectionsReported ? (parsedCollections ?? 0) : null,
         collectionsReported,
+        collectionsPending,
         insurance: coerceFloat(row.insurance || row.Insurance) || 0,
         patient: coerceFloat(row.patient || row.Patient) || 0,
       };
     });
+  }
+
+  function isPriorCalendarMonth(laterPeriod, earlierPeriod) {
+    const later = normalizePeriodKey(laterPeriod);
+    const earlier = normalizePeriodKey(earlierPeriod);
+    const matchLater = later.match(/^(\d{4})-(\d{2})$/);
+    const matchEarlier = earlier.match(/^(\d{4})-(\d{2})$/);
+    if (!matchLater || !matchEarlier) return false;
+    let year = Number(matchEarlier[1]);
+    let month = Number(matchEarlier[2]) + 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+    return `${year}-${String(month).padStart(2, "0")}` === `${matchLater[1]}-${matchLater[2]}`;
+  }
+
+  function resolveComparablePeriod(softdentPeriod, quickbooksPeriod, referenceDate) {
+    const sd = normalizePeriodKey(softdentPeriod);
+    const qb = normalizePeriodKey(quickbooksPeriod);
+    if (!sd) return qb;
+    if (!qb) return sd;
+    if (sd === qb) return sd;
+    const ref = referenceDate instanceof Date ? referenceDate : new Date(referenceDate || Date.now());
+    const currentMonth = `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, "0")}`;
+    if (sd === currentMonth && isPriorCalendarMonth(sd, qb)) return qb;
+    return sd;
+  }
+
+  function dashboardRowsForPeriod(rows, periodKey) {
+    const target = normalizePeriodKey(periodKey);
+    if (!target) return normalizeDashboardRows(rows || []);
+    return normalizeDashboardRows(rows || []).filter((row) => normalizePeriodKey(row.period) === target);
+  }
+
+  function resolveDashboardPeriodContext(bundle) {
+    const dashboardRows = normalizeDashboardRows(((bundle.softdent && bundle.softdent.dashboard) || {}).rows || []);
+    const aggregate = aggregateDashboard(dashboardRows);
+    const qbPeriod = latestQuickbooksPeriod(bundle);
+    const sdLatestPeriod = aggregate.period;
+    const comparablePeriod = resolveComparablePeriod(sdLatestPeriod, qbPeriod, bundle.loadedAt || Date.now());
+    const comparableRows = comparablePeriod ? dashboardRowsForPeriod(dashboardRows, comparablePeriod) : dashboardRows;
+    const comparableAggregate = comparableRows.length ? aggregateDashboard(comparableRows) : aggregate;
+    return {
+      dashboardRows,
+      aggregate,
+      qbPeriod,
+      sdLatestPeriod,
+      comparablePeriod,
+      comparableRows,
+      comparableAggregate,
+    };
   }
 
   function aggregateCollections(rows) {
@@ -464,41 +519,81 @@ const ImportLoader = (function () {
     return periods[0] || "";
   }
 
-  function assessCollectionHealth(rows) {
+  function assessCollectionHealth(rows, comparablePeriod) {
     const normalized = normalizeDashboardRows(rows || []);
     if (!normalized.length) {
       return {
         evaluated: false,
         reported: true,
         healthy: true,
+        pending: false,
         latestZeroWithProduction: false,
         message: "OK",
       };
     }
-    const sorted = [...normalized].sort((a, b) => String(a.period || "").localeCompare(String(b.period || "")));
+    const scoped = comparablePeriod
+      ? normalized.filter((row) => normalizePeriodKey(row.period) === normalizePeriodKey(comparablePeriod))
+      : normalized;
+    const sorted = [...(scoped.length ? scoped : normalized)].sort((a, b) =>
+      String(a.period || "").localeCompare(String(b.period || "")),
+    );
     const latest = sorted[sorted.length - 1];
+    if (latest.collectionsPending) {
+      return {
+        evaluated: true,
+        reported: false,
+        pending: true,
+        healthy: true,
+        latestZeroWithProduction: false,
+        message: "Collections export pending for comparable period",
+      };
+    }
     if (latest.collectionsReported === false) {
       return {
         evaluated: true,
         reported: false,
+        pending: false,
         healthy: false,
         latestZeroWithProduction: false,
-        message: "Collections missing for latest period",
+        message: "Collections missing for comparable period",
       };
     }
     if (latest.production > 0 && (latest.collections === null || latest.collections === 0)) {
       return {
         evaluated: true,
         reported: true,
+        pending: false,
         healthy: false,
         latestZeroWithProduction: true,
         message: "$0 collections with production — verify final SoftDent daysheet export",
       };
     }
-    return { evaluated: true, reported: true, healthy: true, latestZeroWithProduction: false, message: "OK" };
+    return {
+      evaluated: true,
+      reported: true,
+      pending: false,
+      healthy: true,
+      latestZeroWithProduction: false,
+      message: "OK",
+    };
+  }
+
+  function collectionsPendingValue(aggregate, collectionHealth) {
+    if (collectionHealth && collectionHealth.pending) return null;
+    return aggregate.totals.collections ?? null;
   }
 
   function resolveCollectionHealth(collectionHealth, aggregate) {
+    if (collectionHealth && collectionHealth.pending) {
+      return {
+        evaluated: true,
+        reported: false,
+        pending: true,
+        healthy: true,
+        latestZeroWithProduction: false,
+        message: collectionHealth.message || "Collections export pending for comparable period",
+      };
+    }
     if (collectionHealth && collectionHealth.evaluated) return collectionHealth;
     const reported = aggregate.totals.collectionsReported !== false;
     const production = aggregate.totals.production || 0;
@@ -559,28 +654,47 @@ const ImportLoader = (function () {
     };
   }
 
-  function comparePeriodAlignment(softdentPeriod, quickbooksPeriod, hasSd, hasQb) {
-    const sd = normalizePeriodKey(softdentPeriod);
+  function comparePeriodAlignment(softdentPeriod, quickbooksPeriod, hasSd, hasQb, referenceDate) {
+    const sdLatest = normalizePeriodKey(softdentPeriod);
     const qb = normalizePeriodKey(quickbooksPeriod);
+    const comparablePeriod = resolveComparablePeriod(sdLatest, qb, referenceDate);
     if (!hasSd || !hasQb) {
-      return { aligned: true, softdentPeriod: sd, quickbooksPeriod: qb, message: "" };
+      return {
+        aligned: true,
+        softdentPeriod: sdLatest,
+        quickbooksPeriod: qb,
+        comparablePeriod,
+        message: "",
+      };
     }
-    if (!sd || !qb) {
+    if (!sdLatest || !qb) {
       return {
         aligned: false,
-        softdentPeriod: sd,
+        softdentPeriod: sdLatest,
         quickbooksPeriod: qb,
+        comparablePeriod,
         message: "Period unknown for one or more sources; cross-source comparison not verified.",
       };
     }
-    if (sd === qb) {
-      return { aligned: true, softdentPeriod: sd, quickbooksPeriod: qb, message: "" };
+    if (comparablePeriod === qb) {
+      return {
+        aligned: true,
+        softdentPeriod: sdLatest,
+        quickbooksPeriod: qb,
+        comparablePeriod,
+        message: "",
+        note:
+          sdLatest !== qb
+            ? `Cross-source view uses ${qb}; SoftDent also includes ${sdLatest} in progress.`
+            : "",
+      };
     }
     return {
       aligned: false,
-      softdentPeriod: sd,
+      softdentPeriod: sdLatest,
       quickbooksPeriod: qb,
-      message: `Period mismatch: SoftDent ${sd} vs QuickBooks ${qb}.`,
+      comparablePeriod,
+      message: `Period mismatch: SoftDent ${comparablePeriod || sdLatest} vs QuickBooks ${qb}.`,
     };
   }
 
@@ -593,14 +707,14 @@ const ImportLoader = (function () {
     score += freshOk ? 25 : 10;
 
     const health = resolveCollectionHealth(collectionHealth, aggregate);
-    const fieldScore = health.reported ? 10 : 0;
+    const fieldScore = health.pending ? 8 : health.reported ? 10 : 0;
     categories.push({
       label: "Collections field",
       score: fieldScore,
-      value: health.reported ? "Present" : "Missing for period",
+      value: health.pending ? "Pending export" : health.reported ? "Present" : "Missing for period",
     });
     score += fieldScore;
-    const healthScore = !health.reported ? 0 : health.healthy ? 15 : 0;
+    const healthScore = health.pending ? 12 : !health.reported ? 0 : health.healthy ? 15 : 0;
     categories.push({
       label: "Collection health",
       score: healthScore,
@@ -932,8 +1046,15 @@ const ImportLoader = (function () {
   function buildSoftdentDashboard(bundle) {
     if (!hasSoftdentImport(bundle)) return null;
     const sd = bundle.softdent || {};
-    const dashboardRows = normalizeDashboardRows((sd.dashboard && sd.dashboard.rows) || []);
-    const aggregate = aggregateDashboard(dashboardRows);
+    const periodCtx = resolveDashboardPeriodContext(bundle);
+    const dashboardRows = periodCtx.dashboardRows;
+    const aggregate = periodCtx.aggregate;
+    const displayAggregate = periodCtx.comparableAggregate;
+    const comparablePeriod = periodCtx.comparablePeriod;
+    const collectionsPending = Boolean(
+      periodCtx.comparableRows.some((row) => row.collectionsPending) &&
+        !periodCtx.comparableRows.some((row) => row.collectionsReported !== false && !row.collectionsPending),
+    );
     const arRows = (sd.ar && sd.ar.rows) || [];
     const arBuckets = arRows
       .map((row) => ({
@@ -961,21 +1082,26 @@ const ImportLoader = (function () {
 
     const glance = [
       { label: "Providers Loaded", value: dashboardRows.length ? "1" : "0" },
-      { label: "Import Period", value: aggregate.period || "—" },
+      { label: "Import Period", value: comparablePeriod || aggregate.period || "—" },
       { label: "Claims Rows", value: formatCount(((sd.claims && sd.claims.rows) || []).length) },
       { label: "Clinical Notes", value: formatCount(((sd.clinicalNotes && sd.clinicalNotes.rows) || []).length) },
-      { label: "Production MTD", value: formatMoney(aggregate.totals.production) },
-      { label: "Collections MTD", value: formatMoney(aggregate.totals.collections) },
+      { label: "Production MTD", value: formatMoney(displayAggregate.totals.production) },
+      {
+        label: "Collections MTD",
+        value: collectionsPending ? "Pending export" : formatMoney(displayAggregate.totals.collections),
+      },
     ];
 
     const patch = {
       dataSource: "import",
       importedAt: modifiedAt,
-      date: aggregate.period || new Date(modifiedAt).toLocaleDateString(),
+      date: comparablePeriod || aggregate.period || new Date(modifiedAt).toLocaleDateString(),
       source: "SoftDent",
       status: "Connected",
-      production: aggregate.totals.production,
-      collections: aggregate.totals.collections,
+      production: displayAggregate.totals.production,
+      collections: collectionsPending ? null : displayAggregate.totals.collections,
+      collectionsPending,
+      comparablePeriod,
       hero: hasAr
         ? {
             label: "DAYSHEET A/R",
@@ -993,13 +1119,16 @@ const ImportLoader = (function () {
             trendDir: "flat",
             spark: null,
           },
-      collectionsMissing: aggregate.totals.collectionsReported === false,
-      collectionsReported: aggregate.totals.collectionsReported !== false,
+      collectionsMissing: !collectionsPending && displayAggregate.totals.collectionsReported === false,
+      collectionsReported: collectionsPending ? false : displayAggregate.totals.collectionsReported !== false,
       subMetrics: [
-            { label: "Production", value: formatMoney(aggregate.totals.production) },
-            { label: "Collections", value: formatMoney(aggregate.totals.collections) },
-            { label: "Insurance", value: formatMoney(aggregate.totals.insurance) },
-            { label: "Patient", value: formatMoney(aggregate.totals.patient) },
+            { label: "Production", value: formatMoney(displayAggregate.totals.production) },
+            {
+              label: "Collections",
+              value: collectionsPending ? "Pending export" : formatMoney(displayAggregate.totals.collections),
+            },
+            { label: "Insurance", value: formatMoney(displayAggregate.totals.insurance) },
+            { label: "Patient", value: formatMoney(displayAggregate.totals.patient) },
           ],
       aging: arBuckets.map((bucket) => ({
         bucket: bucket.bucket,
@@ -1031,9 +1160,11 @@ const ImportLoader = (function () {
           ok: Boolean(sd.clinicalNotes && sd.clinicalNotes.rows && sd.clinicalNotes.rows.length),
         },
         { label: "A/R Export", value: hasAr ? sd.ar.sourceFile : "Not loaded", ok: hasAr },
-        ...(aggregate.totals.production > 0 && aggregate.totals.collectionsReported === false
+        ...(collectionsPending
+          ? [{ label: "Collections", value: "Awaiting daysheet export for comparable period", ok: true }]
+          : displayAggregate.totals.production > 0 && displayAggregate.totals.collectionsReported === false
           ? [{ label: "Collections", value: "Not reported for this period — verify daysheet export", ok: false }]
-          : aggregate.totals.production > 0 && aggregate.totals.collections === 0
+          : displayAggregate.totals.production > 0 && displayAggregate.totals.collections === 0
             ? [{ label: "Collections", value: "Source reports $0 collections for this period", ok: false }]
             : []),
       ],
@@ -1132,17 +1263,19 @@ const ImportLoader = (function () {
 
   function buildFinancialDashboard(bundle, softdent, quickbooks) {
     if (!hasSoftdentImport(bundle) && !hasQuickbooksImport(bundle)) return null;
-    const dashboardRows = normalizeDashboardRows(((bundle.softdent && bundle.softdent.dashboard) || {}).rows || []);
-    const aggregate = aggregateDashboard(dashboardRows);
+    const periodCtx = resolveDashboardPeriodContext(bundle);
+    const dashboardRows = periodCtx.dashboardRows;
+    const aggregate = periodCtx.aggregate;
+    const displayAggregate = periodCtx.comparableAggregate;
     const qb = quickbooksTotals(bundle);
     const hasSd = hasSoftdentImport(bundle);
     const hasQb = hasQuickbooksImport(bundle);
-    const qbPeriod = latestQuickbooksPeriod(bundle);
-    const periodAlignment = comparePeriodAlignment(aggregate.period, qbPeriod, hasSd, hasQb);
-    const collectionHealth = assessCollectionHealth(dashboardRows);
-    const production = aggregate.totals.production || null;
-    const collections = aggregate.totals.collections ?? null;
-    const collectionsMissing = production > 0 && !collectionHealth.reported;
+    const qbPeriod = periodCtx.qbPeriod;
+    const periodAlignment = comparePeriodAlignment(periodCtx.sdLatestPeriod, qbPeriod, hasSd, hasQb, bundle.loadedAt || Date.now());
+    const collectionHealth = assessCollectionHealth(dashboardRows, periodCtx.comparablePeriod);
+    const production = displayAggregate.totals.production || null;
+    const collections = collectionsPendingValue(displayAggregate, collectionHealth);
+    const collectionsMissing = !collectionHealth.pending && production > 0 && !collectionHealth.reported;
     const collectionsZeroWithProduction = collectionHealth.latestZeroWithProduction;
     const collectionRateMetrics = buildCollectionRateMetrics(dashboardRows, collectionHealth);
     const collectionRate = collectionRateMetrics.displayRate;
@@ -1150,11 +1283,13 @@ const ImportLoader = (function () {
     const payerMix = buildPayerMixFromAggregate(aggregate, collectionRateMetrics);
     const quality = buildFinancialDataQuality(bundle, aggregate, qb, periodAlignment, collectionHealth);
     const arCrossCheck = compareArCrossSource(softdentArTotal(bundle), quickbooksArTotal(bundle));
-    const periodLabel = periodAlignment.softdentPeriod || aggregate.period || "";
+    const periodLabel = periodAlignment.comparablePeriod || periodAlignment.softdentPeriod || aggregate.period || "";
     const dateRange = !periodAlignment.aligned && periodAlignment.message
       ? periodAlignment.message
       : periodLabel
-        ? `Period ${periodLabel}`
+        ? periodAlignment.note
+          ? `Period ${periodLabel} · ${periodAlignment.note}`
+          : `Period ${periodLabel}`
         : `Imported ${formatFreshness(bundle.loadedAt)}`;
     const prodTrend = importedTrendMeta();
     return assignPatch(emptyDashboard("financial"), {
@@ -1166,6 +1301,7 @@ const ImportLoader = (function () {
       bothSources: hasSd && hasQb,
       collectionsMissing,
       collectionsZeroWithProduction,
+      collectionsPending: Boolean(collectionHealth.pending),
       collectionHealth,
       collectionRateMetrics,
       arCrossCheck,
@@ -1479,6 +1615,9 @@ const ImportLoader = (function () {
     const diagApi = diagnosticsApi();
     const diagnostics = bundle.diagnostics || (diagApi ? diagApi.evaluateBundle(bundle) : null);
     const lines = [`Import bundle loaded ${formatFreshness(bundle.loadedAt)}.`];
+    if (bundle.importMode) {
+      lines.push(`Import mode: ${bundle.importMode}.`);
+    }
     const sync = bundle.syncStatus || {};
     if (sync.attempted) {
       lines.push(`Sync: ${sync.ok ? "OK" : "FAILED"}${sync.error ? ` (${sync.error})` : ""}`);
@@ -1557,6 +1696,8 @@ const ImportLoader = (function () {
     attachBundleDiagnostics,
     normalizePeriodKey,
     latestQuickbooksPeriod,
+    resolveComparablePeriod,
+    resolveDashboardPeriodContext,
     comparePeriodAlignment,
     buildCollectionRateMetrics,
     compareArCrossSource,

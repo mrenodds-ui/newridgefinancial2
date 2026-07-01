@@ -114,6 +114,13 @@ const HalPageWidgets = (function () {
         }
       });
     }
+    if (pageId === "taxes") {
+      ["quickbooksProfitLossDetail", "ebitdaNormalization"].forEach((key) => {
+        if (!items.some((item) => item.key === key)) {
+          items.push({ key, widget: widgetFromFeed(feed, key) });
+        }
+      });
+    }
     return items;
   }
 
@@ -141,48 +148,37 @@ const HalPageWidgets = (function () {
     return `<div class="pv-hal-strip pv-hal-strip--${tone}" role="status"><span class="pv-hal-strip__mark">${typeof AppIcons !== "undefined" ? AppIcons.hal() : ""}</span><strong>HAL</strong><span>${esc(parts.join(" · "))} on this page</span><button type="button" class="pv-hal-strip__force" data-hal-force-place="1" data-hal-page="${esc(pageId)}">Force HAL placement</button></div>`;
   }
 
-  function wrapCard({ title, body, className, headRight, widgetKey, feed, Card }) {
+  function canvasPageStrip(pageId, feed) {
+    const { ready, partial, empty, total } = pageReadiness(pageId, feed);
+    if (!total) return "";
+    const mark = typeof AppIcons !== "undefined" ? AppIcons.hal() : "";
+    const parts = [`${ready} ready`];
+    if (partial) parts.push(`${partial} partial`);
+    if (empty) parts.push(`${empty} waiting on export`);
+    const tone = ready === total ? "ok" : ready > 0 || partial > 0 ? "warn" : "off";
+    return `<div class="pv-canvas-hal-strip pv-hal-strip--${tone}" role="status"><span class="pv-hal-strip__mark">${mark}</span><strong>HAL</strong><span>${esc(parts.join(" · "))} on this page</span></div>`;
+  }
+
+  function panelChrome(widgetKey, title, feed) {
     const widget = widgetFromFeed(feed, widgetKey);
-    const status = widget ? widget.status : "FAILED";
-    const tone = statusTone(status);
+    const tone = statusTone(widget ? widget.status : "FAILED");
     const badge = widgetKey ? halBadge(widgetKey, widget) : "";
-    const mergedHead = [badge, headRight].filter(Boolean).join(" ");
     const note = widgetKey ? halNote(widget) : "";
-    const statusClass = widgetKey ? ` pv-hal-widget pv-hal-widget--${tone}` : "";
-    const cmdLabel = widget && widget.title ? widget.title : title;
+    const cmdLabel = (widget && widget.title) || title || widgetKey;
     const halCmd = widgetKey && cmdLabel ? `Explain ${cmdLabel}` : "";
     const cmdAttr = halCmd ? ` data-hal-cmd="${esc(halCmd)}"` : "";
     const attrs = widgetKey ? ` data-hal-widget-key="${esc(widgetKey)}"${cmdAttr}` : "";
-    if (Card) {
-      return Card({
-        title,
-        body: `${note}${body}`,
-        className: `${className || ""}${statusClass}`.trim(),
-        headRight: mergedHead || undefined,
-        attrs: widgetKey
-          ? { "data-hal-widget-key": widgetKey, ...(halCmd ? { "data-hal-cmd": halCmd } : {}) }
-          : undefined,
-      });
-    }
-    return `<section class="pv-card${statusClass}${className ? " " + esc(className) : ""}"${attrs}>
-      <div class="pv-card__head"><h3>${esc(title)}</h3>${mergedHead ? `<span class="pv-card__head-right">${mergedHead}</span>` : ""}</div>
-      <div class="pv-card__body">${note}${body}</div>
-    </section>`;
-  }
-
-  function wrapSection(innerHtml, widgetKey, feed, className) {
-    const widget = widgetFromFeed(feed, widgetKey);
-    const tone = statusTone(widget ? widget.status : "FAILED");
-    const badge = halBadge(widgetKey, widget);
-    const note = halNote(widget);
-    const cmdLabel = widget && widget.title ? widget.title : widgetKey;
-    const halCmd = cmdLabel ? `Explain ${cmdLabel}` : "";
-    const cmdAttr = halCmd ? ` data-hal-cmd="${esc(halCmd)}"` : "";
-    return `<section class="pv-card pv-hal-widget pv-hal-widget--${tone}${className ? " " + esc(className) : ""}" data-hal-widget-key="${esc(widgetKey)}"${cmdAttr}>
-      <div class="pv-hal-widget__chrome">${badge}</div>
-      ${note}
-      ${innerHtml}
-    </section>`;
+    const icon =
+      widgetKey && typeof AppIcons !== "undefined"
+        ? `<span class="pv-canvas-panel__ico">${AppIcons.widget(widgetKey)}</span>`
+        : "";
+    return {
+      badge,
+      note,
+      attrs,
+      toneClass: widgetKey ? ` pv-hal-widget pv-hal-widget--${tone}` : "",
+      icon,
+    };
   }
 
   return {
@@ -190,18 +186,22 @@ const HalPageWidgets = (function () {
     widgetsForPage,
     pageReadiness,
     pageStrip,
-    wrapCard,
-    wrapSection,
+    canvasPageStrip,
+    panelChrome,
     halBadge,
     halNote,
     statusLabel,
     statusTone,
     formatMetrics,
+    canConfigureWidget,
   };
 })();
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = HalPageWidgets;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.HalPageWidgets = HalPageWidgets;
 }
 if (typeof window !== "undefined") {
   window.HalPageWidgets = HalPageWidgets;

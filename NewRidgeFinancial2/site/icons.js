@@ -13,6 +13,7 @@ var AppIcons = (function () {
 
   const NAV = {
     financial: svg('<path d="M3 20V4"/><path d="M7 16l3-5 3 3 4-6 4 8"/>'),
+    taxes: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 10h8"/><path d="M8 14h5"/><path d="M16 8v8"/>'),
     softdent: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/>'),
     quickbooks: svg('<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'),
     ar: svg('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>'),
@@ -54,6 +55,12 @@ var AppIcons = (function () {
     narrativeWorkflow: NAV.narratives,
     documentLibrary: NAV.library,
     halCommandPalette: NAV.hal,
+    halImportHealth: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+    halAskHal: NAV.hal,
+    halProgramPosture: NAV.hal,
+    halReasoningCore: NAV.hal,
+    halFirewall: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>'),
+    journalPostingQueue: svg('<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>'),
     officeManagerPriorities: NAV["office-manager"],
     officeManagerTasks: svg('<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>'),
     officeManagerBoundaries: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="M9 12h6"/>'),

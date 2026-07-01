@@ -103,7 +103,7 @@
   ],
   "programAccess": {
     "mode": "full-read",
-    "scope": ["financial", "softdent", "quickbooks", "ar", "claims", "narratives", "documents", "library", "office-manager", "hal"],
+    "scope": ["financial", "taxes", "softdent", "quickbooks", "ar", "claims", "narratives", "documents", "library", "office-manager", "hal"],
     "writesBlocked": true,
     "note": "HAL may read all local program pages and persisted service data to monitor, organize, analyze, and recommend. External and destructive actions remain blocked."
   },
@@ -250,6 +250,11 @@
         "label": "Financial Dashboard",
         "target": "financial",
         "detail": "Owner-level production, collections, A/R, EBITDA, payer mix, and provider view."
+      },
+      {
+        "label": "Taxes",
+        "target": "taxes",
+        "detail": "Federal and Kansas S corporation tax checklist, deadlines, and MemoAI-guided owner guidance."
       },
       {
         "label": "Claims Workbench",
@@ -439,7 +444,7 @@
   "readiness": {
     "title": "HAL readiness",
     "summary": "Local self-check for registry, firewall, sessions, evidence packets, and model lane configuration. No external actions are performed.",
-    "expectedRegistryCount": 10,
+    "expectedRegistryCount": 11,
     "expectedSessionTemplates": 5,
     "expectedModelLanes": 3,
     "halImage": "",
@@ -475,7 +480,17 @@
       "state": "Ready",
       "nextAction": "Review production and collections trends for the current period.",
       "blocked": ["SoftDent read-only", "QuickBooks read-only"],
-      "related": ["ar", "softdent", "quickbooks"]
+      "related": ["ar", "softdent", "quickbooks", "taxes"]
+    },
+    {
+      "id": "taxes",
+      "name": "Taxes",
+      "purpose": "Federal and Kansas S corporation tax planning: deadlines, reasonable compensation, K-1 flow-through, and MemoAI tax guidance.",
+      "safety": "Read-only guidance · CPA review required",
+      "state": "Ready",
+      "nextAction": "Review federal 1120-S and Kansas K-120S checklist items with your CPA before filing.",
+      "blocked": ["No e-file", "No IRS or KDOR submission", "QuickBooks read-only"],
+      "related": ["financial", "quickbooks", "documents"]
     },
     {
       "id": "softdent",

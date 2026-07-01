@@ -44,13 +44,6 @@ const HalWidgetMasterChart = (function () {
       readyWhen: "Provider rows are present in the financial dashboard cache.",
       primarySystem: "SoftDent",
     },
-    dataFreshnessQuality: {
-      title: "Data Freshness & Quality",
-      purpose: "Show source freshness, sync status, and quality-score posture.",
-      expectedData: ["SoftDent export timestamps", "QuickBooks export timestamps", "Import diagnostics"],
-      readyWhen: "Import diagnostics can score the available local datasets.",
-      primarySystem: "SoftDent + QuickBooks",
-    },
     ebitdaNormalization: {
       title: "EBITDA Normalization",
       purpose: "Surface potential EBITDA add-backs and expense-category totals.",
@@ -63,13 +56,6 @@ const HalWidgetMasterChart = (function () {
       purpose: "Show revenue, COGS, gross profit, operating expenses, and net income.",
       expectedData: ["QuickBooks revenue", "QuickBooks expenses", "QuickBooks P&L summary"],
       readyWhen: "QuickBooks revenue and expenses are available from the import cache.",
-      primarySystem: "QuickBooks",
-    },
-    quickbooksSyncHealth: {
-      title: "QuickBooks Sync Health",
-      purpose: "Show local QuickBooks connection/import freshness and expense trend.",
-      expectedData: ["QuickBooks import files", "QuickBooks sync metadata", "Monthly expenses"],
-      readyWhen: "QuickBooks import files are copied into the canonical import folder.",
       primarySystem: "QuickBooks",
     },
     accountsPayableAutomation: {
@@ -100,6 +86,13 @@ const HalWidgetMasterChart = (function () {
       readyWhen: "Documents have period/status fields for close review.",
       primarySystem: "Local documents",
     },
+    journalPostingQueue: {
+      title: "Journal Posting Queue",
+      purpose: "Show local SQLite journal posting queue for reviewed accruals.",
+      expectedData: ["Local journal queue", "Pending review counts", "Ready-to-export entries"],
+      readyWhen: "Desktop mode exposes the local journal posting queue.",
+      primarySystem: "Local SQLite",
+    },
     smartClaimsAndReceivables: {
       title: "Smart Claims & Receivables",
       purpose: "Connect claims posture with verified receivables data without fabricating A/R.",
@@ -113,13 +106,6 @@ const HalWidgetMasterChart = (function () {
       expectedData: ["SoftDent claims", "Claim status", "Claim amount", "Patient/payer fields"],
       readyWhen: "SoftDent claims export contains claim rows with status values.",
       primarySystem: "SoftDent",
-    },
-    claimReadinessAndSafety: {
-      title: "Claim Readiness & Safety",
-      purpose: "Show readiness checks and enforce no-submission safety posture.",
-      expectedData: ["SoftDent claims", "Local readiness checks", "Safety rules"],
-      readyWhen: "Claims are present and readiness checks can run locally.",
-      primarySystem: "SoftDent + local checks",
     },
     arAgingAndCollections: {
       title: "A/R Aging & Collections",
@@ -154,20 +140,6 @@ const HalWidgetMasterChart = (function () {
       purpose: "Show insurance versus patient responsibility when sourced.",
       expectedData: ["SoftDent insurance responsibility", "SoftDent patient responsibility"],
       readyWhen: "Responsibility values are present or the widget degrades.",
-      primarySystem: "SoftDent",
-    },
-    softdentSourceHealth: {
-      title: "SoftDent Source Health",
-      purpose: "Show source file health and read-only import status.",
-      expectedData: ["SoftDent dashboard", "SoftDent claims", "SoftDent clinical notes", "Optional SoftDent A/R"],
-      readyWhen: "Diagnostics can evaluate configured SoftDent datasets.",
-      primarySystem: "SoftDent",
-    },
-    softdentExportHistory: {
-      title: "SoftDent Export History",
-      purpose: "Show recent local SoftDent exports and cache freshness.",
-      expectedData: ["SoftDent export files", "Source file timestamps", "Record counts"],
-      readyWhen: "Canonical SoftDent import folder has export files.",
       primarySystem: "SoftDent",
     },
     newPatients: {

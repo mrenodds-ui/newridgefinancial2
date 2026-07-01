@@ -175,7 +175,7 @@ async function main() {
   let passed = 0;
 
   // JSON structure
-  assert(halData.registry && halData.registry.length === 10, "registry must have 10 entries");
+  assert(halData.registry && halData.registry.length === 11, "registry must have 11 entries");
   assert(halData.sources.items.length === 4, "sources must have 4 items");
   assert(halData.firewall.examples.length >= 4, "firewall examples required");
   passed++;
@@ -283,7 +283,7 @@ async function main() {
   passed++;
 
   // Readiness checks
-  assert(halData.readiness && halData.readiness.expectedRegistryCount === 10, "readiness config required");
+  assert(halData.readiness && halData.readiness.expectedRegistryCount === 11, "readiness config required");
   const readinessReport = HalCore.runReadinessChecks(halData, halModels, pages);
   assert(readinessReport && readinessReport.results && readinessReport.results.length >= 6, "readiness must return checks");
   const registryCheck = readinessReport.results.find((item) => item.id === "registry");
@@ -543,8 +543,7 @@ async function main() {
   assert(programSummary.includes("FULL PROGRAM READ ACCESS"), "program snapshot summary must include full access header");
   assert(programSummary.includes("Financial"), "program snapshot must include financial data");
   assert(programSummary.includes("Claims workbench"), "program snapshot must include claims data");
-  assert(halHtml.includes("PROGRAM ACCESS"), "HAL page must show program access");
-  assert(halHtml.includes("Full read"), "HAL page must show full read access");
+  assert(halHtml.includes("PROGRAM POSTURE"), "HAL page must show program posture");
   passed++;
 
   // Ported HAL skills (accounting, claim readiness, office-manager, tasks, sanitization, memory)

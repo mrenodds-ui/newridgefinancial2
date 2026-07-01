@@ -5,7 +5,7 @@
  * map onto the existing mockup-faithful CSS classes, so the visual look is
  * identical across pages and never duplicated per page.
  *
- * Components: AppShell, Sidebar, TopBar, PageTitle, Card, Button, Table,
+ * Components: AppShell, Sidebar, PageHero, PageToolbar, CanvasShell, Card, Button, Table,
  * FormField, Modal, StatusBadge, EmptyState, LoadingState, ErrorState.
  */
 const UI = (function () {
@@ -70,40 +70,40 @@ const UI = (function () {
     return `<${tag} class="${cls}${o.className ? " " + esc(o.className) : ""}" type="${esc(o.type || "button")}"${o.disabled ? " disabled" : ""}${attrs(o.attrs)}>${icon}${esc(o.label)}</${tag}>`;
   }
 
-  /* ---- PageTitle ---- */
-  function PageTitle(opts) {
-    const o = opts || {};
-    return `
-      <div class="pv__header-main">
-        ${o.eyebrow ? `<p class="pv__eyebrow">${esc(o.eyebrow)}</p>` : ""}
-        <h2 class="pv__title">${esc(o.title)}</h2>
-        ${o.subtitle ? `<p class="pv__subtitle">${esc(o.subtitle)}</p>` : ""}
-      </div>`;
-  }
-
-  /* ---- TopBar (per-page header bar: title + actions + safety) ---- */
-  function TopBar(opts) {
-    const o = opts || {};
-    const actions = (o.actions && o.actions.length) ? `<div class="pv-toolbar">${o.actions.join("")}</div>` : "";
-    const badge = o.dataBadge ? `<span class="pv-badge pv-badge--import">${esc(o.dataBadge)}</span>` : "";
-    const safetyIcon =
-      typeof AppIcons !== "undefined" ? renderIcon(AppIcons.ui("shield"), "pv-safety-note__ico") : "";
-    const safety = o.safety
-      ? `<div class="pv__safety">${badge}<span class="pv-safety-note">${safetyIcon}${esc(o.safety)}</span></div>`
-      : "";
-    return `
-      <header class="pv__header">
-        ${PageTitle(o)}
-        <div class="pv__header-right">
-          ${actions}
-          ${safety}
-        </div>
-      </header>`;
-  }
-
-  /* ---- Sidebar (single shared sidebar for whole app) ---- */
+  /* ---- Button ---- */
   function Sidebar(opts) {
     const o = opts || {};
+    if (Array.isArray(o.navGroups) && o.navGroups.length) {
+      const groups = o.navGroups
+        .map((group) => {
+          const items = (group.pages || [])
+            .map((pageId) => {
+              const page = (o.pages && o.pages[pageId]) || null;
+              if (!page) return "";
+              const active = pageId === o.activeId;
+              const accent = page.accent || "gold";
+              return `<button type="button" class="nav-item nav-item--accent-${esc(accent)}${active ? " active" : ""}" data-nav="${esc(pageId)}">
+                ${typeof AppIcons !== "undefined" ? renderIcon(AppIcons.nav(pageId), "nav-item__ico") : ""}
+                <span class="nav-item__label">${esc(page.label || pageId)}</span>
+              </button>`;
+            })
+            .join("");
+          if (!items) return "";
+          return `<div class="nav-group"><p class="nav-group__title">${esc(group.section)}</p>${items}</div>`;
+        })
+        .join("");
+      const practice = o.practice || {};
+      return `
+        <div class="brand brand--canvas">
+          <span class="brand-mark" aria-hidden="true">NR</span>
+          <div class="brand-copy">
+            <strong>${esc(practice.name || o.brand || "New Ridge Family Dental")}</strong>
+            <span class="brand-kicker">${esc(practice.location || o.kicker || "Ridgefield, Connecticut")}</span>
+          </div>
+        </div>
+        <nav class="nav nav--grouped" id="nav">${groups}</nav>
+        ${sidebarFoot(o)}`;
+    }
     const items = (o.nav || [])
       .map(
         (item) =>
@@ -127,6 +127,12 @@ const UI = (function () {
         </div>
       </div>
       <nav class="nav" id="nav">${items}</nav>
+      ${sidebarFoot(o)}`;
+  }
+
+  function sidebarFoot(o) {
+    const user = o.user || {};
+    return `
       <div class="foot">
         <div class="foot-user">
           <span class="foot-avatar">${esc(user.initials || "NR")}</span>
@@ -140,6 +146,57 @@ const UI = (function () {
           <span class="foot-status__dot"></span>
           <span>${esc(o.status || "All systems operational")}</span>
         </div>
+      </div>`;
+  }
+
+  function PageHero(opts) {
+    const o = opts || {};
+    const accent = o.accent || "gold";
+    const trailing = [o.dataBadge, o.periodLabel].filter(Boolean).join("");
+    return `
+      <header class="pv-canvas-hero pv-canvas-hero--${esc(accent)}">
+        <span class="pv-canvas-hero__accent" aria-hidden="true"></span>
+        <div class="pv-canvas-hero__main">
+          <p class="pv-canvas-hero__label">${esc(o.label || "")}</p>
+          <h1 class="pv-canvas-hero__title">${esc(o.title || "")}</h1>
+          <p class="pv-canvas-hero__subtitle">${esc(o.subtitle || "")}</p>
+        </div>
+        ${trailing ? `<div class="pv-canvas-hero__meta">${trailing}</div>` : ""}
+      </header>`;
+  }
+
+  function PageToolbar(opts) {
+    const o = opts || {};
+    const filters = (o.filters || [])
+      .map((label, i) => `<span class="pv-filter-pill${i === 0 ? " is-active" : ""}">${esc(label)}</span>`)
+      .join("");
+    const actions = o.actions ? `<div class="pv-canvas-toolbar__actions">${o.actions}</div>` : "";
+    return `
+      <div class="pv-canvas-toolbar">
+        <div class="pv-canvas-toolbar__filters">${filters}</div>
+        ${actions}
+      </div>`;
+  }
+
+  function PageInsight(opts) {
+    const o = opts || {};
+    const tone = o.tone || "info";
+    return `
+      <aside class="pv-canvas-insight pv-canvas-insight--${esc(tone)}" role="note">
+        <strong>${esc(o.title || "")}</strong>
+        <p>${esc(o.body || "")}</p>
+      </aside>`;
+  }
+
+  function CanvasShell(opts) {
+    const o = opts || {};
+    return `
+      <div class="pv-canvas-shell">
+        ${o.hero || ""}
+        ${o.toolbar || ""}
+        ${o.insight || ""}
+        ${o.strip || ""}
+        ${o.commands || ""}
       </div>`;
   }
 
@@ -265,15 +322,32 @@ const UI = (function () {
       </div>`;
   }
 
+  function CanvasCommandStrip(opts) {
+    const o = opts || {};
+    const cmds = (o.commands || [])
+      .map(
+        (cmd) =>
+          `<button type="button" class="pv-canvas-command__pill" data-hal-page="${esc(o.pageId || "")}" data-hal-cmd="${esc(cmd)}">${esc(cmd)}</button>`,
+      )
+      .join("");
+    return `<div class="pv-canvas-command">
+      <input class="pv-canvas-command__input" type="text" placeholder="Ask HAL or choose an action…" disabled />
+      <div class="pv-canvas-command__pills">${cmds}</div>
+    </div>`;
+  }
+
   return {
     esc,
     attrs,
     AppShell,
     StatusBadge,
     Button,
-    PageTitle,
-    TopBar,
     Sidebar,
+    PageHero,
+    PageToolbar,
+    PageInsight,
+    CanvasShell,
+    CanvasCommandStrip,
     Card,
     Table,
     FormField,
@@ -286,6 +360,9 @@ const UI = (function () {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = UI;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.UI = UI;
 }
 if (typeof window !== "undefined") {
   window.UI = UI;

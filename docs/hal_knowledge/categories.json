@@ -73,6 +73,12 @@
       "default_staleness_rule": "expires_30d",
       "retrieval_priority": "backlog",
       "may_override_runtime": false
+    },
+    "tax_accounting": {
+      "description": "Federal and Kansas S corporation tax guidance for the practice entity: 1120-S, K-1, reasonable compensation, Kansas K-120S, PTE tax, and owner estimated taxes. Guidance only — CPA review required before filing.",
+      "default_staleness_rule": "verify_monthly",
+      "retrieval_priority": "guidance",
+      "may_override_runtime": false
     }
   }
 }

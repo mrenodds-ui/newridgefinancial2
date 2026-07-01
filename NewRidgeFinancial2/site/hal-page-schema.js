@@ -3,7 +3,7 @@
  * Cleaner layout: Ask HAL + status rail, compact widget monitor, quick nav, session footer.
  */
 const HalPageSchema = (function () {
-  const SCHEMA_VERSION = "hal-102";
+  const SCHEMA_VERSION = "hal-104";
 
   const GRID = {
     className: "hp-grid hp-grid--hal-102",

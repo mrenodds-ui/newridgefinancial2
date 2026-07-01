@@ -6,14 +6,14 @@ The legacy program in `_legacy/` is for reference only and is not used here.
 
 ## Run
 
-Double-click `StartNewRidgeFinancial2.bat` (repo root), or run:
+Double-click `StartProgram.bat` (repo root), or run:
 
 ```powershell
-scripts\start_nr2_1966.ps1
+scripts\start_nr2_desktop.ps1
 ```
 
-The launcher opens one desktop app window. It does not start a localhost
-server and does not open Chrome.
+The launcher opens one desktop window on **http://127.0.0.1:8765/**.
+It does not open a separate browser tab.
 
 ## Files
 
@@ -42,12 +42,14 @@ NewRidgeFinancial2/
 
 ## SoftDent / QuickBooks imports (read-only)
 
-In desktop mode, HAL automatically reads local export files from the document-inbox cache:
+**Default (direct-first):** widgets scan upstream export roots for the newest SoftDent and QuickBooks files via `practice_source_access.py`. Document-inbox cache folders are fallback only:
 
-- `app_data/nr2/document_inbox/softdent/` (dashboard, claims, clinical notes, A/R)
-- `app_data/nr2/document_inbox/quickbooks/` (revenue/P&L, expenses, optional A/R)
+- `app_data/nr2/document_inbox/softdent/`
+- `app_data/nr2/document_inbox/quickbooks/`
 
-Override with `SOFTDENT_IMPORT_DIR` or `QUICKBOOKS_IMPORT_DIR` if needed.
+Set `NR2_DIRECT_FIRST_IMPORTS=0` to use cache-only mode with scheduled `Sync-HAL-Imports.ps1` copies instead.
+
+Override cache paths with `SOFTDENT_IMPORT_DIR` or `QUICKBOOKS_IMPORT_DIR` if needed.
 
 On first sync, any files still in the legacy `app/data/imports/` folders are migrated into the document-inbox cache automatically.
 
@@ -67,6 +69,8 @@ Default upstream source folders (override in repo `.env`):
 - QuickBooks: `NR2_QUICKBOOKS_EXPORT_SOURCE` or `QUICKBOOKS_SOURCE_DIR`
 
 After files are copied, ask HAL **"refresh imports"** or restart the app. HAL reads only — nothing is posted or written back to SoftDent or QuickBooks.
+
+In direct-first mode (`NR2_DIRECT_FIRST_IMPORTS=1`, default), **refresh imports** re-scans upstream exports instead of copying into cache. Optional `NR2_DIRECT_FIRST_WRITE_CACHE=1` mirrors direct reads into document-inbox on refresh.
 
 HAL's top priority is to monitor the program, place correct import data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action.
 

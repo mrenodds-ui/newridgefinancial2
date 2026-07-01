@@ -1,17 +1,29 @@
-// NewRidgeFinancial 2.0 — mission-control pages.
+// NewRidgeFinancial 2.0 — mission-control pages (nav from PageSchema).
 
-const PAGES = [
-  { id: "financial", label: "Financial dashboard", title: "Owner Financial Dashboard" },
-  { id: "softdent", label: "SoftDent", title: "SoftDent" },
-  { id: "quickbooks", label: "QuickBooks", title: "QuickBooks" },
-  { id: "ar", label: "A/R & Collections", title: "A/R & Collections" },
-  { id: "claims", label: "Claims Workbench", title: "Patient Claims Workbench" },
-  { id: "narratives", label: "Insurance Narratives", title: "Insurance Narratives" },
-  { id: "documents", label: "Accounting Documents", title: "Accounting Documents" },
-  { id: "library", label: "Document Library", title: "Document Library" },
-  { id: "office-manager", label: "Office Manager", title: "Office Manager" },
-  { id: "hal", label: "HAL Command Center", title: "HAL Command Center" },
-];
+function getPages() {
+  if (typeof PageSchema !== "undefined" && PageSchema.navPages) {
+    return PageSchema.navPages();
+  }
+  return [{ id: "hal", label: "HAL", title: "HAL Command Center" }];
+}
+
+function appPages() {
+  return getPages();
+}
+
+function defaultPageId() {
+  const staff = getPages().find((p) => p.id !== "hal");
+  return staff ? staff.id : getPages()[0]?.id || "financial";
+}
+
+function resolvePageId(raw) {
+  const cleaned = String(raw || "")
+    .replace(/^#/, "")
+    .split(/[?&]/)[0]
+    .trim();
+  if (cleaned && getPages().some((p) => p.id === cleaned)) return cleaned;
+  return defaultPageId();
+}
 
 const FALLBACK_HAL = {
   status: { title: "HAL Command Center", summary: "Local program manager.", posture: ["Local-only", "Read-only"] },
@@ -28,7 +40,6 @@ const FALLBACK_MODELS = { config: { mode: "offline" }, lanes: [] };
 
 const sidebar = document.getElementById("sidebar");
 let nav = document.getElementById("nav");
-const pageTitle = document.getElementById("pageTitle");
 const appPage = document.getElementById("appPage");
 const halPage = document.getElementById("halPage");
 const halPageRoot = document.getElementById("halPageRoot");
@@ -44,6 +55,7 @@ let halChatHistory = [];
 let halAudit = [];
 let halAskDraft = "";
 let halAskLoading = false;
+let nr2DesignSchemaVersion = typeof PageSchema !== "undefined" ? PageSchema.SCHEMA_VERSION : null;
 
 function persistLocal(key, value) {
   DesktopBridge.storageSet(key, value).catch(() => {});
@@ -134,6 +146,8 @@ async function runHalProactiveCycle(options) {
 
 function renderProactiveBanner() {
   if (typeof document === "undefined" || !window.HalProactive) return;
+  const pageId = (window.location.hash || "").replace("#", "") || "financial";
+  if (typeof PageSchema !== "undefined" && PageSchema.isStaffPage && PageSchema.isStaffPage(pageId)) return;
   const existing = document.getElementById("halProactiveBanner");
   if (existing) existing.remove();
   const briefing = halProactiveBriefing || HalProactive.getLastBriefing();
@@ -181,9 +195,9 @@ function scheduleHalWidgetRefresh(snapshot) {
       await runHalProactiveCycle();
       renderHalScreen();
       if (currentDrawerKey === "sources") renderPanel("sources");
-      const currentId = (window.location.hash || "").replace("#", "") || PAGES[0].id;
+      const currentId = (window.location.hash || "").replace("#", "") || getPages()[0].id;
       if (currentId !== "hal" && appPage && !appPage.hidden && PageViews && PageViews.hasPage(currentId)) {
-        PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed);
+        PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
       }
       return feed;
     })
@@ -202,6 +216,7 @@ let halSideNotesAnnouncedIds = new Set();
 let nr2SidenotesHubPath = null;
 // HAL manager dashboard widgets (derived from program snapshot).
 let halWidgetFeed = null;
+let halProgramSnapshot = null;
 let halStressTest = {
   running: false,
   total: 2000000,
@@ -368,11 +383,45 @@ async function activateSideNotesPanel({ scroll } = {}) {
   if (scroll) scrollHalPanelIntoView("sidenotes");
 }
 
-async function runHalPageCmd(cmd) {
+async function runHalPageCmd(cmd, opts) {
   const text = String(cmd || "").trim();
   if (!text) return;
+  const openHal = !opts || opts.openHal !== false;
+  if (openHal && halPage && halPage.hidden) select("hal");
   await handleHalSubmit(text);
   renderHalScreen();
+}
+
+async function handleHalChromeInteraction(event) {
+  const widgetNav = event.target.closest("[data-hal-widget-nav]");
+  if (widgetNav) {
+    const target = widgetNav.getAttribute("data-hal-widget-nav");
+    if (target) select(target);
+    return true;
+  }
+  const suggest = event.target.closest("[data-hal-suggest]");
+  if (suggest) {
+    await runHalPageCmd(suggest.getAttribute("data-hal-suggest"));
+    return true;
+  }
+  const widgetCard = event.target.closest("[data-hal-widget-key]");
+  if (widgetCard && !event.target.closest("[data-hal-widget-nav]") && !event.target.closest("[data-hal-action]")) {
+    let cmd = widgetCard.getAttribute("data-hal-cmd");
+    if (!cmd) {
+      const key = widgetCard.getAttribute("data-hal-widget-key");
+      if (key) cmd = `Explain ${key} widget on this page`;
+    }
+    if (cmd) {
+      await runHalPageCmd(cmd);
+      return true;
+    }
+  }
+  const cmdEl = event.target.closest("[data-hal-cmd]");
+  if (cmdEl) {
+    await runHalPageCmd(cmdEl.getAttribute("data-hal-cmd"));
+    return true;
+  }
+  return false;
 }
 
 function handleHalPageNav(target) {
@@ -756,7 +805,7 @@ function collectReadinessRuntime() {
 }
 
 function runReadinessDiagnostics() {
-  halReadinessDiagnostics = HalCore.runReadinessChecks(halData, halModels, PAGES, collectReadinessRuntime());
+  halReadinessDiagnostics = HalCore.runReadinessChecks(halData, halModels, getPages(), collectReadinessRuntime());
   saveReadinessDiagnostics();
   logAudit("Run readiness check", "readiness: run");
   return halReadinessDiagnostics;
@@ -914,8 +963,10 @@ async function refreshHalWidgetFeed(snapshot) {
   const snap = snapshot || (await loadProgramSnapshot());
   if (!snap) {
     halWidgetFeed = null;
+    halProgramSnapshot = null;
     return null;
   }
+  halProgramSnapshot = snap;
   halWidgetFeed = HalSkills.buildWidgetFeed(snap);
   halData.runtime = Object.assign({}, halData.runtime || {}, { widgetFeed: halWidgetFeed });
   return halWidgetFeed;
@@ -950,7 +1001,7 @@ async function forceHalWidgetPlacement(detail) {
   const pageId =
     (detail && detail.pageId) ||
     (window.location.hash || "").replace("#", "") ||
-    (PAGES[0] && PAGES[0].id) ||
+    (getPages()[0] && getPages()[0].id) ||
     "financial";
   let placementNote = "";
 
@@ -1048,6 +1099,7 @@ async function loadProgramSnapshot() {
     },
   });
   if (window.HalSkills) {
+    halProgramSnapshot = snapshot;
     halWidgetFeed = HalSkills.buildWidgetFeed(snapshot);
     halData.runtime = Object.assign({}, halData.runtime || {}, { widgetFeed: halWidgetFeed });
     snapshot.widgets = halWidgetFeed;
@@ -1086,7 +1138,7 @@ function saveOperatorReport() {
 }
 
 function runOperatorSmokeTest() {
-  halOperatorReport = HalCore.runOperatorSmokeTest(halData, halModels, PAGES, collectReadinessRuntime());
+  halOperatorReport = HalCore.runOperatorSmokeTest(halData, halModels, getPages(), collectReadinessRuntime());
   saveOperatorReport();
   logAudit("Run operator smoke test", "operator: smoke");
   return halOperatorReport;
@@ -1177,7 +1229,7 @@ function bindOperatorControls(root) {
 }
 
 function drawerHealthBadge(key) {
-  const health = HalCore.deriveDrawerHealth(halData, halModels, PAGES, halReadinessDiagnostics);
+  const health = HalCore.deriveDrawerHealth(halData, halModels, getPages(), halReadinessDiagnostics);
   const status = health[key];
   if (!status) return "";
   return `<span class="hal-badge ${readinessStatusClass(status)}" title="Readiness: ${escapeHtml(status)}">${escapeHtml(status)}</span>`;
@@ -1192,7 +1244,7 @@ function registryById(id) {
 }
 
 function pageInfoMap() {
-  return HalCore.pageInfoMap(halData, PAGES);
+  return HalCore.pageInfoMap(halData, getPages());
 }
 
 function localModelConfig() {
@@ -1375,7 +1427,7 @@ function callEscalationModel(userText) {
 }
 
 function routeHalCommand(rawQuery) {
-  return HalCore.routeHalCommand(halData, halModels, PAGES, rawQuery);
+  return HalCore.routeHalCommand(halData, halModels, getPages(), rawQuery);
 }
 
 function logAudit(query, intent) {
@@ -1445,7 +1497,7 @@ function buildHalAgentCtx(extras) {
   return Object.assign({
     halData,
     halModels,
-    pages: PAGES,
+    pages: getPages(),
     halOfficeTasks,
     getOfficeTasks: async () => {
       if (typeof OfficeTaskStore !== "undefined") return OfficeTaskStore.list();
@@ -1481,7 +1533,7 @@ function buildHalAgentCtx(extras) {
     ossModelConfig,
     persistGet: (key) => DesktopBridge.storageGet(key),
     persistSet: (key, value) => persistLocal(key, value),
-    getCurrentPage: () => window.location.hash.replace("#", "") || PAGES[0].id,
+    getCurrentPage: () => window.location.hash.replace("#", "") || getPages()[0].id,
     clearProgramContextCache: () => {
       invalidateProgramCaches("hal-agent");
     },
@@ -2200,7 +2252,7 @@ async function startHalStressTest(count) {
     HalAgent: window.HalAgent,
     halData,
     halModels,
-    pages: PAGES,
+    pages: getPages(),
     snapshot,
     feed,
   });
@@ -2284,6 +2336,7 @@ function renderHalScreen() {
     halSideNoteMonitor: halSideNoteMonitor || (window.HalSkills ? HalSkills.buildSideNoteMonitor(halSideNotes) : null),
     halSideNotesInbox,
     halWidgetFeed,
+    halProgramSnapshot,
     halProactiveBriefing,
     halStressTest,
     halAgentHealth: window.HalAgent ? HalAgent.getHealth() : null,
@@ -2293,22 +2346,18 @@ function renderHalScreen() {
 }
 
 function renderSidebar(activeId) {
-  if (!sidebar || !window.UI) return;
+  if (!sidebar || !window.UI || typeof PageSchema === "undefined") return;
   sidebar.innerHTML = UI.Sidebar({
     activeId,
-    nav: PAGES.map((page) => ({
-      id: page.id,
-      label: page.label,
-      icon: typeof AppIcons !== "undefined" ? AppIcons.nav(page.id) : "",
-    })),
-    brand: "New Ridge Family Financial",
-    kicker: "Financial OS",
+    navGroups: PageSchema.NAV_GROUPS,
+    pages: PageSchema.PAGES,
+    practice: PageSchema.PRACTICE,
     user: {
       initials: "NR",
-      name: "New Ridge Owner",
-      role: "Administrator",
+      name: PageSchema.PRACTICE.operator || "Dr. Michael Reno",
+      role: "Owner",
     },
-    status: "All systems operational",
+    status: nr2DesignSchemaVersion ? `Design ${nr2DesignSchemaVersion}` : "All systems operational",
   });
   nav = document.getElementById("nav");
   Object.keys(buttons).forEach((key) => delete buttons[key]);
@@ -2321,16 +2370,25 @@ function renderSidebar(activeId) {
 }
 
 function select(id) {
-  const page = PAGES.find((p) => p.id === id) || PAGES[0];
-  const isHal = page.id === "hal" && !PageViews.hasPage(page.id);
+  const pageId = resolvePageId(id);
+  const page = getPages().find((p) => p.id === pageId) || getPages().find((p) => p.id === defaultPageId()) || getPages()[0];
+  if (!page) return;
+  const isHal = page.id === "hal" && PageViews && !PageViews.hasPage(page.id);
   if (halPage) halPage.hidden = !isHal;
   if (appPage) {
     appPage.hidden = isHal;
-    if (!isHal && PageViews.hasPage(page.id)) {
-      PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed);
+    if (!isHal) {
+      appPage.hidden = false;
+      if (PageViews && PageViews.hasPage(page.id)) {
+        PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed, halProgramSnapshot);
+      } else if (window.UI && window.UI.ErrorState) {
+        appPage.innerHTML = `<div class="page-view"><article class="pv pv--app pv--canvas" data-pv-page="${page.id}">${UI.ErrorState({
+          title: "Page not available",
+          message: `Could not open "${page.id}". Choose a page from the sidebar or restart Start Program.`,
+        })}</article></div>`;
+      }
     }
   }
-  pageTitle.textContent = page.title;
   renderSidebar(page.id);
   if (isHal) {
     renderHalScreen();
@@ -2339,13 +2397,40 @@ function select(id) {
     });
   }
   closeDrawer();
-  if (window.location.hash !== "#" + page.id) {
+  const nextHash = "#" + page.id;
+  if (window.location.hash !== nextHash) {
     window.location.hash = page.id;
   }
 }
 
+function assertDesignSchemaLoaded() {
+  if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return false;
+  if (typeof PageSchema !== "undefined" && typeof PageChrome !== "undefined") return true;
+  const frame = document.getElementById("pageFrame");
+  if (frame) {
+    frame.innerHTML =
+      '<div class="pv-state pv-state--error" role="alert"><strong class="pv-state__title">Design schema failed to load</strong><p class="pv-state__msg">page-schema.js and page-chrome.js are required. Restart the desktop app.</p></div>';
+  }
+  return false;
+}
+
+function renderSchemaVersionMismatch(pythonVersion, jsVersion) {
+  const frame = document.getElementById("pageFrame");
+  const sidebar = document.getElementById("sidebar");
+  if (sidebar) sidebar.innerHTML = "";
+  if (!frame) return;
+  frame.innerHTML =
+    `<div class="pv-state pv-state--error nr2-boot-error" role="alert">` +
+    `<strong class="pv-state__title">Desktop build mismatch</strong>` +
+    `<p class="pv-state__msg">Python shell reports <strong>${String(pythonVersion).replace(/</g, "&lt;")}</strong> but the loaded page schema is <strong>${String(jsVersion).replace(/</g, "&lt;")}</strong>.</p>` +
+    `<p class="pv-state__msg">Close this window completely, then launch <strong>Start Program</strong> again.</p>` +
+    `</div>`;
+}
+
 renderRuntimeModeBanner();
-renderSidebar(window.location.hash.replace("#", "") || PAGES[0].id);
+if (assertDesignSchemaLoaded()) {
+  renderSidebar(resolvePageId(window.location.hash));
+}
 
 drawerClose.addEventListener("click", closeDrawer);
 
@@ -2457,7 +2542,7 @@ if (halPage) {
         const key = widgetCard.getAttribute("data-hal-widget-key");
         if (key) cmd = `Explain ${key} widget on this page`;
       }
-      if (cmd) await runHalPageCmd(cmd);
+      if (cmd) await runHalPageCmd(cmd, { openHal: false });
       return;
     }
     const activityReplay = event.target.closest("[data-hal-activity-cmd]");
@@ -2536,7 +2621,8 @@ if (halPage) {
 }
 
 if (appPage) {
-  appPage.addEventListener("click", (event) => {
+  appPage.addEventListener("click", async (event) => {
+    if (await handleHalChromeInteraction(event)) return;
     const configure = event.target.closest("[data-hal-configure-export]");
     if (configure) {
       const widgetKey = configure.getAttribute("data-hal-configure-export") || "this widget";
@@ -2572,8 +2658,7 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeDrawer();
 });
 window.addEventListener("hashchange", () => {
-  const id = window.location.hash.replace("#", "");
-  if (id) select(id);
+  select(window.location.hash);
 });
 window.addEventListener("hal-live-widget-event", handleHalLiveWidgetEvent);
 window.addEventListener("hal-force-widget-placement", (event) => {
@@ -2620,10 +2705,30 @@ async function refreshImportsInBackground() {
 
 async function boot() {
   renderRuntimeModeBanner();
+  if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return;
   await loadPersistedState();
   try {
+    if (typeof NR2Boot !== "undefined" && NR2Boot.verifyDesktopManifest) {
+      const manifest = await NR2Boot.verifyDesktopManifest();
+      if (!manifest.ok) {
+        if (manifest.pythonVersion && manifest.jsVersion) {
+          renderSchemaVersionMismatch(manifest.pythonVersion, manifest.jsVersion);
+        } else if (manifest.manifestVersion && manifest.jsVersion) {
+          renderSchemaVersionMismatch(manifest.manifestVersion, manifest.jsVersion);
+        }
+        return;
+      }
+    }
     const info = await DesktopBridge.getAppInfo();
     if (info && info.sidenotesHub) nr2SidenotesHubPath = info.sidenotesHub;
+    if (info && info.designSchemaVersion) {
+      nr2DesignSchemaVersion = info.designSchemaVersion;
+      if (PageSchema && PageSchema.SCHEMA_VERSION && info.designSchemaVersion !== PageSchema.SCHEMA_VERSION) {
+        renderSchemaVersionMismatch(info.designSchemaVersion, PageSchema.SCHEMA_VERSION);
+        return;
+      }
+      renderSidebar(window.location.hash.replace("#", "") || getPages()[0].id);
+    }
   } catch {
     /* desktop info optional in browser preview */
   }
@@ -2663,7 +2768,7 @@ async function boot() {
   await refreshHalWidgetFeed().catch(() => {
     /* widget feed optional on boot */
   });
-  const initial = window.location.hash.replace("#", "") || PAGES[0].id;
+  const initial = resolvePageId(window.location.hash);
   select(initial);
   if (typeof ImportCoordinator !== "undefined") {
     ImportCoordinator.refresh({ reason: "boot" })
@@ -2695,5 +2800,6 @@ if (typeof window !== "undefined") {
 
 DesktopBridge.whenReady(() => {
   DesktopBridge.installClipboardHandlers();
+  if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return;
   boot();
 });

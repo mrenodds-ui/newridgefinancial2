@@ -1278,22 +1278,18 @@ const HalSkills = (function () {
     financialProductionTrend: "financial",
     payerMixAndCollections: "financial",
     providerPerformance: "financial",
-    dataFreshnessQuality: "financial",
     ebitdaNormalization: "quickbooks",
     quickbooksProfitLossDetail: "quickbooks",
-    quickbooksSyncHealth: "quickbooks",
     accountsPayableAutomation: "documents",
     documentIntakeQueue: "documents",
     documentPreview: "documents",
     periodCloseAndPosting: "documents",
+    journalPostingQueue: "documents",
     smartClaimsAndReceivables: "ar",
     claimsPipeline: "claims",
-    claimReadinessAndSafety: "claims",
     careDeliveryPerformance: "softdent",
     softdentArAging: "softdent",
     softdentResponsibility: "softdent",
-    softdentSourceHealth: "softdent",
-    softdentExportHistory: "softdent",
     newPatients: "softdent",
     treatmentPlanSummary: "softdent",
     caseAcceptance: "softdent",
@@ -1302,9 +1298,8 @@ const HalSkills = (function () {
     narrativeWorkflow: "narratives",
     documentLibrary: "library",
     officeManagerPriorities: "office-manager",
-    officeManagerTasks: "office-manager",
     officeManagerSurfaces: "office-manager",
-    officeManagerBoundaries: "office-manager",
+    halCommandPalette: "hal",
   };
 
   const WIDGET_ORDER = [
@@ -1312,24 +1307,20 @@ const HalSkills = (function () {
     "financialProductionTrend",
     "payerMixAndCollections",
     "providerPerformance",
-    "dataFreshnessQuality",
     "ebitdaNormalization",
     "quickbooksProfitLossDetail",
-    "quickbooksSyncHealth",
     "accountsPayableAutomation",
     "documentIntakeQueue",
     "documentPreview",
     "periodCloseAndPosting",
+    "journalPostingQueue",
     "smartClaimsAndReceivables",
     "claimsPipeline",
-    "claimReadinessAndSafety",
     "arAgingAndCollections",
     "arOutstandingClaims",
     "careDeliveryPerformance",
     "softdentArAging",
     "softdentResponsibility",
-    "softdentSourceHealth",
-    "softdentExportHistory",
     "newPatients",
     "treatmentPlanSummary",
     "caseAcceptance",
@@ -1342,24 +1333,20 @@ const HalSkills = (function () {
     financialProductionTrend: ["SoftDent dashboard export with current period production", "Period labels for trend comparison"],
     payerMixAndCollections: ["SoftDent collections and payer mix fields", "Verified collection-rate source"],
     providerPerformance: ["SoftDent dashboard export for Dr. Michael Reno"],
-    dataFreshnessQuality: ["Current SoftDent export timestamps", "Current QuickBooks export timestamps"],
     ebitdaNormalization: ["QuickBooks expenses export", "Staff-reviewed EBITDA add-back categories"],
     quickbooksProfitLossDetail: ["QuickBooks revenue/P&L export", "QuickBooks expenses export"],
-    quickbooksSyncHealth: ["QuickBooks import files copied into the canonical import folder"],
     accountsPayableAutomation: ["Local accounting document queue", "QuickBooks expenses or vendor document imports"],
     documentIntakeQueue: ["SoftDent and QuickBooks financial summary rows synced into the document queue", "Optional manual Add document entries"],
     documentPreview: ["Selected local document metadata and extracted fields"],
     periodCloseAndPosting: ["Accounting document period assignment", "Human-reviewed posting readiness"],
+    journalPostingQueue: ["Desktop journal posting queue (SQLite)", "Reviewed accruals ready for export"],
     smartClaimsAndReceivables: ["SoftDent claims export", "Verified SoftDent A/R export"],
     claimsPipeline: ["SoftDent claims export with claim status values"],
-    claimReadinessAndSafety: ["SoftDent claims export", "Local claim readiness checks"],
     arAgingAndCollections: ["Verified SoftDent A/R aging export"],
     arOutstandingClaims: ["SoftDent claims export with balances or verified A/R export"],
     careDeliveryPerformance: ["SoftDent dashboard export", "Verified patient balance/A/R source"],
     softdentArAging: ["Verified SoftDent A/R aging export"],
     softdentResponsibility: ["SoftDent dashboard export with insurance and patient responsibility values"],
-    softdentSourceHealth: ["SoftDent dashboard, claims, clinical notes, and optional A/R export files"],
-    softdentExportHistory: ["SoftDent export files in the canonical import folder"],
     newPatients: ["SoftDent new patient export (analytics sync via softdent_practice_exports.py when tables exist)"],
     treatmentPlanSummary: ["SoftDent treatment_plan_summary.csv (analytics sync via softdent_practice_exports.py when tables exist)"],
     caseAcceptance: ["SoftDent case acceptance export or derived treatment plan summary"],
@@ -1385,11 +1372,14 @@ const HalSkills = (function () {
           ? window.ImportDiagnostics
           : null;
     const bundle = snapshot && snapshot.importBundle;
-    const diagnostics =
-      (bundle && bundle.diagnostics) || (bundle && diagApi ? diagApi.evaluateBundle(bundle) : null);
+    let diagnostics = bundle && bundle.diagnostics;
+    if (!diagnostics && bundle && diagApi && typeof diagApi.evaluateBundle === "function") {
+      diagnostics = diagApi.evaluateBundle(bundle);
+    }
     return {
       dashboards: dashboards || snapshot.dashboards || {},
       diagnostics,
+      importBundle: bundle || null,
     };
   }
 
@@ -1571,8 +1561,16 @@ const HalSkills = (function () {
         "warning",
         "SoftDent collections are not reported for the current dashboard period.",
       );
+    } else if (finDash && finDash.collectionsPending) {
+      addCommitIssue(
+        issues,
+        "practiceFinancialOverview",
+        "collectionsTotal",
+        "info",
+        "SoftDent collections export is pending for the QuickBooks-comparable period; production is loaded from provider totals.",
+      );
     }
-    if (finDash && finDash.collectionsZeroWithProduction) {
+    if (finDash && finDash.collectionsZeroWithProduction && !finDash.collectionsPending) {
       addCommitIssue(
         issues,
         "practiceFinancialOverview",
@@ -1582,10 +1580,10 @@ const HalSkills = (function () {
       );
       addCommitIssue(
         issues,
-        "dataFreshnessQuality",
-        "qualityScore",
+        "practiceFinancialOverview",
+        "collectionsTotal",
         "warning",
-        "Import quality score is reduced because collection health failed on the latest SoftDent period.",
+        "Import quality is reduced because collection health failed on the latest SoftDent period.",
       );
     }
     if (finDash && finDash.periodAlignment && finDash.periodAlignment.aligned === false && finDash.periodAlignment.message) {
@@ -1750,8 +1748,8 @@ const HalSkills = (function () {
     const sd = dashboards.softdent || {};
     const qb = dashboards.quickbooks || {};
     const collectionHealthDegraded = Boolean(
-      fin.collectionsMissing ||
-        fin.collectionsZeroWithProduction ||
+      (fin.collectionsMissing && !fin.collectionsPending) ||
+        (fin.collectionsZeroWithProduction && !fin.collectionsPending) ||
         ((fin.quality && fin.quality.categories) || []).some(
           (category) => category.label === "Collection health" && Number(category.score) < 15,
         ),
@@ -1800,22 +1798,23 @@ const HalSkills = (function () {
       financialStatus,
       "Provider production split from the owner financial dashboard.",
     );
+    const practiceStatus = widgetStatusFromDash(practiceDash);
     const newPatientsWidget = buildContractWidget(
       "newPatients",
       contractCtx,
-      "FAILED",
+      practiceStatus,
       "New patient counts from SoftDent when an export is configured.",
     );
     const treatmentWidget = buildContractWidget(
       "treatmentPlanSummary",
       contractCtx,
-      "FAILED",
+      practiceStatus,
       "Treatment plan presented/accepted summary from SoftDent when an export is configured.",
     );
     const caseAcceptanceWidget = buildContractWidget(
       "caseAcceptance",
       contractCtx,
-      "FAILED",
+      practiceStatus,
       "Case acceptance rate from SoftDent when an export is configured or derived from treatment plans.",
     );
     const monthlyRevenue = overviewWidget
@@ -1844,14 +1843,17 @@ const HalSkills = (function () {
     const docsDataReady = docsQueueCount > 0 && docsPeriodReady;
     const docsStatus = docsDataReady ? "SUCCESS" : docsQueueCount > 0 ? "DEGRADED" : "FAILED";
     const qbDocImportCount = Number(docs.sourceCounts?.quickbooks || 0);
+    const contract = widgetContractApi();
+    const missingToken = contract ? contract.MISSING : "—";
     const apDataReady =
       qbStatus === "SUCCESS" ||
-      (expenseTotal != null && expenseTotal !== WidgetContract.MISSING && expenseTotal !== "—") ||
+      (expenseTotal != null && expenseTotal !== missingToken && expenseTotal !== "—") ||
       qbDocImportCount > 0;
-    const claimsReadinessStatus =
-      !claimsSnap.readiness && !claimsSnap.total ? "FAILED" : claimsSnap.total > 0 ? "SUCCESS" : "DEGRADED";
     const narrativeStatus = narrativeDraftCount > 0 ? "SUCCESS" : "FAILED";
     const libraryStatus = libraryDocCount > 0 ? "SUCCESS" : "FAILED";
+    const journalQueue = snap.journalPostingQueue || {};
+    const journalItems = Array.isArray(journalQueue.items) ? journalQueue.items : [];
+    const journalStatus = journalItems.length > 0 ? "SUCCESS" : journalQueue.unavailable ? "DEGRADED" : "FAILED";
 
     const widgets = {
       practiceFinancialOverview: overviewWidget || {
@@ -1921,21 +1923,6 @@ const HalSkills = (function () {
           providerTotal: metricValue(fin.providers?.total?.amount),
         },
       },
-      dataFreshnessQuality: {
-        key: "dataFreshnessQuality",
-        title: "Data Freshness & Quality",
-        status: financialQualityStatus,
-        summary:
-          "Source freshness and import wiring quality for financial inputs. Quality score reflects export freshness and collection health — not collection rate alone.",
-        navTarget: WIDGET_NAV.dataFreshnessQuality,
-        metricLabels: WIDGET_METRIC_LABELS.dataFreshnessQuality,
-        metrics: {
-          qualityScore: metricValue(fin.quality?.score != null ? `${fin.quality.score}%` : null),
-          syncedSources: healthyCount(fin.freshness),
-          delayedSource: metricValue((fin.freshness || []).find((f) => /delay|stale|error/i.test(String(f.status || "")))?.system),
-          refreshedAt: metricValue(fin.footer?.refreshed),
-        },
-      },
       ebitdaNormalization: {
         key: "ebitdaNormalization",
         title: "EBITDA Normalization",
@@ -1964,19 +1951,6 @@ const HalSkills = (function () {
           grossProfit: rowAmount(qb.pl?.rows, "Gross Profit"),
           operatingExpenses: rowAmount(qb.pl?.rows, "Operating Expenses"),
           netIncome: rowAmount(qb.pl?.rows, "Net Income"),
-        },
-      },
-      quickbooksSyncHealth: {
-        key: "quickbooksSyncHealth",
-        title: "QuickBooks Sync Health",
-        status: qbStatus,
-        summary: "QuickBooks connection status, last sync, and trailing expense trend from the import cache.",
-        navTarget: WIDGET_NAV.quickbooksSyncHealth,
-        metrics: {
-          syncStatus: metricValue(qb.syncStatus || qb.sync?.status),
-          lastSync: metricValue(qb.lastSync || qb.sync?.lastSync),
-          monthlyExpensesLatest: lastSeriesValue(qb.monthlyExpenses),
-          netIncomeYtd: monthlyNetIncome,
         },
       },
       accountsPayableAutomation: {
@@ -2035,6 +2009,18 @@ const HalSkills = (function () {
           pendingAmount: metricValue(docs.period?.pendingAmount || docs.period?.pending),
         },
       },
+      journalPostingQueue: {
+        key: "journalPostingQueue",
+        title: "Journal Posting Queue",
+        status: journalStatus,
+        summary: "Local SQLite journal posting queue for reviewed accruals. Desktop mode required for live queue access.",
+        navTarget: WIDGET_NAV.journalPostingQueue,
+        metrics: {
+          queueCount: metricValue(journalItems.length || journalQueue.metrics?.pending || null),
+          pendingReview: metricValue(journalQueue.metrics?.pending),
+          readyToExport: metricValue(journalQueue.metrics?.ready),
+        },
+      },
       smartClaimsAndReceivables: {
         key: "smartClaimsAndReceivables",
         title: "Smart Claims & Receivables",
@@ -2059,19 +2045,6 @@ const HalSkills = (function () {
           draftCount: metricValue(claimsSnap.byStatus?.Draft || claimsSnap.laneTotals?.Draft),
           needsReviewCount: metricValue(claimsSnap.byStatus?.["Needs Review"] || claimsSnap.laneTotals?.["Needs Review"]),
           readyCount: metricValue(claimsSnap.byStatus?.Ready || claimsSnap.laneTotals?.Ready),
-          deniedCount: metricValue(claimsSnap.byStatus?.Denied || claimsSnap.laneTotals?.Denied),
-        },
-      },
-      claimReadinessAndSafety: {
-        key: "claimReadinessAndSafety",
-        title: "Claim Readiness & Safety",
-        status: claimsReadinessStatus,
-        summary: "Claim packet readiness score and local safety posture from the claims workbench cache. Submission remains locked.",
-        navTarget: WIDGET_NAV.claimReadinessAndSafety,
-        metrics: {
-          readinessOverall: metricValue(claimsSnap.readiness?.overall || kpiValue(claimsSnap.kpis, "Claim Readiness")),
-          safetyPosture: metricValue(claimsSnap.safety),
-          needsReviewCount: metricValue(claimsSnap.byStatus?.["Needs Review"] || claimsSnap.laneTotals?.["Needs Review"]),
           deniedCount: metricValue(claimsSnap.byStatus?.Denied || claimsSnap.laneTotals?.Denied),
         },
       },
@@ -2161,32 +2134,6 @@ const HalSkills = (function () {
           patientAmount: metricValue(sd.responsibility?.patient?.amount),
           collectability: metricValue(sd.responsibility?.collectability),
           collectableAmount: metricValue(sd.responsibility?.collectable),
-        },
-      },
-      softdentSourceHealth: {
-        key: "softdentSourceHealth",
-        title: "SoftDent Source Health",
-        status: softdentStatus,
-        summary: "SoftDent connection, data freshness, daysheet load, and scheduled export health.",
-        navTarget: WIDGET_NAV.softdentSourceHealth,
-        metrics: {
-          healthyChecks: healthyCount(sd.health),
-          totalChecks: metricValue((sd.health || []).length || null),
-          connection: metricValue((sd.health || []).find((h) => h.label === "Connection")?.value || sd.status),
-          nextExport: metricValue((sd.health || []).find((h) => h.label === "Next Scheduled Export")?.value),
-        },
-      },
-      softdentExportHistory: {
-        key: "softdentExportHistory",
-        title: "SoftDent Export History",
-        status: softdentStatus,
-        summary: "Latest SoftDent export jobs, datasets, and record counts from the local import cache.",
-        navTarget: WIDGET_NAV.softdentExportHistory,
-        metrics: {
-          exportCount: metricValue((sd.exports || []).length || null),
-          latestExport: metricValue(firstItem(sd.exports)?.name),
-          latestStatus: metricValue(firstItem(sd.exports)?.status),
-          latestRecords: metricValue(firstItem(sd.exports)?.records),
         },
       },
       newPatients: newPatientsWidget || {
@@ -2380,26 +2327,7 @@ const HalSkills = (function () {
       const status = String(widget && widget.status || "").toUpperCase();
       return status === "FAILED" || status === "DEGRADED";
     });
-    const officeTasks = Array.isArray(snap.officeTasks) ? snap.officeTasks : [];
-    const officeTasksStatus =
-      officeTasks.length > 0
-        ? "SUCCESS"
-        : snap.officeTasksState === "not_configured"
-          ? "DEGRADED"
-          : "FAILED";
     feed.officeWidgets = {
-      officeManagerBoundaries: {
-        key: "officeManagerBoundaries",
-        title: "HAL Boundaries",
-        status: "SUCCESS",
-        summary: "HAL is local-only and read-only for external actions; human approval remains required.",
-        navTarget: "office-manager",
-        metrics: {
-          mode: "Local only",
-          externalWriteback: "Blocked",
-          humanApproval: "Required",
-        },
-      },
       officeManagerPriorities: {
         key: "officeManagerPriorities",
         title: "HAL Priorities",
@@ -2412,20 +2340,6 @@ const HalSkills = (function () {
           attentionItems: officeAttention.length || 0,
           failedWidgets: officeAttention.filter((w) => String(w.status).toUpperCase() === "FAILED").length,
           partialWidgets: officeAttention.filter((w) => String(w.status).toUpperCase() === "DEGRADED").length,
-        },
-      },
-      officeManagerTasks: {
-        key: "officeManagerTasks",
-        title: "HAL-managed Local Tasks",
-        status: officeTasksStatus,
-        summary: officeTasks.length
-          ? "HAL-created local tasks are loaded from the office task store."
-          : "HAL will create local tasks when import, widget, or review issues need follow-up.",
-        navTarget: "office-manager",
-        metrics: {
-          taskCount: officeTasks.length || 0,
-          highPriority: officeTasks.filter((task) => task.priority === "high").length || 0,
-          taskStore: snap.officeTasksState || "unknown",
         },
       },
       officeManagerSurfaces: {
@@ -2492,12 +2406,6 @@ const HalSkills = (function () {
       monthlyNetIncome: "QB Net Income",
       productionTotal: "SoftDent Production (operational)",
       collectionsTotal: "SoftDent Collections",
-    },
-    dataFreshnessQuality: {
-      qualityScore: "Import Quality Score",
-      syncedSources: "Synced Sources",
-      delayedSource: "Delayed Source",
-      refreshedAt: "Refreshed At",
     },
     ebitdaNormalization: {
       ebitdaAddBackTotal: "EBITDA Add-Back Total",
@@ -2581,24 +2489,20 @@ const HalSkills = (function () {
     financialProductionTrend: ["softdent.dashboard"],
     payerMixAndCollections: ["softdent.dashboard"],
     providerPerformance: ["softdent.dashboard"],
-    dataFreshnessQuality: ["softdent.dashboard", "quickbooks.revenue"],
     ebitdaNormalization: ["quickbooks.expenses", "quickbooks.expenseCategories"],
     quickbooksProfitLossDetail: ["quickbooks.revenue", "quickbooks.expenses"],
-    quickbooksSyncHealth: ["quickbooks.revenue", "quickbooks.expenses"],
     accountsPayableAutomation: ["local:documents", "quickbooks.expenses"],
     documentIntakeQueue: ["local:documents"],
     documentPreview: ["local:documents"],
     periodCloseAndPosting: ["local:documents"],
+    journalPostingQueue: ["local:documents"],
     smartClaimsAndReceivables: ["softdent.claims", "softdent.ar"],
     claimsPipeline: ["softdent.claims"],
-    claimReadinessAndSafety: ["softdent.claims"],
     arAgingAndCollections: ["softdent.ar"],
     arOutstandingClaims: ["softdent.claims", "softdent.ar"],
     careDeliveryPerformance: ["softdent.dashboard", "softdent.ar"],
     softdentArAging: ["softdent.ar"],
     softdentResponsibility: ["softdent.dashboard"],
-    softdentSourceHealth: ["softdent.dashboard", "softdent.claims", "softdent.clinicalNotes", "softdent.ar"],
-    softdentExportHistory: ["softdent.dashboard", "softdent.claims", "softdent.ar"],
     newPatients: ["softdent.newPatients"],
     treatmentPlanSummary: ["softdent.treatmentPlans"],
     caseAcceptance: ["softdent.caseAcceptance"],
@@ -2793,15 +2697,11 @@ const HalSkills = (function () {
   function formatWidgetFillPriority(feed) {
     if (!feed || !feed.widgets) return "No widget feed is available yet. Refresh imports, then ask again.";
     const priority = [
-      "softdentSourceHealth",
-      "quickbooksSyncHealth",
       "practiceFinancialOverview",
       "quickbooksProfitLossDetail",
-      "dataFreshnessQuality",
       "arAgingAndCollections",
       "smartClaimsAndReceivables",
       "claimsPipeline",
-      "claimReadinessAndSafety",
       "providerPerformance",
       "payerMixAndCollections",
       "financialProductionTrend",
@@ -2813,9 +2713,9 @@ const HalSkills = (function () {
       "documentIntakeQueue",
       "documentPreview",
       "periodCloseAndPosting",
+      "journalPostingQueue",
       "narrativeWorkflow",
       "documentLibrary",
-      "softdentExportHistory",
       "arOutstandingClaims",
     ];
     const lines = ["Priority order to fill widgets:", ""];
@@ -2826,7 +2726,7 @@ const HalSkills = (function () {
       lines.push(`${index + 1}. [${widget.status}] ${widget.title} — ${(WIDGET_FILL_REQUIREMENTS[key] || []).join("; ") || "verified local/import data"}`);
       if (missing.length) lines.push(`   Missing: ${missing.join(", ")}.`);
     });
-    lines.push("", "Rationale: source health first, then owner financials, A/R and claims, then accounting documents, narratives, and library context.");
+    lines.push("", "Rationale: owner financials first, then A/R and claims, then accounting documents, narratives, and library context.");
     return lines.join("\n");
   }
 
@@ -3184,10 +3084,9 @@ const HalSkills = (function () {
     const fin = widgets.practiceFinancialOverview;
     const ar = widgets.arAgingAndCollections;
     const claims = widgets.claimsPipeline;
-    const qb = widgets.quickbooksSyncHealth;
-    const sd = widgets.softdentSourceHealth;
+    const qb = widgets.quickbooksProfitLossDetail;
+    const sd = widgets.careDeliveryPerformance;
     const recommendations = [
-      "Refresh imports first if source health is degraded or failed.",
       "Review A/R only from verified SoftDent A/R export.",
       "Work claims in Needs Review before any payer-facing step.",
       "Use accounting review queue for QuickBooks/documents before any posting decision.",
@@ -3209,7 +3108,7 @@ const HalSkills = (function () {
 
   function formatAccountingReviewQueue(feed, snapshot) {
     const widgets = (feed && feed.widgets) || {};
-    const keys = ["quickbooksSyncHealth", "quickbooksProfitLossDetail", "ebitdaNormalization", "accountsPayableAutomation", "documentIntakeQueue", "documentPreview", "periodCloseAndPosting"];
+    const keys = ["quickbooksProfitLossDetail", "ebitdaNormalization", "accountsPayableAutomation", "documentIntakeQueue", "documentPreview", "periodCloseAndPosting", "journalPostingQueue"];
     const lines = ["Accounting review queue:", ""];
     keys.forEach((key) => {
       const widget = widgets[key];

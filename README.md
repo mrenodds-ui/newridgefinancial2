@@ -14,22 +14,26 @@ Legacy code under `_legacy/` and `frontend/` is reference only.
 Double-click:
 
 ```text
-StartNewRidgeFinancial2.bat
+StartProgram.bat
 ```
 
 Or:
 
 ```powershell
-scripts\start_nr2_1966.ps1
+scripts\start_program.ps1
 ```
+
+(`StartNewRidgeFinancial2.bat` is an alias to the same launcher.)
 
 The launcher loads repo-root `.env` when present, then starts `NewRidgeFinancial2/desktop_app.py`.
 
 ## Stop
 
 ```text
-StopNewRidgeFinancial2.bat
+StopProgram.bat
 ```
+
+(`StopNewRidgeFinancial2.bat` is an alias.)
 
 (`StopDashboard.bat` only kills old port listeners — it does not stop the desktop app.)
 

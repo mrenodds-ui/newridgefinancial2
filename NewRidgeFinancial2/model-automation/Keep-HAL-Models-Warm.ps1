@@ -23,7 +23,7 @@ function Get-ConfiguredModels {
     )
 
     if (-not (Test-Path $modelsConfigPath)) {
-        return @("hal-chat:8b", "hal-helper:14b")
+        return @("hal-chat:8b")
     }
 
     $config = Get-Content $modelsConfigPath -Raw | ConvertFrom-Json
@@ -37,14 +37,13 @@ function Get-ConfiguredModels {
         }
     }
 
-    # Always-resident default: GPU-pinned 8B chat + 14B helper models.
+    # Always-resident default: GPU-pinned chat only unless fastModel is enabled.
     $lane = @()
-    if ($config.config.fastModel.model) {
-        $lane += $config.config.fastModel.model
+    if ($config.config.localModel.model -and $config.config.localModel.enabled -ne $false) {
+        $lane += $config.config.localModel.model
     }
-    $lane += $config.config.localModel.model
-    if ($config.readinessDisplay.configuredModels.helper.model) {
-        $lane += $config.readinessDisplay.configuredModels.helper.model
+    if ($config.config.fastModel.enabled -eq $true -and $config.config.fastModel.model) {
+        $lane += $config.config.fastModel.model
     }
 
     if ($IncludeReasoning) {

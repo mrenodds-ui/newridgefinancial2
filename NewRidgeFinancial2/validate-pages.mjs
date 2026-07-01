@@ -16,6 +16,8 @@ process.env.NR2_LOAD_IMPORTS = "1";
 
 const appJs = readFileSync(join(siteDir, "app.js"), "utf8");
 const indexHtml = readFileSync(join(siteDir, "index.html"), "utf8");
+const buildManifest = JSON.parse(readFileSync(join(__dirname, "nr2-build.json"), "utf8"));
+const expectedAssetVersion = buildManifest.assetVersion;
 const stylesCss = readFileSync(join(siteDir, "styles.css"), "utf8");
 
 require(join(siteDir, "empty-states.js"));
@@ -33,6 +35,11 @@ require(join(siteDir, "hal-widget-master-chart.js"));
 require(join(siteDir, "hal-page-widgets.js"));
 require(join(siteDir, "hal-live-widget-bridge.js"));
 const HalPilotWidgets = require(join(siteDir, "hal-pilot-widgets.js"));
+require(join(siteDir, "page-schema.js"));
+require(join(siteDir, "tax-engine.js"));
+require(join(siteDir, "page-chrome.js"));
+require(join(siteDir, "page-canvas-data.js"));
+require(join(siteDir, "page-canvas.js"));
 require(join(siteDir, "components.js"));
 const ServicesMod = require(join(siteDir, "services.js"));
 const PageViews = require(join(siteDir, "page-views.js"));
@@ -46,58 +53,55 @@ const previewSnapshot = await SnapshotStorePage.get(() => ServicesMod.buildProgr
 const previewWidgetFeed = HalSkills.buildWidgetFeed(previewSnapshot);
 
 const FUNCTIONAL_PAGES = [
-  { id: "financial", checks: ["pv-fin-top", "pv-bento--financial", "Production MTD"] },
-  { id: "softdent", checks: ["pv-bento--softdent", "DAYSHEET A/R"] },
-  { id: "quickbooks", checks: ["pv-bento--quickbooks", "P&amp;L Summary"] },
-  { id: "ar", checks: ["pv-bento--ar", "Aging Buckets"] },
-  { id: "claims", checks: ["pv-claims-layout", "Claims pipeline"] },
-  { id: "narratives", checks: ["pv-two-pane--narratives", "Narrative Composer", "Draft Narrative Preview"] },
-  { id: "documents", checks: ["pv-bento--documents", "Document Intake", "Selected Document Preview"] },
-  { id: "library", checks: ["pv-library-layout", "Document Library"] },
-  { id: "office-manager", checks: ["pv--app", "Office Manager", "HAL priorities", "HAL did", "Human must approve"] },
+  { id: "financial", checks: ["pv-canvas-metric-grid", "pv-canvas-panel", "Production MTD"] },
+  { id: "taxes", checks: ["pv-canvas-metric-grid", "Book-to-tax bridge", "Reasonable compensation scenarios", "MemoAI evidence"] },
+  { id: "softdent", checks: ["pv-canvas-operatory-grid", "Care Delivery Summary", "Case Acceptance Rate"] },
+  { id: "quickbooks", checks: ["pv-canvas-panel", "Loss Summary (YTD)", "EBITDA Normalization"] },
+  { id: "ar", checks: ["pv-canvas-metric-grid", "Follow-up Queue", "Outstanding Claims"] },
+  { id: "claims", checks: ["pv-canvas-metric-grid", "Insurance Claims Workbench", "Open Insurance Claims"] },
+  { id: "narratives", checks: ["pv-canvas-textarea", "Narrative Composer", "Draft history"] },
+  { id: "documents", checks: ["pv-canvas-panel", "Recent Accounting Documents"] },
+  { id: "library", checks: ["pv-canvas-search", "Document Library", "Library &amp; Preview"] },
+  { id: "office-manager", checks: ["pv-canvas-metric-grid", "Today&#039;s Focus", "Office task queue"] },
 ];
 
 const HIGH_TECH_SURFACES = {
-  financial: ["pv-hal-echart", "pv-hal-tabulator", "pv-hal-command"],
-  softdent: ["pv-hal-grid", "pv-hal-command"],
-  quickbooks: ["pv-hal-grid", "pv-hal-command"],
-  ar: ["pv-hal-grid", "pv-hal-kanban", "pv-hal-command"],
-  claims: ["pv-hal-kanban"],
-  narratives: ["pv-hal-editor"],
-  documents: ["pv-hal-grid", "pv-hal-pdf"],
-  library: ["pv-hal-pdf"],
-  "office-manager": ["pv-hal-kanban", "pv-hal-timeline", "pv-hal-command"],
+  financial: ["pv-canvas-command", "pv-canvas-panel"],
+  taxes: ["pv-canvas-command", "pv-canvas-panel"],
+  softdent: ["pv-canvas-command", "pv-canvas-panel"],
+  quickbooks: ["pv-canvas-command", "pv-canvas-panel"],
+  ar: ["pv-canvas-command", "pv-hal-kanban", "pv-canvas-panel"],
+  claims: ["pv-canvas-command", "pv-hal-kanban"],
+  narratives: ["pv-canvas-command", "pv-hal-editor"],
+  documents: ["pv-canvas-command", "pv-hal-pdf", "pv-canvas-panel"],
+  library: ["pv-canvas-command", "pv-hal-pdf"],
+  "office-manager": ["pv-canvas-command", "pv-hal-kanban", "pv-canvas-panel"],
 };
 
 for (const page of FUNCTIONAL_PAGES) {
   assert.ok(PageViews.hasPage(page.id), `${page.id} page must be routable`);
-  const html = await PageViews.previewPageHtml(halData, page.id, previewWidgetFeed);
+  const html = await PageViews.previewPageHtml(halData, page.id, previewWidgetFeed, previewSnapshot);
   assert.ok(!html.includes("pv--mock-image"), `${page.id} must NOT render a mockup image`);
   assert.ok(html.includes("pv--app"), `${page.id} must render the functional app surface`);
-  assert.ok(html.includes("pv__header"), `${page.id} must use the shared page header`);
+  assert.ok(html.includes("pv-canvas-hero"), `${page.id} must use the canvas page hero`);
+  assert.ok(html.includes("pv-canvas-insight") || html.includes("pv-filter-pill"), `${page.id} must use canvas toolbar or insight chrome`);
   if (page.id !== "office-manager") {
     assert.ok(
-      html.includes("pv-badge--import") ||
-        html.includes("Partial import") ||
-        html.includes("No data loaded") ||
-        html.includes("Import data"),
-      `${page.id} must label import or empty data honestly`,
+      html.includes("pv-canvas-insight") || html.includes("pv-filter-pill"),
+      `${page.id} must use canvas insight or filter toolbar`,
     );
   }
   for (const check of page.checks) {
     assert.ok(html.includes(check), `${page.id} must include ${check}`);
   }
-    assert.ok(html.includes("data-hal-widget-key"), `${page.id} must wire HAL into page widgets`);
-    assert.ok(html.includes("pv-hal-strip") || html.includes("pv-hal-widget__badge"), `${page.id} must show HAL placement chrome`);
+  assert.ok(html.includes("data-hal-widget-key"), `${page.id} must wire HAL into page widgets`);
+  assert.ok(html.includes("pv-hal-widget__badge"), `${page.id} must show HAL widget badges from feed`);
+  assert.ok(html.includes("pv-canvas-hal-strip") || html.includes("pv-hal-strip"), `${page.id} must show HAL page strip`);
   if (page.id === "financial") {
     assert.ok(!html.includes("Dr. Adams"), "financial page must not render sample provider names");
-    assert.ok(!html.includes("Hygiene Team"), "financial page must not render sample provider names");
-    assert.ok(html.includes("pv-hal-echart"), "financial page must include HAL ECharts pilot");
-    assert.ok(html.includes("pv-hal-tabulator"), "financial page must include HAL Tabulator pilot");
-    assert.ok(
-      html.includes("Awaiting import data") || html.includes("pv-badge--import") || html.includes("Partial import"),
-      "financial page must show honest import state",
-    );
+    assert.ok(!html.includes("Hygiene Team"), "financial page must not render legacy sample provider names");
+    assert.ok(html.includes("pv-canvas-panel") || html.includes("pv-canvas-metric-grid"), "financial page must use canvas widget panels");
+    assert.ok(html.includes("pv-canvas-insight"), "financial page must show schema insight callout");
   }
   for (const cls of HIGH_TECH_SURFACES[page.id] || []) {
     assert.ok(html.includes(cls), `${page.id} must render high-tech HAL surface ${cls}`);
@@ -121,9 +125,28 @@ assert.ok(indexHtml.includes("hal-office-manager.js"), "index must load HalOffic
 assert.ok(indexHtml.includes("hal-page-widgets.js"), "index must load HalPageWidgets");
 assert.ok(indexHtml.includes("hal-widget-master-chart.js"), "index must load HalWidgetMasterChart");
 assert.ok(indexHtml.includes("hal-live-widget-bridge.js"), "index must load HalLiveWidgetBridge");
-assert.ok(indexHtml.includes("hal-pilot-widgets.js"), "index must load HalPilotWidgets");
-assert.equal(HalPilotWidgets.LEGACY_WIDGET_SCHEMA.mode, "preserve-existing-page-data", "plain widgets must preserve the old page data schema");
-assert.ok(stylesCss.includes(".pv-hal-grid"), "styles must include AG Grid plain styling");
+assert.ok(indexHtml.includes("page-schema.js"), "index must load PageSchema");
+assert.ok(indexHtml.includes("page-chrome.js"), "index must load PageChrome");
+assert.ok(indexHtml.includes("desktop-boot.js"), "index must load desktop boot gate");
+const scriptVersions = [...indexHtml.matchAll(/\.js\?v=([^"&]+)/g)].map((match) => match[1]);
+assert.ok(scriptVersions.length >= 1, "index must load versioned scripts");
+for (const version of new Set(scriptVersions)) {
+  assert.equal(version, expectedAssetVersion, `all index scripts must use asset version ${expectedAssetVersion}`);
+}
+assert.ok(
+  indexHtml.includes(`styles.css?v=${expectedAssetVersion}`),
+  `index styles.css must use asset version ${expectedAssetVersion}`,
+);
+assert.ok(!stylesCss.includes(".pv--mock-image"), "styles must not include legacy mock-image shell rules");
+assert.ok(!stylesCss.includes(".pv__header"), "styles must not include legacy pv__header rules");
+assert.equal(
+  typeof PageSchema !== "undefined" ? PageSchema.SCHEMA_VERSION : null,
+  expectedAssetVersion,
+  "PageSchema.SCHEMA_VERSION must match nr2-build.json",
+);
+assert.equal(HalPilotWidgets.LEGACY_WIDGET_SCHEMA.mode, "canvas-feed", "staff pages must use canvas feed HAL wiring");
+assert.ok(!stylesCss.includes(".pv-bento"), "styles must not include legacy bento layout rules");
+assert.ok(stylesCss.includes(".pv-canvas-hero"), "styles must include canvas page hero");
 assert.ok(stylesCss.includes(".pv-hal-kanban"), "styles must include Kanban plain styling");
 assert.ok(stylesCss.includes(".pv-hal-pdf"), "styles must include PDF plain styling");
 assert.ok(indexHtml.includes("widget-contract.js"), "index must load WidgetContract");
@@ -131,11 +154,20 @@ assert.ok(indexHtml.includes("snapshot-store.js"), "index must load SnapshotStor
 assert.ok(indexHtml.includes("runtime-issues.js"), "index must load RuntimeIssues");
 assert.ok(indexHtml.includes("office-task-store.js"), "index must load OfficeTaskStore");
 assert.ok(!appJs.includes("await refreshHalWidgetFeed()") || appJs.includes("scheduleHalWidgetRefresh"), "side-note monitor must not poll full widget refresh");
+assert.ok(!indexHtml.includes('class="topbar"'), "index must not include legacy topbar shell");
+assert.ok(appJs.includes("PageSchema.navPages") || appJs.includes("appPages"), "app must derive navigation from PageSchema");
+assert.ok(indexHtml.includes("tax-engine.js"), "index must load TaxEngine");
+assert.ok(indexHtml.includes("page-canvas-data.js"), "index must load PageCanvasData");
+assert.ok(indexHtml.includes("page-canvas.js"), "index must load PageCanvas");
 const pageViewsJs = readFileSync(join(siteDir, "page-views.js"), "utf8");
-assert.ok(pageViewsJs.includes("mountGeneration"), "page mount must use generation tokens to ignore stale renders");
-assert.ok(pageViewsJs.includes("mountStillCurrent"), "page mount must verify current page before committing async HTML");
-assert.ok(pageViewsJs.includes("sourceExpired"), "documents preview must handle expired source files");
-assert.ok(pageViewsJs.includes("fileUnavailable"), "documents preview must show unavailable source message");
+const pageCanvasJs = readFileSync(join(siteDir, "page-canvas.js"), "utf8");
+assert.ok(!pageViewsJs.includes("PAGE_OUTLINES"), "page-views must not use legacy PAGE_OUTLINES");
+assert.ok(!pageViewsJs.includes("MOCK_IMAGES"), "page-views must not use mock image routing");
+assert.ok(!pageViewsJs.includes("readDashboard"), "page-views must not fetch legacy dashboard renderers");
+assert.ok(pageViewsJs.includes("renderBody(pageId"), "page-views must delegate body HTML to PageCanvas");
+assert.ok(pageCanvasJs.includes("PageCanvasData") || pageCanvasJs.includes("dataApi"), "page-canvas must render from HAL program snapshot data");
+assert.ok(pageCanvasJs.includes("renderFinancial"), "page-canvas must implement financial body");
+assert.ok(pageCanvasJs.includes("renderTaxes"), "page-canvas must implement taxes body");
 
 const ServicesModValidate = ServicesMod;
 const SnapshotStorePageValidate = SnapshotStorePage;

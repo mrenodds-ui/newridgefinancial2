@@ -200,7 +200,7 @@
       "id": "reason24b",
       "name": "24B reasoning lane",
       "model": "mistral-small3.1:24b-fast",
-      "role": "On-demand reasoning for plans, accounting/Excel-style review, prioritization, and structured recommendations",
+      "role": "On-demand reasoning for plans, accounting/Excel-style review, insurance narratives, prioritization, and structured recommendations",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,

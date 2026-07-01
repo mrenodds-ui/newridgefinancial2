@@ -1,0 +1,776 @@
+/**
+ * Maps HAL widget feed + program snapshot into canvas page view models.
+ * No mock/demo values — empty states when imports are missing.
+ */
+const PageCanvasData = (function () {
+  let feed = null;
+  let snapshot = null;
+
+  const COLORS = ["#78a86b", "#60a5fa", "#c084fc", "#d6b15e", "#fb923c", "#f472b6"];
+  const CLAIM_LANES = ["Draft", "Needs Review", "Ready", "Denied"];
+  const TASK_LANE_MAP = {
+    billing: "Billing",
+    claims: "Billing",
+    ar: "Billing",
+    revenue: "Owner review",
+    accounting: "Owner review",
+    data_sources: "Owner review",
+    scheduling: "Scheduling",
+    sidenotes: "Scheduling",
+    other: "General",
+  };
+
+  function bind(nextFeed, nextSnapshot) {
+    feed = nextFeed || null;
+    snapshot = nextSnapshot || null;
+  }
+
+  function widget(key) {
+    if (!feed || !key) return null;
+    return feed.widgets?.[key] || feed.officeWidgets?.[key] || null;
+  }
+
+  function dash(pageId) {
+    return (snapshot && snapshot.dashboards && snapshot.dashboards[pageId]) || null;
+  }
+
+  function metrics(key) {
+    const w = widget(key);
+    return (w && w.metrics) || {};
+  }
+
+  function fmt(value) {
+    if (value == null || value === "") return "—";
+    if (typeof WidgetContract !== "undefined" && value === WidgetContract.MISSING) return "—";
+    return String(value);
+  }
+
+  function parseAmount(value) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    const n = Number(String(value || "").replace(/[$,%]/g, "").replace(/,/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function sparkSeries(values) {
+    if (!Array.isArray(values) || !values.length) return null;
+    const nums = values.map(parseAmount).filter((n) => Number.isFinite(n));
+    return nums.length >= 2 ? nums.slice(-5) : null;
+  }
+
+  function widgetTone(key) {
+    const status = String((widget(key) && widget(key).status) || "").toUpperCase();
+    if (status === "SUCCESS") return "success";
+    if (status === "DEGRADED") return "warning";
+    return undefined;
+  }
+
+  function periodSubtitle() {
+    const fin = dash("financial");
+    if (fin && fin.dateRange) return fin.dateRange;
+    const sd = dash("softdent");
+    if (sd && sd.date) return sd.date;
+    if (snapshot && snapshot.label) return snapshot.label;
+    return "Awaiting import data";
+  }
+
+  function financialKpis() {
+    const fin = dash("financial") || {};
+    const ov = metrics("practiceFinancialOverview");
+    const trend = metrics("financialProductionTrend");
+    const payer = metrics("payerMixAndCollections");
+    const ar = metrics("arAgingAndCollections");
+    const prodSpark = sparkSeries(fin.productionTrend && fin.productionTrend.production);
+    return [
+      {
+        label: "Production MTD",
+        value: fmt(ov.productionTotal || trend.productionMtd || (fin.productionMtd && fin.productionMtd.value)),
+        hint: fin.productionMtd && fin.productionMtd.vs ? fin.productionMtd.vs : fmt(trend.trailingCollectionRate),
+        tone: widgetTone("financialProductionTrend"),
+        spark: prodSpark,
+      },
+      {
+        label: "Collection rate",
+        value: fmt(payer.collectionRate || payer.latestMonthCollectionRate),
+        hint: fmt(payer.trailingCollectionPeriods),
+        tone: widgetTone("payerMixAndCollections"),
+      },
+      {
+        label: "QuickBooks net income",
+        value: fmt(ov.monthlyNetIncome),
+        hint: fmt(ov.monthlyRevenue ? `Revenue ${ov.monthlyRevenue}` : null),
+        tone: widgetTone("practiceFinancialOverview"),
+      },
+      {
+        label: "Outstanding A/R",
+        value: fmt(ar.totalOutstanding || ov.collectionsTotal),
+        hint: fmt(ar.aging90PlusPct ? `90+ ${ar.aging90PlusPct}` : null),
+        tone: widgetTone("arAgingAndCollections") || "warning",
+        spark: sparkSeries(fin.productionTrend && fin.productionTrend.average),
+      },
+    ];
+  }
+
+  function financialCompare() {
+    const fin = dash("financial") || {};
+    const payer = metrics("payerMixAndCollections");
+    const prod = fin.productionMtd || {};
+    return [
+      {
+        label: "Production MTD",
+        value: fmt(prod.value),
+        delta: fmt(prod.vs || prod.trend),
+        tone: prod.trendDir === "down" ? "warning" : prod.trendDir === "up" ? "success" : undefined,
+      },
+      {
+        label: "Collection rate",
+        value: fmt(payer.collectionRate),
+        delta: fmt(payer.latestMonthCollectionRate),
+        tone: widgetTone("payerMixAndCollections"),
+      },
+      {
+        label: "Data quality",
+        value: fin.quality && fin.quality.score != null ? `${fin.quality.score}/100` : "—",
+        delta: fin.footer && fin.footer.refreshed ? `Refreshed ${fin.footer.refreshed}` : "Import snapshot",
+        tone: fin.dataSource === "import" ? "success" : "warning",
+      },
+    ];
+  }
+
+  function financialWeeklyBars() {
+    const fin = dash("financial") || {};
+    const trend = fin.productionTrend || {};
+    const labels = trend.labels || [];
+    const values = (trend.production || []).map(parseAmount);
+    if (!labels.length || !values.length) return null;
+    const tail = Math.min(4, labels.length);
+    return {
+      labels: labels.slice(-tail),
+      values: values.slice(-tail),
+      caption: "SoftDent production trend · trailing periods",
+    };
+  }
+
+  function financialYtdBars() {
+    const ov = metrics("practiceFinancialOverview");
+    const qb = dash("quickbooks") || {};
+    const pl = (qb.pl && qb.pl.rows) || [];
+    const rowVal = (name) => {
+      const row = pl.find((r) => String(r.category || "").toLowerCase() === name.toLowerCase());
+      return row ? parseAmount(row.amount || row.value) : 0;
+    };
+    const labels = ["Revenue", "Expenses", "Net income"];
+    const values = [
+      parseAmount(ov.monthlyRevenue || rowVal("Revenue")),
+      parseAmount(rowVal("Operating Expenses") || rowVal("Expenses") || qb.expenses),
+      parseAmount(ov.monthlyNetIncome || rowVal("Net Income")),
+    ];
+    if (!values.some((v) => v > 0)) return null;
+    return { labels, values, caption: qb.pl && qb.pl.range ? qb.pl.range : "QuickBooks YTD" };
+  }
+
+  function productionTrendSeries() {
+    const fin = dash("financial") || {};
+    const trend = fin.productionTrend || {};
+    const production = (trend.production || []).map(parseAmount);
+    const average = (trend.average || []).map(parseAmount);
+    if (!production.length) return null;
+    return { production, average: average.length ? average : null, max: Math.max(...production, 1) * 1.1 };
+  }
+
+  function payerDonut() {
+    const fin = dash("financial") || {};
+    const mix = fin.payerMix || {};
+    const slices = (mix.slices || []).map((s, i) => ({
+      label: s.label || "Payer",
+      pct: parseAmount(s.pct),
+      color: s.color || COLORS[i % COLORS.length],
+    }));
+    if (!slices.length) return null;
+    const center = mix.rate ? `<strong>${escHtml(mix.rate)}</strong><span>Collections</span>` : "";
+    return { slices, center };
+  }
+
+  function providerBars() {
+    const fin = dash("financial") || {};
+    const rows = (fin.providers && fin.providers.rows) || [];
+    if (!rows.length) return null;
+    return {
+      items: rows.map((r) => ({ name: r.name, amount: r.amount, pct: parseAmount(r.pct) })),
+      total: (fin.providers.total && fin.providers.total.amount) || fmt(metrics("providerPerformance").providerTotal),
+    };
+  }
+
+  function softdentGlanceStats() {
+    const sd = dash("softdent") || {};
+    const care = metrics("careDeliveryPerformance");
+    const payer = metrics("payerMixAndCollections");
+    return [
+      { value: fmt(care.patientBalanceTotal || (sd.hero && sd.hero.value)), label: "Patient A/R", tone: widgetTone("careDeliveryPerformance") || "warning" },
+      { value: fmt(payer.collectionRate), label: "Collection rate", tone: widgetTone("payerMixAndCollections") },
+      { value: fmt(care.patientCount || glanceValue(sd, "Total Patients")), label: "Active patients" },
+      { value: fmt(care.providerCount), label: "Providers loaded" },
+    ];
+  }
+
+  function glanceValue(sd, label) {
+    const row = ((sd && sd.glance) || []).find((g) => g.label === label);
+    return row ? row.value : null;
+  }
+
+  function softdentAgingBars() {
+    const sd = dash("softdent") || {};
+    const aging = sd.aging || [];
+    if (!aging.length) return null;
+    return {
+      labels: aging.map((a) => a.bucket || a.label),
+      values: aging.map((a) => parseAmount(a.amount || a.pct)),
+    };
+  }
+
+  function softdentResponsibilityDonut() {
+    const sd = dash("softdent") || {};
+    const resp = sd.responsibility || {};
+    const ins = parseAmount(resp.insurance && resp.insurance.amount);
+    const pat = parseAmount(resp.patient && resp.patient.amount);
+    const total = ins + pat;
+    if (!total) return null;
+    return {
+      slices: [
+        { label: "Insurance", pct: Math.round((ins / total) * 1000) / 10, color: "#60a5fa" },
+        { label: "Patient portion", pct: Math.round((pat / total) * 1000) / 10, color: "#d6b15e" },
+      ],
+    };
+  }
+
+  function practiceStats() {
+    const pr = dash("practice") || {};
+    const np = metrics("newPatients");
+    const tp = metrics("treatmentPlanSummary");
+    const ca = metrics("caseAcceptance");
+    return {
+      newPatients: fmt(np.newPatientCount || pr.newPatients?.count),
+      newPatientsHint: fmt(np.period || pr.newPatients?.period),
+      treatmentPresented: fmt(tp.presentedValue || tp.plansPresented || pr.treatmentPlans?.presentedValue || pr.treatmentPlans?.presented),
+      caseRate: fmt(ca.acceptanceRate || pr.caseAcceptance?.rate),
+      caseAccepted:
+        ca.acceptedCount != null && ca.presentedCount != null
+          ? `${fmt(ca.acceptedCount)} / ${fmt(ca.presentedCount)}`
+          : ca.plansAccepted != null && ca.plansPresented != null
+            ? `${fmt(ca.plansAccepted)} / ${fmt(ca.plansPresented)}`
+            : null,
+    };
+  }
+
+  function importHealthCards() {
+    const sd = dash("softdent") || {};
+    const exports = sd.exports || [];
+    if (exports.length) {
+      return exports.slice(0, 4).map((row, i) => ({
+        op: row.dataset || "Export",
+        patient: row.name || row.sourceFile || "SoftDent",
+        procedure: `${row.records || "0"} records · ${row.status || "—"}`,
+        provider: row.source || "SoftDent",
+        tone: row.status === "SUCCESS" ? "green" : row.status === "EMPTY" ? "orange" : "blue",
+      }));
+    }
+    const glance = sd.glance || [];
+    if (glance.length) {
+      return glance.slice(0, 4).map((g, i) => ({
+        op: g.label,
+        patient: fmt(g.value),
+        procedure: sd.source || "SoftDent import",
+        provider: sd.status || "Import",
+        tone: ["green", "blue", "orange", "blue"][i % 4],
+      }));
+    }
+    return [];
+  }
+
+  function quickbooksPlRows() {
+    const qb = dash("quickbooks") || {};
+    const rows = (qb.pl && qb.pl.rows) || [];
+    return rows.slice(0, 8).map((r) => [r.category || r.label || "—", fmt(r.amount || r.value), fmt(r.vs || r.note || "—")]);
+  }
+
+  function quickbooksExpenseBars() {
+    const qb = dash("quickbooks") || {};
+    const monthly = qb.monthlyExpenses || {};
+    const labels = monthly.labels || [];
+    const values = (monthly.values || []).map(parseAmount);
+    if (!labels.length) return null;
+    return { labels, values };
+  }
+
+  function quickbooksExpenseDonut() {
+    const qb = dash("quickbooks") || {};
+    const cats = qb.expenseCategories || {};
+    const slices = (cats.slices || []).map((s, i) => ({
+      label: s.label || "Category",
+      pct: parseAmount(s.pct),
+      color: s.color || COLORS[i % COLORS.length],
+    }));
+    return slices.length ? { slices } : null;
+  }
+
+  function ebitdaRows() {
+    const qb = dash("quickbooks") || {};
+    const candidates = qb.ebitdaCandidates || [];
+    if (candidates.length) {
+      return candidates.slice(0, 8).map((c) => [
+        c.category || c.label || "Add-back",
+        fmt(c.amount),
+        fmt(c.reviewer || "—"),
+        fmt(c.notes || c.status || "—"),
+      ]);
+    }
+    const m = metrics("ebitdaNormalization");
+    if (m.ebitdaAddBackTotal || m.ebitdaCandidateCount) {
+      return [["EBITDA add-back total", fmt(m.ebitdaAddBackTotal), "HAL", fmt(m.expenseCategoriesScope)]];
+    }
+    return [];
+  }
+
+  function arKpis() {
+    const ar = dash("ar") || {};
+    const wm = metrics("arAgingAndCollections");
+    const kpis = ar.kpis || [];
+    if (kpis.length) {
+      return kpis.map((k) => ({
+        label: k.label,
+        value: fmt(k.value),
+        hint: k.hint || "",
+        tone: k.tone === "warn" || k.tone === "warning" ? "warning" : k.tone === "green" || k.tone === "success" ? "success" : undefined,
+        spark: null,
+      }));
+    }
+    return [
+      { label: "Total outstanding", value: fmt(wm.totalOutstanding), hint: "Verified A/R", tone: widgetTone("arAgingAndCollections") || "warning" },
+      { label: "90+ days", value: fmt(wm.aging90PlusPct), hint: "Aging bucket", tone: "warning" },
+      { label: "Collections MTD", value: fmt(wm.collectionsThisPeriod), hint: "This period", tone: widgetTone("arAgingAndCollections") },
+      { label: "Follow-up queue", value: fmt(wm.followUpQueueCount), hint: "Claims needing action" },
+    ];
+  }
+
+  function arCollectionsChart() {
+    const ar = dash("ar") || {};
+    const trend = ar.collectionsTrend || {};
+    const labels = trend.labels || [];
+    const billed = (trend.current || trend.billed || []).map(parseAmount);
+    const collected = (trend.prior || trend.collected || []).map(parseAmount);
+    if (!labels.length && !billed.length) return null;
+    const useLabels = labels.length ? labels : billed.map((_, i) => `P${i + 1}`);
+    return {
+      labels: useLabels,
+      series: [
+        { name: "Billed", data: billed.length ? billed : collected, tone: "info" },
+        { name: "Collected", data: collected.length ? collected : billed, tone: "success" },
+      ],
+    };
+  }
+
+  function arTopClaimsTable() {
+    const ar = dash("ar") || {};
+    const rows = ar.topClaims || [];
+    return rows.slice(0, 10).map((c) => [
+      c.patient || "—",
+      c.procedure || c.claim || "—",
+      c.insurance || "—",
+      fmt(c.outstanding || c.billed),
+      fmt(c.days),
+    ]);
+  }
+
+  function arFollowUpKanban() {
+    const ar = dash("ar") || {};
+    const followUp = ar.followUp || [];
+    if (followUp.length) {
+      return followUp.map((lane) => ({
+        lane: lane.status || lane.lane || "Follow-up",
+        tone: lane.tone === "red" ? "orange" : lane.tone === "warn" ? "orange" : lane.tone || "blue",
+        items: (lane.items || []).map((item) => (typeof item === "string" ? item : item.label || "—")),
+      }));
+    }
+    const claims = snapshot && snapshot.claims && snapshot.claims.claims;
+    if (!claims || !claims.length) return [];
+    const lanes = { "Needs call": [], "Awaiting payer": [], "Ready to close": [] };
+    claims.slice(0, 12).forEach((c) => {
+      const label = `${c.patient || "Unknown"} · ${fmt(c.amount)}`;
+      if (c.status === "Denied") lanes["Needs call"].push(label);
+      else if (c.status === "Ready") lanes["Ready to close"].push(label);
+      else lanes["Awaiting payer"].push(label);
+    });
+    return Object.entries(lanes)
+      .filter(([, items]) => items.length)
+      .map(([lane, items]) => ({ lane, tone: "muted", items }));
+  }
+
+  function claimsKpis() {
+    const m = metrics("claimsPipeline");
+    const claims = snapshot && snapshot.claims;
+    return [
+      { label: "Open claims", value: fmt(m.totalClaims || (claims && claims.total)), spark: null },
+      { label: "Needs review", value: fmt(m.needsReviewCount), tone: "warning" },
+      { label: "Ready", value: fmt(m.readyCount), tone: "success" },
+      { label: "Denied", value: fmt(m.deniedCount), tone: "warning" },
+    ];
+  }
+
+  function claimsKanban() {
+    const claims = snapshot && snapshot.claims;
+    if (!claims) return [];
+    const byLane = claims.byStatus || claims.laneTotals || {};
+    if (claims.claims && claims.claims.length) {
+      const lanes = {};
+      CLAIM_LANES.forEach((lane) => {
+        lanes[lane] = claims.claims
+          .filter((c) => c.status === lane)
+          .slice(0, 6)
+          .map((c) => `${c.patient || "Unknown"} · ${c.procedure || "—"} · ${fmt(c.amount)}`);
+      });
+      return CLAIM_LANES.filter((lane) => lanes[lane].length).map((lane) => ({
+        lane,
+        tone: lane === "Ready" ? "green" : lane === "Denied" ? "orange" : "muted",
+        items: lanes[lane],
+      }));
+    }
+    return CLAIM_LANES.filter((lane) => byLane[lane]).map((lane) => ({
+      lane,
+      tone: "muted",
+      items: [`${byLane[lane]} claim(s)`],
+    }));
+  }
+
+  function firstClaim() {
+    const claims = snapshot && snapshot.claims && snapshot.claims.claims;
+    return (claims && claims[0]) || null;
+  }
+
+  function narrativeDraft() {
+    const nar = snapshot && snapshot.narratives;
+    const latest = nar && nar.latest;
+    if (latest && latest.body) return latest.body;
+    if (latest && latest.text) return latest.text;
+    return "";
+  }
+
+  function narrativeHistoryRows() {
+    const nar = snapshot && snapshot.narratives;
+    return [];
+  }
+
+  function documentsQueueRows() {
+    const docs = snapshot && snapshot.documents;
+    const rows = (docs && (docs.workbookSample || docs.top)) || [];
+    return rows.slice(0, 8).map((d) => [d.vendor || d.type || d.id || "Document", d.type || d.sourceSystem || "—", fmt(d.amount), fmt(d.date || d.status)]);
+  }
+
+  function firstDocument() {
+    const docs = snapshot && snapshot.documents;
+    const rows = (docs && (docs.top || docs.workbookSample)) || [];
+    return rows[0] || null;
+  }
+
+  function documentsPeriodStats() {
+    const docs = snapshot && snapshot.documents;
+    const period = metrics("periodCloseAndPosting");
+    const ap = metrics("accountsPayableAutomation");
+    return [
+      { value: fmt(period.documentsInPeriod), label: "Documents in period", tone: widgetTone("periodCloseAndPosting") },
+      { value: fmt(period.postedPct), label: "Posted", tone: "success" },
+      { value: fmt(period.pendingAmount || ap.postingQueuePendingCount), label: "Pending review", tone: "warning" },
+      { value: fmt(ap.expenseTotal), label: "Expense total", tone: "warning" },
+    ];
+  }
+
+  function journalRows() {
+    const m = metrics("journalPostingQueue");
+    if (m.queueCount && m.queueCount !== "—") {
+      return [
+        ["Pending review", fmt(m.pendingReview), "Journal queue", "Local"],
+        ["Ready to export", fmt(m.readyToExport), "Journal queue", "Local"],
+      ];
+    }
+    return [];
+  }
+
+  function libraryRows() {
+    const lib = snapshot && snapshot.library;
+    const docs = (lib && (lib.docs || lib.top)) || [];
+    return docs.slice(0, 10).map((d) => [d.title || d.name || d.id || "Document", d.category || d.type || "—", fmt(d.updated || d.date), fmt(d.expires || "—")]);
+  }
+
+  function firstLibraryDoc() {
+    const lib = snapshot && snapshot.library;
+    const docs = (lib && (lib.docs || lib.top)) || [];
+    return docs[0] || null;
+  }
+
+  function officeKpis() {
+    const pri = metrics("officeManagerPriorities");
+    const ov = metrics("practiceFinancialOverview");
+    const ar = metrics("arAgingAndCollections");
+    const np = metrics("newPatients");
+    return [
+      { label: "Production MTD", value: fmt(ov.productionTotal), hint: "Owner dashboard", tone: widgetTone("practiceFinancialOverview") },
+      { label: "Open A/R", value: fmt(ar.totalOutstanding), hint: "Verified receivables", tone: "warning" },
+      { label: "HAL attention items", value: fmt(pri.attentionItems), hint: fmt(`${pri.failedWidgets || 0} failed · ${pri.partialWidgets || 0} partial`), tone: pri.attentionItems > 0 ? "warning" : "success" },
+      { label: "New patients", value: fmt(np.newPatientCount), hint: "Practice performance" },
+    ];
+  }
+
+  function officeKanban() {
+    const tasks = (snapshot && snapshot.officeTasks) || [];
+    if (tasks.length) {
+      const lanes = {};
+      tasks.slice(0, 20).forEach((task) => {
+        const lane = TASK_LANE_MAP[task.category] || "General";
+        if (!lanes[lane]) lanes[lane] = [];
+        lanes[lane].push(task.title || "Task");
+      });
+      return Object.entries(lanes).map(([lane, items]) => ({
+        lane,
+        tone: lane === "Billing" ? "orange" : lane === "Scheduling" ? "blue" : "green",
+        items: items.slice(0, 5),
+      }));
+    }
+    const failed = Object.values((feed && feed.widgets) || {}).filter((w) => {
+      const s = String(w.status || "").toUpperCase();
+      return s === "FAILED" || s === "DEGRADED";
+    });
+    if (failed.length) {
+      return [
+        {
+          lane: "HAL priorities",
+          tone: "orange",
+          items: failed.slice(0, 6).map((w) => w.title || w.key),
+        },
+      ];
+    }
+    return [];
+  }
+
+  function officeTaskRows() {
+    const tasks = (snapshot && snapshot.officeTasks) || [];
+    return tasks.slice(0, 8).map((t) => [
+      fmt(t.dueHint || t.dueDate || "—"),
+      fmt(t.patientLabel || t.category || "—"),
+      t.title || "—",
+      fmt(t.assignedTo || t.status || "open"),
+    ]);
+  }
+
+  function taxPlan() {
+    if (typeof TaxEngine !== "undefined" && TaxEngine.buildTaxPlanFromSnapshot) {
+      return TaxEngine.buildTaxPlanFromSnapshot(snapshot, feed);
+    }
+    return null;
+  }
+
+  function fmtTaxMoney(value) {
+    if (typeof TaxEngine !== "undefined" && TaxEngine.formatMoney) return TaxEngine.formatMoney(value);
+    return fmt(value);
+  }
+
+  function taxKpis() {
+    const plan = taxPlan();
+    if (plan && plan.kpis && plan.kpis.length) return plan.kpis;
+    return [
+      { label: "Entity", value: "S corporation", tone: "info", hint: "Awaiting QuickBooks import" },
+      { label: "State", value: "Kansas", tone: "info", hint: "K-120S · K-40" },
+      { label: "MemoAI topics", value: "19", tone: "success", hint: "Governed tax memories" },
+      { label: "Filing posture", value: "CPA review", tone: "warning", hint: "Planning only" },
+    ];
+  }
+
+  function taxBridgeRows() {
+    const plan = taxPlan();
+    if (!plan || !plan.bridgeLines) return [];
+    return plan.bridgeLines.map((row) => [row.line, fmtTaxMoney(row.amount)]);
+  }
+
+  function taxCompScenarioRows() {
+    const plan = taxPlan();
+    if (!plan || !plan.compScenarios) return [];
+    return plan.compScenarios.map((s) => [
+      fmtTaxMoney(s.salary),
+      fmtTaxMoney(s.k1Ordinary),
+      fmtTaxMoney(s.employerFica),
+      s.selected ? `${s.note} · selected` : s.note,
+    ]);
+  }
+
+  function taxQuarterlyRows() {
+    const plan = taxPlan();
+    if (!plan || !plan.quarterlyEstimates) return [];
+    return plan.quarterlyEstimates.map((q) => [
+      q.period,
+      fmtTaxMoney(q.federal),
+      fmtTaxMoney(q.kansas),
+      q.due,
+      q.status,
+    ]);
+  }
+
+  function taxSplit() {
+    const plan = taxPlan();
+    return (plan && plan.taxSplit) || [];
+  }
+
+  function taxMemoCitations() {
+    const plan = taxPlan();
+    return (plan && plan.memoCitations) || [];
+  }
+
+  function taxDisclaimer() {
+    const plan = taxPlan();
+    return (plan && plan.disclaimer) || "Read-only planning — CPA review required before filing.";
+  }
+
+  function taxHasBookData() {
+    const plan = taxPlan();
+    return Boolean(plan && plan.hasBookData);
+  }
+
+  function taxFederalRows() {
+    return [
+      ["Form 1120-S", "U.S. S corporation return", "Mar 15 (or extension)", "File with IRS; issue Schedule K-1 to shareholders"],
+      ["Schedule K-1", "Shareholder income allocation", "With 1120-S", "Ordinary income, wages, distributions flow to owner 1040"],
+      ["Reasonable compensation", "Owner-dentist W-2 wages", "Payroll ongoing", "IRS scrutinizes low salary / high distributions"],
+      ["Payroll taxes", "FICA on officer wages", "Semi-weekly / quarterly", "S corp wages subject to FICA; distributions are not"],
+      ["Section 199A (QBI)", "Qualified business income deduction", "Owner 1040", "W-2 wages and UBIA limit may apply to dental S corp"],
+      ["Estimated tax (1040-ES)", "Owner tax on K-1 income", "Apr / Jun / Sep / Jan", "Pass-through income taxed on shareholder return"],
+      ["Section 179 / bonus", "Equipment expensing", "With return", "Dental equipment and technology may qualify—verify with CPA"],
+      ["Built-in gains / AAA", "Accumulated adjustments account", "With return", "Track AAA for distribution taxability"],
+    ];
+  }
+
+  function taxKansasRows() {
+    return [
+      ["Form K-120S", "Kansas S corporation return", "Apr 15 (or extension)", "State counterpart to federal 1120-S"],
+      ["K-1 (Kansas)", "Shareholder state allocation", "With K-120S", "Kansas ordinary income flows to owner Kansas return"],
+      ["Kansas individual (K-40)", "Owner return on K-1 income", "Apr 15 (or extension)", "Report Kansas share of S corp income"],
+      ["PTE tax election", "Pass-through entity tax", "Annual election", "Kansas allows PTE tax election—evaluate with CPA vs individual credit"],
+      ["Kansas estimated tax", "Owner quarterly estimates", "Apr / Jun / Sep / Jan", "If Kansas tax owed after withholding/credits"],
+      ["Withholding (if applicable)", "Non-resident shareholders", "Per KDOR rules", "Review if owners live outside Kansas"],
+      ["Sales / use tax", "Taxable goods", "Monthly / quarterly", "Most dental professional services exempt; taxable supplies may apply"],
+    ];
+  }
+
+  function taxCalendarRows() {
+    return [
+      ["Jan 31", "Federal", "W-2 / 1099 issuance to employees and vendors"],
+      ["Mar 15", "Federal", "Form 1120-S due (or file extension Form 7004)"],
+      ["Apr 15", "Federal / Kansas", "Owner 1040 and 1040-ES Q1; Kansas K-120S and K-40 if calendar year"],
+      ["Jun 15", "Federal / Kansas", "1040-ES Q2 estimated payment"],
+      ["Sep 15", "Federal / Kansas", "1040-ES Q3; extended 1120-S if on extension"],
+      ["Oct 15", "Federal", "Extended individual 1040 if on extension"],
+      ["Jan 15", "Federal / Kansas", "1040-ES Q4 estimated payment"],
+    ];
+  }
+
+  function taxMemoTopics() {
+    return [
+      { topic: "Federal 1120-S & K-1", scope: "Federal S corp return and shareholder allocations" },
+      { topic: "Reasonable compensation", scope: "Owner-dentist W-2 vs distributions" },
+      { topic: "Section 199A QBI", scope: "Pass-through deduction limits for dental practices" },
+      { topic: "Estimated taxes", scope: "1040-ES for shareholder K-1 income" },
+      { topic: "Kansas K-120S", scope: "Kansas S corporation return" },
+      { topic: "Kansas PTE tax", scope: "Pass-through entity tax election" },
+      { topic: "Kansas owner K-40", scope: "Individual flow-through reporting" },
+      { topic: "Equipment §179", scope: "Dental capex expensing review points" },
+      { topic: "NR2 Taxes page", scope: "HAL read-only tax guidance boundary" },
+    ];
+  }
+
+  function taxBookIncomeRows() {
+    const plRows = quickbooksPlRows();
+    if (!plRows.length) return [];
+    return plRows.slice(0, 6);
+  }
+
+  function taxEbitdaRows() {
+    return ebitdaRows().slice(0, 5);
+  }
+
+  function officeTimeline() {
+    const tasks = (snapshot && snapshot.officeTasks) || [];
+    return tasks.slice(0, 4).map((t, i) => ({
+      time: fmt(t.category || "Task"),
+      title: t.title || "—",
+      detail: t.description || t.notes || fmt(t.status),
+      active: i === 0,
+    }));
+  }
+
+  function escHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  return {
+    bind,
+    periodSubtitle,
+    financialKpis,
+    financialCompare,
+    financialWeeklyBars,
+    financialYtdBars,
+    productionTrendSeries,
+    payerDonut,
+    providerBars,
+    softdentGlanceStats,
+    softdentAgingBars,
+    softdentResponsibilityDonut,
+    practiceStats,
+    importHealthCards,
+    quickbooksPlRows,
+    quickbooksExpenseBars,
+    quickbooksExpenseDonut,
+    ebitdaRows,
+    arKpis,
+    arCollectionsChart,
+    arTopClaimsTable,
+    arFollowUpKanban,
+    claimsKpis,
+    claimsKanban,
+    firstClaim,
+    narrativeDraft,
+    documentsQueueRows,
+    firstDocument,
+    documentsPeriodStats,
+    journalRows,
+    libraryRows,
+    firstLibraryDoc,
+    officeKpis,
+    officeKanban,
+    officeTaskRows,
+    officeTimeline,
+    taxKpis,
+    taxPlan,
+    taxBridgeRows,
+    taxCompScenarioRows,
+    taxQuarterlyRows,
+    taxSplit,
+    taxMemoCitations,
+    taxDisclaimer,
+    taxHasBookData,
+    taxFederalRows,
+    taxKansasRows,
+    taxCalendarRows,
+    taxMemoTopics,
+    taxBookIncomeRows,
+    taxEbitdaRows,
+    fmt,
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = PageCanvasData;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.PageCanvasData = PageCanvasData;
+}
+if (typeof window !== "undefined") {
+  window.PageCanvasData = PageCanvasData;
+}

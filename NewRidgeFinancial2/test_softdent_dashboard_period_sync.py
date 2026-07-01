@@ -21,6 +21,12 @@ class SoftdentDashboardPeriodSyncTests(unittest.TestCase):
         )
         self.assertEqual(row["production"], 169318.9)
         self.assertFalse(row.get("collectionsReported", True))
+        self.assertNotIn("collectionsPending", row)
+
+    def test_provider_only_marks_collections_pending(self) -> None:
+        row = _build_period_row("2026-06", [{"_source": "provider_prod", "production": 169318.9}])
+        self.assertTrue(row.get("collectionsPending"))
+        self.assertNotIn("collectionsReported", row)
 
     def test_daysheet_collections_are_preserved(self) -> None:
         row = _build_period_row(

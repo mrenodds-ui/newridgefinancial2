@@ -130,6 +130,8 @@ def _merge_collections(existing: float | None, candidate: float | None, *, repor
 
 def _include_collections_from_source(source: dict[str, Any]) -> tuple[float | None, bool]:
     kind = str(source.get("_source") or "")
+    if source.get("collectionsPending") is True:
+        return None, False
     if source.get("collectionsReported") is False:
         return None, False
     if "collections" not in source:
@@ -149,19 +151,42 @@ def _prior_source_dict(prior: dict[str, Any]) -> dict[str, Any]:
     production = float(prior.get("production") or 0)
     collections = float(prior.get("collections") or 0)
     reported = prior.get("collectionsReported")
-    if reported is None and production > 0 and collections == 0:
-        reported = False
+    pending = prior.get("collectionsPending")
     payload = {
         "_source": "prior",
         "production": production,
         "insurance": float(prior.get("insurance") or 0),
         "patient": float(prior.get("patient") or 0),
     }
-    if reported is False:
+    if pending is True:
+        payload["collectionsPending"] = True
+    elif reported is False:
         payload["collectionsReported"] = False
-    else:
+        payload["collections"] = collections
+    elif "collections" in prior and prior.get("collections") not in (None, ""):
         payload["collections"] = collections
     return payload
+
+
+def _collections_source_kind(source: dict[str, Any]) -> str:
+    return str(source.get("_source") or "")
+
+
+def _explicit_collections_failure(sources: list[dict[str, Any]]) -> bool:
+    """True when a collections-bearing source reports missing/zero collections with production."""
+    for source in sources:
+        kind = _collections_source_kind(source)
+        if source.get("collectionsReported") is False:
+            return True
+        if kind not in {"daysheet", "bridge", "prior"}:
+            continue
+        if "collections" not in source:
+            continue
+        production = float(source.get("production") or 0)
+        collections = float(source.get("collections") or 0)
+        if production > 0 and collections <= 0:
+            return True
+    return False
 
 
 def _build_period_row(period: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
@@ -178,16 +203,23 @@ def _build_period_row(period: str, sources: list[dict[str, Any]]) -> dict[str, A
         patient = _merge_metric(patient, float(source.get("patient") or 0))
     if patient <= 0 and collections is not None and collections > 0:
         patient = max(0.0, collections - insurance)
-    row = {
+    row: dict[str, Any] = {
         "provider": PRACTICE_NAME,
         "period": period,
         "production": production,
-        "collections": collections if collections is not None else 0.0,
         "insurance": insurance,
         "patient": patient,
     }
+    if collections is not None:
+        row["collections"] = collections
     if production > 0 and not collections_reported:
-        row["collectionsReported"] = False
+        if _explicit_collections_failure(sources):
+            row["collectionsReported"] = False
+            if "collections" not in row:
+                row["collections"] = 0.0
+        else:
+            row["collectionsPending"] = True
+            row.pop("collections", None)
     return row
 
 
