@@ -1,0 +1,11 @@
+[
+  {
+    "provider": "New Ridge Family Dental",
+    "period": "2026-06",
+    "production": 120000,
+    "collections": 95000,
+    "insurance": 60000,
+    "patient": 35000,
+    "collectionsReported": true
+  }
+]

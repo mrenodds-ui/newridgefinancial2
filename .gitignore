@@ -69,6 +69,7 @@ frontend_vitest_quickbooks_route.txt
 softdent_claims_export.csv
 softdent_clinical_notes_data.json
 softdent_dashboard_data.json
+!NewRidgeFinancial2/ci-fixtures/**
 app/data/imports/softdent/softdent_dashboard_data.csv
 test_dashboard.zip
 test_dashboard.json
