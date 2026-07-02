@@ -83,6 +83,39 @@ class DirectFirstImportTests(unittest.TestCase):
         self.assertEqual(dashboard.get("readSource"), "direct")
         self.assertEqual(dashboard.get("rows")[0].get("provider"), "Dr. Test")
 
+    def test_cache_write_serializes_pipeline_claims_rows_not_source_path(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp) / "softdent"
+            cache_dir.mkdir()
+            daysheet = Path(tmp) / "daysheet.jsonl"
+            daysheet.write_text('{"normalized":{"report_date":"2026-05-28"}}\n', encoding="utf-8")
+            dataset = {
+                "sourceFile": "softdent_claims_export.csv",
+                "sourcePath": str(daysheet),
+                "modifiedAt": "2026-07-01T12:00:00+00:00",
+                "rows": [
+                    {
+                        "PatientName": "Jane Doe",
+                        "ClaimId": "DS-20260528-1",
+                        "ClaimStatus": "Pending Review",
+                        "ClaimAmount": "137.00",
+                    }
+                ],
+            }
+            with patch("import_loader.softdent_import_dir", return_value=cache_dir):
+                from import_loader import _write_direct_sections_to_cache
+
+                result = _write_direct_sections_to_cache({"softdent": {"claims": dataset}, "quickbooks": {}})
+            dest = cache_dir / "softdent_claims_export.csv"
+            self.assertIn(dest.name, result.get("written") or [])
+            text = dest.read_text(encoding="utf-8")
+            self.assertIn("ClaimId", text)
+            self.assertIn("DS-20260528-1", text)
+            self.assertNotIn("dataset_name", text)
+
 
 if __name__ == "__main__":
     unittest.main()

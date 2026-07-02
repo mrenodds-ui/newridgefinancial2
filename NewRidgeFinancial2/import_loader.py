@@ -26,6 +26,15 @@ from import_contract import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _repo_relative(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return path.name
+
+
 NR2_DATA_DIR = REPO_ROOT / "app_data" / "nr2"
 DEFAULT_SOFTDENT_IMPORT_REL = "app_data/nr2/document_inbox/softdent"
 DEFAULT_QUICKBOOKS_IMPORT_REL = "app_data/nr2/document_inbox/quickbooks"
@@ -92,21 +101,51 @@ def _read_tabular(path: Path) -> list[dict[str, Any]]:
 def _newest_existing(directory: Path, names: tuple[str, ...]) -> Path | None:
     if not directory.is_dir():
         return None
+    matches = _all_existing(directory, names)
+    if not matches:
+        return None
+    return matches[0]
+
+
+def _all_existing(directory: Path, names: tuple[str, ...]) -> list[Path]:
+    if not directory.is_dir():
+        return []
     matches: list[Path] = []
     name_set = {name.casefold() for name in names}
     for path in directory.iterdir():
         if path.is_file() and path.name.casefold() in name_set:
             matches.append(path)
-    if not matches:
-        return None
-    return max(matches, key=lambda item: item.stat().st_mtime)
+    return sorted(matches, key=lambda item: item.stat().st_mtime, reverse=True)
+
+
+def _rows_are_usable(rows: list[dict[str, Any]]) -> bool:
+    if not rows:
+        return False
+    for row in rows[:5]:
+        if not isinstance(row, dict):
+            return False
+        for key in row.keys():
+            text = str(key)
+            if text.startswith("{") or "dataset_name" in text:
+                return False
+    return True
 
 
 def _load_dataset(directory: Path, names: tuple[str, ...]) -> dict[str, Any] | None:
-    path = _newest_existing(directory, names)
-    if path is None:
+    paths = _all_existing(directory, names)
+    if not paths:
         return None
-    rows = _read_tabular(path)
+    path: Path | None = None
+    rows: list[dict[str, Any]] = []
+    for candidate in paths:
+        candidate_rows = _read_tabular(candidate)
+        if _rows_are_usable(candidate_rows):
+            path = candidate
+            rows = candidate_rows
+            break
+    if path is None:
+        path = paths[0]
+        rows = _read_tabular(path)
     file_sha: str | None = None
     try:
         from import_cache_ttl import sha256_file
@@ -192,14 +231,16 @@ def _write_direct_sections_to_cache(sections: dict[str, Any]) -> dict[str, Any]:
         source_file = str(dataset.get("sourceFile") or "").strip()
         if source_path:
             src = Path(source_path)
-            if src.is_file():
-                dest = directory / (source_file or src.name)
+            dest_name = source_file or src.name
+            dest = directory / dest_name
+            same_export = src.is_file() and src.name == dest_name
+            if same_export:
                 try:
                     if not dest.is_file() or src.stat().st_mtime > dest.stat().st_mtime:
                         import shutil
 
                         shutil.copy2(src, dest)
-                        written.append(str(dest.relative_to(REPO_ROOT)))
+                        written.append(_repo_relative(dest))
                 except OSError as exc:
                     errors.append(f"{dest.name}: {exc}")
                 return
@@ -213,7 +254,7 @@ def _write_direct_sections_to_cache(sections: dict[str, Any]) -> dict[str, Any]:
                     "sha256": dataset.get("sha256"),
                 }
                 dest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-                written.append(str(dest.relative_to(REPO_ROOT)))
+                written.append(_repo_relative(dest))
             except OSError as exc:
                 errors.append(f"{dest.name}: {exc}")
         elif source_file.endswith(".csv") and _dataset_has_rows(dataset):
@@ -225,7 +266,7 @@ def _write_direct_sections_to_cache(sections: dict[str, Any]) -> dict[str, Any]:
                         writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
                         writer.writeheader()
                         writer.writerows(rows)
-                    written.append(str(dest.relative_to(REPO_ROOT)))
+                    written.append(_repo_relative(dest))
             except OSError as exc:
                 errors.append(f"{dest.name}: {exc}")
 

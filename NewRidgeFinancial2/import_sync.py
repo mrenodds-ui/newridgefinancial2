@@ -527,10 +527,20 @@ def _purge_sample_cache(destination: Path) -> list[str]:
     claims = destination / "softdent_claims_export.csv"
     if claims.is_file():
         try:
-            rows = list(csv.DictReader(claims.open("r", encoding="utf-8-sig", newline="")))
-            if _is_sample_claims(rows):
+            head = claims.read_text(encoding="utf-8-sig", errors="ignore")[:256].lstrip()
+            if head.startswith("{"):
                 claims.unlink()
                 removed.append(claims.name)
+            else:
+                rows = list(csv.DictReader(claims.open("r", encoding="utf-8-sig", newline="")))
+                if _is_sample_claims(rows):
+                    claims.unlink()
+                    removed.append(claims.name)
+                elif rows and not any(
+                    str(row.get("ClaimId") or row.get("claimId") or row.get("id") or "").strip() for row in rows[:10]
+                ):
+                    claims.unlink()
+                    removed.append(claims.name)
         except Exception:
             pass
     clinical = destination / "softdent_clinical_notes_data.json"
