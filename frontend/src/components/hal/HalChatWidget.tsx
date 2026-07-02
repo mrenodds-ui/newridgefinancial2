@@ -27,7 +27,7 @@ function HalChatWidgetPanel() {
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="hal-chat-widget" data-testid="hal-chat-widget">
         {open ? (
-          <section className="hal-chat-panel" aria-label="HAL assistant chat" data-testid="hal-chat-panel">
+          <section className="hal-chat-panel" id="hal-chat-panel-region" aria-label="HAL assistant chat" data-testid="hal-chat-panel">
             <HalChatPanelHeader onMinimize={() => setOpen(false)} />
             <HalChatThread />
           </section>
