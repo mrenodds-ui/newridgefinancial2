@@ -708,7 +708,7 @@ async function main() {
   const widgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show manager dashboard widgets");
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
-  assert(Object.keys(feed.widgets).length === 23, "widget feed must build 23 operational widgets");
+  assert(Object.keys(feed.widgets).length === 24, "widget feed must build 24 operational widgets");
   const masterChart = HalWidgetMasterChart.all();
   assert(masterChart.length === HalSkills.WIDGET_ORDER.length, "widget master chart must cover every HAL widget");
   assert(masterChart.every((row) => row.page && row.purpose && row.expectedData.length && row.readyWhen), "widget master chart rows must include page, purpose, expected data, and ready criteria");

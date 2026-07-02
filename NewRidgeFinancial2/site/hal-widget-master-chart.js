@@ -180,6 +180,13 @@ const HalWidgetMasterChart = (function () {
       readyWhen: "The local document library has indexed records.",
       primarySystem: "Local documents",
     },
+    halImportHealth: {
+      title: "Import & Source Health",
+      purpose: "Summarize import diagnostics across SoftDent and QuickBooks dataset contracts.",
+      expectedData: ["Import bundle diagnostics", "Dataset connected/partial/missing counts"],
+      readyWhen: "Import diagnostics are available and no blocking datasets are missing or stale.",
+      primarySystem: "Import cache",
+    },
   };
 
   function widgetOrder() {

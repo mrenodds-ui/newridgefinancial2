@@ -66,11 +66,13 @@ const HalPageSchema = (function () {
       icon: { type: "nav", key: "office-manager" },
       widgets: [
         { key: "documentIntakeQueue", nav: "documents" },
+        { key: "documentPreview", nav: "documents" },
         { key: "periodCloseAndPosting", nav: "documents" },
         { key: "journalPostingQueue", nav: "documents" },
         { key: "accountsPayableAutomation", nav: "documents" },
         { key: "narrativeWorkflow", nav: "narratives" },
         { key: "documentLibrary", nav: "library" },
+        { key: "halImportHealth", nav: "hal" },
         { key: "officeManagerPriorities", nav: "office-manager" },
         { key: "officeManagerSurfaces", nav: "office-manager" },
       ],

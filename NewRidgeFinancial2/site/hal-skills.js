@@ -1300,6 +1300,7 @@ const HalSkills = (function () {
     documentLibrary: "library",
     officeManagerPriorities: "office-manager",
     officeManagerSurfaces: "office-manager",
+    halImportHealth: "hal",
     halCommandPalette: "hal",
   };
 
@@ -1327,6 +1328,7 @@ const HalSkills = (function () {
     "caseAcceptance",
     "narrativeWorkflow",
     "documentLibrary",
+    "halImportHealth",
   ];
 
   const WIDGET_FILL_REQUIREMENTS = {
@@ -1353,6 +1355,7 @@ const HalSkills = (function () {
     caseAcceptance: ["SoftDent case acceptance export or derived treatment plan summary"],
     narrativeWorkflow: ["Local narrative drafts or claim source facts from SoftDent claims"],
     documentLibrary: ["Local library documents or indexed document metadata"],
+    halImportHealth: ["Import bundle diagnostics", "SoftDent and QuickBooks dataset contracts"],
   };
 
   function widgetContractApi() {
@@ -1741,6 +1744,42 @@ const HalSkills = (function () {
       issues,
     };
     return feed;
+  }
+
+  function importHealthWidgetStatus(diagnostics) {
+    const datasets = (diagnostics && diagnostics.datasets) || [];
+    if (!datasets.length) return "FAILED";
+    const blocking = datasets.filter((row) => {
+      const severity = String(row.severity || "warning");
+      if (severity === "optional") return false;
+      const status = String(row.status || "");
+      return status === "missing" || status === "stale" || (status !== "connected" && severity === "critical");
+    });
+    if (!blocking.length) return "SUCCESS";
+    return datasets.some((row) => row.status === "connected") ? "DEGRADED" : "FAILED";
+  }
+
+  function buildImportHealthWidget(bundle) {
+    const diagnostics = (bundle && bundle.diagnostics) || null;
+    const summary = (diagnostics && diagnostics.summary) || {};
+    const datasets = (diagnostics && diagnostics.datasets) || [];
+    const optionalMissing = datasets.filter(
+      (row) => row.status === "missing" && String(row.severity || "") === "optional",
+    ).length;
+    return {
+      key: "halImportHealth",
+      title: "Import & Source Health",
+      status: importHealthWidgetStatus(diagnostics),
+      summary:
+        "Import-mode dataset health across SoftDent and QuickBooks contracts. Optional exports do not block a healthy import posture.",
+      navTarget: WIDGET_NAV.halImportHealth,
+      metrics: {
+        connectedDatasets: metricValue(summary.connected),
+        partialDatasets: metricValue(summary.partial),
+        missingDatasets: metricValue(summary.missing),
+        optionalMissing: metricValue(optionalMissing || null),
+      },
+    };
   }
 
   function buildWidgetFeed(snapshot) {
@@ -2228,6 +2267,7 @@ const HalSkills = (function () {
           topDocument: metricValue(firstItem(library.top)?.title),
         },
       },
+      halImportHealth: buildImportHealthWidget(snap.importBundle),
     };
 
     const feed = {
@@ -2236,6 +2276,7 @@ const HalSkills = (function () {
       runId: uid("run"),
       generatedAt: snap.gatheredAt || new Date().toISOString(),
       widgets,
+      importMode: (snap.importBundle && snap.importBundle.importMode) || "document-inbox-cache",
       sources: {
         quickbooks: { lastStatus: qbStatus, origin: "local" },
         softdent: { lastStatus: softdentStatus, origin: "local" },
