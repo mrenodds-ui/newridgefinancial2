@@ -40,7 +40,8 @@ Consolidated from 12 sub-slice eval reports (`eval_section*_120b_70b_report.md`,
 
 ### Eval infrastructure
 - 12 sub-slice focus bundles and dual-model batch runner (`scripts/run_nr2_dual_model_micro_eval.ps1`)
-- Eval artifacts gitignored (`eval_section*.md`, `235b_*`)
+- Gemma 2 HAL programming review (`scripts/run_gemma2_hal_program_eval.ps1`, profiles `gemma2_hal_9b` / `gemma2_hal_27b`)
+- Eval artifacts gitignored (`eval_section*.md`, `235b_*`, `gemma2_hal_program_*`)
 
 ### CI and GitHub
 - **Validate NR2** runs on every push/PR to `main` (`.github/workflows/validate-nr2.yml`)

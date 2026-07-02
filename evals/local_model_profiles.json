@@ -94,6 +94,39 @@
       "seed": 37,
       "strip_thinking_tags": true,
       "system_prompt_path": "evals/prompts/qwen_second_opinion_system.txt"
+    },
+    "gemma2_hal_9b": {
+      "role": "hal_program_reviewer",
+      "label": "Gemma 2 9B HAL Programming Reviewer",
+      "model": "hal-gemma2:9b",
+      "gguf_quant": "Q4_K_M",
+      "ollama_pull": "ollama pull gemma2:9b && ollama create hal-gemma2:9b -f NewRidgeFinancial2/model-automation/Modelfile.gemma2-hal-eval-9b",
+      "timeout_seconds": 300,
+      "keep_alive": "5m",
+      "temperature": 0.1,
+      "top_p": 0.95,
+      "num_ctx": 8192,
+      "num_gpu": 999,
+      "seed": 41,
+      "strip_thinking_tags": false,
+      "system_prompt_path": "evals/prompts/gemma2_hal_program_review_system.txt"
+    },
+    "gemma2_hal_27b": {
+      "role": "hal_program_reviewer",
+      "label": "Gemma 2 27B HAL Programming Reviewer",
+      "model": "hal-gemma2:27b",
+      "gguf_quant": "Q4_K_S",
+      "ollama_pull": "ollama pull gemma2:27b && ollama create hal-gemma2:27b -f NewRidgeFinancial2/model-automation/Modelfile.gemma2-hal-eval-27b",
+      "timeout_seconds": 600,
+      "keep_alive": "0",
+      "temperature": 0.1,
+      "top_p": 0.95,
+      "num_ctx": 8192,
+      "num_gpu": 999,
+      "seed": 43,
+      "strip_thinking_tags": false,
+      "system_prompt_path": "evals/prompts/gemma2_hal_program_review_system.txt",
+      "notes": "Unload hal-chat:8b and hal-helper:14b before loading on 16 GB VRAM."
     }
   }
 }
