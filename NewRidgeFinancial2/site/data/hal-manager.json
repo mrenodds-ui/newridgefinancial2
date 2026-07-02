@@ -621,8 +621,16 @@
       "Are you connected to a model?": "model lanes"
     },
     "firewallExamples": [
-      { "text": "Submit the denied claim", "expected": "blocked" },
-      { "text": "Open claims workbench", "expected": "allowed" }
+      {
+        "text": "Submit the denied claim",
+        "expected": "blocked",
+        "reason": "External payer submission is a staff action outside HAL; firewall blocks all submit/send paths."
+      },
+      {
+        "text": "Open claims workbench",
+        "expected": "allowed",
+        "reason": "Local navigation and read-only review inside NR2."
+      }
     ],
     "sessionRoutes": {
       "Start claims review": "session: start:claims-review",

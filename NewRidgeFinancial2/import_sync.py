@@ -452,12 +452,79 @@ def _sync_softdent_pipeline_exports(destination: Path) -> dict[str, Any]:
         written.extend(practice_sync.get("written") or [])
     except Exception:
         pass
+    written.extend(_sync_operational_softdent_exports(destination))
     return {
         "written": written,
         "collectionsDiagnostic": collections_diagnostic,
         "practiceSync": practice_sync,
         "periodSync": period_sync,
     }
+
+
+def _recover_expense_categories_csv(destination: Path) -> list[str]:
+    """Convert a JSON QuickBooks probe accidentally stored as expense_categories.csv."""
+    categories_path = destination / "quickbooks_expense_categories.csv"
+    if not categories_path.is_file():
+        return []
+    raw = categories_path.read_text(encoding="utf-8-sig").lstrip()
+    if not raw.startswith("{"):
+        return []
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    categories = payload.get("top_expense_categories")
+    if not isinstance(categories, list) or not categories:
+        return []
+    category_rows = [
+        {
+            "Category": str(item.get("category") or ""),
+            "Amount": item.get("amount"),
+            "Period": str(item.get("period") or payload.get("period") or ""),
+        }
+        for item in categories
+        if isinstance(item, dict) and item.get("amount") not in (None, "")
+    ]
+    if not category_rows:
+        return []
+    has_period = any(str(row.get("Period") or "").strip() for row in category_rows)
+    if not has_period:
+        category_rows = [{**row, "Scope": "YTD"} for row in category_rows]
+        headers = ["Category", "Amount", "Scope"]
+    else:
+        headers = ["Category", "Amount", "Period"]
+    _write_csv(
+        categories_path,
+        [{key: row.get(key, "") for key in headers} for row in category_rows],
+        headers,
+    )
+    return [categories_path.name]
+
+
+def _sync_operational_softdent_exports(destination: Path) -> list[str]:
+    """Refresh claims/clinical notes from the live daysheet pipeline when exports are stale."""
+    written: list[str] = []
+    try:
+        from softdent_operational_pipeline import build_daysheet_claims_dataset, build_daysheet_clinical_dataset
+
+        claims = build_daysheet_claims_dataset()
+        claim_rows = (claims or {}).get("rows") or []
+        if claim_rows and not _is_sample_claims(claim_rows):
+            claims_path = destination / "softdent_claims_export.csv"
+            fieldnames = list(claim_rows[0].keys())
+            _write_csv(claims_path, claim_rows, fieldnames)
+            _write_csv_json_sidecar(claims_path)
+            written.append(claims_path.name)
+
+        clinical = build_daysheet_clinical_dataset()
+        clinical_rows = (clinical or {}).get("rows") or []
+        if clinical_rows and not _is_sample_clinical(clinical_rows):
+            clinical_path = destination / "softdent_clinical_notes_data.json"
+            _write_json(clinical_path, {"rows": clinical_rows})
+            written.append(clinical_path.name)
+    except Exception:
+        pass
+    return written
 
 
 def _sync_quickbooks_sdk_summary(destination: Path) -> list[str]:
@@ -472,9 +539,9 @@ def _sync_quickbooks_sdk_summary(destination: Path) -> list[str]:
         if isinstance(read, dict):
             payload = read
     if not isinstance(payload, dict):
-        return []
+        return _recover_expense_categories_csv(destination)
     if str(payload.get("status") or "").upper() != "QUICKBOOKS_SDK_REPORT_DATA_AVAILABLE":
-        return []
+        return _recover_expense_categories_csv(destination)
     revenue = payload.get("total_income")
     expenses = payload.get("total_expenses")
     if revenue in (None, "") or expenses in (None, ""):
@@ -729,6 +796,9 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
         result["quickbooks"]["generated"].extend(monthly_result["written"])
     else:
         result["quickbooks"]["generated"].extend(_sync_quickbooks_sdk_summary(quickbooks_dest))
+    recovered_categories = _recover_expense_categories_csv(quickbooks_dest)
+    if recovered_categories:
+        result["quickbooks"]["generated"].extend(recovered_categories)
 
     qb_periods = list(monthly_result.get("periods") or [])
     sd_periods = relevant_period_labels()
@@ -778,10 +848,11 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
         }
         result["diagnostics"] = evaluate_bundle(
             bundle_for_diag,
-            deep=True,
+            deep=False,
             previous_checksums=previous_checksums,
         )
-        result["upstreamHealth"] = check_upstream_health()
+        if os.environ.get("NR2_IMPORT_SYNC_UPSTREAM_HEALTH", "0").strip().lower() in {"1", "true", "yes", "on"}:
+            result["upstreamHealth"] = check_upstream_health()
         dashboard_rows = (bundle_for_diag.get("softdent") or {}).get("dashboard")
         if isinstance(dashboard_rows, dict):
             rows = dashboard_rows.get("rows") or []

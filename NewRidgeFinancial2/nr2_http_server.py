@@ -44,6 +44,18 @@ class NR2BottleServer(BottleServer):
                 return json.dumps(server.js_callback[body["uid"]](body))
             logger.error("JS callback function is not set for window %s", body["uid"])
 
+        @app.get("/api/import-bundle")
+        def import_bundle():
+            bottle.response.content_type = "application/json"
+            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            try:
+                from import_loader import load_import_bundle
+
+                return json.dumps(load_import_bundle(sync=False, deep=False))
+            except Exception as exc:
+                bottle.response.status = 500
+                return json.dumps({"error": str(exc)})
+
         @app.get("/")
         def index():
             if not server.root_path:

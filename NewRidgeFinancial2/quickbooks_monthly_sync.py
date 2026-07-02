@@ -278,6 +278,24 @@ def _should_fetch_sdk_monthly(existing_months: int) -> bool:
         return False
     if mode in {"1", "true", "yes", "on"}:
         return True
+    if existing_months >= 2:
+        return False
+    for candidate in (
+        _env_path("NR2_QB_PROBE_PATH"),
+        REPO_ROOT / "app_data" / "nr2" / "document_inbox" / "quickbooks" / "quickbooks_sdk_report_probe_summary.json",
+        QB_SDK_SUMMARY,
+    ):
+        if not candidate or not candidate.is_file():
+            continue
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            status = str(payload.get("status") or "").upper()
+            if status and status != "QUICKBOOKS_SDK_REPORT_DATA_AVAILABLE":
+                return False
+            break
     return existing_months < 2
 
 

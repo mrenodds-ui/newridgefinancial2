@@ -8,41 +8,58 @@ Re-run:
 powershell -ExecutionPolicy Bypass -File .\scripts\run_gemma2_hal_program_eval.ps1 -Both
 ```
 
-Apply the same evidence bar as the dual-model audit: **file + line or validator assertion required** before changing production code.
+## Evaluation run (latest)
 
-## 9B report triage
+| Check | Result |
+|-------|--------|
+| `validate-pages.mjs` | Passed |
+| `validate-hal.mjs` | 26 suites passed |
+| NR2 Python tests (12 modules, 46 tests) | Passed |
+| Gemma 2 9B + 27B HAL review | Completed (12:20–12:27 UTC) |
 
-| Finding | Verdict | Evidence |
-|---------|---------|----------|
-| `halAutoRefreshCalled` not reset | **False positive** | Symbol exists only in `validate-hal.mjs` (test mock, lines 1295–1318). Not in `NewRidgeFinancial2/site/`. Model confused validator harness with production code. |
-| Globals `DesktopBridge` / `ImportCoordinator` | **By design** | Intentional pywebview desktop bridge in `hal-proactive.js` with `Services` / `ImportCoordinator` / `DesktopBridge` fallbacks. Standard NR2 architecture. |
-| Generic `assert` messages in validators | **Low priority** | Many asserts already include descriptive messages (e.g. lines 804–805). Some short labels remain (`"toggle check"`) — cosmetic only. |
+## Original Gemma findings (9B + 27B) — triage
 
-## 27B report triage
+| Finding | Verdict |
+|---------|---------|
+| `halAutoRefreshCalled` not reset | **False positive** — test-only mock in `validate-hal.mjs` |
+| `buildWidgetFeed` A/R nulling | **False positive** — handled by `enforceReceivablesArPolicy` |
+| Globals `DesktopBridge` / `ImportCoordinator` | **By design** |
+| Generic assert brittleness | **Partial** — structured message checks added where actionable |
 
-| Finding | Verdict | Evidence |
-|---------|---------|----------|
-| `buildWidgetFeed` fails to null `patientBalanceTotal` when A/R unavailable | **False positive (widget feed)** | `buildWidgetFeed` ends with `enforceReceivablesArPolicy(feed, arAvailable)` which nulls both `accountsReceivableTotal` and `patientBalanceTotal` (`hal-skills.js` 2384–2404). Covered by `validate-hal.mjs` 801–806. |
-| Missing `HalProactive` unit tests | **Overstated** | `validate-hal.mjs` 1286–1316 exercises `buildProactiveBriefing`, `runAutonomousPlacement`, routing, and refresh behavior. Not a dedicated test file, but not untested. |
-| `halAutoRefreshCalled` not reset in `runAutonomousPlacement` | **False positive** | Same as 9B — test-only variable in validator, not production state. |
+## Gemma round 2 (post A/R fixes) — triage
 
-## Related real issue (not in Gemma reports, found during verification)
+| Finding | Verdict | Action |
+|---------|---------|--------|
+| Assert/schema validation (9B) | Low priority | Structured issue-message asserts for quality validation |
+| Firewall string matching (9B) | Docs | Added `reason` to `hal-manager.json` `firewallExamples` |
+| hal-models.json comments (9B) | Docs | Added `note` on `deep235b` lane |
+| Missing `quality` metric (27B) | **Fixed** | `applyAccountingExcelCommitValidation` + widget degrade |
+| Regex `overallPass failed` (27B) | **Fixed** | Exact message constants + structured assert |
+| deep235b / firewallExamples docs (27B) | **Fixed** | See hal-models.json / hal-manager.json |
 
-| Issue | Verdict | Status |
-|-------|---------|--------|
-| SoftDent page canvas may show unverified A/R via `sd.hero` fallback | **Fixed** | `softdentGlanceStats()` uses widget-feed `patientBalanceTotal` only. |
-| Stale `dashboards.ar.kpis` / SoftDent aging / responsibility charts bypass widget feed | **Fixed** | `arKpis()`, `softdentAgingBars()`, `softdentResponsibilityDonut()` require verified-A/R widget `SUCCESS`. |
-| HAL program snapshot / source guide show stale `sd.hero` or `ar.kpis` | **Fixed** | `summarizeProgramSnapshot()` and `formatSourceSystemGuide()` gate on verified A/R. |
-| A/R claims table shows per-claim `outstanding` without verified export | **Fixed** | `arTopClaimsTable()` masks outstanding unless `arOutstandingClaims` widget is `SUCCESS`. |
-| A/R follow-up kanban / collections chart show claim or trend amounts without verified export | **Fixed** | `arFollowUpKanban()` omits claim amounts; `arCollectionsChart()` requires `arAgingAndCollections` `SUCCESS`. |
+## Code fixes applied
 
-## Recommended next steps
+### A/R honesty (page canvas + HAL summaries)
 
-1. **Do not fix** `halAutoRefreshCalled` or refactor globals based on Gemma output alone.
-2. ~~**Optional fix:** Remove `sd.hero` fallback in `softdentGlanceStats()`~~ **Done.**
-3. ~~**Optional test:** Add `validate-hal.mjs` assertion for page canvas A/R honesty~~ **Done.**
+- `softdentGlanceStats`, `arKpis`, `softdentAgingBars`, `softdentResponsibilityDonut`
+- `arTopClaimsTable`, `arFollowUpKanban`, `arCollectionsChart`
+- `summarizeProgramSnapshot`, `formatSourceSystemGuide`
+
+### Quality score validation (Gemma 27B)
+
+- `hal-skills.js`: missing `financial.quality` → commit issue + `DEGRADED` overview widget
+- `validate-hal.mjs`: regression tests for missing quality and exact `overallPass` message
+
+### Import loader (pytest failure)
+
+- `import_loader.py`: `_repo_relative()` — safe path recording when cache dir is outside repo root (temp test dirs)
+
+### Documentation (Gemma low priority)
+
+- `hal-manager.json`: firewall example `reason` fields
+- `hal-models.json`: `deep235b` lane `note`
 
 ## Do not auto-fix from model output
 
-- Architecture refactors (remove globals, rewrite agent loop) without staff sign-off.
-- Findings that cite symbols or files not present in the repo snapshot.
+- Architecture refactors without staff sign-off
+- Findings citing symbols not present in the repo snapshot

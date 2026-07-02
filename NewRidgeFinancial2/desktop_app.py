@@ -401,6 +401,14 @@ def main() -> int:
         sync_accounting_documents(api.store)
     except Exception as exc:
         print(f"Startup document sync failed: {exc}", file=sys.stderr)
+
+    def _startup_import_sync() -> None:
+        try:
+            api._run_import_sync()
+        except Exception as exc:
+            print(f"Startup import sync failed: {exc}", file=sys.stderr)
+
+    threading.Thread(target=_startup_import_sync, daemon=True).start()
     WEBVIEW_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
     default_port = 8765
     http_port = int(os.environ.get("NR2_HTTP_PORT", str(default_port)))

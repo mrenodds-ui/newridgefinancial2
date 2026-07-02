@@ -786,10 +786,31 @@ async function main() {
     },
   });
   assert(
-    (failedQualityFeed.accountingExcelValidation?.issues || []).some((issue) =>
-      /overallPass failed/i.test(String(issue.message || "")),
+    (failedQualityFeed.accountingExcelValidation?.issues || []).some(
+      (issue) =>
+        issue.widgetKey === "practiceFinancialOverview" &&
+        issue.message === "Financial data quality overallPass failed — resolve import freshness, collections, period alignment, or QuickBooks reconcile before period close.",
     ),
     "overallPass false must surface in widget commit validation",
+  );
+
+  const missingQualityFeed = HalSkills.buildWidgetFeed({
+    dashboards: {
+      financial: { dataSource: "import", productionMtd: { value: 100000 } },
+      softdent: { dataSource: "import", production: 100000, collections: 80000 },
+      quickbooks: { dataSource: "import", revenue: 50000, expenses: 30000 },
+      practice: { dataSource: "empty" },
+    },
+  });
+  assert(
+    missingQualityFeed.widgets.practiceFinancialOverview.status === "DEGRADED",
+    "missing financial quality score must degrade practice financial overview widget",
+  );
+  assert(
+    (missingQualityFeed.accountingExcelValidation?.issues || []).some(
+      (issue) => issue.message === "Financial dashboard loaded without a quality score — run import diagnostics before period close.",
+    ),
+    "missing financial quality score must surface in widget commit validation",
   );
 
   const contractRoute = HalCore.routeHalCommand(halData, halModels, pages, "what does the financial widget need?");

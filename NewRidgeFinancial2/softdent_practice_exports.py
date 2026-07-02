@@ -65,21 +65,49 @@ def _aggregate_treatment_plans(conn: sqlite3.Connection, periods: list[str]) -> 
         if not _table_exists(conn, table):
             continue
         columns = _table_columns(conn, table)
-        period_col = next((name for name in ("year_month", "period", "month") if name in columns), None)
-        presented_col = next((name for name in ("presented", "plans_presented", "tx_presented") if name in columns), None)
-        accepted_col = next((name for name in ("accepted", "plans_accepted", "tx_accepted") if name in columns), None)
+        period_col = next(
+            (name for name in ("year_month", "period", "month", "report_date") if name in columns),
+            None,
+        )
+        presented_col = next(
+            (
+                name
+                for name in (
+                    "presented",
+                    "plans_presented",
+                    "tx_presented",
+                    "presented_count",
+                    "presented_value",
+                )
+                if name in columns
+            ),
+            None,
+        )
+        accepted_col = next(
+            (
+                name
+                for name in ("accepted", "plans_accepted", "tx_accepted", "accepted_count", "accepted_value")
+                if name in columns
+            ),
+            None,
+        )
         amount_col = next((name for name in ("amount", "presented_value", "total_amount") if name in columns), None)
         if not presented_col and not accepted_col:
             continue
         where = ""
         params: list[Any] = []
+        group_by = period_col
+        period_select = f"{period_col} AS period"
         if period_col and periods:
             placeholders = ",".join("?" for _ in periods)
-            where = f" WHERE {period_col} IN ({placeholders})"
+            if period_col == "report_date":
+                period_select = f"substr({period_col}, 1, 7) AS period"
+                where = f" WHERE substr({period_col}, 1, 7) IN ({placeholders})"
+                group_by = "substr(report_date, 1, 7)"
+            else:
+                where = f" WHERE {period_col} IN ({placeholders})"
             params = list(periods)
-        select_parts = []
-        if period_col:
-            select_parts.append(f"{period_col} AS period")
+        select_parts = [period_select] if period_col else []
         if presented_col:
             select_parts.append(f"SUM(COALESCE({presented_col}, 0)) AS presented")
         if accepted_col:
@@ -88,7 +116,7 @@ def _aggregate_treatment_plans(conn: sqlite3.Connection, periods: list[str]) -> 
             select_parts.append(f"SUM(COALESCE({amount_col}, 0)) AS amount")
         cur = conn.cursor()
         cur.execute(
-            f"SELECT {', '.join(select_parts)} FROM {table}{where}" + (f" GROUP BY {period_col}" if period_col else ""),
+            f"SELECT {', '.join(select_parts)} FROM {table}{where}" + (f" GROUP BY {group_by}" if group_by else ""),
             params,
         )
         rows: list[dict[str, Any]] = []

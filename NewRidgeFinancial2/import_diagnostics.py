@@ -83,14 +83,36 @@ def _collector_hint(manifest: dict[str, Any], contract: dict[str, Any]) -> str |
     return None
 
 
+def _upstream_scan_max_depth() -> int:
+    raw = os.environ.get("NR2_UPSTREAM_SCAN_MAX_DEPTH", "4").strip()
+    try:
+        return max(0, min(int(raw), 12))
+    except ValueError:
+        return 4
+
+
+def _iter_upstream_files(root: Path, *, max_depth: int):
+    if not root.is_dir():
+        return
+    root_depth = len(root.parts)
+    for dirpath, dirnames, filenames in os.walk(root):
+        depth = len(Path(dirpath).parts) - root_depth
+        if depth > max_depth:
+            dirnames.clear()
+            continue
+        for filename in filenames:
+            yield Path(dirpath) / filename
+
+
 def _find_newest_upstream(roots: list[Path], filenames: tuple[str, ...]) -> dict[str, Any] | None:
     name_set = {name.casefold() for name in filenames}
     best: Path | None = None
+    max_depth = _upstream_scan_max_depth()
     for root in roots:
         if not root.is_dir():
             continue
-        for path in root.rglob("*"):
-            if path.is_file() and path.name.casefold() in name_set:
+        for path in _iter_upstream_files(root, max_depth=max_depth):
+            if path.name.casefold() in name_set:
                 if best is None or path.stat().st_mtime > best.stat().st_mtime:
                     best = path
     if best is None:

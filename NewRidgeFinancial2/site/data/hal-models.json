@@ -362,6 +362,7 @@
       "name": "235B deep reasoning lane",
       "model": "qwen3:235b",
       "role": "Deep reasoning for complex review (local, heavy)",
+      "note": "On-demand only. Uses local cached imports for cross-page synthesis; no external actions or writeback.",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,

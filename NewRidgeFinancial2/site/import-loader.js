@@ -260,9 +260,43 @@ const ImportLoader = (function () {
     return [];
   }
 
+  function rowsFromJsonProbe(payload) {
+    if (!payload || typeof payload !== "object") return [];
+    const categories = payload.top_expense_categories;
+    if (!Array.isArray(categories)) return [];
+    const period = String(payload.period || payload.period_end || "").trim();
+    return categories
+      .filter((item) => item && typeof item === "object" && item.amount != null && item.amount !== "")
+      .map((item) => {
+        const row = {
+          Category: String(item.category || ""),
+          Amount: item.amount,
+        };
+        const itemPeriod = String(item.period || period || "").trim();
+        if (itemPeriod) row.Period = itemPeriod;
+        else row.Scope = "YTD";
+        return row;
+      });
+  }
+
   function readTabularFile(path, fs) {
     const raw = fs.readFileSync(path, "utf8");
-    if (path.toLowerCase().endsWith(".json")) return extractJsonRows(JSON.parse(raw));
+    if (path.toLowerCase().endsWith(".json")) {
+      const payload = JSON.parse(raw);
+      const probeRows = rowsFromJsonProbe(payload);
+      if (probeRows.length) return probeRows;
+      return extractJsonRows(payload);
+    }
+    const trimmed = raw.trimStart();
+    if (trimmed.startsWith("{")) {
+      try {
+        const payload = JSON.parse(trimmed);
+        const probeRows = rowsFromJsonProbe(payload);
+        if (probeRows.length) return probeRows;
+      } catch {
+        /* fall through to CSV */
+      }
+    }
     const sidecar = path.replace(/\.csv$/i, ".json");
     if (sidecar !== path && fs.existsSync(sidecar)) {
       try {
@@ -331,7 +365,21 @@ const ImportLoader = (function () {
     });
   }
 
-  // Browser file:// without pywebview returns null — use the desktop bridge or Node (NR2_LOAD_IMPORTS=1).
+  // Browser file:// without pywebview returns null — use the desktop bridge, loopback API, or Node (NR2_LOAD_IMPORTS=1).
+  async function loadBundleFromHttpApi() {
+    if (typeof window === "undefined" || typeof fetch !== "function") return null;
+    const host = String(window.location.hostname || "").toLowerCase();
+    if (host !== "127.0.0.1" && host !== "localhost") return null;
+    try {
+      const response = await fetch("/api/import-bundle", { cache: "no-store" });
+      if (!response.ok) return null;
+      const payload = await response.json();
+      return payload && typeof payload === "object" ? payload : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function loadBundle(force) {
     const br = bridge();
     let bundle = null;
@@ -339,6 +387,7 @@ const ImportLoader = (function () {
       if (force && br.refreshImports) bundle = await br.refreshImports();
       else if (br.getImportBundle) bundle = await br.getImportBundle();
     }
+    if (!bundle) bundle = await loadBundleFromHttpApi();
     if (!bundle && isNode && process.env.NR2_LOAD_IMPORTS === "1") bundle = await loadBundleNode();
     return bundle ? attachBundleDiagnostics(bundle) : null;
   }

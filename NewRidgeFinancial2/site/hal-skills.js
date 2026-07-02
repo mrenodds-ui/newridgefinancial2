@@ -1496,6 +1496,11 @@ const HalSkills = (function () {
     issues.push({ widgetKey, metricKey, severity, message });
   }
 
+  const FINANCIAL_QUALITY_OVERALL_PASS_FAILED =
+    "Financial data quality overallPass failed — resolve import freshness, collections, period alignment, or QuickBooks reconcile before period close.";
+  const FINANCIAL_QUALITY_SCORE_MISSING =
+    "Financial dashboard loaded without a quality score — run import diagnostics before period close.";
+
   function degradeWidgetForCommitValidation(feed, issue) {
     const widget = feed.widgets && feed.widgets[issue.widgetKey];
     if (!widget) return;
@@ -1610,8 +1615,14 @@ const HalSkills = (function () {
         "practiceFinancialOverview",
         "monthlyRevenue",
         "warning",
-        "Financial data quality overallPass failed — resolve import freshness, collections, period alignment, or QuickBooks reconcile before period close.",
+        FINANCIAL_QUALITY_OVERALL_PASS_FAILED,
       );
+    } else if (
+      finDash &&
+      (finDash.dataSource === "import" || finDash.dataSource === "persisted") &&
+      !finDash.quality
+    ) {
+      addCommitIssue(issues, "practiceFinancialOverview", "monthlyRevenue", "warning", FINANCIAL_QUALITY_SCORE_MISSING);
     }
 
     const qbDash = snapshot.dashboards && snapshot.dashboards.quickbooks;
@@ -1768,6 +1779,7 @@ const HalSkills = (function () {
     const collectionHealthDegraded = Boolean(
       (fin.collectionsMissing && !fin.collectionsPending) ||
         (fin.collectionsZeroWithProduction && !fin.collectionsPending) ||
+        ((fin.dataSource === "import" || fin.dataSource === "persisted") && !fin.quality) ||
         ((fin.quality && fin.quality.categories) || []).some(
           (category) => category.label === "Collection health" && Number(category.score) < 15,
         ),

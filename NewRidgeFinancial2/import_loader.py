@@ -80,18 +80,62 @@ def _extract_json_rows(payload: object) -> list[dict[str, Any]]:
     return []
 
 
+def _rows_from_json_probe(payload: object) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    categories = payload.get("top_expense_categories")
+    if not isinstance(categories, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    period = str(payload.get("period") or payload.get("period_end") or "").strip()
+    for item in categories:
+        if not isinstance(item, dict):
+            continue
+        amount = item.get("amount")
+        if amount in (None, ""):
+            continue
+        row = {
+            "Category": str(item.get("category") or ""),
+            "Amount": amount,
+        }
+        item_period = str(item.get("period") or period or "").strip()
+        if item_period:
+            row["Period"] = item_period
+        else:
+            row["Scope"] = "YTD"
+        rows.append(row)
+    return rows
+
+
 def _read_tabular(path: Path) -> list[dict[str, Any]]:
     suffix = path.suffix.lower()
     if suffix == ".json":
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        probe_rows = _rows_from_json_probe(payload)
+        if probe_rows:
+            return probe_rows
         return _extract_json_rows(payload)
     if suffix == ".csv":
+        raw = path.read_text(encoding="utf-8-sig")
+        stripped = raw.lstrip()
+        if stripped.startswith("{"):
+            try:
+                payload = json.loads(stripped)
+            except json.JSONDecodeError:
+                payload = None
+            if isinstance(payload, dict):
+                probe_rows = _rows_from_json_probe(payload)
+                if probe_rows:
+                    return probe_rows
         sidecar = path.with_suffix(".json")
         if sidecar.is_file() and sidecar.stat().st_mtime >= path.stat().st_mtime:
             try:
                 payload = json.loads(sidecar.read_text(encoding="utf-8-sig"))
                 if isinstance(payload, list):
                     return [row for row in payload if isinstance(row, dict)]
+                probe_rows = _rows_from_json_probe(payload)
+                if probe_rows:
+                    return probe_rows
             except json.JSONDecodeError:
                 pass
         return _read_csv_rows(path)
