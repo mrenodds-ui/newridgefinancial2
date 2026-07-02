@@ -118,6 +118,9 @@ SoftDentPage/
 AI_Workspace/
 DataAnalysisExpert/
 
+# Legacy reference trees (install JDK locally; do not commit vendor bundles)
+**/oracleJdk-26/
+
 # Local backup / reset folders
 _seeded_backup_*/
 _softdent_reset_*/
