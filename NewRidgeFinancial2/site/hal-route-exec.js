@@ -51,6 +51,43 @@ const HalRouteExec = (function () {
       return outcome(text, "program", result.intent);
     }
 
+    if (result.usePrint) {
+      const PU = typeof PrintUtils !== "undefined" ? PrintUtils : typeof globalThis !== "undefined" ? globalThis.PrintUtils : null;
+      if (!PU) return outcome("Print utilities are not loaded.", "print", result.intent);
+
+      const scope = result.printScope || "auto";
+      let printResult = { ok: false };
+
+      if (scope === "snapshot") {
+        const snapshot = await ctx.loadProgramSnapshot();
+        printResult = PU.printSnapshot(snapshot, ctx.halData);
+      } else if (scope === "widget-feed") {
+        const feed = await widgetFeed();
+        printResult = PU.printWidgetFeed(feed);
+      } else if (scope === "widget" && result.widgetKey) {
+        const feed = await widgetFeed();
+        printResult = PU.printWidget(feed, result.widgetKey);
+      } else if (scope === "drawer") {
+        printResult = PU.printDrawer();
+      } else if (scope === "hal-reply") {
+        printResult = PU.printHalReply(ctx.halChatHistory || []);
+      } else if (scope === "text") {
+        printResult = PU.printText(result.printTitle || "Print", result.printText || trimmed);
+      } else {
+        printResult = PU.printCurrentView();
+      }
+
+      const label =
+        scope === "text" && result.printText
+          ? result.printText.slice(0, 48) + (result.printText.length > 48 ? "…" : "")
+          : scope;
+      const text =
+        printResult && printResult.ok !== false
+          ? `Print dialog opened for ${label}.`
+          : "Could not open the print dialog. Allow pop-ups for this app or use the Print toolbar button.";
+      return outcome(text, "print", result.intent, [], { refreshHal: false });
+    }
+
     if (result.useProactiveBriefing) {
       const Proactive = typeof HalProactive !== "undefined" ? HalProactive : window.HalProactive;
       if (!Proactive) return outcome("Proactive HAL manager is not loaded.", "hal", result.intent);
@@ -252,6 +289,16 @@ const HalRouteExec = (function () {
       if (!Ops) return outcome("Portal ops module is not loaded.", "ops", result.intent);
       const payload = await Ops.getDailyCloseout();
       return outcome(Ops.formatDailyCloseout(payload), "ops", result.intent);
+    }
+
+    if (result.useCloseoutRunbook) {
+      const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
+      if (!Ops || typeof Ops.buildCloseoutRunbook !== "function") {
+        return outcome("Closeout runbook requires PortalOps.", "ops", result.intent);
+      }
+      const snapshot = await ctx.loadProgramSnapshot();
+      const payload = await Ops.buildCloseoutRunbook(snapshot);
+      return outcome(Ops.formatCloseoutRunbook(payload), "ops", result.intent, [{ label: "Open documents", page: "documents" }]);
     }
 
     if (result.useFinancialReports) {

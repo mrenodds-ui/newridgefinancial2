@@ -85,6 +85,7 @@ const UI = (function () {
               return `<button type="button" class="nav-item nav-item--accent-${esc(accent)}${active ? " active" : ""}" data-nav="${esc(pageId)}">
                 ${typeof AppIcons !== "undefined" ? renderIcon(AppIcons.nav(pageId), "nav-item__ico") : ""}
                 <span class="nav-item__label">${esc(page.label || pageId)}</span>
+                ${page.badge ? `<span class="nav-item__badge">${esc(page.badge)}</span>` : ""}
               </button>`;
             })
             .join("");

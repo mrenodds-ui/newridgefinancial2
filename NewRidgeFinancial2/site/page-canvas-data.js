@@ -974,6 +974,22 @@ const PageCanvasData = (function () {
     return [];
   }
 
+  function journalQueueItems() {
+    const jq = snapshot && snapshot.journalPostingQueue;
+    return Array.isArray(jq && jq.items) ? jq.items : [];
+  }
+
+  function monthEndChecklistHtml() {
+    if (typeof MonthEndClose === "undefined" || !MonthEndClose.renderChecklistHtml || !snapshot) return "";
+    const payload = MonthEndClose.buildReconciliationPayload(snapshot);
+    return MonthEndClose.renderChecklistHtml(payload.checklist, escHtml);
+  }
+
+  function monthEndReconciliationPayload() {
+    if (typeof MonthEndClose === "undefined" || !MonthEndClose.buildReconciliationPayload || !snapshot) return null;
+    return MonthEndClose.buildReconciliationPayload(snapshot);
+  }
+
   function libraryRows() {
     const lib = snapshot && snapshot.library;
     const docs = (lib && (lib.docs || lib.top)) || [];
@@ -1231,6 +1247,9 @@ const PageCanvasData = (function () {
     firstDocument,
     documentsPeriodStats,
     journalRows,
+    journalQueueItems,
+    monthEndChecklistHtml,
+    monthEndReconciliationPayload,
     libraryRows,
     firstLibraryDoc,
     officeKpis,

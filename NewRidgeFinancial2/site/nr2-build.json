@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-104",
-  "schemaVersion": "hal-104",
-  "builtAt": "2026-07-01T21:00:00.000Z",
-  "notes": "HAL Tax Workspace v2 — book-to-tax engine, comp scenarios, quarterly estimates."
+  "assetVersion": "hal-105",
+  "schemaVersion": "hal-105",
+  "builtAt": "2026-07-02T21:18:09.044Z",
+  "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server."
 }

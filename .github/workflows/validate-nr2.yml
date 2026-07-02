@@ -51,3 +51,9 @@ jobs:
 
       - name: Validate pages
         run: node validate-pages.mjs
+
+      - name: Live import smoke
+        run: node smoke_desktop_live.mjs
+
+      - name: Integration health CLI
+        run: python integration_health.py

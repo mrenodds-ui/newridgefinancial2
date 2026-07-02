@@ -58,6 +58,62 @@ const PageViews = (function () {
     container.querySelectorAll("[data-pv-nav]").forEach((btn) => {
       btn.addEventListener("click", () => onNavigate && onNavigate(btn.getAttribute("data-pv-nav")));
     });
+    if (!container.dataset.nr2WiredExport) {
+      container.dataset.nr2WiredExport = "1";
+      container.addEventListener("click", async (event) => {
+        const reconBtn = event.target.closest("[data-recon-export]");
+        if (reconBtn) {
+          event.preventDefault();
+          const D = typeof PageCanvasData !== "undefined" ? PageCanvasData : null;
+          const payload = D && D.monthEndReconciliationPayload ? D.monthEndReconciliationPayload() : null;
+          if (!payload) return;
+          const MEC = typeof MonthEndClose !== "undefined" ? MonthEndClose : null;
+          const EU = typeof ExportUtils !== "undefined" ? ExportUtils : null;
+          if (!MEC || !EU) return;
+          const mode = reconBtn.getAttribute("data-recon-export");
+          if (mode === "csv") {
+            EU.exportText(`reconciliation-${payload.period || "period"}.csv`, MEC.formatReconciliationCsv(payload));
+          } else {
+            EU.exportText(`reconciliation-${payload.period || "period"}.txt`, MEC.formatReconciliationExport(payload));
+          }
+          return;
+        }
+        const copyBtn = event.target.closest("[data-recon-copy]");
+        if (copyBtn) {
+          event.preventDefault();
+          const D = typeof PageCanvasData !== "undefined" ? PageCanvasData : null;
+          const payload = D && D.monthEndReconciliationPayload ? D.monthEndReconciliationPayload() : null;
+          const MEC = typeof MonthEndClose !== "undefined" ? MonthEndClose : null;
+          if (!payload || !MEC || !MEC.formatReconciliationExport) return;
+          const text = MEC.formatReconciliationExport(payload);
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+          }
+          return;
+        }
+        const journalBtn = event.target.closest("[data-journal-review]");
+        if (journalBtn) {
+          event.preventDefault();
+          const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+          if (!db || typeof db.reviewPostingQueueEntry !== "function") return;
+          const entryId = journalBtn.getAttribute("data-journal-review");
+          const action = journalBtn.getAttribute("data-journal-action") || "approve";
+          await db.reviewPostingQueueEntry({ entryId, action, reviewedBy: "local-user" });
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("nr2:journal-queue-updated"));
+          }
+          return;
+        }
+        const journalExport = event.target.closest("[data-journal-export]");
+        if (journalExport) {
+          event.preventDefault();
+          const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+          if (db && typeof db.exportApprovedPostingQueue === "function") {
+            await db.exportApprovedPostingQueue();
+          }
+        }
+      });
+    }
     const pilot =
       typeof HalPilotWidgets !== "undefined"
         ? HalPilotWidgets

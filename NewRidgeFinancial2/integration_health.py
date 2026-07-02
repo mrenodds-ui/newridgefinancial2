@@ -241,3 +241,21 @@ def format_integration_health_text(snapshot: dict[str, Any]) -> str:
         if not row.get("ok") and row.get("actionHint"):
             lines.append(f"  Next: {row.get('actionHint')}")
     return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+    import sys
+
+    parser = argparse.ArgumentParser(description="Print NR2 integration health snapshot.")
+    parser.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
+    args = parser.parse_args()
+    snapshot = integration_health_snapshot(deep_diagnostics=True)
+    if args.json:
+        print(json.dumps(snapshot, indent=2))
+    else:
+        print(format_integration_health_text(snapshot))
+    fail_count = int(snapshot.get("fail_count") or 0)
+    status = str(snapshot.get("status") or "").lower()
+    sys.exit(1 if status == "fail" else 0)

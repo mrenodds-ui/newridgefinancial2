@@ -117,18 +117,26 @@ const PageChrome = (function () {
       accent: schema.accent,
       periodLabel,
     });
-    const exportAction =
-      o.toolbarActions ||
-      (U.Button
-        ? U.Button({
-            label: "Export",
-            icon: typeof AppIcons !== "undefined" ? AppIcons.ui("export") : "",
-            variant: "toolbar",
-          })
-        : "");
+    const printAction = U.Button
+      ? U.Button({
+          label: "Print",
+          icon: typeof AppIcons !== "undefined" ? AppIcons.ui("print") : "",
+          variant: "toolbar",
+          attrs: { "data-nr2-print": "page", type: "button", "aria-label": "Print this page" },
+        })
+      : "";
+    const exportAction = U.Button
+      ? U.Button({
+          label: "Export",
+          icon: typeof AppIcons !== "undefined" ? AppIcons.ui("export") : "",
+          variant: "toolbar",
+          attrs: { "data-nr2-export": "page", type: "button", "aria-label": "Export this page as CSV" },
+        })
+      : "";
+    const toolbarActions = o.toolbarActions || `${printAction}${exportAction}`;
     const toolbar = U.PageToolbar({
       filters: schema.filters || [],
-      actions: exportAction,
+      actions: toolbarActions,
     });
     const feed = (state && state.halWidgetFeed) || null;
     return U.CanvasShell({

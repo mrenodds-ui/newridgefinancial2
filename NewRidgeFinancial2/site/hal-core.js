@@ -549,6 +549,45 @@ const HalCore = (function () {
     return null;
   }
 
+  function matchPrintRoute(query, rawQuery) {
+    if (/\b(fingerprint|blueprint|print queue|printer queue)\b/.test(query)) return null;
+    if (!/\bprint\b/.test(query)) return null;
+
+    const base = { lane: "local", usePrint: true, text: "", actions: [] };
+
+    if (/\b(snapshot|program snapshot)\b/.test(query)) {
+      return { ...base, intent: "print: snapshot", printScope: "snapshot" };
+    }
+    if (/\b(drawer|side panel|command center panel)\b/.test(query)) {
+      return { ...base, intent: "print: drawer", printScope: "drawer" };
+    }
+    if (/\b(last (?:hal )?(?:reply|response|answer)|hal reply|hal response)\b/.test(query)) {
+      return { ...base, intent: "print: hal-reply", printScope: "hal-reply" };
+    }
+    if (/\b(current page|this page|the page|page view|screen)\b/.test(query) || /\bprint\s+(?:the\s+)?page\b/.test(query)) {
+      return { ...base, intent: "print: page", printScope: "page" };
+    }
+
+    const pseudoQuery = query.replace(/\bprint\b/g, "show");
+    const skill = matchSkillRoute(pseudoQuery, rawQuery);
+    if (skill && skill.useWidgetShow && skill.widgetKey) {
+      return { ...base, intent: `print: widget:${skill.widgetKey}`, printScope: "widget", widgetKey: skill.widgetKey };
+    }
+    if (skill && skill.useWidgetFeed) {
+      return { ...base, intent: "print: widget-feed", printScope: "widget-feed" };
+    }
+    if (skill && skill.useProgramSnapshot) {
+      return { ...base, intent: "print: snapshot", printScope: "snapshot" };
+    }
+
+    const textMatch = String(rawQuery || "").match(/\bprint\b[:\s]+([\s\S]+)$/i);
+    if (textMatch && textMatch[1].trim()) {
+      return { ...base, intent: "print: text", printScope: "text", printText: textMatch[1].trim() };
+    }
+
+    return { ...base, intent: "print: auto", printScope: "auto", prompt: rawQuery };
+  }
+
   function modelLanesText(halModels) {
     const lanes = modelLanes(halModels);
     const anyReady = lanes.some((lane) => laneReady(halModels, lane.id));
@@ -1318,10 +1357,13 @@ const HalCore = (function () {
         intent: "help",
         lane: "local",
         text:
-          "I am HAL, the local read-only program manager for NewRidgeFinancial 2.0. My top priority is to monitor the program, place correct data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action. I have full read access to local program pages and service data. I run an agent loop: plan the question, gather local tool data, answer, and self-check before responding. I can: open and explain pages; show the full program snapshot; show priorities and source health; show integration health and automation job status; build a redacted support bundle; run daily closeout; show financial reports (claims/A/R); start read-only work sessions; build local evidence packets; run readiness checks; check claim packet readiness; draft journal-entry review notes; show manager dashboard widgets; explain missing widget data; prioritize widget imports; build daily owner briefings; show accounting review queues; perform Excel-style reconciliation; search the local library; research public web reference material for practice operations (sanitized — no patient data sent); save durable learned facts when you say Remember this: ...; list and create local tasks; monitor, list, and create sidenotes; report local AI model lanes; and simulate the external-action firewall. I use local GPU chat and helper models for unmatched questions, 24B reasoning on demand for plans and insurance narratives, and keep escalation local. I remember recent conversation context, approved learned facts, and local office preferences. I do not submit, send, upload, post, delete, or change outside systems.",
+          "I am HAL, the local read-only program manager for NewRidgeFinancial 2.0. My top priority is to monitor the program, place correct data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action. I have full read access to local program pages and service data. I run an agent loop: plan the question, gather local tool data, answer, and self-check before responding. I can: open and explain pages; show the full program snapshot; show priorities and source health; show integration health and automation job status; build a redacted support bundle; run daily closeout and a month-end closeout runbook; show financial reports (claims/A/R); start read-only work sessions; build local evidence packets; run readiness checks; check claim packet readiness; draft journal-entry review notes; show manager dashboard widgets; explain missing widget data; prioritize widget imports; build daily owner briefings; show accounting review queues; perform Excel-style reconciliation; search the local library; research public web reference material for practice operations (sanitized — no patient data sent); save durable learned facts when you say Remember this: ...; list and create local tasks; monitor, list, and create sidenotes; report local AI model lanes; print any page, widget, widget feed, snapshot, drawer, HAL reply, or arbitrary text; export CSV from the current page; and simulate the external-action firewall. I use local GPU chat and helper models for unmatched questions, 24B reasoning on demand for plans and insurance narratives, and keep escalation local. I remember recent conversation context, approved learned facts, and local office preferences. I do not submit, send, upload, post, delete, or change outside systems.",
         actions: [],
       };
     }
+
+    const printRoute = matchPrintRoute(query, rawQuery);
+    if (printRoute) return printRoute;
 
     const programRoute = matchProgramRoute(query);
     if (programRoute) {
@@ -1568,6 +1610,9 @@ const HalCore = (function () {
     }
     if (/\b(daily closeout|morning checklist|end of day checklist)\b/.test(query)) {
       return { intent: "ops: daily-closeout", lane: "local", useDailyCloseout: true, text: "", actions: [] };
+    }
+    if (/\b(closeout runbook|month.?end runbook|end of month runbook|close the month|month.?end close runbook)\b/.test(query)) {
+      return { intent: "ops: closeout-runbook", lane: "local", useCloseoutRunbook: true, text: "", actions: [] };
     }
     if (/\b(financial reports?|claim tracking|claims report|ar aging report)\b/.test(query)) {
       return { intent: "ops: financial-reports", lane: "local", useFinancialReports: true, text: "", actions: [] };

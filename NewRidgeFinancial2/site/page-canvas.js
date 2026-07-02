@@ -408,6 +408,7 @@ const PageCanvas = (function () {
             : canvasEmpty("Provider rows will appear when SoftDent dashboard export includes providers."),
         })}
       </div>
+      ${D && D.monthEndChecklistHtml ? D.monthEndChecklistHtml() : ""}
     </div>`;
   }
 
@@ -647,12 +648,45 @@ const PageCanvas = (function () {
     </div>`;
   }
 
+  function renderJournalQueuePanel(items) {
+    if (!items.length) {
+      return canvasEmpty("Journal posting queue is available in desktop mode.");
+    }
+    const body = items
+      .map((entry) => {
+        const id = esc(entry.id || entry.entryId || "");
+        const status = String(entry.status || "unknown");
+        const pending = /pending/i.test(status);
+        const actions = pending
+          ? `<div class="pv-journal-actions">
+              <button type="button" class="pv-button pv-button--sm" data-journal-review="${id}" data-journal-action="approve">Approve</button>
+              <button type="button" class="pv-button pv-button--sm pv-button--ghost" data-journal-review="${id}" data-journal-action="reject">Reject</button>
+            </div>`
+          : `<span class="pv-muted">${esc(status)}</span>`;
+        return `<tr>
+          <td>${esc(entry.title || entry.description || entry.memo || entry.id || "Entry")}</td>
+          <td>${esc(entry.amount != null ? entry.amount : "—")}</td>
+          <td>${esc(entry.category || entry.account || "Journal")}</td>
+          <td>${esc(entry.period || entry.createdAt || "—")}</td>
+          <td>${actions}</td>
+        </tr>`;
+      })
+      .join("");
+    return `<div class="pv-table-wrap"><table class="pv-table pv-table--compact pv-table--striped">
+      <thead><tr><th>Entry</th><th>Amount</th><th>Category</th><th>Period</th><th>Review</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>
+    <div class="pv-journal-toolbar">
+      <button type="button" class="pv-button" data-journal-export="1">Export approved CSV</button>
+    </div>`;
+  }
+
   function renderDocuments() {
     const D = dataApi();
     const queue = D ? D.documentsQueueRows() : [];
     const doc = D ? D.firstDocument() : null;
     const periodStats = D ? D.documentsPeriodStats() : [];
-    const journal = D ? D.journalRows() : [];
+    const journalItems = D ? D.journalQueueItems() : [];
     const ap = metricsFromWidget("accountsPayableAutomation");
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.documentsImportNotice() : null)}
@@ -687,7 +721,7 @@ const PageCanvas = (function () {
         title: wTitle("documents", 4),
         caption: "Local journal queue",
         widgetKey: wKey("documents", 4),
-        body: journal.length ? canvasTable(["Entry", "Amount", "Category", "Period"], journal, true) : canvasEmpty("Journal posting queue is available in desktop mode."),
+        body: journalItems.length ? renderJournalQueuePanel(journalItems) : canvasEmpty("Journal posting queue is available in desktop mode."),
       })}
     </div>`;
   }

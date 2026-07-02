@@ -141,6 +141,7 @@ def _aggregate_treatment_plans_from_production(conn: sqlite3.Connection, periods
                 "Presented": round(payload["presented"], 1),
                 "Accepted": round(payload["accepted"], 1),
                 "Amount": round(payload["amount"], 2),
+                "DerivedFromProduction": True,
             }
         )
     return rows
@@ -327,6 +328,8 @@ def sync_practice_exports(db_path: Path | None = None, destination: Path | None 
         return result
 
     conn = sqlite3.connect(db_path)
+    tp_rows: list[dict[str, Any]] = []
+    tp_source = "analytics-db"
     try:
         np_rows = _aggregate_new_patients(conn, periods)
         if np_rows:
@@ -335,6 +338,9 @@ def sync_practice_exports(db_path: Path | None = None, destination: Path | None 
             written.append(path.name)
 
         tp_rows = _aggregate_treatment_plans(conn, periods)
+        tp_source = "analytics-db"
+        if tp_rows and all(row.get("DerivedFromProduction") for row in tp_rows):
+            tp_source = "derived-production"
         if tp_rows:
             fieldnames = [key for key in ("Period", "Presented", "Accepted", "Amount") if any(key in row for row in tp_rows)]
             if not fieldnames:
@@ -353,6 +359,8 @@ def sync_practice_exports(db_path: Path | None = None, destination: Path | None 
 
     result["ok"] = bool(written)
     result["written"] = written
+    if tp_rows:
+        result["treatmentPlanSource"] = tp_source
     try:
         from automation_registry import record_job_run
 

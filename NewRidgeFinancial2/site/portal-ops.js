@@ -108,6 +108,61 @@ const PortalOps = (function () {
     return lines.join("\n");
   }
 
+  async function buildCloseoutRunbook(snapshot) {
+    const [health, closeout, automation] = await Promise.all([
+      getIntegrationHealth().catch(() => null),
+      getDailyCloseout().catch(() => null),
+      getAutomationRegistry().catch(() => null),
+    ]);
+    const journal = (snapshot && snapshot.journalPostingQueue) || {};
+    const items = Array.isArray(journal.items) ? journal.items : [];
+    const pendingJournal = items.filter((row) => String(row.status || "").toLowerCase().includes("pending")).length;
+    const fin = snapshot && snapshot.dashboards && snapshot.dashboards.financial;
+    let reconciliation = null;
+    if (typeof MonthEndClose !== "undefined" && MonthEndClose.buildReconciliationPayload && snapshot) {
+      reconciliation = MonthEndClose.buildReconciliationPayload(snapshot);
+    }
+    return { health, closeout, automation, journal: { pendingJournal, total: items.length, items: items.slice(0, 8) }, reconciliation, financial: fin || null };
+  }
+
+  function formatCloseoutRunbook(payload) {
+    if (!payload) return "Closeout runbook unavailable.";
+    const lines = ["Month-end / closeout runbook (local review only):", ""];
+    if (payload.health) {
+      lines.push(formatIntegrationHealth(payload.health));
+      lines.push("");
+    }
+    if (payload.closeout) {
+      lines.push(formatDailyCloseout(payload.closeout));
+      lines.push("");
+    }
+    if (payload.reconciliation && payload.reconciliation.checklist) {
+      const checklist = payload.reconciliation.checklist;
+      lines.push(`Reconciliation checklist (${checklist.period}): ${checklist.summary}`);
+      (checklist.items || []).forEach((row) => {
+        lines.push(`- [${String(row.status || "").toUpperCase()}] ${row.label}: ${row.detail || ""}`);
+      });
+      lines.push("");
+    }
+    lines.push(`Journal posting queue: ${payload.journal?.pendingJournal || 0} pending of ${payload.journal?.total || 0} item(s).`);
+    if ((payload.journal?.items || []).length) {
+      payload.journal.items.forEach((row) => {
+        lines.push(`  · ${row.title || row.id || "Entry"} — ${row.status || "unknown"}${row.amount != null ? ` ($${row.amount})` : ""}`);
+      });
+      lines.push("");
+    }
+    if (payload.automation) {
+      lines.push(formatAutomationRegistry(payload.automation));
+      lines.push("");
+    }
+    lines.push("Next safe actions:");
+    lines.push("1. Refresh imports if any integration is degraded.");
+    lines.push("2. Review journal queue on Accounting Documents.");
+    lines.push("3. Run readiness check before staff handoff.");
+    lines.push("4. Say “build support bundle” if IT needs diagnostics.");
+    return lines.join("\n");
+  }
+
   return {
     getIntegrationHealth,
     getAutomationRegistry,
@@ -115,9 +170,11 @@ const PortalOps = (function () {
     getFinancialReports,
     getDailyCloseout,
     getProgramHelp,
+    buildCloseoutRunbook,
     formatIntegrationHealth,
     formatAutomationRegistry,
     formatDailyCloseout,
+    formatCloseoutRunbook,
   };
 })();
 

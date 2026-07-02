@@ -18,7 +18,7 @@
 
     <meta http-equiv="Expires" content="0" />
 
-    <link rel="stylesheet" href="styles.css?v=hal-104" />
+    <link rel="stylesheet" href="styles.css?v=hal-105" />
 
   </head>
 
@@ -58,6 +58,8 @@
 
       <div class="drawer__panel">
 
+        <button class="drawer__print" id="drawerPrint" type="button" data-nr2-print="drawer" aria-label="Print panel">Print</button>
+
         <button class="drawer__close" id="drawerClose" type="button" aria-label="Close panel">Close</button>
 
         <p class="drawer__eyebrow">HAL Command Center</p>
@@ -74,83 +76,87 @@
 
     <!-- Load order: foundation → HAL libs → schema shell → boot gate → app -->
 
-    <script src="empty-states.js?v=hal-104"></script>
+    <script src="empty-states.js?v=hal-105"></script>
 
-    <script src="import-diagnostics.js?v=hal-104"></script>
+    <script src="import-diagnostics.js?v=hal-105"></script>
 
-    <script src="import-loader.js?v=hal-104"></script>
+    <script src="import-loader.js?v=hal-105"></script>
 
-    <script src="document-posting.js?v=hal-104"></script>
+    <script src="document-posting.js?v=hal-105"></script>
 
-    <script src="month-end-close.js?v=hal-104"></script>
+    <script src="month-end-close.js?v=hal-105"></script>
 
-    <script src="desktop-bridge.js?v=hal-104"></script>
-    <script src="daily-closeout.js?v=hal-104"></script>
-    <script src="portal-ops.js?v=hal-104"></script>
+    <script src="desktop-bridge.js?v=hal-105"></script>
+    <script src="daily-closeout.js?v=hal-105"></script>
+    <script src="portal-ops.js?v=hal-105"></script>
 
-    <script src="runtime-issues.js?v=hal-104"></script>
+    <script src="runtime-issues.js?v=hal-105"></script>
 
-    <script src="snapshot-store.js?v=hal-104"></script>
+    <script src="snapshot-store.js?v=hal-105"></script>
 
-    <script src="import-coordinator.js?v=hal-104"></script>
+    <script src="import-coordinator.js?v=hal-105"></script>
 
-    <script src="office-task-store.js?v=hal-104"></script>
+    <script src="office-task-store.js?v=hal-105"></script>
 
-    <script src="hal-core.js?v=hal-104"></script>
+    <script src="hal-core.js?v=hal-105"></script>
 
-    <script src="hal-proactive.js?v=hal-104"></script>
+    <script src="hal-proactive.js?v=hal-105"></script>
 
-    <script src="hal-office-manager.js?v=hal-104"></script>
+    <script src="hal-office-manager.js?v=hal-105"></script>
 
-    <script src="widget-contract.js?v=hal-104"></script>
+    <script src="widget-contract.js?v=hal-105"></script>
 
-    <script src="hal-period-requirements.js?v=hal-104"></script>
+    <script src="hal-period-requirements.js?v=hal-105"></script>
 
-    <script src="hal-narrative-library.js?v=hal-104"></script>
+    <script src="hal-narrative-library.js?v=hal-105"></script>
 
-    <script src="hal-skills.js?v=hal-104"></script>
+    <script src="hal-skills.js?v=hal-105"></script>
 
-    <script src="hal-widget-master-chart.js?v=hal-104"></script>
+    <script src="hal-widget-master-chart.js?v=hal-105"></script>
 
-    <script src="hal-page-widgets.js?v=hal-104"></script>
+    <script src="hal-page-widgets.js?v=hal-105"></script>
 
-    <script src="hal-live-widget-bridge.js?v=hal-104"></script>
+    <script src="hal-live-widget-bridge.js?v=hal-105"></script>
 
-    <script src="hal-pilot-widgets.js?v=hal-104"></script>
+    <script src="hal-pilot-widgets.js?v=hal-105"></script>
 
-    <script src="hal-agent.js?v=hal-104"></script>
+    <script src="hal-agent.js?v=hal-105"></script>
 
-    <script src="hal-route-exec.js?v=hal-104"></script>
+    <script src="hal-route-exec.js?v=hal-105"></script>
 
-    <script src="hal-stress-harness.js?v=hal-104"></script>
+    <script src="hal-stress-harness.js?v=hal-105"></script>
 
-    <script src="icons.js?v=hal-104"></script>
+    <script src="icons.js?v=hal-105"></script>
 
-    <script src="page-schema.js?v=hal-104"></script>
+    <script src="print-utils.js?v=hal-105"></script>
 
-    <script src="page-chrome.js?v=hal-104"></script>
+    <script src="export-utils.js?v=hal-105"></script>
 
-    <script src="tax-engine.js?v=hal-104"></script>
-    <script src="page-canvas-data.js?v=hal-104"></script>
-    <script src="page-canvas.js?v=hal-104"></script>
+    <script src="page-schema.js?v=hal-105"></script>
 
-    <script src="components.js?v=hal-104"></script>
+    <script src="page-chrome.js?v=hal-105"></script>
 
-    <script src="services.js?v=hal-104"></script>
+    <script src="tax-engine.js?v=hal-105"></script>
+    <script src="page-canvas-data.js?v=hal-105"></script>
+    <script src="page-canvas.js?v=hal-105"></script>
 
-    <script src="page-views.js?v=hal-104"></script>
+    <script src="components.js?v=hal-105"></script>
 
-    <script src="hal-page-schema.js?v=hal-104"></script>
+    <script src="services.js?v=hal-105"></script>
 
-    <script src="hal-page-canvas.js?v=hal-104"></script>
+    <script src="page-views.js?v=hal-105"></script>
 
-    <script src="hal-page.js?v=hal-104"></script>
+    <script src="hal-page-schema.js?v=hal-105"></script>
 
-    <script src="hal-voice.js?v=hal-104"></script>
+    <script src="hal-page-canvas.js?v=hal-105"></script>
 
-    <script src="desktop-boot.js?v=hal-104"></script>
+    <script src="hal-page.js?v=hal-105"></script>
 
-    <script src="app.js?v=hal-104"></script>
+    <script src="hal-voice.js?v=hal-105"></script>
+
+    <script src="desktop-boot.js?v=hal-105"></script>
+
+    <script src="app.js?v=hal-105"></script>
 
   </body>
 

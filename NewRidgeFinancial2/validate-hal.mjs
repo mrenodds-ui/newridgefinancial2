@@ -29,6 +29,14 @@ function buildRoutingRegressionCases() {
   const addMany = (questions, expected) => questions.forEach((question) => add(question, expected));
 
   addMany(["What can you do?", "How do you work?", "help", "what are your capabilities?", "tell me what you can do"], "help");
+  addMany(["Print this page", "print current page", "print the page"], "print: page");
+  addMany(["Print widget feed", "print dashboard widgets", "print manager dashboard"], "print: widget-feed");
+  addMany(["Print program snapshot", "print snapshot"], "print: snapshot");
+  addMany(["Print drawer", "print command center panel"], "print: drawer");
+  addMany(["Print last HAL reply", "print hal response"], "print: hal-reply");
+  addMany(["Print financial widget", "print financial overview widget"], "print: widget:practiceFinancialOverview");
+  addMany(["Print ar aging widget"], "print: widget:arAgingAndCollections");
+  addMany(["Closeout runbook", "month end runbook", "month-end close runbook"], "ops: closeout-runbook");
   addMany(["Run readiness check", "check hal", "self-check", "readiness check now"], "readiness: run");
   addMany(["Show diagnostics", "display diagnostics"], "readiness: show");
   addMany(["Clear diagnostics", "reset diagnostics"], "readiness: clear");
@@ -158,6 +166,10 @@ async function main() {
   const halModels = loadJson(halModelsPath);
   const halCoreUrl = pathToFileURL(join(siteDir, "hal-core.js")).href;
   const HalCore = (await import(halCoreUrl)).default || (await import(halCoreUrl));
+  const printUtilsUrl = pathToFileURL(join(siteDir, "print-utils.js")).href;
+  const PrintUtils = (await import(printUtilsUrl)).default || globalThis.PrintUtils;
+  assert(typeof PrintUtils.esc === "function", "PrintUtils must load");
+  assert(PrintUtils.esc("<test>") === "&lt;test&gt;", "PrintUtils esc must escape html");
 
   const pages = [
     { id: "financial", label: "Financial dashboard", title: "Owner Financial Dashboard" },
@@ -1075,6 +1087,13 @@ async function main() {
   assert(selfBad.pass === false, "claimed external action must fail self-check");
   const helpRoute = HalCore.routeHalCommand(halData, halModels, pages, "what can you do?");
   assert(helpRoute.text.includes("agent loop"), "help text must describe agent loop");
+  assert(helpRoute.text.includes("print any page"), "help text must mention print");
+  const printPageRoute = HalCore.routeHalCommand(halData, halModels, pages, "print this page");
+  assert(printPageRoute.intent === "print: page" && printPageRoute.usePrint === true, "print page must route locally");
+  const printWidgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "print financial widget");
+  assert(printWidgetRoute.intent === "print: widget:practiceFinancialOverview", "print widget must resolve widget key");
+  const closeoutRunbookRoute = HalCore.routeHalCommand(halData, halModels, pages, "closeout runbook");
+  assert(closeoutRunbookRoute.intent === "ops: closeout-runbook" && closeoutRunbookRoute.useCloseoutRunbook === true, "closeout runbook must route locally");
   const mockCtx = {
     halData,
     halModels,

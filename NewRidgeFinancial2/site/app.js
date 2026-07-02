@@ -199,6 +199,9 @@ function scheduleHalWidgetRefresh(snapshot) {
       if (currentId !== "hal" && appPage && !appPage.hidden && PageViews && PageViews.hasPage(currentId)) {
         PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
       }
+      refreshOpsHealthStatus().catch(() => {
+        /* ops health optional */
+      });
       return feed;
     })
     .finally(() => {
@@ -527,6 +530,8 @@ function stopSideNoteMonitor() {
 let documentSyncListenerBound = false;
 let documentSourceRefreshTimer = null;
 const DOCUMENT_SOURCE_REFRESH_MS = 30 * 60 * 1000;
+let importCoordinatorRefreshTimer = null;
+const IMPORT_COORDINATOR_REFRESH_MS = 15 * 60 * 1000;
 
 function startDocumentSyncListener() {
   if (documentSyncListenerBound || typeof window === "undefined") return;
@@ -545,6 +550,19 @@ function startDocumentSourceRefreshTimer() {
       /* background document sync optional */
     });
   }, DOCUMENT_SOURCE_REFRESH_MS);
+}
+
+function startImportCoordinatorRefreshTimer() {
+  if (importCoordinatorRefreshTimer || typeof window === "undefined") return;
+  importCoordinatorRefreshTimer = setInterval(() => {
+    if (typeof ImportCoordinator !== "undefined") {
+      ImportCoordinator.refresh({ reason: "scheduled" }).catch(() => {
+        /* scheduled import refresh optional */
+      });
+      return;
+    }
+    refreshImportsInBackground();
+  }, IMPORT_COORDINATOR_REFRESH_MS);
 }
 
 function addSideNote(text) {
@@ -2109,6 +2127,121 @@ function closeDrawer() {
   drawer.setAttribute("aria-hidden", "true");
 }
 
+function handleNr2Print(scope) {
+  const PU = typeof PrintUtils !== "undefined" ? PrintUtils : null;
+  if (!PU) {
+    showHalActionNotice("Print utilities failed to load. Reload the app.", "warn");
+    return;
+  }
+  const pageId = resolvePageId(window.location.hash);
+  const page = getPages().find((p) => p.id === pageId);
+  const printScope = scope || "page";
+  if (printScope === "drawer") {
+    PU.printDrawer();
+    return;
+  }
+  PU.printCurrentView({
+    pageId,
+    title: page ? page.title : pageId,
+    halPageVisible: halPage && !halPage.hidden,
+    drawerOpen: drawer && drawer.classList.contains("open"),
+  });
+}
+
+function handleNr2Export(scope) {
+  const EU = typeof ExportUtils !== "undefined" ? ExportUtils : null;
+  if (!EU) {
+    showHalActionNotice("Export utilities failed to load. Reload the app.", "warn");
+    return;
+  }
+  const pageId = resolvePageId(window.location.hash);
+  EU.exportCurrentPage({
+    pageId,
+    snapshot: halProgramSnapshot,
+    feed: halWidgetFeed,
+    halPageVisible: halPage && !halPage.hidden,
+  });
+}
+
+let nr2OpsHealth = null;
+let nr2SidebarStatus = "All systems operational";
+let nr2SidebarBadges = {};
+
+function removeOpsHealthBanner() {
+  const existing = document.getElementById("opsHealthBanner");
+  if (existing) existing.remove();
+}
+
+function renderOpsHealthBanner(health) {
+  if (typeof document === "undefined") return;
+  let banner = document.getElementById("opsHealthBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "opsHealthBanner";
+    banner.className = "ops-health-banner";
+    const app = document.querySelector(".app");
+    if (app && app.parentNode) app.parentNode.insertBefore(banner, app);
+    else document.body.prepend(banner);
+  }
+  const status = String(health?.status || "degraded").toUpperCase();
+  const failed = (health?.integrations || []).filter((row) => !row.ok).slice(0, 2);
+  const hint = failed.map((row) => row.label).join(", ");
+  banner.innerHTML = `<strong>Integration health: ${escapeHtml(status)}</strong><span>${escapeHtml(hint || "Review imports and automation jobs.")} · Ask HAL: integration health</span>`;
+}
+
+function buildSidebarPages() {
+  if (typeof PageSchema === "undefined" || !PageSchema.PAGES) return {};
+  const pages = PageSchema.PAGES;
+  const out = {};
+  Object.keys(pages).forEach((id) => {
+    const page = pages[id];
+    out[id] = Object.assign({}, page, { badge: nr2SidebarBadges[id] || "" });
+  });
+  return out;
+}
+
+async function refreshOpsHealthStatus() {
+  let status = nr2DesignSchemaVersion ? `Design ${nr2DesignSchemaVersion}` : "All systems operational";
+  const badges = {};
+  try {
+    if (typeof PortalOps !== "undefined" && PortalOps.getIntegrationHealth) {
+      const health = await PortalOps.getIntegrationHealth();
+      nr2OpsHealth = health;
+      const hs = String(health?.status || "").toLowerCase();
+      if (hs === "degraded" || hs === "fail") {
+        status = `Integration ${hs.toUpperCase()} — ${health.ok_count || 0}/${health.enabled_count || 0} OK`;
+        renderOpsHealthBanner(health);
+      } else {
+        removeOpsHealthBanner();
+      }
+    }
+  } catch {
+    removeOpsHealthBanner();
+  }
+
+  const feed = halWidgetFeed;
+  if (feed && feed.widgets) {
+    const widgets = Object.values(feed.widgets);
+    const failed = widgets.filter((w) => w && w.status === "FAILED").length;
+    const degraded = widgets.filter((w) => w && w.status === "DEGRADED").length;
+    if (failed || degraded) {
+      status = failed
+        ? `${failed} widget(s) failed — review HAL monitor`
+        : `${degraded} widget(s) degraded — review HAL monitor`;
+      badges.hal = String(failed || degraded);
+    }
+  }
+
+  const jq = halProgramSnapshot && halProgramSnapshot.journalPostingQueue;
+  const pending = (jq && jq.items ? jq.items : []).filter((row) => /pending/i.test(String(row.status || ""))).length;
+  if (pending > 0) badges.documents = String(pending);
+
+  nr2SidebarStatus = status;
+  nr2SidebarBadges = badges;
+  const activeId = resolvePageId(window.location.hash);
+  renderSidebar(activeId);
+}
+
 let halTypeSig = null;
 let halTypeTimer = null;
 
@@ -2350,14 +2483,14 @@ function renderSidebar(activeId) {
   sidebar.innerHTML = UI.Sidebar({
     activeId,
     navGroups: PageSchema.NAV_GROUPS,
-    pages: PageSchema.PAGES,
+    pages: buildSidebarPages(),
     practice: PageSchema.PRACTICE,
     user: {
       initials: "NR",
       name: PageSchema.PRACTICE.operator || "Dr. Michael Reno",
       role: "Owner",
     },
-    status: nr2DesignSchemaVersion ? `Design ${nr2DesignSchemaVersion}` : "All systems operational",
+    status: nr2SidebarStatus,
   });
   nav = document.getElementById("nav");
   Object.keys(buttons).forEach((key) => delete buttons[key]);
@@ -2644,6 +2777,18 @@ if (appPage) {
 }
 
 document.addEventListener("click", (event) => {
+  const printBtn = event.target.closest("[data-nr2-print]");
+  if (printBtn) {
+    event.preventDefault();
+    handleNr2Print(printBtn.getAttribute("data-nr2-print"));
+    return;
+  }
+  const exportBtn = event.target.closest("[data-nr2-export]");
+  if (exportBtn) {
+    event.preventDefault();
+    handleNr2Export(exportBtn.getAttribute("data-nr2-export"));
+    return;
+  }
   if (!currentDrawerKey) return;
   const panel = drawer.querySelector(".drawer__panel");
   if (panel && panel.contains(event.target)) return;
@@ -2655,6 +2800,11 @@ document.addEventListener("click", (event) => {
   closeDrawer();
 });
 window.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && String(event.key || "").toLowerCase() === "p") {
+    event.preventDefault();
+    handleNr2Print("page");
+    return;
+  }
   if (event.key === "Escape") closeDrawer();
 });
 window.addEventListener("hashchange", () => {
@@ -2765,8 +2915,12 @@ async function boot() {
   startSideNoteMonitor();
   startDocumentSyncListener();
   startDocumentSourceRefreshTimer();
+  startImportCoordinatorRefreshTimer();
   await refreshHalWidgetFeed().catch(() => {
     /* widget feed optional on boot */
+  });
+  refreshOpsHealthStatus().catch(() => {
+    /* ops health optional on boot */
   });
   const initial = resolvePageId(window.location.hash);
   select(initial);
@@ -2795,6 +2949,10 @@ if (typeof window !== "undefined") {
     invalidateProgramCaches("side-notes-storage");
     scheduleHalWidgetRefresh();
     refreshSideNoteMonitor({ patchUi: true });
+  });
+  window.addEventListener("nr2:journal-queue-updated", () => {
+    invalidateProgramCaches("journal-queue-updated");
+    scheduleHalWidgetRefresh();
   });
 }
 

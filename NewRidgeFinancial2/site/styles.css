@@ -76,6 +76,57 @@ body.nr2-desktop input:not([type="button"]):not([type="submit"]):not([type="chec
   font-size: 13px;
 }
 
+.ops-health-banner {
+  align-items: center;
+  background: rgba(234, 179, 8, 0.14);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.35);
+  color: var(--text);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 8px 14px;
+  padding: 10px 16px;
+}
+
+.ops-health-banner strong {
+  color: #eab308;
+}
+
+.nav-item__badge {
+  background: rgba(234, 179, 8, 0.18);
+  border: 1px solid rgba(234, 179, 8, 0.45);
+  border-radius: 999px;
+  color: #eab308;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: auto;
+  min-width: 18px;
+  padding: 3px 6px;
+  text-align: center;
+}
+
+.pv-journal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pv-journal-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pv-button--sm {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.pv-button--ghost {
+  background: transparent;
+}
+
 .app {
   display: grid;
   grid-template-columns: 220px 1fr;
@@ -865,6 +916,19 @@ body.nr2-desktop input:not([type="button"]):not([type="submit"]):not([type="chec
   cursor: pointer;
   float: right;
   font-size: 12px;
+  padding: 6px 10px;
+}
+
+.drawer__print {
+  appearance: none;
+  background: var(--fill-tertiary);
+  border: 1px solid var(--line-subtle);
+  border-radius: 999px;
+  color: var(--text);
+  cursor: pointer;
+  float: right;
+  font-size: 12px;
+  margin-right: 8px;
   padding: 6px 10px;
 }
 
@@ -4915,4 +4979,30 @@ body.nr2-desktop input:not([type="button"]):not([type="submit"]):not([type="chec
   .pv-canvas-grid-split,
   .pv-canvas-stat-grid,
   .pv-canvas-operatory-grid { grid-template-columns: 1fr; }
+}
+
+@media print {
+  #sidebar,
+  #nav,
+  .drawer,
+  .drawer__print,
+  .drawer__close,
+  [data-nr2-print],
+  .hal-chat__form,
+  .hp-inline-chat__form,
+  .runtime-mode-banner { display: none !important; }
+  #appPage,
+  #halPage,
+  .pv-canvas-body,
+  .drawer__content { display: block !important; }
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+  .pv,
+  .hp-main,
+  .drawer__panel {
+    box-shadow: none !important;
+    border: none !important;
+  }
 }
