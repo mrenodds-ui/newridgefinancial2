@@ -33,7 +33,7 @@ Consolidated from 12 sub-slice eval reports (`eval_section*_120b_70b_report.md`,
 - Cross-source overview does not borrow SoftDent production for QuickBooks revenue
 
 ### Staff-facing canvas and diagnostics
-- Import notices on Financial, SoftDent, QuickBooks, A/R, Claims, Documents, Library, Office Manager pages
+- Import notices on Financial, SoftDent, QuickBooks, A/R, Claims, Documents, Library, Office Manager, Narratives, and Taxes pages
 - Bridge fallback downgrades `softdent.dashboard` diagnostics to **partial**
 - Master chart `dataReady` + `formatForHal(feed)` includes **Ready now** per widget
 - Financial data-quality tile uses `overallPass` and pending/missing flags (not green-on-import alone)
@@ -67,8 +67,6 @@ Consolidated from 12 sub-slice eval reports (`eval_section*_120b_70b_report.md`,
 
 | Item | Notes |
 |------|-------|
-| Narratives canvas notice | Local draft workflow; lower traffic than claims/A/R |
-| Taxes canvas notice | Tax engine has separate boundary; book data optional |
 | Page-chrome / HAL page null guards (2c2) | Quick review passed; no crash paths found in `page-chrome.js` |
 | Push + CI | Run after commits; workflow `.github/workflows/validate-nr2.yml` |
 

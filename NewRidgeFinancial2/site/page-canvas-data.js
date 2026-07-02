@@ -561,6 +561,89 @@ const PageCanvasData = (function () {
     return null;
   }
 
+  function narrativesImportNotice() {
+    const nar = snapshot && snapshot.narratives;
+    const workflow = widget("narrativeWorkflow");
+    const draft = narrativeDraft();
+    const draftCount = Array.isArray(nar && nar.drafts)
+      ? nar.drafts.length
+      : Number((nar && nar.drafts) || 0);
+    if (workflow && workflow.status === "FAILED" && !draft && !draftCount) {
+      return {
+        tone: "info",
+        message:
+          workflow.summary ||
+          "Narrative composer is local-only — drafts appear after staff capture claim facts from SoftDent.",
+      };
+    }
+    if (workflow && workflow.status === "DEGRADED" && workflow.summary) {
+      return { tone: "info", message: workflow.summary };
+    }
+    if (!draft && !draftCount && !(nar && nar.latest)) {
+      return {
+        tone: "info",
+        message: "No local narrative drafts yet — HAL can help draft for review; nothing submits to payers from this page.",
+      };
+    }
+    return null;
+  }
+
+  function taxesImportNotice() {
+    const bundle = snapshot && snapshot.importBundle;
+    const pipelineError = bundle && bundle.directPipelineError;
+    if (pipelineError) {
+      return { tone: "error", message: `Import pipeline: ${pipelineError}` };
+    }
+    const issues = quickbooksDatasetIssues();
+    const missing = issues.filter((item) => item.status === "missing" || item.status === "not_configured");
+    const hasBook = taxHasBookData();
+    const bridge = taxBridgeRows();
+    const plWidget = widget("quickbooksProfitLossDetail");
+    const ebitdaWidget = widget("ebitdaNormalization");
+    if (missing.length && !hasBook) {
+      return {
+        tone: "warning",
+        message: `Book-to-tax bridge needs QuickBooks P&L — ${missing
+          .slice(0, 2)
+          .map((item) => item.detail || item.datasetKey)
+          .join(" · ")}`,
+      };
+    }
+    if (issues.length && !hasBook) {
+      return {
+        tone: "info",
+        message: issues
+          .slice(0, 3)
+          .map((item) => item.detail || item.datasetKey)
+          .join(" · "),
+      };
+    }
+    const feedWidget = plWidget || ebitdaWidget;
+    if (feedWidget && feedWidget.status === "FAILED" && !hasBook && !bridge.length) {
+      return {
+        tone: "warning",
+        message:
+          feedWidget.summary ||
+          "Book-to-tax bridge stays empty until QuickBooks revenue and P&L exports sync.",
+      };
+    }
+    if (feedWidget && feedWidget.status === "DEGRADED" && !hasBook) {
+      return {
+        tone: "info",
+        message:
+          feedWidget.summary ||
+          "QuickBooks book data is partial — compensation scenarios and quarterly estimates may be placeholders.",
+      };
+    }
+    if (!hasBook && !bridge.length) {
+      return {
+        tone: "info",
+        message: "Tax planning uses QuickBooks book income when available — sync P&L exports for live bridge lines.",
+      };
+    }
+    return null;
+  }
+
   function officeManagerImportNotice() {
     const priorities = widget("officeManagerPriorities") || widget("officeManagerSurfaces");
     const tasks = (snapshot && snapshot.officeTasks) || [];
@@ -1113,6 +1196,8 @@ const PageCanvasData = (function () {
     documentsImportNotice,
     libraryImportNotice,
     officeManagerImportNotice,
+    narrativesImportNotice,
+    taxesImportNotice,
     quickbooksImportNotice,
     quickbooksPlRows,
     quickbooksExpenseBars,

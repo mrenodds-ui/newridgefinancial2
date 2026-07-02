@@ -174,6 +174,8 @@ assert.ok(pageCanvasDataJs.includes("claimsImportNotice"), "page canvas data mus
 assert.ok(pageCanvasDataJs.includes("documentsImportNotice"), "page canvas data must expose documents import notice");
 assert.ok(pageCanvasDataJs.includes("libraryImportNotice"), "page canvas data must expose library import notice");
 assert.ok(pageCanvasDataJs.includes("officeManagerImportNotice"), "page canvas data must expose office manager import notice");
+assert.ok(pageCanvasDataJs.includes("narrativesImportNotice"), "page canvas data must expose narratives import notice");
+assert.ok(pageCanvasDataJs.includes("taxesImportNotice"), "page canvas data must expose taxes import notice");
 assert.ok(pageCanvasJs.includes("canvasImportNotice"), "page-canvas must render import notices on staff pages");
 
 const ServicesModValidate = ServicesMod;

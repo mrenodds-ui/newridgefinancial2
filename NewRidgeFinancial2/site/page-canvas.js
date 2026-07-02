@@ -619,6 +619,7 @@ const PageCanvas = (function () {
     const D = dataApi();
     const draft = D ? D.narrativeDraft() : "";
     return `<div class="pv-canvas-stack">
+      ${canvasImportNotice(D ? D.narrativesImportNotice() : null)}
       <div class="pv-canvas-grid-split">
         ${canvasPanel({
           title: wTitle("narratives", 0),
@@ -767,6 +768,7 @@ const PageCanvas = (function () {
             .join("")}</div>`
         : canvasEmpty("Load QuickBooks P&amp;L to model compensation scenarios.");
     return `<div class="pv-canvas-stack pv-canvas-stack--taxes">
+      ${canvasImportNotice(D ? D.taxesImportNotice() : null)}
       <div class="pv-tax-disclaimer">${esc(disclaimer)}</div>
       <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
       ${sectionHead("Book → tax bridge", plan && plan.periodLabel ? plan.periodLabel : "QuickBooks import → 1120-S prep")}
