@@ -53,27 +53,35 @@ const MonthEndClose = (function () {
     );
 
     const collectionsOk = !fin.collectionsMissing && !fin.collectionsZeroWithProduction;
+    const collectionsPending = Boolean(fin.collectionsPending);
     items.push(
       item(
         "collections",
         "SoftDent collections reported",
-        collectionsOk ? "ok" : "fail",
-        collectionsOk
-          ? "Collections field present for the current period."
-          : fin.collectionsMissing
-            ? "Collections not reported — verify daysheet export before close."
-            : "Production without collections — run final daysheet export.",
+        collectionsPending ? "warn" : collectionsOk ? "ok" : "fail",
+        collectionsPending
+          ? "Collections export pending for the comparable period — production may load before collections."
+          : collectionsOk
+            ? "Collections field present for the current period."
+            : fin.collectionsMissing
+              ? "Collections not reported — verify daysheet export before close."
+              : "Production without collections — run final daysheet export.",
       ),
     );
 
+    const overallPass = fin.quality && fin.quality.overallPass;
     const qualityScore = Number(fin.quality?.score || 0);
-    const qualityOk = qualityScore >= 70;
+    const qualityOk = overallPass !== false && qualityScore >= 70;
     items.push(
       item(
         "data-quality",
         "Financial data quality",
-        qualityScore <= 0 ? "warn" : qualityOk ? "ok" : "warn",
-        qualityScore > 0 ? `Score ${qualityScore}/100.` : "No quality score — imports may be missing.",
+        overallPass === false ? "fail" : qualityScore <= 0 ? "warn" : qualityOk ? "ok" : "warn",
+        overallPass === false
+          ? "Overall quality gate failed — review collections, period alignment, freshness, and QuickBooks reconcile."
+          : qualityScore > 0
+            ? `Score ${qualityScore}/100.`
+            : "No quality score — imports may be missing.",
       ),
     );
 
@@ -114,6 +122,7 @@ const MonthEndClose = (function () {
     );
 
     const depth = dashboardRowCount(bundle);
+    const dashboardSource = bundle?.softdent?.dashboard?.readSource;
     items.push(
       item(
         "dashboard-depth",
@@ -122,6 +131,16 @@ const MonthEndClose = (function () {
         depth >= 2 ? "Current and prior month loaded for trend/YTD." : "Single-month dashboard — prior month export missing.",
       ),
     );
+    if (dashboardSource === "bridge-fallback") {
+      items.push(
+        item(
+          "dashboard-source",
+          "SoftDent dashboard source",
+          "warn",
+          "Dashboard row(s) sourced from bridge snapshot — export daysheet for authoritative collections.",
+        ),
+      );
+    }
 
     const blockers = items.filter((row) => row.status === "fail").length;
     const warnings = items.filter((row) => row.status === "warn").length;
@@ -147,8 +166,10 @@ const MonthEndClose = (function () {
       financial: {
         productionMtd: fin.productionMtd?.value || null,
         qualityScore: fin.quality?.score || null,
+        overallPass: fin.quality?.overallPass ?? null,
         periodAlignment: fin.periodAlignment || null,
         collectionsMissing: Boolean(fin.collectionsMissing),
+        collectionsPending: Boolean(fin.collectionsPending),
       },
       documents: {
         queueCount: docs.queueCount || 0,

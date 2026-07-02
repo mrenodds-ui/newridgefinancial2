@@ -91,8 +91,8 @@ const PageCanvasData = (function () {
       {
         label: "Collection rate",
         value: fmt(payer.collectionRate || payer.latestMonthCollectionRate),
-        hint: fmt(payer.trailingCollectionPeriods),
-        tone: widgetTone("payerMixAndCollections"),
+        hint: fin.collectionsPending ? "Collections export pending" : fmt(payer.trailingCollectionPeriods),
+        tone: fin.collectionsPending ? "warning" : widgetTone("payerMixAndCollections"),
       },
       {
         label: "QuickBooks net income",
@@ -101,13 +101,35 @@ const PageCanvasData = (function () {
         tone: widgetTone("practiceFinancialOverview"),
       },
       {
-        label: "Outstanding A/R",
-        value: fmt(ar.totalOutstanding || ov.collectionsTotal),
-        hint: fmt(ar.aging90PlusPct ? `90+ ${ar.aging90PlusPct}` : null),
-        tone: widgetTone("arAgingAndCollections") || "warning",
+        label: "SoftDent collections",
+        value: fin.collectionsPending ? "Pending export" : fmt(ov.collectionsTotal),
+        hint: fin.collectionsPending
+          ? "Comparable period export not loaded"
+          : fmt(ar.aging90PlusPct ? `A/R 90+ ${ar.aging90PlusPct}` : null),
+        tone: fin.collectionsPending || fin.collectionsMissing ? "warning" : widgetTone("practiceFinancialOverview"),
         spark: sparkSeries(fin.productionTrend && fin.productionTrend.average),
       },
     ];
+  }
+
+  function financialQualityTone(fin) {
+    if (!fin || (fin.dataSource !== "import" && fin.dataSource !== "persisted")) return "warning";
+    if (fin.collectionsMissing || fin.collectionsZeroWithProduction) return "warning";
+    if (fin.collectionsPending) return "warning";
+    if (fin.periodAlignment && fin.periodAlignment.aligned === false) return "warning";
+    if (fin.quality && fin.quality.overallPass === false) return "warning";
+    if (fin.quality && fin.quality.overallPass === true && Number(fin.quality.score) >= 70) return "success";
+    return undefined;
+  }
+
+  function financialQualityDelta(fin) {
+    if (fin.collectionsPending) return "Collections export pending";
+    if (fin.quality && fin.quality.overallPass === false) return "Quality gate failed";
+    if (fin.periodAlignment && fin.periodAlignment.aligned === false) {
+      return fin.periodAlignment.message || "Period mismatch";
+    }
+    if (fin.footer && fin.footer.refreshed) return `Refreshed ${fin.footer.refreshed}`;
+    return "Import snapshot";
   }
 
   function financialCompare() {
@@ -124,14 +146,14 @@ const PageCanvasData = (function () {
       {
         label: "Collection rate",
         value: fmt(payer.collectionRate),
-        delta: fmt(payer.latestMonthCollectionRate),
-        tone: widgetTone("payerMixAndCollections"),
+        delta: fin.collectionsPending ? "Pending export" : fmt(payer.latestMonthCollectionRate),
+        tone: fin.collectionsPending ? "warning" : widgetTone("payerMixAndCollections"),
       },
       {
         label: "Data quality",
         value: fin.quality && fin.quality.score != null ? `${fin.quality.score}/100` : "—",
-        delta: fin.footer && fin.footer.refreshed ? `Refreshed ${fin.footer.refreshed}` : "Import snapshot",
-        tone: fin.dataSource === "import" ? "success" : "warning",
+        delta: financialQualityDelta(fin),
+        tone: financialQualityTone(fin),
       },
     ];
   }
@@ -284,6 +306,115 @@ const PageCanvasData = (function () {
       }));
     }
     return [];
+  }
+
+  function importBundleDashboard() {
+    const bundle = snapshot && snapshot.importBundle;
+    return (bundle && bundle.softdent && bundle.softdent.dashboard) || null;
+  }
+
+  function datasetIssuesForKeys(datasetKeys) {
+    const bundle = snapshot && snapshot.importBundle;
+    const diagnostics = bundle && bundle.diagnostics;
+    const datasets = (diagnostics && diagnostics.datasets) || [];
+    const keys = new Set(datasetKeys);
+    return datasets.filter((item) => keys.has(item.datasetKey) && item.status !== "connected");
+  }
+
+  function financialImportNotice() {
+    const fin = dash("financial") || {};
+    const bundle = snapshot && snapshot.importBundle;
+    const dashboard = importBundleDashboard();
+    const readSource = dashboard && dashboard.readSource;
+    if (bundle && bundle.directPipelineError) {
+      return { tone: "error", message: `Import pipeline: ${bundle.directPipelineError}` };
+    }
+    if (readSource === "bridge-fallback") {
+      const validation = (dashboard && dashboard.bridgeValidation) || {};
+      const issues = validation.issues || [];
+      return {
+        tone: validation.ok ? "info" : "warning",
+        message: issues.length
+          ? `SoftDent dashboard is from bridge snapshot (not daysheet export): ${issues.join("; ")}`
+          : "SoftDent dashboard is from bridge snapshot — export daysheet for authoritative collections.",
+      };
+    }
+    if (fin.periodAlignment && fin.periodAlignment.aligned === false) {
+      return {
+        tone: "warning",
+        message: fin.periodAlignment.message || "SoftDent and QuickBooks periods do not align.",
+      };
+    }
+    if (fin.collectionsPending) {
+      return {
+        tone: "info",
+        message:
+          "Collections export is pending for the QuickBooks-comparable period — production is loaded; collection rate may be incomplete.",
+      };
+    }
+    if (fin.collectionsMissing || fin.collectionsZeroWithProduction) {
+      return {
+        tone: "warning",
+        message:
+          "SoftDent collections are missing for a period with production — verify final daysheet export before period close.",
+      };
+    }
+    if (fin.quality && fin.quality.overallPass === false) {
+      return {
+        tone: "warning",
+        message:
+          "Financial data quality gate failed — review import freshness, collections, period alignment, and QuickBooks P&L reconcile.",
+      };
+    }
+    const overview = widget("practiceFinancialOverview");
+    if (overview && overview.status === "FAILED") {
+      return {
+        tone: "warning",
+        message: overview.summary || "Practice financial overview is missing required import data.",
+      };
+    }
+    if (overview && overview.status === "DEGRADED" && overview.summary) {
+      return { tone: "info", message: overview.summary };
+    }
+    return null;
+  }
+
+  function softdentImportNotice() {
+    const dashboard = importBundleDashboard();
+    const fin = dash("financial") || {};
+    const readSource = dashboard && dashboard.readSource;
+    if (readSource === "bridge-fallback") {
+      const validation = (dashboard && dashboard.bridgeValidation) || {};
+      const issues = validation.issues || [];
+      return {
+        tone: validation.ok ? "info" : "warning",
+        message: issues.length
+          ? `Dashboard sourced from bridge snapshot: ${issues.join("; ")}. Export daysheet for authoritative collections.`
+          : "Dashboard sourced from bridge snapshot — daysheet export recommended for collections and trend widgets.",
+      };
+    }
+    const issues = datasetIssuesForKeys(["softdent.dashboard", "softdent.claims", "softdent.ar"]);
+    if (issues.length) {
+      return {
+        tone: issues.some((item) => item.status === "missing" || item.status === "not_configured") ? "warning" : "info",
+        message: issues
+          .slice(0, 3)
+          .map((item) => item.detail || item.datasetKey)
+          .join(" · "),
+      };
+    }
+    if (fin.collectionsPending) {
+      return {
+        tone: "info",
+        message:
+          "Collections export pending for the comparable period — care delivery metrics may omit collections.",
+      };
+    }
+    const care = widget("careDeliveryPerformance");
+    if (care && care.status === "FAILED") {
+      return { tone: "warning", message: care.summary || "SoftDent dashboard import not loaded." };
+    }
+    return null;
   }
 
   function quickbooksDatasetIssues() {
@@ -802,6 +933,8 @@ const PageCanvasData = (function () {
     softdentResponsibilityDonut,
     practiceStats,
     importHealthCards,
+    financialImportNotice,
+    softdentImportNotice,
     quickbooksImportNotice,
     quickbooksPlRows,
     quickbooksExpenseBars,

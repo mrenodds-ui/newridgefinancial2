@@ -20,13 +20,14 @@ const rows = [
   { production: 100, period: "2026-06" },
   { production: 90, period: "2026-05" },
 ];
+const freshModifiedAt = new Date().toISOString();
 
 const changed = evaluateDataset(
   "softdent.dashboard",
   contract,
   {
     sourceFile: "softdent_dashboard_data.json",
-    modifiedAt: "2026-06-30T12:00:00.000Z",
+    modifiedAt: freshModifiedAt,
     sha256: "bbbb",
     rows,
   },
@@ -48,7 +49,7 @@ const stable = evaluateDataset(
   contract,
   {
     sourceFile: "softdent_dashboard_data.json",
-    modifiedAt: "2026-06-30T12:00:00.000Z",
+    modifiedAt: freshModifiedAt,
     sha256: "same-hash",
     rows,
   },
@@ -63,5 +64,22 @@ const stable = evaluateDataset(
 );
 assert.equal(stable.status, STATUS.CONNECTED);
 assert.equal(stable.checksumChanged, false);
+
+const bridgeFallback = evaluateDataset(
+  "softdent.dashboard",
+  contract,
+  {
+    sourceFile: "softdent_dashboard_data.json",
+    modifiedAt: freshModifiedAt,
+    readSource: "bridge-fallback",
+    bridgeValidation: { ok: true, rowCount: 1, issues: [] },
+    rows: [{ production: 120000, period: "2026-06", collectionsReported: false }],
+  },
+  { datasets: { "softdent.dashboard": contract } },
+  [],
+  {},
+);
+assert.equal(bridgeFallback.status, STATUS.PARTIAL);
+assert.match(bridgeFallback.detail, /bridge fallback/i);
 
 console.log("test_import_diagnostics_node.mjs: ok");

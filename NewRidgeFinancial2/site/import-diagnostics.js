@@ -249,6 +249,20 @@ const ImportDiagnostics = (function () {
       detail = `Dataset changed since last sync (checksum). ${detail}`;
     }
 
+    const readSource = String((datasetPayload && datasetPayload.readSource) || "").toLowerCase();
+    if (datasetKey === "softdent.dashboard" && readSource === "bridge-fallback") {
+      if (status === STATUS.CONNECTED) status = STATUS.PARTIAL;
+      const bridgeValidation =
+        datasetPayload && typeof datasetPayload.bridgeValidation === "object" ? datasetPayload.bridgeValidation : {};
+      const bridgeIssues = Array.isArray(bridgeValidation.issues) ? bridgeValidation.issues : [];
+      let bridgeNote = "Dashboard loaded from bridge fallback (not daysheet export).";
+      if (bridgeIssues.length) bridgeNote = `${bridgeNote} ${bridgeIssues.join("; ")}.`;
+      detail = `${bridgeNote} ${detail}`.trim();
+    } else if (datasetKey === "softdent.dashboard" && rowCount === 1 && status === STATUS.CONNECTED) {
+      status = STATUS.PARTIAL;
+      detail = "Current month only; prior month export missing for trend/YTD widgets.";
+    }
+
     return {
       datasetKey,
       system: contract && contract.system,

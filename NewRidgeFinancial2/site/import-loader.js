@@ -162,6 +162,7 @@ const ImportLoader = (function () {
   function dashboardImportDepth(pageId, patch) {
     if (pageId === "financial") {
       if (patch.collectionsMissing || patch.collectionsZeroWithProduction) return "degraded";
+      if (patch.collectionsPending) return "partial";
       if (patch.periodAlignment && patch.periodAlignment.aligned === false && patch.bothSources) return "degraded";
       if (patch.singleSource) return "partial";
       const hasTrend = Array.isArray(patch.productionTrend?.production) && patch.productionTrend.production.length > 1;
@@ -1344,14 +1345,18 @@ const ImportLoader = (function () {
       metrics: [
         {
           label: "Collections MTD",
-          value: formatMoney(collections),
-          tone: collectionsMissing ? "gold" : "green",
+          value: collectionHealth.pending ? "Pending export" : formatMoney(collections),
+          tone: collectionHealth.pending || collectionsMissing ? "gold" : "green",
           ...(collectionsMissing
             ? { trend: "Not reported", trendDir: "down" }
-            : importedTrendMeta()),
-          vs: collectionsMissing
-            ? "Verify daysheet export — not a true 0% rate"
-            : "SoftDent import",
+            : collectionHealth.pending
+              ? { trend: "Pending export", trendDir: "flat" }
+              : importedTrendMeta()),
+          vs: collectionHealth.pending
+            ? "Comparable period export not loaded"
+            : collectionsMissing
+              ? "Verify daysheet export — not a true 0% rate"
+              : "SoftDent import",
           subLabel: collectionRateMetrics.displayLabel,
           subValue: collectionRate,
           ...(collectionRateMetrics.latestMonthIncomplete

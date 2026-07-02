@@ -748,6 +748,25 @@ async function main() {
     "pending metric state must degrade widget contract status",
   );
 
+  const failedQualityFeed = HalSkills.buildWidgetFeed({
+    dashboards: {
+      financial: {
+        dataSource: "import",
+        productionMtd: { value: 100000 },
+        quality: { score: 55, overallPass: false, categories: [{ label: "QB P&L reconcile", score: 10 }] },
+      },
+      softdent: { dataSource: "import", production: 100000, collections: 80000 },
+      quickbooks: { dataSource: "import", revenue: 50000, expenses: 30000 },
+      practice: { dataSource: "empty" },
+    },
+  });
+  assert(
+    (failedQualityFeed.accountingExcelValidation?.issues || []).some((issue) =>
+      /overallPass failed/i.test(String(issue.message || "")),
+    ),
+    "overallPass false must surface in widget commit validation",
+  );
+
   const contractRoute = HalCore.routeHalCommand(halData, halModels, pages, "what does the financial widget need?");
   assert(contractRoute.intent === "widgets: contract" && contractRoute.useWidgetContract === true, "widget contract questions must route locally");
   assert(WidgetContract.formatContractForHal("practiceFinancialOverview").includes("quickbooks.revenue"), "HAL widget contract must describe required datasets");

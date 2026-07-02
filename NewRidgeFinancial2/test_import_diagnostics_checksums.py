@@ -78,6 +78,27 @@ class ImportDiagnosticsChecksumTests(unittest.TestCase):
         self.assertEqual(item["status"], STATUS_CONNECTED)
         self.assertFalse(item["checksumChanged"])
 
+    def test_bridge_fallback_downgrades_dashboard_to_partial(self) -> None:
+        contract = {
+            "system": "softdent",
+            "bundleKey": "dashboard",
+            "automated": True,
+            "severity": "critical",
+            "freshnessMaxMinutes": 1440,
+            "requiredFields": ["production"],
+            "fieldAliases": {"production": ["production"]},
+        }
+        payload = {
+            "sourceFile": "softdent_dashboard_data.json",
+            "modifiedAt": datetime.now(timezone.utc).isoformat(),
+            "readSource": "bridge-fallback",
+            "bridgeValidation": {"ok": True, "rowCount": 1, "issues": []},
+            "rows": [{"production": 120000, "period": "2026-06", "collectionsReported": False}],
+        }
+        item = evaluate_dataset("softdent.dashboard", contract, payload)
+        self.assertEqual(item["status"], STATUS_PARTIAL)
+        self.assertIn("bridge fallback", item["detail"].lower())
+
 
 if __name__ == "__main__":
     unittest.main()

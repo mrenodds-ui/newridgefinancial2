@@ -413,6 +413,7 @@ def _sync_softdent_pipeline_exports(destination: Path) -> dict[str, Any]:
     written: list[str] = []
     collections_diagnostic: dict[str, Any] | None = None
     practice_sync: dict[str, Any] | None = None
+    period_sync: dict[str, Any] | None = None
     bridge_path = destination / "softdent_bridge_latest.json"
     if not bridge_path.is_file():
         bridge_path = _find_newest(destination, ("softdent_bridge_latest.json",))
@@ -455,6 +456,7 @@ def _sync_softdent_pipeline_exports(destination: Path) -> dict[str, Any]:
         "written": written,
         "collectionsDiagnostic": collections_diagnostic,
         "practiceSync": practice_sync,
+        "periodSync": period_sync,
     }
 
 
@@ -683,6 +685,16 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
     result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_CASE_ACCEPTANCE_NAMES))
     pipeline = _sync_softdent_pipeline_exports(softdent_dest)
     result["softdent"]["generated"].extend(pipeline.get("written") or [])
+    if pipeline.get("periodSync"):
+        result["periodSync"] = pipeline["periodSync"]
+        for entry in (pipeline["periodSync"].get("mergeLog") or []):
+            if entry.get("action") != "upsert":
+                continue
+            result["warnings"].append(
+                "Dashboard period upsert "
+                f"{entry.get('period')}: production {entry.get('priorProduction')} -> {entry.get('mergedProduction')}, "
+                f"collections {entry.get('priorCollections')} -> {entry.get('mergedCollections')}."
+            )
     for issue in (pipeline.get("collectionsDiagnostic") or {}).get("issues") or []:
         result["warnings"].append(f"Collections: {issue}")
     if pipeline.get("practiceSync") and not (pipeline["practiceSync"].get("written") or []):

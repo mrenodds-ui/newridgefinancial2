@@ -47,6 +47,47 @@ const checklist = MonthEndClose.buildMonthEndChecklist({
 assert.equal(checklist.ready, true);
 assert.ok(checklist.items.some((item) => item.id === "period-alignment" && item.status === "ok"));
 
+const pendingChecklist = MonthEndClose.buildMonthEndChecklist({
+  financial: {
+    periodAlignment: { aligned: true, softdentPeriod: "2026-06", quickbooksPeriod: "2026-06" },
+    collectionsPending: true,
+    collectionsMissing: false,
+    collectionsZeroWithProduction: false,
+    quality: { score: 85, overallPass: true, categories: [{ label: "QB P&L reconcile", score: 25 }] },
+  },
+  documents: { posting: [{ label: "Pending Review", count: 0 }], period: { label: "2026-06" } },
+  importBundle: { diagnostics: { datasets: [] }, softdent: { dashboard: { rows: [{}, {}] } } },
+});
+assert.equal(pendingChecklist.ready, true);
+assert.ok(pendingChecklist.items.some((item) => item.id === "collections" && item.status === "warn"));
+
+const failedQualityChecklist = MonthEndClose.buildMonthEndChecklist({
+  financial: {
+    periodAlignment: { aligned: true, softdentPeriod: "2026-06", quickbooksPeriod: "2026-06" },
+    collectionsMissing: false,
+    collectionsZeroWithProduction: false,
+    quality: { score: 55, overallPass: false, categories: [{ label: "QB P&L reconcile", score: 10 }] },
+  },
+  documents: { posting: [{ label: "Pending Review", count: 0 }], period: { label: "2026-06" } },
+  importBundle: { diagnostics: { datasets: [] }, softdent: { dashboard: { rows: [{}, {}] } } },
+});
+assert.equal(failedQualityChecklist.ready, false);
+assert.ok(failedQualityChecklist.items.some((item) => item.id === "data-quality" && item.status === "fail"));
+
+const bridgeChecklist = MonthEndClose.buildMonthEndChecklist({
+  financial: {
+    periodAlignment: { aligned: true, softdentPeriod: "2026-06", quickbooksPeriod: "2026-06" },
+    collectionsMissing: false,
+    quality: { score: 85, overallPass: true, categories: [{ label: "QB P&L reconcile", score: 25 }] },
+  },
+  documents: { posting: [{ label: "Pending Review", count: 0 }], period: { label: "2026-06" } },
+  importBundle: {
+    diagnostics: { datasets: [] },
+    softdent: { dashboard: { rows: [{}, {}], readSource: "bridge-fallback" } },
+  },
+});
+assert.ok(bridgeChecklist.items.some((item) => item.id === "dashboard-source" && item.status === "warn"));
+
 const payload = MonthEndClose.buildReconciliationPayload({
   dashboards: { financial: { productionMtd: { value: "$1" }, quality: { score: 80 } } },
   documents: { queueCount: 2, period: { postedAmount: "$1" }, postingAudit: [entry] },

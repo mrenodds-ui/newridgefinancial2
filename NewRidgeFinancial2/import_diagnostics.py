@@ -217,6 +217,18 @@ def evaluate_dataset(
         status = STATUS_PARTIAL
         detail = f"Dataset changed since last sync (checksum). {detail}"
 
+    read_source = str(dataset_payload.get("readSource") or "").strip().lower()
+    if dataset_key == "softdent.dashboard" and read_source == "bridge-fallback":
+        if status == STATUS_CONNECTED:
+            status = STATUS_PARTIAL
+        bridge_validation = dataset_payload.get("bridgeValidation")
+        bridge_validation = bridge_validation if isinstance(bridge_validation, dict) else {}
+        bridge_issues = bridge_validation.get("issues") or []
+        bridge_note = "Dashboard loaded from bridge fallback (not daysheet export)."
+        if bridge_issues:
+            bridge_note = f"{bridge_note} {'; '.join(str(issue) for issue in bridge_issues)}."
+        detail = f"{bridge_note} {detail}".strip()
+
     return {
         "datasetKey": dataset_key,
         "system": contract.get("system"),

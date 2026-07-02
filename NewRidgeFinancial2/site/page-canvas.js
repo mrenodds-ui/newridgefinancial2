@@ -363,6 +363,7 @@ const PageCanvas = (function () {
       : canvasEmpty("QuickBooks YTD totals will appear when P&amp;L export is loaded.");
 
     return `<div class="pv-canvas-stack">
+      ${canvasImportNotice(D ? D.financialImportNotice() : null)}
       <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
       ${compare.length ? canvasCompareStrip(compare) : ""}
       ${sectionHead("Performance snapshot", D ? D.periodSubtitle() : "Import snapshot")}
@@ -415,6 +416,7 @@ const PageCanvas = (function () {
     const resp = D ? D.softdentResponsibilityDonut() : null;
     const caseRateNum = parseFloat(String(practice.caseRate || "").replace("%", ""));
     return `<div class="pv-canvas-stack">
+      ${canvasImportNotice(D ? D.softdentImportNotice() : null)}
       ${sectionHead("Import status", D ? D.periodSubtitle() : "SoftDent source")}
       ${canvasImportHealthGrid()}
       ${canvasPanel({

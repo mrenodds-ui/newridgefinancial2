@@ -1603,6 +1603,15 @@ const HalSkills = (function () {
         finDash.periodAlignment.message,
       );
     }
+    if (finDash && finDash.quality && finDash.quality.overallPass === false) {
+      addCommitIssue(
+        issues,
+        "practiceFinancialOverview",
+        "monthlyRevenue",
+        "warning",
+        "Financial data quality overallPass failed — resolve import freshness, collections, period alignment, or QuickBooks reconcile before period close.",
+      );
+    }
 
     const qbDash = snapshot.dashboards && snapshot.dashboards.quickbooks;
     if (qbDash && qbDash.expenseCategories && qbDash.expenseCategories.scope === "unlabeled") {
