@@ -74,6 +74,6 @@ See `NewRidgeFinancial2/README.md` for page/HAL details.
 | **Secret Scan** | Push/PR + manual | TruffleHog on repo (excludes `.trufflehogignore`) |
 | Legacy (Build, CI, Frontend CI, FastAPI, CodeQL, …) | **Manual only** | Reference stack under `frontend/` and `_legacy/` |
 
-Dependabot is disabled for legacy trees. Close any old open dependency PRs manually on GitHub.
+Dependabot is disabled for legacy trees. Open Dependabot PRs are auto-closed by `.github/workflows/close-legacy-dependabot-prs.yml` (or run `scripts/Close-Legacy-Dependabot-PRs.ps1` if `gh` is installed).
 
 Eval tooling (local, optional): `scripts/run_nr2_dual_model_micro_eval.ps1`, `scripts/run_gemma2_hal_program_eval.ps1` — see `docs/nr2-audit-findings.md` and `docs/gemma2-hal-review-triage.md`.
