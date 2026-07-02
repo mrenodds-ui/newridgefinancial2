@@ -423,6 +423,8 @@ const HalRouteExec = (function () {
     }
 
     if (result.useWidgetMasterChart) {
+      const feed = await widgetFeed();
+      ctx.setHalWidgetFeed(feed);
       const chart =
         typeof HalWidgetMasterChart !== "undefined"
           ? HalWidgetMasterChart
@@ -437,7 +439,7 @@ const HalRouteExec = (function () {
               })();
       const text =
         chart && typeof chart.formatForHal === "function"
-          ? chart.formatForHal()
+          ? chart.formatForHal(feed)
           : "Widget master chart unavailable.";
       return outcome(text, "widgets", result.intent, [], { refreshHal: true });
     }

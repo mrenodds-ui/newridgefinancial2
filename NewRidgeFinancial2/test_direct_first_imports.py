@@ -57,6 +57,32 @@ class DirectFirstImportTests(unittest.TestCase):
         self.assertEqual(claims.get("readSource"), "cache")
         self.assertEqual(len(claims.get("rows") or []), 1)
 
+    def test_direct_first_prefers_direct_over_fresher_cache(self) -> None:
+        with patch.dict(os.environ, {"NR2_DIRECT_FIRST_IMPORTS": "1"}, clear=False):
+            with patch("import_loader._load_direct_sections") as mock_direct:
+                with patch("import_loader._load_dataset") as mock_cache:
+                    mock_direct.return_value = {
+                        "softdent": {
+                            "dashboard": {
+                                "sourceFile": "softdent_dashboard_data.json",
+                                "modifiedAt": "2026-06-01T12:00:00+00:00",
+                                "rows": [{"provider": "Dr. Test", "production": 1000, "collections": 900}],
+                                "readSource": "direct",
+                            }
+                        },
+                        "quickbooks": {},
+                    }
+                    mock_cache.return_value = {
+                        "sourceFile": "softdent_dashboard_data.json",
+                        "modifiedAt": "2026-07-01T12:00:00+00:00",
+                        "rows": [{"provider": "Cache", "production": 500, "collections": 400}],
+                        "readSource": "cache",
+                    }
+                    bundle = load_import_bundle(sync=False, deep=False)
+        dashboard = (bundle.get("softdent") or {}).get("dashboard") or {}
+        self.assertEqual(dashboard.get("readSource"), "direct")
+        self.assertEqual(dashboard.get("rows")[0].get("provider"), "Dr. Test")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -79,7 +79,8 @@ const HalAgent = (function () {
     },
     read_widget_master_chart: {
       label: "Read widget master chart",
-      run: async () => {
+      run: async (ctx) => {
+        const snap = ctx && typeof ctx.loadProgramSnapshot === "function" ? await ctx.loadProgramSnapshot() : null;
         const chart =
           typeof HalWidgetMasterChart !== "undefined"
             ? HalWidgetMasterChart
@@ -95,7 +96,13 @@ const HalAgent = (function () {
         if (!chart || typeof chart.formatForHal !== "function") {
           return { ok: false, summary: "Widget master chart unavailable." };
         }
-        return { ok: true, summary: chart.formatForHal().slice(0, 6000), chart: chart.all ? chart.all() : null };
+        const feed =
+          (snap && snap.widgets) || (window.HalSkills && HalSkills.buildWidgetFeed(snap)) || ctx.halWidgetFeed || null;
+        return {
+          ok: true,
+          summary: chart.formatForHal(feed).slice(0, 6000),
+          chart: chart.all ? chart.all(feed) : null,
+        };
       },
     },
     read_source_health: {

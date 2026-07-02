@@ -417,6 +417,54 @@ const PageCanvasData = (function () {
     return null;
   }
 
+  function arImportNotice() {
+    const fin = dash("financial") || {};
+    const smart = widget("smartClaimsAndReceivables");
+    const aging = widget("arAgingAndCollections");
+    const outstanding = widget("arOutstandingClaims");
+    const issues = datasetIssuesForKeys(["softdent.ar", "softdent.claims"]);
+    if (issues.length) {
+      return {
+        tone: issues.some((item) => item.status === "missing" || item.status === "not_configured") ? "warning" : "info",
+        message: issues
+          .slice(0, 3)
+          .map((item) => item.detail || item.datasetKey)
+          .join(" · "),
+      };
+    }
+    if (fin.arCrossCheck && fin.arCrossCheck.comparable && fin.arCrossCheck.withinTolerance === false) {
+      return { tone: "warning", message: fin.arCrossCheck.message || "SoftDent and QuickBooks A/R totals differ beyond tolerance." };
+    }
+    if (smart && smart.status === "FAILED") {
+      return {
+        tone: "warning",
+        message:
+          smart.summary ||
+          "Verified A/R source is not loaded — totals stay empty until SoftDent A/R aging export syncs.",
+      };
+    }
+    if (aging && aging.status === "DEGRADED" && aging.summary) {
+      return { tone: "info", message: aging.summary };
+    }
+    if (outstanding && outstanding.status === "FAILED" && !arTopClaimsTable().length) {
+      return {
+        tone: "warning",
+        message:
+          outstanding.summary ||
+          "Outstanding claim detail will appear when SoftDent claims export includes balances or verified A/R.",
+      };
+    }
+    const hasChart = Boolean(arCollectionsChart());
+    const hasClaims = arTopClaimsTable().length > 0;
+    if (smart && smart.status !== "SUCCESS" && !hasChart && !hasClaims) {
+      return {
+        tone: "warning",
+        message: "A/R charts stay empty until verified SoftDent A/R aging and claims exports are loaded.",
+      };
+    }
+    return null;
+  }
+
   function quickbooksDatasetIssues() {
     const bundle = snapshot && snapshot.importBundle;
     const diagnostics = bundle && bundle.diagnostics;
@@ -935,6 +983,7 @@ const PageCanvasData = (function () {
     importHealthCards,
     financialImportNotice,
     softdentImportNotice,
+    arImportNotice,
     quickbooksImportNotice,
     quickbooksPlRows,
     quickbooksExpenseBars,

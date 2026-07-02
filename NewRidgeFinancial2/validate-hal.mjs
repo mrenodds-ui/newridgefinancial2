@@ -696,6 +696,10 @@ async function main() {
     "widget master chart must stay aligned with WIDGET_ORDER",
   );
   assert(HalWidgetMasterChart.formatForHal().includes("HAL Widget Master Chart"), "widget master chart must format for HAL guidance");
+  assert(
+    HalWidgetMasterChart.formatForHal(feed).includes("Ready now:"),
+    "widget master chart must include feed readiness when a widget feed is supplied",
+  );
   const masterChartWithFeed = HalWidgetMasterChart.all(feed);
   assert(
     masterChartWithFeed.every((row) => typeof row.dataReady === "boolean"),

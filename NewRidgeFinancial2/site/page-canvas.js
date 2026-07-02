@@ -530,6 +530,7 @@ const PageCanvas = (function () {
             { lane: "Ready to close", tone: "green", items: [] },
           ];
     return `<div class="pv-canvas-stack">
+      ${canvasImportNotice(D ? D.arImportNotice() : null)}
       <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
       ${canvasPanel({
         title: wTitle("ar", 0),

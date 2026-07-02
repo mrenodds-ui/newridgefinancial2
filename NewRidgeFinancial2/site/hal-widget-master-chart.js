@@ -229,9 +229,12 @@ const HalWidgetMasterChart = (function () {
     }, {});
   }
 
-  function formatForHal() {
-    const groups = byPage();
+  function formatForHal(feed) {
+    const groups = byPage(feed);
     const lines = ["HAL Widget Master Chart", "Use this as the placement guide before reading or explaining widgets."];
+    if (feed && feed.widgets) {
+      lines.push("", "Readiness reflects the current widget feed (SUCCESS = ready now).");
+    }
     Object.keys(groups).forEach((page) => {
       lines.push("", page.toUpperCase());
       groups[page].forEach((row) => {
@@ -239,6 +242,9 @@ const HalWidgetMasterChart = (function () {
         lines.push(`  Does: ${row.purpose}`);
         lines.push(`  Expected: ${row.expectedData.join("; ") || "No expected data documented."}`);
         lines.push(`  Ready when: ${row.readyWhen}`);
+        if (typeof row.dataReady === "boolean") {
+          lines.push(`  Ready now: ${row.dataReady ? "yes" : "no"}`);
+        }
       });
     });
     return lines.join("\n");

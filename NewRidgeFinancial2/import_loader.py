@@ -144,6 +144,10 @@ def _resolve_dataset(
     direct: dict[str, Any] | None,
     cached: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
+    if direct_first_imports_enabled() and _dataset_has_rows(direct):
+        picked = dict(direct)
+        picked.setdefault("readSource", "direct")
+        return picked
     try:
         from import_direct_pipeline import pipeline_first_imports_enabled, pick_freshest_dataset
 
@@ -153,12 +157,15 @@ def _resolve_dataset(
                 if picked is cached and _dataset_has_rows(cached):
                     cached = dict(cached)
                     cached["readSource"] = "cache"
+                    return cached
                 return picked
     except Exception:
         pass
     if _dataset_has_rows(direct):
         return direct
     if _dataset_has_rows(cached):
+        cached = dict(cached)
+        cached.setdefault("readSource", "cache")
         return cached
     return direct or cached
 
