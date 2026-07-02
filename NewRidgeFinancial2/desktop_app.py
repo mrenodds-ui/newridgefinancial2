@@ -382,6 +382,53 @@ class DesktopApi:
         bundle = load_import_bundle(sync=False, deep=False)
         return build_tax_plan_from_bundle(bundle)
 
+    def get_integration_health(self) -> dict:
+        from integration_health import integration_health_snapshot
+
+        with self._sync_lock:
+            sync_state = dict(self._sync_state)
+        return integration_health_snapshot(self.store, sync_state=sync_state, deep_diagnostics=True)
+
+    def get_automation_registry(self) -> dict:
+        from automation_registry import list_automation_jobs
+
+        return list_automation_jobs()
+
+    def build_support_bundle(self, note: str = "") -> dict:
+        from hal_audit import append_audit_event
+        from support_bundle import build_support_bundle
+
+        result = build_support_bundle(self.store, note=str(note or ""))
+        append_audit_event(event_type="support_bundle", actor="Staff", detail=result.get("path", ""))
+        return result
+
+    def get_financial_reports(self, sync_exports: bool = False) -> dict:
+        from financial_reports import build_financial_reports
+
+        return build_financial_reports(sync_exports=bool(sync_exports))
+
+    def get_daily_closeout(self) -> dict:
+        from daily_closeout import build_daily_closeout
+
+        return build_daily_closeout(self.store)
+
+    def get_program_help(self, query: str) -> dict:
+        from program_help import format_program_help, match_program_help
+
+        return {"text": format_program_help(query), "match": match_program_help(query)}
+
+    def search_hal_memories(self, query: str, limit: int = 5) -> dict:
+        from knowledge_memory_index import format_memory_hits, search_memories
+
+        hits = search_memories(str(query or ""), limit=int(limit or 5))
+        return {"items": hits, "count": len(hits), "text": format_memory_hits(hits)}
+
+    def get_hal_audit_recent(self, limit: int = 20) -> dict:
+        from hal_audit import read_recent_audit
+
+        items = read_recent_audit(limit=int(limit or 20))
+        return {"items": items, "count": len(items)}
+
 
 def main() -> int:
     if not INDEX_HTML.is_file():

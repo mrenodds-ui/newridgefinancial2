@@ -1318,7 +1318,7 @@ const HalCore = (function () {
         intent: "help",
         lane: "local",
         text:
-          "I am HAL, the local read-only program manager for NewRidgeFinancial 2.0. My top priority is to monitor the program, place correct data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action. I have full read access to local program pages and service data. I run an agent loop: plan the question, gather local tool data, answer, and self-check before responding. I can: open and explain pages; show the full program snapshot; show priorities and source health; start read-only work sessions; build local evidence packets; run readiness checks; check claim packet readiness; draft journal-entry review notes; show manager dashboard widgets; explain missing widget data; prioritize widget imports; build daily owner briefings; show accounting review queues; perform Excel-style reconciliation; search the local library; research public web reference material for practice operations (sanitized — no patient data sent); save durable learned facts when you say Remember this: ...; list and create local tasks; monitor, list, and create sidenotes; report local AI model lanes; and simulate the external-action firewall. I use local GPU chat and helper models for unmatched questions, 24B reasoning on demand for plans and insurance narratives, and keep escalation local. I remember recent conversation context, approved learned facts, and local office preferences. I do not submit, send, upload, post, delete, or change outside systems.",
+          "I am HAL, the local read-only program manager for NewRidgeFinancial 2.0. My top priority is to monitor the program, place correct data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action. I have full read access to local program pages and service data. I run an agent loop: plan the question, gather local tool data, answer, and self-check before responding. I can: open and explain pages; show the full program snapshot; show priorities and source health; show integration health and automation job status; build a redacted support bundle; run daily closeout; show financial reports (claims/A/R); start read-only work sessions; build local evidence packets; run readiness checks; check claim packet readiness; draft journal-entry review notes; show manager dashboard widgets; explain missing widget data; prioritize widget imports; build daily owner briefings; show accounting review queues; perform Excel-style reconciliation; search the local library; research public web reference material for practice operations (sanitized — no patient data sent); save durable learned facts when you say Remember this: ...; list and create local tasks; monitor, list, and create sidenotes; report local AI model lanes; and simulate the external-action firewall. I use local GPU chat and helper models for unmatched questions, 24B reasoning on demand for plans and insurance narratives, and keep escalation local. I remember recent conversation context, approved learned facts, and local office preferences. I do not submit, send, upload, post, delete, or change outside systems.",
         actions: [],
       };
     }
@@ -1558,6 +1558,25 @@ const HalCore = (function () {
         return { intent: "imports: refresh", lane: "local", useImportRefresh: true, text: "", actions: [] };
       }
       return { intent: "imports: status", lane: "local", useImportStatus: true, text: "", actions: [] };
+    }
+
+    if (/\b(integration health|integrations health|integration status|system health)\b/.test(query)) {
+      return { intent: "ops: integration-health", lane: "local", useIntegrationHealth: true, text: "", actions: [] };
+    }
+    if (/\b(support bundle|diagnostics bundle|export support|troubleshoot bundle)\b/.test(query)) {
+      return { intent: "ops: support-bundle", lane: "local", useSupportBundle: true, text: "", actions: [] };
+    }
+    if (/\b(daily closeout|morning checklist|end of day checklist)\b/.test(query)) {
+      return { intent: "ops: daily-closeout", lane: "local", useDailyCloseout: true, text: "", actions: [] };
+    }
+    if (/\b(financial reports?|claim tracking|claims report|ar aging report)\b/.test(query)) {
+      return { intent: "ops: financial-reports", lane: "local", useFinancialReports: true, text: "", actions: [] };
+    }
+    if (/\b(automation registry|scheduled jobs|automation status|last run)\b/.test(query)) {
+      return { intent: "ops: automation-registry", lane: "local", useAutomationRegistry: true, text: "", actions: [] };
+    }
+    if (/\bhow do i\b|\bhow to\b.*\b(import|widget|document|support|closeout|refresh)\b/.test(query)) {
+      return { intent: "ops: program-help", lane: "local", useProgramHelp: true, prompt: rawQuery, text: "", actions: [] };
     }
 
     if (

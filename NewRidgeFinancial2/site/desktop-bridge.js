@@ -434,6 +434,70 @@ const DesktopBridge = (function () {
     return null;
   }
 
+  async function getIntegrationHealth() {
+    if (hasDesktopApi() && window.pywebview.api.get_integration_health) {
+      return window.pywebview.api.get_integration_health();
+    }
+    const resp = await fetch("http://127.0.0.1:8765/api/integration-health", { cache: "no-store" });
+    if (!resp.ok) throw new Error("integration health unavailable");
+    return resp.json();
+  }
+
+  async function getAutomationRegistry() {
+    if (hasDesktopApi() && window.pywebview.api.get_automation_registry) {
+      return window.pywebview.api.get_automation_registry();
+    }
+    const resp = await fetch("http://127.0.0.1:8765/api/automation-registry", { cache: "no-store" });
+    if (!resp.ok) throw new Error("automation registry unavailable");
+    return resp.json();
+  }
+
+  async function buildSupportBundle(note) {
+    if (hasDesktopApi() && window.pywebview.api.build_support_bundle) {
+      return window.pywebview.api.build_support_bundle(String(note || ""));
+    }
+    const resp = await fetch("http://127.0.0.1:8765/api/support-bundle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: String(note || "") }),
+    });
+    if (!resp.ok) throw new Error("support bundle unavailable");
+    return resp.json();
+  }
+
+  async function getFinancialReports(syncExports) {
+    if (hasDesktopApi() && window.pywebview.api.get_financial_reports) {
+      return window.pywebview.api.get_financial_reports(Boolean(syncExports));
+    }
+    const q = syncExports ? "?syncExports=1" : "";
+    const resp = await fetch(`http://127.0.0.1:8765/api/financial-reports${q}`, { cache: "no-store" });
+    if (!resp.ok) throw new Error("financial reports unavailable");
+    return resp.json();
+  }
+
+  async function getDailyCloseout() {
+    if (hasDesktopApi() && window.pywebview.api.get_daily_closeout) {
+      return window.pywebview.api.get_daily_closeout();
+    }
+    const resp = await fetch("http://127.0.0.1:8765/api/daily-closeout", { cache: "no-store" });
+    if (!resp.ok) throw new Error("daily closeout unavailable");
+    return resp.json();
+  }
+
+  async function getProgramHelp(query) {
+    if (hasDesktopApi() && window.pywebview.api.get_program_help) {
+      return window.pywebview.api.get_program_help(String(query || ""));
+    }
+    return { text: "Program help requires the NR2 desktop app.", match: null };
+  }
+
+  async function searchHalMemories(query, limit) {
+    if (hasDesktopApi() && window.pywebview.api.search_hal_memories) {
+      return window.pywebview.api.search_hal_memories(String(query || ""), Number(limit || 5));
+    }
+    return { items: [], count: 0, text: "" };
+  }
+
   return {
     hasDesktopApi,
     runtimeMode,
@@ -461,6 +525,13 @@ const DesktopBridge = (function () {
     rememberHalFact,
     rememberHalWebFindings,
     getTaxPlan,
+    getIntegrationHealth,
+    getAutomationRegistry,
+    buildSupportBundle,
+    getFinancialReports,
+    getDailyCloseout,
+    getProgramHelp,
+    searchHalMemories,
     readClipboard,
     writeClipboard,
     installClipboardHandlers,

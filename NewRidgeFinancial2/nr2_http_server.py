@@ -105,6 +105,73 @@ class NR2BottleServer(BottleServer):
                 bottle.response.status = 500
                 return json.dumps({"error": str(exc)})
 
+        def _local_store():
+            from local_store import LocalStore
+
+            return LocalStore(NR2_DATA_DIR)
+
+        @app.get("/api/integration-health")
+        def integration_health_api():
+            bottle.response.content_type = "application/json"
+            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            try:
+                from integration_health import integration_health_snapshot
+
+                store = _local_store()
+                return json.dumps(integration_health_snapshot(store, deep_diagnostics=True))
+            except Exception as exc:
+                bottle.response.status = 500
+                return json.dumps({"error": str(exc)})
+
+        @app.get("/api/automation-registry")
+        def automation_registry_api():
+            bottle.response.content_type = "application/json"
+            try:
+                from automation_registry import list_automation_jobs
+
+                return json.dumps(list_automation_jobs())
+            except Exception as exc:
+                bottle.response.status = 500
+                return json.dumps({"error": str(exc)})
+
+        @app.post("/api/support-bundle")
+        def support_bundle_api():
+            bottle.response.content_type = "application/json"
+            try:
+                from support_bundle import build_support_bundle
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                store = _local_store()
+                return json.dumps(build_support_bundle(store, note=str(payload.get("note") or "")))
+            except Exception as exc:
+                bottle.response.status = 500
+                return json.dumps({"error": str(exc)})
+
+        @app.get("/api/financial-reports")
+        def financial_reports_api():
+            bottle.response.content_type = "application/json"
+            try:
+                from financial_reports import build_financial_reports
+
+                sync_exports = bottle.request.query.get("syncExports") == "1"
+                return json.dumps(build_financial_reports(sync_exports=sync_exports))
+            except Exception as exc:
+                bottle.response.status = 500
+                return json.dumps({"error": str(exc)})
+
+        @app.get("/api/daily-closeout")
+        def daily_closeout_api():
+            bottle.response.content_type = "application/json"
+            try:
+                from daily_closeout import build_daily_closeout
+
+                store = _local_store()
+                return json.dumps(build_daily_closeout(store))
+            except Exception as exc:
+                bottle.response.status = 500
+                return json.dumps({"error": str(exc)})
+
         @app.get("/")
         def index():
             if not server.root_path:

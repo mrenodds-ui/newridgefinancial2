@@ -286,6 +286,16 @@ def sync_practice_exports(db_path: Path | None = None, destination: Path | None 
 
     result["ok"] = bool(written)
     result["written"] = written
+    try:
+        from automation_registry import record_job_run
+
+        record_job_run(
+            "practice-exports",
+            ok=bool(written),
+            detail=f"written={len(written)}",
+        )
+    except Exception:
+        pass
     return result
 
 

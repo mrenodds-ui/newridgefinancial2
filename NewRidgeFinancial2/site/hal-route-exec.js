@@ -217,8 +217,79 @@ const HalRouteExec = (function () {
         if (refreshError) {
           text += `\n\nRefresh error: ${refreshError.message || refreshError}`;
         }
+        try {
+          const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
+          if (Ops && typeof Ops.getIntegrationHealth === "function") {
+            const health = await Ops.getIntegrationHealth();
+            text += "\n\n" + Ops.formatIntegrationHealth(health);
+          }
+        } catch (_healthErr) {
+          /* optional enrichment */
+        }
       }
       return outcome(text, "imports", result.intent, [], { refreshHal: true });
+    }
+
+    if (result.useIntegrationHealth) {
+      const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
+      if (!Ops) return outcome("Portal ops module is not loaded.", "ops", result.intent);
+      const health = await Ops.getIntegrationHealth();
+      return outcome(Ops.formatIntegrationHealth(health), "ops", result.intent);
+    }
+
+    if (result.useSupportBundle) {
+      const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
+      if (!Ops) return outcome("Portal ops module is not loaded.", "ops", result.intent);
+      const bundle = await Ops.buildSupportBundle(trimmed.slice(0, 200));
+      const text = bundle && bundle.ok
+        ? `Support bundle created: ${bundle.path}\nSize: ${bundle.sizeBytes || 0} bytes.\nIntegration status: ${bundle.integrationStatus || "unknown"}.`
+        : "Support bundle could not be created.";
+      return outcome(text, "ops", result.intent);
+    }
+
+    if (result.useDailyCloseout) {
+      const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
+      if (!Ops) return outcome("Portal ops module is not loaded.", "ops", result.intent);
+      const payload = await Ops.getDailyCloseout();
+      return outcome(Ops.formatDailyCloseout(payload), "ops", result.intent);
+    }
+
+    if (result.useFinancialReports) {
+      const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
+      if (!Ops) return outcome("Portal ops module is not loaded.", "ops", result.intent);
+      const reports = await Ops.getFinancialReports(/\bsync exports\b/i.test(trimmed));
+      const lines = [
+        "Financial reports (import snapshot):",
+        `- Claims: ${reports.claimTracking?.totalClaims || 0} total; ${reports.claimTracking?.deniedCount || 0} denied.`,
+        `- A/R outstanding: $${Number(reports.arAging?.totalOutstanding || 0).toLocaleString()}.`,
+        `- Treatment plans: ${reports.treatmentPlans?.available ? "loaded" : "missing"}.`,
+        `- Case acceptance: ${reports.caseAcceptance?.available ? "loaded" : "missing"}.`,
+        "",
+        reports.claimTracking?.followUpHint || "",
+        reports.arAging?.followUpHint || "",
+      ].filter(Boolean);
+      return outcome(lines.join("\n"), "ops", result.intent);
+    }
+
+    if (result.useAutomationRegistry) {
+      const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
+      if (!Ops) return outcome("Portal ops module is not loaded.", "ops", result.intent);
+      const payload = await Ops.getAutomationRegistry();
+      return outcome(Ops.formatAutomationRegistry(payload), "ops", result.intent);
+    }
+
+    if (result.useProgramHelp) {
+      const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
+      const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
+      let text = "Program help is unavailable in this runtime.";
+      if (Ops && typeof Ops.getProgramHelp === "function") {
+        const help = await Ops.getProgramHelp(result.prompt || trimmed);
+        text = (help && help.text) || text;
+      } else if (db && typeof db.getProgramHelp === "function") {
+        const help = await db.getProgramHelp(result.prompt || trimmed);
+        text = (help && help.text) || text;
+      }
+      return outcome(text, "help", result.intent);
     }
 
     if (result.useSourceHealth) {

@@ -866,6 +866,20 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
     except Exception as exc:
         result["warnings"].append(f"Import diagnostics unavailable: {exc}")
 
+    try:
+        from automation_registry import record_job_run
+
+        copied = len((result.get("softdent") or {}).get("copied") or []) + len(
+            (result.get("quickbooks") or {}).get("copied") or []
+        )
+        record_job_run(
+            "import-sync",
+            ok=len(result.get("warnings") or []) == 0 or copied > 0,
+            detail=f"sync complete; copied={copied}; warnings={len(result.get('warnings') or [])}",
+        )
+    except Exception:
+        pass
+
     return result
 
 

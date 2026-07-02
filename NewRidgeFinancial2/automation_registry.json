@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "id": "import-sync",
+      "label": "HAL import sync",
+      "description": "Refresh SoftDent and QuickBooks import cache from upstream export roots.",
+      "script": "NewRidgeFinancial2/import_sync.py",
+      "powershell": "NewRidgeFinancial2/import-automation/Sync-HAL-Imports.ps1",
+      "scheduleHint": "Every 4 hours during business days",
+      "owner": "NR2 desktop"
+    },
+    {
+      "id": "document-sync",
+      "label": "Accounting document sync",
+      "description": "Merge import rows into the documents queue and seed posting queue when empty.",
+      "script": "NewRidgeFinancial2/document_sync.py",
+      "powershell": "NewRidgeFinancial2/import-automation/Sync-HAL-Document-Sources.ps1",
+      "scheduleHint": "Daily after imports",
+      "owner": "NR2 desktop"
+    },
+    {
+      "id": "practice-exports",
+      "label": "SoftDent practice widget exports",
+      "description": "Generate newPatients, treatment plan, and case acceptance CSVs from analytics DB or daysheet.",
+      "script": "NewRidgeFinancial2/softdent_practice_exports.py",
+      "scheduleHint": "After SoftDent dashboard sync",
+      "owner": "NR2 desktop"
+    },
+    {
+      "id": "validate-hal",
+      "label": "HAL regression validator",
+      "description": "Run validate-hal.mjs contract suites.",
+      "script": "NewRidgeFinancial2/validate-hal.mjs",
+      "scheduleHint": "Before commits or weekly",
+      "owner": "Developer"
+    },
+    {
+      "id": "readiness-check",
+      "label": "HAL readiness verification",
+      "description": "Verify import bundle, Ollama lanes, and widget prerequisites.",
+      "powershell": "NewRidgeFinancial2/import-automation/Verify-HAL-Readiness.ps1",
+      "scheduleHint": "Daily morning",
+      "owner": "Operator"
+    }
+  ]
+}

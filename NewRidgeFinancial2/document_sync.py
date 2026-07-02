@@ -533,6 +533,16 @@ def sync_accounting_documents(store: Any) -> dict[str, Any]:
     result["queueCount"] = len(merged_queue)
     result["autoCount"] = len(auto_queue)
     result["state"] = state
+    try:
+        from automation_registry import record_job_run
+
+        record_job_run(
+            "document-sync",
+            ok=True,
+            detail=f"queue={result.get('queueCount', 0)}; warnings={len(result.get('warnings') or [])}",
+        )
+    except Exception:
+        pass
     return result
 
 
