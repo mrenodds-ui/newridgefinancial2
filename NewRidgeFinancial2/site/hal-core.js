@@ -187,6 +187,31 @@ const HalCore = (function () {
       .join("\n");
   }
 
+  function verifiedSoftdentArAvailable(snapshot) {
+    const skills =
+      typeof HalSkills !== "undefined"
+        ? HalSkills
+        : typeof globalThis !== "undefined" && globalThis.HalSkills
+          ? globalThis.HalSkills
+          : typeof window !== "undefined" && window.HalSkills
+            ? window.HalSkills
+            : null;
+    if (skills && typeof skills.softDentReadSourceStatus === "function") {
+      return skills.softDentReadSourceStatus(snapshot).arAvailable;
+    }
+    const snap = snapshot || {};
+    const bundle = snap.importBundle || {};
+    const ar = snap.dashboards && snap.dashboards.ar;
+    const arRows = (bundle.softdent && bundle.softdent.ar && bundle.softdent.ar.rows) || [];
+    return !!(
+      (ar &&
+        ((Array.isArray(ar.buckets) && ar.buckets.length) ||
+          (Array.isArray(ar.aging) && ar.aging.length) ||
+          ar.total)) ||
+      arRows.length > 0
+    );
+  }
+
   function summarizeProgramSnapshot(snapshot, halData) {
     if (!snapshot) return registryAsText(halData);
     const lines = [];
@@ -227,8 +252,9 @@ const HalCore = (function () {
     if (sd) {
       const sdProd = (sd.glance || []).find((g) => g.label === "Production MTD");
       const sdColl = (sd.glance || []).find((g) => g.label === "Collections MTD");
+      const arAvailable = verifiedSoftdentArAvailable(snapshot);
       lines.push(
-        `SoftDent: A/R ${sd.hero?.value || "—"}, production ${sdProd?.value || "—"}, collections ${sdColl?.value || "—"}, status ${sd.status || "—"}`,
+        `SoftDent: A/R ${arAvailable ? sd.hero?.value || "—" : "—"}, production ${sdProd?.value || "—"}, collections ${sdColl?.value || "—"}, status ${sd.status || "—"}`,
       );
     }
     const qb = snapshot.dashboards && snapshot.dashboards.quickbooks;
@@ -241,8 +267,9 @@ const HalCore = (function () {
     }
     const ar = snapshot.dashboards && snapshot.dashboards.ar;
     if (ar) {
+      const arAvailable = verifiedSoftdentArAvailable(snapshot);
       lines.push(
-        `A/R: outstanding ${ar.kpis?.[0]?.value || "—"}, follow-up lanes ${(ar.followUp || []).length}, top claims ${(ar.topClaims || []).length}`,
+        `A/R: outstanding ${arAvailable ? ar.kpis?.[0]?.value || "—" : "—"}, follow-up lanes ${(ar.followUp || []).length}, top claims ${(ar.topClaims || []).length}`,
       );
     }
     if (snapshot.claims) {

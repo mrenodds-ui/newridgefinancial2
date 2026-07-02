@@ -64,6 +64,11 @@ const PageCanvasData = (function () {
     return undefined;
   }
 
+  function verifiedArWidgetReady(key) {
+    const w = widget(key);
+    return String((w && w.status) || "").toUpperCase() === "SUCCESS";
+  }
+
   function periodSubtitle() {
     const fin = dash("financial");
     if (fin && fin.dateRange) return fin.dateRange;
@@ -223,11 +228,11 @@ const PageCanvasData = (function () {
   }
 
   function softdentGlanceStats() {
-    const sd = dash("softdent") || {};
     const care = metrics("careDeliveryPerformance");
     const payer = metrics("payerMixAndCollections");
+    const sd = dash("softdent") || {};
     return [
-      { value: fmt(care.patientBalanceTotal || (sd.hero && sd.hero.value)), label: "Patient A/R", tone: widgetTone("careDeliveryPerformance") || "warning" },
+      { value: fmt(care.patientBalanceTotal), label: "Patient A/R", tone: widgetTone("careDeliveryPerformance") || "warning" },
       { value: fmt(payer.collectionRate), label: "Collection rate", tone: widgetTone("payerMixAndCollections") },
       { value: fmt(care.patientCount || glanceValue(sd, "Total Patients")), label: "Active patients" },
       { value: fmt(care.providerCount), label: "Providers loaded" },
@@ -240,6 +245,7 @@ const PageCanvasData = (function () {
   }
 
   function softdentAgingBars() {
+    if (!verifiedArWidgetReady("softdentArAging")) return null;
     const sd = dash("softdent") || {};
     const aging = sd.aging || [];
     if (!aging.length) return null;
@@ -250,6 +256,7 @@ const PageCanvasData = (function () {
   }
 
   function softdentResponsibilityDonut() {
+    if (!verifiedArWidgetReady("softdentResponsibility")) return null;
     const sd = dash("softdent") || {};
     const resp = sd.responsibility || {};
     const ins = parseAmount(resp.insurance && resp.insurance.amount);
@@ -798,7 +805,7 @@ const PageCanvasData = (function () {
     const ar = dash("ar") || {};
     const wm = metrics("arAgingAndCollections");
     const kpis = ar.kpis || [];
-    if (kpis.length) {
+    if (verifiedArWidgetReady("arAgingAndCollections") && kpis.length) {
       return kpis.map((k) => ({
         label: k.label,
         value: fmt(k.value),
@@ -816,6 +823,7 @@ const PageCanvasData = (function () {
   }
 
   function arCollectionsChart() {
+    if (!verifiedArWidgetReady("arAgingAndCollections")) return null;
     const ar = dash("ar") || {};
     const trend = ar.collectionsTrend || {};
     const labels = trend.labels || [];
@@ -835,11 +843,12 @@ const PageCanvasData = (function () {
   function arTopClaimsTable() {
     const ar = dash("ar") || {};
     const rows = ar.topClaims || [];
+    const showOutstanding = verifiedArWidgetReady("arOutstandingClaims");
     return rows.slice(0, 10).map((c) => [
       c.patient || "—",
       c.procedure || c.claim || "—",
       c.insurance || "—",
-      fmt(c.outstanding || c.billed),
+      showOutstanding ? fmt(c.outstanding || c.billed) : "—",
       fmt(c.days),
     ]);
   }
@@ -847,18 +856,25 @@ const PageCanvasData = (function () {
   function arFollowUpKanban() {
     const ar = dash("ar") || {};
     const followUp = ar.followUp || [];
+    const showAmounts = verifiedArWidgetReady("arOutstandingClaims");
     if (followUp.length) {
       return followUp.map((lane) => ({
         lane: lane.status || lane.lane || "Follow-up",
         tone: lane.tone === "red" ? "orange" : lane.tone === "warn" ? "orange" : lane.tone || "blue",
-        items: (lane.items || []).map((item) => (typeof item === "string" ? item : item.label || "—")),
+        items: (lane.items || []).map((item) => {
+          if (typeof item === "string") return item;
+          if (!showAmounts) return item.label || item.patient || "—";
+          return item.label || "—";
+        }),
       }));
     }
     const claims = snapshot && snapshot.claims && snapshot.claims.claims;
     if (!claims || !claims.length) return [];
     const lanes = { "Needs call": [], "Awaiting payer": [], "Ready to close": [] };
     claims.slice(0, 12).forEach((c) => {
-      const label = `${c.patient || "Unknown"} · ${fmt(c.amount)}`;
+      const label = showAmounts
+        ? `${c.patient || "Unknown"} · ${fmt(c.amount)}`
+        : c.patient || "Unknown";
       if (c.status === "Denied") lanes["Needs call"].push(label);
       else if (c.status === "Ready") lanes["Ready to close"].push(label);
       else lanes["Awaiting payer"].push(label);

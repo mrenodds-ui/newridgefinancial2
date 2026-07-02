@@ -805,6 +805,87 @@ async function main() {
   assert(noArFeed.widgets.careDeliveryPerformance.metrics.patientBalanceTotal === null, "patient A/R balance must not be fabricated");
   assert(noArFeed.widgets.smartClaimsAndReceivables.status !== "SUCCESS", "claims widget must degrade without A/R source");
 
+  const PageCanvasData = require(join(siteDir, "page-canvas-data.js"));
+  const noArSnapshot = {
+    dashboards: {
+      softdent: { hero: { value: "$8,500" }, glance: [{ label: "Total Patients", value: "120" }] },
+      quickbooks: { syncStatus: "ok" },
+    },
+  };
+  PageCanvasData.bind(noArFeed, noArSnapshot);
+  const noArGlance = PageCanvasData.softdentGlanceStats();
+  const patientArGlance = noArGlance.find((row) => row.label === "Patient A/R");
+  assert(patientArGlance && patientArGlance.value === "—", "SoftDent page canvas must not show sd.hero A/R when widget feed withholds verified A/R");
+
+  const staleArSnapshot = {
+    dashboards: {
+      ar: { kpis: [{ label: "Total Outstanding", value: "$5,000", tone: "gold" }] },
+      softdent: { aging: [{ bucket: "0-30", amount: "$1,000", pct: 50 }], responsibility: { insurance: { amount: "500" }, patient: { amount: "300" } } },
+    },
+  };
+  PageCanvasData.bind(noArFeed, staleArSnapshot);
+  const staleArKpis = PageCanvasData.arKpis();
+  assert(
+    staleArKpis.every((row) => row.value === "—" || row.value === "0"),
+    "A/R page canvas must not show stale dashboard KPIs when widget feed withholds verified A/R",
+  );
+  assert(PageCanvasData.softdentAgingBars() === null, "SoftDent aging chart must hide when verified A/R is unavailable");
+  assert(PageCanvasData.softdentResponsibilityDonut() === null, "SoftDent responsibility chart must hide when verified A/R is unavailable");
+
+  const claimsTableSnapshot = {
+    dashboards: {
+      ar: {
+        topClaims: [{ patient: "Jane Doe", claim: "CLM-1", outstanding: "$500.00", days: 45 }],
+      },
+      softdent: {},
+      quickbooks: { syncStatus: "ok" },
+    },
+    claims: { total: 3 },
+  };
+  const claimsTableFeed = HalSkills.buildWidgetFeed(claimsTableSnapshot);
+  PageCanvasData.bind(claimsTableFeed, claimsTableSnapshot);
+  const claimsTableRows = PageCanvasData.arTopClaimsTable();
+  assert(
+    claimsTableRows.length === 1 && claimsTableRows[0][3] === "—",
+    "A/R claims table must withhold per-claim outstanding amounts without verified A/R export",
+  );
+
+  const followUpSnapshot = {
+    dashboards: { softdent: {}, quickbooks: { syncStatus: "ok" } },
+    claims: {
+      total: 2,
+      claims: [
+        { patient: "Jane Doe", amount: "$1,200.00", status: "Denied" },
+        { patient: "John Smith", amount: "$800.00", status: "Ready" },
+      ],
+    },
+  };
+  const followUpFeed = HalSkills.buildWidgetFeed(followUpSnapshot);
+  PageCanvasData.bind(followUpFeed, followUpSnapshot);
+  const followUpKanban = PageCanvasData.arFollowUpKanban();
+  assert(
+    followUpKanban.some((lane) => lane.items.some((item) => item.includes("$") === false)),
+    "A/R follow-up kanban must omit claim amounts without verified A/R export",
+  );
+  assert(
+    followUpKanban.flatMap((lane) => lane.items).every((item) => !/\$\d/.test(item)),
+    "A/R follow-up kanban must not display dollar amounts without verified A/R export",
+  );
+
+  const staleDiagSnapshot = {
+    dashboards: {
+      softdent: { hero: { value: "$8,500" }, status: "Connected" },
+      ar: { kpis: [{ label: "Total Outstanding", value: "$8,500" }] },
+    },
+    claims: { total: 5 },
+  };
+  const staleProgramSummary = HalCore.summarizeProgramSnapshot(staleDiagSnapshot, halData);
+  assert(staleProgramSummary.includes("SoftDent: A/R —"), "program snapshot summary must withhold stale SoftDent A/R without verified export");
+  assert(!staleProgramSummary.includes("$8,500"), "program snapshot summary must not leak stale A/R totals");
+  const staleSourceGuide = HalSkills.formatSourceSystemGuide(staleDiagSnapshot);
+  assert(staleSourceGuide.includes("verified A/R —"), "source system guide must withhold stale A/R without verified export");
+  assert(!staleSourceGuide.includes("$8,500"), "source system guide must not leak stale A/R hero values");
+
   // Document widgets must reflect local document data honestly (not blanket FAILED)
   const docsPresentFeed = HalSkills.buildWidgetFeed({
     dashboards: { softdent: {}, quickbooks: {} },

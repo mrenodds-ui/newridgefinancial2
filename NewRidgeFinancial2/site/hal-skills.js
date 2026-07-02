@@ -1145,11 +1145,12 @@ const HalSkills = (function () {
     lines.push("");
 
     lines.push("Live snapshot (current program data):");
+    const arAvailable = softDentReadSourceStatus(snap).arAvailable;
     if (sd) {
       const sdProd = (sd.glance || []).find((g) => g.label === "Production MTD");
       const sdColl = (sd.glance || []).find((g) => g.label === "Collections MTD");
       lines.push(
-        `- SoftDent: production ${sdProd?.value || "—"}, collections ${sdColl?.value || "—"}, A/R hero ${sd.hero?.value || "—"}, status ${sd.status || "—"}`,
+        `- SoftDent: production ${sdProd?.value || "—"}, collections ${sdColl?.value || "—"}, verified A/R ${arAvailable ? sd.hero?.value || "—" : "—"}, status ${sd.status || "—"}`,
       );
     } else {
       lines.push("- SoftDent: no dashboard data loaded.");
