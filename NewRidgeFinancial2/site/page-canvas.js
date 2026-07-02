@@ -652,6 +652,7 @@ const PageCanvas = (function () {
     const journal = D ? D.journalRows() : [];
     const ap = metricsFromWidget("accountsPayableAutomation");
     return `<div class="pv-canvas-stack">
+      ${canvasImportNotice(D ? D.documentsImportNotice() : null)}
       <div class="pv-canvas-grid-split">
         ${canvasPanel({
           title: wTitle("documents", 0),
@@ -693,6 +694,7 @@ const PageCanvas = (function () {
     const rows = D ? D.libraryRows() : [];
     const doc = D ? D.firstLibraryDoc() : null;
     return `<div class="pv-canvas-stack">
+      ${canvasImportNotice(D ? D.libraryImportNotice() : null)}
       ${canvasSearch("Search contracts, compliance, vendors…")}
       <div class="pv-canvas-grid-split">
         ${canvasPanel({
@@ -874,6 +876,7 @@ const PageCanvas = (function () {
         ? PageSchema.NAV_GROUPS.flatMap((g) => g.pages).filter((id) => id !== "hal" && id !== "office-manager")
         : ["financial", "softdent", "narratives", "claims", "ar", "quickbooks", "documents", "library"];
     return `<div class="pv-canvas-stack">
+      ${canvasImportNotice(D ? D.officeManagerImportNotice() : null)}
       <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
       ${canvasPanel({
         title: wTitle("office-manager", 0),

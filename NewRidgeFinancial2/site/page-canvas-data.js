@@ -503,6 +503,92 @@ const PageCanvasData = (function () {
     return null;
   }
 
+  function documentsImportNotice() {
+    const docs = snapshot && snapshot.documents;
+    const intake = widget("documentIntakeQueue");
+    const ap = widget("accountsPayableAutomation");
+    const period = widget("periodCloseAndPosting");
+    const journal = widget("journalPostingQueue");
+    const pending = (docs && docs.posting || []).find((row) => /pending review/i.test(String(row.label || "")));
+    const pendingCount = Number((pending && pending.count) || 0);
+    if (intake && intake.status === "FAILED" && !(docs && docs.queueCount > 0)) {
+      return {
+        tone: "warning",
+        message:
+          intake.summary ||
+          "Local document queue is empty — drop accounting documents in the inbox or run document sync.",
+      };
+    }
+    if (pendingCount > 0) {
+      return {
+        tone: "info",
+        message: `${pendingCount} document(s) still Pending Review before posting or period close.`,
+      };
+    }
+    if (period && period.status === "DEGRADED" && period.summary) {
+      return { tone: "info", message: period.summary };
+    }
+    if (journal && journal.status === "FAILED" && !journalRows().length) {
+      return {
+        tone: "info",
+        message: journal.summary || "Journal posting queue is available in desktop mode after accruals are reviewed.",
+      };
+    }
+    if (ap && ap.status === "DEGRADED" && ap.summary && !(docs && docs.queueCount > 0)) {
+      return { tone: "info", message: ap.summary };
+    }
+    return null;
+  }
+
+  function libraryImportNotice() {
+    const lib = snapshot && snapshot.library;
+    const libraryWidget = widget("documentLibrary");
+    const rows = libraryRows();
+    if (libraryWidget && libraryWidget.status === "FAILED" && !rows.length) {
+      return {
+        tone: "warning",
+        message:
+          libraryWidget.summary ||
+          "Document library is empty — index local contracts and compliance files for HAL search.",
+      };
+    }
+    if (libraryWidget && libraryWidget.status === "DEGRADED" && libraryWidget.summary) {
+      return { tone: "info", message: libraryWidget.summary };
+    }
+    if (lib && lib.indexStatus && /error|stale/i.test(String(lib.indexStatus))) {
+      return { tone: "warning", message: `Library index status: ${lib.indexStatus}` };
+    }
+    return null;
+  }
+
+  function officeManagerImportNotice() {
+    const priorities = widget("officeManagerPriorities") || widget("officeManagerSurfaces");
+    const tasks = (snapshot && snapshot.officeTasks) || [];
+    const failedWidgets = Object.values((feed && feed.widgets) || {}).filter((w) => {
+      const status = String(w.status || "").toUpperCase();
+      return status === "FAILED" || status === "DEGRADED";
+    });
+    if (priorities && priorities.status === "FAILED" && !tasks.length && !failedWidgets.length) {
+      return {
+        tone: "warning",
+        message: priorities.summary || "No HAL attention items yet — widgets may still be waiting on imports.",
+      };
+    }
+    if (failedWidgets.length) {
+      return {
+        tone: failedWidgets.some((w) => w.status === "FAILED") ? "warning" : "info",
+        message: `${failedWidgets.length} widget(s) need attention: ${failedWidgets
+          .slice(0, 4)
+          .map((w) => w.title || w.key)
+          .join(", ")}.`,
+      };
+    }
+    if (priorities && priorities.summary && priorities.status === "DEGRADED") {
+      return { tone: "info", message: priorities.summary };
+    }
+    return null;
+  }
+
   function quickbooksDatasetIssues() {
     const bundle = snapshot && snapshot.importBundle;
     const diagnostics = bundle && bundle.diagnostics;
@@ -1024,6 +1110,9 @@ const PageCanvasData = (function () {
     softdentImportNotice,
     arImportNotice,
     claimsImportNotice,
+    documentsImportNotice,
+    libraryImportNotice,
+    officeManagerImportNotice,
     quickbooksImportNotice,
     quickbooksPlRows,
     quickbooksExpenseBars,

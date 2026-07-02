@@ -171,6 +171,9 @@ assert.ok(pageCanvasJs.includes("renderTaxes"), "page-canvas must implement taxe
 const pageCanvasDataJs = readFileSync(join(siteDir, "page-canvas-data.js"), "utf8");
 assert.ok(pageCanvasDataJs.includes("financialImportNotice"), "page canvas data must expose financial import notice");
 assert.ok(pageCanvasDataJs.includes("claimsImportNotice"), "page canvas data must expose claims import notice");
+assert.ok(pageCanvasDataJs.includes("documentsImportNotice"), "page canvas data must expose documents import notice");
+assert.ok(pageCanvasDataJs.includes("libraryImportNotice"), "page canvas data must expose library import notice");
+assert.ok(pageCanvasDataJs.includes("officeManagerImportNotice"), "page canvas data must expose office manager import notice");
 assert.ok(pageCanvasJs.includes("canvasImportNotice"), "page-canvas must render import notices on staff pages");
 
 const ServicesModValidate = ServicesMod;
