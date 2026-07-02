@@ -404,20 +404,19 @@ def main() -> int:
     WEBVIEW_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
     default_port = 8765
     http_port = int(os.environ.get("NR2_HTTP_PORT", str(default_port)))
-    index_url = f"http://127.0.0.1:{http_port}/index.html"
     print(
         f"NR2 desktop: schema={DESIGN_SCHEMA_VERSION} site={SITE_DIR} storage={WEBVIEW_STORAGE_DIR}",
         file=sys.stderr,
     )
     print(
-        f"NR2 desktop: UI at {index_url} (pywebview http_server=True).",
+        f"NR2 desktop: UI at http://127.0.0.1:{http_port}/ (pywebview http_server=True).",
         file=sys.stderr,
     )
     from nr2_http_server import NR2BottleServer
 
     window = webview.create_window(
         f"NewRidgeFinancial 2.0 ({DESIGN_SCHEMA_VERSION})",
-        index_url,
+        str(INDEX_HTML),
         width=1440,
         height=920,
         min_size=(1024, 700),

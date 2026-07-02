@@ -141,6 +141,11 @@ hal_*.txt
 hal_*_raw.json
 /hal_*.json
 **/hal-check-out.json
+eval_section*.md
+eval_section*.raw.json
+235b_*.md
+235b_*.txt
+235b_*.json
 hal_diag_*
 hal_fix_*
 hal_lmstudio_*

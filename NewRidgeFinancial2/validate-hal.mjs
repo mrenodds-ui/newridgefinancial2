@@ -696,6 +696,16 @@ async function main() {
     "widget master chart must stay aligned with WIDGET_ORDER",
   );
   assert(HalWidgetMasterChart.formatForHal().includes("HAL Widget Master Chart"), "widget master chart must format for HAL guidance");
+  const masterChartWithFeed = HalWidgetMasterChart.all(feed);
+  assert(
+    masterChartWithFeed.every((row) => typeof row.dataReady === "boolean"),
+    "master chart rows must expose dataReady when a widget feed is supplied",
+  );
+  const qbMasterRow = masterChartWithFeed.find((row) => row.key === "quickbooksProfitLossDetail");
+  assert(
+    qbMasterRow && qbMasterRow.dataReady === (feed.widgets.quickbooksProfitLossDetail.status === "SUCCESS"),
+    "master chart dataReady must mirror widget feed SUCCESS status",
+  );
   assert(feed.widgets.ebitdaNormalization && feed.widgets.arAgingAndCollections && feed.widgets.narrativeWorkflow && feed.widgets.documentLibrary, "widget feed must include all extended page widgets");
   assert(feed.widgets.journalPostingQueue && feed.widgets.smartClaimsAndReceivables, "widget feed must include journal posting and smart claims widgets");
   assert(feed.widgets.newPatients && feed.widgets.treatmentPlanSummary && feed.widgets.caseAcceptance, "widget feed must include practice-performance widgets");
@@ -716,6 +726,26 @@ async function main() {
   assert(
     crossOverview.metrics.monthlyRevenue === WidgetContract.MISSING || crossOverview.metrics.monthlyRevenue === null,
     "monthlyRevenue must be explicitly missing when QuickBooks revenue is absent",
+  );
+  assert(crossOverview.status !== "SUCCESS", "cross-source overview must not read SUCCESS when QuickBooks revenue is absent");
+
+  const pendingCollectionsFeed = HalSkills.buildWidgetFeed({
+    dashboards: {
+      financial: { dataSource: "import", productionMtd: { value: 171796.9 }, collectionsPending: true },
+      softdent: { dataSource: "import", production: 171796.9, collectionsPending: true },
+      quickbooks: { dataSource: "import", revenue: 50000, expenses: 30000 },
+      practice: { dataSource: "empty" },
+    },
+  });
+  const pendingOverview = pendingCollectionsFeed.widgets.practiceFinancialOverview;
+  assert(pendingOverview.status !== "SUCCESS", "pending collections must not read SUCCESS on financial overview");
+  assert(
+    pendingOverview.metrics.collectionsTotal === WidgetContract.MISSING || pendingOverview.metrics.collectionsTotal === null,
+    "collections must stay missing when SoftDent collections export is pending",
+  );
+  assert(
+    WidgetContract.widgetStatusFromStates(["ok", "ok", "ok", "pending"]) === "DEGRADED",
+    "pending metric state must degrade widget contract status",
   );
 
   const contractRoute = HalCore.routeHalCommand(halData, halModels, pages, "what does the financial widget need?");

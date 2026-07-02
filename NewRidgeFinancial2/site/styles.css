@@ -4820,6 +4820,13 @@ body.nr2-desktop input:not([type="button"]):not([type="submit"]):not([type="chec
 }
 
 .pv-canvas-stack { display: flex; flex-direction: column; gap: 22px; }
+.pv-canvas-import-notice {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
 .pv-canvas-stat-grid { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .pv-canvas-stat { display: grid; gap: 4px; }
 .pv-canvas-stat strong { color: var(--text); font-size: 22px; }

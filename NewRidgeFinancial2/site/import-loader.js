@@ -484,6 +484,19 @@ const ImportLoader = (function () {
     return { totals, period, rows: providerRows };
   }
 
+  function comparableDisplayTotals(displayAggregate) {
+    const totals = displayAggregate && displayAggregate.totals;
+    return (
+      totals || {
+        production: 0,
+        collections: null,
+        insurance: 0,
+        patient: 0,
+        collectionsReported: false,
+      }
+    );
+  }
+
   function pickField(row, names) {
     for (const name of names) {
       if (row[name] !== undefined && row[name] !== "") return row[name];
@@ -539,6 +552,7 @@ const ImportLoader = (function () {
     );
     const latest = sorted[sorted.length - 1];
     if (latest.collectionsPending) {
+      // Pending = incomplete export, not a hard failure. UI uses pending flag + widget state "pending".
       return {
         evaluated: true,
         reported: false,
@@ -580,7 +594,8 @@ const ImportLoader = (function () {
 
   function collectionsPendingValue(aggregate, collectionHealth) {
     if (collectionHealth && collectionHealth.pending) return null;
-    return aggregate.totals.collections ?? null;
+    const totals = aggregate && aggregate.totals;
+    return totals ? totals.collections ?? null : null;
   }
 
   function resolveCollectionHealth(collectionHealth, aggregate) {
@@ -744,7 +759,12 @@ const ImportLoader = (function () {
     });
     score += qbReconcile ? 25 : 10;
 
-    return { score: Math.min(100, score), categories };
+    const overallPass =
+      freshOk &&
+      (health.pending || (health.reported && health.healthy)) &&
+      periodOk &&
+      qbReconcile;
+    return { score: Math.min(100, score), categories, overallPass };
   }
 
   function diagnosticsApi() {
@@ -1050,6 +1070,7 @@ const ImportLoader = (function () {
     const dashboardRows = periodCtx.dashboardRows;
     const aggregate = periodCtx.aggregate;
     const displayAggregate = periodCtx.comparableAggregate;
+    const displayTotals = comparableDisplayTotals(displayAggregate);
     const comparablePeriod = periodCtx.comparablePeriod;
     const collectionsPending = Boolean(
       periodCtx.comparableRows.some((row) => row.collectionsPending) &&
@@ -1085,10 +1106,10 @@ const ImportLoader = (function () {
       { label: "Import Period", value: comparablePeriod || aggregate.period || "—" },
       { label: "Claims Rows", value: formatCount(((sd.claims && sd.claims.rows) || []).length) },
       { label: "Clinical Notes", value: formatCount(((sd.clinicalNotes && sd.clinicalNotes.rows) || []).length) },
-      { label: "Production MTD", value: formatMoney(displayAggregate.totals.production) },
+      { label: "Production MTD", value: formatMoney(displayTotals.production) },
       {
         label: "Collections MTD",
-        value: collectionsPending ? "Pending export" : formatMoney(displayAggregate.totals.collections),
+        value: collectionsPending ? "Pending export" : formatMoney(displayTotals.collections),
       },
     ];
 
@@ -1098,8 +1119,8 @@ const ImportLoader = (function () {
       date: comparablePeriod || aggregate.period || new Date(modifiedAt).toLocaleDateString(),
       source: "SoftDent",
       status: "Connected",
-      production: displayAggregate.totals.production,
-      collections: collectionsPending ? null : displayAggregate.totals.collections,
+      production: displayTotals.production,
+      collections: collectionsPending ? null : displayTotals.collections,
       collectionsPending,
       comparablePeriod,
       hero: hasAr
@@ -1119,16 +1140,16 @@ const ImportLoader = (function () {
             trendDir: "flat",
             spark: null,
           },
-      collectionsMissing: !collectionsPending && displayAggregate.totals.collectionsReported === false,
-      collectionsReported: collectionsPending ? false : displayAggregate.totals.collectionsReported !== false,
+      collectionsMissing: !collectionsPending && displayTotals.collectionsReported === false,
+      collectionsReported: collectionsPending ? false : displayTotals.collectionsReported !== false,
       subMetrics: [
-            { label: "Production", value: formatMoney(displayAggregate.totals.production) },
+            { label: "Production", value: formatMoney(displayTotals.production) },
             {
               label: "Collections",
-              value: collectionsPending ? "Pending export" : formatMoney(displayAggregate.totals.collections),
+              value: collectionsPending ? "Pending export" : formatMoney(displayTotals.collections),
             },
-            { label: "Insurance", value: formatMoney(displayAggregate.totals.insurance) },
-            { label: "Patient", value: formatMoney(displayAggregate.totals.patient) },
+            { label: "Insurance", value: formatMoney(displayTotals.insurance) },
+            { label: "Patient", value: formatMoney(displayTotals.patient) },
           ],
       aging: arBuckets.map((bucket) => ({
         bucket: bucket.bucket,
@@ -1162,9 +1183,9 @@ const ImportLoader = (function () {
         { label: "A/R Export", value: hasAr ? sd.ar.sourceFile : "Not loaded", ok: hasAr },
         ...(collectionsPending
           ? [{ label: "Collections", value: "Awaiting daysheet export for comparable period", ok: true }]
-          : displayAggregate.totals.production > 0 && displayAggregate.totals.collectionsReported === false
+          : displayTotals.production > 0 && displayTotals.collectionsReported === false
           ? [{ label: "Collections", value: "Not reported for this period — verify daysheet export", ok: false }]
-          : displayAggregate.totals.production > 0 && displayAggregate.totals.collections === 0
+          : displayTotals.production > 0 && displayTotals.collections === 0
             ? [{ label: "Collections", value: "Source reports $0 collections for this period", ok: false }]
             : []),
       ],
@@ -1267,14 +1288,15 @@ const ImportLoader = (function () {
     const dashboardRows = periodCtx.dashboardRows;
     const aggregate = periodCtx.aggregate;
     const displayAggregate = periodCtx.comparableAggregate;
+    const displayTotals = comparableDisplayTotals(displayAggregate);
     const qb = quickbooksTotals(bundle);
     const hasSd = hasSoftdentImport(bundle);
     const hasQb = hasQuickbooksImport(bundle);
     const qbPeriod = periodCtx.qbPeriod;
     const periodAlignment = comparePeriodAlignment(periodCtx.sdLatestPeriod, qbPeriod, hasSd, hasQb, bundle.loadedAt || Date.now());
     const collectionHealth = assessCollectionHealth(dashboardRows, periodCtx.comparablePeriod);
-    const production = displayAggregate.totals.production || null;
-    const collections = collectionsPendingValue(displayAggregate, collectionHealth);
+    const production = displayTotals.production || null;
+    const collections = collectionsPendingValue(displayAggregate || { totals: displayTotals }, collectionHealth);
     const collectionsMissing = !collectionHealth.pending && production > 0 && !collectionHealth.reported;
     const collectionsZeroWithProduction = collectionHealth.latestZeroWithProduction;
     const collectionRateMetrics = buildCollectionRateMetrics(dashboardRows, collectionHealth);

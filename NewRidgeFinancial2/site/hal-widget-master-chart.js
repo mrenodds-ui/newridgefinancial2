@@ -10,7 +10,10 @@ const HalWidgetMasterChart = (function () {
     if (typeof window !== "undefined" && window.HalSkills) return window.HalSkills;
     try {
       return require("./hal-skills.js");
-    } catch {
+    } catch (err) {
+      if (typeof console !== "undefined" && console.error) {
+        console.error("[HalWidgetMasterChart] Failed to load hal-skills:", err);
+      }
       return null;
     }
   }
@@ -189,25 +192,37 @@ const HalWidgetMasterChart = (function () {
     return skills && skills.WIDGET_NAV ? skills.WIDGET_NAV : {};
   }
 
-  function all() {
+  function widgetDataReady(widgetKey, feed) {
+    if (!feed || !feed.widgets) return null;
+    const widget = feed.widgets[widgetKey];
+    if (!widget || !widget.status) return false;
+    return widget.status === "SUCCESS";
+  }
+
+  function all(feed) {
     const nav = widgetNav();
     return widgetOrder().map((key, index) => {
       const detail = DETAILS[key] || {};
+      const page = nav[key] || "unknown";
+      if (page === "unknown" && typeof console !== "undefined" && console.warn) {
+        console.warn(`[HalWidgetMasterChart] Widget "${key}" has no page mapping in WIDGET_NAV`);
+      }
       return {
         key,
         order: index + 1,
         title: detail.title || key,
-        page: nav[key] || "unknown",
+        page,
         purpose: detail.purpose || "Widget purpose not documented.",
         primarySystem: detail.primarySystem || "Unknown",
         expectedData: detail.expectedData || [],
         readyWhen: detail.readyWhen || "Required local data is available and validated.",
+        dataReady: widgetDataReady(key, feed),
       };
     });
   }
 
-  function byPage() {
-    return all().reduce((acc, row) => {
+  function byPage(feed) {
+    return all(feed).reduce((acc, row) => {
       if (!acc[row.page]) acc[row.page] = [];
       acc[row.page].push(row);
       return acc;
@@ -229,8 +244,8 @@ const HalWidgetMasterChart = (function () {
     return lines.join("\n");
   }
 
-  function find(widgetKey) {
-    return all().find((row) => row.key === widgetKey) || null;
+  function find(widgetKey, feed) {
+    return all(feed).find((row) => row.key === widgetKey) || null;
   }
 
   return {

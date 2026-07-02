@@ -22,18 +22,19 @@ class DirectFirstImportTests(unittest.TestCase):
     def test_load_bundle_marks_direct_first_mode(self) -> None:
         with patch.dict(os.environ, {"NR2_DIRECT_FIRST_IMPORTS": "1"}, clear=False):
             with patch("import_loader._load_direct_sections") as mock_direct:
-                mock_direct.return_value = {
-                    "softdent": {
-                        "dashboard": {
-                            "sourceFile": "softdent_dashboard_data.json",
-                            "modifiedAt": "2026-07-01T12:00:00+00:00",
-                            "rows": [{"provider": "Dr. Test", "production": 1000, "collections": 900}],
-                            "readSource": "direct",
-                        }
-                    },
-                    "quickbooks": {},
-                }
-                bundle = load_import_bundle(sync=False, deep=False)
+                with patch("import_loader._load_dataset", return_value=None):
+                    mock_direct.return_value = {
+                        "softdent": {
+                            "dashboard": {
+                                "sourceFile": "softdent_dashboard_data.json",
+                                "modifiedAt": "2026-07-01T12:00:00+00:00",
+                                "rows": [{"provider": "Dr. Test", "production": 1000, "collections": 900}],
+                                "readSource": "direct",
+                            }
+                        },
+                        "quickbooks": {},
+                    }
+                    bundle = load_import_bundle(sync=False, deep=False)
         self.assertTrue(bundle.get("directFirst"))
         self.assertEqual(bundle.get("importMode"), "direct-first")
         dashboard = (bundle.get("softdent") or {}).get("dashboard") or {}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,8 @@ from import_cache_ttl import relevant_period_labels
 from import_loader import softdent_import_dir
 from import_sync import BRIDGE_AGGREGATE_JSON, _build_dashboard_from_bridge, _read_json
 from quickbooks_monthly_sync import resolve_analytics_db
+
+logger = logging.getLogger(__name__)
 
 PRACTICE_NAME = "New Ridge Family Dental"
 
@@ -141,6 +144,8 @@ def _include_collections_from_source(source: dict[str, Any]) -> tuple[float | No
     if value > 0:
         return value, True
     if kind == "daysheet":
+        if production > 0:
+            return None, False
         return value, True
     if production > 0 and kind == "bridge":
         return None, False
@@ -289,13 +294,30 @@ def sync_dashboard_period_rows() -> dict[str, Any]:
         except json.JSONDecodeError:
             existing = []
     by_period = {str(row.get("period")): row for row in existing if isinstance(row, dict) and row.get("period")}
+    merge_log: list[dict[str, Any]] = []
     for row in generated:
         period = str(row["period"])
         prior = by_period.get(period)
         if prior:
-            by_period[period] = _build_period_row(period, [_prior_source_dict(prior), row])
+            merged = _build_period_row(period, [_prior_source_dict(prior), row])
+            merge_log.append(
+                {
+                    "period": period,
+                    "action": "upsert",
+                    "priorProduction": prior.get("production"),
+                    "priorCollections": prior.get("collections"),
+                    "priorCollectionsPending": prior.get("collectionsPending"),
+                    "mergedProduction": merged.get("production"),
+                    "mergedCollections": merged.get("collections"),
+                    "mergedCollectionsPending": merged.get("collectionsPending"),
+                }
+            )
+            by_period[period] = merged
         else:
+            merge_log.append({"period": period, "action": "insert", "mergedProduction": row.get("production")})
             by_period[period] = row
+    if merge_log:
+        logger.info("SoftDent dashboard period upsert merge: %s", merge_log)
     merged = [by_period[p] for p in sorted(by_period.keys()) if p in periods] + [
         by_period[p] for p in sorted(by_period.keys()) if p not in periods
     ]
@@ -309,6 +331,7 @@ def sync_dashboard_period_rows() -> dict[str, Any]:
         "periods": [row.get("period") for row in merged if row.get("period") in periods],
         "rowCount": len(merged),
         "source": str(db_path) if db_path else None,
+        "mergeLog": merge_log,
         "collectionsDiagnostic": diagnostic,
     }
 

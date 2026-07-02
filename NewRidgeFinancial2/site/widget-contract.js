@@ -134,7 +134,7 @@ const WidgetContract = (function () {
       return { value: Number.isFinite(net) ? net : MISSING, state: "ok", dataset: datasetKey };
     }
     if (binding.path === "collections" && dash.collectionsPending) {
-      return { value: "Pending export", state: "ok", dataset: datasetKey };
+      return { value: MISSING, state: "pending", dataset: datasetKey };
     }
     let raw = getPath(dash, binding.path);
     if (binding.label && Array.isArray(raw)) {
@@ -169,9 +169,12 @@ const WidgetContract = (function () {
 
   function widgetStatusFromStates(states) {
     if (!states.length) return "FAILED";
-    if (states.every((s) => s === "ok")) return "SUCCESS";
-    if (states.some((s) => s === "ok")) return "DEGRADED";
-    if (states.every((s) => s === "not_configured")) return "FAILED";
+    const problemStates = new Set(["missing", "stale", "partial", "pending"]);
+    const hasProblem = states.some((state) => problemStates.has(state));
+    if (states.every((state) => state === "ok")) return "SUCCESS";
+    if (hasProblem) return states.some((state) => state === "ok") ? "DEGRADED" : "FAILED";
+    if (states.some((state) => state === "ok")) return "DEGRADED";
+    if (states.every((state) => state === "not_configured")) return "FAILED";
     return "FAILED";
   }
 

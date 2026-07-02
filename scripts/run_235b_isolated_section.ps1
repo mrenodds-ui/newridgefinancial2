@@ -32,7 +32,7 @@ param(
     [switch]$Help,
 
     [Parameter(ParameterSetName = 'Run', Mandatory = $true)]
-    [ValidateSet('1', '2', '3', '4', '5')]
+    [ValidateSet('1', '2', '3', '4', '5', '1a', '1b', '1c', '2a', '2b', '2c', '1a1', '1a2', '1b1', '1b2', '1c1', '1c2', '2a1', '2a2', '2b1', '2b2', '2c1', '2c2')]
     [string]$Section,
 
     [Parameter(ParameterSetName = 'Run')]
@@ -60,12 +60,39 @@ $reportNames = @{
     '3' = '235b_section3_ai_routing_report.md'
     '4' = '235b_section4_security_config_report.md'
     '5' = '235b_section5_tests_docs_report.md'
+    '1a' = '235b_section1a_softdent_period_report.md'
+    '1b' = '235b_section1b_import_loader_report.md'
+    '1c' = '235b_section1c_import_pipeline_report.md'
+    '2a' = '235b_section2a_widget_contract_report.md'
+    '2b' = '235b_section2b_financial_overview_report.md'
+    '2c' = '235b_section2c_page_canvas_report.md'
+    '1a1' = '235b_section1a1_softdent_sync_core_report.md'
+    '1a2' = '235b_section1a2_direct_pipeline_report.md'
+    '1b1' = '235b_section1b1_import_loader_periods_report.md'
+    '1b2' = '235b_section1b2_import_loader_tests_report.md'
+    '1c1' = '235b_section1c1_import_loader_py_report.md'
+    '1c2' = '235b_section1c2_import_sync_report.md'
+    '2a1' = '235b_section2a1_hal_skills_report.md'
+    '2a2' = '235b_section2a2_widget_contract_report.md'
+    '2b1' = '235b_section2b1_master_chart_report.md'
+    '2b2' = '235b_section2b2_financial_dashboard_report.md'
+    '2c1' = '235b_section2c1_page_canvas_report.md'
+    '2c2' = '235b_section2c2_hal_page_validate_report.md'
 }
 $reportPath = Join-Path $Root $reportNames[$Section]
 
 Write-Host "=== 235B isolated section $Section workflow ===" -ForegroundColor Cyan
 
-Write-Host "`n[1/10] Verify repo state"
+Write-Host "`n[1/10] Build NR2 micro focus bundles (if script present)"
+$focusScript = Join-Path $PSScriptRoot 'build_235b_nr2_focus.ps1'
+if (Test-Path $focusScript) {
+    & $focusScript
+    if (-not $?) {
+        throw 'Focus bundle build failed.'
+    }
+}
+
+Write-Host "`n[2/10] Verify repo state"
 git status --short
 git log --oneline -8
 
@@ -84,7 +111,7 @@ if ((Test-Path $reportPath) -and -not $OverwriteReport) {
     throw "Report already exists: $reportPath. Pass -OverwriteReport to replace it."
 }
 
-Write-Host "`n[2/10] Stop normal 14B lanes"
+Write-Host "`n[3/10] Stop normal 14B lanes"
 $stopScript = Join-Path $PSScriptRoot 'stop_normal_model_lanes.ps1'
 if ($ForceStopOllamaApp) {
     & $stopScript -ForceStopOllamaApp
@@ -93,7 +120,7 @@ if ($ForceStopOllamaApp) {
 }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "`n[3/10] Verify :11434 and :11435 are down"
+Write-Host "`n[4/10] Verify :11434 and :11435 are down"
 $code11434 = curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:11434/v1/models 2>$null
 $code11435 = curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:11435/v1/models 2>$null
 Write-Host ":11434 http=$code11434 :11435 http=$code11435"
@@ -101,15 +128,18 @@ if ($code11434 -match '^2' -or $code11435 -match '^2') {
     throw 'Normal lanes still respond. Do not start 235B until :11434 and :11435 are down.'
 }
 
-Write-Host "`n[4/10] Start evaluator lane :11436 only"
+Write-Host "`n[5/10] Start evaluator lane :11436 only"
 & (Join-Path $PSScriptRoot 'start_235b_evaluator_lane.ps1')
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "`n[5/10] Preflight qwen3:235b"
-$env:OLLAMA_HOST = '127.0.0.1:11436'
-ollama run qwen3:235b "Reply in one sentence: 235B evaluator is online."
+Write-Host "`n[6/10] Preflight qwen3:235b on :11436"
+$modelsJson = curl.exe -s -m 30 http://127.0.0.1:11436/v1/models
+if ($modelsJson -notmatch 'qwen3:235b') {
+    throw 'qwen3:235b not listed on evaluator lane :11436.'
+}
+Write-Host '235B preflight OK.'
 
-Write-Host "`n[6/10] Run section $Section evaluation (one section only)"
+Write-Host "`n[7/10] Run section $Section evaluation (one section only)"
 $py = Join-Path $Root '.venv\Scripts\python.exe'
 if (-not (Test-Path $py)) { $py = 'python' }
 $pyArgs = @((Join-Path $Root 'run_235b_eval_section.py'), $Section, '--isolated')
@@ -124,7 +154,7 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-Write-Host "`n[7/10] Stop qwen3:235b and evaluator serve"
+Write-Host "`n[8/10] Stop qwen3:235b and evaluator serve"
 if ($ForceStopOllamaApp) {
     & (Join-Path $PSScriptRoot 'stop_235b_evaluator_lane.ps1') -ForceStopOllamaApp
 } else {
@@ -132,7 +162,7 @@ if ($ForceStopOllamaApp) {
 }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "`n[8/10] Verify :11436 is down"
+Write-Host "`n[9/10] Verify :11436 is down"
 $code11436 = curl.exe -s -m 3 -o NUL -w "%{http_code}" http://127.0.0.1:11436/v1/models 2>$null
 Write-Host ":11436 http=$code11436"
 if ($code11436 -match '^2') {
@@ -140,7 +170,7 @@ if ($code11436 -match '^2') {
 }
 
 if ($RestartNormalLanes) {
-    Write-Host "`n[9/10] Restart normal lanes (foreground scripts in new windows)"
+    Write-Host "`n[10/10] Restart normal lanes (foreground scripts in new windows)"
     Start-Process powershell -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'run_frontend_model.ps1') -WindowStyle Minimized
     Start-Process powershell -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'run_backend_model.ps1') -WindowStyle Minimized
     Start-Sleep -Seconds 5
@@ -149,10 +179,10 @@ if ($RestartNormalLanes) {
     Write-Host 'Normal lanes restart requested. Keep those terminals open (foreground processes).'
 }
 else {
-    Write-Host "`n[9/10] Skipping normal lane restart (pass -RestartNormalLanes to enable)"
+    Write-Host "`n[10/10] Skipping normal lane restart (pass -RestartNormalLanes to enable)"
 }
 
-Write-Host "`n[10/10] Final git status"
+Write-Host "`n[11/11] Final git status"
 git status --short
 Write-Host "`nDone. Report: $reportPath" -ForegroundColor Green
 Write-Host 'Review the section report before approving the next section.' -ForegroundColor Green

@@ -286,6 +286,84 @@ const PageCanvasData = (function () {
     return [];
   }
 
+  function quickbooksDatasetIssues() {
+    const bundle = snapshot && snapshot.importBundle;
+    const diagnostics = bundle && bundle.diagnostics;
+    const datasets = (diagnostics && diagnostics.datasets) || [];
+    const qbKeys = new Set([
+      "quickbooks.revenue",
+      "quickbooks.expenses",
+      "quickbooks.profitAndLoss",
+      "quickbooks.expenseCategories",
+    ]);
+    return datasets.filter((item) => qbKeys.has(item.datasetKey) && item.status !== "connected");
+  }
+
+  function quickbooksImportNotice() {
+    const qb = dash("quickbooks") || {};
+    const bundle = snapshot && snapshot.importBundle;
+    const hasPl = quickbooksPlRows().length > 0;
+    const hasExpenses = Boolean(quickbooksExpenseBars() || quickbooksExpenseDonut());
+    const hasEbitda = ebitdaRows().length > 0;
+    const hasAny = hasPl || hasExpenses || hasEbitda;
+    const pipelineError = bundle && bundle.directPipelineError;
+    if (pipelineError) {
+      return { tone: "error", message: `QuickBooks import pipeline: ${pipelineError}` };
+    }
+    const issues = quickbooksDatasetIssues();
+    if (issues.length) {
+      const missing = issues.filter((item) => item.status === "missing" || item.status === "not_configured");
+      const partial = issues.filter((item) => item.status === "partial" || item.status === "stale");
+      const summary = [];
+      if (missing.length) summary.push(`${missing.length} export(s) missing`);
+      if (partial.length) summary.push(`${partial.length} stale or partial`);
+      const detail = issues
+        .slice(0, 3)
+        .map((item) => item.detail || item.datasetKey)
+        .join(" · ");
+      return {
+        tone: missing.length ? "warning" : "info",
+        message: [summary.join("; "), detail].filter(Boolean).join(" — "),
+      };
+    }
+    const plWidget = widget("quickbooksProfitLossDetail");
+    const ebitdaWidget = widget("ebitdaNormalization");
+    const feedWidget = plWidget || ebitdaWidget;
+    if (feedWidget && feedWidget.status === "FAILED" && !hasAny) {
+      return {
+        tone: "warning",
+        message:
+          feedWidget.summary ||
+          "QuickBooks import not loaded — charts stay empty until revenue, P&L, and expense exports sync.",
+      };
+    }
+    if (feedWidget && feedWidget.status === "DEGRADED" && !hasAny) {
+      return {
+        tone: "info",
+        message: feedWidget.summary || "QuickBooks data is partial — some panels may stay empty until all exports sync.",
+      };
+    }
+    if (!hasAny && qb.dataSource !== "import" && qb.dataSource !== "persisted") {
+      return {
+        tone: "warning",
+        message: "QuickBooks charts populate when revenue, P&L, and expense exports are synced to the import cache.",
+      };
+    }
+    if (!hasAny && (qb.dataSource === "import" || qb.dataSource === "persisted")) {
+      return {
+        tone: "info",
+        message: "QuickBooks import is connected, but P&L rows and expense series are not in the current cache yet.",
+      };
+    }
+    if (/blocked|stale|pending/i.test(String(qb.syncStatus || qb.lastSync || ""))) {
+      return {
+        tone: "warning",
+        message: `QuickBooks sync status: ${qb.syncStatus || qb.lastSync}. Charts may be incomplete until sync completes.`,
+      };
+    }
+    return null;
+  }
+
   function quickbooksPlRows() {
     const qb = dash("quickbooks") || {};
     const rows = (qb.pl && qb.pl.rows) || [];
@@ -724,6 +802,7 @@ const PageCanvasData = (function () {
     softdentResponsibilityDonut,
     practiceStats,
     importHealthCards,
+    quickbooksImportNotice,
     quickbooksPlRows,
     quickbooksExpenseBars,
     quickbooksExpenseDonut,

@@ -1389,10 +1389,18 @@ const HalSkills = (function () {
     const built = contract.buildWidgetMetrics(widgetKey, contractCtx);
     if (!built.contract) return null;
     const status = contract.widgetStatusFromStates(built.states);
+    const resolvedStatus =
+      status === "SUCCESS"
+        ? status
+        : status === "FAILED"
+          ? "FAILED"
+          : fallbackStatus === "SUCCESS"
+            ? "DEGRADED"
+            : status;
     return {
       key: widgetKey,
       title: built.contract.title || widgetKey,
-      status: status === "SUCCESS" ? status : fallbackStatus === "SUCCESS" ? "DEGRADED" : status,
+      status: resolvedStatus,
       summary,
       navTarget: built.contract.navTarget || WIDGET_NAV[widgetKey],
       metrics: built.metrics,

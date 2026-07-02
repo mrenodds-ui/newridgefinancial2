@@ -16,7 +16,35 @@ FRONTEND_URL = "http://127.0.0.1:11434"
 BACKEND_URL = "http://127.0.0.1:11435"
 MODEL = "qwen3:235b"
 MAX_CONTEXT_CHARS = 22_000
+MICRO_CONTEXT_CHARS = 12_000
+SLICE_CONTEXT_CHARS = 12_000
 TIMEOUT_SECONDS = 3600
+MICRO_SECTIONS = frozenset({"1a", "1b", "1c", "2a", "2b", "2c"})
+SLICE_SECTIONS = frozenset(
+    {
+        "1a1",
+        "1a2",
+        "1b1",
+        "1b2",
+        "1c1",
+        "1c2",
+        "2a1",
+        "2a2",
+        "2b1",
+        "2b2",
+        "2c1",
+        "2c2",
+    }
+)
+COMPACT_SECTIONS = MICRO_SECTIONS | SLICE_SECTIONS
+
+
+def context_limit_for(key: str) -> int:
+    if key in SLICE_SECTIONS:
+        return SLICE_CONTEXT_CHARS
+    if key in MICRO_SECTIONS:
+        return MICRO_CONTEXT_CHARS
+    return MAX_CONTEXT_CHARS
 
 SECTION_META: dict[str, dict[str, str | Path | None]] = {
     "1": {
@@ -47,6 +75,114 @@ SECTION_META: dict[str, dict[str, str | Path | None]] = {
         "title": "Section 5 — Tests/docs consistency",
         "report": "235b_section5_tests_docs_report.md",
         "focus": ROOT / "235b_eval_section5_tests.txt",
+        "fallback": None,
+    },
+    "1a": {
+        "title": "Section 1A — SoftDent period sync and collections pipeline",
+        "report": "235b_section1a_softdent_period_report.md",
+        "focus": ROOT / "235b_eval_section1a_focus.txt",
+        "fallback": None,
+    },
+    "1b": {
+        "title": "Section 1B — Import loader comparable periods and accounting",
+        "report": "235b_section1b_import_loader_report.md",
+        "focus": ROOT / "235b_eval_section1b_focus.txt",
+        "fallback": None,
+    },
+    "1c": {
+        "title": "Section 1C — Python import loader and practice source access",
+        "report": "235b_section1c_import_pipeline_report.md",
+        "focus": ROOT / "235b_eval_section1c_focus.txt",
+        "fallback": None,
+    },
+    "2a": {
+        "title": "Section 2A — HAL skills and widget contract validation",
+        "report": "235b_section2a_widget_contract_report.md",
+        "focus": ROOT / "235b_eval_section2a_focus.txt",
+        "fallback": None,
+    },
+    "2b": {
+        "title": "Section 2B — Practice financial overview and master chart",
+        "report": "235b_section2b_financial_overview_report.md",
+        "focus": ROOT / "235b_eval_section2b_focus.txt",
+        "fallback": None,
+    },
+    "2c": {
+        "title": "Section 2C — Page canvas and HAL page validation",
+        "report": "235b_section2c_page_canvas_report.md",
+        "focus": ROOT / "235b_eval_section2c_focus.txt",
+        "fallback": None,
+    },
+    "1a1": {
+        "title": "Slice 1A1 — SoftDent period row / collections flags",
+        "report": "235b_section1a1_softdent_sync_core_report.md",
+        "focus": ROOT / "235b_eval_section1a1_focus.txt",
+        "fallback": None,
+    },
+    "1a2": {
+        "title": "Slice 1A2 — Direct import pipeline + period sync tests",
+        "report": "235b_section1a2_direct_pipeline_report.md",
+        "focus": ROOT / "235b_eval_section1a2_focus.txt",
+        "fallback": None,
+    },
+    "1b1": {
+        "title": "Slice 1B1 — import-loader comparable periods",
+        "report": "235b_section1b1_import_loader_periods_report.md",
+        "focus": ROOT / "235b_eval_section1b1_focus.txt",
+        "fallback": None,
+    },
+    "1b2": {
+        "title": "Slice 1B2 — import-loader accounting tests",
+        "report": "235b_section1b2_import_loader_tests_report.md",
+        "focus": ROOT / "235b_eval_section1b2_focus.txt",
+        "fallback": None,
+    },
+    "1c1": {
+        "title": "Slice 1C1 — Python import_loader.py",
+        "report": "235b_section1c1_import_loader_py_report.md",
+        "focus": ROOT / "235b_eval_section1c1_focus.txt",
+        "fallback": None,
+    },
+    "1c2": {
+        "title": "Slice 1C2 — import_sync + practice_source_access",
+        "report": "235b_section1c2_import_sync_report.md",
+        "focus": ROOT / "235b_eval_section1c2_focus.txt",
+        "fallback": None,
+    },
+    "2a1": {
+        "title": "Slice 2A1 — hal-skills widget validation",
+        "report": "235b_section2a1_hal_skills_report.md",
+        "focus": ROOT / "235b_eval_section2a1_focus.txt",
+        "fallback": None,
+    },
+    "2a2": {
+        "title": "Slice 2A2 — widget-contract.js",
+        "report": "235b_section2a2_widget_contract_report.md",
+        "focus": ROOT / "235b_eval_section2a2_focus.txt",
+        "fallback": None,
+    },
+    "2b1": {
+        "title": "Slice 2B1 — hal-widget-master-chart.js",
+        "report": "235b_section2b1_master_chart_report.md",
+        "focus": ROOT / "235b_eval_section2b1_focus.txt",
+        "fallback": None,
+    },
+    "2b2": {
+        "title": "Slice 2B2 — import-loader financial dashboard build",
+        "report": "235b_section2b2_financial_dashboard_report.md",
+        "focus": ROOT / "235b_eval_section2b2_focus.txt",
+        "fallback": None,
+    },
+    "2c1": {
+        "title": "Slice 2C1 — page-canvas.js",
+        "report": "235b_section2c1_page_canvas_report.md",
+        "focus": ROOT / "235b_eval_section2c1_focus.txt",
+        "fallback": None,
+    },
+    "2c2": {
+        "title": "Slice 2C2 — hal-page + validate-hal.mjs",
+        "report": "235b_section2c2_hal_page_validate_report.md",
+        "focus": ROOT / "235b_eval_section2c2_focus.txt",
         "fallback": None,
     },
 }
@@ -85,17 +221,66 @@ Do NOT write setup guides.""",
 Focus on stale mocks, tests that pass while runtime fails, docs implying wrong lane behavior,
 missing regression tests for A/R, widget feed, AI lanes, and model scripts.
 Do NOT write setup guides.""",
+    "1a": """Review Section 1A only: SoftDent period sync and collections pipeline.
+Focus on collectionsPending vs collectionsReported, comparable period alignment with QuickBooks,
+daysheet upserts, production-only months, and stale dashboard rows.
+Do NOT write setup guides.""",
+    "1b": """Review Section 1B only: site import-loader comparable periods and accounting rules.
+Focus on resolveComparablePeriod, assessCollectionHealth, buildFinancialDashboard,
+misleading SUCCESS when collections are pending, and period mismatch bugs.
+Do NOT write setup guides.""",
+    "1c": """Review Section 1C only: Python import loader and practice source access.
+Focus on import_sync, direct pipeline wiring, cache manifest freshness, and source path resolution.
+Do NOT write setup guides.""",
+    "2a": """Review Section 2A only: HAL skills and widget contract validation.
+Focus on practiceFinancialOverview degraded logic, widgetContractApi usage, pending collections info level.
+Do NOT write setup guides.""",
+    "2b": """Review Section 2B only: practice financial overview widgets and master chart rendering.
+Focus on null vs zero, source labels, partial import UX, and chart data binding.
+Do NOT write setup guides.""",
+    "2c": """Review Section 2C only: page canvas and HAL page validation.
+Focus on validate-hal.mjs expectations, page-canvas wiring, and schema mismatches.
+Do NOT write setup guides.""",
+    "1a1": """Review slice 1A1 only: softdent_dashboard_period_sync.py period rows and collections flags.
+Focus on _include_collections_from_source, _build_period_row, collectionsPending vs collectionsReported,
+_explicit_collections_failure, sync_dashboard_period_rows upsert merge. Max 2-3 findings.""",
+    "1a2": """Review slice 1A2 only: import_direct_pipeline.py and period sync tests.
+Focus on period export ingestion, daysheet upserts, and test gaps for collections pending scenarios.""",
+    "1b1": """Review slice 1B1 only: import-loader.js comparable period and collection health logic.
+Focus on resolveComparablePeriod, resolveDashboardPeriodContext, assessCollectionHealth, buildFinancialDashboard.""",
+    "1b2": """Review slice 1B2 only: test_import_loader_accounting.mjs.
+Focus on missing regressions for pending collections, period mismatch, and misleading SUCCESS cases.""",
+    "1c1": """Review slice 1C1 only: import_loader.py.
+Focus on cache manifest, dashboard JSON loading, and source path resolution bugs.""",
+    "1c2": """Review slice 1C2 only: import_sync.py and practice_source_access.py.
+Focus on direct pipeline wiring, bridge paths, and stale import cache risks.""",
+    "2a1": """Review slice 2A1 only: hal-skills.js.
+Focus on practiceFinancialOverview validation, degraded vs success, widgetContractApi usage.""",
+    "2a2": """Review slice 2A2 only: widget-contract.js.
+Focus on pending collections display, contract status labels, and misleading success states.""",
+    "2b1": """Review slice 2B1 only: hal-widget-master-chart.js.
+Focus on null vs zero, partial data binding, and source label accuracy.""",
+    "2b2": """Review slice 2B2 only: import-loader.js financial overview sections.
+Focus on collectionsPendingValue, displayAggregate, and practice overview widget feed.""",
+    "2c1": """Review slice 2C1 only: page-canvas.js.
+Focus on widget wiring, schema mismatches, and partial import UX.""",
+    "2c2": """Review slice 2C2 only: hal-page.js and validate-hal.mjs.
+Focus on validator expectations vs runtime page behavior and missing regression tests.""",
 }
 
 SYSTEM = (
     "Senior full-stack auditor. Evidence-based only. Never invent files. "
-    "Output numbered audit findings in markdown. Each finding MUST include: "
-    "Title, Severity (Critical|High|Medium|Low), Files/functions, Evidence, "
-    "Recommended narrow fix, Test to add or run. "
+    "Do NOT show reasoning, planning, or step-by-step analysis. "
+    "Output ONLY finalized audit findings — no preamble. "
+    "Each finding MUST use this exact structure:\n"
+    "### Finding N: <title>\n"
+    "- **Severity:** Critical|High|Medium|Low\n"
+    "- **Files/functions:** ...\n"
+    "- **Evidence:** ...\n"
+    "- **Recommended narrow fix:** ...\n"
+    "- **Test to add or run:** ...\n"
     "Label speculative findings as speculative. "
-    "Also include short sections: Credible findings, Low-confidence findings, "
-    "Recommended narrow fixes (summary), Tests to add/run (summary), "
-    "Whether code changes are recommended now (yes/no with rationale)."
+    "End with: **Code changes recommended now:** yes|no — <one sentence rationale>."
 )
 
 SETUP_GUIDE_MARKERS = (
@@ -151,7 +336,7 @@ def preflight_model() -> None:
         raise RuntimeError(f"{MODEL} not listed on {EVALUATOR_URL}. Available: {sorted(x for x in ids if x)}")
 
 
-def call_ollama(user_prompt: str) -> tuple[str, dict]:
+def call_ollama(user_prompt: str, *, max_tokens: int = 4096) -> tuple[str, dict]:
     payload = {
         "model": MODEL,
         "messages": [
@@ -160,7 +345,7 @@ def call_ollama(user_prompt: str) -> tuple[str, dict]:
         ],
         "stream": False,
         "think": False,
-        "options": {"temperature": 0.1, "num_predict": 4096},
+        "options": {"temperature": 0.1, "num_predict": max_tokens},
     }
     req = urllib.request.Request(
         f"{EVALUATOR_URL}/api/chat",
@@ -172,8 +357,6 @@ def call_ollama(user_prompt: str) -> tuple[str, dict]:
         body = json.loads(resp.read().decode("utf-8"))
     msg = body.get("message", {})
     content = (msg.get("content") or "").strip()
-    if not content:
-        content = (msg.get("thinking") or "").strip()
     return content or "(empty response)", body
 
 
@@ -182,8 +365,10 @@ def validate_answer(answer: str) -> list[str]:
     lowered = answer.lower()
     if not answer or answer == "(empty response)":
         errors.append("empty model response")
-    if "severity" not in lowered:
+    if "severity" not in lowered and "**severity:**" not in lowered:
         errors.append("missing Severity labels in findings")
+    if "finding 1" not in lowered and "### finding" not in lowered:
+        errors.append("missing numbered Finding sections")
     if any(marker in lowered for marker in SETUP_GUIDE_MARKERS):
         errors.append("looks like a setup guide, not an audit")
     return errors
@@ -296,19 +481,42 @@ def run_section(key: str, *, isolated: bool, overwrite: bool) -> int:
     preflight_model()
 
     context_path, context_raw = pick_context(Path(str(meta["focus"])), Path(str(meta["fallback"])) if meta["fallback"] else None)
-    context = truncate(context_raw, MAX_CONTEXT_CHARS)
+    context_limit = context_limit_for(key)
+    context = truncate(context_raw, context_limit)
     ctx_cache.write_text(context, encoding="utf-8")
     print(f"Context: {context_path.name} ({len(context)} chars) -> {ctx_cache.name}", flush=True)
 
     section_prompt = SECTION_PROMPTS[key]
+    if key in SLICE_SECTIONS:
+        finding_cap = "Return 2-3 audit findings max."
+        max_tokens = 1536
+    elif key in MICRO_SECTIONS:
+        finding_cap = "Return 2-5 audit findings max."
+        max_tokens = 3072
+    else:
+        finding_cap = "Return 3-8 audit findings max."
+        max_tokens = 4096
+    format_block = (
+        "Use ONLY the Finding template from the system prompt. "
+        "No chain-of-thought. No 'We are reviewing'. Start directly with '### Finding 1:'."
+    )
     user_prompt = (
         f"{section_prompt}\n\n"
-        "Return 3-8 audit findings max. Audit only — no setup guides.\n\n"
+        f"{finding_cap} {format_block}\n\n"
         f"--- CODE ---\n{context}\n--- END ---"
     )
 
     print(f"Evaluating section {key}...", flush=True)
-    answer, raw = call_ollama(user_prompt)
+    answer, raw = call_ollama(user_prompt, max_tokens=max_tokens)
+    validation_errors = validate_answer(answer)
+    if validation_errors:
+        print(f"First pass validation: {', '.join(validation_errors)} — retrying...", flush=True)
+        retry_prompt = (
+            f"{user_prompt}\n\n"
+            "Your prior answer failed validation. Rewrite using ONLY ### Finding N blocks "
+            "with **Severity:** lines. No reasoning text."
+        )
+        answer, raw = call_ollama(retry_prompt, max_tokens=max_tokens)
     debug_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
 
     validation_errors = validate_answer(answer)

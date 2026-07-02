@@ -179,7 +179,7 @@ const PageCanvas = (function () {
             toneClass: "",
             icon: widgetKey && typeof AppIcons !== "undefined" ? `<span class="pv-canvas-panel__ico">${AppIcons.widget(widgetKey)}</span>` : "",
           };
-    return `<section class="pv-canvas-panel${accentClass}${chrome.toneClass}"${chrome.attrs}>
+    return `<section class="pv-canvas-panel${accentClass}${(chrome.toneClass || "").trim()}"${chrome.attrs}>
       <header class="pv-canvas-panel__head">${chrome.icon}<h3>${esc(title)}</h3>${chrome.badge}</header>
       <div class="pv-canvas-panel__body">${chrome.note}${body}</div>
       ${caption ? `<footer class="pv-canvas-panel__foot">${esc(caption)}${widgetKey ? ` · ${esc(widgetKey)}` : ""}</footer>` : ""}
@@ -267,6 +267,17 @@ const PageCanvas = (function () {
 
   function canvasEmpty(message) {
     return `<p class="pv-canvas-empty pv-muted">${esc(message || "No data yet — HAL fills this when the source export is available.")}</p>`;
+  }
+
+  function canvasImportNotice(notice) {
+    if (!notice || !notice.message) return "";
+    const toneClass =
+      notice.tone === "error"
+        ? " pv-hal-widget__note--off"
+        : notice.tone === "warning"
+          ? " pv-hal-widget__note--warn"
+          : "";
+    return `<p class="pv-hal-widget__note pv-canvas-import-notice${toneClass}">${esc(notice.message)}</p>`;
   }
 
   function dataApi() {
@@ -466,7 +477,9 @@ const PageCanvas = (function () {
     const expenseBars = D ? D.quickbooksExpenseBars() : null;
     const expenseDonut = D ? D.quickbooksExpenseDonut() : null;
     const ebitda = D ? D.ebitdaRows() : [];
+    const importNotice = D ? D.quickbooksImportNotice() : null;
     return `<div class="pv-canvas-stack">
+      ${canvasImportNotice(importNotice)}
       <div class="pv-canvas-grid-3">
         ${canvasPanel({
           title: wTitle("quickbooks", 0),

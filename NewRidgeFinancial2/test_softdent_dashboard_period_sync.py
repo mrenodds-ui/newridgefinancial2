@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from softdent_dashboard_period_sync import _build_period_row, diagnose_collections_gap
+from softdent_dashboard_period_sync import _build_period_row, _prior_source_dict, diagnose_collections_gap, sync_dashboard_period_rows
 
 
 class SoftdentDashboardPeriodSyncTests(unittest.TestCase):
@@ -39,6 +41,41 @@ class SoftdentDashboardPeriodSyncTests(unittest.TestCase):
         self.assertEqual(row["collections"], 71414.88)
         self.assertNotIn("collectionsReported", row)
 
+    def test_daysheet_zero_collections_with_production_not_reported(self) -> None:
+        row = _build_period_row(
+            "2026-06",
+            [
+                {
+                    "_source": "daysheet",
+                    "production": 120000.0,
+                    "collections": 0.0,
+                    "insurance": 0.0,
+                    "patient": 0.0,
+                },
+            ],
+        )
+        self.assertEqual(row["production"], 120000.0)
+        self.assertFalse(row.get("collectionsReported", True))
+        self.assertNotIn("collectionsPending", row)
+
+    def test_prior_collections_preserved_when_provider_pending(self) -> None:
+        prior = {
+            "period": "2026-06",
+            "production": 169318.9,
+            "collections": 71414.88,
+            "insurance": 0.0,
+            "patient": 71414.88,
+        }
+        row = _build_period_row(
+            "2026-06",
+            [
+                _prior_source_dict(prior),
+                {"_source": "provider_prod", "production": 169318.9},
+            ],
+        )
+        self.assertEqual(row.get("collections"), 71414.88)
+        self.assertNotIn("collectionsPending", row)
+
     def test_diagnose_collections_gap_reports_zero_daysheet(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "analytics.sqlite3"
@@ -61,6 +98,45 @@ class SoftdentDashboardPeriodSyncTests(unittest.TestCase):
             conn.close()
             diagnostic = diagnose_collections_gap(db_path, ["2026-06"])
             self.assertTrue(any("zero" in issue.lower() for issue in diagnostic["issues"]))
+
+    def test_sync_dashboard_period_rows_records_merge_log(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp)
+            existing_path = dest / "softdent_dashboard_data.json"
+            existing_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "period": "2026-06",
+                            "production": 100.0,
+                            "collections": 50.0,
+                            "provider": "Test",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            with patch("softdent_dashboard_period_sync.softdent_import_dir", return_value=dest):
+                with patch("softdent_dashboard_period_sync.relevant_period_labels", return_value=["2026-06"]):
+                    with patch("softdent_dashboard_period_sync.resolve_analytics_db", return_value=None):
+                        with patch(
+                            "softdent_dashboard_period_sync._month_rows",
+                            return_value=[
+                                {
+                                    "period": "2026-06",
+                                    "production": 120.0,
+                                    "collectionsPending": True,
+                                    "provider": "New Ridge Family Dental",
+                                }
+                            ],
+                        ):
+                            result = sync_dashboard_period_rows()
+            self.assertTrue(result.get("ok"))
+            merge_log = result.get("mergeLog") or []
+            self.assertTrue(any(entry.get("action") == "upsert" for entry in merge_log))
+            upsert = next(entry for entry in merge_log if entry.get("action") == "upsert")
+            self.assertEqual(upsert.get("priorCollections"), 50.0)
+            self.assertEqual(upsert.get("mergedCollections"), 50.0)
 
 
 if __name__ == "__main__":

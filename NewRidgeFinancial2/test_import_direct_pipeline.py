@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from import_direct_pipeline import (
+    build_dashboard_pipeline_dataset,
     dataset_mtime,
     pick_freshest_dataset,
     pipeline_first_imports_enabled,
@@ -83,6 +84,17 @@ class ImportDirectPipelineTests(unittest.TestCase):
             self.assertEqual(ar.get("readSource"), "direct")
             self.assertEqual(ar.get("sourceKind"), "pipeline-jsonl")
             self.assertEqual((ar.get("rows") or [{}])[0].get("Amount"), 5000)
+
+    def test_build_dashboard_pipeline_source_mtime_without_optional_paths(self) -> None:
+        rows = [{"period": "2026-06", "provider": "Practice", "production": 100.0, "collections": 50.0}]
+        fake_db = Path(tempfile.gettempdir()) / "fake_analytics.sqlite3"
+        with patch("import_direct_pipeline.resolve_bridge_path", return_value=None):
+            with patch("quickbooks_monthly_sync.resolve_analytics_db", return_value=fake_db):
+                with patch("softdent_dashboard_period_sync._month_rows", return_value=rows):
+                    with patch("import_direct_pipeline._path_mtime", return_value=None):
+                        dataset = build_dashboard_pipeline_dataset()
+        self.assertIsNotNone(dataset)
+        self.assertEqual(len(dataset["rows"]), 1)
 
     def test_dataset_mtime_uses_source_path(self) -> None:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as handle:

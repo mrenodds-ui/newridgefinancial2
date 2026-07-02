@@ -257,7 +257,9 @@ def build_dashboard_pipeline_dataset() -> dict[str, Any] | None:
         return None
 
     source_path = bridge_path or db_path or SOFTDENT_FINANCIAL_EXPORTS
-    source_mtime = max(_path_mtime(bridge_path), _path_mtime(db_path))
+    mtime_candidates = [_path_mtime(bridge_path), _path_mtime(db_path)]
+    mtimes = [value for value in mtime_candidates if value]
+    source_mtime = max(mtimes) if mtimes else 0
     return {
         "sourceFile": "softdent_dashboard_data.json",
         "sourcePath": str(source_path),

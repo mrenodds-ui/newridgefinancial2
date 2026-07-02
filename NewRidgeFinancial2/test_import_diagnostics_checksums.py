@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timezone
 
 from import_diagnostics import STATUS_CONNECTED, STATUS_PARTIAL, evaluate_dataset
 
@@ -20,7 +21,7 @@ class ImportDiagnosticsChecksumTests(unittest.TestCase):
         }
         payload = {
             "sourceFile": "softdent_dashboard_data.json",
-            "modifiedAt": "2026-06-30T12:00:00+00:00",
+            "modifiedAt": datetime.now(timezone.utc).isoformat(),
             "sha256": "bbbb",
             "rows": [
                 {"production": 100, "period": "2026-06"},
@@ -55,7 +56,7 @@ class ImportDiagnosticsChecksumTests(unittest.TestCase):
         }
         payload = {
             "sourceFile": "softdent_dashboard_data.json",
-            "modifiedAt": "2026-06-30T12:00:00+00:00",
+            "modifiedAt": datetime.now(timezone.utc).isoformat(),
             "sha256": "same-hash",
             "rows": [
                 {"production": 100, "period": "2026-06"},

@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from import_contract import (
     QUICKBOOKS_AR_NAMES,
@@ -116,8 +119,58 @@ def _payload_to_dataset(payload: dict[str, Any] | None) -> dict[str, Any] | None
     return dataset
 
 
+def _validate_bridge_dashboard_rows(rows: list[Any] | None) -> dict[str, Any]:
+    if not isinstance(rows, list) or not rows:
+        return {"ok": False, "rowCount": 0, "issues": ["bridge produced no dashboard rows"]}
+    issues: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            issues.append("non-dict row in bridge payload")
+            continue
+        period = str(row.get("period") or "").strip()
+        production = float(row.get("production") or 0)
+        if not period:
+            issues.append("dashboard row missing period")
+        elif production <= 0:
+            issues.append(f"{period}: bridge production is zero")
+    return {"ok": not issues, "rowCount": len(rows), "issues": issues}
+
+
+def _dashboard_from_bridge_fallback() -> dict[str, Any] | None:
+    bridge_raw = _fetch_softdent("bridge", {})
+    rows = bridge_raw.get("derivedDashboardRows") if bridge_raw.get("ok") else None
+    validation = _validate_bridge_dashboard_rows(rows if isinstance(rows, list) else None)
+    if not bridge_raw.get("ok"):
+        logger.warning(
+            "SoftDent dashboard export unavailable and bridge fetch failed: %s",
+            bridge_raw.get("error") or "unknown error",
+        )
+        return None
+    dataset = _payload_to_dataset(bridge_raw)
+    if not dataset:
+        logger.warning(
+            "SoftDent dashboard export unavailable; bridge fallback could not be normalized (%s)",
+            "; ".join(validation.get("issues") or ["empty payload"]),
+        )
+        return None
+    if validation["ok"]:
+        logger.info(
+            "SoftDent dashboard export unavailable; using bridge fallback (%s row(s))",
+            validation["rowCount"],
+        )
+    else:
+        logger.warning(
+            "SoftDent dashboard export unavailable; bridge fallback validation issues: %s",
+            "; ".join(validation["issues"]),
+        )
+    dataset["readSource"] = "bridge-fallback"
+    dataset["bridgeValidation"] = validation
+    return dataset
+
+
 def assemble_direct_import_sections() -> dict[str, Any]:
     """Build import-loader dataset sections by scanning upstream roots (no cache copy)."""
+    pipeline_error: str | None = None
     try:
         from import_direct_pipeline import (
             load_upstream_export_dataset,
@@ -145,15 +198,16 @@ def assemble_direct_import_sections() -> dict[str, Any]:
                     "ar": load_upstream_export_dataset("quickbooks", QUICKBOOKS_AR_NAMES),
                 },
             }
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception("Direct import pipeline unavailable; falling back to legacy fetch")
+        pipeline_error = str(exc)
 
     softdent: dict[str, Any | None] = {}
     quickbooks: dict[str, Any | None] = {}
 
     softdent["dashboard"] = _payload_to_dataset(_fetch_softdent("dashboard", {}))
     if not softdent["dashboard"]:
-        softdent["dashboard"] = _payload_to_dataset(_fetch_softdent("bridge", {}))
+        softdent["dashboard"] = _dashboard_from_bridge_fallback()
 
     for key, resource in (
         ("claims", "claims"),
@@ -177,7 +231,10 @@ def assemble_direct_import_sections() -> dict[str, Any]:
     ):
         quickbooks[key] = _payload_to_dataset(_fetch_quickbooks(resource, {}))
 
-    return {"softdent": softdent, "quickbooks": quickbooks}
+    result: dict[str, Any] = {"softdent": softdent, "quickbooks": quickbooks}
+    if pipeline_error:
+        result["directPipelineError"] = pipeline_error
+    return result
 
 
 def _scan_roots(system: str) -> list[Path]:

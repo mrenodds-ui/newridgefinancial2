@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import ImportLoader from "./site/import-loader.js";
+import WidgetContract from "./site/widget-contract.js";
 
 const {
   normalizePeriodKey,
@@ -51,6 +52,7 @@ const qualityMissing = buildFinancialDataQuality(
   assessCollectionHealth([]),
 );
 assert.ok(qualityMissing.score < 88, "quality score should reflect missing collections and period mismatch");
+assert.equal(qualityMissing.overallPass, false, "period mismatch should fail overallPass");
 assert.equal(qualityMissing.categories.find((c) => c.label === "Collections field").score, 0);
 assert.equal(qualityMissing.categories.find((c) => c.label === "Collection health").score, 0);
 
@@ -142,5 +144,12 @@ const plTotals = quickbooksTotals({
 });
 assert.equal(plTotals.netIncome, 650);
 assert.equal(plTotals.plReconcile.matches, false);
+
+const pendingContract = WidgetContract.resolveMetric(
+  { path: "collections", dataset: "softdent.dashboard", dashboard: "financial" },
+  { dashboards: { financial: { dataSource: "import", collectionsPending: true } }, diagnostics: { datasets: [] } },
+);
+assert.equal(pendingContract.state, "pending");
+assert.equal(pendingContract.value, WidgetContract.MISSING);
 
 console.log("test_import_loader_accounting.mjs: ok");
