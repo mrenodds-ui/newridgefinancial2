@@ -19,3 +19,13 @@ export const HAL_SAFETY_BOUNDARIES = [
 ] as const;
 
 export const HAL_FRONTEND_ONLY_NOTE = "Frontend-only mode: messages stay in this browser session until a backend assistant is connected.";
+
+export const HAL_BACKEND_NOTE = "Backend mode: HAL uses the browser API and local Ollama when available. External actions remain blocked.";
+
+export function halRuntimeNote(): string {
+  return import.meta.env.VITE_HAL_CHAT_MODE === "mock" ? HAL_FRONTEND_ONLY_NOTE : HAL_BACKEND_NOTE;
+}
+
+export function isHalMockChatMode(): boolean {
+  return import.meta.env.VITE_HAL_CHAT_MODE === "mock";
+}

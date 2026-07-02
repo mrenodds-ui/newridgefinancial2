@@ -7,6 +7,7 @@ import { HAL_MOCK_ASSISTANT_RESPONSE, HAL_SAFETY_BOUNDARIES } from "../component
 import AppShell from "../layout/AppShell";
 
 const fetchAuthSessionMock = vi.fn();
+const postHalChatMock = vi.fn();
 
 vi.mock("../api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api/client")>();
@@ -15,6 +16,10 @@ vi.mock("../api/client", async (importOriginal) => {
     fetchAuthSession: (...args: Parameters<typeof actual.fetchAuthSession>) => fetchAuthSessionMock(...args),
   };
 });
+
+vi.mock("../components/hal/halChatApi", () => ({
+  postHalChat: (...args: unknown[]) => postHalChatMock(...args),
+}));
 
 function renderProtectedAppShell() {
   const queryClient = new QueryClient({
@@ -41,6 +46,10 @@ beforeEach(() => {
     username: "office.manager",
     display_name: "Office Manager",
     roles: ["dashboard:read"],
+  });
+  postHalChatMock.mockResolvedValue({
+    message: "Backend HAL reply for tests.",
+    mode: "local-ollama",
   });
 });
 
@@ -71,9 +80,7 @@ describe("HalChatWidget", () => {
     }
   });
 
-  it("adds the user message and mock assistant response without network calls", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-
+  it("adds the user message and backend assistant response", async () => {
     renderProtectedAppShell();
     fireEvent.click(await screen.findByTestId("hal-chat-trigger"));
 
@@ -87,13 +94,15 @@ describe("HalChatWidget", () => {
 
     await waitFor(
       () => {
-        expect(within(panel).getByText(HAL_MOCK_ASSISTANT_RESPONSE)).toBeInTheDocument();
+        expect(within(panel).getByText("Backend HAL reply for tests.")).toBeInTheDocument();
       },
       { timeout: 3000 },
     );
 
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+    expect(postHalChatMock).toHaveBeenCalledTimes(1);
+    expect(postHalChatMock.mock.calls[0]?.[0]).toMatchObject({
+      message: "What can HAL do right now?",
+    });
   });
 
   it("clears the conversation", async () => {
@@ -115,7 +124,7 @@ describe("HalChatWidget", () => {
 
     await waitFor(
       () => {
-        expect(within(panel).getByText(HAL_MOCK_ASSISTANT_RESPONSE)).toBeInTheDocument();
+        expect(within(panel).getByText("Backend HAL reply for tests.")).toBeInTheDocument();
       },
       { timeout: 3000 },
     );
@@ -162,5 +171,27 @@ describe("HalChatWidget", () => {
     renderProtectedAppShell();
 
     expect(await screen.findByTestId("hal-chat-trigger")).toBeInTheDocument();
+  });
+});
+
+describe("HalChatWidget mock mode", () => {
+  it("uses the local mock adapter when VITE_HAL_CHAT_MODE=mock", async () => {
+    vi.stubEnv("VITE_HAL_CHAT_MODE", "mock");
+    renderProtectedAppShell();
+    fireEvent.click(await screen.findByTestId("hal-chat-trigger"));
+
+    const panel = screen.getByTestId("hal-chat-panel");
+    const input = within(panel).getByRole("textbox", { name: "Message HAL" });
+    fireEvent.change(input, { target: { value: "Mock mode check" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Send message" }));
+
+    await waitFor(
+      () => {
+        expect(within(panel).getByText(HAL_MOCK_ASSISTANT_RESPONSE)).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
+    expect(postHalChatMock).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
   });
 });

@@ -1,6 +1,6 @@
 import { ComposerPrimitive, MessagePartPrimitive, MessagePrimitive, ThreadPrimitive, useAui } from "@assistant-ui/react";
 
-import { HAL_FRONTEND_ONLY_NOTE, HAL_GREETING_SUBTITLE, HAL_GREETING_TITLE, HAL_SAFETY_BOUNDARIES } from "./halChatConstants";
+import { HAL_GREETING_SUBTITLE, HAL_GREETING_TITLE, HAL_SAFETY_BOUNDARIES, halRuntimeNote } from "./halChatConstants";
 
 function HalChatEmptyState() {
   return (
@@ -16,7 +16,7 @@ function HalChatEmptyState() {
           <li key={item}>{item}</li>
         ))}
       </ul>
-      <p className="hal-chat-empty__note">{HAL_FRONTEND_ONLY_NOTE}</p>
+      <p className="hal-chat-empty__note">{halRuntimeNote()}</p>
     </div>
   );
 }

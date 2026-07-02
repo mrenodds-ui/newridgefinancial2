@@ -2,7 +2,9 @@ import { AssistantRuntimeProvider, useLocalRuntime } from "@assistant-ui/react";
 import { useMemo, useRef, useState } from "react";
 
 import { HalChatPanelHeader, HalChatThread } from "./HalChatThread";
+import { createHalBackendChatAdapter } from "./createHalBackendChatAdapter";
 import { createHalMockChatAdapter } from "./createHalMockChatAdapter";
+import { isHalMockChatMode } from "./halChatConstants";
 import { useHalChatAccess } from "./useHalChatAccess";
 import { useHalPageContext } from "./useHalPageContext";
 import "./HalChatWidget.css";
@@ -11,8 +13,13 @@ function HalChatWidgetPanel() {
   const pageContext = useHalPageContext();
   const pageContextRef = useRef(pageContext);
   pageContextRef.current = pageContext;
+  const useMockChat = isHalMockChatMode();
 
-  const adapter = useMemo(() => createHalMockChatAdapter(() => pageContextRef.current), []);
+  const adapter = useMemo(
+    () =>
+      useMockChat ? createHalMockChatAdapter(() => pageContextRef.current) : createHalBackendChatAdapter(() => pageContextRef.current),
+    [useMockChat],
+  );
   const runtime = useLocalRuntime(adapter);
   const [open, setOpen] = useState(false);
 

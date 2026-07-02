@@ -1,28 +1,29 @@
-"""Retired legacy host for New Ridge Family Financial.
+from __future__ import annotations
 
-NewRidgeFinancial 2.0 runs separately on port 8765.
-Use StartNewRidgeFinancial2.bat.
-"""
+import os
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="New Ridge Family Financial (retired)")
+from .config import default_dev_auth_users_json, load_settings
+from .routes import router
 
-_RETIRED = {
-    "status": "retired",
-    "message": "This legacy program is for reference only.",
-    "use_instead": {
-        "program": "NewRidgeFinancial 2.0",
-        "start": "StartNewRidgeFinancial2.bat",
-        "url": "http://127.0.0.1:8765/",
-    },
-}
+os.environ.setdefault("APP_AUTH_USERS_JSON", default_dev_auth_users_json())
 
+settings = load_settings()
 
-@app.get("/")
-@app.get("/health")
-@app.get("/app")
-@app.get("/app/{request_path:path}")
-def retired():
-    return JSONResponse(status_code=410, content=_RETIRED)
+app = FastAPI(
+    title="New Ridge Family Financial Browser API",
+    version="0.1.0",
+    description="HAL browser chat API for the Vite/React dashboard.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(settings.cors_origins),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(router)

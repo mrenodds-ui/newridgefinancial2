@@ -60,3 +60,7 @@ jobs:
 
       - name: Program self-heal (documents only)
         run: python program_self_heal.py --documents-only --json
+
+      - name: Browser HAL API tests
+        working-directory: .
+        run: python -m pytest app/tests/test_hal_chat_api.py -q
