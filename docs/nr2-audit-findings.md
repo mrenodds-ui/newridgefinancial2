@@ -95,4 +95,4 @@ node validate-pages.mjs
 2. `75184ca` — Import notices and quality gates (Financial/SoftDent/bridge diagnostics)
 3. `f309473` — A/R notices, master chart readiness in HAL answers, direct-first preference
 4. `7223fe6` — Claims notices and `.env.example` import policy comments
-5. `cc9c22a` — Documents/Library/Office Manager notices + this doc
+5. Documents/Library/Office Manager notices + `docs/nr2-audit-findings.md` (latest on `main`)
