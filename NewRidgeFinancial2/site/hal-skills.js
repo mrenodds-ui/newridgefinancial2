@@ -2403,8 +2403,8 @@ const HalSkills = (function () {
       if (String(widget.status).toUpperCase() === "SUCCESS") widget.status = "DEGRADED";
     });
     const publish = publishJobStatus(feed.widgets);
-    feed.jobs.importCacheRefresh = { status: publish };
-    feed.jobs.widgetPublish = { status: publish };
+    feed.jobs.importCacheRefresh = Object.assign({}, feed.jobs.importCacheRefresh, { status: publish });
+    feed.jobs.widgetPublish = Object.assign({}, feed.jobs.widgetPublish, { status: publish });
     return feed;
   }
 

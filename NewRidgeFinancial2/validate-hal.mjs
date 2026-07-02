@@ -779,6 +779,7 @@ async function main() {
 
   // A/R honesty: with no verified A/R source, totals are nulled and status degrades
   const noArFeed = HalSkills.buildWidgetFeed({ dashboards: { softdent: {}, quickbooks: { syncStatus: "ok" } }, claims: { total: 5 } });
+  assert(noArFeed.jobs.widgetPublish && noArFeed.jobs.widgetPublish.validation, "widget publish job must retain validation when verified A/R is unavailable");
   assert(noArFeed.widgets.smartClaimsAndReceivables.metrics.accountsReceivableTotal === null, "A/R must not be fabricated without a verified source");
   assert(noArFeed.widgets.careDeliveryPerformance.metrics.patientBalanceTotal === null, "patient A/R balance must not be fabricated");
   assert(noArFeed.widgets.smartClaimsAndReceivables.status !== "SUCCESS", "claims widget must degrade without A/R source");
