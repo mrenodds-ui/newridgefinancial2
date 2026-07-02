@@ -2922,6 +2922,15 @@ async function boot() {
   refreshOpsHealthStatus().catch(() => {
     /* ops health optional on boot */
   });
+  if (typeof ProgramStrength !== "undefined" && ProgramStrength.runBootHeal) {
+    ProgramStrength.runBootHeal({
+      invalidateProgramCaches,
+      scheduleHalWidgetRefresh,
+      refreshOpsHealthStatus,
+    }).catch(() => {
+      /* boot self-heal optional */
+    });
+  }
   const initial = resolvePageId(window.location.hash);
   select(initial);
   if (typeof ImportCoordinator !== "undefined") {

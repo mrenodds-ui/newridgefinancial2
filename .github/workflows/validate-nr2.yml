@@ -57,3 +57,6 @@ jobs:
 
       - name: Integration health CLI
         run: python integration_health.py
+
+      - name: Program self-heal (documents only)
+        run: python program_self_heal.py --documents-only --json

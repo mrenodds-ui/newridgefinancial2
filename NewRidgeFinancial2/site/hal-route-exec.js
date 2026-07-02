@@ -301,6 +301,18 @@ const HalRouteExec = (function () {
       return outcome(Ops.formatCloseoutRunbook(payload), "ops", result.intent, [{ label: "Open documents", page: "documents" }]);
     }
 
+    if (result.useProgramSelfHeal) {
+      const PS = typeof ProgramStrength !== "undefined" ? ProgramStrength : window.ProgramStrength;
+      if (!PS || typeof PS.runSelfHeal !== "function") {
+        return outcome("Program self-heal is not loaded.", "ops", result.intent);
+      }
+      const fullPull = /\bfull\b|\b100%\b|\ball exports\b/.test(trimmed);
+      const report = await PS.runSelfHeal({ reason: "hal", fullPull });
+      ctx.clearProgramContextCache && ctx.clearProgramContextCache();
+      if (ctx.refreshHalWidgetFeed) await ctx.refreshHalWidgetFeed(await ctx.loadProgramSnapshot());
+      return outcome(PS.formatReport(report), "ops", result.intent, [], { refreshHal: true });
+    }
+
     if (result.useFinancialReports) {
       const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
       if (!Ops) return outcome("Portal ops module is not loaded.", "ops", result.intent);

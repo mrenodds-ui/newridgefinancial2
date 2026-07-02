@@ -412,6 +412,16 @@ class DesktopApi:
 
         return build_daily_closeout(self.store)
 
+    def run_program_self_heal(self, full_pull: bool = False, documents_only: bool = False, reason: str = "desktop") -> dict:
+        from program_self_heal import run_program_self_heal
+
+        return run_program_self_heal(
+            self.store,
+            full_pull=bool(full_pull),
+            pull_imports=not bool(documents_only),
+            reason=str(reason or "desktop"),
+        )
+
     def get_program_help(self, query: str) -> dict:
         from program_help import format_program_help, match_program_help
 

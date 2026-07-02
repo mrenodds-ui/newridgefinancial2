@@ -172,6 +172,26 @@ class NR2BottleServer(BottleServer):
                 bottle.response.status = 500
                 return json.dumps({"error": str(exc)})
 
+        @app.post("/api/self-heal")
+        def self_heal_api():
+            bottle.response.content_type = "application/json"
+            try:
+                from program_self_heal import run_program_self_heal
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                store = _local_store()
+                report = run_program_self_heal(
+                    store,
+                    full_pull=bool(payload.get("fullPull")),
+                    pull_imports=not bool(payload.get("documentsOnly")),
+                    reason=str(payload.get("reason") or "http"),
+                )
+                return json.dumps(report)
+            except Exception as exc:
+                bottle.response.status = 500
+                return json.dumps({"error": str(exc), "status": "fail"})
+
         @app.get("/")
         def index():
             if not server.root_path:

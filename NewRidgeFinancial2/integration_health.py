@@ -38,18 +38,39 @@ def _probe_ollama(endpoint: str = "http://127.0.0.1:11434/api/tags", timeout: fl
         return {"ok": False, "endpoint": endpoint.replace("/api/tags", ""), "error": str(exc)}
 
 
-def _document_queue_count(store: Any | None) -> dict[str, Any]:
+def _document_queue_count(store: Any | None, *, heal: bool = False) -> dict[str, Any]:
     if store is None:
-        return {"ok": False, "count": 0, "error": "no_store"}
+        try:
+            from local_store import LocalStore
+
+            store = LocalStore(DATA_DIR)
+        except Exception as exc:
+            return {"ok": False, "count": 0, "error": str(exc)}
     try:
         raw = store.get("nr2:v2:documents")
         if not raw:
+            if heal:
+                return _heal_document_queue(store)
             return {"ok": True, "count": 0}
         payload = json.loads(raw)
         queue = payload.get("queue") if isinstance(payload, dict) else []
-        return {"ok": True, "count": len(queue) if isinstance(queue, list) else 0}
+        count = len(queue) if isinstance(queue, list) else 0
+        if count == 0 and heal:
+            return _heal_document_queue(store)
+        return {"ok": True, "count": count}
     except Exception as exc:
         return {"ok": False, "count": 0, "error": str(exc)}
+
+
+def _heal_document_queue(store: Any) -> dict[str, Any]:
+    try:
+        from document_sync import sync_accounting_documents
+
+        result = sync_accounting_documents(store)
+        count = int(result.get("queueCount") or 0) if isinstance(result, dict) else 0
+        return {"ok": True, "count": count, "healed": True}
+    except Exception as exc:
+        return {"ok": False, "count": 0, "error": str(exc), "healed": False}
 
 
 def _posting_queue_count(db_path: Path | None) -> dict[str, Any]:
@@ -168,29 +189,50 @@ def integration_health_snapshot(
         )
     )
 
-    docs = _document_queue_count(store)
+    if store is None:
+        try:
+            from local_store import LocalStore
+
+            store = LocalStore(DATA_DIR)
+        except Exception:
+            store = None
+
+    docs = _document_queue_count(store, heal=deep_diagnostics)
+    posting = _posting_queue_count(Path(getattr(store, "db_path", DATA_DIR / "nr2.sqlite3")) if store else DATA_DIR / "nr2.sqlite3")
+    doc_count = int(docs.get("count") or 0)
+    posting_count = int(posting.get("count") or 0)
+    docs_ok = doc_count > 0 or posting_count > 0
+    docs_status = "ok" if doc_count > 0 else ("degraded" if posting_count > 0 else "fail")
+    if doc_count == 0 and posting_count > 0:
+        docs_detail = f"0 document(s) in intake queue; {posting_count} journal queue item(s) seeded from imports."
+    else:
+        docs_detail = f"{doc_count} document(s) in local queue."
+        if docs.get("healed"):
+            docs_detail += " (auto-synced during health check)"
     integrations.append(
         _integration_row(
             integration_id="documents",
             label="Documents queue",
-            ok=bool(docs.get("ok")),
-            status="ok" if docs.get("ok") else "fail",
-            detail=f"{docs.get('count', 0)} document(s) in local queue.",
-            action_hint="Run document sync when the queue is empty but imports exist.",
+            ok=docs_ok,
+            status=docs_status,
+            detail=docs_detail,
+            action_hint="Run document sync or program self-heal when the queue is empty but imports exist.",
         )
     )
 
     db_path = getattr(store, "db_path", None) if store else DATA_DIR / "nr2.sqlite3"
     if db_path and not Path(db_path).is_file():
         db_path = DATA_DIR / "nr2.sqlite3"
-    posting = _posting_queue_count(Path(db_path) if db_path else None)
+    if not posting_count:
+        posting = _posting_queue_count(Path(db_path) if db_path else None)
+        posting_count = int(posting.get("count") or 0)
     integrations.append(
         _integration_row(
             integration_id="posting-queue",
             label="Journal posting queue",
             ok=bool(posting.get("ok")),
             status="ok" if posting.get("ok") else "degraded",
-            detail=f"{posting.get('count', 0)} posting queue item(s).",
+            detail=f"{posting_count} posting queue item(s).",
             action_hint="Review posting queue before month-end close.",
         )
     )

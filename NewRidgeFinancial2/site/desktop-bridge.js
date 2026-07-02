@@ -484,6 +484,28 @@ const DesktopBridge = (function () {
     return resp.json();
   }
 
+  async function runProgramSelfHeal(options) {
+    const opts = options || {};
+    if (hasDesktopApi() && window.pywebview.api.run_program_self_heal) {
+      return window.pywebview.api.run_program_self_heal(
+        Boolean(opts.fullPull),
+        Boolean(opts.documentsOnly),
+        String(opts.reason || "ui"),
+      );
+    }
+    const resp = await fetch("http://127.0.0.1:8765/api/self-heal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fullPull: Boolean(opts.fullPull),
+        documentsOnly: Boolean(opts.documentsOnly),
+        reason: opts.reason || "ui",
+      }),
+    });
+    if (!resp.ok) throw new Error("program self-heal unavailable");
+    return resp.json();
+  }
+
   async function getProgramHelp(query) {
     if (hasDesktopApi() && window.pywebview.api.get_program_help) {
       return window.pywebview.api.get_program_help(String(query || ""));
@@ -530,6 +552,7 @@ const DesktopBridge = (function () {
     buildSupportBundle,
     getFinancialReports,
     getDailyCloseout,
+    runProgramSelfHeal,
     getProgramHelp,
     searchHalMemories,
     readClipboard,

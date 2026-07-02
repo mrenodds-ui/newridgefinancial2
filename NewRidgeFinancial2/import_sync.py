@@ -880,6 +880,15 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
     except Exception:
         pass
 
+    try:
+        from document_sync import sync_accounting_documents
+        from local_store import LocalStore
+
+        doc_store = LocalStore(REPO_ROOT / "app_data" / "nr2")
+        result["documents"] = sync_accounting_documents(doc_store)
+    except Exception as exc:
+        result["warnings"].append(f"Document queue sync skipped: {exc}")
+
     return result
 
 

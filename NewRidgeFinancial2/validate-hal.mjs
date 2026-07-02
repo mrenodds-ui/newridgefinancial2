@@ -37,6 +37,7 @@ function buildRoutingRegressionCases() {
   addMany(["Print financial widget", "print financial overview widget"], "print: widget:practiceFinancialOverview");
   addMany(["Print ar aging widget"], "print: widget:arAgingAndCollections");
   addMany(["Closeout runbook", "month end runbook", "month-end close runbook"], "ops: closeout-runbook");
+  addMany(["Self heal program", "strengthen program", "repair program"], "ops: self-heal");
   addMany(["Run readiness check", "check hal", "self-check", "readiness check now"], "readiness: run");
   addMany(["Show diagnostics", "display diagnostics"], "readiness: show");
   addMany(["Clear diagnostics", "reset diagnostics"], "readiness: clear");
@@ -1094,6 +1095,8 @@ async function main() {
   assert(printWidgetRoute.intent === "print: widget:practiceFinancialOverview", "print widget must resolve widget key");
   const closeoutRunbookRoute = HalCore.routeHalCommand(halData, halModels, pages, "closeout runbook");
   assert(closeoutRunbookRoute.intent === "ops: closeout-runbook" && closeoutRunbookRoute.useCloseoutRunbook === true, "closeout runbook must route locally");
+  const selfHealRoute = HalCore.routeHalCommand(halData, halModels, pages, "strengthen program");
+  assert(selfHealRoute.intent === "ops: self-heal" && selfHealRoute.useProgramSelfHeal === true, "program self-heal must route locally");
   const mockCtx = {
     halData,
     halModels,
