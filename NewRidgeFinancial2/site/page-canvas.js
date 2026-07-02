@@ -573,6 +573,7 @@ const PageCanvas = (function () {
             { lane: "Denied", tone: "orange", items: [] },
           ];
     return `<div class="pv-canvas-stack">
+      ${canvasImportNotice(D ? D.claimsImportNotice() : null)}
       <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
       ${canvasPanel({
         title: wTitle("claims", 0),

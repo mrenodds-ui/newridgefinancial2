@@ -168,6 +168,10 @@ assert.ok(pageViewsJs.includes("renderBody(pageId"), "page-views must delegate b
 assert.ok(pageCanvasJs.includes("PageCanvasData") || pageCanvasJs.includes("dataApi"), "page-canvas must render from HAL program snapshot data");
 assert.ok(pageCanvasJs.includes("renderFinancial"), "page-canvas must implement financial body");
 assert.ok(pageCanvasJs.includes("renderTaxes"), "page-canvas must implement taxes body");
+const pageCanvasDataJs = readFileSync(join(siteDir, "page-canvas-data.js"), "utf8");
+assert.ok(pageCanvasDataJs.includes("financialImportNotice"), "page canvas data must expose financial import notice");
+assert.ok(pageCanvasDataJs.includes("claimsImportNotice"), "page canvas data must expose claims import notice");
+assert.ok(pageCanvasJs.includes("canvasImportNotice"), "page-canvas must render import notices on staff pages");
 
 const ServicesModValidate = ServicesMod;
 const SnapshotStorePageValidate = SnapshotStorePage;

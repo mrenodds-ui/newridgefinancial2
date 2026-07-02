@@ -465,6 +465,44 @@ const PageCanvasData = (function () {
     return null;
   }
 
+  function claimsImportNotice() {
+    const claimsSnap = snapshot && snapshot.claims;
+    const pipeline = widget("claimsPipeline");
+    const smart = widget("smartClaimsAndReceivables");
+    const issues = datasetIssuesForKeys(["softdent.claims"]);
+    if (issues.length) {
+      return {
+        tone: issues.some((item) => item.status === "missing" || item.status === "not_configured") ? "warning" : "info",
+        message: issues
+          .slice(0, 3)
+          .map((item) => item.detail || item.datasetKey)
+          .join(" · "),
+      };
+    }
+    if (pipeline && pipeline.status === "FAILED") {
+      return {
+        tone: "warning",
+        message:
+          pipeline.summary || "SoftDent claims export not loaded — pipeline lanes stay empty until claims sync.",
+      };
+    }
+    if (pipeline && pipeline.status === "DEGRADED" && pipeline.summary) {
+      return { tone: "info", message: pipeline.summary };
+    }
+    if (smart && smart.status === "DEGRADED" && smart.summary && !(claimsSnap && claimsSnap.total > 0)) {
+      return { tone: "info", message: smart.summary };
+    }
+    const hasKanban = claimsKanban().length > 0;
+    const hasClaim = Boolean(firstClaim());
+    if (pipeline && pipeline.status !== "SUCCESS" && !hasKanban && !hasClaim) {
+      return {
+        tone: "warning",
+        message: "Claims workbench stays empty until SoftDent claims export is loaded and validated.",
+      };
+    }
+    return null;
+  }
+
   function quickbooksDatasetIssues() {
     const bundle = snapshot && snapshot.importBundle;
     const diagnostics = bundle && bundle.diagnostics;
@@ -664,11 +702,12 @@ const PageCanvasData = (function () {
   function claimsKpis() {
     const m = metrics("claimsPipeline");
     const claims = snapshot && snapshot.claims;
+    const pipelineTone = widgetTone("claimsPipeline");
     return [
-      { label: "Open claims", value: fmt(m.totalClaims || (claims && claims.total)), spark: null },
-      { label: "Needs review", value: fmt(m.needsReviewCount), tone: "warning" },
-      { label: "Ready", value: fmt(m.readyCount), tone: "success" },
-      { label: "Denied", value: fmt(m.deniedCount), tone: "warning" },
+      { label: "Open claims", value: fmt(m.totalClaims || (claims && claims.total)), tone: pipelineTone, spark: null },
+      { label: "Needs review", value: fmt(m.needsReviewCount), tone: m.needsReviewCount ? "warning" : pipelineTone },
+      { label: "Ready", value: fmt(m.readyCount), tone: m.readyCount ? "success" : pipelineTone },
+      { label: "Denied", value: fmt(m.deniedCount), tone: m.deniedCount ? "warning" : pipelineTone },
     ];
   }
 
@@ -984,6 +1023,7 @@ const PageCanvasData = (function () {
     financialImportNotice,
     softdentImportNotice,
     arImportNotice,
+    claimsImportNotice,
     quickbooksImportNotice,
     quickbooksPlRows,
     quickbooksExpenseBars,
