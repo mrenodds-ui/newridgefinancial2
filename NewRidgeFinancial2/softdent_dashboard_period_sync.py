@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -194,6 +195,10 @@ def _explicit_collections_failure(sources: list[dict[str, Any]]) -> bool:
     return False
 
 
+def _is_current_month(period: str) -> bool:
+    return str(period or "").strip()[:7] == datetime.now(timezone.utc).strftime("%Y-%m")
+
+
 def _build_period_row(period: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
     production = 0.0
     collections: float | None = None
@@ -218,10 +223,15 @@ def _build_period_row(period: str, sources: list[dict[str, Any]]) -> dict[str, A
     if collections is not None:
         row["collections"] = collections
     if production > 0 and not collections_reported:
+        has_daysheet = any(_collections_source_kind(source) == "daysheet" for source in sources)
         if _explicit_collections_failure(sources):
-            row["collectionsReported"] = False
-            if "collections" not in row:
-                row["collections"] = 0.0
+            if _is_current_month(period) and not has_daysheet:
+                row["collectionsPending"] = True
+                row.pop("collections", None)
+            else:
+                row["collectionsReported"] = False
+                if "collections" not in row:
+                    row["collections"] = 0.0
         else:
             row["collectionsPending"] = True
             row.pop("collections", None)
@@ -261,6 +271,8 @@ def diagnose_collections_gap(db_path: Path | None, periods: list[str] | None = N
             issues.append(f"{period}: daysheet row exists but collections are zero — rerun final daysheet in SoftDent.")
             continue
         if br and float(br.get("production") or 0) > 0:
+            if _is_current_month(period):
+                continue
             if db_path and db_path.is_file():
                 issues.append(
                     f"{period}: production without daysheet_totals row in {db_path.name} — export daysheet before period close."

@@ -1829,22 +1829,23 @@ const HalSkills = (function () {
       "Provider production split from the owner financial dashboard.",
     );
     const practiceStatus = widgetStatusFromDash(practiceDash);
+    const practiceConfigured = (practiceDash && practiceDash.configured) || {};
     const newPatientsWidget = buildContractWidget(
       "newPatients",
       contractCtx,
-      practiceStatus,
+      practiceConfigured.newPatients ? practiceStatus : "FAILED",
       "New patient counts from SoftDent when an export is configured.",
     );
     const treatmentWidget = buildContractWidget(
       "treatmentPlanSummary",
       contractCtx,
-      practiceStatus,
+      practiceConfigured.treatmentPlans ? practiceStatus : "FAILED",
       "Treatment plan presented/accepted summary from SoftDent when an export is configured.",
     );
     const caseAcceptanceWidget = buildContractWidget(
       "caseAcceptance",
       contractCtx,
-      practiceStatus,
+      practiceConfigured.caseAcceptance ? practiceStatus : "FAILED",
       "Case acceptance rate from SoftDent when an export is configured or derived from treatment plans.",
     );
     const monthlyRevenue = overviewWidget
@@ -2228,17 +2229,6 @@ const HalSkills = (function () {
         },
       },
     };
-
-    if (widgets.newPatients && widgets.newPatients.status !== "FAILED") {
-      ["treatmentPlanSummary", "caseAcceptance"].forEach((key) => {
-        const widget = widgets[key];
-        if (!widget || widget.status !== "FAILED") return;
-        widgets[key] = Object.assign({}, widget, {
-          status: "DEGRADED",
-          summary: `${widget.summary} Treatment-plan analytics are not populated in softdent_financial_analytics.db yet — export or sync treatment plan summary from SoftDent.`,
-        });
-      });
-    }
 
     const feed = {
       meta: skillMeta("widgets.feed", "programSnapshot"),

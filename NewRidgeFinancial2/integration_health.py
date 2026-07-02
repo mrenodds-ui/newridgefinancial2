@@ -11,7 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from automation_registry import list_automation_jobs
-from import_diagnostics import STATUS_CONNECTED, STATUS_MISSING, STATUS_STALE, evaluate_bundle
+from import_diagnostics import (
+    STATUS_CONNECTED,
+    STATUS_MISSING,
+    STATUS_STALE,
+    blocking_import_issues,
+    evaluate_bundle,
+)
 from import_loader import load_import_bundle
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -98,17 +104,24 @@ def integration_health_snapshot(
     missing = int(summary.get("missing") or 0)
     partial = int(summary.get("partial") or 0)
     connected = int(summary.get("connected") or 0)
-    imports_ok = missing == 0 and stale == 0
+    blocking = blocking_import_issues(diagnostics)
+    imports_ok = not blocking
     import_status = "ok" if imports_ok else ("degraded" if connected > 0 else "fail")
     import_detail = (
         f"{connected} connected, {partial} partial, {stale} stale, {missing} missing."
     )
+    optional_missing = int(summary.get("missingOptional") or 0)
+    if optional_missing:
+        import_detail = f"{import_detail} {optional_missing} optional export(s) not loaded."
     top_issues: list[str] = []
     for row in diagnostics.get("datasets") or []:
         if not isinstance(row, dict):
             continue
+        severity = str(row.get("severity") or "warning")
+        if severity == "optional" and row.get("status") == STATUS_MISSING:
+            continue
         if row.get("status") in {STATUS_STALE, STATUS_MISSING} or (
-            row.get("status") != STATUS_CONNECTED and row.get("severity") == "critical"
+            row.get("status") != STATUS_CONNECTED and severity == "critical"
         ):
             hint = row.get("collectorHint") or row.get("detail") or row.get("datasetKey")
             top_issues.append(f"{row.get('datasetKey')}: {hint}")

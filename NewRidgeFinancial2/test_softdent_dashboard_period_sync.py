@@ -30,6 +30,19 @@ class SoftdentDashboardPeriodSyncTests(unittest.TestCase):
         self.assertTrue(row.get("collectionsPending"))
         self.assertNotIn("collectionsReported", row)
 
+    def test_current_month_bridge_without_daysheet_marks_collections_pending(self) -> None:
+        with patch("softdent_dashboard_period_sync._is_current_month", return_value=True):
+            row = _build_period_row(
+                "2026-07",
+                [
+                    {"_source": "provider_prod", "production": 10476.0},
+                    {"_source": "bridge", "production": 10476.0, "collections": 0.0, "insurance": 0.0, "patient": 0.0},
+                ],
+            )
+        self.assertTrue(row.get("collectionsPending"))
+        self.assertNotIn("collectionsReported", row)
+        self.assertNotIn("collections", row)
+
     def test_daysheet_collections_are_preserved(self) -> None:
         row = _build_period_row(
             "2026-05",

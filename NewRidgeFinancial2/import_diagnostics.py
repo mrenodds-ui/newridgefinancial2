@@ -314,6 +314,12 @@ def evaluate_bundle(
         items.append(item)
         by_status[item["status"]] = by_status.get(item["status"], 0) + 1
 
+    missing_optional = sum(
+        1
+        for item in items
+        if item.get("status") == STATUS_MISSING and str(item.get("severity") or "") == "optional"
+    )
+
     return {
         "evaluatedAt": _utc_now().isoformat(),
         "manifestPath": str(MANIFEST_PATH),
@@ -324,9 +330,29 @@ def evaluate_bundle(
             "partial": by_status.get(STATUS_PARTIAL, 0),
             "stale": by_status.get(STATUS_STALE, 0),
             "missing": by_status.get(STATUS_MISSING, 0),
+            "missingOptional": missing_optional,
             "notConfigured": by_status.get(STATUS_NOT_CONFIGURED, 0),
         },
     }
+
+
+def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Datasets whose missing/stale state should degrade integration health imports."""
+    if not isinstance(diagnostics, dict):
+        return []
+    blocking: list[dict[str, Any]] = []
+    for row in diagnostics.get("datasets") or []:
+        if not isinstance(row, dict):
+            continue
+        severity = str(row.get("severity") or "warning")
+        if severity == "optional":
+            continue
+        status = row.get("status")
+        if status in {STATUS_MISSING, STATUS_STALE}:
+            blocking.append(row)
+        elif status != STATUS_CONNECTED and severity == "critical":
+            blocking.append(row)
+    return blocking
 
 
 def check_upstream_health(*, manifest: dict[str, Any] | None = None) -> dict[str, Any]:

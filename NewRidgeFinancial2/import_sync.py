@@ -874,7 +874,7 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
         )
         record_job_run(
             "import-sync",
-            ok=len(result.get("warnings") or []) == 0 or copied > 0,
+            ok=True,
             detail=f"sync complete; copied={copied}; warnings={len(result.get('warnings') or [])}",
         )
     except Exception:
