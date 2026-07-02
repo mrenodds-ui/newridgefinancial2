@@ -157,8 +157,17 @@ const HalCore = (function () {
     return best;
   }
 
+  function isLocalStaffReviewOverride(query) {
+    const q = String(query).toLowerCase().trim();
+    return (
+      /\b(approve all|bulk approve)\b.*\b(journal|posting queue)\b/.test(q) ||
+      /\b(journal|posting queue)\b.*\b(approve all|bulk approve)\b/.test(q)
+    );
+  }
+
   function checkFirewall(query) {
     const q = String(query).toLowerCase().trim();
+    if (isLocalStaffReviewOverride(q)) return false;
     return BLOCKED_RE.test(q) || BLOCKED_PHRASES_RE.test(q);
   }
 
@@ -635,6 +644,22 @@ const HalCore = (function () {
       "For denied claims aging past 30 days: mention the claim status or denial reason and a practical follow-up (resubmit or appeal).",
       "For operating-picture requests: stay in status mode, use two short paragraphs, and when verified context includes them mention Ollama, SoftDent, and QuickBooks explicitly.",
     ].join("\n");
+  }
+
+  function buildFastChatSystemPrompt(halData, programContext) {
+    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
+    const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
+    const parts = [
+      "You are HAL, the local read-only program manager for NewRidgeFinancial 2.0.",
+      topPriority ? `Priority: ${topPriority}` : "Priority: monitor the program and recommend safe next staff actions.",
+      "Answer in short plain paragraphs from local context only. Never fabricate import data.",
+      "Read-only: no submit, email, fax, upload, post, or external delivery.",
+      "Blocked: " + (firewall.blocked || []).slice(0, 8).join(", ") + ".",
+    ];
+    if (programContext) {
+      parts.push("Local snapshot:", programContext.slice(0, 2200));
+    }
+    return parts.join("\n");
   }
 
   function buildSystemPrompt(halData, programContext) {
@@ -1518,7 +1543,14 @@ const HalCore = (function () {
       return { intent: "reasoning: narrative", lane: "reason21b", text: "", useReasoning: true, prompt: rawQuery, actions: [] };
     }
 
-    if (/prioriti[sz]e|make a plan|draft a plan|\bplan (my|for|the)\b|analy[sz]e|reason through|think through|recommend|\bstrategy\b|focus first|where (do|should) (i|we) start/.test(query)) {
+    if (
+      /prioriti[sz]e|make a plan|draft a plan|\bplan (my|for|the)\b|analy[sz]e (?:this|the|my|our|it)|reason through|think through|\bstrategy\b|focus first|where (do|should) (i|we) start/.test(
+        query,
+      ) ||
+      /\b(step[\s-]?by[\s-]?step plan|numbered plan|work plan|action plan)\b/.test(query) ||
+      (/\brecommend\b/.test(query) &&
+        /\b(accounting|review|priority|priorities|next step|month.?end|closeout|close out|work plan)\b/.test(query))
+    ) {
       return { intent: "reasoning", lane: "reason21b", text: "", useReasoning: true, prompt: rawQuery, actions: [] };
     }
 
@@ -1764,6 +1796,7 @@ const HalCore = (function () {
     matchProgramRoute,
     modelLanesText,
     buildSystemPrompt,
+    buildFastChatSystemPrompt,
     buildReasoningPrompt,
     buildEscalationPrompt,
     cleanModelText,

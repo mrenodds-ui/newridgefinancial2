@@ -376,20 +376,10 @@ const HalAgent = (function () {
       );
     }
 
-    // broad: model-backed and substantive practice questions
-    if (r.useModel || r.useReasoning || r.useEscalation || r.useOss) return true;
-    if (
-      (r.useClaimReadiness ||
-        r.useWidgetGuidance ||
-        r.useProactiveBriefing ||
-        r.useOfficeBriefing ||
-        r.useDocRag ||
-        r.useProgramSnapshot) &&
-      WEB_RESEARCH_PRACTICE_RE.test(query)
-    ) {
-      return true;
+    // broad: no automatic web fetch on casual chat — too slow.
+    if (r.useReasoning || r.useEscalation || r.useOss) {
+      return WEB_RESEARCH_PRACTICE_RE.test(query) && String(query).trim().length >= 16;
     }
-    if (WEB_RESEARCH_PRACTICE_RE.test(query) && String(query).trim().length >= 12) return true;
     return false;
   }
 
@@ -411,7 +401,7 @@ const HalAgent = (function () {
       };
     }
 
-    if (route.useProgramSnapshot || route.useModel || route.useReasoning || route.useEscalation || route.useOss) {
+    if (route.useProgramSnapshot || route.useReasoning || route.useEscalation || route.useOss) {
       tools.push("read_program_snapshot");
     }
     if (route.useWidgetFeed || route.useWidgetGuidance || route.useWidgetShow || route.useWidgetFillSuggestions) {
@@ -451,11 +441,7 @@ const HalAgent = (function () {
     if (route.useReadinessRun || route.useReadinessGate || /\breadiness\b/i.test(query)) {
       tools.push("run_readiness_check");
     }
-    if (
-      route.useProactiveBriefing ||
-      route.useReasoning ||
-      /\b(proactive|what should hal|what's best|best for the program|think about the program|program health)\b/i.test(query)
-    ) {
+    if (route.useProactiveBriefing || route.useReasoning) {
       tools.push("read_proactive_briefing");
     }
     if (
@@ -575,6 +561,20 @@ const HalAgent = (function () {
     return parts.join("\n");
   }
 
+  function buildFastChatAgentPrompt(ctx, plan, toolResults, working, longTerm) {
+    const toolText = summarizeToolResults(toolResults);
+    const parts = [HalCore.buildFastChatSystemPrompt(ctx.halData, null)];
+    if (toolText) {
+      parts.push("", "Tool results:", toolText.slice(0, 1200));
+    }
+    const turnText = summarizeWorkingMemory(working);
+    if (turnText) {
+      parts.push("", "Recent turns:", turnText.slice(0, 400));
+    }
+    parts.push("", "Answer the user directly in 1–3 short paragraphs. No bullet lists unless asked.");
+    return parts.join("\n");
+  }
+
   function selfCheckResponse(query, text, plan, toolResults, route) {
     const issues = [];
     const body = String(text || "").trim();
@@ -686,7 +686,10 @@ const HalAgent = (function () {
   }
 
   async function enhanceModelCall(ctx, route, query, plan, toolResults, onToken) {
-    const agentPrompt = buildAgentSystemPrompt(ctx, plan, toolResults, workingMemory, longTermMemory);
+    const isFastChat = !!(route.useModel && !route.useReasoning && !route.useEscalation && !route.useOss);
+    const agentPrompt = isFastChat
+      ? buildFastChatAgentPrompt(ctx, plan, toolResults, workingMemory, longTermMemory)
+      : buildAgentSystemPrompt(ctx, plan, toolResults, workingMemory, longTermMemory);
 
     // De-dup: when a snapshot-bearing tool already ran, its summary is in the
     // agent prompt, so do NOT also append the full program context (it would
@@ -696,7 +699,7 @@ const HalAgent = (function () {
     );
     // The fast chat lane gets a tighter context cap for snappier first tokens;
     // the deeper reasoning/escalation lanes keep the full budget.
-    const ctxCap = route.useModel ? 3000 : AGENT_BUDGET.maxModelContextChars;
+    const ctxCap = isFastChat ? 1800 : route.useModel ? 3000 : AGENT_BUDGET.maxModelContextChars;
     let combinedPrompt = agentPrompt;
     if (!snapshotToolRan) {
       const programContext = await ctx.getProgramContextText();
@@ -802,7 +805,30 @@ const HalAgent = (function () {
     }
 
     if (!outcome) {
-      outcome = await ctx.executeRoute(route, trimmed, toolResults);
+      try {
+        outcome = await ctx.executeRoute(route, trimmed, toolResults);
+      } catch (error) {
+        if (typeof RuntimeIssues !== "undefined") {
+          RuntimeIssues.record("hal-agent.route", error, { lane: route.lane, intent: route.intent });
+        }
+        outcome = null;
+      }
+    }
+
+    if (!outcome) {
+      const lane = route.lane || "local";
+      const offline =
+        typeof ctx.offlineModelMessage === "function" && plan.useModelEnhancement
+          ? ctx.offlineModelMessage(lane)
+          : null;
+      outcome = {
+        text:
+          offline ||
+          "I could not complete that request. Check that Ollama is running at 127.0.0.1:11434, then try again.",
+        lane: plan.useModelEnhancement ? lane + " · offline" : lane,
+        actions: [],
+        intent: route.intent || "error",
+      };
     }
 
     const checked = selfCheckResponse(trimmed, outcome.text, plan, toolResults, route);

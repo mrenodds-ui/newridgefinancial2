@@ -518,8 +518,12 @@ async function main() {
     assert(HalCore.isLocalModelEndpoint(runtime.endpoint), `model endpoint must be loopback-only: ${runtime.endpoint}`);
   }
   for (const lane of halModels.lanes) {
-    assert(lane.executionEnabled === true, `lane ${lane.id} execution must be enabled`);
     assert(lane.inventoryAvailable === true, `lane ${lane.id} inventory should be marked available`);
+    if (lane.executionEnabled === false) {
+      assert(lane.runtime && lane.runtime.enabled === false, `standby lane ${lane.id} runtime must be disabled`);
+      continue;
+    }
+    assert(lane.executionEnabled === true, `lane ${lane.id} execution must be enabled`);
     assert(HalCore.laneReady(halModels, lane.id), `lane ${lane.id} must be execution-ready on loopback`);
     const runtime = HalCore.laneRuntime(halModels, lane.id);
     assert(runtime && HalCore.isLocalModelEndpoint(runtime.endpoint), `lane ${lane.id} runtime must be loopback-only`);
@@ -537,9 +541,14 @@ async function main() {
   assert(halModels.readinessDisplay.gpu && halModels.readinessDisplay.gpu.verified === true, "GPU must be marked verified in readiness display");
   assert(/Radeon RX 9060 XT|ROCm/i.test(halHtml), "HAL page must show the verified GPU device");
   assert(/sensitive raw data|SoftDent|QuickBooks/i.test(halHtml), "HAL page must show sensitive-data no-egress policy");
-  assert(HalCore.laneReady(halModels, "helper14b"), "helper lane must be execution-ready on loopback");
-  assert(halModels.readinessDisplay.configuredModels.helper.gpuResidentWithLocal === true, "helper lane must be verified co-resident with local lane");
   assert(HalCore.laneReady(halModels, "chat8b"), "chat lane must be execution-ready on loopback");
+  const helperLane = halModels.lanes.find((lane) => lane.id === "helper14b");
+  assert(helperLane && helperLane.executionEnabled === false, "helper lane must be standby in single-lane layout");
+  assert(halModels.readinessDisplay.configuredModels.helper.onDemand === true, "helper lane must be on-demand only");
+  assert(
+    halModels.readinessDisplay.configuredModels.helper.gpuResidentWithLocal === false,
+    "helper lane must not be GPU co-resident in single-lane layout",
+  );
   assert(HalCore.laneReady(halModels, "reason21b"), "reasoning lane must be execution-ready on loopback");
   assert(HalCore.laneReady(halModels, "escalate30b"), "escalation lane must be execution-ready on loopback");
   assert(HalCore.laneReady(halModels, "oss120b"), "oss120b lane must be execution-ready on loopback");

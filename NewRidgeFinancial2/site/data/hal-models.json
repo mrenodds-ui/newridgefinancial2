@@ -26,11 +26,16 @@
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
       "model": "hal-chat:8b",
-      "timeoutMs": 90000,
-      "temperature": 0.2
+      "timeoutMs": 60000,
+      "temperature": 0.2,
+      "think": false,
+      "options": {
+        "num_predict": 320,
+        "num_ctx": 2048
+      }
     },
     "fastModel": {
-      "enabled": true,
+      "enabled": false,
       "endpoint": "http://127.0.0.1:11434/api/chat",
       "model": "hal-helper:14b",
       "timeoutMs": 60000,
@@ -51,7 +56,7 @@
       "temperature": 0.2,
       "think": true
     },
-    "note": "HAL routes general questions to local Ollama lanes on 127.0.0.1 only. GPU-resident: hal-chat:8b + hal-helper:14b. Reasoning uses mistral-small3.1:24b-fast on demand. Broad web research is enabled for public practice-reference lookups (sanitized, no PHI). External action firewall still runs before every model call."
+    "note": "HAL routes general questions to local Ollama on 127.0.0.1 only. Single GPU lane: hal-chat:8b only (no dual 14B helper). Reasoning uses mistral-small3.1:24b-fast on demand. External action firewall runs before every model call."
   },
   "readinessDisplay": {
     "label": "Operator-verified local inventory",
@@ -68,9 +73,9 @@
       "version": "0.30.11"
     },
     "activeLane": "chat8b",
-    "laneExecution": "Enabled · dual GPU 8B chat + 14B helper · 24B reasoning on demand · loopback only",
-    "runningModel": "hal-chat:8b + hal-helper:14b dual GPU resident (~5 GB + ~9 GB, capped ctx)",
-    "gpuStatus": "AMD Radeon RX 9060 XT · 16 GB VRAM · dual 8B chat + 14B helper GPU lanes · 24B reasoning on demand",
+    "laneExecution": "Enabled · single GPU 8B chat lane · 14B helper off · 24B reasoning on demand · loopback only",
+    "runningModel": "hal-chat:8b only — single GPU resident (~5 GB, ctx 2048)",
+    "gpuStatus": "AMD Radeon RX 9060 XT · 16 GB VRAM · single 8B chat lane (no dual 14B pin)",
     "bindingStatus": "Ollama server binds 0.0.0.0:11434 (LAN access enabled by operator) · HAL client connects 127.0.0.1 only",
     "dataPolicy": "No patient or sensitive practice data sent to models or the web. Web research uses sanitized generic queries for public reference material.",
     "allModelsEnabled": true,
@@ -82,10 +87,10 @@
       "library": "ROCm",
       "compute": "gfx1200",
       "vramGiB": 15.9,
-      "layerOffload": "hal-chat:8b + hal-helper:14b dual resident on GPU with capped context",
+      "layerOffload": "hal-chat:8b single resident on GPU (no dual 14B lane)",
       "integratedGpu": "Intel Graphics present but dropped by Ollama (set OLLAMA_IGPU_ENABLE=1 to enable)",
       "resolvedWarning": "rocblaslt TensileLibrary_lazy_gfx1200 lookup fixed by setting ROCBLAS_TENSILE_LIBPATH",
-      "lastVerifiedLoad": "hal-chat:8b (3072 ctx) + hal-helper:14b (2048 ctx) pinned · mistral-small3.1:24b-fast on demand"
+      "lastVerifiedLoad": "hal-chat:8b only pinned (2048 ctx) · mistral-small3.1:24b-fast on demand"
     },
     "runtime": {
       "ollamaVersion": "0.30.11",
@@ -114,7 +119,7 @@
     ],
     "configuredModels": {
       "local": { "lane": "chat8b", "model": "hal-chat:8b", "available": true },
-      "helper": { "lane": "helper14b", "model": "hal-helper:14b", "available": true, "gpuResidentWithLocal": true },
+      "helper": { "lane": "helper14b", "model": "hal-helper:14b", "available": true, "onDemand": true, "gpuResidentWithLocal": false },
       "reasoning": { "lane": "reason24b", "model": "mistral-small3.1:24b-fast", "available": true, "onDemand": true },
       "escalation": { "lane": "escalate30b", "model": "qwen3:30b", "available": true },
       "general": { "lane": "general14b", "model": "qwen3:14b", "available": true },
@@ -129,12 +134,12 @@
       "id": "helper14b",
       "name": "14B helper lane",
       "model": "hal-helper:14b",
-      "role": "GPU-pinned triage, routing checks, and quick helper answers",
-      "state": "Configured",
+      "role": "Optional on-demand helper (not GPU-pinned; single-lane layout uses 8B chat only)",
+      "state": "Standby",
       "inventoryAvailable": true,
-      "executionEnabled": true,
+      "executionEnabled": false,
       "runtime": {
-        "enabled": true,
+        "enabled": false,
         "endpoint": "http://127.0.0.1:11434/api/chat",
         "model": "hal-helper:14b",
         "timeoutMs": 60000,
@@ -142,9 +147,9 @@
       },
       "gpuFit": {
         "verified": true,
-        "coResidentWith": "hal-chat:8b",
-        "processor": "100% GPU",
-        "residentSize": "~9 GB",
+        "onDemand": true,
+        "processor": "on demand",
+        "residentSize": "~9 GB when loaded",
         "context": 2048,
         "quantization": "queen3:14b base"
       },
@@ -164,7 +169,7 @@
       "id": "chat8b",
       "name": "8B chat lane",
       "model": "hal-chat:8b",
-      "role": "GPU-pinned staff conversation, program monitoring summaries, and plain-language recommendations",
+      "role": "GPU-pinned staff conversation, program monitoring summaries, and plain-language recommendations (sole chat lane)",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
@@ -172,15 +177,14 @@
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
         "model": "hal-chat:8b",
-        "timeoutMs": 90000,
+        "timeoutMs": 60000,
         "temperature": 0.2
       },
       "gpuFit": {
         "verified": true,
-        "coResidentWith": "hal-helper:14b",
         "processor": "100% GPU",
         "residentSize": "~5 GB",
-        "context": 3072,
+        "context": 2048,
         "quantization": "deepseek-r1:8b base"
       },
       "willAllow": [

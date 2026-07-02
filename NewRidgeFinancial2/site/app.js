@@ -1623,20 +1623,17 @@ async function handleHalSubmit(query) {
     placeholder = { role: "hal", text: label + " locally…", lane, actions: [] };
     halChatHistory.push(placeholder);
     saveChatHistory();
-    // Show the placeholder on both surfaces and suppress the typewriter so live
-    // streamed tokens are written directly instead of being re-animated.
     halTypeSig = halChatHistory.length + ":" + placeholder.text.length;
     renderChatLog();
     renderHalScreen();
   }
 
-  // Live token stream → write straight into the visible HAL bubbles, throttled.
   const onToken = placeholder
     ? (partial) => {
         if (!partial) return;
         placeholder.text = partial;
         const now = Date.now();
-        if (now - streamRenderAt < 60) return;
+        if (now - streamRenderAt < 40) return;
         streamRenderAt = now;
         renderChatLog();
         setInlineHalStreamingText(partial);
@@ -1644,40 +1641,59 @@ async function handleHalSubmit(query) {
     : undefined;
 
   let outcome = null;
-  if (window.HalAgent) {
-    outcome = await HalAgent.processQuery(trimmed, buildHalAgentCtx(onToken ? { onToken } : null));
-  } else {
-    outcome = await HalRouteExec.execute(preRoute, trimmed, {}, buildHalAgentCtx());
-  }
-  if (!outcome) {
-    halAskLoading = false;
-    renderHalScreen();
-    return;
-  }
+  try {
+    if (window.HalAgent) {
+      outcome = await HalAgent.processQuery(trimmed, buildHalAgentCtx(onToken ? { onToken } : null));
+    } else {
+      outcome = await HalRouteExec.execute(preRoute, trimmed, {}, buildHalAgentCtx());
+    }
+    if (!outcome) {
+      outcome = {
+        text: "HAL did not return a response. Try again or ask a simpler local question.",
+        lane: "local",
+        intent: "error",
+        actions: [],
+      };
+    }
 
-  if (placeholder) {
-    placeholder.text = outcome.text;
-    placeholder.lane = outcome.lane || placeholder.lane;
-    placeholder.actions = normalizeActions(outcome.actions);
-    // Replay the final answer with synced typewriter + voice (stream preview is replaced).
-    halTypeSig = null;
-  } else {
-    halChatHistory.push({
-      role: "hal",
-      text: outcome.text,
-      lane: outcome.lane || "local",
-      actions: normalizeActions(outcome.actions),
-    });
+    if (placeholder) {
+      placeholder.text = outcome.text;
+      placeholder.lane = outcome.lane || placeholder.lane;
+      placeholder.actions = normalizeActions(outcome.actions);
+      halTypeSig = halChatHistory.length + ":" + String(outcome.text || "").length;
+    } else {
+      halChatHistory.push({
+        role: "hal",
+        text: outcome.text,
+        lane: outcome.lane || "local",
+        actions: normalizeActions(outcome.actions),
+      });
+    }
+    logAudit(trimmed, outcome.intent);
+  } catch (error) {
+    const detail = error && error.message ? error.message : String(error);
+    const failText =
+      "HAL hit an error and could not finish: " +
+      detail +
+      ". If this keeps happening, restart Start Program and confirm Ollama is running.";
+    if (placeholder) {
+      placeholder.text = failText;
+      placeholder.lane = "error";
+    } else {
+      halChatHistory.push({ role: "hal", text: failText, lane: "error", actions: [] });
+    }
+    if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("hal-chat", error);
+    logAudit(trimmed, "error");
+  } finally {
+    halAskLoading = false;
+    saveChatHistory();
+    renderChatLog();
+    renderAuditLog();
+    if (outcome && outcome.refreshHal) renderHalScreen();
+    if (outcome && outcome.refreshPanel && currentDrawerKey) renderPanel(currentDrawerKey);
+    if (outcome && /^sidenotes:/.test(String(outcome.intent || ""))) scrollHalPanelIntoView("sidenotes");
+    renderHalScreen();
   }
-  logAudit(trimmed, outcome.intent);
-  saveChatHistory();
-  renderChatLog();
-  renderAuditLog();
-  if (outcome.refreshHal) renderHalScreen();
-  if (outcome.refreshPanel && currentDrawerKey) renderPanel(currentDrawerKey);
-  if (/^sidenotes:/.test(String(outcome.intent || ""))) scrollHalPanelIntoView("sidenotes");
-  halAskLoading = false;
-  renderHalScreen();
 }
 
 function escapeHtml(value) {
