@@ -97,11 +97,29 @@ const PageViews = (function () {
           const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
           if (!db || typeof db.reviewPostingQueueEntry !== "function") return;
           const entryId = journalBtn.getAttribute("data-journal-review");
-          const action = journalBtn.getAttribute("data-journal-action") || "approve";
-          await db.reviewPostingQueueEntry({ entryId, action, reviewedBy: "local-user" });
+          const uiAction = journalBtn.getAttribute("data-journal-action") || "approve";
+          const action = uiAction === "reject" ? "rejected" : "approved";
+          await db.reviewPostingQueueEntry(entryId, action, "local-user", "");
           if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("nr2:journal-queue-updated"));
           }
+          if (typeof onNavigate === "function") onNavigate("documents");
+          return;
+        }
+        const journalBulk = event.target.closest("[data-journal-approve-all]");
+        if (journalBulk) {
+          event.preventDefault();
+          const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+          if (!db || typeof db.bulkReviewPostingQueue !== "function") return;
+          await db.bulkReviewPostingQueue(
+            "approved",
+            "local-user",
+            "Bulk approved from Accounting Documents (local review only).",
+          );
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("nr2:journal-queue-updated"));
+          }
+          if (typeof onNavigate === "function") onNavigate("documents");
           return;
         }
         const journalExport = event.target.closest("[data-journal-export]");

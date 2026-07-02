@@ -412,14 +412,25 @@ class DesktopApi:
 
         return build_daily_closeout(self.store)
 
-    def run_program_self_heal(self, full_pull: bool = False, documents_only: bool = False, reason: str = "desktop") -> dict:
+    def run_program_self_heal(self, full_pull: bool = False, documents_only: bool = False, reason: str = "desktop", approve_journal: bool = False) -> dict:
         from program_self_heal import run_program_self_heal
 
         return run_program_self_heal(
             self.store,
             full_pull=bool(full_pull),
             pull_imports=not bool(documents_only),
+            approve_journal_pending=bool(approve_journal),
             reason=str(reason or "desktop"),
+        )
+
+    def bulk_review_posting_queue(self, action: str = "approved", reviewer_actor: str = "local-user", review_note: str = "") -> dict:
+        from accounting_bridge import bulk_review_posting_queue
+
+        return bulk_review_posting_queue(
+            self.store.db_path,
+            action=str(action or "approved"),
+            reviewer_actor=str(reviewer_actor or "local-user"),
+            review_note=str(review_note or ""),
         )
 
     def get_program_help(self, query: str) -> dict:

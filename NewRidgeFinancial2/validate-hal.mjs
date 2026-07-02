@@ -38,6 +38,7 @@ function buildRoutingRegressionCases() {
   addMany(["Print ar aging widget"], "print: widget:arAgingAndCollections");
   addMany(["Closeout runbook", "month end runbook", "month-end close runbook"], "ops: closeout-runbook");
   addMany(["Self heal program", "strengthen program", "repair program"], "ops: self-heal");
+  addMany(["Approve all journal queue", "bulk approve journal posting queue"], "ops: journal-bulk-approve");
   addMany(["Run readiness check", "check hal", "self-check", "readiness check now"], "readiness: run");
   addMany(["Show diagnostics", "display diagnostics"], "readiness: show");
   addMany(["Clear diagnostics", "reset diagnostics"], "readiness: clear");

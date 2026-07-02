@@ -1617,6 +1617,9 @@ const HalCore = (function () {
     if (/\b(self heal|self-heal|strengthen program|repair program|fix program|program strength|heal program)\b/.test(query)) {
       return { intent: "ops: self-heal", lane: "local", useProgramSelfHeal: true, text: "", actions: [] };
     }
+    if (/\b(approve all|bulk approve)\b.*\b(journal|posting queue)\b|\b(journal|posting queue)\b.*\b(approve all|bulk approve)\b/.test(query)) {
+      return { intent: "ops: journal-bulk-approve", lane: "local", useJournalBulkApprove: true, text: "", actions: [] };
+    }
     if (/\b(financial reports?|claim tracking|claims report|ar aging report)\b/.test(query)) {
       return { intent: "ops: financial-reports", lane: "local", useFinancialReports: true, text: "", actions: [] };
     }

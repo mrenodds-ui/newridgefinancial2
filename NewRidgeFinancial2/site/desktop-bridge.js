@@ -191,6 +191,17 @@ const DesktopBridge = (function () {
     throw new Error(desktopRequiredMessage("Posting queue review"));
   }
 
+  async function bulkReviewPostingQueue(action, reviewerActor, reviewNote) {
+    if (hasDesktopApi() && window.pywebview.api.bulk_review_posting_queue) {
+      return window.pywebview.api.bulk_review_posting_queue(
+        String(action || "approved"),
+        String(reviewerActor || "local-user"),
+        String(reviewNote || ""),
+      );
+    }
+    throw new Error(desktopRequiredMessage("Bulk posting queue review"));
+  }
+
   async function exportApprovedPostingQueue(options) {
     if (hasDesktopApi() && window.pywebview.api.export_approved_posting_queue) {
       const limit = options && options.limit != null ? Number(options.limit) : 200;
@@ -541,6 +552,7 @@ const DesktopBridge = (function () {
     listPostingQueue,
     enqueueJournalPosting,
     reviewPostingQueueEntry,
+    bulkReviewPostingQueue,
     exportApprovedPostingQueue,
     webResearch,
     listHalMemories,

@@ -677,6 +677,7 @@ const PageCanvas = (function () {
       <tbody>${body}</tbody>
     </table></div>
     <div class="pv-journal-toolbar">
+      <button type="button" class="pv-button" data-journal-approve-all="1">Approve all pending</button>
       <button type="button" class="pv-button" data-journal-export="1">Export approved CSV</button>
     </div>`;
   }

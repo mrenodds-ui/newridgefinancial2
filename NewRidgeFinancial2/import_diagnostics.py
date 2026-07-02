@@ -220,9 +220,13 @@ def evaluate_dataset(
 
     if upstream_file and upstream_file.get("ageMinutes") is not None:
         upstream_age = int(upstream_file["ageMinutes"])
+        local_fresh = age_minutes is not None and age_minutes <= freshness_max
         if upstream_age > freshness_max and status == STATUS_CONNECTED:
-            status = STATUS_STALE
-            detail = f"Upstream export is stale ({upstream_age} min old). {detail}"
+            if local_fresh:
+                detail = f"Local cache is fresh; upstream source is {upstream_age} min old. {detail}"
+            else:
+                status = STATUS_STALE
+                detail = f"Upstream export is stale ({upstream_age} min old). {detail}"
 
     current_sha = str(dataset_payload.get("sha256") or "").strip() or None
     previous = (previous_checksums or {}).get(dataset_key) if isinstance(previous_checksums, dict) else None

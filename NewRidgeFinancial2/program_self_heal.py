@@ -33,6 +33,7 @@ def run_program_self_heal(
     full_pull: bool = False,
     reason: str = "manual",
     pull_imports: bool = True,
+    approve_journal_pending: bool = False,
 ) -> dict[str, Any]:
     """Run a full local repair cycle without external writes."""
     store = store or LocalStore(DATA_DIR)
@@ -90,6 +91,29 @@ def run_program_self_heal(
     except Exception as exc:
         steps.append(_step("practice-exports", False, str(exc)))
 
+    if approve_journal_pending:
+        try:
+            from accounting_bridge import bulk_review_posting_queue
+
+            db_path = getattr(store, "db_path", None) or DATA_DIR / "nr2.sqlite3"
+            bulk = bulk_review_posting_queue(
+                db_path,
+                action="approved",
+                reviewer_actor="nr2-self-heal",
+                review_note="Bulk approved during program self-heal (local review only; not posted to QuickBooks).",
+                limit=50,
+            )
+            steps.append(
+                _step(
+                    "journal-queue-review",
+                    True,
+                    f"approved {bulk.get('reviewedCount', 0)} pending item(s)",
+                    bulk,
+                )
+            )
+        except Exception as exc:
+            steps.append(_step("journal-queue-review", False, str(exc)))
+
     health = integration_health_snapshot(store, deep_diagnostics=True)
     health_text = format_integration_health_text(health)
     steps.append(
@@ -140,11 +164,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run NR2 program self-heal cycle.")
     parser.add_argument("--full-pull", action="store_true", help="Pull all upstream export periods.")
     parser.add_argument("--documents-only", action="store_true", help="Skip import pull; refresh documents only.")
+    parser.add_argument("--approve-journal", action="store_true", help="Approve all pending journal queue items.")
     parser.add_argument("--json", action="store_true", help="Emit JSON report.")
     args = parser.parse_args()
     report = run_program_self_heal(
         full_pull=bool(args.full_pull),
         pull_imports=not args.documents_only,
+        approve_journal_pending=bool(args.approve_journal),
         reason="cli",
     )
     if args.json:

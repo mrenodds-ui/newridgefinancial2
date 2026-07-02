@@ -313,6 +313,28 @@ const HalRouteExec = (function () {
       return outcome(PS.formatReport(report), "ops", result.intent, [], { refreshHal: true });
     }
 
+    if (result.useJournalBulkApprove) {
+      const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
+      if (!db || typeof db.bulkReviewPostingQueue !== "function") {
+        return outcome("Bulk journal review requires the NR2 desktop app.", "ops", result.intent);
+      }
+      const bulk = await db.bulkReviewPostingQueue(
+        "approved",
+        "hal-local-user",
+        "Bulk approved via HAL (local review only; not posted to QuickBooks).",
+      );
+      ctx.clearProgramContextCache && ctx.clearProgramContextCache();
+      if (ctx.refreshHalWidgetFeed) await ctx.refreshHalWidgetFeed(await ctx.loadProgramSnapshot());
+      const count = bulk && bulk.reviewedCount != null ? bulk.reviewedCount : 0;
+      return outcome(
+        `Approved ${count} pending journal queue item(s). Export approved CSV from Accounting Documents when ready.`,
+        "ops",
+        result.intent,
+        [{ label: "Open documents", page: "documents" }],
+        { refreshHal: true },
+      );
+    }
+
     if (result.useFinancialReports) {
       const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
       if (!Ops) return outcome("Portal ops module is not loaded.", "ops", result.intent);

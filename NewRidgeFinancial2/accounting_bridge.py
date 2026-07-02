@@ -167,6 +167,36 @@ def review_posting_queue_entry(
     )
 
 
+def bulk_review_posting_queue(
+    store_path: Any,
+    *,
+    action: str = "approved",
+    reviewer_actor: str,
+    review_note: str | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    if action not in {"approved", "rejected"}:
+        raise ValueError("action must be approved or rejected")
+    if not str(reviewer_actor or "").strip():
+        raise ValueError("reviewer_actor is required")
+    queue = PostingQueueStore(store_path)
+    pending = queue.list_entries(limit=max(1, min(limit, 100)), status=POSTING_QUEUE_STATUS_PENDING_REVIEW)
+    reviewed: list[dict[str, Any]] = []
+    for entry in pending:
+        queue_id = str(entry.get("queueId") or entry.get("queue_id") or "")
+        if not queue_id:
+            continue
+        reviewed.append(
+            queue.review_entry(
+                queue_id=queue_id,
+                action=action,
+                reviewer_actor=str(reviewer_actor).strip(),
+                review_note=review_note,
+            )
+        )
+    return {"action": action, "reviewedCount": len(reviewed), "items": reviewed, "metrics": queue.metrics()}
+
+
 def export_approved_posting_queue_csv(store_path: Any, *, limit: int = 200) -> dict[str, Any]:
     """Export approved queue entries as CSV rows for manual QuickBooks entry (never posts externally)."""
     import csv
