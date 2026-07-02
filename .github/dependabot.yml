@@ -1,18 +1,17 @@
-version: 2
-updates:
-  # Frontend npm packages
-  - package-ecosystem: npm
-    directory: /frontend
-    schedule:
-      interval: weekly
-    groups:
-      dev-dependencies:
-        dependency-type: development
-      production-dependencies:
-        dependency-type: production
+# NR2 active program does not use frontend npm CI or legacy GitHub Action matrices.
+# Automatic dependency PRs for those trees created noise after legacy workflows moved to workflow_dispatch.
+# Re-enable blocks below if you revive frontend/FastAPI CI.
 
-  # GitHub Actions
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
+version: 2
+updates: []
+
+# --- reference (disabled) ---
+# updates:
+#   - package-ecosystem: npm
+#     directory: /frontend
+#     schedule:
+#       interval: weekly
+#   - package-ecosystem: github-actions
+#     directory: /
+#     schedule:
+#       interval: weekly

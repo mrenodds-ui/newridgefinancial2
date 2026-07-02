@@ -87,4 +87,6 @@ node validate-hal.mjs
 node validate-pages.mjs
 ```
 
-CI runs the same checks via `.github/workflows/validate-nr2.yml`.
+CI runs the same checks via `.github/workflows/validate-nr2.yml` (automatic on push).  
+Secret Scan runs on push/PR; legacy Build/Frontend/FastAPI workflows are manual-only.  
+See repo-root `README.md` (CI section) and `docs/nr2-audit-findings.md`.

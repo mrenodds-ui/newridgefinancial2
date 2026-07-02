@@ -1,11 +1,15 @@
 <#
 .SYNOPSIS
-  Run NR2 micro sections with 120B draft + 70B (llama3.3) review on :11438.
+  Run NR2 micro sections with 120B draft + secondary reviewer on :11438.
+
+  Default secondary: llama3.3:latest. Override with -SecondaryModel or env NR2_EVAL_SECONDARY_MODEL
+  (e.g. hal-gemma2:9b from .env).
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('1a', '1b', '1c', '2a', '2b', '2c', '1a1', '1a2', '1b1', '1b2', '1c1', '1c2', '2a1', '2a2', '2b1', '2b2', '2c1', '2c2')]
-    [string[]]$Sections = @('1a1', '1a2', '1b1', '1b2', '1c1', '1c2', '2a1', '2a2', '2b1', '2b2', '2c1', '2c2')
+    [string[]]$Sections = @('1a1', '1a2', '1b1', '1b2', '1c1', '1c2', '2a1', '2a2', '2b1', '2b2', '2c1', '2c2'),
+    [string]$SecondaryModel = $(if ($env:NR2_EVAL_SECONDARY_MODEL) { $env:NR2_EVAL_SECONDARY_MODEL } else { 'llama3.3:latest' })
 )
 
 $ErrorActionPreference = 'Continue'
@@ -22,7 +26,7 @@ function Log([string]$Message) {
 }
 
 Log "Dual-model eval sections: $($Sections -join ', ')"
-Log "Primary: gpt-oss:120b  Review: llama3.3:latest (70B class)"
+Log "Primary: gpt-oss:120b  Review: $SecondaryModel"
 
 & (Join-Path $PSScriptRoot 'build_235b_nr2_focus.ps1') | Out-Null
 
@@ -38,12 +42,15 @@ if ($LASTEXITCODE -ne 0) { throw 'start_dual_eval_lane failed' }
 
 $modelsJson = curl.exe -s -m 30 http://127.0.0.1:11438/v1/models
 if ($modelsJson -notmatch 'gpt-oss:120b') { throw 'gpt-oss:120b not on :11438' }
-if ($modelsJson -notmatch 'llama3.3') { throw 'llama3.3 not on :11438' }
+$secondaryKey = ($SecondaryModel -split ':', 2)[0]
+if ($modelsJson -notmatch [regex]::Escape($secondaryKey)) {
+    throw "Secondary model $SecondaryModel (key $secondaryKey) not on :11438"
+}
 Log 'Eval lane ready on :11438'
 
 $env:NR2_EVAL_OLLAMA_HOST = '127.0.0.1:11438'
 $env:NR2_EVAL_PRIMARY_MODEL = 'gpt-oss:120b'
-$env:NR2_EVAL_SECONDARY_MODEL = 'llama3.3:latest'
+$env:NR2_EVAL_SECONDARY_MODEL = $SecondaryModel
 $py = Join-Path $Root '.venv\Scripts\python.exe'
 if (-not (Test-Path $py)) { $py = 'python' }
 

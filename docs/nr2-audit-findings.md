@@ -79,6 +79,8 @@ Consolidated from 12 sub-slice eval reports (`eval_section*_120b_70b_report.md`,
 |------|-------|
 | *(none)* | Audit batch closed July 2026 — re-run dual-model eval only if large HAL/page refactors land |
 
+See also: [`docs/gemma2-hal-review-triage.md`](gemma2-hal-review-triage.md) for Gemma 2 programming review triage.
+
 ---
 
 ## Verification commands

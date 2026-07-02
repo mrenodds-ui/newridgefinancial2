@@ -65,3 +65,15 @@ Legacy `scripts/sync_softdent_bridge.ps1` is **retired**.
 | `app_data/nr2/` | Desktop SQLite state |
 
 See `NewRidgeFinancial2/README.md` for page/HAL details.
+
+## CI (GitHub)
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| **Validate NR2** | Every push/PR to `main` | Python + Node validators (`NewRidgeFinancial2/`) |
+| **Secret Scan** | Push/PR + manual | TruffleHog on repo (excludes `.trufflehogignore`) |
+| Legacy (Build, CI, Frontend CI, FastAPI, CodeQL, …) | **Manual only** | Reference stack under `frontend/` and `_legacy/` |
+
+Dependabot is disabled for legacy trees. Close any old open dependency PRs manually on GitHub.
+
+Eval tooling (local, optional): `scripts/run_nr2_dual_model_micro_eval.ps1`, `scripts/run_gemma2_hal_program_eval.ps1` — see `docs/nr2-audit-findings.md` and `docs/gemma2-hal-review-triage.md`.
