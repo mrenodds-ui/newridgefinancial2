@@ -1,10 +1,8 @@
 name: "CodeQL"
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+  # Manual CodeQL scan. NR2 push gate: validate-nr2.yml
 
 jobs:
   analyze:

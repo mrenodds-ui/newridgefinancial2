@@ -1,10 +1,8 @@
 name: Test Suite
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+  # Legacy React/FastAPI stack (reference only). NR2 push gate: validate-nr2.yml
 
 jobs:
   test-backend:

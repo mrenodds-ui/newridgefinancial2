@@ -1,16 +1,8 @@
 name: Frontend CI
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-ci.yml"
-  pull_request:
-    branches: [main, master]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-ci.yml"
+  workflow_dispatch:
+  # Legacy frontend stack (reference only). NR2 push gate: validate-nr2.yml
 
 defaults:
   run:
