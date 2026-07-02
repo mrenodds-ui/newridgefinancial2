@@ -287,7 +287,9 @@ const PageCanvas = (function () {
   function canvasImportHealthGrid() {
     const D = dataApi();
     const cards = D ? D.importHealthCards() : [];
-    if (!cards.length) return canvasEmpty("SoftDent import status will appear here after the dashboard export loads.");
+    if (!cards.length) {
+      return `<div class="pv-canvas-operatory-grid">${canvasEmpty("SoftDent import status will appear here after the dashboard export loads.")}</div>`;
+    }
     return `<div class="pv-canvas-operatory-grid">${cards
       .map(
         (o) => `<article class="pv-canvas-operatory-card pv-canvas-operatory-card--${esc(o.tone)}">
