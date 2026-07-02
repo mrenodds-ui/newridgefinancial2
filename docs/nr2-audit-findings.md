@@ -42,6 +42,15 @@ Consolidated from 12 sub-slice eval reports (`eval_section*_120b_70b_report.md`,
 - 12 sub-slice focus bundles and dual-model batch runner (`scripts/run_nr2_dual_model_micro_eval.ps1`)
 - Eval artifacts gitignored (`eval_section*.md`, `235b_*`)
 
+### CI and GitHub
+- **Validate NR2** runs on every push/PR to `main` (`.github/workflows/validate-nr2.yml`)
+- CI import fixtures seeded from `NewRidgeFinancial2/ci-fixtures/imports/`
+- Legacy React/FastAPI/frontend workflows are **manual only** (`workflow_dispatch`)
+
+### Page chrome / HAL Command Center (2c2)
+- Null-safe sidenotes handling in `hal-page.js` (`Array.isArray` guards)
+- `validate-hal.mjs` renders HAL page and `PageChrome` with empty/missing snapshot context
+
 ---
 
 ## False positives
@@ -67,8 +76,7 @@ Consolidated from 12 sub-slice eval reports (`eval_section*_120b_70b_report.md`,
 
 | Item | Notes |
 |------|-------|
-| Page-chrome / HAL page null guards (2c2) | Quick review passed; no crash paths found in `page-chrome.js` |
-| Push + CI | Run after commits; workflow `.github/workflows/validate-nr2.yml` |
+| *(none)* | Audit batch closed July 2026 — re-run dual-model eval only if large HAL/page refactors land |
 
 ---
 
@@ -93,4 +101,8 @@ node validate-pages.mjs
 2. `75184ca` — Import notices and quality gates (Financial/SoftDent/bridge diagnostics)
 3. `f309473` — A/R notices, master chart readiness in HAL answers, direct-first preference
 4. `7223fe6` — Claims notices and `.env.example` import policy comments
-5. Documents/Library/Office Manager notices + `docs/nr2-audit-findings.md` (latest on `main`)
+5. Documents/Library/Office Manager notices + `docs/nr2-audit-findings.md`
+6. Narratives/Taxes canvas notices; GitHub push + history cleanup (Oracle JDK / tmp blobs removed)
+7. CI fixes (`enforceReceivablesArPolicy`, operatory grid shell, fixture seed paths)
+8. Legacy workflows manual-only; **Validate NR2** is the automatic push gate
+9. Page-chrome / HAL empty-context regression checks in `validate-hal.mjs`

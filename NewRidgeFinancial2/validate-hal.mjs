@@ -531,6 +531,27 @@ async function main() {
   assert(HalCore.laneReady(halModels, "oss120b"), "oss120b lane must be execution-ready on loopback");
   const ossRoute = HalCore.routeHalCommand(halData, halModels, pages, "run this through 120b");
   assert(ossRoute.lane === "oss120b" && ossRoute.useOss === true, "120b queries must route to oss120b lane");
+  HalPageMod.render({
+    root: halRoot,
+    halData: {},
+    halModels,
+    halAudit: null,
+    halChatHistory: null,
+    halAskDraft: "",
+    halAskLoading: false,
+    halInlineFirewallResult: null,
+    halSideNotes: null,
+    halSideNoteMonitor: null,
+    halSideNotesInbox: null,
+    halWidgetFeed: null,
+  });
+  assert(typeof halHtml === "string" && halHtml.length > 0, "HAL page must render with empty program context");
+  assert(halHtml.includes("HAL STATUS"), "HAL page empty render must still show status toolbar");
+  const PageChromeMod = require(join(siteDir, "page-chrome.js"));
+  const emptyShell = PageChromeMod.canvasShell({ pageId: "financial", halData: {}, halWidgetFeed: null });
+  assert(emptyShell.includes("pv-canvas-shell"), "page chrome must render financial shell with empty feed");
+  const missingShell = PageChromeMod.canvasShell({ pageId: "not-a-real-page", halData: {} });
+  assert(missingShell.includes("pv-canvas-shell--missing"), "page chrome must degrade when schema is missing");
   passed++;
 
   // Full program read access

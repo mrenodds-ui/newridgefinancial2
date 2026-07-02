@@ -226,7 +226,7 @@ const HalPage = (function () {
   }
 
   function sideNotesMonitorHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox, hubPath) {
-    const notes = halSideNotes || [];
+    const notes = Array.isArray(halSideNotes) ? halSideNotes : [];
     const mon = halSideNoteMonitor || { activeCount: 0, openCount: 0, pinnedCount: 0, highPriorityCount: 0 };
     const active = notes.filter((n) => n.status !== "archived");
     const changeBadge = mon.hasChanges
@@ -273,7 +273,9 @@ const HalPage = (function () {
   function sideNotesProgramCardHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox, hubPath) {
     const online = isSideNotesInboxLive(halSideNotesInbox);
     const stationCount = (halSideNotesInbox && halSideNotesInbox.monitor && halSideNotesInbox.monitor.stationCount) || 0;
-    const unread = ((halSideNotesInbox && halSideNotesInbox.items) || []).filter((m) => m && m.unread).length;
+    const unread = (Array.isArray(halSideNotesInbox && halSideNotesInbox.items) ? halSideNotesInbox.items : []).filter(
+      (m) => m && m.unread,
+    ).length;
     const statusChip = online
       ? `<span class="hp-sn-badge hp-sn-badge--ok">${stationCount > 1 ? stationCount + " STATIONS" : "LIVE"}</span>`
       : '<span class="hp-sn-badge hp-sn-badge--off">WATCHERS OFFLINE</span>';
