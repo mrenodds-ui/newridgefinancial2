@@ -23,6 +23,8 @@ $env:APP_AUTH_USERS_JSON = @'
 
 $env:HAL_BROWSER_DEV_AUTH = "1"
 $env:HAL_OLLAMA_MODEL = "hal-chat:8b"
+$env:HAL_OLLAMA_THINK = "0"
+$env:HAL_OLLAMA_NUM_PREDICT = "512"
 
 Write-Host "Starting HAL browser API on http://127.0.0.1:$Port"
 Write-Host "Dev auth enabled (HAL_BROWSER_DEV_AUTH=1). Login user: office.manager / office-manager"

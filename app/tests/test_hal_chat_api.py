@@ -6,7 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import default_dev_auth_users_json
-from app.hal_chat import HalChatMessage, HalChatRequest, HalPageContext, generate_hal_chat_response
+from app.hal_chat import (
+    HalChatMessage,
+    HalChatRequest,
+    HalPageContext,
+    extract_ollama_text,
+    generate_hal_chat_response,
+)
 
 
 @pytest.fixture()
@@ -84,6 +90,21 @@ def test_hal_chat_ollama_fallback(client: TestClient, monkeypatch: pytest.Monkey
     body = response.json()
     assert body["mode"] == "fallback"
     assert body["localAiUnavailable"] == "connection refused"
+    assert "Integration health: OK" in body["message"]
+
+
+def test_extract_ollama_text_empty_content() -> None:
+    with pytest.raises(RuntimeError, match="empty response"):
+        extract_ollama_text({"message": {"content": ""}, "done_reason": "stop"})
+
+
+def test_extract_ollama_text_length_error() -> None:
+    with pytest.raises(RuntimeError, match="token limit"):
+        extract_ollama_text({"message": {"content": ""}, "done_reason": "length"})
+
+
+def test_extract_ollama_text_success() -> None:
+    assert extract_ollama_text({"message": {"content": " Hello "}}) == "Hello"
 
 
 def test_generate_hal_chat_response_unit(monkeypatch: pytest.MonkeyPatch) -> None:

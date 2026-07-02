@@ -19,6 +19,9 @@ class AppSettings:
     ollama_chat_url: str
     ollama_model: str
     ollama_timeout_seconds: float
+    ollama_num_predict: int
+    ollama_num_ctx: int
+    ollama_think: bool
     cors_origins: tuple[str, ...]
 
 
@@ -30,6 +33,9 @@ def load_settings() -> AppSettings:
         ollama_chat_url=os.environ.get("HAL_OLLAMA_CHAT_URL", "http://127.0.0.1:11434/api/chat"),
         ollama_model=os.environ.get("HAL_OLLAMA_MODEL", "hal-chat:8b"),
         ollama_timeout_seconds=float(os.environ.get("HAL_OLLAMA_TIMEOUT_SECONDS", "90")),
+        ollama_num_predict=int(os.environ.get("HAL_OLLAMA_NUM_PREDICT", "512")),
+        ollama_num_ctx=int(os.environ.get("HAL_OLLAMA_NUM_CTX", "4096")),
+        ollama_think=_env_bool("HAL_OLLAMA_THINK", False),
         cors_origins=tuple(part.strip() for part in cors_raw.split(",") if part.strip()),
     )
 

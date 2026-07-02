@@ -113,22 +113,55 @@ def build_prompt(
     return messages
 
 
+def extract_ollama_text(body: dict[str, Any]) -> str:
+    message = body.get("message")
+    if not isinstance(message, dict):
+        raise RuntimeError("Ollama returned an unexpected response shape")
+
+    content = str(message.get("content") or "").strip()
+    if content:
+        return content
+
+    done_reason = str(body.get("done_reason") or "")
+    if done_reason == "length":
+        raise RuntimeError(
+            "Ollama hit the token limit before producing a final answer. "
+            "Increase HAL_OLLAMA_NUM_PREDICT or shorten the prompt."
+        )
+
+    raise RuntimeError("Ollama returned an empty response")
+
+
 def call_ollama(messages: list[dict[str, str]], settings: AppSettings | None = None) -> str:
     settings = settings or load_settings()
     payload: dict[str, Any] = {
         "model": settings.ollama_model,
         "messages": messages,
         "stream": False,
-        "options": {"temperature": 0.2, "num_predict": 420, "num_ctx": 4096},
+        "think": settings.ollama_think,
+        "options": {
+            "temperature": 0.2,
+            "num_predict": settings.ollama_num_predict,
+            "num_ctx": settings.ollama_num_ctx,
+        },
     }
     with httpx.Client(timeout=settings.ollama_timeout_seconds) as client:
         response = client.post(settings.ollama_chat_url, json=payload)
         response.raise_for_status()
         body = response.json()
-    content = body.get("message", {}).get("content")
-    if not isinstance(content, str) or not content.strip():
-        raise RuntimeError("Ollama returned an empty response")
-    return content.strip()
+    return extract_ollama_text(body)
+
+
+def build_fallback_message(exc: Exception, integration_health: str) -> str:
+    health_excerpt = integration_health.strip()
+    if len(health_excerpt) > 1800:
+        health_excerpt = health_excerpt[:1800].rstrip() + "…"
+    return (
+        "HAL could not produce a local model reply right now. "
+        f"Details: {exc}\n\n"
+        "Here is the latest local integration snapshot I can share safely:\n\n"
+        f"{health_excerpt}"
+    )
 
 
 def generate_hal_chat_response(request: HalChatRequest, settings: AppSettings | None = None) -> HalChatResponse:
@@ -150,11 +183,7 @@ def generate_hal_chat_response(request: HalChatRequest, settings: AppSettings | 
         return HalChatResponse(message=answer, mode="local-ollama")
     except Exception as exc:
         return HalChatResponse(
-            message=(
-                "HAL could not reach the local Ollama chat model right now. "
-                f"Details: {exc}. "
-                "Integration health and page context were loaded, but no model reply was generated."
-            ),
+            message=build_fallback_message(exc, integration_health),
             mode="fallback",
             local_ai_unavailable=str(exc),
         )
