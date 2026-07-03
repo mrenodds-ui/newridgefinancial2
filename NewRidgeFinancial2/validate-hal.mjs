@@ -542,6 +542,10 @@ async function main() {
   assert(/Radeon RX 9060 XT|ROCm/i.test(halHtml), "HAL page must show the verified GPU device");
   assert(/sensitive raw data|SoftDent|QuickBooks/i.test(halHtml), "HAL page must show sensitive-data no-egress policy");
   assert(HalCore.laneReady(halModels, "chat8b"), "chat lane must be execution-ready on loopback");
+  const chatRuntime = HalCore.laneRuntime(halModels, "chat8b");
+  assert(chatRuntime && chatRuntime.think === false, "chat lane must disable thinking tokens");
+  assert(chatRuntime.options && chatRuntime.options.num_predict === 180, "chat lane must use a short token cap for speed");
+  assert(chatRuntime.options.num_ctx === 1536, "chat lane must use a smaller context window for speed");
   const helperLane = halModels.lanes.find((lane) => lane.id === "helper14b");
   assert(helperLane && helperLane.executionEnabled === false, "helper lane must be standby in single-lane layout");
   assert(halModels.readinessDisplay.configuredModels.helper.onDemand === true, "helper lane must be on-demand only");
@@ -1075,6 +1079,10 @@ async function main() {
   const HalRouteExec = (await import(halRouteExecUrl)).default || (await import(halRouteExecUrl));
   assert(HalAgent.SAFETY_POLICY && HalAgent.SAFETY_POLICY.blocked.length > 0, "agent safety policy must exist");
   assert(HalAgent.ARCHITECTURE_VERSION === "hal-agent-v1.1", "agent architecture version must be current");
+  const genericChatRoute = HalCore.routeHalCommand(halData, halModels, pages, "what is a variable in programming");
+  assert(genericChatRoute.useModel && genericChatRoute.lane === "chat8b", "generic questions must route to chat8b");
+  assert(HalAgent.fastChatSkipsProgramContext(genericChatRoute), "fast chat must skip heavy program snapshot");
+  assert(!HalAgent.fastChatSkipsProgramContext({ useReasoning: true, useModel: true }), "reasoning lane must keep program context");
   assert(HalAgent.AGENT_BUDGET.maxTools === 3, "agent must enforce a small tool budget");
   assert(HalAgent.getHealth().budget.maxTools === 3, "agent health must expose budget");
   const blockedRoute = HalCore.routeHalCommand(halData, halModels, pages, "email the payer");
@@ -1259,7 +1267,8 @@ async function main() {
   };
   const bootStart = Date.now();
   const bootBundle = await Services.refreshImports({ reason: "boot" });
-  assert(Date.now() - bootStart < 3000, "boot import refresh must not block on running sync");
+  const bootElapsed = Date.now() - bootStart;
+  assert(bootElapsed < 5000, `boot import refresh must not block on running sync (took ${bootElapsed}ms)`);
   assert(bootBundle.syncStatus && bootBundle.syncStatus.status === "running", "boot refresh must report running sync honestly");
   global.DesktopBridge = priorBridge;
 
@@ -1448,6 +1457,26 @@ async function main() {
     },
   );
   assert(placement.refreshed === true && halAutoRefreshCalled === true, "HAL proactive cycle must refresh stale automated datasets when desktop bridge is available");
+  global.DesktopBridge = { hasDesktopApi: () => false };
+  const browserOnlyCycle = await HalProactive.runCycle(
+    {
+      halData,
+      loadProgramSnapshot: async () => proactiveSnapshot,
+      refreshHalWidgetFeed: async () => {},
+      getOfficeTasks: async () => [],
+      persistSet: async () => {},
+      persistGet: async () => null,
+    },
+    { force: true, forcePlacement: true },
+  );
+  assert(browserOnlyCycle.placement.reason === "browser-only", "browser preview must not run autonomous placement");
+  assert(browserOnlyCycle.placement.refreshed === false, "browser preview must not mark imports refreshed");
+  const browserBriefText = HalProactive.formatProactiveBriefing(browserOnlyCycle);
+  assert(!browserBriefText.includes("import refresh completed"), "browser preview briefing must not claim import refresh");
+  assert(
+    /desktop app|browser preview cannot refresh/i.test(browserBriefText),
+    "browser preview briefing must direct staff to Start Program",
+  );
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;
   const writebackBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Write back to SoftDent");

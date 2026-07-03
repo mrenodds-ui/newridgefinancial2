@@ -82,12 +82,25 @@ const HalCore = (function () {
     );
   }
 
+  function mergeChatLaneRuntime(base, laneRuntimeBlock) {
+    if (!base && !laneRuntimeBlock) return null;
+    const merged = Object.assign({}, base || {}, laneRuntimeBlock || {});
+    merged.options = Object.assign({}, (base && base.options) || {}, (laneRuntimeBlock && laneRuntimeBlock.options) || {});
+    if (laneRuntimeBlock && typeof laneRuntimeBlock.think === "boolean") merged.think = laneRuntimeBlock.think;
+    else if (base && typeof base.think === "boolean") merged.think = base.think;
+    return merged;
+  }
+
   function laneRuntime(halModels, laneId) {
     const config = modelConfig(halModels);
     // A lane may carry its own runtime block; prefer it so any local model can be enabled.
     const lane = modelLanes(halModels).find((l) => l.id === laneId);
+    if (laneId === "chat8b" || laneId === "chat14b") {
+      const base = config.localModel || null;
+      if (lane && lane.runtime) return mergeChatLaneRuntime(base, lane.runtime);
+      return base;
+    }
     if (lane && lane.runtime) return lane.runtime;
-    if (laneId === "chat8b" || laneId === "chat14b") return config.localModel || null;
     if (laneId === "helper14b" || laneId === "helper8b") return config.fastModel || null;
     if (laneId === "reason21b") return config.reasoningModel || null;
     if (laneId === "escalate30b") return config.escalationModel || null;

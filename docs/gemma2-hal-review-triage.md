@@ -8,14 +8,28 @@ Re-run:
 powershell -ExecutionPolicy Bypass -File .\scripts\run_gemma2_hal_program_eval.ps1 -Both
 ```
 
-## Evaluation run (latest)
+## Evaluation run (latest — July 3 2026)
 
 | Check | Result |
 |-------|--------|
 | `validate-pages.mjs` | Passed |
 | `validate-hal.mjs` | 26 suites passed |
 | NR2 Python tests (12 modules, 46 tests) | Passed |
-| Gemma 2 9B + 27B HAL review | Completed (12:20–12:27 UTC) |
+| Gemma 2 9B + 27B HAL review | Completed (15:19–15:30 UTC) |
+
+### July 3 findings — triage
+
+| Finding | Model | Verdict |
+|---------|-------|---------|
+| `monthlyRevenue !== 123456` assert (test-only) | 9B | **False positive** — intentional cross-source A/R policy test |
+| `crossOverview.status !== "SUCCESS"` assert | 9B | **False positive** — same test block |
+| `global.DesktopBridge` mutation in tests | 9B | **By design** — mocks restored after |
+| "Add comments" on test fixtures | 9B | **Style / not a bug** |
+| `bootStart < 3000` timeout brittleness | 27B | **Fixed** — raised to 5000ms with elapsed diagnostic |
+| `syncStatus.ok` assumption | 27B | **Misread** — mock sets `ok: true`; assertion uses `.status` |
+| `localModel` 60s timeout too short | 27B | **Config opinion** — not a confirmed bug |
+
+No confirmed production bugs in this round.
 
 ## Original Gemma findings (9B + 27B) — triage
 

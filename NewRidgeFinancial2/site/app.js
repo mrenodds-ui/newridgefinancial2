@@ -1346,10 +1346,11 @@ function modelRuntimeOptions(runtime) {
   return options;
 }
 
-function modelMessages(systemPrompt, userText) {
+function modelMessages(systemPrompt, userText, runtime) {
   const voice = naturalVoiceConfig();
-  const styleRules = Array.isArray(voice.instructions) ? voice.instructions.filter(Boolean) : [];
-  const prechat = Array.isArray(voice.fewShotMessages) ? voice.fewShotMessages : [];
+  const skipFewShot = !!(runtime && runtime.fastChat);
+  const styleRules = skipFewShot ? [] : Array.isArray(voice.instructions) ? voice.instructions.filter(Boolean) : [];
+  const prechat = skipFewShot ? [] : Array.isArray(voice.fewShotMessages) ? voice.fewShotMessages : [];
   const system = styleRules.length ? systemPrompt + "\n\nVoice and cadence:\n" + styleRules.map((line) => "- " + line).join("\n") : systemPrompt;
   return [{ role: "system", content: system }]
     .concat(
@@ -1368,7 +1369,7 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken) {
   const payload = {
     model: runtime.model,
     stream: wantStream,
-    messages: modelMessages(systemPrompt, userText),
+    messages: modelMessages(systemPrompt, userText, runtime),
     options: modelRuntimeOptions(runtime),
   };
   if (typeof runtime.think === "boolean") payload.think = runtime.think;

@@ -348,8 +348,11 @@ const HalProactive = (function () {
     } else if (placement && placement.reason === "throttled") {
       briefing.headline = "HAL placement is waiting — refresh was throttled. Use Force HAL placement if you just added exports.";
       briefing.programPosture = "monitor";
-    } else if (placement && !placement.placed && placement.reason === "browser-only") {
+    } else if (placement && placement.reason === "browser-only") {
       briefing.headline = "HAL placement needs the desktop app — browser preview cannot refresh imports.";
+      briefing.programPosture = "monitor";
+    } else if (placement && placement.reason === "no-refresh-path") {
+      briefing.headline = "HAL could not refresh imports in this runtime — launch Start Program on the desktop app.";
       briefing.programPosture = "monitor";
     }
     return briefing;
@@ -364,8 +367,14 @@ const HalProactive = (function () {
       "",
     ];
     if (briefing.placement) {
+      const refreshNote =
+        briefing.placement.refreshed && briefing.placement.reason !== "browser-only"
+          ? " — import refresh completed."
+          : briefing.placement.reason === "browser-only"
+            ? " — browser preview cannot refresh imports (use Start Program)."
+            : "";
       lines.push(
-        `Placement: ${briefing.placement.placed ? "active" : "skipped"} (${briefing.placement.reason})${briefing.placement.refreshed ? " — import refresh completed." : ""}`,
+        `Placement: ${briefing.placement.placed ? "active" : "skipped"} (${briefing.placement.reason})${refreshNote}`,
         "",
       );
     }
@@ -539,7 +548,8 @@ const HalProactive = (function () {
     const forcePlacement = options && options.forcePlacement;
     if (!skipPlacement) {
       placement = await runAutonomousPlacement(ctx, initialDiagnostics, { force: forcePlacement });
-      if ((placement.refreshed || forcePlacement) && typeof ctx.loadProgramSnapshot === "function") {
+      const browserOnly = placement.reason === "browser-only" || placement.reason === "no-refresh-path";
+      if (!browserOnly && (placement.refreshed || forcePlacement) && typeof ctx.loadProgramSnapshot === "function") {
         snapshot = await ctx.loadProgramSnapshot();
         if (ctx && typeof ctx.refreshHalWidgetFeed === "function") {
           await ctx.refreshHalWidgetFeed(snapshot);

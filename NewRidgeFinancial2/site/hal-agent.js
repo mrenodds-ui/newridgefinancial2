@@ -571,7 +571,7 @@ const HalAgent = (function () {
     if (turnText) {
       parts.push("", "Recent turns:", turnText.slice(0, 400));
     }
-    parts.push("", "Answer the user directly in 1–3 short paragraphs. No bullet lists unless asked.");
+    parts.push("", "Answer the user directly in 1–2 short paragraphs. No bullet lists unless asked.");
     return parts.join("\n");
   }
 
@@ -685,23 +685,27 @@ const HalAgent = (function () {
     }
   }
 
+  function isFastChatRoute(route) {
+    return !!(route.useModel && !route.useReasoning && !route.useEscalation && !route.useOss);
+  }
+
+  function fastChatSkipsProgramContext(route) {
+    // Speed-first chat: tool summaries and route handlers cover office data.
+    return isFastChatRoute(route);
+  }
+
   async function enhanceModelCall(ctx, route, query, plan, toolResults, onToken) {
-    const isFastChat = !!(route.useModel && !route.useReasoning && !route.useEscalation && !route.useOss);
+    const isFastChat = isFastChatRoute(route);
     const agentPrompt = isFastChat
       ? buildFastChatAgentPrompt(ctx, plan, toolResults, workingMemory, longTermMemory)
       : buildAgentSystemPrompt(ctx, plan, toolResults, workingMemory, longTermMemory);
 
-    // De-dup: when a snapshot-bearing tool already ran, its summary is in the
-    // agent prompt, so do NOT also append the full program context (it would
-    // double the prompt and slow time-to-first-token).
     const snapshotToolRan = (plan.tools || []).some(
       (t) => t === "read_program_snapshot" || t === "read_widget_feed" || t === "read_claims_summary",
     );
-    // The fast chat lane gets a tighter context cap for snappier first tokens;
-    // the deeper reasoning/escalation lanes keep the full budget.
-    const ctxCap = isFastChat ? 1800 : route.useModel ? 3000 : AGENT_BUDGET.maxModelContextChars;
+    const ctxCap = isFastChat ? 900 : route.useModel ? 3000 : AGENT_BUDGET.maxModelContextChars;
     let combinedPrompt = agentPrompt;
-    if (!snapshotToolRan) {
+    if (!fastChatSkipsProgramContext(route) && !snapshotToolRan) {
       const programContext = await ctx.getProgramContextText();
       if (programContext) combinedPrompt += "\n\nProgram context:\n" + programContext.slice(0, ctxCap);
     }
@@ -728,7 +732,7 @@ const HalAgent = (function () {
     }
     if (route.useModel) {
       if (!ctx.localModelReady()) return { text: ctx.offlineModelMessage("chat8b"), lane: "chat8b · offline" };
-      const lm = ctx.localModelConfig();
+      const lm = Object.assign({ fastChat: true }, ctx.localModelConfig());
       const text = await ctx.runModel(lm, combinedPrompt, query, "Local chat draft", onToken);
       return { text, lane: "chat8b" };
     }
@@ -913,6 +917,8 @@ const HalAgent = (function () {
     runTools,
     selfCheckResponse,
     buildAgentSystemPrompt,
+    isFastChatRoute,
+    fastChatSkipsProgramContext,
     processQuery,
     loadMemory,
     saveMemory,
