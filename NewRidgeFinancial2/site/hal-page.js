@@ -372,7 +372,10 @@ const HalPage = (function () {
       typeof globalThis !== "undefined" &&
       typeof globalThis.getCloudApiKey === "function" &&
       !!globalThis.getCloudApiKey();
-    const cloudReady = cloudCfg.enabled === true && cloudKeySet && cloudCfg.useForAgentLoop !== false;
+    const cloudReady =
+      cloudKeySet &&
+      cloudCfg.useForAgentLoop !== false &&
+      (cloudCfg.enabled === true || cloudCfg.autoEnableWhenKeySet !== false);
     const lanesLive =
       cfg.mode === "online" &&
       cfg.externalCallsEnabled === false &&
@@ -393,7 +396,7 @@ const HalPage = (function () {
           ${aiStatRow("GPU STATUS", rd.gpuStatus || "not verified", rd.gpu && rd.gpu.verified === true)}
           ${aiStatRow("BINDING", rd.bindingStatus || "not verified")}
           ${aiStatRow("LANE EXECUTION", lanesLive ? rd.laneExecution || "Enabled · local loopback only" : "Disabled")}
-          ${aiStatRow("CLOUD AGENT", cloudReady ? "Ready · opt-in key set" : cloudCfg.enabled ? "Enabled · key missing" : "Disabled · local only", cloudReady)}
+          ${aiStatRow("CLOUD AGENT", cloudReady ? (cloudCfg.enabled ? "Ready · key set" : "Ready · complex tasks when key set") : cloudCfg.enabled ? "Enabled · key missing" : "Off · add key for complex tasks", cloudReady)}
         </dl>
         <div class="hp-cloud-key hp-muted">
           <label for="hal-cloud-key-input">Optional cloud agent key (session):</label>

@@ -47,7 +47,13 @@
       let name = String(fn.name || "").trim().replace(/\s+/g, "_");
       let query = "";
       try {
-        const args = JSON.parse(String(fn.arguments || "{}"));
+        const argsRaw = fn.arguments;
+        const args =
+          typeof argsRaw === "string"
+            ? JSON.parse(String(argsRaw || "{}"))
+            : argsRaw && typeof argsRaw === "object"
+              ? argsRaw
+              : {};
         query = args.query || args.command || args.command_id || "";
       } catch {
         query = String(fn.arguments || "").slice(0, 500);

@@ -6,7 +6,7 @@ const HalAgent = (function () {
   const MEMORY_KEY = "halAgentMemory";
   const REPAIR_KEY = "halRepairLog";
   const WORKING_KEY = "halWorkingMemory";
-  const ARCHITECTURE_VERSION = "hal-agent-v11-cursor";
+  const ARCHITECTURE_VERSION = "hal-agent-v12-cursor";
   const REPAIR_MAX = 100;
   const TURN_MAX = 16;
   const AGENT_BUDGET = {
@@ -46,6 +46,37 @@ const HalAgent = (function () {
         },
       },
     }));
+  }
+
+  function agentLoopToolIds(plan) {
+    return (plan.tools || []).concat([
+      "grep_program_source",
+      "read_program_file",
+      "semantic_search_program",
+      "run_hal_validation",
+      "run_command",
+      "read_program_snapshot",
+      "spawn_investigation",
+    ]);
+  }
+
+  function attachOllamaNativeTools(runtime, plan, agentCfg) {
+    if (!runtime || !plan || !plan.agentToolLoop) return runtime;
+    if (agentCfg.localOllamaTools === false) return runtime;
+    const schemas = buildCloudToolSchemas(agentLoopToolIds(plan));
+    if (!schemas.length) return runtime;
+    return Object.assign({}, runtime, { structuredAgent: true, ollamaTools: schemas });
+  }
+
+  function cloudAgentEligible(plan, ctx) {
+    if (typeof ctx.cloudAgentEligible === "function") return ctx.cloudAgentEligible(plan);
+    if (typeof ctx.cloudModelReady !== "function" || !ctx.cloudModelReady()) return false;
+    const cfg = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.cloudReasoning) || {};
+    if (cfg.enabled === true) return !!(plan && plan.agentToolLoop);
+    if (cfg.autoEnableWhenKeySet === false) return false;
+    if (!plan || !plan.agentToolLoop) return false;
+    if (cfg.preferForTaskCompletion === false) return false;
+    return !!(plan.isTaskCompletionQuery || plan.isInvestigateQuery || plan.isComplexInvestigationQuery);
   }
 
   function parsePatchFromQuery(query) {
@@ -1147,6 +1178,7 @@ const HalAgent = (function () {
       planOnly,
       isTaskCompletionQuery: isTaskCompletionQuery(query),
       isInvestigateQuery: isInvestigateQuery(query, route),
+      isComplexInvestigationQuery: isComplexInvestigationQuery(query, route),
       lane: route.lane,
       intent,
       budget: AGENT_BUDGET,
@@ -1692,12 +1724,7 @@ const HalAgent = (function () {
       const text = await ctx.runModel(om, combinedPrompt, userText, "Local OSS draft", onToken);
       return { text, lane: "oss120b" };
     }
-    const useCloudAgent =
-      plan &&
-      plan.agentToolLoop &&
-      typeof ctx.cloudModelReady === "function" &&
-      ctx.cloudModelReady() &&
-      typeof ctx.cloudModelConfig === "function";
+    const useCloudAgent = plan && plan.agentToolLoop && cloudAgentEligible(plan, ctx);
     if (useCloudAgent) {
       const cloudPolicy = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.cloudReasoning) || {};
       const shouldSanitize = cloudPolicy.sanitizeBeforeCloud !== false;
@@ -1709,16 +1736,7 @@ const HalAgent = (function () {
       }
       const cm = Object.assign({ cloud: true, agentLoop: true, structuredAgent: true }, ctx.cloudModelConfig());
       cm.options = Object.assign({}, cm.options || {}, { max_tokens: 2048, temperature: 0.2 });
-      const toolIds = (plan.tools || []).concat([
-        "grep_program_source",
-        "read_program_file",
-        "semantic_search_program",
-        "run_hal_validation",
-        "run_command",
-        "read_program_snapshot",
-        "spawn_investigation",
-      ]);
-      cm.cloudTools = buildCloudToolSchemas(toolIds);
+      cm.cloudTools = buildCloudToolSchemas(agentLoopToolIds(plan));
       const raw = await ctx.runModel(cm, sysPrompt, usrText, "Cloud agent", onToken);
       if (raw && typeof raw === "object" && (raw.toolCalls || raw.text != null)) {
         return {
@@ -1740,9 +1758,18 @@ const HalAgent = (function () {
       typeof ctx.reasoningModelReady === "function" &&
       ctx.reasoningModelReady();
     if (wantAgentReasoning) {
-      const rm = Object.assign({ reasoningLane: true, agentLoop: true }, ctx.reasoningModelConfig());
+      let rm = Object.assign({ reasoningLane: true, agentLoop: true }, ctx.reasoningModelConfig());
       rm.options = Object.assign({}, rm.options || {}, { num_predict: 1800 });
-      const text = await ctx.runModel(rm, combinedPrompt, userText, "Agent loop reasoning", onToken);
+      rm = attachOllamaNativeTools(rm, plan, agentCfg);
+      const raw = await ctx.runModel(rm, combinedPrompt, userText, "Agent loop reasoning", onToken);
+      if (raw && typeof raw === "object" && (raw.toolCalls || raw.text != null)) {
+        return {
+          text: String(raw.text || ""),
+          toolCalls: raw.toolCalls || [],
+          lane: "reason21b",
+        };
+      }
+      const text = typeof raw === "string" ? raw : String((raw && raw.text) || "");
       return { text, lane: "reason21b" };
     }
     if (route.useReasoning) {
@@ -1755,10 +1782,17 @@ const HalAgent = (function () {
         return { text: ctx.offlineModelMessage("reason21b"), lane: "reason21b · offline" };
       }
       const rm = Object.assign({ reasoningLane: true }, ctx.reasoningModelConfig());
+      const rmTools = plan && plan.agentToolLoop ? attachOllamaNativeTools(rm, plan, agentCfg) : rm;
       try {
-        const text = await ctx.runModel(rm, combinedPrompt, userText, "Local reasoning plan", onToken);
-        if (String(text || "").trim()) {
-          return { text, lane: rm.reasonFallback ? "chat8b" : "reason21b" };
+        const raw = await ctx.runModel(rmTools, combinedPrompt, userText, "Local reasoning plan", onToken);
+        const text = typeof raw === "string" ? raw : String((raw && raw.text) || "");
+        const toolCalls = raw && typeof raw === "object" ? raw.toolCalls : null;
+        if (String(text || "").trim() || (toolCalls && toolCalls.length)) {
+          return {
+            text,
+            toolCalls: toolCalls || [],
+            lane: rm.reasonFallback ? "chat8b" : "reason21b",
+          };
         }
       } catch (error) {
         if (typeof RuntimeIssues !== "undefined") {
@@ -1795,9 +1829,16 @@ const HalAgent = (function () {
   async function spawnInvestigationSubtask(ctx, focusQuery, parentQuery) {
     const focus = String(focusQuery || "").trim();
     if (!focus) return { ok: false, summary: "Sub-investigation needs a focused question." };
+    const agentCfg = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
+    const maxDepth = typeof agentCfg.subtaskMaxDepth === "number" ? agentCfg.subtaskMaxDepth : 1;
+    const depth = Number(ctx.subtaskDepth || 0);
+    if (depth >= maxDepth) {
+      return { ok: false, summary: "Sub-investigation depth limit reached — answer from prior context." };
+    }
     if (typeof HalAgentLoop === "undefined" || !HalAgentLoop.runModelWithLoop) {
       return { ok: false, summary: "Agent loop unavailable for sub-investigation." };
     }
+    ctx.subtaskDepth = depth + 1;
     let subRoute = HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, focus);
     subRoute = escalateRouteForRetry(subRoute, focus);
     const subPlan = buildPlan(focus, subRoute, workingMemory, longTermMemory, ctx);
@@ -1824,7 +1865,7 @@ const HalAgent = (function () {
         plan: activeSubPlan,
         initialToolResults: {},
         onToken: undefined,
-        toolIds: new Set(Object.keys(TOOL_DEFS)),
+        toolIds: new Set(Object.keys(TOOL_DEFS).filter((id) => id !== "spawn_investigation")),
         maxTurnsOverride: 3,
       });
       const text = result && result.text ? String(result.text).trim() : "";
@@ -1839,6 +1880,8 @@ const HalAgent = (function () {
         RuntimeIssues.record("hal-agent.spawn-investigation", error, { focus: focus.slice(0, 80) });
       }
       return { ok: false, summary: "Sub-investigation failed: " + String(error && error.message ? error.message : error) };
+    } finally {
+      ctx.subtaskDepth = depth;
     }
   }
 
@@ -2368,6 +2411,9 @@ const HalAgent = (function () {
     TOOL_DEFS,
     syncAgentBudgetFromModels,
     buildCloudToolSchemas,
+    attachOllamaNativeTools,
+    cloudAgentEligible,
+    agentLoopToolIds,
     buildPlan,
     runTools,
     selfCheckResponse,

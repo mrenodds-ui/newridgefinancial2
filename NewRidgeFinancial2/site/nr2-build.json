@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-146",
-  "schemaVersion": "hal-146",
-  "builtAt": "2026-07-04T12:30:00.000Z",
-  "notes": "HAL hal-146 — spawn_investigation subtasks, improved code search, expanded run_command."
+  "assetVersion": "hal-147",
+  "schemaVersion": "hal-147",
+  "builtAt": "2026-07-04T13:00:00.000Z",
+  "notes": "HAL hal-147 — Ollama native tools, embedding search, cloud auto-enable on key."
 }

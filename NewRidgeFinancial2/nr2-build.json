@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-146",
-  "schemaVersion": "hal-146",
-  "builtAt": "2026-07-04T12:30:00.000Z",
-  "notes": "HAL hal-146 — subagent investigations, grep++ semantic search, command allowlist."
+  "assetVersion": "hal-147",
+  "schemaVersion": "hal-147",
+  "builtAt": "2026-07-04T13:00:00.000Z",
+  "notes": "HAL hal-147 — hybrid embed search, Ollama tool_calls, cloud prefer complex tasks."
 }

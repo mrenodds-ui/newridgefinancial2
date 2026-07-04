@@ -1389,13 +1389,18 @@ function sanitizeForCloud(text) {
 
 function cloudModelConfig() {
   const cfg = HalCore.modelConfig(halModels).cloudReasoning || {};
-  if (!cfg.enabled || !cfg.endpoint) return null;
+  if (!cfg.endpoint) return null;
+  const hasKey = !!getCloudApiKey();
+  const active = cfg.enabled === true || (cfg.autoEnableWhenKeySet !== false && hasKey);
+  if (!active) return null;
   return {
     cloud: true,
     endpoint: cfg.endpoint,
     model: cfg.model || "gpt-4o-mini",
     timeoutMs: cfg.timeoutMs || 120000,
     useForAgentLoop: cfg.useForAgentLoop !== false,
+    autoEnableWhenKeySet: cfg.autoEnableWhenKeySet !== false,
+    preferForTaskCompletion: cfg.preferForTaskCompletion !== false,
     options: cfg.options || {},
   };
 }
@@ -1404,6 +1409,15 @@ function cloudModelReady() {
   const cfg = cloudModelConfig();
   if (!cfg || !cfg.useForAgentLoop) return false;
   return !!getCloudApiKey();
+}
+
+function cloudAgentEligible(plan) {
+  if (!plan || !plan.agentToolLoop || !cloudModelReady()) return false;
+  const cfg = HalCore.modelConfig(halModels).cloudReasoning || {};
+  if (cfg.enabled === true) return true;
+  if (cfg.autoEnableWhenKeySet === false || !getCloudApiKey()) return false;
+  if (cfg.preferForTaskCompletion === false) return false;
+  return !!(plan.isTaskCompletionQuery || plan.isInvestigateQuery || plan.isComplexInvestigationQuery);
 }
 
 function offlineModelMessage(laneId) {
@@ -1487,7 +1501,13 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken, ab
     if (controller) controller.abort();
   }, runtime.timeoutMs || 60000);
   const structuredCloud = !!(runtime && runtime.cloud && runtime.structuredAgent);
-  const wantStream = typeof onToken === "function" && !structuredCloud;
+  const structuredOllama = !!(
+    runtime &&
+    runtime.structuredAgent &&
+    Array.isArray(runtime.ollamaTools) &&
+    runtime.ollamaTools.length
+  );
+  const wantStream = typeof onToken === "function" && !structuredCloud && !structuredOllama;
 
   if (runtime && runtime.cloud) {
     const key = getCloudApiKey();
@@ -1593,6 +1613,9 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken, ab
     options: modelRuntimeOptions(runtime),
   };
   if (typeof runtime.think === "boolean") payload.think = runtime.think;
+  if (Array.isArray(runtime.ollamaTools) && runtime.ollamaTools.length) {
+    payload.tools = runtime.ollamaTools;
+  }
   try {
     const response = await fetch(runtime.endpoint, {
       method: "POST",
@@ -1637,11 +1660,23 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken, ab
       }
     } else {
       const data = await response.json();
-      raw = data && data.message && data.message.content ? data.message.content : "";
+      const msg = data && data.message ? data.message : null;
+      raw = msg && msg.content ? msg.content : "";
+      if (structuredOllama && msg) {
+        const text = HalCore.cleanModelText(raw);
+        const toolCalls = msg.tool_calls || [];
+        if (text || toolCalls.length) {
+          const lane = runtime.reasonFallback ? "chat8b" : runtime.reasoningLane ? "reason21b" : "chat8b";
+          return { text, toolCalls, lane };
+        }
+      }
     }
 
     const text = HalCore.cleanModelText(raw);
-    if (!text) throw new Error("empty model response");
+    if (!text && !structuredOllama) throw new Error("empty model response");
+    if (structuredOllama) {
+      return { text: text || "", toolCalls: [], lane: runtime.reasoningLane ? "reason21b" : "chat8b" };
+    }
     if (runtime && runtime.fastChat) return text;
     return text + "\n\n(" + draftLabel + " · read-only · verify before acting)";
   } catch (error) {
@@ -1973,6 +2008,7 @@ function buildHalAgentCtx(extras) {
     ossModelConfig,
     cloudModelConfig,
     cloudModelReady,
+    cloudAgentEligible,
     getCloudApiKey,
     setCloudApiKey,
     sanitizeForCloud,

@@ -333,8 +333,91 @@ def _line_definition_boost(line: str, terms: list[str]) -> int:
     return boost
 
 
+def _cosine_sparse(a: dict[str, float], b: dict[str, float]) -> float:
+    if not a or not b:
+        return 0.0
+    dot = sum(v * b.get(k, 0.0) for k, v in a.items())
+    return max(0.0, min(1.0, dot))
+
+
+def _char_ngram_vector(text: str, n: int = 3) -> dict[str, float]:
+    import math
+
+    low = re.sub(r"\s+", " ", str(text or "").lower())
+    vec: dict[str, float] = {}
+    for i in range(max(0, len(low) - n + 1)):
+        gram = low[i : i + n]
+        if gram.strip():
+            vec[gram] = vec.get(gram, 0.0) + 1.0
+    norm = math.sqrt(sum(v * v for v in vec.values())) or 1.0
+    return {k: v / norm for k, v in vec.items()}
+
+
+def _ollama_embedding(
+    text: str,
+    model: str = "nomic-embed-text",
+    endpoint: str = "http://127.0.0.1:11434/api/embeddings",
+) -> list[float] | None:
+    import json
+    import urllib.error
+    import urllib.request
+
+    try:
+        payload = json.dumps({"model": model, "prompt": str(text or "")[:2000]}).encode("utf-8")
+        req = urllib.request.Request(
+            endpoint,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        emb = data.get("embedding")
+        if isinstance(emb, list) and emb:
+            return [float(x) for x in emb]
+    except (OSError, urllib.error.URLError, ValueError, TypeError, TimeoutError):
+        return None
+    return None
+
+
+def _cosine_dense(a: list[float], b: list[float]) -> float:
+    import math
+
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a)) or 1.0
+    nb = math.sqrt(sum(y * y for y in b)) or 1.0
+    return max(0.0, min(1.0, dot / (na * nb)))
+
+
+def _embedding_rerank(query: str, candidates: list[tuple[int, str, str, int]], limit: int) -> tuple[list[tuple[int, str, str, int]], str]:
+    if not candidates:
+        return [], "lexical"
+    q_text = str(query or "").strip()
+    q_vec = _char_ngram_vector(q_text)
+    q_emb = _ollama_embedding(q_text)
+    mode = "ollama-embed" if q_emb else "ngram-embed"
+    reranked: list[tuple[float, int, str, str, int]] = []
+    seen_files: set[str] = set()
+    for lex_score, rel, snip, line_no in candidates[:80]:
+        if rel in seen_files and len(reranked) > limit * 2:
+            continue
+        seen_files.add(rel)
+        embed_score = _cosine_sparse(q_vec, _char_ngram_vector(snip))
+        if q_emb:
+            line_emb = _ollama_embedding(snip)
+            if line_emb:
+                embed_score = max(embed_score, _cosine_dense(q_emb, line_emb))
+        combined = lex_score * 0.45 + embed_score * 400.0
+        reranked.append((combined, lex_score, rel, snip, line_no))
+    reranked.sort(key=lambda x: x[0], reverse=True)
+    top = [(int(ls), rel, snip, ln) for _, ls, rel, snip, ln in reranked[:limit]]
+    return top, mode
+
+
 def semantic_search_program(repo_root: Path, site_dir: Path, query: str, limit: int = 15) -> dict:
-    """Token-overlap + path/definition scoring across program source (no embeddings)."""
+    """Hybrid lexical + embedding-lite search across program source."""
     repo_root, site_dir, roots = _resolve_roots(repo_root, site_dir)
     terms = _query_search_terms(query)
     if not terms:
@@ -383,12 +466,13 @@ def semantic_search_program(repo_root: Path, site_dir: Path, query: str, limit: 
                 scored.append((score, rel, line.strip()[:200], line_no))
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    top = scored[: max(1, min(int(limit or 15), 25))]
+    cap = max(1, min(int(limit or 15), 25))
+    top, mode = _embedding_rerank(str(query or ""), scored, cap)
     if not top:
         return {"hits": [], "count": 0, "text": f'No semantic matches for "{" ".join(terms[:6])}".'}
     hits = [{"file": rel, "line": ln, "score": sc, "text": snip} for sc, rel, snip, ln in top]
-    text = "\n".join(f"{h['file']}:{h['line']} (score {h['score']}): {h['text']}" for h in hits)
-    return {"hits": hits, "count": len(hits), "text": text, "query": " ".join(terms)}
+    text = "\n".join(f"{h['file']}:{h['line']} (score {h['score']} · {mode}): {h['text']}" for h in hits)
+    return {"hits": hits, "count": len(hits), "text": text, "query": " ".join(terms), "mode": mode}
 
 
 def run_git_readonly(repo_root: Path, command: str) -> dict:
