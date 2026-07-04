@@ -1404,6 +1404,12 @@ const HalCore = (function () {
     if (/monitor sidenotes/.test(a)) {
       return { intent: "capability:sidenotes", lane: "local", useSideNoteMonitor: true, text: "", actions: [] };
     }
+    if (/posting queue|journal queue|journal posting queue/.test(a)) {
+      return { intent: "capability:posting-queue", lane: "local", usePostingQueueList: true, text: "", actions: [] };
+    }
+    if (/search the document library|search document library/.test(a)) {
+      return { intent: "capability:library-search", lane: "local", useDocRag: true, ragQuestion: action, text: "", actions: [] };
+    }
     if (/explain the firewall|external action firewall/.test(a)) {
       const fwText = isFirewallActive(halData, halModels)
         ? pickVariant([
@@ -1657,6 +1663,11 @@ const HalCore = (function () {
         inner.useClaimReadiness ||
         inner.useJournalDraft ||
         inner.useSideNoteMonitor ||
+        inner.useSideNoteList ||
+        inner.useTaskList ||
+        inner.usePostingQueueList ||
+        inner.useDocRag ||
+        inner.useReadinessShow ||
         inner.useSourceHealth
       ) {
         return Object.assign({}, inner, { intent: "capability:" + (inner.intent || "tool") });

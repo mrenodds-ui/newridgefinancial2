@@ -107,8 +107,13 @@ const HalAgent = (function () {
     if (cfg.autoEnableWhenKeySet === false) return false;
     if (!plan || !plan.agentToolLoop) return false;
     if (cfg.preferForAllAgentLoops === true) return true;
-    if (cfg.preferForTaskCompletion === false) return false;
-    return !!(plan.isTaskCompletionQuery || plan.isInvestigateQuery || plan.isComplexInvestigationQuery);
+    if (cfg.preferForTaskCompletion === false && !plan.isInvestigateQuery) return false;
+    return !!(
+      plan.isTaskCompletionQuery ||
+      plan.isInvestigateQuery ||
+      plan.isComplexInvestigationQuery ||
+      isMultiAnalyzeQuery(plan.originalQuery || "")
+    );
   }
 
   function parsePatchFromQuery(query) {
@@ -942,6 +947,20 @@ const HalAgent = (function () {
     );
   }
 
+  function extractAnalyzeTargets(query) {
+    const q = String(query || "");
+    const m = q.match(/\banalyze\s+(.+?)\s+and\s+(.+?)(?:\s+and tell me|\s*$)/i);
+    if (!m) return null;
+    const left = m[1].trim();
+    const right = m[2].replace(/\s+and tell me.*$/i, "").trim();
+    if (!left || !right || left.length < 2 || right.length < 2) return null;
+    return [left, right];
+  }
+
+  function isMultiAnalyzeQuery(query) {
+    return extractAnalyzeTargets(query) !== null;
+  }
+
   function extractSubInvestigationFocus(query) {
     const q = String(query || "").trim();
     const parts = q.split(/\?\s+/).filter(Boolean);
@@ -1131,6 +1150,27 @@ const HalAgent = (function () {
         needsClarification: false,
         lane: route.lane,
         intent,
+      };
+    }
+
+    if (routeIsOperational(route)) {
+      return {
+        questionType: classifyQuestion(query, route),
+        originalQuery: query,
+        needsData: false,
+        tools: [],
+        isUnsafe: false,
+        useModelEnhancement: false,
+        needsClarification: false,
+        agentToolLoop: false,
+        planOnly: false,
+        isTaskCompletionQuery: false,
+        isInvestigateQuery: false,
+        isComplexInvestigationQuery: false,
+        lane: route.lane,
+        intent,
+        budget: AGENT_BUDGET,
+        preferences: longTerm.preferences,
       };
     }
 
@@ -1859,6 +1899,33 @@ const HalAgent = (function () {
     return null;
   }
 
+  async function spawnParallelInvestigations(ctx, focuses, parentQuery) {
+    const list = (focuses || []).filter(Boolean).slice(0, 2);
+    if (!list.length) return null;
+    const results = await Promise.all(
+      list.map((focus) =>
+        spawnInvestigationSubtask(
+          ctx,
+          /\banalyze\b/i.test(focus) ? focus : "Analyze " + focus + " and tell me what's missing from imports.",
+          parentQuery,
+        ),
+      ),
+    );
+    const ok = results.filter((r) => r && r.ok);
+    if (!ok.length) {
+      return { ok: false, summary: "Parallel sub-investigations did not return usable answers." };
+    }
+    const summary = ok
+      .map((r, i) => "### Focus " + (i + 1) + "\n" + String(r.summary || "").slice(0, 1400))
+      .join("\n\n");
+    return {
+      ok: true,
+      summary: summary.slice(0, 2800),
+      parallel: list.length,
+      loopTurns: ok.reduce((n, r) => n + (Number(r.loopTurns) || 0), 0),
+    };
+  }
+
   async function spawnInvestigationSubtask(ctx, focusQuery, parentQuery) {
     const focus = String(focusQuery || "").trim();
     if (!focus) return { ok: false, summary: "Sub-investigation needs a focused question." };
@@ -2121,14 +2188,20 @@ const HalAgent = (function () {
     if (
       plan.useModelEnhancement &&
       agentCfg.spawnSubtasks !== false &&
-      isComplexInvestigationQuery(trimmed, route) &&
+      (isComplexInvestigationQuery(trimmed, route) || isMultiAnalyzeQuery(trimmed)) &&
       !toolResults.spawn_investigation
     ) {
-      const focus = extractSubInvestigationFocus(trimmed);
+      const analyzeTargets = extractAnalyzeTargets(trimmed);
       if (ctx.onToolProgress) {
-        ctx.onToolProgress({ phase: "start", tool: "spawn_investigation", label: "Sub-investigation" });
+        ctx.onToolProgress({
+          phase: "start",
+          tool: "spawn_investigation",
+          label: analyzeTargets ? "Parallel sub-investigations" : "Sub-investigation",
+        });
       }
-      toolResults.spawn_investigation = await spawnInvestigationSubtask(ctx, focus, trimmed);
+      toolResults.spawn_investigation = analyzeTargets
+        ? await spawnParallelInvestigations(ctx, analyzeTargets, trimmed)
+        : await spawnInvestigationSubtask(ctx, extractSubInvestigationFocus(trimmed), trimmed);
       if (ctx.onToolProgress) {
         ctx.onToolProgress({
           phase: "done",
@@ -2472,7 +2545,10 @@ const HalAgent = (function () {
     synthesizeAnswerFromTools,
     isInvestigateQuery,
     isComplexInvestigationQuery,
+    isMultiAnalyzeQuery,
+    extractAnalyzeTargets,
     spawnInvestigationSubtask,
+    spawnParallelInvestigations,
   };
 })();
 

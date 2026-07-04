@@ -1658,15 +1658,19 @@ async function main() {
     sarcIssues,
   );
   assert(!/shocking/i.test(repairedSarc), "agent repair must strip sarcasm");
-  assert(halModels.config.agentProgramming.profile === "cursor-auto-v14", "hal-models agentProgramming profile must be v14");
+  assert(halModels.config.agentProgramming.profile === "cursor-auto-v15", "hal-models agentProgramming profile must be v15");
   assert(halModels.config.agentProgramming.subtaskMaxDepth === 2, "subtask max depth must be 2");
   assert(halModels.config.cloudReasoning.searchIndex && halModels.config.cloudReasoning.searchIndex.enabled === true, "search index config must exist");
   assert(halModels.config.agentProgramming.agentToolLoop === true, "agent tool loop must be enabled");
   assert(halModels.config.agentProgramming.agentLoopUseReasoning === true, "agent loop must prefer reasoning lane");
   assert(halModels.config.agentProgramming.agentAutoTools === true, "agent auto tools must be enabled");
-  const postingQueueRoute = HalCore.routeHalCommand(halData, halModels, pages, "Can you show posting queue items?");
-  assert(postingQueueRoute.usePostingQueueList === true, "show posting queue must use instant posting-queue route");
-  assert(postingQueueRoute.useModel !== true, "show posting queue must not fall through to model lane");
+  assert(typeof HalAgent.isMultiAnalyzeQuery === "function", "isMultiAnalyzeQuery must exist");
+  assert(
+    HalAgent.isMultiAnalyzeQuery("Analyze SoftDent and Narratives and tell me what's missing from imports."),
+    "multi-analyze detector must match paired analyze queries",
+  );
+  const capPq = HalCore.routeHalCommand(halData, halModels, pages, "Can you show posting queue items?");
+  assert(capPq.usePostingQueueList === true, "capability-wrapped posting queue must stay instant");
   assert(typeof HalSkills.formatPostingQueueList === "function", "formatPostingQueueList must exist");
   const pqText = HalSkills.formatPostingQueueList({ items: [{ queue_id: "q1", status: "pending_review", amount: 120, accounting_period: "2025-06", description: "Prepaid insurance" }], metrics: { pendingReview: 1, approved: 0, total: 1 } });
   assert(/Journal posting queue/i.test(pqText) && /q1/.test(pqText), "posting queue formatter must list entries");
@@ -1707,7 +1711,7 @@ async function main() {
 
   // Program source patch helper (Python dry-run) — use live schemaVersion from manifest
   const buildManifest = loadJson(join(siteDir, "nr2-build.json"));
-  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-150")}"`;
+  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-151")}"`;
   const pyPatch = require("node:child_process").execFileSync(
     "python",
     [
