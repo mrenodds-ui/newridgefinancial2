@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-156",
-  "schemaVersion": "hal-156",
-  "builtAt": "2026-07-04T22:49:57.388Z",
+  "assetVersion": "hal-160",
+  "schemaVersion": "hal-160",
+  "builtAt": "2026-07-04T23:55:15.390Z",
   "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server."
 }

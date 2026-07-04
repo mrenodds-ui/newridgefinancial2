@@ -515,6 +515,16 @@ const PageCanvas = (function () {
           }`,
         })}
       </div>
+      <div class="pv-canvas-grid-2">
+        ${canvasPanel({
+          title: wTitle("softdent", 6),
+          caption: "Hygiene and recall follow-up",
+          widgetKey: wKey("softdent", 6),
+          body: `${canvasStat(practice.hygieneCompleted || "—", "Hygiene completed", widgetTone("hygieneRecall") === "success" ? "success" : undefined, wKey("softdent", 6))}${
+            practice.recallDue ? `<p class="pv-canvas-note">${esc(practice.recallDue)}</p>` : ""
+          }${practice.hygienePeriod ? `<p class="pv-canvas-note">${esc(practice.hygienePeriod)}</p>` : ""}`,
+        })}
+      </div>
     </div>`;
   }
 

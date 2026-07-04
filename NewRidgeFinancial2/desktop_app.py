@@ -333,6 +333,74 @@ class DesktopApi:
 
         return export_approved_posting_queue_csv(self.store.db_path, limit=int(limit or 200))
 
+    def export_posting_queue_iif_with_consent(self, payload_json: str = "{}") -> dict:
+        from outbound_actions import export_posting_queue_iif
+        import json as _json
+
+        payload = _json.loads(payload_json or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+        return export_posting_queue_iif(
+            self.store.db_path,
+            limit=int(payload.get("limit") or 200),
+            consent_text=str(payload.get("consentText") or ""),
+            actor=str(payload.get("actor") or "Staff"),
+            store=self.store,
+        )
+
+    def send_email_with_consent(self, payload_json: str = "{}") -> dict:
+        from outbound_actions import send_email_with_consent
+        import json as _json
+
+        payload = _json.loads(payload_json or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+        return send_email_with_consent(
+            to=str(payload.get("to") or ""),
+            subject=str(payload.get("subject") or ""),
+            body=str(payload.get("body") or ""),
+            consent_text=str(payload.get("consentText") or ""),
+            actor=str(payload.get("actor") or "Staff"),
+            store=self.store,
+            dry_run=bool(payload.get("dryRun")),
+        )
+
+    def build_claim_packet_with_consent(self, payload_json: str = "{}") -> dict:
+        from outbound_actions import build_claim_submission_packet
+        import json as _json
+
+        payload = _json.loads(payload_json or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+        return build_claim_submission_packet(
+            claim_id=str(payload.get("claimId") or payload.get("claim_id") or ""),
+            narrative=str(payload.get("narrative") or payload.get("body") or ""),
+            notes=str(payload.get("notes") or payload.get("query") or ""),
+            consent_text=str(payload.get("consentText") or ""),
+            actor=str(payload.get("actor") or "Staff"),
+            store=self.store,
+        )
+
+    def export_narrative_portal_prep_with_consent(self, payload_json: str = "{}") -> dict:
+        from outbound_actions import export_narrative_portal_prep
+        import json as _json
+
+        payload = _json.loads(payload_json or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+        return export_narrative_portal_prep(
+            claim_id=str(payload.get("claimId") or payload.get("claim_id") or ""),
+            narrative=str(payload.get("narrative") or payload.get("body") or ""),
+            consent_text=str(payload.get("consentText") or ""),
+            actor=str(payload.get("actor") or "Staff"),
+            store=self.store,
+        )
+
+    def quickbooks_online_status(self) -> dict:
+        from outbound_actions import quickbooks_online_status
+
+        return quickbooks_online_status()
+
     def web_research(self, query: str, options_json: str = "{}") -> dict:
         from web_research import research
         import json as _json

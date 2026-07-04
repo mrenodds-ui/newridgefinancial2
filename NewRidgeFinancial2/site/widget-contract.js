@@ -73,6 +73,15 @@ const WidgetContract = (function () {
         presentedCount: { dataset: "softdent.caseAcceptance", dashboard: "practice", path: "caseAcceptance.presented" },
       },
     },
+    hygieneRecall: {
+      title: "Hygiene & Recall",
+      navTarget: "softdent",
+      metrics: {
+        hygieneCompleted: { dataset: "softdent.hygieneRecall", dashboard: "practice", path: "hygieneRecall.completed" },
+        recallDue: { dataset: "softdent.hygieneRecall", dashboard: "practice", path: "hygieneRecall.due" },
+        period: { dataset: "softdent.hygieneRecall", dashboard: "practice", path: "hygieneRecall.period" },
+      },
+    },
   };
 
   function isNode() {

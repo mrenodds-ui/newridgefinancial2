@@ -367,6 +367,7 @@ const PageCanvasData = (function () {
     const np = metrics("newPatients");
     const tp = metrics("treatmentPlanSummary");
     const ca = metrics("caseAcceptance");
+    const hr = metrics("hygieneRecall");
     return {
       newPatients: fmt(np.newPatientCount || pr.newPatients?.count),
       newPatientsHint: fmt(np.period || pr.newPatients?.period),
@@ -378,6 +379,9 @@ const PageCanvasData = (function () {
           : ca.plansAccepted != null && ca.plansPresented != null
             ? `${fmt(ca.plansAccepted)} / ${fmt(ca.plansPresented)}`
             : null,
+      hygieneCompleted: fmt(hr.hygieneCompleted || pr.hygieneRecall?.completed),
+      recallDue: hr.recallDue != null ? `${fmt(hr.recallDue)} recall due` : pr.hygieneRecall?.due != null ? `${fmt(pr.hygieneRecall.due)} recall due` : null,
+      hygienePeriod: fmt(hr.period || pr.hygieneRecall?.period),
     };
   }
 

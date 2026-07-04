@@ -1,20 +1,61 @@
 /**
  * Desktop bridge — local file reads and SQLite-backed storage via pywebview.
- * Falls back to fetch + sessionStorage only for local file dev (no server).
+ * Loopback HTTP fallbacks when served from http://127.0.0.1 (full HAL data access without pywebview).
  */
 const DesktopBridge = (function () {
+  function isLoopbackHost() {
+    if (typeof window === "undefined" || !window.location) return false;
+    const protocol = String(window.location.protocol || "").toLowerCase();
+    if (protocol !== "http:" && protocol !== "https:") return false;
+    const host = String(window.location.hostname || "").toLowerCase();
+    return host === "127.0.0.1" || host === "localhost" || host === "::1";
+  }
+
   function hasDesktopApi() {
     if (typeof window === "undefined") return false;
     return Boolean(window.pywebview && window.pywebview.api);
   }
 
+  function hasLoopbackApi() {
+    return isLoopbackHost() && typeof fetch === "function";
+  }
+
+  function hasRuntimeAccess() {
+    return hasDesktopApi() || hasLoopbackApi();
+  }
+
+  function loopbackUrl(path) {
+    if (typeof window === "undefined" || !window.location) {
+      return `http://127.0.0.1:8765${path}`;
+    }
+    const port = window.location.port || "8765";
+    const host = (typeof window !== "undefined" && window.location && window.location.hostname) || "127.0.0.1";
+    const protocol = (typeof window !== "undefined" && window.location && window.location.protocol) || "http:";
+    return `${protocol}//${host}:${port}${path}`;
+  }
+
+  async function loopbackJson(path, options) {
+    const resp = await fetch(loopbackUrl(path), Object.assign({ cache: "no-store" }, options || {}));
+    if (!resp.ok) {
+      const err = new Error(`HTTP ${resp.status} for ${path}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
   function runtimeMode() {
-    return hasDesktopApi() ? "desktop" : "browser-dev";
+    if (hasDesktopApi()) return "desktop";
+    if (hasLoopbackApi()) return "loopback";
+    return "browser-dev";
   }
 
   function desktopRequiredMessage(feature) {
     const label = feature || "This feature";
-    return `${label} requires the NR2 desktop app. Browser/file mode is a UI preview only: imports, SQLite storage, SideNotes hub files, and import sync are unavailable. Launch StartProgram.bat (http://127.0.0.1:8765/).`;
+    if (hasLoopbackApi()) {
+      return `${label} is available through the NR2 loopback server on this machine.`;
+    }
+    return `${label} requires the NR2 desktop app or loopback server. Launch StartProgram.bat (http://127.0.0.1:8765/). Browser file preview has no import or SQLite access.`;
   }
 
   function whenReady(callback) {
@@ -67,6 +108,14 @@ const DesktopBridge = (function () {
       const raw = await window.pywebview.api.storage_get(key);
       return parseStorageValue(raw);
     }
+    if (hasLoopbackApi()) {
+      try {
+        const payload = await loopbackJson(`/api/storage/${encodeURIComponent(key)}`);
+        return parseStorageValue(payload && payload.value);
+      } catch {
+        return null;
+      }
+    }
     try {
       const raw = sessionStorage.getItem(key);
       return raw ? JSON.parse(raw) : null;
@@ -81,6 +130,18 @@ const DesktopBridge = (function () {
       await window.pywebview.api.storage_set(key, payload);
       return;
     }
+    if (hasLoopbackApi()) {
+      try {
+        await loopbackJson(`/api/storage/${encodeURIComponent(key)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+        });
+        return;
+      } catch {
+        /* fall through to sessionStorage */
+      }
+    }
     try {
       sessionStorage.setItem(key, payload);
     } catch {
@@ -90,12 +151,26 @@ const DesktopBridge = (function () {
 
   async function getAppInfo() {
     if (hasDesktopApi()) return window.pywebview.api.get_app_info();
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/app-info");
+      } catch {
+        return { mode: "loopback", version: "2.0" };
+      }
+    }
     return { mode: "file", version: "2.0" };
   }
 
   async function getImportBundle() {
     if (hasDesktopApi() && window.pywebview.api.get_import_bundle) {
       return window.pywebview.api.get_import_bundle();
+    }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/import-bundle");
+      } catch {
+        return null;
+      }
     }
     return null;
   }
@@ -104,12 +179,26 @@ const DesktopBridge = (function () {
     if (hasDesktopApi() && window.pywebview.api.get_import_sync_status) {
       return window.pywebview.api.get_import_sync_status();
     }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/import-sync-status");
+      } catch {
+        return { status: "idle" };
+      }
+    }
     return { status: "idle" };
   }
 
   async function refreshImports() {
     if (hasDesktopApi() && window.pywebview.api.refresh_imports) {
       return window.pywebview.api.refresh_imports();
+    }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/refresh-imports", { method: "POST" });
+      } catch {
+        return getImportBundle();
+      }
     }
     return getImportBundle();
   }
@@ -118,12 +207,26 @@ const DesktopBridge = (function () {
     if (hasDesktopApi() && window.pywebview.api.sync_accounting_documents) {
       return window.pywebview.api.sync_accounting_documents();
     }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/sync-documents");
+      } catch {
+        return null;
+      }
+    }
     return null;
   }
 
   async function listPracticeSourceCatalog() {
     if (hasDesktopApi() && window.pywebview.api.list_practice_source_catalog) {
       return window.pywebview.api.list_practice_source_catalog();
+    }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/practice-source-catalog");
+      } catch {
+        return null;
+      }
     }
     return null;
   }
@@ -133,6 +236,21 @@ const DesktopBridge = (function () {
       const payload = options && typeof options === "object" ? JSON.stringify(options) : "{}";
       return window.pywebview.api.fetch_practice_source(system, resource, payload);
     }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/fetch-practice-source", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system: String(system || ""),
+            resource: String(resource || ""),
+            options: options && typeof options === "object" ? options : {},
+          }),
+        });
+      } catch {
+        return null;
+      }
+    }
     return null;
   }
 
@@ -140,6 +258,17 @@ const DesktopBridge = (function () {
     const opts = options && typeof options === "object" ? options : {};
     if (hasDesktopApi() && window.pywebview.api.pull_practice_sources) {
       return window.pywebview.api.pull_practice_sources(JSON.stringify(opts));
+    }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/pull-practice-sources", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(opts),
+        });
+      } catch {
+        return null;
+      }
     }
     return null;
   }
@@ -168,6 +297,13 @@ const DesktopBridge = (function () {
       const limit = options && options.limit != null ? Number(options.limit) : 20;
       const status = options && options.status ? String(options.status) : "";
       return window.pywebview.api.list_posting_queue(limit, status);
+    }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/posting-queue");
+      } catch {
+        return { items: [], metrics: { pendingReview: 0, approved: 0, rejected: 0, total: 0 }, unavailable: true };
+      }
     }
     return { items: [], metrics: { pendingReview: 0, approved: 0, rejected: 0, total: 0 }, unavailable: true };
   }
@@ -227,6 +363,13 @@ const DesktopBridge = (function () {
     if (hasDesktopApi() && window.pywebview.api.list_hal_memories) {
       return window.pywebview.api.list_hal_memories();
     }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/hal-memories");
+      } catch {
+        return { items: [], count: 0 };
+      }
+    }
     return { items: [], count: 0 };
   }
 
@@ -238,6 +381,17 @@ const DesktopBridge = (function () {
         String(opts.source || "staff:remember"),
         String(opts.category || ""),
       );
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/hal-memories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: String(text || ""),
+          source: String(opts.source || "staff:remember"),
+          category: String(opts.category || ""),
+        }),
+      });
     }
     throw new Error(desktopRequiredMessage("Saving HAL learned facts"));
   }
@@ -449,50 +603,49 @@ const DesktopBridge = (function () {
     if (hasDesktopApi() && window.pywebview.api.get_integration_health) {
       return window.pywebview.api.get_integration_health();
     }
-    const resp = await fetch("http://127.0.0.1:8765/api/integration-health", { cache: "no-store" });
-    if (!resp.ok) throw new Error("integration health unavailable");
-    return resp.json();
+    if (hasLoopbackApi()) return loopbackJson("/api/integration-health");
+    throw new Error(desktopRequiredMessage("Integration health"));
   }
 
   async function getAutomationRegistry() {
     if (hasDesktopApi() && window.pywebview.api.get_automation_registry) {
       return window.pywebview.api.get_automation_registry();
     }
-    const resp = await fetch("http://127.0.0.1:8765/api/automation-registry", { cache: "no-store" });
-    if (!resp.ok) throw new Error("automation registry unavailable");
-    return resp.json();
+    if (hasLoopbackApi()) return loopbackJson("/api/automation-registry");
+    throw new Error(desktopRequiredMessage("Automation registry"));
   }
 
   async function buildSupportBundle(note) {
     if (hasDesktopApi() && window.pywebview.api.build_support_bundle) {
       return window.pywebview.api.build_support_bundle(String(note || ""));
     }
-    const resp = await fetch("http://127.0.0.1:8765/api/support-bundle", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note: String(note || "") }),
-    });
-    if (!resp.ok) throw new Error("support bundle unavailable");
-    return resp.json();
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/support-bundle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: String(note || "") }),
+      });
+    }
+    throw new Error(desktopRequiredMessage("Support bundle"));
   }
 
   async function getFinancialReports(syncExports) {
     if (hasDesktopApi() && window.pywebview.api.get_financial_reports) {
       return window.pywebview.api.get_financial_reports(Boolean(syncExports));
     }
-    const q = syncExports ? "?syncExports=1" : "";
-    const resp = await fetch(`http://127.0.0.1:8765/api/financial-reports${q}`, { cache: "no-store" });
-    if (!resp.ok) throw new Error("financial reports unavailable");
-    return resp.json();
+    if (hasLoopbackApi()) {
+      const q = syncExports ? "?syncExports=1" : "";
+      return loopbackJson(`/api/financial-reports${q}`);
+    }
+    throw new Error(desktopRequiredMessage("Financial reports"));
   }
 
   async function getDailyCloseout() {
     if (hasDesktopApi() && window.pywebview.api.get_daily_closeout) {
       return window.pywebview.api.get_daily_closeout();
     }
-    const resp = await fetch("http://127.0.0.1:8765/api/daily-closeout", { cache: "no-store" });
-    if (!resp.ok) throw new Error("daily closeout unavailable");
-    return resp.json();
+    if (hasLoopbackApi()) return loopbackJson("/api/daily-closeout");
+    throw new Error(desktopRequiredMessage("Daily closeout"));
   }
 
   async function runProgramSelfHeal(options) {
@@ -504,17 +657,18 @@ const DesktopBridge = (function () {
         String(opts.reason || "ui"),
       );
     }
-    const resp = await fetch("http://127.0.0.1:8765/api/self-heal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fullPull: Boolean(opts.fullPull),
-        documentsOnly: Boolean(opts.documentsOnly),
-        reason: opts.reason || "ui",
-      }),
-    });
-    if (!resp.ok) throw new Error("program self-heal unavailable");
-    return resp.json();
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/self-heal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullPull: Boolean(opts.fullPull),
+          documentsOnly: Boolean(opts.documentsOnly),
+          reason: opts.reason || "ui",
+        }),
+      });
+    }
+    throw new Error(desktopRequiredMessage("Program self-heal"));
   }
 
   async function getProgramHelp(query) {
@@ -608,6 +762,9 @@ const DesktopBridge = (function () {
 
   return {
     hasDesktopApi,
+    hasLoopbackApi,
+    hasRuntimeAccess,
+    isLoopbackHost,
     runtimeMode,
     desktopRequiredMessage,
     whenReady,

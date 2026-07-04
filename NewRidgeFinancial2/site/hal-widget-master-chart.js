@@ -166,6 +166,13 @@ const HalWidgetMasterChart = (function () {
       readyWhen: "Dedicated or derived case-acceptance data is configured and loaded.",
       primarySystem: "SoftDent",
     },
+    hygieneRecall: {
+      title: "Hygiene & Recall",
+      purpose: "Show hygiene completed and recall due counts by period.",
+      expectedData: ["SoftDent hygiene_recall_summary export"],
+      readyWhen: "Hygiene/recall summary export is configured and loaded.",
+      primarySystem: "SoftDent",
+    },
     narrativeWorkflow: {
       title: "Narrative Workflow",
       purpose: "Track local narrative drafting, draft history, and source-fact safety.",

@@ -6,6 +6,7 @@ import json
 import os
 import threading
 import uuid
+from datetime import datetime, timezone
 
 from pathlib import Path
 
@@ -16,6 +17,65 @@ from webview.util import abspath, is_app, is_local_url
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NR2_DATA_DIR = REPO_ROOT / "app_data" / "nr2"
+
+_sync_lock = threading.Lock()
+_sync_state = {
+    "status": "idle",
+    "startedAt": None,
+    "completedAt": None,
+    "error": None,
+    "result": None,
+}
+
+
+def _json_response(payload, status=200):
+    bottle.response.content_type = "application/json"
+    bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+    if status != 200:
+        bottle.response.status = status
+    return json.dumps(payload)
+
+
+def _run_import_sync_http(store) -> None:
+    global _sync_state
+    try:
+        from document_sync import sync_accounting_documents
+        from import_loader import direct_first_imports_enabled, load_import_bundle
+
+        if direct_first_imports_enabled():
+            bundle = load_import_bundle(sync=True, deep=True)
+            documents = sync_accounting_documents(store)
+            result = {
+                "directFirst": True,
+                "importMode": bundle.get("importMode"),
+                "diagnostics": bundle.get("diagnostics"),
+                "documents": documents,
+            }
+            sync_result = bundle.get("syncStatus", {}).get("result")
+            if isinstance(sync_result, dict):
+                result["directRefresh"] = sync_result
+        else:
+            from import_sync import sync_imports
+
+            result = sync_imports()
+            result["documents"] = sync_accounting_documents(store)
+        with _sync_lock:
+            _sync_state = {
+                "status": "success",
+                "startedAt": _sync_state.get("startedAt"),
+                "completedAt": datetime.now(timezone.utc).isoformat(),
+                "error": None,
+                "result": result,
+            }
+    except Exception as exc:
+        with _sync_lock:
+            _sync_state = {
+                "status": "failed",
+                "startedAt": _sync_state.get("startedAt"),
+                "completedAt": datetime.now(timezone.utc).isoformat(),
+                "error": str(exc),
+                "result": None,
+            }
 
 
 class NR2BottleServer(BottleServer):
@@ -51,15 +111,247 @@ class NR2BottleServer(BottleServer):
 
         @app.get("/api/import-bundle")
         def import_bundle():
-            bottle.response.content_type = "application/json"
-            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
             try:
                 from import_loader import load_import_bundle
 
-                return json.dumps(load_import_bundle(sync=False, deep=False))
+                return _json_response(load_import_bundle(sync=False, deep=False))
             except Exception as exc:
-                bottle.response.status = 500
-                return json.dumps({"error": str(exc)})
+                return _json_response({"error": str(exc)}, status=500)
+
+        @app.get("/api/app-info")
+        def app_info_api():
+            try:
+                from import_loader import load_import_bundle
+
+                bundle = load_import_bundle(sync=False, deep=False)
+                return _json_response(
+                    {
+                        "mode": "loopback",
+                        "version": "2.0",
+                        "importMode": bundle.get("importMode"),
+                        "runtimeAccess": True,
+                    }
+                )
+            except Exception as exc:
+                return _json_response({"mode": "loopback", "version": "2.0", "error": str(exc)})
+
+        @app.get("/api/import-sync-status")
+        def import_sync_status_api():
+            with _sync_lock:
+                return _json_response(dict(_sync_state))
+
+        @app.post("/api/refresh-imports")
+        def refresh_imports_api():
+            global _sync_state
+            with _sync_lock:
+                if _sync_state.get("status") == "running":
+                    return _json_response(dict(_sync_state))
+                _sync_state = {
+                    "status": "running",
+                    "startedAt": datetime.now(timezone.utc).isoformat(),
+                    "completedAt": None,
+                    "error": None,
+                    "result": None,
+                }
+                state = dict(_sync_state)
+            store = _local_store()
+            thread = threading.Thread(target=_run_import_sync_http, args=(store,), daemon=True)
+            thread.start()
+            return _json_response(state)
+
+        @app.get("/api/practice-source-catalog")
+        def practice_source_catalog_api():
+            try:
+                from practice_source_access import list_catalog
+
+                return _json_response(list_catalog())
+            except Exception as exc:
+                return _json_response({"error": str(exc)}, status=500)
+
+        @app.post("/api/pull-practice-sources")
+        def pull_practice_sources_api():
+            try:
+                from practice_source_access import pull_all_practice_sources
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                full = bool(payload.get("fullPull"))
+                return _json_response(pull_all_practice_sources(full=full))
+            except Exception as exc:
+                return _json_response({"error": str(exc), "ok": False}, status=500)
+
+        @app.post("/api/fetch-practice-source")
+        def fetch_practice_source_api():
+            try:
+                from practice_source_access import fetch
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                return _json_response(
+                    fetch(
+                        str(payload.get("system") or ""),
+                        str(payload.get("resource") or ""),
+                        payload.get("options") if isinstance(payload.get("options"), dict) else {},
+                    )
+                )
+            except Exception as exc:
+                return _json_response({"error": str(exc)}, status=500)
+
+        @app.get("/api/storage/<key>")
+        def storage_get_api(key):
+            try:
+                store = _local_store()
+                raw = store.get(str(key))
+                if raw is None:
+                    return _json_response({"key": key, "value": None})
+                return _json_response({"key": key, "value": raw})
+            except Exception as exc:
+                return _json_response({"error": str(exc)}, status=500)
+
+        @app.post("/api/storage/<key>")
+        def storage_set_api(key):
+            try:
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else ""
+                store = _local_store()
+                store.set(str(key), body)
+                return _json_response({"ok": True, "key": key})
+            except Exception as exc:
+                return _json_response({"error": str(exc), "ok": False}, status=500)
+
+        @app.get("/api/hal-memories")
+        def hal_memories_api():
+            try:
+                from knowledge_memory_store import load_approved_memories
+
+                items = load_approved_memories()
+                return _json_response({"items": items, "count": len(items)})
+            except Exception as exc:
+                return _json_response({"error": str(exc), "items": [], "count": 0}, status=500)
+
+        @app.post("/api/hal-memories")
+        def hal_remember_api():
+            try:
+                from knowledge_memory_store import remember_fact
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                result = remember_fact(
+                    str(payload.get("text") or ""),
+                    source=str(payload.get("source") or "staff:remember"),
+                    category=str(payload.get("category") or "").strip() or None,
+                    actor="Staff",
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/outbound/email")
+        def outbound_email_api():
+            try:
+                from outbound_actions import send_email_with_consent
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                store = _local_store()
+                result = send_email_with_consent(
+                    to=str(payload.get("to") or ""),
+                    subject=str(payload.get("subject") or ""),
+                    body=str(payload.get("body") or ""),
+                    consent_text=str(payload.get("consentText") or ""),
+                    actor=str(payload.get("actor") or "Staff"),
+                    store=store,
+                    dry_run=bool(payload.get("dryRun")),
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/outbound/qb-export")
+        def outbound_qb_export_api():
+            try:
+                from outbound_actions import export_posting_queue_iif
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                store = _local_store()
+                result = export_posting_queue_iif(
+                    store.db_path,
+                    limit=int(payload.get("limit") or 200),
+                    consent_text=str(payload.get("consentText") or ""),
+                    actor=str(payload.get("actor") or "Staff"),
+                    store=store,
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/outbound/claim-packet")
+        def outbound_claim_packet_api():
+            try:
+                from outbound_actions import build_claim_submission_packet
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                store = _local_store()
+                result = build_claim_submission_packet(
+                    claim_id=str(payload.get("claimId") or payload.get("claim_id") or ""),
+                    narrative=str(payload.get("narrative") or payload.get("body") or ""),
+                    notes=str(payload.get("notes") or payload.get("query") or ""),
+                    consent_text=str(payload.get("consentText") or ""),
+                    actor=str(payload.get("actor") or "Staff"),
+                    store=store,
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/outbound/narrative-prep")
+        def outbound_narrative_prep_api():
+            try:
+                from outbound_actions import export_narrative_portal_prep
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                store = _local_store()
+                result = export_narrative_portal_prep(
+                    claim_id=str(payload.get("claimId") or payload.get("claim_id") or ""),
+                    narrative=str(payload.get("narrative") or payload.get("body") or ""),
+                    consent_text=str(payload.get("consentText") or ""),
+                    actor=str(payload.get("actor") or "Staff"),
+                    store=store,
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/outbound/briefing-email")
+        def outbound_briefing_email_api():
+            try:
+                from outbound_actions import send_staff_briefing_email
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                store = _local_store()
+                result = send_staff_briefing_email(
+                    subject=str(payload.get("subject") or "NR2 HAL briefing"),
+                    body=str(payload.get("body") or ""),
+                    to=str(payload.get("to") or ""),
+                    consent_text=str(payload.get("consentText") or "Scheduled internal briefing"),
+                    actor=str(payload.get("actor") or "HAL"),
+                    store=store,
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/outbound/qbo-status")
+        def outbound_qbo_status_api():
+            try:
+                from outbound_actions import quickbooks_online_status
+
+                return _json_response(quickbooks_online_status())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
 
         @app.get("/api/sync-documents")
         def sync_documents_api():

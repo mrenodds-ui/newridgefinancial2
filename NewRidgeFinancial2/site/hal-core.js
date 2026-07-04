@@ -1,16 +1,18 @@
 /**
- * HAL core: routing, firewall, registry, and model-lane logic.
+ * HAL core: routing, consent policy, registry, and model-lane logic.
  * Browser + Node compatible (no DOM).
  */
 const HalCore = (function () {
-  const BLOCKED_RE =
+  const OUTBOUND_ACTION_RE =
     /\b(submit|submits|submitting|send|sends|sending|email|emails|emailing|e-?mail|fax|faxes|faxing|upload|uploads|uploading|transmit|transmits|transmitting|pay|pays|paying|approve|approves|approving|deny|denies|denying|delete|deletes|deleting|remove|removes|removing|writeback|write back|dispatch|dispatches|dispatching|mail|mailing|wire|wires|wiring)\b|\b(contact|contacts|contacting)\b.*\b(payer|insurance)\b|\b(payer|insurance)\b.*\b(contact|email|fax|call)\b/;
 
-  // Writeback / external phrases that should not false-positive on local nouns like "posting queue".
-  // Note: drafting a journal entry is a local draft-only action (allowed); only POSTING a
-  // journal entry to the ledger is blocked. The post(...) clause below still blocks posting.
-  const BLOCKED_PHRASES_RE =
+  const OUTBOUND_PHRASES_RE =
     /\bpost(s|ing|ed)?\s+(?:(?:a|an|the|this|that)\s+)?(?:[a-z]+\s+){0,3}?(journal|entry|entries|payment|charge|transaction|invoice|claim|note|statement|ledger|document|documents|record|records|refund|refunds|narrative|narratives|deposit|bill|check|payer)\b|\bpost(s|ing|ed)?\s+to\s+quickbooks\b|\bquickbooks\s+post(ing|ed)?\b|\b(record|make|process)\s+((a|an|the)\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b|\bwrite(s|ing)?\s+to\s+softdent\b|\bsoftdent\s+write(s|ing|back)?\b|\bupdate\s+softdent\b|\bsync\s+to\s+softdent\b/;
+
+  /** @deprecated use OUTBOUND_ACTION_RE — kept for tests and legacy imports */
+  const BLOCKED_RE = OUTBOUND_ACTION_RE;
+  /** @deprecated use OUTBOUND_PHRASES_RE */
+  const BLOCKED_PHRASES_RE = OUTBOUND_PHRASES_RE;
 
   const PAGE_SYNONYMS = {
     financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
@@ -26,32 +28,33 @@ const HalCore = (function () {
     hal: ["hal", "command center", "yourself"],
   };
 
-  const FALLBACK_FIREWALL = {
-    summary: "External actions are blocked by design.",
-    blocked: [
-      "No email",
-      "No fax",
-      "No upload",
-      "No payer contact",
-      "SoftDent read-only",
-      "QuickBooks read-only",
-      "No submission",
-    ],
-    allowed: ["Open local program pages", "Explain local status", "Prepare review notes", "Flag missing information"],
+  const FALLBACK_CONSENT = {
+    required: true,
+    title: "Staff consent policy",
+    summary: "HAL may email, submit, post, fax, upload, or deliver externally only after explicit staff consent for that specific action.",
+    prompt: "I need your consent before I send, post, submit, or deliver anything externally.",
+    categories: ["Email and payer contact", "Claim submission", "QuickBooks post", "SoftDent writeback", "Document upload"],
+    localAlways: ["Open local program pages", "Explain local status", "Prepare review notes", "Refresh imports", "Draft locally"],
   };
 
-  /** Global kill switch — set false to route external phrases like normal questions (no blocked: firewall). */
-  let FIREWALL_ENABLED = false;
+  /** @deprecated legacy export — consent policy replaced firewall */
+  const FALLBACK_FIREWALL = FALLBACK_CONSENT;
 
-  function isFirewallActive(halData, halModels) {
-    if (!FIREWALL_ENABLED) return false;
-    if (halModels && halModels.config && halModels.config.firewallEnabled === false) return false;
-    if (halData && halData.firewall && halData.firewall.enabled === false) return false;
-    return true;
+  function consentPolicy(halData) {
+    if (halData && halData.consent) return halData.consent;
+    return FALLBACK_CONSENT;
   }
 
-  function setFirewallEnabled(on) {
-    FIREWALL_ENABLED = !!on;
+  function isFirewallActive() {
+    return false;
+  }
+
+  function setFirewallEnabled() {
+    /* firewall removed — consent policy only */
+  }
+
+  function checkFirewall() {
+    return false;
   }
 
   function registryList(halData) {
@@ -196,8 +199,8 @@ const HalCore = (function () {
     const q = String(query).toLowerCase().trim();
     if (isLocalStaffReviewOverride(q)) return false;
     return (
-      BLOCKED_RE.test(q) ||
-      BLOCKED_PHRASES_RE.test(q) ||
+      OUTBOUND_ACTION_RE.test(q) ||
+      OUTBOUND_PHRASES_RE.test(q) ||
       /\bpush\b.*\b(live|to quickbooks)\b/.test(q) ||
       /\bpush\b.*\b(journal|entry|entries)\b.*\blive\b/.test(q)
     );
@@ -250,7 +253,7 @@ const HalCore = (function () {
   function isChatSizedQuestion(query, route) {
     const q = String(query || "").toLowerCase();
     const intent = route && route.intent ? String(route.intent) : "";
-    if (/^capability:|^blocked: firewall/.test(intent)) return true;
+    if (/^capability:|^capability:consent|^consent/.test(intent)) return true;
     if (isYesNoQuestion(q)) return true;
     if (/^what can you (not )?do on /.test(q)) return true;
     if (route && route.useProactiveBriefing) {
@@ -305,11 +308,11 @@ const HalCore = (function () {
   }
 
   function buildHelpChatReply(halData) {
-    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
+    const consent = consentPolicy(halData);
     return pickVariant([
-      "I'm HAL — local read-only program manager for this office. I open pages, explain imports, run readiness checks, and draft review notes. I don't submit, email, upload, or post anywhere. Staff handles outbound work.",
-      "I'm read-only — I read SoftDent and QuickBooks imports, place data on dashboards, and flag gaps. Name a page, widget, import task, or say Run readiness check for specifics.",
-      `I stay read-only: navigate, explain, reconcile, draft locally. ${firewall.summary} Name a page if you want more detail.`,
+      "I'm HAL — local program manager for this office. I open pages, explain imports, run readiness checks, and draft work. Outbound actions like email, submit, and post require your explicit consent each time.",
+      "I read SoftDent and QuickBooks imports, place data on dashboards, and flag gaps. Outbound actions need your consent. Name a page, widget, import task, or say Run readiness check for specifics.",
+      `${consent.summary} Name a page if you want more detail.`,
     ]);
   }
 
@@ -625,15 +628,15 @@ const HalCore = (function () {
       .trim();
   }
 
-  function compressedBlockedReply(firewall, query, briefCount, halData, halModels) {
+  function compressedBlockedReply(_legacy, query, briefCount, halData) {
     if (briefCount >= 1) {
       return pickVariant([
-        "Still blocked — same firewall as before. I can prep locally; staff executes outbound steps.",
-        "Same answer: read-only, no external delivery from this program.",
-        "No change. A human still handles the external step outside NR2.",
+        "Same consent policy — confirm before any email, submit, or post.",
+        "Still need your consent for outbound actions. I can prep locally until you confirm.",
+        "No change — explicit consent is still required for external delivery.",
       ]);
     }
-    return variedBlockedCapabilityReply(firewall, query, halData, halModels);
+    return variedBlockedCapabilityReply(null, query, halData);
   }
 
   function buildSessionRecap(turns) {
@@ -1133,7 +1136,7 @@ const HalCore = (function () {
     let out = stripInstructionLeaks(String(text || "").trim());
     const intent = route && route.intent ? String(route.intent) : "";
     if (/^blocked: firewall/.test(intent) && meta.firewallBriefCount >= 1) {
-      out = compressedBlockedReply((meta.halData && meta.halData.firewall) || FALLBACK_FIREWALL, query, meta.firewallBriefCount, meta.halData, meta.halModels);
+      out = compressedBlockedReply(null, query, meta.firewallBriefCount, meta.halData);
     }
     const micro = isSimpleActionQuery(query) && buildMicroActionReply(intent, meta.actionLabel, query);
     if (micro && /^navigate:|imports: refresh|imports: status/.test(intent)) {
@@ -1296,22 +1299,31 @@ const HalCore = (function () {
     return verb ? verb[1] + " that" : "do that external step";
   }
 
-  function variedBlockedCapabilityReply(firewall, actionPhrase, halData, halModels) {
-    const fw = firewall || FALLBACK_FIREWALL;
+  function variedBlockedCapabilityReply(_legacy, actionPhrase, halData) {
     const act = describeBlockedAction(actionPhrase);
-    const fwActive = isFirewallActive(halData, halModels);
-    if (!fwActive) {
-      return pickVariant([
-        `No. I can't ${act} from here. External-action firewall is off, but HAL still has no outbound executors — staff performs that step outside this program. I can open the right page and draft review notes locally.`,
-        `No — ${act.charAt(0).toUpperCase() + act.slice(1)} is outside what HAL can execute. Firewall is disabled in config, not capability: I navigate, explain, and draft; humans handle payer contact and ledger posting.`,
-        `No. That request stops at the program boundary for ${act}. I'll help navigate and document locally — outbound delivery requires staff.`,
-      ]);
-    }
+    const consent = consentPolicy(halData);
     return pickVariant([
-      `No. I can't ${act} from here. ${fw.summary} I can open the right page and draft review notes; staff performs the external step.`,
-      `No — ${act.charAt(0).toUpperCase() + act.slice(1)} is blocked by the firewall. SoftDent and QuickBooks stay read-only from this program. I can prepare local review material; a human executes outside the app.`,
-      `No. That request stops at the boundary for ${act}. ${fw.summary} I'll help navigate and document locally — outbound delivery requires staff.`,
+      `Yes — I can ${act} with your explicit consent. ${consent.summary} Confirm when you are ready and I will proceed or prepare the delivery.`,
+      `Yes — ${act.charAt(0).toUpperCase() + act.slice(1)} is allowed here after consent. ${consent.prompt}`,
+      `Yes — I can handle ${act} once you consent. Say "I consent" or confirm the action and I will continue.`,
     ]);
+  }
+
+  function consentVerdict(query, _consentCfg, halData) {
+    const cfg = consentPolicy(halData);
+    const outbound = isOutboundActionPhrase(query);
+    const phrase = String(query || "").trim();
+    return {
+      allowed: true,
+      intent: outbound ? "consent: required" : "consent: local",
+      text: outbound
+        ? `${cfg.prompt} Proposed action: "${phrase}". Confirm consent to proceed.`
+        : "Allowed — local action with no external delivery required.",
+    };
+  }
+
+  function firewallVerdict(query, consentCfg, halData, halModels) {
+    return consentVerdict(query, consentCfg, halData);
   }
 
   function wrapAllowedCapabilityReply(actionPhrase, body) {
@@ -1320,7 +1332,7 @@ const HalCore = (function () {
     const intro = pickVariant([
       `Yes — I can ${act} here locally.`,
       `${act.charAt(0).toUpperCase() + act.slice(1)} is in-bounds for this program.`,
-      `Yes — ${act} stays on the read-only side and I can handle it now.`,
+      `Yes — ${act} stays local and I can handle it now.`,
       `I can do that here. ${act.charAt(0).toUpperCase() + act.slice(1)} uses local data only.`,
     ]);
     if (!core) return intro;
@@ -1410,22 +1422,25 @@ const HalCore = (function () {
     if (/search the document library|search document library/.test(a)) {
       return { intent: "capability:library-search", lane: "local", useDocRag: true, ragQuestion: action, text: "", actions: [] };
     }
-    if (/explain the firewall|external action firewall/.test(a)) {
-      const fwText = isFirewallActive(halData, halModels)
-        ? pickVariant([
-            `${firewall.summary} Blocked: ${firewall.blocked.join(", ")}. Allowed: ${firewall.allowed.join(", ")}.`,
-            `Firewall is enforced before any model runs. Blocked: ${firewall.blocked.join(", ")}. I stay in read-only mode.`,
-            `External actions never leave this program unattended. ${firewall.summary} Staff reviews anything outbound.`,
-          ])
-        : pickVariant([
-            "External-action firewall is off in this build, but HAL still has no outbound executors. Submit, email, upload, and post require staff outside the program.",
-            "Firewall is disabled here — that does not add outbound powers. I stay read-only on SoftDent and QuickBooks; staff owns payer contact and ledger posting.",
-            "Guardrails are relaxed in config, not in practice: I still only navigate, explain, reconcile, and draft for staff review.",
-          ]);
+    if (/explain (the )?(staff )?consent|consent policy|external action consent/.test(a)) {
+      const cfg = consentPolicy(halData);
       return {
-        intent: "capability:firewall",
+        intent: "capability:consent",
         lane: "local",
-        text: fwText,
+        text: pickVariant([
+          `${cfg.summary} Categories: ${(cfg.categories || []).join(", ")}.`,
+          `${cfg.prompt} ${cfg.summary}`,
+          `Consent is required per action — not a firewall. ${cfg.summary}`,
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/explain the firewall|external action firewall/.test(a)) {
+      return {
+        intent: "capability:consent",
+        lane: "local",
+        text: "The external-action firewall has been removed. HAL uses a staff consent policy instead — email, submit, post, and upload require your explicit consent for each action.",
         actions: [],
       };
     }
@@ -1505,9 +1520,9 @@ const HalCore = (function () {
         intent: "capability:browser-preview",
         lane: "local",
         text: pickVariant([
-          "Browser preview is a thin shell — I can chat there, but import refresh, SoftDent/QuickBooks pulls, and full widget placement need Start Program on the desktop.",
-          "In browser-only mode I'm limited. Daily work runs through Start Program so imports, widgets, and source health are real.",
-          "Preview mode is for UI checks. For production posture, open Start Program — that's where I see live imports and manager widgets.",
+          "On http://127.0.0.1 I have full loopback access — imports, practice pulls, widgets, and SQLite storage through the NR2 server. File:// preview and remote hosts still need Start Program.",
+          "Loopback mode at 127.0.0.1 gives HAL the same data access as the desktop shell. Agent patch tools and clipboard still need the pywebview app.",
+          "Browser preview on file:// is UI-only. Open http://127.0.0.1:8765 or Start Program for live imports and autonomous placement.",
         ]),
         actions: [],
       };
@@ -1567,7 +1582,6 @@ const HalCore = (function () {
     if (/without staff approval/.test(raw)) return true;
     if (/^tell me honestly/.test(String(rawQuery).toLowerCase())) return true;
     if (isOutboundActionPhrase(act) || isOutboundActionPhrase(rawQuery)) return true;
-    if (FIREWALL_ENABLED && (checkFirewall(act) || BLOCKED_PHRASES_RE.test(act))) return true;
     return false;
   }
 
@@ -1594,7 +1608,7 @@ const HalCore = (function () {
     const parsed = parseCapabilityQuestion(rawQuery);
     if (!parsed) return null;
 
-    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
+    const consent = consentPolicy(halData);
 
     if (parsed.kind === "page-can") {
       return buildPageCapabilityReply(halData, pages, parsed.pageHint, false);
@@ -1608,15 +1622,13 @@ const HalCore = (function () {
     }
 
     const action = parsed.action || "";
-    const actionBlocked =
-      isFirewallActive(halData, halModels) && (checkFirewall(action) || BLOCKED_PHRASES_RE.test(action));
-    const actionNoExecutor = isOutboundActionPhrase(action) || isOutboundActionPhrase(rawQuery);
+    const actionNeedsConsent = isOutboundActionPhrase(action) || isOutboundActionPhrase(rawQuery);
 
-    if (parsed.kind === "hypothetical" || (parsed.kind === "can" && (actionBlocked || actionNoExecutor))) {
+    if (parsed.kind === "hypothetical" || (parsed.kind === "can" && actionNeedsConsent)) {
       return {
-        intent: actionBlocked ? "blocked: firewall" : "capability:no-executor",
+        intent: "capability:consent-required",
         lane: "local",
-        text: variedBlockedCapabilityReply(firewall, action, halData, halModels),
+        text: variedBlockedCapabilityReply(consent, action, halData),
         actions: [],
       };
     }
@@ -1644,7 +1656,7 @@ const HalCore = (function () {
         return {
           intent: "capability:allowed-fallback",
           lane: "local",
-          text: wrapAllowedCapabilityReply(action, "I handle that locally without crossing the firewall."),
+          text: wrapAllowedCapabilityReply(action, "I handle that locally; outbound delivery needs your consent."),
           actions: [],
         };
       }
@@ -1675,39 +1687,6 @@ const HalCore = (function () {
     }
 
     return null;
-  }
-
-  function checkFirewall(query) {
-    if (!FIREWALL_ENABLED) return false;
-    const q = String(query).toLowerCase().trim();
-    if (isLocalStaffReviewOverride(q)) return false;
-    return BLOCKED_RE.test(q) || BLOCKED_PHRASES_RE.test(q);
-  }
-
-  function firewallVerdict(query, firewall, halData, halModels) {
-    const fw = firewall || FALLBACK_FIREWALL;
-    if (!isFirewallActive(halData, halModels)) {
-      return {
-        allowed: true,
-        intent: "firewall: disabled",
-        text: "Firewall is off — HAL routes this phrase through normal handlers. Outbound actions still require staff or integrated executors outside this check.",
-      };
-    }
-    if (checkFirewall(query)) {
-      return {
-        allowed: false,
-        intent: "blocked: firewall",
-        text:
-          "Blocked — external action. " +
-          fw.summary +
-          " A human must perform this step outside HAL.",
-      };
-    }
-    return {
-      allowed: true,
-      intent: "firewall: allowed",
-      text: "Allowed — local/read-only action. HAL can navigate, explain, or draft review notes only.",
-    };
   }
 
   function registryAsText(halData) {
@@ -2191,19 +2170,27 @@ const HalCore = (function () {
     );
   }
 
+  function consentPromptLines(halData) {
+    const cfg = consentPolicy(halData);
+    const local = (cfg.localAlways || []).slice(0, 8);
+    const outbound = (cfg.categories || []).slice(0, 6);
+    return [
+      cfg.summary || FALLBACK_CONSENT.summary,
+      "Local actions run immediately: " + (local.length ? local.join(", ") : "read, explain, reconcile, draft, refresh imports") + ".",
+      "Outbound actions require explicit staff consent per action: " + (outbound.length ? outbound.join(", ") : "email, submit, post, upload, fax") + ".",
+      cfg.prompt || FALLBACK_CONSENT.prompt,
+    ];
+  }
+
   function buildFastChatSystemPrompt(halData, programContext) {
-    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
     const parts = [
-      "You are HAL, the local read-only program manager for NewRidgeFinancial 2.0.",
+      "You are HAL, the local program manager for NewRidgeFinancial 2.0.",
       topPriority ? `Priority: ${topPriority}` : "Priority: monitor the program and recommend safe next staff actions.",
       fastHumanVoicePromptLines(),
       "Hard rule: always write at least five complete sentences — direct answer first, then evidence, implication, gaps, and next step.",
       "Answer from local context only. Never fabricate import data.",
-      "Read-only: no submit, email, fax, upload, post, or external delivery.",
-      "Allowed: " + (firewall.allowed || []).slice(0, 10).join(", ") + ".",
-      "Blocked: " + (firewall.blocked || []).slice(0, 8).join(", ") + ".",
-    ];
+    ].concat(consentPromptLines(halData));
     if (programContext) {
       parts.push("Local snapshot:", programContext.slice(0, 2200));
     }
@@ -2220,11 +2207,10 @@ const HalCore = (function () {
   }
 
   function buildSystemPrompt(halData, programContext) {
-    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const access = (halData && halData.programAccess) || {};
     const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
     const parts = [
-      "You are HAL, the local read-only program manager for NewRidgeFinancial 2.0, a dental-practice financial program.",
+      "You are HAL, the local program manager for NewRidgeFinancial 2.0, a dental-practice financial program.",
       cognitivePathwaysText(halData),
       topPriority ? `Top priority: ${topPriority}` : "Top priority: monitor the program, place correct data, and recommend next safe staff actions.",
       access.mode === "full-read"
@@ -2234,11 +2220,10 @@ const HalCore = (function () {
       "Never fabricate missing SoftDent, QuickBooks, A/R, claims, document, or library data; say what is missing and what staff should verify.",
       "SoftDent and QuickBooks are separate systems: SoftDent = practice ops (production, claims, verified dental A/R). QuickBooks = accounting GL (revenue, expenses, P&L). Never treat their totals as the same number.",
       humanVoicePromptLines(),
-      "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
       webResearchPromptLine(),
-      "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
-      "If the user asks for an external action, refuse and say it needs human review.",
-    ];
+    ].concat(consentPromptLines(halData)).concat([
+      "If the user asks for an outbound action, explain what you can prepare locally and ask for explicit consent before sending, posting, or delivering.",
+    ]);
     if (programContext) {
       parts.push("Current local program snapshot:", programContext);
     } else {
@@ -2254,7 +2239,6 @@ const HalCore = (function () {
   }
 
   function buildReasoningChatPrompt(halData, programContext) {
-    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
     const parts = [
       "You are HAL on the 24B reasoning lane for NewRidgeFinancial 2.0 — dental-practice financial program.",
@@ -2271,10 +2255,8 @@ const HalCore = (function () {
       "Give five to eight sentences when explaining — clear prose with evidence, not a telegram.",
       "Yes/no questions: lead with Yes or No, then explain why with real detail.",
       "Never open with Here is a structured plan unless they asked for a plan.",
-      "You are read-only. Never submit, email, fax, upload, post, or write back.",
       webResearchPromptLine(),
-      "Blocked: " + (firewall.blocked || []).join(", ") + ".",
-    ];
+    ].concat(consentPromptLines(halData));
     if (programContext) {
       parts.push("Current local program snapshot:", programContext);
     } else {
@@ -2284,7 +2266,6 @@ const HalCore = (function () {
   }
 
   function buildReasoningPrompt(halData, programContext) {
-    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const priorities = (halData.priorities && halData.priorities.items) || [];
     const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
     const parts = [
@@ -2295,10 +2276,8 @@ const HalCore = (function () {
       "Use accounting and Excel-style reasoning: verify source freshness, put imported rows in the correct financial/accounting context, reconcile totals and periods, sort or group what matters, and call out blanks or conflicts.",
       "Order work by readiness and risk: handle Needs Review and Blocked items carefully, and never advance payer-facing work without human review.",
       "Recommendations must say what data supports them and what data is still missing.",
-      "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
       webResearchPromptLine(),
-      "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
-    ];
+    ].concat(consentPromptLines(halData));
     if (programContext) {
       parts.push("Current local program snapshot:", programContext);
     } else {
@@ -2313,15 +2292,12 @@ const HalCore = (function () {
   }
 
   function buildEscalationPrompt(halData, programContext) {
-    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const parts = [
       "You are HAL's escalation lane for NewRidgeFinancial 2.0, a dental-practice financial program.",
       "Give a careful second-opinion review for a complex or high-risk question.",
       "Be conservative: call out risks, assumptions, and exactly what a human must verify before acting.",
-      "You are read-only. You never submit, email, fax, upload, post, or write back. A human performs any external step.",
       webResearchPromptLine(),
-      "Blocked external actions: " + (firewall.blocked || []).join(", ") + ".",
-    ];
+    ].concat(consentPromptLines(halData));
     if (programContext) {
       parts.push("Current local program snapshot:", programContext);
     } else {
@@ -2506,8 +2482,8 @@ const HalCore = (function () {
   function buildEvidencePacket(session, halData, halModels) {
     if (!session) return null;
     const reg = registryById(halData, session.targetPage);
-    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const cfg = packetConfig(halData);
+    const consent = consentPolicy(halData);
     const completedChecks = (session.checklist || []).filter((c) => c.done).map((c) => c.text);
     const remainingChecks = (session.checklist || []).filter((c) => !c.done).map((c) => c.text);
     const registryState = reg
@@ -2524,10 +2500,11 @@ const HalCore = (function () {
       verifyList: (session.verify || []).map(String),
       registryState,
       sourceFreshness: sourceFreshnessSummary(halData),
-      firewallReminder: "Blocked external actions: " + (firewall.blocked || []).join(", "),
+      consentReminder: consent.prompt || consent.summary,
+      firewallReminder: consent.prompt || consent.summary,
       handoffNote: session.handoffNote || null,
-      modelNote: halModels ? "Local model lanes only; firewall runs before every lane." : null,
-      disclaimer: cfg.disclaimer || "Draft only · read-only · human review required before any external action",
+      modelNote: halModels ? "Local model lanes only; consent required before outbound actions." : null,
+      disclaimer: cfg.disclaimer || "Draft only · staff consent required before any external delivery",
     };
     packet.text = formatEvidencePacketText(packet);
     return packet;
@@ -2547,9 +2524,9 @@ const HalCore = (function () {
     if (!Array.isArray(packet.verifyList)) errors.push("missing verifyList");
     if (!packet.registryState) errors.push("missing registryState");
     if (!packet.sourceFreshness) errors.push("missing sourceFreshness");
-    if (!packet.firewallReminder) errors.push("missing firewallReminder");
-    if (!packet.disclaimer || !/human review/i.test(packet.disclaimer)) {
-      errors.push("disclaimer must mention human review");
+    if (!packet.consentReminder && !packet.firewallReminder) errors.push("missing consentReminder");
+    if (!packet.disclaimer || !/consent|human review/i.test(packet.disclaimer)) {
+      errors.push("disclaimer must mention consent or human review");
     }
     if (!packet.text || !packet.text.includes(packet.sessionLabel)) {
       errors.push("packet text must include session label");
@@ -2665,19 +2642,14 @@ const HalCore = (function () {
       ),
     );
 
-    const firewallTrap = routeHalCommand(halData, halModels, pages, "submit the claim");
-    const firewallActive = isFirewallActive(halData, halModels);
+    const submitRoute = routeHalCommand(halData, halModels, pages, "submit the claim");
     results.push(
       readinessItem(
-        "firewall",
-        "External-action firewall",
-        !firewallActive || firewallTrap.intent === "blocked: firewall" ? "Pass" : "Fail",
-        !firewallActive
-          ? "Firewall disabled — external phrases route normally"
-          : firewallTrap.intent === "blocked: firewall"
-            ? "Submit/email/upload blocked before models"
-            : "Firewall did not block test verb",
-        firewallActive && firewallTrap.intent !== "blocked: firewall" ? "Review BLOCKED_RE in hal-core.js." : null,
+        "consent",
+        "Staff consent policy",
+        submitRoute.intent !== "blocked: firewall" ? "Pass" : "Fail",
+        consentPolicy(halData).summary,
+        submitRoute.intent === "blocked: firewall" ? "Remove firewall blocking from routeHalCommand." : null,
       ),
     );
 
@@ -2840,14 +2812,13 @@ const HalCore = (function () {
       ),
     );
 
-    const blocked = routeHalCommand(halData, halModels, pages, "submit the claim");
-    const fwActive = isFirewallActive(halData, halModels);
+    const submitRoute = routeHalCommand(halData, halModels, pages, "submit the claim");
     steps.push(
       smokeStep(
-        "firewall",
-        fwActive ? "Firewall blocks external action" : "Firewall disabled",
-        !fwActive || blocked.intent === "blocked: firewall" ? "Pass" : "Fail",
-        "Intent: " + blocked.intent,
+        "consent",
+        "Consent policy (no firewall block)",
+        submitRoute.intent !== "blocked: firewall" ? "Pass" : "Fail",
+        "Intent: " + submitRoute.intent,
       ),
     );
 
@@ -2901,7 +2872,7 @@ const HalCore = (function () {
       sources: sourcesStatus,
       reasoning: worst(byId.models || "Pass"),
       workSurfaces: worst(byId.sessions || "Pass", byId.packets || "Pass"),
-      firewall: worst(byId.firewall || "Pass"),
+      consent: worst(byId.consent || "Pass"),
       priorities: "Pass",
       status: report.overall,
       controls: report.overall,
@@ -3013,7 +2984,6 @@ const HalCore = (function () {
       .toLowerCase()
       .trim()
       .replace(/^hal[,:]\s+/, "");
-    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
 
     if (!opts.capabilityInner) {
       if (
@@ -3036,15 +3006,6 @@ const HalCore = (function () {
       if (english) return english;
       const capability = matchCapabilityRoute(halData, halModels, pages, rawQuery);
       if (capability) return capability;
-    }
-
-    if (isFirewallActive(halData, halModels) && checkFirewall(query)) {
-      return {
-        intent: "blocked: firewall",
-        lane: "firewall",
-        text: variedBlockedCapabilityReply(firewall, query, halData, halModels),
-        actions: [],
-      };
     }
 
     if (
@@ -3275,15 +3236,24 @@ const HalCore = (function () {
       return { intent: "priorities", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
     }
 
-    if (/\b(firewall|external action|boundary|guardrail|guardrails|safety)\b/.test(query)) {
-      const fwText = isFirewallActive(halData, halModels)
-        ? `${firewall.summary}\nBlocked: ${firewall.blocked.join(", ")}.\nAllowed: ${firewall.allowed.join(", ")}.`
-        : pickVariant([
-            "External-action firewall is off in this build, but HAL still has no outbound executors. Submit, email, upload, and post require staff outside the program. I navigate, explain imports, draft locally, and run readiness checks.",
-            "Firewall is disabled here — that does not add outbound powers. I stay read-only on SoftDent and QuickBooks; staff owns payer contact and ledger posting.",
-            "Guardrails are relaxed in config, not in practice: I still only navigate, explain, reconcile, and draft for staff review.",
-          ]);
-      return { intent: "firewall", lane: "local", text: fwText, actions: [] };
+    if (/\b(consent|consent policy|guardrail|guardrails|safety)\b/.test(query) || /\bfirewall\b/.test(query)) {
+      const cfg = consentPolicy(halData);
+      const policyText = pickVariant([
+        `${cfg.summary} ${cfg.prompt}`,
+        `No firewall — consent only. ${cfg.summary}`,
+        `${cfg.title}: ${(cfg.categories || []).join(", ")} require explicit consent before HAL acts.`,
+      ]);
+      return { intent: "consent", lane: "local", text: policyText, actions: [] };
+    }
+
+    if (/\bquickbooks online\b|\bqbo api\b|\bquickbooks api status\b/.test(query)) {
+      return {
+        intent: "integration:qbo-online",
+        lane: "local",
+        text:
+          "QuickBooks Online API direct post is optional. Set NR2_QBO_CLIENT_ID, NR2_QBO_CLIENT_SECRET, NR2_QBO_REALM_ID, and NR2_QBO_REFRESH_TOKEN to enable consent-gated API post. Until configured, use Export approved journal entries to QuickBooks IIF after consent — that path is live today.",
+        actions: [{ type: "openPage", page: "quickbooks", label: "Open QuickBooks" }],
+      };
     }
 
     if (
@@ -3485,7 +3455,10 @@ const HalCore = (function () {
   return {
     BLOCKED_RE,
     PAGE_SYNONYMS,
+    FALLBACK_CONSENT,
     FALLBACK_FIREWALL,
+    consentPolicy,
+    consentVerdict,
     registryList,
     registryById,
     registryByState,

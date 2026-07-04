@@ -6,6 +6,7 @@ const HalProactive = (function () {
   const TASK_PREFIX = "HAL: ";
   const CYCLE_MIN_MS = 5 * 60 * 1000;
   const PLACEMENT_TIMER_MS = 5 * 60 * 1000;
+  const BRIEFING_CHECK_MS = 60 * 1000;
   const MAX_RECOMMENDATIONS = 8;
   const AUTO_TASK_SEVERITIES = new Set(["critical", "warning"]);
 
@@ -13,6 +14,7 @@ const HalProactive = (function () {
   let lastBriefing = null;
   let lastPlacementAt = 0;
   let placementTimer = null;
+  let briefingTimer = null;
   let lastRefreshSignature = null;
 
   // Fingerprint of dataset statuses. When this is unchanged between cycles a
@@ -26,9 +28,11 @@ const HalProactive = (function () {
       .join("|");
   }
 
-  function hasDesktopApi() {
+  function hasRuntimeAccess() {
     const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : typeof window !== "undefined" ? window.DesktopBridge : null;
-    return Boolean(desktop && desktop.hasDesktopApi && desktop.hasDesktopApi());
+    if (!desktop) return false;
+    if (desktop.hasRuntimeAccess && desktop.hasRuntimeAccess()) return true;
+    return Boolean(desktop.hasDesktopApi && desktop.hasDesktopApi());
   }
 
   function needsAutonomousRefresh(diagnostics) {
@@ -46,7 +50,7 @@ const HalProactive = (function () {
 
   async function runAutonomousPlacement(ctx, diagnostics, options) {
     const force = options && options.force;
-    if (!hasDesktopApi()) {
+    if (!hasRuntimeAccess()) {
       return { placed: false, reason: "browser-only", refreshed: false };
     }
     const halData = (ctx && ctx.halData) || {};
@@ -98,7 +102,16 @@ const HalProactive = (function () {
       lastRefreshSignature = signature;
       return { placed: true, reason: "import-refresh-complete", refreshed: true };
     } catch (err) {
-      return { placed: false, reason: err && err.message ? err.message : "placement-failed", refreshed: false };
+      const failed = { placed: false, reason: err && err.message ? err.message : "placement-failed", refreshed: false };
+      if (
+        typeof ProgramStrength !== "undefined" &&
+        ProgramStrength.runAutonomousHealLoop &&
+        ctx &&
+        failed.reason === "placement-failed"
+      ) {
+        ProgramStrength.runAutonomousHealLoop(ctx).catch(() => {});
+      }
+      return failed;
     }
   }
 
@@ -623,6 +636,69 @@ const HalProactive = (function () {
     return briefing.programPosture === "needs_attention" || briefing.topAction.severity === "critical";
   }
 
+  function scheduledBriefingKey(kind, date) {
+    const d = date || new Date();
+    return `${kind}:${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  }
+
+  async function readScheduledBriefingKey() {
+    if (typeof DesktopBridge === "undefined" || !DesktopBridge.storageGet) return null;
+    try {
+      return await DesktopBridge.storageGet("halScheduledBriefingKey");
+    } catch {
+      return null;
+    }
+  }
+
+  async function writeScheduledBriefingKey(key) {
+    if (typeof DesktopBridge === "undefined" || !DesktopBridge.storageSet) return;
+    try {
+      await DesktopBridge.storageSet("halScheduledBriefingKey", key);
+    } catch {
+      /* optional */
+    }
+  }
+
+  function currentScheduledBriefingKind() {
+    const hour = new Date().getHours();
+    if (hour >= 7 && hour < 9) return "morning";
+    if (hour >= 17 && hour < 20) return "eod";
+    return null;
+  }
+
+  async function maybeFireScheduledBriefing(ctx, options) {
+    const kind = (options && options.scheduledKind) || currentScheduledBriefingKind();
+    if (!kind || !ctx) return null;
+    const key = scheduledBriefingKey(kind);
+    const last = await readScheduledBriefingKey();
+    if (last === key && !(options && options.force)) return null;
+    const briefing = await runCycle(ctx, {
+      force: true,
+      forcePlacement: kind === "morning",
+      scheduledKind: kind,
+      showScheduledNotice: true,
+    });
+    await writeScheduledBriefingKey(key);
+    if (briefing && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("nr2:scheduled-briefing", { detail: { kind, briefing } }));
+    }
+    return briefing;
+  }
+
+  function startBriefingScheduler(ctxProvider) {
+    if (briefingTimer || typeof window === "undefined") return;
+    briefingTimer = setInterval(() => {
+      const ctx = typeof ctxProvider === "function" ? ctxProvider() : ctxProvider;
+      if (ctx) maybeFireScheduledBriefing(ctx).catch(() => {});
+    }, BRIEFING_CHECK_MS);
+  }
+
+  function stopBriefingScheduler() {
+    if (!briefingTimer) return;
+    clearInterval(briefingTimer);
+    briefingTimer = null;
+  }
+
   return {
     TASK_PREFIX,
     CYCLE_MIN_MS,
@@ -635,6 +711,9 @@ const HalProactive = (function () {
     shouldSurfaceBanner,
     startPlacementTimer,
     stopPlacementTimer,
+    startBriefingScheduler,
+    stopBriefingScheduler,
+    maybeFireScheduledBriefing,
     needsAutonomousRefresh,
   };
 })();

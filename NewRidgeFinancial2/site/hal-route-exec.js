@@ -27,6 +27,12 @@ const HalRouteExec = (function () {
     );
   }
 
+  function hasRuntimeAccess(desktop) {
+    if (!desktop) return false;
+    if (desktop.hasRuntimeAccess && desktop.hasRuntimeAccess()) return true;
+    return Boolean(desktop.hasDesktopApi && desktop.hasDesktopApi());
+  }
+
   function extractRememberText(query) {
     const patterns = [
       /\bremember this[:.]?\s+(.+)$/i,
@@ -143,11 +149,11 @@ const HalRouteExec = (function () {
 
     if (result.usePracticeSourceCatalog) {
       const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
-      if (!desktop || !desktop.hasDesktopApi || !desktop.hasDesktopApi()) {
+      if (!hasRuntimeAccess(desktop)) {
         const message =
           desktop && desktop.desktopRequiredMessage
             ? desktop.desktopRequiredMessage("Direct QuickBooks and SoftDent source access")
-            : "Direct source access requires the NR2 desktop app.";
+            : "Direct source access requires the NR2 desktop app or loopback server.";
         return outcome(message, "sources", result.intent, [], { refreshHal: false });
       }
       let catalog = null;
@@ -209,11 +215,11 @@ const HalRouteExec = (function () {
 
     if (result.usePracticeSourceFetch) {
       const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
-      if (!desktop || !desktop.hasDesktopApi || !desktop.hasDesktopApi()) {
+      if (!hasRuntimeAccess(desktop)) {
         const message =
           desktop && desktop.desktopRequiredMessage
             ? desktop.desktopRequiredMessage("Direct QuickBooks and SoftDent source access")
-            : "Direct source access requires the NR2 desktop app.";
+            : "Direct source access requires the NR2 desktop app or loopback server.";
         return outcome(message, "sources", result.intent, [], { refreshHal: false });
       }
       const request = result.practiceSourceRequest || (HalSkills.resolvePracticeSourceRequest ? HalSkills.resolvePracticeSourceRequest(trimmed) : {});
@@ -235,11 +241,11 @@ const HalRouteExec = (function () {
 
     if (result.useImportRefresh || result.useImportStatus) {
       const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
-      if (!desktop || !desktop.hasDesktopApi || !desktop.hasDesktopApi()) {
+      if (!hasRuntimeAccess(desktop)) {
         const message =
           desktop && desktop.desktopRequiredMessage
             ? desktop.desktopRequiredMessage("Import status and refresh")
-            : "Import status and refresh require the NR2 desktop app. Browser mode is a UI preview only.";
+            : "Import status and refresh require the NR2 desktop app or loopback server.";
         return outcome(message, "imports", result.intent, [], { refreshHal: false });
       }
       const Svc = ctx.Services;
@@ -488,11 +494,11 @@ const HalRouteExec = (function () {
 
     if (result.useRememberMemory) {
       const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
-      if (!desktop || !desktop.hasDesktopApi || !desktop.hasDesktopApi()) {
+      if (!hasRuntimeAccess(desktop)) {
         const message =
           desktop && desktop.desktopRequiredMessage
             ? desktop.desktopRequiredMessage("Saving durable HAL learned facts")
-            : "Learning requires the NR2 desktop app.";
+            : "Learning requires the NR2 desktop app or loopback server.";
         return outcome(message, "memory", result.intent);
       }
       const wantsWeb = /\bweb\b/i.test(trimmed);

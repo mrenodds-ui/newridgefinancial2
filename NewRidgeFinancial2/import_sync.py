@@ -24,6 +24,7 @@ from import_contract import (
     SOFTDENT_CLAIMS_NAMES,
     SOFTDENT_CLINICAL_NAMES,
     SOFTDENT_DASHBOARD_NAMES,
+    SOFTDENT_HYGIENE_RECALL_NAMES,
     SOFTDENT_NEW_PATIENTS_NAMES,
     SOFTDENT_TREATMENT_PLANS_NAMES,
 )
@@ -777,6 +778,7 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
     result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_NEW_PATIENTS_NAMES))
     result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_TREATMENT_PLANS_NAMES))
     result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_CASE_ACCEPTANCE_NAMES))
+    result["softdent"]["copied"].extend(_sync_named_exports(softdent_external, softdent_dest, SOFTDENT_HYGIENE_RECALL_NAMES))
     pipeline = _sync_softdent_pipeline_exports(softdent_dest)
     result["softdent"]["generated"].extend(pipeline.get("written") or [])
     if pipeline.get("periodSync"):
@@ -855,6 +857,7 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
                 "newPatients": _load_dataset_for_diag(softdent_dest, SOFTDENT_NEW_PATIENTS_NAMES),
                 "treatmentPlans": _load_dataset_for_diag(softdent_dest, SOFTDENT_TREATMENT_PLANS_NAMES),
                 "caseAcceptance": _load_dataset_for_diag(softdent_dest, SOFTDENT_CASE_ACCEPTANCE_NAMES),
+                "hygieneRecall": _load_dataset_for_diag(softdent_dest, SOFTDENT_HYGIENE_RECALL_NAMES),
             },
             "quickbooks": {
                 "revenue": _load_dataset_for_diag(quickbooks_dest, QUICKBOOKS_REVENUE_NAMES),

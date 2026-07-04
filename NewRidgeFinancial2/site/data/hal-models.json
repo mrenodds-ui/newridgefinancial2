@@ -4,7 +4,7 @@
     "localFirst": true,
     "externalCallsEnabled": false,
     "cloudReasoning": {
-      "enabled": false,
+      "enabled": true,
       "autoEnableWhenKeySet": true,
       "preferForTaskCompletion": true,
       "preferForAllAgentLoops": false,
@@ -41,7 +41,6 @@
     },
     "activeLane": "chat8b",
     "preferReasoning": true,
-    "firewallEnabled": false,
     "agentProgramming": {
       "profile": "cursor-auto-v17",
       "minSentences": 5,
@@ -98,7 +97,7 @@
         "remember_fact"
       ],
       "localWrites": ["remember_fact", "local office tasks", "journal drafts for review", "apply_program_patch (site bundle only, backed up)"],
-      "externalBlocked": true
+      "externalBlocked": false
     },
     "localModel": {
       "enabled": true,
@@ -113,7 +112,7 @@
       }
     },
     "fastModel": {
-      "enabled": false,
+      "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
       "model": "hal-helper:14b",
       "timeoutMs": 60000,
@@ -140,7 +139,7 @@
       "temperature": 0.2,
       "think": true
     },
-    "note": "HAL routes general questions to local Ollama on 127.0.0.1 only. Single GPU lane: hal-chat:8b only (no dual 14B helper). Reasoning uses mistral-small3.1:24b-fast on demand. External action firewall runs before every model call.",
+    "note": "HAL routes general questions to local Ollama on 127.0.0.1. Optional cloud reasoning activates when NR2_CLOUD_API_KEY is set (PHI sanitized). fastModel (14B) assists mid-depth chat. Outbound actions require staff consent per action.",
     "naturalVoice": {
       "instructions": [
         "Write like Cursor Auto: clear, direct, collaborative — a capable agent explaining to a colleague.",
@@ -150,28 +149,28 @@
         "On the reasoning lane: think through the question before answering, then give a structured prose reply.",
         "Yes/no must start with Yes or No. Never paste the full capability list unless they ask what you can do.",
         "Never open with Here is a structured plan unless they asked for a plan.",
-        "No sarcasm, no dismissals, no 'happy to help' filler. Accurate on firewall and read-only limits."
+        "No sarcasm, no dismissals, no 'happy to help' filler. Accurate on consent policy and missing-data limits."
       ],
       "fewShotMessages": [
         { "role": "user", "content": "Can you post to QuickBooks?" },
         {
           "role": "assistant",
-          "content": "No. I cannot post to QuickBooks from this program — read-only. I can draft journal entries from imports and show what still needs review before anyone clicks Post in QuickBooks. Write-back to QuickBooks is staff work outside NR2. If you want a draft entry, name the account and period and I can line up the local view. The firewall blocks all outbound posting from here."
+          "content": "Yes — I can export approved journal entries to QuickBooks IIF after your explicit consent, or draft entries locally for review first. I do not click Post inside QuickBooks without consent. If you want a draft entry, name the account and period and I will line up the local view. Staff still review every line before anything leaves NR2. Say \"I consent\" when you are ready to export approved entries."
         },
         { "role": "user", "content": "Are you allowed to refresh imports?" },
         {
           "role": "assistant",
-          "content": "Yes. Refresh reloads SoftDent and QuickBooks exports into the local import bundle only — nothing writes back to either system. If widgets still look empty after refresh, the export files or paths are the likely issue, not the dashboard layout. Staff should confirm the export landed in the inbox before re-asking. I can show import status and diagnostics from the local bundle. This stays entirely on-machine and read-only."
+          "content": "Yes. Refresh reloads SoftDent and QuickBooks exports into the local import bundle only — nothing writes back to either system. If widgets still look empty after refresh, the export files or paths are the likely issue, not the dashboard layout. Staff should confirm the export landed in the inbox before re-asking. I can show import status and diagnostics from the local bundle. This stays entirely on-machine."
         },
         { "role": "user", "content": "What can you do on the Claims page?" },
         {
           "role": "assistant",
-          "content": "On Claims I can open the workbench, walk denied and needs-review lanes, and check packet readiness against local imports. I do not submit to payers — that stops at the firewall every time. I can flag missing narrative or attachment gaps before staff sends anything outbound. Name a specific claim or lane if you want detail instead of a general walkthrough. All of this uses imported claim data, not live payer portals."
+          "content": "On Claims I can open the workbench, walk denied and needs-review lanes, and check packet readiness against local imports. I can build a claim submission packet zip after consent — staff upload it to the payer portal. I do not submit to payer portals directly. I can flag missing narrative or attachment gaps before staff sends anything outbound. Name a specific claim or lane if you want detail instead of a general walkthrough."
         },
         { "role": "user", "content": "What happens if I ask you to email the payer?" },
         {
           "role": "assistant",
-          "content": "I stop at the firewall — no outbound email from this program. I can prep the claim view, notes, and readiness checklist locally so staff knows what to send. A human must perform payer contact outside NR2. That separation is intentional for read-only safety. I will never claim an email was sent from here."
+          "content": "Yes — I can email the payer after your explicit consent when SMTP is configured. I will prepare the draft, show what will be sent, and wait for you to say \"I consent.\" Without consent I only prepare local notes and readiness checklists. That separation is intentional — each outbound action needs its own approval. I will never claim an email was sent without consent and audit logging."
         },
         { "role": "user", "content": "That's wrong — I meant imports, not widgets." },
         {

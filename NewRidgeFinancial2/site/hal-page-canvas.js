@@ -244,14 +244,15 @@ const HalPageCanvas = (function () {
   function renderSession(ctx, H) {
     const stats = registryStats(ctx);
     const { halData, halInlineFirewallResult, halAudit } = ctx;
-    const blocked = ((halData && halData.firewall && halData.firewall.blocked) || []).slice(0, 4);
-    const allowedActions = (halData && halData.firewall && halData.firewall.allowed) || [];
-    const fwList = blocked
+    const consent = (halData && halData.consent) || {};
+    const categories = (consent.categories || []).slice(0, 4);
+    const consentList = categories
       .map((item) => {
-        const fwCmd = `Explain why "${item}" is blocked by the firewall`;
-        return `<li class="hp-fw__row--active" data-hal-cmd="${H.esc(fwCmd)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>BLOCKED</b></li>`;
+        const cmd = `Explain staff consent for ${item}`;
+        return `<li class="hp-fw__row--active" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>CONSENT</b></li>`;
       })
       .join("");
+    const localAlways = (consent.localAlways || []).slice(0, 5);
     const activity = (halAudit || []).slice(-5).reverse();
     const activityHtml = activity.length
       ? activity
@@ -269,11 +270,11 @@ const HalPageCanvas = (function () {
 
     return `<section class="hp-card hp-card--session" data-panel="session" style="grid-area:session;">
       <div class="hp-session-grid">
-        <div class="hp-session-col" data-panel="firewall">
-          ${H.cardHead("TRUST & FIREWALL", "firewall", "External action firewall", H.cardIconRaw("ui", "shield"))}
-          <button type="button" class="hp-fw__active hp-fw__active--btn" data-hal-cmd="Explain the external action firewall">${H.uiIcon("check")} ENFORCED</button>
-          <ul class="hp-fw__list hp-fw__list--compact">${fwList}</ul>
-          <p class="hp-fw__allowed"><b>Allowed:</b> ${allowedActions.length ? allowedActions.slice(0, 5).map(H.esc).join(" · ") : "Open pages · Explain status"}</p>
+        <div class="hp-session-col" data-panel="consent">
+          ${H.cardHead("TRUST & CONSENT", "consent", "Staff consent policy", H.cardIconRaw("ui", "shield"))}
+          <button type="button" class="hp-fw__active hp-fw__active--btn" data-hal-cmd="Explain staff consent policy">${H.uiIcon("check")} CONSENT</button>
+          <ul class="hp-fw__list hp-fw__list--compact">${consentList}</ul>
+          <p class="hp-fw__allowed"><b>Always local:</b> ${localAlways.length ? localAlways.slice(0, 5).map(H.esc).join(" · ") : "Open pages · Explain status"}</p>
           ${halInlineFirewallResult ? `<p class="hp-live-note">${H.esc(halInlineFirewallResult.text || "")}</p>` : ""}
         </div>
         <div class="hp-session-col" data-panel="status">

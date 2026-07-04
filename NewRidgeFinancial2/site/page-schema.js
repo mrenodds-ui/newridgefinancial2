@@ -3,7 +3,7 @@
  * Single source of truth for nav, page chrome, HAL commands, and widget inventory.
  */
 const PageSchema = (function () {
-  const SCHEMA_VERSION = "hal-156";
+  const SCHEMA_VERSION = "hal-160";
 
   const PRACTICE = {
     name: "New Ridge Family Dental",
@@ -88,6 +88,7 @@ const PageSchema = (function () {
         { key: "newPatients", title: "New Patients (MTD)" },
         { key: "treatmentPlanSummary", title: "Treatment Plans Presented" },
         { key: "caseAcceptance", title: "Case Acceptance Rate" },
+        { key: "hygieneRecall", title: "Hygiene & Recall" },
       ],
     },
     quickbooks: {
@@ -198,7 +199,7 @@ const PageSchema = (function () {
       accent: "yellow",
       filters: ["Today", "All departments", "Ridgefield"],
       commands: ["Show today's priorities", "Summarize open A/R", "Jump to billing"],
-      safety: "HAL office manager · Local tasks · External firewall locked",
+      safety: "HAL office manager · Local tasks · Consent before outbound actions",
       insight: {
         tone: "info",
         title: "Morning huddle at 8:30 AM",
@@ -222,7 +223,7 @@ const PageSchema = (function () {
         "Import status",
         "What needs review",
       ],
-      safety: "Local manager · Read-only · Direct-first imports · External firewall",
+      safety: "Local manager · Consent before outbound · Direct-first imports",
       widgets: [
         { key: "halAskHal", title: "Ask HAL" },
         { key: "halImportHealth", title: "Import & Source Health" },

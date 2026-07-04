@@ -51,6 +51,11 @@ const ImportLoader = (function () {
     "treatment_plan_summary.json",
   ];
   const SOFTDENT_CASE_ACCEPTANCE_NAMES = ["case_acceptance.csv", "softdent_case_acceptance.csv", "case_acceptance.json"];
+  const SOFTDENT_HYGIENE_RECALL_NAMES = [
+    "hygiene_recall_summary.csv",
+    "softdent_hygiene_recall.csv",
+    "hygiene_recall_summary.json",
+  ];
 
   function loadManifestDatasets() {
     if (!isNode) return null;
@@ -85,6 +90,7 @@ const ImportLoader = (function () {
   const MANIFEST_SOFTDENT_NEW_PATIENTS_NAMES = manifestFilenames("softdent.newPatients", SOFTDENT_NEW_PATIENTS_NAMES);
   const MANIFEST_SOFTDENT_TREATMENT_PLANS_NAMES = manifestFilenames("softdent.treatmentPlans", SOFTDENT_TREATMENT_PLANS_NAMES);
   const MANIFEST_SOFTDENT_CASE_ACCEPTANCE_NAMES = manifestFilenames("softdent.caseAcceptance", SOFTDENT_CASE_ACCEPTANCE_NAMES);
+  const MANIFEST_SOFTDENT_HYGIENE_RECALL_NAMES = manifestFilenames("softdent.hygieneRecall", SOFTDENT_HYGIENE_RECALL_NAMES);
 
   function bridge() {
     if (typeof DesktopBridge !== "undefined") return DesktopBridge;
@@ -93,7 +99,10 @@ const ImportLoader = (function () {
   }
 
   function shouldLoadImports() {
-    if (bridge() && bridge().hasDesktopApi && bridge().hasDesktopApi()) return true;
+    const br = bridge();
+    if (br && br.hasRuntimeAccess && br.hasRuntimeAccess()) return true;
+    if (br && br.hasDesktopApi && br.hasDesktopApi()) return true;
+    if (br && br.hasLoopbackApi && br.hasLoopbackApi()) return true;
     if (isNode && process.env.NR2_LOAD_IMPORTS === "1") return true;
     return false;
   }
@@ -356,6 +365,7 @@ const ImportLoader = (function () {
         newPatients: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_NEW_PATIENTS_NAMES, fs),
         treatmentPlans: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_TREATMENT_PLANS_NAMES, fs),
         caseAcceptance: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_CASE_ACCEPTANCE_NAMES, fs),
+        hygieneRecall: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_HYGIENE_RECALL_NAMES, fs),
       },
       quickbooks: {
         dir: REPO_IMPORT_QUICKBOOKS,
@@ -1617,18 +1627,21 @@ const ImportLoader = (function () {
     const npRows = (sd.newPatients && sd.newPatients.rows) || [];
     const tpRows = (sd.treatmentPlans && sd.treatmentPlans.rows) || [];
     const caRows = (sd.caseAcceptance && sd.caseAcceptance.rows) || [];
+    const hrRows = (sd.hygieneRecall && sd.hygieneRecall.rows) || [];
     const hasNp = npRows.length > 0;
     const hasTp = tpRows.length > 0;
     const hasCa = caRows.length > 0;
+    const hasHr = hrRows.length > 0;
     const emptyPractice = {
       pageId: "practice",
       dataSource: "empty",
-      configured: { newPatients: false, treatmentPlans: false, caseAcceptance: false },
+      configured: { newPatients: false, treatmentPlans: false, caseAcceptance: false, hygieneRecall: false },
       newPatients: { count: null, period: null, status: "Not Configured" },
       treatmentPlans: { presented: null, accepted: null, presentedValue: null, status: "Not Configured" },
       caseAcceptance: { rate: null, presented: null, accepted: null, status: "Not Configured" },
+      hygieneRecall: { completed: null, due: null, period: null, status: "Not Configured" },
     };
-    if (!hasNp && !hasTp && !hasCa) {
+    if (!hasNp && !hasTp && !hasCa && !hasHr) {
       return assignPatch(emptyDashboard("practice"), emptyPractice);
     }
     const npCount = hasNp
@@ -1646,11 +1659,16 @@ const ImportLoader = (function () {
       caAccepted = accepted;
       caRate = `${((accepted / presented) * 100).toFixed(1)}%`;
     }
+    const hrCompleted = hasHr
+      ? sumFieldRows(hrRows, ["HygieneCompleted", "hygieneCompleted", "Completed", "completed"])
+      : null;
+    const hrDue = hasHr ? sumFieldRows(hrRows, ["RecallDue", "recallDue", "Due", "due", "Overdue"]) : null;
+    const hrPeriod = hasHr ? String(pickField(hrRows[0], ["Period", "period", "Month", "month"]) || "—") : null;
     return assignPatch(emptyDashboard("practice"), {
       pageId: "practice",
       dataSource: "import",
       importedAt: bundle.loadedAt,
-      configured: { newPatients: hasNp, treatmentPlans: hasTp, caseAcceptance: hasCa || Boolean(caRate) },
+      configured: { newPatients: hasNp, treatmentPlans: hasTp, caseAcceptance: hasCa || Boolean(caRate), hygieneRecall: hasHr },
       newPatients: hasNp
         ? { count: npCount, period: npPeriod, status: "Connected" }
         : { count: null, period: null, status: "Not Configured" },
@@ -1671,6 +1689,14 @@ const ImportLoader = (function () {
               status: hasCa ? "Connected" : "Derived",
             }
           : { rate: null, presented: null, accepted: null, status: "Not Configured" },
+      hygieneRecall: hasHr
+        ? {
+            completed: hrCompleted,
+            due: hrDue,
+            period: hrPeriod,
+            status: "Connected",
+          }
+        : { completed: null, due: null, period: null, status: "Not Configured" },
     });
   }
 

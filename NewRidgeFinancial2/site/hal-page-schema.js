@@ -43,6 +43,7 @@ const HalPageSchema = (function () {
         { key: "newPatients", nav: "softdent" },
         { key: "treatmentPlanSummary", nav: "softdent" },
         { key: "caseAcceptance", nav: "softdent" },
+        { key: "hygieneRecall", nav: "softdent" },
       ],
     },
     {
@@ -94,7 +95,7 @@ const HalPageSchema = (function () {
     title: "HAL Command Center",
     subtitle: "Ask HAL · monitor widgets · open staff surfaces",
     accent: "gold",
-    safety: "Local manager · Read-only · Direct-first imports · External firewall",
+    safety: "Local manager · Consent before outbound · Direct-first imports",
     commands: ["Make a plan for today", "Show manager dashboard widgets", "Import status", "What needs review"],
     widgets: WIDGET_GROUPS.flatMap((g) => g.widgets).concat([{ key: "halAskHal" }, { key: "sidenotesProgram" }]),
   };

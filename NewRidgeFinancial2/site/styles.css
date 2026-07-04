@@ -76,6 +76,15 @@ body.nr2-desktop input:not([type="button"]):not([type="submit"]):not([type="chec
   font-size: 13px;
 }
 
+.runtime-banner--loopback {
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0.12), rgba(56, 189, 248, 0.1));
+  border-bottom-color: rgba(74, 222, 128, 0.35);
+}
+
+.runtime-banner--loopback strong {
+  color: var(--green);
+}
+
 .ops-health-banner {
   align-items: center;
   background: rgba(234, 179, 8, 0.14);

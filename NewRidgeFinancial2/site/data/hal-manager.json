@@ -104,8 +104,9 @@
   "programAccess": {
     "mode": "full-read",
     "scope": ["financial", "taxes", "softdent", "quickbooks", "ar", "claims", "narratives", "documents", "library", "office-manager", "hal"],
-    "writesBlocked": true,
-    "note": "HAL may read all local program pages and persisted service data to monitor, organize, analyze, and recommend. External and destructive actions remain blocked."
+    "writesBlocked": false,
+    "localWritesAllowed": true,
+    "note": "HAL may read all local program pages and persisted service data, refresh imports, pull practice sources (read-only), and write local SQLite/session state (tasks, narratives, memories). Outbound payer/QB/email actions still require staff outside NR2."
   },
   "practiceSourcePull": {
     "approved": true,
@@ -118,7 +119,7 @@
   },
   "askHal": {
     "title": "Ask HAL",
-    "summary": "HAL answers from the local program registry and full program snapshot using an agent loop: plan → local tools → answer → self-check. Its primary job is program monitoring, correct data placement, accounting/Excel-style analysis, and recommendations. HAL can also research public web reference material (sanitized practice queries — no PHI). Unmatched questions use the local GPU chat lane with tool-enriched context. Planning uses the reasoning lane; second-opinion uses escalation. The firewall runs before every model. Recent conversation and local preferences are remembered on this device.",
+    "summary": "HAL answers from the local program registry and full program snapshot using an agent loop: plan → local tools → answer → self-check. Its primary job is program monitoring, correct data placement, accounting/Excel-style analysis, and recommendations. HAL can also research public web reference material (sanitized practice queries — no PHI). Optional cloud reasoning activates when NR2_CLOUD_API_KEY is set. Outbound email, exports, and claim packets require explicit staff consent per action.",
     "suggestions": [
       "Monitor sidenotes",
       "Show sidenotes",
@@ -157,14 +158,14 @@
       "Second opinion on a complex case",
       "Open the claims workbench",
       "Review read-only source health",
-      "Explain the external action firewall",
+      "Explain the staff consent policy",
       "Are you connected to a model?",
       "Start claims review",
       "Show active session",
       "Build evidence packet",
       "Run readiness check"
     ],
-    "response": "I monitor the program, place the correct data in the right financial and accounting views, apply accounting and Excel-style review, and recommend next safe actions. I plan each question, run local tools, self-check my answer, and remember recent context on this device. I can navigate the program, explain each page, show full snapshots, show priorities, review source freshness, draft read-only work notes, build evidence packets, check claim readiness, draft journal-entry review notes, show widget-filling guidance, build owner briefings, reconcile imported tables, search the local library, research public web reference for practice operations (sanitized — no patient data sent), list tasks, monitor sidenotes, simulate the firewall, and report local AI model status. For other questions I use local model lanes on this machine; external actions still require human review.",
+    "response": "I monitor the program, place the correct data in the right financial and accounting views, apply accounting and Excel-style review, and recommend next safe actions. I plan each question, run local tools, self-check my answer, and remember recent context on this device. I can navigate the program, explain each page, show full snapshots, show priorities, review source freshness, draft work notes, build evidence and claim packets, check claim readiness, draft journal-entry review notes, export QuickBooks IIF after consent, email payers after consent, show widget-filling guidance, build owner briefings, reconcile imported tables, search the local library, research public web reference for practice operations (sanitized — no patient data sent), list tasks, monitor sidenotes, explain the consent policy, and report local AI model status. Optional cloud reasoning helps on hard questions when NR2_CLOUD_API_KEY is set.",
     "commandExamples": [
       "Open claims workbench",
       "Explain QuickBooks",
@@ -288,21 +289,21 @@
       }
     ]
   },
-  "firewall": {
-    "enabled": false,
-    "title": "External action firewall (disabled)",
-    "summary": "Firewall is off. HAL routes submit, email, post, and similar phrases through normal handlers instead of blocking them. Staff still perform outbound actions outside this program unless dedicated executors are wired.",
-    "blocked": ["No email", "No fax", "No upload", "No payer contact", "SoftDent read-only", "QuickBooks read-only", "No submission"],
-    "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information", "Draft a journal entry (local review only)", "Assess claim packet readiness", "Build office-manager attention list", "Create local office tasks", "Monitor local sidenotes", "Add local sidenotes", "Read QuickBooks and SoftDent directly (authorized practice employee, read-only)", "Research public web reference material for practice operations (sanitized queries, no PHI)"],
+  "consent": {
+    "required": true,
+    "title": "Staff consent policy",
+    "summary": "HAL may email, submit, post, fax, upload, or deliver externally only after explicit staff consent for that specific action. There is no firewall — consent is the only gate.",
+    "prompt": "I need your consent before I send, post, submit, or deliver anything externally.",
+    "categories": ["Email and payer contact", "Claim submission", "QuickBooks post", "SoftDent writeback", "Document upload"],
+    "localAlways": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Refresh imports", "Draft locally"],
     "examples": [
-      { "text": "Open the claims workbench", "expected": "allowed" },
-      { "text": "Explain A/R aging", "expected": "allowed" },
-      { "text": "Submit the denied claim", "expected": "allowed" },
-      { "text": "Email the payer about this claim", "expected": "allowed" },
-      { "text": "Upload the narrative to the portal", "expected": "allowed" },
-      { "text": "Post to QuickBooks", "expected": "allowed" },
-      { "text": "Write to SoftDent", "expected": "allowed" },
-      { "text": "Make a plan for today", "expected": "allowed" }
+      { "text": "Open the claims workbench", "expected": "local" },
+      { "text": "Explain A/R aging", "expected": "local" },
+      { "text": "Submit the denied claim", "expected": "consent-required" },
+      { "text": "Email the payer about this claim", "expected": "consent-required" },
+      { "text": "Upload the narrative to the portal", "expected": "consent-required" },
+      { "text": "Post to QuickBooks", "expected": "consent-required" },
+      { "text": "Make a plan for today", "expected": "local" }
     ]
   },
   "priorities": {
@@ -421,7 +422,7 @@
   "evidencePackets": {
     "title": "Local evidence packets",
     "summary": "Assemble a read-only review packet from the active work session. Packets stay in this browser only — copy text manually if needed; HAL never emails or uploads.",
-    "disclaimer": "Draft only · read-only · human review required before any external action",
+    "disclaimer": "Draft only · staff consent required before any external delivery",
     "fields": [
       "sessionLabel",
       "progress",
@@ -432,7 +433,7 @@
       "verifyList",
       "registryState",
       "sourceFreshness",
-      "firewallReminder",
+      "consentReminder",
       "handoffNote",
       "disclaimer"
     ],
@@ -465,7 +466,7 @@
       "Open a program page",
       "Start a work session",
       "Build evidence packet",
-      "Firewall blocks external action"
+      "Consent policy — no firewall block"
     ],
     "commands": {
       "smoke": "Run operator smoke test",
@@ -594,7 +595,7 @@
       "Second opinion on a complex case": "escalation",
       "Open the claims workbench": "navigate: claims",
       "Review read-only source health": "sources",
-      "Explain the external action firewall": "firewall",
+      "Explain staff consent policy": "consent",
       "Show full program snapshot": "program: snapshot",
       "Show office manager attention": "office: attention",
       "Check claim packet readiness": "claims: readiness",
@@ -621,16 +622,16 @@
       "Show my tasks": "tasks: list",
       "Are you connected to a model?": "model lanes"
     },
-    "firewallExamples": [
+    "consentExamples": [
       {
         "text": "Submit the denied claim",
-        "expected": "allowed",
-        "reason": "Firewall is off; submit phrases route through normal handlers instead of hard-blocking."
+        "expected": "consent-required",
+        "reason": "Outbound actions require explicit staff consent — no firewall block."
       },
       {
         "text": "Open claims workbench",
-        "expected": "allowed",
-        "reason": "Local navigation and read-only review inside NR2."
+        "expected": "local",
+        "reason": "Local navigation and review inside NR2."
       }
     ],
     "sessionRoutes": {

@@ -168,8 +168,8 @@ const HalAgent = (function () {
     rules: [
       "Apply metacognition: self-check every answer against tool results and missing-data rules before responding.",
       "Use mental time travel: compare required calendar months (current + prior) to loaded SoftDent/QuickBooks exports for trend and close widgets.",
-      "HAL is the internal office manager; outbound executors are not wired — do not claim email, post, or writeback was performed.",
-      "Sound like a capable Cursor-style agent: answer first, cite local evidence, name gaps, recommend one safe next step. At least five complete sentences. Accurate on missing data and read-only limits — helpful, never sarcastic.",
+      "HAL is the internal office manager. Outbound actions (email, IIF export, claim packets) run only after staff consent — do not claim they were performed without consent and audit logging.",
+      "Sound like a capable Cursor-style agent: answer first, cite local evidence, name gaps, recommend one safe next step. At least five complete sentences. Accurate on missing data and consent limits — helpful, never sarcastic.",
       "Never fabricate missing import data; say what is missing.",
       "Never claim an external action was performed.",
       "If data is stale or unavailable, say so before recommending.",
@@ -367,14 +367,21 @@ const HalAgent = (function () {
         }
       },
     },
-    explain_firewall: {
-      label: "Explain external-action firewall",
+    explain_consent: {
+      label: "Explain staff consent policy",
       run: async (ctx) => {
-        const fw = (ctx.halData && ctx.halData.firewall) || HalCore.FALLBACK_FIREWALL;
+        const cfg = HalCore.consentPolicy(ctx.halData);
         return {
           ok: true,
-          summary: `${fw.summary}\nBlocked: ${(fw.blocked || []).join(", ")}.\nAllowed: ${(fw.allowed || []).join(", ")}.`,
+          summary: `${cfg.summary}\nCategories: ${(cfg.categories || []).join(", ")}.`,
         };
+      },
+    },
+    explain_firewall: {
+      label: "Explain staff consent policy (legacy alias)",
+      run: async (ctx) => {
+        const cfg = HalCore.consentPolicy(ctx.halData);
+        return { ok: true, summary: cfg.summary };
       },
     },
     run_readiness_check: {
@@ -1140,21 +1147,8 @@ const HalAgent = (function () {
     if (ctx && ctx.halModels) syncAgentBudgetFromModels(ctx.halModels);
     const agentCfg = (ctx && ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
     const intent = route.intent || "";
-    const isUnsafe = intent === "blocked: firewall";
+    const isUnsafe = false;
     const tools = [];
-
-    if (isUnsafe) {
-      return {
-        questionType: "unsafe_external",
-        needsData: false,
-        tools: ["explain_firewall"],
-        isUnsafe: true,
-        useModelEnhancement: false,
-        needsClarification: false,
-        lane: route.lane,
-        intent,
-      };
-    }
 
     if (routeIsOperational(route)) {
       return {
@@ -1226,7 +1220,8 @@ const HalAgent = (function () {
     ) {
       tools.push("read_office_briefing");
     }
-    if (intent === "firewall" || /\bfirewall\b/i.test(query)) tools.push("explain_firewall");
+    if (intent === "consent" || /\bconsent\b/i.test(query)) tools.push("explain_consent");
+    if (intent === "firewall" || /\bfirewall\b/i.test(query)) tools.push("explain_consent");
     if (ctx && webResearchEnabled(ctx, query, route)) tools.push("research_web");
 
     if (agentCfg.cursorGather !== false) {
@@ -1462,10 +1457,10 @@ const HalAgent = (function () {
     const body = String(text || "").trim();
 
     if (!body) issues.push("empty_response");
-    if (plan.isUnsafe && !/human review|firewall|blocked|external|cannot|can't|will not/i.test(body)) {
+    if (plan.isUnsafe && !/consent|human review|confirmed|with your approval/i.test(body)) {
       issues.push("unsafe_not_refused");
     }
-    if (!plan.isUnsafe && /\b(I (submitted|sent|emailed|uploaded|posted|deleted|paid|wired|faxed))\b/i.test(body)) {
+    if (!plan.isUnsafe && /\b(I (submitted|sent|emailed|uploaded|posted|deleted|paid|wired|faxed))\b/i.test(body) && !/consent|confirmed|with your approval/i.test(body)) {
       issues.push("claimed_external_action");
     }
     if (plan.useModelEnhancement && body.length < 28) issues.push("too_short");
@@ -1512,11 +1507,11 @@ const HalAgent = (function () {
       repaired =
         typeof HalCore !== "undefined" && HalCore.variedBlockedCapabilityReply
           ? HalCore.variedBlockedCapabilityReply(fw, query)
-          : "That is an external action, so it stops at the firewall and needs human review. I can open the right page and prepare review notes, but a person must take the external step.";
+          : "That outbound action needs your explicit consent first. I can open the right page and prepare the delivery — confirm when you are ready.";
     } else if (issues.includes("claimed_external_action")) {
       repaired =
         body.replace(/\bI (submitted|sent|emailed|uploaded|posted|deleted|paid|wired|faxed)\b/gi, "A human must") +
-        "\n\n(Local draft only — external delivery requires human review.)";
+        "\n\n(Local draft only — external delivery requires your consent.)";
     } else if (
       issues.some((i) =>
         i === "too_long_chat" ||

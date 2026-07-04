@@ -84,7 +84,7 @@ function buildRoutingRegressionCases() {
   addMany(["What needs attention today?", "priorities today"], "priorities");
   addMany(["What is ready to work on", "ready pages"], "registry: ready");
   addMany(["What is blocked", "show blockers", "what is waiting"], "registry: blocked");
-  addMany(["firewall status", "what are the guardrails?"], "firewall");
+  addMany(["consent policy", "what are the guardrails?"], "consent");
   addMany(["Are you connected to a model?", "model lanes"], "model lanes");
   addMany(["source health", "source freshness"], "sources");
   addMany(["read-only areas", "review-only areas"], "registry: read-only");
@@ -195,24 +195,25 @@ async function main() {
   // JSON structure
   assert(halData.registry && halData.registry.length === 11, "registry must have 11 entries");
   assert(halData.sources.items.length === 4, "sources must have 4 items");
-  assert(halData.firewall.examples.length >= 4, "firewall examples required");
+  assert(halData.consent && halData.consent.examples.length >= 4, "consent examples required");
+  assert(halData.consent.required === true, "consent policy must be required");
   passed++;
 
-  // Firewall disabled — external phrases route through normal handlers
-  assert(halData.firewall.enabled === false || halModels.config.firewallEnabled === false, "firewall must be disabled in config");
+  // No firewall — outbound actions use consent policy
   const submitRoute = HalCore.routeHalCommand(halData, halModels, pages, "submit the claim");
-  assert(submitRoute.intent !== "blocked: firewall", "submit must not hit firewall block when disabled");
+  assert(submitRoute.intent !== "blocked: firewall", "submit must not hit firewall block");
   const emailRoute = HalCore.routeHalCommand(halData, halModels, pages, "emailing the payer");
-  assert(emailRoute.intent !== "blocked: firewall", "email must not hit firewall block when disabled");
+  assert(emailRoute.intent !== "blocked: firewall", "email must not hit firewall block");
   const escalateSubmit = HalCore.routeHalCommand(halData, halModels, pages, "escalate and submit the claim");
-  assert(escalateSubmit.intent !== "blocked: firewall", "escalation must not be blocked by firewall when disabled");
+  assert(escalateSubmit.intent !== "blocked: firewall", "escalation must not be blocked by firewall");
   passed++;
 
-  // Firewall simulator (disabled)
-  const allowed = HalCore.firewallVerdict("open claims workbench", halData.firewall, halData, halModels);
-  assert(allowed.allowed === true, "open claims should be allowed");
-  const uploadVerdict = HalCore.firewallVerdict("upload the narrative", halData.firewall, halData, halModels);
-  assert(uploadVerdict.allowed === true, "upload should be allowed when firewall is off");
+  // Consent checker
+  const allowed = HalCore.consentVerdict("open claims workbench", halData.consent, halData);
+  const uploadVerdict = HalCore.consentVerdict("upload the narrative", halData.consent, halData);
+  assert(uploadVerdict.allowed === true, "upload should be allowed pending consent");
+  const uploadNeedsConsent = uploadVerdict.intent === "consent: required";
+  assert(uploadNeedsConsent, "upload must flag consent required");
   passed++;
 
   // Suggestion routes from validation fixtures
@@ -307,8 +308,8 @@ async function main() {
   assert(readinessReport && readinessReport.results && readinessReport.results.length >= 6, "readiness must return checks");
   const registryCheck = readinessReport.results.find((item) => item.id === "registry");
   assert(registryCheck && registryCheck.status === "Pass", "registry readiness must pass");
-  const firewallCheck = readinessReport.results.find((item) => item.id === "firewall");
-  assert(firewallCheck && firewallCheck.status === "Pass", "firewall readiness must pass");
+  const consentCheck = readinessReport.results.find((item) => item.id === "consent");
+  assert(consentCheck && consentCheck.status === "Pass", "consent readiness must pass");
   const routesCheck = readinessReport.results.find((item) => item.id === "routes");
   assert(routesCheck && routesCheck.status === "Pass", "route fixture readiness must pass");
   const readinessRoutes = halData.validation.readinessRoutes || {};
@@ -362,7 +363,7 @@ async function main() {
   assert(handoff.includes("STAFF HANDOFF SUMMARY"), "handoff summary must format");
   assert(/human review/i.test(handoff), "handoff summary must mention human review");
   const health = HalCore.deriveDrawerHealth(halData, halModels, pages, readinessReport);
-  for (const key of ["askHal", "sources", "reasoning", "workSurfaces", "firewall", "priorities"]) {
+  for (const key of ["askHal", "sources", "reasoning", "workSurfaces", "consent", "priorities"]) {
     assert(["Pass", "Warning", "Fail"].includes(health[key]), `drawer health for ${key} must be valid, got ${health[key]}`);
   }
   const laneDetails = HalCore.modelLaneDetails(halModels);
@@ -513,7 +514,7 @@ async function main() {
   assert(halHtml.includes("Room 4"), "HAL page must render live SideNotesIM message senders");
   assert(halHtml.includes("LOCAL NOTES"), "HAL page must render the local notes section");
   assert(halHtml.includes("PROGRAM POSTURE"), "HAL page must surface program posture");
-  assert(halHtml.includes("TRUST & FIREWALL"), "HAL page must surface firewall policy");
+  assert(halHtml.includes("TRUST & CONSENT"), "HAL page must surface consent policy");
   assert(halHtml.includes("BLOCKED"), "HAL page must surface blocked actions");
   assert(halHtml.includes("Last receipt:"), "HAL page must surface the last local receipt");
   assert(halHtml.includes("direct-first") || halHtml.includes("Direct-first"), "HAL page must label direct-first import mode");
@@ -750,7 +751,7 @@ async function main() {
   const widgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show manager dashboard widgets");
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
-  assert(Object.keys(feed.widgets).length === 26, "widget feed must build 26 operational widgets");
+  assert(Object.keys(feed.widgets).length === 27, "widget feed must build 27 operational widgets");
   const masterChart = HalWidgetMasterChart.all();
   assert(masterChart.length === HalSkills.WIDGET_ORDER.length, "widget master chart must cover every HAL widget");
   assert(masterChart.every((row) => row.page && row.purpose && row.expectedData.length && row.readyWhen), "widget master chart rows must include page, purpose, expected data, and ready criteria");
@@ -1162,7 +1163,7 @@ async function main() {
   assert(gatherPlan.tools.includes("read_program_snapshot"), "cursor gather must include snapshot");
   const agentEmailRoute = HalCore.routeHalCommand(halData, halModels, pages, "email the payer");
   const emailPlan = HalAgent.buildPlan("email the payer", agentEmailRoute, HalAgent.getWorkingMemory(), HalAgent.getLongTermMemory());
-  assert(emailPlan.isUnsafe === false, "email query must not be flagged unsafe when firewall is off");
+  assert(emailPlan.isUnsafe === false, "email query must not be flagged unsafe");
   const selfOkPlan = HalAgent.buildPlan(
     "open claims workbench",
     HalCore.routeHalCommand(halData, halModels, pages, "open claims workbench"),
@@ -1186,7 +1187,7 @@ async function main() {
   );
   assert(selfBad.pass === false, "claimed external action must fail self-check");
   const helpRoute = HalCore.routeHalCommand(halData, halModels, pages, "what can you do?");
-  assert(helpRoute.text.includes("read-only"), "help text must describe read-only role");
+  assert(helpRoute.text.includes("consent") || helpRoute.text.includes("program manager"), "help text must describe HAL role");
   assert(helpRoute.text.length <= HalCore.CHAT_LIMITS.helpMax + 20, "help text must stay chat-sized");
   const pageCapRoute = HalCore.routeHalCommand(halData, halModels, pages, "What can you do on the QuickBooks page?");
   assert(pageCapRoute.intent === "capability:page-can", "page capability must not hit generic help");
@@ -1273,8 +1274,8 @@ async function main() {
     lane: "local",
   }, { halData, halModels });
   assert(HalCore.countSentences(readOnlyPolished) >= HalCore.MIN_REPLY_SENTENCES, "read-only reply must meet min sentences");
-  const transmitOff = HalCore.variedBlockedCapabilityReply(halData.firewall, "transmit the claim", halData, halModels);
-  assert(!/blocked by the firewall/i.test(transmitOff), "firewall-off blocked reply must not claim firewall block");
+  const transmitConsent = HalCore.variedBlockedCapabilityReply(null, "transmit the claim", halData);
+  assert(/consent/i.test(transmitConsent), "outbound reply must mention consent not firewall block");
   const engRandom = HalCore.matchEnglishVocabRoute("random english word", "random english word");
   assert(engRandom && engRandom.useEnglishRandom, "english random word route");
   const engSeed = HalCore.matchEnglishVocabRoute("seed english dictionary library", "seed english dictionary library");
@@ -1288,7 +1289,7 @@ async function main() {
   assert(HalEnglishVocab.lookupInSeed(seedMini, "ability").definition.includes("skill"), "dictionary lookup");
   passed++;
   const execHelp = await HalRouteExec.execute(helpRoute, "what can you do?", {}, mockCtx);
-  assert(execHelp && execHelp.text.includes("read-only"), "route exec must return help text");
+  assert(execHelp && /consent|program manager/i.test(execHelp.text), "route exec must return help text");
   passed++;
 
   // Structural stabilization guarantees
@@ -1428,10 +1429,15 @@ async function main() {
   global.window = global.window || {};
   global.DesktopBridge = Object.assign({}, DesktopBridge, {
     hasDesktopApi: () => false,
+    hasLoopbackApi: () => false,
+    hasRuntimeAccess: () => false,
     desktopRequiredMessage: (feature) => `${feature} requires the NR2 desktop app.`,
   });
   const browserImportExec = await HalRouteExec.execute(importRefreshRoute, "refresh imports", {}, Object.assign({}, mockCtx, { Services, ImportLoader }));
-  assert(browserImportExec.text.includes("requires the NR2 desktop app"), "HAL import route must clearly block browser-only refresh");
+  assert(
+    browserImportExec.text.includes("requires the NR2 desktop app") || browserImportExec.text.includes("loopback server"),
+    "HAL import route must clearly block browser-only refresh",
+  );
   global.DesktopBridge = priorDesktopBridge;
 
   // Financial automation contract and diagnostics
@@ -1580,6 +1586,8 @@ async function main() {
   const priorPlacementCoordinator = global.ImportCoordinator;
   global.DesktopBridge = {
     hasDesktopApi: () => true,
+    hasLoopbackApi: () => false,
+    hasRuntimeAccess: () => true,
   };
   global.ImportCoordinator = undefined;
   const placement = await HalProactive.runAutonomousPlacement(
@@ -1597,7 +1605,7 @@ async function main() {
     },
   );
   assert(placement.refreshed === true && halAutoRefreshCalled === true, "HAL proactive cycle must refresh stale automated datasets when desktop bridge is available");
-  global.DesktopBridge = { hasDesktopApi: () => false };
+  global.DesktopBridge = { hasDesktopApi: () => false, hasLoopbackApi: () => false, hasRuntimeAccess: () => false };
   const browserOnlyCycle = await HalProactive.runCycle(
     {
       halData,
@@ -1698,7 +1706,7 @@ async function main() {
     "hypothetical should fall through to model lane",
   );
   const pushCap = HalCore.matchCapabilityRoute(halData, halModels, pages, "Can you push this journal entry live?");
-  assert(pushCap && /^No\b/i.test(String(pushCap.text || "").trim()), "push live must explain no executor with No lead");
+  assert(pushCap && /^Yes\b/i.test(String(pushCap.text || "").trim()) && /consent/i.test(String(pushCap.text || "")), "push live must explain consent with Yes lead");
   const taxesCap = HalCore.matchCapabilityRoute(halData, halModels, pages, "What can you do on the Taxes page?");
   assert(taxesCap && taxesCap.intent === "capability:page-can", "Taxes page capability must resolve");
   const synth = HalAgent.synthesizeAnswerFromTools(

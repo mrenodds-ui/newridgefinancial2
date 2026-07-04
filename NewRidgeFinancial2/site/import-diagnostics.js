@@ -19,6 +19,7 @@ const ImportDiagnostics = (function () {
     "softdent.newPatients",
     "softdent.treatmentPlans",
     "softdent.caseAcceptance",
+    "softdent.hygieneRecall",
     "quickbooks.revenue",
     "quickbooks.profitAndLoss",
     "quickbooks.expenses",

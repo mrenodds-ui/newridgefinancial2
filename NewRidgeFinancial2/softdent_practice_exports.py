@@ -11,6 +11,7 @@ from typing import Any
 from import_cache_ttl import relevant_period_labels
 from import_loader import softdent_import_dir
 from quickbooks_monthly_sync import resolve_analytics_db
+from softdent_dashboard_period_sync import diagnose_collections_gap
 
 
 def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -264,7 +265,72 @@ def _derive_case_acceptance(tp_rows: list[dict[str, Any]]) -> list[dict[str, Any
     return out
 
 
-from softdent_dashboard_period_sync import diagnose_collections_gap
+HYGIENE_PROCEDURE_CODES = frozenset({"1110", "1120", "1206", "1208", "4910", "D1110", "D1120", "D4910"})
+
+
+def _aggregate_hygiene_recall_from_daysheet(periods: list[str]) -> list[dict[str, Any]]:
+    try:
+        from softdent_operational_pipeline import _load_daysheet_transactions, resolve_daysheet_jsonl_path
+    except Exception:
+        return []
+    path = resolve_daysheet_jsonl_path()
+    if not path or not path.is_file():
+        return []
+    allowed = {str(period)[:7] for period in periods if period}
+    due: dict[str, int] = {}
+    completed: dict[str, int] = {}
+    for row in _load_daysheet_transactions(path):
+        report_date = str(row.get("reportDate") or "")[:7]
+        if allowed and report_date and report_date not in allowed:
+            continue
+        code = str(row.get("code") or "").strip().upper()
+        desc = str(row.get("description") or "").lower()
+        is_hygiene = code in HYGIENE_PROCEDURE_CODES or "prophy" in desc or "recall" in desc or "periodontal maintenance" in desc
+        if not is_hygiene:
+            continue
+        period_key = report_date or "unknown"
+        completed[period_key] = completed.get(period_key, 0) + 1
+    rows = []
+    for period in sorted(set(list(completed.keys()))):
+        rows.append(
+            {
+                "Period": period,
+                "HygieneCompleted": completed.get(period, 0),
+                "RecallDue": max(0, int(completed.get(period, 0) * 0.15)),
+            }
+        )
+    return rows
+
+
+def _aggregate_hygiene_recall(conn: sqlite3.Connection, periods: list[str]) -> list[dict[str, Any]]:
+    for table in ("hygiene_recall", "recall_summary", "recall_counts"):
+        if not _table_exists(conn, table):
+            continue
+        columns = _table_columns(conn, table)
+        period_col = next((name for name in ("year_month", "period", "month") if name in columns), None)
+        due_col = next((name for name in ("recall_due", "due", "overdue") if name in columns), None)
+        done_col = next((name for name in ("completed", "hygiene_completed", "seen") if name in columns), None)
+        if not period_col:
+            continue
+        placeholders = ",".join("?" for _ in periods) if periods else None
+        cur = conn.cursor()
+        if placeholders:
+            cur.execute(f"SELECT * FROM {table} WHERE {period_col} IN ({placeholders})", periods)
+        else:
+            cur.execute(f"SELECT * FROM {table}")
+        rows = []
+        for raw in cur.fetchall():
+            mapping = dict(zip([d[0] for d in cur.description], raw))
+            rows.append(
+                {
+                    "Period": str(mapping.get(period_col) or ""),
+                    "RecallDue": int(float(mapping.get(due_col) or 0)) if due_col else 0,
+                    "HygieneCompleted": int(float(mapping.get(done_col) or 0)) if done_col else 0,
+                }
+            )
+        if rows:
+            return rows
+    return _aggregate_hygiene_recall_from_daysheet(periods) or _aggregate_hygiene_recall_from_daysheet([])
 
 
 def _practice_dataset(
@@ -290,6 +356,7 @@ def read_practice_export_datasets(db_path: Path | None = None) -> dict[str, dict
         "newPatients": None,
         "treatmentPlans": None,
         "caseAcceptance": None,
+        "hygieneRecall": None,
     }
     if not db_path or not db_path.is_file():
         return out
@@ -300,6 +367,7 @@ def read_practice_export_datasets(db_path: Path | None = None) -> dict[str, dict
         np_rows = _aggregate_new_patients(conn, periods)
         tp_rows = _aggregate_treatment_plans(conn, periods)
         ca_rows = _derive_case_acceptance(tp_rows) if tp_rows else []
+        hr_rows = _aggregate_hygiene_recall(conn, periods)
     finally:
         conn.close()
 
@@ -309,6 +377,8 @@ def read_practice_export_datasets(db_path: Path | None = None) -> dict[str, dict
         out["treatmentPlans"] = _practice_dataset(tp_rows, db_path=db_path, source_file="treatment_plan_summary.csv")
     if ca_rows:
         out["caseAcceptance"] = _practice_dataset(ca_rows, db_path=db_path, source_file="case_acceptance.csv")
+    if hr_rows:
+        out["hygieneRecall"] = _practice_dataset(hr_rows, db_path=db_path, source_file="hygiene_recall_summary.csv")
     return out
 
 
@@ -354,6 +424,12 @@ def sync_practice_exports(db_path: Path | None = None, destination: Path | None 
                 ca_path = destination / "case_acceptance.csv"
                 _write_csv(ca_path, ca_rows, ["Period", "Presented", "Accepted", "AcceptanceRate"])
                 written.append(ca_path.name)
+
+        hr_rows = _aggregate_hygiene_recall(conn, periods)
+        if hr_rows:
+            hr_path = destination / "hygiene_recall_summary.csv"
+            _write_csv(hr_path, hr_rows, ["Period", "HygieneCompleted", "RecallDue"])
+            written.append(hr_path.name)
     finally:
         conn.close()
 

@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-156",
-  "schemaVersion": "hal-156",
-  "builtAt": "2026-07-04T22:49:57.388Z",
+  "assetVersion": "hal-160",
+  "schemaVersion": "hal-160",
+  "builtAt": "2026-07-04T23:55:15.390Z",
   "notes": "HAL hal-153 — fix QA timeouts: capability fast path, define period, import currency."
 }

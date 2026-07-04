@@ -512,12 +512,15 @@ const HalSkills = (function () {
       }
     }
 
-    // Honest "no live source" items, mirroring the legacy backend.
+    const practice = snap.dashboards && snap.dashboards.practice;
+    const hasTp = practice && practice.configured && practice.configured.treatmentPlans;
+    const hasHr = practice && practice.configured && practice.configured.hygieneRecall;
     [
-      ["treatment-plan-unavailable", "treatment_plan", "Treatment plan follow-up is limited", "No approved treatment-plan export source is available yet.", "missing_treatment_plan_export"],
-      ["hygiene-recall-unavailable", "hygiene_recall", "Hygiene and recall follow-up is limited", "No approved recall or hygiene export source is available yet.", "missing_hygiene_recall_export"],
-      ["vendor-tracker-local-only", "vendor", "Vendor and software issues are local-only", "Vendor/software issue tracking uses local records in this app only.", "missing_vendor_tracker_source"],
-    ].forEach(([id, category, title, detail, code]) => {
+      ["treatment-plan-unavailable", "treatment_plan", "Treatment plan follow-up is limited", "No approved treatment-plan export source is available yet.", "missing_treatment_plan_export", () => !hasTp],
+      ["hygiene-recall-unavailable", "hygiene_recall", "Hygiene and recall follow-up is limited", "No approved recall or hygiene export source is available yet.", "missing_hygiene_recall_export", () => !hasHr],
+      ["vendor-tracker-local-only", "vendor", "Vendor and software issues are local-only", "Vendor/software issue tracking uses local records in this app only.", "missing_vendor_tracker_source", () => true],
+    ].forEach(([id, category, title, detail, code, include]) => {
+      if (typeof include === "function" && !include()) return;
       missingCodes.add(code);
       items.push({ itemId: id, category, severity: "info", title, detail, actionHint: "Use local office tasks until a real export source is approved.", missingDataCodes: [code] });
     });
@@ -1294,6 +1297,7 @@ const HalSkills = (function () {
     newPatients: "softdent",
     treatmentPlanSummary: "softdent",
     caseAcceptance: "softdent",
+    hygieneRecall: "softdent",
     arAgingAndCollections: "ar",
     arOutstandingClaims: "ar",
     narrativeWorkflow: "narratives",
@@ -1328,6 +1332,7 @@ const HalSkills = (function () {
     "newPatients",
     "treatmentPlanSummary",
     "caseAcceptance",
+    "hygieneRecall",
     "narrativeWorkflow",
     "documentLibrary",
     "halAskHal",
@@ -1357,6 +1362,7 @@ const HalSkills = (function () {
     newPatients: ["SoftDent new patient export (analytics sync via softdent_practice_exports.py when tables exist)"],
     treatmentPlanSummary: ["SoftDent treatment_plan_summary.csv (analytics sync via softdent_practice_exports.py when tables exist)"],
     caseAcceptance: ["SoftDent case acceptance export or derived treatment plan summary"],
+    hygieneRecall: ["SoftDent hygiene_recall_summary.csv (analytics sync via softdent_practice_exports.py when tables exist)"],
     narrativeWorkflow: ["Local narrative drafts or claim source facts from SoftDent claims"],
     documentLibrary: ["Local library documents or indexed document metadata"],
     halImportHealth: ["Import bundle diagnostics", "SoftDent and QuickBooks dataset contracts"],
@@ -1892,6 +1898,12 @@ const HalSkills = (function () {
       practiceConfigured.caseAcceptance ? practiceStatus : "FAILED",
       "Case acceptance rate from SoftDent when an export is configured or derived from treatment plans.",
     );
+    const hygieneRecallWidget = buildContractWidget(
+      "hygieneRecall",
+      contractCtx,
+      practiceConfigured.hygieneRecall ? practiceStatus : "FAILED",
+      "Hygiene completed and recall due counts from SoftDent when hygiene_recall_summary export is configured.",
+    );
     const monthlyRevenue = overviewWidget
       ? overviewWidget.metrics.monthlyRevenue
       : metricValue(qb.revenue);
@@ -2246,6 +2258,18 @@ const HalSkills = (function () {
           presentedCount: "Not Configured",
         },
       },
+      hygieneRecall: hygieneRecallWidget || {
+        key: "hygieneRecall",
+        title: "Hygiene & Recall",
+        status: "FAILED",
+        summary: "Hygiene completed and recall due from SoftDent when hygiene_recall_summary export is configured.",
+        navTarget: WIDGET_NAV.hygieneRecall,
+        metrics: {
+          hygieneCompleted: "Not Configured",
+          recallDue: "Not Configured",
+          period: "Not Configured",
+        },
+      },
       narrativeWorkflow: {
         key: "narrativeWorkflow",
         title: "Insurance Narrative Workflow",
@@ -2286,14 +2310,23 @@ const HalSkills = (function () {
       sidenotesProgram: {
         key: "sidenotesProgram",
         title: "SideNotes Program",
-        status: snap.sidenotesInbox && snap.sidenotesInbox.monitor ? "DEGRADED" : "FAILED",
+        status: (() => {
+          const inbox = snap.sidenotesInbox;
+          const stations = inbox && inbox.monitor && inbox.monitor.stations;
+          if (Array.isArray(stations) && stations.some((s) => s && s.live)) return "SUCCESS";
+          if (inbox && inbox.monitor) return "DEGRADED";
+          if (snap.sidenotesHubPath || (inbox && Array.isArray(inbox.items) && inbox.items.length)) return "DEGRADED";
+          return "FAILED";
+        })(),
         summary: "SideNotesIM workstation routing — HAL announces sender metadata only; message text is never read aloud.",
         navTarget: "hal",
         metrics: {
           watchersOnline: metricValue(
             snap.sidenotesInbox && snap.sidenotesInbox.monitor && snap.sidenotesInbox.monitor.stations
               ? snap.sidenotesInbox.monitor.stations.filter((s) => s.live).length
-              : null,
+              : snap.sidenotesHubPath
+                ? 1
+                : null,
           ),
         },
       },
@@ -2607,6 +2640,7 @@ const HalSkills = (function () {
     newPatients: ["softdent.newPatients"],
     treatmentPlanSummary: ["softdent.treatmentPlans"],
     caseAcceptance: ["softdent.caseAcceptance"],
+    hygieneRecall: ["softdent.hygieneRecall"],
     narrativeWorkflow: ["local:narratives", "softdent.claims"],
     documentLibrary: ["local:library"],
   };

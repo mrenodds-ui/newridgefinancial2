@@ -31,7 +31,7 @@ const FALLBACK_HAL = {
   sources: { title: "Sources", summary: "Read-only.", items: [] },
   reasoning: { title: "Reasoning", summary: "Local lanes.", actions: [] },
   workSurfaces: { title: "Work surfaces", summary: "Open pages.", items: [] },
-  firewall: { title: "Firewall", summary: "External-action firewall is off.", blocked: [], allowed: [], examples: [] },
+  consent: { title: "Consent", summary: "Staff consent required before outbound actions.", categories: [], examples: [] },
   priorities: { title: "Priorities", items: [] },
   registry: [],
 };
@@ -63,7 +63,9 @@ function persistLocal(key, value) {
 }
 
 function isDesktopMode() {
-  return Boolean(window.DesktopBridge && DesktopBridge.hasDesktopApi && DesktopBridge.hasDesktopApi());
+  const bridge = window.DesktopBridge;
+  if (bridge && bridge.hasRuntimeAccess && bridge.hasRuntimeAccess()) return true;
+  return Boolean(bridge && bridge.hasDesktopApi && bridge.hasDesktopApi());
 }
 
 function desktopRequiredMessage(feature) {
@@ -79,6 +81,8 @@ function renderRuntimeModeBanner() {
     if (existing) existing.remove();
     return;
   }
+  const bridge = window.DesktopBridge;
+  const loopbackOnly = bridge && bridge.hasLoopbackApi && bridge.hasLoopbackApi() && !(bridge.hasDesktopApi && bridge.hasDesktopApi());
   let banner = document.getElementById("runtimeModeBanner");
   if (!banner) {
     banner = document.createElement("div");
@@ -86,6 +90,15 @@ function renderRuntimeModeBanner() {
     banner.className = "runtime-banner";
     document.body.prepend(banner);
   }
+  if (loopbackOnly) {
+    banner.className = "runtime-banner runtime-banner--loopback";
+    banner.innerHTML = `
+      <strong>Loopback mode</strong>
+      <span>HAL has full local data access via the NR2 server. Pywebview shell features (clipboard, agent patch tools) need Start Program.</span>
+    `;
+    return;
+  }
+  banner.className = "runtime-banner";
   banner.innerHTML = `
     <strong>Browser preview mode</strong>
     <span>${escapeHtml(desktopRequiredMessage("Full NR2 data access"))}</span>
@@ -138,6 +151,13 @@ async function runHalProactiveCycle(options) {
       });
     }
     renderProactiveBanner();
+    if (options && options.showBootNotice && halProactiveBriefing && halProactiveBriefing.headline) {
+      showHalActionNotice(`HAL briefing: ${halProactiveBriefing.headline}`, "info");
+    }
+    if (options && options.showScheduledNotice && halProactiveBriefing && halProactiveBriefing.headline) {
+      const label = options.scheduledKind === "eod" ? "End-of-day" : "Morning";
+      showHalActionNotice(`${label} briefing: ${halProactiveBriefing.headline}`, "info");
+    }
     if (currentDrawerKey === "priorities") renderPanel("priorities");
     return halProactiveBriefing;
   } catch {
@@ -988,6 +1008,8 @@ async function refreshHalWidgetFeed(snapshot) {
     halProgramSnapshot = null;
     return null;
   }
+  snap.sidenotesInbox = halSideNotesInbox || null;
+  snap.sidenotesHubPath = nr2SidenotesHubPath || null;
   halProgramSnapshot = snap;
   halWidgetFeed = HalSkills.buildWidgetFeed(snap);
   halData.runtime = Object.assign({}, halData.runtime || {}, { widgetFeed: halWidgetFeed });
@@ -1801,13 +1823,14 @@ function renderFollowUpChipsHtml(chips) {
   return `<div class="hal-msg__followups hp-chips">${chips
     .map((c) => {
       const label = escapeHtml(c.label);
+      const consentAttr = c.consent ? ' data-hal-consent="1"' : c.cancel ? ' data-hal-cancel="1"' : "";
       if (c.action && c.action.type === "openPage" && c.action.page) {
-        return `<button type="button" class="hp-chip hp-chip--action" data-hal-action="openPage" data-open-page="${escapeHtml(c.action.page)}" data-hal-followup="${escapeHtml(c.query || c.label)}">${label}</button>`;
+        return `<button type="button" class="hp-chip hp-chip--action" data-hal-action="openPage" data-open-page="${escapeHtml(c.action.page)}" data-hal-followup="${escapeHtml(c.query || c.label)}"${consentAttr}>${label}</button>`;
       }
       if (c.action && c.action.type === "refreshImports") {
-        return `<button type="button" class="hp-chip hp-chip--action" data-hal-action="refreshImports" data-hal-followup="Refresh imports">${label}</button>`;
+        return `<button type="button" class="hp-chip hp-chip--action" data-hal-action="refreshImports" data-hal-followup="Refresh imports"${consentAttr}>${label}</button>`;
       }
-      return `<button type="button" class="hp-chip" data-hal-followup="${escapeHtml(c.query || c.label)}">${label}</button>`;
+      return `<button type="button" class="hp-chip${c.consent ? " hp-chip--action" : ""}" data-hal-followup="${escapeHtml(c.query || c.label)}"${consentAttr}>${label}</button>`;
     })
     .join("")}</div>`;
 }
@@ -1898,6 +1921,14 @@ function renderChatLog() {
       }
       if (action === "refreshImports") {
         handleHalSubmit("Refresh imports");
+        return;
+      }
+      if (button.hasAttribute("data-hal-consent")) {
+        executeHalConsentAction(button.getAttribute("data-hal-followup") || "I consent");
+        return;
+      }
+      if (button.hasAttribute("data-hal-cancel")) {
+        handleHalSubmit("Cancel");
         return;
       }
       handleHalSubmit(button.getAttribute("data-hal-followup"));
@@ -2072,9 +2103,66 @@ function buildHalAgentCtx(extras) {
   }, extras || {});
 }
 
+async function executeHalConsentAction(consentText) {
+  const pending = window.HalConsent ? await HalConsent.loadPending() : null;
+  if (!pending || !window.HalOutbound) {
+    halChatHistory.push({
+      role: "hal",
+      text: "No pending outbound action to execute. Ask HAL to email, export, or post first.",
+      lane: "local",
+      actions: [],
+    });
+    return;
+  }
+  try {
+    const result = await HalOutbound.executePending(pending, consentText);
+    HalConsent.clearPending();
+    const actions = [];
+    if (result && result.exportPath) {
+      actions.push({ type: "openPage", page: "quickbooks", label: "Open QuickBooks page" });
+    }
+    halChatHistory.push({
+      role: "hal",
+      text: HalOutbound.formatResult(result),
+      lane: "local",
+      intent: "outbound:executed",
+      actions,
+    });
+    logAudit(consentText, "outbound:executed");
+  } catch (error) {
+    const detail = error && error.message ? error.message : String(error);
+    halChatHistory.push({ role: "hal", text: `Outbound action failed: ${detail}`, lane: "error", actions: [] });
+    logAudit(consentText, "outbound:error");
+  }
+}
+
 async function handleHalSubmit(query) {
   const trimmed = String(query).trim();
   if (!trimmed) return;
+
+  if (window.HalConsent) {
+    await HalConsent.loadPending();
+    if (HalConsent.isCancelPhrase(trimmed)) {
+      HalConsent.clearPending();
+      halChatHistory.push({ role: "user", text: trimmed, actions: [] });
+      halChatHistory.push({ role: "hal", text: "Cancelled the pending outbound action.", lane: "local", actions: [] });
+      saveChatHistory();
+      renderChatLog();
+      return;
+    }
+    if (HalConsent.isConsentPhrase(trimmed)) {
+      halAskLoading = true;
+      halChatHistory.push({ role: "user", text: trimmed, actions: [] });
+      renderHalScreen();
+      renderChatLog();
+      await executeHalConsentAction(trimmed);
+      halAskLoading = false;
+      saveChatHistory();
+      renderChatLog();
+      renderHalScreen();
+      return;
+    }
+  }
 
   if (halModelAbortController) halModelAbortController.abort();
   halModelAbortController = new AbortController();
@@ -2161,6 +2249,18 @@ async function handleHalSubmit(query) {
         intent: "error",
         actions: [],
       };
+    }
+
+    if (window.HalConsent) {
+      const intent = String(outcome.intent || "");
+      const needsConsent =
+        /consent-required|consent:\s*required|capability:consent/i.test(intent) ||
+        (HalConsent.outboundKind(trimmed, intent) && /consent|outbound|email|quickbooks|post|submit/i.test(String(outcome.text || "")));
+      if (needsConsent) {
+        const pending = HalConsent.createPendingFromQuery(trimmed, intent, { draftBody: outcome.text });
+        outcome.text = HalConsent.wrapReplyWithConsent(outcome.text, pending);
+        outcome.followUpChips = HalConsent.followUpChips(pending);
+      }
     }
 
     if (placeholder) {
@@ -2397,27 +2497,34 @@ function workSurfacePanel(items) {
     .join("")}</div>`;
 }
 
-function firewallPanel(data) {
-  const examples = (data.examples || [])
+function consentPanel(data) {
+  const cfg = data || {};
+  const examples = (cfg.examples || [])
     .map(
       (ex) =>
-        `<button class="status-chip hal-suggest__chip" type="button" data-firewall-test="${escapeHtml(ex.text)}">${escapeHtml(ex.text)}</button>`,
+        `<button class="status-chip hal-suggest__chip" type="button" data-consent-test="${escapeHtml(ex.text)}">${escapeHtml(ex.text)}</button>`,
     )
     .join("");
+  const categories = (cfg.categories || [])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
   return `
-    <p>${escapeHtml(data.summary)}</p>
-    <div><strong>Blocked</strong>${chips(data.blocked, true)}</div>
-    <div><strong>Allowed</strong>${chips(data.allowed)}</div>
+    <p>${escapeHtml(cfg.summary || "Staff consent required before outbound actions.")}</p>
+    ${categories ? `<div><strong>Consent categories</strong><ul class="drawer-list">${categories}</ul></div>` : ""}
     <div class="drawer-section">
-      <h3 class="drawer-section__title">Firewall simulator</h3>
-      <p class="drawer-meta">Type a proposed action. With the firewall off, HAL routes the phrase through normal handlers instead of blocking it.</p>
-      <form class="hal-chat__form" id="firewallSimForm" autocomplete="off">
-        <input id="firewallSimInput" class="hal-chat__input" type="text" placeholder="e.g. Submit the denied claim" aria-label="Test firewall" />
-        <button class="hal-chat__send" type="submit">Test</button>
+      <h3 class="drawer-section__title">Consent checker</h3>
+      <p class="drawer-meta">Type a proposed action. Outbound delivery requires your explicit consent — nothing is blocked by a firewall.</p>
+      <form class="hal-chat__form" id="consentSimForm" autocomplete="off">
+        <input id="consentSimInput" class="hal-chat__input" type="text" placeholder="e.g. Email the payer about this claim" aria-label="Test consent policy" />
+        <button class="hal-chat__send" type="submit">Check</button>
       </form>
-      <div class="drawer-card" id="firewallSimResult">Enter an action above to test.</div>
+      <div class="drawer-card" id="consentSimResult">Enter an action above to check.</div>
       <div class="hal-suggest">${examples}</div>
     </div>`;
+}
+
+function firewallPanel(data) {
+  return consentPanel(data);
 }
 
 function proactiveBriefingPanelHtml() {
@@ -2622,23 +2729,24 @@ function renderPanel(key) {
     return;
   }
 
-  if (key === "firewall") {
-    drawerContent.innerHTML = firewallPanel(data);
-    const form = document.getElementById("firewallSimForm");
-    const input = document.getElementById("firewallSimInput");
-    const result = document.getElementById("firewallSimResult");
+  if (key === "consent" || key === "firewall") {
+    const consentData = halData.consent || data || {};
+    drawerContent.innerHTML = consentPanel(consentData);
+    const form = document.getElementById("consentSimForm");
+    const input = document.getElementById("consentSimInput");
+    const result = document.getElementById("consentSimResult");
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      const verdict = HalCore.firewallVerdict(input.value, data, halData, halModels);
-      result.innerHTML = `<strong>${verdict.allowed ? "Allowed" : "Blocked"}</strong><p>${escapeHtml(verdict.text)}</p>`;
+      const verdict = HalCore.consentVerdict(input.value, consentData, halData);
+      result.innerHTML = `<strong>${verdict.intent === "consent: required" ? "Consent required" : "Local OK"}</strong><p>${escapeHtml(verdict.text)}</p>`;
       logAudit(input.value, verdict.intent);
       renderAuditLog();
     });
-    drawerContent.querySelectorAll("[data-firewall-test]").forEach((button) => {
+    drawerContent.querySelectorAll("[data-consent-test]").forEach((button) => {
       button.addEventListener("click", () => {
-        input.value = button.dataset.firewallTest;
-        const verdict = HalCore.firewallVerdict(input.value, data, halData, halModels);
-        result.innerHTML = `<strong>${verdict.allowed ? "Allowed" : "Blocked"}</strong><p>${escapeHtml(verdict.text)}</p>`;
+        input.value = button.dataset.consentTest;
+        const verdict = HalCore.consentVerdict(input.value, consentData, halData);
+        result.innerHTML = `<strong>${verdict.intent === "consent: required" ? "Consent required" : "Local OK"}</strong><p>${escapeHtml(verdict.text)}</p>`;
         logAudit(input.value, verdict.intent);
         renderAuditLog();
       });
@@ -3497,6 +3605,9 @@ async function boot() {
   if (window.HalAgent) await HalAgent.loadMemory(buildHalAgentCtx());
   if (window.HalProactive && typeof HalProactive.startPlacementTimer === "function") {
     HalProactive.startPlacementTimer(buildHalAgentCtx);
+    if (typeof HalProactive.startBriefingScheduler === "function") {
+      HalProactive.startBriefingScheduler(buildHalAgentCtx);
+    }
   }
   startSideNoteMonitor();
   startDocumentSyncListener();
@@ -3526,9 +3637,39 @@ async function boot() {
   } else {
     refreshImportsInBackground();
     forceHalWidgetPlacement({ reason: "boot" }).catch(() => {
-      runHalProactiveCycle({ force: true, forcePlacement: true }).catch(() => {
+      runHalProactiveCycle({ force: true, forcePlacement: true, showBootNotice: true }).catch(() => {
         /* proactive cycle optional on boot */
       });
+    });
+  }
+  if (window.HalConsent && HalConsent.loadPending) {
+    HalConsent.loadPending().catch(() => {});
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("nr2:scheduled-briefing", async (event) => {
+      const detail = event && event.detail;
+      if (!detail || !detail.briefing) return;
+      const label = detail.kind === "eod" ? "End-of-day" : "Morning";
+      if (detail.briefing.headline) {
+        showHalActionNotice(`${label} briefing: ${detail.briefing.headline}`, "info");
+      }
+      if (detail.kind !== "eod" || !window.HalProactive || !HalProactive.formatProactiveBriefing) return;
+      const body = HalProactive.formatProactiveBriefing(detail.briefing);
+      const port = window.location.port || "8765";
+      try {
+        await fetch(`${window.location.protocol}//${window.location.hostname || "127.0.0.1"}:${port}/api/outbound/briefing-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subject: "NR2 end-of-day HAL briefing",
+            body,
+            consentText: "Scheduled internal briefing",
+            actor: "HAL",
+          }),
+        });
+      } catch {
+        /* Set NR2_BRIEFING_EMAIL_TO and SMTP to enable EOD email digest */
+      }
     });
   }
 }

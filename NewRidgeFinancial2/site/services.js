@@ -148,7 +148,7 @@ const Services = (function () {
     importBundleCache = null;
     importBundleAt = 0;
     if (!br || typeof br.pullPracticeSources !== "function") {
-      const err = new Error("Practice source pull requires the NR2 desktop app.");
+      const err = new Error("Practice source pull requires the NR2 desktop app or loopback server.");
       if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.pullPracticeSources", err);
       throw err;
     }

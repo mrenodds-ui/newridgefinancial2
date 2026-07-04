@@ -296,6 +296,27 @@
         "Accepted": ["Accepted", "accepted", "PlansAccepted"]
       },
       "note": "Derived from treatment plan summary when case_acceptance.csv is not supplied manually."
+    },
+    "softdent.hygieneRecall": {
+      "system": "softdent",
+      "bundleKey": "hygieneRecall",
+      "filenames": [
+        "hygiene_recall_summary.csv",
+        "softdent_hygiene_recall.csv",
+        "hygiene_recall_summary.json"
+      ],
+      "sourceOwner": null,
+      "generatedBy": ["softdent_practice_exports.py"],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": true,
+      "requiredFields": [],
+      "optionalFields": ["Period", "HygieneCompleted", "RecallDue"],
+      "fieldAliases": {
+        "HygieneCompleted": ["HygieneCompleted", "hygieneCompleted", "Completed", "completed"],
+        "RecallDue": ["RecallDue", "recallDue", "Due", "due", "Overdue", "overdue"]
+      },
+      "note": "Generated from analytics DB recall tables or derived from daysheet hygiene procedure codes."
     }
   },
   "widgets": {
@@ -363,6 +384,15 @@
         "acceptanceRate": { "dataset": "softdent.caseAcceptance", "dashboard": "practice", "path": "caseAcceptance.rate" },
         "acceptedCount": { "dataset": "softdent.caseAcceptance", "dashboard": "practice", "path": "caseAcceptance.accepted" },
         "presentedCount": { "dataset": "softdent.caseAcceptance", "dashboard": "practice", "path": "caseAcceptance.presented" }
+      }
+    },
+    "hygieneRecall": {
+      "title": "Hygiene & Recall",
+      "navTarget": "softdent",
+      "metrics": {
+        "hygieneCompleted": { "dataset": "softdent.hygieneRecall", "dashboard": "practice", "path": "hygieneRecall.completed" },
+        "recallDue": { "dataset": "softdent.hygieneRecall", "dashboard": "practice", "path": "hygieneRecall.due" },
+        "period": { "dataset": "softdent.hygieneRecall", "dashboard": "practice", "path": "hygieneRecall.period" }
       }
     }
   }

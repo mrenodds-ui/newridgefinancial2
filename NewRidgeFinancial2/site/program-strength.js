@@ -82,9 +82,40 @@ const ProgramStrength = (function () {
     return report;
   }
 
+  async function runAutonomousHealLoop(ctx) {
+    const steps = [];
+    try {
+      if (typeof PortalOps !== "undefined" && PortalOps.getIntegrationHealth) {
+        const health = await PortalOps.getIntegrationHealth();
+        const status = health && String(health.status || "").toLowerCase();
+        steps.push({ step: "integration-health", status: status || "unknown" });
+        if (!health || status === "degraded" || status === "fail" || status === "failed") {
+          steps.push({ step: "self-heal", report: await runSelfHeal({ reason: "auto-heal", fullPull: false }) });
+        }
+      } else {
+        steps.push({ step: "self-heal", report: await runSelfHeal({ reason: "auto-heal", fullPull: false }) });
+      }
+    } catch (err) {
+      steps.push({ step: "error", message: err && err.message ? err.message : String(err) });
+    }
+    if (ctx && typeof ctx.invalidateProgramCaches === "function") ctx.invalidateProgramCaches("auto-heal");
+    if (ctx && typeof ctx.scheduleHalWidgetRefresh === "function") {
+      await ctx.scheduleHalWidgetRefresh().catch(() => {});
+    }
+    if (typeof window !== "undefined" && window.HalProactive && ctx) {
+      await HalProactive.runCycle(ctx, { force: true, forcePlacement: true }).catch(() => {});
+      steps.push({ step: "proactive-cycle", ok: true });
+    }
+    if (ctx && typeof ctx.refreshOpsHealthStatus === "function") {
+      await ctx.refreshOpsHealthStatus().catch(() => {});
+    }
+    return { ok: true, steps };
+  }
+
   return {
     runSelfHeal,
     runBootHeal,
+    runAutonomousHealLoop,
     formatReport,
   };
 })();

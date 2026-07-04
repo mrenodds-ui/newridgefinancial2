@@ -251,6 +251,54 @@ def export_approved_posting_queue_csv(store_path: Any, *, limit: int = 200) -> d
     }
 
 
+def export_approved_posting_queue_iif(store_path: Any, *, limit: int = 200) -> dict[str, Any]:
+    """Export approved queue entries as QuickBooks IIF (manual import in QuickBooks)."""
+    from posting_queue_store import POSTING_QUEUE_STATUS_APPROVED
+
+    queue = PostingQueueStore(store_path)
+    entries = queue.list_entries(limit=max(1, min(limit, 500)), status=POSTING_QUEUE_STATUS_APPROVED)
+    lines: list[str] = []
+    lines.append("!TRNS\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tMEMO")
+    lines.append("!SPL\tSPLID\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tMEMO")
+    lines.append("!ENDTRNS")
+    row_count = 0
+    for entry in entries:
+        trns_date = str(entry.get("transactionDate") or entry.get("accountingPeriod") or "")[:10]
+        desc = str(entry.get("description") or "Journal entry").replace("\t", " ")
+        entry_lines = entry.get("lines") or []
+        if not entry_lines:
+            continue
+        first = entry_lines[0]
+        debit = float(first.get("debit") or 0)
+        credit = float(first.get("credit") or 0)
+        amount = debit if debit else -credit
+        accnt = str(first.get("account_name") or first.get("accountName") or first.get("account_code") or "Misc")
+        lines.append(f"TRNS\tGENERAL JOURNAL\t{trns_date}\t{accnt}\t\t{amount:.2f}\t{desc}")
+        for idx, line in enumerate(entry_lines):
+            d = float(line.get("debit") or 0)
+            c = float(line.get("credit") or 0)
+            lamt = d if d else -c
+            lacnt = str(line.get("account_name") or line.get("accountName") or line.get("account_code") or "Misc")
+            lmemo = str(line.get("memo") or desc).replace("\t", " ")
+            lines.append(f"SPL\t{idx + 1}\tGENERAL JOURNAL\t{trns_date}\t{lacnt}\t\t{lamt:.2f}\t{lmemo}")
+            row_count += 1
+        lines.append("ENDTRNS")
+    iif_text = "\n".join(lines) + ("\n" if lines else "")
+    export_dir = Path(store_path).resolve().parent / "exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    export_path = export_dir / f"journal_posting_queue_{stamp}.iif"
+    if iif_text.strip():
+        export_path.write_text(iif_text, encoding="utf-8")
+    return {
+        "iif": iif_text,
+        "exportPath": str(export_path) if iif_text.strip() else None,
+        "entryCount": len(entries),
+        "lineCount": row_count,
+        "exportedAt": _utc_now(),
+    }
+
+
 def parse_context_json(raw: str | None) -> dict[str, Any]:
     if not raw:
         return {}
