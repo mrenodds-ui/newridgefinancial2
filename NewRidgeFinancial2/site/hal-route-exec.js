@@ -408,6 +408,29 @@ const HalRouteExec = (function () {
       return outcome(text, "sources", result.intent, [], { refreshHal: false });
     }
 
+    if (result.usePostingQueueList) {
+      const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
+      let payload = null;
+      if (desktop && typeof desktop.listPostingQueue === "function") {
+        try {
+          payload = await desktop.listPostingQueue({ limit: 20 });
+        } catch (error) {
+          return outcome(
+            error && error.message ? error.message : "Could not read the journal posting queue.",
+            "accounting",
+            result.intent,
+          );
+        }
+      }
+      if (!payload || (!payload.items && !payload.metrics)) {
+        const snapshot = await ctx.loadProgramSnapshot();
+        payload = (snapshot && snapshot.journalPostingQueue) || { items: [], metrics: {}, unavailable: true };
+      }
+      const text = HalSkills.formatPostingQueueList(payload);
+      const actions = [{ type: "openPage", label: "Open Documents", page: "documents" }];
+      return outcome(text, "accounting", result.intent, actions, { refreshHal: true });
+    }
+
     if (result.useJournalDraft) {
       const req = result.journalRequest || {};
       let text;

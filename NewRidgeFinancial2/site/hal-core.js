@@ -1993,6 +1993,13 @@ const HalCore = (function () {
       return { intent: "accounting: review-queue", lane: "local", useWidgetGuidance: true, widgetGuidance: "accountingReviewQueue", text: "", actions: [] };
     }
     if (
+      /\b(show|list|view|can you show)\b.*\b(posting queue|journal posting queue|journal queue)\b|\b(posting queue|journal posting queue|journal queue)\b.*\b(items?|entries|list|status)\b/.test(
+        query,
+      )
+    ) {
+      return { intent: "accounting: posting-queue-list", lane: "local", usePostingQueueList: true, text: "", actions: [] };
+    }
+    if (
       /\breconciliation checklist\b|\bsoftdent\b.*\bquickbooks\b.*\breconcil|\baccounting reconciliation\b|\breconcile\b.*\b(softdent|quickbooks)\b/.test(
         query,
       )

@@ -487,6 +487,10 @@ def _char_ngram_vector(text: str, n: int = 3) -> dict[str, float]:
     return {k: v / norm for k, v in vec.items()}
 
 
+_EMBED_CACHE: dict[str, list[float] | None] = {}
+_EMBED_CACHE_MAX = 256
+
+
 def _ollama_embedding(
     text: str,
     model: str = "nomic-embed-text",
@@ -496,8 +500,12 @@ def _ollama_embedding(
     import urllib.error
     import urllib.request
 
+    key = str(text or "")[:2000]
+    if key in _EMBED_CACHE:
+        return _EMBED_CACHE[key]
+
     try:
-        payload = json.dumps({"model": model, "prompt": str(text or "")[:2000]}).encode("utf-8")
+        payload = json.dumps({"model": model, "prompt": key}).encode("utf-8")
         req = urllib.request.Request(
             endpoint,
             data=payload,
@@ -508,10 +516,16 @@ def _ollama_embedding(
             data = json.loads(resp.read().decode("utf-8"))
         emb = data.get("embedding")
         if isinstance(emb, list) and emb:
-            return [float(x) for x in emb]
+            result = [float(x) for x in emb]
+        else:
+            result = None
     except (OSError, urllib.error.URLError, ValueError, TypeError, TimeoutError):
-        return None
-    return None
+        result = None
+
+    if len(_EMBED_CACHE) >= _EMBED_CACHE_MAX:
+        _EMBED_CACHE.clear()
+    _EMBED_CACHE[key] = result
+    return result
 
 
 def _cosine_dense(a: list[float], b: list[float]) -> float:

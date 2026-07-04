@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-149",
-  "schemaVersion": "hal-149",
-  "builtAt": "2026-07-04T14:00:00.000Z",
-  "notes": "HAL hal-149 — QA chat fixes: agent loop scope, timeouts, instruction leak strip."
+  "assetVersion": "hal-150",
+  "schemaVersion": "hal-150",
+  "builtAt": "2026-07-04T15:00:00.000Z",
+  "notes": "HAL hal-150 — instant posting-queue route, QA TTS skip, embed cache, subtask depth 2."
 }

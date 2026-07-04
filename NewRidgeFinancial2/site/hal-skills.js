@@ -2708,6 +2708,38 @@ const HalSkills = (function () {
     return lines.join("\n");
   }
 
+  function formatPostingQueueList(payload) {
+    const data = payload || {};
+    const items = Array.isArray(data.items) ? data.items : [];
+    const metrics = data.metrics || {};
+    const pending = metrics.pendingReview != null ? metrics.pendingReview : metrics.pending;
+    const approved = metrics.approved != null ? metrics.approved : metrics.ready;
+    const lines = [
+      "Journal posting queue (local SQLite — draft/review only; staff posts to QuickBooks outside NR2):",
+      `Pending review ${pending != null ? pending : "—"} · Approved ${approved != null ? approved : "—"} · Total ${metrics.total != null ? metrics.total : items.length}`,
+    ];
+    if (data.unavailable) {
+      lines.push("", "Live queue access needs the NR2 desktop app. Browser preview shows layout only.");
+      return lines.join("\n");
+    }
+    if (!items.length) {
+      lines.push("", "No queue entries yet. Mark a reviewed document Posted with “Queue journal draft” checked, or ask me to draft a journal entry.");
+      return lines.join("\n");
+    }
+    lines.push("");
+    items.slice(0, 12).forEach((entry) => {
+      const id = entry.queue_id || entry.id || "—";
+      const status = entry.status || "pending_review";
+      const amount = entry.amount != null ? entry.amount : "—";
+      const period = entry.accounting_period || entry.period || "—";
+      const desc = String(entry.description || entry.memo || "Journal draft").slice(0, 72);
+      lines.push(`- [${status}] ${id} · ${period} · $${amount} — ${desc}`);
+    });
+    if (items.length > 12) lines.push(`… and ${items.length - 12} more. Open Documents for the full queue panel.`);
+    lines.push("", "Next step: review pending rows on Documents, approve for export, then staff enters approved CSV in QuickBooks.");
+    return lines.join("\n");
+  }
+
   function formatWidgetFeed(feed) {
     const lines = [`Manager dashboard widgets (${feed.manager}, local only):`, ""];
     WIDGET_ORDER.forEach((key) => {
@@ -3464,6 +3496,7 @@ const HalSkills = (function () {
     WIDGET_FILL_REQUIREMENTS,
     buildWidgetFeed,
     enforceReceivablesArPolicy,
+    formatPostingQueueList,
     formatWidgetFeed,
     formatWidgetFillSuggestions,
     formatWidgetMissingData,

@@ -706,12 +706,19 @@
     };
   }
 
+  function qaSkipSpeech() {
+    return !!(global._halRandomQaSkipSpeech || global.HAL_SKIP_SPEECH);
+  }
+
   function speakHalReply(text, options) {
     options = options || {};
     const profile = MIRANDA;
     const displayText = String(text || "");
     if (!displayText) return { started: false, durationMs: 0 };
     if (options.interrupt !== false) cancelSpeech();
+    if (qaSkipSpeech() || options.skipSpeech) {
+      return { started: false, durationMs: 0, skipped: true, reason: "qa-skip-speech" };
+    }
 
     const raw = resolveSpokenText(displayText, options);
     if (!raw) return { started: false, durationMs: 0 };

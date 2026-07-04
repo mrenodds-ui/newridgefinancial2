@@ -2857,7 +2857,7 @@ function typewriteLastHalMessage() {
   if (reduce || full.length < 2) {
     p.textContent = full;
     p.classList.remove("hp-typing");
-    if (window.HalVoice && HalVoice.speakHalReply) {
+    if (window.HalVoice && HalVoice.speakHalReply && !window._halRandomQaSkipSpeech) {
       const speechCtx = halSpeechContextForLastReply(full);
       HalVoice.speakHalReply(full, { interrupt: true, ...speechCtx });
     }
@@ -2869,7 +2869,7 @@ function typewriteLastHalMessage() {
   const iterations = Math.ceil(full.length / step);
   let speechMs = 2400;
   const speechCtx = halSpeechContextForLastReply(full);
-  if (window.HalVoice) {
+  if (window.HalVoice && !window._halRandomQaSkipSpeech) {
     if (HalVoice.speakHalReply) {
       const spoken = HalVoice.speakHalReply(full, { interrupt: true, ...speechCtx });
       speechMs = (spoken && spoken.durationMs) || speechMs;
