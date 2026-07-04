@@ -1288,7 +1288,8 @@ const HalCore = (function () {
     if (/\b(upload|portal)\b.*\bnarrative\b|\bnarrative\b.*\b(upload|portal)\b/.test(a)) return "upload a narrative to a portal";
     if (/\b(email|contact|fax)\b.*\bpayer\b|\bpayer\b.*\b(email|contact|fax)\b/.test(a)) return "contact the payer directly";
     if (/\bdelete\b.*\bclaim\b/.test(a)) return "delete a claim";
-    if (/\bpay\b.*\binvoice\b/.test(a)) return "pay an invoice";
+    if (/\bpush\b.*\b(live|to quickbooks)\b/.test(a)) return "push that live to the ledger";
+    if (/\bpush\b.*\b(journal|entry|entries)\b.*\blive\b/.test(a)) return "push this journal entry live";
     const verb = a.match(
       /\b(submit|send|email|fax|upload|transmit|pay|delete|remove|post|write|contact|dispatch|wire)\b/,
     );
@@ -1376,7 +1377,7 @@ const HalCore = (function () {
     };
   }
 
-  function capabilityLocalFlagsForAction(action, halData) {
+  function capabilityLocalFlagsForAction(action, halData, halModels) {
     const a = String(action || "").toLowerCase();
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     if (/make a plan|plan for today|show what needs attention|what needs attention today/.test(a)) {
@@ -1615,7 +1616,7 @@ const HalCore = (function () {
     }
 
     if (parsed.kind === "can") {
-      const localFlags = capabilityLocalFlagsForAction(action, halData);
+      const localFlags = capabilityLocalFlagsForAction(action, halData, halModels);
       if (localFlags) return localFlags;
 
       const inner = routeHalCommand(halData, halModels, pages, action, { capabilityInner: true });

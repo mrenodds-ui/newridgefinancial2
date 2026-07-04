@@ -1652,7 +1652,7 @@ async function main() {
     "hypothetical should fall through to model lane",
   );
   const pushCap = HalCore.matchCapabilityRoute(halData, halModels, pages, "Can you push this journal entry live?");
-  assert(pushCap && /^No\./i.test(String(pushCap.text || "").trim()), "push live must explain no executor with No lead");
+  assert(pushCap && /^No\b/i.test(String(pushCap.text || "").trim()), "push live must explain no executor with No lead");
   const taxesCap = HalCore.matchCapabilityRoute(halData, halModels, pages, "What can you do on the Taxes page?");
   assert(taxesCap && taxesCap.intent === "capability:page-can", "Taxes page capability must resolve");
   const synth = HalAgent.synthesizeAnswerFromTools(
@@ -1675,9 +1675,23 @@ async function main() {
 
   passed++;
 
-  // Program source patch helper (Python dry-run)
-  const pyPatch = require("node:child_process").execSync(
-    'python -c "from pathlib import Path; from program_source_grep import apply_program_patch; nr2=Path(\'.\').resolve(); repo=nr2.parent; site=nr2/\'site\'; out=apply_program_patch(repo,site,\'NewRidgeFinancial2/site/nr2-build.json\',\'offline tool synthesis, hypothetical routing, shape dedupe.\',\'offline tool synthesis, hypothetical routing, shape dedupe.\',dry_run=True); assert out[\'ok\'], out; print(out[\'text\'])"',
+  // Program source patch helper (Python dry-run) — use live schemaVersion from manifest
+  const buildManifest = loadJson(join(siteDir, "nr2-build.json"));
+  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-144")}"`;
+  const pyPatch = require("node:child_process").execFileSync(
+    "python",
+    [
+      "-c",
+      `from pathlib import Path
+from program_source_grep import apply_program_patch
+nr2 = Path(".").resolve()
+repo = nr2.parent
+site = nr2 / "site"
+old = ${JSON.stringify(patchNeedle)}
+out = apply_program_patch(repo, site, "NewRidgeFinancial2/site/nr2-build.json", old, old, dry_run=True)
+assert out["ok"], out
+print(out["text"])`,
+    ],
     { encoding: "utf8", cwd: __dirname, stdio: ["ignore", "pipe", "pipe"] },
   );
   assert(/Dry run|would patch/i.test(pyPatch), "apply_program_patch dry run must work");
