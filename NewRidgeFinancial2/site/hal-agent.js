@@ -1417,10 +1417,41 @@ const HalAgent = (function () {
     return !!(cfg && cfg.preferReasoning);
   }
 
+  function routeIsOperational(route) {
+    if (!route) return false;
+    return Object.keys(route).some((k) => k.startsWith("use") && route[k] === true && k !== "useModel" && k !== "useReasoning" && k !== "useEscalation" && k !== "useOss");
+  }
+
+  function reason21bAvailable(ctx) {
+    if (typeof ctx.reason21bAvailable === "function") return ctx.reason21bAvailable();
+    if (typeof ctx.reasoningModelConfig === "function") {
+      const rc = ctx.reasoningModelConfig();
+      return !!(rc && !rc.reasonFallback);
+    }
+    return false;
+  }
+
+  function downgradeRouteIfReasoningOffline(route, ctx) {
+    if (!route || !route.useReasoning) return route;
+    if (reason21bAvailable(ctx)) return route;
+    if (typeof ctx.localModelReady === "function" && ctx.localModelReady()) {
+      const r = Object.assign({}, route);
+      r.useReasoning = false;
+      r.useModel = true;
+      r.useEscalation = false;
+      r.useOss = false;
+      r.lane = "chat8b";
+      if (/^reasoning:/.test(String(r.intent || ""))) r.intent = "model: query";
+      return r;
+    }
+    return route;
+  }
+
   function applyHigherReasoningRoute(route, query, ctx) {
     if (!route) return route;
     // Template/instant routes already have staff-facing text — keep fast path.
     if (route.text && String(route.text).trim()) return route;
+    if (routeIsOperational(route)) return route;
     const ap = (ctx && ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
     const agentLoopQuery =
       ap.agentToolLoop !== false &&
@@ -1435,19 +1466,28 @@ const HalAgent = (function () {
       ctx.reasoningModelReady()
     ) {
       const r = Object.assign({}, route);
-      r.useReasoning = true;
-      r.useModel = false;
+      if (reason21bAvailable(ctx)) {
+        r.useReasoning = true;
+        r.useModel = false;
+        r.lane = "reason21b";
+      } else {
+        r.useReasoning = false;
+        r.useModel = true;
+        r.lane = "chat8b";
+      }
       r.useEscalation = false;
       r.useOss = false;
-      r.lane = "reason21b";
       r.text = "";
       r.prompt = r.prompt || query;
       if (!/^reasoning:/.test(String(r.intent || ""))) {
-        r.intent = "reasoning: agent-loop";
+        r.intent = reason21bAvailable(ctx) ? "reasoning: agent-loop" : "model: query";
       }
       return r;
     }
     if (!preferHigherReasoning(ctx)) return route;
+    if (typeof ctx.reasoningModelReady === "function" && !ctx.reasoningModelReady()) {
+      return downgradeRouteIfReasoningOffline(Object.assign({}, route, { useReasoning: true, useModel: false, lane: "reason21b" }), ctx);
+    }
     const intent = String(route.intent || "");
     if (
       /^navigate:/.test(intent) &&
@@ -1461,14 +1501,24 @@ const HalAgent = (function () {
     }
     if (intent === "imports: refresh" && route.useImportRefresh) return route;
     const r = Object.assign({}, route);
-    r.useReasoning = true;
-    r.useModel = false;
+    if (reason21bAvailable(ctx)) {
+      r.useReasoning = true;
+      r.useModel = false;
+      r.lane = "reason21b";
+    } else {
+      r.useReasoning = false;
+      r.useModel = true;
+      r.lane = "chat8b";
+    }
     r.useEscalation = false;
     r.useOss = false;
-    r.lane = "reason21b";
     r.prompt = r.prompt || query;
     if (!/^reasoning:/.test(intent)) {
-      r.intent = globalThis._halRandomQaUseReasoning ? "reasoning: qa" : "reasoning: chat";
+      r.intent = reason21bAvailable(ctx)
+        ? globalThis._halRandomQaUseReasoning
+          ? "reasoning: qa"
+          : "reasoning: chat"
+        : "model: query";
     }
     return r;
   }
@@ -1555,10 +1605,31 @@ const HalAgent = (function () {
       return { text, lane: "reason21b" };
     }
     if (route.useReasoning) {
-      if (!ctx.reasoningModelReady()) return { text: ctx.offlineModelMessage("reason21b"), lane: "reason21b · offline" };
+      if (!ctx.reasoningModelReady()) {
+        if (ctx.localModelReady && ctx.localModelReady()) {
+          const lm = Object.assign({ fastChat: true, reasonFallback: true }, ctx.localModelConfig());
+          const text = await ctx.runModel(lm, combinedPrompt, userText, "Local chat fallback", onToken);
+          return { text, lane: "chat8b" };
+        }
+        return { text: ctx.offlineModelMessage("reason21b"), lane: "reason21b · offline" };
+      }
       const rm = Object.assign({ reasoningLane: true }, ctx.reasoningModelConfig());
-      const text = await ctx.runModel(rm, combinedPrompt, userText, "Local reasoning plan", onToken);
-      return { text, lane: "reason21b" };
+      try {
+        const text = await ctx.runModel(rm, combinedPrompt, userText, "Local reasoning plan", onToken);
+        if (String(text || "").trim()) {
+          return { text, lane: rm.reasonFallback ? "chat8b" : "reason21b" };
+        }
+      } catch (error) {
+        if (typeof RuntimeIssues !== "undefined") {
+          RuntimeIssues.record("hal-agent.reasoning", error, { lane: route.lane, intent: route.intent });
+        }
+      }
+      if (ctx.localModelReady && ctx.localModelReady()) {
+        const lm = Object.assign({ fastChat: true, reasonFallback: true }, ctx.localModelConfig());
+        const text = await ctx.runModel(lm, combinedPrompt, userText, "Local chat fallback", onToken);
+        return { text, lane: "chat8b" };
+      }
+      return { text: ctx.offlineModelMessage("reason21b"), lane: "reason21b · offline" };
     }
     if (route.useModel) {
       if (!ctx.localModelReady()) {
@@ -1672,6 +1743,20 @@ const HalAgent = (function () {
     return /\boffline\b/i.test(String(lane || ""));
   }
 
+  async function ensureOfflineToolGather(trimmed, route, plan, toolResults, ctx, runToolFn) {
+    if (Object.keys(toolResults || {}).length >= 2) return toolResults;
+    if (typeof HalAgentLoop === "undefined" || !HalAgentLoop.suggestAutoTools) return toolResults;
+    const toolIds = new Set(Object.keys(TOOL_DEFS));
+    const agentCfg = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
+    const auto = HalAgentLoop.suggestAutoTools(trimmed, plan, toolResults, toolIds, agentCfg).slice(0, 3);
+    for (const req of auto) {
+      const def = TOOL_DEFS[req.name];
+      if (!def) continue;
+      toolResults[req.name + "_offline"] = await def.run(ctx, { query: req.query || trimmed });
+    }
+    return toolResults;
+  }
+
   async function processQuery(query, ctx) {
     const trimmed = String(query).trim();
     if (!trimmed) return null;
@@ -1683,7 +1768,10 @@ const HalAgent = (function () {
     workingMemory.activeWorkSession = !!(ctx.halWorkSession);
     recordTurn("user", trimmed, { focus: workingMemory.currentPage });
 
-    let route = applyHigherReasoningRoute(HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, trimmed), trimmed, ctx);
+    let route = downgradeRouteIfReasoningOffline(
+      applyHigherReasoningRoute(HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, trimmed), trimmed, ctx),
+      ctx,
+    );
     const plan = buildPlan(trimmed, route, workingMemory, longTermMemory, ctx);
     const isModelLane = !!(route.useModel || route.useReasoning || route.useEscalation || route.useOss);
 
@@ -1788,6 +1876,7 @@ const HalAgent = (function () {
           };
         } else if (enhanced && isOfflineModelLane(enhanced.lane)) {
           if (enhanced.toolResults) Object.assign(toolResults, enhanced.toolResults);
+          await ensureOfflineToolGather(trimmed, route, activePlan, toolResults, ctx, runToolFn);
           const synth = buildToolSynthesisOutcome(trimmed, activePlan, toolResults, route, ctx);
           if (synth) outcome = synth;
         }
@@ -1810,7 +1899,14 @@ const HalAgent = (function () {
       }
     }
 
-    if ((!outcome || isGenericOfflineText(outcome.text)) && Object.keys(toolResults || {}).length) {
+    if ((!outcome || isGenericOfflineText(outcome.text)) && plan.useModelEnhancement) {
+      await ensureOfflineToolGather(trimmed, route, activePlan, toolResults, ctx, runToolFn);
+      const synth = buildToolSynthesisOutcome(trimmed, activePlan, toolResults, route, ctx);
+      if (synth) outcome = synth;
+    }
+
+    if (outcome && isGenericOfflineText(outcome.text)) {
+      await ensureOfflineToolGather(trimmed, route, activePlan, toolResults, ctx, runToolFn);
       const synth = buildToolSynthesisOutcome(trimmed, activePlan, toolResults, route, ctx);
       if (synth) outcome = synth;
     }

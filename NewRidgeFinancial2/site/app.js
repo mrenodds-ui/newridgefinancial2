@@ -1270,10 +1270,6 @@ function localModelConfig() {
   return HalCore.laneRuntime(halModels, "chat8b");
 }
 
-function reasoningModelConfig() {
-  return HalCore.laneRuntime(halModels, "reason21b");
-}
-
 function escalationModelConfig() {
   return HalCore.laneRuntime(halModels, "escalate30b");
 }
@@ -1282,12 +1278,69 @@ function ossModelConfig() {
   return HalCore.laneRuntime(halModels, "oss120b");
 }
 
+const ollamaModelCache = { at: 0, names: null, loading: null };
+
+async function refreshOllamaModelNames() {
+  const runtime = HalCore.laneRuntime(halModels, "chat8b");
+  if (!runtime || !runtime.endpoint) return [];
+  const base = String(runtime.endpoint).replace(/\/api\/chat\/?$/i, "");
+  try {
+    const res = await fetch(base + "/api/tags", { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const names = (data.models || []).map((m) => m.name).filter(Boolean);
+    ollamaModelCache.names = new Set(names);
+    ollamaModelCache.at = Date.now();
+    return names;
+  } catch {
+    return [];
+  }
+}
+
+async function ensureOllamaModelCache(maxAgeMs) {
+  const age = maxAgeMs == null ? 45000 : maxAgeMs;
+  if (ollamaModelCache.names && Date.now() - ollamaModelCache.at < age) return ollamaModelCache.names;
+  if (ollamaModelCache.loading) return ollamaModelCache.loading;
+  ollamaModelCache.loading = refreshOllamaModelNames().finally(() => {
+    ollamaModelCache.loading = null;
+  });
+  return ollamaModelCache.loading;
+}
+window.ensureOllamaModelCache = ensureOllamaModelCache;
+
+function ollamaHasModel(modelName) {
+  if (!modelName) return false;
+  if (!ollamaModelCache.names) return false;
+  if (ollamaModelCache.names.has(modelName)) return true;
+  const base = String(modelName).split(":")[0];
+  for (const n of ollamaModelCache.names) {
+    if (n === modelName || n.startsWith(base + ":")) return true;
+  }
+  return false;
+}
+
+function laneModelInstalled(laneId) {
+  if (!HalCore.laneReady(halModels, laneId)) return false;
+  const rt = HalCore.laneRuntime(halModels, laneId);
+  if (!rt || !rt.model) return false;
+  return ollamaHasModel(rt.model);
+}
+
 function localModelReady() {
-  return HalCore.laneReady(halModels, "chat8b");
+  return laneModelInstalled("chat8b");
+}
+
+function reason21bAvailable() {
+  return laneModelInstalled("reason21b");
 }
 
 function reasoningModelReady() {
-  return HalCore.laneReady(halModels, "reason21b");
+  return reason21bAvailable() || laneModelInstalled("chat8b");
+}
+
+function reasoningModelConfig() {
+  if (laneModelInstalled("reason21b")) return HalCore.laneRuntime(halModels, "reason21b");
+  return Object.assign({ fastChat: true, reasonFallback: true }, HalCore.laneRuntime(halModels, "chat8b"));
 }
 
 function escalationModelReady() {
@@ -1399,6 +1452,7 @@ function modelMessages(systemPrompt, userText, runtime) {
 }
 
 async function runModel(runtime, systemPrompt, userText, draftLabel, onToken, abortSignal) {
+  if (!runtime || !runtime.cloud) await ensureOllamaModelCache();
   const controller = abortSignal ? null : new AbortController();
   const signal = abortSignal || (controller && controller.signal);
   const timer = setTimeout(() => {
@@ -1863,7 +1917,9 @@ function buildHalAgentCtx(extras) {
         ? (HalAgent.getWorkingMemory().turns || []).slice(-12)
         : halChatHistory.slice(-12).map((m) => ({ role: m.role, text: m.text })),
     localModelReady,
+    reason21bAvailable,
     reasoningModelReady,
+    ensureOllamaModelCache,
     escalationModelReady,
     ossModelReady,
     offlineModelMessage,
@@ -3313,6 +3369,7 @@ async function boot() {
     if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("app.boot", err, { file: "hal-models.json" });
     halModels = FALLBACK_MODELS;
   }
+  await ensureOllamaModelCache(0).catch(() => {});
   if (typeof OfficeTaskStore !== "undefined") {
     OfficeTaskStore.onChange((tasks) => {
       halOfficeTasks = tasks;

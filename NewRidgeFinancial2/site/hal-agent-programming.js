@@ -124,7 +124,12 @@
   }
 
   function yesNoLead(query, route) {
-    const blocked = route && (route.intent === "blocked: firewall" || /^blocked:/.test(String(route.intent || "")));
+    const intent = route && route.intent ? String(route.intent) : "";
+    const blocked =
+      intent === "blocked: firewall" ||
+      /^blocked:/.test(intent) ||
+      intent === "capability:no-executor" ||
+      /^capability:(no-executor|blocked)/.test(intent);
     if (blocked) return "No.";
     if (isYesNoQuestion(query)) return "Yes.";
     return "";

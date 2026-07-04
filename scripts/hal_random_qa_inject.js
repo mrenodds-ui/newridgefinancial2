@@ -193,6 +193,16 @@
   };
   window._halRandomQaLog = [];
 
+  async function probeReasoningLane() {
+    if (!useReasoning) return;
+    try {
+      if (typeof ensureOllamaModelCache === "function") await ensureOllamaModelCache(0);
+      else if (typeof refreshOllamaModelNames === "function") await refreshOllamaModelNames();
+    } catch {
+      /* probe optional */
+    }
+  }
+
   function waitForHalPlayback(answer, entry) {
     if (window._halRandomQaSkipSpeech) {
       return new Promise((resolve) => {
@@ -205,7 +215,7 @@
           }
           setTimeout(typePoll, useReasoning ? 320 : 120);
         };
-        setTimeout(typePoll, useReasoning ? 400 : 150);
+        setTimeout(typePoll, useReasoning ? 800 : 150);
       });
     }
     return new Promise((resolve) => {
@@ -246,6 +256,7 @@
   }
 
   (async () => {
+    await probeReasoningLane();
     for (let n = 0; n < questions.length; n++) {
       if (!window._halRandomQaRun || !window._halRandomQaRun.running) break;
       window._halRandomQaRun.completed = n;

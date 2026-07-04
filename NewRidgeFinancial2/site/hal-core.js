@@ -14,7 +14,7 @@ const HalCore = (function () {
 
   const PAGE_SYNONYMS = {
     financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
-    taxes: ["tax plan", "tax planning", "book to tax", "book-to-tax", "1120-s", "1120s", "k-1", "kansas tax", "federal tax", "reasonable compensation", "k-120s", "pte tax", "pass-through", "quarterly estimate", "1040-es"],
+    taxes: ["taxes", "tax plan", "tax planning", "book to tax", "book-to-tax", "1120-s", "1120s", "k-1", "kansas tax", "federal tax", "reasonable compensation", "k-120s", "pte tax", "pass-through", "quarterly estimate", "1040-es"],
     softdent: ["softdent", "soft dent", "practice management"],
     quickbooks: ["quickbooks", "quick books", "p&l", "profit and loss", "expenses", "posting queue", "journal posting queue"],
     ar: ["a/r", "accounts receivable", "receivable", "collections", "aging", "follow-up", "follow up"],
@@ -681,11 +681,19 @@ const HalCore = (function () {
     if (issues.includes("internal_jargon")) out = stripInternalJargon(out);
     if (issues.includes("question_echo")) out = out.replace(QUESTION_ECHO_RE, "").trim();
     if (issues.includes("repeats_previous")) {
-      out = pickVariant([
-        "Different angle on the same point: " + out,
-        "Restating with the same evidence: " + out,
-        out.replace(/^(yes|no)[—,\s]*/i, ""),
-      ]);
+      const keepYesNo =
+        route &&
+        (/^capability:(no-executor|blocked)/.test(String(route.intent || "")) ||
+          /^blocked: firewall/.test(String(route.intent || "")));
+      out = pickVariant(
+        keepYesNo
+          ? ["Same boundary as before: " + out, "Still the same rule: " + out, out]
+          : [
+              "Different angle on the same point: " + out,
+              "Restating with the same evidence: " + out,
+              out.replace(/^(yes|no)[—,\s]*/i, ""),
+            ],
+      );
     }
     if (issues.includes("too_long_chat") || issues.includes("numbered_list_unrequested")) {
       out = trimChatReply(out, query, route, { force: true, preferBrief: true });
@@ -1249,11 +1257,11 @@ const HalCore = (function () {
   function variedBlockedCapabilityReply(firewall, actionPhrase) {
     const fw = firewall || FALLBACK_FIREWALL;
     const act = describeBlockedAction(actionPhrase);
-      return pickVariant([
-        `No. I can't ${act} from here. ${fw.summary} I can open the right page and draft review notes; staff performs the external step.`,
-        `${act.charAt(0).toUpperCase() + act.slice(1)} is blocked by the firewall. SoftDent and QuickBooks stay read-only from this program. I can prepare local review material; a human executes outside the app.`,
-        `That request stops at the boundary for ${act}. ${fw.summary} I'll help navigate and document locally — outbound delivery requires staff.`,
-      ]);
+    return pickVariant([
+      `No. I can't ${act} from here. ${fw.summary} I can open the right page and draft review notes; staff performs the external step.`,
+      `No — ${act.charAt(0).toUpperCase() + act.slice(1)} is blocked by the firewall. SoftDent and QuickBooks stay read-only from this program. I can prepare local review material; a human executes outside the app.`,
+      `No. That request stops at the boundary for ${act}. ${fw.summary} I'll help navigate and document locally — outbound delivery requires staff.`,
+    ]);
   }
 
   function wrapAllowedCapabilityReply(actionPhrase, body) {
@@ -1347,14 +1355,21 @@ const HalCore = (function () {
       return { intent: "capability:sidenotes", lane: "local", useSideNoteMonitor: true, text: "", actions: [] };
     }
     if (/explain the firewall|external action firewall/.test(a)) {
+      const fwText = isFirewallActive(halData, halModels)
+        ? pickVariant([
+            `${firewall.summary} Blocked: ${firewall.blocked.join(", ")}. Allowed: ${firewall.allowed.join(", ")}.`,
+            `Firewall is enforced before any model runs. Blocked: ${firewall.blocked.join(", ")}. I stay in read-only mode.`,
+            `External actions never leave this program unattended. ${firewall.summary} Staff reviews anything outbound.`,
+          ])
+        : pickVariant([
+            "External-action firewall is off in this build, but HAL still has no outbound executors. Submit, email, upload, and post require staff outside the program.",
+            "Firewall is disabled here — that does not add outbound powers. I stay read-only on SoftDent and QuickBooks; staff owns payer contact and ledger posting.",
+            "Guardrails are relaxed in config, not in practice: I still only navigate, explain, reconcile, and draft for staff review.",
+          ]);
       return {
         intent: "capability:firewall",
         lane: "local",
-        text: pickVariant([
-          `${firewall.summary} Blocked: ${firewall.blocked.join(", ")}. Allowed: ${firewall.allowed.join(", ")}.`,
-          `Firewall is enforced before any model runs. Blocked: ${firewall.blocked.join(", ")}. I stay in read-only mode.`,
-          `External actions never leave this program unattended. ${firewall.summary} Staff reviews anything outbound.`,
-        ]),
+        text: fwText,
         actions: [],
       };
     }
@@ -1364,6 +1379,19 @@ const HalCore = (function () {
   function matchMixedCapabilityQuestion(halData, pages, rawQuery) {
     const q = stripCapabilityPrefixes(rawQuery).toLowerCase();
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
+
+    if (/\b(who|staff|human|office)\b.*\b(submit|transmit|send|post)\b.*\bpayer/i.test(q) || /\bwho\b.*\bsubmit.*\bpayer/i.test(q)) {
+      return {
+        intent: "capability:external-review",
+        lane: "local",
+        text: pickVariant([
+          "Staff submits to payers — not HAL. I prepare claims review, narratives, and packet readiness locally; a human transmits outside this program.",
+          "Payer submission is always staff-owned. I can open Claims, explain packet readiness, and draft notes — I never transmit.",
+          "No — I don't submit to payers. Your team reviews my local drafts and sends through SoftDent or the payer portal.",
+        ]),
+        actions: [{ type: "openPage", label: "Open Claims Workbench", page: "claims" }],
+      };
+    }
 
     if (/\bregistry items need review\b/.test(q)) {
       const waiting = registryByState(halData, /needs review/i);
@@ -3160,12 +3188,14 @@ const HalCore = (function () {
     }
 
     if (/\b(firewall|external action|boundary|guardrail|guardrails|safety)\b/.test(query)) {
-      return {
-        intent: "firewall",
-        lane: "local",
-        text: `${firewall.summary}\nBlocked: ${firewall.blocked.join(", ")}.\nAllowed: ${firewall.allowed.join(", ")}.`,
-        actions: [],
-      };
+      const fwText = isFirewallActive(halData, halModels)
+        ? `${firewall.summary}\nBlocked: ${firewall.blocked.join(", ")}.\nAllowed: ${firewall.allowed.join(", ")}.`
+        : pickVariant([
+            "External-action firewall is off in this build, but HAL still has no outbound executors. Submit, email, upload, and post require staff outside the program. I navigate, explain imports, draft locally, and run readiness checks.",
+            "Firewall is disabled here — that does not add outbound powers. I stay read-only on SoftDent and QuickBooks; staff owns payer contact and ledger posting.",
+            "Guardrails are relaxed in config, not in practice: I still only navigate, explain, reconcile, and draft for staff review.",
+          ]);
+      return { intent: "firewall", lane: "local", text: fwText, actions: [] };
     }
 
     if (
@@ -3309,7 +3339,13 @@ const HalCore = (function () {
         /read[\s-]?only|indexed|reference|review-only|local review|manager/i.test(entry.safety),
       );
       const list = readOnly.map((entry) => `- ${entry.name}: ${entry.safety}`).join("\n");
-      return { intent: "registry: read-only", lane: "local", text: `Read-only and review-only areas:\n${list}`, actions: [] };
+      const text = readOnly.length
+        ? `Read-only and review-only areas:\n${list}`
+        : pickVariant([
+            "Read-only here means I navigate, explain imports, reconcile, and draft locally — but I cannot post to QuickBooks, submit to payers, email, fax, or upload. Staff executes anything outbound.",
+            "Read-only for HAL: local review, summaries, and drafts only. Ledger posting, payer contact, and file delivery stay with staff outside this program.",
+          ]);
+      return { intent: "registry: read-only", lane: "local", text, actions: [] };
     }
 
     if (/next (step|action|staff action)|do next|what should (i|we|staff) (do|review|check|open|work)/.test(query)) {
@@ -3327,10 +3363,14 @@ const HalCore = (function () {
         return { intent: "status", lane: "local", text: (halStatus.summary || "") + status, actions: [] };
       }
       if (wantsExplain) {
+        const verbose = /glacial pace|every step|walk me through/i.test(String(rawQuery || ""));
+        const explainBody = verbose
+          ? `${info.label}: ${info.detail}${status}\n\nStep-by-step locally: (1) open the page, (2) check import freshness on the widgets you care about, (3) read registry status above, (4) note missing data before any staff action.`
+          : `${info.label}: ${info.detail}${status}`;
         return {
           intent: "explain: " + pageId,
           lane: "local",
-          text: `${info.label}: ${info.detail}${status}`,
+          text: explainBody,
           actions: pageId === "hal" ? [] : [{ type: "openPage", label: "Open " + info.label, page: pageId }],
         };
       }

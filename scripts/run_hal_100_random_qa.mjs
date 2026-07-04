@@ -48,6 +48,7 @@ async function run() {
 
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
+  page.setDefaultTimeout(120000);
   const consoleErrors = [];
   const pageErrors = [];
 
@@ -61,9 +62,15 @@ async function run() {
   console.log("Opening HAL Command Center ...");
   await page.goto(`${BASE_URL}/#hal`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForFunction(
-    () => typeof handleHalSubmit === "function",
+    () =>
+      typeof handleHalSubmit === "function" &&
+      typeof HalCore !== "undefined" &&
+      HalCore.laneRuntime(halModels, "chat8b"),
     { timeout: 120000 },
   );
+  await page.evaluate(async () => {
+    if (typeof ensureOllamaModelCache === "function") await ensureOllamaModelCache(0);
+  });
 
   console.log(
     `Starting ${QUESTION_COUNT} random questions (skipSpeech=${SKIP_SPEECH}, reasoning=${USE_REASONING}) ...`,

@@ -1642,7 +1642,9 @@ async function main() {
     "hypothetical should fall through to model lane",
   );
   const pushCap = HalCore.matchCapabilityRoute(halData, halModels, pages, "Can you push this journal entry live?");
-  assert(pushCap && /can't|blocked|No\.|requires staff/i.test(pushCap.text), "push live must explain no executor");
+  assert(pushCap && /^No\./i.test(String(pushCap.text || "").trim()), "push live must explain no executor with No lead");
+  const taxesCap = HalCore.matchCapabilityRoute(halData, halModels, pages, "What can you do on the Taxes page?");
+  assert(taxesCap && taxesCap.intent === "capability:page-can", "Taxes page capability must resolve");
   const synth = HalAgent.synthesizeAnswerFromTools(
     "analyze SoftDent imports",
     { tools: ["read_import_diagnostics"] },
