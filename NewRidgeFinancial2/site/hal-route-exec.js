@@ -43,6 +43,18 @@ const HalRouteExec = (function () {
   async function execute(result, trimmed, toolResults, ctx) {
     if (result.useEscalation || result.useReasoning || result.useModel) return null;
 
+    if (result.useChatRecap) {
+      const turns =
+        ctx.getWorkingTurns && typeof ctx.getWorkingTurns === "function"
+          ? ctx.getWorkingTurns()
+          : (ctx.getChatHistory || (() => []))().map((m) => ({ role: m.role, text: m.text }));
+      const text =
+        typeof HalCore !== "undefined" && HalCore.buildSessionRecap
+          ? HalCore.buildSessionRecap(turns)
+          : "Session recap is not available.";
+      return outcome(text, "local", result.intent);
+    }
+
     if (result.useProgramSnapshot) {
       const snapshot = await ctx.loadProgramSnapshot();
       const text = snapshot
@@ -95,8 +107,18 @@ const HalRouteExec = (function () {
         (ctx.runProactiveCycle && (await ctx.runProactiveCycle())) ||
         Proactive.getLastBriefing() ||
         (await Proactive.runCycle(ctx));
-      const text = briefing ? Proactive.formatProactiveBriefing(briefing) : "Proactive briefing unavailable.";
-      return outcome(text, "hal", result.intent, [], { refreshHal: true });
+      const chatMode =
+        typeof HalCore !== "undefined" && HalCore.isChatSizedQuestion
+          ? HalCore.isChatSizedQuestion(trimmed, result)
+          : true;
+      const text = briefing
+        ? Proactive.formatProactiveBriefing(briefing, { chatMode })
+        : "Proactive briefing unavailable.";
+      const shaped =
+        typeof HalCore !== "undefined" && HalCore.trimChatReply
+          ? HalCore.trimChatReply(text, trimmed, result, { force: chatMode })
+          : text;
+      return outcome(shaped, "hal", result.intent, [], { refreshHal: true });
     }
 
     if (result.useForceWidgetPlacement) {
@@ -633,6 +655,49 @@ const HalRouteExec = (function () {
         [{ label: "Open related page", page: feed.widgets[result.widgetKey]?.navTarget || "" }],
         { refreshHal: true },
       );
+    }
+
+    if (result.useEnglishSeed) {
+      const Vocab = typeof HalEnglishVocab !== "undefined" ? HalEnglishVocab : globalThis.HalEnglishVocab;
+      if (!Vocab || !Vocab.seedLibraryIntoServices) {
+        return outcome("English vocabulary module is not loaded.", "english", result.intent);
+      }
+      const seeded = await Vocab.seedLibraryIntoServices(/\bforce\b/i.test(trimmed));
+      ctx.clearProgramContextCache && ctx.clearProgramContextCache();
+      const text = seeded.ok
+        ? seeded.seeded
+          ? `English dictionary indexed — ${seeded.volumes || seeded.docCount} volumes, ${seeded.wordCount || "370k+"} words in the local library. Ask for a random word or say define [word].`
+          : `Library already has the dictionary (${seeded.docCount} volumes, ${seeded.wordCount || ""} words). Say "seed english dictionary force" to rebuild.`
+        : `Could not seed dictionary: ${seeded.error || "unknown error"}`;
+      return outcome(text, "english", result.intent, [], { refreshHal: result.useEnglishSeed });
+    }
+
+    if (result.useEnglishRandom || result.useEnglishTeach) {
+      const Vocab = typeof HalEnglishVocab !== "undefined" ? HalEnglishVocab : globalThis.HalEnglishVocab;
+      if (!Vocab) return outcome("English vocabulary module is not loaded.", "english", result.intent);
+      const entry = await Vocab.randomWord({ minLen: 4, maxLen: 11 });
+      const text = result.useEnglishTeach
+        ? Vocab.formatWordLesson(entry, { prompt: true })
+        : Vocab.buildRandomWordReply(entry);
+      return outcome(text, "english", result.intent);
+    }
+
+    if (result.useEnglishDefine) {
+      const Vocab = typeof HalEnglishVocab !== "undefined" ? HalEnglishVocab : globalThis.HalEnglishVocab;
+      if (!Vocab) return outcome("English vocabulary module is not loaded.", "english", result.intent);
+      const entry = await Vocab.lookupWord(result.englishWord);
+      return outcome(Vocab.buildDefineReply(entry, result.englishWord), "english", result.intent);
+    }
+
+    if (result.useEnglishQuiz) {
+      const Vocab = typeof HalEnglishVocab !== "undefined" ? HalEnglishVocab : globalThis.HalEnglishVocab;
+      if (!Vocab) return outcome("English vocabulary module is not loaded.", "english", result.intent);
+      const count = result.englishQuizCount || 5;
+      const words = [];
+      for (let i = 0; i < count; i++) {
+        words.push(await Vocab.randomWord({ minLen: 4, maxLen: 10 }));
+      }
+      return outcome(Vocab.buildQuizPrompt(words), "english", result.intent);
     }
 
     if (result.useDocRag) {

@@ -132,16 +132,22 @@ const HalPageCanvas = (function () {
     const messages = (halChatHistory || []).slice(-1);
     const chatHtml = messages.length
       ? messages
-          .map(
-            (m) =>
-              `<div class="hp-chat-row hp-chat-row--${m.role === "user" ? "user" : "hal"}">
+          .map((m) => {
+            const followups =
+              m.role === "hal" && m.followUpChips && m.followUpChips.length
+                ? `<div class="hp-chips hp-live-actions">${m.followUpChips
+                    .map((c) => H.actionChip(c.label, `data-hal-followup="${H.esc(c.query)}"`))
+                    .join("")}</div>`
+                : "";
+            return `<div class="hp-chat-row hp-chat-row--${m.role === "user" ? "user" : "hal"}">
                 <div class="hp-chat-row__head">
                   <span>${m.role === "user" ? "You" : "HAL"}${m.lane ? ` · ${H.esc(m.lane)}` : ""}</span>
                   ${m.role === "hal" ? `<button type="button" class="hp-chat-copy" data-hal-copy-response title="Copy response">${H.uiIcon("copy")}</button>` : ""}
                 </div>
                 <p>${H.esc(m.text)}</p>
-              </div>`,
-          )
+                ${followups}
+              </div>`;
+          })
           .join("")
       : "";
     return `<section class="hp-card hp-card--ask" data-panel="askHal" style="grid-area:command;">

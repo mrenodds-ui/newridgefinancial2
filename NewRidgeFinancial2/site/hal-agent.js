@@ -6,18 +6,55 @@ const HalAgent = (function () {
   const MEMORY_KEY = "halAgentMemory";
   const REPAIR_KEY = "halRepairLog";
   const WORKING_KEY = "halWorkingMemory";
-  const ARCHITECTURE_VERSION = "hal-agent-v1.1";
+  const ARCHITECTURE_VERSION = "hal-agent-v9-cursor";
   const REPAIR_MAX = 100;
-  const TURN_MAX = 12;
+  const TURN_MAX = 16;
   const AGENT_BUDGET = {
-    maxTools: 3,
-    maxToolSummaryChars: 2400,
-    maxModelContextChars: 6000,
-    maxRecentTurns: 4,
+    maxTools: 10,
+    maxGatherRounds: 3,
+    maxTaskCompletionRounds: 2,
+    maxToolSummaryChars: 5200,
+    maxModelContextChars: 14000,
+    maxRecentTurns: 12,
   };
 
+  function parsePatchFromQuery(query) {
+    const block = String(query || "").match(/<<<patch\s+([\s\S]*?)>>>/i);
+    if (!block) return null;
+    const body = block[1];
+    const fileMatch = body.match(/^\s*file:\s*(.+)$/im);
+    const oldMatch = body.match(/^\s*old:\s*\n([\s\S]*?)(?=^\s*new:\s*\n)/im);
+    const newMatch = body.match(/^\s*new:\s*\n([\s\S]*)$/im);
+    if (!fileMatch || !oldMatch || !newMatch) return null;
+    return {
+      file: fileMatch[1].trim(),
+      old: oldMatch[1].replace(/\r\n/g, "\n"),
+      new: newMatch[1].replace(/\r\n/g, "\n"),
+    };
+  }
+
+  function isTaskCompletionQuery(query) {
+    return /\b(fix|patch|change|update|edit|implement|modify|correct|validate|validation|syntax check|run validation|self-heal|strengthen program|repair program|make it pass)\b/i.test(
+      String(query || ""),
+    );
+  }
+
+  function shouldRunPostValidation(query, toolResults) {
+    if (!isTaskCompletionQuery(query)) return false;
+    if (/\bvalidate|validation|syntax check|make sure.*pass\b/i.test(query)) return true;
+    if (toolResults && toolResults.apply_program_patch && toolResults.apply_program_patch.ok) return true;
+    return false;
+  }
+
+  function bridgeFromCtx(ctx) {
+    if (ctx && ctx.desktopBridge) return ctx.desktopBridge;
+    if (typeof DesktopBridge !== "undefined") return DesktopBridge;
+    if (typeof window !== "undefined" && window.DesktopBridge) return window.DesktopBridge;
+    return null;
+  }
+
   const SAFETY_POLICY = {
-    summary: "HAL is the internal office manager. Local coordination only. External firewall locked. Human review required for outbound actions.",
+    summary: "HAL is the internal office manager. Local coordination; external-action firewall disabled.",
     blocked: [
       "submit", "email", "fax", "upload", "transmit", "pay", "post", "delete",
       "remove", "dispatch", "mail", "wire", "writeback", "payer contact",
@@ -33,14 +70,15 @@ const HalAgent = (function () {
     rules: [
       "Apply metacognition: self-check every answer against tool results and missing-data rules before responding.",
       "Use mental time travel: compare required calendar months (current + prior) to loaded SoftDent/QuickBooks exports for trend and close widgets.",
-      "HAL is the internal office manager; external writeback and outbound actions remain blocked.",
-      "Sound like a steady office teammate: short plain paragraphs, no bullet lists unless the user asks, no chatbot closings.",
+      "HAL is the internal office manager; outbound executors are not wired — do not claim email, post, or writeback was performed.",
+      "Sound like a capable Cursor-style agent: answer first, cite local evidence, name gaps, recommend one safe next step. At least five complete sentences. Accurate on missing data and read-only limits — helpful, never sarcastic.",
       "Never fabricate missing import data; say what is missing.",
       "Never claim an external action was performed.",
       "If data is stale or unavailable, say so before recommending.",
       "Cite which local source or tool informed the answer when possible.",
       "When web research tool results are present, use them for public reference context and say they are not verified against this practice's live data.",
       "When planning or prioritizing, prefer the proactive office manager assessment over generic advice.",
+      "Follow HalAgentProgramming contract when present: answer first, synthesize tools, min five sentences, one next step.",
     ],
   };
 
@@ -285,6 +323,370 @@ const HalAgent = (function () {
         };
       },
     },
+    read_registry: {
+      label: "Read HAL capability registry",
+      run: async (ctx) => {
+        if (!HalCore || typeof HalCore.registryAsText !== "function") {
+          return { ok: false, summary: "Registry unavailable." };
+        }
+        return { ok: true, summary: HalCore.registryAsText(ctx.halData).slice(0, 4500) };
+      },
+    },
+    read_current_context: {
+      label: "Read current page and session context",
+      run: async (ctx) => {
+        const pageId = ctx.getCurrentPage ? ctx.getCurrentPage() : "unknown";
+        const info =
+          HalCore && ctx.pages ? HalCore.pageInfoMap(ctx.halData, ctx.pages)[pageId] : null;
+        const hist = ctx.getWorkingTurns ? ctx.getWorkingTurns() : ctx.getChatHistory ? ctx.getChatHistory() : [];
+        const recent = (hist || [])
+          .slice(-4)
+          .map((t) => `${t.role}: ${String(t.text || "").slice(0, 100)}`)
+          .join("\n");
+        const events = Array.isArray(ctx.halLiveWidgetEvents) ? ctx.halLiveWidgetEvents.length : 0;
+        const session = ctx.halWorkSession && ctx.halWorkSession.templateId ? ctx.halWorkSession.templateId : "none";
+        const lines = [
+          `Current page: ${info ? info.label : pageId}`,
+          info && info.detail ? `Page focus: ${info.detail}` : "",
+          `Active work session: ${session}`,
+          `Live widget events this session: ${events}`,
+          recent ? `Recent turns:\n${recent}` : "Recent turns: none",
+        ].filter(Boolean);
+        return { ok: true, summary: lines.join("\n") };
+      },
+    },
+    search_program: {
+      label: "Search program pages and registry",
+      run: async (ctx, args) => {
+        const raw = String(args.query || "").trim();
+        const terms = raw
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((w) => w.length > 2);
+        if (!terms.length) return { ok: false, summary: "No search terms." };
+        const hits = [];
+        (ctx.pages || []).forEach((page) => {
+          const hay = `${page.id} ${page.label || ""} ${page.title || ""}`.toLowerCase();
+          if (terms.some((t) => hay.includes(t))) hits.push(`Page: ${page.label || page.id} (#${page.id})`);
+        });
+        (HalCore.registryList(ctx.halData) || []).forEach((entry) => {
+          const hay = `${entry.id} ${entry.label || ""} ${entry.state || ""} ${entry.detail || ""} ${entry.nextAction || ""}`.toLowerCase();
+          if (terms.some((t) => hay.includes(t))) {
+            hits.push(`Registry: ${entry.label || entry.id} — ${entry.state || "unknown"}`);
+          }
+        });
+        const firewall = ctx.halData && ctx.halData.firewall;
+        if (firewall && terms.some((t) => "firewall blocked allowed".includes(t))) {
+          hits.push(`Firewall: ${firewall.summary || "external actions blocked"}`);
+        }
+        return {
+          ok: true,
+          summary: hits.length
+            ? hits.slice(0, 24).join("\n")
+            : `No program matches for "${raw}". Try page names (claims, A/R, QuickBooks) or registry topics (imports, widgets).`,
+          query: raw,
+        };
+      },
+    },
+    read_import_diagnostics: {
+      label: "Read import diagnostics detail",
+      run: async (ctx) => {
+        const snap = await ctx.loadProgramSnapshot();
+        const diagnostics = snap && snap.importBundle && snap.importBundle.diagnostics;
+        const api =
+          typeof ImportDiagnostics !== "undefined"
+            ? ImportDiagnostics
+            : typeof window !== "undefined" && window.ImportDiagnostics
+              ? window.ImportDiagnostics
+              : null;
+        if (!diagnostics || !api || typeof api.formatDatasetLines !== "function") {
+          return { ok: false, summary: "Import diagnostics unavailable — try refresh imports first." };
+        }
+        const lines = api.formatDatasetLines(diagnostics);
+        return { ok: true, summary: (lines.length ? lines.join("\n") : "No import datasets evaluated.").slice(0, 4000) };
+      },
+    },
+    lookup_english_word: {
+      label: "Look up English dictionary word",
+      run: async (ctx, args) => {
+        const api =
+          typeof HalEnglishVocab !== "undefined"
+            ? HalEnglishVocab
+            : typeof window !== "undefined" && window.HalEnglishVocab
+              ? window.HalEnglishVocab
+              : null;
+        if (!api || typeof api.lookupWord !== "function") {
+          return { ok: false, summary: "English dictionary unavailable." };
+        }
+        const raw = String(args.query || "").trim().replace(/^define\s+/i, "");
+        const word = raw.match(/\b([a-z'-]{3,})\b/i);
+        const term = word ? word[1] : raw.split(/\s+/).pop();
+        if (!term) return { ok: false, summary: "No word to look up." };
+        const entry = await api.lookupWord(term);
+        if (!entry) return { ok: false, summary: `No dictionary entry for "${term}".` };
+        const text =
+          typeof api.formatWordLesson === "function" ? api.formatWordLesson(entry) : JSON.stringify(entry);
+        return { ok: true, summary: String(text).slice(0, 2500), word: term };
+      },
+    },
+    read_program_help: {
+      label: "Read in-app program help",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.getProgramHelp !== "function") {
+          return { ok: false, summary: "Program help requires the NR2 desktop app." };
+        }
+        const payload = await bridge.getProgramHelp(String(args.query || ""));
+        const text = payload && payload.text ? String(payload.text) : "No help topic matched.";
+        return { ok: true, summary: text.slice(0, 3000), match: payload && payload.match ? payload.match : null };
+      },
+    },
+    grep_program_source: {
+      label: "Search NR2 program source (read-only)",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.grepProgramSource !== "function") {
+          return { ok: false, summary: "Program source search requires the NR2 desktop app." };
+        }
+        const raw = String(args.query || "").trim();
+        const term =
+          raw.match(/\b(handleHalSubmit|HalAgent|routeHalCommand|buildPlan|grep|function\s+(\w+))\b/i)?.[0] ||
+          raw.replace(/^(how does|how do|where is|find|grep|search)\s+/i, "").trim() ||
+          raw;
+        const payload = await bridge.grepProgramSource(term, 20);
+        const text = payload && payload.text ? String(payload.text) : "No source matches.";
+        return { ok: !!(payload && payload.count), summary: text.slice(0, 4500), hits: payload && payload.hits ? payload.hits : [] };
+      },
+    },
+    search_hal_memories: {
+      label: "Search durable HAL memories",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.searchHalMemories !== "function") {
+          return { ok: false, summary: "Memory search requires the NR2 desktop app." };
+        }
+        const payload = await bridge.searchHalMemories(String(args.query || ""), 6);
+        const text = payload && payload.text ? String(payload.text) : "No matching memories.";
+        return {
+          ok: !!(payload && payload.count),
+          summary: text.slice(0, 2500) || "No matching memories.",
+          count: payload && payload.count ? payload.count : 0,
+        };
+      },
+    },
+    read_program_file: {
+      label: "Read NR2 program source file",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.readProgramFile !== "function") {
+          return { ok: false, summary: "Program file read requires the NR2 desktop app." };
+        }
+        const raw = String(args.query || "");
+        const pathMatch =
+          raw.match(/(?:NewRidgeFinancial2\/)?(site\/[\w./-]+\.\w+)/i) ||
+          raw.match(/\b(hal-[\w.-]+\.(?:js|json|py|html|css|mjs))\b/i) ||
+          raw.match(/\b([\w.-]+\.(?:js|json|py))\b/i);
+        const rel = pathMatch ? pathMatch[1] : raw.replace(/^read\s+/i, "").trim();
+        if (!rel) return { ok: false, summary: "No file path to read." };
+        const payload = await bridge.readProgramFile(rel, 10000);
+        const text = payload && payload.text ? String(payload.text) : "File unavailable.";
+        return {
+          ok: !!(payload && payload.ok !== false),
+          summary: (payload && payload.file ? payload.file + ":\n" : "") + text.slice(0, 4500),
+          file: payload && payload.file ? payload.file : rel,
+        };
+      },
+    },
+    list_program_files: {
+      label: "List NR2 program source files",
+      run: async (ctx, args) => {
+        const bridge = bridgeFromCtx(ctx);
+        if (!bridge || typeof bridge.listProgramFiles !== "function") {
+          return { ok: false, summary: "Program file list requires the NR2 desktop app." };
+        }
+        const payload = await bridge.listProgramFiles("site", 60);
+        return {
+          ok: !!(payload && payload.count),
+          summary: (payload && payload.text ? payload.text : "No files.").slice(0, 3500),
+          files: payload && payload.files ? payload.files : [],
+        };
+      },
+    },
+    apply_program_patch: {
+      label: "Apply safe program source patch",
+      run: async (ctx, args) => {
+        const bridge = bridgeFromCtx(ctx);
+        const spec = (ctx && ctx.pendingPatch) || parsePatchFromQuery(String(args.query || ""));
+        if (!spec || !spec.file || !spec.old) {
+          return {
+            ok: false,
+            summary:
+              "No patch spec. Use <<<patch\\nfile: site/example.js\\nold:\\n...\\nnew:\\n...\\n>>> in your message, or ask HAL to validate only.",
+          };
+        }
+        if (!bridge || typeof bridge.applyProgramPatch !== "function") {
+          return { ok: false, summary: "Program patch requires the NR2 desktop app." };
+        }
+        const payload = await bridge.applyProgramPatch(spec.file, spec.old, spec.new, false);
+        const text = payload && payload.text ? String(payload.text) : "Patch failed.";
+        return { ok: !!(payload && payload.ok), summary: text.slice(0, 2000), file: payload && payload.file ? payload.file : spec.file };
+      },
+    },
+    run_hal_validation: {
+      label: "Run validate-hal.mjs",
+      run: async (ctx, args) => {
+        const bridge = bridgeFromCtx(ctx);
+        if (bridge && typeof bridge.runHalValidation === "function") {
+          const payload = await bridge.runHalValidation(120);
+          const text = payload && payload.text ? String(payload.text) : "Validation unavailable.";
+          return {
+            ok: !!(payload && payload.ok),
+            summary: text.slice(0, 5000),
+            exitCode: payload && payload.exitCode != null ? payload.exitCode : -1,
+          };
+        }
+        if (typeof process !== "undefined" && process.versions && process.versions.node) {
+          try {
+            const { execSync } = require("node:child_process");
+            const { join } = require("node:path");
+            let nr2 = ctx && ctx.nr2Root ? ctx.nr2Root : null;
+            if (!nr2) {
+              const cwd = process.cwd();
+              nr2 = /NewRidgeFinancial2/i.test(cwd) ? cwd : join(cwd, "NewRidgeFinancial2");
+            }
+            const out = execSync("node validate-hal.mjs", {
+              cwd: nr2,
+              encoding: "utf8",
+              env: Object.assign({}, process.env, { NR2_LOAD_IMPORTS: "1" }),
+              stdio: ["ignore", "pipe", "pipe"],
+              timeout: 120000,
+            });
+            return { ok: true, summary: String(out).slice(-5000), exitCode: 0 };
+          } catch (err) {
+            const msg = (err.stdout || "") + (err.stderr || "") + (err.message || "");
+            return { ok: false, summary: msg.slice(-5000), exitCode: err.status || 1 };
+          }
+        }
+        return { ok: false, summary: "HAL validation requires the NR2 desktop app or Node runtime." };
+      },
+    },
+    run_node_syntax_check: {
+      label: "Run node --check on program files",
+      run: async (ctx, args) => {
+        const bridge = bridgeFromCtx(ctx);
+        const raw = String(args.query || "");
+        const paths = [];
+        const re = /(?:NewRidgeFinancial2\/)?(site\/[\w./-]+\.(?:js|mjs))/gi;
+        let m;
+        while ((m = re.exec(raw)) !== null) paths.push(m[1]);
+        if (!paths.length) {
+          paths.push("site/hal-core.js", "site/hal-agent.js", "site/app.js");
+        }
+        if (!bridge || typeof bridge.runNodeSyntaxCheck !== "function") {
+          return { ok: false, summary: "Syntax check requires the NR2 desktop app." };
+        }
+        const payload = await bridge.runNodeSyntaxCheck(paths);
+        const text = payload && payload.text ? String(payload.text) : "Syntax check failed.";
+        return { ok: !!(payload && payload.ok), summary: text.slice(0, 3000), results: payload && payload.results ? payload.results : [] };
+      },
+    },
+    semantic_search_program: {
+      label: "Semantic search program source",
+      run: async (ctx, args) => {
+        const bridge = bridgeFromCtx(ctx);
+        if (!bridge || typeof bridge.semanticSearchProgram !== "function") {
+          return { ok: false, summary: "Semantic search requires the NR2 desktop app." };
+        }
+        const payload = await bridge.semanticSearchProgram(String(args.query || ""), 15);
+        const text = payload && payload.text ? String(payload.text) : "No semantic matches.";
+        return { ok: !!(payload && payload.count), summary: text.slice(0, 4500), hits: payload && payload.hits ? payload.hits : [] };
+      },
+    },
+    run_git_readonly: {
+      label: "Git status/diff (read-only)",
+      run: async (ctx, args) => {
+        const bridge = bridgeFromCtx(ctx);
+        const raw = String(args.query || "").toLowerCase();
+        let cmd = "status";
+        if (/diff-stat|diff stat/.test(raw)) cmd = "diff-stat";
+        else if (/diff-names|diff names|changed files/.test(raw)) cmd = "diff-names";
+        else if (/log|history/.test(raw)) cmd = "log";
+        if (!bridge || typeof bridge.runGitReadonly !== "function") {
+          return { ok: false, summary: "Git read requires the NR2 desktop app." };
+        }
+        const payload = await bridge.runGitReadonly(cmd);
+        const text = payload && payload.text ? String(payload.text) : "Git unavailable.";
+        return { ok: !!(payload && payload.ok), summary: text.slice(0, 4000), command: cmd };
+      },
+    },
+    explain_route: {
+      label: "Explain HAL routing for this question",
+      run: async (ctx, args) => {
+        const q = String(args.query || "").trim();
+        if (!HalCore || typeof HalCore.routeHalCommand !== "function") {
+          return { ok: false, summary: "Routing unavailable." };
+        }
+        const r = HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, q);
+        const miniPlan = buildPlan(q, r, workingMemory, longTermMemory, ctx);
+        const flags = [
+          r.useModel ? "useModel" : null,
+          r.useReasoning ? "useReasoning" : null,
+          r.useEscalation ? "useEscalation" : null,
+          r.useImportRefresh ? "useImportRefresh" : null,
+        ]
+          .filter(Boolean)
+          .join(", ");
+        return {
+          ok: true,
+          summary: [
+            `Question: ${q}`,
+            `Intent: ${r.intent || "unknown"}`,
+            `Lane: ${r.lane || "local"}`,
+            `Flags: ${flags || "none"}`,
+            `Tools planned: ${miniPlan.tools.join(", ") || "none"}`,
+            r.text ? `Template text: ${String(r.text).slice(0, 200)}` : "No pre-baked template — model or executor will answer.",
+          ].join("\n"),
+        };
+      },
+    },
+    search_chat_history: {
+      label: "Search recent HAL chat turns",
+      run: async (ctx, args) => {
+        const raw = String(args.query || "").toLowerCase();
+        const terms = raw.split(/\s+/).filter((w) => w.length > 2);
+        const hist = ctx.getChatHistory ? ctx.getChatHistory() : ctx.getWorkingTurns ? ctx.getWorkingTurns() : [];
+        const hits = (hist || []).filter((m) => {
+          const hay = `${m.role || ""} ${m.text || ""}`.toLowerCase();
+          return terms.length ? terms.some((t) => hay.includes(t)) : hay.length > 0;
+        });
+        const recent = hits.slice(-8);
+        if (!recent.length) {
+          return { ok: true, summary: "No matching turns in recent chat history." };
+        }
+        const lines = recent.map((m) => `${m.role === "user" ? "You" : "HAL"}: ${String(m.text || "").slice(0, 160)}`);
+        return { ok: true, summary: lines.join("\n") };
+      },
+    },
   };
 
   let workingMemory = createWorkingMemory();
@@ -317,6 +719,8 @@ const HalAgent = (function () {
       lastIntent: null,
       lastTools: [],
       activeWorkSession: false,
+      preferBrief: false,
+      firewallBriefCount: 0,
       updatedAt: new Date().toISOString(),
     };
   }
@@ -381,6 +785,175 @@ const HalAgent = (function () {
       return WEB_RESEARCH_PRACTICE_RE.test(query) && String(query).trim().length >= 16;
     }
     return false;
+  }
+
+  function isInvestigateQuery(query, route) {
+    return (
+      /\b(what'?s wrong|why is|why are|investigate|debug|diagnose|root cause|figure out|what happened|broken|not working|empty widget)\b/i.test(
+        query,
+      ) ||
+      /\b(how does|where is .+ handled|grep|source code)\b/i.test(query) ||
+      !!(route && route.useReasoning && /\b(import|widget|source|missing|failed)\b/i.test(query))
+    );
+  }
+
+  function extractToolEvidenceLines(toolResults, maxLines) {
+    const lines = [];
+    for (const [id, res] of Object.entries(toolResults || {})) {
+      if (!res || !res.summary) continue;
+      const summary = String(res.summary).trim();
+      const chunks = summary
+        .split(/\n+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const chunk of chunks) {
+        if (/^(no data|error|unknown tool|#+\s)/i.test(chunk)) continue;
+        if (chunk.length < 16) continue;
+        lines.push(chunk.replace(/\s+/g, " ").slice(0, 420));
+        break;
+      }
+      if (lines.length >= maxLines) break;
+    }
+    return lines;
+  }
+
+  function synthesizeAnswerFromTools(query, plan, toolResults, route, ctx) {
+    const ap = (ctx && ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
+    if (ap.synthesizeTools === false) return null;
+    const lines = extractToolEvidenceLines(toolResults, 5);
+    if (!lines.length) return null;
+
+    const q = String(query || "");
+    let lead;
+    if (/\breadiness\b/i.test(q)) lead = "Readiness checks from local tools show:";
+    else if (/\bimport|fresh|stale|missing|softdent|quickbooks\b/i.test(q)) lead = "Import and source status from local checks:";
+    else if (isInvestigateQuery(q, route)) lead = "Local diagnostics for this question:";
+    else if (/\bprioriti|attention|blocked\b/i.test(q)) lead = "From local office data:";
+    else lead = "From local program evidence:";
+
+    let next = "Next step: refresh imports or name a specific page if you want a narrower check.";
+    if (/\breadiness\b/i.test(q)) next = "Next step: run readiness from HAL or open the page named in the findings.";
+    else if (route && route.intent === "imports: refresh") next = "Next step: verify export paths, then refresh imports if files are missing.";
+    else if (/\bdenied|claim\b/i.test(q)) next = "Next step: open Claims Workbench and work the Needs Review lane first.";
+
+    const evidenceTag = "This is based on the local program data gathered for this question.";
+    const body = lines.join(" ");
+    return `${lead} ${body} ${next} ${evidenceTag}`.replace(/\s{2,}/g, " ").trim();
+  }
+
+  function isGenericOfflineText(text) {
+    return /\b(local chat is offline|can't reach local chat|model lane is down|chat model is offline)\b/i.test(
+      String(text || ""),
+    );
+  }
+
+  function buildToolSynthesisOutcome(query, plan, toolResults, route, ctx) {
+    const text = synthesizeAnswerFromTools(query, plan, toolResults, route, ctx);
+    if (!text) return null;
+    return {
+      text,
+      lane: "local",
+      actions: [],
+      intent: (route && route.intent) || "tools:synthesis",
+    };
+  }
+
+  function expandGatherToolsForRound(query, route, toolResults, round, existingIds) {
+    const had = new Set(existingIds || []);
+    const add = [];
+    const blob = Object.values(toolResults || {})
+      .map((r) => (r && r.summary ? String(r.summary) : ""))
+      .join(" ");
+    if (round >= 1) {
+      if (!had.has("read_import_diagnostics") && /\b(import|missing|empty|stale|dataset|export)\b/i.test(query + blob)) {
+        add.push("read_import_diagnostics");
+      }
+      if (!had.has("read_widget_feed") && /\b(widget|dashboard|feed|empty|tile)\b/i.test(query + blob)) {
+        add.push("read_widget_feed");
+      }
+      if (!had.has("grep_program_source") && /\b(how|why|bug|code|function|broken|error)\b/i.test(query)) {
+        add.push("grep_program_source");
+      }
+    }
+    if (round >= 2) {
+      if (!had.has("read_program_help")) add.push("read_program_help");
+      if (!had.has("search_program")) add.push("search_program");
+      if (!had.has("read_source_health")) add.push("read_source_health");
+    }
+    if (round >= 1 && /\bvalidate|validation|syntax\b/i.test(query)) {
+      if (!had.has("run_hal_validation")) add.push("run_hal_validation");
+      if (!had.has("run_node_syntax_check") && /\bsyntax\b/i.test(query)) add.push("run_node_syntax_check");
+    }
+    return add.filter((id) => !had.has(id)).slice(0, Math.max(0, AGENT_BUDGET.maxTools - had.size));
+  }
+
+  function needsMoreGather(checked, toolResults, plan, round) {
+    if (!plan || !plan.useModelEnhancement) return false;
+    if (round >= AGENT_BUDGET.maxGatherRounds - 1) return false;
+    if (checked && checked.pass) return false;
+    const issues = (checked && checked.issues) || [];
+    if (issues.includes("missing_evidence_when_tools") || issues.includes("empty_response")) return true;
+    const blob = Object.values(toolResults || {})
+      .map((r) => (r && r.summary ? String(r.summary) : ""))
+      .join(" ");
+    if (/FAILED|missing|empty|no data|error|unavailable/i.test(blob)) return true;
+    return false;
+  }
+
+  function cursorGatherTools(query, route) {
+    if (!(route.useModel || route.useReasoning || route.useEscalation || route.useOss)) return [];
+    const gather = ["read_current_context"];
+    if (!route.text) {
+      gather.push("read_program_snapshot", "read_source_health");
+    }
+    if (/\b(registry|capabilit|what can you|what can't|blocked|allowed)\b/i.test(query)) {
+      gather.push("read_registry");
+    }
+    if (/\bwidget|dashboard|feed|manager|tile|monitor\b/i.test(query)) {
+      gather.push("read_widget_feed");
+    }
+    if (/\b(import|diagnostic|export|fresh|stale|inbox|dataset)\b/i.test(query)) {
+      gather.push("read_import_diagnostics");
+    }
+    if (/\bdefine\b|english word|vocabulary|dictionary|random english\b/i.test(query)) {
+      gather.push("lookup_english_word");
+    }
+    if (/\b(search|find|where is|look for|grep)\b/i.test(query)) {
+      gather.push("search_program");
+      gather.push("semantic_search_program");
+    }
+    if (/\b(how does|how do|source code|in the code|function|programming|hal-agent|handleHalSubmit|routeHalCommand)\b/i.test(query)) {
+      gather.push("grep_program_source");
+    }
+    if (/\b(read file|open file|show file|\.js\b|\.py\b|hal-agent\.js|app\.js)\b/i.test(query)) {
+      gather.push("read_program_file");
+    }
+    if (/\b(list files|what files|source tree|program files)\b/i.test(query)) {
+      gather.push("list_program_files");
+    }
+    if (/\b(route|routing|which lane|what intent|how do you route)\b/i.test(query)) {
+      gather.push("explain_route");
+    }
+    if (/\b(earlier|before|you said|last time|chat history|we discussed)\b/i.test(query)) {
+      gather.push("search_chat_history");
+    }
+    if (/\b(how do i|help with|troubleshoot|why is my|operator help)\b/i.test(query)) {
+      gather.push("read_program_help");
+    }
+    if (/\b(remember|recall|you said|last time|memory)\b/i.test(query)) {
+      gather.push("search_hal_memories");
+    }
+    if (/\blearn this|save this|note that\b/i.test(query)) {
+      gather.push("remember_fact");
+    }
+    if (isTaskCompletionQuery(query)) {
+      if (!gather.includes("grep_program_source")) gather.push("grep_program_source");
+      if (/\bvalidate|validation\b/i.test(query)) gather.push("run_hal_validation");
+      if (/\bsyntax\b/i.test(query)) gather.push("run_node_syntax_check");
+      if (/<<<patch/i.test(query)) gather.push("apply_program_patch");
+      if (/\bgit\b/i.test(query)) gather.push("run_git_readonly");
+    }
+    return gather;
   }
 
   function buildPlan(query, route, working, longTerm, ctx) {
@@ -453,16 +1026,29 @@ const HalAgent = (function () {
     if (intent === "firewall" || /\bfirewall\b/i.test(query)) tools.push("explain_firewall");
     if (ctx && webResearchEnabled(ctx, query, route)) tools.push("research_web");
 
-    const toolBudget = tools.includes("research_web") ? 4 : AGENT_BUDGET.maxTools;
-    const uniqueTools = [...new Set(tools)].slice(0, toolBudget);
+    cursorGatherTools(query, route).forEach((id) => tools.push(id));
+
+    if (parsePatchFromQuery(query)) tools.push("apply_program_patch");
+    if (isTaskCompletionQuery(query)) {
+      if (/\bvalidate|validation|make.*pass\b/i.test(query)) tools.push("run_hal_validation");
+      if (/\bsyntax\b/i.test(query)) tools.push("run_node_syntax_check");
+    }
+
+    const uniqueTools = [...new Set(tools)].slice(0, AGENT_BUDGET.maxTools);
+    const planOnly = typeof HalAgentLoop !== "undefined" && HalAgentLoop.isPlanOnlyQuery(query);
 
     return {
       questionType: classifyQuestion(query, route),
+      originalQuery: query,
       needsData: uniqueTools.length > 0,
       tools: uniqueTools,
       isUnsafe: false,
       useModelEnhancement: !!(route.useModel || route.useReasoning || route.useEscalation || route.useOss),
       needsClarification: !route.text && !hasUseFlag(route),
+      agentToolLoop: !planOnly && !!(route.useModel || route.useReasoning || route.useEscalation),
+      planOnly,
+      isTaskCompletionQuery: isTaskCompletionQuery(query),
+      isInvestigateQuery: isInvestigateQuery(query, route),
       lane: route.lane,
       intent,
       budget: AGENT_BUDGET,
@@ -471,31 +1057,80 @@ const HalAgent = (function () {
   }
 
   async function runTools(toolIds, ctx, query) {
-    const results = {};
-    for (const id of toolIds) {
+    const notify = ctx && typeof ctx.onToolProgress === "function" ? ctx.onToolProgress : null;
+    const jobs = toolIds.map(async (id) => {
       const def = TOOL_DEFS[id];
-      if (!def) continue;
+      if (!def) return [id, null];
+      if (notify) notify({ phase: "start", tool: id, label: def.label || id });
       try {
-        results[id] = await def.run(ctx, { query });
+        const res = await def.run(ctx, { query });
+        if (notify) {
+          notify({
+            phase: "done",
+            tool: id,
+            label: def.label || id,
+            ok: !(res && res.ok === false),
+          });
+        }
+        return [id, res];
       } catch (error) {
-        results[id] = { ok: false, summary: error && error.message ? error.message : String(error) };
+        if (notify) notify({ phase: "done", tool: id, label: def.label || id, ok: false });
+        return [id, { ok: false, summary: error && error.message ? error.message : String(error) }];
       }
-    }
+    });
+    const pairs = await Promise.all(jobs);
+    const results = {};
+    pairs.forEach(([id, res]) => {
+      if (res) results[id] = res;
+    });
     return results;
   }
 
+  function escalateRouteForRetry(route, query) {
+    const r = Object.assign({}, route || {});
+    r.useReasoning = true;
+    r.useModel = false;
+    r.useEscalation = false;
+    r.useOss = false;
+    r.lane = "reason21b";
+    r.text = "";
+    r.prompt = query;
+    if (!/^reasoning:/.test(String(r.intent || ""))) {
+      r.intent = "reasoning: auto-escalate";
+    }
+    return r;
+  }
+
+  function shouldAutoEscalate(checked, route) {
+    if (!checked || checked.pass) return false;
+    if (!route || route.useReasoning || route.useEscalation || route.useOss) return false;
+    if (!route.useModel) return false;
+    return checked.issues.some((issue) => MODEL_SHAPE_ISSUES.has(issue) || issue === "too_short" || issue === "empty_response");
+  }
+
   function summarizeToolResults(toolResults) {
-    return Object.entries(toolResults || {})
-      .map(([id, res]) => {
-        const label = (TOOL_DEFS[id] && TOOL_DEFS[id].label) || id;
-        const body = res && res.summary ? String(res.summary).slice(0, AGENT_BUDGET.maxToolSummaryChars) : "No data.";
-        return `### ${label}\n${body}`;
-      })
-      .join("\n\n");
+    const header =
+      typeof HalAgentProgramming !== "undefined" && HalAgentProgramming.toolSynthesisGuide
+        ? HalAgentProgramming.toolSynthesisGuide() + "\n\n"
+        : "Synthesize these tool results into your answer (do not paste raw dumps):\n\n";
+    return (
+      header +
+      Object.entries(toolResults || {})
+        .map(([id, res]) => {
+          const label = (TOOL_DEFS[id] && TOOL_DEFS[id].label) || id;
+          const body = res && res.summary ? String(res.summary).slice(0, AGENT_BUDGET.maxToolSummaryChars) : "No data.";
+          return `### ${label}\n${body}`;
+        })
+        .join("\n\n")
+    );
   }
 
   function summarizeWorkingMemory(working) {
-    const recent = (working.turns || []).slice(-AGENT_BUDGET.maxRecentTurns);
+    const turns = working.turns || [];
+    if (typeof HalCore !== "undefined" && HalCore.compressThreadForPrompt) {
+      return HalCore.compressThreadForPrompt(turns, AGENT_BUDGET.maxRecentTurns);
+    }
+    const recent = turns.slice(-AGENT_BUDGET.maxRecentTurns);
     if (!recent.length) return "";
     return recent
       .map((t) => `${t.role}: ${String(t.text).slice(0, 160)}${t.intent ? ` [${t.intent}]` : ""}`)
@@ -503,12 +1138,18 @@ const HalAgent = (function () {
   }
 
   function buildAgentSystemPrompt(ctx, plan, toolResults, working, longTerm) {
+    const query = plan && plan.originalQuery ? plan.originalQuery : "";
+    const usePlanStyle =
+      plan.questionType === "planning" &&
+      (HalCore.wantsStructuredPlan ? HalCore.wantsStructuredPlan(query) : /make a plan|prioriti/i.test(query));
     const base =
-      plan.questionType === "planning"
-        ? HalCore.buildReasoningPrompt(ctx.halData, null)
-        : plan.questionType === "escalation"
-          ? HalCore.buildEscalationPrompt(ctx.halData, null)
-          : HalCore.buildSystemPrompt(ctx.halData, null);
+      plan.questionType === "planning" && !usePlanStyle
+        ? HalCore.buildReasoningChatPrompt(ctx.halData, null)
+        : plan.questionType === "planning"
+          ? HalCore.buildReasoningPrompt(ctx.halData, null)
+          : plan.questionType === "escalation"
+            ? HalCore.buildEscalationPrompt(ctx.halData, null)
+            : HalCore.buildSystemPrompt(ctx.halData, null);
 
     const parts = [
       base,
@@ -553,10 +1194,22 @@ const HalAgent = (function () {
     if (turnText) {
       parts.push("", "Recent conversation context:", turnText);
     }
+    if (working.sessionSummary) {
+      parts.push("", working.sessionSummary);
+    }
+    if (plan.agentToolLoop && typeof HalAgentLoop !== "undefined") {
+      parts.push("", HalAgentLoop.TOOL_LOOP_GUIDE);
+      if (plan.loopSuffix) parts.push("", "Prior tool loop results:", String(plan.loopSuffix).slice(0, 6000));
+    }
+    if (plan.planOnly) {
+      parts.push("", "PLAN ONLY: propose steps and patches but do not claim changes were applied.");
+    }
 
     parts.push(
       "",
-      "Before answering, verify: answer the question, do not invent data, refuse external actions, note missing data, and keep the reply practical for staff review.",
+      plan.questionType === "planning" && !usePlanStyle
+        ? "Answer clearly: cite local evidence and one safe next step for staff. Use five+ sentences for planning questions."
+        : "Verify: answer the question, do not invent data, do not claim external actions, note missing data. Proportional depth — simple questions stay concise; reasoning and code questions get full detail. Markdown allowed for source citations.",
     );
     return parts.join("\n");
   }
@@ -564,6 +1217,9 @@ const HalAgent = (function () {
   function buildFastChatAgentPrompt(ctx, plan, toolResults, working, longTerm) {
     const toolText = summarizeToolResults(toolResults);
     const parts = [HalCore.buildFastChatSystemPrompt(ctx.halData, null)];
+    const thread = HalCore.buildThreadContextBlock(working.turns, plan && plan.originalQuery ? plan.originalQuery : "");
+    if (thread) parts.push("", thread);
+    if (working.preferBrief) parts.push("", "User prefers brief answers this session — keep replies short.");
     if (toolText) {
       parts.push("", "Tool results:", toolText.slice(0, 1200));
     }
@@ -571,7 +1227,10 @@ const HalAgent = (function () {
     if (turnText) {
       parts.push("", "Recent turns:", turnText.slice(0, 400));
     }
-    parts.push("", "Answer the user directly in 1–2 short paragraphs. No bullet lists unless asked.");
+    parts.push(
+      "",
+      "Write like a Cursor Auto-style agent: direct answer first, then evidence and implications. Proportional depth — simple questions can be short; complex or diagnostic questions need detail. Markdown and code citations allowed when discussing program source.",
+    );
     return parts.join("\n");
   }
 
@@ -586,7 +1245,39 @@ const HalAgent = (function () {
     if (!plan.isUnsafe && /\b(I (submitted|sent|emailed|uploaded|posted|deleted|paid|wired|faxed))\b/i.test(body)) {
       issues.push("claimed_external_action");
     }
-    if (plan.useModelEnhancement && body.length < 20) issues.push("too_short");
+    if (plan.useModelEnhancement && body.length < 28) issues.push("too_short");
+    if (
+      plan.useModelEnhancement &&
+      route &&
+      route.useReasoning &&
+      typeof HalCore !== "undefined" &&
+      HalCore.countSentences &&
+      HalCore.countSentences(body) < (HalCore.MIN_REPLY_SENTENCES || 5)
+    ) {
+      issues.push("too_few_sentences");
+    } else if (
+      plan.useModelEnhancement &&
+      route &&
+      route.useReasoning &&
+      typeof HalCore !== "undefined" &&
+      HalCore.countWords &&
+      HalCore.countWords(body) < 42
+    ) {
+      issues.push("too_short");
+    }
+
+    if (typeof HalCore !== "undefined" && HalCore.chatShapeIssues) {
+      const prevHal = (workingMemory.turns || []).filter((t) => t.role === "hal").slice(-1)[0];
+      const shapeIssues = HalCore.chatShapeIssues(query, body, route, {
+        previousHalText: prevHal ? prevHal.text : "",
+        hadToolResults: !!(toolResults && Object.keys(toolResults).length),
+        toolsUsed: plan && plan.tools ? plan.tools : [],
+        hadSourceTools: !!(plan && plan.tools && plan.tools.some((t) => /grep_program|read_program_file|list_program_files|explain_route/.test(t))),
+      });
+      shapeIssues.forEach((issue) => {
+        if (!issues.includes(issue)) issues.push(issue);
+      });
+    }
 
     let repaired = null;
     if (issues.includes("empty_response")) {
@@ -594,12 +1285,37 @@ const HalAgent = (function () {
         (route && route.text) ||
         "I could not produce a safe answer from local data. Try asking what HAL can do, or name a page, widget, or review task.";
     } else if (issues.includes("unsafe_not_refused")) {
+      const fw = typeof HalCore !== "undefined" ? HalCore.FALLBACK_FIREWALL : null;
       repaired =
-        "That is an external action, so it stops at the firewall and needs human review. I can open the right page and prepare review notes, but a person must take the external step.";
+        typeof HalCore !== "undefined" && HalCore.variedBlockedCapabilityReply
+          ? HalCore.variedBlockedCapabilityReply(fw, query)
+          : "That is an external action, so it stops at the firewall and needs human review. I can open the right page and prepare review notes, but a person must take the external step.";
     } else if (issues.includes("claimed_external_action")) {
       repaired =
         body.replace(/\bI (submitted|sent|emailed|uploaded|posted|deleted|paid|wired|faxed)\b/gi, "A human must") +
         "\n\n(Local draft only — external delivery requires human review.)";
+    } else if (
+      issues.some((i) =>
+        i === "too_long_chat" ||
+        i === "identity_monologue" ||
+        i === "numbered_list_unrequested" ||
+        i === "yes_no_not_direct" ||
+        i === "chatbot_filler" ||
+        i === "repeats_previous" ||
+        i === "internal_jargon" ||
+        i === "question_echo" ||
+        i === "answer_not_first" ||
+        i === "too_few_sentences" ||
+        i === "missing_evidence_when_tools" ||
+        i === "no_next_step" ||
+        i === "sarcasm_or_dismissal" ||
+        i === "engagement_bait",
+      )
+    ) {
+      repaired =
+        typeof HalCore !== "undefined" && HalCore.repairChatShape
+          ? HalCore.repairChatShape(query, body, route, issues)
+          : body;
     }
 
     return { pass: issues.length === 0, issues, repaired };
@@ -617,7 +1333,14 @@ const HalAgent = (function () {
     if (meta && meta.intent) workingMemory.lastIntent = meta.intent;
     if (meta && meta.tools) workingMemory.lastTools = meta.tools;
     if (meta && meta.focus) workingMemory.focus = meta.focus;
+    if (role === "user" && HalCore.wantsBriefReply && HalCore.wantsBriefReply(text)) workingMemory.preferBrief = true;
+    if (role === "hal" && meta && meta.intent && /blocked: firewall|capability:blocked/.test(meta.intent)) {
+      workingMemory.firewallBriefCount = (workingMemory.firewallBriefCount || 0) + 1;
+    }
     workingMemory.updatedAt = new Date().toISOString();
+    if (typeof HalCore !== "undefined" && HalCore.updateSessionSummary) {
+      workingMemory.sessionSummary = HalCore.updateSessionSummary(workingMemory.turns, workingMemory.sessionSummary);
+    }
     memoryDirty = true;
   }
 
@@ -685,6 +1408,71 @@ const HalAgent = (function () {
     }
   }
 
+  function preferHigherReasoning(ctx) {
+    if (typeof globalThis !== "undefined" && globalThis._halForceReasoning === false) return false;
+    if (typeof globalThis !== "undefined" && (globalThis._halRandomQaUseReasoning || globalThis._halForceReasoning)) {
+      return true;
+    }
+    const cfg = ctx && ctx.halModels && ctx.halModels.config;
+    return !!(cfg && cfg.preferReasoning);
+  }
+
+  function applyHigherReasoningRoute(route, query, ctx) {
+    if (!route) return route;
+    // Template/instant routes already have staff-facing text — keep fast path.
+    if (route.text && String(route.text).trim()) return route;
+    const ap = (ctx && ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
+    const agentLoopQuery =
+      ap.agentToolLoop !== false &&
+      ap.agentLoopUseReasoning !== false &&
+      (/(how does|why is|fix|debug|investigate|validate|patch|source code|grep|where is .* handled|implement|make.*pass)/i.test(
+        String(query || ""),
+      ) ||
+        /<<<tool/i.test(String(query || "")));
+    if (
+      agentLoopQuery &&
+      typeof ctx.reasoningModelReady === "function" &&
+      ctx.reasoningModelReady()
+    ) {
+      const r = Object.assign({}, route);
+      r.useReasoning = true;
+      r.useModel = false;
+      r.useEscalation = false;
+      r.useOss = false;
+      r.lane = "reason21b";
+      r.text = "";
+      r.prompt = r.prompt || query;
+      if (!/^reasoning:/.test(String(r.intent || ""))) {
+        r.intent = "reasoning: agent-loop";
+      }
+      return r;
+    }
+    if (!preferHigherReasoning(ctx)) return route;
+    const intent = String(route.intent || "");
+    if (
+      /^navigate:/.test(intent) &&
+      route.actions &&
+      route.actions.length &&
+      typeof HalCore !== "undefined" &&
+      HalCore.isSimpleActionQuery &&
+      HalCore.isSimpleActionQuery(query)
+    ) {
+      return route;
+    }
+    if (intent === "imports: refresh" && route.useImportRefresh) return route;
+    const r = Object.assign({}, route);
+    r.useReasoning = true;
+    r.useModel = false;
+    r.useEscalation = false;
+    r.useOss = false;
+    r.lane = "reason21b";
+    r.prompt = r.prompt || query;
+    if (!/^reasoning:/.test(intent)) {
+      r.intent = globalThis._halRandomQaUseReasoning ? "reasoning: qa" : "reasoning: chat";
+    }
+    return r;
+  }
+
   function isFastChatRoute(route) {
     return !!(route.useModel && !route.useReasoning && !route.useEscalation && !route.useOss);
   }
@@ -695,15 +1483,30 @@ const HalAgent = (function () {
   }
 
   async function enhanceModelCall(ctx, route, query, plan, toolResults, onToken) {
-    const isFastChat = isFastChatRoute(route);
+    const agentCfg = (ctx && ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
+    const isFastChat = isFastChatRoute(route) && !(plan && plan.agentToolLoop);
     const agentPrompt = isFastChat
       ? buildFastChatAgentPrompt(ctx, plan, toolResults, workingMemory, longTermMemory)
       : buildAgentSystemPrompt(ctx, plan, toolResults, workingMemory, longTermMemory);
 
+    const userText = (function () {
+      const thread = HalCore.buildThreadContextBlock(workingMemory.turns, query);
+      if (typeof HalAgentProgramming !== "undefined" && HalAgentProgramming.formatUserTurn) {
+        return HalAgentProgramming.formatUserTurn(query, thread);
+      }
+      return thread ? thread + "\n\n" + query : query;
+    })();
+
     const snapshotToolRan = (plan.tools || []).some(
       (t) => t === "read_program_snapshot" || t === "read_widget_feed" || t === "read_claims_summary",
     );
-    const ctxCap = isFastChat ? 900 : route.useModel ? 3000 : AGENT_BUDGET.maxModelContextChars;
+    const ctxCap = isFastChat
+      ? 1200
+      : route.useReasoning || route.useEscalation
+        ? AGENT_BUDGET.maxModelContextChars
+        : route.useModel
+          ? 3500
+          : AGENT_BUDGET.maxModelContextChars;
     let combinedPrompt = agentPrompt;
     if (!fastChatSkipsProgramContext(route) && !snapshotToolRan) {
       const programContext = await ctx.getProgramContextText();
@@ -715,25 +1518,63 @@ const HalAgent = (function () {
       const em = ctx.escalationModelConfig();
       // Escalation runs a hidden think pass; skip streaming so raw reasoning is
       // not flashed to the user before it is cleaned out.
-      const text = await ctx.runModel(em, combinedPrompt, query, "Local escalation draft");
+      const text = await ctx.runModel(em, combinedPrompt, userText, "Local escalation draft");
       return { text, lane: "escalate30b" };
     }
     if (route.useOss) {
       if (!ctx.ossModelReady()) return { text: ctx.offlineModelMessage("oss120b"), lane: "oss120b · offline" };
       const om = ctx.ossModelConfig();
-      const text = await ctx.runModel(om, combinedPrompt, query, "Local OSS draft", onToken);
+      const text = await ctx.runModel(om, combinedPrompt, userText, "Local OSS draft", onToken);
       return { text, lane: "oss120b" };
+    }
+    const useCloudAgent =
+      plan &&
+      plan.agentToolLoop &&
+      typeof ctx.cloudModelReady === "function" &&
+      ctx.cloudModelReady() &&
+      typeof ctx.cloudModelConfig === "function";
+    if (useCloudAgent) {
+      const cm = Object.assign({ cloud: true, agentLoop: true }, ctx.cloudModelConfig());
+      cm.options = Object.assign({}, cm.options || {}, { max_tokens: 2048, temperature: 0.2 });
+      const text = await ctx.runModel(cm, combinedPrompt, userText, "Cloud agent", onToken);
+      return { text, lane: "cloud" };
+    }
+    const wantAgentReasoning =
+      plan &&
+      plan.agentToolLoop &&
+      agentCfg.agentLoopUseReasoning !== false &&
+      route.useModel &&
+      !route.useReasoning &&
+      !route.useEscalation &&
+      typeof ctx.reasoningModelReady === "function" &&
+      ctx.reasoningModelReady();
+    if (wantAgentReasoning) {
+      const rm = Object.assign({ reasoningLane: true, agentLoop: true }, ctx.reasoningModelConfig());
+      rm.options = Object.assign({}, rm.options || {}, { num_predict: 1800 });
+      const text = await ctx.runModel(rm, combinedPrompt, userText, "Agent loop reasoning", onToken);
+      return { text, lane: "reason21b" };
     }
     if (route.useReasoning) {
       if (!ctx.reasoningModelReady()) return { text: ctx.offlineModelMessage("reason21b"), lane: "reason21b · offline" };
-      const rm = ctx.reasoningModelConfig();
-      const text = await ctx.runModel(rm, combinedPrompt, query, "Local reasoning plan", onToken);
+      const rm = Object.assign({ reasoningLane: true }, ctx.reasoningModelConfig());
+      const text = await ctx.runModel(rm, combinedPrompt, userText, "Local reasoning plan", onToken);
       return { text, lane: "reason21b" };
     }
     if (route.useModel) {
-      if (!ctx.localModelReady()) return { text: ctx.offlineModelMessage("chat8b"), lane: "chat8b · offline" };
+      if (!ctx.localModelReady()) {
+        if (typeof HalCore !== "undefined" && HalCore.offlineModelChatMessage) {
+          return {
+            text: HalCore.offlineModelChatMessage("chat8b", ctx.halModels, ctx.halData, query),
+            lane: "local",
+          };
+        }
+        return { text: ctx.offlineModelMessage("chat8b"), lane: "chat8b · offline" };
+      }
       const lm = Object.assign({ fastChat: true }, ctx.localModelConfig());
-      const text = await ctx.runModel(lm, combinedPrompt, query, "Local chat draft", onToken);
+      if (HalCore.isChatSizedQuestion && HalCore.isChatSizedQuestion(query, route)) {
+        lm.options = Object.assign({}, lm.options || {}, { temperature: 0.42 });
+      }
+      const text = await ctx.runModel(lm, combinedPrompt, userText, "Local chat draft", onToken);
       return { text, lane: "chat8b" };
     }
     return null;
@@ -743,6 +1584,94 @@ const HalAgent = (function () {
    * Main agent entry: plan → enrich with tools → execute route → self-check → repair log.
    * ctx.executeRoute(route, query, toolResults) must return { text, lane, actions, intent }.
    */
+  const MODEL_SHAPE_ISSUES = new Set([
+    "too_long_chat",
+    "numbered_list_unrequested",
+    "yes_no_not_direct",
+    "repeats_previous",
+    "answer_not_first",
+    "question_echo",
+    "internal_jargon",
+    "too_few_sentences",
+    "missing_evidence_when_tools",
+    "no_next_step",
+  ]);
+
+  async function rewriteShapeViaModel(ctx, query, draftText, route) {
+    if (!ctx || typeof ctx.runModel !== "function") return null;
+    const useReason =
+      route && route.useReasoning && typeof ctx.reasoningModelReady === "function" && ctx.reasoningModelReady();
+    if (!useReason && (!ctx.localModelReady || !ctx.localModelReady())) return null;
+    const lm = useReason
+      ? Object.assign({ reasoningLane: true }, ctx.reasoningModelConfig())
+      : Object.assign({ fastChat: true }, ctx.localModelConfig());
+    const system =
+      "Rewrite HAL's reply for staff chat. Clear, direct, collaborative — like a strong coding agent explaining to a colleague. At least five complete sentences with real detail. Answer in the first sentence. No markdown, no numbered lists unless they asked for a plan, no internal jargon, no echoing the question, no filler closings. Keep evidence and recommendations from the draft.";
+    const user = `Question: ${query}\n\nDraft to rewrite:\n${String(draftText || "").slice(0, 1400)}`;
+    try {
+      const text = await ctx.runModel(lm, system, user, "Shape repair");
+      return typeof HalCore !== "undefined" && HalCore.cleanModelText ? HalCore.cleanModelText(text) : text;
+    } catch {
+      return null;
+    }
+  }
+
+  function finalizeOutcome(outcome, trimmed, route, plan, ctx, toolResults) {
+    if (!outcome || !outcome.text || !HalCore.polishChatReply) return outcome;
+    const toolSummary = summarizeToolResults(toolResults || {}).replace(/^#+\s+/gm, "").slice(0, 220);
+    let actionLabel = "";
+    const navMatch = route && route.intent ? String(route.intent).match(/^navigate:\s*(.+)$/) : null;
+    if (navMatch && ctx.pages) {
+      const info = HalCore.pageInfoMap(ctx.halData, ctx.pages)[navMatch[1]];
+      actionLabel = info && info.label ? info.label : navMatch[1];
+    }
+    outcome.text = HalCore.polishChatReply(outcome.text, trimmed, route, {
+      halData: ctx.halData,
+      pages: ctx.pages,
+      currentPage: workingMemory.currentPage,
+      preferBrief: workingMemory.preferBrief,
+      synthesize: !plan.useModelEnhancement,
+      firewallBriefCount: workingMemory.firewallBriefCount || 0,
+      toolSummary,
+      actionLabel,
+      toolsUsed: plan && plan.tools ? plan.tools : [],
+      hadSourceTools: !!(plan && plan.tools && plan.tools.some((t) => /grep_program|read_program_file|list_program_files|explain_route/.test(t))),
+    });
+    outcome.followUpChips = HalCore.buildFollowUpChips(
+      Object.assign({}, outcome, { _pages: ctx.pages }),
+      route,
+      ctx.halData,
+      trimmed,
+    );
+    if (HalCore.inferPageActionsFromAnswer && ctx.pages) {
+      const inferred = HalCore.inferPageActionsFromAnswer(outcome.text, ctx.pages);
+      if (inferred.length && (!outcome.actions || !outcome.actions.length)) {
+        outcome.actions = inferred;
+      }
+    }
+    if (navMatch && (!outcome.actions || !outcome.actions.length)) {
+      const pageId = navMatch[1];
+      const info = HalCore.pageInfoMap(ctx.halData, ctx.pages)[pageId];
+      outcome.actions = [
+        {
+          type: "openPage",
+          label: "Open " + (info && info.label ? info.label : pageId),
+          page: pageId,
+        },
+      ];
+    }
+    if (HalCore.toSpokenScript) {
+      outcome.spokenScript = HalCore.toSpokenScript(outcome.text, trimmed, route, {
+        preferBrief: workingMemory.preferBrief,
+      });
+    }
+    return outcome;
+  }
+
+  function isOfflineModelLane(lane) {
+    return /\boffline\b/i.test(String(lane || ""));
+  }
+
   async function processQuery(query, ctx) {
     const trimmed = String(query).trim();
     if (!trimmed) return null;
@@ -754,17 +1683,37 @@ const HalAgent = (function () {
     workingMemory.activeWorkSession = !!(ctx.halWorkSession);
     recordTurn("user", trimmed, { focus: workingMemory.currentPage });
 
-    const route = HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, trimmed);
+    let route = applyHigherReasoningRoute(HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, trimmed), trimmed, ctx);
     const plan = buildPlan(trimmed, route, workingMemory, longTermMemory, ctx);
     const isModelLane = !!(route.useModel || route.useReasoning || route.useEscalation || route.useOss);
 
-    // Instant local-command path: deterministic routes that need no tools and no
+    if (typeof HalCore.detectAmbiguousQuery === "function") {
+      const clarify = HalCore.detectAmbiguousQuery(trimmed, workingMemory.turns);
+      if (clarify) {
+        const clarifyOutcome = {
+          text: clarify.text,
+          lane: "local",
+          actions: [],
+          intent: "clarify:ambiguous",
+          followUpChips: clarify.chips,
+        };
+        finalizeOutcome(clarifyOutcome, trimmed, route, plan, ctx, {});
+        recordTurn("hal", clarifyOutcome.text, { intent: clarifyOutcome.intent, tools: [] });
+        saveMemory(ctx);
+        return Object.assign({}, clarifyOutcome, { plan, toolResults: {}, selfCheck: { pass: true, issues: [], clarify: true } });
+      }
+    }
+
+    // Instant local-command path:
     // model run straight through the executor so they answer with zero extra
     // latency (template responses are inherently within the safety policy).
     if (!isModelLane && !plan.useModelEnhancement && (!plan.tools || plan.tools.length === 0)) {
       const fast = await ctx.executeRoute(route, trimmed, {});
       if (fast) {
-        recordTurn("hal", fast.text, { intent: fast.intent, tools: [] });
+        let checked = selfCheckResponse(trimmed, fast.text, plan, {}, route);
+        if (!checked.pass && checked.repaired) fast.text = checked.repaired;
+        finalizeOutcome(fast, trimmed, route, plan, ctx, {});
+        recordTurn("hal", fast.text, { intent: fast.intent || route.intent, tools: [] });
         health = {
           architectureVersion: ARCHITECTURE_VERSION,
           budget: AGENT_BUDGET,
@@ -786,19 +1735,61 @@ const HalAgent = (function () {
       }
     }
 
-    const toolResults = plan.tools.length ? await runTools(plan.tools, ctx, trimmed) : {};
+    const patchSpec = parsePatchFromQuery(trimmed);
+    if (patchSpec) ctx.pendingPatch = patchSpec;
+
+    let toolResults = plan.tools.length ? await runTools(plan.tools, ctx, trimmed) : {};
+    let activePlan = plan;
+
+    if (plan.useModelEnhancement && isInvestigateQuery(trimmed, route)) {
+      const extra = expandGatherToolsForRound(trimmed, route, toolResults, 1, Object.keys(toolResults));
+      if (extra.length) {
+        const more = await runTools(extra, ctx, trimmed);
+        Object.assign(toolResults, more);
+        activePlan = Object.assign({}, plan, { tools: [...new Set([...plan.tools, ...extra])] });
+      }
+    }
 
     let outcome;
+    const runToolFn = (id, c, q) => {
+      const def = TOOL_DEFS[id];
+      return def ? def.run(c, { query: q }) : Promise.resolve({ ok: false, summary: "Unknown tool: " + id });
+    };
+    const toolIdSet = new Set(Object.keys(TOOL_DEFS));
+
     if (plan.useModelEnhancement) {
       try {
-        const enhanced = await enhanceModelCall(ctx, route, trimmed, plan, toolResults, ctx.onToken);
-        if (enhanced) {
+        let enhanced;
+        if (typeof HalAgentLoop !== "undefined" && HalAgentLoop.runModelWithLoop) {
+          enhanced = await HalAgentLoop.runModelWithLoop({
+            enhanceModelCall,
+            runTool: runToolFn,
+            ctx,
+            route,
+            query: trimmed,
+            plan: activePlan,
+            initialToolResults: toolResults,
+            onToken: ctx.onToken,
+            toolIds: toolIdSet,
+          });
+        } else {
+          enhanced = await enhanceModelCall(ctx, route, trimmed, activePlan, toolResults, ctx.onToken);
+          enhanced = Object.assign({}, enhanced, { toolResults, loopTurns: 0, loopLog: [] });
+        }
+        if (enhanced && enhanced.text && !isOfflineModelLane(enhanced.lane)) {
+          if (enhanced.toolResults) Object.assign(toolResults, enhanced.toolResults);
           outcome = {
             text: enhanced.text,
             lane: enhanced.lane,
             actions: [],
             intent: route.intent,
+            agentLoopTurns: enhanced.loopTurns || 0,
+            agentLoopLog: enhanced.loopLog || [],
           };
+        } else if (enhanced && isOfflineModelLane(enhanced.lane)) {
+          if (enhanced.toolResults) Object.assign(toolResults, enhanced.toolResults);
+          const synth = buildToolSynthesisOutcome(trimmed, activePlan, toolResults, route, ctx);
+          if (synth) outcome = synth;
         }
       } catch (error) {
         if (typeof RuntimeIssues !== "undefined") {
@@ -819,23 +1810,106 @@ const HalAgent = (function () {
       }
     }
 
+    if ((!outcome || isGenericOfflineText(outcome.text)) && Object.keys(toolResults || {}).length) {
+      const synth = buildToolSynthesisOutcome(trimmed, activePlan, toolResults, route, ctx);
+      if (synth) outcome = synth;
+    }
+
     if (!outcome) {
       const lane = route.lane || "local";
-      const offline =
-        typeof ctx.offlineModelMessage === "function" && plan.useModelEnhancement
-          ? ctx.offlineModelMessage(lane)
-          : null;
+      let offline = null;
+      if (plan.useModelEnhancement) {
+        if (typeof HalCore !== "undefined" && HalCore.offlineModelChatMessage) {
+          offline = HalCore.offlineModelChatMessage(lane.replace(/\s·\soffline$/i, ""), ctx.halModels, ctx.halData, trimmed);
+        } else if (typeof ctx.offlineModelMessage === "function") {
+          offline = ctx.offlineModelMessage(lane);
+        }
+      }
       outcome = {
         text:
           offline ||
           "I could not complete that request. Check that Ollama is running at 127.0.0.1:11434, then try again.",
-        lane: plan.useModelEnhancement ? lane + " · offline" : lane,
+        lane: plan.useModelEnhancement ? "local" : lane,
         actions: [],
         intent: route.intent || "error",
       };
     }
 
-    const checked = selfCheckResponse(trimmed, outcome.text, plan, toolResults, route);
+    let checked = selfCheckResponse(trimmed, outcome.text, activePlan, toolResults, route);
+
+    if (!checked.pass && needsMoreGather(checked, toolResults, plan, 1)) {
+      const extra = expandGatherToolsForRound(trimmed, route, toolResults, 2, Object.keys(toolResults));
+      if (extra.length) {
+        const more = await runTools(extra, ctx, trimmed);
+        Object.assign(toolResults, more);
+        activePlan = Object.assign({}, plan, { tools: [...new Set([...plan.tools, ...extra])] });
+        if (ctx.onToolProgress) {
+          extra.forEach((toolId) => ctx.onToolProgress({ phase: "start", tool: toolId, label: toolId }));
+        }
+        try {
+          const retry = await enhanceModelCall(ctx, route, trimmed, activePlan, toolResults, ctx.onToken);
+          if (retry && String(retry.text || "").trim()) {
+            outcome = {
+              text: retry.text,
+              lane: retry.lane || outcome.lane,
+              actions: outcome.actions || [],
+              intent: route.intent,
+            };
+            checked = selfCheckResponse(trimmed, outcome.text, activePlan, toolResults, route);
+            logRepair(
+              {
+                query: trimmed,
+                intent: route.intent,
+                issues: ["multi_gather_round_2"],
+                example: String(outcome.text || "").slice(0, 200),
+                tools: activePlan.tools,
+              },
+              ctx.persistSet,
+            );
+          }
+        } catch (error) {
+          if (typeof RuntimeIssues !== "undefined") {
+            RuntimeIssues.record("hal-agent.multi-gather", error, { intent: route.intent });
+          }
+        }
+      }
+    }
+
+    if (
+      !checked.pass &&
+      shouldAutoEscalate(checked, route) &&
+      typeof ctx.reasoningModelReady === "function" &&
+      ctx.reasoningModelReady()
+    ) {
+      route = escalateRouteForRetry(route, trimmed);
+      try {
+        const retry = await enhanceModelCall(ctx, route, trimmed, plan, toolResults, ctx.onToken);
+        if (retry && String(retry.text || "").trim()) {
+          outcome = {
+            text: retry.text,
+            lane: retry.lane || "reason21b",
+            actions: [],
+            intent: route.intent,
+          };
+          checked = selfCheckResponse(trimmed, outcome.text, activePlan, toolResults, route);
+          logRepair(
+            {
+              query: trimmed,
+              intent: route.intent,
+              issues: ["auto_escalate_reason21b"],
+              example: String(outcome.text || "").slice(0, 200),
+              tools: plan.tools,
+            },
+            ctx.persistSet,
+          );
+        }
+      } catch (error) {
+        if (typeof RuntimeIssues !== "undefined") {
+          RuntimeIssues.record("hal-agent.auto-escalate", error, { intent: route.intent });
+        }
+      }
+    }
+
     if (!checked.pass) {
       logRepair(
         {
@@ -848,16 +1922,69 @@ const HalAgent = (function () {
         ctx.persistSet,
       );
       if (checked.repaired) outcome.text = checked.repaired;
+      const recheck = selfCheckResponse(trimmed, outcome.text, plan, toolResults, route);
+      const needsModel = recheck.issues.some((issue) => MODEL_SHAPE_ISSUES.has(issue));
+      if (!recheck.pass && needsModel && plan.useModelEnhancement) {
+        const rewritten = await rewriteShapeViaModel(ctx, trimmed, outcome.text, route);
+        if (rewritten && String(rewritten).trim().length > 8) {
+          outcome.text = String(rewritten).trim();
+          logRepair(
+            {
+              query: trimmed,
+              intent: route.intent,
+              issues: recheck.issues.concat(["model_rewrite"]),
+              example: String(outcome.text || "").slice(0, 200),
+              tools: plan.tools,
+            },
+            ctx.persistSet,
+          );
+        }
+      } else if (!recheck.pass && recheck.repaired) {
+        outcome.text = recheck.repaired;
+      }
     }
 
-    recordTurn("hal", outcome.text, { intent: outcome.intent, tools: plan.tools });
+    if (shouldRunPostValidation(trimmed, toolResults) || (typeof HalAgentLoop !== "undefined" && HalAgentLoop.parseAllPatches(outcome.text).length)) {
+      if (typeof HalAgentLoop !== "undefined" && HalAgentLoop.runValidateRetryLoop) {
+        outcome = await HalAgentLoop.runValidateRetryLoop({
+          ctx,
+          query: trimmed,
+          outcome,
+          toolResults,
+          route,
+          activePlan,
+          onToken: ctx.onToken,
+          shouldValidate: shouldRunPostValidation(trimmed, toolResults),
+          planOnly: activePlan.planOnly,
+          runTool: runToolFn,
+          enhanceModelCall,
+          escalateRoute: escalateRouteForRetry,
+          toolIds: toolIdSet,
+          runModelWithLoopFn: HalAgentLoop.runModelWithLoop,
+        });
+      } else if (!toolResults.run_hal_validation) {
+        toolResults.run_hal_validation = await TOOL_DEFS.run_hal_validation.run(ctx, { query: trimmed });
+        const val = toolResults.run_hal_validation;
+        if (val && outcome && outcome.text) {
+          const tag = val.ok ? "Validation passed" : "Validation failed";
+          outcome.text =
+            String(outcome.text).replace(/\s+$/, "") +
+            `\n\n${tag} (validate-hal.mjs):\n${String(val.summary || "").slice(0, 1600)}`;
+        }
+      }
+    }
+
+    finalizeOutcome(outcome, trimmed, route, activePlan, ctx, toolResults);
+
+    const finalCheck = selfCheckResponse(trimmed, outcome.text, activePlan, toolResults, route);
+    recordTurn("hal", outcome.text, { intent: outcome.intent, tools: activePlan.tools });
     health = {
       architectureVersion: ARCHITECTURE_VERSION,
       budget: AGENT_BUDGET,
       lastIntent: route.intent,
-      lastQuestionType: plan.questionType,
-      lastTools: plan.tools,
-      lastSelfCheck: checked.pass ? "pass" : "repaired:" + checked.issues.join(","),
+      lastQuestionType: activePlan.questionType,
+      lastTools: activePlan.tools,
+      lastSelfCheck: finalCheck.pass ? "pass" : "repaired:" + finalCheck.issues.join(","),
       lastLatencyMs: Date.now() - startedAt,
       lastModelLane: plan.useModelEnhancement ? route.lane : null,
       repairCount: repairLog.length,
@@ -866,7 +1993,7 @@ const HalAgent = (function () {
     saveMemory(ctx);
 
     return Object.assign({}, outcome, {
-      plan,
+      plan: activePlan,
       toolResults,
       selfCheck: checked,
     });
@@ -930,6 +2057,11 @@ const HalAgent = (function () {
     getApprovedMemories,
     updatePreferences,
     logRepair,
+    parsePatchFromQuery,
+    isTaskCompletionQuery,
+    shouldRunPostValidation,
+    synthesizeAnswerFromTools,
+    isInvestigateQuery,
   };
 })();
 

@@ -1109,6 +1109,43 @@ const Services = (function () {
           : null);
       return clone({ doc, detail });
     },
+    async importSeed(seedPayload, options) {
+      options = options || {};
+      const state = clone(await load("library", emptyLibrary));
+      const existing = (state.docs || []).length;
+      const hasDictionary = (state.docs || []).some((d) => (d.tags || []).includes("dictionary") || d.type === "Dictionary");
+      if (existing > 0 && hasDictionary && !options.force) {
+        return {
+          ok: true,
+          seeded: false,
+          reason: "library already contains dictionary volumes",
+          docCount: existing,
+          wordCount: (state.storage && state.storage.wordCount) || 0,
+        };
+      }
+      const incoming = seedPayload || {};
+      if (!incoming.docs || !incoming.docs.length) {
+        return { ok: false, error: "empty seed payload" };
+      }
+      state.docs = incoming.docs;
+      state.detailById = incoming.detailById || {};
+      state.results = state.docs.length;
+      state.storage = Object.assign({}, incoming.storage || {}, {
+        indexed: state.docs.length,
+        refreshedAt: new Date().toISOString(),
+      });
+      state.filters = incoming.filters || state.filters || [];
+      if (incoming.wordIndex) state.wordIndex = incoming.wordIndex;
+      await save("library", state);
+      if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate("english-dictionary-seed");
+      return {
+        ok: true,
+        seeded: true,
+        docCount: state.results,
+        wordCount: (state.storage && state.storage.wordCount) || 0,
+        volumes: state.docs.length,
+      };
+    },
   };
 
   /* ============ Office Manager ============ */

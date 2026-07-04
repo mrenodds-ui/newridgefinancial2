@@ -3,6 +3,15 @@
     "mode": "online",
     "localFirst": true,
     "externalCallsEnabled": false,
+    "cloudReasoning": {
+      "enabled": false,
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "model": "gpt-4o-mini",
+      "timeoutMs": 120000,
+      "useForAgentLoop": true,
+      "apiKeyEnv": "NR2_CLOUD_API_KEY",
+      "note": "Optional cloud agent lane when enabled and NR2_CLOUD_API_KEY is set in sessionStorage. PHI must never be sent."
+    },
     "webResearch": {
       "enabled": true,
       "mode": "broad",
@@ -22,6 +31,59 @@
       ]
     },
     "activeLane": "chat8b",
+    "preferReasoning": true,
+    "firewallEnabled": false,
+    "agentProgramming": {
+      "profile": "cursor-auto-v9",
+      "minSentences": 5,
+      "proportionalDepth": true,
+      "allowMarkdown": true,
+      "multiGatherRounds": 3,
+      "taskCompletion": true,
+      "agentToolLoop": true,
+      "agentLoopUseReasoning": true,
+      "agentAutoTools": true,
+      "autoApplyPatches": true,
+      "clarifyAmbiguous": true,
+      "requireNextStep": true,
+      "requireEvidenceWhenTools": true,
+      "synthesizeTools": true,
+      "noSarcasm": true,
+      "agentLoop": true,
+      "cursorGather": true,
+      "parallelTools": true,
+      "autoEscalate": true,
+      "maxToolsPerTurn": 8
+    },
+    "agentCapabilities": {
+      "gatherMode": "Cursor-style — parallel tool gather, auto-escalate to reasoning on weak answers",
+      "tools": [
+        "read_current_context",
+        "read_program_snapshot",
+        "read_source_health",
+        "read_widget_feed",
+        "read_import_diagnostics",
+        "search_program",
+        "grep_program_source",
+        "read_program_file",
+        "list_program_files",
+        "explain_route",
+        "search_chat_history",
+        "lookup_english_word",
+        "read_registry",
+        "read_program_help",
+        "search_hal_memories",
+        "apply_program_patch",
+        "run_hal_validation",
+        "run_node_syntax_check",
+        "semantic_search_program",
+        "run_git_readonly",
+        "research_web",
+        "remember_fact"
+      ],
+      "localWrites": ["remember_fact", "local office tasks", "journal drafts for review", "apply_program_patch (site bundle only, backed up)"],
+      "externalBlocked": true
+    },
     "localModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
@@ -30,8 +92,8 @@
       "temperature": 0.2,
       "think": false,
       "options": {
-        "num_predict": 180,
-        "num_ctx": 1536
+        "num_predict": 512,
+        "num_ctx": 4096
       }
     },
     "fastModel": {
@@ -45,8 +107,14 @@
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
       "model": "mistral-small3.1:24b-fast",
-      "timeoutMs": 180000,
-      "temperature": 0.3
+      "timeoutMs": 210000,
+      "temperature": 0.25,
+      "options": {
+        "num_predict": 1280,
+        "num_ctx": 8192,
+        "repeat_penalty": 1.08,
+        "top_p": 0.92
+      }
     },
     "escalationModel": {
       "enabled": true,
@@ -56,7 +124,74 @@
       "temperature": 0.2,
       "think": true
     },
-    "note": "HAL routes general questions to local Ollama on 127.0.0.1 only. Single GPU lane: hal-chat:8b only (no dual 14B helper). Reasoning uses mistral-small3.1:24b-fast on demand. External action firewall runs before every model call."
+    "note": "HAL routes general questions to local Ollama on 127.0.0.1 only. Single GPU lane: hal-chat:8b only (no dual 14B helper). Reasoning uses mistral-small3.1:24b-fast on demand. External action firewall runs before every model call.",
+    "naturalVoice": {
+      "instructions": [
+        "Write like Cursor Auto: clear, direct, collaborative — a capable agent explaining to a colleague.",
+        "Structure: direct answer first, then local evidence, implication for staff, missing data, one safe next step.",
+        "Hard rule: at least five complete sentences in every reply — yes/no questions included.",
+        "Cite imports, registry, or tool results when available; say plainly when data is missing.",
+        "On the reasoning lane: think through the question before answering, then give a structured prose reply.",
+        "Yes/no must start with Yes or No. Never paste the full capability list unless they ask what you can do.",
+        "Never open with Here is a structured plan unless they asked for a plan.",
+        "No sarcasm, no dismissals, no 'happy to help' filler. Accurate on firewall and read-only limits."
+      ],
+      "fewShotMessages": [
+        { "role": "user", "content": "Can you post to QuickBooks?" },
+        {
+          "role": "assistant",
+          "content": "No. I cannot post to QuickBooks from this program — read-only. I can draft journal entries from imports and show what still needs review before anyone clicks Post in QuickBooks. Write-back to QuickBooks is staff work outside NR2. If you want a draft entry, name the account and period and I can line up the local view. The firewall blocks all outbound posting from here."
+        },
+        { "role": "user", "content": "Are you allowed to refresh imports?" },
+        {
+          "role": "assistant",
+          "content": "Yes. Refresh reloads SoftDent and QuickBooks exports into the local import bundle only — nothing writes back to either system. If widgets still look empty after refresh, the export files or paths are the likely issue, not the dashboard layout. Staff should confirm the export landed in the inbox before re-asking. I can show import status and diagnostics from the local bundle. This stays entirely on-machine and read-only."
+        },
+        { "role": "user", "content": "What can you do on the Claims page?" },
+        {
+          "role": "assistant",
+          "content": "On Claims I can open the workbench, walk denied and needs-review lanes, and check packet readiness against local imports. I do not submit to payers — that stops at the firewall every time. I can flag missing narrative or attachment gaps before staff sends anything outbound. Name a specific claim or lane if you want detail instead of a general walkthrough. All of this uses imported claim data, not live payer portals."
+        },
+        { "role": "user", "content": "What happens if I ask you to email the payer?" },
+        {
+          "role": "assistant",
+          "content": "I stop at the firewall — no outbound email from this program. I can prep the claim view, notes, and readiness checklist locally so staff knows what to send. A human must perform payer contact outside NR2. That separation is intentional for read-only safety. I will never claim an email was sent from here."
+        },
+        { "role": "user", "content": "That's wrong — I meant imports, not widgets." },
+        {
+          "role": "assistant",
+          "content": "Understood — imports, not widgets. Refresh reloads SoftDent and QuickBooks files locally; nothing writes back to those systems. Widgets only reflect what landed in the import bundle. If you saw empty tiles, check import status first, then the export path. I can walk either surface if you name which page you are on."
+        },
+        { "role": "user", "content": "Keep it brief — can you open claims?" },
+        {
+          "role": "assistant",
+          "content": "Yes. I can open the claims workbench from here. It loads the local claims import view — denied lanes, needs-review, and packet readiness. I do not submit claims to payers. Tell me if you want a specific lane once the page is open."
+        },
+        { "role": "user", "content": "Can you see SoftDent production right now?" },
+        {
+          "role": "assistant",
+          "content": "Not from live SoftDent — I only see production that arrived in the local imports. If production looks empty, refresh imports and verify the SoftDent export path first. I can explain what the Financial dashboard shows once data is loaded. Live SoftDent write-back and real-time reads are outside this program."
+        },
+        { "role": "user", "content": "Same question — still read-only?" },
+        {
+          "role": "assistant",
+          "content": "Yes — still read-only, same as before. I open pages and explain status from local imports; staff handles anything external. The firewall has not changed. Outbound submit, email, fax, upload, and post remain blocked from this program."
+        },
+        { "role": "user", "content": "Random english word" },
+        {
+          "role": "assistant",
+          "content": "Random word: diligent — adjective, careful and persistent in work or effort. It fits office review tasks where attention to detail matters. Ask for another word or a definition in context if you need one."
+        },
+        { "role": "user", "content": "Define ability" },
+        {
+          "role": "assistant",
+          "content": "Ability — noun, the skill or power to do something. In this program it usually refers to what HAL can do locally versus what staff must do outside the firewall. I can list page capabilities if you name a surface like Claims or QuickBooks."
+        }
+      ],
+      "sampling": {
+        "temperature": 0.42
+      }
+    }
   },
   "readinessDisplay": {
     "label": "Operator-verified local inventory",

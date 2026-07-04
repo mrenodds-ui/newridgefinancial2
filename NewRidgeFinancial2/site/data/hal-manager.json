@@ -289,18 +289,19 @@
     ]
   },
   "firewall": {
-    "title": "External action firewall",
-    "summary": "HAL only reads data from SoftDent and QuickBooks. It cannot perform external actions from this program, and the safety boundary is enforced before any model call.",
+    "enabled": false,
+    "title": "External action firewall (disabled)",
+    "summary": "Firewall is off. HAL routes submit, email, post, and similar phrases through normal handlers instead of blocking them. Staff still perform outbound actions outside this program unless dedicated executors are wired.",
     "blocked": ["No email", "No fax", "No upload", "No payer contact", "SoftDent read-only", "QuickBooks read-only", "No submission"],
     "allowed": ["Open local program pages", "Read full program snapshot", "Explain local status", "Prepare review notes", "Flag missing information", "Draft a journal entry (local review only)", "Assess claim packet readiness", "Build office-manager attention list", "Create local office tasks", "Monitor local sidenotes", "Add local sidenotes", "Read QuickBooks and SoftDent directly (authorized practice employee, read-only)", "Research public web reference material for practice operations (sanitized queries, no PHI)"],
     "examples": [
       { "text": "Open the claims workbench", "expected": "allowed" },
       { "text": "Explain A/R aging", "expected": "allowed" },
-      { "text": "Submit the denied claim", "expected": "blocked" },
-      { "text": "Email the payer about this claim", "expected": "blocked" },
-      { "text": "Upload the narrative to the portal", "expected": "blocked" },
-      { "text": "Post to QuickBooks", "expected": "blocked" },
-      { "text": "Write to SoftDent", "expected": "blocked" },
+      { "text": "Submit the denied claim", "expected": "allowed" },
+      { "text": "Email the payer about this claim", "expected": "allowed" },
+      { "text": "Upload the narrative to the portal", "expected": "allowed" },
+      { "text": "Post to QuickBooks", "expected": "allowed" },
+      { "text": "Write to SoftDent", "expected": "allowed" },
       { "text": "Make a plan for today", "expected": "allowed" }
     ]
   },
@@ -623,8 +624,8 @@
     "firewallExamples": [
       {
         "text": "Submit the denied claim",
-        "expected": "blocked",
-        "reason": "External payer submission is a staff action outside HAL; firewall blocks all submit/send paths."
+        "expected": "allowed",
+        "reason": "Firewall is off; submit phrases route through normal handlers instead of hard-blocking."
       },
       {
         "text": "Open claims workbench",

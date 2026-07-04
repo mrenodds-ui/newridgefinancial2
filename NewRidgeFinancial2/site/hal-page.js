@@ -184,7 +184,7 @@ const HalPage = (function () {
       ? `<span class="hp-sn-stat">${mon.announce ? "voice on" : "voice off"} · ${mon.bellSuppressed ? "bell muted" : "bell on"} · ${esc(stationText)}${mon.voiceStyle === "hal9000" ? " · HAL 9000 voice" : ""}</span>`
       : '<span class="hp-sn-stat">watcher not running</span>';
     const voiceBtn =
-      `<button type="button" class="hp-sn-voice" data-hal-voice-test title="Test HAL 9000 voice" aria-label="Test HAL 9000 voice">${uiIcon("voice")} TEST VOICE</button>`;
+      `<button type="button" class="hp-sn-voice" data-hal-voice-test title="Test Miranda voice (American neural)" aria-label="Test Miranda voice">${uiIcon("voice")} TEST VOICE</button>`;
     const checked = online && mon.checkedAt ? esc(mon.checkedAt.slice(11, 19)) + " UTC" : "—";
     let listHtml;
     if (!online) {
@@ -452,6 +452,7 @@ const HalPage = (function () {
         <div><dt>GPU</dt><dd>${esc(rd.gpuStatus || "—")}</dd></div>
         <div><dt>Budget</dt><dd>${esc(h.budget ? `${h.budget.maxTools} tools · ${h.budget.maxRecentTurns} turns` : "—")}</dd></div>
         <div><dt>Last Intent</dt><dd>${esc(h.lastIntent || "—")}</dd></div>
+        <div><dt>Last tools</dt><dd>${esc(Array.isArray(h.lastTools) && h.lastTools.length ? h.lastTools.join(", ") : "—")}</dd></div>
         <div><dt>Self-Check</dt><dd class="${selfCheckClass}">${esc(h.lastSelfCheck || "none")}</dd></div>
         <div><dt>Repairs</dt><dd class="${h.repairCount ? "hp-stress__fail-num" : ""}">${esc(String(h.repairCount || 0))}</dd></div>
         <div><dt>Latency</dt><dd>${esc(h.lastLatencyMs ? h.lastLatencyMs + " ms" : "—")}</dd></div>
@@ -504,7 +505,7 @@ const HalPage = (function () {
     const halStatusToolbar = `
             <button type="button" class="hp-status hp-status--btn" data-hal-cmd="What can you do" title="Ask HAL what it can do"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>HAL STATUS <b>${esc(halStatusLabel)}</b></button>
             <button type="button" class="hp-status hp-status--btn" data-hal-cmd="Run readiness check" title="Run local readiness check"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>LOCAL CORE <b>${esc(coreStatusLabel)}</b></button>
-            <button type="button" class="hp-status hp-status--btn hp-status--red" data-hal-cmd="Explain the external action firewall" title="Explain the external action firewall"><i class="hp-status__dot hp-status__dot--red" aria-hidden="true"></i>FIREWALL <b>ACTIVE</b></button>
+            <button type="button" class="hp-status hp-status--btn" data-hal-cmd="Explain the external action firewall" title="Firewall status"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>FIREWALL <b>OFF</b></button>
             ${directBadge}
             <span class="hp-clock"><strong>${esc(now.toISOString().slice(11, 19))} UTC</strong><span>${esc(now.toISOString().slice(0, 10))}</span></span>`;
 

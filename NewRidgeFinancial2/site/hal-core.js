@@ -4,7 +4,7 @@
  */
 const HalCore = (function () {
   const BLOCKED_RE =
-    /\b(submit|submits|submitting|send|sends|sending|email|emails|emailing|e-?mail|fax|faxes|faxing|upload|uploads|uploading|transmit|transmits|transmitting|pay|pays|paying|approve|approves|approving|deny|denies|denying|delete|deletes|deleting|remove|removes|removing|writeback|write back|dispatch|dispatches|dispatching|mail|mailing|wire|wires|wiring)\b/;
+    /\b(submit|submits|submitting|send|sends|sending|email|emails|emailing|e-?mail|fax|faxes|faxing|upload|uploads|uploading|transmit|transmits|transmitting|pay|pays|paying|approve|approves|approving|deny|denies|denying|delete|deletes|deleting|remove|removes|removing|writeback|write back|dispatch|dispatches|dispatching|mail|mailing|wire|wires|wiring)\b|\b(contact|contacts|contacting)\b.*\b(payer|insurance)\b|\b(payer|insurance)\b.*\b(contact|email|fax|call)\b/;
 
   // Writeback / external phrases that should not false-positive on local nouns like "posting queue".
   // Note: drafting a journal entry is a local draft-only action (allowed); only POSTING a
@@ -16,11 +16,11 @@ const HalCore = (function () {
     financial: ["financial dashboard", "financial", "dashboard", "ebitda", "owner", "production", "payer mix", "provider"],
     taxes: ["tax plan", "tax planning", "book to tax", "book-to-tax", "1120-s", "1120s", "k-1", "kansas tax", "federal tax", "reasonable compensation", "k-120s", "pte tax", "pass-through", "quarterly estimate", "1040-es"],
     softdent: ["softdent", "soft dent", "practice management"],
-    quickbooks: ["quickbooks", "quick books", "p&l", "profit and loss", "expenses"],
+    quickbooks: ["quickbooks", "quick books", "p&l", "profit and loss", "expenses", "posting queue", "journal posting queue"],
     ar: ["a/r", "accounts receivable", "receivable", "collections", "aging", "follow-up", "follow up"],
     claims: ["claims workbench", "claims", "claim", "workbench", "denied"],
     narratives: ["narratives", "narrative", "insurance narrative"],
-    documents: ["accounting documents", "documents", "document intake", "posting queue", "extraction"],
+    documents: ["accounting documents", "documents", "document intake", "extraction"],
     library: ["document library", "library", "repository"],
     "office-manager": ["office manager", "office-manager", "office attention", "staff attention"],
     hal: ["hal", "command center", "yourself"],
@@ -39,6 +39,20 @@ const HalCore = (function () {
     ],
     allowed: ["Open local program pages", "Explain local status", "Prepare review notes", "Flag missing information"],
   };
+
+  /** Global kill switch — set false to route external phrases like normal questions (no blocked: firewall). */
+  let FIREWALL_ENABLED = false;
+
+  function isFirewallActive(halData, halModels) {
+    if (!FIREWALL_ENABLED) return false;
+    if (halModels && halModels.config && halModels.config.firewallEnabled === false) return false;
+    if (halData && halData.firewall && halData.firewall.enabled === false) return false;
+    return true;
+  }
+
+  function setFirewallEnabled(on) {
+    FIREWALL_ENABLED = !!on;
+  }
 
   function registryList(halData) {
     return (halData && halData.registry) || [];
@@ -178,14 +192,1418 @@ const HalCore = (function () {
     );
   }
 
+  function isOutboundActionPhrase(query) {
+    const q = String(query).toLowerCase().trim();
+    if (isLocalStaffReviewOverride(q)) return false;
+    return (
+      BLOCKED_RE.test(q) ||
+      BLOCKED_PHRASES_RE.test(q) ||
+      /\bpush\b.*\b(live|to quickbooks)\b/.test(q) ||
+      /\bpush\b.*\b(journal|entry|entries)\b.*\blive\b/.test(q)
+    );
+  }
+
+  function isHypotheticalQuestion(query) {
+    const q = String(query).toLowerCase().trim();
+    return (
+      /\bwhat happens (when|if)\b/.test(q) ||
+      /\bwhat if\b/.test(q) ||
+      /\bwhat would happen\b/.test(q) ||
+      /\bwhat goes wrong if\b/.test(q) ||
+      /\bwhat are the risks if\b/.test(q) ||
+      /\bwhen staff (skip|skips|ignore|ignores)\b/.test(q) ||
+      /\bif staff (skip|skips|ignore|ignores)\b/.test(q)
+    );
+  }
+
+  function isPageNavigationIntent(query) {
+    const q = String(query).toLowerCase().trim();
+    return /\b(open|go to|navigate to|take me to|launch|show me the)\b/.test(q);
+  }
+
+  function pickVariant(items) {
+    if (!items || !items.length) return "";
+    return items[Math.floor(Math.random() * items.length)];
+  }
+
+  const CHAT_LIMITS = {
+    defaultMax: 1380,
+    capabilityMax: 1120,
+    helpMax: 920,
+    proactiveMax: 1280,
+    readinessMax: 1400,
+    yesNoMax: 780,
+    reasoningMax: 2400,
+  };
+
+  const MIN_REPLY_SENTENCES = 5;
+
+  const HAL_IDENTITY_RE =
+    /^I am HAL, the local read-only program manager[\s\S]{0,120}?self-check before responding\.\s*/i;
+
+  function isYesNoQuestion(query) {
+    return /^(can you|are you allowed|could you|may i ask if you can|tell me honestly|what happens if i ask you to)\b/i.test(
+      String(query || "").trim(),
+    );
+  }
+
+  function isChatSizedQuestion(query, route) {
+    const q = String(query || "").toLowerCase();
+    const intent = route && route.intent ? String(route.intent) : "";
+    if (/^capability:|^blocked: firewall/.test(intent)) return true;
+    if (isYesNoQuestion(q)) return true;
+    if (/^what can you (not )?do on /.test(q)) return true;
+    if (route && route.useProactiveBriefing) {
+      if (/make a plan|step-by-step|numbered plan|work plan|action plan|analy[sz]e|strategy|reason through/.test(q)) {
+        return false;
+      }
+      return true;
+    }
+    if (intent === "priorities" || intent === "proactive: briefing") return true;
+    if (intent === "help") return true;
+    return false;
+  }
+
+  function chatBudgetFor(query, route) {
+    const intent = route && route.intent ? String(route.intent) : "";
+    if (intent === "help") return CHAT_LIMITS.helpMax;
+    if (/^reasoning:/.test(intent) || (route && route.useReasoning)) return CHAT_LIMITS.reasoningMax;
+    if (/^capability:|^blocked: firewall/.test(intent)) {
+      return isYesNoQuestion(query) ? CHAT_LIMITS.yesNoMax : CHAT_LIMITS.capabilityMax;
+    }
+    if (route && route.useProactiveBriefing) return CHAT_LIMITS.proactiveMax;
+    if (route && (route.useReadinessRun || route.useReadinessGate)) return CHAT_LIMITS.readinessMax;
+    if (isYesNoQuestion(query)) return CHAT_LIMITS.yesNoMax;
+    return CHAT_LIMITS.defaultMax;
+  }
+
+  function stripHalIdentityMonologue(text, allowIdentity) {
+    if (allowIdentity) return String(text || "").trim();
+    return String(text || "")
+      .replace(HAL_IDENTITY_RE, "")
+      .trim();
+  }
+
+  function trimAtSentence(text, maxChars) {
+    const raw = String(text || "").trim();
+    if (raw.length <= maxChars) return raw;
+    const slice = raw.slice(0, maxChars);
+    const lastStop = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "));
+    if (lastStop > Math.floor(maxChars * 0.45)) return slice.slice(0, lastStop + 1).trim();
+    return slice.trim() + "…";
+  }
+
+  function trimChatReply(text, query, route, options) {
+    options = options || {};
+    const force = options.force === true;
+    if (!force && !isChatSizedQuestion(query, route)) return String(text || "").trim();
+    const intent = route && route.intent ? String(route.intent) : "";
+    let out = stripHalIdentityMonologue(text, intent === "help");
+    const max = options.maxChars || adjustChatBudget(query, route, options);
+    if (out.length > max) out = trimAtSentence(out, max);
+    return out.trim();
+  }
+
+  function buildHelpChatReply(halData) {
+    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
+    return pickVariant([
+      "I'm HAL — local read-only program manager for this office. I open pages, explain imports, run readiness checks, and draft review notes. I don't submit, email, upload, or post anywhere. Staff handles outbound work.",
+      "I'm read-only — I read SoftDent and QuickBooks imports, place data on dashboards, and flag gaps. Name a page, widget, import task, or say Run readiness check for specifics.",
+      `I stay read-only: navigate, explain, reconcile, draft locally. ${firewall.summary} Name a page if you want more detail.`,
+    ]);
+  }
+
+  function localChatFallback(query, halData) {
+    const top = halData && halData.topPriority && halData.topPriority.summary;
+    const reg = registryList(halData)
+      .filter((e) => /needs review|blocked/i.test(e.state))
+      .slice(0, 2)
+      .map((e) => e.name)
+      .join(" and ");
+    return pickVariant([
+      top
+        ? `The chat model is offline, but from local data: ${top}${reg ? ` Also watch ${reg}.` : ""}`
+        : "The chat model is offline — I still have the registry and import status. Ask about a page, imports, or readiness.",
+      reg
+        ? `Local chat is offline. Registry shows ${reg} needs attention. I can still explain pages and import health without the model.`
+        : "Local chat is offline. I can answer from the program registry — try Open claims, Import status, or Run readiness check.",
+    ]);
+  }
+
+  function offlineModelChatMessage(laneId, halModels, halData, query) {
+    const lane = modelLanes(halModels).find((entry) => entry.id === laneId) || modelLanes(halModels)[0];
+    const name = lane && lane.name ? lane.name : "local chat";
+    const fallback = localChatFallback(query, halData);
+    return pickVariant([
+      `${name} is offline right now. ${fallback}`,
+      `I can't reach ${name} on this machine. ${fallback}`,
+      `Model lane is down (${lane && lane.model ? lane.model : "local"}). ${fallback}`,
+    ]);
+  }
+
+  function countWords(text) {
+    return String(text || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean).length;
+  }
+
+  function splitSentences(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return [];
+    return (raw.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [raw]).map((s) => s.trim()).filter(Boolean);
+  }
+
+  function countSentences(text) {
+    return splitSentences(text).length;
+  }
+
+  function isCodeDiscussionQuery(query, route, meta) {
+    meta = meta || {};
+    const q = String(query || "");
+    if (/\b(source code|function|\.js\b|\.py\b|\.mjs\b|grep|read file|how does .+ work|handleHalSubmit|routeHalCommand|programming|in the code)\b/i.test(q)) {
+      return true;
+    }
+    if (meta.hadSourceTools) return true;
+    const tools = meta.toolsUsed || meta.tools || [];
+    if (Array.isArray(tools) && tools.some((t) => /grep_program|read_program_file|list_program_files|explain_route/.test(String(t)))) {
+      return true;
+    }
+    return false;
+  }
+
+  function allowsMarkdownInReply(query, route, meta) {
+    if (isCodeDiscussionQuery(query, route, meta || {})) return true;
+    if (route && (route.useReasoning || route.useEscalation || route.useOss)) return true;
+    if (wantsDetailedReply(query)) return true;
+    if (/\b(list|steps|checklist|bullet)\b/i.test(String(query || ""))) return true;
+    return false;
+  }
+
+  function compressThreadForPrompt(turns, maxRecent) {
+    maxRecent = maxRecent || 6;
+    const list = turns || [];
+    if (!list.length) return "";
+    if (list.length <= maxRecent) {
+      return list
+        .map((t) => `${t.role}: ${String(t.text).slice(0, 160)}${t.intent ? ` [${t.intent}]` : ""}`)
+        .join("\n");
+    }
+    const old = list.slice(0, -maxRecent);
+    const recent = list.slice(-maxRecent);
+    const topics = old
+      .filter((t) => t.role === "user")
+      .map((t) => String(t.text).slice(0, 56))
+      .slice(-4);
+    const summary = topics.length
+      ? `Earlier thread (${old.length} turns): ${topics.join("; ")}.`
+      : `Earlier thread (${old.length} turns).`;
+    const recentText = recent
+      .map((t) => `${t.role}: ${String(t.text).slice(0, 160)}${t.intent ? ` [${t.intent}]` : ""}`)
+      .join("\n");
+    return summary + "\n" + recentText;
+  }
+
+  function detectAmbiguousQuery(query, turns) {
+    const q = String(query || "").trim();
+    if (!/^(fix it|what about that|do that|same thing|help me|what now|and that|what about it)\??$/i.test(q)) {
+      return null;
+    }
+    const priorUser = [...(turns || [])].reverse().find((t) => t.role === "user");
+    if (priorUser) return null;
+    return {
+      text:
+        "I need a bit more context before I can investigate. Are you asking about imports, a specific page, claims work, or accounting review?",
+      chips: [
+        { label: "Import status", query: "Show import status", action: { type: "runQuery", query: "Show import status" } },
+        { label: "Top priority", query: "What needs attention today?", action: { type: "runQuery", query: "What needs attention today?" } },
+        { label: "Open Claims", query: "Open claims workbench", action: { type: "openPage", page: "claims" } },
+        { label: "Refresh imports", query: "Refresh imports", action: { type: "refreshImports" } },
+      ],
+    };
+  }
+
+  function inferPageActionsFromAnswer(text, pages) {
+    const actions = [];
+    const body = String(text || "").toLowerCase();
+    for (const p of pages || []) {
+      const id = String(p.id || "").toLowerCase();
+      const label = String(p.label || p.title || id).toLowerCase();
+      if ((label.length > 4 && body.includes(label)) || body.includes(id.replace(/-/g, " "))) {
+        actions.push({
+          type: "openPage",
+          label: "Open " + (p.label || p.id),
+          page: p.id,
+        });
+      }
+    }
+    const seen = new Set();
+    return actions.filter((a) => {
+      if (seen.has(a.page)) return false;
+      seen.add(a.page);
+      return true;
+    }).slice(0, 2);
+  }
+
+  function shouldEnforceMinSentences(query, route, meta) {
+    meta = meta || {};
+    if (meta.skipMinSentences) return false;
+    if (isSimpleActionQuery(query)) return false;
+    if (route && route.text) return false;
+    if (isCodeDiscussionQuery(query, route, meta)) return false;
+    if (wantsBriefReply(query) || (meta && meta.preferBrief)) return false;
+    const q = String(query || "").trim();
+    if (q.length < 48 && !(route && (route.useReasoning || route.useEscalation)) && !isYesNoQuestion(q)) {
+      return false;
+    }
+    return true;
+  }
+
+  function minSentencePadding(query, route, meta, existing) {
+    const halData = meta && meta.halData;
+    const top = halData && halData.topPriority && halData.topPriority.summary;
+    const page = meta && meta.currentPage;
+    const tool = meta && meta.toolSummary;
+    const pool = [
+      top
+        ? "The registry currently flags this as the top priority: " + top + "."
+        : "I answer from the local program registry and import bundle — not live write-back to SoftDent or QuickBooks.",
+      page
+        ? "You are on the " + page + " page; name a widget if you want a narrower answer."
+        : "You can narrow this by naming a page — Financial, Claims, A/R, or QuickBooks.",
+      tool && String(tool).length > 20
+        ? "Local tool check: " + String(tool).replace(/\s+/g, " ").trim().slice(0, 120) + "."
+        : "If a widget looks empty, refresh imports and verify the export path before drawing conclusions.",
+      "Staff still posts in QuickBooks, contacts payers, and handles outbound steps — I stay read-only at the firewall.",
+      "I can open pages, explain status, draft review notes, and flag gaps; humans execute anything external.",
+      "Missing fields usually indicate a stale or incomplete import, not hidden data.",
+    ];
+    const out = [];
+    for (const p of pool) {
+      if (existing.length + out.length >= MIN_REPLY_SENTENCES) break;
+      if (!existing.some((s) => textSimilarity(s, p) > 0.55) && !out.some((s) => textSimilarity(s, p) > 0.55)) {
+        out.push(p);
+      }
+    }
+    while (existing.length + out.length < MIN_REPLY_SENTENCES) {
+      out.push(pool[(existing.length + out.length) % pool.length]);
+    }
+    return out;
+  }
+
+  function ensureMinSentences(text, query, route, meta) {
+    if (!shouldEnforceMinSentences(query, route, meta)) return String(text || "").trim();
+    let sentences = splitSentences(text);
+    if (sentences.length >= MIN_REPLY_SENTENCES) return sentences.join(" ");
+    const pads = minSentencePadding(query, route, meta || {}, sentences);
+    sentences = sentences.concat(pads.slice(0, MIN_REPLY_SENTENCES - sentences.length));
+    return sentences.join(" ").trim();
+  }
+
+  function hasUnrequestedList(text, query) {
+    if (/\b(list|step-by-step|numbered|bullet|checklist|show all|full briefing|everything)\b/i.test(String(query || ""))) {
+      return false;
+    }
+    const body = String(text || "");
+    const numbered = (body.match(/^\s*\d+\.\s/mg) || []).length;
+    const bullets = (body.match(/^\s*[-*•]\s/mg) || []).length;
+    return numbered >= 4 || bullets >= 4;
+  }
+
+  function chatShapeIssues(query, text, route, opts) {
+    opts = opts || {};
+    const issues = [];
+    const intent = route && route.intent ? String(route.intent) : "";
+    const body = String(text || "").trim();
+    if (!body) return issues;
+    if (intent !== "help" && HAL_IDENTITY_RE.test(body)) issues.push("identity_monologue");
+    if (isChatSizedQuestion(query, route) && !(route && route.useReasoning) && countWords(body) > 320) {
+      issues.push("too_long_chat");
+    }
+    if (hasUnrequestedList(body, query) && !allowsMarkdownInReply(query, route, opts)) issues.push("numbered_list_unrequested");
+    if (isYesNoQuestion(query) && !/^(yes|no|sure|absolutely|that one's|not from here|i can't|i can|different angle|to add)/i.test(body)) {
+      issues.push("yes_no_not_direct");
+    }
+    if (CHATBOT_FILLER_RE.test(body) || CHATBOT_CLOSER_RE.test(body)) issues.push("chatbot_filler");
+    if (INTERNAL_JARGON_RE.test(body)) issues.push("internal_jargon");
+    if (QUESTION_ECHO_RE.test(body)) issues.push("question_echo");
+    if (answersMustLead(query, route) && !answerLeadsCorrectly(query, body, route)) issues.push("answer_not_first");
+    if (opts.previousHalText && textSimilarity(body, opts.previousHalText) > 0.72) issues.push("repeats_previous");
+    if (
+      shouldEnforceMinSentences(query, route, opts) &&
+      countSentences(body) < MIN_REPLY_SENTENCES
+    ) {
+      issues.push("too_few_sentences");
+    }
+    if (typeof HalAgentProgramming !== "undefined" && HalAgentProgramming.agentShapeIssues) {
+      HalAgentProgramming.agentShapeIssues(query, body, route, {
+        hadToolResults: opts.hadToolResults,
+        previousHalText: opts.previousHalText,
+        codeDiscussion: isCodeDiscussionQuery(query, route, opts),
+      }).forEach((issue) => {
+        if (!issues.includes(issue)) issues.push(issue);
+      });
+    }
+    return issues;
+  }
+
+  function answersMustLead(query, route) {
+    const intent = route && route.intent ? String(route.intent) : "";
+    return isYesNoQuestion(query) || /^capability:|^blocked: firewall/.test(intent);
+  }
+
+  function answerLeadsCorrectly(query, body, route) {
+    const text = String(body || "").trim();
+    if (!text) return false;
+    const intent = route && route.intent ? String(route.intent) : "";
+    if (isYesNoQuestion(query)) {
+      return /^(yes|no|sure|absolutely|obviously|frankly|predictably|not from here|i can't|i can|repeating myself|still|got it|fine)/i.test(text);
+    }
+    if (/^blocked: firewall/.test(intent)) {
+      return /^(no|not from here|can't|cannot|blocked|stops at the firewall|same answer|still read-only|that's all|i couldn't have been clearer|that's not what|details\.|please bore)/i.test(text);
+    }
+    if (/^capability:/.test(intent)) {
+      return /^(yes|no|sure|on |from |for |i can|i can't|absolutely|obviously|same as before)/i.test(text);
+    }
+    return true;
+  }
+
+  function stripInternalJargon(text) {
+    return String(text || "")
+      .replace(INTERNAL_JARGON_RE, "local system")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  function flattenMarkdownForChat(text) {
+    return String(text || "")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\*([^*]+)\*/g, "$1")
+      .replace(/^#+\s+/gm, "")
+      .replace(/^\s*\d+\.\s+/gm, "")
+      .replace(/^\s*[-*•]\s+/gm, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function compressedBlockedReply(firewall, query, briefCount) {
+    if (briefCount >= 1) {
+      return pickVariant([
+        "Still blocked — same firewall as before. I can prep locally; staff executes outbound steps.",
+        "Same answer: read-only, no external delivery from this program.",
+        "No change. A human still handles the external step outside NR2.",
+      ]);
+    }
+    return variedBlockedCapabilityReply(firewall, query);
+  }
+
+  function buildSessionRecap(turns) {
+    const list = (turns || []).filter((t) => t && t.text);
+    if (!list.length) return "We haven't chatted yet this session — ask about a page, imports, or readiness.";
+    const pairs = [];
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      if (t.role !== "user") continue;
+      const nextHal = list[i + 1] && list[i + 1].role === "hal" ? list[i + 1] : null;
+      pairs.push({
+        q: String(t.text).slice(0, 100),
+        a: nextHal ? String(nextHal.text).slice(0, 120) : "",
+      });
+    }
+    const recent = pairs.slice(-4);
+    if (!recent.length) return "No recent questions to recap.";
+    const lines = recent.map((p, idx) => `${idx + 1}. You asked "${p.q}" — I said "${p.a || "…"}"`);
+    return "Quick recap:\n" + lines.join("\n");
+  }
+
+  function matchCompareRoute(query) {
+    const raw = String(query || "").trim();
+    if (/^(explain|tell me about|what is|what's|describe)\b/i.test(raw)) return null;
+    const m = raw.match(/^(.+?)\s+(?:vs\.?|versus|compared to)\s+(.+?)\??$/i);
+    if (!m) return null;
+    const left = m[1].trim();
+    const right = m[2].trim();
+    if (!left || !right || left.length > 48 || right.length > 48) return null;
+    return { left, right };
+  }
+
+  function buildCompareReply(left, right, halData) {
+    const l = left.toLowerCase();
+    const r = right.toLowerCase();
+    const topics = {
+      imports: /\bimports?\b/,
+      widgets: /\bwidgets?\b/,
+      softdent: /\bsoftdent\b/,
+      quickbooks: /\bquickbooks\b|\bqb\b/,
+      claims: /\bclaims?\b/,
+      readiness: /\breadiness\b/,
+    };
+    function detect(s) {
+      return Object.keys(topics).filter((k) => topics[k].test(s));
+    }
+    const dl = detect(l);
+    const dr = detect(r);
+    if (dl.includes("imports") && dr.includes("widgets")) {
+      return pickVariant([
+        "Imports are the raw SoftDent and QuickBooks files I load locally. Widgets are the dashboard tiles built from that data — refresh imports first when widgets look empty.",
+        "Imports feed the program; widgets display the result on each page. No imports, widgets show gaps even if the layout is fine.",
+      ]);
+    }
+    if (dl.includes("softdent") && dr.includes("quickbooks")) {
+      return pickVariant([
+        "SoftDent is clinical and production data; QuickBooks is accounting and P&L. I read both as imports — neither gets write-back from here.",
+        "SoftDent covers practice/clinical exports; QuickBooks covers books. Both stay read-only; staff posts in QuickBooks outside the program.",
+      ]);
+    }
+    const top = halData && halData.topPriority && halData.topPriority.summary;
+    return pickVariant([
+      `${left} and ${right} are different surfaces here — ask about one page at a time if you want specifics.${top ? " Top priority right now: " + top : ""}`,
+      `Short answer: ${left} vs ${right} aren't the same workflow. Name the page or task and I'll compare what I can do on each.`,
+    ]);
+  }
+
+  function appendEvidenceClause(text, toolSummary, query) {
+    if (!toolSummary || !String(text || "").trim()) return text;
+    const body = String(text).trim();
+    if (/\b(from local|registry shows|imports show|from the registry|local data)\b/i.test(body)) return body;
+    const snippet = String(toolSummary).replace(/\s+/g, " ").trim().slice(0, 100);
+    if (!snippet || snippet.length < 12) return body;
+    if (/\b(missing|empty|offline|unavailable|no import)\b/i.test(snippet)) {
+      return body.replace(/[.!?]\s*$/, "") + ". From local data: " + snippet + ".";
+    }
+    return body;
+  }
+
+  function repairChatShape(query, text, route, issues) {
+    let out = String(text || "").trim();
+    if (issues.includes("identity_monologue")) out = stripHalIdentityMonologue(out, false);
+    if (issues.includes("chatbot_filler")) out = stripChatbotFillers(out);
+    if (issues.includes("internal_jargon")) out = stripInternalJargon(out);
+    if (issues.includes("question_echo")) out = out.replace(QUESTION_ECHO_RE, "").trim();
+    if (issues.includes("repeats_previous")) {
+      out = pickVariant([
+        "Different angle on the same point: " + out,
+        "Restating with the same evidence: " + out,
+        out.replace(/^(yes|no)[—,\s]*/i, ""),
+      ]);
+    }
+    if (issues.includes("too_long_chat") || issues.includes("numbered_list_unrequested")) {
+      out = trimChatReply(out, query, route, { force: true, preferBrief: true });
+    }
+    if (issues.includes("yes_no_not_direct") && isYesNoQuestion(query)) {
+      const blocked = route && route.intent === "blocked: firewall";
+      let prefix =
+        typeof HalAgentProgramming !== "undefined" && HalAgentProgramming.yesNoLead
+          ? HalAgentProgramming.yesNoLead(query, route)
+          : blocked
+            ? "No."
+            : "Yes.";
+      if (!prefix) prefix = blocked ? "No." : "Yes.";
+      if (!/^(yes|no)\b/i.test(out)) out = prefix + " " + out;
+    }
+    if (issues.includes("answer_not_first") && answersMustLead(query, route)) {
+      if (/^blocked: firewall/.test(route && route.intent ? route.intent : "") && !/^no\b/i.test(out)) {
+        out = "No — " + out.replace(/^(yes|no)[—,\s]*/i, "");
+      } else if (isYesNoQuestion(query) && !/^(yes|no)\b/i.test(out)) {
+        const blocked = /^blocked: firewall/.test(route && route.intent ? route.intent : "");
+        out = (blocked ? "No — " : "Yes — ") + out;
+      }
+    }
+    if (issues.includes("too_few_sentences")) {
+      out = ensureMinSentences(out, query, route, {});
+    }
+    if (typeof HalAgentProgramming !== "undefined" && HalAgentProgramming.repairAgentShapeIssues) {
+      out = HalAgentProgramming.repairAgentShapeIssues(query, out, issues, route);
+    }
+    return out.trim();
+  }
+
+  const CHATBOT_FILLER_RE =
+    /^(great question|good question|certainly[!,]?|absolutely[!,]?|i'd be happy to|as an ai|as an artificial)/i;
+  const CHATBOT_CLOSER_RE =
+    /(let me know if|would you like me to|feel free to ask|if you want more detail|i hope this helps|happy to assist|feel free to reach out)\s*\.?\s*$/i;
+  const INTERNAL_JARGON_RE =
+    /\b(agent loop|model lane|chat8b|reason21b|escalate30b|oss120b|self-check|tool results|num_predict|fastChat|GPU lane|Ollama endpoint)\b/gi;
+  const QUESTION_ECHO_RE = /^(regarding your question|as for your question|you asked (?:if|whether)|to answer your question)/i;
+
+  function detectUserTone(query) {
+    const q = String(query || "").trim().toLowerCase();
+    if (/^(quick question|hey hal|hal,|just wondering|real quick)/.test(q)) return "casual";
+    if (/\b(explain|step-by-step|numbered|list all|full detail|walk me through|break down)\b/.test(q)) return "detailed";
+    return "neutral";
+  }
+
+  function isFollowUpQuery(query) {
+    const q = String(query || "").trim();
+    return (
+      /\b(that|same thing|same question|what about|how about|and what about|you said|earlier)\b/i.test(q) ||
+      isImplicitFollowUp(q)
+    );
+  }
+
+  function isImplicitFollowUp(query) {
+    const q = String(query || "").trim();
+    if (/^(what about|and |also |how about|same for|still\??|again\??)/i.test(q)) return true;
+    if (q.length < 90 && /\b(it|that|there|this one)\b/i.test(q)) return true;
+    return false;
+  }
+
+  function isCorrectionQuery(query) {
+    return /^(no[,.\s—-]|that'?s wrong|not what i meant|incorrect|you misunderstood|wrong[—-])/i.test(String(query || "").trim());
+  }
+
+  function wantsBriefReply(query) {
+    return /\b(shorter|too long|be brief|keep it short|tl;dr|summarize|less detail)\b/i.test(String(query || "").toLowerCase());
+  }
+
+  function wantsDetailedReply(query) {
+    return detectUserTone(query) === "detailed";
+  }
+
+  function tokenSet(text) {
+    return new Set(String(text || "").toLowerCase().match(/\b[a-z]{3,}\b/g) || []);
+  }
+
+  function textSimilarity(a, b) {
+    const sa = tokenSet(a);
+    const sb = tokenSet(b);
+    if (!sa.size || !sb.size) return 0;
+    let inter = 0;
+    sa.forEach((t) => {
+      if (sb.has(t)) inter++;
+    });
+    return inter / Math.max(sa.size, sb.size);
+  }
+
+  function buildThreadContextBlock(turns, query) {
+    const recent = (turns || []).slice(-6);
+    if (!recent.length) return "";
+    const lines = recent.map((t) => `${t.role === "user" ? "User" : "HAL"}: ${String(t.text).slice(0, 200)}`);
+    let block = "Recent conversation (stay coherent — do not repeat your last answer verbatim):\n" + lines.join("\n");
+    const resolved = resolveFollowUpTopic(query, turns);
+    if (resolved) block += "\nResolved follow-up topic: " + resolved;
+    if (isFollowUpQuery(query)) block += "\nThis refers to the prior turn — answer in that context.";
+    return block;
+  }
+
+  function resolveFollowUpTopic(query, turns) {
+    const q = String(query || "").trim();
+    if (!isFollowUpQuery(q)) return "";
+    const list = turns || [];
+    const lastUser = [...list].reverse().find((t) => t.role === "user");
+    const lastHal = [...list].reverse().find((t) => t.role === "hal");
+    const priorQ = lastUser ? String(lastUser.text).slice(0, 140) : "";
+    const priorA = lastHal ? String(lastHal.text).slice(0, 120) : "";
+    const about = q.match(/^what about\s+(.+?)\??$/i);
+    if (about) return `User previously asked "${priorQ}" — now asking about ${about[1].trim()}.`;
+    if (/^(and|also)\s+/i.test(q)) return `Extending prior question "${priorQ}": ${q}`;
+    if (/\b(it|that|there)\b/i.test(q) && priorA) return `Referring to HAL's last answer: "${priorA}" — user says: ${q}`;
+    if (/^(still|again)\??$/i.test(q)) return `User wants confirmation on: "${priorQ}"`;
+    return priorQ ? `Follow-up to: "${priorQ}"` : "";
+  }
+
+  function resolveFollowUpQuery(query, turns) {
+    const q = String(query || "").trim();
+    if (!isFollowUpQuery(q)) return q;
+    const topic = resolveFollowUpTopic(q, turns);
+    if (!topic) return q;
+    return `${q} (${topic})`;
+  }
+
+  function expandAtMentions(query, pages) {
+    let q = String(query || "");
+    if (!/@/.test(q)) return q;
+    const pageList = pages || [];
+    q = q.replace(/@([\w./-]+)/g, (full, token) => {
+      const t = String(token || "").toLowerCase();
+      const page = pageList.find(
+        (p) =>
+          String(p.id || "").toLowerCase() === t ||
+          String(p.label || "")
+            .toLowerCase()
+            .includes(t.replace(/-/g, " ")),
+      );
+      if (page) return `(page context: ${page.label || page.id}) ${full}`;
+      if (/\.(js|py|json|mjs|css|html)$/i.test(token)) return `(file context: ${token}) ${full}`;
+      return full;
+    });
+    return q;
+  }
+
+  function updateSessionSummary(turns, prior) {
+    const list = turns || [];
+    if (list.length < 6) return prior || "";
+    const users = list
+      .filter((t) => t.role === "user")
+      .slice(-8)
+      .map((t) => String(t.text).slice(0, 72));
+    if (!users.length) return prior || "";
+    return "Session topics so far: " + users.join("; ") + ".";
+  }
+
+  function isSimpleActionQuery(query) {
+    const q = String(query || "").toLowerCase();
+    if (/\b(explain|why|detail|status|describe|tell me about)\b/.test(q)) return false;
+    return (
+      /^\s*(open|go to|navigate to|take me to|launch)\b/.test(q) ||
+      /^\s*(refresh|reload)\s+(the\s+)?imports?\b/.test(q) ||
+      (/^\s*can you (open|refresh|reload)\b/.test(q) && q.length < 80)
+    );
+  }
+
+  function buildMicroActionReply(intent, label, query) {
+    const name = label || "that page";
+    if (/^navigate:/.test(intent)) {
+      return pickVariant([
+        `Opening ${name} now.`,
+        `${name} is loading — I'll keep context on this page for follow-ups.`,
+        `On it — switching to ${name}.`,
+      ]);
+    }
+    if (/imports: refresh/.test(intent)) {
+      return pickVariant([
+        "Refreshing local SoftDent and QuickBooks imports — read-only, no write-back.",
+        "Import refresh started from local export paths.",
+        "Reloading import bundle now; widgets update when files land.",
+      ]);
+    }
+    if (/imports: status/.test(intent) && isSimpleActionQuery(query)) {
+      return pickVariant(["Checking import status from local files.", "Pulling import health from the local bundle."]);
+    }
+    return "";
+  }
+
+  function pageAwareClause(currentPage, halData, pages, query) {
+    if (!currentPage || currentPage === "hal") return "";
+    if (isFollowUpQuery(query) && !/\b(on |page|open )/i.test(query)) return "";
+    const info = pageInfoMap(halData, pages)[currentPage];
+    if (!info) return "";
+    return pickVariant([`On ${info.label}: `, `From ${info.label}, `, `${info.label} — `]);
+  }
+
+  function agentPersonalityPromptLines() {
+    if (typeof HalAgentProgramming !== "undefined" && HalAgentProgramming.contractSummary) {
+      return HalAgentProgramming.contractSummary();
+    }
+    return "Auto-style agent: answer first, cite local evidence, name gaps, one next step, min five sentences.";
+  }
+
+  function mirandaPersonalityPromptLines() {
+    return agentPersonalityPromptLines();
+  }
+
+  function applyHalPersonality(text, query, route, meta) {
+    meta = meta || {};
+    let out = String(text || "").trim();
+    if (!out || meta.skipPersonality) return out;
+
+    if (/^got it\b/i.test(out)) {
+      out = out.replace(/^got it\b/i, "Understood — ").trim();
+    }
+    if (isCorrectionQuery(query) && !/^to clarify\b/i.test(out)) {
+      out = ("To clarify — " + out.charAt(0).toLowerCase() + out.slice(1)).trim();
+    }
+    if (isYesNoQuestion(query)) {
+      if (/^yes\b/i.test(out) && !/^yes[.,]/i.test(out)) {
+        out = out.replace(/^yes[—,\s-]*/i, "Yes. ");
+      } else if (/^no\b/i.test(out) && !/^no[.,]/i.test(out)) {
+        out = out.replace(/^no[—,\s-]*/i, "No. ");
+      }
+    }
+    return out.trim();
+  }
+
+  function stripChatbotFillers(text) {
+    let out = String(text || "").trim();
+    out = out.replace(CHATBOT_FILLER_RE, "");
+    out = out.replace(CHATBOT_CLOSER_RE, "").trim();
+    return out.trim();
+  }
+
+  function synthesizeHandlerReply(rawText, query, route) {
+    const raw = String(rawText || "").trim();
+    if (!raw || raw.length < 320) return raw;
+    const intent = route && route.intent ? String(route.intent) : "";
+    if (/readiness/i.test(intent) || /HAL readiness:/i.test(raw)) {
+      const gate = raw.match(/Staff use gate:\s*([^\n]+)/i);
+      const warn = (raw.match(/\[Warning\]/gi) || []).length;
+      const fail = (raw.match(/\[Fail\]/gi) || []).length;
+      const pass = (raw.match(/\[Pass\]/gi) || []).length;
+      const status = fail ? "needs fixes" : warn ? "ready with warnings" : "looks good";
+      return pickVariant([
+        `Readiness is ${status} — ${pass} pass, ${warn} warning${warn === 1 ? "" : "s"}${fail ? `, ${fail} fail` : ""}.${gate ? " " + gate[1].trim() + "." : ""}`,
+        `Quick read: ${status} (${pass}P/${warn}W${fail ? `/${fail}F` : ""}).${gate ? " Gate: " + gate[1].trim() + "." : ""}`,
+      ]);
+    }
+    if (/widget/i.test(intent) || /\[FAILED\]|Widgets ready:/i.test(raw)) {
+      const ready = raw.match(/(\d+\/\d+)\s*ready/i) || raw.match(/Widgets ready:\s*(\d+\/\d+)/i);
+      const failed = (raw.match(/\[FAILED\]/gi) || []).length;
+      return pickVariant([
+        `Widget feed: ${ready ? ready[1] + " ready" : "partial data"}${failed ? `, ${failed} need imports` : ""}.`,
+        `Dashboard widgets — ${ready ? ready[1] : "some gaps"}${failed ? "; " + failed + " still need data" : ""}.`,
+      ]);
+    }
+    if (/imports:/i.test(intent)) {
+      if (isSimpleActionQuery(query) && /refresh/i.test(intent)) {
+        return pickVariant([
+          "Imports refreshed — dashboards use the latest local export files.",
+          "Done — local SoftDent and QuickBooks imports reloaded.",
+        ]);
+      }
+      const first = raw.split(/\n/).find((l) => l.trim().length > 10) || raw.slice(0, 160);
+      return trimAtSentence(first.replace(/^#+\s*/, ""), 280);
+    }
+    if (hasUnrequestedList(raw, query) || raw.length > 700) {
+      const first = raw.split(/\n/).find((l) => l.trim().length > 12) || raw.slice(0, 120);
+      return trimAtSentence(first.replace(/^#+\s*/, ""), 280);
+    }
+    return trimChatReply(raw, query, route, { force: true });
+  }
+
+  function progressiveDepthHint(query, route, wasTrimmed) {
+    if (!wasTrimmed || wantsDetailedReply(query)) return "";
+    const intent = route && route.intent ? String(route.intent) : "";
+    if (/readiness/i.test(intent)) return pickVariant([' Say "Run readiness check" for the full checklist.', " Ask for the full readiness report for every line."]);
+    if (route && route.useProactiveBriefing) return pickVariant([' Say "full briefing" for all priorities.', " Ask for more detail if you want the rest."]);
+    if (/widget/i.test(intent)) return ' Say "Show manager dashboard widgets" for the full feed.';
+    return "";
+  }
+
+  function buildFollowUpChips(outcome, route, halData, query) {
+    const chips = [];
+    const intent = outcome && outcome.intent ? String(outcome.intent) : route && route.intent ? String(route.intent) : "";
+    const answer = outcome && outcome.text ? String(outcome.text) : "";
+    const pages = outcome && outcome._pages ? outcome._pages : [];
+    if (route && route.useReadinessRun) {
+      chips.push({ label: "Full readiness", query: "Run readiness check", action: { type: "runQuery", query: "Run readiness check" } });
+    }
+    if (route && route.useProactiveBriefing) {
+      chips.push({ label: "What's next?", query: "What should staff do first?", action: { type: "runQuery", query: "What should staff do first?" } });
+    }
+    if (route && route.useWidgetFeed) {
+      chips.push({
+        label: "Open Financial",
+        query: "Open financial dashboard",
+        action: { type: "openPage", page: "financial" },
+      });
+    }
+    if (intent === "blocked: firewall" || intent === "capability:blocked") {
+      chips.push({ label: "What CAN I do?", query: "What can you do instead?" });
+      chips.push({ label: "Draft review note", query: "Draft a journal entry locally" });
+    }
+    if (/imports:|missing import|no import data|imports look empty|stale export|refresh import/i.test(answer + intent)) {
+      chips.push({ label: "Refresh imports", query: "Refresh imports", action: { type: "refreshImports" } });
+      chips.push({ label: "Import status", query: "Show import status", action: { type: "runQuery", query: "Show import status" } });
+    }
+    if (/^navigate:/.test(intent)) {
+      const pageId = intent.replace(/^navigate:\s*/, "");
+      chips.push({
+        label: "Why this page?",
+        query: "What can you do on this page?",
+        action: { type: "runQuery", query: "What can you do on the " + pageId.replace(/-/g, " ") + " page?" },
+      });
+    }
+    const actions = outcome && outcome.actions ? outcome.actions : [];
+    if (/^capability:page-/.test(intent) && actions[0] && actions[0].page) {
+      chips.push({
+        label: "Open page",
+        query: "Open " + actions[0].page.replace(/-/g, " "),
+        action: { type: "openPage", page: actions[0].page },
+      });
+    }
+    if (/claims workbench|denied claim|claim packet/i.test(answer) && !chips.some((c) => c.action && c.action.page === "claims")) {
+      chips.push({
+        label: "Open Claims",
+        query: "Open claims workbench",
+        action: { type: "openPage", page: "claims" },
+      });
+    }
+    if (/quickbooks|journal|ledger|posting queue/i.test(answer) && !chips.some((c) => c.action && c.action.page === "quickbooks")) {
+      chips.push({
+        label: "Open QuickBooks",
+        query: "Open QuickBooks",
+        action: { type: "openPage", page: "quickbooks" },
+      });
+    }
+    const top = halData && halData.topPriority && halData.topPriority.summary;
+    if (top && (/priority|attention|blocked today/i.test(String(query || "")) || chips.length < 2)) {
+      chips.push({ label: "Top priority", query: "What's the top priority?", action: { type: "runQuery", query: "What's the top priority?" } });
+    }
+    const displayLen = answer.length;
+    const spokenBudget =
+      typeof spokenBudgetFor === "function" && query ? spokenBudgetFor(query, route, {}) : 220;
+    if (displayLen > spokenBudget + 60) {
+      chips.push({ label: "Say more", query: "Say more about that", action: { type: "runQuery", query: "Say more about that" } });
+    }
+    const seen = new Set();
+    return chips
+      .filter((c) => {
+        const key = (c.action && c.action.type === "openPage" ? c.action.page : c.query || c.label).toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 5);
+  }
+
+  function adjustChatBudget(query, route, opts) {
+    opts = opts || {};
+    let max = chatBudgetFor(query, route);
+    const intent = route && route.intent ? String(route.intent) : "";
+    if (route && (route.useReasoning || route.useEscalation || /^reasoning:/.test(intent))) {
+      max = Math.min(Math.floor(max * 1.15), CHAT_LIMITS.reasoningMax);
+    }
+    if (opts.preferBrief || wantsBriefReply(query)) {
+      max = Math.max(Math.floor(max * 0.88), 920);
+    } else if (detectUserTone(query) === "casual") {
+      max = Math.floor(max * 0.92);
+    }
+    if (wantsDetailedReply(query)) max = Math.min(Math.floor(max * 1.35), CHAT_LIMITS.reasoningMax);
+    return max;
+  }
+
+  function expandCorrectionQuery(query, turns) {
+    if (!isCorrectionQuery(query)) return query;
+    const list = turns || [];
+    const priorUser = [...list].reverse().find((t) => t.role === "user");
+    const priorHal = [...list].reverse().find((t) => t.role === "hal");
+    if (!priorUser || !priorHal) return query;
+    return (
+      'Correction: "' +
+      query +
+      '". Re-answer more accurately. Prior question: "' +
+      priorUser.text +
+      '". Your prior answer: "' +
+      String(priorHal.text).slice(0, 280) +
+      '".'
+    );
+  }
+
+  function polishChatReply(text, query, route, meta) {
+    meta = meta || {};
+    let out = String(text || "").trim();
+    const intent = route && route.intent ? String(route.intent) : "";
+    if (/^blocked: firewall/.test(intent) && meta.firewallBriefCount >= 1) {
+      out = compressedBlockedReply((meta.halData && meta.halData.firewall) || FALLBACK_FIREWALL, query, meta.firewallBriefCount);
+    }
+    const micro = isSimpleActionQuery(query) && buildMicroActionReply(intent, meta.actionLabel, query);
+    if (micro && /^navigate:|imports: refresh|imports: status/.test(intent)) {
+      out = micro;
+    }
+    const rawLen = out.length;
+    if (meta.synthesize !== false && (out.length > 300 || (hasUnrequestedList(out, query) && !allowsMarkdownInReply(query, route, meta)))) {
+      out = synthesizeHandlerReply(out, query, route);
+    }
+    if (isChatSizedQuestion(query, route) && (/\*\*|^\s*\d+\./m.test(out)) && !allowsMarkdownInReply(query, route, meta)) {
+      out = flattenMarkdownForChat(out);
+    }
+    if (meta.currentPage && meta.pages && meta.halData) {
+      const clause = pageAwareClause(meta.currentPage, meta.halData, meta.pages, query);
+      if (clause && !new RegExp("^" + clause.trim().slice(0, 6), "i").test(out)) {
+        out = clause + (out.charAt(0) || "").toLowerCase() + out.slice(1);
+      }
+    }
+    out = stripChatbotFillers(out);
+    out = stripInternalJargon(out);
+    if (meta.toolSummary) out = appendEvidenceClause(out, meta.toolSummary, query);
+    out = trimChatReply(out, query, route, {
+      force: meta.forceTrim || (isChatSizedQuestion(query, route) && !(route && route.useReasoning)),
+      maxChars: adjustChatBudget(query, route, meta),
+      preferBrief: meta.preferBrief,
+    });
+    const hint = progressiveDepthHint(query, route, rawLen > out.length + 40);
+    if (hint && !out.includes(hint.trim().slice(1, 20))) out = out + hint;
+    out = applyHalPersonality(out, query, route, meta);
+    out = ensureMinSentences(out, query, route, meta);
+    return out.trim();
+  }
+
+  const SPOKEN_LIMITS = {
+    defaultMax: 520,
+    yesNoMax: 340,
+    capabilityMax: 440,
+    readinessMax: 400,
+    planMax: 580,
+    briefMax: 200,
+  };
+
+  const SPOKEN_DEPTH_HINT_RE = /(?:^|\s)(?:Say|Ask)\s+"[^"]+"\s+for\s+[^.!?]+[.!?]?/gi;
+
+  function stripMarkdownForSpeech(text) {
+    return String(text || "")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\*([^*]+)\*/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/^#+\s+/gm, "")
+      .replace(/^\s*[-*•]\s+/gm, "")
+      .replace(/^\s*\d+\.\s+/gm, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function spokenContractions(text) {
+    return String(text || "")
+      .replace(/\bI am\b/g, "I'm")
+      .replace(/\bcannot\b/gi, "can't")
+      .replace(/\bdo not\b/gi, "don't")
+      .replace(/\bdoes not\b/gi, "doesn't")
+      .replace(/\bwill not\b/gi, "won't")
+      .replace(/\bit is\b/gi, "it's")
+      .replace(/\bthat is\b/gi, "that's")
+      .replace(/\bwe are\b/gi, "we're")
+      .replace(/\byou are\b/gi, "you're");
+  }
+
+  function spokenNumbers(text) {
+    const small = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+    return String(text || "").replace(/\b(\d+)\/(\d+)\b/g, (_, a, b) => {
+      const an = Number(a);
+      const bn = Number(b);
+      const aw = an >= 0 && an <= 10 ? small[an] : a;
+      const bw = bn >= 0 && bn <= 10 ? small[bn] : b;
+      return `${aw} of ${bw}`;
+    });
+  }
+
+  function spokenBudgetFor(query, route, meta) {
+    meta = meta || {};
+    const intent = route && route.intent ? String(route.intent) : "";
+    if (meta.preferBrief || wantsBriefReply(query)) return SPOKEN_LIMITS.briefMax;
+    if (isYesNoQuestion(query)) return SPOKEN_LIMITS.yesNoMax;
+    if (/^capability:|^blocked: firewall/.test(intent)) return SPOKEN_LIMITS.capabilityMax;
+    if (/readiness/i.test(intent) || (route && route.useReadinessRun)) return SPOKEN_LIMITS.readinessMax;
+    if (route && (route.useReasoning || route.useEscalation)) return SPOKEN_LIMITS.planMax;
+    if (route && route.useProactiveBriefing && /make a plan|priorit/i.test(String(query || "").toLowerCase())) {
+      return SPOKEN_LIMITS.planMax;
+    }
+    return SPOKEN_LIMITS.defaultMax;
+  }
+
+  function takeSpokenSentences(text, maxChars, maxSentences) {
+    const raw = String(text || "").trim();
+    if (!raw) return "";
+    const sentences = raw.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [raw];
+    let out = "";
+    let count = 0;
+    for (const sentence of sentences) {
+      const piece = sentence.trim();
+      if (!piece) continue;
+      const next = out ? `${out} ${piece}` : piece;
+      if (count >= maxSentences || next.length > maxChars) break;
+      out = next;
+      count++;
+    }
+    if (!out) out = trimAtSentence(raw, maxChars);
+    return out.trim();
+  }
+
+  function toSpokenScript(displayText, query, route, meta) {
+    meta = meta || {};
+    let out = stripMarkdownForSpeech(displayText);
+    out = stripChatbotFillers(out);
+    out = out.replace(SPOKEN_DEPTH_HINT_RE, " ").trim();
+    out = stripHalIdentityMonologue(out, false);
+    out = spokenContractions(out);
+    out = spokenNumbers(out);
+    out = out.replace(/[;:—–]/g, ".").replace(/\.\.+/g, ".").trim();
+
+    const budget = spokenBudgetFor(query, route, meta);
+    let maxSentences = 3;
+    if (meta.preferBrief || wantsBriefReply(query)) maxSentences = 2;
+    if (/readiness/i.test(route && route.intent ? route.intent : "")) maxSentences = 2;
+    if (route && (route.useReasoning || route.useEscalation)) maxSentences = 6;
+
+    out = takeSpokenSentences(out, budget, maxSentences);
+
+    const displayLen = String(displayText || "").trim().length;
+    if (displayLen > out.length + 80 && !/on screen/i.test(out)) {
+      out = out.replace(/[.!?]\s*$/, "") + ". The rest is on screen if you can read.";
+    }
+    return out.trim();
+  }
+
+  function stripCapabilityPrefixes(rawQuery) {
+    return String(rawQuery)
+      .trim()
+      .replace(/^hal[,:]\s+/i, "")
+      .replace(/^quick question:\s*/i, "")
+      .replace(/^tell me honestly\s*[—-]\s*/i, "")
+      .trim();
+  }
+
+  function describeBlockedAction(actionPhrase) {
+    const a = String(actionPhrase || "").toLowerCase();
+    if (/\bpost\b.*\bquickbooks\b|\bquickbooks\b.*\bpost\b/.test(a)) return "post to QuickBooks";
+    if (/\bwrite\b.*\bsoftdent\b|\bsoftdent\b.*\bwrite\b/.test(a)) return "write back to SoftDent";
+    if (/\b(submit|transmit)\b.*\bclaim\b|\bclaim\b.*\b(submit|transmit)\b/.test(a)) return "submit or transmit a claim";
+    if (/\b(upload|portal)\b.*\bnarrative\b|\bnarrative\b.*\b(upload|portal)\b/.test(a)) return "upload a narrative to a portal";
+    if (/\b(email|contact|fax)\b.*\bpayer\b|\bpayer\b.*\b(email|contact|fax)\b/.test(a)) return "contact the payer directly";
+    if (/\bdelete\b.*\bclaim\b/.test(a)) return "delete a claim";
+    if (/\bpay\b.*\binvoice\b/.test(a)) return "pay an invoice";
+    const verb = a.match(
+      /\b(submit|send|email|fax|upload|transmit|pay|delete|remove|post|write|contact|dispatch|wire)\b/,
+    );
+    return verb ? verb[1] + " that" : "do that external step";
+  }
+
+  function variedBlockedCapabilityReply(firewall, actionPhrase) {
+    const fw = firewall || FALLBACK_FIREWALL;
+    const act = describeBlockedAction(actionPhrase);
+      return pickVariant([
+        `No. I can't ${act} from here. ${fw.summary} I can open the right page and draft review notes; staff performs the external step.`,
+        `${act.charAt(0).toUpperCase() + act.slice(1)} is blocked by the firewall. SoftDent and QuickBooks stay read-only from this program. I can prepare local review material; a human executes outside the app.`,
+        `That request stops at the boundary for ${act}. ${fw.summary} I'll help navigate and document locally — outbound delivery requires staff.`,
+      ]);
+  }
+
+  function wrapAllowedCapabilityReply(actionPhrase, body) {
+    const act = String(actionPhrase || "that").replace(/\s+without staff approval$/i, "").trim();
+    const core = String(body || "").trim();
+    const intro = pickVariant([
+      `Yes — I can ${act} here locally.`,
+      `${act.charAt(0).toUpperCase() + act.slice(1)} is in-bounds for this program.`,
+      `Yes — ${act} stays on the read-only side and I can handle it now.`,
+      `I can do that here. ${act.charAt(0).toUpperCase() + act.slice(1)} uses local data only.`,
+    ]);
+    if (!core) return intro;
+    if (/^yes\b|^sure\b|^absolutely\b|^that's in-bounds/i.test(core)) return core;
+    return intro + " " + core;
+  }
+
+  function parseCapabilityQuestion(rawQuery) {
+    const q = stripCapabilityPrefixes(rawQuery).toLowerCase();
+
+    let m = q.match(/^what can you not do on (?:the )?(.+?)(?:\s+page)?\??$/);
+    if (m) return { kind: "page-cannot", pageHint: m[1].trim() };
+
+    m = q.match(/^what can you do on (?:the )?(.+?)(?:\s+page)?\??$/);
+    if (m) return { kind: "page-can", pageHint: m[1].trim() };
+
+    m = q.match(/^what happens if i ask you to (.+?)\??$/);
+    if (m) return { kind: "hypothetical", action: m[1].trim() };
+
+    m = q.match(/^(?:are you allowed to|can you) (.+?)(?:\s+without staff approval)?\??$/);
+    if (m) return { kind: "can", action: m[1].trim() };
+
+    return null;
+  }
+
+  function buildPageCapabilityReply(halData, pages, pageHint, negated) {
+    const pageId = findPage(pageHint.replace(/\s+page$/, ""));
+    if (!pageId) return null;
+    const reg = registryById(halData, pageId);
+    const info = pageInfoMap(halData, pages)[pageId] || { label: pageId, detail: "" };
+    const label = info.label || pageId;
+    const status = reg ? `${reg.state}. Safety: ${reg.safety}. Next: ${reg.nextAction}` : "review-only locally.";
+    if (negated) {
+      return {
+        intent: "capability:page-limits",
+        lane: "local",
+        text: pickVariant([
+          `On ${label}, I won't post, submit, email, or write back — ${reg?.safety || "review-only"}. I can explain what's here and prep notes for staff. Obviously.`,
+          `${label} is read-only for me. No external delivery from that page; I flag gaps and tell staff what to do next (${status}).`,
+          `I don't change outside systems from ${label}. I navigate, explain imported data, and draft local review — humans own outbound actions.`,
+        ]),
+        actions: pageId === "hal" ? [] : [{ type: "openPage", label: "Open " + label, page: pageId }],
+      };
+    }
+    return {
+      intent: "capability:page-can",
+      lane: "local",
+      text: pickVariant([
+        `On ${label}, I open the page, walk through ${info.detail || "local data"}, and call out what's missing — ${status}`,
+        `${label}: I explain ${info.detail || "what staff see here"}, compare imports, and tell you the next review step. ${status}`,
+        `For ${label}, I'm your read-only guide — ${info.detail || "local views only"}. Current posture: ${status}. You're welcome.`,
+      ]),
+      actions: pageId === "hal" ? [] : [{ type: "openPage", label: "Open " + label, page: pageId }],
+    };
+  }
+
+  function capabilityLocalFlagsForAction(action, halData) {
+    const a = String(action || "").toLowerCase();
+    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
+    if (/make a plan|plan for today|show what needs attention|what needs attention today/.test(a)) {
+      return { intent: "capability:plan", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
+    }
+    if (/readiness check|run readiness/.test(a)) {
+      return { intent: "capability:readiness", lane: "local", useReadinessRun: true, text: "", actions: [] };
+    }
+    if (/refresh imports|import status|show import status/.test(a)) {
+      const refresh = /\brefresh\b/.test(a);
+      return refresh
+        ? { intent: "capability:imports-refresh", lane: "local", useImportRefresh: true, text: "", actions: [] }
+        : { intent: "capability:imports-status", lane: "local", useImportStatus: true, text: "", actions: [] };
+    }
+    if (/manager dashboard widgets|show manager dashboard/.test(a)) {
+      return { intent: "capability:widgets", lane: "local", useWidgetFeed: true, text: "", actions: [] };
+    }
+    if (/claim packet readiness|check claim packet readiness/.test(a)) {
+      return { intent: "capability:claims-packet", lane: "local", useClaimReadiness: true, text: "", actions: [] };
+    }
+    if (/draft a journal entry locally|journal entry locally/.test(a)) {
+      return { intent: "capability:journal-draft", lane: "local", useJournalDraft: true, text: "", actions: [] };
+    }
+    if (/monitor sidenotes/.test(a)) {
+      return { intent: "capability:sidenotes", lane: "local", useSideNoteMonitor: true, text: "", actions: [] };
+    }
+    if (/explain the firewall|external action firewall/.test(a)) {
+      return {
+        intent: "capability:firewall",
+        lane: "local",
+        text: pickVariant([
+          `${firewall.summary} Blocked: ${firewall.blocked.join(", ")}. Allowed: ${firewall.allowed.join(", ")}.`,
+          `Firewall is enforced before any model runs. Blocked: ${firewall.blocked.join(", ")}. I stay in read-only mode.`,
+          `External actions never leave this program unattended. ${firewall.summary} Staff reviews anything outbound.`,
+        ]),
+        actions: [],
+      };
+    }
+    return null;
+  }
+
+  function matchMixedCapabilityQuestion(halData, pages, rawQuery) {
+    const q = stripCapabilityPrefixes(rawQuery).toLowerCase();
+    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
+
+    if (/\bregistry items need review\b/.test(q)) {
+      const waiting = registryByState(halData, /needs review/i);
+      const list = waiting.map((entry) => `- ${entry.name} (${entry.state}): ${entry.nextAction}`).join("\n");
+      return {
+        intent: "capability:registry-review",
+        lane: "local",
+        text: pickVariant([
+          waiting.length
+            ? `These registry items need review:\n${list}`
+            : "Nothing in the registry is flagged needs-review right now.",
+          waiting.length
+            ? `Needs-review queue:\n${list}`
+            : "Registry looks clear — no items waiting on review.",
+        ]),
+        actions: waiting.map((entry) => ({ type: "openPage", label: "Open " + entry.name, page: entry.id })),
+      };
+    }
+
+    if (/\bare imports current\b/.test(q)) {
+      return {
+        intent: "capability:imports-current",
+        lane: "local",
+        useImportStatus: true,
+        text: "",
+        actions: [],
+      };
+    }
+
+    if (/\bdo you control widgets\b/.test(q)) {
+      return {
+        intent: "capability:widgets-control",
+        lane: "local",
+        useWidgetFeed: true,
+        text: "",
+        actions: [],
+      };
+    }
+
+    if (/\bwho must review external actions\b/.test(q)) {
+      return {
+        intent: "capability:external-review",
+        lane: "local",
+        text: pickVariant([
+          "Staff with authority over that workflow — usually the owner or office manager. I stop at the firewall; a named person approves anything outbound.",
+          "A human on your team, not me. I prep and explain; whoever owns claims, accounting, or payer contact takes the external step after review.",
+          "Always a person. The firewall blocks HAL from submit, email, upload, or post — your staff reviews my notes and executes outside the program.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\b(browser preview|preview mode)\b/.test(q)) {
+      return {
+        intent: "capability:browser-preview",
+        lane: "local",
+        text: pickVariant([
+          "Browser preview is a thin shell — I can chat there, but import refresh, SoftDent/QuickBooks pulls, and full widget placement need Start Program on the desktop.",
+          "In browser-only mode I'm limited. Daily work runs through Start Program so imports, widgets, and source health are real.",
+          "Preview mode is for UI checks. For production posture, open Start Program — that's where I see live imports and manager widgets.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\bwhat is blocked today\b/.test(q)) {
+      const blocked = registryByState(halData, /blocked/i);
+      const list = blocked.map((entry) => `- ${entry.name}: ${entry.nextAction}`).join("\n");
+      return {
+        intent: "capability:blocked-today",
+        lane: "local",
+        text: blocked.length
+          ? pickVariant([
+              `Blocked today:\n${list}`,
+              `These are blocked right now:\n${list}`,
+            ])
+          : pickVariant([
+              "Nothing is marked blocked in the registry today.",
+              "No blocked registry items — check needs-review if you're hunting for work.",
+            ]),
+        actions: blocked.map((entry) => ({ type: "openPage", label: "Open " + entry.name, page: entry.id })),
+      };
+    }
+
+    if (/\bwhat do you need from staff\b/.test(q)) {
+      return { intent: "capability:job-requirements", lane: "local", useHalJobRequirements: true, text: "", actions: [] };
+    }
+
+    if (/\bwhat is your top priority\b/.test(q)) {
+      return { intent: "capability:priority", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
+    }
+
+    if (/\bwhat happens if data is missing\b/.test(q)) {
+      return {
+        intent: "capability:missing-data",
+        lane: "local",
+        text: pickVariant([
+          "I say what's missing, which import or page to check, and I won't invent numbers. Staff verifies SoftDent and QuickBooks before acting.",
+          "No guessing — I flag the gap, point to the source health panel, and recommend the next safe verification step.",
+          "Missing data means I stay in review mode: name the blank field, suggest which collector to run, and wait for staff confirmation.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\bsee softdent production\b/.test(q)) {
+      return { intent: "capability:softdent-production", lane: "local", useSourceHealth: true, text: "", actions: [] };
+    }
+
+    return null;
+  }
+
+  function isPolicyCanYouProbe(rawQuery, action) {
+    const raw = stripCapabilityPrefixes(rawQuery).toLowerCase();
+    const act = String(action || "").toLowerCase();
+    if (/^are you allowed to /.test(raw)) return true;
+    if (/without staff approval/.test(raw)) return true;
+    if (/^tell me honestly/.test(String(rawQuery).toLowerCase())) return true;
+    if (isOutboundActionPhrase(act) || isOutboundActionPhrase(rawQuery)) return true;
+    if (FIREWALL_ENABLED && (checkFirewall(act) || BLOCKED_PHRASES_RE.test(act))) return true;
+    return false;
+  }
+
+  function isOperationalPassthrough(inner, action) {
+    if (!inner || !inner.intent) return false;
+    if (inner.intent === "help") return true;
+    if (/^(readiness:|session:|print:|operator:|packet:|imports:|ops:)/.test(inner.intent)) return true;
+    if (
+      inner.useReadinessRun ||
+      inner.useReadinessClear ||
+      inner.useSessionStart ||
+      inner.usePacketBuild ||
+      inner.usePrint
+    ) {
+      return true;
+    }
+    return /^(run |start |clear |reset |print |build |check hal|self-check|readiness)/i.test(String(action || ""));
+  }
+
+  function matchCapabilityRoute(halData, halModels, pages, rawQuery) {
+    const mixed = matchMixedCapabilityQuestion(halData, pages, rawQuery);
+    if (mixed) return mixed;
+
+    const parsed = parseCapabilityQuestion(rawQuery);
+    if (!parsed) return null;
+
+    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
+
+    if (parsed.kind === "page-can") {
+      return buildPageCapabilityReply(halData, pages, parsed.pageHint, false);
+    }
+    if (parsed.kind === "page-cannot") {
+      return buildPageCapabilityReply(halData, pages, parsed.pageHint, true);
+    }
+
+    if (parsed.kind === "can" && !isPolicyCanYouProbe(rawQuery, parsed.action)) {
+      return null;
+    }
+
+    const action = parsed.action || "";
+    const actionBlocked =
+      isFirewallActive(halData, halModels) && (checkFirewall(action) || BLOCKED_PHRASES_RE.test(action));
+    const actionNoExecutor = isOutboundActionPhrase(action) || isOutboundActionPhrase(rawQuery);
+
+    if (parsed.kind === "hypothetical" || (parsed.kind === "can" && (actionBlocked || actionNoExecutor))) {
+      return {
+        intent: actionBlocked ? "blocked: firewall" : "capability:no-executor",
+        lane: "local",
+        text: variedBlockedCapabilityReply(firewall, action),
+        actions: [],
+      };
+    }
+
+    if (parsed.kind === "can") {
+      const localFlags = capabilityLocalFlagsForAction(action, halData);
+      if (localFlags) return localFlags;
+
+      const inner = routeHalCommand(halData, halModels, pages, action, { capabilityInner: true });
+      if (isOperationalPassthrough(inner, action)) return inner;
+
+      if (inner.useModel || inner.useReasoning || inner.useEscalation || inner.useOss) {
+        const pageId = findPage(action);
+        if (pageId) {
+          const nav = routeHalCommand(halData, halModels, pages, "open " + pageId.replace(/-/g, " "), {
+            capabilityInner: true,
+          });
+          if (nav.text) {
+            return Object.assign({}, nav, {
+              intent: "capability:" + nav.intent,
+              text: wrapAllowedCapabilityReply(action, nav.text),
+            });
+          }
+        }
+        return {
+          intent: "capability:allowed-fallback",
+          lane: "local",
+          text: wrapAllowedCapabilityReply(action, "I handle that locally without crossing the firewall."),
+          actions: [],
+        };
+      }
+      if (inner.text) {
+        return Object.assign({}, inner, {
+          intent: "capability:" + (inner.intent || "allowed"),
+          text: wrapAllowedCapabilityReply(action, inner.text),
+        });
+      }
+      if (
+        inner.useImportRefresh ||
+        inner.useImportStatus ||
+        inner.useReadinessRun ||
+        inner.useProactiveBriefing ||
+        inner.useWidgetFeed ||
+        inner.useClaimReadiness ||
+        inner.useJournalDraft ||
+        inner.useSideNoteMonitor ||
+        inner.useSourceHealth
+      ) {
+        return Object.assign({}, inner, { intent: "capability:" + (inner.intent || "tool") });
+      }
+    }
+
+    return null;
+  }
+
   function checkFirewall(query) {
+    if (!FIREWALL_ENABLED) return false;
     const q = String(query).toLowerCase().trim();
     if (isLocalStaffReviewOverride(q)) return false;
     return BLOCKED_RE.test(q) || BLOCKED_PHRASES_RE.test(q);
   }
 
-  function firewallVerdict(query, firewall) {
+  function firewallVerdict(query, firewall, halData, halModels) {
     const fw = firewall || FALLBACK_FIREWALL;
+    if (!isFirewallActive(halData, halModels)) {
+      return {
+        allowed: true,
+        intent: "firewall: disabled",
+        text: "Firewall is off — HAL routes this phrase through normal handlers. Outbound actions still require staff or integrated executors outside this check.",
+      };
+    }
     if (checkFirewall(query)) {
       return {
         allowed: false,
@@ -659,20 +2077,43 @@ const HalCore = (function () {
     ].join("\n");
   }
 
+  function fastHumanVoicePromptLines() {
+    return (
+      agentPersonalityPromptLines() +
+      "\nExamples:" +
+      "\nQ: Can you post to QuickBooks? → No. I cannot post to QuickBooks from here — read-only. I can draft journal entries from imports and show what needs review before staff clicks Post." +
+      "\nQ: Are imports current? → [Direct answer from local status.] Then what is missing, which export path, and what staff should verify." +
+      "\nQ: What can you do on Claims? → Open the workbench, walk denied lanes, check packet readiness — I do not submit to payers." +
+      "\nQ: Same question again? → Briefly acknowledge the repeat, restate the answer clearly with the same evidence."
+    );
+  }
+
   function buildFastChatSystemPrompt(halData, programContext) {
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
     const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
     const parts = [
       "You are HAL, the local read-only program manager for NewRidgeFinancial 2.0.",
       topPriority ? `Priority: ${topPriority}` : "Priority: monitor the program and recommend safe next staff actions.",
-      "Answer in short plain paragraphs from local context only. Never fabricate import data.",
+      fastHumanVoicePromptLines(),
+      "Hard rule: always write at least five complete sentences — direct answer first, then evidence, implication, gaps, and next step.",
+      "Answer from local context only. Never fabricate import data.",
       "Read-only: no submit, email, fax, upload, post, or external delivery.",
+      "Allowed: " + (firewall.allowed || []).slice(0, 10).join(", ") + ".",
       "Blocked: " + (firewall.blocked || []).slice(0, 8).join(", ") + ".",
     ];
     if (programContext) {
       parts.push("Local snapshot:", programContext.slice(0, 2200));
     }
-    return parts.join("\n");
+    return wrapAgentSystemPrompt(parts.join("\n"));
+  }
+
+  function wrapAgentSystemPrompt(text) {
+    const body = String(text || "").trim();
+    if (/^PROGRAMMING:/m.test(body)) return body;
+    if (typeof HalAgentProgramming !== "undefined" && HalAgentProgramming.wrapSystemPrompt) {
+      return HalAgentProgramming.wrapSystemPrompt(body);
+    }
+    return body;
   }
 
   function buildSystemPrompt(halData, programContext) {
@@ -685,7 +2126,7 @@ const HalCore = (function () {
       topPriority ? `Top priority: ${topPriority}` : "Top priority: monitor the program, place correct data, and recommend next safe staff actions.",
       access.mode === "full-read"
         ? "You have full read access to the local program snapshot below. Answer using that data when relevant."
-        : "Answer briefly and only about this program and its pages. If you are unsure, say so.",
+        : "Answer in enough detail to be useful — about this program and its pages. If you are unsure, say so plainly.",
       "Use accounting and Excel-style review to organize imported data, compare totals and periods, reconcile available values, identify missing fields, and make recommendations.",
       "Never fabricate missing SoftDent, QuickBooks, A/R, claims, document, or library data; say what is missing and what staff should verify.",
       "SoftDent and QuickBooks are separate systems: SoftDent = practice ops (production, claims, verified dental A/R). QuickBooks = accounting GL (revenue, expenses, P&L). Never treat their totals as the same number.",
@@ -700,7 +2141,43 @@ const HalCore = (function () {
     } else {
       parts.push("Program pages and current status:", registryAsText(halData));
     }
-    return parts.join("\n");
+    return wrapAgentSystemPrompt(parts.join("\n"));
+  }
+
+  function wantsStructuredPlan(query) {
+    return /prioriti[sz]e|make a plan|draft a plan|\bplan (my|for|the)\b|analy[sz]e (?:this|the|my|our|it)|reason through|think through|\bstrategy\b|focus first|where (do|should) (i|we) start|\b(step[\s-]?by[\s-]?step plan|numbered plan|work plan|action plan)\b/.test(
+      String(query || "").toLowerCase(),
+    );
+  }
+
+  function buildReasoningChatPrompt(halData, programContext) {
+    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
+    const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
+    const parts = [
+      "You are HAL on the 24B reasoning lane for NewRidgeFinancial 2.0 — dental-practice financial program.",
+      mirandaPersonalityPromptLines(),
+      topPriority ? `Top priority: ${topPriority}` : "Top priority: monitor the program and recommend safe next staff actions.",
+      "Before writing, reason through: what they asked, what local/tool evidence applies, what is missing, and what one safe next step staff should take.",
+      "Answer structure (prose only — no markdown headers, no numbered lists unless they asked for a plan):",
+      "1) Direct answer in the first sentence.",
+      "2) Evidence from tool results or snapshot — be specific about page, widget, or import state.",
+      "3) Accounting or operational implication in plain language.",
+      "4) What data is missing or stale and how to fix it locally (refresh imports, open a page, etc.).",
+      "5) One prioritized recommendation staff can act on locally.",
+      "Hard rule: never fewer than five complete sentences in the final answer.",
+      "Give five to eight sentences when explaining — clear prose with evidence, not a telegram.",
+      "Yes/no questions: lead with Yes or No, then explain why with real detail.",
+      "Never open with Here is a structured plan unless they asked for a plan.",
+      "You are read-only. Never submit, email, fax, upload, post, or write back.",
+      webResearchPromptLine(),
+      "Blocked: " + (firewall.blocked || []).join(", ") + ".",
+    ];
+    if (programContext) {
+      parts.push("Current local program snapshot:", programContext);
+    } else {
+      parts.push("Program pages and current status:", registryAsText(halData));
+    }
+    return wrapAgentSystemPrompt(parts.join("\n"));
   }
 
   function buildReasoningPrompt(halData, programContext) {
@@ -729,7 +2206,7 @@ const HalCore = (function () {
       priorities.map((item, index) => `${index + 1}. ${item}`).join("\n"),
       "Respond with a brief numbered plan. Keep it under 8 steps and include recommendations.",
     );
-    return parts.join("\n");
+    return wrapAgentSystemPrompt(parts.join("\n"));
   }
 
   function buildEscalationPrompt(halData, programContext) {
@@ -748,7 +2225,7 @@ const HalCore = (function () {
       parts.push("Program pages and current status:", registryAsText(halData));
     }
     parts.push("Respond with: a short risk assessment, then a numbered list of what a human should verify.");
-    return parts.join("\n");
+    return wrapAgentSystemPrompt(parts.join("\n"));
   }
 
   function cleanModelText(text) {
@@ -756,6 +2233,8 @@ const HalCore = (function () {
     out = out.replace(/<think>[\s\S]*?<\/think>/gi, "");
     out = out.replace(/<\/?think>/gi, "");
     out = out.replace(/\*[^*]+\*/g, "");
+    out = out.replace(/^(Okay|Sure|Certainly)[,.]?\s*(from my (local )?)?(read-?only )?(monitoring )?perspective[,:]?\s*/i, "");
+    out = out.replace(/\s*\((Local chat draft|Local .* draft)[^)]*\)\s*$/i, "");
     const monologueStart = /^(Okay|Hmm|Let me|Wait|Pauses|Nods|Double-checks|Starts structuring)/i;
     if (monologueStart.test(out.trim())) {
       const riskIdx = out.search(/\*\*Risk Assessment\*\*|Risk Assessment|Human Verification|DO NOT PROCEED/i);
@@ -1082,13 +2561,18 @@ const HalCore = (function () {
     );
 
     const firewallTrap = routeHalCommand(halData, halModels, pages, "submit the claim");
+    const firewallActive = isFirewallActive(halData, halModels);
     results.push(
       readinessItem(
         "firewall",
         "External-action firewall",
-        firewallTrap.intent === "blocked: firewall" ? "Pass" : "Fail",
-        firewallTrap.intent === "blocked: firewall" ? "Submit/email/upload blocked before models" : "Firewall did not block test verb",
-        firewallTrap.intent === "blocked: firewall" ? null : "Review BLOCKED_RE in hal-core.js.",
+        !firewallActive || firewallTrap.intent === "blocked: firewall" ? "Pass" : "Fail",
+        !firewallActive
+          ? "Firewall disabled — external phrases route normally"
+          : firewallTrap.intent === "blocked: firewall"
+            ? "Submit/email/upload blocked before models"
+            : "Firewall did not block test verb",
+        firewallActive && firewallTrap.intent !== "blocked: firewall" ? "Review BLOCKED_RE in hal-core.js." : null,
       ),
     );
 
@@ -1252,8 +2736,14 @@ const HalCore = (function () {
     );
 
     const blocked = routeHalCommand(halData, halModels, pages, "submit the claim");
+    const fwActive = isFirewallActive(halData, halModels);
     steps.push(
-      smokeStep("firewall", "Firewall blocks external action", blocked.intent === "blocked: firewall" ? "Pass" : "Fail", "Intent: " + blocked.intent),
+      smokeStep(
+        "firewall",
+        fwActive ? "Firewall blocks external action" : "Firewall disabled",
+        !fwActive || blocked.intent === "blocked: firewall" ? "Pass" : "Fail",
+        "Intent: " + blocked.intent,
+      ),
     );
 
     const overall = steps.some((s) => s.status === "Fail") ? "Fail" : steps.some((s) => s.status === "Warning") ? "Warning" : "Pass";
@@ -1342,6 +2832,13 @@ const HalCore = (function () {
     }
     if (/clear diagnostic|clear readiness|reset diagnostic/.test(q)) return { type: "clear" };
     if (/show diagnostic|show readiness|display diagnostic/.test(q)) return { type: "show" };
+    if (
+      /what (?:does |do )?readiness|what readiness|readiness actually check|explain readiness|tell me what readiness/.test(
+        q,
+      )
+    ) {
+      return { type: "show" };
+    }
     if (/run readiness|readiness check|check hal|hal diagnostic|self[\s-]?check|diagnostic check/.test(q)) return { type: "run" };
     return null;
   }
@@ -1363,21 +2860,84 @@ const HalCore = (function () {
     return null;
   }
 
-  function routeHalCommand(halData, halModels, pages, rawQuery) {
+  function matchEnglishVocabRoute(query, rawQuery) {
+    const q = String(query || "").trim().toLowerCase();
+    if (/\b(seed|index|fill|load)\b.*\b(english|dictionary)\b/.test(q) && /\b(library|local)\b/.test(q)) {
+      return { intent: "english: seed-library", lane: "local", useEnglishSeed: true, text: "", actions: [] };
+    }
+    if (/\b(random|pick)\b.*\b(english\s+)?word\b/.test(q) || /\bvocabulary\b.*\brandom\b/.test(q) || q === "random word") {
+      return { intent: "english: random-word", lane: "local", useEnglishRandom: true, text: "", actions: [] };
+    }
+    if (/\b(english\s+)?quiz\b.*\b(\d+|words?)\b/.test(q) || /\bvocabulary quiz\b/.test(q)) {
+      const m = q.match(/\b(\d+)\b/);
+      return {
+        intent: "english: quiz",
+        lane: "local",
+        useEnglishQuiz: true,
+        englishQuizCount: m ? Math.min(10, parseInt(m[1], 10) || 5) : 5,
+        text: "",
+        actions: [],
+      };
+    }
+    const define =
+      String(rawQuery || "")
+        .trim()
+        .match(/^(?:define|meaning of)\s+(?:the\s+word\s+)?([a-z'-]+)\??$/i) ||
+      String(rawQuery || "")
+        .trim()
+        .match(/^(?:what does|what is)\s+the\s+word\s+([a-z'-]+)\??$/i);
+    if (define) {
+      return {
+        intent: "english: define",
+        lane: "local",
+        useEnglishDefine: true,
+        englishWord: define[1].toLowerCase(),
+        text: "",
+        actions: [],
+      };
+    }
+    if (/\bteach\b.*\benglish\b/.test(q) || /\blearn english\b/.test(q) || /\benglish lesson\b/.test(q)) {
+      return { intent: "english: teach", lane: "local", useEnglishTeach: true, text: "", actions: [] };
+    }
+    return null;
+  }
+
+  function routeHalCommand(halData, halModels, pages, rawQuery, opts) {
+    opts = opts || {};
     const query = String(rawQuery)
       .toLowerCase()
       .trim()
       .replace(/^hal[,:]\s+/, "");
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
 
-    if (checkFirewall(query)) {
+    if (!opts.capabilityInner) {
+      if (
+        /\b(recap|summarize (?:what we|our (?:chat|conversation))|what did we (?:just )?(?:talk|discuss) about|conversation so far)\b/i.test(
+          query,
+        )
+      ) {
+        return { intent: "chat: recap", lane: "local", useChatRecap: true, text: "", actions: [] };
+      }
+      const compare = matchCompareRoute(rawQuery);
+      if (compare) {
+        return {
+          intent: "chat: compare",
+          lane: "local",
+          text: buildCompareReply(compare.left, compare.right, halData),
+          actions: [],
+        };
+      }
+      const english = matchEnglishVocabRoute(query, rawQuery);
+      if (english) return english;
+      const capability = matchCapabilityRoute(halData, halModels, pages, rawQuery);
+      if (capability) return capability;
+    }
+
+    if (isFirewallActive(halData, halModels) && checkFirewall(query)) {
       return {
         intent: "blocked: firewall",
         lane: "firewall",
-        text:
-          "That is an external action, so it stops at the firewall and needs human review. " +
-          firewall.summary +
-          " I can open the right page and prepare review notes, but a person has to take the external step.",
+        text: variedBlockedCapabilityReply(firewall, query),
         actions: [],
       };
     }
@@ -1390,12 +2950,14 @@ const HalCore = (function () {
       return { intent: "memory: remember", lane: "local", useRememberMemory: true, text: "", prompt: rawQuery, actions: [] };
     }
 
-    if (/\b(help|what can you do|tell me what you can do|capabilit\w*|how do you work|what do you do|what are you able to)\b/.test(query)) {
+    if (
+      /\b(help|tell me what you can do|capabilit\w*|how do you work|what do you do|what are you able to)\b/.test(query) ||
+      (/\bwhat can you do\b/.test(query) && !/\bon (the )?[a-z]/i.test(query) && !/\bpage\b/.test(query))
+    ) {
       return {
         intent: "help",
         lane: "local",
-        text:
-          "I am HAL, the local read-only program manager for NewRidgeFinancial 2.0. My top priority is to monitor the program, place correct data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action. I have full read access to local program pages and service data. I run an agent loop: plan the question, gather local tool data, answer, and self-check before responding. I can: open and explain pages; show the full program snapshot; show priorities and source health; show integration health and automation job status; build a redacted support bundle; run daily closeout and a month-end closeout runbook; run program self-heal to refresh imports, documents, and widgets; show financial reports (claims/A/R); start read-only work sessions; build local evidence packets; run readiness checks; check claim packet readiness; draft journal-entry review notes; show manager dashboard widgets; explain missing widget data; prioritize widget imports; build daily owner briefings; show accounting review queues; perform Excel-style reconciliation; search the local library; research public web reference material for practice operations (sanitized — no patient data sent); save durable learned facts when you say Remember this: ...; list and create local tasks; monitor, list, and create sidenotes; report local AI model lanes; print any page, widget, widget feed, snapshot, drawer, HAL reply, or arbitrary text; export CSV from the current page; and simulate the external-action firewall. I use local GPU chat and helper models for unmatched questions, 24B reasoning on demand for plans and insurance narratives, and keep escalation local. I remember recent conversation context, approved learned facts, and local office preferences. I do not submit, send, upload, post, delete, or change outside systems.",
+        text: buildHelpChatReply(halData),
         actions: [],
       };
     }
@@ -1499,7 +3061,10 @@ const HalCore = (function () {
       }
     }
 
-    const wantsExplain = /\b(explain|what is|what's|whats|what does|tell me about|describe|purpose of)\b/.test(query);
+    const wantsExplain =
+      /\b(explain|what is|what's|whats|what does|tell me about|describe|purpose of|what happens when|what happens if|what if|what would happen)\b/.test(
+        query,
+      );
 
     // Explicit navigation wins over source/status keyword matching (e.g. "Open SoftDent").
     if (/\b(open|go to|navigate to|take me to|launch)\b/.test(query) && !wantsExplain) {
@@ -1508,10 +3073,14 @@ const HalCore = (function () {
         const navInfo = pageInfoMap(halData, pages)[navId] || { label: navId, detail: "" };
         const navReg = registryById(halData, navId);
         const navStatus = navReg ? `\nStatus: ${navReg.state}. Safety: ${navReg.safety}. Next: ${navReg.nextAction}` : "";
+        const simpleNav = isSimpleActionQuery(rawQuery);
+        const navText = simpleNav
+          ? buildMicroActionReply("navigate: " + navId, navInfo.label, rawQuery)
+          : `I can open ${navInfo.label}. ${navInfo.detail}${navStatus}`;
         return {
           intent: "navigate: " + navId,
           lane: "local",
-          text: `I can open ${navInfo.label}. ${navInfo.detail}${navStatus}`,
+          text: navText,
           actions: [{ type: "openPage", label: "Open " + navInfo.label, page: navId }],
         };
       }
@@ -1590,7 +3159,7 @@ const HalCore = (function () {
       return { intent: "priorities", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
     }
 
-    if (/\b(firewall|external action|boundary|guardrail|guardrails|safety|are you allowed)\b/.test(query)) {
+    if (/\b(firewall|external action|boundary|guardrail|guardrails|safety)\b/.test(query)) {
       return {
         intent: "firewall",
         lane: "local",
@@ -1749,7 +3318,7 @@ const HalCore = (function () {
     }
 
     const pageId = findPage(query);
-    if (pageId) {
+    if (pageId && !isHypotheticalQuestion(rawQuery)) {
       const info = pageInfoMap(halData, pages)[pageId] || { label: pageId, detail: "" };
       const reg = registryById(halData, pageId);
       const status = reg ? `\nStatus: ${reg.state}. Safety: ${reg.safety}. Next: ${reg.nextAction}` : "";
@@ -1765,12 +3334,14 @@ const HalCore = (function () {
           actions: pageId === "hal" ? [] : [{ type: "openPage", label: "Open " + info.label, page: pageId }],
         };
       }
-      return {
-        intent: "navigate: " + pageId,
-        lane: "local",
-        text: `I can open ${info.label}. ${info.detail}${status}`,
-        actions: [{ type: "openPage", label: "Open " + info.label, page: pageId }],
-      };
+      if (isPageNavigationIntent(query)) {
+        return {
+          intent: "navigate: " + pageId,
+          lane: "local",
+          text: `I can open ${info.label}. ${info.detail}${status}`,
+          actions: [{ type: "openPage", label: "Open " + info.label, page: pageId }],
+        };
+      }
     }
 
     return {
@@ -1801,7 +3372,77 @@ const HalCore = (function () {
     derivePriorityGroups,
     pageInfoMap,
     findPage,
+    isHypotheticalQuestion,
+    isOutboundActionPhrase,
+    isPageNavigationIntent,
     checkFirewall,
+    isFirewallActive,
+    setFirewallEnabled,
+    pickVariant,
+    variedBlockedCapabilityReply,
+    wrapAllowedCapabilityReply,
+    parseCapabilityQuestion,
+    matchCapabilityRoute,
+    CHAT_LIMITS,
+    MIN_REPLY_SENTENCES,
+    isChatSizedQuestion,
+    isYesNoQuestion,
+    chatBudgetFor,
+    trimChatReply,
+    stripHalIdentityMonologue,
+    buildHelpChatReply,
+    localChatFallback,
+    offlineModelChatMessage,
+    chatShapeIssues,
+    repairChatShape,
+    detectUserTone,
+    isFollowUpQuery,
+    isCorrectionQuery,
+    wantsBriefReply,
+    textSimilarity,
+    buildThreadContextBlock,
+    pageAwareClause,
+    stripChatbotFillers,
+    synthesizeHandlerReply,
+    progressiveDepthHint,
+    buildFollowUpChips,
+    adjustChatBudget,
+    expandCorrectionQuery,
+    applyHalPersonality,
+    wrapAgentSystemPrompt,
+    agentPersonalityPromptLines,
+    polishChatReply,
+    isSimpleActionQuery,
+    buildMicroActionReply,
+    expandAtMentions,
+    updateSessionSummary,
+    resolveFollowUpQuery,
+    updateSessionSummary,
+    isCodeDiscussionQuery,
+    allowsMarkdownInReply,
+    compressThreadForPrompt,
+    detectAmbiguousQuery,
+    inferPageActionsFromAnswer,
+    resolveFollowUpTopic,
+    isImplicitFollowUp,
+    stripInternalJargon,
+    flattenMarkdownForChat,
+    compressedBlockedReply,
+    buildSessionRecap,
+    matchCompareRoute,
+    buildCompareReply,
+    matchEnglishVocabRoute,
+    appendEvidenceClause,
+    answerLeadsCorrectly,
+    answersMustLead,
+    SPOKEN_LIMITS,
+    spokenBudgetFor,
+    toSpokenScript,
+    countWords,
+    countSentences,
+    splitSentences,
+    ensureMinSentences,
+    shouldEnforceMinSentences,
     firewallVerdict,
     registryAsText,
     summarizeProgramSnapshot,
@@ -1811,6 +3452,8 @@ const HalCore = (function () {
     buildSystemPrompt,
     buildFastChatSystemPrompt,
     buildReasoningPrompt,
+    buildReasoningChatPrompt,
+    wantsStructuredPlan,
     buildEscalationPrompt,
     cleanModelText,
     routeHalCommand,

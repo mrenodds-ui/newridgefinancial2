@@ -444,6 +444,59 @@ class DesktopApi:
         hits = search_memories(str(query or ""), limit=int(limit or 5))
         return {"items": hits, "count": len(hits), "text": format_memory_hits(hits)}
 
+    def grep_program_source(self, query: str, limit: int = 24) -> dict:
+        from program_source_grep import grep_program_source
+
+        return grep_program_source(REPO_ROOT, self.site_dir, str(query or ""), int(limit or 24))
+
+    def read_program_file(self, rel_path: str, max_chars: int = 12000) -> dict:
+        from program_source_grep import read_program_file
+
+        return read_program_file(REPO_ROOT, self.site_dir, str(rel_path or ""), int(max_chars or 12000))
+
+    def list_program_files(self, subdir: str = "site", limit: int = 80) -> dict:
+        from program_source_grep import list_program_files
+
+        return list_program_files(REPO_ROOT, self.site_dir, str(subdir or "site"), int(limit or 80))
+
+    def apply_program_patch(self, rel_path: str, old_string: str, new_string: str, dry_run: bool = False) -> dict:
+        from program_source_grep import apply_program_patch
+
+        return apply_program_patch(
+            REPO_ROOT,
+            self.site_dir,
+            str(rel_path or ""),
+            str(old_string or ""),
+            str(new_string or ""),
+            dry_run=bool(dry_run),
+        )
+
+    def run_hal_validation(self, timeout_sec: int = 120) -> dict:
+        from program_source_grep import run_hal_validation
+
+        return run_hal_validation(REPO_ROOT, int(timeout_sec or 120))
+
+    def run_node_syntax_check(self, rel_paths: list) -> dict:
+        from program_source_grep import run_node_syntax_check
+
+        paths = [str(p) for p in (rel_paths or [])]
+        return run_node_syntax_check(REPO_ROOT, self.site_dir, paths)
+
+    def semantic_search_program(self, query: str, limit: int = 15) -> dict:
+        from program_source_grep import semantic_search_program
+
+        return semantic_search_program(REPO_ROOT, self.site_dir, str(query or ""), int(limit or 15))
+
+    def run_git_readonly(self, command: str = "status") -> dict:
+        from program_source_grep import run_git_readonly
+
+        return run_git_readonly(REPO_ROOT, str(command or "status"))
+
+    def apply_program_patches(self, patches: list, dry_run: bool = False) -> dict:
+        from program_source_grep import apply_program_patches
+
+        return apply_program_patches(REPO_ROOT, self.site_dir, patches or [], dry_run=bool(dry_run))
+
     def get_hal_audit_recent(self, limit: int = 20) -> dict:
         from hal_audit import read_recent_audit
 

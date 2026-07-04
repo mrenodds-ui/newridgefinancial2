@@ -1,0 +1,60 @@
+{
+  "sources": [
+    {
+      "file": "npr_prada_nichols.mp3",
+      "source_url": "https://www.npr.org/2006/07/08/5543033/streeps-prada-performance-a-bit-of-nichols",
+      "film_window_sec": [
+        38,
+        58
+      ],
+      "reference_text": "My flight has been cancelled. There's some absurd weather problem. I need to get home tonight. The twins have a recital tomorrow morning at school.",
+      "segments_used": 1,
+      "wpm": 61.7,
+      "speech_sec": 25.29,
+      "pause_sec": 0.0,
+      "pause_ratio": 0.0,
+      "gap_ms_median": 0.0,
+      "gap_ms_p75": 0.0,
+      "median_pitch_hz": 192.4
+    },
+    {
+      "file": "npr_prada_review.mp3",
+      "source_url": "https://www.npr.org/2006/06/30/5525317/the-devil-wears-prada-wears-thin",
+      "film_window_sec": [
+        42,
+        52
+      ],
+      "reference_text": "I don't understand why it's so difficult to confirm an appointment.",
+      "segments_used": 3,
+      "wpm": 188.9,
+      "speech_sec": 4.13,
+      "pause_sec": 3.76,
+      "pause_ratio": 0.91,
+      "gap_ms_median": 1880.0,
+      "gap_ms_p75": 2715.0,
+      "median_pitch_hz": 199.5
+    }
+  ],
+  "clip_cafe_hints": {
+    "thats_all": {
+      "line": "That's all.",
+      "words": 2,
+      "duration_sec": 1.2
+    },
+    "couldnt_be_clearer": {
+      "line": "I couldn't have been clearer.",
+      "words": 5,
+      "duration_sec": 6.0
+    },
+    "coffee_isnt_here": {
+      "line": "Is there some reason that my coffee isn't here?",
+      "words": 11,
+      "duration_sec": 10.0
+    },
+    "glacial_pace": {
+      "line": "By all means, move at a glacial pace.",
+      "words": 8,
+      "duration_sec": 5.5
+    }
+  }
+}

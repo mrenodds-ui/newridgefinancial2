@@ -192,6 +192,41 @@ class NR2BottleServer(BottleServer):
                 bottle.response.status = 500
                 return json.dumps({"error": str(exc), "status": "fail"})
 
+        @app.get("/api/hal-tts/status")
+        def hal_tts_status_api():
+            bottle.response.content_type = "application/json"
+            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            try:
+                from miranda_tts import tts_status
+
+                return json.dumps(tts_status())
+            except Exception as exc:
+                return json.dumps({"ok": False, "error": str(exc)})
+
+        @app.post("/api/hal-tts")
+        def hal_tts_api():
+            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            try:
+                from miranda_tts import parse_tts_request, synthesize_demo_sync, synthesize_segments_sync
+
+                raw = bottle.request.body.read() if bottle.request.body else b""
+                payload = parse_tts_request(raw)
+                if payload.get("demo"):
+                    audio = synthesize_demo_sync()
+                else:
+                    segments = payload.get("segments")
+                    if not isinstance(segments, list) or not segments:
+                        bottle.response.status = 400
+                        bottle.response.content_type = "application/json"
+                        return json.dumps({"error": "segments or demo required"})
+                    audio = synthesize_segments_sync(segments)
+                bottle.response.content_type = "audio/mpeg"
+                return audio
+            except Exception as exc:
+                bottle.response.status = 500
+                bottle.response.content_type = "application/json"
+                return json.dumps({"error": str(exc)})
+
         @app.get("/")
         def index():
             if not server.root_path:

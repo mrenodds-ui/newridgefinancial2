@@ -31,7 +31,7 @@ const FALLBACK_HAL = {
   sources: { title: "Sources", summary: "Read-only.", items: [] },
   reasoning: { title: "Reasoning", summary: "Local lanes.", actions: [] },
   workSurfaces: { title: "Work surfaces", summary: "Open pages.", items: [] },
-  firewall: { title: "Firewall", summary: "External actions blocked.", blocked: [], allowed: [], examples: [] },
+  firewall: { title: "Firewall", summary: "External-action firewall is off.", blocked: [], allowed: [], examples: [] },
   priorities: { title: "Priorities", items: [] },
   registry: [],
 };
@@ -55,6 +55,7 @@ let halChatHistory = [];
 let halAudit = [];
 let halAskDraft = "";
 let halAskLoading = false;
+let halModelAbortController = null;
 let nr2DesignSchemaVersion = typeof PageSchema !== "undefined" ? PageSchema.SCHEMA_VERSION : null;
 
 function persistLocal(key, value) {
@@ -1297,17 +1298,46 @@ function ossModelReady() {
   return HalCore.laneReady(halModels, "oss120b");
 }
 
+function getCloudApiKey() {
+  try {
+    return sessionStorage.getItem("NR2_CLOUD_API_KEY") || localStorage.getItem("NR2_CLOUD_API_KEY") || "";
+  } catch {
+    return "";
+  }
+}
+
+function cloudModelConfig() {
+  const cfg = HalCore.modelConfig(halModels).cloudReasoning || {};
+  if (!cfg.enabled || !cfg.endpoint) return null;
+  return {
+    cloud: true,
+    endpoint: cfg.endpoint,
+    model: cfg.model || "gpt-4o-mini",
+    timeoutMs: cfg.timeoutMs || 120000,
+    useForAgentLoop: cfg.useForAgentLoop !== false,
+    options: cfg.options || {},
+  };
+}
+
+function cloudModelReady() {
+  const cfg = cloudModelConfig();
+  if (!cfg || !cfg.useForAgentLoop) return false;
+  return !!getCloudApiKey();
+}
+
 function offlineModelMessage(laneId) {
+  if (window.HalCore && HalCore.offlineModelChatMessage) {
+    return HalCore.offlineModelChatMessage(laneId, halModels, halData, "");
+  }
   const lane = HalCore.modelLanes(halModels).find((entry) => entry.id === laneId) || HalCore.modelLanes(halModels)[0];
   const name = lane && lane.name ? lane.name : "local chat lane";
   const model = lane && lane.model ? lane.model : "local model";
   return (
-    "I could not reach the " +
+    "The local chat model (" +
     name +
-    " (" +
+    " · " +
     model +
-    ") on this machine, so I can only answer from the local program registry right now. " +
-    "Make sure the local model service is running, then try again."
+    ") is offline. I can still answer from the program registry — ask about a page, imports, or readiness."
   );
 }
 
@@ -1334,8 +1364,11 @@ function modelRuntimeOptions(runtime) {
       temperature: typeof runtime.temperature === "number" ? runtime.temperature : 0.2,
     },
     runtime.options || {},
-    profile,
   );
+  // Miranda voice sampling is for the fast 8B chat lane only — not reasoning/escalation.
+  if (runtime && runtime.fastChat) {
+    Object.assign(options, profile);
+  }
 
   ["temperature", "min_p", "top_p", "repeat_penalty", "presence_penalty", "frequency_penalty", "num_ctx"].forEach((key) => {
     if (typeof options[key] === "string") {
@@ -1348,10 +1381,13 @@ function modelRuntimeOptions(runtime) {
 
 function modelMessages(systemPrompt, userText, runtime) {
   const voice = naturalVoiceConfig();
-  const skipFewShot = !!(runtime && runtime.fastChat);
-  const styleRules = skipFewShot ? [] : Array.isArray(voice.instructions) ? voice.instructions.filter(Boolean) : [];
-  const prechat = skipFewShot ? [] : Array.isArray(voice.fewShotMessages) ? voice.fewShotMessages : [];
-  const system = styleRules.length ? systemPrompt + "\n\nVoice and cadence:\n" + styleRules.map((line) => "- " + line).join("\n") : systemPrompt;
+  const styleRules = Array.isArray(voice.instructions) ? voice.instructions.filter(Boolean) : [];
+  const fewShots = Array.isArray(voice.fewShotMessages) ? voice.fewShotMessages : [];
+  const prechat = runtime && runtime.fastChat ? fewShots.slice(0, 8) : fewShots;
+  let system = styleRules.length ? systemPrompt + "\n\nVoice and cadence:\n" + styleRules.map((line) => "- " + line).join("\n") : systemPrompt;
+  if (typeof HalAgentProgramming !== "undefined" && HalAgentProgramming.contract && !/^PROGRAMMING:/m.test(system)) {
+    system = HalAgentProgramming.wrapSystemPrompt(system);
+  }
   return [{ role: "system", content: system }]
     .concat(
       prechat
@@ -1362,10 +1398,96 @@ function modelMessages(systemPrompt, userText, runtime) {
     .concat([{ role: "user", content: userText }]);
 }
 
-async function runModel(runtime, systemPrompt, userText, draftLabel, onToken) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), runtime.timeoutMs || 60000);
+async function runModel(runtime, systemPrompt, userText, draftLabel, onToken, abortSignal) {
+  const controller = abortSignal ? null : new AbortController();
+  const signal = abortSignal || (controller && controller.signal);
+  const timer = setTimeout(() => {
+    if (controller) controller.abort();
+  }, runtime.timeoutMs || 60000);
   const wantStream = typeof onToken === "function";
+
+  if (runtime && runtime.cloud) {
+    const key = getCloudApiKey();
+    if (!key) throw new Error("cloud api key missing");
+    const messages = modelMessages(systemPrompt, userText, runtime);
+    const payload = {
+      model: runtime.model,
+      stream: wantStream,
+      messages,
+      temperature: (runtime.options && runtime.options.temperature) || 0.2,
+      max_tokens: (runtime.options && (runtime.options.max_tokens || runtime.options.num_predict)) || 2048,
+    };
+    try {
+      const response = await fetch(runtime.endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + key,
+        },
+        body: JSON.stringify(payload),
+        signal,
+      });
+      if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError");
+      if (!response.ok) throw new Error("cloud model http " + response.status);
+
+      let raw = "";
+      if (wantStream && response.body && typeof response.body.getReader === "function") {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === "data: [DONE]") continue;
+            const jsonLine = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : trimmed;
+            if (!jsonLine) continue;
+            let chunk;
+            try {
+              chunk = JSON.parse(jsonLine);
+            } catch {
+              continue;
+            }
+            const delta =
+              (chunk.choices &&
+                chunk.choices[0] &&
+                chunk.choices[0].delta &&
+                chunk.choices[0].delta.content) ||
+              (chunk.message && chunk.message.content) ||
+              "";
+            if (delta) {
+              raw += delta;
+              try {
+                onToken(HalCore.cleanModelText(raw));
+              } catch {
+                /* display callback is best-effort */
+              }
+            }
+          }
+        }
+      } else {
+        const data = await response.json();
+        raw =
+          (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ||
+          (data.message && data.message.content) ||
+          "";
+      }
+      const text = HalCore.cleanModelText(raw);
+      if (!text) throw new Error("empty cloud model response");
+      if (runtime && runtime.fastChat) return text;
+      return text + "\n\n(" + draftLabel + " · cloud · verify before acting)";
+    } catch (error) {
+      if (error && error.name === "AbortError") throw error;
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   const payload = {
     model: runtime.model,
     stream: wantStream,
@@ -1378,8 +1500,9 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: controller.signal,
+      signal,
     });
+    if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError");
     if (!response.ok) throw new Error("model http " + response.status);
 
     let raw = "";
@@ -1421,7 +1544,11 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken) {
 
     const text = HalCore.cleanModelText(raw);
     if (!text) throw new Error("empty model response");
+    if (runtime && runtime.fastChat) return text;
     return text + "\n\n(" + draftLabel + " · read-only · verify before acting)";
+  } catch (error) {
+    if (error && error.name === "AbortError") throw error;
+    throw error;
   } finally {
     clearTimeout(timer);
   }
@@ -1461,12 +1588,139 @@ function normalizeActions(actions) {
   });
 }
 
+function expandHalUserQuery(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return trimmed;
+  const turns = halChatHistory.map((m) => ({ role: m.role === "user" ? "user" : "hal", text: m.text }));
+  if (window.HalCore && HalCore.expandCorrectionQuery) {
+    if (HalCore.isCorrectionQuery && HalCore.isCorrectionQuery(trimmed)) {
+      return HalCore.expandCorrectionQuery(trimmed, turns);
+    }
+  }
+  let q = trimmed;
+  if (window.HalCore && HalCore.resolveFollowUpQuery) {
+    q = HalCore.resolveFollowUpQuery(q, turns);
+  }
+  if (window.HalCore && HalCore.expandAtMentions) {
+    q = HalCore.expandAtMentions(q, getPages());
+  }
+  return q;
+}
+
+function formatHalMessageHtml(text) {
+  const raw = String(text || "");
+  if (!raw) return "";
+
+  const withPatches = raw.replace(/<<<patch\s+([\s\S]*?)>>>/gi, (full, body) => {
+    const fileMatch = body.match(/^\s*file:\s*(.+)$/im);
+    const file = fileMatch ? fileMatch[1].trim() : "file";
+    const preview = body.trim().slice(0, 280);
+    return (
+      '<details class="hal-msg__patch"><summary>Patch: ' +
+      escapeHtml(file) +
+      '</summary><pre class="hal-msg__codeblock">' +
+      escapeHtml(preview) +
+      (body.length > 280 ? "\n…" : "") +
+      "</pre></details>"
+    );
+  });
+  const withTools = withPatches.replace(/<<<tool[\s\S]*?>>>/gi, "");
+
+  const blocks = [];
+  let lastIndex = 0;
+  const codeBlockRe = /```([\s\S]*?)```/g;
+  let match;
+  while ((match = codeBlockRe.exec(withTools)) !== null) {
+    if (match.index > lastIndex) {
+      blocks.push({ type: "text", value: withTools.slice(lastIndex, match.index) });
+    }
+    blocks.push({ type: "code", value: match[1].trim() });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < withTools.length) blocks.push({ type: "text", value: withTools.slice(lastIndex) });
+  if (!blocks.length) blocks.push({ type: "text", value: withTools });
+
+  function inlineFormat(segment) {
+    let s = escapeHtml(segment);
+    s = s.replace(/`([^`\n]+)`/g, "<code class=\"hal-msg__code\">$1</code>");
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/^\s*[-*•]\s+(.+)$/gm, "<span class=\"hal-msg__bullet\">• $1</span>");
+    return s;
+  }
+
+  return blocks
+    .map((block) => {
+      if (block.type === "code") {
+        return `<pre class="hal-msg__codeblock">${escapeHtml(block.value)}</pre>`;
+      }
+      return inlineFormat(block.value);
+    })
+    .join("");
+}
+
+function renderFollowUpChipsHtml(chips) {
+  if (!chips || !chips.length) return "";
+  return `<div class="hal-msg__followups hp-chips">${chips
+    .map((c) => {
+      const label = escapeHtml(c.label);
+      if (c.action && c.action.type === "openPage" && c.action.page) {
+        return `<button type="button" class="hp-chip hp-chip--action" data-hal-action="openPage" data-open-page="${escapeHtml(c.action.page)}" data-hal-followup="${escapeHtml(c.query || c.label)}">${label}</button>`;
+      }
+      if (c.action && c.action.type === "refreshImports") {
+        return `<button type="button" class="hp-chip hp-chip--action" data-hal-action="refreshImports" data-hal-followup="Refresh imports">${label}</button>`;
+      }
+      return `<button type="button" class="hp-chip" data-hal-followup="${escapeHtml(c.query || c.label)}">${label}</button>`;
+    })
+    .join("")}</div>`;
+}
+
+function formatHalToolsUsed(tools) {
+  if (!Array.isArray(tools) || !tools.length) return "";
+  const labels = tools.map((id) =>
+    String(id || "")
+      .replace(/^read_/, "")
+      .replace(/^search_/, "search ")
+      .replace(/^grep_/, "grep ")
+      .replace(/^run_/, "")
+      .replace(/^lookup_/, "lookup ")
+      .replace(/_/g, " "),
+  );
+  return labels.join(" · ");
+}
+
+function summarizeToolResultsBrief(toolResults) {
+  if (!toolResults || typeof toolResults !== "object") return "";
+  return Object.entries(toolResults)
+    .map(([id, res]) => {
+      const label = formatHalToolsUsed([id]) || id;
+      const summary = res && res.summary ? String(res.summary).replace(/\s+/g, " ").trim().slice(0, 320) : "No data.";
+      return label + " — " + summary;
+    })
+    .join("\n");
+}
+
 function renderChatLog() {
   const log = document.getElementById("halChatLog");
   if (!log) return;
   log.innerHTML = halChatHistory
-    .map((message) => {
+    .map((message, idx) => {
       const lane = message.lane ? `<span class="hal-msg__lane">${escapeHtml(message.lane)}</span>` : "";
+      const loopBadge =
+        message.role === "hal" && message.agentLoopTurns > 0
+          ? `<span class="hal-msg__loop">${message.agentLoopTurns} agent turn${message.agentLoopTurns > 1 ? "s" : ""}</span>`
+          : "";
+      const tools =
+        message.role === "hal" && message.tools && message.tools.length
+          ? `<div class="hal-msg__tools">Checked: ${escapeHtml(formatHalToolsUsed(message.tools))}</div>`
+          : "";
+      const toolDetails =
+        message.role === "hal" && message.toolSummaries
+          ? `<details class="hal-msg__tools-detail"><summary>Evidence detail</summary><pre class="hal-msg__tools-pre">${escapeHtml(message.toolSummaries)}</pre></details>`
+          : "";
+      const patchChip =
+        message.role === "hal" && /<<<patch/i.test(String(message.text || ""))
+          ? `<button type="button" class="hp-chip hp-chip--action" data-hal-apply-patches="${idx}">Apply patches</button>`
+          : "";
       const actions = normalizeActions(message.actions)
         .map((action) => {
           if (action.type === "openPage") {
@@ -1475,10 +1729,15 @@ function renderChatLog() {
           return "";
         })
         .join("");
+      const followups = message.role === "hal" ? renderFollowUpChipsHtml(message.followUpChips) : "";
       return `<div class="hal-msg hal-msg--${message.role === "user" ? "user" : "hal"}">
-        <span class="hal-msg__who">${message.role === "user" ? "You" : "HAL"}${lane}</span>
-        <div class="hal-msg__text">${escapeHtml(message.text)}</div>
+        <span class="hal-msg__who">${message.role === "user" ? "You" : "HAL"}${lane}${loopBadge}</span>
+        ${tools}
+        ${toolDetails}
+        <div class="hal-msg__text">${formatHalMessageHtml(message.text)}</div>
+        ${patchChip ? `<div class="hal-msg__actions">${patchChip}</div>` : ""}
         ${actions ? `<div class="hal-msg__actions">${actions}</div>` : ""}
+        ${followups}
       </div>`;
     })
     .join("");
@@ -1488,6 +1747,57 @@ function renderChatLog() {
       logAudit("Open " + target, "navigate: confirmed");
       closeDrawer();
       select(target);
+    });
+  });
+  log.querySelectorAll("[data-hal-followup]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.getAttribute("data-hal-action");
+      if (action === "openPage" && button.dataset.openPage) {
+        logAudit("Open " + button.dataset.openPage, "navigate: chip");
+        closeDrawer();
+        select(button.dataset.openPage);
+        return;
+      }
+      if (action === "refreshImports") {
+        handleHalSubmit("Refresh imports");
+        return;
+      }
+      handleHalSubmit(button.getAttribute("data-hal-followup"));
+    });
+  });
+  log.querySelectorAll("[data-hal-apply-patches]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const idx = parseInt(button.getAttribute("data-hal-apply-patches"), 10);
+      const msg = halChatHistory[idx];
+      if (!msg || !window.HalAgentLoop || typeof HalAgentLoop.parseAllPatches !== "function") return;
+      const patches = HalAgentLoop.parseAllPatches(msg.text);
+      if (!patches.length) return;
+      button.disabled = true;
+      button.textContent = "Applying…";
+      try {
+        let summary = "";
+        if (typeof DesktopBridge !== "undefined" && typeof DesktopBridge.applyProgramPatches === "function") {
+          const payload = await DesktopBridge.applyProgramPatches(patches, false);
+          summary = payload && payload.text ? payload.text : "Patches applied.";
+        } else {
+          summary = "Desktop bridge unavailable — paste patches manually.";
+        }
+        halChatHistory.push({ role: "hal", text: summary, lane: "patch", actions: [] });
+        saveChatHistory();
+        renderChatLog();
+        renderHalScreen();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = "Apply patches";
+        halChatHistory.push({
+          role: "hal",
+          text: "Patch apply failed: " + (error && error.message ? error.message : String(error)),
+          lane: "error",
+          actions: [],
+        });
+        saveChatHistory();
+        renderChatLog();
+      }
     });
   });
   log.scrollTop = log.scrollHeight;
@@ -1510,6 +1820,11 @@ function renderAuditLog() {
         `<div class="hal-audit__row"><span>${escapeHtml(entry.time)}</span><span>${escapeHtml(entry.intent)}</span><span>${escapeHtml(entry.query)}</span></div>`,
     )
     .join("");
+}
+
+function ctxAbortSignal(extras) {
+  if (extras && extras.abortSignal) return extras.abortSignal;
+  return halModelAbortController ? halModelAbortController.signal : undefined;
 }
 
 function buildHalAgentCtx(extras) {
@@ -1540,7 +1855,13 @@ function buildHalAgentCtx(extras) {
     staffUseGateText,
     staffHandoffSummaryText,
     runOperatorSmokeTest,
-    runModel,
+    runModel: (runtime, systemPrompt, userText, draftLabel, onToken) =>
+      runModel(runtime, systemPrompt, userText, draftLabel, onToken, ctxAbortSignal(extras)),
+    getChatHistory: () => halChatHistory.slice(-16),
+    getWorkingTurns: () =>
+      window.HalAgent && typeof HalAgent.getWorkingMemory === "function"
+        ? (HalAgent.getWorkingMemory().turns || []).slice(-12)
+        : halChatHistory.slice(-12).map((m) => ({ role: m.role, text: m.text })),
     localModelReady,
     reasoningModelReady,
     escalationModelReady,
@@ -1550,6 +1871,9 @@ function buildHalAgentCtx(extras) {
     reasoningModelConfig,
     escalationModelConfig,
     ossModelConfig,
+    cloudModelConfig,
+    cloudModelReady,
+    getCloudApiKey,
     persistGet: (key) => DesktopBridge.storageGet(key),
     persistSet: (key, value) => persistLocal(key, value),
     getCurrentPage: () => window.location.hash.replace("#", "") || getPages()[0].id,
@@ -1603,24 +1927,38 @@ function buildHalAgentCtx(extras) {
 
 async function handleHalSubmit(query) {
   const trimmed = String(query).trim();
-  if (!trimmed || halAskLoading) return;
+  if (!trimmed) return;
+
+  if (halModelAbortController) halModelAbortController.abort();
+  halModelAbortController = new AbortController();
+  const abortSignal = halModelAbortController.signal;
+
   if (window.HalVoice && HalVoice.cancelSpeech) HalVoice.cancelSpeech();
   if (halTypeTimer) {
     clearInterval(halTypeTimer);
     halTypeTimer = null;
   }
+
+  if (halAskLoading) {
+    const last = halChatHistory[halChatHistory.length - 1];
+    if (last && last.role === "hal" && /gathering|thinking locally|reasoning locally|escalating locally/i.test(last.text)) {
+      halChatHistory.pop();
+    }
+  }
+
+  const effectiveQuery = expandHalUserQuery(trimmed);
   halAskLoading = true;
   renderHalScreen();
   halChatHistory.push({ role: "user", text: trimmed, actions: [] });
   saveChatHistory();
 
-  const preRoute = routeHalCommand(trimmed);
+  const preRoute = routeHalCommand(effectiveQuery);
   const isModelLane = !!(preRoute.useModel || preRoute.useReasoning || preRoute.useEscalation);
   let placeholder = null;
   let streamRenderAt = 0;
   if (isModelLane && window.HalAgent) {
     const lane = preRoute.lane || "chat8b";
-    const label = preRoute.useEscalation ? "Escalating" : preRoute.useReasoning ? "Reasoning" : "Thinking";
+    const label = preRoute.useEscalation ? "Escalating" : preRoute.useReasoning ? "Reasoning" : "Gathering evidence";
     placeholder = { role: "hal", text: label + " locally…", lane, actions: [] };
     halChatHistory.push(placeholder);
     saveChatHistory();
@@ -1628,6 +1966,18 @@ async function handleHalSubmit(query) {
     renderChatLog();
     renderHalScreen();
   }
+
+  const onToolProgress = placeholder
+    ? (ev) => {
+        if (!ev || !placeholder) return;
+        placeholder.tools = placeholder.tools || [];
+        if (ev.phase === "start" && ev.tool && !placeholder.tools.includes(ev.tool)) {
+          placeholder.tools.push(ev.tool);
+          placeholder.text = "Gathering: " + formatHalToolsUsed(placeholder.tools) + "…";
+          renderChatLog();
+        }
+      }
+    : undefined;
 
   const onToken = placeholder
     ? (partial) => {
@@ -1644,9 +1994,12 @@ async function handleHalSubmit(query) {
   let outcome = null;
   try {
     if (window.HalAgent) {
-      outcome = await HalAgent.processQuery(trimmed, buildHalAgentCtx(onToken ? { onToken } : null));
+      outcome = await HalAgent.processQuery(
+        effectiveQuery,
+        buildHalAgentCtx(onToken || onToolProgress ? { onToken, onToolProgress, abortSignal } : { abortSignal }),
+      );
     } else {
-      outcome = await HalRouteExec.execute(preRoute, trimmed, {}, buildHalAgentCtx());
+      outcome = await HalRouteExec.execute(preRoute, effectiveQuery, {}, buildHalAgentCtx({ abortSignal }));
     }
     if (!outcome) {
       outcome = {
@@ -1661,6 +2014,13 @@ async function handleHalSubmit(query) {
       placeholder.text = outcome.text;
       placeholder.lane = outcome.lane || placeholder.lane;
       placeholder.actions = normalizeActions(outcome.actions);
+      placeholder.followUpChips = outcome.followUpChips || [];
+      placeholder.intent = outcome.intent || "";
+      placeholder.spokenScript = outcome.spokenScript || "";
+      placeholder.userQuery = trimmed;
+      placeholder.tools = (outcome.plan && outcome.plan.tools) || placeholder.tools || [];
+      placeholder.toolSummaries = summarizeToolResultsBrief(outcome.toolResults);
+      placeholder.agentLoopTurns = outcome.agentLoopTurns || 0;
       halTypeSig = halChatHistory.length + ":" + String(outcome.text || "").length;
     } else {
       halChatHistory.push({
@@ -1668,10 +2028,18 @@ async function handleHalSubmit(query) {
         text: outcome.text,
         lane: outcome.lane || "local",
         actions: normalizeActions(outcome.actions),
+        followUpChips: outcome.followUpChips || [],
+        intent: outcome.intent || "",
+        spokenScript: outcome.spokenScript || "",
+        userQuery: trimmed,
+        tools: (outcome.plan && outcome.plan.tools) || [],
+        toolSummaries: summarizeToolResultsBrief(outcome.toolResults),
+        agentLoopTurns: outcome.agentLoopTurns || 0,
       });
     }
     logAudit(trimmed, outcome.intent);
   } catch (error) {
+    if (error && error.name === "AbortError") return;
     const detail = error && error.message ? error.message : String(error);
     const failText =
       "HAL hit an error and could not finish: " +
@@ -1877,7 +2245,7 @@ function firewallPanel(data) {
     <div><strong>Allowed</strong>${chips(data.allowed)}</div>
     <div class="drawer-section">
       <h3 class="drawer-section__title">Firewall simulator</h3>
-      <p class="drawer-meta">Type a proposed action. HAL checks the firewall before any model call.</p>
+      <p class="drawer-meta">Type a proposed action. With the firewall off, HAL routes the phrase through normal handlers instead of blocking it.</p>
       <form class="hal-chat__form" id="firewallSimForm" autocomplete="off">
         <input id="firewallSimInput" class="hal-chat__input" type="text" placeholder="e.g. Submit the denied claim" aria-label="Test firewall" />
         <button class="hal-chat__send" type="submit">Test</button>
@@ -2096,7 +2464,7 @@ function renderPanel(key) {
     const result = document.getElementById("firewallSimResult");
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      const verdict = HalCore.firewallVerdict(input.value, data);
+      const verdict = HalCore.firewallVerdict(input.value, data, halData, halModels);
       result.innerHTML = `<strong>${verdict.allowed ? "Allowed" : "Blocked"}</strong><p>${escapeHtml(verdict.text)}</p>`;
       logAudit(input.value, verdict.intent);
       renderAuditLog();
@@ -2104,7 +2472,7 @@ function renderPanel(key) {
     drawerContent.querySelectorAll("[data-firewall-test]").forEach((button) => {
       button.addEventListener("click", () => {
         input.value = button.dataset.firewallTest;
-        const verdict = HalCore.firewallVerdict(input.value, data);
+        const verdict = HalCore.firewallVerdict(input.value, data, halData, halModels);
         result.innerHTML = `<strong>${verdict.allowed ? "Allowed" : "Blocked"}</strong><p>${escapeHtml(verdict.text)}</p>`;
         logAudit(input.value, verdict.intent);
         renderAuditLog();
@@ -2279,6 +2647,32 @@ function setInlineHalStreamingText(text) {
   box.scrollTop = box.scrollHeight;
 }
 
+function halSpeechContextForLastReply(displayText) {
+  const hist = halChatHistory || [];
+  const lastHal = hist.length ? hist[hist.length - 1] : null;
+  let query = lastHal && lastHal.userQuery ? lastHal.userQuery : "";
+  if (!query) {
+    for (let i = hist.length - 2; i >= 0; i--) {
+      if (hist[i].role === "user") {
+        query = hist[i].text;
+        break;
+      }
+    }
+  }
+  const route = lastHal && lastHal.intent ? { intent: lastHal.intent } : {};
+  const preferBrief =
+    window.HalAgent && typeof HalAgent.getWorkingMemory === "function"
+      ? !!HalAgent.getWorkingMemory().preferBrief
+      : false;
+  const spokenText =
+    lastHal && lastHal.spokenScript
+      ? lastHal.spokenScript
+      : window.HalCore && HalCore.toSpokenScript
+        ? HalCore.toSpokenScript(displayText, query, route, { preferBrief })
+        : "";
+  return { query, route, preferBrief, spokenText };
+}
+
 function typewriteLastHalMessage() {
   if (!halPageRoot) return;
   const box = halPageRoot.querySelector(".hp-inline-chat");
@@ -2301,7 +2695,10 @@ function typewriteLastHalMessage() {
   if (reduce || full.length < 2) {
     p.textContent = full;
     p.classList.remove("hp-typing");
-    if (window.HalVoice && HalVoice.speakHalReply) HalVoice.speakHalReply(full);
+    if (window.HalVoice && HalVoice.speakHalReply) {
+      const speechCtx = halSpeechContextForLastReply(full);
+      HalVoice.speakHalReply(full, { interrupt: true, ...speechCtx });
+    }
     return;
   }
   p.textContent = "";
@@ -2309,12 +2706,13 @@ function typewriteLastHalMessage() {
   const step = Math.max(1, Math.ceil(full.length / 110));
   const iterations = Math.ceil(full.length / step);
   let speechMs = 2400;
+  const speechCtx = halSpeechContextForLastReply(full);
   if (window.HalVoice) {
     if (HalVoice.speakHalReply) {
-      const spoken = HalVoice.speakHalReply(full, { interrupt: true });
+      const spoken = HalVoice.speakHalReply(full, { interrupt: true, ...speechCtx });
       speechMs = (spoken && spoken.durationMs) || speechMs;
     } else if (HalVoice.estimateDurationMs) {
-      speechMs = HalVoice.estimateDurationMs(full);
+      speechMs = HalVoice.estimateDurationMs(speechCtx.spokenText || full);
     }
   }
   // Type quickly enough to stay ahead of HAL's voice, but not instant.
@@ -2710,6 +3108,11 @@ if (halPage) {
     const suggest = event.target.closest("[data-hal-suggest]");
     if (suggest) {
       await runHalPageCmd(suggest.getAttribute("data-hal-suggest"));
+      return;
+    }
+    const followup = event.target.closest("[data-hal-followup]");
+    if (followup) {
+      await handleHalSubmit(followup.getAttribute("data-hal-followup"));
       return;
     }
     const voiceTest = event.target.closest("[data-hal-voice-test]");

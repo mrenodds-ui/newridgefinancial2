@@ -337,7 +337,8 @@ const HalProactive = (function () {
   function applyPlacementToBriefing(briefing, placement) {
     if (!briefing) return briefing;
     briefing.placement = placement || null;
-    if (placement && placement.refreshed) {
+    const browserOnly = placement && (placement.reason === "browser-only" || placement.reason === "no-refresh-path");
+    if (placement && placement.refreshed && !browserOnly) {
       briefing.headline = "HAL refreshed imports and placed updated data into dashboards.";
       briefing.programPosture = "monitor";
     } else if (placement && placement.placed && placement.reason === "data-current") {
@@ -358,8 +359,40 @@ const HalProactive = (function () {
     return briefing;
   }
 
-  function formatProactiveBriefing(briefing) {
+  function formatProactiveBriefing(briefing, opts) {
     if (!briefing) return "Proactive briefing unavailable.";
+    opts = opts || {};
+    const chatMode = opts.chatMode === true;
+
+    if (chatMode) {
+      const lines = [briefing.headline || "Here's what needs attention."];
+      if (briefing.placement) {
+        const refreshNote =
+          briefing.placement.refreshed && briefing.placement.reason !== "browser-only"
+            ? " Imports refreshed."
+            : briefing.placement.reason === "browser-only"
+              ? " Browser preview — use Start Program for live imports."
+              : "";
+        lines.push(`Placement: ${briefing.placement.placed ? "active" : "skipped"} (${briefing.placement.reason}).${refreshNote}`);
+      }
+      const recs = (briefing.recommendations || []).slice(0, 3);
+      if (recs.length) {
+        lines.push("", "Top priorities:");
+        recs.forEach((item, index) => {
+          const action =
+            item.action && item.action.type === "navigate"
+              ? `Open ${item.action.target}`
+              : item.action && item.action.command
+                ? item.action.command
+                : "Review locally";
+          lines.push(`${index + 1}. [${item.severity}] ${item.title} — Next: ${action}.`);
+        });
+      } else {
+        lines.push("", "Nothing urgent — imports and surfaces look steady.");
+      }
+      return lines.join("\n");
+    }
+
     const lines = [
       "HAL internal office manager (local placement only · external firewall locked):",
       briefing.headline,

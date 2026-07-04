@@ -531,6 +531,74 @@ const DesktopBridge = (function () {
     return { items: [], count: 0, text: "" };
   }
 
+  async function grepProgramSource(query, limit) {
+    if (hasDesktopApi() && window.pywebview.api.grep_program_source) {
+      return window.pywebview.api.grep_program_source(String(query || ""), Number(limit || 24));
+    }
+    return { hits: [], count: 0, text: "Program source search requires the NR2 desktop app." };
+  }
+
+  async function readProgramFile(relPath, maxChars) {
+    if (hasDesktopApi() && window.pywebview.api.read_program_file) {
+      return window.pywebview.api.read_program_file(String(relPath || ""), Number(maxChars || 12000));
+    }
+    return { ok: false, text: "Program file read requires the NR2 desktop app." };
+  }
+
+  async function listProgramFiles(subdir, limit) {
+    if (hasDesktopApi() && window.pywebview.api.list_program_files) {
+      return window.pywebview.api.list_program_files(String(subdir || "site"), Number(limit || 80));
+    }
+    return { ok: false, files: [], text: "Program file list requires the NR2 desktop app." };
+  }
+
+  async function applyProgramPatch(relPath, oldString, newString, dryRun) {
+    if (hasDesktopApi() && window.pywebview.api.apply_program_patch) {
+      return window.pywebview.api.apply_program_patch(
+        String(relPath || ""),
+        String(oldString || ""),
+        String(newString || ""),
+        Boolean(dryRun),
+      );
+    }
+    return { ok: false, text: "Program patch requires the NR2 desktop app." };
+  }
+
+  async function runHalValidation(timeoutSec) {
+    if (hasDesktopApi() && window.pywebview.api.run_hal_validation) {
+      return window.pywebview.api.run_hal_validation(Number(timeoutSec || 120));
+    }
+    return { ok: false, text: "HAL validation requires the NR2 desktop app.", exitCode: -1 };
+  }
+
+  async function runNodeSyntaxCheck(relPaths) {
+    if (hasDesktopApi() && window.pywebview.api.run_node_syntax_check) {
+      return window.pywebview.api.run_node_syntax_check(Array.isArray(relPaths) ? relPaths : []);
+    }
+    return { ok: false, text: "Syntax check requires the NR2 desktop app.", results: [] };
+  }
+
+  async function semanticSearchProgram(query, limit) {
+    if (hasDesktopApi() && window.pywebview.api.semantic_search_program) {
+      return window.pywebview.api.semantic_search_program(String(query || ""), Number(limit || 15));
+    }
+    return { hits: [], count: 0, text: "Semantic search requires the NR2 desktop app." };
+  }
+
+  async function runGitReadonly(command) {
+    if (hasDesktopApi() && window.pywebview.api.run_git_readonly) {
+      return window.pywebview.api.run_git_readonly(String(command || "status"));
+    }
+    return { ok: false, text: "Git read requires the NR2 desktop app." };
+  }
+
+  async function applyProgramPatches(patches, dryRun) {
+    if (hasDesktopApi() && window.pywebview.api.apply_program_patches) {
+      return window.pywebview.api.apply_program_patches(Array.isArray(patches) ? patches : [], Boolean(dryRun));
+    }
+    return { ok: false, text: "Batch patch requires the NR2 desktop app.", count: 0 };
+  }
+
   return {
     hasDesktopApi,
     runtimeMode,
@@ -566,6 +634,15 @@ const DesktopBridge = (function () {
     getDailyCloseout,
     runProgramSelfHeal,
     getProgramHelp,
+    grepProgramSource,
+    readProgramFile,
+    listProgramFiles,
+    applyProgramPatch,
+    runHalValidation,
+    runNodeSyntaxCheck,
+    semanticSearchProgram,
+    runGitReadonly,
+    applyProgramPatches,
     searchHalMemories,
     readClipboard,
     writeClipboard,

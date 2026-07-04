@@ -66,11 +66,11 @@ function buildRoutingRegressionCases() {
   const pageNames = {
     financial: ["financial dashboard", "financial"],
     softdent: ["SoftDent", "practice management"],
-    quickbooks: ["QuickBooks", "profit and loss"],
+    quickbooks: ["QuickBooks", "profit and loss", "posting queue"],
     ar: ["A/R", "collections", "aging"],
     claims: ["claims workbench", "claims"],
     narratives: ["insurance narratives", "narratives"],
-    documents: ["accounting documents", "documents", "posting queue"],
+    documents: ["accounting documents", "documents"],
     library: ["document library", "library"],
     hal: ["HAL command center", "HAL"],
   };
@@ -90,13 +90,6 @@ function buildRoutingRegressionCases() {
   addMany(["read-only areas", "review-only areas"], "registry: read-only");
   addMany(["next staff action", "what should staff review next"], "registry: next actions");
 
-  const externalVerbs = ["submit", "email", "upload", "send", "fax", "transmit", "approve", "deny", "delete", "remove", "dispatch", "mail", "pay"];
-  const externalObjects = ["the denied claim", "the payer", "the document", "the statement", "the invoice", "the record"];
-  for (const verb of externalVerbs) {
-    for (const object of externalObjects) add(`${verb} ${object}`, "blocked: firewall");
-  }
-  addMany(["Process a payment", "Record a charge", "Make a refund", "Post a transaction", "Write back to SoftDent"], "blocked: firewall");
-
   const modelFallback = [
     "What is the office weather?",
     "Summarize dental billing risk generally",
@@ -108,7 +101,18 @@ function buildRoutingRegressionCases() {
   ];
   modelFallback.forEach((question) => add(question, "model: query"));
 
-  return { cases, externalVerbs, externalObjects, modelFallback };
+  return { cases, modelFallback };
+}
+
+function trapLocalIntent(localPhrase) {
+  const map = {
+    "Run readiness check": "readiness: run",
+    "Build evidence packet": "packet: build",
+    "Start claims review": "session: start:claims-review",
+    "Show diagnostics": "readiness: show",
+    "Open claims workbench": "navigate: claims",
+  };
+  return map[localPhrase] || "model: query";
 }
 
 function seededChoice(seedState, items) {
@@ -117,7 +121,7 @@ function seededChoice(seedState, items) {
 }
 
 function buildSeededRoutingVariants(count) {
-  const { cases, externalVerbs, externalObjects, modelFallback } = buildRoutingRegressionCases();
+  const { cases, modelFallback } = buildRoutingRegressionCases();
   const prefixes = ["", "please ", "can you ", "HAL, ", "locally ", "for staff review, "];
   const suffixes = ["", " please", " now", " locally", " for review"];
   const trapLocals = ["Run readiness check", "Build evidence packet", "Start claims review", "Show diagnostics", "Open claims workbench"];
@@ -140,7 +144,7 @@ function buildSeededRoutingVariants(count) {
       const external = trapExternals[Math.floor(i / trapLocals.length) % trapExternals.length];
       const prefix = i % 3 === 0 ? "HAL, " : i % 3 === 1 ? "please " : "";
       question = `${prefix}${local} ${external}`;
-      expected = "blocked: firewall";
+      expected = trapLocalIntent(local);
     } else if (i < count * 0.95) {
       const base = modelFallback[i % modelFallback.length];
       const prefix = prefixes[i % prefixes.length];
@@ -148,12 +152,10 @@ function buildSeededRoutingVariants(count) {
       question = `${prefix}${base}${suffix}`;
       expected = "model: query";
     } else {
-      const verb = externalVerbs[i % externalVerbs.length];
-      const object = externalObjects[Math.floor(i / externalVerbs.length) % externalObjects.length];
-      const noise = seededChoice(seedState, ["before staff review", "locally", "in HAL", "for triage", "today"]);
-      const prefix = i % 2 === 0 ? "please " : "HAL, ";
-      question = `${prefix}${verb} ${object} ${noise}`;
-      expected = "blocked: firewall";
+      const base = modelFallback[i % modelFallback.length];
+      const prefix = prefixes[i % prefixes.length];
+      question = `${prefix}${base}`;
+      expected = "model: query";
     }
 
     variants.push([question.replace(/\s+/g, " ").trim(), expected]);
@@ -166,6 +168,8 @@ async function main() {
   process.env.NR2_LOAD_IMPORTS = "1";
   const halData = loadJson(halManagerPath);
   const halModels = loadJson(halModelsPath);
+  const halProgrammingUrl = pathToFileURL(join(siteDir, "hal-agent-programming.js")).href;
+  await import(halProgrammingUrl);
   const halCoreUrl = pathToFileURL(join(siteDir, "hal-core.js")).href;
   const HalCore = (await import(halCoreUrl)).default || (await import(halCoreUrl));
   const printUtilsUrl = pathToFileURL(join(siteDir, "print-utils.js")).href;
@@ -194,20 +198,21 @@ async function main() {
   assert(halData.firewall.examples.length >= 4, "firewall examples required");
   passed++;
 
-  // Firewall blocks external verbs before model
-  const blocked = HalCore.routeHalCommand(halData, halModels, pages, "submit the claim");
-  assert(blocked.intent === "blocked: firewall", "submit must be blocked");
-  const blockedEmail = HalCore.routeHalCommand(halData, halModels, pages, "emailing the payer");
-  assert(blockedEmail.intent === "blocked: firewall", "emailing must be blocked");
+  // Firewall disabled — external phrases route through normal handlers
+  assert(halData.firewall.enabled === false || halModels.config.firewallEnabled === false, "firewall must be disabled in config");
+  const submitRoute = HalCore.routeHalCommand(halData, halModels, pages, "submit the claim");
+  assert(submitRoute.intent !== "blocked: firewall", "submit must not hit firewall block when disabled");
+  const emailRoute = HalCore.routeHalCommand(halData, halModels, pages, "emailing the payer");
+  assert(emailRoute.intent !== "blocked: firewall", "email must not hit firewall block when disabled");
   const escalateSubmit = HalCore.routeHalCommand(halData, halModels, pages, "escalate and submit the claim");
-  assert(escalateSubmit.intent === "blocked: firewall", "firewall must beat escalation");
+  assert(escalateSubmit.intent !== "blocked: firewall", "escalation must not be blocked by firewall when disabled");
   passed++;
 
-  // Firewall simulator
-  const allowed = HalCore.firewallVerdict("open claims workbench", halData.firewall);
+  // Firewall simulator (disabled)
+  const allowed = HalCore.firewallVerdict("open claims workbench", halData.firewall, halData, halModels);
   assert(allowed.allowed === true, "open claims should be allowed");
-  const denied = HalCore.firewallVerdict("upload the narrative", halData.firewall);
-  assert(denied.allowed === false, "upload should be blocked");
+  const uploadVerdict = HalCore.firewallVerdict("upload the narrative", halData.firewall, halData, halModels);
+  assert(uploadVerdict.allowed === true, "upload should be allowed when firewall is off");
   passed++;
 
   // Suggestion routes from validation fixtures
@@ -264,9 +269,9 @@ async function main() {
   }
   passed++;
 
-  // Session firewall trap
+  // Session + external phrase keeps local session intent when firewall is off
   const sessionTrap = HalCore.routeHalCommand(halData, halModels, pages, halData.validation.sessionFirewallTrap);
-  assert(sessionTrap.intent === "blocked: firewall", "session + submit must be blocked");
+  assert(sessionTrap.intent === "session: start:claims-review", "session + submit must keep session route");
   passed++;
 
   // Session state helpers
@@ -293,7 +298,7 @@ async function main() {
     assert(result.intent === expectedIntent, `packet "${command}" expected ${expectedIntent}, got ${result.intent}`);
   }
   const packetTrap = HalCore.routeHalCommand(halData, halModels, pages, halData.validation.packetFirewallTrap);
-  assert(packetTrap.intent === "blocked: firewall", "packet + email must be blocked");
+  assert(packetTrap.intent === "packet: build", "packet + email must keep packet route");
   passed++;
 
   // Readiness checks
@@ -312,7 +317,7 @@ async function main() {
     assert(result.intent === expectedIntent, `readiness "${command}" expected ${expectedIntent}, got ${result.intent}`);
   }
   const readinessTrap = HalCore.routeHalCommand(halData, halModels, pages, halData.validation.readinessFirewallTrap);
-  assert(readinessTrap.intent === "blocked: firewall", "readiness + email must be blocked");
+  assert(readinessTrap.intent === "readiness: run", "readiness + email must keep readiness route");
   const summary = HalCore.formatReadinessSummary(readinessReport);
   assert(summary.includes("HAL readiness"), "readiness summary must format report");
   passed++;
@@ -336,7 +341,7 @@ async function main() {
   const gateRoute = HalCore.routeHalCommand(halData, halModels, pages, "Are you ready for staff use?");
   assert(gateRoute.intent === "readiness: gate", "staff use gate must route locally");
   const gateTrap = HalCore.routeHalCommand(halData, halModels, pages, "Are you ready for staff use and email it");
-  assert(gateTrap.intent === "blocked: firewall", "gate + email must be blocked");
+  assert(gateTrap.intent === "readiness: gate", "gate + email must keep gate route");
   assert(HalCore.formatReadinessSummary(readinessReport).includes("Staff use gate:"), "summary must include staff use gate line");
   passed++;
 
@@ -352,7 +357,7 @@ async function main() {
     assert(routed.intent === expectedIntent, `operator "${command}" expected ${expectedIntent}, got ${routed.intent}`);
   }
   const operatorTrap = HalCore.routeHalCommand(halData, halModels, pages, halData.validation.operatorFirewallTrap);
-  assert(operatorTrap.intent === "blocked: firewall", "operator smoke + email must be blocked");
+  assert(operatorTrap.intent === "operator: smoke", "operator smoke + email must keep operator route");
   const handoff = HalCore.buildHandoffSummary(halData, halModels, { readiness: readinessReport, smoke });
   assert(handoff.includes("STAFF HANDOFF SUMMARY"), "handoff summary must format");
   assert(/human review/i.test(handoff), "handoff summary must mention human review");
@@ -364,7 +369,7 @@ async function main() {
   assert(laneDetails.length === halModels.lanes.length, "model lane details must cover all configured lanes");
   passed++;
 
-  // Seeded routing regression: local intents, model fallbacks, and firewall traps.
+  // Seeded routing regression: local intents, model fallbacks, and mixed local+external phrases.
   const routingCases = buildSeededRoutingVariants(10000);
   const routingFailures = [];
   const laneCounts = {};
@@ -376,7 +381,6 @@ async function main() {
     if (!ok) routingFailures.push(`"${question}" expected ${expectedIntent}, got ${got}`);
   }
   assert(routingFailures.length === 0, "routing regression failures:\n" + routingFailures.slice(0, 20).join("\n"));
-  assert(laneCounts.firewall > 0, "routing regression must include firewall cases");
   assert(laneCounts.chat8b > 0, "routing regression must include model fallback cases");
   assert(laneCounts.reason21b > 0, "routing regression must include reasoning lane cases");
   assert(laneCounts.escalate30b > 0, "routing regression must include escalation lane cases");
@@ -389,7 +393,7 @@ async function main() {
   execSync("node --check site/hal-core.js", { cwd: __dirname, stdio: "pipe" });
   execSync("node --check site/hal-page.js", { cwd: __dirname, stdio: "pipe" });
   execSync("node --check site/hal-page-schema.js", { cwd: __dirname, stdio: "pipe" });
-  execSync("node --check site/hal-page-canvas.js", { cwd: __dirname, stdio: "pipe" });
+  execSync("node --check site/hal-agent-loop.js", { cwd: __dirname, stdio: "pipe" });
   passed++;
 
   // HAL page surfaces required manager signals (no backend, local data only)
@@ -544,8 +548,13 @@ async function main() {
   assert(HalCore.laneReady(halModels, "chat8b"), "chat lane must be execution-ready on loopback");
   const chatRuntime = HalCore.laneRuntime(halModels, "chat8b");
   assert(chatRuntime && chatRuntime.think === false, "chat lane must disable thinking tokens");
-  assert(chatRuntime.options && chatRuntime.options.num_predict === 180, "chat lane must use a short token cap for speed");
-  assert(chatRuntime.options.num_ctx === 1536, "chat lane must use a smaller context window for speed");
+  assert(chatRuntime.options && chatRuntime.options.num_predict === 512, "chat lane token cap must match hal-models.json localModel");
+  assert(chatRuntime.options.num_ctx === 4096, "chat lane context must match hal-models.json localModel");
+  assert(
+    HalCore.buildFastChatSystemPrompt(halData, null).includes("PROGRAMMING:"),
+    "fast chat prompt must include Auto agent programming contract",
+  );
+  assert(halModels.config.preferReasoning === true, "HAL must prefer 24B reasoning lane by default");
   const helperLane = halModels.lanes.find((lane) => lane.id === "helper14b");
   assert(helperLane && helperLane.executionEnabled === false, "helper lane must be standby in single-lane layout");
   assert(halModels.readinessDisplay.configuredModels.helper.onDemand === true, "helper lane must be on-demand only");
@@ -612,15 +621,15 @@ async function main() {
   const WidgetContract = require(join(siteDir, "widget-contract.js"));
   const HalWidgetMasterChart = require(join(siteDir, "hal-widget-master-chart.js"));
 
-  // Accounting: drafting allowed through firewall; posting still blocked.
+  // Accounting: drafting routes locally; posting phrases no longer hit firewall when disabled.
   const draftRoute = HalCore.routeHalCommand(halData, halModels, pages, "Draft a journal entry for $1,200 prepaid insurance");
   assert(draftRoute.intent === "accounting: journal-draft" && draftRoute.useJournalDraft === true, "journal drafting must route locally");
-  const postBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Post a journal entry to the ledger");
-  assert(postBlocked.intent === "blocked: firewall", "posting a journal entry must stay blocked");
-  const qbPostBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Post to QuickBooks");
-  assert(qbPostBlocked.intent === "blocked: firewall", "Post to QuickBooks must be blocked");
-  const softdentWriteBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Write to SoftDent");
-  assert(softdentWriteBlocked.intent === "blocked: firewall", "Write to SoftDent must be blocked");
+  const postRoute = HalCore.routeHalCommand(halData, halModels, pages, "Post a journal entry to the ledger");
+  assert(postRoute.intent !== "blocked: firewall", "posting must not hit firewall when disabled");
+  const qbPostRoute = HalCore.routeHalCommand(halData, halModels, pages, "Post to QuickBooks");
+  assert(qbPostRoute.intent !== "blocked: firewall", "Post to QuickBooks must not hit firewall when disabled");
+  const softdentWriteRoute = HalCore.routeHalCommand(halData, halModels, pages, "Write to SoftDent");
+  assert(softdentWriteRoute.intent !== "blocked: firewall", "Write to SoftDent must not hit firewall when disabled");
   const rememberRoute = HalCore.routeHalCommand(
     halData,
     halModels,
@@ -1073,21 +1082,59 @@ async function main() {
   passed++;
 
   // HAL agent core (planner, tools, self-check, repair loop)
+  const halLoopUrl = pathToFileURL(join(siteDir, "hal-agent-loop.js")).href;
+  await import(halLoopUrl);
   const halAgentUrl = pathToFileURL(join(siteDir, "hal-agent.js")).href;
   const halRouteExecUrl = pathToFileURL(join(siteDir, "hal-route-exec.js")).href;
   const HalAgent = (await import(halAgentUrl)).default || (await import(halAgentUrl));
   const HalRouteExec = (await import(halRouteExecUrl)).default || (await import(halRouteExecUrl));
   assert(HalAgent.SAFETY_POLICY && HalAgent.SAFETY_POLICY.blocked.length > 0, "agent safety policy must exist");
-  assert(HalAgent.ARCHITECTURE_VERSION === "hal-agent-v1.1", "agent architecture version must be current");
+  assert(HalAgent.ARCHITECTURE_VERSION === "hal-agent-v9-cursor", "agent architecture version must be current");
+  assert(typeof globalThis.HalAgentLoop !== "undefined", "HalAgentLoop must load");
+  assert(typeof HalAgentLoop.runModelWithLoop === "function", "agent tool loop must exist");
+  assert(typeof HalAgentLoop.suggestAutoTools === "function", "auto tool suggest must exist");
+  const autoTools = HalAgentLoop.suggestAutoTools(
+    "how does handleHalSubmit work in app.js",
+    { isInvestigateQuery: true },
+    {},
+    new Set(["grep_program_source", "semantic_search_program", "read_current_context", "read_program_snapshot"]),
+    { agentAutoTools: true },
+  );
+  assert(autoTools.length >= 2, "auto tools must suggest grep and search for code questions");
+  assert(typeof HalAgent.TOOL_DEFS.semantic_search_program === "object", "semantic_search_program tool must exist");
+  assert(typeof HalAgent.TOOL_DEFS.run_git_readonly === "object", "run_git_readonly tool must exist");
+  assert(HalAgent.AGENT_BUDGET.maxGatherRounds === 3, "agent must support multi-round gather");
+  assert(HalAgent.AGENT_BUDGET.maxTools === 10, "agent tool budget must allow task-completion tools");
+  assert(typeof HalAgent.TOOL_DEFS.apply_program_patch === "object", "apply_program_patch tool must exist");
+  assert(typeof HalAgent.TOOL_DEFS.run_hal_validation === "object", "run_hal_validation tool must exist");
+  assert(typeof HalAgent.TOOL_DEFS.run_node_syntax_check === "object", "run_node_syntax_check tool must exist");
+  assert(typeof HalAgent.parsePatchFromQuery === "function", "parsePatchFromQuery must exist");
+  const patch = HalAgent.parsePatchFromQuery('<<<patch\nfile: site/test.js\nold:\nfoo\nnew:\nbar\n>>>');
+  assert(patch && patch.file === "site/test.js" && patch.old.trim() === "foo", "parsePatchFromQuery must parse patch blocks");
   const genericChatRoute = HalCore.routeHalCommand(halData, halModels, pages, "what is a variable in programming");
   assert(genericChatRoute.useModel && genericChatRoute.lane === "chat8b", "generic questions must route to chat8b");
   assert(HalAgent.fastChatSkipsProgramContext(genericChatRoute), "fast chat must skip heavy program snapshot");
   assert(!HalAgent.fastChatSkipsProgramContext({ useReasoning: true, useModel: true }), "reasoning lane must keep program context");
-  assert(HalAgent.AGENT_BUDGET.maxTools === 3, "agent must enforce a small tool budget");
-  assert(HalAgent.getHealth().budget.maxTools === 3, "agent health must expose budget");
-  const blockedRoute = HalCore.routeHalCommand(halData, halModels, pages, "email the payer");
-  const plan = HalAgent.buildPlan("email the payer", blockedRoute, HalAgent.getWorkingMemory(), HalAgent.getLongTermMemory());
-  assert(plan.isUnsafe === true && plan.tools.includes("explain_firewall"), "unsafe query must plan firewall tool");
+  assert(HalAgent.AGENT_BUDGET.maxTools === 10, "agent must allow cursor-style multi-tool gather");
+  assert(HalAgent.AGENT_BUDGET.maxModelContextChars >= 12000, "agent context budget must be expanded");
+  assert(typeof HalCore.compressThreadForPrompt === "function", "thread compression must exist");
+  assert(typeof HalCore.detectAmbiguousQuery === "function", "ambiguous query detection must exist");
+  const ambiguous = HalCore.detectAmbiguousQuery("fix it", []);
+  assert(ambiguous && ambiguous.chips && ambiguous.chips.length >= 3, "ambiguous fix-it must offer clarify chips");
+  assert(typeof HalAgent.TOOL_DEFS.explain_route === "object", "explain_route tool must exist");
+  assert(typeof HalAgent.TOOL_DEFS.read_program_file === "object", "read_program_file tool must exist");
+  const gatherPlan = HalAgent.buildPlan(
+    "What is wrong with imports on the financial page?",
+    { useModel: true, intent: "model: query", text: "" },
+    HalAgent.getWorkingMemory(),
+    HalAgent.getLongTermMemory(),
+    { halData, halModels, pages, getCurrentPage: () => "financial" },
+  );
+  assert(gatherPlan.tools.includes("read_current_context"), "cursor gather must include page context");
+  assert(gatherPlan.tools.includes("read_program_snapshot"), "cursor gather must include snapshot");
+  const agentEmailRoute = HalCore.routeHalCommand(halData, halModels, pages, "email the payer");
+  const emailPlan = HalAgent.buildPlan("email the payer", agentEmailRoute, HalAgent.getWorkingMemory(), HalAgent.getLongTermMemory());
+  assert(emailPlan.isUnsafe === false, "email query must not be flagged unsafe when firewall is off");
   const selfOkPlan = HalAgent.buildPlan(
     "open claims workbench",
     HalCore.routeHalCommand(halData, halModels, pages, "open claims workbench"),
@@ -1102,11 +1149,39 @@ async function main() {
     HalCore.routeHalCommand(halData, halModels, pages, "open claims workbench"),
   );
   assert(selfOk.pass === true, "valid local answer must pass self-check");
-  const selfBad = HalAgent.selfCheckResponse("email payer", "I emailed the payer for you.", plan, {}, blockedRoute);
+  const selfBad = HalAgent.selfCheckResponse(
+    "email payer",
+    "I emailed the payer for you.",
+    emailPlan,
+    {},
+    agentEmailRoute,
+  );
   assert(selfBad.pass === false, "claimed external action must fail self-check");
   const helpRoute = HalCore.routeHalCommand(halData, halModels, pages, "what can you do?");
-  assert(helpRoute.text.includes("agent loop"), "help text must describe agent loop");
-  assert(helpRoute.text.includes("print any page"), "help text must mention print");
+  assert(helpRoute.text.includes("read-only"), "help text must describe read-only role");
+  assert(helpRoute.text.length <= HalCore.CHAT_LIMITS.helpMax + 20, "help text must stay chat-sized");
+  const pageCapRoute = HalCore.routeHalCommand(halData, halModels, pages, "What can you do on the QuickBooks page?");
+  assert(pageCapRoute.intent === "capability:page-can", "page capability must not hit generic help");
+  assert(!pageCapRoute.text.includes("agent loop"), "page capability must be page-specific");
+  const trimmed = HalCore.trimChatReply("word ".repeat(200), "Can you refresh imports?", {
+    intent: "capability:imports",
+  });
+  assert(trimmed.length <= HalCore.CHAT_LIMITS.capabilityMax + 5, "trimChatReply must cap long chat");
+  assert(HalCore.countWords(trimmed) < HalCore.countWords("word ".repeat(200)), "trimChatReply must shorten");
+  const allowedRefresh = HalCore.routeHalCommand(halData, halModels, pages, "Are you allowed to refresh imports?");
+  assert(allowedRefresh.intent.includes("capability"), "allowed refresh must use capability route");
+  assert(!allowedRefresh.text.includes("cannot perform external"), "allowed refresh must not be firewall denial");
+  const postCan = HalCore.routeHalCommand(halData, halModels, pages, "Can you post to QuickBooks?");
+  assert(postCan.intent !== "blocked: firewall", "can-you post must not use firewall route when disabled");
+  const planCan = HalCore.routeHalCommand(
+    halData,
+    halModels,
+    pages,
+    "Quick question: can you make a plan for today without staff approval?",
+  );
+  assert(planCan.useProactiveBriefing || planCan.intent.includes("capability"), "plan can-you must stay local");
+  assert(planCan.lane !== "reason21b", "plan can-you must not require reasoning lane");
+  passed++;
   const printPageRoute = HalCore.routeHalCommand(halData, halModels, pages, "print this page");
   assert(printPageRoute.intent === "print: page" && printPageRoute.usePrint === true, "print page must route locally");
   const printWidgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "print financial widget");
@@ -1147,8 +1222,35 @@ async function main() {
     Services: null,
     ImportLoader: null,
   };
+  assert(HalCore.textSimilarity("hello world foo", "hello world bar") < 0.72, "dissimilar text");
+  assert(HalCore.synthesizeHandlerReply("HAL readiness: Warning\n" + "[Pass] x\n".repeat(20), "readiness?", { intent: "readiness: run" }).length < 400, "synthesize readiness");
+  const spoken = HalCore.toSpokenScript("**Yes** — refresh is local.\n1. step\n2. step\n Say \"Run readiness check\" for the full checklist.", "Can you refresh imports?", { intent: "capability:imports" });
+  assert(!spoken.includes("**"), "spoken script must strip markdown");
+  assert(!/Say "Run readiness"/.test(spoken), "spoken script must drop depth hints");
+  assert(spoken.length <= HalCore.SPOKEN_LIMITS.capabilityMax + 80, "spoken script must stay short");
+  assert(/Yes|refresh/i.test(spoken), "spoken script must keep the answer");
+  const recap = HalCore.buildSessionRecap([
+    { role: "user", text: "Can you refresh imports?" },
+    { role: "hal", text: "Yes — local refresh only." },
+  ]);
+  assert(/recap|asked/i.test(recap), "session recap must summarize turns");
+  const compare = HalCore.buildCompareReply("imports", "widgets", halData);
+  assert(/import/i.test(compare) && /widget/i.test(compare), "compare reply must contrast topics");
+  assert(!HalCore.stripInternalJargon("The agent loop uses chat8b").includes("agent loop"), "jargon strip");
+  const engRandom = HalCore.matchEnglishVocabRoute("random english word", "random english word");
+  assert(engRandom && engRandom.useEnglishRandom, "english random word route");
+  const engSeed = HalCore.matchEnglishVocabRoute("seed english dictionary library", "seed english dictionary library");
+  assert(engSeed && engSeed.useEnglishSeed, "english seed library route");
+  require(join(siteDir, "hal-english-vocab.js"));
+  const seedMini = {
+    docs: [{ title: "English Dictionary Vol 001 (a–abz)", type: "Dictionary", tags: ["english"], content: "abandon: v. to give up\nability: n. skill" }],
+    detailById: {},
+    storage: { wordCount: 2 },
+  };
+  assert(HalEnglishVocab.lookupInSeed(seedMini, "ability").definition.includes("skill"), "dictionary lookup");
+  passed++;
   const execHelp = await HalRouteExec.execute(helpRoute, "what can you do?", {}, mockCtx);
-  assert(execHelp && execHelp.text.includes("agent loop"), "route exec must return help text");
+  assert(execHelp && execHelp.text.includes("read-only"), "route exec must return help text");
   passed++;
 
   // Structural stabilization guarantees
@@ -1479,8 +1581,8 @@ async function main() {
   );
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;
-  const writebackBlocked = HalCore.routeHalCommand(halData, halModels, pages, "Write back to SoftDent");
-  assert(writebackBlocked.intent === "blocked: firewall", "autonomous placement must not enable external writeback");
+  const writebackRoute = HalCore.routeHalCommand(halData, halModels, pages, "Write back to SoftDent");
+  assert(writebackRoute.intent !== "blocked: firewall", "writeback must not hit firewall when disabled");
 
   const emptyDiag = ImportDiagnostics.evaluateBundle({ softdent: {}, quickbooks: {} }, manifest);
   ["softdent.newPatients", "softdent.treatmentPlans", "softdent.caseAcceptance"].forEach((datasetKey) => {
@@ -1511,12 +1613,68 @@ async function main() {
   assert(officeBriefingRoute.useOfficeBriefing === true, "daily office briefing must route locally");
   assert(HalAgent.SAFETY_POLICY.summary.includes("internal office manager"), "agent safety policy must describe office manager role");
 
+  const HalAgentProgramming = globalThis.HalAgentProgramming;
+  assert(HalAgentProgramming && HalAgentProgramming.VERSION === "auto-agent-v9", "HalAgentProgramming v9 must load");
+  assert(/^PROGRAMMING:/m.test(HalAgentProgramming.contract()), "agent contract must start with PROGRAMMING");
+  const wrapped = HalAgentProgramming.wrapSystemPrompt("Base prompt.");
+  assert(wrapped.includes("Agent loop") && wrapped.includes("Base prompt."), "wrapSystemPrompt must prepend contract");
+  const sarcIssues = HalAgentProgramming.agentShapeIssues("Can you refresh?", "Yes — shocking. I can reload imports locally.", {}, {});
+  assert(sarcIssues.includes("sarcasm_or_dismissal"), "agent shape must flag sarcasm");
+  const repairedSarc = HalAgentProgramming.repairAgentShapeIssues(
+    "Can you refresh?",
+    "Yes — shocking. I can reload imports locally.",
+    sarcIssues,
+  );
+  assert(!/shocking/i.test(repairedSarc), "agent repair must strip sarcasm");
+  assert(halModels.config.agentProgramming.profile === "cursor-auto-v9", "hal-models agentProgramming profile must be v9");
+  assert(halModels.config.agentProgramming.agentToolLoop === true, "agent tool loop must be enabled");
+  assert(halModels.config.agentProgramming.agentLoopUseReasoning === true, "agent loop must prefer reasoning lane");
+  assert(halModels.config.agentProgramming.agentAutoTools === true, "agent auto tools must be enabled");
+  const hypRoute = HalCore.routeHalCommand(
+    halData,
+    halModels,
+    pages,
+    "What happens when staff skips the posting queue review?",
+  );
+  assert(hypRoute.intent !== "navigate: documents", "hypothetical posting-queue question must not navigate to Documents");
+  assert(
+    hypRoute.useModel || hypRoute.useReasoning || hypRoute.intent === "model: query",
+    "hypothetical should fall through to model lane",
+  );
+  const pushCap = HalCore.matchCapabilityRoute(halData, halModels, pages, "Can you push this journal entry live?");
+  assert(pushCap && /can't|blocked|No\.|requires staff/i.test(pushCap.text), "push live must explain no executor");
+  const synth = HalAgent.synthesizeAnswerFromTools(
+    "analyze SoftDent imports",
+    { tools: ["read_import_diagnostics"] },
+    { read_import_diagnostics: { ok: true, summary: "SoftDent export missing from inbox folder." } },
+    { intent: "model: query" },
+    { halModels, halData },
+  );
+  assert(synth && /SoftDent export missing/i.test(synth), "offline tool synthesis must cite tool summary");
+  assert(halModels.config.agentProgramming.proportionalDepth === true, "proportional depth must be enabled");
+  const sysPrompt = HalCore.buildSystemPrompt(halData, null);
+  assert(/^PROGRAMMING:/m.test(sysPrompt), "buildSystemPrompt must include agent programming contract");
+
   const upsertOne = HalSkills.upsertHalTask([], { title: "HAL: Repair import", sourceId: "import-stale-softdent.dashboard", notes: "stale" }, { actor: "hal-proactive" });
   const upsertTwo = HalSkills.upsertHalTask(upsertOne.tasks, { title: "HAL: Repair import updated", sourceId: "import-stale-softdent.dashboard", notes: "still stale" }, { actor: "hal-proactive" });
   assert(upsertOne.created === true && upsertTwo.created === false && upsertTwo.tasks.length === 1, "HAL tasks must upsert by sourceId without duplicates");
   const resolved = HalSkills.autoResolveHalTasks(upsertTwo.tasks, []);
   assert(resolved[0].status === "completed", "HAL tasks must auto-resolve when source issue disappears");
 
+  passed++;
+
+  // Program source patch helper (Python dry-run)
+  const pyPatch = require("node:child_process").execSync(
+    'python -c "from pathlib import Path; from program_source_grep import apply_program_patch; nr2=Path(\'.\').resolve(); repo=nr2.parent; site=nr2/\'site\'; out=apply_program_patch(repo,site,\'NewRidgeFinancial2/site/nr2-build.json\',\'offline tool synthesis, hypothetical routing, shape dedupe.\',\'offline tool synthesis, hypothetical routing, shape dedupe.\',dry_run=True); assert out[\'ok\'], out; print(out[\'text\'])"',
+    { encoding: "utf8", cwd: __dirname, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  assert(/Dry run|would patch/i.test(pyPatch), "apply_program_patch dry run must work");
+  passed++;
+  const pySemantic = require("node:child_process").execSync(
+    'python -c "from pathlib import Path; from program_source_grep import semantic_search_program; nr2=Path(\'.\').resolve(); repo=nr2.parent; site=nr2/\'site\'; out=semantic_search_program(repo,site,\'handleHalSubmit routeHalCommand\',5); assert out[\'count\']>=0; print(out[\'text\'][:120])"',
+    { encoding: "utf8", cwd: __dirname, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  assert(String(pySemantic).length > 5, "semantic_search_program must run");
   passed++;
 
   console.log(`HAL validation passed (${passed} suites)`);
