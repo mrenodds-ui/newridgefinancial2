@@ -445,15 +445,43 @@ const HalCore = (function () {
     }).slice(0, 2);
   }
 
-  function shouldEnforceMinSentences(query, route, meta) {
+  function isInternalInstructionText(text) {
+    const s = String(text || "").toLowerCase();
+    return (
+      /synthesize tool results|do not paste tool headers|combine them into one coherent|local tool check:/i.test(s) ||
+      /if multiple tools ran|markdown dumps|chain-of-thought|self-check rubric/i.test(s)
+    );
+  }
+
+  function stripInstructionLeaks(text) {
+    return String(text || "")
+      .replace(/\bLocal tool check:\s*[^.!?]+[.!?]?/gi, "")
+      .replace(/\bSynthesize tool results[^.!?]+[.!?]?/gi, "")
+      .replace(/\bIf multiple tools ran, combine th[^.!?]*[.!?]?/gi, "")
+      .replace(/\bdo not paste tool headers[^.!?]*[.!?]?/gi, "")
+      .replace(/\bCall out \[FAILED\][^.!?]*[.!?]?/gi, "")
+      .replace(/\s*\((Local (reasoning|chat|escalation|OSS)?[^)]*draft[^)]*)\)\s*$/gi, "")
+      .replace(/\s*\(Local reasoning plan · read-only · verify before acting\)\s*$/gi, "")
+      .replace(/\s*\(Local .* · read-only · verify before acting\)\s*$/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  function shouldEnforceMinSentences(query, route, meta, text) {
     meta = meta || {};
+    const body = String(text || "").trim();
+    const detailed = wantsDetailedReply(query) || /glacial pace|every step|walk me through|at a glacial/i.test(String(query || ""));
+    if (body && countSentences(body) >= MIN_REPLY_SENTENCES && !detailed) {
+      return false;
+    }
     if (meta.skipMinSentences) return false;
     if (isSimpleActionQuery(query)) return false;
-    if (route && route.text) return false;
+    if (route && route.text && body && countSentences(body) >= MIN_REPLY_SENTENCES && !detailed) return false;
     if (isCodeDiscussionQuery(query, route, meta)) return false;
-    if (wantsBriefReply(query) || (meta && meta.preferBrief)) return false;
+    if ((wantsBriefReply(query) || meta.preferBrief) && !detailed) return false;
     const q = String(query || "").trim();
-    if (q.length < 48 && !(route && (route.useReasoning || route.useEscalation)) && !isYesNoQuestion(q)) {
+    if (/read[\s-]?only|readonly actually mean|what does read-only/i.test(q)) return true;
+    if (q.length < 48 && !(route && (route.useReasoning || route.useEscalation)) && !isYesNoQuestion(q) && !detailed) {
       return false;
     }
     return true;
@@ -471,8 +499,8 @@ const HalCore = (function () {
       page
         ? "You are on the " + page + " page; name a widget if you want a narrower answer."
         : "You can narrow this by naming a page — Financial, Claims, A/R, or QuickBooks.",
-      tool && String(tool).length > 20
-        ? "Local tool check: " + String(tool).replace(/\s+/g, " ").trim().slice(0, 120) + "."
+      tool && String(tool).length > 20 && !isInternalInstructionText(tool)
+        ? "From local checks: " + String(tool).replace(/\s+/g, " ").trim().slice(0, 120) + "."
         : "If a widget looks empty, refresh imports and verify the export path before drawing conclusions.",
       "Staff still posts in QuickBooks, contacts payers, and handles outbound steps — I stay read-only at the firewall.",
       "I can open pages, explain status, draft review notes, and flag gaps; humans execute anything external.",
@@ -492,12 +520,18 @@ const HalCore = (function () {
   }
 
   function ensureMinSentences(text, query, route, meta) {
-    if (!shouldEnforceMinSentences(query, route, meta)) return String(text || "").trim();
-    let sentences = splitSentences(text);
-    if (sentences.length >= MIN_REPLY_SENTENCES) return sentences.join(" ");
-    const pads = minSentencePadding(query, route, meta || {}, sentences);
-    sentences = sentences.concat(pads.slice(0, MIN_REPLY_SENTENCES - sentences.length));
-    return sentences.join(" ").trim();
+    const draft = String(text || "").trim();
+    if (!shouldEnforceMinSentences(query, route, meta, draft)) return draft;
+    let out = draft;
+    for (let pass = 0; pass < 3 && countSentences(out) < MIN_REPLY_SENTENCES; pass++) {
+      const sentences = splitSentences(out);
+      const pads = minSentencePadding(query, route, meta || {}, sentences);
+      out = sentences.concat(pads.slice(0, MIN_REPLY_SENTENCES - sentences.length)).join(" ").trim();
+    }
+    if (countSentences(out) < MIN_REPLY_SENTENCES) {
+      out = out.replace(/[.!?]\s*$/, "") + ". Ask about Financial, Claims, A/R, or QuickBooks if you want a narrower answer.";
+    }
+    return out.trim();
   }
 
   function hasUnrequestedList(text, query) {
@@ -526,6 +560,9 @@ const HalCore = (function () {
     }
     if (CHATBOT_FILLER_RE.test(body) || CHATBOT_CLOSER_RE.test(body)) issues.push("chatbot_filler");
     if (INTERNAL_JARGON_RE.test(body)) issues.push("internal_jargon");
+    if (/\b(local tool check|synthesize tool results|combine th\b|do not paste tool headers)\b/i.test(body)) {
+      issues.push("instruction_leak");
+    }
     if (QUESTION_ECHO_RE.test(body)) issues.push("question_echo");
     if (answersMustLead(query, route) && !answerLeadsCorrectly(query, body, route)) issues.push("answer_not_first");
     if (opts.previousHalText && textSimilarity(body, opts.previousHalText) > 0.72) issues.push("repeats_previous");
@@ -569,10 +606,12 @@ const HalCore = (function () {
   }
 
   function stripInternalJargon(text) {
-    return String(text || "")
-      .replace(INTERNAL_JARGON_RE, "local system")
-      .replace(/\s{2,}/g, " ")
-      .trim();
+    return stripInstructionLeaks(
+      String(text || "")
+        .replace(INTERNAL_JARGON_RE, "local system")
+        .replace(/\s{2,}/g, " ")
+        .trim(),
+    );
   }
 
   function flattenMarkdownForChat(text) {
@@ -586,7 +625,7 @@ const HalCore = (function () {
       .trim();
   }
 
-  function compressedBlockedReply(firewall, query, briefCount) {
+  function compressedBlockedReply(firewall, query, briefCount, halData, halModels) {
     if (briefCount >= 1) {
       return pickVariant([
         "Still blocked — same firewall as before. I can prep locally; staff executes outbound steps.",
@@ -594,7 +633,7 @@ const HalCore = (function () {
         "No change. A human still handles the external step outside NR2.",
       ]);
     }
-    return variedBlockedCapabilityReply(firewall, query);
+    return variedBlockedCapabilityReply(firewall, query, halData, halModels);
   }
 
   function buildSessionRecap(turns) {
@@ -664,10 +703,11 @@ const HalCore = (function () {
 
   function appendEvidenceClause(text, toolSummary, query) {
     if (!toolSummary || !String(text || "").trim()) return text;
+    if (isInternalInstructionText(toolSummary)) return String(text || "").trim();
     const body = String(text).trim();
-    if (/\b(from local|registry shows|imports show|from the registry|local data)\b/i.test(body)) return body;
+    if (/\b(from local|registry shows|imports show|from the registry|local data|from local checks)\b/i.test(body)) return body;
     const snippet = String(toolSummary).replace(/\s+/g, " ").trim().slice(0, 100);
-    if (!snippet || snippet.length < 12) return body;
+    if (!snippet || snippet.length < 12 || isInternalInstructionText(snippet)) return body;
     if (/\b(missing|empty|offline|unavailable|no import)\b/i.test(snippet)) {
       return body.replace(/[.!?]\s*$/, "") + ". From local data: " + snippet + ".";
     }
@@ -679,6 +719,7 @@ const HalCore = (function () {
     if (issues.includes("identity_monologue")) out = stripHalIdentityMonologue(out, false);
     if (issues.includes("chatbot_filler")) out = stripChatbotFillers(out);
     if (issues.includes("internal_jargon")) out = stripInternalJargon(out);
+    if (issues.includes("instruction_leak")) out = stripInstructionLeaks(out);
     if (issues.includes("question_echo")) out = out.replace(QUESTION_ECHO_RE, "").trim();
     if (issues.includes("repeats_previous")) {
       const keepYesNo =
@@ -731,7 +772,7 @@ const HalCore = (function () {
   const CHATBOT_CLOSER_RE =
     /(let me know if|would you like me to|feel free to ask|if you want more detail|i hope this helps|happy to assist|feel free to reach out)\s*\.?\s*$/i;
   const INTERNAL_JARGON_RE =
-    /\b(agent loop|model lane|chat8b|reason21b|escalate30b|oss120b|self-check|tool results|num_predict|fastChat|GPU lane|Ollama endpoint)\b/gi;
+    /\b(agent loop|model lane|chat8b|reason21b|escalate30b|oss120b|self-check|tool results|num_predict|fastChat|GPU lane|Ollama endpoint|local tool check|synthesize tool|markdown dumps)\b/gi;
   const QUESTION_ECHO_RE = /^(regarding your question|as for your question|you asked (?:if|whether)|to answer your question)/i;
 
   function detectUserTone(query) {
@@ -1089,10 +1130,10 @@ const HalCore = (function () {
 
   function polishChatReply(text, query, route, meta) {
     meta = meta || {};
-    let out = String(text || "").trim();
+    let out = stripInstructionLeaks(String(text || "").trim());
     const intent = route && route.intent ? String(route.intent) : "";
     if (/^blocked: firewall/.test(intent) && meta.firewallBriefCount >= 1) {
-      out = compressedBlockedReply((meta.halData && meta.halData.firewall) || FALLBACK_FIREWALL, query, meta.firewallBriefCount);
+      out = compressedBlockedReply((meta.halData && meta.halData.firewall) || FALLBACK_FIREWALL, query, meta.firewallBriefCount, meta.halData, meta.halModels);
     }
     const micro = isSimpleActionQuery(query) && buildMicroActionReply(intent, meta.actionLabel, query);
     if (micro && /^navigate:|imports: refresh|imports: status/.test(intent)) {
@@ -1123,7 +1164,7 @@ const HalCore = (function () {
     if (hint && !out.includes(hint.trim().slice(1, 20))) out = out + hint;
     out = applyHalPersonality(out, query, route, meta);
     out = ensureMinSentences(out, query, route, meta);
-    return out.trim();
+    return stripInstructionLeaks(out.trim());
   }
 
   const SPOKEN_LIMITS = {
@@ -1254,9 +1295,17 @@ const HalCore = (function () {
     return verb ? verb[1] + " that" : "do that external step";
   }
 
-  function variedBlockedCapabilityReply(firewall, actionPhrase) {
+  function variedBlockedCapabilityReply(firewall, actionPhrase, halData, halModels) {
     const fw = firewall || FALLBACK_FIREWALL;
     const act = describeBlockedAction(actionPhrase);
+    const fwActive = isFirewallActive(halData, halModels);
+    if (!fwActive) {
+      return pickVariant([
+        `No. I can't ${act} from here. External-action firewall is off, but HAL still has no outbound executors — staff performs that step outside this program. I can open the right page and draft review notes locally.`,
+        `No — ${act.charAt(0).toUpperCase() + act.slice(1)} is outside what HAL can execute. Firewall is disabled in config, not capability: I navigate, explain, and draft; humans handle payer contact and ledger posting.`,
+        `No. That request stops at the program boundary for ${act}. I'll help navigate and document locally — outbound delivery requires staff.`,
+      ]);
+    }
     return pickVariant([
       `No. I can't ${act} from here. ${fw.summary} I can open the right page and draft review notes; staff performs the external step.`,
       `No — ${act.charAt(0).toUpperCase() + act.slice(1)} is blocked by the firewall. SoftDent and QuickBooks stay read-only from this program. I can prepare local review material; a human executes outside the app.`,
@@ -1560,7 +1609,7 @@ const HalCore = (function () {
       return {
         intent: actionBlocked ? "blocked: firewall" : "capability:no-executor",
         lane: "local",
-        text: variedBlockedCapabilityReply(firewall, action),
+        text: variedBlockedCapabilityReply(firewall, action, halData, halModels),
         actions: [],
       };
     }
@@ -2263,12 +2312,14 @@ const HalCore = (function () {
     out = out.replace(/\*[^*]+\*/g, "");
     out = out.replace(/^(Okay|Sure|Certainly)[,.]?\s*(from my (local )?)?(read-?only )?(monitoring )?perspective[,:]?\s*/i, "");
     out = out.replace(/\s*\((Local chat draft|Local .* draft)[^)]*\)\s*$/i, "");
+    out = out.replace(/\s*\(Local reasoning plan · read-only · verify before acting\)\s*$/i, "");
+    out = out.replace(/\s*\(Local .* · read-only · verify before acting\)\s*$/i, "");
     const monologueStart = /^(Okay|Hmm|Let me|Wait|Pauses|Nods|Double-checks|Starts structuring)/i;
     if (monologueStart.test(out.trim())) {
       const riskIdx = out.search(/\*\*Risk Assessment\*\*|Risk Assessment|Human Verification|DO NOT PROCEED/i);
       if (riskIdx > 0) out = out.slice(riskIdx);
     }
-    return out.trim();
+    return stripInstructionLeaks(out.trim());
   }
 
   function sessionTemplates(halData) {
@@ -2965,7 +3016,7 @@ const HalCore = (function () {
       return {
         intent: "blocked: firewall",
         lane: "firewall",
-        text: variedBlockedCapabilityReply(firewall, query),
+        text: variedBlockedCapabilityReply(firewall, query, halData, halModels),
         actions: [],
       };
     }
@@ -3365,7 +3416,7 @@ const HalCore = (function () {
       if (wantsExplain) {
         const verbose = /glacial pace|every step|walk me through/i.test(String(rawQuery || ""));
         const explainBody = verbose
-          ? `${info.label}: ${info.detail}${status}\n\nStep-by-step locally: (1) open the page, (2) check import freshness on the widgets you care about, (3) read registry status above, (4) note missing data before any staff action.`
+          ? `${info.label}: ${info.detail}${status}\n\nI'll walk through this slowly. First, open ${info.label} from the sidebar so widgets and registry context load together. Second, check whether imports for that page are fresh — empty tiles usually mean stale or missing SoftDent or QuickBooks exports, not hidden live data. Third, read the registry line above for state, safety, and the suggested next staff action. Fourth, name a specific widget if you want a narrower drill-down. Fifth, note anything still missing before anyone posts, emails, or contacts a payer outside NR2. HAL stays read-only here; staff executes outbound steps.`
           : `${info.label}: ${info.detail}${status}`;
         return {
           intent: "explain: " + pageId,
@@ -3466,6 +3517,8 @@ const HalCore = (function () {
     resolveFollowUpTopic,
     isImplicitFollowUp,
     stripInternalJargon,
+    stripInstructionLeaks,
+    isInternalInstructionText,
     flattenMarkdownForChat,
     compressedBlockedReply,
     buildSessionRecap,

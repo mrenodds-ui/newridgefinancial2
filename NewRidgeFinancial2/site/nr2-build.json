@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-143",
-  "schemaVersion": "hal-143",
+  "assetVersion": "hal-144",
+  "schemaVersion": "hal-144",
   "builtAt": "2026-07-04T03:00:00.000Z",
-  "notes": "HAL hal-143 — offline tool synthesis, hypothetical routing, shape dedupe."
+  "notes": "HAL hal-144 — strip instruction leaks, firewall-off copy, min-sentence enforcement, 8B token budget."
 }

@@ -92,7 +92,7 @@
       "temperature": 0.2,
       "think": false,
       "options": {
-        "num_predict": 512,
+        "num_predict": 1536,
         "num_ctx": 4096
       }
     },

@@ -75,6 +75,7 @@
   const SELF_CHECK_RUBRIC = [
     "empty_response",
     "too_few_sentences",
+    "instruction_leak",
     "answer_not_first",
     "yes_no_not_direct",
     "identity_monologue",
@@ -143,6 +144,9 @@
 
     if (SARCASM_RE.test(body)) issues.push("sarcasm_or_dismissal");
     if (ENGAGEMENT_BAIT_RE.test(body)) issues.push("engagement_bait");
+    if (/\b(local tool check|synthesize tool results|combine th\b|do not paste tool headers)\b/i.test(body)) {
+      issues.push("instruction_leak");
+    }
     if (/\b(I (submitted|sent|emailed|uploaded|posted|deleted|paid|wired|faxed))\b/i.test(body)) {
       issues.push("claimed_external_action");
     }
@@ -178,6 +182,9 @@
     }
     if (issues.includes("claimed_external_action")) {
       out = out.replace(/\bI (submitted|sent|emailed|uploaded|posted|deleted|paid|wired|faxed)\b/gi, "A human must");
+    }
+    if (issues.includes("instruction_leak") && typeof HalCore !== "undefined" && HalCore.stripInstructionLeaks) {
+      out = HalCore.stripInstructionLeaks(out);
     }
     if (issues.includes("missing_evidence_when_tools") && !/\bbased on the local program data\b/i.test(out)) {
       out = out.replace(/[.!?]\s*$/, "") + " " + EVIDENCE_SUFFIX;

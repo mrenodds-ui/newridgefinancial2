@@ -614,12 +614,23 @@ const HalAgent = (function () {
       label: "Semantic search program source",
       run: async (ctx, args) => {
         const bridge = bridgeFromCtx(ctx);
-        if (!bridge || typeof bridge.semanticSearchProgram !== "function") {
-          return { ok: false, summary: "Semantic search requires the NR2 desktop app." };
+        const q = String(args.query || "");
+        if (bridge && typeof bridge.semanticSearchProgram === "function") {
+          const payload = await bridge.semanticSearchProgram(q, 15);
+          const text = payload && payload.text ? String(payload.text) : "No semantic matches.";
+          return { ok: !!(payload && payload.count), summary: text.slice(0, 4500), hits: payload && payload.hits ? payload.hits : [] };
         }
-        const payload = await bridge.semanticSearchProgram(String(args.query || ""), 15);
-        const text = payload && payload.text ? String(payload.text) : "No semantic matches.";
-        return { ok: !!(payload && payload.count), summary: text.slice(0, 4500), hits: payload && payload.hits ? payload.hits : [] };
+        const grepDef = TOOL_DEFS.grep_program_source;
+        if (grepDef) {
+          const fallback = await grepDef.run(ctx, { query: q });
+          const summary = fallback && fallback.summary ? String(fallback.summary) : "No matches.";
+          return {
+            ok: !!(fallback && fallback.ok),
+            summary: ("Source search (browser fallback):\n" + summary).slice(0, 4500),
+            hits: fallback && fallback.matches ? fallback.matches : [],
+          };
+        }
+        return { ok: false, summary: "Semantic search requires the NR2 desktop app or grep fallback." };
       },
     },
     run_git_readonly: {
@@ -1106,6 +1117,22 @@ const HalAgent = (function () {
     if (!route || route.useReasoning || route.useEscalation || route.useOss) return false;
     if (!route.useModel) return false;
     return checked.issues.some((issue) => MODEL_SHAPE_ISSUES.has(issue) || issue === "too_short" || issue === "empty_response");
+  }
+
+  function summarizeToolEvidenceOnly(toolResults) {
+    const parts = [];
+    for (const [id, res] of Object.entries(toolResults || {})) {
+      if (!res || !res.summary) continue;
+      const label = (TOOL_DEFS[id] && TOOL_DEFS[id].label) || id.replace(/_L\d+$/, "");
+      const body = String(res.summary)
+        .replace(/^#+\s+/gm, "")
+        .replace(/\bSynthesize tool results[^.]*\.?/gi, "")
+        .trim()
+        .slice(0, 180);
+      if (body.length < 16 || /^(no data|error|unknown tool)/i.test(body)) continue;
+      parts.push(`${label}: ${body}`);
+    }
+    return parts.join(" ").slice(0, 220);
   }
 
   function summarizeToolResults(toolResults) {
@@ -1663,6 +1690,7 @@ const HalAgent = (function () {
     "answer_not_first",
     "question_echo",
     "internal_jargon",
+    "instruction_leak",
     "too_few_sentences",
     "missing_evidence_when_tools",
     "no_next_step",
@@ -1689,7 +1717,7 @@ const HalAgent = (function () {
 
   function finalizeOutcome(outcome, trimmed, route, plan, ctx, toolResults) {
     if (!outcome || !outcome.text || !HalCore.polishChatReply) return outcome;
-    const toolSummary = summarizeToolResults(toolResults || {}).replace(/^#+\s+/gm, "").slice(0, 220);
+    const toolSummary = summarizeToolEvidenceOnly(toolResults || {});
     let actionLabel = "";
     const navMatch = route && route.intent ? String(route.intent).match(/^navigate:\s*(.+)$/) : null;
     if (navMatch && ctx.pages) {
@@ -1698,6 +1726,7 @@ const HalAgent = (function () {
     }
     outcome.text = HalCore.polishChatReply(outcome.text, trimmed, route, {
       halData: ctx.halData,
+      halModels: ctx.halModels,
       pages: ctx.pages,
       currentPage: workingMemory.currentPage,
       preferBrief: workingMemory.preferBrief,

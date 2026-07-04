@@ -548,7 +548,7 @@ async function main() {
   assert(HalCore.laneReady(halModels, "chat8b"), "chat lane must be execution-ready on loopback");
   const chatRuntime = HalCore.laneRuntime(halModels, "chat8b");
   assert(chatRuntime && chatRuntime.think === false, "chat lane must disable thinking tokens");
-  assert(chatRuntime.options && chatRuntime.options.num_predict === 512, "chat lane token cap must match hal-models.json localModel");
+  assert(chatRuntime.options && chatRuntime.options.num_predict === 1536, "chat lane token cap must match hal-models.json localModel");
   assert(chatRuntime.options.num_ctx === 4096, "chat lane context must match hal-models.json localModel");
   assert(
     HalCore.buildFastChatSystemPrompt(halData, null).includes("PROGRAMMING:"),
@@ -1237,6 +1237,16 @@ async function main() {
   const compare = HalCore.buildCompareReply("imports", "widgets", halData);
   assert(/import/i.test(compare) && /widget/i.test(compare), "compare reply must contrast topics");
   assert(!HalCore.stripInternalJargon("The agent loop uses chat8b").includes("agent loop"), "jargon strip");
+  const leakSample =
+    "Office-manager attention. Local tool check: Synthesize tool results into the answer. If multiple tools ran, combine th.";
+  assert(!HalCore.stripInstructionLeaks(leakSample).match(/local tool check|synthesize tool/i), "instruction leak strip");
+  const readOnlyPolished = HalCore.polishChatReply("Read-only and review-only areas:", "what does read-only mean?", {
+    intent: "registry: read-only",
+    lane: "local",
+  }, { halData, halModels });
+  assert(HalCore.countSentences(readOnlyPolished) >= HalCore.MIN_REPLY_SENTENCES, "read-only reply must meet min sentences");
+  const transmitOff = HalCore.variedBlockedCapabilityReply(halData.firewall, "transmit the claim", halData, halModels);
+  assert(!/blocked by the firewall/i.test(transmitOff), "firewall-off blocked reply must not claim firewall block");
   const engRandom = HalCore.matchEnglishVocabRoute("random english word", "random english word");
   assert(engRandom && engRandom.useEnglishRandom, "english random word route");
   const engSeed = HalCore.matchEnglishVocabRoute("seed english dictionary library", "seed english dictionary library");
