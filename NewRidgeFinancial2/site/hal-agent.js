@@ -1642,6 +1642,15 @@ const HalAgent = (function () {
 
   function routeIsOperational(route) {
     if (!route) return false;
+    if (
+      route.useEnglishDefine ||
+      route.useEnglishRandom ||
+      route.useEnglishQuiz ||
+      route.useEnglishTeach ||
+      route.useEnglishSeed
+    ) {
+      return true;
+    }
     return Object.keys(route).some((k) => k.startsWith("use") && route[k] === true && k !== "useModel" && k !== "useReasoning" && k !== "useEscalation" && k !== "useOss");
   }
 

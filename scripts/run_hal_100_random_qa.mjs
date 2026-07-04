@@ -60,7 +60,7 @@ async function run() {
   });
 
   console.log("Opening HAL Command Center ...");
-  await page.goto(`${BASE_URL}/#hal`, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.goto(`${BASE_URL}/#hal?v=${Date.now()}`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForFunction(
     () =>
       typeof handleHalSubmit === "function" &&

@@ -376,7 +376,13 @@ async function main() {
   for (const [question, expectedIntent] of routingCases) {
     const result = HalCore.routeHalCommand(halData, halModels, pages, question);
     const got = String(result.intent || "");
-    const ok = got === expectedIntent || got.startsWith(expectedIntent);
+    const ok =
+      got === expectedIntent ||
+      got.startsWith(expectedIntent) ||
+      (expectedIntent === "reasoning" &&
+        got === "priorities" &&
+        /\bcan you\b/i.test(question) &&
+        /\bmake a plan|plan for today\b/i.test(question));
     laneCounts[result.lane] = (laneCounts[result.lane] || 0) + 1;
     if (!ok) routingFailures.push(`"${question}" expected ${expectedIntent}, got ${got}`);
   }
@@ -1658,7 +1664,13 @@ async function main() {
     sarcIssues,
   );
   assert(!/shocking/i.test(repairedSarc), "agent repair must strip sarcasm");
-  assert(halModels.config.agentProgramming.profile === "cursor-auto-v16", "hal-models agentProgramming profile must be v16");
+  assert(halModels.config.agentProgramming.profile === "cursor-auto-v17", "hal-models agentProgramming profile must be v17");
+  const defineRoute = HalCore.routeHalCommand(halData, halModels, pages, "Define ability.");
+  assert(defineRoute.useEnglishDefine === true && defineRoute.englishWord === "ability", "Define word must accept trailing period");
+  const planToday = HalCore.routeHalCommand(halData, halModels, pages, "Can you make a plan for today?");
+  assert(planToday.useProactiveBriefing === true, "Can you make a plan must use proactive briefing not reasoning");
+  const importCurrency = HalCore.routeHalCommand(halData, halModels, pages, "Analyze whether imports are current enough for management review.");
+  assert(importCurrency.useImportStatus === true, "import currency analyze must use import status route");
   assert(halModels.config.agentProgramming.subtaskMaxDepth === 2, "subtask max depth must be 2");
   assert(halModels.config.cloudReasoning.searchIndex && halModels.config.cloudReasoning.searchIndex.enabled === true, "search index config must exist");
   assert(halModels.config.agentProgramming.agentToolLoop === true, "agent tool loop must be enabled");
@@ -1711,7 +1723,7 @@ async function main() {
 
   // Program source patch helper (Python dry-run) — use live schemaVersion from manifest
   const buildManifest = loadJson(join(siteDir, "nr2-build.json"));
-  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-152")}"`;
+  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-153")}"`;
   const pyPatch = require("node:child_process").execFileSync(
     "python",
     [

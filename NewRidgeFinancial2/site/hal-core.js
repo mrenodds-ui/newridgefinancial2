@@ -1386,7 +1386,7 @@ const HalCore = (function () {
     if (/readiness check|run readiness/.test(a)) {
       return { intent: "capability:readiness", lane: "local", useReadinessRun: true, text: "", actions: [] };
     }
-    if (/refresh imports|import status|show import status/.test(a)) {
+    if (/refresh imports|import status|show import status|review import diagnostics|import diagnostics/.test(a)) {
       const refresh = /\brefresh\b/.test(a);
       return refresh
         ? { intent: "capability:imports-refresh", lane: "local", useImportRefresh: true, text: "", actions: [] }
@@ -1404,7 +1404,7 @@ const HalCore = (function () {
     if (/monitor sidenotes/.test(a)) {
       return { intent: "capability:sidenotes", lane: "local", useSideNoteMonitor: true, text: "", actions: [] };
     }
-    if (/posting queue|journal queue|journal posting queue/.test(a)) {
+    if (/posting queue items|show posting queue|list posting queue|journal queue items|show journal queue/.test(a)) {
       return { intent: "capability:posting-queue", lane: "local", usePostingQueueList: true, text: "", actions: [] };
     }
     if (/search the document library|search document library/.test(a)) {
@@ -2071,6 +2071,13 @@ const HalCore = (function () {
     }
     if (/\b(widgets?|widget feed|dashboard widgets|manager dashboard)\b/.test(query)) {
       return { intent: "widgets: feed", lane: "local", useWidgetFeed: true, text: "", actions: [] };
+    }
+
+    if (
+      /\b(document library|library)\b.*\b(compliance|policy|support|questions?)\b/.test(query) ||
+      /\bcompliance\b.*\b(library|document)\b/.test(query)
+    ) {
+      return { intent: "library: ask", lane: "local", useDocRag: true, ragQuestion: rawQuery, text: "", actions: [] };
     }
 
     // Document RAG / library retrieval (grounded, local-only)
@@ -2980,10 +2987,10 @@ const HalCore = (function () {
     const define =
       String(rawQuery || "")
         .trim()
-        .match(/^(?:define|meaning of)\s+(?:the\s+word\s+)?([a-z'-]+)\??$/i) ||
+        .match(/^(?:define|meaning of)\s+(?:the\s+word\s+)?([a-z'-]+)\.?\??$/i) ||
       String(rawQuery || "")
         .trim()
-        .match(/^(?:what does|what is)\s+the\s+word\s+([a-z'-]+)\??$/i);
+        .match(/^(?:what does|what is)\s+the\s+word\s+([a-z'-]+)\.?\??$/i);
     if (define) {
       return {
         intent: "english: define",
@@ -3216,11 +3223,22 @@ const HalCore = (function () {
     }
 
     if (
+      /\banalyze whether\b.*\bimports?\b.*\b(current|fresh|stale|enough|ready|management)\b/.test(query) ||
+      /\bimports?\b.*\b(current enough|fresh enough|stale|ready)\b.*\bfor\b.*\b(review|management)\b/.test(query)
+    ) {
+      return { intent: "imports: currency-check", lane: "local", useImportStatus: true, text: "", actions: [] };
+    }
+
+    if (
       !wantsExplain &&
       (/\b(review|fact[\s-]?check)\s+(this\s+|the\s+|my\s+)?(insurance\s+)?narrative/i.test(query) ||
         /\b(appeal letter|crown narrative|perio narrative)\b/i.test(query))
     ) {
       return { intent: "reasoning: narrative", lane: "reason21b", text: "", useReasoning: true, prompt: rawQuery, actions: [] };
+    }
+
+    if (/\b(can you|could you)\b.*\b(make a plan|plan for today)\b/.test(query)) {
+      return { intent: "priorities", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
     }
 
     if (

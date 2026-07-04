@@ -43,7 +43,7 @@
     "preferReasoning": true,
     "firewallEnabled": false,
     "agentProgramming": {
-      "profile": "cursor-auto-v16",
+      "profile": "cursor-auto-v17",
       "minSentences": 5,
       "proportionalDepth": true,
       "allowMarkdown": true,
