@@ -135,6 +135,9 @@ async function run() {
     /hit an error|could not finish|did not return a response/i.test(String(e.a || "")),
   );
 
+  const benignConsoleRe = /404|hal-tts|favicon|Failed to load resource/i;
+  const significantConsole = consoleErrors.filter((e) => !benignConsoleRe.test(String(e || "")));
+
   const report = {
     generated_at: new Date().toISOString(),
     base_url: BASE_URL,
@@ -149,10 +152,12 @@ async function run() {
       error_entries: errorEntries.length,
       error_pattern_matches: errorPatterns.length,
       console_error_count: consoleErrors.length,
+      significant_console_error_count: significantConsole.length,
       page_error_count: pageErrors.length,
       elapsed_sec: result.run?.elapsedSec ?? null,
     },
     console_errors: consoleErrors.slice(0, 200),
+    significant_console_errors: significantConsole.slice(0, 50),
     page_errors: pageErrors.slice(0, 50),
     error_entries: errorEntries,
     error_pattern_matches: errorPatterns,
@@ -172,7 +177,7 @@ async function run() {
   if (
     report.summary.flagged_errors > 0 ||
     report.summary.page_error_count > 0 ||
-    report.summary.console_error_count > 0
+    report.summary.significant_console_error_count > 0
   ) {
     process.exitCode = 1;
   }

@@ -122,8 +122,11 @@ def build_program_search_index(repo_root: Path, site_dir: Path, index_path: Path
     out_path = index_path or default_search_index_path(repo_root)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     files: list[dict] = []
+    file_cap = 220
     for root in roots:
         for path in root.rglob("*"):
+            if len(files) >= file_cap:
+                break
             if not path.is_file() or not _allowed_path(path, roots):
                 continue
             try:

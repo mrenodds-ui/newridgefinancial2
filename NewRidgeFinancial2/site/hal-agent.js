@@ -60,9 +60,40 @@ const HalAgent = (function () {
     ]);
   }
 
-  function attachOllamaNativeTools(runtime, plan, agentCfg) {
-    if (!runtime || !plan || !plan.agentToolLoop) return runtime;
-    if (agentCfg.localOllamaTools === false) return runtime;
+  function shouldUseAgentToolLoop(query, route, agentCfg) {
+    if (agentCfg && agentCfg.agentToolLoop === false) return false;
+    if (/<<<tool/i.test(String(query || ""))) return true;
+    if (isTaskCompletionQuery(query)) return true;
+    if (isInvestigateQuery(query, route)) return true;
+    if (route && (route.useEscalation || route.useOss)) return true;
+    if (route && route.text && hasUseFlag(route) && !/\b(code|source|grep|fix|patch|debug|investigate)\b/i.test(query)) {
+      return false;
+    }
+    if (
+      /\b(show|list|open|refresh|monitor|run a readiness|check claim|explain .+ widget|can you (show|list|open|refresh|monitor|run|check|explain)|posting queue items?)\b/i.test(
+        query,
+      ) &&
+      !/\b(code|source|grep|fix|patch|debug|investigate|why is|how does)\b/i.test(query)
+    ) {
+      return false;
+    }
+    if (/\b(make a plan|prioriti|reason through|think through|analyze .+ and tell)\b/i.test(query) && route && route.useReasoning) {
+      return false;
+    }
+    return false;
+  }
+
+  function wantsOllamaNativeTools(plan, query, agentCfg) {
+    if (!plan || !plan.agentToolLoop || agentCfg.localOllamaTools === false) return false;
+    return !!(
+      plan.isTaskCompletionQuery ||
+      plan.isInvestigateQuery ||
+      /\b(code|source|grep|patch|function|handled|hal-agent|debug|implement)\b/i.test(String(query || ""))
+    );
+  }
+
+  function attachOllamaNativeTools(runtime, plan, query, agentCfg) {
+    if (!wantsOllamaNativeTools(plan, query, agentCfg)) return runtime;
     const schemas = buildCloudToolSchemas(agentLoopToolIds(plan));
     if (!schemas.length) return runtime;
     return Object.assign({}, runtime, { structuredAgent: true, ollamaTools: schemas });
@@ -1176,7 +1207,7 @@ const HalAgent = (function () {
       isUnsafe: false,
       useModelEnhancement: !!(route.useModel || route.useReasoning || route.useEscalation || route.useOss),
       needsClarification: !route.text && !hasUseFlag(route),
-      agentToolLoop: !planOnly && !!(route.useModel || route.useReasoning || route.useEscalation),
+      agentToolLoop: !planOnly && shouldUseAgentToolLoop(query, route, agentCfg),
       planOnly,
       isTaskCompletionQuery: isTaskCompletionQuery(query),
       isInvestigateQuery: isInvestigateQuery(query, route),
@@ -1762,7 +1793,7 @@ const HalAgent = (function () {
     if (wantAgentReasoning) {
       let rm = Object.assign({ reasoningLane: true, agentLoop: true }, ctx.reasoningModelConfig());
       rm.options = Object.assign({}, rm.options || {}, { num_predict: 1800 });
-      rm = attachOllamaNativeTools(rm, plan, agentCfg);
+      rm = attachOllamaNativeTools(rm, plan, query, agentCfg);
       const raw = await ctx.runModel(rm, combinedPrompt, userText, "Agent loop reasoning", onToken);
       if (raw && typeof raw === "object" && (raw.toolCalls || raw.text != null)) {
         return {
@@ -1784,7 +1815,7 @@ const HalAgent = (function () {
         return { text: ctx.offlineModelMessage("reason21b"), lane: "reason21b · offline" };
       }
       const rm = Object.assign({ reasoningLane: true }, ctx.reasoningModelConfig());
-      const rmTools = plan && plan.agentToolLoop ? attachOllamaNativeTools(rm, plan, agentCfg) : rm;
+      const rmTools = plan && plan.agentToolLoop ? attachOllamaNativeTools(rm, plan, query, agentCfg) : rm;
       try {
         const raw = await ctx.runModel(rmTools, combinedPrompt, userText, "Local reasoning plan", onToken);
         const text = typeof raw === "string" ? raw : String((raw && raw.text) || "");
@@ -2413,6 +2444,8 @@ const HalAgent = (function () {
     TOOL_DEFS,
     syncAgentBudgetFromModels,
     buildCloudToolSchemas,
+    shouldUseAgentToolLoop,
+    wantsOllamaNativeTools,
     attachOllamaNativeTools,
     cloudAgentEligible,
     agentLoopToolIds,

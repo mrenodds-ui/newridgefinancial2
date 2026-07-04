@@ -107,14 +107,15 @@
   function shouldUseAgentLoop(query, route, plan, cfg) {
     if (!plan || !plan.useModelEnhancement) return false;
     if (cfg && cfg.agentToolLoop === false) return false;
+    if (plan.agentToolLoop === false) return false;
+    if (!plan.agentToolLoop) return false;
     if (/<<<tool/i.test(query)) return true;
-    if (plan.agentToolLoop) return true;
     if (plan.isTaskCompletionQuery) return true;
     if (plan.isInvestigateQuery) return true;
     if (/(how does|why is|fix|debug|investigate|validate|patch|source code|grep|where is .* handled)/i.test(query)) {
       return true;
     }
-    return !!(plan.tools && plan.tools.length > 2);
+    return false;
   }
 
   function ranToolKeys(toolResults) {

@@ -2136,6 +2136,12 @@ async function handleHalSubmit(query) {
     : undefined;
 
   let outcome = null;
+  const queryTimeoutMs = preRoute.useEscalation ? 180000 : preRoute.useReasoning ? 120000 : 60000;
+  const queryTimer = setTimeout(() => {
+    if (halModelAbortController && !halModelAbortController.signal.aborted) {
+      halModelAbortController.abort();
+    }
+  }, queryTimeoutMs);
   try {
     if (window.HalAgent) {
       outcome = await HalAgent.processQuery(
@@ -2183,21 +2189,33 @@ async function handleHalSubmit(query) {
     }
     logAudit(trimmed, outcome.intent);
   } catch (error) {
-    if (error && error.name === "AbortError") return;
-    const detail = error && error.message ? error.message : String(error);
-    const failText =
-      "HAL hit an error and could not finish: " +
-      detail +
-      ". If this keeps happening, restart Start Program and confirm Ollama is running.";
-    if (placeholder) {
-      placeholder.text = failText;
-      placeholder.lane = "error";
+    if (error && error.name === "AbortError") {
+      const abortText =
+        "That question took too long locally — I stopped to keep the chat responsive. Try a narrower ask or refresh imports first.";
+      if (placeholder) {
+        placeholder.text = abortText;
+        placeholder.lane = "local";
+      } else {
+        halChatHistory.push({ role: "hal", text: abortText, lane: "local", actions: [] });
+      }
+      logAudit(trimmed, "timeout");
     } else {
-      halChatHistory.push({ role: "hal", text: failText, lane: "error", actions: [] });
+      const detail = error && error.message ? error.message : String(error);
+      const failText =
+        "HAL hit an error and could not finish: " +
+        detail +
+        ". If this keeps happening, restart Start Program and confirm Ollama is running.";
+      if (placeholder) {
+        placeholder.text = failText;
+        placeholder.lane = "error";
+      } else {
+        halChatHistory.push({ role: "hal", text: failText, lane: "error", actions: [] });
+      }
+      if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("hal-chat", error);
+      logAudit(trimmed, "error");
     }
-    if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("hal-chat", error);
-    logAudit(trimmed, "error");
   } finally {
+    clearTimeout(queryTimer);
     halAskLoading = false;
     saveChatHistory();
     renderChatLog();

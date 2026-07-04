@@ -455,10 +455,10 @@ const HalCore = (function () {
 
   function stripInstructionLeaks(text) {
     return String(text || "")
-      .replace(/\bLocal tool check:\s*[^.!?]+[.!?]?/gi, "")
-      .replace(/\bSynthesize tool results[^.!?]+[.!?]?/gi, "")
-      .replace(/\bIf multiple tools ran, combine th[^.!?]*[.!?]?/gi, "")
-      .replace(/\bdo not paste tool headers[^.!?]*[.!?]?/gi, "")
+      .replace(/\bLocal tool check:[\s\S]{0,360}?(?:\.\s|\.$|$)/gi, "")
+      .replace(/\bSynthesize tool results[\s\S]{0,280}?(?:\.\s|\.$|$)/gi, "")
+      .replace(/\bIf multiple tools ran, combine th[\s\S]{0,160}?\./gi, "")
+      .replace(/\bdo not paste tool headers[\s\S]{0,120}?(?:\.\s|\.$|$)/gi, "")
       .replace(/\bCall out \[FAILED\][^.!?]*[.!?]?/gi, "")
       .replace(/\s*\((Local (reasoning|chat|escalation|OSS)?[^)]*draft[^)]*)\)\s*$/gi, "")
       .replace(/\s*\(Local reasoning plan · read-only · verify before acting\)\s*$/gi, "")

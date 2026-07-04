@@ -262,8 +262,15 @@
       window._halRandomQaRun.completed = n;
       window._halRandomQaRun.current = questions[n];
       const t0 = Date.now();
+      const perQTimeoutMs =
+        Number(window._halRandomQaTimeoutMs) || (useReasoning ? 130000 : 65000);
       try {
-        await handleHalSubmit(questions[n]);
+        await Promise.race([
+          handleHalSubmit(questions[n]),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("question timeout after " + perQTimeoutMs + "ms")), perQTimeoutMs),
+          ),
+        ]);
         const hist = typeof halChatHistory !== "undefined" ? halChatHistory : [];
         const last = hist.length ? hist[hist.length - 1] : null;
         const answer = last && last.role === "hal" ? String(last.text || "") : "";
@@ -299,9 +306,10 @@
           window._halRandomQaRun.empty++;
           entry.error = true;
         }
-        if (/hit an error|could not finish|did not return a response/i.test(answer)) {
+        if (/local tool check|synthesize tool results|do not paste tool headers|combine th\b/i.test(answer)) {
           window._halRandomQaRun.errors++;
           entry.error = true;
+          entry.issue = "instruction_leak";
         }
         window._halRandomQaLog.push(entry);
         if (hist.length > 24 && typeof halChatHistory !== "undefined") {

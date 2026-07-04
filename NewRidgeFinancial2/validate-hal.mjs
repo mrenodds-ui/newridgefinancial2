@@ -1109,6 +1109,11 @@ async function main() {
   assert(typeof HalAgent.isComplexInvestigationQuery === "function", "isComplexInvestigationQuery must exist");
   assert(typeof HalAgent.cloudAgentEligible === "function", "cloudAgentEligible must exist");
   assert(typeof HalAgent.attachOllamaNativeTools === "function", "attachOllamaNativeTools must exist");
+  assert(typeof HalAgent.shouldUseAgentToolLoop === "function", "shouldUseAgentToolLoop must exist");
+  assert(
+    !HalAgent.shouldUseAgentToolLoop("Can you show posting queue items?", { useReasoning: true, useModel: false }, halModels.config.agentProgramming),
+    "simple show/list queries must not use full agent tool loop",
+  );
   assert(halModels.config.agentProgramming.localOllamaTools === true, "local Ollama tools should be enabled");
   assert(typeof HalAgent.isComplexInvestigationQuery === "function", "isComplexInvestigationQuery must exist");
   assert(
@@ -1695,7 +1700,7 @@ async function main() {
 
   // Program source patch helper (Python dry-run) — use live schemaVersion from manifest
   const buildManifest = loadJson(join(siteDir, "nr2-build.json"));
-  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-148")}"`;
+  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-149")}"`;
   const pyPatch = require("node:child_process").execFileSync(
     "python",
     [
