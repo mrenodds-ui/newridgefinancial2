@@ -1101,6 +1101,9 @@ const HalAgent = (function () {
     if (/\b(deep dive|trace through|step by step|sub-investigation|spawn)\b/i.test(query)) {
       gather.push("spawn_investigation");
     }
+    if (/\banalyze .+ and .+/i.test(query) && /\bmissing\b/i.test(query)) {
+      gather.push("spawn_investigation");
+    }
     if (/\b(read file|open file|show file|\.js\b|\.py\b|hal-agent\.js|app\.js)\b/i.test(query)) {
       gather.push("read_program_file");
     }

@@ -3,7 +3,7 @@
  * Single source of truth for nav, page chrome, HAL commands, and widget inventory.
  */
 const PageSchema = (function () {
-  const SCHEMA_VERSION = "hal-151";
+  const SCHEMA_VERSION = "hal-152";
 
   const PRACTICE = {
     name: "New Ridge Family Dental",

@@ -157,6 +157,9 @@
     if (plan && plan.isInvestigateQuery && /deep|trace|step|multiple|why|how does/i.test(q)) {
       add("spawn_investigation", q);
     }
+    if (/\banalyze .+ and .+/i.test(q) && /\bmissing\b/i.test(q)) {
+      add("spawn_investigation", q);
+    }
     add("read_current_context", q);
     if (!ran.has("read_program_snapshot")) add("read_program_snapshot", q);
     return out.slice(0, MAX_TOOLS_PER_TURN);

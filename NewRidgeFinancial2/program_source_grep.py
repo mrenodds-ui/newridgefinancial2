@@ -539,6 +539,30 @@ def _cosine_dense(a: list[float], b: list[float]) -> float:
     return max(0.0, min(1.0, dot / (na * nb)))
 
 
+def _prefetch_ollama_embeddings(texts: list[str]) -> None:
+    """Warm embedding cache for rerank snippets (best-effort, parallel)."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    unique = []
+    seen: set[str] = set()
+    for raw in texts:
+        key = str(raw or "")[:2000]
+        if not key or key in seen or key in _EMBED_CACHE:
+            continue
+        seen.add(key)
+        unique.append(key)
+    if not unique:
+        return
+    workers = min(6, len(unique))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_ollama_embedding, text) for text in unique[:40]]
+        for fut in as_completed(futures):
+            try:
+                fut.result()
+            except Exception:
+                pass
+
+
 def _embedding_rerank(query: str, candidates: list[tuple[int, str, str, int]], limit: int) -> tuple[list[tuple[int, str, str, int]], str]:
     if not candidates:
         return [], "lexical"
@@ -548,7 +572,10 @@ def _embedding_rerank(query: str, candidates: list[tuple[int, str, str, int]], l
     mode = "ollama-embed" if q_emb else "ngram-embed"
     reranked: list[tuple[float, int, str, str, int]] = []
     seen_files: set[str] = set()
-    for lex_score, rel, snip, line_no in candidates[:80]:
+    slice_candidates = candidates[:80]
+    if q_emb:
+        _prefetch_ollama_embeddings([snip for _, _, snip, _ in slice_candidates])
+    for lex_score, rel, snip, line_no in slice_candidates:
         if rel in seen_files and len(reranked) > limit * 2:
             continue
         seen_files.add(rel)

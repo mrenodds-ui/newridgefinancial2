@@ -1658,7 +1658,7 @@ async function main() {
     sarcIssues,
   );
   assert(!/shocking/i.test(repairedSarc), "agent repair must strip sarcasm");
-  assert(halModels.config.agentProgramming.profile === "cursor-auto-v15", "hal-models agentProgramming profile must be v15");
+  assert(halModels.config.agentProgramming.profile === "cursor-auto-v16", "hal-models agentProgramming profile must be v16");
   assert(halModels.config.agentProgramming.subtaskMaxDepth === 2, "subtask max depth must be 2");
   assert(halModels.config.cloudReasoning.searchIndex && halModels.config.cloudReasoning.searchIndex.enabled === true, "search index config must exist");
   assert(halModels.config.agentProgramming.agentToolLoop === true, "agent tool loop must be enabled");
@@ -1711,7 +1711,7 @@ async function main() {
 
   // Program source patch helper (Python dry-run) — use live schemaVersion from manifest
   const buildManifest = loadJson(join(siteDir, "nr2-build.json"));
-  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-151")}"`;
+  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-152")}"`;
   const pyPatch = require("node:child_process").execFileSync(
     "python",
     [
