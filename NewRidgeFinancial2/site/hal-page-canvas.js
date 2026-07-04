@@ -268,13 +268,25 @@ const HalPageCanvas = (function () {
       ? `${lastReceipt.time || ""} · ${lastReceipt.intent || lastReceipt.query || "local action"}`.trim()
       : "No local receipt this session";
 
+    const outboundExecutors = [
+      "Email (SMTP)",
+      "QuickBooks IIF export",
+      "Claim submission packet",
+      "Narrative portal prep",
+    ];
+    const outboundList = outboundExecutors
+      .map((item) => `<li class="hp-fw__row--active" data-hal-cmd="Explain staff consent for ${H.esc(item)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>LIVE</b></li>`)
+      .join("");
     return `<section class="hp-card hp-card--session" data-panel="session" style="grid-area:session;">
       <div class="hp-session-grid">
         <div class="hp-session-col" data-panel="consent">
           ${H.cardHead("TRUST & CONSENT", "consent", "Staff consent policy", H.cardIconRaw("ui", "shield"))}
           <button type="button" class="hp-fw__active hp-fw__active--btn" data-hal-cmd="Explain staff consent policy">${H.uiIcon("check")} CONSENT</button>
           <ul class="hp-fw__list hp-fw__list--compact">${consentList}</ul>
+          <p class="hp-fw__allowed"><b>Executors (consent):</b></p>
+          <ul class="hp-fw__list hp-fw__list--compact">${outboundList}</ul>
           <p class="hp-fw__allowed"><b>Always local:</b> ${localAlways.length ? localAlways.slice(0, 5).map(H.esc).join(" · ") : "Open pages · Explain status"}</p>
+          <button type="button" class="hp-chip hp-chip--action" data-hal-cmd="Show outbound audit log">Outbound audit</button>
           ${halInlineFirewallResult ? `<p class="hp-live-note">${H.esc(halInlineFirewallResult.text || "")}</p>` : ""}
         </div>
         <div class="hp-session-col" data-panel="status">

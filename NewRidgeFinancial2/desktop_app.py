@@ -401,6 +401,11 @@ class DesktopApi:
 
         return quickbooks_online_status()
 
+    def list_outbound_audit(self, limit: int = 15) -> dict:
+        from outbound_actions import list_outbound_audit
+
+        return list_outbound_audit(self.store, limit=int(limit or 15))
+
     def web_research(self, query: str, options_json: str = "{}") -> dict:
         from web_research import research
         import json as _json

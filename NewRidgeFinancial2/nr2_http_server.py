@@ -344,6 +344,17 @@ class NR2BottleServer(BottleServer):
             except Exception as exc:
                 return _json_response({"ok": False, "error": str(exc)}, status=500)
 
+        @app.get("/api/outbound/audit")
+        def outbound_audit_api():
+            try:
+                from outbound_actions import list_outbound_audit
+
+                store = _local_store()
+                limit = int(bottle.request.query.get("limit") or 15)
+                return _json_response(list_outbound_audit(store, limit=limit))
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
         @app.get("/api/outbound/qbo-status")
         def outbound_qbo_status_api():
             try:

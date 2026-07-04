@@ -3246,6 +3246,14 @@ const HalCore = (function () {
       return { intent: "consent", lane: "local", text: policyText, actions: [] };
     }
 
+    if (/\b(show outbound audit|outbound audit log)\b/.test(query) || /\boutbound audit\b/.test(query)) {
+      return { intent: "outbound:audit", lane: "local", useOutboundAudit: true, text: "", actions: [] };
+    }
+
+    if (/\boutbound audit\b|\bconsent audit\b|\boutbound log\b/.test(query)) {
+      return { intent: "outbound:audit", lane: "local", useOutboundAudit: true, text: "", actions: [] };
+    }
+
     if (/\bquickbooks online\b|\bqbo api\b|\bquickbooks api status\b/.test(query)) {
       return {
         intent: "integration:qbo-online",

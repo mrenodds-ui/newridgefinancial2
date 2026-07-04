@@ -346,6 +346,71 @@ const DesktopBridge = (function () {
     throw new Error(desktopRequiredMessage("Approved posting queue export"));
   }
 
+  async function outboundPost(path, payload) {
+    if (hasDesktopApi() && window.pywebview && window.pywebview.api) {
+      const api = window.pywebview.api;
+      if (path === "/api/outbound/email" && api.send_email_with_consent) {
+        return api.send_email_with_consent(JSON.stringify(payload || {}));
+      }
+      if (path === "/api/outbound/qb-export" && api.export_posting_queue_iif_with_consent) {
+        return api.export_posting_queue_iif_with_consent(JSON.stringify(payload || {}));
+      }
+      if (path === "/api/outbound/claim-packet" && api.build_claim_packet_with_consent) {
+        return api.build_claim_packet_with_consent(JSON.stringify(payload || {}));
+      }
+      if (path === "/api/outbound/narrative-prep" && api.export_narrative_portal_prep_with_consent) {
+        return api.export_narrative_portal_prep_with_consent(JSON.stringify(payload || {}));
+      }
+      if (path === "/api/outbound/briefing-email") {
+        return outboundPost("/api/outbound/email", payload);
+      }
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+      });
+    }
+    throw new Error(desktopRequiredMessage("Outbound actions"));
+  }
+
+  async function sendEmailWithConsent(payload) {
+    return outboundPost("/api/outbound/email", payload || {});
+  }
+
+  async function exportPostingQueueIifWithConsent(payload) {
+    return outboundPost("/api/outbound/qb-export", payload || {});
+  }
+
+  async function buildClaimPacketWithConsent(payload) {
+    return outboundPost("/api/outbound/claim-packet", payload || {});
+  }
+
+  async function exportNarrativePortalPrepWithConsent(payload) {
+    return outboundPost("/api/outbound/narrative-prep", payload || {});
+  }
+
+  async function quickbooksOnlineStatus() {
+    if (hasDesktopApi() && window.pywebview.api.quickbooks_online_status) {
+      return window.pywebview.api.quickbooks_online_status();
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/outbound/qbo-status");
+    }
+    return { ok: false, message: "QuickBooks Online status requires desktop or loopback runtime." };
+  }
+
+  async function listOutboundAudit(limit) {
+    if (hasDesktopApi() && window.pywebview.api.list_outbound_audit) {
+      return window.pywebview.api.list_outbound_audit(Number(limit || 15));
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson(`/api/outbound/audit?limit=${encodeURIComponent(String(limit || 15))}`);
+    }
+    return { ok: true, items: [], count: 0 };
+  }
+
   async function webResearch(query, options) {
     const opts = options && typeof options === "object" ? options : {};
     if (hasDesktopApi() && window.pywebview.api.web_research) {
@@ -786,6 +851,13 @@ const DesktopBridge = (function () {
     reviewPostingQueueEntry,
     bulkReviewPostingQueue,
     exportApprovedPostingQueue,
+    outboundPost,
+    sendEmailWithConsent,
+    exportPostingQueueIifWithConsent,
+    buildClaimPacketWithConsent,
+    exportNarrativePortalPrepWithConsent,
+    quickbooksOnlineStatus,
+    listOutboundAudit,
     webResearch,
     listHalMemories,
     rememberHalFact,

@@ -1,7 +1,7 @@
 {
   "status": {
     "title": "HAL Command Center",
-    "summary": "Local program manager for NewRidgeFinancial 2.0. HAL's top priority is to monitor the program, place the correct data using accounting and Excel knowledge, and make recommendations while preserving the external-action firewall.",
+    "summary": "Local program manager for NewRidgeFinancial 2.0. HAL monitors the program, places correct import data, and recommends next staff actions. Outbound email, exports, and claim packets require explicit consent per action.",
     "posture": ["Local-only", "Full read access", "Human review required", "Not submitted"]
   },
   "topPriority": {
@@ -12,13 +12,13 @@
       "Place the correct data into the right financial, A/R, claims, and accounting-document views.",
       "Use accounting knowledge to validate totals, periods, journal-draft logic, A/R risk, EBITDA candidates, and posting readiness.",
       "Use Excel-style knowledge to structure, reconcile, compare, sort, filter, and summarize imported tables without fabricating missing values.",
-      "Make clear recommendations and next steps for staff review while staying read-only."
+      "Make clear recommendations and next steps for staff review; outbound actions require explicit consent."
     ]
   },
   "cognitivePathways": {
     "priority": 1,
     "title": "HAL cognitive & social characteristics (high-priority pathways)",
-    "summary": "HAL reasons about complex practice-financial concepts, reflects on its own analysis, plans across time periods, and cooperates with staff using symbolic language — always read-only and review-required.",
+    "summary": "HAL reasons about complex practice-financial concepts, reflects on its own analysis, plans across time periods, and cooperates with staff — consent-gated for outbound actions.",
     "cognitive": [
       {
         "id": "abstract-reasoning",
@@ -28,7 +28,7 @@
       {
         "id": "self-awareness",
         "label": "Self-Awareness",
-        "practice": "Know HAL is a local read-only assistant separate from SoftDent, QuickBooks, and staff; never confuse imported cache with live systems."
+        "practice": "Know HAL is a local assistant separate from SoftDent, QuickBooks, and staff; never confuse imported cache with live systems; outbound actions need consent."
       },
       {
         "id": "metacognition",
@@ -84,7 +84,7 @@
       "priority": 2,
       "title": "Self-check before recommending",
       "characteristics": ["metacognition", "self-awareness", "empathy-moral-compass"],
-      "summary": "Verify tool results, missing data, and firewall posture before any recommendation."
+      "summary": "Verify tool results, missing data, and consent posture before any recommendation."
     },
     {
       "id": "mental-time-travel-close",
@@ -106,7 +106,7 @@
     "scope": ["financial", "taxes", "softdent", "quickbooks", "ar", "claims", "narratives", "documents", "library", "office-manager", "hal"],
     "writesBlocked": false,
     "localWritesAllowed": true,
-    "note": "HAL may read all local program pages and persisted service data, refresh imports, pull practice sources (read-only), and write local SQLite/session state (tasks, narratives, memories). Outbound payer/QB/email actions still require staff outside NR2."
+    "note": "HAL may read all local program pages and persisted service data, refresh imports, pull practice sources, and write local SQLite/session state. Outbound email, IIF export, and claim packets run only after explicit staff consent."
   },
   "practiceSourcePull": {
     "approved": true,
@@ -115,7 +115,7 @@
   },
   "controls": {
     "title": "System Controls",
-    "summary": "Read-only operator console. Run the acceptance smoke test, check the staff-use gate, and assemble a handoff summary. HAL changes no settings and takes no external action."
+    "summary": "Operator console for readiness, smoke tests, handoffs, and outbound audit. HAL takes no external action without staff consent."
   },
   "askHal": {
     "title": "Ask HAL",

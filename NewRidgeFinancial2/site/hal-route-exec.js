@@ -335,10 +335,32 @@ const HalRouteExec = (function () {
         return outcome("Program self-heal is not loaded.", "ops", result.intent);
       }
       const fullPull = /\bfull\b|\b100%\b|\ball exports\b/.test(trimmed);
+      if (typeof PS.runAutonomousHealLoop === "function") {
+        await PS.runAutonomousHealLoop(ctx).catch(() => {});
+      }
       const report = await PS.runSelfHeal({ reason: "hal", fullPull });
       ctx.clearProgramContextCache && ctx.clearProgramContextCache();
       if (ctx.refreshHalWidgetFeed) await ctx.refreshHalWidgetFeed(await ctx.loadProgramSnapshot());
       return outcome(PS.formatReport(report), "ops", result.intent, [], { refreshHal: true });
+    }
+
+    if (result.useOutboundAudit) {
+      const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
+      if (!db || typeof db.listOutboundAudit !== "function") {
+        return outcome("Outbound audit log requires the NR2 desktop app or loopback server.", "outbound", result.intent);
+      }
+      const audit = await db.listOutboundAudit(12);
+      const items = (audit && audit.items) || [];
+      if (!items.length) {
+        return outcome("No outbound actions have been logged yet. Consent-gated email, IIF export, and claim packets appear here after execution.", "outbound", result.intent);
+      }
+      const lines = items.map((entry) => {
+        const action = entry.action || "unknown";
+        const at = entry.at || "";
+        const ok = entry.result && entry.result.ok !== false ? "OK" : "FAIL";
+        return `- [${ok}] ${at} · ${action}`;
+      });
+      return outcome("Recent outbound audit (consent-gated actions):\n" + lines.join("\n"), "outbound", result.intent);
     }
 
     if (result.useJournalBulkApprove) {

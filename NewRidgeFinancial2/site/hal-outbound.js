@@ -3,6 +3,9 @@
  */
 const HalOutbound = (function () {
   async function loopbackPost(path, payload) {
+    if (typeof DesktopBridge !== "undefined" && DesktopBridge.outboundPost) {
+      return DesktopBridge.outboundPost(path, payload || {});
+    }
     if (typeof DesktopBridge !== "undefined" && DesktopBridge.hasDesktopApi && DesktopBridge.hasDesktopApi()) {
       const api = window.pywebview && window.pywebview.api;
       if (!api) throw new Error("Desktop API unavailable.");
@@ -82,15 +85,8 @@ const HalOutbound = (function () {
   }
 
   async function fetchQboStatus() {
-    if (typeof DesktopBridge !== "undefined" && DesktopBridge.hasDesktopApi && DesktopBridge.hasDesktopApi()) {
-      const api = window.pywebview && window.pywebview.api;
-      if (api && api.quickbooks_online_status) return api.quickbooks_online_status();
-    }
-    if (typeof DesktopBridge !== "undefined" && DesktopBridge.hasLoopbackApi && DesktopBridge.hasLoopbackApi()) {
-      const host = window.location.hostname || "127.0.0.1";
-      const port = window.location.port || "8765";
-      const resp = await fetch(`${window.location.protocol}//${host}:${port}/api/outbound/qbo-status`, { cache: "no-store" });
-      if (resp.ok) return resp.json();
+    if (typeof DesktopBridge !== "undefined" && DesktopBridge.quickbooksOnlineStatus) {
+      return DesktopBridge.quickbooksOnlineStatus();
     }
     return { ok: false, message: "QuickBooks Online status requires desktop or loopback runtime." };
   }

@@ -290,3 +290,15 @@ def quickbooks_online_status() -> dict[str, Any]:
             else "QuickBooks Online API not configured — IIF export remains the supported path."
         ),
     }
+
+
+def list_outbound_audit(store=None, *, limit: int = 15) -> dict[str, Any]:
+    raw = store.get(AUDIT_KEY) if store else None
+    try:
+        entries = json.loads(raw) if raw else []
+    except json.JSONDecodeError:
+        entries = []
+    if not isinstance(entries, list):
+        entries = []
+    items = entries[-max(1, int(limit or 15)) :]
+    return {"ok": True, "items": list(reversed(items)), "count": len(entries)}
