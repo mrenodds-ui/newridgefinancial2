@@ -157,8 +157,43 @@ const PageViews = (function () {
           }
           return;
         }
+        const librarySearch = event.target.closest("[data-hal-library-search]");
+        if (librarySearch) {
+          event.preventDefault();
+          const wrap = librarySearch.closest("[data-hal-widget-key]");
+          const input = wrap && wrap.querySelector("[data-hal-library-query]");
+          const q = input && input.value ? String(input.value).trim() : "";
+          if (q && typeof window.runHalPageCmd === "function") {
+            await window.runHalPageCmd(`Search library for ${q}`);
+          }
+          return;
+        }
+        const narrativeSave = event.target.closest("[data-narrative-save]");
+        if (narrativeSave) {
+          event.preventDefault();
+          const editor = narrativeSave.closest("[data-hal-widget-key]");
+          const textarea = editor && editor.querySelector("[data-narrative-body]");
+          const text = textarea ? textarea.value : "";
+          if (typeof Services !== "undefined" && Services.narratives && typeof Services.narratives.saveDraft === "function") {
+            await Services.narratives.saveDraft({ text, focus: "Medical Necessity", length: "Standard" });
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("nr2:page-refresh-requested"));
+              window.dispatchEvent(new CustomEvent("nr2:narratives-updated"));
+            }
+          }
+          return;
+        }
       });
     }
+    container.addEventListener("keydown", async (event) => {
+      if (event.key !== "Enter") return;
+      const input = event.target.closest("[data-hal-library-query]");
+      if (!input) return;
+      event.preventDefault();
+      const q = String(input.value || "").trim();
+      if (!q || typeof window.runHalPageCmd !== "function") return;
+      await window.runHalPageCmd(`Search library for ${q}`);
+    });
     const pilot =
       typeof HalPilotWidgets !== "undefined"
         ? HalPilotWidgets

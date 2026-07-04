@@ -5146,13 +5146,25 @@ body.nr2-desktop input:not([type="button"]):not([type="submit"]):not([type="chec
   width: 100%;
 }
 .pv-canvas-search {
-  background: var(--fill-tertiary);
+  background: var(--fill-secondary);
   border: 1px solid var(--line-subtle);
   border-radius: 8px;
-  color: var(--muted);
+  color: var(--text);
   font: inherit;
-  padding: 12px 14px;
+  font-size: 14px;
+  padding: 10px 12px;
   width: 100%;
+}
+
+.pv-canvas-search-wrap {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.pv-canvas-search-wrap .pv-canvas-search {
+  flex: 1;
 }
 .pv-canvas-toolbar-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .pv-canvas-nav-pills { display: flex; flex-wrap: wrap; gap: 8px; }

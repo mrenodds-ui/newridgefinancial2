@@ -61,7 +61,7 @@ const FUNCTIONAL_PAGES = [
   { id: "quickbooks", checks: ["pv-canvas-metric-grid", "pv-canvas-panel", "Loss Summary (YTD)", "EBITDA Normalization"] },
   { id: "ar", checks: ["pv-canvas-metric-grid", "Follow-up Queue", "Outstanding Claims"] },
   { id: "claims", checks: ["pv-canvas-metric-grid", "Insurance Claims Workbench", "Open Insurance Claims"] },
-  { id: "narratives", checks: ["pv-canvas-textarea", "Narrative Composer", "Draft history"] },
+  { id: "narratives", checks: ["pv-canvas-metric-grid", "pv-canvas-textarea", "Narrative Composer", "Draft history"] },
   { id: "documents", checks: ["pv-canvas-panel", "Recent Accounting Documents", "Source breakdown"] },
   { id: "library", checks: ["pv-canvas-metric-grid", "pv-canvas-search", "Document Library", "Library &amp; Preview"] },
   { id: "office-manager", checks: ["pv-canvas-metric-grid", "Today&#039;s Focus", "Office task queue", "Practice data"] },
@@ -95,6 +95,13 @@ for (const page of FUNCTIONAL_PAGES) {
   }
   for (const check of page.checks) {
     assert.ok(html.includes(check), `${page.id} must include ${check}`);
+  }
+  const schema = PageSchema.byId(page.id);
+  for (const widget of (schema && schema.widgets) || []) {
+    assert.ok(
+      html.includes(`data-hal-widget-key="${widget.key}"`),
+      `${page.id} must wire HAL widget key ${widget.key}`,
+    );
   }
   assert.ok(html.includes("data-hal-widget-key"), `${page.id} must wire HAL into page widgets`);
   if (page.id === "financial") {

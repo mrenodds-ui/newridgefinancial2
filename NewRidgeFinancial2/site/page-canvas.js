@@ -281,12 +281,18 @@ const PageCanvas = (function () {
     </div>`;
   }
 
-  function canvasTextArea(value, rows) {
-    return `<textarea class="pv-canvas-textarea" rows="${rows || 10}" disabled>${esc(value)}</textarea>`;
+  function canvasTextArea(value, rows, editable) {
+    const disabled = editable ? "" : " disabled";
+    const bodyAttr = editable ? ` data-narrative-body="1"` : "";
+    return `<textarea class="pv-canvas-textarea" rows="${rows || 10}"${disabled}${bodyAttr}>${esc(value)}</textarea>`;
   }
 
-  function canvasSearch(placeholder) {
-    return `<input class="pv-canvas-search" type="search" value="${esc(placeholder)}" disabled aria-label="Search library" />`;
+  function canvasSearch(placeholder, widgetKey) {
+    const wk = widgetKey || "documentLibrary";
+    return `<div class="pv-canvas-search-wrap" data-hal-widget-key="${esc(wk)}">
+      <input class="pv-canvas-search" type="search" placeholder="${esc(placeholder)}" data-hal-library-query="1" aria-label="Search library" />
+      <button type="button" class="pv-button pv-button--sm" data-hal-library-search="1">Search with HAL</button>
+    </div>`;
   }
 
   function canvasUsageBar(segments, labelLeft, labelRight) {
@@ -456,7 +462,7 @@ const PageCanvas = (function () {
     const caseRateNum = parseFloat(String(practice.caseRate || "").replace("%", ""));
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.softdentImportNotice() : null)}
-      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
+      <div class="pv-canvas-metric-grid pv-canvas-metric-grid--hero">${kpis.map(canvasMetricTile).join("")}</div>
       ${sectionHead("Care delivery", D ? D.periodSubtitle() : "SoftDent source")}
       ${canvasPanel({
         title: wTitle("softdent", 0),
@@ -522,7 +528,7 @@ const PageCanvas = (function () {
     const importNotice = D ? D.quickbooksImportNotice() : null;
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(importNotice)}
-      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
+      <div class="pv-canvas-metric-grid pv-canvas-metric-grid--hero">${kpis.map(canvasMetricTile).join("")}</div>
       <div class="pv-canvas-grid-3">
         ${canvasPanel({
           title: wTitle("quickbooks", 0),
@@ -572,7 +578,7 @@ const PageCanvas = (function () {
           ];
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.arImportNotice() : null)}
-      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
+      <div class="pv-canvas-metric-grid pv-canvas-metric-grid--hero">${kpis.map(canvasMetricTile).join("")}</div>
       ${canvasPanel({
         title: wTitle("ar", 0),
         accent: "orange",
@@ -615,7 +621,7 @@ const PageCanvas = (function () {
           ];
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.claimsImportNotice() : null)}
-      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
+      <div class="pv-canvas-metric-grid pv-canvas-metric-grid--hero">${kpis.map(canvasMetricTile).join("")}</div>
       ${canvasPanel({
         title: wTitle("claims", 0),
         accent: "purple",
@@ -659,28 +665,34 @@ const PageCanvas = (function () {
   function renderNarratives() {
     const D = dataApi();
     const draft = D ? D.narrativeDraft() : "";
+    const history = D ? D.narrativeHistoryRows() : [];
+    const kpis = D && D.narrativeKpis ? D.narrativeKpis() : [];
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.narrativesImportNotice() : null)}
+      ${kpis.length ? `<div class="pv-canvas-metric-grid pv-canvas-metric-grid--hero">${kpis.map(canvasMetricTile).join("")}</div>` : ""}
       <div class="pv-canvas-grid-split">
         ${canvasPanel({
           title: wTitle("narratives", 0),
           accent: "pink",
           caption: "Insurance narrative composer",
           widgetKey: wKey("narratives", 0),
-          body: `<div class="pv-hal-editor">
+          body: `<div class="pv-hal-editor" data-hal-widget-key="${esc(wKey("narratives", 0))}">
             <div class="pv-canvas-toolbar-row">
-              <button type="button" class="btn btn--ghost" disabled>Insert history</button>
-              <button type="button" class="btn btn--secondary" disabled>Save draft</button>
+              <button type="button" class="btn btn--ghost" data-hal-cmd="Insert prior history into narrative">Insert history</button>
+              <button type="button" class="btn btn--ghost" data-hal-cmd="Draft crown narrative">Draft with HAL</button>
+              <button type="button" class="btn btn--secondary" data-narrative-save="1">Save draft locally</button>
             </div>
-            ${canvasTextArea(draft || "", 10)}
-            ${draft ? "" : canvasEmpty("Narrative drafts will appear when local narrative workflow data is available.")}
+            ${canvasTextArea(draft || "", 10, true)}
+            ${draft ? "" : canvasEmpty("Start typing or ask HAL to draft a narrative for staff review.")}
           </div>`,
         })}
         ${canvasPanel({
           title: "Draft history",
           caption: "Local narrative drafts",
           widgetKey: wKey("narratives", 0),
-          body: canvasEmpty("Draft history is populated from the local narratives store."),
+          body: history.length
+            ? canvasTable(["Version", "Updated", "Focus", "Author"], history, true)
+            : canvasEmpty("Saved drafts appear here after local save or HAL-assisted drafting."),
         })}
       </div>
     </div>`;
@@ -730,7 +742,7 @@ const PageCanvas = (function () {
     const ap = metricsFromWidget("accountsPayableAutomation");
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.documentsImportNotice() : null)}
-      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
+      <div class="pv-canvas-metric-grid pv-canvas-metric-grid--hero">${kpis.map(canvasMetricTile).join("")}</div>
       ${sectionHead("Document sources", "Queue rows by import origin")}
       ${canvasPanel({
         title: "Source breakdown",
@@ -781,8 +793,8 @@ const PageCanvas = (function () {
     const doc = D ? D.firstLibraryDoc() : null;
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.libraryImportNotice() : null)}
-      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
-      ${canvasSearch("Search contracts, compliance, vendors…")}
+      <div class="pv-canvas-metric-grid pv-canvas-metric-grid--hero">${kpis.map(canvasMetricTile).join("")}</div>
+      ${canvasSearch("Search contracts, compliance, vendors…", wKey("library", 0))}
       <div class="pv-canvas-grid-split">
         ${canvasPanel({
           title: wTitle("library", 0),
@@ -856,7 +868,7 @@ const PageCanvas = (function () {
     return `<div class="pv-canvas-stack pv-canvas-stack--taxes">
       ${canvasImportNotice(D ? D.taxesImportNotice() : null)}
       <div class="pv-tax-disclaimer">${esc(disclaimer)}</div>
-      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
+      <div class="pv-canvas-metric-grid pv-canvas-metric-grid--hero">${kpis.map(canvasMetricTile).join("")}</div>
       ${sectionHead("Book → tax bridge", plan && plan.periodLabel ? plan.periodLabel : "QuickBooks import → 1120-S prep")}
       ${canvasPanel({
         title: "Book-to-tax bridge",
@@ -974,7 +986,7 @@ const PageCanvas = (function () {
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.officeManagerImportNotice() : null)}
       ${D && D.opsDataPanelHtml ? D.opsDataPanelHtml() : ""}
-      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
+      <div class="pv-canvas-metric-grid pv-canvas-metric-grid--hero">${kpis.map(canvasMetricTile).join("")}</div>
       ${canvasPanel({
         title: wTitle("office-manager", 0),
         accent: "yellow",

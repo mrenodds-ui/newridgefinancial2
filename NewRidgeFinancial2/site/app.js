@@ -395,6 +395,9 @@ async function runHalPageCmd(cmd, opts) {
   await handleHalSubmit(text);
   renderHalScreen();
 }
+if (typeof window !== "undefined") {
+  window.runHalPageCmd = runHalPageCmd;
+}
 
 async function handleHalChromeInteraction(event) {
   const widgetNav = event.target.closest("[data-hal-widget-nav]");
@@ -3551,6 +3554,10 @@ if (typeof window !== "undefined") {
     if (currentId !== "hal" && appPage && !appPage.hidden && PageViews && PageViews.hasPage(currentId)) {
       PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
     }
+  });
+  window.addEventListener("nr2:narratives-updated", () => {
+    invalidateProgramCaches("narratives-updated");
+    scheduleHalWidgetRefresh();
   });
 }
 

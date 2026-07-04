@@ -1102,7 +1102,52 @@ const PageCanvasData = (function () {
 
   function narrativeHistoryRows() {
     const nar = snapshot && snapshot.narratives;
+    const latest = nar && nar.latest;
+    if (latest) {
+      return [[fmt(latest.version || "v1"), fmt(latest.modified || latest.date), fmt(latest.focus || nar.focus), fmt(latest.by || "Local")]];
+    }
     return [];
+  }
+
+  function narrativeKpis() {
+    const nar = snapshot && snapshot.narratives;
+    const w = widget("narrativeWorkflow");
+    const draftCount = typeof nar?.drafts === "number" ? nar.drafts : Array.isArray(nar?.drafts) ? nar.drafts.length : 0;
+    return [
+      {
+        label: "Drafts saved",
+        value: fmt(draftCount),
+        hint: "Local review only",
+        widgetKey: "narrativeWorkflow",
+        tone: draftCount ? "success" : undefined,
+      },
+      {
+        label: "Focus mode",
+        value: fmt(nar?.focus || (w && w.metrics && w.metrics.focus)),
+        widgetKey: "narrativeWorkflow",
+      },
+      {
+        label: "Latest version",
+        value: fmt(latestVersionLabel(nar)),
+        widgetKey: "narrativeWorkflow",
+      },
+      {
+        label: "Claims source",
+        value: fmt(metrics("claimsPipeline").totalClaims),
+        hint: "For narrative facts",
+        widgetKey: "claimsPipeline",
+      },
+    ];
+  }
+
+  function latestVersionLabel(nar) {
+    const latest = nar && nar.latest;
+    if (latest && latest.version) return latest.version;
+    return draftCountLabel(nar) > 0 ? "Saved" : "—";
+  }
+
+  function draftCountLabel(nar) {
+    return typeof nar?.drafts === "number" ? nar.drafts : Array.isArray(nar?.drafts) ? nar.drafts.length : 0;
   }
 
   function documentsSourceBreakdown() {
@@ -1495,6 +1540,8 @@ const PageCanvasData = (function () {
     claimsKanban,
     firstClaim,
     narrativeDraft,
+    narrativeHistoryRows,
+    narrativeKpis,
     documentsQueueRows,
     firstDocument,
     documentsPeriodStats,

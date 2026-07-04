@@ -1300,6 +1300,8 @@ const HalSkills = (function () {
     documentLibrary: "library",
     officeManagerPriorities: "office-manager",
     officeManagerSurfaces: "office-manager",
+    halAskHal: "hal",
+    sidenotesProgram: "hal",
     halImportHealth: "hal",
     halCommandPalette: "hal",
   };
@@ -1328,6 +1330,8 @@ const HalSkills = (function () {
     "caseAcceptance",
     "narrativeWorkflow",
     "documentLibrary",
+    "halAskHal",
+    "sidenotesProgram",
     "halImportHealth",
   ];
 
@@ -2269,6 +2273,30 @@ const HalSkills = (function () {
         },
       },
       halImportHealth: buildImportHealthWidget(snap.importBundle),
+      halAskHal: {
+        key: "halAskHal",
+        title: "Ask HAL",
+        status: "SUCCESS",
+        summary: "HAL command center — ask questions, explain widgets, and jump to staff work surfaces.",
+        navTarget: "hal",
+        metrics: {
+          registeredWidgets: metricValue(WIDGET_ORDER.length),
+        },
+      },
+      sidenotesProgram: {
+        key: "sidenotesProgram",
+        title: "SideNotes Program",
+        status: snap.sidenotesInbox && snap.sidenotesInbox.monitor ? "DEGRADED" : "FAILED",
+        summary: "SideNotesIM workstation routing — HAL announces sender metadata only; message text is never read aloud.",
+        navTarget: "hal",
+        metrics: {
+          watchersOnline: metricValue(
+            snap.sidenotesInbox && snap.sidenotesInbox.monitor && snap.sidenotesInbox.monitor.stations
+              ? snap.sidenotesInbox.monitor.stations.filter((s) => s.live).length
+              : null,
+          ),
+        },
+      },
     };
 
     const feed = {

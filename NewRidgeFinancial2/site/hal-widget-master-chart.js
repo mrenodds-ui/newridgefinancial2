@@ -187,6 +187,34 @@ const HalWidgetMasterChart = (function () {
       readyWhen: "Import diagnostics are available and no blocking datasets are missing or stale.",
       primarySystem: "Import cache",
     },
+    officeManagerPriorities: {
+      title: "Office Manager Priorities",
+      purpose: "Group HAL attention items and local office tasks for the morning huddle.",
+      expectedData: ["Widget feed attention items", "Local office tasks"],
+      readyWhen: "HAL has widget priorities or local office tasks to review.",
+      primarySystem: "HAL + local tasks",
+    },
+    officeManagerSurfaces: {
+      title: "Staff Work Surfaces",
+      purpose: "Jump links to every staff page HAL monitors with live readiness counts.",
+      expectedData: ["Widget feed surface counts", "Page schema navigation"],
+      readyWhen: "Staff page schema and widget feed are loaded.",
+      primarySystem: "HAL navigation",
+    },
+    halAskHal: {
+      title: "Ask HAL",
+      purpose: "Command center for questions, widget explanations, and staff navigation.",
+      expectedData: ["HAL models", "Widget feed", "Program snapshot"],
+      readyWhen: "HAL runtime and widget feed are available.",
+      primarySystem: "HAL",
+    },
+    sidenotesProgram: {
+      title: "SideNotes Program",
+      purpose: "Monitor SideNotesIM workstation routing and local note handoff.",
+      expectedData: ["SideNotes hub inbox", "Workstation watcher status"],
+      readyWhen: "SideNotes hub path is configured and watchers are online.",
+      primarySystem: "SideNotesIM",
+    },
   };
 
   function widgetOrder() {
