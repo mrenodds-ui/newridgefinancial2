@@ -9,8 +9,9 @@
       "model": "gpt-4o-mini",
       "timeoutMs": 120000,
       "useForAgentLoop": true,
+      "sanitizeBeforeCloud": true,
       "apiKeyEnv": "NR2_CLOUD_API_KEY",
-      "note": "Optional cloud agent lane when enabled and NR2_CLOUD_API_KEY is set in sessionStorage. PHI must never be sent."
+      "note": "Optional cloud agent lane when enabled and NR2_CLOUD_API_KEY is set (HAL page or sessionStorage). PHI is redacted before send."
     },
     "webResearch": {
       "enabled": true,
@@ -34,11 +35,12 @@
     "preferReasoning": true,
     "firewallEnabled": false,
     "agentProgramming": {
-      "profile": "cursor-auto-v9",
+      "profile": "cursor-auto-v10",
       "minSentences": 5,
       "proportionalDepth": true,
       "allowMarkdown": true,
       "multiGatherRounds": 3,
+      "agentLoopMaxTurns": 6,
       "taskCompletion": true,
       "agentToolLoop": true,
       "agentLoopUseReasoning": true,
@@ -76,6 +78,7 @@
         "apply_program_patch",
         "run_hal_validation",
         "run_node_syntax_check",
+        "run_command",
         "semantic_search_program",
         "run_git_readonly",
         "research_web",

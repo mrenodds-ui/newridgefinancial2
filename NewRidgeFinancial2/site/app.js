@@ -1307,6 +1307,14 @@ async function ensureOllamaModelCache(maxAgeMs) {
   return ollamaModelCache.loading;
 }
 window.ensureOllamaModelCache = ensureOllamaModelCache;
+globalThis.getCloudApiKey = getCloudApiKey;
+window.getCloudApiKey = getCloudApiKey;
+window.setCloudApiKeyFromHalPage = function saveCloudKeyFromHalPage() {
+  const input = document.getElementById("hal-cloud-key-input");
+  const persist = document.getElementById("hal-cloud-key-persist");
+  setCloudApiKey(input ? input.value : "", persist && persist.checked);
+  if (typeof renderHalScreen === "function") renderHalScreen();
+};
 
 function ollamaHasModel(modelName) {
   if (!modelName) return false;
@@ -1357,6 +1365,26 @@ function getCloudApiKey() {
   } catch {
     return "";
   }
+}
+
+function setCloudApiKey(key, persist) {
+  const value = String(key || "").trim();
+  try {
+    sessionStorage.setItem("NR2_CLOUD_API_KEY", value);
+    if (persist) localStorage.setItem("NR2_CLOUD_API_KEY", value);
+    else localStorage.removeItem("NR2_CLOUD_API_KEY");
+  } catch {
+    /* storage may be unavailable in preview */
+  }
+}
+
+function sanitizeForCloud(text) {
+  return String(text || "")
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[redacted-id]")
+    .replace(/\b\d{9,12}\b/g, "[redacted-number]")
+    .replace(/\$[\d,]+(?:\.\d{2})?/g, "[amount]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/\bpatient[:\s]+[^\n,]{2,40}/gi, "patient: [redacted]");
 }
 
 function cloudModelConfig() {
@@ -1458,7 +1486,8 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken, ab
   const timer = setTimeout(() => {
     if (controller) controller.abort();
   }, runtime.timeoutMs || 60000);
-  const wantStream = typeof onToken === "function";
+  const structuredCloud = !!(runtime && runtime.cloud && runtime.structuredAgent);
+  const wantStream = typeof onToken === "function" && !structuredCloud;
 
   if (runtime && runtime.cloud) {
     const key = getCloudApiKey();
@@ -1471,6 +1500,10 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken, ab
       temperature: (runtime.options && runtime.options.temperature) || 0.2,
       max_tokens: (runtime.options && (runtime.options.max_tokens || runtime.options.num_predict)) || 2048,
     };
+    if (Array.isArray(runtime.cloudTools) && runtime.cloudTools.length) {
+      payload.tools = runtime.cloudTools;
+      payload.tool_choice = "auto";
+    }
     try {
       const response = await fetch(runtime.endpoint, {
         method: "POST",
@@ -1525,13 +1558,24 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken, ab
         }
       } else {
         const data = await response.json();
-        raw =
-          (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ||
-          (data.message && data.message.content) ||
-          "";
+        const msg = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message : null;
+        raw = (msg && msg.content) || (data.message && data.message.content) || "";
+        if (structuredCloud && msg) {
+          const text = HalCore.cleanModelText(raw);
+          if (text || (msg.tool_calls && msg.tool_calls.length)) {
+            return {
+              text,
+              toolCalls: msg.tool_calls || [],
+              lane: "cloud",
+            };
+          }
+        }
       }
       const text = HalCore.cleanModelText(raw);
-      if (!text) throw new Error("empty cloud model response");
+      if (!text && !(structuredCloud && runtime.cloudTools)) throw new Error("empty cloud model response");
+      if (structuredCloud) {
+        return { text: text || "", toolCalls: [], lane: "cloud" };
+      }
       if (runtime && runtime.fastChat) return text;
       return text + "\n\n(" + draftLabel + " · cloud · verify before acting)";
     } catch (error) {
@@ -1930,6 +1974,12 @@ function buildHalAgentCtx(extras) {
     cloudModelConfig,
     cloudModelReady,
     getCloudApiKey,
+    setCloudApiKey,
+    sanitizeForCloud,
+    buildCloudToolSchemas:
+      window.HalAgent && typeof HalAgent.buildCloudToolSchemas === "function"
+        ? (ids) => HalAgent.buildCloudToolSchemas(ids)
+        : () => [],
     persistGet: (key) => DesktopBridge.storageGet(key),
     persistSet: (key, value) => persistLocal(key, value),
     getCurrentPage: () => window.location.hash.replace("#", "") || getPages()[0].id,

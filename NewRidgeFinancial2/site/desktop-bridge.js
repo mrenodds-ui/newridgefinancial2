@@ -592,6 +592,13 @@ const DesktopBridge = (function () {
     return { ok: false, text: "Git read requires the NR2 desktop app." };
   }
 
+  async function runAllowlistedCommand(commandId) {
+    if (hasDesktopApi() && window.pywebview.api.run_allowlisted_command) {
+      return window.pywebview.api.run_allowlisted_command(String(commandId || "validate-hal"));
+    }
+    return { ok: false, text: "Allowlisted commands require the NR2 desktop app." };
+  }
+
   async function applyProgramPatches(patches, dryRun) {
     if (hasDesktopApi() && window.pywebview.api.apply_program_patches) {
       return window.pywebview.api.apply_program_patches(Array.isArray(patches) ? patches : [], Boolean(dryRun));
@@ -642,6 +649,7 @@ const DesktopBridge = (function () {
     runNodeSyntaxCheck,
     semanticSearchProgram,
     runGitReadonly,
+    runAllowlistedCommand,
     applyProgramPatches,
     searchHalMemories,
     readClipboard,

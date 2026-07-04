@@ -6,7 +6,7 @@ const HalAgent = (function () {
   const MEMORY_KEY = "halAgentMemory";
   const REPAIR_KEY = "halRepairLog";
   const WORKING_KEY = "halWorkingMemory";
-  const ARCHITECTURE_VERSION = "hal-agent-v9-cursor";
+  const ARCHITECTURE_VERSION = "hal-agent-v10-cursor";
   const REPAIR_MAX = 100;
   const TURN_MAX = 16;
   const AGENT_BUDGET = {
@@ -17,6 +17,36 @@ const HalAgent = (function () {
     maxModelContextChars: 14000,
     maxRecentTurns: 12,
   };
+
+  function syncAgentBudgetFromModels(halModels) {
+    const ap = (halModels && halModels.config && halModels.config.agentProgramming) || {};
+    if (typeof ap.maxToolsPerTurn === "number" && ap.maxToolsPerTurn > 0) {
+      AGENT_BUDGET.maxTools = Math.min(20, ap.maxToolsPerTurn);
+    }
+    if (typeof ap.multiGatherRounds === "number" && ap.multiGatherRounds > 0) {
+      AGENT_BUDGET.maxGatherRounds = Math.min(6, ap.multiGatherRounds);
+    }
+    if (typeof HalAgentLoop !== "undefined" && HalAgentLoop.configureFromAgentProgramming) {
+      HalAgentLoop.configureFromAgentProgramming(ap);
+    }
+  }
+
+  function buildCloudToolSchemas(toolIds) {
+    const ids = [...new Set((toolIds || []).filter((id) => TOOL_DEFS[id]))].slice(0, 12);
+    return ids.map((id) => ({
+      type: "function",
+      function: {
+        name: id,
+        description: (TOOL_DEFS[id] && TOOL_DEFS[id].label) || id,
+        parameters: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "Search terms, file path, or allowlisted command id" },
+          },
+        },
+      },
+    }));
+  }
 
   function parsePatchFromQuery(query) {
     const block = String(query || "").match(/<<<patch\s+([\s\S]*?)>>>/i);
@@ -650,6 +680,32 @@ const HalAgent = (function () {
         return { ok: !!(payload && payload.ok), summary: text.slice(0, 4000), command: cmd };
       },
     },
+    run_command: {
+      label: "Run allowlisted repo command",
+      run: async (ctx, args) => {
+        const bridge = bridgeFromCtx(ctx);
+        const raw = String(args.query || "").trim().toLowerCase();
+        let cmdId = "validate-hal";
+        if (/node-check-agent|check agent|hal-agent/.test(raw)) cmdId = "node-check-agent";
+        else if (/node-check-app|check app/.test(raw)) cmdId = "node-check-app";
+        else if (/node-check-core|check core/.test(raw)) cmdId = "node-check-core";
+        else if (/node-check-loop|agent-loop/.test(raw)) cmdId = "node-check-loop";
+        else if (/git-status|git status/.test(raw)) cmdId = "git-status";
+        else if (/validate|validation/.test(raw)) cmdId = "validate-hal";
+        else if (/^[a-z0-9-]+$/.test(raw)) cmdId = raw;
+        if (!bridge || typeof bridge.runAllowlistedCommand !== "function") {
+          return { ok: false, summary: "Allowlisted commands require the NR2 desktop app." };
+        }
+        const payload = await bridge.runAllowlistedCommand(cmdId);
+        const text = payload && payload.text ? String(payload.text) : "Command unavailable.";
+        return {
+          ok: !!(payload && payload.ok),
+          summary: text.slice(0, 5000),
+          command: cmdId,
+          exitCode: payload && payload.exitCode != null ? payload.exitCode : -1,
+        };
+      },
+    },
     explain_route: {
       label: "Explain HAL routing for this question",
       run: async (ctx, args) => {
@@ -963,11 +1019,14 @@ const HalAgent = (function () {
       if (/\bsyntax\b/i.test(query)) gather.push("run_node_syntax_check");
       if (/<<<patch/i.test(query)) gather.push("apply_program_patch");
       if (/\bgit\b/i.test(query)) gather.push("run_git_readonly");
+      if (/\bcommand|shell|run validate\b/i.test(query)) gather.push("run_command");
     }
     return gather;
   }
 
   function buildPlan(query, route, working, longTerm, ctx) {
+    if (ctx && ctx.halModels) syncAgentBudgetFromModels(ctx.halModels);
+    const agentCfg = (ctx && ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
     const intent = route.intent || "";
     const isUnsafe = intent === "blocked: firewall";
     const tools = [];
@@ -1037,7 +1096,9 @@ const HalAgent = (function () {
     if (intent === "firewall" || /\bfirewall\b/i.test(query)) tools.push("explain_firewall");
     if (ctx && webResearchEnabled(ctx, query, route)) tools.push("research_web");
 
-    cursorGatherTools(query, route).forEach((id) => tools.push(id));
+    if (agentCfg.cursorGather !== false) {
+      cursorGatherTools(query, route).forEach((id) => tools.push(id));
+    }
 
     if (parsePatchFromQuery(query)) tools.push("apply_program_patch");
     if (isTaskCompletionQuery(query)) {
@@ -1112,7 +1173,8 @@ const HalAgent = (function () {
     return r;
   }
 
-  function shouldAutoEscalate(checked, route) {
+  function shouldAutoEscalate(checked, route, agentCfg) {
+    if (agentCfg && agentCfg.autoEscalate === false) return false;
     if (!checked || checked.pass) return false;
     if (!route || route.useReasoning || route.useEscalation || route.useOss) return false;
     if (!route.useModel) return false;
@@ -1611,9 +1673,34 @@ const HalAgent = (function () {
       ctx.cloudModelReady() &&
       typeof ctx.cloudModelConfig === "function";
     if (useCloudAgent) {
-      const cm = Object.assign({ cloud: true, agentLoop: true }, ctx.cloudModelConfig());
+      const cloudPolicy = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.cloudReasoning) || {};
+      const shouldSanitize = cloudPolicy.sanitizeBeforeCloud !== false;
+      let sysPrompt = combinedPrompt;
+      let usrText = userText;
+      if (shouldSanitize && typeof ctx.sanitizeForCloud === "function") {
+        sysPrompt = ctx.sanitizeForCloud(sysPrompt);
+        usrText = ctx.sanitizeForCloud(usrText);
+      }
+      const cm = Object.assign({ cloud: true, agentLoop: true, structuredAgent: true }, ctx.cloudModelConfig());
       cm.options = Object.assign({}, cm.options || {}, { max_tokens: 2048, temperature: 0.2 });
-      const text = await ctx.runModel(cm, combinedPrompt, userText, "Cloud agent", onToken);
+      const toolIds = (plan.tools || []).concat([
+        "grep_program_source",
+        "read_program_file",
+        "semantic_search_program",
+        "run_hal_validation",
+        "run_command",
+        "read_program_snapshot",
+      ]);
+      cm.cloudTools = buildCloudToolSchemas(toolIds);
+      const raw = await ctx.runModel(cm, sysPrompt, usrText, "Cloud agent", onToken);
+      if (raw && typeof raw === "object" && (raw.toolCalls || raw.text != null)) {
+        return {
+          text: String(raw.text || ""),
+          toolCalls: raw.toolCalls || [],
+          lane: "cloud",
+        };
+      }
+      const text = typeof raw === "string" ? raw : String((raw && raw.text) || "");
       return { text, lane: "cloud" };
     }
     const wantAgentReasoning =
@@ -1857,6 +1944,7 @@ const HalAgent = (function () {
 
     let toolResults = plan.tools.length ? await runTools(plan.tools, ctx, trimmed) : {};
     let activePlan = plan;
+    const agentCfg = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
 
     if (plan.useModelEnhancement && isInvestigateQuery(trimmed, route)) {
       const extra = expandGatherToolsForRound(trimmed, route, toolResults, 1, Object.keys(toolResults));
@@ -2002,7 +2090,7 @@ const HalAgent = (function () {
 
     if (
       !checked.pass &&
-      shouldAutoEscalate(checked, route) &&
+      shouldAutoEscalate(checked, route, agentCfg) &&
       typeof ctx.reasoningModelReady === "function" &&
       ctx.reasoningModelReady()
     ) {
@@ -2165,6 +2253,8 @@ const HalAgent = (function () {
     AGENT_BUDGET,
     SAFETY_POLICY,
     TOOL_DEFS,
+    syncAgentBudgetFromModels,
+    buildCloudToolSchemas,
     buildPlan,
     runTools,
     selfCheckResponse,

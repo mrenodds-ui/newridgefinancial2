@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-144",
-  "schemaVersion": "hal-144",
-  "builtAt": "2026-07-04T03:00:00.000Z",
-  "notes": "HAL hal-144 — strip instruction leaks, firewall-off copy, min-sentence enforcement, 8B token budget."
+  "assetVersion": "hal-145",
+  "schemaVersion": "hal-145",
+  "builtAt": "2026-07-04T12:00:00.000Z",
+  "notes": "HAL hal-145 — config-wired agent loop, allowlisted run_command, cloud native tools + PHI sanitize."
 }

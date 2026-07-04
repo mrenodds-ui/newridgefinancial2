@@ -4,10 +4,20 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "agent-loop-v2";
-  const MAX_LOOP_TURNS = 6;
-  const MAX_TOOLS_PER_TURN = 3;
+  const VERSION = "agent-loop-v3";
+  let MAX_LOOP_TURNS = 6;
+  let MAX_TOOLS_PER_TURN = 3;
   const MAX_VALIDATE_RETRIES = 2;
+
+  function configureFromAgentProgramming(ap) {
+    const cfg = ap || {};
+    if (typeof cfg.maxToolsPerTurn === "number" && cfg.maxToolsPerTurn > 0) {
+      MAX_TOOLS_PER_TURN = Math.min(8, Math.max(1, cfg.maxToolsPerTurn));
+    }
+    if (typeof cfg.agentLoopMaxTurns === "number" && cfg.agentLoopMaxTurns > 0) {
+      MAX_LOOP_TURNS = Math.min(10, Math.max(2, cfg.agentLoopMaxTurns));
+    }
+  }
 
   const TOOL_LOOP_GUIDE = [
     "AGENT TOOL LOOP (internal protocol):",
@@ -16,10 +26,35 @@
     "name: tool_id",
     "query: arguments or search terms",
     ">>>",
-    "Allowed tool ids include: grep_program_source, read_program_file, semantic_search_program, read_import_diagnostics, read_widget_feed, read_program_snapshot, run_hal_validation, run_node_syntax_check, run_git_status, explain_route, read_program_help.",
+    "Allowed tool ids include: grep_program_source, read_program_file, semantic_search_program, read_import_diagnostics, read_widget_feed, read_program_snapshot, run_hal_validation, run_node_syntax_check, run_command, run_git_readonly, explain_route, read_program_help.",
+    "For run_command use query: validate-hal | node-check-agent | node-check-app | git-status.",
     "After tool results appear in context, either request more tools or write the final staff-facing answer (no <<<tool blocks in the final answer).",
     "To propose code changes, include <<<patch blocks; they may be applied automatically when task completion is enabled.",
   ].join("\n");
+
+  function normalizeToolId(id) {
+    const map = {
+      run_git_status: "run_git_readonly",
+      git_status: "run_git_readonly",
+      semantic_search: "semantic_search_program",
+    };
+    return map[id] || id;
+  }
+
+  function parseCloudToolCalls(toolCalls) {
+    return (toolCalls || []).slice(0, MAX_TOOLS_PER_TURN).map((tc) => {
+      const fn = tc && tc.function ? tc.function : {};
+      let name = String(fn.name || "").trim().replace(/\s+/g, "_");
+      let query = "";
+      try {
+        const args = JSON.parse(String(fn.arguments || "{}"));
+        query = args.query || args.command || args.command_id || "";
+      } catch {
+        query = String(fn.arguments || "").slice(0, 500);
+      }
+      return { name: normalizeToolId(name), query };
+    });
+  }
 
   function parseToolRequests(text) {
     const blocks = [];
@@ -76,15 +111,6 @@
     return !!(plan.tools && plan.tools.length > 2);
   }
 
-  function normalizeToolId(id) {
-    const map = {
-      run_git_status: "run_git_readonly",
-      git_status: "run_git_readonly",
-      semantic_search: "semantic_search_program",
-    };
-    return map[id] || id;
-  }
-
   function ranToolKeys(toolResults) {
     const ran = new Set();
     Object.keys(toolResults || {}).forEach((k) => {
@@ -115,6 +141,7 @@
       add("read_widget_feed", q);
     }
     if (/\bvalidate|validation|make.*pass\b/i.test(q)) add("run_hal_validation", q);
+    if (/\bvalidate|validation|make.*pass\b/i.test(q)) add("run_command", "validate-hal");
     if (/\bgit\b|changed files|diff|commit/i.test(q)) add("run_git_readonly", q);
     if (plan && (plan.isInvestigateQuery || plan.isTaskCompletionQuery)) {
       add("read_program_snapshot", q);
@@ -214,7 +241,10 @@
       if (!result || !result.text) break;
       lastResult = result;
 
-      const requests = parseToolRequests(result.text);
+      let requests = parseToolRequests(result.text);
+      if (!requests.length && result.toolCalls && result.toolCalls.length) {
+        requests = parseCloudToolCalls(result.toolCalls);
+      }
       if (!requests.length) {
         if (
           turn === 0 &&
@@ -374,7 +404,14 @@
   global.HalAgentLoop = {
     VERSION,
     TOOL_LOOP_GUIDE,
-    MAX_LOOP_TURNS,
+    get MAX_LOOP_TURNS() {
+      return MAX_LOOP_TURNS;
+    },
+    get MAX_TOOLS_PER_TURN() {
+      return MAX_TOOLS_PER_TURN;
+    },
+    configureFromAgentProgramming,
+    parseCloudToolCalls,
     parseToolRequests,
     parseAllPatches,
     stripToolBlocks,

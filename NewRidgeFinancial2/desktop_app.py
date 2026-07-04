@@ -492,6 +492,11 @@ class DesktopApi:
 
         return run_git_readonly(REPO_ROOT, str(command or "status"))
 
+    def run_allowlisted_command(self, command_id: str = "validate-hal") -> dict:
+        from program_source_grep import run_allowlisted_command
+
+        return run_allowlisted_command(REPO_ROOT, str(command_id or "validate-hal"))
+
     def apply_program_patches(self, patches: list, dry_run: bool = False) -> dict:
         from program_source_grep import apply_program_patches
 

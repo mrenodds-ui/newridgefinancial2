@@ -344,6 +344,49 @@ def run_git_readonly(repo_root: Path, command: str) -> dict:
     return {"ok": ok, "command": cmd, "text": out[-5000:] if out else "(empty)", "exitCode": proc.returncode}
 
 
+def run_allowlisted_command(repo_root: Path, command_id: str) -> dict:
+    """Run a fixed allowlist of repo-scoped commands (no arbitrary shell)."""
+    import subprocess
+
+    repo_root = repo_root.resolve()
+    nr2 = repo_root / "NewRidgeFinancial2"
+    if not nr2.is_dir():
+        nr2 = repo_root
+    cmd_id = str(command_id or "validate-hal").strip().lower().replace("_", "-")
+    allowed: dict[str, tuple[list[str], str, int]] = {
+        "validate-hal": (["node", "validate-hal.mjs"], str(nr2), 120),
+        "node-check-core": (["node", "--check", "site/hal-core.js"], str(nr2), 30),
+        "node-check-agent": (["node", "--check", "site/hal-agent.js"], str(nr2), 30),
+        "node-check-app": (["node", "--check", "site/app.js"], str(nr2), 30),
+        "node-check-loop": (["node", "--check", "site/hal-agent-loop.js"], str(nr2), 30),
+        "git-status": (["git", "status", "--short"], str(repo_root), 30),
+    }
+    if cmd_id not in allowed:
+        keys = ", ".join(sorted(allowed.keys()))
+        return {"ok": False, "text": f"Command not allowed: {cmd_id}. Use: {keys}."}
+    argv, cwd, timeout = allowed[cmd_id]
+    try:
+        proc = subprocess.run(
+            argv,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "text": f"Command timed out: {cmd_id}."}
+    except OSError as exc:
+        return {"ok": False, "text": str(exc)}
+    out = ((proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")).strip()
+    ok = proc.returncode == 0
+    return {
+        "ok": ok,
+        "command": cmd_id,
+        "text": out[-5000:] if out else "(empty)",
+        "exitCode": proc.returncode,
+    }
+
+
 def parse_all_patches(text: str) -> list[dict]:
     patches: list[dict] = []
     for block in re.finditer(r"<<<patch\s+([\s\S]*?)>>>", str(text or ""), re.IGNORECASE):

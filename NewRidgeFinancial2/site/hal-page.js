@@ -367,6 +367,12 @@ const HalPage = (function () {
     const inventoryMore = inventory.length > 4 ? ` +${inventory.length - 4} more` : "";
     const runtimes = [cfg.localModel, cfg.reasoningModel, cfg.escalationModel];
     const webResearchOn = cfg.webResearch && cfg.webResearch.enabled === true;
+    const cloudCfg = cfg.cloudReasoning || {};
+    const cloudKeySet =
+      typeof globalThis !== "undefined" &&
+      typeof globalThis.getCloudApiKey === "function" &&
+      !!globalThis.getCloudApiKey();
+    const cloudReady = cloudCfg.enabled === true && cloudKeySet && cloudCfg.useForAgentLoop !== false;
     const lanesLive =
       cfg.mode === "online" &&
       cfg.externalCallsEnabled === false &&
@@ -387,7 +393,14 @@ const HalPage = (function () {
           ${aiStatRow("GPU STATUS", rd.gpuStatus || "not verified", rd.gpu && rd.gpu.verified === true)}
           ${aiStatRow("BINDING", rd.bindingStatus || "not verified")}
           ${aiStatRow("LANE EXECUTION", lanesLive ? rd.laneExecution || "Enabled · local loopback only" : "Disabled")}
+          ${aiStatRow("CLOUD AGENT", cloudReady ? "Ready · opt-in key set" : cloudCfg.enabled ? "Enabled · key missing" : "Disabled · local only", cloudReady)}
         </dl>
+        <div class="hp-cloud-key hp-muted">
+          <label for="hal-cloud-key-input">Optional cloud agent key (session):</label>
+          <input id="hal-cloud-key-input" type="password" autocomplete="off" placeholder="sk-…" class="hp-input hp-input--sm" />
+          <label class="hp-inline-check"><input id="hal-cloud-key-persist" type="checkbox" /> Remember locally</label>
+          <button type="button" class="hp-btn hp-btn--sm" onclick="setCloudApiKeyFromHalPage()">Save key</button>
+        </div>
         <p class="hp-ai-ready__inventory"><b>Available inventory:</b> ${esc(inventoryPreview)}${esc(inventoryMore)} <em class="hp-muted">${lanesLive ? "(routed locally on query)" : "(not routed)"}</em></p>
         <p class="hp-card__foot hp-card__foot--ai">${esc(rd.dataPolicy || "No sensitive raw data sent to any model.")}</p>
       </div>`;

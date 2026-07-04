@@ -1089,7 +1089,7 @@ async function main() {
   const HalAgent = (await import(halAgentUrl)).default || (await import(halAgentUrl));
   const HalRouteExec = (await import(halRouteExecUrl)).default || (await import(halRouteExecUrl));
   assert(HalAgent.SAFETY_POLICY && HalAgent.SAFETY_POLICY.blocked.length > 0, "agent safety policy must exist");
-  assert(HalAgent.ARCHITECTURE_VERSION === "hal-agent-v9-cursor", "agent architecture version must be current");
+  assert(HalAgent.ARCHITECTURE_VERSION === "hal-agent-v10-cursor", "agent architecture version must be current");
   assert(typeof globalThis.HalAgentLoop !== "undefined", "HalAgentLoop must load");
   assert(typeof HalAgentLoop.runModelWithLoop === "function", "agent tool loop must exist");
   assert(typeof HalAgentLoop.suggestAutoTools === "function", "auto tool suggest must exist");
@@ -1103,8 +1103,14 @@ async function main() {
   assert(autoTools.length >= 2, "auto tools must suggest grep and search for code questions");
   assert(typeof HalAgent.TOOL_DEFS.semantic_search_program === "object", "semantic_search_program tool must exist");
   assert(typeof HalAgent.TOOL_DEFS.run_git_readonly === "object", "run_git_readonly tool must exist");
+  assert(typeof HalAgent.TOOL_DEFS.run_command === "object", "run_command tool must exist");
+  assert(typeof HalAgent.syncAgentBudgetFromModels === "function", "syncAgentBudgetFromModels must exist");
+  HalAgent.syncAgentBudgetFromModels(halModels);
   assert(HalAgent.AGENT_BUDGET.maxGatherRounds === 3, "agent must support multi-round gather");
-  assert(HalAgent.AGENT_BUDGET.maxTools === 10, "agent tool budget must allow task-completion tools");
+  assert(HalAgent.AGENT_BUDGET.maxTools === 8, "agent tool budget must honor maxToolsPerTurn from hal-models");
+  assert(typeof HalAgentLoop.configureFromAgentProgramming === "function", "agent loop must read agentProgramming config");
+  HalAgentLoop.configureFromAgentProgramming(halModels.config.agentProgramming);
+  assert(HalAgentLoop.MAX_TOOLS_PER_TURN === 8, "loop max tools per turn must honor config");
   assert(typeof HalAgent.TOOL_DEFS.apply_program_patch === "object", "apply_program_patch tool must exist");
   assert(typeof HalAgent.TOOL_DEFS.run_hal_validation === "object", "run_hal_validation tool must exist");
   assert(typeof HalAgent.TOOL_DEFS.run_node_syntax_check === "object", "run_node_syntax_check tool must exist");
@@ -1115,7 +1121,7 @@ async function main() {
   assert(genericChatRoute.useModel && genericChatRoute.lane === "chat8b", "generic questions must route to chat8b");
   assert(HalAgent.fastChatSkipsProgramContext(genericChatRoute), "fast chat must skip heavy program snapshot");
   assert(!HalAgent.fastChatSkipsProgramContext({ useReasoning: true, useModel: true }), "reasoning lane must keep program context");
-  assert(HalAgent.AGENT_BUDGET.maxTools === 10, "agent must allow cursor-style multi-tool gather");
+  assert(HalAgent.AGENT_BUDGET.maxTools === 8, "agent must allow cursor-style multi-tool gather from config");
   assert(HalAgent.AGENT_BUDGET.maxModelContextChars >= 12000, "agent context budget must be expanded");
   assert(typeof HalCore.compressThreadForPrompt === "function", "thread compression must exist");
   assert(typeof HalCore.detectAmbiguousQuery === "function", "ambiguous query detection must exist");
@@ -1624,7 +1630,7 @@ async function main() {
   assert(HalAgent.SAFETY_POLICY.summary.includes("internal office manager"), "agent safety policy must describe office manager role");
 
   const HalAgentProgramming = globalThis.HalAgentProgramming;
-  assert(HalAgentProgramming && HalAgentProgramming.VERSION === "auto-agent-v9", "HalAgentProgramming v9 must load");
+  assert(HalAgentProgramming && HalAgentProgramming.VERSION === "auto-agent-v10", "HalAgentProgramming v10 must load");
   assert(/^PROGRAMMING:/m.test(HalAgentProgramming.contract()), "agent contract must start with PROGRAMMING");
   const wrapped = HalAgentProgramming.wrapSystemPrompt("Base prompt.");
   assert(wrapped.includes("Agent loop") && wrapped.includes("Base prompt."), "wrapSystemPrompt must prepend contract");
@@ -1636,7 +1642,7 @@ async function main() {
     sarcIssues,
   );
   assert(!/shocking/i.test(repairedSarc), "agent repair must strip sarcasm");
-  assert(halModels.config.agentProgramming.profile === "cursor-auto-v9", "hal-models agentProgramming profile must be v9");
+  assert(halModels.config.agentProgramming.profile === "cursor-auto-v10", "hal-models agentProgramming profile must be v10");
   assert(halModels.config.agentProgramming.agentToolLoop === true, "agent tool loop must be enabled");
   assert(halModels.config.agentProgramming.agentLoopUseReasoning === true, "agent loop must prefer reasoning lane");
   assert(halModels.config.agentProgramming.agentAutoTools === true, "agent auto tools must be enabled");
@@ -1677,7 +1683,7 @@ async function main() {
 
   // Program source patch helper (Python dry-run) — use live schemaVersion from manifest
   const buildManifest = loadJson(join(siteDir, "nr2-build.json"));
-  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-144")}"`;
+  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-145")}"`;
   const pyPatch = require("node:child_process").execFileSync(
     "python",
     [
@@ -1701,6 +1707,12 @@ print(out["text"])`,
     { encoding: "utf8", cwd: __dirname, stdio: ["ignore", "pipe", "pipe"] },
   );
   assert(String(pySemantic).length > 5, "semantic_search_program must run");
+  passed++;
+  const pyCmd = require("node:child_process").execSync(
+    'python -c "from pathlib import Path; from program_source_grep import run_allowlisted_command; nr2=Path(\'.\').resolve(); repo=nr2.parent; out=run_allowlisted_command(repo, \'node-check-agent\'); assert \'exitCode\' in out; print(out[\'command\'])"',
+    { encoding: "utf8", cwd: __dirname, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  assert(/node-check-agent/.test(pyCmd), "run_allowlisted_command must accept node-check-agent");
   passed++;
 
   console.log(`HAL validation passed (${passed} suites)`);
