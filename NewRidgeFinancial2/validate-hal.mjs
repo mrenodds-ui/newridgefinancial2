@@ -1089,7 +1089,7 @@ async function main() {
   const HalAgent = (await import(halAgentUrl)).default || (await import(halAgentUrl));
   const HalRouteExec = (await import(halRouteExecUrl)).default || (await import(halRouteExecUrl));
   assert(HalAgent.SAFETY_POLICY && HalAgent.SAFETY_POLICY.blocked.length > 0, "agent safety policy must exist");
-  assert(HalAgent.ARCHITECTURE_VERSION === "hal-agent-v10-cursor", "agent architecture version must be current");
+  assert(HalAgent.ARCHITECTURE_VERSION === "hal-agent-v11-cursor", "agent architecture version must be current");
   assert(typeof globalThis.HalAgentLoop !== "undefined", "HalAgentLoop must load");
   assert(typeof HalAgentLoop.runModelWithLoop === "function", "agent tool loop must exist");
   assert(typeof HalAgentLoop.suggestAutoTools === "function", "auto tool suggest must exist");
@@ -1104,6 +1104,13 @@ async function main() {
   assert(typeof HalAgent.TOOL_DEFS.semantic_search_program === "object", "semantic_search_program tool must exist");
   assert(typeof HalAgent.TOOL_DEFS.run_git_readonly === "object", "run_git_readonly tool must exist");
   assert(typeof HalAgent.TOOL_DEFS.run_command === "object", "run_command tool must exist");
+  assert(typeof HalAgent.TOOL_DEFS.spawn_investigation === "object", "spawn_investigation tool must exist");
+  assert(typeof HalAgent.spawnInvestigationSubtask === "function", "spawnInvestigationSubtask must exist");
+  assert(typeof HalAgent.isComplexInvestigationQuery === "function", "isComplexInvestigationQuery must exist");
+  assert(
+    HalAgent.isComplexInvestigationQuery("Why is the widget empty and how does handleHalSubmit route imports?", { useReasoning: true }),
+    "complex investigation detector must match multi-part diagnostics",
+  );
   assert(typeof HalAgent.syncAgentBudgetFromModels === "function", "syncAgentBudgetFromModels must exist");
   HalAgent.syncAgentBudgetFromModels(halModels);
   assert(HalAgent.AGENT_BUDGET.maxGatherRounds === 3, "agent must support multi-round gather");
@@ -1630,7 +1637,7 @@ async function main() {
   assert(HalAgent.SAFETY_POLICY.summary.includes("internal office manager"), "agent safety policy must describe office manager role");
 
   const HalAgentProgramming = globalThis.HalAgentProgramming;
-  assert(HalAgentProgramming && HalAgentProgramming.VERSION === "auto-agent-v10", "HalAgentProgramming v10 must load");
+  assert(HalAgentProgramming && HalAgentProgramming.VERSION === "auto-agent-v11", "HalAgentProgramming v11 must load");
   assert(/^PROGRAMMING:/m.test(HalAgentProgramming.contract()), "agent contract must start with PROGRAMMING");
   const wrapped = HalAgentProgramming.wrapSystemPrompt("Base prompt.");
   assert(wrapped.includes("Agent loop") && wrapped.includes("Base prompt."), "wrapSystemPrompt must prepend contract");
@@ -1642,7 +1649,7 @@ async function main() {
     sarcIssues,
   );
   assert(!/shocking/i.test(repairedSarc), "agent repair must strip sarcasm");
-  assert(halModels.config.agentProgramming.profile === "cursor-auto-v10", "hal-models agentProgramming profile must be v10");
+  assert(halModels.config.agentProgramming.profile === "cursor-auto-v11", "hal-models agentProgramming profile must be v11");
   assert(halModels.config.agentProgramming.agentToolLoop === true, "agent tool loop must be enabled");
   assert(halModels.config.agentProgramming.agentLoopUseReasoning === true, "agent loop must prefer reasoning lane");
   assert(halModels.config.agentProgramming.agentAutoTools === true, "agent auto tools must be enabled");
@@ -1683,7 +1690,7 @@ async function main() {
 
   // Program source patch helper (Python dry-run) — use live schemaVersion from manifest
   const buildManifest = loadJson(join(siteDir, "nr2-build.json"));
-  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-145")}"`;
+  const patchNeedle = `"schemaVersion": "${String(buildManifest.schemaVersion || "hal-146")}"`;
   const pyPatch = require("node:child_process").execFileSync(
     "python",
     [
@@ -1713,6 +1720,12 @@ print(out["text"])`,
     { encoding: "utf8", cwd: __dirname, stdio: ["ignore", "pipe", "pipe"] },
   );
   assert(/node-check-agent/.test(pyCmd), "run_allowlisted_command must accept node-check-agent");
+  passed++;
+  const pySemantic2 = require("node:child_process").execSync(
+    'python -c "from pathlib import Path; from program_source_grep import semantic_search_program; nr2=Path(\'.\').resolve(); repo=nr2.parent; site=nr2/\'site\'; out=semantic_search_program(repo,site,\'handleHalSubmit routeHalCommand\',8); assert out[\'count\']>=0; print(out[\'text\'][:160])"',
+    { encoding: "utf8", cwd: __dirname, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  assert(String(pySemantic2).length > 5, "semantic_search_program v2 must run");
   passed++;
 
   console.log(`HAL validation passed (${passed} suites)`);

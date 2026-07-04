@@ -26,7 +26,7 @@
     "name: tool_id",
     "query: arguments or search terms",
     ">>>",
-    "Allowed tool ids include: grep_program_source, read_program_file, semantic_search_program, read_import_diagnostics, read_widget_feed, read_program_snapshot, run_hal_validation, run_node_syntax_check, run_command, run_git_readonly, explain_route, read_program_help.",
+    "Allowed tool ids include: grep_program_source, read_program_file, semantic_search_program, read_import_diagnostics, read_widget_feed, read_program_snapshot, run_hal_validation, run_node_syntax_check, run_command, run_git_readonly, spawn_investigation, explain_route, read_program_help.",
     "For run_command use query: validate-hal | node-check-agent | node-check-app | git-status.",
     "After tool results appear in context, either request more tools or write the final staff-facing answer (no <<<tool blocks in the final answer).",
     "To propose code changes, include <<<patch blocks; they may be applied automatically when task completion is enabled.",
@@ -147,6 +147,9 @@
       add("read_program_snapshot", q);
       add("grep_program_source", q);
     }
+    if (plan && plan.isInvestigateQuery && /deep|trace|step|multiple|why|how does/i.test(q)) {
+      add("spawn_investigation", q);
+    }
     add("read_current_context", q);
     if (!ran.has("read_program_snapshot")) add("read_program_snapshot", q);
     return out.slice(0, MAX_TOOLS_PER_TURN);
@@ -191,7 +194,13 @@
       initialToolResults,
       onToken,
       toolIds,
+      maxTurnsOverride,
     } = deps;
+
+    const maxTurns =
+      typeof maxTurnsOverride === "number" && maxTurnsOverride > 0
+        ? Math.min(MAX_LOOP_TURNS, maxTurnsOverride)
+        : MAX_LOOP_TURNS;
 
     if (!shouldUseAgentLoop(query, route, plan, (ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {})) {
       const single = await enhanceModelCall(ctx, route, query, plan, initialToolResults || {}, onToken);
@@ -225,7 +234,7 @@
       }
     }
 
-    for (let turn = 0; turn < MAX_LOOP_TURNS; turn++) {
+    for (let turn = 0; turn < maxTurns; turn++) {
       activePlan.loopSuffix = loopSuffix;
       if (ctx.onToolProgress && turn > 0) {
         ctx.onToolProgress({ phase: "loop", tool: "agent-loop", label: "Agent loop turn " + (turn + 1) });
@@ -298,7 +307,7 @@
       text: stripToolBlocks((lastResult && lastResult.text) || "") || "Agent loop reached the turn limit. Try a narrower question.",
       lane: (lastResult && lastResult.lane) || route.lane || "chat8b",
       toolResults,
-      loopTurns: MAX_LOOP_TURNS,
+      loopTurns: maxTurns,
       loopLog,
     };
   }

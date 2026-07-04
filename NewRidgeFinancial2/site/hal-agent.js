@@ -6,7 +6,7 @@ const HalAgent = (function () {
   const MEMORY_KEY = "halAgentMemory";
   const REPAIR_KEY = "halRepairLog";
   const WORKING_KEY = "halWorkingMemory";
-  const ARCHITECTURE_VERSION = "hal-agent-v10-cursor";
+  const ARCHITECTURE_VERSION = "hal-agent-v11-cursor";
   const REPAIR_MAX = 100;
   const TURN_MAX = 16;
   const AGENT_BUDGET = {
@@ -690,6 +690,10 @@ const HalAgent = (function () {
         else if (/node-check-app|check app/.test(raw)) cmdId = "node-check-app";
         else if (/node-check-core|check core/.test(raw)) cmdId = "node-check-core";
         else if (/node-check-loop|agent-loop/.test(raw)) cmdId = "node-check-loop";
+        else if (/node-check-all|check all|syntax all/.test(raw)) cmdId = "node-check-all";
+        else if (/git-diff-stat|diff stat/.test(raw)) cmdId = "git-diff-stat";
+        else if (/git-diff-names|diff names|changed files/.test(raw)) cmdId = "git-diff-names";
+        else if (/git-log|git log/.test(raw)) cmdId = "git-log";
         else if (/git-status|git status/.test(raw)) cmdId = "git-status";
         else if (/validate|validation/.test(raw)) cmdId = "validate-hal";
         else if (/^[a-z0-9-]+$/.test(raw)) cmdId = raw;
@@ -864,6 +868,25 @@ const HalAgent = (function () {
     );
   }
 
+  function isComplexInvestigationQuery(query, route) {
+    const q = String(query || "");
+    if (!isInvestigateQuery(q, route)) return false;
+    return (
+      q.length > 140 ||
+      (q.match(/\?/g) || []).length > 1 ||
+      /\b(and also|additionally|step by step|trace through|deep dive|multiple|both .+ and| and how| and why| as well as)\b/i.test(q)
+    );
+  }
+
+  function extractSubInvestigationFocus(query) {
+    const q = String(query || "").trim();
+    const parts = q.split(/\?\s+/).filter(Boolean);
+    if (parts.length > 1) return parts[0].trim() + "?";
+    const codeFocus = q.match(/\b(how does|where is|why is|what handles)\s+[^?.!]+/i);
+    if (codeFocus) return codeFocus[0].trim();
+    return q.slice(0, 180);
+  }
+
   function extractToolEvidenceLines(toolResults, maxLines) {
     const lines = [];
     for (const [id, res] of Object.entries(toolResults || {})) {
@@ -991,6 +1014,9 @@ const HalAgent = (function () {
     }
     if (/\b(how does|how do|source code|in the code|function|programming|hal-agent|handleHalSubmit|routeHalCommand)\b/i.test(query)) {
       gather.push("grep_program_source");
+    }
+    if (/\b(deep dive|trace through|step by step|sub-investigation|spawn)\b/i.test(query)) {
+      gather.push("spawn_investigation");
     }
     if (/\b(read file|open file|show file|\.js\b|\.py\b|hal-agent\.js|app\.js)\b/i.test(query)) {
       gather.push("read_program_file");
@@ -1690,6 +1716,7 @@ const HalAgent = (function () {
         "run_hal_validation",
         "run_command",
         "read_program_snapshot",
+        "spawn_investigation",
       ]);
       cm.cloudTools = buildCloudToolSchemas(toolIds);
       const raw = await ctx.runModel(cm, sysPrompt, usrText, "Cloud agent", onToken);
@@ -1764,6 +1791,66 @@ const HalAgent = (function () {
     }
     return null;
   }
+
+  async function spawnInvestigationSubtask(ctx, focusQuery, parentQuery) {
+    const focus = String(focusQuery || "").trim();
+    if (!focus) return { ok: false, summary: "Sub-investigation needs a focused question." };
+    if (typeof HalAgentLoop === "undefined" || !HalAgentLoop.runModelWithLoop) {
+      return { ok: false, summary: "Agent loop unavailable for sub-investigation." };
+    }
+    let subRoute = HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, focus);
+    subRoute = escalateRouteForRetry(subRoute, focus);
+    const subPlan = buildPlan(focus, subRoute, workingMemory, longTermMemory, ctx);
+    const loopSuffix =
+      "\n[Sub-investigation" +
+      (parentQuery ? " for: " + String(parentQuery).slice(0, 160) : "") +
+      "]\nAnswer this focused slice only; cite file paths and line evidence.\n";
+    const activeSubPlan = Object.assign({}, subPlan, {
+      agentToolLoop: true,
+      isInvestigateQuery: true,
+      loopSuffix,
+    });
+    const runToolFn = (id, c, q) => {
+      const def = TOOL_DEFS[id];
+      return def ? def.run(c, { query: q, parentQuery: parentQuery || focus }) : Promise.resolve({ ok: false, summary: "Unknown tool: " + id });
+    };
+    try {
+      const result = await HalAgentLoop.runModelWithLoop({
+        enhanceModelCall,
+        runTool: runToolFn,
+        ctx,
+        route: subRoute,
+        query: focus,
+        plan: activeSubPlan,
+        initialToolResults: {},
+        onToken: undefined,
+        toolIds: new Set(Object.keys(TOOL_DEFS)),
+        maxTurnsOverride: 3,
+      });
+      const text = result && result.text ? String(result.text).trim() : "";
+      if (!text) return { ok: false, summary: "Sub-investigation completed without a usable answer." };
+      return {
+        ok: true,
+        summary: ("Sub-investigation (" + (result.loopTurns || 0) + " turns):\n" + text).slice(0, 2800),
+        loopTurns: result.loopTurns || 0,
+      };
+    } catch (error) {
+      if (typeof RuntimeIssues !== "undefined") {
+        RuntimeIssues.record("hal-agent.spawn-investigation", error, { focus: focus.slice(0, 80) });
+      }
+      return { ok: false, summary: "Sub-investigation failed: " + String(error && error.message ? error.message : error) };
+    }
+  }
+
+  TOOL_DEFS.spawn_investigation = {
+    label: "Run focused sub-investigation (subagent)",
+    run: async (ctx, args) =>
+      spawnInvestigationSubtask(
+        ctx,
+        String(args.query || "").trim(),
+        String(args.parentQuery || args.query || "").trim(),
+      ),
+  };
 
   /**
    * Main agent entry: plan → enrich with tools → execute route → self-check → repair log.
@@ -1953,6 +2040,32 @@ const HalAgent = (function () {
         Object.assign(toolResults, more);
         activePlan = Object.assign({}, plan, { tools: [...new Set([...plan.tools, ...extra])] });
       }
+    }
+
+    if (
+      plan.useModelEnhancement &&
+      agentCfg.spawnSubtasks !== false &&
+      isComplexInvestigationQuery(trimmed, route) &&
+      !toolResults.spawn_investigation
+    ) {
+      const focus = extractSubInvestigationFocus(trimmed);
+      if (ctx.onToolProgress) {
+        ctx.onToolProgress({ phase: "start", tool: "spawn_investigation", label: "Sub-investigation" });
+      }
+      toolResults.spawn_investigation = await spawnInvestigationSubtask(ctx, focus, trimmed);
+      if (ctx.onToolProgress) {
+        ctx.onToolProgress({
+          phase: "done",
+          tool: "spawn_investigation",
+          ok: !!(toolResults.spawn_investigation && toolResults.spawn_investigation.ok),
+        });
+      }
+      activePlan = Object.assign({}, activePlan, {
+        loopSuffix:
+          (activePlan.loopSuffix || "") +
+          "\n\nPrior sub-investigation:\n" +
+          String((toolResults.spawn_investigation && toolResults.spawn_investigation.summary) || "").slice(0, 2200),
+      });
     }
 
     let outcome;
@@ -2277,6 +2390,8 @@ const HalAgent = (function () {
     shouldRunPostValidation,
     synthesizeAnswerFromTools,
     isInvestigateQuery,
+    isComplexInvestigationQuery,
+    spawnInvestigationSubtask,
   };
 })();
 

@@ -272,13 +272,89 @@ def run_node_syntax_check(repo_root: Path, site_dir: Path, rel_paths: list[str])
     return {"ok": all_ok, "results": results, "text": "\n".join(lines)}
 
 
+def _query_search_terms(query: str) -> list[str]:
+    raw = str(query or "")
+    terms: set[str] = set()
+    for t in re.findall(r"[a-z0-9_]{3,}", raw.lower()):
+        terms.add(t)
+    for chunk in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\b)", raw):
+        if len(chunk) >= 3:
+            terms.add(chunk.lower())
+    for chunk in re.findall(r"[a-z]+(?:_[a-z]+)+", raw.lower()):
+        terms.update(p for p in chunk.split("_") if len(p) >= 3)
+    stop = {
+        "the",
+        "and",
+        "for",
+        "how",
+        "what",
+        "does",
+        "with",
+        "where",
+        "when",
+        "why",
+        "this",
+        "that",
+        "from",
+        "into",
+        "handled",
+        "handle",
+        "work",
+        "works",
+        "code",
+        "source",
+        "program",
+    }
+    out = [t for t in terms if t not in stop]
+    return out[:12]
+
+
+def _path_score(rel: str, terms: list[str]) -> int:
+    low = rel.lower()
+    score = 0
+    if "/site/hal-" in low or low.endswith(("hal-agent.js", "hal-core.js", "app.js")):
+        score += 10
+    if "program_source_grep.py" in low or "desktop_app.py" in low:
+        score += 6
+    for t in terms:
+        if t in low:
+            score += 14
+    return score
+
+
+def _line_definition_boost(line: str, terms: list[str]) -> int:
+    low = line.lower()
+    boost = 0
+    for t in terms[:6]:
+        if re.search(rf"\b(function|def|const|class|async\s+function)\s+[\w]*{re.escape(t)}", low):
+            boost += 18
+        elif re.search(rf"\b{re.escape(t)}\s*[=(:]", low):
+            boost += 8
+    return boost
+
+
 def semantic_search_program(repo_root: Path, site_dir: Path, query: str, limit: int = 15) -> dict:
-    """Lightweight token-overlap search (no embeddings) across program source."""
+    """Token-overlap + path/definition scoring across program source (no embeddings)."""
     repo_root, site_dir, roots = _resolve_roots(repo_root, site_dir)
-    terms = [t for t in re.findall(r"[a-z0-9_]{3,}", str(query or "").lower()) if t not in {"the", "and", "for", "how", "what", "does", "with"}]
+    terms = _query_search_terms(query)
     if not terms:
         return {"hits": [], "count": 0, "text": "Query too short for semantic search."}
+
+    exact = " ".join(str(query or "").split()).strip()
+    grep_hits: list[dict] = []
+    if len(exact) >= 4:
+        grep_out = grep_program_source(repo_root, site_dir, exact, limit=6)
+        grep_hits = list(grep_out.get("hits") or [])
+
     scored: list[tuple[int, str, str, int]] = []
+    seen: set[tuple[str, int]] = set()
+    for hit in grep_hits:
+        key = (hit.get("file", ""), int(hit.get("line") or 1))
+        if key in seen:
+            continue
+        seen.add(key)
+        scored.append((500 + _path_score(hit.get("file", ""), terms), hit.get("file", ""), hit.get("text", ""), key[1]))
+
     for root in roots:
         for path in root.rglob("*"):
             if not path.is_file() or not _allowed_path(path, roots):
@@ -287,24 +363,25 @@ def semantic_search_program(repo_root: Path, site_dir: Path, query: str, limit: 
                 lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
             except OSError:
                 continue
-            blob = "\n".join(lines).lower()
-            name = path.name.lower()
-            score = sum(blob.count(t) * 2 + name.count(t) * 5 for t in terms)
-            if score <= 0:
-                continue
-            snippet_line = 1
-            snippet = ""
-            for line_no, line in enumerate(lines, 1):
-                low = line.lower()
-                if any(t in low for t in terms):
-                    snippet_line = line_no
-                    snippet = line.strip()[:200]
-                    break
             try:
                 rel = path.relative_to(repo_root).as_posix()
             except ValueError:
                 rel = path.name
-            scored.append((score, rel, snippet, snippet_line))
+            path_boost = _path_score(rel, terms)
+            for line_no, line in enumerate(lines, 1):
+                low = line.lower()
+                term_hits = sum(1 for t in terms if t in low)
+                if term_hits <= 0:
+                    continue
+                score = term_hits * 4 + path_boost + _line_definition_boost(line, terms)
+                if score <= 0:
+                    continue
+                key = (rel, line_no)
+                if key in seen:
+                    continue
+                seen.add(key)
+                scored.append((score, rel, line.strip()[:200], line_no))
+
     scored.sort(key=lambda x: x[0], reverse=True)
     top = scored[: max(1, min(int(limit or 15), 25))]
     if not top:
@@ -359,8 +436,43 @@ def run_allowlisted_command(repo_root: Path, command_id: str) -> dict:
         "node-check-agent": (["node", "--check", "site/hal-agent.js"], str(nr2), 30),
         "node-check-app": (["node", "--check", "site/app.js"], str(nr2), 30),
         "node-check-loop": (["node", "--check", "site/hal-agent-loop.js"], str(nr2), 30),
+        "node-check-all": (
+            ["node", "--check", "site/hal-core.js"],
+            str(nr2),
+            30,
+        ),
         "git-status": (["git", "status", "--short"], str(repo_root), 30),
+        "git-diff-stat": (["git", "diff", "--stat"], str(repo_root), 30),
+        "git-diff-names": (["git", "diff", "--name-only"], str(repo_root), 30),
+        "git-log": (["git", "log", "-5", "--oneline"], str(repo_root), 30),
     }
+    if cmd_id == "node-check-all":
+        files = [
+            "site/hal-core.js",
+            "site/hal-agent.js",
+            "site/hal-agent-loop.js",
+            "site/app.js",
+        ]
+        results = []
+        all_ok = True
+        for rel in files:
+            try:
+                proc = subprocess.run(
+                    ["node", "--check", rel],
+                    cwd=str(nr2),
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                ok = proc.returncode == 0
+                all_ok = all_ok and ok
+                err = ((proc.stderr or proc.stdout or "").strip())[:300]
+                results.append(f"{'PASS' if ok else 'FAIL'} {rel}" + (f": {err}" if err and not ok else ""))
+            except OSError as exc:
+                all_ok = False
+                results.append(f"FAIL {rel}: {exc}")
+        text = "\n".join(results)
+        return {"ok": all_ok, "command": cmd_id, "text": text, "exitCode": 0 if all_ok else 1}
     if cmd_id not in allowed:
         keys = ", ".join(sorted(allowed.keys()))
         return {"ok": False, "text": f"Command not allowed: {cmd_id}. Use: {keys}."}
