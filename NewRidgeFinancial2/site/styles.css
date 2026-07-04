@@ -3712,6 +3712,12 @@ body.nr2-desktop input:not([type="button"]):not([type="submit"]):not([type="chec
 .pv-month-end__item--fail .pv-month-end__mark { color: #d17b7b; }
 .pv-month-end__item p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .pv-month-end__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.pv-month-end-blocker { margin: 0 0 16px; padding: 14px 16px; border: 1px solid rgba(209, 123, 123, 0.45); border-radius: 12px; background: rgba(209, 123, 123, 0.08); }
+.pv-month-end-blocker__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.pv-month-end-blocker__list { margin: 0 0 8px; padding-left: 18px; color: var(--muted); font-size: 13px; }
+.pv-month-end-blocker__list li { margin: 4px 0; }
+.pv-ops-health .pv-ops-health__line { margin: 4px 0; font-size: 13px; line-height: 1.45; }
+.pv-ops-health .pv-month-end__actions { margin-top: 12px; }
 .pv-table--compact { font-size: 12px; }
 .pv-table-wrap { overflow-x: auto; }
 .pv-sd-hero {
@@ -4790,17 +4796,140 @@ body.nr2-desktop input:not([type="button"]):not([type="submit"]):not([type="chec
 .pv-canvas-metric-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.pv-canvas-metric-grid--hero {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .pv-canvas-metric {
   background: var(--fill-secondary);
   border: 1px solid var(--line-subtle);
   border-radius: 10px;
+  cursor: pointer;
   display: grid;
   gap: 10px;
   min-height: 88px;
   padding: 14px 16px;
+}
+
+.pv-canvas-metric--hero {
+  border-radius: 12px;
+  gap: 12px;
+  min-height: 108px;
+  padding: 16px 18px;
+}
+
+.pv-canvas-metric__value-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pv-canvas-metric--hero .pv-canvas-metric__value {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.pv-canvas-metric--hero .pv-canvas-metric__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.pv-canvas-metric__ico-wrap {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.pv-kpi-delta {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 8px;
+}
+
+.pv-kpi-delta--success { background: rgba(120, 168, 107, 0.18); color: var(--sage); }
+.pv-kpi-delta--warning { background: rgba(251, 146, 60, 0.16); color: #fb923c; }
+.pv-kpi-delta--neutral { background: var(--fill-tertiary); color: var(--muted); }
+
+.pv-kpi-bars {
+  align-items: flex-end;
+  display: flex;
+  gap: 3px;
+  height: 24px;
+  margin-top: 2px;
+}
+
+.pv-kpi-bar {
+  background: var(--gold);
+  border-radius: 2px;
+  flex: 1;
+  min-width: 4px;
+}
+
+.pv-kpi-bars--success .pv-kpi-bar { background: var(--sage); }
+.pv-kpi-bars--warning .pv-kpi-bar { background: #fb923c; }
+
+.pv-hal-status {
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  height: 8px;
+  width: 8px;
+}
+
+.pv-hal-status--ok { background: var(--sage); box-shadow: 0 0 0 2px rgba(120, 168, 107, 0.25); }
+.pv-hal-status--warn { background: #fb923c; box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.25); }
+.pv-hal-status--off { background: var(--muted); opacity: 0.55; }
+
+.pv-canvas-panel__head h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pv-canvas-panel {
+  border-radius: 12px;
+}
+
+.pv-canvas-metric__head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.pv-canvas-metric__ico,
+.pv-canvas-stat__ico {
+  color: var(--gold);
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 16px;
+  width: 16px;
+}
+
+.pv-canvas-metric__ico svg,
+.pv-canvas-stat__ico svg {
+  height: 16px;
+  width: 16px;
+}
+
+.pv-canvas-stat {
+  cursor: pointer;
+}
+
+.pv-ops-data__grid {
+  margin-top: 8px;
+}
+
+.pv-ops-data__stat {
+  min-height: 72px;
 }
 
 .pv-canvas-metric__label {
@@ -5058,6 +5187,7 @@ body.nr2-desktop input:not([type="button"]):not([type="submit"]):not([type="chec
 @media (max-width: 1100px) {
   .pv-canvas-metric-grid,
   .pv-canvas-compare { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pv-canvas-metric-grid--hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pv-canvas-grid-2,
   .pv-canvas-grid-3,
   .pv-canvas-grid-split,

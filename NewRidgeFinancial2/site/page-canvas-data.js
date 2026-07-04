@@ -5,6 +5,7 @@
 const PageCanvasData = (function () {
   let feed = null;
   let snapshot = null;
+  let liveIntegrationHealth = null;
 
   const COLORS = ["#78a86b", "#60a5fa", "#c084fc", "#d6b15e", "#fb923c", "#f472b6"];
   const CLAIM_LANES = ["Draft", "Needs Review", "Ready", "Denied"];
@@ -23,6 +24,20 @@ const PageCanvasData = (function () {
   function bind(nextFeed, nextSnapshot) {
     feed = nextFeed || null;
     snapshot = nextSnapshot || null;
+  }
+
+  function setLiveIntegrationHealth(payload) {
+    liveIntegrationHealth = payload || null;
+  }
+
+  function getLiveIntegrationHealth() {
+    return liveIntegrationHealth;
+  }
+
+  function integrationMetric(id) {
+    const health = liveIntegrationHealth;
+    const row = health && Array.isArray(health.integrations) ? health.integrations.find((item) => item.id === id) : null;
+    return row || null;
   }
 
   function widget(key) {
@@ -92,18 +107,21 @@ const PageCanvasData = (function () {
         hint: fin.productionMtd && fin.productionMtd.vs ? fin.productionMtd.vs : fmt(trend.trailingCollectionRate),
         tone: widgetTone("financialProductionTrend"),
         spark: prodSpark,
+        widgetKey: "financialProductionTrend",
       },
       {
         label: "Collection rate",
         value: fmt(payer.collectionRate || payer.latestMonthCollectionRate),
         hint: fin.collectionsPending ? "Collections export pending" : fmt(payer.trailingCollectionPeriods),
         tone: fin.collectionsPending ? "warning" : widgetTone("payerMixAndCollections"),
+        widgetKey: "payerMixAndCollections",
       },
       {
         label: "QuickBooks net income",
         value: fmt(ov.monthlyNetIncome),
         hint: fmt(ov.monthlyRevenue ? `Revenue ${ov.monthlyRevenue}` : null),
         tone: widgetTone("practiceFinancialOverview"),
+        widgetKey: "quickbooksProfitLossDetail",
       },
       {
         label: "SoftDent collections",
@@ -113,6 +131,94 @@ const PageCanvasData = (function () {
           : fmt(ar.aging90PlusPct ? `A/R 90+ ${ar.aging90PlusPct}` : null),
         tone: fin.collectionsPending || fin.collectionsMissing ? "warning" : widgetTone("practiceFinancialOverview"),
         spark: sparkSeries(fin.productionTrend && fin.productionTrend.average),
+        widgetKey: "practiceFinancialOverview",
+      },
+      {
+        label: "SoftDent A/R",
+        value: fmt(ar.totalOutstanding),
+        hint: fmt(ar.aging90PlusPct ? `90+ ${ar.aging90PlusPct}` : "Outstanding balance"),
+        tone: widgetTone("arAgingAndCollections") || "warning",
+        widgetKey: "arAgingAndCollections",
+      },
+    ];
+  }
+
+  function softdentKpis() {
+    const care = metrics("careDeliveryPerformance");
+    const practice = practiceStats();
+    const np = metrics("newPatients");
+    const ca = metrics("caseAcceptance");
+    const fin = dash("financial") || {};
+    const prodSpark = sparkSeries(fin.productionTrend && fin.productionTrend.production);
+    return [
+      {
+        label: "Production MTD",
+        value: fmt(care.productionTotal || metrics("financialProductionTrend").productionMtd),
+        hint: fin.productionMtd && fin.productionMtd.vs ? fin.productionMtd.vs : "SoftDent dashboard",
+        tone: widgetTone("careDeliveryPerformance"),
+        spark: prodSpark,
+        widgetKey: "careDeliveryPerformance",
+      },
+      {
+        label: "Collections",
+        value: fmt(care.collectionsTotal),
+        hint: fmt(metrics("payerMixAndCollections").collectionRate),
+        tone: widgetTone("payerMixAndCollections"),
+        widgetKey: "payerMixAndCollections",
+      },
+      {
+        label: "New patients",
+        value: fmt(np.newPatientCount || practice.newPatients),
+        hint: fmt(np.period || practice.newPatientsHint),
+        tone: widgetTone("newPatients"),
+        widgetKey: "newPatients",
+      },
+      {
+        label: "Case acceptance",
+        value: fmt(ca.acceptanceRate || practice.caseRate),
+        hint: practice.treatmentPresented ? `${practice.treatmentPresented} presented` : fmt(ca.plansPresented),
+        tone: widgetTone("caseAcceptance"),
+        widgetKey: "caseAcceptance",
+      },
+    ];
+  }
+
+  function documentsKpis() {
+    const period = metrics("periodCloseAndPosting");
+    const ap = metrics("accountsPayableAutomation");
+    const docs = snapshot && snapshot.documents;
+    const docApi = integrationMetric("documents");
+    const postingApi = integrationMetric("posting-queue");
+    const queueCount = docs && docs.queueCount != null ? docs.queueCount : null;
+    const docDetail = docApi && docApi.detail ? String(docApi.detail).replace(/[^\d]/g, "") : "";
+    return [
+      {
+        label: "Documents in period",
+        value: fmt(period.documentsInPeriod || queueCount || docDetail),
+        hint: docs && docs.period ? fmt(docs.period) : "Accounting queue",
+        tone: widgetTone("documentIntakeQueue"),
+        widgetKey: "documentIntakeQueue",
+      },
+      {
+        label: "Posted",
+        value: fmt(period.postedPct),
+        hint: "Period close",
+        tone: "success",
+        widgetKey: "periodCloseAndPosting",
+      },
+      {
+        label: "Pending review",
+        value: fmt(period.pendingAmount || ap.postingQueuePendingCount || metrics("journalPostingQueue").pendingReview),
+        hint: postingApi && postingApi.detail ? postingApi.detail : "Journal queue",
+        tone: "warning",
+        widgetKey: "journalPostingQueue",
+      },
+      {
+        label: "Expense total",
+        value: fmt(ap.expenseTotal),
+        hint: "Accounts payable",
+        tone: widgetTone("accountsPayableAutomation"),
+        widgetKey: "accountsPayableAutomation",
       },
     ];
   }
@@ -142,24 +248,9 @@ const PageCanvasData = (function () {
     const payer = metrics("payerMixAndCollections");
     const prod = fin.productionMtd || {};
     return [
-      {
-        label: "Production MTD",
-        value: fmt(prod.value),
-        delta: fmt(prod.vs || prod.trend),
-        tone: prod.trendDir === "down" ? "warning" : prod.trendDir === "up" ? "success" : undefined,
-      },
-      {
-        label: "Collection rate",
-        value: fmt(payer.collectionRate),
-        delta: fin.collectionsPending ? "Pending export" : fmt(payer.latestMonthCollectionRate),
-        tone: fin.collectionsPending ? "warning" : widgetTone("payerMixAndCollections"),
-      },
-      {
-        label: "Data quality",
-        value: fin.quality && fin.quality.score != null ? `${fin.quality.score}/100` : "—",
-        delta: financialQualityDelta(fin),
-        tone: financialQualityTone(fin),
-      },
+      { label: "Production MTD", value: fmt(prod.value), delta: fmt(prod.vs || prod.trend), tone: prod.trendDir === "down" ? "warning" : prod.trendDir === "up" ? "success" : undefined },
+      { label: "Collection rate", value: fmt(payer.collectionRate), delta: fin.collectionsPending ? "Pending export" : fmt(payer.latestMonthCollectionRate), tone: fin.collectionsPending ? "warning" : widgetTone("payerMixAndCollections") },
+      { label: "QuickBooks net", value: fmt(metrics("practiceFinancialOverview").monthlyNetIncome), delta: fmt(metrics("practiceFinancialOverview").monthlyRevenue), tone: widgetTone("quickbooksProfitLossDetail") },
     ];
   }
 
@@ -232,10 +323,10 @@ const PageCanvasData = (function () {
     const payer = metrics("payerMixAndCollections");
     const sd = dash("softdent") || {};
     return [
-      { value: fmt(care.patientBalanceTotal), label: "Patient A/R", tone: widgetTone("careDeliveryPerformance") || "warning" },
-      { value: fmt(payer.collectionRate), label: "Collection rate", tone: widgetTone("payerMixAndCollections") },
-      { value: fmt(care.patientCount || glanceValue(sd, "Total Patients")), label: "Active patients" },
-      { value: fmt(care.providerCount), label: "Providers loaded" },
+      { value: fmt(care.patientBalanceTotal), label: "Patient A/R", tone: widgetTone("careDeliveryPerformance") || "warning", widgetKey: "softdentArAging" },
+      { value: fmt(payer.collectionRate), label: "Collection rate", tone: widgetTone("payerMixAndCollections"), widgetKey: "payerMixAndCollections" },
+      { value: fmt(care.patientCount || glanceValue(sd, "Total Patients")), label: "Active patients", widgetKey: "careDeliveryPerformance" },
+      { value: fmt(care.providerCount), label: "Providers loaded", widgetKey: "careDeliveryPerformance" },
     ];
   }
 
@@ -757,6 +848,80 @@ const PageCanvasData = (function () {
     return null;
   }
 
+  function quickbooksKpis() {
+    const qb = dash("quickbooks") || {};
+    const pl = metrics("quickbooksProfitLossDetail");
+    const ebitda = metrics("ebitdaNormalization");
+    const kpis = qb.kpis || [];
+    if (kpis.length) {
+      return kpis.map((k, i) =>
+        Object.assign({}, k, {
+          value: fmt(k.value),
+          widgetKey: k.widgetKey || (i === kpis.length - 1 ? "ebitdaNormalization" : "quickbooksProfitLossDetail"),
+        }),
+      );
+    }
+    return [
+      {
+        label: "Net income YTD",
+        value: fmt(pl.netIncome || qb.netIncomeYtd),
+        hint: "QuickBooks P&L",
+        tone: widgetTone("quickbooksProfitLossDetail"),
+        widgetKey: "quickbooksProfitLossDetail",
+      },
+      {
+        label: "Revenue YTD",
+        value: fmt(pl.revenueTotal || pl.totalRevenue || qb.revenueYtd),
+        widgetKey: "quickbooksProfitLossDetail",
+      },
+      {
+        label: "Operating expenses",
+        value: fmt(pl.operatingExpenses || pl.expenseTotal || qb.expenseYtd),
+        tone: widgetTone("quickbooksProfitLossDetail"),
+        widgetKey: "quickbooksProfitLossDetail",
+      },
+      {
+        label: "EBITDA add-backs",
+        value: fmt(ebitda.ebitdaAddBackTotal || ebitda.candidateTotal),
+        hint: fmt(ebitda.expenseCategoriesScope),
+        widgetKey: "ebitdaNormalization",
+      },
+    ];
+  }
+
+  function libraryKpis() {
+    const lib = snapshot && snapshot.library;
+    const m = metrics("documentLibrary");
+    const docs = (lib && (lib.docs || lib.top)) || [];
+    const contracts = docs.filter((d) => /contract|payer|agreement/i.test(String(d.category || d.type || ""))).length;
+    const compliance = docs.filter((d) => /compliance|hipaa|osha|policy/i.test(String(d.category || d.type || ""))).length;
+    return [
+      {
+        label: "Documents indexed",
+        value: fmt(lib && lib.results != null ? lib.results : docs.length),
+        hint: lib && lib.indexStatus ? String(lib.indexStatus) : "Local library",
+        tone: widgetTone("documentLibrary"),
+        widgetKey: "documentLibrary",
+      },
+      {
+        label: "Contracts",
+        value: fmt(contracts || m.contractCount),
+        widgetKey: "documentLibrary",
+      },
+      {
+        label: "Compliance files",
+        value: fmt(compliance || m.complianceCount),
+        widgetKey: "documentLibrary",
+      },
+      {
+        label: "Expiring soon",
+        value: fmt(m.expiringSoonCount || (lib && lib.expiringSoon) || "—"),
+        tone: m.expiringSoonCount ? "warning" : undefined,
+        widgetKey: "documentLibrary",
+      },
+    ];
+  }
+
   function quickbooksPlRows() {
     const qb = dash("quickbooks") || {};
     const rows = (qb.pl && qb.pl.rows) || [];
@@ -806,19 +971,20 @@ const PageCanvasData = (function () {
     const wm = metrics("arAgingAndCollections");
     const kpis = ar.kpis || [];
     if (verifiedArWidgetReady("arAgingAndCollections") && kpis.length) {
-      return kpis.map((k) => ({
+      return kpis.map((k, i) => ({
         label: k.label,
         value: fmt(k.value),
         hint: k.hint || "",
         tone: k.tone === "warn" || k.tone === "warning" ? "warning" : k.tone === "green" || k.tone === "success" ? "success" : undefined,
         spark: null,
+        widgetKey: ["arAgingAndCollections", "arAgingAndCollections", "arAgingAndCollections", "smartClaimsAndReceivables"][i] || "arAgingAndCollections",
       }));
     }
     return [
-      { label: "Total outstanding", value: fmt(wm.totalOutstanding), hint: "Verified A/R", tone: widgetTone("arAgingAndCollections") || "warning" },
-      { label: "90+ days", value: fmt(wm.aging90PlusPct), hint: "Aging bucket", tone: "warning" },
-      { label: "Collections MTD", value: fmt(wm.collectionsThisPeriod), hint: "This period", tone: widgetTone("arAgingAndCollections") },
-      { label: "Follow-up queue", value: fmt(wm.followUpQueueCount), hint: "Claims needing action" },
+      { label: "Total outstanding", value: fmt(wm.totalOutstanding), hint: "Verified A/R", tone: widgetTone("arAgingAndCollections") || "warning", widgetKey: "arAgingAndCollections" },
+      { label: "90+ days", value: fmt(wm.aging90PlusPct), hint: "Aging bucket", tone: "warning", widgetKey: "arAgingAndCollections" },
+      { label: "Collections MTD", value: fmt(wm.collectionsThisPeriod), hint: "This period", tone: widgetTone("arAgingAndCollections"), widgetKey: "arAgingAndCollections" },
+      { label: "Follow-up queue", value: fmt(wm.followUpQueueCount), hint: "Claims needing action", widgetKey: "smartClaimsAndReceivables" },
     ];
   }
 
@@ -889,10 +1055,10 @@ const PageCanvasData = (function () {
     const claims = snapshot && snapshot.claims;
     const pipelineTone = widgetTone("claimsPipeline");
     return [
-      { label: "Open claims", value: fmt(m.totalClaims || (claims && claims.total)), tone: pipelineTone, spark: null },
-      { label: "Needs review", value: fmt(m.needsReviewCount), tone: m.needsReviewCount ? "warning" : pipelineTone },
-      { label: "Ready", value: fmt(m.readyCount), tone: m.readyCount ? "success" : pipelineTone },
-      { label: "Denied", value: fmt(m.deniedCount), tone: m.deniedCount ? "warning" : pipelineTone },
+      { label: "Open claims", value: fmt(m.totalClaims || (claims && claims.total)), tone: pipelineTone, spark: null, widgetKey: "claimsPipeline" },
+      { label: "Needs review", value: fmt(m.needsReviewCount), tone: m.needsReviewCount ? "warning" : pipelineTone, widgetKey: "claimsPipeline" },
+      { label: "Ready", value: fmt(m.readyCount), tone: m.readyCount ? "success" : pipelineTone, widgetKey: "claimsPipeline" },
+      { label: "Denied", value: fmt(m.deniedCount), tone: m.deniedCount ? "warning" : pipelineTone, widgetKey: "claimsPipeline" },
     ];
   }
 
@@ -939,6 +1105,69 @@ const PageCanvasData = (function () {
     return [];
   }
 
+  function documentsSourceBreakdown() {
+    const docs = snapshot && snapshot.documents;
+    const counts = (docs && docs.sourceCounts) || {};
+    return [
+      { value: fmt(counts.quickbooks || 0), label: "QuickBooks rows", tone: "default", widgetKey: "documentIntakeQueue" },
+      { value: fmt(counts.softdent || 0), label: "SoftDent rows", tone: "default", widgetKey: "documentIntakeQueue" },
+      { value: fmt(counts.ocr || 0), label: "OCR inbox", tone: "default", widgetKey: "documentIntakeQueue" },
+      { value: fmt(counts.manual || 0), label: "Manual", tone: "default", widgetKey: "documentIntakeQueue" },
+    ];
+  }
+
+  function opsDataPanelHtml() {
+    if (!snapshot) return "";
+    const ov = metrics("practiceFinancialOverview");
+    const ar = metrics("arAgingAndCollections");
+    const claims = metrics("claimsPipeline");
+    const docs = snapshot.documents || {};
+    const docApi = integrationMetric("documents");
+    const postingApi = integrationMetric("posting-queue");
+    const docCount =
+      docs.queueCount != null
+        ? fmt(docs.queueCount)
+        : docApi && docApi.detail
+          ? fmt(String(docApi.detail).match(/\d+/)?.[0] || "—")
+          : "—";
+    const postingCount =
+      metrics("journalPostingQueue").queueCount && metrics("journalPostingQueue").queueCount !== "—"
+        ? metrics("journalPostingQueue").queueCount
+        : postingApi && postingApi.detail
+          ? fmt(String(postingApi.detail).match(/\d+/)?.[0] || "—")
+          : "—";
+    const rows = [
+      { label: "Production MTD", value: fmt(ov.productionTotal), widgetKey: "practiceFinancialOverview" },
+      { label: "Collections", value: fmt(ov.collectionsTotal), widgetKey: "payerMixAndCollections" },
+      { label: "Open A/R", value: fmt(ar.totalOutstanding), widgetKey: "arAgingAndCollections" },
+      { label: "Open claims", value: fmt(claims.totalClaims), widgetKey: "claimsPipeline" },
+      { label: "Documents", value: docCount, widgetKey: "documentIntakeQueue" },
+      { label: "Posting queue", value: fmt(postingCount), widgetKey: "journalPostingQueue" },
+    ];
+    const cards = rows
+      .map((row) => {
+        const icon = typeof AppIcons !== "undefined" ? AppIcons.widget(row.widgetKey) : "";
+        return `<article class="pv-canvas-stat pv-ops-data__stat" data-hal-widget-key="${escHtml(row.widgetKey)}" data-hal-cmd="Explain ${escHtml(row.label)}" role="button" tabindex="0">
+          <span class="pv-canvas-stat__ico">${icon}</span>
+          <strong>${escHtml(row.value)}</strong>
+          <span>${escHtml(row.label)}</span>
+        </article>`;
+      })
+      .join("");
+    return `<section class="pv-card pv-ops-data" data-hal-widget-key="officeManagerPriorities">
+      <div class="pv-card__head"><h3>Practice data</h3><span class="pv-muted">Live snapshot · API-backed counts</span></div>
+      <div class="pv-canvas-stat-grid pv-ops-data__grid">${cards}</div>
+      <div class="pv-month-end__actions">
+        <button type="button" class="pv-button" data-ops-refresh-health="1">Refresh data</button>
+        <button type="button" class="pv-button pv-button--primary" data-ops-support-bundle="1">Export support bundle</button>
+      </div>
+    </section>`;
+  }
+
+  function opsHealthPanelHtml() {
+    return opsDataPanelHtml();
+  }
+
   function documentsQueueRows() {
     const docs = snapshot && snapshot.documents;
     const rows = (docs && (docs.workbookSample || docs.top)) || [];
@@ -956,10 +1185,10 @@ const PageCanvasData = (function () {
     const period = metrics("periodCloseAndPosting");
     const ap = metrics("accountsPayableAutomation");
     return [
-      { value: fmt(period.documentsInPeriod), label: "Documents in period", tone: widgetTone("periodCloseAndPosting") },
-      { value: fmt(period.postedPct), label: "Posted", tone: "success" },
-      { value: fmt(period.pendingAmount || ap.postingQueuePendingCount), label: "Pending review", tone: "warning" },
-      { value: fmt(ap.expenseTotal), label: "Expense total", tone: "warning" },
+      { value: fmt(period.documentsInPeriod), label: "Documents in period", tone: widgetTone("periodCloseAndPosting"), widgetKey: "periodCloseAndPosting" },
+      { value: fmt(period.postedPct), label: "Posted", tone: "success", widgetKey: "periodCloseAndPosting" },
+      { value: fmt(period.pendingAmount || ap.postingQueuePendingCount), label: "Pending review", tone: "warning", widgetKey: "journalPostingQueue" },
+      { value: fmt(ap.expenseTotal), label: "Expense total", tone: "warning", widgetKey: "accountsPayableAutomation" },
     ];
   }
 
@@ -977,6 +1206,12 @@ const PageCanvasData = (function () {
   function journalQueueItems() {
     const jq = snapshot && snapshot.journalPostingQueue;
     return Array.isArray(jq && jq.items) ? jq.items : [];
+  }
+
+  function monthEndBlockerStripHtml() {
+    if (typeof MonthEndClose === "undefined" || !MonthEndClose.renderBlockerStripHtml || !snapshot) return "";
+    const payload = MonthEndClose.buildReconciliationPayload(snapshot);
+    return MonthEndClose.renderBlockerStripHtml(payload.checklist, escHtml);
   }
 
   function monthEndChecklistHtml() {
@@ -1003,15 +1238,14 @@ const PageCanvasData = (function () {
   }
 
   function officeKpis() {
-    const pri = metrics("officeManagerPriorities");
     const ov = metrics("practiceFinancialOverview");
     const ar = metrics("arAgingAndCollections");
     const np = metrics("newPatients");
     return [
-      { label: "Production MTD", value: fmt(ov.productionTotal), hint: "Owner dashboard", tone: widgetTone("practiceFinancialOverview") },
-      { label: "Open A/R", value: fmt(ar.totalOutstanding), hint: "Verified receivables", tone: "warning" },
-      { label: "HAL attention items", value: fmt(pri.attentionItems), hint: fmt(`${pri.failedWidgets || 0} failed · ${pri.partialWidgets || 0} partial`), tone: pri.attentionItems > 0 ? "warning" : "success" },
-      { label: "New patients", value: fmt(np.newPatientCount), hint: "Practice performance" },
+      { label: "Production MTD", value: fmt(ov.productionTotal), hint: "Owner dashboard", tone: widgetTone("practiceFinancialOverview"), widgetKey: "practiceFinancialOverview" },
+      { label: "Open A/R", value: fmt(ar.totalOutstanding), hint: "Verified receivables", tone: "warning", widgetKey: "arAgingAndCollections" },
+      { label: "Open claims", value: fmt(metrics("claimsPipeline").totalClaims), hint: "Claims workbench", tone: widgetTone("claimsPipeline"), widgetKey: "claimsPipeline" },
+      { label: "New patients", value: fmt(np.newPatientCount), hint: "Practice performance", widgetKey: "newPatients" },
     ];
   }
 
@@ -1037,13 +1271,23 @@ const PageCanvasData = (function () {
     if (failed.length) {
       return [
         {
-          lane: "HAL priorities",
+          lane: "Billing focus",
           tone: "orange",
-          items: failed.slice(0, 6).map((w) => w.title || w.key),
+          items: failed.slice(0, 6).map((w) => `${w.title || w.key}: ${formatMetricsLine(w)}`),
         },
       ];
     }
     return [];
+  }
+
+  function formatMetricsLine(widget) {
+    if (!widget || !widget.metrics) return "Review";
+    const entries = Object.entries(widget.metrics).filter(([, v]) => v != null && v !== "" && v !== "—");
+    if (!entries.length) return "Review";
+    return entries
+      .slice(0, 2)
+      .map(([k, v]) => `${k} ${v}`)
+      .join(" · ");
   }
 
   function officeTaskRows() {
@@ -1070,12 +1314,14 @@ const PageCanvasData = (function () {
 
   function taxKpis() {
     const plan = taxPlan();
-    if (plan && plan.kpis && plan.kpis.length) return plan.kpis;
+    if (plan && plan.kpis && plan.kpis.length) {
+      return plan.kpis.map((k) => Object.assign({}, k, { widgetKey: k.widgetKey || "quickbooksProfitLossDetail" }));
+    }
     return [
-      { label: "Entity", value: "S corporation", tone: "info", hint: "Awaiting QuickBooks import" },
-      { label: "State", value: "Kansas", tone: "info", hint: "K-120S · K-40" },
-      { label: "MemoAI topics", value: "19", tone: "success", hint: "Governed tax memories" },
-      { label: "Filing posture", value: "CPA review", tone: "warning", hint: "Planning only" },
+      { label: "Book net income", value: fmt(metrics("quickbooksProfitLossDetail").netIncome || metrics("practiceFinancialOverview").monthlyNetIncome), tone: widgetTone("quickbooksProfitLossDetail"), hint: "QuickBooks P&L", widgetKey: "quickbooksProfitLossDetail" },
+      { label: "Annualized book", value: fmtTaxMoney(parseAmount(metrics("practiceFinancialOverview").monthlyNetIncome) * 12), tone: "info", hint: "Planning estimate", widgetKey: "ebitdaNormalization" },
+      { label: "Federal est.", value: "Planning", tone: "info", hint: "CPA review required", widgetKey: "quickbooksProfitLossDetail" },
+      { label: "Kansas est.", value: "Planning", tone: "info", hint: "K-120S · K-40", widgetKey: "quickbooksProfitLossDetail" },
     ];
   }
 
@@ -1208,8 +1454,12 @@ const PageCanvasData = (function () {
 
   return {
     bind,
+    setLiveIntegrationHealth,
+    getLiveIntegrationHealth,
     periodSubtitle,
     financialKpis,
+    softdentKpis,
+    documentsKpis,
     financialCompare,
     financialWeeklyBars,
     financialYtdBars,
@@ -1231,6 +1481,8 @@ const PageCanvasData = (function () {
     narrativesImportNotice,
     taxesImportNotice,
     quickbooksImportNotice,
+    quickbooksKpis,
+    libraryKpis,
     quickbooksPlRows,
     quickbooksExpenseBars,
     quickbooksExpenseDonut,
@@ -1248,8 +1500,12 @@ const PageCanvasData = (function () {
     documentsPeriodStats,
     journalRows,
     journalQueueItems,
+    monthEndBlockerStripHtml,
     monthEndChecklistHtml,
     monthEndReconciliationPayload,
+    documentsSourceBreakdown,
+    opsHealthPanelHtml,
+    opsDataPanelHtml,
     libraryRows,
     firstLibraryDoc,
     officeKpis,

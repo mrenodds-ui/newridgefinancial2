@@ -112,6 +112,13 @@ def integration_health_snapshot(
     sync_state: dict[str, Any] | None = None,
     deep_diagnostics: bool = False,
 ) -> dict[str, Any]:
+    if deep_diagnostics:
+        try:
+            from import_sync import refresh_quickbooks_sdk_derived
+
+            refresh_quickbooks_sdk_derived()
+        except Exception:
+            pass
     bundle = bundle or load_import_bundle(sync=False, deep=deep_diagnostics)
     diagnostics = bundle.get("diagnostics")
     if not diagnostics:
@@ -140,6 +147,8 @@ def integration_health_snapshot(
             continue
         severity = str(row.get("severity") or "warning")
         if severity == "optional" and row.get("status") == STATUS_MISSING:
+            continue
+        if severity == "warning" and row.get("status") in {STATUS_MISSING, STATUS_STALE}:
             continue
         if row.get("status") in {STATUS_STALE, STATUS_MISSING} or (
             row.get("status") != STATUS_CONNECTED and severity == "critical"

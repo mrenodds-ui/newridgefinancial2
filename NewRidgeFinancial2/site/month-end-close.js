@@ -302,12 +302,33 @@ const MonthEndClose = (function () {
     </section>`;
   }
 
+  function renderBlockerStripHtml(checklist, esc) {
+    const escape = typeof esc === "function" ? esc : (value) => String(value || "");
+    if (!checklist || !checklist.blockers) return "";
+    const fails = (checklist.items || []).filter((row) => row.status === "fail").slice(0, 3);
+    const warns = (checklist.items || []).filter((row) => row.status === "warn").slice(0, 2);
+    const chips = fails.concat(warns);
+    if (!chips.length) return "";
+    const list = chips
+      .map((row) => `<li><strong>${escape(row.label)}</strong> — ${escape(row.detail)}</li>`)
+      .join("");
+    return `<div class="pv-month-end-blocker" role="status">
+      <div class="pv-month-end-blocker__head">
+        <strong>Month-end blockers</strong>
+        <span class="pv-month-end__badge pv-month-end__badge--fail">${escape(checklist.blockers)} blocker(s)</span>
+      </div>
+      <ul class="pv-month-end-blocker__list">${list}</ul>
+      <p class="pv-muted">Resolve imports and data quality before period close. Full checklist is below.</p>
+    </div>`;
+  }
+
   return {
     buildMonthEndChecklist,
     buildReconciliationPayload,
     formatReconciliationExport,
     formatReconciliationCsv,
     renderChecklistHtml,
+    renderBlockerStripHtml,
     renderPostingAuditHtml,
     postingApi,
   };
@@ -318,4 +339,7 @@ if (typeof module !== "undefined" && module.exports) {
 }
 if (typeof window !== "undefined") {
   window.MonthEndClose = MonthEndClose;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.MonthEndClose = MonthEndClose;
 }

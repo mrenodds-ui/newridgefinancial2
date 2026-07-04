@@ -59,6 +59,13 @@ const HalPageWidgets = (function () {
     return `<span class="pv-hal-widget__badge pv-hal-widget__badge--${tone}" title="HAL widget ${esc(widgetKey)}">${mark}<span class="pv-hal-widget__badge-copy">HAL · ${esc(label)}</span></span>`;
   }
 
+  function halStatusDot(widgetKey, widget) {
+    const status = widget ? widget.status : "FAILED";
+    const tone = statusTone(status);
+    const label = statusLabel(status);
+    return `<span class="pv-hal-status pv-hal-status--${tone}" title="HAL · ${esc(label)} · ${esc(widgetKey)}"></span>`;
+  }
+
   function widgetRequirementText(widget) {
     const key = widget && widget.key;
     const map =
@@ -159,11 +166,19 @@ const HalPageWidgets = (function () {
     return `<div class="pv-canvas-hal-strip pv-hal-strip--${tone}" role="status"><span class="pv-hal-strip__mark">${mark}</span><strong>HAL</strong><span>${esc(parts.join(" · "))} on this page</span></div>`;
   }
 
-  function panelChrome(widgetKey, title, feed) {
+  function panelChrome(widgetKey, title, feed, opts) {
+    const options = opts || {};
+    const dataOnly = Boolean(options.dataOnly);
     const widget = widgetFromFeed(feed, widgetKey);
     const tone = statusTone(widget ? widget.status : "FAILED");
-    const badge = widgetKey ? halBadge(widgetKey, widget) : "";
-    const note = widgetKey ? halNote(widget) : "";
+    const badge = dataOnly || !widgetKey ? "" : halBadge(widgetKey, widget);
+    let note = "";
+    if (widgetKey && !dataOnly) {
+      note = halNote(widget);
+    } else if (widgetKey && dataOnly && widget && String(widget.status || "").toUpperCase() === "SUCCESS") {
+      const metrics = formatMetrics(widget);
+      if (metrics) note = `<p class="pv-hal-widget__note">${esc(metrics)}</p>`;
+    }
     const cmdLabel = (widget && widget.title) || title || widgetKey;
     const halCmd = widgetKey && cmdLabel ? `Explain ${cmdLabel}` : "";
     const cmdAttr = halCmd ? ` data-hal-cmd="${esc(halCmd)}"` : "";
@@ -189,6 +204,7 @@ const HalPageWidgets = (function () {
     canvasPageStrip,
     panelChrome,
     halBadge,
+    halStatusDot,
     halNote,
     statusLabel,
     statusTone,

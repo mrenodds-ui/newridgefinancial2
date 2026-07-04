@@ -3546,6 +3546,12 @@ if (typeof window !== "undefined") {
     invalidateProgramCaches("journal-queue-updated");
     scheduleHalWidgetRefresh();
   });
+  window.addEventListener("nr2:page-refresh-requested", () => {
+    const currentId = (window.location.hash || "").replace("#", "") || getPages()[0].id;
+    if (currentId !== "hal" && appPage && !appPage.hidden && PageViews && PageViews.hasPage(currentId)) {
+      PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
+    }
+  });
 }
 
 DesktopBridge.whenReady(() => {

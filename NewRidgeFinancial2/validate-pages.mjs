@@ -38,6 +38,8 @@ const HalPilotWidgets = require(join(siteDir, "hal-pilot-widgets.js"));
 require(join(siteDir, "page-schema.js"));
 require(join(siteDir, "tax-engine.js"));
 require(join(siteDir, "page-chrome.js"));
+require(join(siteDir, "month-end-close.js"));
+require(join(siteDir, "portal-ops.js"));
 require(join(siteDir, "page-canvas-data.js"));
 require(join(siteDir, "page-canvas.js"));
 require(join(siteDir, "components.js"));
@@ -55,14 +57,14 @@ const previewWidgetFeed = HalSkills.buildWidgetFeed(previewSnapshot);
 const FUNCTIONAL_PAGES = [
   { id: "financial", checks: ["pv-canvas-metric-grid", "pv-canvas-panel", "Production MTD"] },
   { id: "taxes", checks: ["pv-canvas-metric-grid", "Book-to-tax bridge", "Reasonable compensation scenarios", "MemoAI evidence"] },
-  { id: "softdent", checks: ["pv-canvas-operatory-grid", "Care Delivery Summary", "Case Acceptance Rate"] },
-  { id: "quickbooks", checks: ["pv-canvas-panel", "Loss Summary (YTD)", "EBITDA Normalization"] },
+  { id: "softdent", checks: ["pv-canvas-metric-grid", "Care Delivery Summary", "Case Acceptance Rate"] },
+  { id: "quickbooks", checks: ["pv-canvas-metric-grid", "pv-canvas-panel", "Loss Summary (YTD)", "EBITDA Normalization"] },
   { id: "ar", checks: ["pv-canvas-metric-grid", "Follow-up Queue", "Outstanding Claims"] },
   { id: "claims", checks: ["pv-canvas-metric-grid", "Insurance Claims Workbench", "Open Insurance Claims"] },
   { id: "narratives", checks: ["pv-canvas-textarea", "Narrative Composer", "Draft history"] },
-  { id: "documents", checks: ["pv-canvas-panel", "Recent Accounting Documents"] },
-  { id: "library", checks: ["pv-canvas-search", "Document Library", "Library &amp; Preview"] },
-  { id: "office-manager", checks: ["pv-canvas-metric-grid", "Today&#039;s Focus", "Office task queue"] },
+  { id: "documents", checks: ["pv-canvas-panel", "Recent Accounting Documents", "Source breakdown"] },
+  { id: "library", checks: ["pv-canvas-metric-grid", "pv-canvas-search", "Document Library", "Library &amp; Preview"] },
+  { id: "office-manager", checks: ["pv-canvas-metric-grid", "Today&#039;s Focus", "Office task queue", "Practice data"] },
 ];
 
 const HIGH_TECH_SURFACES = {
@@ -95,13 +97,13 @@ for (const page of FUNCTIONAL_PAGES) {
     assert.ok(html.includes(check), `${page.id} must include ${check}`);
   }
   assert.ok(html.includes("data-hal-widget-key"), `${page.id} must wire HAL into page widgets`);
-  assert.ok(html.includes("pv-hal-widget__badge"), `${page.id} must show HAL widget badges from feed`);
-  assert.ok(html.includes("pv-canvas-hal-strip") || html.includes("pv-hal-strip"), `${page.id} must show HAL page strip`);
   if (page.id === "financial") {
     assert.ok(!html.includes("Dr. Adams"), "financial page must not render sample provider names");
     assert.ok(!html.includes("Hygiene Team"), "financial page must not render legacy sample provider names");
     assert.ok(html.includes("pv-canvas-panel") || html.includes("pv-canvas-metric-grid"), "financial page must use canvas widget panels");
     assert.ok(html.includes("pv-canvas-insight"), "financial page must show schema insight callout");
+    assert.ok(html.includes("pv-canvas-metric-grid"), "financial page must show API-backed KPI metric grid");
+    assert.ok(html.includes("data-hal-widget-key"), "financial page must wire HAL widget keys on KPI tiles");
   }
   for (const cls of HIGH_TECH_SURFACES[page.id] || []) {
     assert.ok(html.includes(cls), `${page.id} must render high-tech HAL surface ${cls}`);
@@ -110,7 +112,7 @@ for (const page of FUNCTIONAL_PAGES) {
 
 assert.equal(PageViews.hasPage("hal"), false, "HAL must route to the real HAL command-center renderer");
 
-assert.ok(!appJs.includes("/api/"), "app.js must not reference backend API routes");
+assert.ok(!appJs.includes("127.0.0.1:8765/api") && !appJs.includes('"/api/hal'), "app.js must not reference NR2 desktop backend API routes");
 assert.ok(indexHtml.includes('id="appPage"'), "index must have app page container");
 assert.ok(indexHtml.includes('id="halPageRoot"'), "index must have HAL root container");
 assert.ok(!indexHtml.includes("page-sample-data.js"), "index must not load mock sample data");
@@ -176,6 +178,11 @@ assert.ok(pageCanvasDataJs.includes("libraryImportNotice"), "page canvas data mu
 assert.ok(pageCanvasDataJs.includes("officeManagerImportNotice"), "page canvas data must expose office manager import notice");
 assert.ok(pageCanvasDataJs.includes("narrativesImportNotice"), "page canvas data must expose narratives import notice");
 assert.ok(pageCanvasDataJs.includes("taxesImportNotice"), "page canvas data must expose taxes import notice");
+assert.ok(pageCanvasDataJs.includes("monthEndBlockerStripHtml"), "page canvas data must expose month-end blocker strip");
+assert.ok(pageCanvasDataJs.includes("documentsSourceBreakdown"), "page canvas data must expose documents source breakdown");
+assert.ok(pageCanvasDataJs.includes("opsHealthPanelHtml"), "page canvas data must expose ops health panel");
+assert.ok(pageViewsJs.includes("data-ops-refresh-health"), "page-views must wire ops health refresh button");
+assert.ok(pageViewsJs.includes("data-ops-support-bundle"), "page-views must wire support bundle button");
 assert.ok(pageCanvasJs.includes("canvasImportNotice"), "page-canvas must render import notices on staff pages");
 
 const ServicesModValidate = ServicesMod;

@@ -215,11 +215,11 @@
         "quickbooks_accounts_receivable.csv",
         "quickbooks_aging.csv"
       ],
-      "sourceOwner": null,
-      "generatedBy": [],
+      "sourceOwner": "quickbooks_sdk_summary",
+      "generatedBy": ["quickbooks_sdk_summary"],
       "freshnessMaxMinutes": 1440,
       "severity": "optional",
-      "automated": false,
+      "automated": true,
       "requiredFields": ["Bucket"],
       "optionalFields": ["Balance", "Amount", "AccountsReceivable"],
       "fieldAliases": {
@@ -227,7 +227,7 @@
         "Balance": ["Balance", "balance", "Amount", "amount", "AccountsReceivable"],
         "AccountsReceivable": ["AccountsReceivable", "accountsReceivable", "TotalAR", "total_ar"]
       },
-      "note": "QuickBooks A/R is not yet produced by an automated collector; NR2 will load it when a file appears."
+      "note": "Generated from QuickBooks SDK probe summary when accounts_receivable or ar_aging is present; manual CSV still accepted."
     },
     "softdent.newPatients": {
       "system": "softdent",

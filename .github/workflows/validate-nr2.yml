@@ -55,6 +55,9 @@ jobs:
       - name: Live import smoke
         run: node smoke_desktop_live.mjs
 
+      - name: Staff page smoke (financial, documents, office-manager)
+        run: node smoke_desktop_pages.mjs
+
       - name: Integration health CLI
         run: python integration_health.py
 

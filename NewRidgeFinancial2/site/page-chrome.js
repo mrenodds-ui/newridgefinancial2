@@ -71,6 +71,8 @@ const PageChrome = (function () {
   }
 
   function resolveInsight(state) {
+    const schema = schemaApi() && state && state.pageId ? schemaApi().byId(state.pageId) : null;
+    if (schema && schema.insight) return schema.insight;
     const proactive = proactiveInsight(state && state.halData);
     if (proactive) return proactive;
     const feed = state && state.halWidgetFeed;
@@ -143,7 +145,7 @@ const PageChrome = (function () {
       hero,
       toolbar,
       insight: insight ? U.PageInsight(insight) : "",
-      strip: canvasHalStrip(state.pageId, feed),
+      strip: "",
       commands: halCommandSurface(state.pageId, schema.title, { registry: state.halData && state.halData.registry }),
     });
   }

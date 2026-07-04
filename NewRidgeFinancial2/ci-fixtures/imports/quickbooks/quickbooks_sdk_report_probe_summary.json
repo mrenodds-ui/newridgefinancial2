@@ -1,0 +1,16 @@
+{
+  "status": "QUICKBOOKS_SDK_REPORT_DATA_AVAILABLE",
+  "period": "2025-06",
+  "total_income": 109907.52,
+  "total_expenses": 77066.11,
+  "accounts_receivable": 17250.00,
+  "ar_aging": [
+    { "bucket": "0-30", "balance": 12500.0 },
+    { "bucket": "31-60", "balance": 3200.0 },
+    { "bucket": "61-90", "balance": 1100.0 },
+    { "bucket": "90+", "balance": 450.0 }
+  ],
+  "top_expense_categories": [
+    { "category": "Payroll", "amount": 42000.0, "period": "2025-06" }
+  ]
+}

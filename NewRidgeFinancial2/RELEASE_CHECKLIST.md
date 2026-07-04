@@ -10,7 +10,10 @@ Use before tagging a desktop build or handing off to practice staff.
 - [ ] `node NewRidgeFinancial2/test_month_end_close.mjs`
 - [ ] `node NewRidgeFinancial2/validate-hal.mjs`
 - [ ] `node NewRidgeFinancial2/validate-pages.mjs`
+- [ ] `node NewRidgeFinancial2/smoke_desktop_live.mjs`
+- [ ] `node NewRidgeFinancial2/smoke_desktop_pages.mjs`
 - [ ] `NewRidgeFinancial2/import-automation/Run-Accounting-MonthEnd-Checklist.ps1` (when imports present)
+- [ ] `powershell -ExecutionPolicy Bypass -File scripts/Invoke-NR2PracticeOnboarding.ps1` (first workstation setup)
 
 ## Data paths
 
@@ -30,7 +33,7 @@ Use before tagging a desktop build or handing off to practice staff.
 ## Out of scope (known gaps)
 
 - Claims pipeline still requires upstream `softdent_claims_export.csv` (not generated from analytics DB)
-- QuickBooks A/R export remains manual until collector exists
+- QuickBooks A/R is collected from SDK probe summary when available; manual CSV still accepted as fallback
 - NR2 never posts to QuickBooks — approved CSV is for human entry only
 
 ## HAL eval artifacts

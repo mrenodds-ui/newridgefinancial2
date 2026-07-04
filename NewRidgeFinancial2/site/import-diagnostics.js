@@ -230,8 +230,13 @@ const ImportDiagnostics = (function () {
       detail = "Dataset file present but contains no rows.";
     }
     if (upstreamFile && upstreamFile.ageMinutes !== null && upstreamFile.ageMinutes > freshnessMax && status === STATUS.CONNECTED) {
-      status = STATUS.STALE;
-      detail = `Upstream export is stale (${upstreamFile.ageMinutes} min old). ${detail}`;
+      const localFresh = datasetAge !== null && datasetAge <= freshnessMax;
+      if (localFresh) {
+        detail = `Local cache is fresh; upstream source is ${upstreamFile.ageMinutes} min old. ${detail}`;
+      } else {
+        status = STATUS.STALE;
+        detail = `Upstream export is stale (${upstreamFile.ageMinutes} min old). ${detail}`;
+      }
     }
 
     const currentSha = datasetPayload && datasetPayload.sha256 ? String(datasetPayload.sha256) : "";

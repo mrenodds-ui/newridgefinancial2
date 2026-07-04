@@ -142,15 +142,49 @@ const PageCanvas = (function () {
     return `<div class="pv-donut-wrap"><div class="pv-donut-chart" style="width:${sz}px;height:${sz}px;background:conic-gradient(${stops.join(", ")})"><div class="pv-donut-chart__hole">${center || ""}</div></div><div class="pv-legend">${legend}</div></div>`;
   }
 
+  function barSparkline(values, tone) {
+    if (!values || !values.length) return "";
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const range = max - min || 1;
+    const bars = values
+      .map((v, i) => {
+        const h = Math.max(3, ((v - min) / range) * 20);
+        const opacity = i === values.length - 1 ? 1 : 0.35 + (i / values.length) * 0.45;
+        return `<span class="pv-kpi-bar" style="height:${h.toFixed(1)}px;opacity:${opacity.toFixed(2)}"></span>`;
+      })
+      .join("");
+    const toneClass = tone ? ` pv-kpi-bars--${tone}` : "";
+    return `<div class="pv-kpi-bars${toneClass}">${bars}</div>`;
+  }
+
   function canvasMetricTile(kpi) {
     const toneClass = kpi.tone ? ` pv-canvas-metric--${kpi.tone}` : "";
-    const sparkColor = kpi.tone === "success" ? "#78a86b" : kpi.tone === "warning" ? "#fb923c" : "#d6b15e";
-    const spark = kpi.spark ? svgSparkline(kpi.spark, sparkColor) : "";
-    return `<article class="pv-canvas-metric${toneClass}">
-      <span class="pv-canvas-metric__label">${esc(kpi.label)}</span>
-      <strong class="pv-canvas-metric__value">${esc(kpi.value)}</strong>
+    const widgetKey = kpi.widgetKey || "";
+    const HW = halWidgetsApi();
+    const widget = HW && widgetKey && activeFeed ? HW.widgetFromFeed(activeFeed, widgetKey) : null;
+    const icon =
+      widgetKey && typeof AppIcons !== "undefined"
+        ? `<span class="pv-canvas-metric__ico">${AppIcons.widget(widgetKey)}</span>`
+        : "";
+    const statusDot = HW && widgetKey && HW.halStatusDot ? HW.halStatusDot(widgetKey, widget) : "";
+    const cmdLabel = (widget && widget.title) || kpi.label || widgetKey;
+    const halCmd = widgetKey && cmdLabel ? ` data-hal-cmd="Explain ${esc(cmdLabel)}"` : "";
+    const halTone = widgetKey && HW ? ` pv-hal-widget pv-hal-widget--${HW.statusTone(widget ? widget.status : "FAILED")}` : "";
+    const attrs = widgetKey ? ` data-hal-widget-key="${esc(widgetKey)}"${halCmd} role="button" tabindex="0"` : "";
+    const deltaTone = kpi.tone === "success" ? "success" : kpi.tone === "warning" ? "warning" : "neutral";
+    const deltaPill = kpi.hint ? `<span class="pv-kpi-delta pv-kpi-delta--${deltaTone}">${esc(kpi.hint)}</span>` : "";
+    const spark = kpi.spark ? barSparkline(kpi.spark, kpi.tone || "default") : "";
+    return `<article class="pv-canvas-metric pv-canvas-metric--hero${toneClass}${halTone}"${attrs}>
+      <div class="pv-canvas-metric__head">
+        <span class="pv-canvas-metric__label">${esc(String(kpi.label || "").toUpperCase())}</span>
+        <span class="pv-canvas-metric__ico-wrap">${icon}${statusDot}</span>
+      </div>
+      <div class="pv-canvas-metric__value-row">
+        <strong class="pv-canvas-metric__value">${esc(kpi.value)}</strong>
+        ${deltaPill}
+      </div>
       ${spark}
-      ${kpi.hint ? `<span class="pv-canvas-metric__hint">${esc(kpi.hint)}</span>` : ""}
     </article>`;
   }
 
@@ -166,12 +200,12 @@ const PageCanvas = (function () {
       .join("")}</div>`;
   }
 
-  function canvasPanel({ title, caption, accent, widgetKey, body }) {
+  function canvasPanel({ title, caption, accent, widgetKey, body, dataOnly }) {
     const accentClass = accent ? ` pv-canvas-panel--${esc(accent)}` : "";
     const HW = halWidgetsApi();
     const chrome =
       HW && widgetKey
-        ? HW.panelChrome(widgetKey, title, activeFeed)
+        ? HW.panelChrome(widgetKey, title, activeFeed, { dataOnly: dataOnly !== false })
         : {
             badge: "",
             note: "",
@@ -181,18 +215,22 @@ const PageCanvas = (function () {
           };
     return `<section class="pv-canvas-panel${accentClass}${(chrome.toneClass || "").trim()}"${chrome.attrs}>
       <header class="pv-canvas-panel__head">${chrome.icon}<h3>${esc(title)}</h3>${chrome.badge}</header>
-      <div class="pv-canvas-panel__body">${chrome.note}${body}</div>
-      ${caption ? `<footer class="pv-canvas-panel__foot">${esc(caption)}${widgetKey ? ` · ${esc(widgetKey)}` : ""}</footer>` : ""}
+      <div class="pv-canvas-panel__body">${body}${chrome.note || ""}</div>
+      ${caption ? `<footer class="pv-canvas-panel__foot">${esc(caption)}</footer>` : ""}
     </section>`;
   }
 
-  function canvasStat(value, label, tone) {
+  function canvasStat(value, label, tone, widgetKey) {
     const toneClass = tone ? ` pv-canvas-stat--${tone}` : "";
-    return `<div class="pv-canvas-stat${toneClass}"><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`;
+    const wk = widgetKey || "";
+    const icon =
+      wk && typeof AppIcons !== "undefined" ? `<span class="pv-canvas-stat__ico">${AppIcons.widget(wk)}</span>` : "";
+    const attrs = wk ? ` data-hal-widget-key="${esc(wk)}" data-hal-cmd="Explain ${esc(label)}" role="button" tabindex="0"` : "";
+    return `<div class="pv-canvas-stat${toneClass}"${attrs}>${icon}<strong>${esc(value)}</strong><span>${esc(label)}</span></div>`;
   }
 
   function canvasStatGrid(stats) {
-    return `<div class="pv-canvas-stat-grid">${stats.map((s) => canvasStat(s.value, s.label, s.tone)).join("")}</div>`;
+    return `<div class="pv-canvas-stat-grid">${stats.map((s) => canvasStat(s.value, s.label, s.tone, s.widgetKey)).join("")}</div>`;
   }
 
   function canvasTable(headers, rows, striped) {
@@ -339,7 +377,6 @@ const PageCanvas = (function () {
   function renderFinancial() {
     const D = dataApi();
     const kpis = D ? D.financialKpis() : [];
-    const compare = D ? D.financialCompare() : [];
     const weekly = D ? D.financialWeeklyBars() : null;
     const ytd = D ? D.financialYtdBars() : null;
     const trend = D ? D.productionTrendSeries() : null;
@@ -366,8 +403,7 @@ const PageCanvas = (function () {
 
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.financialImportNotice() : null)}
-      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
-      ${compare.length ? canvasCompareStrip(compare) : ""}
+      <div class="pv-canvas-metric-grid pv-canvas-metric-grid--hero">${kpis.map(canvasMetricTile).join("")}</div>
       ${sectionHead("Performance snapshot", D ? D.periodSubtitle() : "Import snapshot")}
       <div class="pv-canvas-grid-2">
         ${canvasPanel({
@@ -408,20 +444,20 @@ const PageCanvas = (function () {
             : canvasEmpty("Provider rows will appear when SoftDent dashboard export includes providers."),
         })}
       </div>
-      ${D && D.monthEndChecklistHtml ? D.monthEndChecklistHtml() : ""}
     </div>`;
   }
 
   function renderSoftdent() {
     const D = dataApi();
+    const kpis = D ? D.softdentKpis() : [];
     const practice = D ? D.practiceStats() : {};
     const aging = D ? D.softdentAgingBars() : null;
     const resp = D ? D.softdentResponsibilityDonut() : null;
     const caseRateNum = parseFloat(String(practice.caseRate || "").replace("%", ""));
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.softdentImportNotice() : null)}
-      ${sectionHead("Import status", D ? D.periodSubtitle() : "SoftDent source")}
-      ${canvasImportHealthGrid()}
+      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
+      ${sectionHead("Care delivery", D ? D.periodSubtitle() : "SoftDent source")}
       ${canvasPanel({
         title: wTitle("softdent", 0),
         accent: "green",
@@ -449,17 +485,17 @@ const PageCanvas = (function () {
         ${canvasPanel({
           title: wTitle("softdent", 3),
           widgetKey: wKey("softdent", 3),
-          body: `${canvasStat(practice.newPatients || "—", "New patients MTD", widgetTone("newPatients") === "success" ? "success" : undefined)}${practice.newPatientsHint ? `<p class="pv-canvas-note">${esc(practice.newPatientsHint)}</p>` : ""}`,
+          body: `${canvasStat(practice.newPatients || "—", "New patients MTD", widgetTone("newPatients") === "success" ? "success" : undefined, wKey("softdent", 3))}${practice.newPatientsHint ? `<p class="pv-canvas-note">${esc(practice.newPatientsHint)}</p>` : ""}`,
         })}
         ${canvasPanel({
           title: wTitle("softdent", 4),
           widgetKey: wKey("softdent", 4),
-          body: `${canvasStat(practice.treatmentPresented || "—", "Treatment presented")}`,
+          body: `${canvasStat(practice.treatmentPresented || "—", "Treatment presented", undefined, wKey("softdent", 4))}`,
         })}
         ${canvasPanel({
           title: wTitle("softdent", 5),
           widgetKey: wKey("softdent", 5),
-          body: `${canvasStat(practice.caseRate || "—", "Case acceptance", widgetTone("caseAcceptance") === "success" ? "success" : undefined)}${
+          body: `${canvasStat(practice.caseRate || "—", "Case acceptance", widgetTone("caseAcceptance") === "success" ? "success" : undefined, wKey("softdent", 5))}${
             practice.caseAccepted && Number.isFinite(caseRateNum)
               ? canvasUsageBar(
                   [
@@ -478,6 +514,7 @@ const PageCanvas = (function () {
 
   function renderQuickbooks() {
     const D = dataApi();
+    const kpis = D ? D.quickbooksKpis() : [];
     const plRows = D ? D.quickbooksPlRows() : [];
     const expenseBars = D ? D.quickbooksExpenseBars() : null;
     const expenseDonut = D ? D.quickbooksExpenseDonut() : null;
@@ -485,6 +522,7 @@ const PageCanvas = (function () {
     const importNotice = D ? D.quickbooksImportNotice() : null;
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(importNotice)}
+      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
       <div class="pv-canvas-grid-3">
         ${canvasPanel({
           title: wTitle("quickbooks", 0),
@@ -684,6 +722,7 @@ const PageCanvas = (function () {
 
   function renderDocuments() {
     const D = dataApi();
+    const kpis = D ? D.documentsKpis() : [];
     const queue = D ? D.documentsQueueRows() : [];
     const doc = D ? D.firstDocument() : null;
     const periodStats = D ? D.documentsPeriodStats() : [];
@@ -691,6 +730,14 @@ const PageCanvas = (function () {
     const ap = metricsFromWidget("accountsPayableAutomation");
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.documentsImportNotice() : null)}
+      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
+      ${sectionHead("Document sources", "Queue rows by import origin")}
+      ${canvasPanel({
+        title: "Source breakdown",
+        accent: "cyan",
+        widgetKey: wKey("documents", 0),
+        body: canvasStatGrid(D ? D.documentsSourceBreakdown() : []),
+      })}
       <div class="pv-canvas-grid-split">
         ${canvasPanel({
           title: wTitle("documents", 0),
@@ -715,7 +762,7 @@ const PageCanvas = (function () {
         ${canvasPanel({
           title: wTitle("documents", 3),
           widgetKey: wKey("documents", 3),
-          body: `${canvasStat(fmtClaim(ap.expenseTotal), "Expense total", "warning")}`,
+          body: `${canvasStat(fmtClaim(ap.expenseTotal), "Expense total", "warning", wKey("documents", 3))}`,
         })}
       </div>
       ${canvasPanel({
@@ -729,10 +776,12 @@ const PageCanvas = (function () {
 
   function renderLibrary() {
     const D = dataApi();
+    const kpis = D ? D.libraryKpis() : [];
     const rows = D ? D.libraryRows() : [];
     const doc = D ? D.firstLibraryDoc() : null;
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.libraryImportNotice() : null)}
+      <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
       ${canvasSearch("Search contracts, compliance, vendors…")}
       <div class="pv-canvas-grid-split">
         ${canvasPanel({
@@ -910,19 +959,28 @@ const PageCanvas = (function () {
     const kanban = D ? D.officeKanban() : [];
     const tasks = D ? D.officeTaskRows() : [];
     const timeline = D ? D.officeTimeline() : [];
+    const kanbanLanes =
+      kanban.length > 0
+        ? kanban
+        : [
+            { lane: "Billing", tone: "orange", items: [] },
+            { lane: "Scheduling", tone: "blue", items: [] },
+            { lane: "Owner review", tone: "green", items: [] },
+          ];
     const staffPages =
       typeof PageSchema !== "undefined" && PageSchema.NAV_GROUPS
         ? PageSchema.NAV_GROUPS.flatMap((g) => g.pages).filter((id) => id !== "hal" && id !== "office-manager")
         : ["financial", "softdent", "narratives", "claims", "ar", "quickbooks", "documents", "library"];
     return `<div class="pv-canvas-stack">
       ${canvasImportNotice(D ? D.officeManagerImportNotice() : null)}
+      ${D && D.opsDataPanelHtml ? D.opsDataPanelHtml() : ""}
       <div class="pv-canvas-metric-grid">${kpis.map(canvasMetricTile).join("")}</div>
       ${canvasPanel({
         title: wTitle("office-manager", 0),
         accent: "yellow",
         caption: "HAL office priorities",
         widgetKey: wKey("office-manager", 0),
-        body: kanban.length ? canvasKanbanLanes(kanban, wKey("office-manager", 0)) : canvasEmpty("Office priorities will appear when HAL detects widgets needing attention or local tasks exist."),
+        body: canvasKanbanLanes(kanbanLanes, wKey("office-manager", 0)),
       })}
       <div class="pv-canvas-grid-split">
         ${canvasPanel({

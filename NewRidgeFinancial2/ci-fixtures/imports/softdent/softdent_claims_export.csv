@@ -1,0 +1,2 @@
+ClaimId,PatientName,Payer,ServiceDate,ClaimAmount,ClaimStatus
+CLM-CI-001,Sample Patient,Delta Dental,2025-06-01,420.00,Needs Review

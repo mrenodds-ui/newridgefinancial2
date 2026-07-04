@@ -577,7 +577,24 @@ def _sync_quickbooks_sdk_summary(destination: Path) -> list[str]:
                 headers,
             )
             written.append(categories_path.name)
+    try:
+        from quickbooks_ar_collector import build_quickbooks_ar_rows_from_sdk
+
+        ar_rows = build_quickbooks_ar_rows_from_sdk(payload)
+        if ar_rows:
+            ar_path = destination / "quickbooks_ar.csv"
+            _write_csv(ar_path, ar_rows, ["Bucket", "Balance", "AccountsReceivable"])
+            written.append(ar_path.name)
+    except Exception:
+        pass
     return written
+
+
+def refresh_quickbooks_sdk_derived(destination: Path | None = None) -> list[str]:
+    """Rewrite SDK-derived QuickBooks CSVs (revenue, expenses, categories, A/R) from local probe."""
+    dest = destination or quickbooks_import_dir()
+    dest.mkdir(parents=True, exist_ok=True)
+    return _sync_quickbooks_sdk_summary(dest)
 
 
 def _purge_sample_cache(destination: Path) -> list[str]:

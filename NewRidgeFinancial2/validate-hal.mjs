@@ -1438,7 +1438,7 @@ async function main() {
   const ImportDiagnostics = require(join(siteDir, "import-diagnostics.js"));
   const manifest = JSON.parse(readFileSync(join(__dirname, "import-manifest.json"), "utf8"));
   assert(manifest.datasets["softdent.dashboard"].requiredFields.includes("production"), "manifest must declare dashboard required fields");
-  assert(manifest.datasets["quickbooks.ar"].automated === false, "QuickBooks A/R must be marked not automated until collector exists");
+  assert(manifest.datasets["quickbooks.ar"].automated === true, "QuickBooks A/R collector must be marked automated");
 
   const freshBundle = {
     loadedAt: new Date().toISOString(),
@@ -1474,7 +1474,7 @@ async function main() {
   const diagnostics = ImportDiagnostics.evaluateBundle(freshBundle, manifest);
   assert(diagnostics.summary.connected >= 2, "connected datasets must be reported for valid financial imports");
   const qbAr = diagnostics.datasets.find((item) => item.datasetKey === "quickbooks.ar");
-  assert(qbAr && qbAr.status === "not_configured", "QuickBooks A/R must report not configured without automated collector");
+  assert(qbAr && qbAr.status === "missing", "QuickBooks A/R must report missing when automated collector has no cached file");
 
   const staleBundle = JSON.parse(JSON.stringify(freshBundle));
   staleBundle.softdent.dashboard.modifiedAt = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
@@ -1527,7 +1527,7 @@ async function main() {
 
   const statusText = ImportLoader.formatImportStatus(attachDiagnosticsBundle(freshBundle));
   assert(statusText.includes("Dataset health:"), "import status must include dataset-level health summary");
-  assert(statusText.includes("not configured"), "import status must explain QuickBooks A/R automation posture");
+  assert(statusText.includes("quickbooks.ar") && statusText.includes("Missing"), "import status must explain QuickBooks A/R missing from cache");
 
   const sourceText = HalSkills.formatSourceHealthText(
     {

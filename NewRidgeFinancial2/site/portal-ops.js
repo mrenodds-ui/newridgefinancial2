@@ -163,6 +163,38 @@ const PortalOps = (function () {
     return lines.join("\n");
   }
 
+  function formatOpsHealthFromSnapshot(snapshot) {
+    if (!snapshot) return "Program snapshot unavailable.";
+    const lines = ["NR2 integration snapshot (local read-only):", ""];
+    const bundle = snapshot.importBundle;
+    const diag = bundle && bundle.diagnostics;
+    if (diag) {
+      const overall = diag.overallStatus || diag.status || "unknown";
+      lines.push(`Import bundle: ${String(overall).toUpperCase()}`);
+      (diag.datasets || [])
+        .filter((row) => row.severity === "critical" && row.status !== "connected")
+        .slice(0, 4)
+        .forEach((row) => lines.push(`  - ${row.datasetKey}: ${row.status} (${row.detail || "check export"})`));
+    } else {
+      lines.push("Import bundle: diagnostics unavailable — refresh imports.");
+    }
+    const jq = snapshot.journalPostingQueue || {};
+    const jm = jq.metrics || {};
+    lines.push(
+      `Journal queue: ${jm.pendingReview != null ? jm.pendingReview : jm.pending || 0} pending · ${jm.ready != null ? jm.ready : jm.approved || 0} approved`,
+    );
+    const docs = snapshot.documents || {};
+    const sc = docs.sourceCounts || {};
+    lines.push(
+      `Documents: ${docs.queueCount || 0} rows (QB ${sc.quickbooks || 0}, SD ${sc.softdent || 0}, OCR ${sc.ocr || 0}, manual ${sc.manual || 0})`,
+    );
+    if (Array.isArray(snapshot.runtimeIssues) && snapshot.runtimeIssues.length) {
+      lines.push(`Runtime issues: ${snapshot.runtimeIssues.length} (see support bundle for detail)`);
+    }
+    lines.push("", "Actions: Refresh imports · Review journal queue · Export support bundle");
+    return lines.join("\n");
+  }
+
   return {
     getIntegrationHealth,
     getAutomationRegistry,
@@ -172,6 +204,7 @@ const PortalOps = (function () {
     getProgramHelp,
     buildCloseoutRunbook,
     formatIntegrationHealth,
+    formatOpsHealthFromSnapshot,
     formatAutomationRegistry,
     formatDailyCloseout,
     formatCloseoutRunbook,

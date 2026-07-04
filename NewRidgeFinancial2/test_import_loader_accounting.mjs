@@ -110,12 +110,14 @@ const ytdInferred = scopeExpenseCategoryRows(
 );
 assert.equal(ytdInferred.scope, "ytd_inferred");
 
-const arOk = compareArCrossSource(49111.03, 48800.5);
-assert.equal(arOk.comparable, true);
-assert.equal(arOk.withinTolerance, true);
+const arBoth = compareArCrossSource(49111.03, 48800.5);
+assert.equal(arBoth.comparable, false);
+assert.equal(arBoth.variance, 310.53);
+assert.match(arBoth.message, /informational/i);
 
 const arReview = compareArCrossSource(49111.03, 40000);
-assert.equal(arReview.withinTolerance, false);
+assert.equal(arReview.comparable, false);
+assert.match(arReview.message, /different scopes/i);
 
 const arMissingQb = compareArCrossSource(49111.03, null);
 assert.equal(arMissingQb.comparable, false);

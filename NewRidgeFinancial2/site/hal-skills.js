@@ -1753,6 +1753,7 @@ const HalSkills = (function () {
       const severity = String(row.severity || "warning");
       if (severity === "optional") return false;
       const status = String(row.status || "");
+      if (severity === "warning" && (status === "missing" || status === "stale")) return false;
       return status === "missing" || status === "stale" || (status !== "connected" && severity === "critical");
     });
     if (!blocking.length) return "SUCCESS";
@@ -2138,8 +2139,8 @@ const HalSkills = (function () {
               : null,
           ),
           arCrossSourceVariance: metricValue(
-            fin.arCrossCheck && fin.arCrossCheck.comparable && fin.arCrossCheck.variance != null
-              ? `$${Number(fin.arCrossCheck.variance).toFixed(2)}${fin.arCrossCheck.withinTolerance ? " (OK)" : " (review)"}`
+            fin.arCrossCheck && fin.arCrossCheck.variance != null && fin.arCrossCheck.quickbooksTotal != null
+              ? `$${Number(fin.arCrossCheck.variance).toFixed(2)} (informational)`
               : null,
           ),
           aging90PlusPct: metricValue(kpiValue(arDash.kpis, "90+ Days %")),
@@ -2550,7 +2551,7 @@ const HalSkills = (function () {
     "quickbooks.revenue": { label: "QuickBooks revenue/P&L export", files: ["quickbooks_revenue.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["TotalIncome"], optional: ["Month"], automated: true },
     "quickbooks.expenses": { label: "QuickBooks expenses export", files: ["quickbooks_expenses.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["TotalExpense"], optional: ["Month"], automated: true },
     "quickbooks.expenseCategories": { label: "QuickBooks expense categories export", files: ["quickbooks_expense_categories.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["Category"], optional: ["Amount", "Period", "Scope"], automated: true },
-    "quickbooks.ar": { label: "QuickBooks A/R export", files: ["quickbooks_ar.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["Bucket"], optional: ["Balance"], automated: false },
+    "quickbooks.ar": { label: "QuickBooks A/R export", files: ["quickbooks_ar.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["Bucket"], optional: ["Balance"], automated: true },
     "local:documents": { label: "Local accounting documents", files: ["app_data/nr2/document_inbox (drop)", "app_data/nr2/document_inbox/softdent", "app_data/nr2/document_inbox/quickbooks", "document_source_import.py", "sync_document_sources.py", "app_data/nr2/accounting_documents.sqlite3 (OCR ledger)", "nr2:v2:documents (desktop store)"], importDir: "app_data/nr2/document_inbox", required: [], optional: [], automated: true, local: true },
     "local:narratives": { label: "Local narrative drafts", files: ["(local narrative drafts)"], importDir: "local records", required: [], optional: [], automated: true, local: true },
     "local:library": { label: "Local library documents", files: ["(local indexed library)"], importDir: "local records", required: [], optional: [], automated: true, local: true },

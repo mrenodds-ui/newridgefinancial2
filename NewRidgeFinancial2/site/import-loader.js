@@ -1038,16 +1038,16 @@ const ImportLoader = (function () {
       };
     }
     const variance = Math.abs(softdentTotal - quickbooksTotal);
-    const withinTolerance = variance <= 500;
     return {
-      comparable: true,
+      comparable: false,
       softdentTotal,
       quickbooksTotal,
       variance,
-      withinTolerance,
-      message: withinTolerance
-        ? `Variance $${variance.toFixed(2)} is within the $500 timing tolerance.`
-        : `Variance $${variance.toFixed(2)} exceeds $500 — investigate posting, timing, or export scope.`,
+      withinTolerance: null,
+      message:
+        `SoftDent operational A/R ($${softdentTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) ` +
+        `and QuickBooks ledger A/R ($${quickbooksTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) ` +
+        `use different scopes — variance $${variance.toFixed(2)} is informational only.`,
     };
   }
 
@@ -1952,7 +1952,7 @@ const ImportLoader = (function () {
       `  profit and loss: ${qb.profitAndLoss ? `${qb.profitAndLoss.sourceFile} (${(qb.profitAndLoss.rows || []).length} rows)` : "missing"}`,
       `  expenses: ${qb.expenses ? `${qb.expenses.sourceFile} (${(qb.expenses.rows || []).length} rows)` : "missing"}`,
       `  expense categories: ${qb.expenseCategories ? `${qb.expenseCategories.sourceFile} (${(qb.expenseCategories.rows || []).length} rows)` : "missing"}`,
-      `  ar: ${qb.ar ? `${qb.ar.sourceFile} (${(qb.ar.rows || []).length} rows)` : "not configured — no automated QuickBooks A/R collector"}`,
+      `  ar: ${qb.ar ? `${qb.ar.sourceFile} (${(qb.ar.rows || []).length} rows)` : "missing — run SDK summary sync or drop quickbooks_ar.csv"}`,
       "",
       "HAL reads SoftDent and QuickBooks only. Nothing is posted or written back.",
     );

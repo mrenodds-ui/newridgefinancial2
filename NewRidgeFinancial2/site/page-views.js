@@ -129,6 +129,33 @@ const PageViews = (function () {
           if (db && typeof db.exportApprovedPostingQueue === "function") {
             await db.exportApprovedPostingQueue();
           }
+          return;
+        }
+        const opsRefresh = event.target.closest("[data-ops-refresh-health]");
+        if (opsRefresh) {
+          event.preventDefault();
+          const coord = typeof ImportCoordinator !== "undefined" ? ImportCoordinator : null;
+          if (coord && typeof coord.refresh === "function") {
+            await coord.refresh({ reason: "ops-health-panel" });
+          } else if (typeof Services !== "undefined" && typeof Services.refreshImports === "function") {
+            await Services.refreshImports({ reason: "ops-health-panel", waitForCompletion: true });
+          }
+          await refreshLiveIntegrationHealth();
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("nr2:page-refresh-requested"));
+          }
+          return;
+        }
+        const opsBundle = event.target.closest("[data-ops-support-bundle]");
+        if (opsBundle) {
+          event.preventDefault();
+          const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+          if (db && typeof db.buildSupportBundle === "function") {
+            await db.buildSupportBundle("Office Manager support bundle");
+          } else if (typeof PortalOps !== "undefined" && typeof PortalOps.buildSupportBundle === "function") {
+            await PortalOps.buildSupportBundle({ note: "Office Manager support bundle" });
+          }
+          return;
         }
       });
     }
@@ -157,6 +184,19 @@ const PageViews = (function () {
     return snap && snap.label ? { periodLabel: snap.label, reportRange: "" } : null;
   }
 
+  async function refreshLiveIntegrationHealth() {
+    const Ops = typeof PortalOps !== "undefined" ? PortalOps : null;
+    const Data = typeof PageCanvasData !== "undefined" ? PageCanvasData : null;
+    if (!Ops || !Ops.getIntegrationHealth || !Data || !Data.setLiveIntegrationHealth) return null;
+    try {
+      const health = await Ops.getIntegrationHealth();
+      Data.setLiveIntegrationHealth(health);
+      return health;
+    } catch {
+      return null;
+    }
+  }
+
   function renderPageView(container, halData, pageId, onNavigate, halWidgetFeed, programSnapshot) {
     if (!container) return;
     const state = buildPageState(halData, pageId, halWidgetFeed, programSnapshot);
@@ -180,6 +220,14 @@ const PageViews = (function () {
       pageChrome(state, Canvas.renderBody(pageId, halWidgetFeed, programSnapshot), chromeOptsFromState(state)),
     );
     wireCommon(container, onNavigate);
+    refreshLiveIntegrationHealth().then((health) => {
+      if (!health || !container.isConnected) return;
+      container.innerHTML = pageShell(
+        state,
+        pageChrome(state, Canvas.renderBody(pageId, halWidgetFeed, programSnapshot), chromeOptsFromState(state)),
+      );
+      wireCommon(container, onNavigate);
+    });
   }
 
   function previewPageHtml(halData, pageId, halWidgetFeed, programSnapshot) {
@@ -209,7 +257,7 @@ const PageViews = (function () {
     if (typeof PageCanvas !== "undefined" && PageCanvas.setFeed) PageCanvas.setFeed(feed, programSnapshot);
   }
 
-  return { buildPageState, renderPageView, previewPageHtml, hasPage, setHalFeed };
+  return { buildPageState, renderPageView, previewPageHtml, hasPage, setHalFeed, refreshLiveIntegrationHealth };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

@@ -352,6 +352,8 @@ def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str,
         if severity == "optional":
             continue
         status = row.get("status")
+        if severity == "warning" and status in {STATUS_MISSING, STATUS_STALE}:
+            continue
         if status in {STATUS_MISSING, STATUS_STALE}:
             blocking.append(row)
         elif status != STATUS_CONNECTED and severity == "critical":
