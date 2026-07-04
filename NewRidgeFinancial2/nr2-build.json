@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-147",
-  "schemaVersion": "hal-147",
-  "builtAt": "2026-07-04T13:00:00.000Z",
-  "notes": "HAL hal-147 — hybrid embed search, Ollama tool_calls, cloud prefer complex tasks."
+  "assetVersion": "hal-148",
+  "schemaVersion": "hal-148",
+  "builtAt": "2026-07-04T13:30:00.000Z",
+  "notes": "HAL hal-148 — program search index cache, agent loop context trim."
 }

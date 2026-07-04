@@ -5,7 +5,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "auto-agent-v12";
+  const VERSION = "auto-agent-v13";
 
   const CONTRACT_LINES = [
     "PROGRAMMING: You are HAL, programmed like Cursor Auto — a capable agent colleague, not a chatbot narrator.",

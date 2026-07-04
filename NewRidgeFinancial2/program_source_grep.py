@@ -90,6 +90,137 @@ def _resolve_roots(repo_root: Path, site_dir: Path) -> tuple[Path, Path, list[Pa
     return repo_root, site_dir, roots
 
 
+def default_search_index_path(repo_root: Path) -> Path:
+    return repo_root.resolve() / "app_data" / "nr2" / "program_search_index.json"
+
+
+def _extract_symbols_and_snippets(lines: list[str], limit: int = 10) -> tuple[list[str], list[dict]]:
+    symbols: list[str] = []
+    snippets: list[dict] = []
+    sym_re = re.compile(
+        r"^\s*(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)",
+    )
+    def_re = re.compile(r"^\s*def\s+([A-Za-z_][\w]*)")
+    for line_no, line in enumerate(lines, 1):
+        for rx in (sym_re, def_re):
+            m = rx.match(line)
+            if m:
+                name = m.group(1)
+                if name not in symbols:
+                    symbols.append(name)
+                if len(snippets) < limit:
+                    snippets.append({"line": line_no, "text": line.strip()[:200], "kind": "def"})
+                break
+    return symbols[:80], snippets
+
+
+def build_program_search_index(repo_root: Path, site_dir: Path, index_path: Path | None = None) -> dict:
+    import json
+    from datetime import datetime, timezone
+
+    repo_root, _, roots = _resolve_roots(repo_root, site_dir)
+    out_path = index_path or default_search_index_path(repo_root)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    files: list[dict] = []
+    for root in roots:
+        for path in root.rglob("*"):
+            if not path.is_file() or not _allowed_path(path, roots):
+                continue
+            try:
+                stat = path.stat()
+                lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+            except OSError:
+                continue
+            try:
+                rel = path.relative_to(repo_root).as_posix()
+            except ValueError:
+                rel = path.name
+            symbols, snippets = _extract_symbols_and_snippets(lines)
+            files.append(
+                {
+                    "file": rel,
+                    "mtime": int(stat.st_mtime),
+                    "size": int(stat.st_size),
+                    "symbols": symbols,
+                    "snippets": snippets,
+                }
+            )
+    payload = {
+        "version": 1,
+        "builtAt": datetime.now(timezone.utc).isoformat(),
+        "fileCount": len(files),
+        "files": files,
+    }
+    out_path.write_text(json.dumps(payload, indent=0)[:2_000_000], encoding="utf-8")
+    return {"ok": True, "path": str(out_path), "fileCount": len(files), "text": f"Built search index with {len(files)} files."}
+
+
+def load_program_search_index(index_path: Path, max_age_hours: int = 36) -> dict | None:
+    import json
+    from datetime import datetime, timezone
+
+    if not index_path.is_file():
+        return None
+    try:
+        data = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("files"), list):
+        return None
+    built = data.get("builtAt")
+    if built:
+        try:
+            ts = datetime.fromisoformat(str(built).replace("Z", "+00:00"))
+            age_h = (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds() / 3600.0
+            if age_h > max(1, int(max_age_hours or 36)):
+                return None
+        except ValueError:
+            return None
+    return data
+
+
+def _score_index_entries(index: dict, terms: list[str], limit: int = 120) -> list[tuple[int, str, str, int]]:
+    scored: list[tuple[int, str, str, int]] = []
+    for entry in index.get("files") or []:
+        rel = str(entry.get("file") or "")
+        if not rel:
+            continue
+        path_boost = _path_score(rel, terms)
+        sym_blob = " ".join(entry.get("symbols") or []).lower()
+        sym_hits = sum(1 for t in terms if t in sym_blob or any(t in s.lower() for s in (entry.get("symbols") or [])))
+        score = path_boost + sym_hits * 12
+        best_line = 1
+        best_text = ""
+        for snip in entry.get("snippets") or []:
+            text = str(snip.get("text") or "")
+            low = text.lower()
+            hits = sum(1 for t in terms if t in low)
+            if hits <= 0:
+                continue
+            line_score = hits * 6 + _line_definition_boost(text, terms) + path_boost
+            if line_score > score:
+                score = line_score
+                best_line = int(snip.get("line") or 1)
+                best_text = text
+        if sym_hits > 0 and not best_text:
+            best_text = f"symbols: {', '.join((entry.get('symbols') or [])[:6])}"
+        if score > 0:
+            scored.append((score, rel, best_text[:200], best_line))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return scored[: max(10, min(int(limit or 120), 200))]
+
+
+def ensure_program_search_index(repo_root: Path, site_dir: Path, index_path: Path | None = None) -> dict:
+    path = index_path or default_search_index_path(repo_root)
+    loaded = load_program_search_index(path)
+    if loaded:
+        return loaded
+    built = build_program_search_index(repo_root, site_dir, path)
+    if not built.get("ok"):
+        return {"files": []}
+    return load_program_search_index(path) or {"files": []}
+
+
 def _resolve_allowed_file(repo_root: Path, roots: list[Path], rel_path: str) -> Path | None:
     rel = str(rel_path or "").replace("\\", "/").strip().lstrip("/")
     if not rel or ".." in rel.split("/"):
@@ -438,41 +569,55 @@ def semantic_search_program(repo_root: Path, site_dir: Path, query: str, limit: 
         seen.add(key)
         scored.append((500 + _path_score(hit.get("file", ""), terms), hit.get("file", ""), hit.get("text", ""), key[1]))
 
-    for root in roots:
-        for path in root.rglob("*"):
-            if not path.is_file() or not _allowed_path(path, roots):
-                continue
-            try:
-                lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
-            except OSError:
-                continue
-            try:
-                rel = path.relative_to(repo_root).as_posix()
-            except ValueError:
-                rel = path.name
-            path_boost = _path_score(rel, terms)
-            for line_no, line in enumerate(lines, 1):
-                low = line.lower()
-                term_hits = sum(1 for t in terms if t in low)
-                if term_hits <= 0:
+    cap = max(1, min(int(limit or 15), 25))
+    index = ensure_program_search_index(repo_root, site_dir)
+    index_hits = _score_index_entries(index, terms, limit=80)
+    for score, rel, snip, line_no in index_hits:
+        key = (rel, line_no)
+        if key in seen:
+            continue
+        seen.add(key)
+        scored.append((score + 40, rel, snip, line_no))
+
+    if len(scored) < cap:
+        for root in roots:
+            for path in root.rglob("*"):
+                if not path.is_file() or not _allowed_path(path, roots):
                     continue
-                score = term_hits * 4 + path_boost + _line_definition_boost(line, terms)
-                if score <= 0:
+                if len(scored) >= cap * 4:
+                    break
+                try:
+                    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+                except OSError:
                     continue
-                key = (rel, line_no)
-                if key in seen:
-                    continue
-                seen.add(key)
-                scored.append((score, rel, line.strip()[:200], line_no))
+                try:
+                    rel = path.relative_to(repo_root).as_posix()
+                except ValueError:
+                    rel = path.name
+                path_boost = _path_score(rel, terms)
+                for line_no, line in enumerate(lines, 1):
+                    low = line.lower()
+                    term_hits = sum(1 for t in terms if t in low)
+                    if term_hits <= 0:
+                        continue
+                    score = term_hits * 4 + path_boost + _line_definition_boost(line, terms)
+                    if score <= 0:
+                        continue
+                    key = (rel, line_no)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    scored.append((score, rel, line.strip()[:200], line_no))
+            if len(scored) >= cap * 4:
+                break
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    cap = max(1, min(int(limit or 15), 25))
     top, mode = _embedding_rerank(str(query or ""), scored, cap)
     if not top:
         return {"hits": [], "count": 0, "text": f'No semantic matches for "{" ".join(terms[:6])}".'}
     hits = [{"file": rel, "line": ln, "score": sc, "text": snip} for sc, rel, snip, ln in top]
     text = "\n".join(f"{h['file']}:{h['line']} (score {h['score']} · {mode}): {h['text']}" for h in hits)
-    return {"hits": hits, "count": len(hits), "text": text, "query": " ".join(terms), "mode": mode}
+    return {"hits": hits, "count": len(hits), "text": text, "query": " ".join(terms), "mode": mode, "indexed": bool((index.get("files") or []))}
 
 
 def run_git_readonly(repo_root: Path, command: str) -> dict:
@@ -530,6 +675,9 @@ def run_allowlisted_command(repo_root: Path, command_id: str) -> dict:
         "git-diff-names": (["git", "diff", "--name-only"], str(repo_root), 30),
         "git-log": (["git", "log", "-5", "--oneline"], str(repo_root), 30),
     }
+    if cmd_id == "rebuild-search-index":
+        site = nr2 / "site"
+        return build_program_search_index(repo_root, site if site.is_dir() else nr2)
     if cmd_id == "node-check-all":
         files = [
             "site/hal-core.js",

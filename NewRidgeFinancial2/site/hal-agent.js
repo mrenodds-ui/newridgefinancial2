@@ -6,7 +6,7 @@ const HalAgent = (function () {
   const MEMORY_KEY = "halAgentMemory";
   const REPAIR_KEY = "halRepairLog";
   const WORKING_KEY = "halWorkingMemory";
-  const ARCHITECTURE_VERSION = "hal-agent-v12-cursor";
+  const ARCHITECTURE_VERSION = "hal-agent-v13-cursor";
   const REPAIR_MAX = 100;
   const TURN_MAX = 16;
   const AGENT_BUDGET = {
@@ -75,6 +75,7 @@ const HalAgent = (function () {
     if (cfg.enabled === true) return !!(plan && plan.agentToolLoop);
     if (cfg.autoEnableWhenKeySet === false) return false;
     if (!plan || !plan.agentToolLoop) return false;
+    if (cfg.preferForAllAgentLoops === true) return true;
     if (cfg.preferForTaskCompletion === false) return false;
     return !!(plan.isTaskCompletionQuery || plan.isInvestigateQuery || plan.isComplexInvestigationQuery);
   }
@@ -725,6 +726,7 @@ const HalAgent = (function () {
         else if (/git-diff-stat|diff stat/.test(raw)) cmdId = "git-diff-stat";
         else if (/git-diff-names|diff names|changed files/.test(raw)) cmdId = "git-diff-names";
         else if (/git-log|git log/.test(raw)) cmdId = "git-log";
+        else if (/rebuild-search|search index|reindex/.test(raw)) cmdId = "rebuild-search-index";
         else if (/git-status|git status/.test(raw)) cmdId = "git-status";
         else if (/validate|validation/.test(raw)) cmdId = "validate-hal";
         else if (/^[a-z0-9-]+$/.test(raw)) cmdId = raw;

@@ -189,6 +189,15 @@
     return suffix;
   }
 
+  function compressLoopSuffix(suffix, maxChars) {
+    const cap = maxChars || 14000;
+    const text = String(suffix || "");
+    if (text.length <= cap) return text;
+    const head = text.slice(0, Math.floor(cap * 0.32));
+    const tail = text.slice(-Math.floor(cap * 0.58));
+    return head + "\n… (earlier tool output truncated for context budget) …\n" + tail;
+  }
+
   async function runModelWithLoop(deps) {
     const {
       enhanceModelCall,
@@ -241,7 +250,8 @@
     }
 
     for (let turn = 0; turn < maxTurns; turn++) {
-      activePlan.loopSuffix = loopSuffix;
+      activePlan.loopSuffix =
+        agentCfg.compressLoopContext === false ? loopSuffix : compressLoopSuffix(loopSuffix);
       if (ctx.onToolProgress && turn > 0) {
         ctx.onToolProgress({ phase: "loop", tool: "agent-loop", label: "Agent loop turn " + (turn + 1) });
       }

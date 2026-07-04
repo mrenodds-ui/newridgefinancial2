@@ -7,6 +7,12 @@
       "enabled": false,
       "autoEnableWhenKeySet": true,
       "preferForTaskCompletion": true,
+      "preferForAllAgentLoops": false,
+      "searchIndex": {
+        "enabled": true,
+        "maxAgeHours": 36,
+        "path": "app_data/nr2/program_search_index.json"
+      },
       "endpoint": "https://api.openai.com/v1/chat/completions",
       "model": "gpt-4o-mini",
       "timeoutMs": 120000,
@@ -37,7 +43,7 @@
     "preferReasoning": true,
     "firewallEnabled": false,
     "agentProgramming": {
-      "profile": "cursor-auto-v12",
+      "profile": "cursor-auto-v13",
       "minSentences": 5,
       "proportionalDepth": true,
       "allowMarkdown": true,
@@ -46,6 +52,7 @@
       "spawnSubtasks": true,
       "subtaskMaxDepth": 1,
       "localOllamaTools": true,
+      "compressLoopContext": true,
       "taskCompletion": true,
       "agentToolLoop": true,
       "agentLoopUseReasoning": true,

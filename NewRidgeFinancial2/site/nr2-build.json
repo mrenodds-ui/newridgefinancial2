@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-147",
-  "schemaVersion": "hal-147",
-  "builtAt": "2026-07-04T13:00:00.000Z",
-  "notes": "HAL hal-147 — Ollama native tools, embedding search, cloud auto-enable on key."
+  "assetVersion": "hal-148",
+  "schemaVersion": "hal-148",
+  "builtAt": "2026-07-04T13:30:00.000Z",
+  "notes": "HAL hal-148 — persistent code search index, loop context compression, cloud routing."
 }

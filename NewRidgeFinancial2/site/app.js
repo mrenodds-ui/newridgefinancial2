@@ -1400,6 +1400,7 @@ function cloudModelConfig() {
     timeoutMs: cfg.timeoutMs || 120000,
     useForAgentLoop: cfg.useForAgentLoop !== false,
     autoEnableWhenKeySet: cfg.autoEnableWhenKeySet !== false,
+    preferForAllAgentLoops: cfg.preferForAllAgentLoops === true,
     preferForTaskCompletion: cfg.preferForTaskCompletion !== false,
     options: cfg.options || {},
   };
@@ -1416,6 +1417,7 @@ function cloudAgentEligible(plan) {
   const cfg = HalCore.modelConfig(halModels).cloudReasoning || {};
   if (cfg.enabled === true) return true;
   if (cfg.autoEnableWhenKeySet === false || !getCloudApiKey()) return false;
+  if (cfg.preferForAllAgentLoops === true) return true;
   if (cfg.preferForTaskCompletion === false) return false;
   return !!(plan.isTaskCompletionQuery || plan.isInvestigateQuery || plan.isComplexInvestigationQuery);
 }
