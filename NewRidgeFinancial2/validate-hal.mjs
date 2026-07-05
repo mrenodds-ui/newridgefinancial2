@@ -43,6 +43,8 @@ function buildRoutingRegressionCases() {
   addMany(["HAL 10000 ascension", "director digest", "executive digest"], "ops: ascension-10000");
   addMany(["autonomous ops status", "HAL 9000 ops"], "ops: autonomous-status");
   addMany(["HAL about me", "about me", "tell me about me"], "ops: hal-about-me");
+  addMany(["go to 7", "go to level 7", "executive partner"], "ops: employee-set-level");
+  addMany(["HAL employee status", "employee level", "employee tier"], "ops: employee-status");
   addMany(["HAL work log", "what did HAL do"], "ops: employee-work-log");
   addMany(["Run HAL shift", "run employee shift"], "ops: employee-shift");
   addMany(["Approve all journal queue", "bulk approve journal posting queue"], "ops: journal-bulk-approve");
