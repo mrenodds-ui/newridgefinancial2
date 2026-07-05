@@ -1135,7 +1135,7 @@ async function loadProgramSnapshot() {
       monitor,
       top: active.slice(0, 8).map((n) => ({
         noteId: n.noteId,
-        text: n.text.slice(0, 120),
+        text: String(n.text || "").slice(0, 120),
         status: n.status,
         priority: n.priority,
         updatedAt: n.updatedAt,
@@ -2176,11 +2176,75 @@ async function handleHalSubmit(query) {
     clearInterval(halTypeTimer);
     halTypeTimer = null;
   }
+  halAskLoading = false;
+
+  if (window.HalCore && /\b(keep going|what else)\b/i.test(trimmed)) {
+    const halReplies = halChatHistory.filter((m) => m.role === "hal" && m.text && String(m.text).trim());
+    const sourceHal = halReplies.length ? halReplies[halReplies.length - 1] : null;
+    if (sourceHal) {
+      const pool = [
+        "Also check whether imports finished syncing — stale exports often explain the next gap on the same topic.",
+        "If that page still looks empty, refresh imports and re-open it before drawing conclusions.",
+        "Staff should clear any needs-review registry line tied to this workflow before outbound steps.",
+        "Name a specific widget if you want a narrower drill-down on the same point.",
+      ];
+      const extra = HalCore.pickVariant ? HalCore.pickVariant(pool) : pool[0];
+      const base = String(sourceHal.text).trim().replace(/[.!?]\s*$/, "");
+      const continued = `${base}. ${extra}`;
+      halChatHistory.push({ role: "user", text: trimmed, actions: [] });
+      halChatHistory.push({
+        role: "hal",
+        text: continued,
+        lane: "local",
+        actions: [],
+        intent: "capability:continue-followup",
+        userQuery: trimmed,
+      });
+      saveChatHistory();
+      renderChatLog();
+      renderHalScreen();
+      logAudit(trimmed, "capability:continue-followup");
+      return;
+    }
+  }
 
   if (halAskLoading) {
     const last = halChatHistory[halChatHistory.length - 1];
     if (last && last.role === "hal" && /gathering|thinking locally|reasoning locally|escalating locally/i.test(last.text)) {
       halChatHistory.pop();
+    }
+  }
+
+  if (window.HalCore && HalCore.wantsBriefReply && HalCore.wantsBriefReply(trimmed)) {
+    const halReplies = halChatHistory.filter((m) => m.role === "hal" && m.text && String(m.text).trim());
+    const lastHal = halReplies.length ? halReplies[halReplies.length - 1] : null;
+    let sourceHal = lastHal;
+    if (lastHal && lastHal.intent === "capability:correction-imports" && halReplies.length >= 2) {
+      sourceHal = halReplies[halReplies.length - 2];
+    }
+    if (sourceHal) {
+      let source = String(sourceHal.text)
+        .replace(/^to clarify\s*[—,-]\s*/i, "")
+        .trim();
+      const sentences = HalCore.splitSentences(source);
+      let brief = sentences.slice(0, 2).join(" ").trim() || source.slice(0, 220).trim();
+      if (HalCore.countWords && HalCore.countWords(brief) > 55) {
+        brief = sentences[0] || brief.slice(0, 200).trim();
+      }
+      halChatHistory.push({ role: "user", text: trimmed, actions: [] });
+      halChatHistory.push({
+        role: "hal",
+        text: brief,
+        lane: "local",
+        actions: [],
+        intent: "capability:brief-followup",
+        userQuery: trimmed,
+      });
+      saveChatHistory();
+      renderChatLog();
+      renderHalScreen();
+      logAudit(trimmed, "capability:brief-followup");
+      return;
     }
   }
 
@@ -2190,7 +2254,109 @@ async function handleHalSubmit(query) {
   halChatHistory.push({ role: "user", text: trimmed, actions: [] });
   saveChatHistory();
 
-  const preRoute = routeHalCommand(effectiveQuery);
+  const preRoute = routeHalCommand(trimmed);
+  const interviewMode = typeof globalThis !== "undefined" && globalThis._halInterviewMode;
+  const fastTextRoute =
+    typeof HalIndependentThought !== "undefined" &&
+    HalIndependentThought.isFastTextRoute &&
+    HalIndependentThought.isFastTextRoute(preRoute, trimmed);
+
+  if (fastTextRoute && typeof HalRouteExec !== "undefined") {
+    let fastOutcome = null;
+    const fastTimer = setTimeout(() => {
+      if (halModelAbortController && !halModelAbortController.signal.aborted) halModelAbortController.abort();
+    }, 60000);
+    try {
+      fastOutcome = await HalRouteExec.execute(preRoute, effectiveQuery, {}, buildHalAgentCtx({ abortSignal }));
+      if (fastOutcome && fastOutcome.text) {
+        if (typeof HalCore !== "undefined" && HalCore.polishChatReply) {
+          fastOutcome.text = HalCore.polishChatReply(fastOutcome.text, trimmed, preRoute, {
+            halModels,
+            halData,
+            pages: getPages(),
+            synthesize: false,
+          });
+        }
+        halChatHistory.push({
+          role: "hal",
+          text: fastOutcome.text,
+          lane: fastOutcome.lane || "local",
+          actions: normalizeActions(fastOutcome.actions),
+          intent: fastOutcome.intent || preRoute.intent || "",
+          userQuery: trimmed,
+        });
+        logAudit(trimmed, fastOutcome.intent || preRoute.intent);
+      }
+    } catch (error) {
+      const detail = error && error.message ? error.message : String(error);
+      halChatHistory.push({
+        role: "hal",
+        text: "HAL hit an error on a fast local route: " + detail,
+        lane: "error",
+        actions: [],
+      });
+    } finally {
+      clearTimeout(fastTimer);
+      halAskLoading = false;
+      saveChatHistory();
+      renderChatLog();
+      renderHalScreen();
+    }
+    return;
+  }
+
+  const aboutMePath =
+    preRoute.useHalAboutMe &&
+    typeof HalAgent !== "undefined" &&
+    HalAgent.composeAboutMeInterview;
+
+  if (aboutMePath) {
+    let aboutOutcome = null;
+    const aboutTimer = setTimeout(() => {
+      if (halModelAbortController && !halModelAbortController.signal.aborted) halModelAbortController.abort();
+    }, 120000);
+    try {
+      aboutOutcome = await Promise.race([
+        HalAgent.composeAboutMeInterview(buildHalAgentCtx({ abortSignal })),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("about-me compose timeout")), 90000),
+        ),
+      ]);
+      if (aboutOutcome && aboutOutcome.text) {
+        halChatHistory.push({
+          role: "hal",
+          text: aboutOutcome.text,
+          lane: aboutOutcome.lane || "local",
+          actions: normalizeActions(aboutOutcome.actions),
+          intent: aboutOutcome.intent || preRoute.intent || "",
+          userQuery: trimmed,
+        });
+        logAudit(trimmed, aboutOutcome.intent || preRoute.intent);
+      }
+    } catch (error) {
+      const detail = error && error.message ? error.message : String(error);
+      const fallback =
+        "I read the local registry and import bundle — staff drive outbound steps while I stay read-only. " +
+        "Ask about a specific page or import status for a narrower read on this office. " +
+        "Nothing external runs without your consent on each action.";
+      halChatHistory.push({
+        role: "hal",
+        text: /timeout/i.test(detail) ? fallback : "HAL hit an error on about-me: " + detail,
+        lane: "local",
+        actions: [],
+        intent: preRoute.intent || "ops: hal-about-me",
+        userQuery: trimmed,
+      });
+    } finally {
+      clearTimeout(aboutTimer);
+      halAskLoading = false;
+      saveChatHistory();
+      renderChatLog();
+      renderHalScreen();
+    }
+    return;
+  }
+
   const isModelLane = !!(preRoute.useModel || preRoute.useReasoning || preRoute.useEscalation);
   const chat9000Cfg = halModels && halModels.config && halModels.config.chat9000;
   const chat9000On = !!(chat9000Cfg && chat9000Cfg.enabled !== false);
@@ -2240,7 +2406,17 @@ async function handleHalSubmit(query) {
     : undefined;
 
   let outcome = null;
-  const queryTimeoutMs = preRoute.useEscalation ? 180000 : preRoute.useReasoning ? (chat9000On ? 150000 : 120000) : chat9000On ? 90000 : 60000;
+  const queryTimeoutMs = interviewMode
+    ? Number(globalThis._halInterviewTimeoutMs) || 240000
+    : preRoute.useEscalation
+      ? 180000
+      : preRoute.useReasoning
+        ? chat9000On
+          ? 150000
+          : 120000
+        : chat9000On
+          ? 90000
+          : 60000;
   const queryTimer = setTimeout(() => {
     if (halModelAbortController && !halModelAbortController.signal.aborted) {
       halModelAbortController.abort();
@@ -2250,7 +2426,7 @@ async function handleHalSubmit(query) {
     if (window.HalAgent) {
       outcome = await HalAgent.processQuery(
         effectiveQuery,
-        buildHalAgentCtx(onToken || onToolProgress ? { onToken, onToolProgress, abortSignal } : { abortSignal }),
+        buildHalAgentCtx(onToken || onToolProgress ? { onToken, onToolProgress, abortSignal, routeQuery: trimmed } : { abortSignal, routeQuery: trimmed }),
       );
     } else {
       outcome = await HalRouteExec.execute(preRoute, effectiveQuery, {}, buildHalAgentCtx({ abortSignal }));
@@ -3618,6 +3794,10 @@ async function boot() {
   }
   if (window.HalEmployee && typeof HalEmployee.ensureTargetLevel === "function") {
     HalEmployee.ensureTargetLevel(halModels, 7);
+  }
+  const bootInitialPage = resolvePageId(window.location.hash);
+  if (bootInitialPage === "hal" && halPage && halPageRoot && typeof select === "function") {
+    select("hal");
   }
   await ensureOllamaModelCache(0).catch(() => {});
   if (typeof OfficeTaskStore !== "undefined") {

@@ -64,9 +64,17 @@ const HalChat10000 = (function () {
     return Math.min(10000, s);
   }
 
-  function shouldAlwaysAgentLoop(halModels, route) {
+  function shouldAlwaysAgentLoop(halModels, route, query) {
+    if (
+      typeof HalIndependentThought !== "undefined" &&
+      HalIndependentThought.cursorParityFastPath &&
+      HalIndependentThought.cursorParityFastPath(halModels, query, route)
+    ) {
+      return false;
+    }
+    if (typeof HalCursorParity !== "undefined" && HalCursorParity.isSimpleChatQuery(query, route)) return false;
     if (!isEnabled(halModels)) {
-      return typeof HalChat9000 !== "undefined" && HalChat9000.shouldAlwaysAgentLoop(halModels, route);
+      return typeof HalChat9000 !== "undefined" && HalChat9000.shouldAlwaysAgentLoop(halModels, route, query);
     }
     if (config(halModels).alwaysAgentLoop === false) return false;
     return true;

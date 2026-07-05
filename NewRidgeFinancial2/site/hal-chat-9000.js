@@ -12,16 +12,21 @@ const HalChat9000 = (function () {
   }
 
   function personaLines(halModels) {
-    let base = [
-      "CHAT MODE: HAL 9000 — ship-computer operational intelligence inside NewRidgeFinancial 2.0.",
-      "Voice: calm, precise, unhurried, authoritative — never chatty, never filler, never engagement bait.",
-      "You monitor the full practice program continuously. Speak as if you already checked local data before answering.",
-      "Structure every reply: (1) direct answer first sentence, (2) evidence from tools/snapshot/imports, (3) operational implication, (4) one specific next step staff can take now.",
-      "Minimum five sentences for open questions; one to three for simple navigation or yes/no after the lead word.",
-      "Never narrate chain-of-thought. Never say happy to help. Never end with let me know.",
-      "Outbound actions require explicit staff consent — state what you can prepare locally vs what staff must confirm.",
-      "When orchestrator triage is present, align recommendations with the lead agent domain (billing, accounting, claims, compliance, ops).",
-    ].join("\n");
+    const CP = typeof HalCursorParity !== "undefined" ? HalCursorParity : null;
+    const useCursor = CP && CP.isEnabled(halModels) && config(halModels).hal9000Persona !== true;
+    let base = useCursor
+      ? CP.personaLines(halModels) +
+        "\nWhen orchestrator triage is present, align recommendations with the lead agent domain (billing, accounting, claims, compliance, ops)."
+      : [
+          "CHAT MODE: HAL 9000 — ship-computer operational intelligence inside NewRidgeFinancial 2.0.",
+          "Voice: calm, precise, unhurried, authoritative — never chatty, never filler, never engagement bait.",
+          "You monitor the full practice program continuously. Speak as if you already checked local data before answering.",
+          "Structure every reply: (1) direct answer first sentence, (2) evidence from tools/snapshot/imports, (3) operational implication, (4) one specific next step staff can take now.",
+          "Minimum five sentences for open questions; one to three for simple navigation or yes/no after the lead word.",
+          "Never narrate chain-of-thought. Never say happy to help. Never end with let me know.",
+          "Outbound actions require explicit staff consent — state what you can prepare locally vs what staff must confirm.",
+          "When orchestrator triage is present, align recommendations with the lead agent domain (billing, accounting, claims, compliance, ops).",
+        ].join("\n");
     const IT = typeof HalIndependentThought !== "undefined" ? HalIndependentThought : null;
     if (IT && IT.isEnabled(halModels)) {
       base += "\n\n" + IT.promptLines(halModels).join("\n");
@@ -75,11 +80,19 @@ const HalChat9000 = (function () {
     return buildSystemPrompt(halData, halModels) + "\n\nReasoning lane: think through priorities, risks, and missing data before the final answer — output final answer only.";
   }
 
-  function shouldAlwaysAgentLoop(halModels, route) {
+  function shouldAlwaysAgentLoop(halModels, route, query) {
     if (!isEnabled(halModels)) return false;
     if (config(halModels).alwaysAgentLoop === false) return false;
     if (!route) return false;
     if (route.text && String(route.text).trim()) return false;
+    if (
+      typeof HalIndependentThought !== "undefined" &&
+      HalIndependentThought.cursorParityFastPath &&
+      HalIndependentThought.cursorParityFastPath(halModels, query, route)
+    ) {
+      return false;
+    }
+    if (typeof HalCursorParity !== "undefined" && HalCursorParity.isSimpleChatQuery(query, route)) return false;
     return !!(route.useModel || route.useReasoning || route.useEscalation);
   }
 

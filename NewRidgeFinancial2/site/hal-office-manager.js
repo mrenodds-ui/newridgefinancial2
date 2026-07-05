@@ -188,7 +188,7 @@ const HalOfficeManager = (function () {
       autoTask: active.length >= 3,
       source: "sidenote",
       sourceId: "sidenotes-high-priority",
-      evidence: active.slice(0, 3).map((n) => n.text.slice(0, 80)),
+      evidence: active.slice(0, 3).map((n) => String(n.text || "").slice(0, 80)),
     });
   }
 

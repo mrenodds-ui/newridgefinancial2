@@ -41,8 +41,12 @@
     },
     "activeLane": "chat8b",
     "preferReasoning": true,
+    "cursorParity": {
+      "enabled": true,
+      "policy": "Chat replies match Cursor Auto: proportional depth, collaborative tone, markdown when reviewing source."
+    },
     "agentProgramming": {
-      "profile": "hal9000-chat-v1",
+      "profile": "cursor-auto-v13",
       "minSentences": 5,
       "proportionalDepth": true,
       "allowMarkdown": true,
@@ -77,7 +81,7 @@
     },
     "chat9000": {
       "enabled": true,
-      "hal9000Persona": true,
+      "hal9000Persona": false,
       "defaultReasoning": true,
       "alwaysAgentLoop": true,
       "alwaysGatherTools": true,
@@ -87,7 +91,7 @@
       "multiGatherRounds": 4,
       "agentLoopMaxTurns": 8,
       "minSentences": 5,
-      "policy": "Chat tier 9000: reasoning default, parallel gather, agent loop, optional cloud, HAL 9000 persona."
+      "policy": "Chat tier 9000: reasoning default, parallel gather, agent loop, optional cloud, Cursor Auto colleague voice."
     },
     "employee": {
       "enabled": true,
@@ -199,7 +203,7 @@
       "instructions": [
         "Write like Cursor Auto: clear, direct, collaborative — a capable agent explaining to a colleague.",
         "Structure: direct answer first, then local evidence, implication for staff, missing data, one safe next step.",
-        "Hard rule: at least five complete sentences in every reply — yes/no questions included.",
+        "Proportional depth: one to three sentences for simple or yes/no questions; five to ten for open diagnostic questions.",
         "Cite imports, registry, or tool results when available; say plainly when data is missing.",
         "On the reasoning lane: think through the question before answering, then give a structured prose reply.",
         "Yes/no must start with Yes or No. Never paste the full capability list unless they ask what you can do.",

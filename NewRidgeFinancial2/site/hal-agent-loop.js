@@ -105,6 +105,14 @@
   }
 
   function shouldUseAgentLoop(query, route, plan, cfg) {
+    if (typeof globalThis !== "undefined" && globalThis._halInterviewMode) {
+      if (/<<<tool/i.test(String(query || ""))) return true;
+      if (plan && (plan.isTaskCompletionQuery || plan.isInvestigateQuery)) return true;
+      if (/(how does|why is|fix|debug|investigate|validate|patch|source code|grep|where is .* handled)/i.test(String(query || ""))) {
+        return true;
+      }
+      return false;
+    }
     if (!plan || !plan.useModelEnhancement) return false;
     if (cfg && cfg.agentToolLoop === false) return false;
     if (plan.agentToolLoop === false) return false;
@@ -219,7 +227,9 @@
     const maxTurns =
       typeof maxTurnsOverride === "number" && maxTurnsOverride > 0
         ? Math.min(MAX_LOOP_TURNS, maxTurnsOverride)
-        : MAX_LOOP_TURNS;
+        : typeof globalThis !== "undefined" && globalThis._halInterviewMode
+          ? 1
+          : MAX_LOOP_TURNS;
 
     if (!shouldUseAgentLoop(query, route, plan, (ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {})) {
       const single = await enhanceModelCall(ctx, route, query, plan, initialToolResults || {}, onToken);

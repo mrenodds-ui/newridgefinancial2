@@ -255,10 +255,24 @@
     });
   }
 
+  function abortInFlightHal() {
+    if (typeof halModelAbortController !== "undefined" && halModelAbortController) {
+      try {
+        halModelAbortController.abort();
+      } catch (_) {}
+    }
+    if (typeof halAskLoading !== "undefined") halAskLoading = false;
+    if (typeof halTypeTimer !== "undefined" && halTypeTimer) {
+      clearInterval(halTypeTimer);
+      halTypeTimer = null;
+    }
+  }
+
   (async () => {
     await probeReasoningLane();
     for (let n = 0; n < questions.length; n++) {
       if (!window._halRandomQaRun || !window._halRandomQaRun.running) break;
+      abortInFlightHal();
       window._halRandomQaRun.completed = n;
       window._halRandomQaRun.current = questions[n];
       const t0 = Date.now();

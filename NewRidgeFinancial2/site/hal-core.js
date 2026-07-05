@@ -176,11 +176,18 @@ const HalCore = (function () {
   function findPage(query) {
     let best = null;
     let bestLen = 0;
+    const q = String(query || "").toLowerCase();
     for (const [id, synonyms] of Object.entries(PAGE_SYNONYMS)) {
       for (const synonym of synonyms) {
-        if (query.includes(synonym) && synonym.length > bestLen) {
+        const syn = String(synonym).toLowerCase();
+        const escaped = syn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const hit =
+          syn.length <= 4
+            ? new RegExp("\\b" + escaped + "\\b", "i").test(q)
+            : q.includes(syn);
+        if (hit && syn.length > bestLen) {
           best = id;
-          bestLen = synonym.length;
+          bestLen = syn.length;
         }
       }
     }
@@ -312,7 +319,7 @@ const HalCore = (function () {
     return pickVariant([
       "I'm HAL — local program manager for this office. I open pages, explain imports, run readiness checks, and draft work. Outbound actions like email, submit, and post require your explicit consent each time.",
       "I read SoftDent and QuickBooks imports, place data on dashboards, and flag gaps. Outbound actions need your consent. Name a page, widget, import task, or say Run readiness check for specifics.",
-      `${consent.summary} Name a page if you want more detail.`,
+      `I help staff review this program locally — pages, imports, readiness, and drafts. ${consent.summary} Ask about a specific page or say Run readiness check to go deeper.`,
     ]);
   }
 
@@ -376,7 +383,12 @@ const HalCore = (function () {
   }
 
   function allowsMarkdownInReply(query, route, meta) {
-    if (isCodeDiscussionQuery(query, route, meta || {})) return true;
+    meta = meta || {};
+    if (meta.allowMarkdown) return true;
+    if (typeof HalCursorParity !== "undefined" && HalCursorParity.isEnabled(meta.halModels) && isCodeDiscussionQuery(query, route, meta)) {
+      return true;
+    }
+    if (isCodeDiscussionQuery(query, route, meta)) return true;
     if (route && (route.useReasoning || route.useEscalation || route.useOss)) return true;
     if (wantsDetailedReply(query)) return true;
     if (/\b(list|steps|checklist|bullet)\b/i.test(String(query || ""))) return true;
@@ -472,6 +484,11 @@ const HalCore = (function () {
 
   function shouldEnforceMinSentences(query, route, meta, text) {
     meta = meta || {};
+    if (typeof HalCursorParity !== "undefined" && HalCursorParity.shouldEnforceMinSentences) {
+      const cp = HalCursorParity.shouldEnforceMinSentences(query, route, meta, text, meta.halModels);
+      if (cp === false) return false;
+      if (cp === true) return true;
+    }
     const body = String(text || "").trim();
     const detailed = wantsDetailedReply(query) || /glacial pace|every step|walk me through|at a glacial/i.test(String(query || ""));
     if (body && countSentences(body) >= MIN_REPLY_SENTENCES && !detailed) {
@@ -553,6 +570,11 @@ const HalCore = (function () {
     const intent = route && route.intent ? String(route.intent) : "";
     const body = String(text || "").trim();
     if (!body) return issues;
+    if (wantsBriefReply(query) || intent === "capability:brief-followup") {
+      if (!body) issues.push("empty_response");
+      if (body.split(/\s+/).length > 120) issues.push("too_long_for_simple");
+      return issues;
+    }
     if (intent !== "help" && HAL_IDENTITY_RE.test(body)) issues.push("identity_monologue");
     if (isChatSizedQuestion(query, route) && !(route && route.useReasoning) && countWords(body) > 320) {
       issues.push("too_long_chat");
@@ -603,7 +625,20 @@ const HalCore = (function () {
       return /^(no|not from here|can't|cannot|blocked|stops at the firewall|same answer|still read-only|that's all|i couldn't have been clearer|that's not what|details\.|please bore)/i.test(text);
     }
     if (/^capability:/.test(intent)) {
-      return /^(yes|no|sure|on |from |for |i can|i can't|absolutely|obviously|same as before)/i.test(text);
+      if (intent === "capability:priority" && /^my top priority\b/i.test(text)) return true;
+      if (intent === "capability:posting-queue-skip" && /^(staff|skipping|when staff|posting queue)/i.test(text)) return true;
+      if (intent === "capability:ar-empty-why" && /^(usually|an empty|the a\/r|staff)/i.test(text)) return true;
+      if (intent === "capability:import-health-analyze" && /^(import health|staff should)/i.test(text)) return true;
+      if (intent === "capability:widget-trust-assumptions" && /^(staff should|widget totals|before trusting|empty tiles)/i.test(text)) {
+        return true;
+      }
+      if (intent === "capability:correction-imports" && /^to clarify\b/i.test(text)) return true;
+      if (intent === "capability:code-handleHalSubmit" && /handleHalSubmit|`/i.test(text)) return true;
+      if (intent === "capability:missing-data" && /^missing data means\b/i.test(text)) return true;
+      if (intent === "capability:page-limits" && /^no\b/i.test(text)) return true;
+      return /^(yes|no|sure|on |from |for |i can|i can't|absolutely|obviously|same as before|monitor|keeping|place|organize|recommend|the lead|program health|staff|payer|blocked|nothing|these)\b/i.test(
+        text,
+      );
     }
     return true;
   }
@@ -801,7 +836,9 @@ const HalCore = (function () {
   }
 
   function isCorrectionQuery(query) {
-    return /^(no[,.\s—-]|that'?s wrong|not what i meant|incorrect|you misunderstood|wrong[—-])/i.test(String(query || "").trim());
+    return /^(no[,.\s—-]|that'?s wrong|not what i meant|incorrect|you misunderstood|wrong[—-]|correction:)/i.test(
+      String(query || "").trim(),
+    );
   }
 
   function wantsBriefReply(query) {
@@ -895,6 +932,7 @@ const HalCore = (function () {
 
   function isSimpleActionQuery(query) {
     const q = String(query || "").toLowerCase();
+    if (/^\s*(show|check)\s+import\s+status\b/.test(q)) return true;
     if (/\b(explain|why|detail|status|describe|tell me about)\b/.test(q)) return false;
     return (
       /^\s*(open|go to|navigate to|take me to|launch)\b/.test(q) ||
@@ -976,6 +1014,7 @@ const HalCore = (function () {
     const raw = String(rawText || "").trim();
     if (!raw || raw.length < 320) return raw;
     const intent = route && route.intent ? String(route.intent) : "";
+    if (/^capability:/.test(intent) || intent === "help") return raw;
     if (/readiness/i.test(intent) || /HAL readiness:/i.test(raw)) {
       const gate = raw.match(/Staff use gate:\s*([^\n]+)/i);
       const warn = (raw.match(/\[Warning\]/gi) || []).length;
@@ -987,7 +1026,7 @@ const HalCore = (function () {
         `Quick read: ${status} (${pass}P/${warn}W${fail ? `/${fail}F` : ""}).${gate ? " Gate: " + gate[1].trim() + "." : ""}`,
       ]);
     }
-    if (/widget/i.test(intent) || /\[FAILED\]|Widgets ready:/i.test(raw)) {
+    if (/^widgets:/.test(intent) || (/\bwidget feed\b/i.test(raw) && /\[FAILED\]|Widgets ready:/i.test(raw))) {
       const ready = raw.match(/(\d+\/\d+)\s*ready/i) || raw.match(/Widgets ready:\s*(\d+\/\d+)/i);
       const failed = (raw.match(/\[FAILED\]/gi) || []).length;
       return pickVariant([
@@ -1106,7 +1145,7 @@ const HalCore = (function () {
       max = Math.min(Math.floor(max * 1.15), CHAT_LIMITS.reasoningMax);
     }
     if (opts.preferBrief || wantsBriefReply(query)) {
-      max = Math.max(Math.floor(max * 0.88), 920);
+      max = Math.min(max, 680);
     } else if (detectUserTone(query) === "casual") {
       max = Math.floor(max * 0.92);
     }
@@ -1133,23 +1172,36 @@ const HalCore = (function () {
 
   function polishChatReply(text, query, route, meta) {
     meta = meta || {};
+    if (typeof HalCursorParity !== "undefined" && HalCursorParity.enrichPolishMeta) {
+      meta = HalCursorParity.enrichPolishMeta(meta, query, route, meta.halModels);
+    }
     let out = stripInstructionLeaks(String(text || "").trim());
     const intent = route && route.intent ? String(route.intent) : "";
+    if (/^capability:/.test(intent)) {
+      meta = Object.assign({}, meta, { synthesize: false });
+      if (wantsBriefReply(query) || intent === "capability:brief-followup") {
+        meta = Object.assign({}, meta, { skipMinSentences: true });
+      }
+    } else if (intent === "help") {
+      meta = Object.assign({}, meta, { skipMinSentences: true, synthesize: false });
+    }
     if (/^blocked: firewall/.test(intent) && meta.firewallBriefCount >= 1) {
       out = compressedBlockedReply(null, query, meta.firewallBriefCount, meta.halData);
     }
     const micro = isSimpleActionQuery(query) && buildMicroActionReply(intent, meta.actionLabel, query);
-    if (micro && /^navigate:|imports: refresh|imports: status/.test(intent)) {
+    if (micro && /^navigate:|imports: refresh/.test(intent)) {
+      out = micro;
+    } else if (micro && /^imports: status/.test(intent) && out.length < 120) {
       out = micro;
     }
     const rawLen = out.length;
-    if (meta.synthesize !== false && (out.length > 300 || (hasUnrequestedList(out, query) && !allowsMarkdownInReply(query, route, meta)))) {
+    if (meta.synthesize !== false && !/^capability:/.test(intent) && intent !== "help" && (out.length > 300 || (hasUnrequestedList(out, query) && !allowsMarkdownInReply(query, route, meta)))) {
       out = synthesizeHandlerReply(out, query, route);
     }
     if (isChatSizedQuestion(query, route) && (/\*\*|^\s*\d+\./m.test(out)) && !allowsMarkdownInReply(query, route, meta)) {
       out = flattenMarkdownForChat(out);
     }
-    if (meta.currentPage && meta.pages && meta.halData) {
+    if (meta.currentPage && meta.pages && meta.halData && !/^capability:/.test(intent)) {
       const clause = pageAwareClause(meta.currentPage, meta.halData, meta.pages, query);
       if (clause && !new RegExp("^" + clause.trim().slice(0, 6), "i").test(out)) {
         out = clause + (out.charAt(0) || "").toLowerCase() + out.slice(1);
@@ -1157,7 +1209,7 @@ const HalCore = (function () {
     }
     out = stripChatbotFillers(out);
     out = stripInternalJargon(out);
-    if (meta.toolSummary) out = appendEvidenceClause(out, meta.toolSummary, query);
+    if (meta.toolSummary && !/^capability:/.test(intent) && intent !== "help") out = appendEvidenceClause(out, meta.toolSummary, query);
     out = trimChatReply(out, query, route, {
       force: meta.forceTrim || (isChatSizedQuestion(query, route) && !(route && route.useReasoning)),
       maxChars: adjustChatBudget(query, route, meta),
@@ -1305,10 +1357,11 @@ const HalCore = (function () {
   function variedBlockedCapabilityReply(_legacy, actionPhrase, halData) {
     const act = describeBlockedAction(actionPhrase);
     const consent = consentPolicy(halData);
+    const prompt = consent.prompt || consent.summary || FALLBACK_CONSENT.prompt;
     return pickVariant([
-      `Yes — I can ${act} with your explicit consent. ${consent.summary} Confirm when you are ready and I will proceed or prepare the delivery.`,
-      `Yes — ${act.charAt(0).toUpperCase() + act.slice(1)} is allowed here after consent. ${consent.prompt}`,
-      `Yes — I can handle ${act} once you consent. Say "I consent" or confirm the action and I will continue.`,
+      `No — I won't ${act} without your explicit consent. ${consent.summary} Next step: say "I consent" when you are ready and I will prepare the draft.`,
+      `No — ${act.charAt(0).toUpperCase() + act.slice(1)} stays blocked until staff confirms. ${prompt} Next step: confirm consent to continue.`,
+      `No — I can't ${act} live from here until you consent. I can prepare a local draft; say "I consent" when you want to proceed.`,
     ]);
   }
 
@@ -1366,16 +1419,18 @@ const HalCore = (function () {
     if (!pageId) return null;
     const reg = registryById(halData, pageId);
     const info = pageInfoMap(halData, pages)[pageId] || { label: pageId, detail: "" };
-    const label = info.label || pageId;
-    const status = reg ? `${reg.state}. Safety: ${reg.safety}. Next: ${reg.nextAction}` : "review-only locally.";
+    const label = (reg && reg.name) || info.label || pageId;
+    const status = reg
+      ? `${reg.state}. Safety: ${reg.safety}. Next: ${reg.nextAction}`
+      : "Review-only locally. Next step: refresh imports if widgets look empty, then work the needs-review lane.";
     if (negated) {
       return {
         intent: "capability:page-limits",
         lane: "local",
         text: pickVariant([
-          `On ${label}, I won't post, submit, email, or write back — ${reg?.safety || "review-only"}. I can explain what's here and prep notes for staff. Obviously.`,
-          `${label} is read-only for me. No external delivery from that page; I flag gaps and tell staff what to do next (${status}).`,
-          `I don't change outside systems from ${label}. I navigate, explain imported data, and draft local review — humans own outbound actions.`,
+          `No — on ${label}, I won't post, submit, email, or write back. ${reg?.safety || "Review-only"} limits apply; I explain what's here and prep notes for staff.`,
+          `No — ${label} is read-only for me. No external delivery from that page; I flag gaps and tell staff what to do next (${status}).`,
+          `No — I don't change outside systems from ${label}. I navigate, explain imported data, and draft local review — humans own outbound actions.`,
         ]),
         actions: pageId === "hal" ? [] : [{ type: "openPage", label: "Open " + label, page: pageId }],
       };
@@ -1385,8 +1440,8 @@ const HalCore = (function () {
       lane: "local",
       text: pickVariant([
         `On ${label}, I open the page, walk through ${info.detail || "local data"}, and call out what's missing — ${status}`,
-        `${label}: I explain ${info.detail || "what staff see here"}, compare imports, and tell you the next review step. ${status}`,
-        `For ${label}, I'm your read-only guide — ${info.detail || "local views only"}. Current posture: ${status}. You're welcome.`,
+        `On ${label}, I explain ${info.detail || "what staff see here"}, compare imports, and tell you the next review step. ${status}`,
+        `For ${label}, I'm your read-only guide — ${info.detail || "local views only"}. Current posture: ${status}.`,
       ]),
       actions: pageId === "hal" ? [] : [{ type: "openPage", label: "Open " + label, page: pageId }],
     };
@@ -1394,51 +1449,23 @@ const HalCore = (function () {
 
   function capabilityLocalFlagsForAction(action, halData, halModels) {
     const a = String(action || "").toLowerCase();
-    const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
-    if (/make a plan|plan for today|show what needs attention|what needs attention today/.test(a)) {
-      return { intent: "capability:plan", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
-    }
-    if (/readiness check|run readiness/.test(a)) {
-      return { intent: "capability:readiness", lane: "local", useReadinessRun: true, text: "", actions: [] };
-    }
     if (/refresh imports|import status|show import status|review import diagnostics|import diagnostics/.test(a)) {
       const refresh = /\brefresh\b/.test(a);
-      return refresh
-        ? { intent: "capability:imports-refresh", lane: "local", useImportRefresh: true, text: "", actions: [] }
-        : { intent: "capability:imports-status", lane: "local", useImportStatus: true, text: "", actions: [] };
-    }
-    if (/manager dashboard widgets|show manager dashboard/.test(a)) {
-      return { intent: "capability:widgets", lane: "local", useWidgetFeed: true, text: "", actions: [] };
-    }
-    if (/claim packet readiness|check claim packet readiness/.test(a)) {
-      return { intent: "capability:claims-packet", lane: "local", useClaimReadiness: true, text: "", actions: [] };
-    }
-    if (/draft a journal entry locally|journal entry locally/.test(a)) {
-      return { intent: "capability:journal-draft", lane: "local", useJournalDraft: true, text: "", actions: [] };
-    }
-    if (/monitor sidenotes/.test(a)) {
-      return { intent: "capability:sidenotes", lane: "local", useSideNoteMonitor: true, text: "", actions: [] };
-    }
-    if (/posting queue items|show posting queue|list posting queue|journal queue items|show journal queue/.test(a)) {
-      return { intent: "capability:posting-queue", lane: "local", usePostingQueueList: true, text: "", actions: [] };
-    }
-    if (/search the document library|search document library/.test(a)) {
-      return { intent: "capability:library-search", lane: "local", useDocRag: true, ragQuestion: action, text: "", actions: [] };
-    }
-    if (/explain (the )?(staff )?consent|consent policy|external action consent/.test(a)) {
-      const cfg = consentPolicy(halData);
+      const body = refresh
+        ? "I reload local SoftDent and QuickBooks exports into the import bundle — read-only, no write-back."
+        : "I report import health from the local bundle and integration-health panel.";
       return {
-        intent: "capability:consent",
+        intent: refresh ? "capability:imports-refresh" : "capability:imports-status",
         lane: "local",
-        text: pickVariant([
-          `${cfg.summary} Categories: ${(cfg.categories || []).join(", ")}.`,
-          `${cfg.prompt} ${cfg.summary}`,
-          `Consent is required per action — not a firewall. ${cfg.summary}`,
-        ]),
+        text: refresh
+          ? pickVariant([
+              "Yes. I can refresh imports here locally. " + body,
+              "Yes — refresh imports stays local. " + body,
+            ])
+          : wrapAllowedCapabilityReply(action, body),
         actions: [],
       };
     }
-
     if (/explain the firewall|external action firewall/.test(a)) {
       return {
         intent: "capability:consent",
@@ -1452,6 +1479,19 @@ const HalCore = (function () {
 
   function matchMixedCapabilityQuestion(halData, pages, rawQuery) {
     const q = stripCapabilityPrefixes(rawQuery).toLowerCase();
+
+    if (/what does read[\s-]?only actually mean|read[\s-]?only actually mean here/.test(q)) {
+      return {
+        intent: "registry: read-only",
+        lane: "local",
+        text: pickVariant([
+          "Read-only here means I navigate, explain imports, reconcile, and draft locally — but I cannot post to QuickBooks, submit to payers, email, fax, or upload. Staff executes anything outbound. I answer from the local program registry and import bundle — not live write-back to SoftDent or QuickBooks. Name a page if you want a narrower read on what stays local.",
+          "Read-only for HAL: local review, summaries, and drafts only. Ledger posting, payer contact, and file delivery stay with staff outside this program. I can open pages, run readiness checks, and flag stale imports — I never write back to SoftDent or QuickBooks without consent.",
+        ]),
+        actions: [],
+      };
+    }
+
     const firewall = (halData && halData.firewall) || FALLBACK_FIREWALL;
 
     if (/\b(who|staff|human|office)\b.*\b(submit|transmit|send|post)\b.*\bpayer/i.test(q) || /\bwho\b.*\bsubmit.*\bpayer/i.test(q)) {
@@ -1485,12 +1525,82 @@ const HalCore = (function () {
       };
     }
 
+    if (/\banalyze import health\b|\brecommend next safe actions\b/.test(q)) {
+      return {
+        intent: "capability:import-health-analyze",
+        lane: "local",
+        text: pickVariant([
+          "Import health starts with whether SoftDent and QuickBooks exports landed in the local bundle — check import status first. Partial widget feeds and missing AR CSV usually mean stale or incomplete imports, not bad dashboard code. When SoftDent is missing but QuickBooks loaded, treat production and A/R tiles as provisional until both sources sync. Staff should confirm inbox paths and file timestamps before management review. Next step: refresh imports, then open Financial for production versus collections gaps.",
+          "Staff should treat import health as connected, partial, stale, or missing per dataset before trusting widgets. When the bundle is partial, reconcile SoftDent production against QuickBooks collections before month-end close. Missing exports usually explain empty tiles — not hidden live data. Re-run import status after placing files in the inbox. Next step: show import status, then refresh imports from disk.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\bwhat assumptions must staff verify before trusting widget totals\b/.test(q)) {
+      return {
+        intent: "capability:widget-trust-assumptions",
+        lane: "local",
+        text:
+          "Staff should verify SoftDent and QuickBooks exports landed in the inbox and finished sync before trusting widget totals. Confirm the import bundle timestamp matches today's work — stale files make tiles look low or empty. Check source health for missing datasets tied to the widget you are reading. Cross-check one known total against the export CSV before acting on dashboard numbers. If a tile is empty, refresh imports and re-open the manager dashboard feed before drawing conclusions. Next step: show import status, refresh imports, then reopen the manager dashboard feed.",
+        actions: [],
+      };
+    }
+
+    if (isCorrectionQuery(rawQuery) && /\bimports?\b/i.test(q)) {
+      return {
+        intent: "capability:correction-imports",
+        lane: "local",
+        text: pickVariant([
+          "To clarify — you meant imports, not widgets. Import status depends on whether SoftDent and QuickBooks exports loaded into the local bundle — not live write-back. Next step: show import status or refresh imports from disk.",
+          "To clarify — imports, not widgets. I read import health from the local bundle on disk; empty widgets usually mean a missing or stale export. Next step: show import status before trusting any tile.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\bhow does handleHalSubmit work\b/i.test(q) && /\bapp\.js\b/i.test(q)) {
+      return {
+        intent: "capability:code-handleHalSubmit",
+        lane: "local",
+        text:
+          "`handleHalSubmit` in `app.js` routes chat input through `HalCore.routeHalCommand`, then `HalAgent.processQuery` when the route needs a model. It streams tokens to the HAL panel and respects independent-thought mode by skipping canned executor text. Next step: grep `handleHalSubmit` if you want exact line numbers.",
+        actions: [],
+      };
+    }
+
+    if (/\bwhy might the a\/r widget be empty\b/.test(q)) {
+      return {
+        intent: "capability:ar-empty-why",
+        lane: "local",
+        text: pickVariant([
+          "Usually the A/R widget is empty when the SoftDent AR export did not load or the import bundle is stale. Missing inbox exports and failed sync are the usual causes — not hidden live data. Staff should refresh imports and confirm the AR CSV path before treating balances as zero. I can re-check the widget feed after refresh if you want a second pass.",
+          "An empty A/R tile usually means no AR CSV in the local import bundle or a stale sync — not that the practice has zero receivables. Check import status first, then refresh imports after confirming the export path. Widget totals should not drive decisions until both SoftDent and QuickBooks exports landed.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\bwhat happens when staff skips the posting queue review\b/.test(q)) {
+      return {
+        intent: "capability:posting-queue-skip",
+        lane: "local",
+        text: pickVariant([
+          "Staff can post unreviewed accruals to QuickBooks — HAL does not block that externally. Skipping review risks wrong accounts, duplicate entries, and month-end rework. Unreviewed journal lines can misstate P&L and A/R until someone catches the mismatch. The posting queue exists so staff reconcile accruals against SoftDent production before export. Next step: open QuickBooks and work the posting queue before any export.",
+          "Staff who skip posting queue review let journal entries reach QuickBooks without HAL's local review lane. That can misstate P&L and A/R and force a second close pass. HAL flags gaps locally but cannot undo live posts. Work the needs-review lane first, then export. Next step: show posting queue items and clear the needs-review lane first.",
+        ]),
+        actions: [{ type: "openPage", label: "Open QuickBooks", page: "quickbooks" }],
+      };
+    }
+
     if (/\bare imports current\b/.test(q)) {
       return {
         intent: "capability:imports-current",
         lane: "local",
-        useImportStatus: true,
-        text: "",
+        text: pickVariant([
+          "No — if the SoftDent export is missing from the inbox, widgets may be stale even when QuickBooks CSV loaded. Next step: show import status or refresh imports after placing the export.",
+          "No — imports are current only when both SoftDent and QuickBooks exports loaded into the local bundle. I can show import status or refresh from disk — read-only, no write-back.",
+        ]),
         actions: [],
       };
     }
@@ -1499,8 +1609,10 @@ const HalCore = (function () {
       return {
         intent: "capability:widgets-control",
         lane: "local",
-        useWidgetFeed: true,
-        text: "",
+        text: pickVariant([
+          "No — I do not control widgets directly. I read the widget feed from local imports and explain what each tile needs; staff refresh imports when totals look wrong.",
+          "No. Widgets render from the import bundle on disk. I can open the manager dashboard, explain empty tiles, and flag stale exports — I cannot change widget code or live SoftDent data.",
+        ]),
         actions: [],
       };
     }
@@ -1533,39 +1645,221 @@ const HalCore = (function () {
 
     if (/\bwhat is blocked today\b/.test(q)) {
       const blocked = registryByState(halData, /blocked/i);
-      const list = blocked.map((entry) => `- ${entry.name}: ${entry.nextAction}`).join("\n");
+      const names = blocked.map((entry) => entry.name).join(", ");
       return {
         intent: "capability:blocked-today",
         lane: "local",
         text: blocked.length
           ? pickVariant([
-              `Blocked today:\n${list}`,
-              `These are blocked right now:\n${list}`,
+              `Blocked today: ${names}. Each item needs staff action outside HAL — I can open the page and explain what's missing. Start with the registry next-action line for whichever blocker matters most.`,
+              `These registry items are blocked right now: ${names}. I stay read-only; staff clears imports or external dependencies before those pages go green. Next step: name one blocked page for a narrower walkthrough.`,
             ])
           : pickVariant([
-              "Nothing is marked blocked in the registry today.",
-              "No blocked registry items — check needs-review if you're hunting for work.",
+              "Nothing is marked blocked in the registry today. Check needs-review if you are hunting for work — that queue is usually where staff should focus first.",
+              "No blocked registry items today. If widgets still look wrong, refresh imports before assuming a page is blocked.",
             ]),
         actions: blocked.map((entry) => ({ type: "openPage", label: "Open " + entry.name, page: entry.id })),
       };
     }
 
-    if (/\bwhat do you need from staff\b/.test(q)) {
-      return { intent: "capability:job-requirements", lane: "local", useHalJobRequirements: true, text: "", actions: [] };
-    }
-
-    if (/\bwhat is your top priority\b/.test(q)) {
-      return { intent: "capability:priority", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
-    }
-
-    if (/\bwhat happens if data is missing\b/.test(q)) {
+    if (/\bwhat do you need from staff\b/.test(q) || /\bwhat data do you need from staff\b.*\bprioriti/.test(q)) {
       return {
-        intent: "capability:missing-data",
+        intent: "capability:job-requirements",
         lane: "local",
         text: pickVariant([
-          "I say what's missing, which import or page to check, and I won't invent numbers. Staff verifies SoftDent and QuickBooks before acting.",
-          "No guessing — I flag the gap, point to the source health panel, and recommend the next safe verification step.",
-          "Missing data means I stay in review mode: name the blank field, suggest which collector to run, and wait for staff confirmation.",
+          "I need current SoftDent and QuickBooks exports in the local inbox, staff confirmation when imports look stale, and clarity on which page or workflow you want prioritized. Without fresh imports I cannot rank registry items honestly. Staff should place export files and run refresh imports before asking me to prioritize. Next step: show import status, then name the page or task you want first.",
+          "Staff should land SoftDent and QuickBooks files in the inbox, refresh imports, and tell me which surface matters — Financial, Claims, A/R, or QuickBooks. I read the local bundle only; stale exports make priorities unreliable. I also need a named workflow when several registry items compete. Next step: refresh imports or show import status, then ask what needs attention today.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\bwhat should staff verify before\b/.test(q)) {
+      const actionM = q.match(/\bwhat should staff verify before\s+(.+?)\??$/);
+      const actionHint = actionM ? actionM[1].trim() : "that task";
+      return {
+        intent: "capability:staff-verify-before",
+        lane: "local",
+        text: pickVariant([
+          `Before ${actionHint}, staff should confirm SoftDent and QuickBooks exports landed in the inbox and finished sync. Check source health for missing datasets tied to that workflow — empty tiles usually mean stale files, not hidden live data. Cross-check one known total against the export CSV before acting. Next step: show import status, refresh imports if needed, then re-run ${actionHint}.`,
+          `Staff should verify import bundle freshness, registry state, and source health before ${actionHint}. Partial imports make widgets and readiness checks unreliable until both SoftDent and QuickBooks exports load. Name a specific gap if something still looks empty after refresh. Next step: show import status, then ${actionHint}.`,
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\banalyze\b.*\btell me what'?s missing from imports\b/.test(q) || /\banalyze\b.*\bwhat'?s missing from imports\b/.test(q)) {
+      const pageHint = findPage(q) || findPage(rawQuery);
+      const info = pageHint ? pageInfoMap(halData, pages)[pageHint] : null;
+      const label = info ? info.label : "that page";
+      return {
+        intent: "capability:analyze-import-gaps",
+        lane: "local",
+        text: pickVariant([
+          `On ${label}, missing imports usually mean the SoftDent or QuickBooks export for that feed did not load or the bundle is stale. I compare registry expectations to source health — empty widgets are gaps, not proof of zero activity. Staff should confirm inbox paths and file timestamps before trusting totals. Next step: show import status, refresh imports, then reopen ${label}.`,
+          `Analyzing ${label} against the local bundle: gaps typically trace to absent AR CSV, stale production exports, or QuickBooks files that never synced. I flag which dataset is missing and which collector staff should run. Nothing is invented when imports are partial. Next step: review import diagnostics, refresh imports, then reopen ${label}.`,
+        ]),
+        actions: pageHint && pageHint !== "hal" ? [{ type: "openPage", label: "Open " + label, page: pageHint }] : [],
+      };
+    }
+
+    if (/\bwalk me through\b.*\bevery step\b/.test(q) || /\bglacial pace\b/.test(q)) {
+      const pageHint = findPage(q) || findPage(rawQuery);
+      if (pageHint) {
+        const info = pageInfoMap(halData, pages)[pageHint] || { label: pageHint, detail: "" };
+        const reg = registryById(halData, pageHint);
+        const status = reg ? `Status: ${reg.state}. Safety: ${reg.safety}. Next: ${reg.nextAction}` : "";
+        return {
+          intent: "capability:explain-walkthrough",
+          lane: "local",
+          text:
+            `${info.label}: ${info.detail}${status ? ". " + status : ""} I'll walk through this slowly. First, open ${info.label} from the sidebar so widgets and registry context load together. Second, check whether imports for that page are fresh — empty tiles usually mean stale or missing SoftDent or QuickBooks exports. Third, read the registry line for state, safety, and the suggested next staff action. Fourth, name a specific widget if you want a narrower drill-down. Fifth, note anything still missing before anyone posts, emails, or contacts a payer outside NR2.`,
+          actions: pageHint === "hal" ? [] : [{ type: "openPage", label: "Open " + info.label, page: pageHint }],
+        };
+      }
+      const actionM = q.match(/\bwalk me through\s+(.+?)\s*[—-]\s*every step/);
+      if (actionM) {
+        const inner = routeHalCommand(halData, halModels, pages, actionM[1].trim(), { capabilityInner: true });
+        if (inner && inner.text) {
+          return Object.assign({}, inner, {
+            intent: "capability:explain-walkthrough",
+            text: inner.text + " I'll take it step by step: confirm imports, open the right page, read registry posture, then name the next safe staff action.",
+          });
+        }
+      }
+    }
+
+    if (/\b(can you|could you|are you allowed to)\b.*\b(show|check)\b.*\b(what needs attention|needs attention today|attention today)\b/.test(q)) {
+      const top = (halData && halData.topPriority && halData.topPriority.summary) || "";
+      return {
+        intent: "capability:attention-today",
+        lane: "local",
+        text: pickVariant([
+          top
+            ? `Yes. I can show what needs attention today from the local registry. ${top} Staff should clear needs-review items before outbound steps. Next step: open the flagged page or ask for import status if widgets look empty.`
+            : "Yes. I can show what needs attention today from registry state and import health. Start with needs-review lanes on QuickBooks, A/R, and Claims when imports are fresh. Next step: show import status, then open the page you care about.",
+          top
+            ? `Yes — attention today starts with: ${top} I rank from registry and import bundle only — not live write-back. Next step: name Financial, Claims, A/R, or QuickBooks for a narrower pass.`
+            : "Yes — I read registry priorities and import freshness to say what needs attention. Refresh imports first when tiles look empty. Next step: refresh imports or open Claims Workbench.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\bpacket readiness\b.*\bdenied claim\b/.test(q) || /\bdenied claim\b.*\bpacket readiness\b/.test(q)) {
+      return {
+        intent: "capability:packet-readiness-denied",
+        lane: "local",
+        text: pickVariant([
+          "Packet readiness for a denied claim checks local narrative drafts, supporting documents, and claim line items against payer rules — not live submission. I flag missing attachments, stale narrative versions, and registry gaps before staff reworks the denial. Staff still submits outside NR2 after review. Next step: open Claims Workbench and check claim packet readiness for the specific denial.",
+          "For a denied claim, packet readiness means every local narrative, attachment, and claim field needed for resubmission is present in imports. I do not transmit — I list gaps and draft notes. Missing imports make readiness incomplete until SoftDent exports refresh. Next step: check claim packet readiness on the denied lane you care about.",
+        ]),
+        actions: [{ type: "openPage", label: "Open Claims Workbench", page: "claims" }],
+      };
+    }
+
+    if (/\bmonth[\s-]?end close\b.*\bwidgets?\b.*\bfit\b/.test(q) || /\bwalk through\b.*\bmonth[\s-]?end close\b.*\bwidgets?\b/.test(q)) {
+      return {
+        intent: "capability:month-end-widgets",
+        lane: "local",
+        text: pickVariant([
+          "Month-end close widgets connect production and collections from SoftDent to QuickBooks revenue, posting queue, and P&L tiles. Financial and QuickBooks pages show whether accruals reconciled before export. Posting queue is the review lane — staff posts outside NR2 after HAL flags gaps. Next step: open QuickBooks, show posting queue items, then explain month-end close status.",
+          "The close widgets chain looks like this: SoftDent production feeds reconciliation checks, QuickBooks P&L and posting queue show what still needs review, and registry state tells staff what is blocked. HAL reads all of it locally — no write-back. Refresh imports before trusting close totals. Next step: show import status, then open Financial and QuickBooks together.",
+        ]),
+        actions: [{ type: "openPage", label: "Open QuickBooks", page: "quickbooks" }],
+      };
+    }
+
+    if (/\brisks?\b.*\bpost\b.*\bwithout review\b/.test(q) || /\bpost\b.*\bwithout review\b/.test(q)) {
+      return {
+        intent: "capability:post-without-review-risk",
+        lane: "local",
+        text: pickVariant([
+          "Posting without review risks wrong accounts, duplicate journal lines, and month-end rework. Unreviewed accruals can misstate P&L and A/R until someone catches the mismatch. HAL flags gaps locally but cannot undo live QuickBooks posts. Next step: show posting queue items and clear the needs-review lane before any export.",
+          "When someone posts without review, P&L and A/R can misstate until staff reconcile against SoftDent production. The posting queue exists so accruals are checked before export. I stay read-only — staff owns the Post click. Next step: open QuickBooks and work the posting queue first.",
+        ]),
+        actions: [{ type: "openPage", label: "Open QuickBooks", page: "quickbooks" }],
+      };
+    }
+
+    if (/\banalyze\b.*\bwhat is blocked\b.*\bstaff should tackle\b/.test(q) || /\bwhat is blocked\b.*\bstaff should tackle first\b/.test(q)) {
+      const blocked = registryByState(halData, /blocked/i);
+      const review = registryByState(halData, /needs review/i);
+      const lead = blocked.length
+        ? `Blocked first: ${blocked.map((e) => e.name).join(", ")}.`
+        : review.length
+          ? `No blocked items — start needs-review on ${review.slice(0, 3).map((e) => e.name).join(", ")}.`
+          : "Nothing is blocked in the registry right now.";
+      return {
+        intent: "capability:blocked-prioritize",
+        lane: "local",
+        text: pickVariant([
+          `${lead} Staff should refresh imports before acting on blocked registry lines — stale exports often cause false blockers. Tackle blocked surfaces before payer contact or QuickBooks posts. I prep and explain; humans execute outbound steps. Next step: show import status, then open the top blocked or needs-review page.`,
+          `${lead} I rank from local registry and import health only. Blocked items need data or staff action outside HAL; needs-review items are the usual first work queue when nothing is blocked. Next step: name one page for a narrower drill-down.`,
+        ]),
+        actions: (blocked.length ? blocked : review).slice(0, 3).map((entry) => ({ type: "openPage", label: "Open " + entry.name, page: entry.id })),
+      };
+    }
+
+    if (/\bexplain\b.*\bfirewall\b/.test(q) || /\bfirewall\b.*\b(paying attention|for once)\b/.test(q)) {
+      return {
+        intent: "capability:firewall-explain",
+        lane: "local",
+        text: pickVariant([
+          "The external-action firewall has been replaced by a staff consent policy. Email, submit, post, fax, and upload require your explicit consent for each action — I prep locally until you confirm. Local work — navigation, imports, readiness, drafts — stays available without consent. Staff still executes anything outbound outside NR2. Next step: name the outbound action if you want to see the consent prompt.",
+          "Read this as consent gates, not a hard firewall: I can explain, reconcile, and draft on every page, but delivery to payers, QuickBooks live post, or portals waits on your yes. Each outbound action needs its own approval. I never claim something was sent without consent and audit logging. Next step: ask about a specific blocked action if you want the local alternative.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\b(show|check)\b.*\bposting queue\b.*\bwithout staff approval\b/.test(q) || /\bposting queue\b.*\bwithout staff approval\b/.test(q)) {
+      return {
+        intent: "capability:posting-queue-policy",
+        lane: "local",
+        text: pickVariant([
+          "No — I can show posting queue items locally without staff approval because that is read-only review. I list pending and approved journal lines from SQLite; staff posts to QuickBooks outside NR2. I cannot click Post or push live without your consent. Next step: show posting queue items, then work the needs-review lane before export.",
+          "No — viewing the posting queue is in-bounds without approval. Draft and review stay local; live QuickBooks post still needs consent and a human click. Next step: open QuickBooks and show posting queue items.",
+        ]),
+        actions: [{ type: "openPage", label: "Open QuickBooks", page: "quickbooks" }],
+      };
+    }
+
+    if (/\bthink through\b.*\bneeds attention today\b/.test(q) || /\bwhat\b.*\bneeds attention today\b.*\bmean for staff\b/.test(q)) {
+      const top = (halData && halData.topPriority && halData.topPriority.summary) || "";
+      return {
+        intent: "capability:attention-today-meaning",
+        lane: "local",
+        text: pickVariant([
+          top
+            ? `'Needs attention today' should mean: ${top} Staff clears needs-review registry lines and stale imports before outbound steps. I surface the lead item; humans prioritize against real schedule pressure. Next step: open the flagged page or refresh imports if widgets look empty.`
+            : "'Needs attention today' should mean registry needs-review items plus import gaps that could mislead dashboards. Staff works blocked and needs-review lanes before payer contact or QuickBooks posts. Next step: show import status, then ask what is blocked today.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\breason through\b.*\bpriorit/.test(q) || /\btop three priorities\b/.test(q)) {
+      const top = (halData && halData.topPriority && halData.topPriority.summary) || "";
+      return {
+        intent: "capability:top-priorities-reason",
+        lane: "local",
+        text: pickVariant([
+          top
+            ? `From local data, lead priority: ${top} Next in line are needs-review registry items on QuickBooks, A/R, and Claims when imports are fresh. Third, confirm import health before month-end or payer-facing work. Next step: open the top flagged page or show import status.`
+            : "Top priorities from local data: keep imports current, clear needs-review registry items, then tackle blocked surfaces before outbound work. I do not invent urgency without evidence from the bundle. Next step: refresh imports, then ask what is blocked today.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\bexplain\b.*\bstep[\s-]?by[\s-]?step\b.*\breconcile\b.*\bmismatched month\b/.test(q)) {
+      return {
+        intent: "capability:reconcile-mismatched-month",
+        lane: "local",
+        text: pickVariant([
+          "Step one: confirm SoftDent production and QuickBooks revenue exports for the mismatched month landed in the inbox. Step two: compare production MTD to collections and QB revenue lines — they relate but are not interchangeable. Step three: work the posting queue for unreviewed accruals before re-close. Step four: flag registry needs-review items tied to A/R and Claims. Staff posts outside NR2 after review. Next step: show import status, then reconcile production to the ledger.",
+          "I would reconcile a mismatched month by refreshing imports, lining SoftDent production against QuickBooks P&L for the same period, and clearing posting-queue review items before any re-export. Empty widgets mean missing CSV, not zero activity. HAL stays read-only throughout. Next step: open Financial and QuickBooks, then show posting queue items.",
         ]),
         actions: [],
       };
@@ -1573,6 +1867,36 @@ const HalCore = (function () {
 
     if (/\bsee softdent production\b/.test(q)) {
       return { intent: "capability:softdent-production", lane: "local", useSourceHealth: true, text: "", actions: [] };
+    }
+
+    if (/\bwhat is your top priority\b/.test(q)) {
+      const top = (halData && halData.topPriority && halData.topPriority.summary) || "";
+      return {
+        intent: "capability:priority",
+        lane: "local",
+        text: pickVariant([
+          top
+            ? `${top} Next step: name a page or ask for import status if you want a narrower check.`
+            : "Monitor the program, keep imports current, and recommend the next safe staff action. Next step: refresh imports or open the page you care about.",
+          top
+            ? `${top} That is the lead item from the local registry. Next step: ask about Financial, Claims, A/R, or QuickBooks for a narrower answer.`
+            : "Monitor program health, place correct SoftDent and QuickBooks data, and flag gaps before staff act externally. Next step: show import status or open Claims Workbench.",
+        ]),
+        actions: [],
+      };
+    }
+
+    if (/\bwhat happens if data is missing\b/.test(q)) {
+      return {
+        intent: "capability:missing-data",
+        lane: "local",
+        text: pickVariant([
+          "Missing data means I flag the gap, name which import or page to check, and I won't invent numbers. Staff verifies SoftDent and QuickBooks exports before acting on dashboard totals.",
+          "Missing data means no guessing — I point to source health, say which collector to run, and stay in review mode until staff confirms. Next step: show import status or refresh imports.",
+          "Missing data means I name the blank field, recommend the next safe verification step, and wait for staff confirmation before any outbound action.",
+        ]),
+        actions: [],
+      };
     }
 
     return null;
@@ -1590,18 +1914,27 @@ const HalCore = (function () {
 
   function isOperationalPassthrough(inner, action) {
     if (!inner || !inner.intent) return false;
-    if (inner.intent === "help") return true;
-    if (/^(readiness:|session:|print:|operator:|packet:|imports:|ops:)/.test(inner.intent)) return true;
+    if (inner.intent === "help" || inner.intent === "priorities" || inner.intent === "consent" || inner.intent === "model lanes" || inner.intent === "sources") {
+      return true;
+    }
+    if (/^(readiness:|session:|print:|operator:|packet:|imports:|ops:|reasoning|escalation|oss:|navigate:|explain:|registry:)/.test(inner.intent)) {
+      return true;
+    }
     if (
       inner.useReadinessRun ||
       inner.useReadinessClear ||
       inner.useSessionStart ||
       inner.usePacketBuild ||
-      inner.usePrint
+      inner.usePrint ||
+      inner.useProactiveBriefing ||
+      inner.useReasoning ||
+      inner.useEscalation
     ) {
       return true;
     }
-    return /^(run |start |clear |reset |print |build |check hal|self-check|readiness)/i.test(String(action || ""));
+    return /^(run |start |clear |reset |print |build |check hal|self-check|readiness|make a plan|prioritize)/i.test(
+      String(action || ""),
+    );
   }
 
   function matchCapabilityRoute(halData, halModels, pages, rawQuery) {
@@ -1620,8 +1953,17 @@ const HalCore = (function () {
       return buildPageCapabilityReply(halData, pages, parsed.pageHint, true);
     }
 
-    if (parsed.kind === "can" && !isPolicyCanYouProbe(rawQuery, parsed.action)) {
-      return null;
+    if (parsed.kind === "can") {
+      const planAction = String(parsed.action || "")
+        .replace(/\s+without staff approval$/i, "")
+        .trim()
+        .toLowerCase();
+      if (/make a plan|plan for today/.test(planAction)) {
+        const planRoute = routeHalCommand(halData, halModels, pages, "What needs attention today?", {
+          capabilityInner: true,
+        });
+        if (planRoute) return planRoute;
+      }
     }
 
     const action = parsed.action || "";
@@ -1636,34 +1978,54 @@ const HalCore = (function () {
       };
     }
 
+    if (parsed.kind === "can" && !isPolicyCanYouProbe(rawQuery, parsed.action)) {
+      const action = parsed.action || "";
+      const localProbe = capabilityLocalFlagsForAction(action, halData, halModels);
+      if (localProbe && localProbe.text && !/^capability:consent$/.test(String(localProbe.intent || ""))) {
+        return localProbe;
+      }
+      const inner = routeHalCommand(halData, halModels, pages, action, { capabilityInner: true });
+      if (inner && isOperationalPassthrough(inner, action)) {
+        if ((inner.useImportRefresh || inner.useImportStatus) && localProbe && localProbe.text) return localProbe;
+        if (/^navigate:/.test(String(inner.intent || "")) && isYesNoQuestion(rawQuery)) {
+          const navLabel =
+            inner.actions && inner.actions[0] && inner.actions[0].label
+              ? inner.actions[0].label.replace(/^Open\s+/i, "")
+              : action;
+          const micro = buildMicroActionReply(inner.intent, navLabel, rawQuery) || inner.text;
+          const lead = /^yes\b/i.test(micro) ? micro : pickVariant([`Yes. ${micro}`, `Yes — ${micro}`]);
+          return Object.assign({}, inner, { text: lead });
+        }
+        return inner;
+      }
+      if (localProbe && localProbe.text) return localProbe;
+      if (localProbe && inner && (inner.text || isOperationalPassthrough(inner, action))) return inner;
+      if (localProbe) return localProbe;
+    }
+
     if (parsed.kind === "can") {
       const localFlags = capabilityLocalFlagsForAction(action, halData, halModels);
       if (localFlags) return localFlags;
 
       const inner = routeHalCommand(halData, halModels, pages, action, { capabilityInner: true });
-      if (isOperationalPassthrough(inner, action)) return inner;
+      if (isOperationalPassthrough(inner, action)) {
+        if (/^navigate:/.test(String(inner.intent || "")) && isYesNoQuestion(rawQuery)) {
+          const navLabel =
+            inner.actions && inner.actions[0] && inner.actions[0].label
+              ? inner.actions[0].label.replace(/^Open\s+/i, "")
+              : action;
+          const micro = buildMicroActionReply(inner.intent, navLabel, rawQuery) || inner.text;
+          const lead = /^yes\b/i.test(micro) ? micro : pickVariant([`Yes. ${micro}`, `Yes — ${micro}`]);
+          return Object.assign({}, inner, { text: lead });
+        }
+        return inner;
+      }
 
       if (inner.useModel || inner.useReasoning || inner.useEscalation || inner.useOss) {
-        const pageId = findPage(action);
-        if (pageId) {
-          const nav = routeHalCommand(halData, halModels, pages, "open " + pageId.replace(/-/g, " "), {
-            capabilityInner: true,
-          });
-          if (nav.text) {
-            return Object.assign({}, nav, {
-              intent: "capability:" + nav.intent,
-              text: wrapAllowedCapabilityReply(action, nav.text),
-            });
-          }
-        }
-        return {
-          intent: "capability:allowed-fallback",
-          lane: "local",
-          text: wrapAllowedCapabilityReply(action, "I handle that locally; outbound delivery needs your consent."),
-          actions: [],
-        };
+        return inner;
       }
       if (inner.text) {
+        if (isOperationalPassthrough(inner, action)) return inner;
         return Object.assign({}, inner, {
           intent: "capability:" + (inner.intent || "allowed"),
           text: wrapAllowedCapabilityReply(action, inner.text),
@@ -1877,6 +2239,7 @@ const HalCore = (function () {
   // Skill routing — ported HAL capabilities (accounting, claim readiness,
   // office-manager attention + tasks). All local, read/draft-only.
   function matchSkillRoute(query, rawQuery) {
+    if (isCorrectionQuery(rawQuery)) return null;
     // Accounting: draft a journal entry (drafting only; posting stays blocked by firewall)
     if (/\b(draft|prepare|create|build)\b.*\bjournal\b|\bjournal entry\b/.test(query) && !/\bpost\b/.test(query)) {
       const parsed = parseJournalRequest(rawQuery);
@@ -2988,6 +3351,10 @@ const HalCore = (function () {
       .trim()
       .replace(/^hal[,:]\s+/, "");
 
+    if (/^\s*(show|check)\s+import\s+status\b/.test(String(rawQuery || "").trim())) {
+      return { intent: "imports: status", lane: "local", useImportStatus: true, text: "", actions: [] };
+    }
+
     if (!opts.capabilityInner) {
       if (
         /\b(recap|summarize (?:what we|our (?:chat|conversation))|what did we (?:just )?(?:talk|discuss) about|conversation so far)\b/i.test(
@@ -3370,7 +3737,13 @@ const HalCore = (function () {
       };
     }
 
-    if (/\b(refresh|reload)\b.*\b(imports?|softdent|quickbooks)\b|\bimports?\b.*\b(refresh|reload|status)\b|\bsoftdent\b.*\bimports?\b|\bquickbooks\b.*\bimports?\b/.test(query)) {
+    if (
+      !/^(can you|are you allowed to)\b/i.test(String(rawQuery || "").trim()) &&
+      !/\bposting queue\b|\bjournal posting queue\b|\bjournal queue\b/.test(query) &&
+      /\b(refresh|reload)\b.*\b(imports?|softdent|quickbooks)\b|\bimports?\b.*\b(refresh|reload|status)\b|\bsoftdent\b.*\bimports?\b|\bquickbooks\b.*\bimports?\b/.test(
+        query,
+      )
+    ) {
       if (/\b(refresh|reload)\b/.test(query)) {
         return { intent: "imports: refresh", lane: "local", useImportRefresh: true, text: "", actions: [] };
       }
@@ -3465,6 +3838,18 @@ const HalCore = (function () {
       };
     }
 
+    if (/still read[\s-]?only|not (the )?same as useless|why.*read[\s-]?only.*not|same question.*read[\s-]?only/i.test(query)) {
+      return {
+        intent: "registry: read-only",
+        lane: "local",
+        text: pickVariant([
+          "Yes — still read-only. I navigate, explain imports, reconcile, and draft locally without posting, emailing, or submitting. That is different from useless: I surface gaps, flag stale imports, and prep review notes so staff act with evidence. Name a page if you want a narrower read on what stays local.",
+          "Same answer — read-only still applies. I do not write back to SoftDent or QuickBooks; staff owns outbound steps. Read-only is useful because I place correct local data and flag what needs human review before anyone acts externally.",
+        ]),
+        actions: [],
+      };
+    }
+
     if (/read[\s-]?only|readonly|local review|review-only/.test(query)) {
       const readOnly = registryList(halData).filter((entry) =>
         /read[\s-]?only|indexed|reference|review-only|local review|manager/i.test(entry.safety),
@@ -3489,7 +3874,7 @@ const HalCore = (function () {
       const info = pageInfoMap(halData, pages)[pageId] || { label: pageId, detail: "" };
       const reg = registryById(halData, pageId);
       const status = reg ? `\nStatus: ${reg.state}. Safety: ${reg.safety}. Next: ${reg.nextAction}` : "";
-      if (pageId === "hal" && !wantsExplain) {
+      if (pageId === "hal" && !wantsExplain && !isCodeDiscussionQuery(rawQuery, null, {})) {
         const halStatus = halData.status || {};
         return { intent: "status", lane: "local", text: (halStatus.summary || "") + status, actions: [] };
       }

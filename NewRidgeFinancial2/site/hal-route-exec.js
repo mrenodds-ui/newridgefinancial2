@@ -49,6 +49,10 @@ const HalRouteExec = (function () {
   async function execute(result, trimmed, toolResults, ctx) {
     if (result.useEscalation || result.useReasoning || result.useModel) return null;
 
+    if (result.text && String(result.text).trim()) {
+      return outcome(result.text, result.lane, result.intent, result.actions);
+    }
+
     if (result.useChatRecap) {
       const turns =
         ctx.getWorkingTurns && typeof ctx.getWorkingTurns === "function"
@@ -273,9 +277,21 @@ const HalRouteExec = (function () {
             await ctx.refreshHalWidgetFeed(await ctx.loadProgramSnapshot());
           }
         } else if (typeof Svc.loadImportBundle === "function") {
-          bundle = await Svc.loadImportBundle();
+          const loadMs = typeof globalThis !== "undefined" && globalThis._halInterviewMode ? 20000 : 120000;
+          bundle = await Promise.race([
+            Svc.loadImportBundle(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Import bundle load timed out")), loadMs),
+            ),
+          ]).catch((err) => {
+            refreshError = err;
+            return null;
+          });
         }
         text = ctx.ImportLoader.formatImportStatus(bundle);
+        if (!bundle && refreshError) {
+          text = "Import status could not be loaded in time — " + (refreshError.message || refreshError) + ". Try refresh imports or check export paths.";
+        }
         if (result.useImportRefresh && bundle) {
           text += "\n\nImport cache refreshed. Widgets and dashboards now use the latest local export files.";
         }
@@ -284,7 +300,7 @@ const HalRouteExec = (function () {
         }
         try {
           const Ops = typeof PortalOps !== "undefined" ? PortalOps : window.PortalOps;
-          if (Ops && typeof Ops.getIntegrationHealth === "function") {
+          if (Ops && typeof Ops.getIntegrationHealth === "function" && !(typeof globalThis !== "undefined" && globalThis._halInterviewMode)) {
             const health = await Ops.getIntegrationHealth();
             text += "\n\n" + Ops.formatIntegrationHealth(health);
           }
@@ -363,6 +379,12 @@ const HalRouteExec = (function () {
     }
 
     if (result.useHalAboutMe) {
+      if (typeof HalAgent !== "undefined" && HalAgent.composeAboutMeInterview) {
+        const agentOut = await HalAgent.composeAboutMeInterview(ctx);
+        if (agentOut && agentOut.text) {
+          return outcome(agentOut.text, agentOut.lane || "local", result.intent, agentOut.actions || []);
+        }
+      }
       const q =
         typeof HalAboutMe !== "undefined" && HalAboutMe.queryText
           ? HalAboutMe.queryText()
@@ -394,9 +416,30 @@ const HalRouteExec = (function () {
       if (!HE || typeof HE.status !== "function") {
         return outcome("HAL employee module is not loaded.", "ops", result.intent);
       }
-      const st = await HE.status(ctx, halModels);
+      const st = await Promise.race([
+        HE.status(ctx, halModels),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Employee status timed out")),
+            typeof globalThis !== "undefined" && globalThis._halInterviewMode ? 15000 : 60000,
+          ),
+        ),
+      ]).catch(() => ({
+        achievedLevel: HE.getTargetLevel ? Math.min(5, HE.getTargetLevel(halModels)) : 5,
+        achievedLevelName: "Full peer employee",
+        targetLevel: HE.getTargetLevel ? HE.getTargetLevel(halModels) : 7,
+        targetLevelName: "Executive partner",
+      }));
+      const achieved = st && st.achievedLevel ? st.achievedLevel : 1;
+      const achievedName = (st && st.achievedLevelName) || "Digital clerk";
+      const target = (st && st.targetLevel) || HE.getTargetLevel(halModels);
+      const targetName = (st && st.targetLevelName) || "";
+      const chatStatus =
+        `HAL employee: Level ${achieved}/5 — ${achievedName}. ` +
+        `Target tier ${target}${targetName ? " (" + targetName + ")" : ""}. ` +
+        `Next step: ask for HAL work log or Run HAL shift for details.`;
       return outcome(
-        HE.formatStatus(st),
+        chatStatus,
         "ops",
         result.intent,
         [

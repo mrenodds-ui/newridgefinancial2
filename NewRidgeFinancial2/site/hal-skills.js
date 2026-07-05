@@ -648,7 +648,7 @@ const HalSkills = (function () {
       lines.push("", "Active notes:");
       active.slice(0, 12).forEach((n) => {
         const tagStr = n.tags && n.tags.length ? ` [${n.tags.join(", ")}]` : "";
-        lines.push(`- [${n.status}/${n.priority}] ${n.text.slice(0, 160)}${tagStr}`);
+        lines.push(`- [${n.status}/${n.priority}] ${String(n.text || "").slice(0, 160)}${tagStr}`);
       });
     }
     lines.push("", SAFETY_DISCLAIMER);
@@ -665,7 +665,7 @@ const HalSkills = (function () {
     } else {
       lines.push("");
       active.slice(0, 15).forEach((n) => {
-        lines.push(`- [${n.status}] (${n.priority}) ${n.text}`);
+        lines.push(`- [${n.status}] (${n.priority}) ${String(n.text || "")}`);
       });
     }
     return lines.join("\n");

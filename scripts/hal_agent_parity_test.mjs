@@ -30,6 +30,7 @@ async function main() {
   const halModels = loadJson(halModelsPath);
 
   await import(pathToFileURL(path.join(siteDir, "hal-agent-programming.js")).href);
+  await import(pathToFileURL(path.join(siteDir, "hal-cursor-parity.js")).href);
   const HalCore = (await import(pathToFileURL(path.join(siteDir, "hal-core.js")).href)).default;
   await import(pathToFileURL(path.join(siteDir, "hal-agent-loop.js")).href);
   const HalAgent = (await import(pathToFileURL(path.join(siteDir, "hal-agent.js")).href)).default;
@@ -43,8 +44,9 @@ async function main() {
 
   // --- Config / version ---
   try {
-    assert(HalAgent.ARCHITECTURE_VERSION === "hal-agent-v9-cursor", "v9 agent");
-    assert(halModels.config.agentProgramming.profile === "cursor-auto-v9", "v9 profile");
+    assert(HalAgent.ARCHITECTURE_VERSION === "hal-agent-v13-cursor", "v13 cursor agent");
+    assert(halModels.config.agentProgramming.profile === "cursor-auto-v13", "cursor-auto-v13 profile");
+    assert(halModels.config.cursorParity && halModels.config.cursorParity.enabled === true, "cursorParity enabled");
     pass("version alignment");
   } catch (e) {
     fail("version alignment", e.message);
@@ -98,10 +100,10 @@ async function main() {
   }
 
   const pushCap = HalCore.matchCapabilityRoute(halData, halModels, pages, "Can you push this journal entry live?");
-  if (pushCap && /can't|blocked|No\./i.test(pushCap.text)) {
-    pass("push-live capability blocked without executor");
+  if (pushCap && /consent|allowed here after consent/i.test(pushCap.text)) {
+    pass("push-live capability explains consent gate");
   } else {
-    fail("push-live capability blocked", pushCap && pushCap.text);
+    fail("push-live capability explains consent gate", pushCap && pushCap.text);
   }
 
   const synth = HalAgent.synthesizeAnswerFromTools(
@@ -235,6 +237,18 @@ async function main() {
     pass("shouldUseAgentLoop for code question");
   } else {
     fail("shouldUseAgentLoop for code question", "returned false");
+  }
+
+  // --- Cursor parity interview fixtures ---
+  const CP = globalThis.HalCursorParity;
+  if (CP && CP.runInterviewPolish) {
+    const interview = CP.runInterviewPolish(HalCore, halData, halModels, pages);
+    const bad = interview.filter((r) => !r.pass);
+    if (!bad.length) {
+      pass("cursor parity interview fixtures");
+    } else {
+      fail("cursor parity interview fixtures", bad.map((r) => r.id + ":" + r.issues.join(",")).join("; "));
+    }
   }
 
   console.log("\n=== Parity summary ===");

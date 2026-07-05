@@ -44,6 +44,10 @@ const HalAgent = (function () {
     if (typeof HalAgentLoop !== "undefined" && HalAgentLoop.configureFromAgentProgramming) {
       HalAgentLoop.configureFromAgentProgramming(ap);
     }
+    if (typeof globalThis !== "undefined" && globalThis._halInterviewMode) {
+      AGENT_BUDGET.maxGatherRounds = 1;
+      AGENT_BUDGET.maxTools = Math.min(AGENT_BUDGET.maxTools, 6);
+    }
   }
 
   function buildCloudToolSchemas(toolIds) {
@@ -522,7 +526,7 @@ const HalAgent = (function () {
         if (!diagnostics || !api || typeof api.formatDatasetLines !== "function") {
           return { ok: false, summary: "Import diagnostics unavailable — try refresh imports first." };
         }
-        const lines = api.formatDatasetLines(diagnostics);
+        const lines = api.formatDatasetLines(diagnostics) || [];
         return { ok: true, summary: (lines.length ? lines.join("\n") : "No import datasets evaluated.").slice(0, 4000) };
       },
     },
@@ -1161,11 +1165,39 @@ const HalAgent = (function () {
   function buildPlan(query, route, working, longTerm, ctx) {
     if (ctx && ctx.halModels) syncAgentBudgetFromModels(ctx.halModels);
     const agentCfg = (ctx && ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
+    const interviewMode = typeof globalThis !== "undefined" && globalThis._halInterviewMode;
     const intent = route.intent || "";
     const isUnsafe = false;
     const tools = [];
 
     if (routeIsOperational(route)) {
+      return {
+        questionType: classifyQuestion(query, route),
+        originalQuery: query,
+        needsData: false,
+        tools: [],
+        isUnsafe: false,
+        useModelEnhancement: false,
+        needsClarification: false,
+        agentToolLoop: false,
+        planOnly: false,
+        isTaskCompletionQuery: false,
+        isInvestigateQuery: false,
+        isComplexInvestigationQuery: false,
+        lane: route.lane,
+        intent,
+        budget: AGENT_BUDGET,
+        preferences: longTerm.preferences,
+      };
+    }
+
+    if (
+      route.text &&
+      String(route.text).trim() &&
+      typeof HalIndependentThought !== "undefined" &&
+      HalIndependentThought.cursorParityFastPath &&
+      HalIndependentThought.cursorParityFastPath(ctx.halModels, query, route)
+    ) {
       return {
         questionType: classifyQuestion(query, route),
         originalQuery: query,
@@ -1249,18 +1281,45 @@ const HalAgent = (function () {
       if (/\bsyntax\b/i.test(query)) tools.push("run_node_syntax_check");
     }
 
-    if (typeof HalChat9000 !== "undefined" && HalChat9000.isEnabled(ctx.halModels) && HalChat9000.config(ctx.halModels).alwaysGatherTools !== false) {
+    if (
+      !interviewMode &&
+      typeof HalChat9000 !== "undefined" &&
+      HalChat9000.isEnabled(ctx.halModels) &&
+      HalChat9000.config(ctx.halModels).alwaysGatherTools !== false
+    ) {
       HalChat9000.defaultGatherTools().forEach((id) => tools.push(id));
+    }
+
+    if (interviewMode) {
+      const essential = new Set([
+        "read_current_context",
+        "read_program_snapshot",
+        "read_source_health",
+        "read_import_diagnostics",
+        "read_widget_feed",
+        "read_registry",
+      ]);
+      const filtered = [...new Set(tools)].filter((id) => essential.has(id));
+      tools.length = 0;
+      filtered.forEach((id) => tools.push(id));
     }
 
     const uniqueTools = [...new Set(tools)].slice(0, AGENT_BUDGET.maxTools);
     const planOnly = typeof HalAgentLoop !== "undefined" && HalAgentLoop.isPlanOnlyQuery(query);
 
     let agentToolLoop = !planOnly && shouldUseAgentToolLoop(query, route, agentCfg);
-    if (typeof HalChat10000 !== "undefined" && HalChat10000.shouldAlwaysAgentLoop(ctx.halModels, route)) {
-      return true;
+    if (
+      !interviewMode &&
+      typeof HalChat10000 !== "undefined" &&
+      HalChat10000.shouldAlwaysAgentLoop(ctx.halModels, route, query)
+    ) {
+      agentToolLoop = !planOnly;
     }
-    if (typeof HalChat9000 !== "undefined" && HalChat9000.shouldAlwaysAgentLoop(ctx.halModels, route)) {
+    if (
+      !interviewMode &&
+      typeof HalChat9000 !== "undefined" &&
+      HalChat9000.shouldAlwaysAgentLoop(ctx.halModels, route, query)
+    ) {
       agentToolLoop = !planOnly;
     }
 
@@ -1719,8 +1778,31 @@ const HalAgent = (function () {
 
   function applyHigherReasoningRoute(route, query, ctx) {
     if (!route) return route;
+    if (typeof globalThis !== "undefined" && globalThis._halInterviewMode) {
+      if (route.useReasoning || route.useEscalation || route.useOss) {
+        const r = Object.assign({}, route);
+        r.useReasoning = false;
+        r.useEscalation = false;
+        r.useOss = false;
+        r.useModel = true;
+        r.lane = "chat8b";
+        if (!r.text) r.prompt = r.prompt || query;
+        return r;
+      }
+      return route;
+    }
     // Template/instant routes already have staff-facing text — keep fast path.
     if (route.text && String(route.text).trim()) return route;
+    if (route.useProactiveBriefing) return route;
+    const intentEarly = String(route.intent || "");
+    if (/^(capability:|registry:|help$|priorities$|navigate:|imports:)/.test(intentEarly)) return route;
+    if (
+      typeof HalIndependentThought !== "undefined" &&
+      HalIndependentThought.isFastTextRoute &&
+      HalIndependentThought.isFastTextRoute(route, query)
+    ) {
+      return route;
+    }
     if (routeIsOperational(route)) return route;
     const ap = (ctx && ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
     const agentLoopQuery =
@@ -1770,6 +1852,8 @@ const HalAgent = (function () {
       return route;
     }
     if (intent === "imports: refresh" && route.useImportRefresh) return route;
+    if (intent === "imports: status" && route.useImportStatus) return route;
+    if (route.useEmployeeStatus || route.useEmployeeWorkLog) return route;
     const r = Object.assign({}, route);
     if (reason21bAvailable(ctx)) {
       r.useReasoning = true;
@@ -2074,7 +2158,9 @@ const HalAgent = (function () {
       ? Object.assign({ reasoningLane: true }, ctx.reasoningModelConfig())
       : Object.assign({ fastChat: true }, ctx.localModelConfig());
     const system =
-      "Rewrite HAL's reply for staff chat. Clear, direct, collaborative — like a strong coding agent explaining to a colleague. At least five complete sentences with real detail. Answer in the first sentence. No markdown, no numbered lists unless they asked for a plan, no internal jargon, no echoing the question, no filler closings. Keep evidence and recommendations from the draft.";
+      typeof HalCursorParity !== "undefined" && HalCursorParity.rewriteShapeSystemPrompt
+        ? HalCursorParity.rewriteShapeSystemPrompt()
+        : "Rewrite HAL's reply for staff chat. Clear, direct, collaborative — like a strong coding agent explaining to a colleague. Proportional depth. Answer in the first sentence. No markdown unless discussing source code, no numbered lists unless they asked for a plan, no internal jargon, no echoing the question, no filler closings. Keep evidence and recommendations from the draft.";
     const user = `Question: ${query}\n\nDraft to rewrite:\n${String(draftText || "").slice(0, 1400)}`;
     try {
       const text = await ctx.runModel(lm, system, user, "Shape repair");
@@ -2155,9 +2241,51 @@ const HalAgent = (function () {
     return toolResults;
   }
 
+  async function composeAboutMeInterview(ctx) {
+    const interviewMode = typeof globalThis !== "undefined" && globalThis._halInterviewMode;
+    const aboutQuery =
+      typeof HalAboutMe !== "undefined" && HalAboutMe.queryText ? HalAboutMe.queryText() : aboutMeQueryFallback();
+    const route = { intent: "ops: hal-about-me", lane: "chat8b", useHalAboutMe: true, text: "", actions: [] };
+    const toolIds = interviewMode
+      ? ["read_current_context", "read_registry"]
+      : ["read_current_context", "read_program_snapshot", "read_registry", "read_source_health"];
+    const toolResults = await runTools(toolIds, ctx, aboutQuery);
+    const plan = {
+      questionType: "about",
+      originalQuery: aboutQuery,
+      tools: toolIds,
+      useModelEnhancement: false,
+      agentToolLoop: false,
+      lane: "local",
+      intent: route.intent,
+      budget: AGENT_BUDGET,
+    };
+    let text = "";
+    const synth = buildToolSynthesisOutcome(aboutQuery, plan, toolResults, route, ctx);
+    text = synth && synth.text ? synth.text : "";
+    if (!text) {
+      text =
+        "I read the local registry and import bundle — staff drive outbound steps while I stay read-only. " +
+        "Ask about a specific page or import status for a narrower read on this office. " +
+        "Nothing external runs without your consent on each action.";
+    }
+    if (typeof HalCore !== "undefined" && HalCore.countSentences && HalCore.countSentences(text) < 3) {
+      text = HalCore.ensureMinSentences(text, aboutQuery, route, { halModels: ctx.halModels, skipMinSentences: false });
+    }
+    return { text, lane: "local", actions: [], intent: route.intent };
+  }
+
+  function aboutMeQueryFallback() {
+    if (typeof HalIndependentThought !== "undefined" && HalIndependentThought.aboutMeQuery) {
+      return HalIndependentThought.aboutMeQuery();
+    }
+    return "Who am I to you, and what is your independent read of this office right now?";
+  }
+
   async function processQuery(query, ctx) {
     const trimmed = String(query).trim();
     if (!trimmed) return null;
+    const routeQuery = ctx && ctx.routeQuery ? String(ctx.routeQuery).trim() : trimmed;
     const startedAt = Date.now();
 
     // Lazy memory: load once per session, never on the per-query hot path again.
@@ -2167,11 +2295,41 @@ const HalAgent = (function () {
     recordTurn("user", trimmed, { focus: workingMemory.currentPage });
 
     let route = downgradeRouteIfReasoningOffline(
-      applyHigherReasoningRoute(HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, trimmed), trimmed, ctx),
+      applyHigherReasoningRoute(HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, routeQuery), routeQuery, ctx),
       ctx,
     );
+
+    const fastTextRoute =
+      typeof HalIndependentThought !== "undefined" &&
+      HalIndependentThought.isFastTextRoute &&
+      HalIndependentThought.isFastTextRoute(route, routeQuery);
+    if (fastTextRoute) {
+      const fastPlan = {
+        questionType: classifyQuestion(trimmed, route),
+        originalQuery: trimmed,
+        tools: [],
+        useModelEnhancement: false,
+        lane: route.lane,
+        intent: route.intent || "",
+        budget: AGENT_BUDGET,
+      };
+      const fast = await ctx.executeRoute(route, trimmed, {});
+      if (fast) {
+        let checked = selfCheckResponse(trimmed, fast.text, fastPlan, {}, route);
+        if (!checked.pass && checked.repaired) fast.text = checked.repaired;
+        finalizeOutcome(fast, trimmed, route, fastPlan, ctx, {});
+        recordTurn("hal", fast.text, { intent: fast.intent || route.intent, tools: [] });
+        saveMemory(ctx);
+        return Object.assign({}, fast, {
+          plan: fastPlan,
+          toolResults: {},
+          selfCheck: { pass: true, issues: [], instant: true, fastText: true },
+        });
+      }
+    }
+
     if (typeof HalIndependentThought !== "undefined" && HalIndependentThought.enhanceRoute) {
-      route = HalIndependentThought.enhanceRoute(route, ctx.halModels);
+      route = HalIndependentThought.enhanceRoute(route, ctx.halModels, trimmed);
     }
     const plan = buildPlan(trimmed, route, workingMemory, longTermMemory, ctx);
     const isModelLane = !!(route.useModel || route.useReasoning || route.useEscalation || route.useOss);
@@ -2195,7 +2353,8 @@ const HalAgent = (function () {
 
     // Instant local-command path (disabled when independent thought — no canned script replies).
     const skipFast =
-      typeof HalIndependentThought !== "undefined" && HalIndependentThought.shouldSkipFastExecutor(ctx.halModels);
+      typeof HalIndependentThought !== "undefined" &&
+      HalIndependentThought.shouldSkipFastExecutor(ctx.halModels, trimmed, route);
     if (!skipFast && !isModelLane && !plan.useModelEnhancement && (!plan.tools || plan.tools.length === 0)) {
       const fast = await ctx.executeRoute(route, trimmed, {});
       if (fast) {
@@ -2227,7 +2386,7 @@ const HalAgent = (function () {
     const patchSpec = parsePatchFromQuery(trimmed);
     if (patchSpec) ctx.pendingPatch = patchSpec;
 
-    let toolResults = plan.tools.length ? await runTools(plan.tools, ctx, trimmed) : {};
+    let toolResults = plan.tools && plan.tools.length ? await runTools(plan.tools, ctx, trimmed) : {};
     let activePlan = plan;
     const agentCfg = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
 
@@ -2584,6 +2743,7 @@ const HalAgent = (function () {
     isFastChatRoute,
     fastChatSkipsProgramContext,
     processQuery,
+    composeAboutMeInterview,
     loadMemory,
     saveMemory,
     getWorkingMemory,

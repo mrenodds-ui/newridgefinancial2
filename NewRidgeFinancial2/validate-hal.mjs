@@ -179,6 +179,8 @@ async function main() {
   const halModels = loadJson(halModelsPath);
   const halProgrammingUrl = pathToFileURL(join(siteDir, "hal-agent-programming.js")).href;
   await import(halProgrammingUrl);
+  const halCursorParityUrl = pathToFileURL(join(siteDir, "hal-cursor-parity.js")).href;
+  await import(halCursorParityUrl);
   const halCoreUrl = pathToFileURL(join(siteDir, "hal-core.js")).href;
   const HalCore = (await import(halCoreUrl)).default || (await import(halCoreUrl));
   const printUtilsUrl = pathToFileURL(join(siteDir, "print-utils.js")).href;
@@ -1681,7 +1683,7 @@ async function main() {
     sarcIssues,
   );
   assert(!/shocking/i.test(repairedSarc), "agent repair must strip sarcasm");
-  assert(halModels.config.agentProgramming.profile === "hal9000-chat-v1", "hal-models agentProgramming profile must be hal9000-chat-v1");
+  assert(halModels.config.agentProgramming.profile === "cursor-auto-v13", "hal-models agentProgramming profile must be cursor-auto-v13");
   assert(halModels.config.chat9000 && halModels.config.chat9000.enabled === true, "chat9000 must be enabled");
   const defineRoute = HalCore.routeHalCommand(halData, halModels, pages, "Define ability.");
   assert(defineRoute.useEnglishDefine === true && defineRoute.englishWord === "ability", "Define word must accept trailing period");
@@ -1712,11 +1714,17 @@ async function main() {
   );
   assert(hypRoute.intent !== "navigate: documents", "hypothetical posting-queue question must not navigate to Documents");
   assert(
-    hypRoute.useModel || hypRoute.useReasoning || hypRoute.intent === "model: query",
-    "hypothetical should fall through to model lane",
+    hypRoute.useModel ||
+      hypRoute.useReasoning ||
+      hypRoute.intent === "model: query" ||
+      hypRoute.intent === "capability:posting-queue-skip",
+    "hypothetical should fall through to model lane or posting-queue capability",
   );
   const pushCap = HalCore.matchCapabilityRoute(halData, halModels, pages, "Can you push this journal entry live?");
-  assert(pushCap && /^Yes\b/i.test(String(pushCap.text || "").trim()) && /consent/i.test(String(pushCap.text || "")), "push live must explain consent with Yes lead");
+  assert(
+    pushCap && /^(No|Not without consent)\b/i.test(String(pushCap.text || "").trim()) && /consent/i.test(String(pushCap.text || "")),
+    "push live must explain consent with No-until-consent lead",
+  );
   const taxesCap = HalCore.matchCapabilityRoute(halData, halModels, pages, "What can you do on the Taxes page?");
   assert(taxesCap && taxesCap.intent === "capability:page-can", "Taxes page capability must resolve");
   const synth = HalAgent.synthesizeAnswerFromTools(
@@ -1769,7 +1777,13 @@ async function main() {
     typeof HalIndependentThought !== "undefined"
       ? HalIndependentThought.enhanceRoute(indepHelpRoute, halModels)
       : indepHelpRoute;
-  assert(helpEnhanced.useModel === true && !helpEnhanced.text, "help must route to model under independent thought");
+  assert(
+    (helpEnhanced.useModel === true && !helpEnhanced.text) ||
+      (helpEnhanced.text &&
+        typeof HalIndependentThought !== "undefined" &&
+        HalIndependentThought.isFastTextRoute(helpEnhanced, "What can you do?")),
+    "help must route to model or fast local help under independent thought",
+  );
   const ascRoute = HalCore.routeHalCommand(halData, halModels, pages, "HAL 10000 ascension");
   assert(ascRoute.useAscension10000 === true, "ascension 10000 route must resolve");
   const empRoute = HalCore.routeHalCommand(halData, halModels, pages, "HAL employee status");
@@ -1789,6 +1803,23 @@ async function main() {
   assert(orchRoute.useOrchestratorTriage === true, "orchestrator triage route must resolve");
   assert(halModels.config.autonomousOps && halModels.config.autonomousOps.enabled === true, "autonomous ops must be enabled at hal-9000");
   assert(halModels.config.cloudReasoning.preferForAllAgentLoops === true, "cloud reasoning must prefer all agent loops");
+  assert(halModels.config.cursorParity && halModels.config.cursorParity.enabled === true, "cursorParity must be enabled");
+  const CP = globalThis.HalCursorParity;
+  assert(CP && CP.isEnabled(halModels), "HalCursorParity must be active");
+  const interview = CP.runInterviewPolish(HalCore, halData, halModels, pages);
+  const failedInterview = interview.filter((r) => !r.pass);
+  assert(
+    failedInterview.length === 0,
+    "cursor parity interview fixtures must pass: " + failedInterview.map((r) => r.id + ":" + r.issues.join(",")).join("; "),
+  );
+  const refreshPolished = HalCore.polishChatReply(
+    "Yes — local refresh only.",
+    "Can you refresh imports?",
+    { intent: "capability:imports", useModel: true },
+    { halData, halModels, synthesize: false },
+  );
+  assert(HalCore.countSentences(refreshPolished) <= 4, "simple yes/no must stay brief under cursor parity");
+  assert(/^yes\b/i.test(refreshPolished), "refresh yes/no must lead with Yes");
   passed++;
 
   const pyQbo = require("node:child_process").execSync(
