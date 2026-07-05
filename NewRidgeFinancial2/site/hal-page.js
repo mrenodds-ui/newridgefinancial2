@@ -521,6 +521,7 @@ const HalPage = (function () {
     const halStatusToolbar = `
             <button type="button" class="hp-status hp-status--btn" data-hal-cmd="What can you do" title="Ask HAL what it can do"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>HAL STATUS <b>${esc(halStatusLabel)}</b></button>
             <button type="button" class="hp-status hp-status--btn" data-hal-cmd="Run readiness check" title="Run local readiness check"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>LOCAL CORE <b>${esc(coreStatusLabel)}</b></button>
+            <button type="button" class="hp-status hp-status--btn" data-hal-about-me title="HAL speaks your executive partner briefing"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>ABOUT ME</button>
             <button type="button" class="hp-status hp-status--btn" data-hal-cmd="Explain staff consent policy" title="Consent policy"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>CONSENT <b>ON</b></button>
             ${directBadge}
             <span class="hp-clock"><strong>${esc(now.toISOString().slice(11, 19))} UTC</strong><span>${esc(now.toISOString().slice(0, 10))}</span></span>`;

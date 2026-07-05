@@ -42,7 +42,7 @@ function buildRoutingRegressionCases() {
   addMany(["Run orchestrator triage", "multi-agent triage"], "ops: orchestrator-triage");
   addMany(["HAL 10000 ascension", "director digest", "executive digest"], "ops: ascension-10000");
   addMany(["autonomous ops status", "HAL 9000 ops"], "ops: autonomous-status");
-  addMany(["go to 7", "go to level 7", "executive partner"], "ops: employee-set-level");
+  addMany(["HAL about me", "about me", "tell me about me"], "ops: hal-about-me");
   addMany(["HAL work log", "what did HAL do"], "ops: employee-work-log");
   addMany(["Run HAL shift", "run employee shift"], "ops: employee-shift");
   addMany(["Approve all journal queue", "bulk approve journal posting queue"], "ops: journal-bulk-approve");
@@ -1768,6 +1768,8 @@ async function main() {
   assert(empLogRoute.useEmployeeWorkLog === true, "employee work log route must resolve");
   const go7Route = HalCore.routeHalCommand(halData, halModels, pages, "go to 7");
   assert(go7Route.useEmployeeSetLevel === true && go7Route.employeeLevel === 7, "go to 7 must set employee level 7");
+  const aboutRoute = HalCore.routeHalCommand(halData, halModels, pages, "HAL about me");
+  assert(aboutRoute.useHalAboutMe === true, "HAL about me route must resolve");
   const hciReport = HCI.compute({ halData: { build: { schemaVersion: "hal-10000" } } }, halModels);
   assert(hciReport.score >= 0 && hciReport.score <= 10000, "capability score must be within 0-10000");
   assert(hciReport.max === 10000, "capability report max must be 10000");

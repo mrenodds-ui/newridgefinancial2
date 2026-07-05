@@ -362,6 +362,22 @@ const HalRouteExec = (function () {
       return outcome(OR.formatReport(triage), "ops", result.intent);
     }
 
+    if (result.useHalAboutMe) {
+      const AM = typeof HalAboutMe !== "undefined" ? HalAboutMe : window.HalAboutMe;
+      if (!AM || typeof AM.speak !== "function") {
+        return outcome("HAL about me is not loaded.", "ops", result.intent);
+      }
+      const spoken = await AM.speak(ctx, halModels, halData);
+      const script = spoken && spoken.script ? spoken.script : "";
+      return outcome(
+        script || "HAL about me briefing spoken.",
+        "ops",
+        result.intent,
+        [{ label: "Capability index", query: "Show HAL capability index" }],
+        { skipSpeech: true },
+      );
+    }
+
     if (result.useAscension10000) {
       const A = typeof HalAscension10000 !== "undefined" ? HalAscension10000 : window.HalAscension10000;
       const DIR = typeof HalDirector !== "undefined" ? HalDirector : window.HalDirector;

@@ -3020,6 +3020,10 @@ const HalCore = (function () {
       return { intent: "ops: orchestrator-triage", lane: "local", useOrchestratorTriage: true, text: "", actions: [] };
     }
 
+    if (/\b(hal about me|about me|tell me about me|who am i to hal)\b/.test(query)) {
+      return { intent: "ops: hal-about-me", lane: "local", useHalAboutMe: true, text: "", actions: [] };
+    }
+
     if (/\b(hal 10000|ascension 10000|transcendent|director digest|executive digest)\b/.test(query)) {
       return { intent: "ops: ascension-10000", lane: "local", useAscension10000: true, text: "", actions: [] };
     }

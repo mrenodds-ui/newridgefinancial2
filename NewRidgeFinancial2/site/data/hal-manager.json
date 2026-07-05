@@ -167,6 +167,7 @@
       "Run HAL shift",
       "HAL employee status",
       "go to 7",
+      "HAL about me",
       "Show HAL capability index"
     ],
     "response": "I monitor the program, place the correct data in the right financial and accounting views, apply accounting and Excel-style review, and recommend next safe actions. I plan each question, run local tools, self-check my answer, and remember recent context on this device. I can navigate the program, explain each page, show full snapshots, show priorities, review source freshness, draft work notes, build evidence and claim packets, check claim readiness, draft journal-entry review notes, export QuickBooks IIF after consent, email payers after consent, show widget-filling guidance, build owner briefings, reconcile imported tables, search the local library, research public web reference for practice operations (sanitized — no patient data sent), list tasks, monitor sidenotes, explain the consent policy, and report local AI model status. Optional cloud reasoning helps on hard questions when NR2_CLOUD_API_KEY is set.",

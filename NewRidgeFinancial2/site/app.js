@@ -2283,6 +2283,7 @@ async function handleHalSubmit(query) {
       placeholder.followUpChips = outcome.followUpChips || [];
       placeholder.intent = outcome.intent || "";
       placeholder.spokenScript = outcome.spokenScript || "";
+      placeholder.skipChatSpeech = !!outcome.skipSpeech;
       placeholder.userQuery = trimmed;
       placeholder.tools = (outcome.plan && outcome.plan.tools) || placeholder.tools || [];
       placeholder.toolSummaries = summarizeToolResultsBrief(outcome.toolResults);
@@ -2297,6 +2298,7 @@ async function handleHalSubmit(query) {
         followUpChips: outcome.followUpChips || [],
         intent: outcome.intent || "",
         spokenScript: outcome.spokenScript || "",
+        skipChatSpeech: !!outcome.skipSpeech,
         userQuery: trimmed,
         tools: (outcome.plan && outcome.plan.tools) || [],
         toolSummaries: summarizeToolResultsBrief(outcome.toolResults),
@@ -2977,6 +2979,12 @@ function typewriteLastHalMessage() {
     clearInterval(halTypeTimer);
     halTypeTimer = null;
   }
+  const lastHal = halChatHistory.length ? halChatHistory[halChatHistory.length - 1] : null;
+  if (lastHal && lastHal.skipChatSpeech) {
+    p.textContent = full;
+    p.classList.remove("hp-typing");
+    return;
+  }
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reduce || full.length < 2) {
     p.textContent = full;
@@ -3404,6 +3412,14 @@ if (halPage) {
     const voiceTest = event.target.closest("[data-hal-voice-test]");
     if (voiceTest) {
       if (window.HalVoice) HalVoice.test();
+      return;
+    }
+    const aboutMeBtn = event.target.closest("[data-hal-about-me]");
+    if (aboutMeBtn && window.HalAboutMe && typeof HalAboutMe.speak === "function") {
+      const r = await HalAboutMe.speak(buildHalAgentCtx(), halModels, halData);
+      if (typeof showHalActionNotice === "function") {
+        showHalActionNotice(r && r.ok ? "HAL about me — listen for the briefing." : "About me voice unavailable.");
+      }
       return;
     }
     const stressRun = event.target.closest("[data-hal-stress-run]");
