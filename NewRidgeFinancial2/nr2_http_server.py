@@ -364,6 +364,138 @@ class NR2BottleServer(BottleServer):
             except Exception as exc:
                 return _json_response({"ok": False, "error": str(exc)}, status=500)
 
+        @app.post("/api/outbound/qbo-post")
+        def outbound_qbo_post_api():
+            try:
+                from outbound_actions import post_qbo_journal_with_consent
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                store = _local_store()
+                result = post_qbo_journal_with_consent(
+                    store.db_path,
+                    limit=int(payload.get("limit") or 25),
+                    consent_text=str(payload.get("consentText") or ""),
+                    actor=str(payload.get("actor") or "Staff"),
+                    store=store,
+                    dry_run=bool(payload.get("dryRun")),
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/outbound/payer-portal-rpa")
+        def outbound_payer_portal_rpa_api():
+            try:
+                from outbound_actions import build_payer_portal_rpa_with_consent
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                store = _local_store()
+                result = build_payer_portal_rpa_with_consent(
+                    claim_id=str(payload.get("claimId") or payload.get("claim_id") or ""),
+                    payer=str(payload.get("payer") or ""),
+                    portal_url=str(payload.get("portalUrl") or payload.get("portal_url") or ""),
+                    narrative=str(payload.get("narrative") or payload.get("body") or ""),
+                    consent_text=str(payload.get("consentText") or ""),
+                    actor=str(payload.get("actor") or "Staff"),
+                    store=store,
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/outbound/softdent-writeback")
+        def outbound_softdent_writeback_api():
+            try:
+                from outbound_actions import queue_softdent_writeback_with_consent
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                store = _local_store()
+                inner = payload.get("payload")
+                result = queue_softdent_writeback_with_consent(
+                    action=str(payload.get("action") or "note"),
+                    payload=inner if isinstance(inner, dict) else {},
+                    consent_text=str(payload.get("consentText") or ""),
+                    actor=str(payload.get("actor") or "Staff"),
+                    store=store,
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/outbound/softdent-writeback-status")
+        def outbound_softdent_writeback_status_api():
+            try:
+                from outbound_actions import softdent_writeback_status
+
+                return _json_response(softdent_writeback_status())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/employee/status")
+        def employee_status_api():
+            try:
+                from employee_actions import get_employee_status
+                from local_store import LocalStore
+
+                store = LocalStore(NR2_DATA_DIR)
+                target = int(bottle.request.query.get("targetLevel") or 7)
+                return _json_response(get_employee_status(store, target_level=target))
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/employee/work-log")
+        def employee_work_log_api():
+            try:
+                from employee_actions import list_employee_work_log
+                from local_store import LocalStore
+
+                store = LocalStore(NR2_DATA_DIR)
+                limit = int(bottle.request.query.get("limit") or 20)
+                return _json_response(list_employee_work_log(store, limit=limit))
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/employee/work-log")
+        def employee_work_log_append_api():
+            try:
+                from employee_actions import append_employee_work_log
+                from local_store import LocalStore
+
+                store = LocalStore(NR2_DATA_DIR)
+                payload = bottle.request.json or {}
+                result = append_employee_work_log(
+                    store,
+                    action=str(payload.get("action") or "work"),
+                    summary=str(payload.get("summary") or ""),
+                    level=int(payload.get("level") or 1),
+                    actor=str(payload.get("actor") or "HAL"),
+                    result=payload.get("result") if isinstance(payload.get("result"), dict) else {},
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/employee/shift")
+        def employee_shift_api():
+            try:
+                from employee_actions import run_employee_shift
+                from local_store import LocalStore
+
+                store = LocalStore(NR2_DATA_DIR)
+                payload = bottle.request.json or {}
+                result = run_employee_shift(
+                    store.db_path,
+                    store=store,
+                    target_level=int(payload.get("targetLevel") or 7),
+                    dry_run=bool(payload.get("dryRun")),
+                )
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
         @app.get("/api/sync-documents")
         def sync_documents_api():
             bottle.response.content_type = "application/json"

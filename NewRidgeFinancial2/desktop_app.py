@@ -401,10 +401,104 @@ class DesktopApi:
 
         return quickbooks_online_status()
 
+    def post_qbo_journal_with_consent(self, payload_json: str = "{}") -> dict:
+        from outbound_actions import post_qbo_journal_with_consent
+        import json as _json
+
+        payload = _json.loads(payload_json or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+        return post_qbo_journal_with_consent(
+            self.store.db_path,
+            limit=int(payload.get("limit") or 25),
+            consent_text=str(payload.get("consentText") or ""),
+            actor=str(payload.get("actor") or "Staff"),
+            store=self.store,
+            dry_run=bool(payload.get("dryRun")),
+        )
+
+    def build_payer_portal_rpa_with_consent(self, payload_json: str = "{}") -> dict:
+        from outbound_actions import build_payer_portal_rpa_with_consent
+        import json as _json
+
+        payload = _json.loads(payload_json or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+        return build_payer_portal_rpa_with_consent(
+            claim_id=str(payload.get("claimId") or payload.get("claim_id") or ""),
+            payer=str(payload.get("payer") or ""),
+            portal_url=str(payload.get("portalUrl") or payload.get("portal_url") or ""),
+            narrative=str(payload.get("narrative") or payload.get("body") or ""),
+            consent_text=str(payload.get("consentText") or ""),
+            actor=str(payload.get("actor") or "Staff"),
+            store=self.store,
+        )
+
+    def queue_softdent_writeback_with_consent(self, payload_json: str = "{}") -> dict:
+        from outbound_actions import queue_softdent_writeback_with_consent
+        import json as _json
+
+        payload = _json.loads(payload_json or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+        inner = payload.get("payload")
+        return queue_softdent_writeback_with_consent(
+            action=str(payload.get("action") or "note"),
+            payload=inner if isinstance(inner, dict) else {},
+            consent_text=str(payload.get("consentText") or ""),
+            actor=str(payload.get("actor") or "Staff"),
+            store=self.store,
+        )
+
+    def softdent_writeback_status(self) -> dict:
+        from outbound_actions import softdent_writeback_status
+
+        return softdent_writeback_status()
+
     def list_outbound_audit(self, limit: int = 15) -> dict:
         from outbound_actions import list_outbound_audit
 
         return list_outbound_audit(self.store, limit=int(limit or 15))
+
+    def employee_status(self, target_level: int = 7) -> dict:
+        from employee_actions import get_employee_status
+
+        return get_employee_status(self.store, target_level=int(target_level or 7))
+
+    def list_employee_work_log(self, limit: int = 20) -> dict:
+        from employee_actions import list_employee_work_log
+
+        return list_employee_work_log(self.store, limit=int(limit or 20))
+
+    def append_employee_work_log(self, payload_json: str = "{}") -> dict:
+        from employee_actions import append_employee_work_log
+        import json as _json
+
+        payload = _json.loads(payload_json or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+        return append_employee_work_log(
+            self.store,
+            action=str(payload.get("action") or "work"),
+            summary=str(payload.get("summary") or ""),
+            level=int(payload.get("level") or 1),
+            actor=str(payload.get("actor") or "HAL"),
+            result=payload.get("result") if isinstance(payload.get("result"), dict) else {},
+        )
+
+    def run_employee_shift(self, payload_json: str = "{}") -> dict:
+        from employee_actions import run_employee_shift
+        import json as _json
+
+        payload = _json.loads(payload_json or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+        return run_employee_shift(
+            self.store.db_path,
+            store=self.store,
+            target_level=int(payload.get("targetLevel") or 7),
+            dry_run=bool(payload.get("dryRun")),
+        )
 
     def web_research(self, query: str, options_json: str = "{}") -> dict:
         from web_research import research

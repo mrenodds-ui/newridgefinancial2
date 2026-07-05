@@ -21,6 +21,15 @@ const HalOutbound = (function () {
       if (path === "/api/outbound/narrative-prep" && api.export_narrative_portal_prep_with_consent) {
         return api.export_narrative_portal_prep_with_consent(JSON.stringify(payload || {}));
       }
+      if (path === "/api/outbound/qbo-post" && api.post_qbo_journal_with_consent) {
+        return api.post_qbo_journal_with_consent(JSON.stringify(payload || {}));
+      }
+      if (path === "/api/outbound/payer-portal-rpa" && api.build_payer_portal_rpa_with_consent) {
+        return api.build_payer_portal_rpa_with_consent(JSON.stringify(payload || {}));
+      }
+      if (path === "/api/outbound/softdent-writeback" && api.queue_softdent_writeback_with_consent) {
+        return api.queue_softdent_writeback_with_consent(JSON.stringify(payload || {}));
+      }
     }
     if (typeof DesktopBridge !== "undefined" && DesktopBridge.hasLoopbackApi && DesktopBridge.hasLoopbackApi()) {
       const host = window.location.hostname || "127.0.0.1";
@@ -57,6 +66,26 @@ const HalOutbound = (function () {
     }
     if (pending.kind === "qb-export") {
       return loopbackPost("/api/outbound/qb-export", { consentText: consent, actor: "Staff", limit: 200 });
+    }
+    if (pending.kind === "qbo-post") {
+      return loopbackPost("/api/outbound/qbo-post", { consentText: consent, actor: "Staff", limit: 25 });
+    }
+    if (pending.kind === "payer-portal-rpa") {
+      return loopbackPost("/api/outbound/payer-portal-rpa", {
+        claimId: draft.claimId || "",
+        payer: draft.payer || "",
+        narrative: draft.body || pending.query,
+        consentText: consent,
+        actor: "Staff",
+      });
+    }
+    if (pending.kind === "softdent-writeback") {
+      return loopbackPost("/api/outbound/softdent-writeback", {
+        action: draft.action || "note",
+        payload: draft.payload || { text: pending.query },
+        consentText: consent,
+        actor: "Staff",
+      });
     }
     if (pending.kind === "claim-submit") {
       return loopbackPost("/api/outbound/claim-packet", {

@@ -38,6 +38,13 @@ function buildRoutingRegressionCases() {
   addMany(["Print ar aging widget"], "print: widget:arAgingAndCollections");
   addMany(["Closeout runbook", "month end runbook", "month-end close runbook"], "ops: closeout-runbook");
   addMany(["Self heal program", "strengthen program", "repair program"], "ops: self-heal");
+  addMany(["Show HAL capability index", "HAL capability score", "where is HAL"], "ops: capability-index");
+  addMany(["Run orchestrator triage", "multi-agent triage"], "ops: orchestrator-triage");
+  addMany(["HAL 10000 ascension", "director digest", "executive digest"], "ops: ascension-10000");
+  addMany(["autonomous ops status", "HAL 9000 ops"], "ops: autonomous-status");
+  addMany(["go to 7", "go to level 7", "executive partner"], "ops: employee-set-level");
+  addMany(["HAL work log", "what did HAL do"], "ops: employee-work-log");
+  addMany(["Run HAL shift", "run employee shift"], "ops: employee-shift");
   addMany(["Approve all journal queue", "bulk approve journal posting queue"], "ops: journal-bulk-approve");
   addMany(["Run readiness check", "check hal", "self-check", "readiness check now"], "readiness: run");
   addMany(["Show diagnostics", "display diagnostics"], "readiness: show");
@@ -1129,8 +1136,8 @@ async function main() {
   );
   assert(typeof HalAgent.syncAgentBudgetFromModels === "function", "syncAgentBudgetFromModels must exist");
   HalAgent.syncAgentBudgetFromModels(halModels);
-  assert(HalAgent.AGENT_BUDGET.maxGatherRounds === 3, "agent must support multi-round gather");
-  assert(HalAgent.AGENT_BUDGET.maxTools === 8, "agent tool budget must honor maxToolsPerTurn from hal-models");
+  assert(HalAgent.AGENT_BUDGET.maxGatherRounds >= 3, "agent must support multi-round gather");
+  assert(HalAgent.AGENT_BUDGET.maxTools === 12, "agent tool budget must honor maxToolsPerTurn from hal-models");
   assert(typeof HalAgentLoop.configureFromAgentProgramming === "function", "agent loop must read agentProgramming config");
   HalAgentLoop.configureFromAgentProgramming(halModels.config.agentProgramming);
   assert(HalAgentLoop.MAX_TOOLS_PER_TURN === 8, "loop max tools per turn must honor config");
@@ -1144,7 +1151,7 @@ async function main() {
   assert(genericChatRoute.useModel && genericChatRoute.lane === "chat8b", "generic questions must route to chat8b");
   assert(HalAgent.fastChatSkipsProgramContext(genericChatRoute), "fast chat must skip heavy program snapshot");
   assert(!HalAgent.fastChatSkipsProgramContext({ useReasoning: true, useModel: true }), "reasoning lane must keep program context");
-  assert(HalAgent.AGENT_BUDGET.maxTools === 8, "agent must allow cursor-style multi-tool gather from config");
+  assert(HalAgent.AGENT_BUDGET.maxTools === 12, "agent must allow cursor-style multi-tool gather from config");
   assert(HalAgent.AGENT_BUDGET.maxModelContextChars >= 12000, "agent context budget must be expanded");
   assert(typeof HalCore.compressThreadForPrompt === "function", "thread compression must exist");
   assert(typeof HalCore.detectAmbiguousQuery === "function", "ambiguous query detection must exist");
@@ -1672,7 +1679,8 @@ async function main() {
     sarcIssues,
   );
   assert(!/shocking/i.test(repairedSarc), "agent repair must strip sarcasm");
-  assert(halModels.config.agentProgramming.profile === "cursor-auto-v17", "hal-models agentProgramming profile must be v17");
+  assert(halModels.config.agentProgramming.profile === "hal9000-chat-v1", "hal-models agentProgramming profile must be hal9000-chat-v1");
+  assert(halModels.config.chat9000 && halModels.config.chat9000.enabled === true, "chat9000 must be enabled");
   const defineRoute = HalCore.routeHalCommand(halData, halModels, pages, "Define ability.");
   assert(defineRoute.useEnglishDefine === true && defineRoute.englishWord === "ability", "Define word must accept trailing period");
   const planToday = HalCore.routeHalCommand(halData, halModels, pages, "Can you make a plan for today?");
@@ -1727,6 +1735,67 @@ async function main() {
   const resolved = HalSkills.autoResolveHalTasks(upsertTwo.tasks, []);
   assert(resolved[0].status === "completed", "HAL tasks must auto-resolve when source issue disappears");
 
+  const hciUrl = pathToFileURL(join(siteDir, "hal-capability-index.js")).href;
+  const orchUrl = pathToFileURL(join(siteDir, "hal-orchestrator.js")).href;
+  const aoUrl = pathToFileURL(join(siteDir, "hal-autonomous-ops.js")).href;
+  const chat9000Url = pathToFileURL(join(siteDir, "hal-chat-9000.js")).href;
+  const empUrl = pathToFileURL(join(siteDir, "hal-employee.js")).href;
+  const empRunUrl = pathToFileURL(join(siteDir, "hal-employee-runner.js")).href;
+  const asc10000Url = pathToFileURL(join(siteDir, "hal-ascension-10000.js")).href;
+  const dirUrl = pathToFileURL(join(siteDir, "hal-director.js")).href;
+  const chat10000Url = pathToFileURL(join(siteDir, "hal-chat-10000.js")).href;
+  await import(hciUrl);
+  await import(orchUrl);
+  await import(aoUrl);
+  await import(chat9000Url);
+  await import(empUrl);
+  await import(empRunUrl);
+  await import(asc10000Url);
+  await import(dirUrl);
+  await import(chat10000Url);
+  const HCI = globalThis.HalCapabilityIndex;
+  assert(HCI && HCI.MAX_SCORE === 10000, "capability index max must be 10000");
+  assert(HCI.OFFICE_MAX === 250, "office core max must remain 250");
+  assert(globalThis.HalEmployee && HalEmployee.MAX_LEVEL === 7, "employee max level must be 7");
+  assert(halModels.config.employee && halModels.config.employee.targetLevel === 7, "employee target level must be 7");
+  assert(halModels.config.ascension10000 && halModels.config.ascension10000.enabled === true, "ascension10000 must be enabled");
+  assert(halModels.config.chat10000 && halModels.config.chat10000.enabled === true, "chat10000 must be enabled");
+  const ascRoute = HalCore.routeHalCommand(halData, halModels, pages, "HAL 10000 ascension");
+  assert(ascRoute.useAscension10000 === true, "ascension 10000 route must resolve");
+  const empRoute = HalCore.routeHalCommand(halData, halModels, pages, "HAL employee status");
+  assert(empRoute.useEmployeeStatus === true, "employee status route must resolve");
+  const empLogRoute = HalCore.routeHalCommand(halData, halModels, pages, "HAL work log");
+  assert(empLogRoute.useEmployeeWorkLog === true, "employee work log route must resolve");
+  const go7Route = HalCore.routeHalCommand(halData, halModels, pages, "go to 7");
+  assert(go7Route.useEmployeeSetLevel === true && go7Route.employeeLevel === 7, "go to 7 must set employee level 7");
+  const hciReport = HCI.compute({ halData: { build: { schemaVersion: "hal-10000" } } }, halModels);
+  assert(hciReport.score >= 0 && hciReport.score <= 10000, "capability score must be within 0-10000");
+  assert(hciReport.max === 10000, "capability report max must be 10000");
+  const capRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show HAL capability index");
+  assert(capRoute.useCapabilityIndex === true, "capability index route must resolve");
+  const orchRoute = HalCore.routeHalCommand(halData, halModels, pages, "Run orchestrator triage");
+  assert(orchRoute.useOrchestratorTriage === true, "orchestrator triage route must resolve");
+  assert(halModels.config.autonomousOps && halModels.config.autonomousOps.enabled === true, "autonomous ops must be enabled at hal-9000");
+  assert(halModels.config.cloudReasoning.preferForAllAgentLoops === true, "cloud reasoning must prefer all agent loops");
+  passed++;
+
+  const pyQbo = require("node:child_process").execSync(
+    'python -c "from outbound_actions import post_qbo_journal_with_consent; out=post_qbo_journal_with_consent(\'app_data/nr2/test.db\', consent_text=\'test\', dry_run=True); assert out.get(\'error\') in (\'qbo_not_configured\',) or out.get(\'dryRun\'); print(out.get(\'message\',\'\')[:80])"',
+    { encoding: "utf8", cwd: __dirname, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  assert(String(pyQbo).length > 3, "post_qbo_journal_with_consent must run");
+  passed++;
+  const pyPortal = require("node:child_process").execSync(
+    'python -c "from payer_portal_bridge import build_portal_rpa_bundle; out=build_portal_rpa_bundle(claim_id=\'C-1\', consent_text=\'yes\'); assert out.get(\'ok\'); print(out.get(\'stepCount\',0))"',
+    { encoding: "utf8", cwd: __dirname, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  assert(Number(String(pyPortal).trim()) >= 5, "payer portal RPA bundle must include steps");
+  passed++;
+  const pySd = require("node:child_process").execSync(
+    'python -c "from softdent_writeback_bridge import enqueue_writeback; out=enqueue_writeback(action=\'note\', payload={\'t\':1}, consent_text=\'yes\'); assert out.get(\'ok\'); print(out.get(\'entryId\',\'\'))"',
+    { encoding: "utf8", cwd: __dirname, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  assert(String(pySd).includes("sdw-"), "softdent writeback queue must accept entries");
   passed++;
 
   // Program source patch helper (Python dry-run) — use live schemaVersion from manifest

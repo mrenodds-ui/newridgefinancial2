@@ -110,7 +110,7 @@
   },
   "practiceSourcePull": {
     "approved": true,
-    "summary": "Staff approved HAL to pull SoftDent and QuickBooks directly into the local import cache (read-only). Nothing is written back to either system.",
+    "summary": "Staff approved HAL to pull SoftDent and QuickBooks into the local import cache. Consent-gated writeback: QBO journal post, IIF export, and SoftDent writeback queue (level 7 executive partner).",
     "onBoot": true
   },
   "controls": {
@@ -163,7 +163,11 @@
       "Start claims review",
       "Show active session",
       "Build evidence packet",
-      "Run readiness check"
+      "Run readiness check",
+      "Run HAL shift",
+      "HAL employee status",
+      "go to 7",
+      "Show HAL capability index"
     ],
     "response": "I monitor the program, place the correct data in the right financial and accounting views, apply accounting and Excel-style review, and recommend next safe actions. I plan each question, run local tools, self-check my answer, and remember recent context on this device. I can navigate the program, explain each page, show full snapshots, show priorities, review source freshness, draft work notes, build evidence and claim packets, check claim readiness, draft journal-entry review notes, export QuickBooks IIF after consent, email payers after consent, show widget-filling guidance, build owner briefings, reconcile imported tables, search the local library, research public web reference for practice operations (sanitized — no patient data sent), list tasks, monitor sidenotes, explain the consent policy, and report local AI model status. Optional cloud reasoning helps on hard questions when NR2_CLOUD_API_KEY is set.",
     "commandExamples": [
@@ -188,7 +192,7 @@
   },
   "sources": {
     "title": "Read-only source intake",
-    "summary": "Source pages are read-only views. HAL reports freshness and sync posture; it cannot write back.",
+    "summary": "Source intake and freshness monitoring. HAL reads imports locally; outbound writeback to QuickBooks and SoftDent runs only under standing consent or explicit staff consent (hal-10000 level 7).",
     "items": [
       {
         "label": "SoftDent",
@@ -445,7 +449,7 @@
   },
   "readiness": {
     "title": "HAL readiness",
-    "summary": "Local self-check for registry, firewall, sessions, evidence packets, and model lane configuration. No external actions are performed.",
+    "summary": "Local self-check for registry, consent policy, sessions, evidence packets, and model lane configuration. No external actions are performed.",
     "expectedRegistryCount": 11,
     "expectedSessionTemplates": 5,
     "expectedModelLanes": 3,
@@ -481,7 +485,7 @@
       "safety": "Read-only view",
       "state": "Ready",
       "nextAction": "Review production and collections trends for the current period.",
-      "blocked": ["SoftDent read-only", "QuickBooks read-only"],
+      "blocked": ["Outbound writeback consent-gated"],
       "related": ["ar", "softdent", "quickbooks", "taxes"]
     },
     {
@@ -501,7 +505,7 @@
       "safety": "Read-only source",
       "state": "Ready",
       "nextAction": "Confirm export freshness before relying on downstream numbers.",
-      "blocked": ["SoftDent read-only", "No patient record edits"],
+      "blocked": ["No patient record edits", "SoftDent writeback consent-gated"],
       "related": ["financial", "ar"]
     },
     {
@@ -511,7 +515,7 @@
       "safety": "Read-only source",
       "state": "Needs review",
       "nextAction": "Refresh QuickBooks imports and verify P&L and expense totals before recommendations.",
-      "blocked": ["QuickBooks read-only", "No journal entries to QuickBooks"],
+      "blocked": ["Payer portal submit requires staff confirm"],
       "related": ["financial"]
     },
     {
@@ -551,7 +555,7 @@
       "safety": "Local review",
       "state": "Needs review",
       "nextAction": "Keep posting work in review status until staff approval.",
-      "blocked": ["SoftDent read-only", "QuickBooks read-only"],
+      "blocked": ["QBO post and IIF export consent-gated"],
       "related": ["library", "quickbooks"]
     },
     {

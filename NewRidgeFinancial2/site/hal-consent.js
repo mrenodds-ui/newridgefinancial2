@@ -5,15 +5,36 @@ const HalConsent = (function () {
   const STORAGE_KEY = "halConsentState";
   const CONSENT_PHRASES = /^(i consent|yes[, ]? i consent|confirmed[, ]? proceed|proceed with consent|go ahead)$/i;
 
+  const ROLE_POLICY = {
+    staff: { email: true, "qb-export": true, "qbo-post": false, "claim-submit": true, "payer-portal-rpa": true, "softdent-writeback": false },
+    office_manager: { email: true, "qb-export": true, "qbo-post": true, "claim-submit": true, "payer-portal-rpa": true, "softdent-writeback": true },
+    owner: { email: true, "qb-export": true, "qbo-post": true, "claim-submit": true, "payer-portal-rpa": true, "softdent-writeback": true },
+  };
+  const DEFAULT_ROLE = "office_manager";
+
   let pending = null;
+
+  function getRolePolicy(role) {
+    const key = String(role || DEFAULT_ROLE).toLowerCase().replace(/\s+/g, "_");
+    return ROLE_POLICY[key] || ROLE_POLICY[DEFAULT_ROLE];
+  }
+
+  function roleAllows(kind, role) {
+    const policy = getRolePolicy(role);
+    if (!kind) return true;
+    return policy[kind] !== false;
+  }
 
   function outboundKind(query, intent) {
     const q = String(query || "").toLowerCase();
     const it = String(intent || "").toLowerCase();
     if (it === "capability:consent-required" || it === "consent: required") return detectKindFromText(q);
     if (/\b(email|e-?mail)\b.*\b(payer|insurance|patient|staff)\b|\b(payer|insurance)\b.*\b(email|contact)\b/.test(q)) return "email";
+    if (/\b(qbo api|quickbooks online)\b.*\bpost\b|\bpost\b.*\b(qbo api|quickbooks online)\b/.test(q)) return "qbo-post";
     if (/\bpost(ing)?\s+to\s+quickbooks\b|\bquickbooks\s+post\b|\bexport.*(approved|posting|journal)\b/.test(q)) return "qb-export";
     if (/\b(upload|portal)\b.*\bnarrative\b|\bnarrative\b.*\b(upload|portal)\b/.test(q)) return "narrative-portal";
+    if (/\b(payer portal rpa|portal rpa|rpa prep)\b/.test(q)) return "payer-portal-rpa";
+    if (/\bwrite\s*(back|back)\s*to\s*softdent\b|\bsoftdent\s*write\b/.test(q)) return "softdent-writeback";
     if (/\bsubmit\b.*\b(claim|payer|portal)\b|\b(claim|payer)\b.*\bsubmit\b/.test(q)) return "claim-submit";
     if (/\b(fax|upload|transmit)\b/.test(q)) return "delivery";
     return null;
@@ -22,8 +43,11 @@ const HalConsent = (function () {
   function detectKindFromText(text) {
     const q = String(text || "").toLowerCase();
     if (/\bemail|e-?mail\b/.test(q)) return "email";
+    if (/\b(qbo api|quickbooks online)\b.*\bpost\b|\bpost\b.*\b(qbo api|quickbooks online)\b/.test(q)) return "qbo-post";
     if (/\bpost\b.*\bquickbooks\b|\bquickbooks\b.*\bpost\b|\bexport\b.*\b(journal|posting|approved)\b/.test(q)) return "qb-export";
     if (/\b(upload|portal)\b.*\bnarrative\b|\bnarrative\b.*\b(upload|portal)\b/.test(q)) return "narrative-portal";
+    if (/\b(payer portal rpa|portal rpa|rpa prep)\b/.test(q)) return "payer-portal-rpa";
+    if (/\bwrite\s*(back|back)\s*to\s*softdent\b|\bsoftdent\s*write\b/.test(q)) return "softdent-writeback";
     if (/\bsubmit\b.*\bclaim\b|\bclaim\b.*\bsubmit\b/.test(q)) return "claim-submit";
     return "delivery";
   }
@@ -78,6 +102,12 @@ const HalConsent = (function () {
     return /^(cancel|never mind|stop|don't|do not proceed)$/i.test(String(query || "").trim());
   }
 
+  function tryStandingConsent(kind, halModels) {
+    if (typeof HalEmployee === "undefined" || !HalEmployee.standingAllows) return null;
+    if (!HalEmployee.standingAllows(kind, halModels)) return null;
+    return HalEmployee.standingConsentText(halModels);
+  }
+
   function createPendingFromQuery(query, intent, extra) {
     const kind = outboundKind(query, intent) || "delivery";
     const draft = kind === "email" ? parseEmailDraft(query, extra) : null;
@@ -91,11 +121,17 @@ const HalConsent = (function () {
           ? `Email${draft && draft.to ? ` to ${draft.to}` : ""}${draft && draft.subject ? `: ${draft.subject}` : ""}`
           : kind === "qb-export"
             ? "Export approved journal entries to QuickBooks IIF"
-            : kind === "claim-submit"
+            : kind === "qbo-post"
+              ? "Post approved journal entries to QuickBooks Online API"
+              : kind === "claim-submit"
               ? "Build claim submission packet for payer portal upload"
               : kind === "narrative-portal"
                 ? "Prepare narrative text for payer portal upload"
-                : "Outbound delivery",
+                : kind === "payer-portal-rpa"
+                  ? "Build payer portal RPA prep bundle (staff confirms submit)"
+                  : kind === "softdent-writeback"
+                    ? "Queue SoftDent writeback (consent-gated)"
+                    : "Outbound delivery",
     };
     setPending(action);
     return action;
@@ -107,7 +143,7 @@ const HalConsent = (function () {
     if (pendingAction.kind === "email" && pendingAction.draft && !pendingAction.draft.to) {
       chips.unshift({ label: "Add recipient email", query: "Email payer at billing@example.com about this claim" });
     }
-    if (pendingAction.kind === "qb-export") {
+    if (pendingAction.kind === "qb-export" || pendingAction.kind === "qbo-post") {
       chips.unshift({ label: "Show posting queue", query: "Show journal posting queue" });
     }
     if (pendingAction.kind === "claim-submit" || pendingAction.kind === "narrative-portal") {
@@ -125,6 +161,9 @@ const HalConsent = (function () {
 
   return {
     outboundKind,
+    tryStandingConsent,
+    getRolePolicy,
+    roleAllows,
     isConsentPhrase,
     isCancelPhrase,
     createPendingFromQuery,

@@ -271,9 +271,26 @@ const HalPageCanvas = (function () {
     const outboundExecutors = [
       "Email (SMTP)",
       "QuickBooks IIF export",
+      "QuickBooks Online post",
       "Claim submission packet",
       "Narrative portal prep",
+      "Payer portal RPA prep",
+      "SoftDent writeback queue",
     ];
+    const hci =
+      typeof HalCapabilityIndex !== "undefined" && HalCapabilityIndex.compute
+        ? HalCapabilityIndex.compute(ctx, ctx.halModels)
+        : null;
+    const ao =
+      typeof HalAutonomousOps !== "undefined" && HalAutonomousOps.status ? HalAutonomousOps.status() : null;
+    const hciHtml = hci
+      ? `<p class="hp-fw__score"><b>HCI:</b> ${H.esc(String(hci.score))}/${H.esc(String(hci.max))} (${H.esc(String(hci.percent))}%) · ${H.esc(hci.band)}</p>
+          <button type="button" class="hp-chip hp-chip--action" data-hal-cmd="Show HAL capability index">Scorecard</button>
+          <button type="button" class="hp-chip hp-chip--action" data-hal-cmd="Run orchestrator triage">Orchestrator</button>`
+      : "";
+    const aoHtml = ao
+      ? `<p class="hp-fw__allowed"><b>HAL 9000 ops:</b> ${ao.running && !ao.paused ? "running" : ao.paused ? "paused" : "stopped"}</p>`
+      : "";
     const outboundList = outboundExecutors
       .map((item) => `<li class="hp-fw__row--active" data-hal-cmd="Explain staff consent for ${H.esc(item)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>LIVE</b></li>`)
       .join("");
@@ -285,6 +302,8 @@ const HalPageCanvas = (function () {
           <ul class="hp-fw__list hp-fw__list--compact">${consentList}</ul>
           <p class="hp-fw__allowed"><b>Executors (consent):</b></p>
           <ul class="hp-fw__list hp-fw__list--compact">${outboundList}</ul>
+          ${hciHtml}
+          ${aoHtml}
           <p class="hp-fw__allowed"><b>Always local:</b> ${localAlways.length ? localAlways.slice(0, 5).map(H.esc).join(" · ") : "Open pages · Explain status"}</p>
           <button type="button" class="hp-chip hp-chip--action" data-hal-cmd="Show outbound audit log">Outbound audit</button>
           ${halInlineFirewallResult ? `<p class="hp-live-note">${H.esc(halInlineFirewallResult.text || "")}</p>` : ""}

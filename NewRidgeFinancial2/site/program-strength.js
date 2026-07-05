@@ -117,6 +117,11 @@ const ProgramStrength = (function () {
     runBootHeal,
     runAutonomousHealLoop,
     formatReport,
+    computeCapabilityIndex(ctx, halModels) {
+      const HCI = typeof HalCapabilityIndex !== "undefined" ? HalCapabilityIndex : globalThis.HalCapabilityIndex;
+      if (!HCI || typeof HCI.compute !== "function") return null;
+      return HCI.compute(ctx, halModels);
+    },
   };
 })();
 

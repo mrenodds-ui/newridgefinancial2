@@ -1438,6 +1438,9 @@ function cloudModelReady() {
 }
 
 function cloudAgentEligible(plan) {
+  if (typeof HalChat9000 !== "undefined" && HalChat9000.cloudForChat(halModels, plan) && cloudModelReady()) {
+    return true;
+  }
   if (!plan || !plan.agentToolLoop || !cloudModelReady()) return false;
   const cfg = HalCore.modelConfig(halModels).cloudReasoning || {};
   if (cfg.enabled === true) return true;
@@ -2189,12 +2192,22 @@ async function handleHalSubmit(query) {
 
   const preRoute = routeHalCommand(effectiveQuery);
   const isModelLane = !!(preRoute.useModel || preRoute.useReasoning || preRoute.useEscalation);
+  const chat9000Cfg = halModels && halModels.config && halModels.config.chat9000;
+  const chat9000On = !!(chat9000Cfg && chat9000Cfg.enabled !== false);
   let placeholder = null;
   let streamRenderAt = 0;
   if (isModelLane && window.HalAgent) {
     const lane = preRoute.lane || "chat8b";
-    const label = preRoute.useEscalation ? "Escalating" : preRoute.useReasoning ? "Reasoning" : "Gathering evidence";
-    placeholder = { role: "hal", text: label + " locally…", lane, actions: [] };
+    const label = preRoute.useEscalation
+      ? "Escalating"
+      : preRoute.useReasoning
+        ? chat9000On
+          ? "HAL 9000 reasoning"
+          : "Reasoning"
+        : chat9000On
+          ? "HAL 9000 gathering"
+          : "Gathering evidence";
+    placeholder = { role: "hal", text: label + "…", lane, actions: [] };
     halChatHistory.push(placeholder);
     saveChatHistory();
     halTypeSig = halChatHistory.length + ":" + placeholder.text.length;
@@ -2227,7 +2240,7 @@ async function handleHalSubmit(query) {
     : undefined;
 
   let outcome = null;
-  const queryTimeoutMs = preRoute.useEscalation ? 180000 : preRoute.useReasoning ? 120000 : 60000;
+  const queryTimeoutMs = preRoute.useEscalation ? 180000 : preRoute.useReasoning ? (chat9000On ? 150000 : 120000) : chat9000On ? 90000 : 60000;
   const queryTimer = setTimeout(() => {
     if (halModelAbortController && !halModelAbortController.signal.aborted) {
       halModelAbortController.abort();
@@ -3586,6 +3599,9 @@ async function boot() {
     if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("app.boot", err, { file: "hal-models.json" });
     halModels = FALLBACK_MODELS;
   }
+  if (window.HalEmployee && typeof HalEmployee.ensureTargetLevel === "function") {
+    HalEmployee.ensureTargetLevel(halModels, 7);
+  }
   await ensureOllamaModelCache(0).catch(() => {});
   if (typeof OfficeTaskStore !== "undefined") {
     OfficeTaskStore.onChange((tasks) => {
@@ -3608,6 +3624,12 @@ async function boot() {
     if (typeof HalProactive.startBriefingScheduler === "function") {
       HalProactive.startBriefingScheduler(buildHalAgentCtx);
     }
+  }
+  if (window.HalAutonomousOps && typeof HalAutonomousOps.start === "function") {
+    HalAutonomousOps.start(buildHalAgentCtx);
+  }
+  if (window.HalDirector && typeof HalDirector.start === "function") {
+    HalDirector.start(buildHalAgentCtx);
   }
   startSideNoteMonitor();
   startDocumentSyncListener();

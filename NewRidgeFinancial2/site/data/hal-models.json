@@ -7,7 +7,7 @@
       "enabled": true,
       "autoEnableWhenKeySet": true,
       "preferForTaskCompletion": true,
-      "preferForAllAgentLoops": false,
+      "preferForAllAgentLoops": true,
       "searchIndex": {
         "enabled": true,
         "maxAgeHours": 36,
@@ -42,12 +42,12 @@
     "activeLane": "chat8b",
     "preferReasoning": true,
     "agentProgramming": {
-      "profile": "cursor-auto-v17",
+      "profile": "hal9000-chat-v1",
       "minSentences": 5,
       "proportionalDepth": true,
       "allowMarkdown": true,
-      "multiGatherRounds": 3,
-      "agentLoopMaxTurns": 6,
+      "multiGatherRounds": 4,
+      "agentLoopMaxTurns": 8,
       "spawnSubtasks": true,
       "subtaskMaxDepth": 2,
       "localOllamaTools": true,
@@ -66,7 +66,57 @@
       "cursorGather": true,
       "parallelTools": true,
       "autoEscalate": true,
-      "maxToolsPerTurn": 8
+      "maxToolsPerTurn": 12
+    },
+    "autonomousOps": {
+      "enabled": true,
+      "hal9000Voice": true,
+      "orchestratorAgents": 5,
+      "tickMinutes": 3,
+      "policy": "Always-on heal, placement, and multi-agent triage on desktop. Payer submit and SoftDent writeback remain consent-gated; staff confirm in portal."
+    },
+    "chat9000": {
+      "enabled": true,
+      "hal9000Persona": true,
+      "defaultReasoning": true,
+      "alwaysAgentLoop": true,
+      "alwaysGatherTools": true,
+      "cloudForOpenChat": true,
+      "orchestratorContext": true,
+      "maxToolsPerTurn": 12,
+      "multiGatherRounds": 4,
+      "agentLoopMaxTurns": 8,
+      "minSentences": 5,
+      "policy": "Chat tier 9000: reasoning default, parallel gather, agent loop, optional cloud, HAL 9000 persona."
+    },
+    "employee": {
+      "enabled": true,
+      "targetLevel": 7,
+      "profile": {
+        "name": "HAL",
+        "title": "Executive Partner — Office Operations",
+        "department": "Back Office"
+      },
+      "standingConsent": {
+        "enabled": true,
+        "policy": "Level 7 executive partner — continuous shift, director delegation, standing consent on routine back-office with full audit. Payer portal submit and clinical charting remain staff-confirmed."
+      },
+      "scheduler": {
+        "enabled": true,
+        "shiftMinutes": 30,
+        "postingDay": "friday"
+      }
+    },
+    "ascension10000": {
+      "enabled": true,
+      "directorMode": true,
+      "policy": "HAL 10000 transcendent tier — practice director loop, predictive alerts, executive digest, HCI ceiling 10000."
+    },
+    "chat10000": {
+      "enabled": true,
+      "executivePersona": true,
+      "alwaysAgentLoop": true,
+      "policy": "Chat 10000 — director voice, executive summary first, agent loop always on when ascension active."
     },
     "agentCapabilities": {
       "gatherMode": "Cursor-style — parallel tool gather, auto-escalate to reasoning on weak answers",

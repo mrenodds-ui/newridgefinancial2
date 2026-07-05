@@ -3016,16 +3016,74 @@ const HalCore = (function () {
       return { intent: "memory: remember", lane: "local", useRememberMemory: true, text: "", prompt: rawQuery, actions: [] };
     }
 
+    if (/\b(orchestrator triage|run orchestrator|multi.?agent triage|agent triage)\b/.test(query)) {
+      return { intent: "ops: orchestrator-triage", lane: "local", useOrchestratorTriage: true, text: "", actions: [] };
+    }
+
+    if (/\b(hal 10000|ascension 10000|transcendent|director digest|executive digest)\b/.test(query)) {
+      return { intent: "ops: ascension-10000", lane: "local", useAscension10000: true, text: "", actions: [] };
+    }
+
+    if (/\b(hal work log|employee work log|what did hal do|hal timesheet)\b/.test(query)) {
+      return { intent: "ops: employee-work-log", lane: "local", useEmployeeWorkLog: true, text: "", actions: [] };
+    }
+
+    if (/\b(hal employee|employee level|employee tier|employee status|how employed)\b/.test(query)) {
+      return { intent: "ops: employee-status", lane: "local", useEmployeeStatus: true, text: "", actions: [] };
+    }
+
+    if (/\b(run hal shift|run employee shift|hal shift)\b/.test(query)) {
+      return { intent: "ops: employee-shift", lane: "local", useEmployeeShift: true, text: "", actions: [] };
+    }
+
+    if (/\b(go to 7|go to level 7|executive partner|max employee)\b/.test(query)) {
+      return {
+        intent: "ops: employee-set-level",
+        lane: "local",
+        useEmployeeSetLevel: true,
+        employeeLevel: 7,
+        text: "",
+        actions: [],
+      };
+    }
+
+    if (/\b(set employee level|employee level\s*[1-7]|hal level\s*[1-7])\b/.test(query)) {
+      const m = query.match(/\blevel\s*([1-7])\b/);
+      return {
+        intent: "ops: employee-set-level",
+        lane: "local",
+        useEmployeeSetLevel: true,
+        employeeLevel: m ? Number(m[1]) : 7,
+        text: "",
+        actions: [],
+      };
+    }
+
+    if (/\b(autonomous ops status|hal 9000 ops|9000 status|always.?on ops)\b/.test(query)) {
+      return { intent: "ops: autonomous-status", lane: "local", useAutonomousOpsStatus: true, text: "", actions: [] };
+    }
+
+    if (/\b(pause autonomous|resume autonomous|pause hal 9000|resume hal 9000)\b/.test(query)) {
+      const pause = /\bpause\b/.test(query);
+      return { intent: pause ? "ops: autonomous-pause" : "ops: autonomous-resume", lane: "local", useAutonomousOpsControl: true, pauseAutonomous: pause, text: "", actions: [] };
+    }
+
+    if (/\b(capability index|hal capability|hal score|how capable|where is hal)\b|\b\d+\s*\/\s*10000\b|\b\d+\s*\/\s*9000\b/.test(query) || /\bhal 9000\b/.test(query) || /\bhal 10000\b/.test(query)) {
+      return { intent: "ops: capability-index", lane: "local", useCapabilityIndex: true, text: "", actions: [] };
+    }
+
     if (
       /\b(help|tell me what you can do|capabilit\w*|how do you work|what do you do|what are you able to)\b/.test(query) ||
       (/\bwhat can you do\b/.test(query) && !/\bon (the )?[a-z]/i.test(query) && !/\bpage\b/.test(query))
     ) {
-      return {
-        intent: "help",
-        lane: "local",
-        text: buildHelpChatReply(halData),
-        actions: [],
-      };
+      if (!/\b(capability index|hal capability score|hal score|where is hal)\b/.test(query)) {
+        return {
+          intent: "help",
+          lane: "local",
+          text: buildHelpChatReply(halData),
+          actions: [],
+        };
+      }
     }
 
     const printRoute = matchPrintRoute(query, rawQuery);

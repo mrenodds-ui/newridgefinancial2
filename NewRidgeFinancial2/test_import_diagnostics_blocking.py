@@ -42,7 +42,9 @@ class ImportDiagnosticsBlockingTests(unittest.TestCase):
         self.assertEqual(blocking_import_issues(diagnostics), [])
 
     def test_blocking_import_issues_ignores_warning_stale(self) -> None:
-        fresh = "2026-07-04T16:55:00+00:00"
+        now = datetime.now(timezone.utc)
+        fresh = now.isoformat()
+        stale_at = datetime(2026, 7, 2, 12, 0, tzinfo=timezone.utc).isoformat()
         bundle = {
             "softdent": {
                 "dashboard": {
@@ -71,7 +73,7 @@ class ImportDiagnosticsBlockingTests(unittest.TestCase):
                 },
                 "expenseCategories": {
                     "sourceFile": "quickbooks_expense_categories.csv",
-                    "modifiedAt": "2026-07-02T12:00:00+00:00",
+                    "modifiedAt": stale_at,
                     "rows": [{"Category": "Supplies", "Amount": 1}],
                 },
                 "profitAndLoss": {

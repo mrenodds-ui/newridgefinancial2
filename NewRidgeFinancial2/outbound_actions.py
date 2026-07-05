@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 import smtplib
@@ -14,7 +15,9 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NR2_DATA_DIR = REPO_ROOT / "app_data" / "nr2"
 EXPORTS_DIR = NR2_DATA_DIR / "exports"
+INBOX_DIR = NR2_DATA_DIR / "document_inbox"
 AUDIT_KEY = "nr2:hal:outbound-audit"
+CLAIMS_CSV_NAMES = ("softdent_claims_export.csv", "claims_export.csv")
 
 
 def _utc_now() -> str:
@@ -146,6 +149,44 @@ def _exports_subdir(name: str) -> Path:
     return path
 
 
+def _find_claims_csv() -> Path | None:
+    candidates = [
+        INBOX_DIR / "softdent" / name for name in CLAIMS_CSV_NAMES
+    ] + [
+        INBOX_DIR / name for name in CLAIMS_CSV_NAMES
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path
+    return None
+
+
+def _load_claim_row(claim_id: str) -> dict[str, Any] | None:
+    needle = str(claim_id or "").strip().lower()
+    if not needle:
+        return None
+    csv_path = _find_claims_csv()
+    if not csv_path:
+        return None
+    try:
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                ref = str(
+                    row.get("ClaimRef")
+                    or row.get("claim_ref")
+                    or row.get("ClaimID")
+                    or row.get("claim_id")
+                    or row.get("Reference")
+                    or ""
+                ).strip()
+                if ref and needle in ref.lower():
+                    return dict(row)
+    except OSError:
+        return None
+    return None
+
+
 def build_claim_submission_packet(
     *,
     claim_id: str = "",
@@ -161,21 +202,52 @@ def build_claim_submission_packet(
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     folder = _exports_subdir("claim_packets") / f"{claim}_{stamp}"
     folder.mkdir(parents=True, exist_ok=True)
+    claim_row = _load_claim_row(claim_id) if claim_id else None
+    enriched_narrative = str(narrative or notes or "").strip()
+    if not enriched_narrative and claim_row:
+        parts = []
+        for key in ("Patient", "patient", "Payer", "payer", "Status", "status", "Procedure", "procedure", "Amount", "amount"):
+            val = claim_row.get(key)
+            if val:
+                parts.append(f"{key}: {val}")
+        if parts:
+            enriched_narrative = "Claim context from SoftDent export:\n" + "\n".join(parts) + "\n\nDraft narrative — staff to review before upload."
+    if not enriched_narrative:
+        enriched_narrative = "Draft narrative — staff to review before upload."
     readme = (
         "New Ridge Family Dental — claim submission packet (local draft)\n"
         "================================================================\n"
         f"Claim: {claim}\n"
         f"Built: {_utc_now()}\n\n"
         "Staff steps:\n"
-        "1. Review narrative.txt and checklist.txt\n"
+        "1. Review narrative.txt, claim_context.json, and attachment_manifest.json\n"
         "2. Attach any required clinical notes or imaging from SoftDent\n"
         "3. Upload this zip to the payer portal manually\n"
         "HAL does not submit to payer portals directly.\n"
     )
     (folder / "PORTAL_UPLOAD_README.txt").write_text(readme, encoding="utf-8")
-    (folder / "narrative.txt").write_text(str(narrative or notes or "Draft narrative — staff to review before upload."), encoding="utf-8")
+    (folder / "narrative.txt").write_text(enriched_narrative, encoding="utf-8")
+    if claim_row:
+        (folder / "claim_context.json").write_text(json.dumps(claim_row, indent=2), encoding="utf-8")
+    manifest = {
+        "claimId": claim,
+        "builtAt": _utc_now(),
+        "files": [
+            {"name": "narrative.txt", "purpose": "Payer portal narrative field", "required": True},
+            {"name": "checklist.txt", "purpose": "Staff review checklist", "required": True},
+            {"name": "PORTAL_UPLOAD_README.txt", "purpose": "Upload instructions", "required": False},
+        ],
+        "staffAttachments": [
+            "Perio charting (if required by payer)",
+            "Clinical notes from SoftDent",
+            "Radiographs or imaging exports",
+        ],
+    }
+    if claim_row:
+        manifest["files"].append({"name": "claim_context.json", "purpose": "Local claim row from SoftDent export", "required": False})
+    (folder / "attachment_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     (folder / "checklist.txt").write_text(
-        "- Verify patient and subscriber IDs\n- Confirm procedure codes and dates\n- Attach perio charting if required\n- Upload via payer portal\n",
+        "- Verify patient and subscriber IDs\n- Confirm procedure codes and dates\n- Attach perio charting if required\n- Review attachment_manifest.json\n- Upload via payer portal\n",
         encoding="utf-8",
     )
     zip_path = folder.with_suffix(".zip")
@@ -188,6 +260,7 @@ def build_claim_submission_packet(
         "claimId": claim,
         "exportPath": str(zip_path),
         "folderPath": str(folder),
+        "enrichedFromImport": bool(claim_row),
         "message": f"Claim packet ready: {zip_path.name}. Upload via payer portal after review.",
     }
     if store:
@@ -243,6 +316,63 @@ def export_narrative_portal_prep(
     return result
 
 
+def build_payer_portal_rpa_with_consent(
+    *,
+    claim_id: str = "",
+    payer: str = "",
+    portal_url: str = "",
+    narrative: str = "",
+    consent_text: str = "",
+    actor: str = "Staff",
+    store=None,
+) -> dict[str, Any]:
+    from payer_portal_bridge import build_portal_rpa_bundle
+
+    result = build_portal_rpa_bundle(
+        claim_id=claim_id,
+        payer=payer,
+        portal_url=portal_url,
+        narrative=narrative,
+        consent_text=consent_text,
+        actor=actor,
+    )
+    if store and result.get("ok"):
+        append_outbound_audit(
+            store,
+            action="payer-portal-rpa",
+            consent={"text": consent_text, "actor": actor},
+            result={"ok": True, "claimId": result.get("claimId"), "path": result.get("exportPath")},
+        )
+    return result
+
+
+def queue_softdent_writeback_with_consent(
+    *,
+    action: str = "note",
+    payload: dict[str, Any] | None = None,
+    consent_text: str = "",
+    actor: str = "Staff",
+    store=None,
+) -> dict[str, Any]:
+    from softdent_writeback_bridge import enqueue_writeback
+
+    result = enqueue_writeback(action=action, payload=payload or {}, consent_text=consent_text, actor=actor)
+    if store:
+        append_outbound_audit(
+            store,
+            action="softdent-writeback-queue",
+            consent={"text": consent_text, "actor": actor},
+            result={"ok": result.get("ok"), "entryId": result.get("entryId"), "message": result.get("message")},
+        )
+    return result
+
+
+def softdent_writeback_status() -> dict[str, Any]:
+    from softdent_writeback_bridge import queue_status
+
+    return queue_status()
+
+
 def send_staff_briefing_email(
     *,
     subject: str,
@@ -268,6 +398,46 @@ def send_staff_briefing_email(
         actor=actor,
         store=store,
     )
+
+
+def post_qbo_journal_with_consent(
+    store_path: Any,
+    *,
+    limit: int = 25,
+    consent_text: str = "",
+    actor: str = "Staff",
+    store=None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    if not consent_text or not str(consent_text).strip():
+        return {"ok": False, "error": "missing_consent", "message": "Staff consent is required before QuickBooks Online post."}
+    from quickbooks_online_bridge import post_approved_queue_entries, qbo_config
+
+    cfg = qbo_config()
+    if not cfg.get("client_id") or not cfg.get("refresh_token"):
+        result = {
+            "ok": False,
+            "error": "qbo_not_configured",
+            "message": "QuickBooks Online API not configured — use Export approved journal entries to QuickBooks IIF after consent.",
+        }
+        if store:
+            append_outbound_audit(
+                store,
+                action="qbo-journal-post",
+                consent={"text": consent_text, "actor": actor},
+                result=result,
+            )
+        return result
+    payload = post_approved_queue_entries(store_path, limit=limit, dry_run=dry_run)
+    payload["ok"] = bool(payload.get("ok"))
+    if store:
+        append_outbound_audit(
+            store,
+            action="qbo-journal-post",
+            consent={"text": consent_text, "actor": actor},
+            result={"ok": payload.get("ok"), "posted": payload.get("posted"), "message": payload.get("message")},
+        )
+    return payload
 
 
 def quickbooks_online_status() -> dict[str, Any]:

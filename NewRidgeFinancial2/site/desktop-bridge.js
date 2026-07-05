@@ -361,6 +361,15 @@ const DesktopBridge = (function () {
       if (path === "/api/outbound/narrative-prep" && api.export_narrative_portal_prep_with_consent) {
         return api.export_narrative_portal_prep_with_consent(JSON.stringify(payload || {}));
       }
+      if (path === "/api/outbound/qbo-post" && api.post_qbo_journal_with_consent) {
+        return api.post_qbo_journal_with_consent(JSON.stringify(payload || {}));
+      }
+      if (path === "/api/outbound/payer-portal-rpa" && api.build_payer_portal_rpa_with_consent) {
+        return api.build_payer_portal_rpa_with_consent(JSON.stringify(payload || {}));
+      }
+      if (path === "/api/outbound/softdent-writeback" && api.queue_softdent_writeback_with_consent) {
+        return api.queue_softdent_writeback_with_consent(JSON.stringify(payload || {}));
+      }
       if (path === "/api/outbound/briefing-email") {
         return outboundPost("/api/outbound/email", payload);
       }
@@ -391,6 +400,28 @@ const DesktopBridge = (function () {
     return outboundPost("/api/outbound/narrative-prep", payload || {});
   }
 
+  async function postQboJournalWithConsent(payload) {
+    return outboundPost("/api/outbound/qbo-post", payload || {});
+  }
+
+  async function buildPayerPortalRpaWithConsent(payload) {
+    return outboundPost("/api/outbound/payer-portal-rpa", payload || {});
+  }
+
+  async function queueSoftdentWritebackWithConsent(payload) {
+    return outboundPost("/api/outbound/softdent-writeback", payload || {});
+  }
+
+  async function softdentWritebackStatus() {
+    if (hasDesktopApi() && window.pywebview.api.softdent_writeback_status) {
+      return window.pywebview.api.softdent_writeback_status();
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/outbound/softdent-writeback-status");
+    }
+    return { ok: false, configured: false, queued: 0 };
+  }
+
   async function quickbooksOnlineStatus() {
     if (hasDesktopApi() && window.pywebview.api.quickbooks_online_status) {
       return window.pywebview.api.quickbooks_online_status();
@@ -409,6 +440,64 @@ const DesktopBridge = (function () {
       return loopbackJson(`/api/outbound/audit?limit=${encodeURIComponent(String(limit || 15))}`);
     }
     return { ok: true, items: [], count: 0 };
+  }
+
+  async function employeeStatus(targetLevel) {
+    if (hasDesktopApi() && window.pywebview.api.employee_status) {
+      return window.pywebview.api.employee_status(Number(targetLevel || 7));
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson(`/api/employee/status?targetLevel=${encodeURIComponent(String(targetLevel || 7))}`);
+    }
+    return { ok: false, message: "Employee status requires desktop or loopback runtime." };
+  }
+
+  async function listEmployeeWorkLog(limit) {
+    if (hasDesktopApi() && window.pywebview.api.list_employee_work_log) {
+      return window.pywebview.api.list_employee_work_log(Number(limit || 20));
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson(`/api/employee/work-log?limit=${encodeURIComponent(String(limit || 20))}`);
+    }
+    return { ok: true, items: [], count: 0 };
+  }
+
+  async function appendEmployeeWorkLog(payload) {
+    if (hasDesktopApi() && window.pywebview.api.append_employee_work_log) {
+      return window.pywebview.api.append_employee_work_log(JSON.stringify(payload || {}));
+    }
+    if (hasLoopbackApi()) {
+      const host = window.location.hostname || "127.0.0.1";
+      const port = window.location.port || "8765";
+      const resp = await fetch(`${window.location.protocol}//${host}:${port}/api/employee/work-log`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+        cache: "no-store",
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return resp.json();
+    }
+    return { ok: false };
+  }
+
+  async function runEmployeeShift(payload) {
+    if (hasDesktopApi() && window.pywebview.api.run_employee_shift) {
+      return window.pywebview.api.run_employee_shift(JSON.stringify(payload || {}));
+    }
+    if (hasLoopbackApi()) {
+      const host = window.location.hostname || "127.0.0.1";
+      const port = window.location.port || "8765";
+      const resp = await fetch(`${window.location.protocol}//${host}:${port}/api/employee/shift`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+        cache: "no-store",
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return resp.json();
+    }
+    return { ok: false, message: "Employee shift requires desktop or loopback runtime." };
   }
 
   async function webResearch(query, options) {
@@ -856,8 +945,16 @@ const DesktopBridge = (function () {
     exportPostingQueueIifWithConsent,
     buildClaimPacketWithConsent,
     exportNarrativePortalPrepWithConsent,
+    postQboJournalWithConsent,
+    buildPayerPortalRpaWithConsent,
+    queueSoftdentWritebackWithConsent,
+    softdentWritebackStatus,
     quickbooksOnlineStatus,
     listOutboundAudit,
+    employeeStatus,
+    listEmployeeWorkLog,
+    appendEmployeeWorkLog,
+    runEmployeeShift,
     webResearch,
     listHalMemories,
     rememberHalFact,

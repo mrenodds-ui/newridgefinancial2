@@ -26,6 +26,21 @@ const HalAgent = (function () {
     if (typeof ap.multiGatherRounds === "number" && ap.multiGatherRounds > 0) {
       AGENT_BUDGET.maxGatherRounds = Math.min(6, ap.multiGatherRounds);
     }
+    const c9000 = halModels && halModels.config && halModels.config.chat9000;
+    if (c9000 && c9000.enabled !== false) {
+      AGENT_BUDGET.maxModelContextChars = 18000;
+      AGENT_BUDGET.maxToolSummaryChars = 6200;
+      AGENT_BUDGET.maxRecentTurns = 16;
+    }
+    const c10000 = halModels && halModels.config && halModels.config.chat10000;
+    if (c10000 && c10000.enabled !== false) {
+      AGENT_BUDGET.maxModelContextChars = 22000;
+      AGENT_BUDGET.maxToolSummaryChars = 7500;
+      AGENT_BUDGET.maxRecentTurns = 18;
+      if (typeof ap.maxToolsPerTurn === "number") {
+        AGENT_BUDGET.maxTools = Math.min(24, Math.max(AGENT_BUDGET.maxTools, ap.maxToolsPerTurn));
+      }
+    }
     if (typeof HalAgentLoop !== "undefined" && HalAgentLoop.configureFromAgentProgramming) {
       HalAgentLoop.configureFromAgentProgramming(ap);
     }
@@ -1234,8 +1249,20 @@ const HalAgent = (function () {
       if (/\bsyntax\b/i.test(query)) tools.push("run_node_syntax_check");
     }
 
+    if (typeof HalChat9000 !== "undefined" && HalChat9000.isEnabled(ctx.halModels) && HalChat9000.config(ctx.halModels).alwaysGatherTools !== false) {
+      HalChat9000.defaultGatherTools().forEach((id) => tools.push(id));
+    }
+
     const uniqueTools = [...new Set(tools)].slice(0, AGENT_BUDGET.maxTools);
     const planOnly = typeof HalAgentLoop !== "undefined" && HalAgentLoop.isPlanOnlyQuery(query);
+
+    let agentToolLoop = !planOnly && shouldUseAgentToolLoop(query, route, agentCfg);
+    if (typeof HalChat10000 !== "undefined" && HalChat10000.shouldAlwaysAgentLoop(ctx.halModels, route)) {
+      return true;
+    }
+    if (typeof HalChat9000 !== "undefined" && HalChat9000.shouldAlwaysAgentLoop(ctx.halModels, route)) {
+      agentToolLoop = !planOnly;
+    }
 
     return {
       questionType: classifyQuestion(query, route),
@@ -1245,7 +1272,7 @@ const HalAgent = (function () {
       isUnsafe: false,
       useModelEnhancement: !!(route.useModel || route.useReasoning || route.useEscalation || route.useOss),
       needsClarification: !route.text && !hasUseFlag(route),
-      agentToolLoop: !planOnly && shouldUseAgentToolLoop(query, route, agentCfg),
+      agentToolLoop,
       planOnly,
       isTaskCompletionQuery: isTaskCompletionQuery(query),
       isInvestigateQuery: isInvestigateQuery(query, route),
@@ -1360,14 +1387,28 @@ const HalAgent = (function () {
     const usePlanStyle =
       plan.questionType === "planning" &&
       (HalCore.wantsStructuredPlan ? HalCore.wantsStructuredPlan(query) : /make a plan|prioriti/i.test(query));
-    const base =
-      plan.questionType === "planning" && !usePlanStyle
-        ? HalCore.buildReasoningChatPrompt(ctx.halData, null)
-        : plan.questionType === "planning"
+    const chat10000 = typeof HalChat10000 !== "undefined" && HalChat10000.isEnabled(ctx.halModels);
+    const chat9000 = typeof HalChat9000 !== "undefined" && HalChat9000.isEnabled(ctx.halModels);
+    let base;
+    if ((chat10000 || chat9000) && plan.questionType !== "escalation") {
+      const Chat = chat10000 ? HalChat10000 : HalChat9000;
+      base =
+        plan.questionType === "planning" && usePlanStyle
           ? HalCore.buildReasoningPrompt(ctx.halData, null)
-          : plan.questionType === "escalation"
-            ? HalCore.buildEscalationPrompt(ctx.halData, null)
-            : HalCore.buildSystemPrompt(ctx.halData, null);
+          : plan.questionType === "planning" && Chat.buildReasoningPrompt
+            ? HalChat9000.buildReasoningPrompt(ctx.halData, ctx.halModels)
+            : Chat.buildSystemPrompt(ctx.halData, ctx.halModels);
+      base = Chat.enrichPrompt(base, ctx);
+    } else {
+      base =
+        plan.questionType === "planning" && !usePlanStyle
+          ? HalCore.buildReasoningChatPrompt(ctx.halData, null)
+          : plan.questionType === "planning"
+            ? HalCore.buildReasoningPrompt(ctx.halData, null)
+            : plan.questionType === "escalation"
+              ? HalCore.buildEscalationPrompt(ctx.halData, null)
+              : HalCore.buildSystemPrompt(ctx.halData, null);
+    }
 
     const parts = [
       base,
@@ -1632,6 +1673,8 @@ const HalAgent = (function () {
       return true;
     }
     const cfg = ctx && ctx.halModels && ctx.halModels.config;
+    const c9000 = cfg && cfg.chat9000;
+    if (c9000 && c9000.enabled !== false && c9000.defaultReasoning !== false) return true;
     return !!(cfg && cfg.preferReasoning);
   }
 
@@ -1754,8 +1797,10 @@ const HalAgent = (function () {
     return !!(route.useModel && !route.useReasoning && !route.useEscalation && !route.useOss);
   }
 
-  function fastChatSkipsProgramContext(route) {
-    // Speed-first chat: tool summaries and route handlers cover office data.
+  function fastChatSkipsProgramContext(route, ctx) {
+    if (typeof HalChat9000 !== "undefined" && ctx && HalChat9000.isEnabled(ctx.halModels) && HalChat9000.config(ctx.halModels).alwaysGatherTools !== false) {
+      return false;
+    }
     return isFastChatRoute(route);
   }
 
@@ -1785,7 +1830,7 @@ const HalAgent = (function () {
           ? 3500
           : AGENT_BUDGET.maxModelContextChars;
     let combinedPrompt = agentPrompt;
-    if (!fastChatSkipsProgramContext(route) && !snapshotToolRan) {
+    if (!fastChatSkipsProgramContext(route, ctx) && !snapshotToolRan) {
       const programContext = await ctx.getProgramContextText();
       if (programContext) combinedPrompt += "\n\nProgram context:\n" + programContext.slice(0, ctxCap);
     }

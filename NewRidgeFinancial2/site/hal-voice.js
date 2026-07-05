@@ -772,8 +772,42 @@
     return testMiranda();
   }
 
+  async function speakMirandaBriefing(text, options) {
+    options = options || {};
+    const raw = String(text || "").trim();
+    if (!raw || qaSkipSpeech() || options.skipSpeech) {
+      return { started: false, durationMs: 0, skipped: true };
+    }
+    const excerpt = raw.length > 420 ? raw.slice(0, 420).replace(/\s+\S*$/, "") + "…" : raw;
+    const neuralOk = await checkNeuralTts();
+    if (neuralOk) {
+      const url = await synthesizeNeural({ segments: [{ text: excerpt, kind: "leanIn" }] });
+      if (url) {
+        const played = await playNeuralAudio(url);
+        if (played.ok) {
+          return { started: true, durationMs: estimateDurationMs(excerpt, MIRANDA), engine: "edge-neural", profile: voiceProfile };
+        }
+      }
+    }
+    speak(excerpt, { interrupt: true, profile: MIRANDA });
+    return { started: true, durationMs: estimateDurationMs(excerpt, MIRANDA), engine: "browser", profile: voiceProfile };
+  }
+
+  async function speakHal9000Briefing(text, options) {
+    options = options || {};
+    const raw = String(text || "").trim();
+    if (!raw || qaSkipSpeech() || options.skipSpeech) {
+      return { started: false, durationMs: 0, skipped: true };
+    }
+    const excerpt = raw.length > 380 ? raw.slice(0, 380).replace(/\s+\S*$/, "") + "…" : raw;
+    speak(excerpt, { interrupt: true, profile: HAL9000 });
+    return { started: true, durationMs: estimateDurationMs(excerpt, HAL9000), engine: "browser-hal9000", profile: "hal9000" };
+  }
+
   global.HalVoice = {
     speak,
+    speakMirandaBriefing,
+    speakHal9000Briefing,
     announceSidenote,
     speakHalReply,
     cancelSpeech,

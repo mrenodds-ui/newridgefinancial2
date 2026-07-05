@@ -344,6 +344,108 @@ const HalRouteExec = (function () {
       return outcome(PS.formatReport(report), "ops", result.intent, [], { refreshHal: true });
     }
 
+    if (result.useCapabilityIndex) {
+      const HCI = typeof HalCapabilityIndex !== "undefined" ? HalCapabilityIndex : window.HalCapabilityIndex;
+      if (!HCI || typeof HCI.compute !== "function") {
+        return outcome("Capability index is not loaded.", "ops", result.intent);
+      }
+      const report = HCI.compute(ctx, halModels);
+      return outcome(HCI.formatReport(report), "ops", result.intent, [{ label: "Orchestrator triage", query: "Run orchestrator triage" }]);
+    }
+
+    if (result.useOrchestratorTriage) {
+      const OR = typeof HalOrchestrator !== "undefined" ? HalOrchestrator : window.HalOrchestrator;
+      if (!OR || typeof OR.runTriage !== "function") {
+        return outcome("HAL orchestrator is not loaded.", "ops", result.intent);
+      }
+      const triage = OR.runTriage(ctx);
+      return outcome(OR.formatReport(triage), "ops", result.intent);
+    }
+
+    if (result.useAscension10000) {
+      const A = typeof HalAscension10000 !== "undefined" ? HalAscension10000 : window.HalAscension10000;
+      const DIR = typeof HalDirector !== "undefined" ? HalDirector : window.HalDirector;
+      if (!A) return outcome("HAL 10000 ascension module is not loaded.", "ops", result.intent);
+      const lines = [A.formatStatus(halModels, ctx)];
+      if (DIR && DIR.getExecutiveSummary) lines.push("", DIR.getExecutiveSummary(ctx));
+      return outcome(lines.join("\n"), "ops", result.intent, [{ label: "Capability index", query: "Show HAL capability index" }]);
+    }
+
+    if (result.useEmployeeStatus) {
+      const HE = typeof HalEmployee !== "undefined" ? HalEmployee : window.HalEmployee;
+      if (!HE || typeof HE.status !== "function") {
+        return outcome("HAL employee module is not loaded.", "ops", result.intent);
+      }
+      const st = await HE.status(ctx, halModels);
+      return outcome(
+        HE.formatStatus(st),
+        "ops",
+        result.intent,
+        [
+          { label: "HAL work log", query: "HAL work log" },
+          { label: "Run employee shift", query: "Run HAL shift" },
+        ],
+      );
+    }
+
+    if (result.useEmployeeWorkLog) {
+      const HE = typeof HalEmployee !== "undefined" ? HalEmployee : window.HalEmployee;
+      if (!HE || typeof HE.formatWorkLog !== "function") {
+        return outcome("HAL employee module is not loaded.", "ops", result.intent);
+      }
+      return outcome(await HE.formatWorkLog(15), "ops", result.intent);
+    }
+
+    if (result.useEmployeeShift) {
+      const RUN = typeof HalEmployeeRunner !== "undefined" ? HalEmployeeRunner : window.HalEmployeeRunner;
+      if (!RUN || typeof RUN.runShift !== "function") {
+        return outcome("HAL employee runner is not loaded.", "ops", result.intent);
+      }
+      const report = await RUN.runShift(ctx, halModels, { force: true });
+      const stepCount = (report && report.steps && report.steps.length) || 0;
+      return outcome(
+        report && report.skipped
+          ? `Employee shift skipped (${report.reason || "cooldown"}).`
+          : `Employee shift complete — ${stepCount} step(s). ${JSON.stringify(report && report.steps ? report.steps.map((s) => s.step || s.action) : [])}`,
+        "ops",
+        result.intent,
+        [{ label: "Work log", query: "HAL work log" }],
+      );
+    }
+
+    if (result.useEmployeeSetLevel) {
+      const HE = typeof HalEmployee !== "undefined" ? HalEmployee : window.HalEmployee;
+      if (!HE || typeof HE.setTargetLevel !== "function") {
+        return outcome("HAL employee module is not loaded.", "ops", result.intent);
+      }
+      const level = HE.setTargetLevel(result.employeeLevel || 7);
+      const st = await HE.status(ctx, halModels);
+      const levelName = HE.LEVELS[level] ? HE.LEVELS[level].name : "Executive partner";
+      return outcome(
+        level === 7
+          ? `HAL is now Level 7 — ${levelName}. Continuous shift, director delegation, and executive partner RPA prep are active under standing consent.\n\n${HE.formatStatus(st)}`
+          : `Employee target level set to ${level} (${levelName}).\n\n${HE.formatStatus(st)}`,
+        "ops",
+        result.intent,
+      );
+    }
+
+    if (result.useAutonomousOpsStatus) {
+      const AO = typeof HalAutonomousOps !== "undefined" ? HalAutonomousOps : window.HalAutonomousOps;
+      if (!AO || typeof AO.status !== "function") {
+        return outcome("HAL 9000 autonomous ops is not loaded.", "ops", result.intent);
+      }
+      return outcome(AO.formatStatus(AO.status()), "ops", result.intent);
+    }
+
+    if (result.useAutonomousOpsControl) {
+      const AO = typeof HalAutonomousOps !== "undefined" ? HalAutonomousOps : window.HalAutonomousOps;
+      if (!AO) return outcome("HAL 9000 autonomous ops is not loaded.", "ops", result.intent);
+      if (result.pauseAutonomous && AO.pause) AO.pause();
+      else if (AO.resume) AO.resume();
+      return outcome(result.pauseAutonomous ? "Autonomous ops paused." : "Autonomous ops resumed.", "ops", result.intent);
+    }
+
     if (result.useOutboundAudit) {
       const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
       if (!db || typeof db.listOutboundAudit !== "function") {
@@ -352,7 +454,7 @@ const HalRouteExec = (function () {
       const audit = await db.listOutboundAudit(12);
       const items = (audit && audit.items) || [];
       if (!items.length) {
-        return outcome("No outbound actions have been logged yet. Consent-gated email, IIF export, and claim packets appear here after execution.", "outbound", result.intent);
+        return outcome("No outbound actions have been logged yet. Consent-gated email, IIF export, QBO post, and claim packets appear here after execution.", "outbound", result.intent);
       }
       const lines = items.map((entry) => {
         const action = entry.action || "unknown";

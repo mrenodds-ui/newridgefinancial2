@@ -375,7 +375,8 @@ const HalProactive = (function () {
   function formatProactiveBriefing(briefing, opts) {
     if (!briefing) return "Proactive briefing unavailable.";
     opts = opts || {};
-    const chatMode = opts.chatMode === true;
+    const spokenMode = opts.spoken === true;
+    const chatMode = opts.chatMode === true || spokenMode;
 
     if (chatMode) {
       const lines = [briefing.headline || "Here's what needs attention."];
@@ -407,7 +408,7 @@ const HalProactive = (function () {
     }
 
     const lines = [
-      "HAL internal office manager (local placement only · external firewall locked):",
+      "HAL internal office manager (local placement · consent-gated outbound):",
       briefing.headline,
       briefing.independenceNote,
       "",
@@ -681,6 +682,16 @@ const HalProactive = (function () {
     await writeScheduledBriefingKey(key);
     if (briefing && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("nr2:scheduled-briefing", { detail: { kind, briefing } }));
+      if (typeof HalVoice !== "undefined" && HalVoice.speakMirandaBriefing && !window.HAL_SKIP_SPEECH) {
+        const spoken = formatProactiveBriefing(briefing, { spoken: true });
+        const auto = (ctx && ctx.halModels && ctx.halModels.config && ctx.halModels.config.autonomousOps) || {};
+        const use9000 = auto.hal9000Voice !== false;
+        if (use9000 && HalVoice.speakHal9000Briefing) {
+          HalVoice.speakHal9000Briefing(spoken, { kind }).catch(() => {});
+        } else {
+          HalVoice.speakMirandaBriefing(spoken, { kind }).catch(() => {});
+        }
+      }
     }
     return briefing;
   }
