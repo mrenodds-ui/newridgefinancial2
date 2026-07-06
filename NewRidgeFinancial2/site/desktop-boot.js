@@ -105,7 +105,26 @@
     async verifyDesktopManifest() {
       const manifestCheck = await boot.verifyBuildManifest();
       if (!manifestCheck.ok) return manifestCheck;
+      const workstationOnly =
+        typeof WorkstationSchema !== "undefined" ||
+        (typeof globalThis !== "undefined" && globalThis.NR2_WORKSTATION_ONLY);
+      if (workstationOnly) {
+        if (!window.pywebview || !window.pywebview.api) {
+          return {
+            ok: false,
+            mode: "workstation-desktop-required",
+            error: "NR2 Workstation must run in the desktop app — close any browser tab and launch Start Workstation.",
+          };
+        }
+      }
       if (!window.DesktopBridge || !DesktopBridge.hasDesktopApi || !DesktopBridge.hasDesktopApi()) {
+        if (workstationOnly) {
+          return {
+            ok: false,
+            mode: "workstation-desktop-required",
+            error: "NR2 Workstation must run in the desktop app — close any browser tab and launch Start Workstation.",
+          };
+        }
         return { ok: true, mode: "browser-dev" };
       }
       try {

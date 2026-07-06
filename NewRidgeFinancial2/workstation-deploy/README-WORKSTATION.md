@@ -1,6 +1,12 @@
 # NR2 Office Workstation — Install Package
 
-Drop this folder on each operatory / front-desk PC. It runs **Send Message**, **Ask HAL**, and **desktop popups** without installing the full financial app.
+Drop this folder on each operatory / front-desk PC. It runs **Send Message**, **Ask HAL**, and **desktop popups** as a **desktop program** (pywebview window) — not in a web browser.
+
+## Desktop app only
+
+- Launch via **Start-NR2-Workstation.bat** or the **NR2 Workstation** desktop shortcut.
+- **Do not** open `http://127.0.0.1:8766` in Chrome, Edge, or any browser — that port is internal to the desktop window and will show a blocked message.
+- There is no browser version of this program.
 
 ## Requirements
 
@@ -16,7 +22,19 @@ Drop this folder on each operatory / front-desk PC. It runs **Send Message**, **
 3. Enter:
    - **Station** — `Room 1`, `Frontdesk 1`, etc. (must match SideNotes)
    - **HAL hub URL** — e.g. `http://192.168.1.50:8765` (the Start Program PC on your LAN)
-4. Setup creates `.env`, desktop + startup shortcuts, and starts the workstation in the background.
+4. Setup creates `.env`, desktop + startup shortcuts, a **Scheduled Task** at sign-in, and starts the workstation in the background.
+
+## After install
+
+- **Desktop:** double-click **NR2 Workstation** to open the messenger (Send / Ask HAL).
+- **At sign-in:** starts silently in the background (popups + hub relay). No console window.
+- Re-register auto-start anytime: `powershell -File Register-NR2WorkstationStartup.ps1`
+
+## Faster startup
+
+- Boot uses a silent VBS launcher (no PowerShell window flash).
+- If the workstation is already running, boot start exits immediately (no restart).
+- SideNotes/hub popup watchers start after the UI loads.
 
 Popups appear in the lower-right without opening the messenger window.
 

@@ -68,6 +68,9 @@ if (-not $Hidden) {
     $env:NR2_WORKSTATION_START_HIDDEN = '0'
 } else {
     $env:NR2_WORKSTATION_START_HIDDEN = '1'
+    if (Test-WorkstationListening -Port $nr2Port) {
+        return
+    }
 }
 
 function Resolve-Python {
@@ -97,7 +100,7 @@ function Start-ModelWarmup {
         [string]$StdoutPath,
         [string]$StderrPath
     )
-    if ($SkipModelWarmup) { return }
+    if ($SkipModelWarmup -or $Hidden) { return }
     if (-not (Test-Path $ScriptPath)) { return }
     try {
         Start-Process `
@@ -116,14 +119,19 @@ if (-not (Test-Path (Join-Path $SiteDir 'workstation\index.html'))) {
     throw "Workstation entry not found at $(Join-Path $SiteDir 'workstation\index.html')"
 }
 
-Write-Host 'Start Workstation - NR2 Office Workstation' -ForegroundColor Green
-Write-Host 'Separate desktop program for Send Message and Ask HAL (not the financial app).' -ForegroundColor Cyan
+Write-Host 'Start Workstation - NR2 Office Workstation (desktop app)' -ForegroundColor Green
+if (-not $Hidden) {
+    Write-Host 'Opens the pywebview desktop window — Send Message and Ask HAL. Do not use a browser tab.' -ForegroundColor Cyan
+}
 
-if (-not $SkipValidation) {
+$skipValidation = $SkipValidation -or $Hidden -or ($env:NR2_SKIP_STARTUP_VALIDATION -eq '1')
+if (-not $skipValidation) {
     $validatorScript = Join-Path $Root 'scripts\Invoke-NR2Validators.ps1'
     if (Test-Path $validatorScript) {
         & $validatorScript -Nr2Dir $AppDir
     }
+} elseif (-not $Hidden) {
+    Write-Host 'Skipping validators (use without -SkipValidation to run checks).' -ForegroundColor DarkGray
 }
 
 $manifestPath = Join-Path $AppDir 'nr2-build.json'
@@ -158,14 +166,15 @@ function Stop-ExistingWorkstation {
         if (Get-Process -Id $existingPid -ErrorAction SilentlyContinue) {
             Write-Host "Stopping previous NR2 Office Workstation (PID $existingPid)..." -ForegroundColor Yellow
             Stop-Process -Id $existingPid -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
         }
     } catch {}
     Remove-Item $PidPath -Force -ErrorAction SilentlyContinue
 }
 
 Stop-ExistingWorkstation -PidPath $pidFile
-Stop-PortListener -Port $nr2Port
+if (-not $Hidden) {
+    Stop-PortListener -Port $nr2Port
+}
 
 Start-ModelWarmup -ScriptPath $ModelWarmupScript -StdoutPath $warmupStdoutLog -StderrPath $warmupStderrLog
 

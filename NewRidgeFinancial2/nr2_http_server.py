@@ -85,17 +85,38 @@ def _lan_hal_hub_access_ok() -> bool:
     return False
 
 
+_workstation_mode = False
+
+
+def set_workstation_mode(enabled: bool = True) -> None:
+    global _workstation_mode
+    _workstation_mode = bool(enabled)
+    if enabled:
+        os.environ["NR2_WORKSTATION_APP"] = "1"
+
+
+def _workstation_app() -> bool:
+    if _workstation_mode:
+        return True
+    val = os.environ.get("NR2_WORKSTATION_APP", "").strip().lower()
+    return val in ("1", "true", "yes")
+
+
 def _desktop_access_ok() -> bool:
     if _loopback_browser_allowed():
-        return True
-    if _lan_hal_hub_access_ok():
-        return True
-    if not _desktop_session_token:
         return True
     path = bottle.request.path or "/"
     if path.startswith("/js_api/"):
         return True
-    return _request_desktop_token() == _desktop_session_token
+    if _lan_hal_hub_access_ok():
+        return True
+    if _workstation_app():
+        if _desktop_session_token and _request_desktop_token() == _desktop_session_token:
+            return True
+        return False
+    if _desktop_session_token:
+        return _request_desktop_token() == _desktop_session_token
+    return True
 
 
 def _maybe_set_desktop_cookie() -> None:
@@ -114,6 +135,28 @@ def _maybe_set_desktop_cookie() -> None:
 
 
 def _desktop_only_html() -> str:
+    if _workstation_app():
+        return """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NR2 Office Workstation — Desktop Only</title>
+  <style>
+    body { font-family: Segoe UI, system-ui, sans-serif; background: #ece9e4; color: #222; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { max-width: 32rem; padding: 2rem 2.25rem; background: #fff; border: 1px solid #9a9488; border-radius: 4px; box-shadow: 2px 2px 8px rgba(0,0,0,.15); }
+    h1 { margin: 0 0 .75rem; font-size: 1.25rem; color: #8b2020; }
+    p { margin: 0 0 .85rem; line-height: 1.55; color: #444; }
+    strong { color: #111; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Desktop app only</h1>
+    <p><strong>NR2 Office Workstation</strong> is a desktop program (Send Message, Ask HAL, popups). It does not run in a web browser.</p>
+    <p>Close this tab. Open the app from <strong>Start-NR2-Workstation.bat</strong> or the <strong>NR2 Workstation</strong> desktop shortcut.</p>
+  </div>
+</body>
+</html>"""
     return """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -211,9 +254,7 @@ class NR2BottleServer(BottleServer):
         def _enforce_desktop_only():
             if _desktop_access_ok():
                 return None
-            bottle.response.status = 403
-            bottle.response.content_type = "text/html; charset=utf-8"
-            return _desktop_only_html()
+            bottle.abort(403, _desktop_only_html())
 
         @app.hook("after_request")
         def _hal_hub_cors_headers():
@@ -980,6 +1021,8 @@ class NR2BottleServer(BottleServer):
 
         @app.get("/")
         def index():
+            if not _desktop_access_ok():
+                bottle.abort(403, _desktop_only_html())
             if not server.root_path:
                 return ""
             _maybe_set_desktop_cookie()
@@ -990,6 +1033,8 @@ class NR2BottleServer(BottleServer):
 
         @app.get("/index.html")
         def index_html():
+            if not _desktop_access_ok():
+                bottle.abort(403, _desktop_only_html())
             if not server.root_path:
                 return ""
             _maybe_set_desktop_cookie()
@@ -1000,6 +1045,8 @@ class NR2BottleServer(BottleServer):
 
         @app.route("/<file:path>")
         def asset(file):
+            if not _desktop_access_ok():
+                bottle.abort(403, _desktop_only_html())
             if not server.root_path:
                 return ""
             bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")

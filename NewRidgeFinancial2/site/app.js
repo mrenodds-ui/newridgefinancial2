@@ -96,6 +96,7 @@ let officeChannelSendFlash = false;
 let workstationStationName = null;
 let workstationMessagePrompts = null;
 let workstationPromptsEditing = false;
+let workstationRenderDeferred = false;
 let officeChannelAnnouncedIds = new Set();
 let sidenotesMessages = [];
 let sidenotesLive = false;
@@ -763,7 +764,31 @@ function stopHalHubDispatcher() {
   }
 }
 
-function renderWorkstationScreen() {
+function workstationComposeFieldFocused() {
+  const el = document.activeElement;
+  if (!el || !workstationPage || workstationPage.hidden) return false;
+  if (!workstationPage.contains(el)) return false;
+  if (el.id === "wsQaInput" || el.id === "wsOfficeInput" || el.id === "wsOfficeChatInput") return true;
+  return !!(el.matches && el.matches(".ws-prompt-edit-input"));
+}
+
+function syncWorkstationDraftsFromDom() {
+  const qa = document.getElementById("wsQaInput");
+  if (qa) workstationAskDraft = qa.value || "";
+  const office = document.getElementById("wsOfficeInput");
+  const chat = document.getElementById("wsOfficeChatInput");
+  const compose = office || chat;
+  if (compose) officeChannelDraft = compose.value || "";
+}
+
+function renderWorkstationScreen(options) {
+  const force = !!(options && options.force);
+  syncWorkstationDraftsFromDom();
+  if (!force && workstationComposeFieldFocused()) {
+    workstationRenderDeferred = true;
+    return;
+  }
+  workstationRenderDeferred = false;
   const root = document.getElementById("workstationPageRoot");
   if (!root || !window.WorkstationPage) return;
   WorkstationPage.render({
@@ -4523,9 +4548,21 @@ if (workstationPage) {
   workstationPage.addEventListener("input", (event) => {
     const target = event.target;
     if (!target) return;
+    if (target.id === "wsQaInput") {
+      workstationAskDraft = target.value || "";
+      return;
+    }
     if (target.id === "wsOfficeInput" || target.id === "wsOfficeChatInput") {
       officeChannelDraft = target.value || "";
     }
+  });
+
+  workstationPage.addEventListener("focusout", () => {
+    window.setTimeout(() => {
+      if (!workstationRenderDeferred) return;
+      if (workstationComposeFieldFocused()) return;
+      renderWorkstationScreen({ force: true });
+    }, 0);
   });
 
   workstationPage.addEventListener("change", (event) => {
@@ -4856,6 +4893,22 @@ async function refreshImportsInBackground() {
   }
 }
 
+function renderWorkstationDesktopRequired(message) {
+  const frame = document.getElementById("pageFrame");
+  if (!frame) return;
+  const root = document.getElementById("workstationPageRoot");
+  const msg = message || "NR2 Office Workstation runs only in the desktop app.";
+  const inner =
+    `<strong class="pv-state__title">Desktop app required</strong>` +
+    `<p class="pv-state__msg">${String(msg).replace(/</g, "&lt;")}</p>` +
+    `<p class="pv-state__msg">Close any browser tab. Launch <strong>Start Workstation</strong> or double-click the <strong>NR2 Workstation</strong> shortcut.</p>`;
+  if (root) {
+    root.innerHTML = `<div class="pv-state pv-state--error nr2-boot-error ws-boot-error" role="alert">${inner}</div>`;
+    return;
+  }
+  frame.innerHTML = `<div class="pv-state pv-state--error nr2-boot-error" role="alert">${inner}</div>`;
+}
+
 async function boot() {
   renderRuntimeModeBanner();
   if (NR2_WORKSTATION_ONLY) {
@@ -4863,6 +4916,12 @@ async function boot() {
     document.body.classList.add("nr2-workstation-app");
     const sidebar = document.getElementById("sidebar");
     if (sidebar) sidebar.setAttribute("hidden", "");
+    if (!DesktopBridge.hasDesktopApi || !DesktopBridge.hasDesktopApi()) {
+      renderWorkstationDesktopRequired(
+        "This URL is for the pywebview desktop window only — not for Chrome, Edge, or other browsers.",
+      );
+      return;
+    }
   }
   if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) {
     if (NR2_WORKSTATION_ONLY) select("workstation");
@@ -4873,6 +4932,10 @@ async function boot() {
     if (typeof NR2Boot !== "undefined" && NR2Boot.verifyDesktopManifest) {
       const manifest = await NR2Boot.verifyDesktopManifest();
       if (!manifest.ok) {
+        if (manifest.mode === "workstation-desktop-required") {
+          renderWorkstationDesktopRequired(manifest.error);
+          return;
+        }
         if (manifest.pythonVersion && manifest.jsVersion) {
           renderSchemaVersionMismatch(manifest.pythonVersion, manifest.jsVersion);
         } else if (manifest.manifestVersion && manifest.jsVersion) {
@@ -4915,7 +4978,10 @@ async function boot() {
       }
     }
   } catch {
-    /* desktop info optional in browser preview */
+    if (NR2_WORKSTATION_ONLY) {
+      renderWorkstationDesktopRequired("Could not connect to the NR2 Workstation desktop shell.");
+      return;
+    }
   }
   try {
     halData = await DesktopBridge.readDataFile("hal-manager.json");

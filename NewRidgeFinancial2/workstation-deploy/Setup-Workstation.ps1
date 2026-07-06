@@ -205,11 +205,16 @@ foreach ($desktop in ($desktops | Select-Object -Unique)) {
 }
 
 if (-not $NoStartup) {
-    $startup = [Environment]::GetFolderPath('Startup')
-    if ($startup) {
-        $link = Join-Path $startup 'NR2 Workstation.lnk'
-        New-Shortcut -LinkPath $link -Target $HiddenLauncher -Description "NR2 Office Workstation auto-start ($schemaVersion)"
-        Write-Info "Startup shortcut: $link"
+    $register = Join-Path $PkgRoot 'Register-NR2WorkstationStartup.ps1'
+    if (Test-Path $register) {
+        & $register -PkgRoot $PkgRoot -Quiet:$Quiet
+    } else {
+        $startup = [Environment]::GetFolderPath('Startup')
+        if ($startup) {
+            $link = Join-Path $startup 'NR2 Workstation.lnk'
+            New-Shortcut -LinkPath $link -Target $HiddenLauncher -Description "NR2 Office Workstation auto-start ($schemaVersion)"
+            Write-Info "Startup shortcut: $link"
+        }
     }
 }
 

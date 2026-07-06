@@ -95,6 +95,9 @@ if (-not $Hidden) {
     $env:NR2_WORKSTATION_START_HIDDEN = '0'
 } else {
     $env:NR2_WORKSTATION_START_HIDDEN = '1'
+    if (Test-WorkstationListening -Port $nr2Port) {
+        return
+    }
 }
 
 $manifestPath = Join-Path $AppDir 'nr2-build.json'
@@ -123,14 +126,15 @@ function Stop-ExistingWorkstation {
         if (Get-Process -Id $existingPid -ErrorAction SilentlyContinue) {
             Write-Host "Stopping previous NR2 Workstation (PID $existingPid)..." -ForegroundColor Yellow
             Stop-Process -Id $existingPid -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
         }
     } catch {}
     Remove-Item $PidPath -Force -ErrorAction SilentlyContinue
 }
 
 Stop-ExistingWorkstation -PidPath $pidFile
-Stop-PortListener -Port $nr2Port
+if (-not $Hidden) {
+    Stop-PortListener -Port $nr2Port
+}
 
 $windowStyle = 'Hidden'
 if ($python -match 'python\.exe$') { $windowStyle = 'Normal' }

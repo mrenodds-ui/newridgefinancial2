@@ -8,6 +8,7 @@ const WorkstationSchema = (function () {
     id: "nr2-workstation",
     title: "NR2 Office Workstation",
     launcher: "StartWorkstation.bat",
+    /** Loopback port for pywebview shell only — not for browser use. */
     port: 8766,
   };
 

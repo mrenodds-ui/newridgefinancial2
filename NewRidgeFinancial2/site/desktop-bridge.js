@@ -55,6 +55,9 @@ function hasLoopbackApi() {
 
   function desktopRequiredMessage(feature) {
     const label = feature || "This feature";
+    if (typeof globalThis !== "undefined" && globalThis.NR2_WORKSTATION_ONLY) {
+      return `${label} requires the NR2 Workstation desktop app. Launch Start Workstation — do not open a browser tab.`;
+    }
     return `${label} requires the NR2 desktop app. Launch StartProgram.bat — do not open a browser tab.`;
   }
 

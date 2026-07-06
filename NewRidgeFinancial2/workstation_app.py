@@ -248,6 +248,21 @@ def _start_hub_popup_watcher(api: WorkstationApi, hub_url: str) -> None:
     print("NR2 workstation: hub popup watcher started (messages show without opening messenger).", file=sys.stderr)
 
 
+def _start_background_services(api: WorkstationApi, hal_hub_url: str) -> None:
+    """Defer SideNotes + hub watchers so pywebview can open the UI first."""
+
+    def _run() -> None:
+        _start_sidenotes_watcher()
+        _start_sidenotes_popup_watcher()
+        _start_hub_popup_watcher(api, hal_hub_url)
+
+    threading.Thread(
+        target=_run,
+        daemon=True,
+        name="nr2-ws-background-services",
+    ).start()
+
+
 def _start_sidenotes_popup_watcher() -> None:
     if not _env_flag("NR2_SIDENOTES_POPUP_WATCHER", True):
         return
@@ -281,6 +296,8 @@ def main() -> int:
         print(f"Workstation site not found: {INDEX_HTML}", file=sys.stderr)
         return 1
 
+    os.environ["NR2_WORKSTATION_APP"] = "1"
+
     try:
         import webview
     except ImportError:
@@ -288,15 +305,17 @@ def main() -> int:
         return 1
 
     api = WorkstationApi(SITE_DIR, DATA_DIR)
-    _start_sidenotes_watcher()
-    _start_sidenotes_popup_watcher()
     WORKSTATION_WEBVIEW_DIR.mkdir(parents=True, exist_ok=True)
     default_port = 8766
     http_port = int(os.environ.get("NR2_WORKSTATION_PORT", str(default_port)))
     hal_hub_url = os.environ.get("NR2_HAL_HUB_URL", "http://127.0.0.1:8765").strip()
-    _start_hub_popup_watcher(api, hal_hub_url)
+    _start_background_services(api, hal_hub_url)
     print(
         f"NR2 workstation: schema={DESIGN_SCHEMA_VERSION} entry={INDEX_HTML} port={http_port}",
+        file=sys.stderr,
+    )
+    print(
+        f"NR2 workstation: desktop app only — loopback port {http_port} is for the pywebview window, not a browser tab.",
         file=sys.stderr,
     )
     print(f"NR2 workstation: HAL hub URL={hal_hub_url} (set NR2_HAL_HUB_URL for LAN hub PC)", file=sys.stderr)
@@ -305,9 +324,11 @@ def main() -> int:
         NR2BottleServer,
         set_desktop_session_token,
         set_site_root,
+        set_workstation_mode,
         set_workstation_show_callback,
     )
 
+    set_workstation_mode(True)
     desktop_token = uuid.uuid4().hex
     set_desktop_session_token(desktop_token)
     set_site_root(SITE_DIR)
