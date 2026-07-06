@@ -500,14 +500,18 @@ def run_section(key: str, *, isolated: bool, overwrite: bool) -> int:
         "Use ONLY the Finding template from the system prompt. "
         "No chain-of-thought. No 'We are reviewing'. Start directly with '### Finding 1:'."
     )
+    print("Building user prompt...", flush=True)
     user_prompt = (
         f"{section_prompt}\n\n"
         f"{finding_cap} {format_block}\n\n"
         f"--- CODE ---\n{context}\n--- END ---"
     )
+    print(f"Prompt ready ({len(user_prompt)} chars).", flush=True)
 
     print(f"Evaluating section {key}...", flush=True)
+    print("Calling evaluator...", flush=True)
     answer, raw = call_ollama(user_prompt, max_tokens=max_tokens)
+    print("Evaluator returned first pass.", flush=True)
     validation_errors = validate_answer(answer)
     if validation_errors:
         print(f"First pass validation: {', '.join(validation_errors)} — retrying...", flush=True)
@@ -516,7 +520,10 @@ def run_section(key: str, *, isolated: bool, overwrite: bool) -> int:
             "Your prior answer failed validation. Rewrite using ONLY ### Finding N blocks "
             "with **Severity:** lines. No reasoning text."
         )
+        print("Calling evaluator retry...", flush=True)
         answer, raw = call_ollama(retry_prompt, max_tokens=max_tokens)
+        print("Evaluator returned retry pass.", flush=True)
+    print(f"Writing raw response: {debug_path.name}", flush=True)
     debug_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
 
     validation_errors = validate_answer(answer)
@@ -531,6 +538,7 @@ def run_section(key: str, *, isolated: bool, overwrite: bool) -> int:
         answer=answer,
         validation_errors=validation_errors,
     )
+    print(f"Writing report: {report_path.name}", flush=True)
     report_path.write_text(report, encoding="utf-8")
     print(f"Report saved: {report_path}", flush=True)
     return 1 if validation_errors and "empty model response" in validation_errors[0] else 0

@@ -72,8 +72,8 @@ def logout_auth_session(response: Response) -> AuthLogoutResponse:
 
 
 @router.post("/api/hal/chat", response_model=HalChatResponse)
-def post_hal_chat(
+async def post_hal_chat(
     payload: HalChatRequest,
     _user: AuthenticatedUser = Depends(require_hal_chat_access),
 ) -> HalChatResponse:
-    return generate_hal_chat_response(payload)
+    return await generate_hal_chat_response(payload)

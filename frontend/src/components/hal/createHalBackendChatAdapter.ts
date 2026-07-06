@@ -26,11 +26,26 @@ function toApiHistory(messages: readonly ThreadMessage[]): HalChatApiMessage[] {
     .slice(-8);
 }
 
+function findLatestUserMessage(messages: readonly ThreadMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "user") {
+      continue;
+    }
+
+    const content = threadMessageText(message);
+    if (content) {
+      return content;
+    }
+  }
+
+  return "";
+}
+
 export function createHalBackendChatAdapter(getPageContext: () => HalPageContext): ChatModelAdapter {
   return {
     async run({ messages, abortSignal }) {
-      const latestUser = [...messages].reverse().find((message) => message.role === "user");
-      const message = latestUser ? threadMessageText(latestUser) : "";
+      const message = findLatestUserMessage(messages);
       if (!message) {
         return {
           content: [{ type: "text", text: "Please enter a message for HAL." }],

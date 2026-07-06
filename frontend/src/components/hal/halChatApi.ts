@@ -23,6 +23,33 @@ export type HalChatApiResponse = {
   localAiUnavailable?: string | null;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseHalChatApiResponse(payload: unknown): HalChatApiResponse {
+  if (!isRecord(payload)) {
+    throw new Error("HAL chat returned an invalid response payload");
+  }
+
+  const { message, mode, localAiUnavailable } = payload;
+  if (typeof message !== "string" || !message.trim()) {
+    throw new Error("HAL chat returned an empty response");
+  }
+  if (typeof mode !== "string" || !mode.trim()) {
+    throw new Error("HAL chat returned an invalid mode");
+  }
+  if (localAiUnavailable !== undefined && localAiUnavailable !== null && typeof localAiUnavailable !== "string") {
+    throw new Error("HAL chat returned an invalid availability flag");
+  }
+
+  return {
+    message,
+    mode,
+    localAiUnavailable: localAiUnavailable ?? null,
+  };
+}
+
 export async function postHalChat(request: HalChatApiRequest, signal?: AbortSignal): Promise<HalChatApiResponse> {
   const response = await fetch(`${config.apiBaseUrl}/hal/chat`, {
     method: "POST",
@@ -54,10 +81,5 @@ export async function postHalChat(request: HalChatApiRequest, signal?: AbortSign
     throw new Error(detail);
   }
 
-  const body = payload as HalChatApiResponse;
-  if (!body?.message) {
-    throw new Error("HAL chat returned an empty response");
-  }
-
-  return body;
+  return parseHalChatApiResponse(payload);
 }
