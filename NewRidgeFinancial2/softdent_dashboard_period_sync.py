@@ -170,6 +170,7 @@ def _prior_source_dict(prior: dict[str, Any]) -> dict[str, Any]:
         payload["collectionsReported"] = False
         payload["collections"] = collections
     elif "collections" in prior and prior.get("collections") not in (None, ""):
+        payload["collectionsReported"] = True
         payload["collections"] = collections
     return payload
 
@@ -222,11 +223,13 @@ def _build_period_row(period: str, sources: list[dict[str, Any]]) -> dict[str, A
     }
     if collections is not None:
         row["collections"] = collections
+        row["collectionsReported"] = True
     if production > 0 and not collections_reported:
         has_daysheet = any(_collections_source_kind(source) == "daysheet" for source in sources)
         if _explicit_collections_failure(sources):
             if _is_current_month(period) and not has_daysheet:
                 row["collectionsPending"] = True
+                row.pop("collectionsReported", None)
                 row.pop("collections", None)
             else:
                 row["collectionsReported"] = False
@@ -234,6 +237,7 @@ def _build_period_row(period: str, sources: list[dict[str, Any]]) -> dict[str, A
                     row["collections"] = 0.0
         else:
             row["collectionsPending"] = True
+            row.pop("collectionsReported", None)
             row.pop("collections", None)
     return row
 

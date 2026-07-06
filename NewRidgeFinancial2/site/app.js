@@ -3,6 +3,11 @@
 const NR2_WORKSTATION_ONLY =
   typeof window !== "undefined" && !!window.NR2_WORKSTATION_ONLY;
 
+/** Real SideNotesIM.exe — NR2 Workstation only; HAL financial app uses local staff notes + office channel. */
+function sideNotesImEnabled() {
+  return Boolean(NR2_WORKSTATION_ONLY);
+}
+
 function workstationFastHalEnabled() {
   if (typeof globalThis !== "undefined") {
     if (globalThis._halWorkstationFastMode === false) return false;
@@ -131,7 +136,7 @@ function desktopRequiredMessage(feature) {
   if (window.DesktopBridge && DesktopBridge.desktopRequiredMessage) {
     return DesktopBridge.desktopRequiredMessage(feature);
   }
-  return `${feature || "This feature"} requires the NR2 desktop app. Browser mode is a UI preview only.`;
+  return `${feature || "This feature"} requires the NR2 server. Run StartProgram.bat and open http://127.0.0.1:8765/ in your browser.`;
 }
 
 function dismissAllPopupBoxes() {
@@ -146,8 +151,8 @@ function dismissAllPopupBoxes() {
 function renderRuntimeModeBanner() {
   dismissAllPopupBoxes();
   if (NR2_WORKSTATION_ONLY) return;
-  if (window.DesktopBridge && DesktopBridge.hasDesktopApi && DesktopBridge.hasDesktopApi()) return;
-  const msg = desktopRequiredMessage("Full NR2 data access");
+  if (hasRuntimeAccess()) return;
+  const msg = serverRequiredMessage("Full NR2 data access");
   let banner = document.querySelector(".runtime-banner");
   if (!banner) {
     banner = document.createElement("div");
@@ -155,7 +160,14 @@ function renderRuntimeModeBanner() {
     banner.setAttribute("role", "status");
     document.body.insertBefore(banner, document.body.firstChild);
   }
-  banner.innerHTML = `<strong>Browser mode</strong><span>${msg}</span>`;
+  banner.innerHTML = `<strong>NR2 server offline</strong><span>${msg}</span>`;
+}
+
+function serverRequiredMessage(feature) {
+  if (window.DesktopBridge && DesktopBridge.desktopRequiredMessage) {
+    return DesktopBridge.desktopRequiredMessage(feature);
+  }
+  return `${feature || "This feature"} requires the NR2 server. Run StartProgram.bat and open http://127.0.0.1:8765/ in your browser.`;
 }
 
 function saveChatHistory() {
@@ -260,6 +272,7 @@ async function resolveWorkstationStationFromInbox() {
 }
 
 async function refreshSideNotesMessages() {
+  if (!sideNotesImEnabled()) return { messages: [] };
   if (typeof SideNotesHub === "undefined") return { messages: [] };
   const station = workstationStationLabel();
   try {
@@ -485,6 +498,7 @@ function workstationPracticeName() {
 }
 
 async function mirrorMessageToSideNotes(partial) {
+  if (!sideNotesImEnabled()) return;
   if (typeof SideNotesHub === "undefined" || !SideNotesHub.sendMessage) return;
   try {
     const status = await SideNotesHub.status();
@@ -1109,6 +1123,10 @@ function mergeSideNotesInboxes(inboxes) {
 // Read the SideNotesIM inboxes written by workstation watcher helpers. Missing
 // station files are expected until that PC has the helper installed/running.
 async function loadSideNotesInbox() {
+  if (!sideNotesImEnabled()) {
+    halSideNotesInbox = null;
+    return null;
+  }
   const inboxes = await Promise.all(SIDENOTE_INBOX_FILES.map(tryReadSideNotesInbox));
   let data = mergeSideNotesInboxes(inboxes);
   let hubStations = null;
@@ -1250,6 +1268,25 @@ function handleHalSurfaceNav(target) {
 }
 
 function sideNotesDrawerHtml() {
+  if (!sideNotesImEnabled()) {
+    const localNotes = (halSideNotes || [])
+      .filter((n) => n.status !== "archived")
+      .slice(0, 8)
+      .map((n) => `<li>${escapeHtml(n.text)} · ${escapeHtml(n.priority || "normal")}</li>`)
+      .join("");
+    const commands = ["Monitor sidenotes", "Show sidenotes", "Add sidenote: follow up on hygiene recall"]
+      .map((cmd) => `<button type="button" class="drawer-action" data-hal-command="${escapeHtml(cmd)}">${escapeHtml(cmd)}</button>`)
+      .join("");
+    return `<p>Local HAL staff notes on this device. Office messaging uses <strong>NR2 Workstation</strong>, not SideNotesIM.</p>
+    <div class="drawer-section">
+      <h3 class="drawer-section__title">Active notes</h3>
+      <ul class="drawer-checklist">${localNotes || "<li>No local notes yet.</li>"}</ul>
+    </div>
+    <div class="drawer-section">
+      <h3 class="drawer-section__title">HAL commands</h3>
+      <div class="drawer-grid">${commands}</div>
+    </div>`;
+  }
   const data = (halData && halData.sidenotes) || {};
   const inbox = halSideNotesInbox;
   const online = window.HalPage && HalPage.isSideNotesInboxLive ? HalPage.isSideNotesInboxLive(inbox) : false;
@@ -1313,11 +1350,11 @@ function sideNotesDrawerHtml() {
 function startSideNoteMonitor() {
   if (halSideNoteMonitorTimer) return;
   refreshSideNoteMonitor();
+  if (!sideNotesImEnabled()) {
+    return;
+  }
   loadSideNotesInbox().then(() => patchSideNoteMonitorDom());
-  // HAL watches sidenotes app-wide — the loop keeps running regardless of which
-  // page is on screen, so monitoring continues with the panel not visible. It
-  // only patches the DOM when the HAL panel happens to be mounted. (No backend:
-  // this cannot run while the app is fully closed; HAL re-checks on next open.)
+  // SideNotesIM watcher inbox — workstation only. Local HAL staff notes still refresh above.
   halSideNoteMonitorTimer = setInterval(async () => {
     if (sideNoteMonitorTickInFlight) return;
     sideNoteMonitorTickInFlight = true;
@@ -1793,8 +1830,8 @@ async function refreshHalWidgetFeed(snapshot) {
     halProgramSnapshot = null;
     return null;
   }
-  snap.sidenotesInbox = halSideNotesInbox || null;
-  snap.sidenotesHubPath = nr2SidenotesHubPath || null;
+  snap.sidenotesInbox = sideNotesImEnabled() ? halSideNotesInbox || null : null;
+  snap.sidenotesHubPath = sideNotesImEnabled() ? nr2SidenotesHubPath || null : null;
   halProgramSnapshot = snap;
   halWidgetFeed = HalSkills.buildWidgetFeed(snap);
   halData.runtime = Object.assign({}, halData.runtime || {}, { widgetFeed: halWidgetFeed });
@@ -1820,7 +1857,7 @@ async function forceHalWidgetPlacement(detail) {
   invalidateProgramCaches("hal-force-widget-placement");
 
   const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
-  if (desktop && desktop.hasDesktopApi && desktop.hasDesktopApi()) {
+  if (desktop && desktop.hasRuntimeAccess && desktop.hasRuntimeAccess()) {
     try {
       if (typeof ImportCoordinator !== "undefined") {
         await ImportCoordinator.refresh({ reason: "hal-force-place" });
@@ -1856,7 +1893,7 @@ async function forceHalWidgetPlacement(detail) {
 
   await scheduleHalWidgetRefresh(snapshot, { repaint: true });
   flashHalWidgets(pageId);
-  showHalActionNotice(placementNote, desktop && desktop.hasDesktopApi && desktop.hasDesktopApi() ? "info" : "warn");
+  showHalActionNotice(placementNote, desktop && desktop.hasRuntimeAccess && desktop.hasRuntimeAccess() ? "info" : "warn");
 
   return { placementNote, feed: halWidgetFeed, pageId };
 }
@@ -3363,6 +3400,44 @@ function runtimeIssuesDrawerHtml() {
     .join("")}</ul></div>`;
 }
 
+function validationArtifactsDrawerHtml() {
+  const items =
+    (halProgramSnapshot && halProgramSnapshot.importBundle && halProgramSnapshot.importBundle.validationArtifacts) || [];
+  if (!items.length) return "";
+  const summary = items.find((item) => item.key === "focusedValidatorSummary") || null;
+  const slices = summary ? items.filter((item) => item.key !== "focusedValidatorSummary") : items;
+  const now = Date.now();
+  const ageText = (value) => {
+    const then = Date.parse(value || "");
+    if (!Number.isFinite(then)) return "time unknown";
+    const minutes = Math.max(0, Math.round((now - then) / 60000));
+    if (minutes < 1) return "updated just now";
+    if (minutes === 1) return "updated 1 min ago";
+    if (minutes < 60) return `updated ${minutes} min ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours === 1) return "updated 1 hour ago";
+    if (hours < 48) return `updated ${hours} hours ago`;
+    const days = Math.round(hours / 24);
+    return `updated ${days} days ago`;
+  };
+  const staleClass = (value) => {
+    const then = Date.parse(value || "");
+    if (!Number.isFinite(then)) return "drawer-meta";
+    return now - then > 6 * 60 * 60 * 1000 ? "drawer-warn" : "drawer-meta";
+  };
+  const renderItem = (item) => {
+    const state = item.ok ? "PASS" : "FAIL";
+    const count = item.testsRun ? ` · tests ${item.testsRun}` : "";
+    const dur = item.durationSec ? ` · ${item.durationSec}s` : "";
+    const problem = (item.errors && item.errors[0] && (item.errors[0].message || item.errors[0].details)) || (item.failures && item.failures[0] && item.failures[0].test) || "";
+    return `<li><strong>${escapeHtml(item.label)}</strong>: ${escapeHtml(state)}${escapeHtml(count)}${escapeHtml(dur)}<br><span class="${staleClass(item.updatedAt)}">${escapeHtml(ageText(item.updatedAt))}</span>${problem ? `<br><span class="drawer-meta">${escapeHtml(String(problem))}</span>` : ""}</li>`;
+  };
+  const detailBlock = slices.length && summary
+    ? `<details class="drawer-meta"><summary>Show slice details (${slices.length})</summary><ul class="drawer-checklist">${slices.map(renderItem).join("")}</ul></details>`
+    : `<ul class="drawer-checklist">${slices.map(renderItem).join("")}</ul>`;
+  return `<div class="drawer-card drawer-card--source"><strong>Focused validators</strong>${summary ? `<p class="${staleClass(summary.updatedAt)}"><strong>${escapeHtml(summary.label)}</strong>: ${escapeHtml(summary.ok ? "PASS" : "FAIL")} · ${escapeHtml(ageText(summary.updatedAt))}${summary.testsRun ? ` · tests ${escapeHtml(String(summary.testsRun))}` : ""}${summary.durationSec ? ` · ${escapeHtml(String(summary.durationSec))}s` : ""}</p>` : ""}${detailBlock}</div>`;
+}
+
 function drawerSourceItems() {
   const staticItems = (halData.sources && halData.sources.items) || [];
   const live = halWidgetFeed && halWidgetFeed.sourceHealth;
@@ -3693,7 +3768,7 @@ function renderPanel(key) {
   }
 
   if (key === "sources") {
-    drawerContent.innerHTML = `<p>${escapeHtml(data.summary)}</p>${sourceHealthCards(drawerSourceItems())}${runtimeIssuesDrawerHtml()}`;
+    drawerContent.innerHTML = `<p>${escapeHtml(data.summary)}</p>${sourceHealthCards(drawerSourceItems())}${validationArtifactsDrawerHtml()}${runtimeIssuesDrawerHtml()}`;
     bindOpenPageButtons(drawerContent);
     return;
   }
@@ -4279,7 +4354,7 @@ function assertDesignSchemaLoaded() {
   const frame = document.getElementById("pageFrame");
   if (frame) {
     frame.innerHTML =
-      '<div class="pv-state pv-state--error" role="alert"><strong class="pv-state__title">Design schema failed to load</strong><p class="pv-state__msg">page-schema.js and page-chrome.js are required. Restart the desktop app.</p></div>';
+      '<div class="pv-state pv-state--error" role="alert"><strong class="pv-state__title">Design schema failed to load</strong><p class="pv-state__msg">page-schema.js and page-chrome.js are required. Run StartProgram.bat and reload http://127.0.0.1:8765/.</p></div>';
   }
   return false;
 }
@@ -4290,10 +4365,12 @@ function renderSchemaVersionMismatch(pythonVersion, jsVersion) {
   if (sidebar) sidebar.innerHTML = "";
   if (!frame) return;
   const launcher = NR2_WORKSTATION_ONLY ? "Start Workstation" : "Start Program";
+  const mismatchTitle = NR2_WORKSTATION_ONLY ? "Desktop build mismatch" : "Build mismatch";
+  const serverLabel = NR2_WORKSTATION_ONLY ? "Desktop shell reports" : "NR2 server reports";
   const inner =
-    `<strong class="pv-state__title">Desktop build mismatch</strong>` +
-    `<p class="pv-state__msg">Python shell reports <strong>${String(pythonVersion).replace(/</g, "&lt;")}</strong> but the loaded page schema is <strong>${String(jsVersion).replace(/</g, "&lt;")}</strong>.</p>` +
-    `<p class="pv-state__msg">Close this window completely, then launch <strong>${launcher}</strong> again.</p>`;
+    `<strong class="pv-state__title">${mismatchTitle}</strong>` +
+    `<p class="pv-state__msg">${serverLabel} <strong>${String(pythonVersion).replace(/</g, "&lt;")}</strong> but the loaded page schema is <strong>${String(jsVersion).replace(/</g, "&lt;")}</strong>.</p>` +
+    `<p class="pv-state__msg">Close this tab or window completely, then launch <strong>${launcher}</strong> again.</p>`;
   if (NR2_WORKSTATION_ONLY && frame.querySelector("#workstationPage")) {
     let banner = frame.querySelector(".nr2-boot-error");
     if (!banner) {
@@ -4945,7 +5022,7 @@ async function boot() {
       }
     }
     const info = await DesktopBridge.getAppInfo();
-    if (info && info.sidenotesHub) nr2SidenotesHubPath = info.sidenotesHub;
+    if (sideNotesImEnabled() && info && info.sidenotesHub) nr2SidenotesHubPath = info.sidenotesHub;
     if (info && info.halHubUrl) window.NR2_HAL_HUB_URL = info.halHubUrl;
     if (info && info.hubPopupWatcher) {
       globalThis.NR2_PYTHON_POPUP_WATCHER = true;

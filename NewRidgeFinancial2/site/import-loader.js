@@ -189,7 +189,7 @@ const ImportLoader = (function () {
     }
     if (pageId === "softdent") {
       if (patch.collectionsMissing) return "degraded";
-      const hasCollections = Number(patch.collections || 0) > 0 || patch.collectionsReported === false;
+      const hasCollections = patch.collectionsReported === true || Number(patch.collections || 0) > 0;
       const claimsOk = (patch.health || []).some((h) => /claims/i.test(String(h.label || "")) && h.ok);
       if (!hasCollections || !claimsOk) return "partial";
       return "complete";
@@ -429,9 +429,12 @@ const ImportLoader = (function () {
   function normalizeDashboardRows(rows) {
     return (rows || []).map((row) => {
       const collectionsPending = row.collectionsPending === true || row.CollectionsPending === true;
+      const explicitReported = row.collectionsReported ?? row.CollectionsReported;
+      const rawCollections = row.collections ?? row.Collections;
+      const parsedCollections = coerceFloat(rawCollections);
+      const hasCollectionsValue = rawCollections !== undefined && rawCollections !== null && String(rawCollections).trim() !== "";
       const collectionsReported =
-        !collectionsPending && row.collectionsReported !== false && row.CollectionsReported !== false;
-      const parsedCollections = coerceFloat(row.collections ?? row.Collections);
+        !collectionsPending && explicitReported !== false && (explicitReported === true || hasCollectionsValue);
       return {
         provider: String(row.provider || row.Provider || row.providerName || row.ProviderName || PRIMARY_PROVIDER).trim() || PRIMARY_PROVIDER,
         period: String(row.period || row.Period || ""),
@@ -615,12 +618,12 @@ const ImportLoader = (function () {
     );
     const latest = sorted[sorted.length - 1];
     if (latest.collectionsPending) {
-      // Pending = incomplete export, not a hard failure. UI uses pending flag + widget state "pending".
+      // Pending = incomplete export. Keep it distinct from healthy so quality signals stay honest.
       return {
         evaluated: true,
         reported: false,
         pending: true,
-        healthy: true,
+        healthy: false,
         latestZeroWithProduction: false,
         message: "Collections export pending for comparable period",
       };
@@ -667,7 +670,7 @@ const ImportLoader = (function () {
         evaluated: true,
         reported: false,
         pending: true,
-        healthy: true,
+        healthy: false,
         latestZeroWithProduction: false,
         message: collectionHealth.message || "Collections export pending for comparable period",
       };
@@ -2038,6 +2041,7 @@ const ImportLoader = (function () {
     softdentArTotal,
     quickbooksArTotal,
     assessCollectionHealth,
+    normalizeDashboardRows,
     resolveCollectionHealth,
     scopeExpenseCategoryRows,
     buildFinancialDataQuality,

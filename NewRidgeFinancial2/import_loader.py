@@ -311,6 +311,8 @@ def _write_direct_sections_to_cache(sections: dict[str, Any]) -> dict[str, Any]:
                         writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
                         writer.writeheader()
                         writer.writerows(rows)
+                    sidecar = dest.with_suffix(".json")
+                    sidecar.write_text(json.dumps(rows, indent=2), encoding="utf-8")
                     written.append(_repo_relative(dest))
             except OSError as exc:
                 errors.append(f"{dest.name}: {exc}")

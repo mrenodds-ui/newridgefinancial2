@@ -4,6 +4,7 @@ import WidgetContract from "./site/widget-contract.js";
 
 const {
   normalizePeriodKey,
+  normalizeDashboardRows,
   comparePeriodAlignment,
   buildFinancialDataQuality,
   assessCollectionHealth,
@@ -33,7 +34,21 @@ const pendingHealth = assessCollectionHealth(
   "2026-06",
 );
 assert.equal(pendingHealth.pending, true);
-assert.equal(pendingHealth.healthy, true);
+assert.equal(pendingHealth.healthy, false);
+
+const missingCollectionsRows = normalizeDashboardRows([
+  { period: "2026-06", production: 171796.9 },
+]);
+assert.equal(missingCollectionsRows[0].collectionsReported, false);
+assert.equal(missingCollectionsRows[0].collections, null);
+
+const missingCollectionsHealth = assessCollectionHealth(
+  [{ period: "2026-06", production: 171796.9 }],
+  "2026-06",
+);
+assert.equal(missingCollectionsHealth.reported, false);
+assert.equal(missingCollectionsHealth.latestZeroWithProduction, false);
+assert.match(missingCollectionsHealth.message, /missing/i);
 
 const aggregateMissing = {
   totals: { production: 168790, collections: 0, collectionsReported: false, insurance: 0, patient: 0 },

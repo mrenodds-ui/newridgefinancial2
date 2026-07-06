@@ -450,14 +450,9 @@ async function main() {
     halAskDraft: "",
     halAskLoading: false,
     halInlineFirewallResult: null,
-    halSideNotes: [],
-    halSideNoteMonitor: { activeCount: 0, openCount: 0, pinnedCount: 0, highPriorityCount: 0, checkedAt: new Date().toISOString() },
-    halSideNotesInbox: {
-      monitor: { checkedAt: new Date().toISOString(), lastRowId: 1616, announce: true, bellSuppressed: true, station: "Server", status: "live", voiceStyle: "hal9000" },
-      items: [
-        { id: "M1", rowId: 1616, sender: "Room 4", recipient: "Server", broadcast: false, date: "6/28/2026", time: "6:49:24 PM", unread: true },
-      ],
-    },
+    halSideNotes: [{ noteId: "n1", text: "Recall patient", status: "open", priority: "normal" }],
+    halSideNoteMonitor: { activeCount: 1, openCount: 1, pinnedCount: 0, highPriorityCount: 0, checkedAt: new Date().toISOString() },
+    halSideNotesInbox: null,
     halWidgetFeed: {
       manager: "Import cache",
       jobs: { widgetPublish: { status: "SUCCESS" } },
@@ -499,11 +494,12 @@ async function main() {
         diagnostics: { summary: { connected: 4, partial: 1, missing: 2 } },
       },
     },
-    sidenotesHubPath: "C:\\softdent\\HAL-SideNotes-Workstation\\data",
+    sidenotesHubPath: null,
   });
-  assert(halHtml.includes("SIDENOTES PROGRAM"), "HAL page must render the dedicated SideNotes program card");
-  assert(halHtml.includes("SIDENOTESIM MONITOR"), "HAL page must render the SideNotesIM live monitor");
-  assert(halHtml.includes("data-hal-surf-nav=\"sidenotes\""), "HAL page must wire SideNotes work surface navigation");
+  assert(halHtml.includes("STAFF NOTES"), "HAL page must render the staff notes card (not SideNotesIM on financial app)");
+  assert(!halHtml.includes("SIDENOTESIM MONITOR"), "HAL financial app must not render SideNotesIM live monitor");
+  assert(!halHtml.includes("SIDENOTES PROGRAM"), "HAL financial app must not render external SideNotes program card");
+  assert(halHtml.includes("data-hal-surf-nav=\"sidenotes\""), "HAL page must wire staff notes work surface navigation");
   assert(halHtml.includes("data-hal-surf-open="), "HAL page must wire work surface open chevrons");
   assert(halHtml.includes("hp-wg-card--active"), "HAL page must wire widget cards to HAL");
   assert(halHtml.includes("data-hal-activity-cmd="), "HAL page must wire activity log replay to HAL");
@@ -520,9 +516,7 @@ async function main() {
   assert(halHtml.includes('id="hpAskForm"'), "HAL page must keep Ask HAL chat form");
   assert(halHtml.includes('id="hpAskInput"'), "HAL page must keep Ask HAL chat input");
   assert(halHtml.includes("IMPORT & SOURCE HEALTH"), "HAL page must render import health panel");
-  assert(halHtml.includes("HAL 9000 voice"), "HAL page must show HAL 9000 voice mode");
-  assert(halHtml.includes("TEST VOICE"), "HAL page must render HAL voice test control");
-  assert(halHtml.includes("Room 4"), "HAL page must render live SideNotesIM message senders");
+  assert(!halHtml.includes("Room 4"), "HAL financial app must not show SideNotesIM sender feed");
   assert(halHtml.includes("LOCAL NOTES"), "HAL page must render the local notes section");
   assert(halHtml.includes("PROGRAM POSTURE"), "HAL page must surface program posture");
   assert(halHtml.includes("TRUST & CONSENT"), "HAL page must surface consent policy");
@@ -821,6 +815,22 @@ async function main() {
   assert(
     pendingOverview.metrics.collectionsTotal === WidgetContract.MISSING || pendingOverview.metrics.collectionsTotal === null,
     "collections must stay missing when SoftDent collections export is pending",
+  );
+  PageCanvasData.bind(pendingCollectionsFeed, {
+    dashboards: {
+      financial: { dataSource: "import", collectionsPending: true },
+      softdent: { dataSource: "import", collectionsPending: true },
+    },
+  });
+  const pendingFinancialKpis = PageCanvasData.financialKpis();
+  const pendingSoftdentKpis = PageCanvasData.softdentKpis();
+  assert(
+    pendingFinancialKpis.some((row) => row.label === "SoftDent collections" && row.value === "Pending export"),
+    "financial page KPIs must label pending collections as Pending export",
+  );
+  assert(
+    pendingSoftdentKpis.some((row) => row.label === "Collections" && row.value === "Pending export"),
+    "SoftDent page KPIs must label pending collections as Pending export",
   );
   assert(
     WidgetContract.widgetStatusFromStates(["ok", "ok", "ok", "pending"]) === "DEGRADED",
@@ -1424,6 +1434,44 @@ async function main() {
   assert(bootBundle.syncStatus && bootBundle.syncStatus.status === "running", "boot refresh must report running sync honestly");
   global.DesktopBridge = priorBridge;
 
+  await Services.resetAll();
+  const priorImportLoader = global.ImportLoader;
+  global.ImportLoader = {
+    shouldLoadImports: () => true,
+    hasImportData: () => true,
+    loadBundle: async () => ({
+      loadedAt: new Date().toISOString(),
+      syncStatus: { attempted: true, ok: false, status: "failed", error: "sync failed" },
+      diagnostics: {
+        datasets: [
+          { datasetKey: "softdent.dashboard", status: "stale" },
+          { datasetKey: "softdent.ar", status: "connected" },
+          { datasetKey: "quickbooks.revenue", status: "connected" },
+          { datasetKey: "quickbooks.expenses", status: "connected" },
+        ],
+      },
+      softdent: {
+        dashboard: { sourceFile: "softdent_dashboard_data.json", rows: [{ period: "2025-06", production: 1000, collections: 900 }] },
+        ar: { sourceFile: "softdent_ar.csv", rows: [{ Bucket: "0-30", Amount: 100 }] },
+      },
+      quickbooks: {
+        revenue: { sourceFile: "quickbooks_revenue.csv", rows: [{ Month: "2025-06", Revenue: 1000 }] },
+        expenses: { sourceFile: "quickbooks_expenses.csv", rows: [{ Month: "2025-06", Expense: 400 }] },
+      },
+    }),
+    buildDocumentStateFromImportBundle: () => ({
+      queue: [{ id: "QB-REV-2025-06", type: "Revenue", vendor: "QuickBooks", amount: "$1,000", status: "Ready to Post" }],
+      previewById: {},
+    }),
+  };
+  const documentsFromFailedImport = await Services.documents.list({});
+  assert(
+    (documentsFromFailedImport.queue || []).length === 0,
+    "documents hydration must not backfill import rows when critical import sync is failed or stale",
+  );
+  global.ImportLoader = priorImportLoader;
+  await Services.resetAll();
+
   delete process.env.NR2_LOAD_IMPORTS;
   const browserOnlyBundle = await ImportLoader.loadBundle();
   assert(browserOnlyBundle === null, "browser-only import load without bridge must return null");
@@ -1442,11 +1490,11 @@ async function main() {
     hasDesktopApi: () => false,
     hasLoopbackApi: () => false,
     hasRuntimeAccess: () => false,
-    desktopRequiredMessage: (feature) => `${feature} requires the NR2 desktop app.`,
+    desktopRequiredMessage: (feature) => `${feature} requires the NR2 server.`,
   });
   const browserImportExec = await HalRouteExec.execute(importRefreshRoute, "refresh imports", {}, Object.assign({}, mockCtx, { Services, ImportLoader }));
   assert(
-    browserImportExec.text.includes("requires the NR2 desktop app") || browserImportExec.text.includes("loopback server"),
+    browserImportExec.text.includes("requires the NR2 server") || browserImportExec.text.includes("loopback server"),
     "HAL import route must clearly block browser-only refresh",
   );
   global.DesktopBridge = priorDesktopBridge;
@@ -1633,7 +1681,7 @@ async function main() {
   const browserBriefText = HalProactive.formatProactiveBriefing(browserOnlyCycle);
   assert(!browserBriefText.includes("import refresh completed"), "browser preview briefing must not claim import refresh");
   assert(
-    /desktop app|browser preview cannot refresh/i.test(browserBriefText),
+    /NR2 server|StartProgram\.bat/i.test(browserBriefText),
     "browser preview briefing must direct staff to Start Program",
   );
   global.DesktopBridge = priorPlacementBridge;

@@ -148,7 +148,7 @@ const Services = (function () {
     importBundleCache = null;
     importBundleAt = 0;
     if (!br || typeof br.pullPracticeSources !== "function") {
-      const err = new Error("Practice source pull requires the NR2 desktop app or loopback server.");
+      const err = new Error("Practice source pull requires the NR2 server.");
       if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.pullPracticeSources", err);
       throw err;
     }
@@ -202,12 +202,93 @@ const Services = (function () {
     }
   }
 
+  function loadValidationArtifacts() {
+    if (!isNode) return [];
+    try {
+      const fs = require("node:fs");
+      const pathMod = require("node:path");
+      const baseDir = pathMod.join(__dirname, "..", "data");
+      const specs = [
+        {
+          key: "focusedValidatorSummary",
+          label: "Focused validator summary",
+          path: pathMod.join(baseDir, "focused_validator_summary.json"),
+        },
+        {
+          key: "softdentPeriodSync",
+          label: "SoftDent period sync slice",
+          path: pathMod.join(baseDir, "softdent_period_sync_slice_validation.json"),
+        },
+        {
+          key: "importDocumentHonesty",
+          label: "Import document honesty slice",
+          path: pathMod.join(baseDir, "import_document_honesty_slice_validation.json"),
+        },
+        {
+          key: "importCache",
+          label: "Import cache slice",
+          path: pathMod.join(baseDir, "import_cache_slice_validation.json"),
+        },
+        {
+          key: "importManifestChecksums",
+          label: "Import manifest/checksum slice",
+          path: pathMod.join(baseDir, "import_manifest_checksum_slice_validation.json"),
+        },
+      ];
+      return specs
+        .map((spec) => {
+          if (!fs.existsSync(spec.path)) return null;
+          const raw = JSON.parse(fs.readFileSync(spec.path, "utf8"));
+          const stat = fs.statSync(spec.path);
+          const updatedAt = stat && stat.mtime ? stat.mtime.toISOString() : null;
+          return {
+            key: spec.key,
+            label: spec.label,
+            ok: raw && raw.ok === true,
+            testsRun: Number(raw && raw.testsRun) || 0,
+            durationSec: Number(raw && raw.durationSec) || 0,
+            updatedAt,
+            modules: Array.isArray(raw && raw.modules) ? raw.modules : [],
+            checks: Array.isArray(raw && raw.checks) ? raw.checks : [],
+            failures: Array.isArray(raw && raw.failures) ? raw.failures : [],
+            errors: Array.isArray(raw && raw.errors) ? raw.errors : [],
+          };
+        })
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  function importBundleCanHydrateDocuments(bundle) {
+    if (!bundle || typeof bundle !== "object") return false;
+    const sync = bundle.syncStatus || {};
+    if (sync && sync.attempted && (sync.ok === false || sync.status === "failed")) return false;
+
+    const diagnostics = bundle.diagnostics;
+    if (!diagnostics || !Array.isArray(diagnostics.datasets)) return true;
+
+    const requiredDatasets = new Set([
+      "softdent.dashboard",
+      "softdent.ar",
+      "quickbooks.revenue",
+      "quickbooks.expenses",
+    ]);
+    return diagnostics.datasets
+      .filter((item) => requiredDatasets.has(String(item.datasetKey || "")))
+      .every((item) => {
+        const status = String(item.status || "").toLowerCase();
+        return status !== "stale" && status !== "missing";
+      });
+  }
+
   async function hydrateDocumentsFromImportIfEmpty(state) {
     if ((state.queue || []).length > 0) return state;
     const loader = resolveImportLoader();
     const bundle = await loadImportBundle(false);
     if (!loader || !bundle || typeof loader.buildDocumentStateFromImportBundle !== "function") return state;
     if (typeof loader.hasImportData === "function" && !loader.hasImportData(bundle)) return state;
+    if (!importBundleCanHydrateDocuments(bundle)) return state;
     const built = loader.buildDocumentStateFromImportBundle(bundle);
     if (!built || !(built.queue || []).length) return state;
     return {
@@ -413,6 +494,7 @@ const Services = (function () {
         : Boolean(desktop && typeof desktop.storageGet === "function");
     const runtimeIssues =
       typeof RuntimeIssues !== "undefined" ? RuntimeIssues.list().slice(0, 8) : [];
+    const validationArtifacts = loadValidationArtifacts();
     return {
       gatheredAt: new Date().toISOString(),
       label: usingImports
@@ -423,12 +505,13 @@ const Services = (function () {
             loadedAt: bundle.loadedAt,
             syncStatus: bundle.syncStatus || null,
             diagnostics: bundle.diagnostics || null,
+            validationArtifacts,
             softdent: bundle.softdent,
             quickbooks: bundle.quickbooks,
             softdentDir: bundle.softdent?.dir,
             quickbooksDir: bundle.quickbooks?.dir,
           }
-        : null,
+        : { validationArtifacts },
       dashboards: {
         financial: dashboards.financial,
         softdent: dashboards.softdent,
@@ -1181,6 +1264,12 @@ const Services = (function () {
 
   async function resetAll() {
     Object.keys(mem).forEach((k) => delete mem[k]);
+    importBundleCache = null;
+    importBundleAt = 0;
+    documentsSyncPromise = null;
+    documentsSyncState.status = "idle";
+    documentsSyncState.error = null;
+    documentsSyncState.syncedAt = null;
     const br = bridge();
     if (br) {
       for (const k of ["claims", "narratives", "documents", "library"]) {

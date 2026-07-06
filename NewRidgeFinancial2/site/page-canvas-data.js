@@ -79,6 +79,30 @@ const PageCanvasData = (function () {
     return undefined;
   }
 
+  function collectionsDisplay(fin, value, fallbackHint) {
+    if (fin && fin.collectionsPending) {
+      return {
+        value: "Pending export",
+        hint: "Comparable period export not loaded",
+        tone: "warning",
+      };
+    }
+    if (fin && (fin.collectionsMissing || fin.collectionsZeroWithProduction)) {
+      return {
+        value: "—",
+        hint: fin.collectionsMissing
+          ? "Collections not reported"
+          : "Verify final daysheet export",
+        tone: "warning",
+      };
+    }
+    return {
+      value: fmt(value),
+      hint: fmt(fallbackHint),
+      tone: undefined,
+    };
+  }
+
   function verifiedArWidgetReady(key) {
     const w = widget(key);
     return String((w && w.status) || "").toUpperCase() === "SUCCESS";
@@ -100,6 +124,11 @@ const PageCanvasData = (function () {
     const payer = metrics("payerMixAndCollections");
     const ar = metrics("arAgingAndCollections");
     const prodSpark = sparkSeries(fin.productionTrend && fin.productionTrend.production);
+    const collections = collectionsDisplay(
+      fin,
+      ov.collectionsTotal,
+      ar.aging90PlusPct ? `A/R 90+ ${ar.aging90PlusPct}` : null,
+    );
     return [
       {
         label: "Production MTD",
@@ -125,11 +154,9 @@ const PageCanvasData = (function () {
       },
       {
         label: "SoftDent collections",
-        value: fin.collectionsPending ? "Pending export" : fmt(ov.collectionsTotal),
-        hint: fin.collectionsPending
-          ? "Comparable period export not loaded"
-          : fmt(ar.aging90PlusPct ? `A/R 90+ ${ar.aging90PlusPct}` : null),
-        tone: fin.collectionsPending || fin.collectionsMissing ? "warning" : widgetTone("practiceFinancialOverview"),
+        value: collections.value,
+        hint: collections.hint,
+        tone: collections.tone || widgetTone("practiceFinancialOverview"),
         spark: sparkSeries(fin.productionTrend && fin.productionTrend.average),
         widgetKey: "practiceFinancialOverview",
       },
@@ -150,6 +177,7 @@ const PageCanvasData = (function () {
     const ca = metrics("caseAcceptance");
     const fin = dash("financial") || {};
     const prodSpark = sparkSeries(fin.productionTrend && fin.productionTrend.production);
+    const collections = collectionsDisplay(fin, care.collectionsTotal, metrics("payerMixAndCollections").collectionRate);
     return [
       {
         label: "Production MTD",
@@ -161,9 +189,9 @@ const PageCanvasData = (function () {
       },
       {
         label: "Collections",
-        value: fmt(care.collectionsTotal),
-        hint: fmt(metrics("payerMixAndCollections").collectionRate),
-        tone: widgetTone("payerMixAndCollections"),
+        value: collections.value,
+        hint: collections.hint,
+        tone: collections.tone || widgetTone("payerMixAndCollections"),
         widgetKey: "payerMixAndCollections",
       },
       {

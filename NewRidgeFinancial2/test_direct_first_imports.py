@@ -116,6 +116,42 @@ class DirectFirstImportTests(unittest.TestCase):
             self.assertIn("DS-20260528-1", text)
             self.assertNotIn("dataset_name", text)
 
+    def test_cache_write_refreshes_stale_csv_sidecar(self) -> None:
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp) / "softdent"
+            cache_dir.mkdir()
+            dataset = {
+                "sourceFile": "softdent_claims_export.csv",
+                "modifiedAt": "2026-07-01T12:00:00+00:00",
+                "rows": [
+                    {
+                        "PatientName": "Jane Doe",
+                        "ClaimId": "NEW-1",
+                        "ClaimStatus": "Pending Review",
+                        "ClaimAmount": "137.00",
+                    }
+                ],
+            }
+            stale_csv = cache_dir / "softdent_claims_export.csv"
+            stale_csv.write_text("ClaimId\nOLD-1\n", encoding="utf-8")
+            stale_sidecar = cache_dir / "softdent_claims_export.json"
+            stale_sidecar.write_text(json.dumps([{"ClaimId": "OLD-1"}], indent=2), encoding="utf-8")
+
+            with patch("import_loader.softdent_import_dir", return_value=cache_dir):
+                from import_loader import _load_dataset, _write_direct_sections_to_cache
+
+                result = _write_direct_sections_to_cache({"softdent": {"claims": dataset}, "quickbooks": {}})
+                loaded = _load_dataset(cache_dir, ("softdent_claims_export.csv",))
+
+            self.assertIn(stale_csv.name, result.get("written") or [])
+            self.assertIsNotNone(loaded)
+            assert loaded is not None
+            self.assertEqual((loaded.get("rows") or [])[0].get("ClaimId"), "NEW-1")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1529,6 +1529,7 @@ const HalSkills = (function () {
     if (!feed || !feed.widgets) return feed;
     const widgets = feed.widgets;
     const issues = [];
+    const finDash = snapshot.dashboards && snapshot.dashboards.financial;
     const overview = widgets.practiceFinancialOverview && widgets.practiceFinancialOverview.metrics;
     const qbDetail = widgets.quickbooksProfitLossDetail && widgets.quickbooksProfitLossDetail.metrics;
     const payer = widgets.payerMixAndCollections && widgets.payerMixAndCollections.metrics;
@@ -1541,7 +1542,13 @@ const HalSkills = (function () {
       const production = parseMetricNumber(overview.productionTotal);
       const collections = parseMetricNumber(overview.collectionsTotal);
       const expenses = parseMetricNumber((snapshot.dashboards?.quickbooks || {}).expenses);
-      if (production !== null && collections !== null && collections === 0 && production > 0) {
+      if (
+        production !== null &&
+        collections !== null &&
+        collections === 0 &&
+        production > 0 &&
+        !(finDash && (finDash.collectionsPending || finDash.collectionsMissing || finDash.collectionsZeroWithProduction))
+      ) {
         addCommitIssue(
           issues,
           "practiceFinancialOverview",
@@ -1579,7 +1586,6 @@ const HalSkills = (function () {
       }
     }
 
-    const finDash = snapshot.dashboards && snapshot.dashboards.financial;
     if (finDash && finDash.collectionsMissing) {
       addCommitIssue(
         issues,
@@ -2309,16 +2315,24 @@ const HalSkills = (function () {
       },
       sidenotesProgram: {
         key: "sidenotesProgram",
-        title: "SideNotes Program",
+        title: "Staff Notes",
         status: (() => {
           const inbox = snap.sidenotesInbox;
-          const stations = inbox && inbox.monitor && inbox.monitor.stations;
-          if (Array.isArray(stations) && stations.some((s) => s && s.live)) return "SUCCESS";
-          if (inbox && inbox.monitor) return "DEGRADED";
-          if (snap.sidenotesHubPath || (inbox && Array.isArray(inbox.items) && inbox.items.length)) return "DEGRADED";
-          return "FAILED";
+          const sideNotes = snap.sideNotes || {};
+          const activeLocal = Number(sideNotes.activeCount || sideNotes.total || 0);
+          if (inbox && inbox.monitor) {
+            const stations = inbox.monitor.stations;
+            if (Array.isArray(stations) && stations.some((s) => s && s.live)) return "SUCCESS";
+            return "DEGRADED";
+          }
+          if (snap.sidenotesHubPath) return "DEGRADED";
+          if (activeLocal > 0) return "SUCCESS";
+          return "DEGRADED";
         })(),
-        summary: "SideNotesIM workstation routing — HAL announces sender metadata only; message text is never read aloud.",
+        summary:
+          snap.sidenotesInbox && snap.sidenotesInbox.monitor
+            ? "SideNotesIM workstation routing — HAL announces sender metadata only; message text is never read aloud."
+            : "Local HAL staff scratch notes on this device. Office messaging uses NR2 Workstation, not SideNotesIM.",
         navTarget: "hal",
         metrics: {
           watchersOnline: metricValue(
@@ -2326,7 +2340,9 @@ const HalSkills = (function () {
               ? snap.sidenotesInbox.monitor.stations.filter((s) => s.live).length
               : snap.sidenotesHubPath
                 ? 1
-                : null,
+                : snap.sideNotes && snap.sideNotes.activeCount != null
+                  ? snap.sideNotes.activeCount
+                  : null,
           ),
         },
       },
@@ -2782,7 +2798,7 @@ const HalSkills = (function () {
       `Pending review ${pending != null ? pending : "—"} · Approved ${approved != null ? approved : "—"} · Total ${metrics.total != null ? metrics.total : items.length}`,
     ];
     if (data.unavailable) {
-      lines.push("", "Live queue access needs the NR2 desktop app. Browser preview shows layout only.");
+      lines.push("", "Live queue access needs the NR2 server. Run StartProgram.bat and open http://127.0.0.1:8765/.");
       return lines.join("\n");
     }
     if (!items.length) {
@@ -2962,7 +2978,7 @@ const HalSkills = (function () {
 
   function formatPracticeSourcePullResult(payload) {
     if (!payload) {
-      return "Practice source pull unavailable. Launch the NR2 desktop app with staff approval enabled.";
+      return "Practice source pull unavailable. Run StartProgram.bat with staff approval enabled.";
     }
     if (payload.approved === false) {
       return `Practice source pull blocked: ${payload.error || "Not approved."}`;
@@ -3121,7 +3137,7 @@ const HalSkills = (function () {
 
   function formatPracticeSourceCatalog(catalog) {
     if (!catalog || !catalog.systems) {
-      return "Practice source catalog unavailable. Use the NR2 desktop app to query QuickBooks and SoftDent directly.";
+      return "Practice source catalog unavailable. Run StartProgram.bat to query QuickBooks and SoftDent directly.";
     }
     const lines = [
       "Authorized practice source catalog (read-only direct access):",
@@ -3154,7 +3170,7 @@ const HalSkills = (function () {
 
   function formatPracticeSourceFetch(result, request) {
     if (!result) {
-      return "Direct source fetch unavailable. Launch the NR2 desktop app and ensure QuickBooks Desktop / SoftDent exports are reachable.";
+      return "Direct source fetch unavailable. Run StartProgram.bat and ensure QuickBooks Desktop / SoftDent exports are reachable.";
     }
     const lines = [
       "Authorized direct source fetch (read-only):",

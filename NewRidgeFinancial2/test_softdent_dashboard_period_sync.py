@@ -52,7 +52,7 @@ class SoftdentDashboardPeriodSyncTests(unittest.TestCase):
             ],
         )
         self.assertEqual(row["collections"], 71414.88)
-        self.assertNotIn("collectionsReported", row)
+        self.assertTrue(row.get("collectionsReported"))
 
     def test_daysheet_zero_collections_with_production_not_reported(self) -> None:
         row = _build_period_row(
@@ -87,6 +87,7 @@ class SoftdentDashboardPeriodSyncTests(unittest.TestCase):
             ],
         )
         self.assertEqual(row.get("collections"), 71414.88)
+        self.assertTrue(row.get("collectionsReported"))
         self.assertNotIn("collectionsPending", row)
 
     def test_diagnose_collections_gap_reports_zero_daysheet(self) -> None:

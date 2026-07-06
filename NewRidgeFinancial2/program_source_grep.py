@@ -705,6 +705,10 @@ def run_allowlisted_command(repo_root: Path, command_id: str) -> dict:
     cmd_id = str(command_id or "validate-hal").strip().lower().replace("_", "-")
     allowed: dict[str, tuple[list[str], str, int]] = {
         "validate-hal": (["node", "validate-hal.mjs"], str(nr2), 120),
+        "validate-focused-slices": (["python", "scripts/validate_focused_slices.py"], str(nr2), 120),
+        "validate-import-document-honesty": (["node", "scripts/validate_import_document_honesty_slice.mjs"], str(nr2), 60),
+        "validate-import-cache-slice": (["python", "scripts/validate_import_cache_slice.py"], str(nr2), 60),
+        "validate-import-manifest-checksums": (["python", "scripts/validate_import_manifest_checksum_slice.py"], str(nr2), 60),
         "node-check-core": (["node", "--check", "site/hal-core.js"], str(nr2), 30),
         "node-check-agent": (["node", "--check", "site/hal-agent.js"], str(nr2), 30),
         "node-check-app": (["node", "--check", "site/app.js"], str(nr2), 30),
