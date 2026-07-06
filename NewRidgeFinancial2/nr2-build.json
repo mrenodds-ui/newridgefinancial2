@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-10024",
-  "schemaVersion": "hal-10024",
+  "assetVersion": "hal-10025",
+  "schemaVersion": "hal-10025",
   "builtAt": "2026-07-05T22:10:00.000Z",
   "notes": "Workstation fast HAL profile — chat8b-only Ask HAL on operatory PCs."
 }

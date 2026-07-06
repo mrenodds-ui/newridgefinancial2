@@ -102,7 +102,11 @@ def run_sidenotes_popup_watcher(
                 if not sidenotes_message_for_station(message, station):
                     continue
                 from_name = str(message.get("from") or "").strip()
-                if station and _norm_station(from_name) == _norm_station(station):
+                if (
+                    station
+                    and _norm_station(from_name) == _norm_station(station)
+                    and not _env_flag("NR2_SIDENOTES_POPUP_SHOW_SELF", True)
+                ):
                     continue
                 if message.get("unread") is False:
                     continue

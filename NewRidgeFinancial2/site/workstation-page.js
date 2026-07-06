@@ -325,7 +325,7 @@ const WorkstationPage = (function () {
     const isSelf = key === String(stationRaw).toLowerCase();
     const active = isOfficeTargetSelected(name === "all" ? "all" : name, ctx);
     const label = name === "all" ? "Everyone" : name;
-    return `<button type="button" class="ws-sn-user${active ? " ws-sn-user--active" : ""}${isSelf ? " ws-sn-user--self" : ""}" data-ws-sn-target="${esc(name === "all" ? "all" : name)}" aria-pressed="${active ? "true" : "false"}" title="${isSelf ? "This PC" : name === "all" ? "Send to all workstations" : active ? "Remove from recipients" : "Add to recipients"}"${isSelf ? " disabled" : ""}>
+    return `<button type="button" class="ws-sn-user${active ? " ws-sn-user--active" : ""}${isSelf ? " ws-sn-user--self" : ""}" data-ws-sn-target="${esc(name === "all" ? "all" : name)}" aria-pressed="${active ? "true" : "false"}" title="${isSelf ? "Send to this PC (includes popup test)" : name === "all" ? "Send to all workstations" : active ? "Remove from recipients" : "Add to recipients"}">
       <span class="ws-sn-user__dot" aria-hidden="true"></span>
       <span class="ws-sn-user__name">${esc(label)}</span>
     </button>`;

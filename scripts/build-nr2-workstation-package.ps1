@@ -71,6 +71,22 @@ foreach ($file in @('nr2-build.json', 'requirements-workstation.txt', 'office-pr
 # Full site bundle (workstation UI + shared HAL assets).
 Copy-TreeFiltered -Source (Join-Path $Nr2Dir 'site') -Dest (Join-Path $appDest 'site')
 
+# Keep site/nr2-build.json in sync with root manifest (desktop-boot.js fetches /nr2-build.json from site).
+$rootManifestPath = Join-Path $Nr2Dir 'nr2-build.json'
+$siteManifestPath = Join-Path $appDest 'site\nr2-build.json'
+if (Test-Path $rootManifestPath) {
+    $rootManifest = Get-Content $rootManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $siteManifest = [ordered]@{
+        assetVersion  = [string]$rootManifest.assetVersion
+        schemaVersion = [string]$rootManifest.schemaVersion
+        builtAt       = [string]$rootManifest.builtAt
+        notes         = "Mirror of ../nr2-build.json $([char]0x2014) workstation fast HAL profile."
+    }
+    $siteJson = ($siteManifest | ConvertTo-Json -Depth 5) + "`n"
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($siteManifestPath, $siteJson, $utf8NoBom)
+}
+
 # SideNotes 32-bit helper runtime (required for history.vdb on workstations).
 $snSrc = Join-Path $Nr2Dir 'sidenotes-helper'
 $snDest = Join-Path $appDest 'sidenotes-helper'

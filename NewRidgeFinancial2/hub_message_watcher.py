@@ -175,7 +175,11 @@ def run_hub_popup_watcher(
                 if not message_for_station(message, station):
                     continue
                 from_name = str(message.get("from") or "").strip()
-                if station and from_name.lower() == station.lower():
+                if (
+                    station
+                    and from_name.lower() == station.lower()
+                    and not _env_flag("NR2_HUB_POPUP_SHOW_SELF", True)
+                ):
                     continue
                 text = str(message.get("text") or "").strip()
                 if not text:
