@@ -170,6 +170,75 @@ function serverRequiredMessage(feature) {
   return `${feature || "This feature"} requires the NR2 server. Run StartProgram.bat and open http://127.0.0.1:8765/ in your browser.`;
 }
 
+function enforceSingleFinancialTab() {
+  const LOCK_KEY = "nr2TabLock";
+  const tabId = sessionStorage.getItem("nr2TabId") || Math.random().toString(36).slice(2);
+  sessionStorage.setItem("nr2TabId", tabId);
+  const channel =
+    typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("nr2-financial-tab") : null;
+  let blocked = false;
+
+  function showTabBlocker() {
+    if (document.getElementById("nr2-tab-blocker")) return;
+    blocked = true;
+    const overlay = document.createElement("div");
+    overlay.id = "nr2-tab-blocker";
+    overlay.setAttribute("role", "alertdialog");
+    overlay.innerHTML =
+      '<div class="nr2-tab-blocker__card">' +
+      "<h2>NR2 already open</h2>" +
+      "<p>Use one browser tab for NewRidgeFinancial to avoid SQLite conflicts.</p>" +
+      '<button type="button" id="nr2-tab-steal">Use this tab</button>' +
+      '<button type="button" id="nr2-tab-close">Close this tab</button>' +
+      "</div>";
+    document.body.appendChild(overlay);
+    overlay.querySelector("#nr2-tab-steal").addEventListener("click", () => {
+      if (channel) channel.postMessage({ type: "steal", tabId });
+      localStorage.setItem(LOCK_KEY, `${tabId}:${Date.now()}`);
+      overlay.remove();
+      blocked = false;
+    });
+    overlay.querySelector("#nr2-tab-close").addEventListener("click", () => {
+      window.close();
+    });
+  }
+
+  if (channel) {
+    channel.postMessage({ type: "hello", tabId });
+    channel.onmessage = (event) => {
+      const data = event.data || {};
+      if (data.type === "hello" && data.tabId !== tabId) {
+        channel.postMessage({ type: "deny", tabId });
+      }
+      if (data.type === "deny" && data.tabId !== tabId) showTabBlocker();
+      if (data.type === "steal" && data.tabId !== tabId) showTabBlocker();
+    };
+  }
+
+  const heartbeat = () => {
+    try {
+      localStorage.setItem(LOCK_KEY, `${tabId}:${Date.now()}`);
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  const existing = localStorage.getItem(LOCK_KEY);
+  if (existing) {
+    const [ownerId, tsRaw] = existing.split(":");
+    const age = Date.now() - Number(tsRaw || 0);
+    if (ownerId && ownerId !== tabId && age < 8000) showTabBlocker();
+  }
+  heartbeat();
+  if (!window.__nr2TabLockInterval) {
+    window.__nr2TabLockInterval = window.setInterval(heartbeat, 3000);
+    window.addEventListener("beforeunload", () => {
+      const cur = localStorage.getItem(LOCK_KEY);
+      if (cur && cur.startsWith(`${tabId}:`)) localStorage.removeItem(LOCK_KEY);
+      if (channel) channel.close();
+    });
+  }
+}
+
 function saveChatHistory() {
   persistLocal("halChatHistory", halChatHistory);
 }
@@ -2455,75 +2524,49 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken, ab
   if (Array.isArray(runtime.ollamaTools) && runtime.ollamaTools.length) {
     payload.tools = runtime.ollamaTools;
   }
-  try {
-    const response = await fetch(runtime.endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal,
-    });
-    if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError");
-    if (!response.ok) throw new Error("model http " + response.status);
-
-    let raw = "";
-    if (wantStream && response.body && typeof response.body.getReader === "function") {
-      // Ollama streams newline-delimited JSON; emit each delta for live display.
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let nl;
-        while ((nl = buffer.indexOf("\n")) >= 0) {
-          const line = buffer.slice(0, nl).trim();
-          buffer = buffer.slice(nl + 1);
-          if (!line) continue;
-          let chunk;
-          try {
-            chunk = JSON.parse(line);
-          } catch {
-            continue;
-          }
-          const delta = chunk && chunk.message && chunk.message.content ? chunk.message.content : "";
-          if (delta) {
-            raw += delta;
-            try {
-              onToken(HalCore.cleanModelText(raw));
-            } catch {
-              /* display callback is best-effort */
-            }
-          }
-        }
+  if (
+    typeof DesktopBridge !== "undefined" &&
+    typeof DesktopBridge.hasLoopbackApi === "function" &&
+    DesktopBridge.hasLoopbackApi() &&
+    typeof DesktopBridge.evaluateHalQuery === "function" &&
+    !(runtime && runtime.cloud)
+  ) {
+    try {
+      const gateway = await DesktopBridge.evaluateHalQuery({
+        query: userText,
+        model: runtime.model,
+        systemPrompt: systemPrompt,
+        messages: payload.messages,
+        options: payload.options,
+        stream: wantStream,
+        shiftContext: typeof window !== "undefined" && window.nr2ShiftState ? window.nr2ShiftState : undefined,
+        sessionId: typeof window !== "undefined" && window.nr2HalSessionId ? window.nr2HalSessionId : undefined,
+      });
+      if (gateway && (gateway.blocked || gateway.error === "HAL_UNAVAILABLE_STALE_DATA")) {
+        throw new Error("HAL_UNAVAILABLE_STALE_DATA");
       }
-    } else {
-      const data = await response.json();
-      const msg = data && data.message ? data.message : null;
-      raw = msg && msg.content ? msg.content : "";
-      if (structuredOllama && msg) {
-        const text = HalCore.cleanModelText(raw);
-        const toolCalls = msg.tool_calls || [];
-        if (text || toolCalls.length) {
-          const lane = runtime.reasonFallback ? "chat8b" : runtime.reasoningLane ? "reason21b" : "chat8b";
-          return { text, toolCalls, lane };
+      const rawGateway = (gateway && (gateway.text || (gateway.message && gateway.message.content))) || "";
+      const textGw = HalCore.cleanModelText(rawGateway);
+      if (structuredOllama) {
+        const lane = (gateway && gateway.resolvedLane) || (runtime.reasoningLane ? "reason21b" : "chat8b");
+        if (typeof window !== "undefined" && gateway && gateway.resolvedLane) {
+          window.dispatchEvent(new CustomEvent("nr2-hal-lane-used", { detail: { lane: gateway.resolvedLane } }));
         }
+        return { text: textGw || "", toolCalls: [], lane: lane };
       }
+      if (runtime && runtime.fastChat) return textGw;
+      return textGw + "\n\n(" + draftLabel + " · gateway · verify before acting)";
+    } catch (gatewayErr) {
+      if (gatewayErr && (gatewayErr.message === "HAL_UNAVAILABLE_STALE_DATA" || gatewayErr.status === 503)) {
+        throw new Error("HAL_UNAVAILABLE_STALE_DATA");
+      }
+      throw gatewayErr;
+    } finally {
+      clearTimeout(timer);
     }
-
-    const text = HalCore.cleanModelText(raw);
-    if (!text && !structuredOllama) throw new Error("empty model response");
-    if (structuredOllama) {
-      return { text: text || "", toolCalls: [], lane: runtime.reasoningLane ? "reason21b" : "chat8b" };
-    }
-    if (runtime && runtime.fastChat) return text;
-    return text + "\n\n(" + draftLabel + " · read-only · verify before acting)";
-  } catch (error) {
-    if (error && error.name === "AbortError") throw error;
-    throw error;
-  } finally {
-    clearTimeout(timer);
   }
+  clearTimeout(timer);
+  throw new Error("HAL gateway required — start NR2 on port 8765");
 }
 
 function callLocalModel(userText) {
@@ -4344,6 +4387,9 @@ function select(id) {
   if (window.location.hash !== nextHash) {
     window.location.hash = page.id;
   }
+  if (typeof ImportReadinessGate !== "undefined" && ImportReadinessGate.evaluate) {
+    ImportReadinessGate.evaluate(page.id);
+  }
 }
 
 function assertDesignSchemaLoaded() {
@@ -4988,6 +5034,9 @@ function renderWorkstationDesktopRequired(message) {
 
 async function boot() {
   renderRuntimeModeBanner();
+  if (!NR2_WORKSTATION_ONLY && typeof DesktopBridge !== "undefined" && DesktopBridge.isLoopbackHost && DesktopBridge.isLoopbackHost()) {
+    enforceSingleFinancialTab();
+  }
   if (NR2_WORKSTATION_ONLY) {
     document.title = "NR2 Office Workstation";
     document.body.classList.add("nr2-workstation-app");
@@ -5208,6 +5257,9 @@ if (typeof window !== "undefined") {
 
 DesktopBridge.whenReady(() => {
   DesktopBridge.installClipboardHandlers();
+  if (typeof ImportReadinessGate !== "undefined" && ImportReadinessGate.installListeners) {
+    ImportReadinessGate.installListeners();
+  }
   if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return;
   boot();
 });

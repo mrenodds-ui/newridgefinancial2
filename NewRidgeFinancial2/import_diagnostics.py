@@ -361,6 +361,207 @@ def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str,
     return blocking
 
 
+POSTING_MAX_AGE_HOURS = int(os.environ.get("NR2_IMPORT_POSTING_MAX_HOURS", "48"))
+DAILY_OPS_HOURS = int(os.environ.get("NR2_IMPORT_DAILY_OPS_HOURS", "8"))
+TAX_OPS_HOURS = int(os.environ.get("NR2_IMPORT_TAX_OPS_HOURS", "168"))
+AR_OPS_HOURS = int(os.environ.get("NR2_IMPORT_AR_OPS_HOURS", "24"))
+AMBER_HOURS = int(os.environ.get("NR2_IMPORT_AMBER_HOURS", "24"))
+SYNC_STALL_MINUTES = int(os.environ.get("NR2_IMPORT_SYNC_STALL_MINUTES", "12"))
+
+OPERATION_CONTEXT = {
+    "dailyOps": {
+        "maxAgeHours": DAILY_OPS_HOURS,
+        "appliesTo": ["financial", "quickbooks", "claims"],
+    },
+    "ar": {
+        "maxAgeHours": AR_OPS_HOURS,
+        "appliesTo": ["ar"],
+    },
+    "tax": {
+        "maxAgeHours": TAX_OPS_HOURS,
+        "appliesTo": ["taxes"],
+    },
+    "posting": {
+        "maxAgeHours": POSTING_MAX_AGE_HOURS,
+        "appliesTo": ["posting_queue", "documents"],
+    },
+}
+
+
+def _operation_stale_hours(
+    operation: str | None,
+    *,
+    daily_ops_hours: int,
+    tax_ops_hours: int,
+    ar_ops_hours: int = AR_OPS_HOURS,
+) -> float:
+    op = str(operation or "").strip().lower()
+    if op in {"tax", "taxes"}:
+        return float(tax_ops_hours)
+    if op in {"ar", "a/r", "aging"}:
+        return float(ar_ops_hours)
+    return float(daily_ops_hours)
+
+
+def _sync_stalled(sync_state: dict[str, Any] | None) -> bool:
+    if not sync_state or str(sync_state.get("status") or "") != "running":
+        return False
+    started = _parse_iso(str(sync_state.get("startedAt") or ""))
+    if started is None:
+        return False
+    age_min = (_utc_now() - started).total_seconds() / 60.0
+    return age_min > float(SYNC_STALL_MINUTES)
+
+
+def _build_source_delta(diagnostics: dict[str, Any], bundle: dict[str, Any], *, stale_hours: float) -> list[dict[str, Any]]:
+    loaded_at = str(bundle.get("loadedAt") or "")
+    sources: list[dict[str, Any]] = []
+    for row in diagnostics.get("datasets") or []:
+        if not isinstance(row, dict):
+            continue
+        status = str(row.get("status") or "")
+        level = "fresh" if status == STATUS_CONNECTED else "stale" if status == STATUS_STALE else "degraded"
+        sources.append(
+            {
+                "id": str(row.get("system") or row.get("name") or "unknown"),
+                "name": str(row.get("label") or row.get("system") or "Import source"),
+                "lastSyncAt": str(row.get("modifiedAt") or loaded_at or ""),
+                "level": level,
+                "recordCount": row.get("recordCount") or row.get("rowCount"),
+                "status": status,
+            }
+        )
+    if not sources:
+        sources.append(
+            {
+                "id": "bundle",
+                "name": "Import bundle",
+                "lastSyncAt": loaded_at,
+                "level": "fresh" if bundle.get("loadedAt") else "unknown",
+                "recordCount": (bundle.get("summary") or {}).get("totalRecords"),
+            }
+        )
+    return sources
+
+
+def assess_import_readiness(
+    *,
+    sync_state: dict[str, Any] | None = None,
+    posting_max_hours: int = POSTING_MAX_AGE_HOURS,
+    daily_ops_hours: int = DAILY_OPS_HOURS,
+    tax_ops_hours: int = TAX_OPS_HOURS,
+    operation: str | None = None,
+) -> dict[str, Any]:
+    """Canonical import readiness for UI, HAL, posting, and read gates."""
+    stale_hours = _operation_stale_hours(operation, daily_ops_hours=daily_ops_hours, tax_ops_hours=tax_ops_hours)
+    thresholds = {
+        "amberHours": AMBER_HOURS,
+        "dailyOpsHours": daily_ops_hours,
+        "taxOpsHours": tax_ops_hours,
+        "postingMaxHours": posting_max_hours,
+        "operationStaleHours": stale_hours,
+    }
+    operation_context = {
+        **OPERATION_CONTEXT,
+        "activeOperation": str(operation or "").strip().lower() or None,
+        "effectiveStaleHours": stale_hours,
+    }
+    if sync_state and str(sync_state.get("status") or "") == "running":
+        if not _sync_stalled(sync_state):
+            return {
+                "ok": False,
+                "level": "syncing",
+                "codes": ["import_sync_running"],
+                "error": "Import sync is running; wait for completion.",
+                "thresholds": thresholds,
+                "operationContext": operation_context,
+            }
+        return {
+            "ok": False,
+            "level": "degraded",
+            "codes": ["import_sync_stalled"],
+            "error": "Import sync appears stalled; reset sync before financial work.",
+            "syncState": sync_state,
+            "thresholds": thresholds,
+            "operationContext": operation_context,
+        }
+
+    from import_loader import load_import_bundle
+
+    bundle = load_import_bundle(sync=False, deep=False)
+    loaded_at = _parse_iso(str(bundle.get("loadedAt") or ""))
+    age_hours: float | None = None
+    if loaded_at is not None:
+        age_hours = (_utc_now() - loaded_at).total_seconds() / 3600.0
+
+    diagnostics = evaluate_bundle(bundle, deep=False)
+    blocking = blocking_import_issues(diagnostics)
+    summary = diagnostics.get("summary") or {}
+
+    base = {
+        "loadedAt": bundle.get("loadedAt"),
+        "ageHours": round(age_hours, 1) if age_hours is not None else None,
+        "summary": summary,
+        "blocking": blocking,
+        "thresholds": thresholds,
+        "operationContext": operation_context,
+        "syncState": sync_state,
+        "sources": _build_source_delta(diagnostics, bundle, stale_hours=stale_hours),
+    }
+
+    if age_hours is not None and age_hours > float(posting_max_hours):
+        return {
+            **base,
+            "ok": False,
+            "level": "expired",
+            "codes": ["import_stale"],
+            "error": f"Import bundle is older than {int(posting_max_hours // 24)} days.",
+        }
+
+    if blocking:
+        return {
+            **base,
+            "ok": False,
+            "level": "degraded",
+            "codes": ["imports_not_ready"],
+            "error": "Required imports are missing or stale.",
+        }
+
+    if age_hours is not None and age_hours > stale_hours:
+        label = "tax" if stale_hours >= float(tax_ops_hours) and stale_hours > float(daily_ops_hours) else "daily operations"
+        return {
+            **base,
+            "ok": False,
+            "level": "stale",
+            "codes": ["import_daily_stale" if label == "daily operations" else "import_tax_stale"],
+            "error": f"Import data is older than {label} threshold ({int(stale_hours)}h).",
+        }
+
+    if age_hours is not None and age_hours > float(AMBER_HOURS):
+        return {
+            **base,
+            "ok": True,
+            "level": "stale",
+            "codes": ["import_amber"],
+        }
+
+    return {**base, "ok": True, "level": "fresh", "codes": []}
+
+
+def assess_posting_import_readiness(
+    *,
+    sync_state: dict[str, Any] | None = None,
+    max_age_hours: int = POSTING_MAX_AGE_HOURS,
+) -> dict[str, Any]:
+    """Return whether financial posting mutations are safe against current imports."""
+    readiness = assess_import_readiness(sync_state=sync_state, posting_max_hours=max_age_hours)
+    if readiness.get("level") == "fresh" and readiness.get("ok"):
+        return {"ok": True, "loadedAt": readiness.get("loadedAt"), "summary": readiness.get("summary")}
+    out = dict(readiness)
+    out["ok"] = False
+    return out
+
+
 def check_upstream_health(*, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
     manifest = manifest or load_manifest_payload()
     datasets_manifest = manifest.get("datasets") or {}

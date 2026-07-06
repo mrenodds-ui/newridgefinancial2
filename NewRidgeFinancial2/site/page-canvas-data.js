@@ -661,7 +661,7 @@ const PageCanvasData = (function () {
     if (journal && journal.status === "FAILED" && !journalRows().length) {
       return {
         tone: "info",
-        message: journal.summary || "Journal posting queue is available in desktop mode after accruals are reviewed.",
+        message: journal.summary || "Journal posting queue is available when Start Program is running and accruals are reviewed.",
       };
     }
     if (ap && ap.status === "DEGRADED" && ap.summary && !(docs && docs.queueCount > 0)) {

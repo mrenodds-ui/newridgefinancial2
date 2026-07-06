@@ -139,6 +139,17 @@ const Services = (function () {
     } catch (err) {
       if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.refreshImports", err, opts);
       throw err;
+    } finally {
+      const brFinal = bridge();
+      if (brFinal && typeof brFinal.getImportReadiness === "function") {
+        try {
+          await brFinal.getImportReadiness();
+        } catch {
+          /* readiness optional */
+        }
+      } else if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("nr2-import-readiness-changed"));
+      }
     }
   }
 

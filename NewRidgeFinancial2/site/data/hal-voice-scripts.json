@@ -1,0 +1,9 @@
+{
+  "employeePhoneScripts": {
+    "arVerification": "Hello, this is the billing office at New Ridge Family Dental. May I speak with {patientName}? I need to verify your identity before discussing account details.",
+    "arBalance": "Our records show a balance of {balance}. Would you like to pay today, or discuss a payment plan?",
+    "appointmentConfirm": "This is a reminder call from New Ridge Family Dental regarding your upcoming appointment.",
+    "hipaaClose": "For your privacy, I cannot leave detailed financial information on voicemail. Please call us back at the office number."
+  },
+  "policy": "HAL voice uses these templates only — no PHI in outbound TTS without staff confirmation."
+}

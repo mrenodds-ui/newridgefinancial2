@@ -15,7 +15,7 @@ const PageSchema = (function () {
   };
 
   const NAV_GROUPS = [
-    { section: "Overview", pages: ["financial", "taxes", "hal"] },
+    { section: "Overview", pages: ["financial", "financial-canvas", "taxes", "hal"] },
     { section: "Clinical", pages: ["softdent", "narratives", "claims"] },
     { section: "Revenue", pages: ["ar", "quickbooks"] },
     { section: "Operations", pages: ["documents", "library", "office-manager"] },
@@ -42,6 +42,26 @@ const PageSchema = (function () {
         { key: "payerMixAndCollections", title: "Payer Mix & Collection Rate" },
         { key: "providerPerformance", title: "Production by Provider" },
       ],
+    },
+    "financial-canvas": {
+      id: "financial-canvas",
+      label: "Canvas Mock",
+      title: "HAL Financial Canvas Prototype",
+      subtitle: "Embedded mock of a HAL-first executive financial cockpit",
+      accent: "gold",
+      filters: ["Prototype", "Executive view", "HAL-first"],
+      commands: [
+        "Open the prototype in a new tab",
+        "Compare this canvas to the current financial dashboard",
+        "Explain which widgets should become live first",
+      ],
+      safety: "Prototype only · Visual direction for future widget wiring",
+      insight: {
+        tone: "info",
+        title: "Concept wired into the real app shell",
+        body: "This page shows the proposed HAL-first financial cockpit inside the normal NR2 page chrome so layout, hierarchy, and widget priorities can be reviewed in context.",
+      },
+      widgets: [{ key: "practiceFinancialOverview", title: "Prototype executive canvas" }],
     },
     taxes: {
       id: "taxes",

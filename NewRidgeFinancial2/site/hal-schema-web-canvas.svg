@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1220" viewBox="0 0 1680 1220" role="img" aria-labelledby="title desc">
+  <title id="title">NR2 Schema Web Canvas</title>
+  <desc id="desc">Schema-aligned dashboard canvas using the NewRidge Financial 2.0 page and widget names with polished web-style widgets.</desc>
+  <defs>
+    <linearGradient id="pageBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#181818" />
+      <stop offset="100%" stop-color="#101114" />
+    </linearGradient>
+    <linearGradient id="railBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#141414" />
+      <stop offset="100%" stop-color="#111216" />
+    </linearGradient>
+    <linearGradient id="heroBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#17191f" />
+      <stop offset="100%" stop-color="#1d222b" />
+    </linearGradient>
+    <filter id="softShadow" x="-15%" y="-15%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.24" />
+    </filter>
+    <style>
+      .panel { fill: rgba(228, 228, 228, 0.067); stroke: rgba(228, 228, 228, 0.078); stroke-width: 1; filter: url(#softShadow); }
+      .dark-panel { fill: url(#heroBg); stroke: rgba(228,228,228,0.12); stroke-width: 1; filter: url(#softShadow); }
+      .rail { fill: url(#railBg); }
+      .title { font: 700 34px "Segoe UI", Aptos, Arial, sans-serif; fill: rgba(228, 228, 228, 0.92); }
+      .subtitle { font: 400 16px "Segoe UI", Aptos, Arial, sans-serif; fill: rgba(228, 228, 228, 0.55); }
+      .eyebrow { font: 600 12px Consolas, "Courier New", monospace; letter-spacing: 1.8px; fill: #7d8694; }
+      .eyebrow-light { font: 600 12px Consolas, "Courier New", monospace; letter-spacing: 1.8px; fill: #7d8694; }
+      .h2 { font: 700 22px "Segoe UI", Aptos, Arial, sans-serif; fill: rgba(228, 228, 228, 0.92); }
+      .body { font: 400 14px "Segoe UI", Aptos, Arial, sans-serif; fill: rgba(228, 228, 228, 0.55); }
+      .body-light { font: 400 14px "Segoe UI", Aptos, Arial, sans-serif; fill: rgba(228, 228, 228, 0.82); }
+      .metric { font: 700 30px "Segoe UI", Aptos, Arial, sans-serif; fill: rgba(228, 228, 228, 0.92); }
+      .metric-light { font: 700 30px "Segoe UI", Aptos, Arial, sans-serif; fill: #ffffff; }
+      .small { font: 600 13px "Segoe UI", Aptos, Arial, sans-serif; fill: rgba(228, 228, 228, 0.92); }
+      .small-light { font: 600 13px "Segoe UI", Aptos, Arial, sans-serif; fill: rgba(228, 228, 228, 0.92); }
+      .muted { font: 400 13px "Segoe UI", Aptos, Arial, sans-serif; fill: rgba(228, 228, 228, 0.55); }
+      .nav { font: 600 14px "Segoe UI", Aptos, Arial, sans-serif; fill: #aeb6c2; }
+      .nav-strong { font: 700 15px "Segoe UI", Aptos, Arial, sans-serif; fill: #d8b25f; }
+      .chipText { font: 600 12px "Segoe UI", Aptos, Arial, sans-serif; }
+      .good { fill: #78a86b; }
+      .warn { fill: #e0584f; }
+      .gold { fill: #d6b15e; }
+      .teal { fill: #78a86b; }
+      .slate { fill: #599ce7; }
+      .lineGold { stroke: #d6b15e; stroke-width: 5; stroke-linecap: round; }
+      .lineTeal { stroke: #78a86b; stroke-width: 5; stroke-linecap: round; }
+      .lineWarn { stroke: #e0584f; stroke-width: 5; stroke-linecap: round; }
+    </style>
+  </defs>
+
+  <rect width="1680" height="1220" fill="url(#pageBg)" />
+
+  <rect x="24" y="24" width="250" height="1172" rx="28" class="rail" />
+  <text x="52" y="70" class="eyebrow-light">NEWRIDGE FINANCIAL 2.0</text>
+  <text x="52" y="110" class="small-light">New Ridge Family Dental</text>
+  <text x="52" y="136" class="body-light">Family &amp; cosmetic dentistry</text>
+  <text x="52" y="176" class="body-light">Ridgefield, Connecticut</text>
+
+  <rect x="42" y="208" width="214" height="54" rx="18" fill="rgba(216, 178, 95, 0.12)" stroke="rgba(216, 178, 95, 0.3)" />
+  <text x="58" y="231" class="eyebrow">OVERVIEW</text>
+  <text x="58" y="252" class="nav-strong">Financial</text>
+  <text x="148" y="252" class="muted">active canvas</text>
+
+  <text x="52" y="304" class="eyebrow-light">OVERVIEW</text>
+  <text x="52" y="332" class="nav">Financial</text>
+  <text x="52" y="358" class="nav">Canvas Mock</text>
+  <text x="52" y="384" class="nav">Taxes</text>
+  <text x="52" y="410" class="nav">HAL</text>
+
+  <text x="52" y="458" class="eyebrow-light">CLINICAL</text>
+  <text x="52" y="486" class="nav">SoftDent</text>
+  <text x="52" y="512" class="nav">Narratives</text>
+  <text x="52" y="538" class="nav">Claims</text>
+
+  <text x="52" y="586" class="eyebrow-light">REVENUE</text>
+  <text x="52" y="614" class="nav">A/R</text>
+  <text x="52" y="640" class="nav">QuickBooks</text>
+
+  <text x="52" y="688" class="eyebrow-light">OPERATIONS</text>
+  <text x="52" y="716" class="nav">Documents</text>
+  <text x="52" y="742" class="nav">Library</text>
+  <text x="52" y="768" class="nav">Office Manager</text>
+
+  <rect x="292" y="24" width="1364" height="108" rx="28" class="panel" />
+  <text x="326" y="56" class="eyebrow">OWNER FINANCIAL DASHBOARD / PAGE SCHEMA</text>
+  <text x="326" y="96" class="title">Schema-aligned executive canvas using the real program widgets.</text>
+  <text x="326" y="118" class="subtitle">Widgets and commands pulled from the existing Financial, QuickBooks, A/R, HAL, Claims, and Office Manager surfaces.</text>
+
+  <rect x="1230" y="44" width="120" height="26" rx="13" fill="rgba(120, 168, 107, 0.16)" stroke="rgba(120, 168, 107, 0.35)" />
+  <text x="1253" y="61" class="chipText" fill="#78a86b">June 2025</text>
+  <rect x="1358" y="44" width="120" height="26" rx="13" fill="rgba(214, 177, 94, 0.16)" stroke="rgba(214, 177, 94, 0.35)" />
+  <text x="1382" y="61" class="chipText" fill="#d6b15e">All providers</text>
+  <rect x="1486" y="44" width="126" height="26" rx="13" fill="rgba(135, 195, 255, 0.16)" stroke="rgba(135, 195, 255, 0.32)" />
+  <text x="1512" y="61" class="chipText" fill="#87c3ff">Ridgefield</text>
+
+  <rect x="292" y="150" width="1364" height="128" rx="26" class="dark-panel" />
+  <text x="326" y="180" class="eyebrow-light">HAL COMMAND CENTER / halAskHal + halImportHealth</text>
+  <text x="326" y="214" class="metric-light">"Summarize MTD production" • "Compare to prior month" • "Explain payer mix"</text>
+  <text x="326" y="242" class="body-light">HAL brief: Production is 4.2% above May. Collection rate is 0.8 points below the 85% target. Martinez crown balance is the largest open insurance claim.</text>
+  <rect x="1240" y="182" width="118" height="24" rx="12" fill="rgba(120,168,107,0.16)" stroke="rgba(120,168,107,0.28)" />
+  <text x="1264" y="198" class="chipText" fill="#78a86b">Import healthy</text>
+  <rect x="1372" y="182" width="116" height="24" rx="12" fill="rgba(214,177,94,0.16)" stroke="rgba(214,177,94,0.28)" />
+  <text x="1395" y="198" class="chipText" fill="#d6b15e">Read-only</text>
+  <rect x="1502" y="182" width="118" height="24" rx="12" fill="rgba(224,88,79,0.16)" stroke="rgba(224,88,79,0.28)" />
+  <text x="1528" y="198" class="chipText" fill="#e0584f">Owner review</text>
+
+  <rect x="292" y="296" width="322" height="196" rx="24" class="panel" />
+  <text x="320" y="326" class="eyebrow">practiceFinancialOverview</text>
+  <text x="320" y="356" class="h2">Practice Financial Overview</text>
+  <text x="320" y="402" class="metric">$412,480</text>
+  <text x="320" y="426" class="small">Production MTD</text>
+  <text x="320" y="450" class="muted">SoftDent &amp; QuickBooks source data</text>
+  <text x="320" y="476" class="small good">June is tracking above plan</text>
+
+  <rect x="632" y="296" width="322" height="196" rx="24" class="panel" />
+  <text x="660" y="326" class="eyebrow">financialProductionTrend</text>
+  <text x="660" y="356" class="h2">Production MTD &amp; 12-Month Trend</text>
+  <text x="660" y="402" class="metric">+4.2%</text>
+  <text x="660" y="426" class="small">Above May</text>
+  <polyline points="660,454 702,448 744,438 786,426 828,418 870,396 912,384" fill="none" class="lineGold" />
+  <text x="660" y="478" class="muted">Web-style sparkline trend using the current financial page metric.</text>
+
+  <rect x="972" y="296" width="322" height="196" rx="24" class="panel" />
+  <text x="1000" y="326" class="eyebrow">payerMixAndCollections</text>
+  <text x="1000" y="356" class="h2">Payer Mix &amp; Collection Rate</text>
+  <circle cx="1076" cy="416" r="42" fill="none" stroke="#d6b15e" stroke-width="14" stroke-dasharray="76 28 52 32 40 90" transform="rotate(-90 1076 416)" />
+  <text x="1150" y="396" class="small">Delta</text><text x="1246" y="396" class="small">34%</text>
+  <text x="1150" y="422" class="small">BCBS</text><text x="1246" y="422" class="small">22%</text>
+  <text x="1150" y="448" class="small">Patient pay</text><text x="1246" y="448" class="small">18%</text>
+  <text x="1000" y="478" class="muted">Collection rate below target by 0.8 points.</text>
+
+  <rect x="1312" y="296" width="344" height="196" rx="24" class="panel" />
+  <text x="1340" y="326" class="eyebrow">providerPerformance</text>
+  <text x="1340" y="356" class="h2">Production by Provider</text>
+  <rect x="1340" y="390" width="252" height="16" rx="8" fill="rgba(228, 228, 228, 0.067)" />
+  <rect x="1340" y="390" width="214" height="16" rx="8" fill="#78a86b" />
+  <text x="1340" y="382" class="small">Dr. Ridge</text><text x="1588" y="382" class="small">$168k</text>
+  <rect x="1340" y="434" width="252" height="16" rx="8" fill="rgba(228, 228, 228, 0.067)" />
+  <rect x="1340" y="434" width="176" height="16" rx="8" fill="#d6b15e" />
+  <text x="1340" y="426" class="small">Dr. Moreno</text><text x="1588" y="426" class="small">$124k</text>
+  <rect x="1340" y="478" width="252" height="16" rx="8" fill="rgba(228, 228, 228, 0.067)" />
+  <rect x="1340" y="478" width="110" height="16" rx="8" fill="#e0584f" />
+  <text x="1340" y="470" class="small">Hygiene</text><text x="1588" y="470" class="small">$72k</text>
+
+  <rect x="292" y="510" width="410" height="224" rx="24" class="panel" />
+  <text x="320" y="540" class="eyebrow">quickbooksProfitLossDetail</text>
+  <text x="320" y="570" class="h2">Profit &amp; Loss Summary (YTD)</text>
+  <text x="320" y="612" class="metric">$886,559</text>
+  <text x="320" y="636" class="small">Net income ahead of prior year</text>
+  <text x="320" y="668" class="muted">Operating expenses and book income rendered as a finance-grade summary card.</text>
+  <text x="320" y="700" class="small warn">Supply spend 2.1% above budget</text>
+
+  <rect x="720" y="510" width="410" height="224" rx="24" class="panel" />
+  <text x="748" y="540" class="eyebrow">ebitdaNormalization</text>
+  <text x="748" y="570" class="h2">EBITDA Normalization</text>
+  <text x="748" y="612" class="small">Owner Add-backs &amp; Adjustments</text>
+  <text x="748" y="648" class="metric">$9,240</text>
+  <text x="748" y="672" class="muted">Potential add-backs</text>
+  <text x="748" y="708" class="small">Payroll ratio: 29.4%</text>
+  <text x="748" y="730" class="small">Dental supplies: 6.1%</text>
+
+  <rect x="1148" y="510" width="508" height="224" rx="24" class="panel" />
+  <text x="1176" y="540" class="eyebrow">arAgingAndCollections + claimsPipeline</text>
+  <text x="1176" y="570" class="h2">Aging &amp; Collections Trend / Open Insurance Claims</text>
+  <text x="1176" y="610" class="small">0-30 days</text><text x="1520" y="610" class="small">$118k</text>
+  <text x="1176" y="638" class="small">31-60 days</text><text x="1520" y="638" class="small">$77k</text>
+  <text x="1176" y="666" class="small">61+ days</text><text x="1520" y="666" class="small">$34k</text>
+  <text x="1176" y="702" class="small warn">Largest claim: Martinez crown balance $1,240</text>
+
+  <rect x="292" y="752" width="478" height="218" rx="24" class="panel" />
+  <text x="320" y="782" class="eyebrow">claimsPipeline / claims page</text>
+  <text x="320" y="812" class="h2">Insurance Claims Workbench</text>
+  <rect x="320" y="838" width="126" height="26" rx="13" fill="rgba(214,177,94,0.16)" stroke="rgba(214,177,94,0.28)" />
+  <text x="348" y="855" class="chipText" fill="#d6b15e">All payers</text>
+  <rect x="454" y="838" width="126" height="26" rx="13" fill="rgba(224,88,79,0.16)" stroke="rgba(224,88,79,0.28)" />
+  <text x="482" y="855" class="chipText" fill="#e0584f">Open claims</text>
+  <rect x="588" y="838" width="142" height="26" rx="13" fill="rgba(135,195,255,0.16)" stroke="rgba(135,195,255,0.28)" />
+  <text x="616" y="855" class="chipText" fill="#87c3ff">June submissions</text>
+  <text x="320" y="894" class="small">Martinez D2740</text><text x="666" y="894" class="small">$1,240</text>
+  <text x="320" y="920" class="muted">Delta Dental requires pre-operative radiograph on file.</text>
+  <text x="320" y="952" class="small warn">2 denied claims need review</text>
+
+  <rect x="788" y="752" width="432" height="218" rx="24" class="panel" />
+  <text x="816" y="782" class="eyebrow">officeManagerPriorities</text>
+  <text x="816" y="812" class="h2">Today’s Focus</text>
+  <text x="816" y="854" class="small">Morning huddle at 8:30 AM</text>
+  <text x="816" y="880" class="muted">Billing should focus on denied perio claims. Scheduling has a hygiene opening tomorrow at 2:30 PM.</text>
+  <text x="816" y="920" class="small">1. Review denied claims</text>
+  <text x="816" y="944" class="small">2. Jump to billing</text>
+  <text x="816" y="968" class="small">3. Summarize open A/R</text>
+
+  <rect x="1238" y="752" width="418" height="218" rx="24" class="dark-panel" />
+  <text x="1266" y="782" class="eyebrow-light">halAskHal / office-manager / halImportHealth</text>
+  <text x="1266" y="814" class="small-light">Ask HAL</text>
+  <text x="1266" y="846" class="body-light">“Make a plan for today”</text>
+  <text x="1266" y="874" class="body-light">“Show manager dashboard widgets”</text>
+  <text x="1266" y="902" class="body-light">“Import status”</text>
+  <rect x="1266" y="924" width="350" height="30" rx="15" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.12)" />
+  <text x="1282" y="944" class="body-light">Ask HAL: Explain collection rate below target</text>
+
+  <rect x="292" y="988" width="1364" height="208" rx="24" class="panel" />
+  <text x="320" y="1018" class="eyebrow">WEB-INSPIRED WIDGET COMPOSITION / ORIGINAL LAYOUT</text>
+  <text x="320" y="1048" class="h2">Same schema, stronger widget system</text>
+  <text x="320" y="1080" class="body">This canvas keeps the NR2 page schema and widget keys intact, but presents them with clearer hierarchy: hero summary, trend card, donut mix card, bar ranking, finance ledger summary, normalization panel, claims workbench, task board, and HAL command rail.</text>
+  <text x="320" y="1116" class="body">That makes it possible to implement this incrementally inside the existing program without inventing a new information model.</text>
+</svg>

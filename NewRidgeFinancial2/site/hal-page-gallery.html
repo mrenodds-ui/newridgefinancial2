@@ -1,0 +1,1165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NR2 HAL Page Gallery</title>
+    <style>
+      :root {
+        --bg: #181818;
+        --panel: #141414;
+        --panel-2: #1b1c20;
+        --elevated: #202227;
+        --line: rgba(228, 228, 228, 0.12);
+        --line-subtle: rgba(228, 228, 228, 0.078);
+        --text: rgba(228, 228, 228, 0.92);
+        --muted: rgba(228, 228, 228, 0.55);
+        --muted-soft: rgba(228, 228, 228, 0.37);
+        --fill-primary: rgba(228, 228, 228, 0.19);
+        --fill-secondary: rgba(228, 228, 228, 0.12);
+        --fill-tertiary: rgba(228, 228, 228, 0.067);
+        --fill-quaternary: rgba(228, 228, 228, 0.04);
+        --gold: #d6b15e;
+        --cyan: #87c3ff;
+        --accent: #599ce7;
+        --sage: #78a86b;
+        --red: #e0584f;
+        --pink: #d68eb0;
+        --purple: #9f8ae8;
+        --orange: #e29a52;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        background:
+          radial-gradient(circle at top left, rgba(214, 177, 94, 0.09), transparent 26%),
+          radial-gradient(circle at top right, rgba(89, 156, 231, 0.08), transparent 24%),
+          var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+
+      .gallery-shell {
+        width: min(1680px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 24px 0 72px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 18px;
+        margin-bottom: 22px;
+      }
+
+      .hero-card,
+      .legend-card,
+      .page {
+        border: 1px solid var(--line-subtle);
+        background: linear-gradient(180deg, rgba(228, 228, 228, 0.03), rgba(228, 228, 228, 0.015));
+        border-radius: 22px;
+        box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+      }
+
+      .hero-card,
+      .legend-card { padding: 22px 24px; }
+
+      .hero-card h1 {
+        margin: 0 0 10px;
+        font-size: 34px;
+        letter-spacing: 0.02em;
+      }
+
+      .eyebrow {
+        color: var(--gold);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .hero-card p,
+      .legend-card p {
+        color: var(--muted);
+        line-height: 1.55;
+        margin: 8px 0 0;
+      }
+
+      .legend-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .legend-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 999px;
+        background: var(--fill-tertiary);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+
+      .pages {
+        display: grid;
+        gap: 18px;
+      }
+
+      .page-switcher {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 0 0 18px;
+        padding: 14px;
+        border: 1px solid var(--line-subtle);
+        border-radius: 18px;
+        background: rgba(20, 20, 20, 0.94);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+      }
+
+      .page-switcher__button {
+        border: 1px solid var(--line-subtle);
+        background: var(--fill-tertiary);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 10px 14px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .page-switcher__button:hover {
+        border-color: var(--line);
+        background: var(--fill-secondary);
+      }
+
+      .page-switcher__button.is-active {
+        background: rgba(216, 178, 95, 0.14);
+        border-color: rgba(216, 178, 95, 0.32);
+        color: var(--gold);
+      }
+
+      .page {
+        display: none;
+        grid-template-columns: 240px 1fr;
+        overflow: hidden;
+      }
+
+      .page.is-active {
+        display: grid;
+      }
+
+      .rail {
+        padding: 20px 16px;
+        background: linear-gradient(180deg, rgba(20,20,20,0.96), rgba(17,18,22,0.98));
+        border-right: 1px solid var(--line);
+      }
+
+      .brand {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+
+      .brand-mark {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, #d8b25f, #9c7b32);
+        color: #1a1206;
+        font-weight: 800;
+      }
+
+      .brand-copy strong {
+        display: block;
+        color: var(--gold);
+        font-size: 13px;
+      }
+
+      .brand-copy span {
+        color: #7d8694;
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .rail-group {
+        margin-top: 16px;
+      }
+
+      .rail-group h3 {
+        margin: 0 0 8px;
+        color: #5d6470;
+        font-size: 9px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .rail-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        color: #aeb6c2;
+        font-size: 12px;
+      }
+
+      .rail-item.active {
+        background: rgba(216, 178, 95, 0.12);
+        color: var(--gold);
+        box-shadow: inset 2px 0 0 var(--gold);
+      }
+
+      .page-main {
+        padding: 20px 20px 18px;
+      }
+
+      .page-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 16px;
+      }
+
+      .page-title h2 {
+        margin: 6px 0 4px;
+        font-size: 28px;
+      }
+
+      .page-title p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .filters {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .chip {
+        padding: 9px 12px;
+        border-radius: 999px;
+        background: var(--fill-tertiary);
+        border: 1px solid var(--line-subtle);
+        font-size: 12px;
+        color: var(--text);
+        white-space: nowrap;
+      }
+
+      .hero-strip {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        border: 1px solid var(--line-subtle);
+        background: linear-gradient(135deg, rgba(214, 177, 94, 0.10), rgba(89, 156, 231, 0.06));
+        margin-bottom: 16px;
+      }
+
+      .hero-strip .icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        background: rgba(214, 177, 94, 0.14);
+        color: var(--gold);
+        font-size: 20px;
+      }
+
+      .hero-strip strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .hero-strip span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .widgets {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .widget {
+        min-height: 150px;
+        border-radius: 18px;
+        border: 1px solid var(--line-subtle);
+        background: var(--fill-tertiary);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .span-3 { grid-column: span 3; }
+      .span-4 { grid-column: span 4; }
+      .span-5 { grid-column: span 5; }
+      .span-6 { grid-column: span 6; }
+      .span-7 { grid-column: span 7; }
+      .span-8 { grid-column: span 8; }
+      .span-12 { grid-column: span 12; }
+
+      .widget-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .widget-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        font-size: 18px;
+      }
+
+      .widget h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .widget p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.45;
+        font-size: 13px;
+      }
+
+      .mini-metric {
+        margin-top: auto;
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .spark,
+      .bars,
+      .queue,
+      .notes,
+      .doc-row,
+      .timeline {
+        margin-top: auto;
+      }
+
+      .spark {
+        height: 46px;
+        background: linear-gradient(180deg, rgba(214, 177, 94, 0.10), transparent);
+        clip-path: polygon(0 84%, 14% 72%, 28% 74%, 42% 56%, 56% 58%, 70% 34%, 84% 28%, 100% 0, 100% 100%, 0 100%);
+        border-radius: 10px;
+      }
+
+      .bars {
+        display: grid;
+        gap: 10px;
+      }
+
+      .bar-row {
+        display: grid;
+        grid-template-columns: 110px 1fr 52px;
+        gap: 10px;
+        align-items: center;
+        font-size: 12px;
+      }
+
+      .bar-track {
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(228, 228, 228, 0.067);
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        border-radius: inherit;
+      }
+
+      .queue,
+      .notes,
+      .timeline {
+        display: grid;
+        gap: 8px;
+      }
+
+      .queue-item,
+      .note-item,
+      .timeline-item,
+      .doc-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(228, 228, 228, 0.04);
+        color: var(--text);
+        font-size: 12px;
+      }
+
+      .doc-stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .accent-gold .widget-icon, .accent-gold .hero-strip .icon { background: rgba(214, 177, 94, 0.14); color: var(--gold); }
+      .accent-green .widget-icon, .accent-green .hero-strip .icon { background: rgba(120, 168, 107, 0.16); color: var(--sage); }
+      .accent-blue .widget-icon, .accent-blue .hero-strip .icon { background: rgba(89, 156, 231, 0.16); color: var(--cyan); }
+      .accent-orange .widget-icon, .accent-orange .hero-strip .icon { background: rgba(226, 154, 82, 0.16); color: var(--orange); }
+      .accent-purple .widget-icon, .accent-purple .hero-strip .icon { background: rgba(159, 138, 232, 0.16); color: var(--purple); }
+      .accent-pink .widget-icon, .accent-pink .hero-strip .icon { background: rgba(214, 142, 176, 0.16); color: var(--pink); }
+      .accent-cyan .widget-icon, .accent-cyan .hero-strip .icon { background: rgba(135, 195, 255, 0.16); color: var(--cyan); }
+      .accent-gray .widget-icon, .accent-gray .hero-strip .icon { background: rgba(228, 228, 228, 0.08); color: var(--text); }
+      .accent-yellow .widget-icon, .accent-yellow .hero-strip .icon { background: rgba(214, 177, 94, 0.14); color: var(--gold); }
+
+      .wallstreet-board {
+        display: grid;
+        gap: 14px;
+      }
+
+      .ticker-ribbon {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .ticker-pill {
+        padding: 10px 12px;
+        border: 1px solid var(--line-subtle);
+        border-radius: 14px;
+        background: linear-gradient(180deg, rgba(228, 228, 228, 0.045), rgba(228, 228, 228, 0.02));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+      }
+
+      .ticker-pill strong,
+      .stat-card strong,
+      .panel-header strong,
+      .rank-header strong,
+      .flow-card strong {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted-soft);
+      }
+
+      .ticker-pill span {
+        display: block;
+        margin-top: 4px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .ticker-pill em {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-style: normal;
+        font-size: 12px;
+      }
+
+      .ticker-pill.up span,
+      .delta.up,
+      .pulse.up {
+        color: var(--sage);
+      }
+
+      .ticker-pill.flat span,
+      .delta.flat,
+      .pulse.flat {
+        color: var(--cyan);
+      }
+
+      .ticker-pill.down span,
+      .delta.down,
+      .pulse.down {
+        color: var(--red);
+      }
+
+      .executive-band {
+        display: grid;
+        grid-template-columns: 1.7fr 1fr;
+        gap: 14px;
+      }
+
+      .band-lead,
+      .band-side,
+      .board-panel,
+      .rank-panel,
+      .flow-card,
+      .heat-panel,
+      .list-panel {
+        border: 1px solid var(--line-subtle);
+        background: linear-gradient(180deg, rgba(28, 29, 34, 0.95), rgba(20, 20, 20, 0.94));
+        border-radius: 18px;
+        box-shadow: 0 18px 48px rgba(0,0,0,0.22);
+      }
+
+      .band-lead,
+      .band-side,
+      .board-panel,
+      .rank-panel,
+      .flow-card,
+      .heat-panel,
+      .list-panel {
+        padding: 16px;
+      }
+
+      .band-lead {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .band-lead::after {
+        content: "";
+        position: absolute;
+        inset: auto -10% -20% 40%;
+        height: 180px;
+        background: radial-gradient(circle, rgba(214, 177, 94, 0.18), transparent 58%);
+        pointer-events: none;
+      }
+
+      .lead-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .stat-card {
+        padding: 12px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.04);
+      }
+
+      .stat-card b {
+        display: block;
+        margin-top: 6px;
+        font-size: 26px;
+        line-height: 1;
+      }
+
+      .delta {
+        margin-top: 6px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .band-side {
+        display: grid;
+        gap: 12px;
+        align-content: start;
+      }
+
+      .side-block {
+        padding: 12px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.04);
+      }
+
+      .side-block h3,
+      .board-panel h3,
+      .rank-panel h3,
+      .flow-card h3,
+      .heat-panel h3,
+      .list-panel h3 {
+        margin: 6px 0 4px;
+        font-size: 16px;
+      }
+
+      .side-block p,
+      .board-panel p,
+      .rank-panel p,
+      .flow-card p,
+      .heat-panel p,
+      .list-panel p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .board-grid {
+        display: grid;
+        grid-template-columns: 1.25fr 1fr 1fr;
+        gap: 14px;
+      }
+
+      .panel-header,
+      .rank-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .panel-chip {
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 11px;
+        color: var(--text);
+        background: rgba(214, 177, 94, 0.08);
+        border: 1px solid rgba(214, 177, 94, 0.18);
+      }
+
+      .metric-ladder,
+      .priority-list,
+      .doc-ledger,
+      .library-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .ladder-row,
+      .priority-row,
+      .doc-ledger-row,
+      .library-row {
+        display: grid;
+        grid-template-columns: 1.2fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.04);
+        font-size: 12px;
+      }
+
+      .ladder-row small,
+      .priority-row small,
+      .doc-ledger-row small,
+      .library-row small {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+      }
+
+      .rank-table {
+        display: grid;
+        gap: 8px;
+      }
+
+      .rank-line {
+        display: grid;
+        grid-template-columns: 100px 1fr 64px;
+        gap: 10px;
+        align-items: center;
+        font-size: 12px;
+      }
+
+      .rank-track {
+        height: 10px;
+        background: rgba(255,255,255,0.06);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .rank-fill {
+        height: 100%;
+        border-radius: inherit;
+      }
+
+      .pulse-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .pulse {
+        padding: 12px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.04);
+      }
+
+      .pulse b {
+        display: block;
+        margin-top: 8px;
+        font-size: 24px;
+      }
+
+      .mini-trend {
+        height: 60px;
+        margin-top: 12px;
+        border-radius: 12px;
+        background:
+          linear-gradient(180deg, rgba(214, 177, 94, 0.13), transparent),
+          linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
+          linear-gradient(0deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+        background-size: auto, 16% 100%, 100% 33%;
+        clip-path: polygon(0 82%, 10% 74%, 20% 78%, 30% 59%, 40% 63%, 50% 49%, 60% 54%, 70% 32%, 80% 37%, 90% 18%, 100% 8%, 100% 100%, 0 100%);
+      }
+
+      .flow-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .flow-card ul,
+      .heat-panel ul,
+      .list-panel ul {
+        list-style: none;
+        padding: 0;
+        margin: 14px 0 0;
+        display: grid;
+        gap: 10px;
+      }
+
+      .flow-card li,
+      .heat-panel li,
+      .list-panel li {
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.04);
+        font-size: 12px;
+      }
+
+      .flow-card li span,
+      .heat-panel li span,
+      .list-panel li span {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+      }
+
+      .heat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      @media (max-width: 1200px) {
+        .hero,
+        .page { grid-template-columns: 1fr; }
+        .widgets { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        .span-7, .span-8, .span-6, .span-5, .span-4, .span-3 { grid-column: span 6; }
+        .ticker-ribbon,
+        .lead-grid,
+        .pulse-grid,
+        .flow-grid,
+        .heat-grid,
+        .board-grid,
+        .executive-band { grid-template-columns: 1fr 1fr; }
+      }
+
+      @media (max-width: 720px) {
+        .gallery-shell { width: min(100vw - 20px, 1680px); padding-top: 16px; }
+        .page-main, .hero-card, .legend-card { padding: 16px; }
+        .widgets { grid-template-columns: 1fr; }
+        .span-12, .span-8, .span-7, .span-6, .span-5, .span-4, .span-3 { grid-column: span 1; }
+        .page-top { flex-direction: column; align-items: flex-start; }
+        .filters { justify-content: flex-start; }
+        .ticker-ribbon,
+        .lead-grid,
+        .pulse-grid,
+        .flow-grid,
+        .heat-grid,
+        .board-grid,
+        .executive-band { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="gallery-shell">
+      <section class="hero">
+        <div class="hero-card">
+          <div class="eyebrow">HAL Page Gallery</div>
+          <h1>Every real program page, restyled for HAL-first work.</h1>
+          <p>This gallery keeps the current NR2 page schema, the live dark color system, and only HAL-usable widgets. Diagnostic, runtime, import-health, and technical status content has been removed from the page concepts.</p>
+        </div>
+        <div class="legend-card">
+          <div class="eyebrow">Design Rules</div>
+          <p>Each page uses icons, a clean command-forward hero band, and only user-facing operational widgets. The HAL page intentionally excludes Import &amp; Source Health.</p>
+          <div class="legend-grid">
+            <div class="legend-pill"><span class="legend-dot" style="background:#d6b15e"></span> Finance / HAL</div>
+            <div class="legend-pill"><span class="legend-dot" style="background:#78a86b"></span> Clinical / Ops</div>
+            <div class="legend-pill"><span class="legend-dot" style="background:#87c3ff"></span> Accounting / Docs</div>
+            <div class="legend-pill"><span class="legend-dot" style="background:#e29a52"></span> A/R / Claims</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="pages">
+        <div class="page-switcher" aria-label="Page switcher">
+          <button class="page-switcher__button" data-target-page="all-widgets">All Widgets</button>
+          <button class="page-switcher__button" data-target-page="financial">Financial</button>
+          <button class="page-switcher__button" data-target-page="taxes">Taxes</button>
+          <button class="page-switcher__button" data-target-page="softdent">SoftDent</button>
+          <button class="page-switcher__button" data-target-page="quickbooks">QuickBooks</button>
+          <button class="page-switcher__button" data-target-page="ar">A/R</button>
+          <button class="page-switcher__button" data-target-page="claims">Claims</button>
+          <button class="page-switcher__button" data-target-page="narratives">Narratives</button>
+          <button class="page-switcher__button" data-target-page="documents">Documents</button>
+          <button class="page-switcher__button" data-target-page="library">Library</button>
+          <button class="page-switcher__button" data-target-page="office-manager">Office Manager</button>
+          <button class="page-switcher__button" data-target-page="hal">HAL</button>
+        </div>
+
+        <article class="page accent-gold" data-page="all-widgets">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">A</div><div class="brand-copy"><strong>All Widgets</strong><span>Market board</span></div></div>
+            <div class="rail-group"><h3>Desk</h3><div class="rail-item active">● Executive tape</div><div class="rail-item">◌ Capital view</div><div class="rail-item">◌ Ops flow</div></div>
+            <div class="rail-group"><h3>Coverage</h3><div class="rail-item">◌ SoftDent</div><div class="rail-item">◌ QuickBooks</div><div class="rail-item">◌ Claims and docs</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">All Widgets</div><h2>HAL Executive Market Board</h2><p>A tighter, owner-grade wallboard using the current NR2 schema and only HAL-compatible operational widgets</p></div><div class="filters"><span class="chip">Current period</span><span class="chip">Cross-system view</span><span class="chip">No diagnostics</span></div></div>
+            <div class="hero-strip"><div class="icon">✦</div><div><strong>HAL focus: executive command, capital posture, and operating flow</strong><span>The layout is denser and more institutional: headline tape first, cross-system comparisons second, queues and operating risk last.</span></div></div>
+            <div class="wallstreet-board">
+              <section class="ticker-ribbon">
+                <div class="ticker-pill up"><strong>Collections Run Rate</strong><span>$412.5k</span><em>+6.8% vs prior month</em></div>
+                <div class="ticker-pill up"><strong>Adjusted EBITDA</strong><span>$118.4k</span><em>Margin holding above target</em></div>
+                <div class="ticker-pill flat"><strong>A/R Weighted Age</strong><span>38.2 days</span><em>Stable after statement cycle</em></div>
+                <div class="ticker-pill down"><strong>Claims at Risk</strong><span>$6.9k</span><em>Requires payer follow-up today</em></div>
+              </section>
+
+              <section class="executive-band">
+                <div class="band-lead">
+                  <strong class="eyebrow">HAL Command Tape</strong>
+                  <h3>Practice Financial Overview, Ask HAL, and Production Trend are fused into a single opening view.</h3>
+                  <p>This board opens on capital-quality numbers first, then exposes where HAL should direct attention across collections, chairside production, payer friction, and month-end close.</p>
+                  <div class="lead-grid">
+                    <div class="stat-card"><strong>Net Production</strong><b>$468k</b><div class="delta up">+4.2% MTD</div></div>
+                    <div class="stat-card"><strong>Net Collections</strong><b>$412k</b><div class="delta up">88.1% realization</div></div>
+                    <div class="stat-card"><strong>Case Acceptance</strong><b>73%</b><div class="delta flat">Within target band</div></div>
+                    <div class="stat-card"><strong>Recall Reactivation</strong><b>91%</b><div class="delta up">Hygiene pace improved</div></div>
+                  </div>
+                </div>
+                <div class="band-side">
+                  <div class="side-block"><strong>Ask HAL</strong><h3>Desk prompts</h3><p>Summarize margin drag, identify aged claims blocking close, and brief the office manager before huddle.</p></div>
+                  <div class="side-block"><strong>QuickBooks + SoftDent</strong><h3>Normalization watch</h3><p>Owner add-backs are modest; the larger lever is claims conversion and patient balance cleanup.</p></div>
+                  <div class="side-block"><strong>Office Manager Priorities</strong><h3>First three moves</h3><p>Push Delta denials, fill the hygiene opening, and release the June close packet after invoice coding.</p></div>
+                </div>
+              </section>
+
+              <section class="board-grid">
+                <div class="board-panel">
+                  <div class="panel-header"><div><strong>Financial Core</strong><h3>Revenue and accounting ladder</h3><p>Practice Financial Overview, Profit &amp; Loss Summary, EBITDA Normalization, and Payer Mix in one capital stack.</p></div><span class="panel-chip">Owner review</span></div>
+                  <div class="metric-ladder">
+                    <div class="ladder-row"><div><span>Practice Financial Overview</span><small>Revenue, collections, net income snapshot</small></div><strong>$412,480</strong></div>
+                    <div class="ladder-row"><div><span>Profit &amp; Loss Summary</span><small>QuickBooks YTD rollup</small></div><strong>$886,559</strong></div>
+                    <div class="ladder-row"><div><span>EBITDA Normalization</span><small>Reviewed owner add-backs</small></div><strong>$9,240</strong></div>
+                    <div class="ladder-row"><div><span>Payer Mix &amp; Collection Rate</span><small>Commercial and patient collection posture</small></div><strong>85.2%</strong></div>
+                  </div>
+                  <div class="mini-trend"></div>
+                </div>
+
+                <div class="rank-panel">
+                  <div class="rank-header"><div><strong>Provider Performance</strong><h3>Production leaderboard</h3><p>Provider Performance and Care Delivery Summary in ranked form.</p></div><span class="panel-chip">Chairside</span></div>
+                  <div class="rank-table">
+                    <div class="rank-line"><span>Dr. Ridge</span><div class="rank-track"><div class="rank-fill" style="width:84%;background:#78a86b"></div></div><strong>$168k</strong></div>
+                    <div class="rank-line"><span>Dr. Moreno</span><div class="rank-track"><div class="rank-fill" style="width:69%;background:#d6b15e"></div></div><strong>$124k</strong></div>
+                    <div class="rank-line"><span>Hygiene</span><div class="rank-track"><div class="rank-fill" style="width:43%;background:#87c3ff"></div></div><strong>$72k</strong></div>
+                  </div>
+                  <div class="pulse-grid">
+                    <div class="pulse up"><strong>New Patients</strong><b>42</b></div>
+                    <div class="pulse flat"><strong>Treatment Plans</strong><b>$214.8k</b></div>
+                    <div class="pulse up"><strong>Case Acceptance</strong><b>73%</b></div>
+                    <div class="pulse up"><strong>Hygiene Recall</strong><b>91%</b></div>
+                  </div>
+                </div>
+
+                <div class="board-panel">
+                  <div class="panel-header"><div><strong>Receivables Pressure</strong><h3>A/R and claims posture</h3><p>SoftDent A/R Aging, Outstanding Claims, Smart Claims &amp; Receivables, and Claims Pipeline.</p></div><span class="panel-chip">Daily action</span></div>
+                  <div class="priority-list">
+                    <div class="priority-row"><div><span>0-30 / 31-60 / 61+</span><small>SoftDent aging ladder</small></div><strong>$118k / $77k / $34k</strong></div>
+                    <div class="priority-row"><div><span>Martinez D2740</span><small>Delta crown claim still open</small></div><strong>$1,240</strong></div>
+                    <div class="priority-row"><div><span>Choi SRP claim</span><small>Aetna clinical narrative needed</small></div><strong>$860</strong></div>
+                    <div class="priority-row"><div><span>Williams patient balance</span><small>Payment plan call due today</small></div><strong>$720</strong></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="flow-grid">
+                <div class="flow-card">
+                  <strong>Narratives and payer language</strong>
+                  <h3>Narrative Workflow</h3>
+                  <p>Concise insurance writing blocks rather than generic notes cards.</p>
+                  <ul>
+                    <li>Prior history block<span>Use for Choi SRP claim</span></li>
+                    <li>Radiograph reference<span>Attach with perio chart note</span></li>
+                    <li>Occlusal breakdown language<span>Apply to crown rework narrative</span></li>
+                  </ul>
+                </div>
+                <div class="flow-card">
+                  <strong>Document operations</strong>
+                  <h3>Document Intake and Preview</h3>
+                  <p>Accounting intake is shown like a blotter instead of a casual card stack.</p>
+                  <div class="doc-ledger">
+                    <div class="doc-ledger-row"><div><span>Henry Schein invoice</span><small>Supplies</small></div><strong>$14,280</strong></div>
+                    <div class="doc-ledger-row"><div><span>Payroll accrual</span><small>Month-end entry support</small></div><strong>$42,800</strong></div>
+                    <div class="doc-ledger-row"><div><span>Merchant deposit</span><small>Deposit matching queue</small></div><strong>$18,420</strong></div>
+                  </div>
+                </div>
+                <div class="flow-card">
+                  <strong>Close desk</strong>
+                  <h3>Period Close and Posting</h3>
+                  <p>Period Close, Accounts Payable, and Journal Posting Queue rolled into one close monitor.</p>
+                  <ul>
+                    <li>Invoices coded<span>2 left before release</span></li>
+                    <li>Payroll accrual ready<span>Journal export staged</span></li>
+                    <li>Merchant fees review<span>Owner sign-off pending</span></li>
+                  </ul>
+                </div>
+              </section>
+
+              <section class="heat-grid">
+                <div class="heat-panel">
+                  <strong>Office manager desk</strong>
+                  <h3>Operational heat map</h3>
+                  <p>Office Manager Priorities, Office Manager Surfaces, and SideNotes Program treated as a professional daily run-sheet.</p>
+                  <ul>
+                    <li>Denied perio claims<span>First queue after huddle</span></li>
+                    <li>Hygiene opening at 2:30 PM<span>Reactivation call list ready</span></li>
+                    <li>Billing / Schedule / Claims surfaces<span>Direct work areas for staff</span></li>
+                    <li>Call Martinez and review close packet<span>Owner and OM follow-up</span></li>
+                  </ul>
+                </div>
+                <div class="list-panel">
+                  <strong>Knowledge and record shelf</strong>
+                  <h3>Document Library and operating memory</h3>
+                  <p>Library materials remain visible but secondary, the way a real executive board would stage them.</p>
+                  <div class="library-list">
+                    <div class="library-row"><div><span>Delta PPO agreement</span><small>Contract reference</small></div><strong>Library</strong></div>
+                    <div class="library-row"><div><span>OSHA training binder</span><small>Compliance reference</small></div><strong>Library</strong></div>
+                    <div class="library-row"><div><span>Lab fee schedule</span><small>Vendor reference</small></div><strong>Library</strong></div>
+                    <div class="library-row"><div><span>HAL prompt shelf</span><small>Natural-language launch point</small></div><strong>Ready</strong></div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="page accent-green" data-page="financial">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">N</div><div class="brand-copy"><strong>New Ridge</strong><span>Overview</span></div></div>
+            <div class="rail-group"><h3>Overview</h3><div class="rail-item active">● Financial</div><div class="rail-item">◌ Taxes</div><div class="rail-item">◌ HAL</div></div>
+            <div class="rail-group"><h3>Revenue</h3><div class="rail-item">◌ A/R</div><div class="rail-item">◌ QuickBooks</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">Financial</div><h2>Owner Financial Dashboard</h2><p>Production, collections, payer mix, and provider contribution</p></div><div class="filters"><span class="chip">June 2025</span><span class="chip">All providers</span><span class="chip">Ridgefield</span></div></div>
+            <div class="hero-strip"><div class="icon">◔</div><div><strong>HAL focus: production, collections, payer mix</strong><span>Owner-facing summary cards and ranking widgets only.</span></div></div>
+            <div class="widgets">
+              <div class="widget span-3"><div class="widget-top"><div class="widget-icon">◔</div><div><h3>Practice Financial Overview</h3><p>Revenue, production, collections, and net income snapshot.</p></div></div><div class="mini-metric">$412,480</div></div>
+              <div class="widget span-3"><div class="widget-top"><div class="widget-icon">⌁</div><div><h3>Production MTD &amp; 12-Month Trend</h3><p>Trend-led view for month and year pacing.</p></div></div><div class="spark"></div></div>
+              <div class="widget span-3"><div class="widget-top"><div class="widget-icon">◌</div><div><h3>Payer Mix &amp; Collection Rate</h3><p>Compact mix card with collection posture.</p></div></div><div class="mini-metric">85.2%</div></div>
+              <div class="widget span-3"><div class="widget-top"><div class="widget-icon">▥</div><div><h3>Production by Provider</h3><p>Provider contribution ranked for owner review.</p></div></div><div class="bars"><div class="bar-row"><span>Dr. Ridge</span><div class="bar-track"><div class="bar-fill" style="width:84%;background:#78a86b"></div></div><span>$168k</span></div><div class="bar-row"><span>Dr. Moreno</span><div class="bar-track"><div class="bar-fill" style="width:69%;background:#d6b15e"></div></div><span>$124k</span></div><div class="bar-row"><span>Hygiene</span><div class="bar-track"><div class="bar-fill" style="width:43%;background:#599ce7"></div></div><span>$72k</span></div></div></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="page accent-blue" data-page="taxes">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">N</div><div class="brand-copy"><strong>New Ridge</strong><span>Overview</span></div></div>
+            <div class="rail-group"><h3>Overview</h3><div class="rail-item">◌ Financial</div><div class="rail-item active">● Taxes</div><div class="rail-item">◌ HAL</div></div>
+            <div class="rail-group"><h3>Revenue</h3><div class="rail-item">◌ QuickBooks</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">Taxes</div><h2>S Corporation Tax Planning</h2><p>Federal and Kansas owner-level tax planning surfaces</p></div><div class="filters"><span class="chip">Tax year 2025</span><span class="chip">S corporation</span><span class="chip">Kansas</span></div></div>
+            <div class="hero-strip"><div class="icon">◫</div><div><strong>HAL focus: tax-ready financial rollup</strong><span>Only owner-facing book-income and normalization widgets are shown.</span></div></div>
+            <div class="widgets">
+              <div class="widget span-7"><div class="widget-top"><div class="widget-icon">◫</div><div><h3>Book Income (QuickBooks YTD)</h3><p>Tax planning starts from the accounting rollup already in HAL.</p></div></div><div class="mini-metric">$886,559</div></div>
+              <div class="widget span-5"><div class="widget-top"><div class="widget-icon">◇</div><div><h3>Owner Add-backs &amp; Adjustments</h3><p>Normalization block for scenario-based tax planning.</p></div></div><div class="timeline"><div class="timeline-item"><span>Reasonable comp</span><span>$220k model</span></div><div class="timeline-item"><span>Distributions</span><span>Review allocation</span></div><div class="timeline-item"><span>Quarterly estimates</span><span>Voucher-ready summary</span></div></div></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="page accent-green" data-page="softdent">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">N</div><div class="brand-copy"><strong>New Ridge</strong><span>Clinical</span></div></div>
+            <div class="rail-group"><h3>Clinical</h3><div class="rail-item active">● SoftDent</div><div class="rail-item">◌ Narratives</div><div class="rail-item">◌ Claims</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">SoftDent</div><h2>Clinical &amp; Practice Performance</h2><p>Care delivery, receivables, hygiene, and case acceptance</p></div><div class="filters"><span class="chip">June 2025</span><span class="chip">All operatories</span><span class="chip">All providers</span></div></div>
+            <div class="hero-strip"><div class="icon">✚</div><div><strong>HAL focus: clinical productivity and patient flow</strong><span>Practice-facing widgets with no diagnostic overlays.</span></div></div>
+            <div class="widgets">
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">✚</div><div><h3>Care Delivery Summary</h3><p>Chairside volume, day sheet posture, and care delivery totals.</p></div></div><div class="mini-metric">73%</div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">◫</div><div><h3>Accounts Receivable Aging</h3><p>Clinical page A/R summary for staff context.</p></div></div><div class="timeline"><div class="timeline-item"><span>0-30 days</span><span>$118k</span></div><div class="timeline-item"><span>31-60 days</span><span>$77k</span></div><div class="timeline-item"><span>61+ days</span><span>$34k</span></div></div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">◌</div><div><h3>Insurance vs Patient Balance</h3><p>Responsibility split with clean balance chips.</p></div></div><div class="mini-metric">58 / 42</div></div>
+              <div class="widget span-3"><div class="widget-top"><div class="widget-icon">◎</div><div><h3>New Patients (MTD)</h3><p>New patient acquisition in a simple volume card.</p></div></div><div class="mini-metric">42</div></div>
+              <div class="widget span-3"><div class="widget-top"><div class="widget-icon">▣</div><div><h3>Treatment Plans Presented</h3><p>Value and case count for treatment presentation.</p></div></div><div class="mini-metric">$214.8k</div></div>
+              <div class="widget span-3"><div class="widget-top"><div class="widget-icon">◔</div><div><h3>Case Acceptance Rate</h3><p>Accepted versus presented treatment in one card.</p></div></div><div class="mini-metric">73%</div></div>
+              <div class="widget span-3"><div class="widget-top"><div class="widget-icon">↺</div><div><h3>Hygiene &amp; Recall</h3><p>Reappointment and due recall pacing.</p></div></div><div class="mini-metric">91%</div></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="page accent-blue" data-page="quickbooks">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">N</div><div class="brand-copy"><strong>New Ridge</strong><span>Revenue</span></div></div>
+            <div class="rail-group"><h3>Revenue</h3><div class="rail-item active">● QuickBooks</div><div class="rail-item">◌ A/R</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">QuickBooks</div><h2>Practice Accounting</h2><p>Profit &amp; loss, operating expenses, and EBITDA normalization</p></div><div class="filters"><span class="chip">YTD 2025</span><span class="chip">Accrual basis</span><span class="chip">All accounts</span></div></div>
+            <div class="hero-strip"><div class="icon">◨</div><div><strong>HAL focus: accounting clarity for the owner</strong><span>Finance cards only, no system-status or import messaging.</span></div></div>
+            <div class="widgets">
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">◨</div><div><h3>Profit &amp; Loss Summary (YTD)</h3><p>Revenue, gross profit, operating expense, and net income.</p></div></div><div class="mini-metric">$886,559</div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">◇</div><div><h3>EBITDA Normalization</h3><p>Owner add-backs and staff-reviewed adjustments.</p></div></div><div class="mini-metric">$9,240</div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">▤</div><div><h3>Operating Expenses</h3><p>Expense groups with emphasis on controllable spend.</p></div></div><div class="bars"><div class="bar-row"><span>Payroll</span><div class="bar-track"><div class="bar-fill" style="width:74%;background:#87c3ff"></div></div><span>29.4%</span></div><div class="bar-row"><span>Supplies</span><div class="bar-track"><div class="bar-fill" style="width:48%;background:#d6b15e"></div></div><span>6.1%</span></div><div class="bar-row"><span>Labs</span><div class="bar-track"><div class="bar-fill" style="width:32%;background:#78a86b"></div></div><span>4.3%</span></div></div></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="page accent-orange" data-page="ar">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">N</div><div class="brand-copy"><strong>New Ridge</strong><span>Revenue</span></div></div>
+            <div class="rail-group"><h3>Revenue</h3><div class="rail-item active">● A/R</div><div class="rail-item">◌ QuickBooks</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">A/R</div><h2>Accounts Receivable &amp; Collections</h2><p>Outstanding balances and open insurance claims</p></div><div class="filters"><span class="chip">All payers</span><span class="chip">Balance &gt; $500</span><span class="chip">Age &gt; 45 days</span></div></div>
+            <div class="hero-strip"><div class="icon">◴</div><div><strong>HAL focus: follow-up work and collections posture</strong><span>Queue-based receivable widgets with action-friendly layout.</span></div></div>
+            <div class="widgets">
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">◴</div><div><h3>Aging &amp; Collections Trend</h3><p>Trend panel for receivables and collection pacing.</p></div></div><div class="timeline"><div class="timeline-item"><span>0-30</span><span>$118k</span></div><div class="timeline-item"><span>31-60</span><span>$77k</span></div><div class="timeline-item"><span>61+</span><span>$34k</span></div></div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">◌</div><div><h3>Outstanding Claims</h3><p>Largest balances and top insurance items.</p></div></div><div class="queue"><div class="queue-item"><span>Martinez crown</span><span>$1,240</span></div><div class="queue-item"><span>Williams self-pay</span><span>$720</span></div><div class="queue-item"><span>Perio follow-up</span><span>$610</span></div></div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">↗</div><div><h3>Follow-up Queue</h3><p>Collections priority list for calls and claim review.</p></div></div><div class="queue"><div class="queue-item"><span>Payment plan call</span><span>Today</span></div><div class="queue-item"><span>Delta claim review</span><span>Queue</span></div><div class="queue-item"><span>Statement batch</span><span>Ready</span></div></div></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="page accent-purple" data-page="claims">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">N</div><div class="brand-copy"><strong>New Ridge</strong><span>Clinical</span></div></div>
+            <div class="rail-group"><h3>Clinical</h3><div class="rail-item">◌ SoftDent</div><div class="rail-item active">● Claims</div><div class="rail-item">◌ Narratives</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">Claims</div><h2>Insurance Claims Workbench</h2><p>Open insurance claims, attachments, and payer detail</p></div><div class="filters"><span class="chip">All payers</span><span class="chip">Open claims</span><span class="chip">June submissions</span></div></div>
+            <div class="hero-strip"><div class="icon">▣</div><div><strong>HAL focus: clean claims workbench</strong><span>Only the open-claims widget surface is shown, redesigned with icon-led queue cards.</span></div></div>
+            <div class="widgets"><div class="widget span-12"><div class="widget-top"><div class="widget-icon">▣</div><div><h3>Open Insurance Claims</h3><p>Lane-based claims board with payer, amount, and next-step posture.</p></div></div><div class="queue"><div class="queue-item"><span>Martinez D2740 • Delta Dental</span><span>$1,240</span></div><div class="queue-item"><span>Choi SRP claim • Aetna</span><span>$860</span></div><div class="queue-item"><span>Rosen implant consult • MetLife</span><span>$540</span></div></div></div></div>
+          </div>
+        </article>
+
+        <article class="page accent-pink" data-page="narratives">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">N</div><div class="brand-copy"><strong>New Ridge</strong><span>Clinical</span></div></div>
+            <div class="rail-group"><h3>Clinical</h3><div class="rail-item">◌ Claims</div><div class="rail-item active">● Narratives</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">Narratives</div><h2>Insurance Narratives</h2><p>Clinical justification for crown, bridge, and periodontal cases</p></div><div class="filters"><span class="chip">Drafts</span><span class="chip">Crown cases</span><span class="chip">Delta Dental</span></div></div>
+            <div class="hero-strip"><div class="icon">✎</div><div><strong>HAL focus: guided drafting</strong><span>Single narrative composer experience with source-grounded writing tools.</span></div></div>
+            <div class="widgets"><div class="widget span-12"><div class="widget-top"><div class="widget-icon">✎</div><div><h3>Narrative Composer</h3><p>Draft workspace for crown, bridge, and periodontal justification with reusable phrase blocks.</p></div></div><div class="notes"><div class="note-item"><span>Prior history block</span><span>Insert</span></div><div class="note-item"><span>Radiograph reference</span><span>Add</span></div><div class="note-item"><span>Occlusal breakdown language</span><span>Use</span></div></div></div></div>
+          </div>
+        </article>
+
+        <article class="page accent-cyan" data-page="documents">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">N</div><div class="brand-copy"><strong>New Ridge</strong><span>Operations</span></div></div>
+            <div class="rail-group"><h3>Operations</h3><div class="rail-item active">● Documents</div><div class="rail-item">◌ Library</div><div class="rail-item">◌ Office Manager</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">Documents</div><h2>Accounting Documents</h2><p>Intake, preview, period close, and journal posting</p></div><div class="filters"><span class="chip">June close</span><span class="chip">Needs review</span><span class="chip">All categories</span></div></div>
+            <div class="hero-strip"><div class="icon">▤</div><div><strong>HAL focus: document workflow without diagnostics</strong><span>Review and close surfaces only, framed as operational work cards.</span></div></div>
+            <div class="widgets">
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">▤</div><div><h3>Recent Accounting Documents</h3><p>Invoice, payroll, and statement intake queue.</p></div></div><div class="doc-stack"><div class="doc-row"><span>Henry Schein invoice</span><span>$14,280</span></div><div class="doc-row"><span>Payroll accrual</span><span>$42,800</span></div><div class="doc-row"><span>Merchant deposit</span><span>$18,420</span></div></div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">◫</div><div><h3>Document Preview</h3><p>Selected file preview and extracted header facts.</p></div></div><div class="queue"><div class="queue-item"><span>Vendor</span><span>Henry Schein</span></div><div class="queue-item"><span>Date</span><span>06/27/2025</span></div><div class="queue-item"><span>Category</span><span>Supplies</span></div></div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">◔</div><div><h3>June Period Close</h3><p>Month-end close priorities and approval sequencing.</p></div></div><div class="timeline"><div class="timeline-item"><span>Invoices</span><span>2 left</span></div><div class="timeline-item"><span>Accruals</span><span>Ready</span></div><div class="timeline-item"><span>Owner review</span><span>Pending</span></div></div></div>
+              <div class="widget span-6"><div class="widget-top"><div class="widget-icon">◌</div><div><h3>Accounts Payable</h3><p>Vendor worklist for review and coding.</p></div></div><div class="queue"><div class="queue-item"><span>Henry Schein</span><span>Supplies</span></div><div class="queue-item"><span>Patterson</span><span>Equipment</span></div><div class="queue-item"><span>Local lab</span><span>COGS</span></div></div></div>
+              <div class="widget span-6"><div class="widget-top"><div class="widget-icon">↺</div><div><h3>June Journal Entries</h3><p>Reviewed entries prepared for export.</p></div></div><div class="queue"><div class="queue-item"><span>Payroll accrual</span><span>Ready</span></div><div class="queue-item"><span>Rent allocation</span><span>Ready</span></div><div class="queue-item"><span>Merchant fees</span><span>Review</span></div></div></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="page accent-gray" data-page="library">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">N</div><div class="brand-copy"><strong>New Ridge</strong><span>Operations</span></div></div>
+            <div class="rail-group"><h3>Operations</h3><div class="rail-item">◌ Documents</div><div class="rail-item active">● Library</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">Library</div><h2>Document Library</h2><p>Payer contracts, compliance files, and vendor agreements</p></div><div class="filters"><span class="chip">All categories</span><span class="chip">Contracts</span><span class="chip">Compliance</span></div></div>
+            <div class="hero-strip"><div class="icon">▦</div><div><strong>HAL focus: searchable reference surface</strong><span>Single library widget with icon-led document rows and preview hints.</span></div></div>
+            <div class="widgets"><div class="widget span-12"><div class="widget-top"><div class="widget-icon">▦</div><div><h3>Library &amp; Preview</h3><p>Unified search-and-preview surface for contracts and compliance references.</p></div></div><div class="doc-stack"><div class="doc-row"><span>Delta PPO agreement</span><span>Contract</span></div><div class="doc-row"><span>OSHA training binder</span><span>Compliance</span></div><div class="doc-row"><span>Lab fee schedule</span><span>Vendor</span></div></div></div></div>
+          </div>
+        </article>
+
+        <article class="page accent-yellow" data-page="office-manager">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">N</div><div class="brand-copy"><strong>New Ridge</strong><span>Operations</span></div></div>
+            <div class="rail-group"><h3>Operations</h3><div class="rail-item active">● Office Manager</div><div class="rail-item">◌ Documents</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">Office Manager</div><h2>Office Manager Dashboard</h2><p>Production, billing, and today’s clinical schedule</p></div><div class="filters"><span class="chip">Today</span><span class="chip">All departments</span><span class="chip">Ridgefield</span></div></div>
+            <div class="hero-strip"><div class="icon">☼</div><div><strong>HAL focus: morning huddle and staff surfaces</strong><span>Task-first layout with direct icons for priorities and team workspaces.</span></div></div>
+            <div class="widgets">
+              <div class="widget span-5"><div class="widget-top"><div class="widget-icon">☼</div><div><h3>Today’s Focus</h3><p>Manager agenda, callouts, and follow-up sequence.</p></div></div><div class="queue"><div class="queue-item"><span>Denied perio claims</span><span>First</span></div><div class="queue-item"><span>Hygiene opening</span><span>2:30 PM</span></div><div class="queue-item"><span>Morning huddle</span><span>8:30 AM</span></div></div></div>
+              <div class="widget span-7"><div class="widget-top"><div class="widget-icon">▥</div><div><h3>Staff Work Surfaces</h3><p>Direct page-launch grid for billing, scheduling, claims, and finance work.</p></div></div><div class="bars"><div class="bar-row"><span>Billing</span><div class="bar-track"><div class="bar-fill" style="width:82%;background:#d6b15e"></div></div><span>Queue</span></div><div class="bar-row"><span>Schedule</span><div class="bar-track"><div class="bar-fill" style="width:64%;background:#78a86b"></div></div><span>Openings</span></div><div class="bar-row"><span>Claims</span><div class="bar-track"><div class="bar-fill" style="width:58%;background:#87c3ff"></div></div><span>Review</span></div></div></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="page accent-gold" data-page="hal">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">H</div><div class="brand-copy"><strong>HAL Center</strong><span>Command</span></div></div>
+            <div class="rail-group"><h3>Overview</h3><div class="rail-item active">● HAL</div><div class="rail-item">◌ Financial</div><div class="rail-item">◌ Office Manager</div></div>
+            <div class="rail-group"><h3>Shortcuts</h3><div class="rail-item">◌ Claims</div><div class="rail-item">◌ SoftDent</div><div class="rail-item">◌ QuickBooks</div></div>
+          </aside>
+          <div class="page-main">
+            <div class="page-top"><div class="page-title"><div class="eyebrow">HAL</div><h2>HAL Command Center</h2><p>Ask questions, move between staff surfaces, and review core widgets</p></div><div class="filters"><span class="chip">Current period</span><span class="chip">All surfaces</span><span class="chip">Office channel</span></div></div>
+            <div class="hero-strip"><div class="icon">✦</div><div><strong>HAL focus: commands, summaries, and work surfaces</strong><span>No import health, no source health, no technical status blocks.</span></div></div>
+            <div class="widgets">
+              <div class="widget span-6"><div class="widget-top"><div class="widget-icon">✦</div><div><h3>Ask HAL</h3><p>Natural-language entry point for page explanations and office workflows.</p></div></div><div class="notes"><div class="note-item"><span>Make a plan for today</span><span>Run</span></div><div class="note-item"><span>Show manager dashboard widgets</span><span>Run</span></div><div class="note-item"><span>Summarize MTD production</span><span>Run</span></div></div></div>
+              <div class="widget span-3"><div class="widget-top"><div class="widget-icon">◔</div><div><h3>Practice Financial Overview</h3><p>Owner snapshot card inside HAL.</p></div></div><div class="mini-metric">$412,480</div></div>
+              <div class="widget span-3"><div class="widget-top"><div class="widget-icon">✚</div><div><h3>Care Delivery Summary</h3><p>Clinical snapshot card inside HAL.</p></div></div><div class="mini-metric">73%</div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">◨</div><div><h3>Profit &amp; Loss Summary</h3><p>Accounting summary card with key totals.</p></div></div><div class="mini-metric">$886,559</div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">▥</div><div><h3>Staff Work Surfaces</h3><p>Navigation grid to the staff pages HAL monitors.</p></div></div><div class="queue"><div class="queue-item"><span>Financial</span><span>Open</span></div><div class="queue-item"><span>Claims</span><span>Open</span></div><div class="queue-item"><span>Office Manager</span><span>Open</span></div></div></div>
+              <div class="widget span-4"><div class="widget-top"><div class="widget-icon">✎</div><div><h3>Staff Notes</h3><p>Side notes and office reminders, presented as a clean workspace feed.</p></div></div><div class="notes"><div class="note-item"><span>Call Martinez about balance</span><span>Today</span></div><div class="note-item"><span>Verify hygiene opening</span><span>Tomorrow</span></div><div class="note-item"><span>Review June close packet</span><span>Owner</span></div></div></div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </div>
+    <script>
+      (function () {
+        const pages = Array.from(document.querySelectorAll('[data-page]'));
+        const buttons = Array.from(document.querySelectorAll('[data-target-page]'));
+
+        function showPage(pageId) {
+          const next = pages.some((page) => page.dataset.page === pageId) ? pageId : 'financial';
+          pages.forEach((page) => page.classList.toggle('is-active', page.dataset.page === next));
+          buttons.forEach((button) => button.classList.toggle('is-active', button.dataset.targetPage === next));
+          if (window.location.hash !== '#' + next) {
+            window.location.hash = next;
+          }
+          window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+        }
+
+        buttons.forEach((button) => {
+          button.addEventListener('click', () => showPage(button.dataset.targetPage));
+        });
+
+        window.addEventListener('hashchange', () => showPage((window.location.hash || '').replace(/^#/, '')));
+        showPage((window.location.hash || '').replace(/^#/, '') || 'financial');
+      })();
+    </script>
+  </body>
+</html>

@@ -1,4 +1,5 @@
-# Minimal Python deps for NR2 Office Workstation (pywebview desktop shell).
+# NR2 Moonshot security stack
 pywebview==5.4
 bottle
 python-dotenv
+keyring

@@ -1,0 +1,215 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200" viewBox="0 0 1600 1200" role="img" aria-labelledby="title desc">
+  <title id="title">HAL Financial Canvas Board</title>
+  <desc id="desc">Standalone visual canvas for the HAL-first executive financial dashboard mock.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fbf7f0" />
+      <stop offset="100%" stop-color="#efe5d4" />
+    </linearGradient>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#253748" />
+      <stop offset="100%" stop-color="#32495c" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#1a242d" flood-opacity="0.12" />
+    </filter>
+    <style>
+      .sans { font-family: "Segoe UI", Aptos, Arial, sans-serif; }
+      .mono { font-family: Consolas, "Courier New", monospace; }
+      .panel { fill: rgba(255,250,242,0.94); stroke: rgba(34,49,64,0.14); stroke-width: 1; filter: url(#shadow); }
+      .panel-dark { fill: url(#hero); stroke: rgba(255,255,255,0.08); stroke-width: 1; filter: url(#shadow); }
+      .title { font: 700 42px "Segoe UI", Aptos, Arial, sans-serif; fill: #1d2935; }
+      .subtitle { font: 400 18px "Segoe UI", Aptos, Arial, sans-serif; fill: #617180; }
+      .eyebrow { font: 600 12px Consolas, "Courier New", monospace; letter-spacing: 2px; text-transform: uppercase; fill: #7b8791; }
+      .eyebrow-dark { font: 600 12px Consolas, "Courier New", monospace; letter-spacing: 2px; text-transform: uppercase; fill: rgba(248,243,234,0.70); }
+      .h2 { font: 700 24px "Segoe UI", Aptos, Arial, sans-serif; fill: #1d2935; }
+      .copy { font: 400 16px "Segoe UI", Aptos, Arial, sans-serif; fill: #617180; }
+      .copy-dark { font: 400 16px "Segoe UI", Aptos, Arial, sans-serif; fill: rgba(248,243,234,0.82); }
+      .metric { font: 700 34px "Segoe UI", Aptos, Arial, sans-serif; fill: #1d2935; }
+      .small { font: 600 14px "Segoe UI", Aptos, Arial, sans-serif; fill: #1d2935; }
+      .small-muted { font: 400 14px "Segoe UI", Aptos, Arial, sans-serif; fill: #617180; }
+      .chip { fill: #f1dec0; stroke: rgba(191,143,47,0.25); stroke-width: 1; }
+      .chip-text { font: 600 13px "Segoe UI", Aptos, Arial, sans-serif; fill: #7f6221; }
+      .ok { fill: #dff0ea; }
+      .warn { fill: #f6dfd3; }
+      .ok-text { fill: #1f7a72; font: 700 13px "Segoe UI", Aptos, Arial, sans-serif; }
+      .warn-text { fill: #b85d30; font: 700 13px "Segoe UI", Aptos, Arial, sans-serif; }
+      .neutral-text { fill: #223140; font: 700 13px "Segoe UI", Aptos, Arial, sans-serif; }
+      .white { fill: #fff; }
+      .line-gold { stroke: #bf8f2f; stroke-width: 6; stroke-linecap: round; }
+      .line-teal { stroke: #1f7a72; stroke-width: 6; stroke-linecap: round; }
+      .line-rust { stroke: #b85d30; stroke-width: 6; stroke-linecap: round; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1200" fill="url(#bg)" />
+
+  <rect x="32" y="24" width="1536" height="166" rx="28" class="panel" />
+  <text x="68" y="62" class="eyebrow mono">NEWRIDGE FINANCIAL 2.0 / HAL OPERATING CANVAS</text>
+  <text x="68" y="112" class="title sans">Executive financial command center with HAL built into the flow.</text>
+  <text x="68" y="144" class="subtitle sans">Verified numbers first, operating risks second, HAL explanations and next actions on the page.</text>
+
+  <rect x="980" y="46" width="556" height="122" rx="24" class="panel-dark" />
+  <text x="1012" y="74" class="eyebrow-dark mono">HAL DAILY BRIEF</text>
+  <text x="1012" y="104" class="copy-dark sans">Collections trail production by 6.8 pts because insurance posting lagged while hygiene stayed strong.</text>
+  <text x="1012" y="132" class="copy-dark sans">Focus: clear top-dollar claims, confirm missing payer posts, review variance before close.</text>
+  <rect x="1012" y="142" width="152" height="20" rx="10" class="chip" />
+  <text x="1024" y="156" class="chip-text sans">Explain prod vs coll</text>
+  <rect x="1176" y="142" width="140" height="20" rx="10" class="chip" />
+  <text x="1188" y="156" class="chip-text sans">Top 5 claims</text>
+  <rect x="1328" y="142" width="172" height="20" rx="10" class="chip" />
+  <text x="1340" y="156" class="chip-text sans">Why payroll higher?</text>
+
+  <rect x="32" y="208" width="360" height="182" rx="24" class="panel" />
+  <text x="56" y="238" class="eyebrow mono">PRACTICE PULSE</text>
+  <text x="56" y="286" class="metric sans">$412,480</text>
+  <text x="56" y="316" class="small sans">Current month production</text>
+  <text x="56" y="342" class="small-muted sans">SoftDent verified daysheet aggregate</text>
+  <text x="56" y="370" class="ok-text sans">+8.2% vs prior month</text>
+  <line x1="56" y1="382" x2="92" y2="360" class="line-gold" />
+  <line x1="98" y1="372" x2="134" y2="350" class="line-gold" />
+  <line x1="140" y1="358" x2="176" y2="338" class="line-gold" />
+  <line x1="182" y1="344" x2="218" y2="324" class="line-gold" />
+  <line x1="224" y1="334" x2="260" y2="306" class="line-gold" />
+  <line x1="266" y1="316" x2="302" y2="286" class="line-gold" />
+
+  <rect x="408" y="208" width="360" height="182" rx="24" class="panel" />
+  <text x="432" y="238" class="eyebrow mono">COLLECTIONS</text>
+  <text x="432" y="286" class="metric sans">$356,910</text>
+  <text x="432" y="316" class="small sans">Current month collections</text>
+  <text x="432" y="342" class="small-muted sans">SoftDent collections, pending insurance noted</text>
+  <text x="432" y="370" class="warn-text sans">Pending claims affecting close</text>
+  <line x1="432" y1="380" x2="468" y2="366" class="line-rust" />
+  <line x1="474" y1="372" x2="510" y2="360" class="line-rust" />
+  <line x1="516" y1="364" x2="552" y2="344" class="line-rust" />
+  <line x1="558" y1="350" x2="594" y2="336" class="line-rust" />
+  <line x1="600" y1="340" x2="636" y2="326" class="line-rust" />
+  <line x1="642" y1="330" x2="678" y2="314" class="line-rust" />
+
+  <rect x="784" y="208" width="360" height="182" rx="24" class="panel" />
+  <text x="808" y="238" class="eyebrow mono">NET INCOME</text>
+  <text x="808" y="286" class="metric sans">$87,240</text>
+  <text x="808" y="316" class="small sans">QuickBooks operating view</text>
+  <text x="808" y="342" class="small-muted sans">Revenue and expenses matched to current period</text>
+  <text x="808" y="370" class="ok-text sans">Margin stable</text>
+  <line x1="808" y1="382" x2="844" y2="368" class="line-teal" />
+  <line x1="850" y1="372" x2="886" y2="350" class="line-teal" />
+  <line x1="892" y1="356" x2="928" y2="338" class="line-teal" />
+  <line x1="934" y1="344" x2="970" y2="316" class="line-teal" />
+  <line x1="976" y1="324" x2="1012" y2="300" class="line-teal" />
+
+  <rect x="1160" y="208" width="408" height="182" rx="24" class="panel" />
+  <text x="1184" y="238" class="eyebrow mono">VERIFIED A/R</text>
+  <text x="1184" y="270" class="h2 sans">Receivables posture with no fabricated balances</text>
+  <circle cx="1252" cy="324" r="44" fill="none" stroke="#bf8f2f" stroke-width="16" stroke-dasharray="120 40 56 60 34 120" transform="rotate(-90 1252 324)" />
+  <text x="1322" y="312" class="small sans">0-30 days</text>
+  <text x="1440" y="312" class="small sans">$118k</text>
+  <text x="1322" y="338" class="small sans">31-60 days</text>
+  <text x="1440" y="338" class="small sans">$77k</text>
+  <text x="1322" y="364" class="small sans">61+ days</text>
+  <text x="1440" y="364" class="small sans">$34k</text>
+
+  <rect x="32" y="410" width="494" height="240" rx="24" class="panel" />
+  <text x="56" y="440" class="eyebrow mono">VARIANCE RADAR</text>
+  <text x="56" y="470" class="h2 sans">What changed and why it matters</text>
+  <text x="56" y="512" class="small sans">Production vs target</text>
+  <text x="430" y="512" class="small sans">+4.1%</text>
+  <rect x="56" y="524" width="400" height="10" rx="5" fill="#e7ded2" />
+  <rect x="56" y="524" width="296" height="10" rx="5" fill="#bf8f2f" />
+  <text x="56" y="552" class="small-muted sans">Higher doctor yield and one larger restorative week.</text>
+  <text x="56" y="586" class="small sans">Collections vs production</text>
+  <text x="408" y="586" class="small sans">-6.8 pts</text>
+  <rect x="56" y="598" width="400" height="10" rx="5" fill="#e7ded2" />
+  <rect x="56" y="598" width="236" height="10" rx="5" fill="#b85d30" />
+  <text x="56" y="626" class="small-muted sans">Insurance posting lag is widening the gap.</text>
+
+  <rect x="542" y="410" width="322" height="240" rx="24" class="panel" />
+  <text x="566" y="440" class="eyebrow mono">COLLECTIONS READINESS</text>
+  <text x="566" y="470" class="h2 sans">Cash movement blockers</text>
+  <text x="566" y="514" class="small sans">Claims over 21 days</text>
+  <text x="782" y="514" class="small sans">$42,800</text>
+  <text x="566" y="540" class="small-muted sans">HAL would prioritize by payer and dollar size.</text>
+  <text x="566" y="580" class="small sans">Unposted insurance</text>
+  <text x="782" y="580" class="small sans">$11,400</text>
+  <text x="566" y="606" class="small-muted sans">Two batches missing confirmation from daily close.</text>
+  <text x="566" y="646" class="small sans">Patient balance follow-up</text>
+  <text x="782" y="646" class="small sans">37 accounts</text>
+
+  <rect x="880" y="410" width="688" height="240" rx="24" class="panel" />
+  <text x="904" y="440" class="eyebrow mono">CLAIMS PIPELINE</text>
+  <text x="904" y="470" class="h2 sans">Operational kanban driven by HAL and verified claim data</text>
+  <rect x="910" y="498" width="202" height="130" rx="18" fill="#fff" stroke="rgba(34,49,64,0.12)" />
+  <text x="928" y="522" class="small sans">Ready to submit</text>
+  <text x="1038" y="522" class="small sans">8</text>
+  <text x="928" y="552" class="small sans">Cigna crown seat</text>
+  <text x="928" y="574" class="small-muted sans">$2,480 • 4 days old</text>
+  <text x="928" y="606" class="small sans">Delta implant consult</text>
+  <text x="928" y="628" class="small-muted sans">$1,320 • 3 days old</text>
+  <rect x="1122" y="498" width="202" height="130" rx="18" fill="#fff" stroke="rgba(34,49,64,0.12)" />
+  <text x="1140" y="522" class="small sans">Pending payer</text>
+  <text x="1252" y="522" class="small sans">11</text>
+  <text x="1140" y="552" class="small sans">BCBS posterior resin</text>
+  <text x="1140" y="574" class="small-muted sans">$3,120 • 23 days old</text>
+  <text x="1140" y="606" class="small sans">MetLife SRP series</text>
+  <text x="1140" y="628" class="small-muted sans">$1,940 • 17 days old</text>
+  <rect x="1334" y="498" width="202" height="130" rx="18" fill="#fff" stroke="rgba(34,49,64,0.12)" />
+  <text x="1352" y="522" class="small sans">Appeal / follow-up</text>
+  <text x="1492" y="522" class="small sans">5</text>
+  <text x="1352" y="552" class="small sans">Aetna bridge denial</text>
+  <text x="1352" y="574" class="small-muted sans">$4,860 • 31 days old</text>
+  <text x="1352" y="606" class="small sans">Guardian extraction review</text>
+  <text x="1352" y="628" class="small-muted sans">$1,610 • 28 days old</text>
+
+  <rect x="32" y="670" width="360" height="210" rx="24" class="panel" />
+  <text x="56" y="700" class="eyebrow mono">EBITDA WATCH</text>
+  <text x="56" y="730" class="h2 sans">Expense and add-back posture</text>
+  <text x="56" y="776" class="small sans">Payroll</text><text x="284" y="776" class="small sans">29.4%</text>
+  <text x="56" y="812" class="small sans">Dental supplies</text><text x="284" y="812" class="small sans">6.1%</text>
+  <text x="56" y="848" class="small sans">Potential add-backs</text><text x="256" y="848" class="small sans">$9,240</text>
+
+  <rect x="408" y="670" width="360" height="210" rx="24" class="panel" />
+  <text x="432" y="700" class="eyebrow mono">PAYER MIX</text>
+  <text x="432" y="730" class="h2 sans">Who is influencing cash timing</text>
+  <text x="432" y="776" class="small sans">Delta</text><text x="688" y="776" class="small sans">34%</text>
+  <text x="432" y="812" class="small sans">BCBS</text><text x="688" y="812" class="small sans">22%</text>
+  <text x="432" y="848" class="small sans">Patient pay</text><text x="688" y="848" class="small sans">18%</text>
+
+  <rect x="784" y="670" width="360" height="210" rx="24" class="panel" />
+  <text x="808" y="700" class="eyebrow mono">PROVIDER PERFORMANCE</text>
+  <text x="808" y="730" class="h2 sans">Top-line delivery</text>
+  <text x="808" y="776" class="small sans">Dr. Ridge</text><text x="1044" y="776" class="small sans">$168k</text>
+  <text x="808" y="800" class="small-muted sans">Highest production, slower collections follow-through.</text>
+  <text x="808" y="832" class="small sans">Dr. Moreno</text><text x="1044" y="832" class="small sans">$124k</text>
+  <text x="808" y="856" class="small-muted sans">Stable production, stronger same-month collections.</text>
+
+  <rect x="1160" y="670" width="408" height="210" rx="24" class="panel" />
+  <text x="1184" y="700" class="eyebrow mono">SOURCE HEALTH CONSOLE</text>
+  <text x="1184" y="730" class="h2 sans">What HAL trusts right now</text>
+  <text x="1184" y="772" class="small-muted sans">• QuickBooks P&amp;L: verified and fresh</text>
+  <text x="1184" y="802" class="small-muted sans">• SoftDent production: verified and fresh</text>
+  <text x="1184" y="832" class="small-muted sans">• SoftDent collections: partial, insurance posting pending</text>
+  <text x="1184" y="862" class="small-muted sans">• SoftDent A/R aging: verified export loaded</text>
+
+  <rect x="32" y="900" width="718" height="262" rx="24" class="panel" />
+  <text x="56" y="930" class="eyebrow mono">EXCEPTIONS TABLE</text>
+  <text x="56" y="960" class="h2 sans">What changed, why, and what HAL would do</text>
+  <text x="56" y="1006" class="small sans">Collections lag</text><text x="256" y="1006" class="small sans">-6.8 pts</text><text x="354" y="1006" class="small-muted sans">SoftDent claims + collections</text>
+  <text x="56" y="1032" class="small-muted sans">HAL next step: Prioritize aged claims by dollar value and payer.</text>
+  <text x="56" y="1072" class="small sans">Payroll pressure</text><text x="256" y="1072" class="small sans">+2.2 pts</text><text x="354" y="1072" class="small-muted sans">QuickBooks payroll categories</text>
+  <text x="56" y="1098" class="small-muted sans">HAL next step: Compare schedule mix and overtime blocks.</text>
+  <text x="56" y="1138" class="small sans">Recall demand</text><text x="256" y="1138" class="small sans">+14 visits</text><text x="354" y="1138" class="small-muted sans">SoftDent recall summary</text>
+
+  <rect x="766" y="900" width="360" height="262" rx="24" class="panel" />
+  <text x="790" y="930" class="eyebrow mono">MORNING ACTION BOARD</text>
+  <text x="790" y="960" class="h2 sans">HAL-ranked priorities</text>
+  <text x="790" y="1008" class="small sans">1. Review Aetna bridge denial</text><text x="1028" y="1008" class="small sans">$4,860</text>
+  <text x="790" y="1032" class="small-muted sans">Largest appeal candidate and oldest unresolved cash item.</text>
+  <text x="790" y="1070" class="small sans">2. Confirm June insurance posting batch</text><text x="1060" y="1070" class="small sans">$11,400</text>
+  <text x="790" y="1108" class="small sans">3. Call 6 patient balances over $500</text><text x="1066" y="1108" class="small sans">37 accts</text>
+
+  <rect x="1142" y="900" width="426" height="262" rx="24" class="panel-dark" />
+  <text x="1168" y="930" class="eyebrow-dark mono">NARRATIVE BUILDER</text>
+  <text x="1168" y="960" class="copy-dark sans">"Production improved because doctor schedule yield and larger restorative cases increased. Collections did not rise at the same pace because insurance payment timing slipped and two claim groups aged past the normal posting window. Net income stayed healthy because expense growth was modest, but payroll ratio should be watched if schedule efficiency softens."</text>
+  <rect x="1168" y="1074" width="332" height="42" rx="18" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.12)" />
+  <text x="1184" y="1100" class="copy-dark sans">Ask HAL: Why is collections down if production is up?</text>
+</svg>

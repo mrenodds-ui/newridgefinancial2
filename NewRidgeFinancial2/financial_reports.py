@@ -81,6 +81,24 @@ def _ar_aging_summary(ar_rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _ar_aging_buckets(ar_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    totals = {"0-30": 0.0, "31-60": 0.0, "61-90": 0.0, "90+": 0.0}
+    for row in ar_rows:
+        amount = _parse_money(row.get("Balance") or row.get("Outstanding") or row.get("Amount") or row.get("Total"))
+        bucket = str(row.get("Aging") or row.get("Bucket") or row.get("AgeBucket") or "")
+        days = _parse_days(row.get("Days") or row.get("AgeDays"))
+        if re.search(r"90\+|91\+|120", bucket) or (days is not None and days >= 90):
+            key = "90+"
+        elif re.search(r"61|60", bucket) or (days is not None and days >= 61):
+            key = "61-90"
+        elif re.search(r"31|30", bucket) or (days is not None and days >= 31):
+            key = "31-60"
+        else:
+            key = "0-30"
+        totals[key] += amount
+    return [{"bucket": label, "amount": round(totals[label], 2)} for label in ("0-30", "31-60", "61-90", "90+")]
+
+
 def build_financial_reports(*, sync_exports: bool = False) -> dict[str, Any]:
     if sync_exports:
         sync_practice_exports()
@@ -100,6 +118,7 @@ def build_financial_reports(*, sync_exports: bool = False) -> dict[str, Any]:
         "generatedAt": _utc_now(),
         "claimTracking": _claim_tracking_summary(claims_rows),
         "arAging": _ar_aging_summary(ar_rows),
+        "arAgingBuckets": _ar_aging_buckets(ar_rows),
         "treatmentPlans": {
             "rowCount": len(treatment_rows) if isinstance(treatment_rows, list) else 0,
             "rows": (treatment_rows or [])[:24],

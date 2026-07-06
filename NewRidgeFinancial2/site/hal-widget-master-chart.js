@@ -93,7 +93,7 @@ const HalWidgetMasterChart = (function () {
       title: "Journal Posting Queue",
       purpose: "Show local SQLite journal posting queue for reviewed accruals.",
       expectedData: ["Local journal queue", "Pending review counts", "Ready-to-export entries"],
-      readyWhen: "Desktop mode exposes the local journal posting queue.",
+      readyWhen: "NR2 server (Start Program) exposes the local journal posting queue.",
       primarySystem: "Local SQLite",
     },
     smartClaimsAndReceivables: {

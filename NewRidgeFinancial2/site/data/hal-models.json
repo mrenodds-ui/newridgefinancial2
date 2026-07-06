@@ -4,8 +4,8 @@
     "localFirst": true,
     "externalCallsEnabled": false,
     "cloudReasoning": {
-      "enabled": true,
-      "autoEnableWhenKeySet": true,
+      "enabled": false,
+      "autoEnableWhenKeySet": false,
       "preferForTaskCompletion": true,
       "preferForAllAgentLoops": true,
       "searchIndex": {

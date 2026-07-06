@@ -141,11 +141,12 @@ const PageChrome = (function () {
       actions: toolbarActions,
     });
     const feed = (state && state.halWidgetFeed) || null;
+    const freshnessStrip = (o && o.importFreshnessHtml) || "";
     return U.CanvasShell({
       hero,
       toolbar,
       insight: insight ? U.PageInsight(insight) : "",
-      strip: "",
+      strip: freshnessStrip,
       commands: o.compact ? "" : halCommandSurface(state.pageId, schema.title, { registry: state.halData && state.halData.registry }),
     });
   }

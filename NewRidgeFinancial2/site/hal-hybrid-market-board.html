@@ -1,0 +1,1287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HAL Hybrid Market Board</title>
+    <style>
+      :root {
+        --bg-0: #020406;
+        --bg-1: #06090d;
+        --bg-2: #0b1016;
+        --panel: rgba(9, 12, 18, 0.97);
+        --panel-2: rgba(13, 17, 24, 0.985);
+        --line: rgba(255, 255, 255, 0.06);
+        --line-strong: rgba(255, 255, 255, 0.12);
+        --text: #f3f6fb;
+        --muted: rgba(243, 246, 251, 0.58);
+        --cyan: #8aa8d6;
+        --teal: #8aa8d6;
+        --amber: #c5ab73;
+        --red: #c5ab73;
+        --violet: #8aa8d6;
+        --lime: #8aa8d6;
+        --magenta: #c5ab73;
+        --shadow: 0 28px 72px rgba(0, 0, 0, 0.52);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        color: var(--text);
+        font-family: "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 12% 14%, rgba(127, 182, 255, 0.05), transparent 22%),
+          radial-gradient(circle at 84% 10%, rgba(95, 221, 193, 0.04), transparent 18%),
+          linear-gradient(155deg, var(--bg-0), var(--bg-1) 44%, var(--bg-2));
+      }
+
+      @keyframes chart-draw {
+        from {
+          stroke-dashoffset: var(--path-length, 240);
+        }
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+
+      @keyframes bar-rise {
+        from {
+          transform: scaleY(0.18);
+          opacity: 0.3;
+        }
+        to {
+          transform: scaleY(1);
+          opacity: 1;
+        }
+      }
+
+      @keyframes dot-pop {
+        0% {
+          transform: scale(0.55);
+          opacity: 0;
+        }
+        70% {
+          transform: scale(1.08);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      @keyframes panel-sheen {
+        0% {
+          transform: translateX(-120%);
+          opacity: 0;
+        }
+        12% {
+          opacity: 0.2;
+        }
+        24%, 100% {
+          transform: translateX(220%);
+          opacity: 0;
+        }
+      }
+
+      @keyframes gauge-sweep {
+        from {
+          stroke-dasharray: 0 180;
+          opacity: 0.35;
+        }
+      }
+
+      @keyframes ticker-slide {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-50%);
+        }
+      }
+
+      @keyframes pulse-band {
+        0%, 100% {
+          opacity: 0.5;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
+      .board {
+        width: min(1880px, calc(100vw - 18px));
+        margin: 8px auto 16px;
+        padding: 8px;
+        border-radius: 18px;
+        border: 1px solid rgba(127, 182, 255, 0.1);
+        background: linear-gradient(180deg, rgba(4, 6, 10, 0.95), rgba(8, 10, 15, 0.99));
+        box-shadow: var(--shadow);
+      }
+
+      .topbar,
+      .market-band,
+      .macro-row,
+      .hero,
+      .widget,
+      .rail,
+      .footer-band {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 12px;
+      }
+
+      .topbar,
+      .market-band,
+      .macro-row,
+      .hero,
+      .widget,
+      .rail,
+      .footer-band {
+        padding: 7px 9px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: 220px 1fr auto;
+        gap: 6px;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+
+      .market-band {
+        display: grid;
+        grid-template-columns: 1.35fr 0.95fr;
+        gap: 6px;
+        margin-bottom: 6px;
+        overflow: hidden;
+      }
+
+      .ticker-lane,
+      .market-mini-grid {
+        min-width: 0;
+      }
+
+      .ticker-lane {
+        display: grid;
+        gap: 5px;
+      }
+
+      .ticker-track {
+        display: flex;
+        width: max-content;
+        gap: 6px;
+        animation: ticker-slide 24s linear infinite;
+      }
+
+      .ticker-window {
+        overflow: hidden;
+        border-radius: 9px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: rgba(255,255,255,0.015);
+        padding: 5px;
+      }
+
+      .ticker-item {
+        min-width: 122px;
+        padding: 5px 7px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.008));
+      }
+
+      .ticker-item b {
+        color: var(--text);
+      }
+
+      .ticker-item b.up,
+      .ticker-item b.flat,
+      .ticker-item b.warm,
+      .ticker-item b.down {
+        color: var(--text);
+      }
+
+      .ticker-item strong,
+      .ticker-item b {
+        display: block;
+      }
+
+      .ticker-item strong {
+        color: var(--muted);
+        font-size: 8px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .ticker-item b {
+        margin-top: 3px;
+        font-size: 13px;
+      }
+
+      .ticker-item span {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 8px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .market-mini-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 5px;
+      }
+
+      .market-mini {
+        padding: 5px 6px;
+        border-radius: 9px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: rgba(255,255,255,0.015);
+      }
+
+      .market-mini .label,
+      .ticker-lane .label {
+        color: rgba(243, 246, 251, 0.72);
+      }
+
+      .market-mini svg {
+        width: 100%;
+        height: 30px;
+        display: block;
+        margin-top: 4px;
+      }
+
+      .pulse-line {
+        animation: pulse-band 2.6s ease-in-out infinite;
+      }
+
+      .brand {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .mark {
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        border: 1px solid var(--line-strong);
+        background: linear-gradient(135deg, rgba(127, 182, 255, 0.12), rgba(255,255,255,0.02));
+        font-weight: 800;
+        letter-spacing: 0.08em;
+      }
+
+      .label {
+        color: var(--muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+      }
+
+      .brand strong {
+        display: block;
+        margin-top: 2px;
+        font-size: 15px;
+      }
+
+      .nav,
+      .control {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .pill {
+        padding: 5px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255,255,255,0.02);
+        font-size: 9px;
+      }
+
+      .pill.active {
+        color: var(--text);
+        border-color: rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.05);
+      }
+
+      .macro-row {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 5px;
+        margin-bottom: 6px;
+      }
+
+      .macro {
+        padding: 6px 7px;
+        border-radius: 9px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: rgba(255,255,255,0.015);
+        min-height: 58px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .macro::after {
+        content: "";
+        position: absolute;
+        inset: auto 10px 8px 10px;
+        height: 2px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(255,255,255,0.05), currentColor 55%, rgba(255,255,255,0.05));
+        opacity: 0.65;
+      }
+
+      .macro strong {
+        display: block;
+        color: var(--muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+      }
+
+      .macro b {
+        display: block;
+        margin-top: 3px;
+        font-size: 15px;
+      }
+
+      .up { color: var(--cyan); }
+      .flat { color: var(--cyan); }
+      .warm { color: var(--amber); }
+      .down { color: var(--amber); }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: 1.6fr 0.85fr;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+
+      .hero {
+        min-height: 128px;
+        background:
+          linear-gradient(180deg, rgba(10, 13, 18, 0.99), rgba(7, 9, 13, 0.995)),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(0deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+        background-size: auto, 56px 100%, 100% 56px;
+      }
+
+      .hero-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: start;
+      }
+
+      .hero h1 {
+        margin: 2px 0 3px;
+        font-size: clamp(15px, 1.45vw, 21px);
+        line-height: 0.95;
+        max-width: 15ch;
+      }
+
+      .hero p,
+      .widget p,
+      .footer-band p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.2;
+      }
+
+      .hero-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 5px;
+        margin-top: 5px;
+      }
+
+      .hero-stat {
+        padding: 5px 6px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: rgba(255,255,255,0.018);
+      }
+
+      .hero-stat b {
+        display: block;
+        margin-top: 2px;
+        font-size: 13px;
+      }
+
+      .hero-signal-grid {
+        display: grid;
+        grid-template-columns: 1.4fr 0.95fr;
+        gap: 5px;
+        margin-top: 5px;
+      }
+
+      .hero-strip,
+      .hero-ladder {
+        min-height: 56px;
+        padding: 5px 6px;
+        border-radius: 9px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.01));
+      }
+
+      .legend-item strong,
+      .status {
+        color: var(--text);
+      }
+
+      .hero-strip svg,
+      .hero-ladder svg {
+        width: 100%;
+        height: 36px;
+        display: block;
+      }
+
+      .hero-strip .label,
+      .hero-ladder .label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 8px;
+      }
+
+      .legend-box {
+        min-width: 154px;
+        padding: 5px 6px;
+        border-radius: 9px;
+        border: 1px solid rgba(255,255,255,0.06);
+        background: rgba(255,255,255,0.022);
+      }
+
+      .legend-list {
+        display: grid;
+        gap: 4px;
+        margin-top: 4px;
+      }
+
+      .legend-item {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 5px;
+        align-items: center;
+        font-size: 8px;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+      }
+
+      .rail {
+        display: grid;
+        gap: 5px;
+      }
+
+      .rail-item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px;
+        align-items: center;
+        padding: 6px 7px;
+        border-radius: 9px;
+        background: rgba(255,255,255,0.018);
+        border: 1px solid rgba(255,255,255,0.05);
+        font-size: 9px;
+      }
+
+      .status {
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.06);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        background: rgba(255,255,255,0.03);
+      }
+
+      .widget-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 5px;
+        margin-bottom: 6px;
+      }
+
+      .widget {
+        min-height: 90px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .widget::after,
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(100deg, transparent 32%, rgba(255,255,255,0.06) 50%, transparent 68%);
+        transform: translateX(-120%);
+        animation: panel-sheen 11s ease-in-out infinite;
+        pointer-events: none;
+      }
+
+      .widget.span-2 { grid-column: span 2; }
+      .widget.span-3 { grid-column: span 3; }
+      .widget.span-4 { grid-column: span 4; }
+
+      .widget b {
+        display: block;
+        margin-top: 5px;
+        font-size: 17px;
+      }
+
+      .widget-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .icon-chip {
+        min-width: 24px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        border-radius: 9px;
+        border: 1px solid rgba(255,255,255,0.07);
+        background: rgba(255,255,255,0.04);
+        font-size: 11px;
+      }
+
+      .axis-chart,
+      .bar-chart,
+      .donut-row,
+      .gauge-strip {
+        margin-top: 8px;
+      }
+
+      .axis-chart {
+        height: 92px;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background:
+          linear-gradient(0deg, rgba(255,255,255,0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+        background-size: 100% 25%, 12.5% 100%, auto;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .axis-chart svg,
+      .bar-chart svg,
+      .donut svg,
+      .mini-xy svg,
+      .gauge svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .x-axis-labels {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 4px;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .draw-line {
+        stroke-dasharray: var(--path-length, 240);
+        stroke-dashoffset: var(--path-length, 240);
+        animation: chart-draw 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+
+      .draw-line.delay-1 { animation-delay: 0.12s; }
+      .draw-line.delay-2 { animation-delay: 0.22s; }
+      .draw-line.delay-3 { animation-delay: 0.3s; }
+
+      .grow-bar {
+        transform-origin: bottom center;
+        animation: bar-rise 0.9s cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+      }
+
+      .grow-bar.delay-1 { animation-delay: 0.08s; }
+      .grow-bar.delay-2 { animation-delay: 0.16s; }
+      .grow-bar.delay-3 { animation-delay: 0.24s; }
+      .grow-bar.delay-4 { animation-delay: 0.32s; }
+
+      .pop-dot {
+        transform-origin: center;
+        animation: dot-pop 0.7s ease-out forwards;
+      }
+
+      .pop-dot.delay-1 { animation-delay: 0.1s; }
+      .pop-dot.delay-2 { animation-delay: 0.18s; }
+      .pop-dot.delay-3 { animation-delay: 0.26s; }
+
+      .gauge-arc {
+        animation: gauge-sweep 1.1s ease-out forwards;
+      }
+
+      .bar-chart {
+        height: 92px;
+        padding: 6px;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.012));
+      }
+
+      .donut-row {
+        display: grid;
+        grid-template-columns: 82px 1fr;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .donut {
+        width: 82px;
+        height: 82px;
+      }
+
+      .mini-kpis {
+        display: grid;
+        gap: 4px;
+      }
+
+      .mini-kpi {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px;
+        padding: 6px 7px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.025);
+        border: 1px solid rgba(255,255,255,0.045);
+        font-size: 10px;
+      }
+
+      .heat-list {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .heat-row {
+        display: grid;
+        grid-template-columns: 80px 1fr auto;
+        gap: 6px;
+        align-items: center;
+        font-size: 10px;
+      }
+
+      .heat-bar {
+        height: 8px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.06);
+      }
+
+      .heat-fill {
+        height: 100%;
+        border-radius: 999px;
+      }
+
+      .prompt-list {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .prompt {
+        padding: 6px 7px;
+        border-radius: 9px;
+        border: 1px solid rgba(255,255,255,0.06);
+        background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      }
+
+      .prompt strong {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+      }
+
+      .prompt span {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .mini-xy {
+        height: 92px;
+        margin-top: 8px;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background:
+          linear-gradient(0deg, rgba(255,255,255,0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(180deg, rgba(255,255,255,0.022), rgba(255,255,255,0.01));
+        background-size: 100% 20%, 16.66% 100%, auto;
+      }
+
+      .gauge-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 6px;
+      }
+
+      .gauge {
+        height: 58px;
+        padding: 5px;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: rgba(255,255,255,0.02);
+      }
+
+      .gauge-label {
+        margin-top: 2px;
+        display: flex;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 8px;
+        color: var(--muted);
+      }
+
+      .micro-chart-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .micro-chart {
+        height: 74px;
+        padding: 6px;
+        border-radius: 9px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: linear-gradient(180deg, rgba(255,255,255,0.024), rgba(255,255,255,0.012));
+      }
+
+      .micro-chart .label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 8px;
+      }
+
+      .spark {
+        height: 46px;
+        margin-top: 10px;
+        border-radius: 6px;
+        background:
+          linear-gradient(180deg, rgba(127, 182, 255, 0.09), rgba(127, 182, 255, 0.02)),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(0deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+        background-size: auto, 16.6% 100%, 100% 50%;
+        clip-path: polygon(0 84%, 10% 75%, 20% 77%, 30% 60%, 40% 64%, 50% 49%, 60% 53%, 70% 36%, 80% 39%, 90% 24%, 100% 14%, 100% 100%, 0 100%);
+      }
+
+      .micro-table {
+        width: 100%;
+        margin-top: 8px;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+
+      .micro-table td {
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+      }
+
+      .micro-table td:last-child { text-align: right; }
+
+      .stack {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .stack-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        padding: 7px 8px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.02);
+        font-size: 11px;
+      }
+
+      .footer-band {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .footer-band .widget {
+        min-height: auto;
+      }
+
+      @media (max-width: 1320px) {
+        .topbar,
+        .market-band,
+        .hero-grid,
+        .footer-band { grid-template-columns: 1fr; }
+        .macro-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .widget-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      }
+
+      @media (max-width: 860px) {
+        .board { width: min(100vw - 10px, 1880px); padding: 8px; }
+        .macro-row,
+        .market-mini-grid,
+        .widget-grid,
+        .hero-metrics,
+        .hero-signal-grid,
+        .footer-band,
+        .gauge-strip { grid-template-columns: 1fr 1fr; }
+        .widget.span-2,
+        .widget.span-3 { grid-column: span 2; }
+      }
+
+      @media (max-width: 620px) {
+        .macro-row,
+        .market-mini-grid,
+        .widget-grid,
+        .hero-metrics,
+        .hero-signal-grid,
+        .footer-band,
+        .gauge-strip { grid-template-columns: 1fr; }
+        .widget.span-2,
+        .widget.span-3 { grid-column: span 1; }
+        .donut-row { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <section class="topbar">
+        <div class="brand">
+          <div class="mark">HAL</div>
+          <div>
+            <div class="label">Hybrid market board</div>
+            <strong>Compact Wall Street Finance Deck</strong>
+          </div>
+        </div>
+        <div class="nav">
+          <div class="pill active">Executive</div>
+          <div class="pill">Collections</div>
+          <div class="pill">Claims</div>
+          <div class="pill">Clinical</div>
+          <div class="pill">Close Desk</div>
+          <div class="pill">HAL Actions</div>
+          <div class="pill">06 Jul 2026</div>
+        </div>
+        <div class="control">
+          <div class="pill">Hybrid mode</div>
+        </div>
+      </section>
+
+      <section class="market-band">
+        <div class="ticker-lane">
+          <div class="label">Live market strip</div>
+          <div class="ticker-window">
+            <div class="ticker-track">
+              <div class="ticker-item"><strong>Collections run</strong><b>+8.4%</b><span>$486.2k pace</span></div>
+              <div class="ticker-item"><strong>AR turnover</strong><b>37d</b><span>goal 34d</span></div>
+              <div class="ticker-item"><strong>Claims lane</strong><b>18 open</b><span>$7.1k risk</span></div>
+              <div class="ticker-item"><strong>Case accept</strong><b>74%</b><span>+3.1 pts</span></div>
+              <div class="ticker-item"><strong>Recall fill</strong><b>89%</b><span>next 10 days</span></div>
+              <div class="ticker-item"><strong>Collections run</strong><b>+8.4%</b><span>$486.2k pace</span></div>
+              <div class="ticker-item"><strong>AR turnover</strong><b>37d</b><span>goal 34d</span></div>
+              <div class="ticker-item"><strong>Claims lane</strong><b>18 open</b><span>$7.1k risk</span></div>
+              <div class="ticker-item"><strong>Case accept</strong><b>74%</b><span>+3.1 pts</span></div>
+              <div class="ticker-item"><strong>Recall fill</strong><b>89%</b><span>next 10 days</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="market-mini-grid">
+          <div class="market-mini">
+            <div class="label">Cash pulse</div>
+            <svg viewBox="0 0 110 30" aria-hidden="true" preserveAspectRatio="none">
+              <polyline class="draw-line pulse-line" style="--path-length:140" points="4,22 18,20 32,21 46,16 60,14 74,15 88,9 104,6" fill="none" stroke="#86aee8" stroke-width="2.4" stroke-linecap="round" />
+            </svg>
+          </div>
+          <div class="market-mini">
+            <div class="label">Claims heat</div>
+            <svg viewBox="0 0 110 30" aria-hidden="true" preserveAspectRatio="none">
+              <rect class="grow-bar" x="6" y="12" width="12" height="14" rx="3" fill="#5c6b84" />
+              <rect class="grow-bar delay-1" x="26" y="10" width="12" height="16" rx="3" fill="#6f7d97" />
+              <rect class="grow-bar delay-2" x="46" y="7" width="12" height="19" rx="3" fill="#8190aa" />
+              <rect class="grow-bar delay-3" x="66" y="4" width="12" height="22" rx="3" fill="#95a3bc" />
+              <rect class="grow-bar delay-4" x="86" y="2" width="12" height="24" rx="3" fill="#a6b4c9" />
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <section class="macro-row">
+        <div class="macro"><strong>Revenue pace</strong><b class="up">$486.2k</b><span class="label">+8.4% mtd</span></div>
+        <div class="macro"><strong>Collected cash</strong><b class="flat">$431.8k</b><span class="label">92.6% conv</span></div>
+        <div class="macro"><strong>AR exposure</strong><b class="warm">$229.4k</b><span class="label">37d age</span></div>
+        <div class="macro"><strong>Claims risk</strong><b class="down">$7.1k</b><span class="label">follow-up</span></div>
+        <div class="macro"><strong>EBITDA</strong><b class="up">24.4%</b><span class="label">margin</span></div>
+        <div class="macro"><strong>Forecast hit</strong><b class="flat">97.2%</b><span class="label">vs plan</span></div>
+        <div class="macro"><strong>Case accept</strong><b>74%</b><span class="label">above band</span></div>
+        <div class="macro"><strong>Recall fill</strong><b class="up">89%</b><span class="label">hygiene</span></div>
+      </section>
+
+      <section class="hero-grid">
+        <article class="hero">
+          <div class="hero-top">
+            <div>
+              <div class="label">Operating composite</div>
+              <h1>Compact finance board.</h1>
+              <p>Chart-first operating view.</p>
+            </div>
+            <div class="legend-box">
+              <div class="label">Legend</div>
+              <div class="legend-list">
+                <div class="legend-item"><span class="dot" style="background:#8aa8d6"></span><span>Primary trend</span><strong>Core</strong></div>
+                <div class="legend-item"><span class="dot" style="background:#c5ab73"></span><span>Threshold / risk</span><strong>Alert</strong></div>
+                <div class="legend-item"><span class="dot" style="background:#9aa5b5"></span><span>Neutral capacity</span><strong>Base</strong></div>
+              </div>
+            </div>
+          </div>
+          <div class="hero-signal-grid">
+            <div class="hero-strip">
+              <span class="label">Top-line momentum</span>
+              <svg viewBox="0 0 360 42" aria-hidden="true" preserveAspectRatio="none">
+                <polyline class="draw-line" style="--path-length:420" points="6,33 46,30 86,28 126,23 166,24 206,17 246,18 286,11 326,8 354,6" fill="none" stroke="#8aa8d6" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
+                <polyline class="draw-line delay-1" style="--path-length:420" points="6,36 46,34 86,33 126,29 166,27 206,23 246,22 286,17 326,14 354,12" fill="none" stroke="#c5ab73" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                <circle class="pop-dot delay-2" cx="354" cy="6" r="3.2" fill="#8aa8d6" />
+                <circle class="pop-dot delay-3" cx="354" cy="12" r="3.2" fill="#c5ab73" />
+              </svg>
+            </div>
+            <div class="hero-ladder">
+              <span class="label">Pressure ladder</span>
+              <svg viewBox="0 0 180 42" aria-hidden="true" preserveAspectRatio="none">
+                <rect class="grow-bar" x="10" y="20" width="18" height="18" rx="4" fill="#667287" />
+                <rect class="grow-bar delay-1" x="42" y="16" width="18" height="22" rx="4" fill="#768298" />
+                <rect class="grow-bar delay-2" x="74" y="10" width="18" height="28" rx="4" fill="#8894a8" />
+                <rect class="grow-bar delay-3" x="106" y="14" width="18" height="24" rx="4" fill="#9aa5b5" />
+                <rect class="grow-bar delay-4" x="138" y="6" width="18" height="32" rx="4" fill="#adb6c3" />
+              </svg>
+            </div>
+          </div>
+          <div class="hero-metrics">
+            <div class="hero-stat"><div class="label">Net production</div><b>$468k</b></div>
+            <div class="hero-stat"><div class="label">Liquidity</div><b class="up">8.4w</b></div>
+            <div class="hero-stat"><div class="label">Open claims</div><b class="down">18</b></div>
+            <div class="hero-stat"><div class="label">Close tasks</div><b>5</b></div>
+          </div>
+          <div class="gauge-strip">
+            <div class="gauge">
+              <svg viewBox="0 0 120 58" aria-hidden="true">
+                <path d="M10 50 A50 50 0 0 1 110 50" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10" stroke-linecap="round" />
+                <path class="gauge-arc" d="M10 50 A50 50 0 0 1 88 18" fill="none" stroke="#8aa8d6" stroke-width="10" stroke-linecap="round" stroke-dasharray="124 180" />
+              </svg>
+              <div class="gauge-label"><span>Same-day cash</span><strong class="up">84%</strong></div>
+            </div>
+            <div class="gauge">
+              <svg viewBox="0 0 120 58" aria-hidden="true">
+                <path d="M10 50 A50 50 0 0 1 110 50" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10" stroke-linecap="round" />
+                <path class="gauge-arc" d="M10 50 A50 50 0 0 1 78 10" fill="none" stroke="#c5ab73" stroke-width="10" stroke-linecap="round" stroke-dasharray="108 180" style="animation-delay:0.12s" />
+              </svg>
+              <div class="gauge-label"><span>AR threshold</span><strong class="warm">67%</strong></div>
+            </div>
+            <div class="gauge">
+              <svg viewBox="0 0 120 58" aria-hidden="true">
+                <path d="M10 50 A50 50 0 0 1 110 50" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10" stroke-linecap="round" />
+                <path class="gauge-arc" d="M10 50 A50 50 0 0 1 60 0" fill="none" stroke="#c5ab73" stroke-width="10" stroke-linecap="round" stroke-dasharray="90 180" style="animation-delay:0.2s" />
+              </svg>
+              <div class="gauge-label"><span>Narrative readiness</span><strong class="warm">52%</strong></div>
+            </div>
+          </div>
+        </article>
+        <aside class="rail">
+          <div class="label">HAL decision rail</div>
+          <div class="rail-item"><span>Push same-day collections</span><span class="status up">Act</span></div>
+          <div class="rail-item"><span>Claims narrative packet</span><span class="status warm">Watch</span></div>
+          <div class="rail-item"><span>June close assembly</span><span class="status flat">Ready</span></div>
+          <div class="rail-item"><span>Fill hygiene opening at 2:30</span><span class="status">Queue</span></div>
+          <div class="rail-item"><span>Re-run payer lag queue</span><span class="status down">Now</span></div>
+        </aside>
+      </section>
+
+      <section class="widget-grid">
+        <article class="widget span-2">
+          <div class="widget-head">
+            <div>
+              <div class="label">Production vs collections</div>
+              <b>$468k / $432k</b>
+            </div>
+            <div class="icon-chip">◔</div>
+          </div>
+          <div class="axis-chart">
+            <svg viewBox="0 0 560 118" aria-hidden="true" preserveAspectRatio="none">
+              <polyline class="draw-line" style="--path-length:620" points="18,84 108,70 198,76 288,52 378,57 468,34 542,24" fill="none" stroke="#7fb6ff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+              <polyline class="draw-line delay-1" style="--path-length:620" points="18,88 108,80 198,82 288,67 378,61 468,48 542,40" fill="none" stroke="#5fddc1" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+              <line x1="18" y1="92" x2="542" y2="92" stroke="rgba(255,255,255,0.14)" stroke-width="1" />
+              <circle class="pop-dot delay-2" cx="542" cy="24" r="4.5" fill="#7fb6ff" />
+              <circle class="pop-dot delay-3" cx="542" cy="40" r="4.5" fill="#5fddc1" />
+            </svg>
+          </div>
+          <div class="x-axis-labels"><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span></div>
+        </article>
+
+        <article class="widget span-2">
+          <div class="widget-head">
+            <div>
+              <div class="label">Variance / forecast grid</div>
+              <b>97.2% / +8.4%</b>
+            </div>
+            <div class="icon-chip">⌗</div>
+          </div>
+          <div class="axis-chart">
+            <svg viewBox="0 0 560 118" aria-hidden="true" preserveAspectRatio="none">
+              <polyline class="draw-line" style="--path-length:620;animation-delay:0.08s" points="18,70 108,66 198,62 288,54 378,51 468,42 542,38" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+              <polyline class="draw-line delay-1" style="--path-length:620" points="18,82 108,78 198,76 288,72 378,68 468,61 542,56" fill="none" stroke="#d6b15e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+              <line x1="18" y1="92" x2="542" y2="92" stroke="rgba(255,255,255,0.14)" stroke-width="1" />
+              <rect class="grow-bar delay-1" x="82" y="48" width="18" height="44" rx="4" fill="rgba(127,182,255,0.16)" />
+              <rect class="grow-bar delay-2" x="262" y="36" width="18" height="56" rx="4" fill="rgba(95,221,193,0.16)" />
+              <rect class="grow-bar delay-3" x="442" y="22" width="18" height="70" rx="4" fill="rgba(255,127,209,0.16)" />
+            </svg>
+          </div>
+          <div class="x-axis-labels"><span>Plan</span><span>Run</span><span>Conv</span><span>AR</span><span>Mix</span><span>Hit</span></div>
+        </article>
+
+        <article class="widget">
+          <div class="widget-head">
+            <div class="label">Provider leaders</div>
+            <div class="icon-chip">▥</div>
+          </div>
+          <div class="bar-chart">
+            <svg viewBox="0 0 220 100" aria-hidden="true" preserveAspectRatio="none">
+              <line x1="22" y1="82" x2="212" y2="82" stroke="rgba(255,255,255,0.12)" />
+              <rect class="grow-bar" x="34" y="18" width="28" height="64" rx="6" fill="#7fb6ff" />
+              <rect class="grow-bar delay-1" x="92" y="34" width="28" height="48" rx="6" fill="#5fddc1" />
+              <rect class="grow-bar delay-2" x="150" y="52" width="28" height="30" rx="6" fill="#a78bfa" />
+              <text x="48" y="94" text-anchor="middle" fill="rgba(237,242,247,0.75)" font-size="8">Ridge</text>
+              <text x="106" y="94" text-anchor="middle" fill="rgba(237,242,247,0.75)" font-size="8">Moreno</text>
+              <text x="164" y="94" text-anchor="middle" fill="rgba(237,242,247,0.75)" font-size="8">Hyg</text>
+            </svg>
+          </div>
+          <table class="micro-table">
+            <tr><td>Dr. Ridge</td><td>$172k</td></tr>
+            <tr><td>Dr. Moreno</td><td>$128k</td></tr>
+            <tr><td>Hygiene</td><td>$76k</td></tr>
+          </table>
+        </article>
+
+        <article class="widget">
+          <div class="widget-head">
+            <div class="label">Payer ladder</div>
+            <div class="icon-chip">◌</div>
+          </div>
+          <div class="donut-row">
+            <div class="donut">
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle cx="60" cy="60" r="34" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="16" />
+                <circle cx="60" cy="60" r="34" fill="none" stroke="#7fb6ff" stroke-width="16" stroke-dasharray="96 214" stroke-linecap="round" transform="rotate(-90 60 60)" />
+                <circle cx="60" cy="60" r="34" fill="none" stroke="#5fddc1" stroke-width="16" stroke-dasharray="56 214" stroke-dashoffset="-102" stroke-linecap="round" transform="rotate(-90 60 60)" />
+                <circle cx="60" cy="60" r="34" fill="none" stroke="#ff7fd1" stroke-width="16" stroke-dasharray="28 214" stroke-dashoffset="-164" stroke-linecap="round" transform="rotate(-90 60 60)" />
+                <text x="60" y="56" text-anchor="middle" fill="#edf2f7" font-size="12">Mix</text>
+                <text x="60" y="72" text-anchor="middle" fill="#edf2f7" font-size="16" font-weight="700">68%</text>
+              </svg>
+            </div>
+            <div class="mini-kpis">
+              <div class="mini-kpi"><span>Delta</span><strong>$41k</strong></div>
+              <div class="mini-kpi"><span>Cigna</span><strong>$18k</strong></div>
+              <div class="mini-kpi"><span>Aetna</span><strong>$9k</strong></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="widget span-2">
+          <div class="widget-head">
+            <div>
+              <div class="label">Clinical flow</div>
+              <b>$226k presented</b>
+            </div>
+            <div class="icon-chip">⌁</div>
+          </div>
+          <div class="mini-xy">
+            <svg viewBox="0 0 420 118" aria-hidden="true" preserveAspectRatio="none">
+              <line x1="38" y1="14" x2="38" y2="98" stroke="rgba(255,255,255,0.14)" />
+              <line x1="38" y1="98" x2="398" y2="98" stroke="rgba(255,255,255,0.14)" />
+              <circle class="pop-dot" cx="110" cy="58" r="8" fill="#7fb6ff" />
+              <circle class="pop-dot delay-1" cx="218" cy="44" r="9" fill="#5fddc1" />
+              <circle class="pop-dot delay-2" cx="318" cy="28" r="10" fill="#ff7fd1" />
+              <text x="110" y="74" text-anchor="middle" fill="rgba(237,242,247,0.8)" font-size="9">Plans</text>
+              <text x="218" y="60" text-anchor="middle" fill="rgba(237,242,247,0.8)" font-size="9">Accept</text>
+              <text x="318" y="44" text-anchor="middle" fill="rgba(237,242,247,0.8)" font-size="9">Recall</text>
+            </svg>
+          </div>
+          <div class="micro-chart-grid">
+            <div class="micro-chart">
+              <span class="label">Acceptance trend</span>
+              <svg viewBox="0 0 110 48" aria-hidden="true" preserveAspectRatio="none">
+                <polyline class="draw-line" style="--path-length:140" points="4,38 24,33 44,30 64,27 84,20 104,15" fill="none" stroke="#5fddc1" stroke-width="3" stroke-linecap="round" />
+              </svg>
+            </div>
+            <div class="micro-chart">
+              <span class="label">Recall fill</span>
+              <svg viewBox="0 0 110 48" aria-hidden="true" preserveAspectRatio="none">
+                <polyline class="draw-line delay-1" style="--path-length:140" points="4,34 24,31 44,30 64,24 84,18 104,16" fill="none" stroke="#7fb6ff" stroke-width="3" stroke-linecap="round" />
+              </svg>
+            </div>
+            <div class="micro-chart">
+              <span class="label">Presented mix</span>
+              <svg viewBox="0 0 110 48" aria-hidden="true" preserveAspectRatio="none">
+                <polyline class="draw-line delay-2" style="--path-length:140" points="4,36 24,34 44,26 64,29 84,18 104,14" fill="none" stroke="#ff7fd1" stroke-width="3" stroke-linecap="round" />
+              </svg>
+            </div>
+          </div>
+        </article>
+
+        <article class="widget">
+          <div class="widget-head">
+            <div class="label">AR aging</div>
+            <div class="icon-chip">◫</div>
+          </div>
+          <div class="heat-list">
+            <div class="heat-row"><span>0-30</span><div class="heat-bar"><div class="heat-fill" style="width:88%;background:#5fddc1"></div></div><strong>$118k</strong></div>
+            <div class="heat-row"><span>31-60</span><div class="heat-bar"><div class="heat-fill" style="width:59%;background:#d6b15e"></div></div><strong>$77k</strong></div>
+            <div class="heat-row"><span>61+</span><div class="heat-bar"><div class="heat-fill" style="width:24%;background:#ef7373"></div></div><strong>$34k</strong></div>
+          </div>
+        </article>
+
+        <article class="widget">
+          <div class="widget-head">
+            <div class="label">Claims queue</div>
+            <div class="icon-chip">◷</div>
+          </div>
+          <div class="stack">
+            <div class="stack-row"><span>Martinez crown</span><strong style="color:var(--magenta)">$1,240</strong></div>
+            <div class="stack-row"><span>Choi SRP</span><strong class="warm">$860</strong></div>
+            <div class="stack-row"><span>Williams plan</span><strong class="flat">$720</strong></div>
+          </div>
+          <div class="prompt-list">
+            <div class="prompt"><strong>Prompt HAL</strong><span>Draft insurer follow-up for crown with missing attachment.</span></div>
+          </div>
+        </article>
+
+        <article class="widget span-2">
+          <div class="widget-head">
+            <div class="label">Receivables workbench</div>
+            <div class="icon-chip">⌘</div>
+          </div>
+          <table class="micro-table">
+            <tr><td>Martinez</td><td>Delta crown pending</td><td>$1,240</td></tr>
+            <tr><td>Choi</td><td>SRP narrative missing</td><td>$860</td></tr>
+            <tr><td>Williams</td><td>Payment call due</td><td>$720</td></tr>
+            <tr><td>Rosen</td><td>Carrier lag</td><td>$540</td></tr>
+          </table>
+          <div class="prompt-list">
+            <div class="prompt"><strong>Prompt HAL</strong><span>Build a four-call sequence for balances over $500 and surface the highest-probability recovery accounts first.</span></div>
+          </div>
+        </article>
+
+        <article class="widget span-2">
+          <div class="widget-head">
+            <div>
+              <div class="label">Collections heatmap</div>
+              <b>92.6% conversion</b>
+            </div>
+            <div class="icon-chip">▦</div>
+          </div>
+          <div class="micro-chart-grid">
+            <div class="micro-chart">
+              <span class="label">Front desk</span>
+              <svg viewBox="0 0 110 48" aria-hidden="true"><rect class="grow-bar" x="6" y="10" width="20" height="30" rx="4" fill="#5fddc1" /><rect class="grow-bar delay-1" x="32" y="18" width="20" height="22" rx="4" fill="#7fb6ff" /><rect class="grow-bar delay-2" x="58" y="14" width="20" height="26" rx="4" fill="#d6b15e" /><rect class="grow-bar delay-3" x="84" y="8" width="20" height="32" rx="4" fill="#ff7fd1" /></svg>
+            </div>
+            <div class="micro-chart">
+              <span class="label">Text-to-pay</span>
+              <svg viewBox="0 0 110 48" aria-hidden="true"><polyline class="draw-line" style="--path-length:140" points="4,34 24,32 44,24 64,26 84,16 104,12" fill="none" stroke="#8ae65c" stroke-width="3" stroke-linecap="round" /></svg>
+            </div>
+            <div class="micro-chart">
+              <span class="label">Carrier lag</span>
+              <svg viewBox="0 0 110 48" aria-hidden="true"><polyline class="draw-line delay-1" style="--path-length:140" points="4,14 24,18 44,22 64,28 84,32 104,36" fill="none" stroke="#ef7373" stroke-width="3" stroke-linecap="round" /></svg>
+            </div>
+          </div>
+        </article>
+
+        <article class="widget">
+          <div class="widget-head">
+            <div class="label">Close desk</div>
+            <div class="icon-chip">◲</div>
+          </div>
+          <div class="stack">
+            <div class="stack-row"><span>Invoices coded</span><strong>2 left</strong></div>
+            <div class="stack-row"><span>Payroll accrual</span><strong>Ready</strong></div>
+            <div class="stack-row"><span>Fees review</span><strong>Watch</strong></div>
+          </div>
+          <div class="prompt-list">
+            <div class="prompt"><strong>Prompt HAL</strong><span>Assemble month-end posting checklist with remaining blockers and owner handoff.</span></div>
+          </div>
+        </article>
+
+        <article class="widget">
+          <div class="widget-head">
+            <div class="label">Document intake</div>
+            <div class="icon-chip">▣</div>
+          </div>
+          <div class="stack">
+            <div class="stack-row"><span>Henry Schein invoice</span><strong>Staged</strong></div>
+            <div class="stack-row"><span>Merchant deposit</span><strong>Ready</strong></div>
+            <div class="stack-row"><span>Payroll support</span><strong>Loaded</strong></div>
+          </div>
+          <div class="prompt-list">
+            <div class="prompt"><strong>Prompt HAL</strong><span>Match staged documents to QuickBooks categories and flag anything without a confident vendor code.</span></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="footer-band">
+        <article class="widget">
+          <div class="widget-head">
+            <div class="label">Office manager priorities</div>
+            <div class="icon-chip">◳</div>
+          </div>
+          <div class="micro-chart">
+            <svg viewBox="0 0 180 48" aria-hidden="true" preserveAspectRatio="none">
+              <rect class="grow-bar" x="8" y="8" width="42" height="32" rx="6" fill="#ef7373" />
+              <rect class="grow-bar delay-1" x="58" y="14" width="42" height="26" rx="6" fill="#d6b15e" />
+              <rect class="grow-bar delay-2" x="108" y="20" width="42" height="20" rx="6" fill="#5fddc1" />
+            </svg>
+          </div>
+        </article>
+        <article class="widget">
+          <div class="widget-head">
+            <div class="label">Narratives and documents</div>
+            <div class="icon-chip">◫</div>
+          </div>
+          <div class="micro-chart">
+            <svg viewBox="0 0 180 48" aria-hidden="true" preserveAspectRatio="none">
+              <polyline class="draw-line" style="--path-length:220" points="6,30 34,22 62,24 90,17 118,18 146,11 174,9" fill="none" stroke="#ff7fd1" stroke-width="3" stroke-linecap="round" />
+            </svg>
+          </div>
+        </article>
+        <article class="widget">
+          <div class="widget-head">
+            <div class="label">HAL action cadence</div>
+            <div class="icon-chip">◴</div>
+          </div>
+          <div class="micro-chart">
+            <svg viewBox="0 0 180 48" aria-hidden="true" preserveAspectRatio="none">
+              <rect class="grow-bar" x="10" y="26" width="18" height="14" rx="4" fill="#7fb6ff" />
+              <rect class="grow-bar delay-1" x="40" y="20" width="18" height="20" rx="4" fill="#5fddc1" />
+              <rect class="grow-bar delay-2" x="70" y="12" width="18" height="28" rx="4" fill="#a78bfa" />
+              <rect class="grow-bar delay-3" x="100" y="16" width="18" height="24" rx="4" fill="#d6b15e" />
+              <rect class="grow-bar delay-4" x="130" y="8" width="18" height="32" rx="4" fill="#ff7fd1" />
+            </svg>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

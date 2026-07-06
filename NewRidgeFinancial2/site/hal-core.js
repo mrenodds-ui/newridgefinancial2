@@ -3094,7 +3094,7 @@ const HalCore = (function () {
             "Browser preview storage",
             "Warning",
             "sessionStorage fallback only; imports, SQLite storage, SideNotes hub files, and import sync are unavailable",
-            "Launch NR2 with StartProgram.bat for desktop mode (http://127.0.0.1:8765/).",
+            "Launch NR2 with StartProgram.bat (http://127.0.0.1:8765/).",
           ),
         );
       } else if (runtime.sessionStorageOk === true) {

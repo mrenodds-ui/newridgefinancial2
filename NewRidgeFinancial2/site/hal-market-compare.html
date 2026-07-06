@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HAL Market Style Compare</title>
+    <style>
+      :root {
+        --bg: #071019;
+        --panel: #0f1824;
+        --panel-2: #131d2a;
+        --line: rgba(255, 255, 255, 0.08);
+        --text: #edf2f7;
+        --muted: rgba(237, 242, 247, 0.62);
+        --cyan: #7fb6ff;
+        --teal: #5fddc1;
+        --amber: #d6b15e;
+        --red: #ef7373;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        font-family: "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(127, 182, 255, 0.08), transparent 28%),
+          linear-gradient(160deg, #08111a, #0c1521 42%, #111a27);
+      }
+
+      .wrap {
+        width: min(1840px, calc(100vw - 24px));
+        margin: 14px auto 28px;
+      }
+
+      .header {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        align-items: center;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: rgba(10, 16, 25, 0.9);
+        margin-bottom: 14px;
+      }
+
+      .eyebrow {
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 6px 0 0;
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .modes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .pill {
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255,255,255,0.03);
+        font-size: 11px;
+      }
+
+      .boards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .board {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: linear-gradient(180deg, rgba(14, 22, 33, 0.96), rgba(10, 16, 25, 0.98));
+        padding: 12px;
+      }
+
+      .board h2 {
+        margin: 6px 0 4px;
+        font-size: 18px;
+      }
+
+      .board p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .tape {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 12px;
+      }
+
+      .cell,
+      .tile,
+      .micro {
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 10px;
+        background: rgba(255,255,255,0.025);
+      }
+
+      .cell {
+        padding: 8px;
+        min-height: 68px;
+      }
+
+      .cell strong,
+      .tile strong,
+      .micro strong {
+        display: block;
+        color: var(--muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      .cell b,
+      .tile b,
+      .micro b {
+        display: block;
+        margin-top: 5px;
+        font-size: 18px;
+      }
+
+      .up { color: var(--teal); }
+      .warm { color: var(--amber); }
+      .down { color: var(--red); }
+      .flat { color: var(--cyan); }
+
+      .terminal-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .micro {
+        padding: 8px;
+        min-height: 92px;
+      }
+
+      .micro-table {
+        width: 100%;
+        margin-top: 6px;
+        border-collapse: collapse;
+        font-size: 10px;
+      }
+
+      .micro-table td {
+        padding: 5px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+      }
+
+      .micro-table td:last-child { text-align: right; }
+
+      .polish-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .tile {
+        padding: 10px;
+        min-height: 118px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      }
+
+      .spark {
+        height: 44px;
+        margin-top: 10px;
+        border-radius: 6px;
+        background:
+          linear-gradient(180deg, rgba(127, 182, 255, 0.09), rgba(127, 182, 255, 0.02)),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+        background-size: auto, 16.6% 100%;
+        clip-path: polygon(0 82%, 12% 72%, 24% 75%, 36% 58%, 48% 61%, 60% 43%, 72% 46%, 84% 27%, 100% 12%, 100% 100%, 0 100%);
+      }
+
+      .hybrid-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      .hybrid-grid .micro.span-2 {
+        grid-column: span 2;
+      }
+
+      .note {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255,255,255,0.05);
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 1260px) {
+        .boards { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 820px) {
+        .header { grid-template-columns: 1fr; }
+        .tape,
+        .terminal-grid,
+        .polish-grid,
+        .hybrid-grid { grid-template-columns: 1fr 1fr; }
+        .hybrid-grid .micro.span-2 { grid-column: span 2; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="header">
+        <div>
+          <div class="eyebrow">HAL comparison board</div>
+          <h1>Three Wall Street directions side by side</h1>
+        </div>
+        <div class="modes">
+          <div class="pill">Bloomberg / LSEG</div>
+          <div class="pill">FactSet / Koyfin</div>
+          <div class="pill">Hybrid</div>
+        </div>
+      </section>
+
+      <section class="boards">
+        <article class="board">
+          <div class="eyebrow">Mode 1</div>
+          <h2>Bloomberg / LSEG</h2>
+          <p>Hard terminal density, tiny surfaces, fast scanning.</p>
+          <div class="tape">
+            <div class="cell"><strong>Revenue</strong><b class="up">$486k</b></div>
+            <div class="cell"><strong>Cash</strong><b class="flat">$432k</b></div>
+            <div class="cell"><strong>AR</strong><b class="warm">37d</b></div>
+            <div class="cell"><strong>Claims</strong><b class="down">18</b></div>
+          </div>
+          <div class="terminal-grid">
+            <div class="micro"><strong>Payer ladder</strong><table class="micro-table"><tr><td>Delta</td><td>$41k</td></tr><tr><td>Cigna</td><td>$18k</td></tr><tr><td>Aetna</td><td>$9k</td></tr></table></div>
+            <div class="micro"><strong>Provider rank</strong><table class="micro-table"><tr><td>Ridge</td><td>$172k</td></tr><tr><td>Moreno</td><td>$128k</td></tr><tr><td>Hyg</td><td>$76k</td></tr></table></div>
+            <div class="micro"><strong>HAL queue</strong><table class="micro-table"><tr><td>Collect</td><td class="up">Act</td></tr><tr><td>Narratives</td><td class="warm">Watch</td></tr><tr><td>Close</td><td class="flat">Ready</td></tr></table></div>
+            <div class="micro"><strong>AR aging</strong><table class="micro-table"><tr><td>0-30</td><td>$118k</td></tr><tr><td>31-60</td><td>$77k</td></tr><tr><td>61+</td><td>$34k</td></tr></table></div>
+            <div class="micro"><strong>Close desk</strong><table class="micro-table"><tr><td>Invoices</td><td>2</td></tr><tr><td>Payroll</td><td>Ready</td></tr><tr><td>Fees</td><td>Watch</td></tr></table></div>
+            <div class="micro"><strong>Forecast</strong><b class="flat">97.2%</b></div>
+          </div>
+          <div class="note">Best for maximum information density and terminal seriousness.</div>
+        </article>
+
+        <article class="board">
+          <div class="eyebrow">Mode 2</div>
+          <h2>FactSet / Koyfin</h2>
+          <p>Cleaner enterprise polish, calmer analytics, more presentation-ready.</p>
+          <div class="tape">
+            <div class="cell"><strong>Net prod</strong><b class="up">$468k</b></div>
+            <div class="cell"><strong>EBITDA</strong><b class="flat">24.4%</b></div>
+            <div class="cell"><strong>Accept</strong><b>74%</b></div>
+            <div class="cell"><strong>Recall</strong><b class="up">89%</b></div>
+          </div>
+          <div class="polish-grid">
+            <div class="tile"><strong>Production trend</strong><b>$468k</b><div class="spark"></div></div>
+            <div class="tile"><strong>Payer mix</strong><b>4 major plans</b><p>Balanced commercial concentration with manageable exposure.</p></div>
+            <div class="tile"><strong>Clinical flow</strong><table class="micro-table"><tr><td>Treatment plans</td><td>$226k</td></tr><tr><td>Case acceptance</td><td>74%</td></tr><tr><td>Recall fill</td><td>89%</td></tr></table></div>
+            <div class="tile"><strong>Close summary</strong><table class="micro-table"><tr><td>Invoices staged</td><td>2</td></tr><tr><td>Merchant deposit</td><td>Ready</td></tr><tr><td>Posting queue</td><td>5</td></tr></table></div>
+          </div>
+          <div class="note">Best for polished finance software with easier reading and less terminal pressure.</div>
+        </article>
+
+        <article class="board">
+          <div class="eyebrow">Mode 3</div>
+          <h2>Hybrid</h2>
+          <p>Bloomberg density with Koyfin polish. Small widgets, but cleaner composition.</p>
+          <div class="tape">
+            <div class="cell"><strong>Revenue pace</strong><b class="up">$486k</b></div>
+            <div class="cell"><strong>Cash conv</strong><b class="flat">92.6%</b></div>
+            <div class="cell"><strong>AR exposure</strong><b class="warm">$229k</b></div>
+            <div class="cell"><strong>Claims risk</strong><b class="down">$7.1k</b></div>
+          </div>
+          <div class="hybrid-grid">
+            <div class="micro span-2"><strong>Production vs collections</strong><b>$468k / $432k</b><div class="spark"></div></div>
+            <div class="micro"><strong>Liquidity</strong><b class="up">8.4w</b></div>
+            <div class="micro"><strong>Forecast hit</strong><b class="flat">97.2%</b></div>
+            <div class="micro"><strong>Provider leaders</strong><table class="micro-table"><tr><td>Ridge</td><td>$172k</td></tr><tr><td>Moreno</td><td>$128k</td></tr></table></div>
+            <div class="micro"><strong>Claims queue</strong><table class="micro-table"><tr><td>Martinez</td><td>$1,240</td></tr><tr><td>Choi</td><td>$860</td></tr></table></div>
+            <div class="micro"><strong>HAL actions</strong><table class="micro-table"><tr><td>Collect now</td><td class="up">Act</td></tr><tr><td>Claims packet</td><td class="warm">Watch</td></tr></table></div>
+            <div class="micro"><strong>Close desk</strong><table class="micro-table"><tr><td>Invoices</td><td>2 left</td></tr><tr><td>Payroll</td><td>Ready</td></tr></table></div>
+          </div>
+          <div class="note">Best overall fit for your brief: compact, high-tech, and serious without looking cluttered.</div>
+        </article>
+      </section>
+    </div>
+  </body>
+</html>

@@ -710,7 +710,7 @@ const PageCanvas = (function () {
 
   function renderJournalQueuePanel(items) {
     if (!items.length) {
-      return canvasEmpty("Journal posting queue is available in desktop mode.");
+      return canvasEmpty("Journal posting queue requires the NR2 server. Run StartProgram.bat.");
     }
     const body = items
       .map((entry) => {
@@ -791,7 +791,7 @@ const PageCanvas = (function () {
         title: wTitle("documents", 4),
         caption: "Local journal queue",
         widgetKey: wKey("documents", 4),
-        body: journalItems.length ? renderJournalQueuePanel(journalItems) : canvasEmpty("Journal posting queue is available in desktop mode."),
+        body: journalItems.length ? renderJournalQueuePanel(journalItems) : canvasEmpty("Journal posting queue requires the NR2 server. Run StartProgram.bat."),
       })}
     </div>`;
   }
@@ -1026,8 +1026,42 @@ const PageCanvas = (function () {
       })}
     </div>`;
   }
+
+  function renderFinancialCanvas() {
+    return `<div class="pv-canvas-stack">
+      ${sectionHead("Prototype direction", "HAL-first page gallery embedded in the NR2 shell")}
+      ${canvasPanel({
+        title: "Why this page exists",
+        accent: "gold",
+        widgetKey: "practiceFinancialOverview",
+        body: `<div class="pv-copy-stack">
+          <p>This gallery shows each major NR2 page as a separate HAL-first mock using the current color system, icon language, and widget names.</p>
+          <p>It excludes diagnostics and technical status surfaces so you can review only the user-facing page concepts.</p>
+          <div class="pv-pill-row">
+            <button type="button" class="pv-chip-btn" onclick="window.open('hal-page-gallery.html#financial', '_blank', 'noopener')">Open Financial mock</button>
+            <button type="button" class="pv-chip-btn" onclick="window.open('hal-page-gallery.html#hal', '_blank', 'noopener')">Open HAL mock</button>
+            <button type="button" class="pv-chip-btn" onclick="window.open('hal-page-gallery.html#office-manager', '_blank', 'noopener')">Open Office Manager mock</button>
+            <button type="button" class="pv-chip-btn" data-pv-nav="financial">Compare current dashboard</button>
+            <button type="button" class="pv-chip-btn" data-pv-nav="hal">Open HAL command center</button>
+          </div>
+        </div>`,
+      })}
+      <section class="pv-canvas-panel pv-canvas-panel--gold" data-hal-widget-key="practiceFinancialOverview">
+        <div class="pv-canvas-panel__body" style="padding: 0; overflow: hidden;">
+          <iframe
+            src="hal-page-gallery.html#financial"
+            title="HAL Page Gallery"
+            style="width: 100%; min-height: 1580px; border: 0; background: transparent;"
+            loading="lazy"
+          ></iframe>
+        </div>
+      </section>
+    </div>`;
+  }
+
   const RENDERERS = {
     financial: renderFinancial,
+    "financial-canvas": renderFinancialCanvas,
     taxes: renderTaxes,
     softdent: renderSoftdent,
     quickbooks: renderQuickbooks,

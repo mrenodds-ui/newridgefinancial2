@@ -39,11 +39,79 @@ const DesktopBridge = (function () {
     return `${protocol}//${host}:${port}${path}`;
   }
 
-  async function loopbackJson(path, options) {
-    const resp = await fetch(loopbackUrl(path), Object.assign({ cache: "no-store" }, options || {}));
+  let loopbackSessionToken = null;
+  let loopbackSessionPromise = null;
+  let importReadinessCache = null;
+  let cloudHalSettingsCache = null;
+
+  function notifyImportReadinessChanged(readiness) {
+    if (readiness && typeof readiness === "object") importReadinessCache = readiness;
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("nr2-import-readiness-changed", { detail: importReadinessCache }));
+    }
+  }
+
+  function notifyCloudHalChanged(settings) {
+    if (settings && typeof settings === "object") cloudHalSettingsCache = settings;
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("nr2-cloud-hal-changed", { detail: cloudHalSettingsCache }));
+    }
+  }
+
+  async function ensureLoopbackSession() {
+    if (!hasLoopbackApi()) return null;
+    if (loopbackSessionToken) return loopbackSessionToken;
+    if (loopbackSessionPromise) return loopbackSessionPromise;
+    loopbackSessionPromise = (async () => {
+      try {
+        const resp = await fetch(loopbackUrl("/api/app-info"), { cache: "no-store" });
+        if (!resp.ok) return null;
+        const refresh = resp.headers.get("X-NR2-Refresh-Token");
+        if (refresh) loopbackSessionToken = refresh;
+        const info = await resp.json();
+        loopbackSessionToken = (info && (info.sessionToken || info.csrfToken)) || loopbackSessionToken;
+        importReadinessCache = (info && info.importReadiness) || importReadinessCache;
+        cloudHalSettingsCache = (info && info.cloudHal) || cloudHalSettingsCache;
+        if (info && info.importReadiness) notifyImportReadinessChanged(info.importReadiness);
+        if (info && info.cloudHal) notifyCloudHalChanged(info.cloudHal);
+        return loopbackSessionToken;
+      } catch {
+        return null;
+      } finally {
+        loopbackSessionPromise = null;
+      }
+    })();
+    return loopbackSessionPromise;
+  }
+
+  async function loopbackJson(path, options, _retried) {
+    const opts = Object.assign({ cache: "no-store" }, options || {});
+    const method = String(opts.method || "GET").toUpperCase();
+    if (method !== "GET" && method !== "HEAD" && hasLoopbackApi()) {
+      const token = await ensureLoopbackSession();
+      opts.headers = Object.assign({}, opts.headers || {});
+      if (token) opts.headers["X-NR2-Session-Token"] = token;
+      const tabId = sessionStorage.getItem("nr2TabId");
+      if (tabId) opts.headers["X-NR2-Tab-ID"] = tabId;
+    }
+    const resp = await fetch(loopbackUrl(path), opts);
+    const refresh = resp.headers.get("X-NR2-Refresh-Token");
+    if (refresh) loopbackSessionToken = refresh;
+    if (resp.status === 403 && !_retried && refresh && hasLoopbackApi()) {
+      loopbackSessionToken = refresh;
+      return loopbackJson(path, options, true);
+    }
     if (!resp.ok) {
-      const err = new Error(`HTTP ${resp.status} for ${path}`);
+      let detail = "";
+      try {
+        const body = await resp.json();
+        detail = (body && (body.error || body.detail)) || JSON.stringify(body);
+      } catch {
+        detail = await resp.text().catch(() => "");
+      }
+      const err = new Error(detail ? `HTTP ${resp.status}: ${detail}` : `HTTP ${resp.status} for ${path}`);
       err.status = resp.status;
+      err.detail = detail;
       throw err;
     }
     return resp.json();
@@ -83,6 +151,13 @@ const DesktopBridge = (function () {
       called = true;
       callback();
     };
+
+    if (hasLoopbackApi()) {
+      ensureLoopbackSession().finally(finish);
+      window.addEventListener("pywebviewready", finish, { once: true });
+      window.setTimeout(finish, 2500);
+      return;
+    }
 
     window.addEventListener("pywebviewready", finish, { once: true });
     window.setTimeout(finish, 1500);
@@ -152,6 +227,122 @@ const DesktopBridge = (function () {
     } catch {
       /* storage may be unavailable */
     }
+  }
+
+  async function getImportReadiness() {
+    if (hasLoopbackApi()) {
+      try {
+        importReadinessCache = await loopbackJson("/api/import-readiness");
+        notifyImportReadinessChanged(importReadinessCache);
+        return importReadinessCache;
+      } catch {
+        return importReadinessCache;
+      }
+    }
+    return importReadinessCache;
+  }
+
+  async function evaluateHalQuery(payload) {
+    if (!hasLoopbackApi()) throw new Error("HAL gateway requires loopback server");
+    const body = Object.assign({}, payload || {});
+    if (!body.shiftContext && typeof window !== "undefined" && window.nr2ShiftState) {
+      body.shiftContext = window.nr2ShiftState;
+    }
+    return loopbackJson("/api/hal/evaluate-query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  let shiftPollTimer = null;
+
+  async function pollShiftState() {
+    if (!hasLoopbackApi()) return null;
+    try {
+      const state = await loopbackJson("/api/employee/current-shift");
+      if (typeof window !== "undefined") {
+        window.nr2ShiftState = state;
+        window.dispatchEvent(new CustomEvent("nr2-shift-state-changed", { detail: state }));
+      }
+      return state;
+    } catch {
+      return typeof window !== "undefined" ? window.nr2ShiftState : null;
+    }
+  }
+
+  function startShiftPolling(intervalMs) {
+    const ms = Number(intervalMs || 60000);
+    if (shiftPollTimer) return;
+    pollShiftState().catch(() => {});
+    shiftPollTimer = setInterval(() => {
+      pollShiftState().catch(() => {});
+    }, ms);
+  }
+
+  async function fetchClinicalContext(options) {
+    if (!hasLoopbackApi()) return { ok: false, items: [] };
+    const opts = options && typeof options === "object" ? options : {};
+    const limit = opts.limit != null ? Number(opts.limit) : 5;
+    const patientId = opts.patientId ? String(opts.patientId) : "";
+    const q = patientId
+      ? `?limit=${encodeURIComponent(String(limit))}&patientId=${encodeURIComponent(patientId)}`
+      : `?limit=${encodeURIComponent(String(limit))}`;
+    return loopbackJson(`/api/clinical-summaries${q}`);
+  }
+
+  async function fetchStandingConsent(actionType, amount) {
+    if (!hasLoopbackApi()) return { ok: false, allowed: false };
+    const q = amount != null ? `?amount=${encodeURIComponent(String(amount))}` : "";
+    return loopbackJson(`/api/employee/standing-consent/${encodeURIComponent(String(actionType || ""))}${q}`);
+  }
+
+  async function explainHalBlock(payload) {
+    if (!hasLoopbackApi()) return { ok: false };
+    return loopbackJson("/api/audit/explain-block", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    });
+  }
+
+  async function fetchHalSessionAudit(sessionId) {
+    if (!hasLoopbackApi()) return { ok: false };
+    return loopbackJson(`/api/audit/hal-session/${encodeURIComponent(String(sessionId || ""))}`);
+  }
+
+  async function fetchHalImportGuard(query) {
+    if (!hasLoopbackApi()) return { blocked: false };
+    const q = encodeURIComponent(String(query || ""));
+    return loopbackJson(`/api/hal/import-guard?q=${q}`);
+  }
+
+  async function getCloudHalSettings() {
+    if (cloudHalSettingsCache) return cloudHalSettingsCache;
+    if (hasLoopbackApi()) {
+      try {
+        cloudHalSettingsCache = await loopbackJson("/api/settings/cloud-hal");
+        return cloudHalSettingsCache;
+      } catch {
+        return { enabled: false };
+      }
+    }
+    return { enabled: false };
+  }
+
+  async function setCloudHalEnabled(enable, enabledBy) {
+    if (!hasLoopbackApi()) throw new Error("Cloud HAL settings require loopback server");
+    const payload = enable
+      ? { enable: true, confirm: "ENABLE CLOUD HAL", enabledBy: enabledBy || "Staff" }
+      : { enable: false, enabledBy: enabledBy || "Staff" };
+    const result = await loopbackJson("/api/settings/cloud-hal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    cloudHalSettingsCache = (result && result.settings) || cloudHalSettingsCache;
+    notifyCloudHalChanged(cloudHalSettingsCache);
+    return result;
   }
 
   async function getAppInfo() {
@@ -317,6 +508,13 @@ const DesktopBridge = (function () {
     if (hasDesktopApi() && window.pywebview.api.enqueue_journal_posting) {
       return window.pywebview.api.enqueue_journal_posting(JSON.stringify(payload || {}));
     }
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/posting-queue/enqueue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+      });
+    }
     throw new Error(desktopRequiredMessage("Journal posting queue"));
   }
 
@@ -329,6 +527,18 @@ const DesktopBridge = (function () {
         String(reviewNote || ""),
       );
     }
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/posting-queue/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          queueId: String(queueId || ""),
+          action: String(action || ""),
+          reviewerActor: String(reviewerActor || ""),
+          reviewNote: String(reviewNote || ""),
+        }),
+      });
+    }
     throw new Error(desktopRequiredMessage("Posting queue review"));
   }
 
@@ -340,6 +550,17 @@ const DesktopBridge = (function () {
         String(reviewNote || ""),
       );
     }
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/posting-queue/bulk-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: String(action || "approved"),
+          reviewerActor: String(reviewerActor || "local-user"),
+          reviewNote: String(reviewNote || ""),
+        }),
+      });
+    }
     throw new Error(desktopRequiredMessage("Bulk posting queue review"));
   }
 
@@ -347,6 +568,14 @@ const DesktopBridge = (function () {
     if (hasDesktopApi() && window.pywebview.api.export_approved_posting_queue) {
       const limit = options && options.limit != null ? Number(options.limit) : 200;
       return window.pywebview.api.export_approved_posting_queue(limit);
+    }
+    if (hasLoopbackApi()) {
+      const limit = options && options.limit != null ? Number(options.limit) : 200;
+      return loopbackJson("/api/posting-queue/export-approved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit }),
+      });
     }
     throw new Error(desktopRequiredMessage("Approved posting queue export"));
   }
@@ -958,7 +1187,21 @@ const DesktopBridge = (function () {
     readDataFile,
     storageGet,
     storageSet,
+    loopbackJson,
     getAppInfo,
+    getImportReadiness,
+    getCachedImportReadiness: () => importReadinessCache,
+    getCachedCloudHalSettings: () => cloudHalSettingsCache,
+    fetchHalImportGuard,
+    evaluateHalQuery,
+    pollShiftState,
+    startShiftPolling,
+    fetchClinicalContext,
+    fetchStandingConsent,
+    explainHalBlock,
+    fetchHalSessionAudit,
+    getCloudHalSettings,
+    setCloudHalEnabled,
     getImportBundle,
     getImportSyncStatus,
     refreshImports,
@@ -1027,4 +1270,7 @@ if (typeof module !== "undefined" && module.exports) {
 }
 if (typeof window !== "undefined") {
   window.DesktopBridge = DesktopBridge;
+  if (typeof DesktopBridge.startShiftPolling === "function") {
+    DesktopBridge.whenReady(() => DesktopBridge.startShiftPolling(60000));
+  }
 }

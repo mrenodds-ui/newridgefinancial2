@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,8 +15,24 @@ class LocalStore:
         self.db_path = self.data_dir / "nr2.sqlite3"
         self._init_db()
 
+    def _connect(self) -> sqlite3.Connection:
+        try:
+            from nr2_db_crypto import db_encryption_enabled, open_encrypted_db
+
+            if db_encryption_enabled():
+                conn = open_encrypted_db(self.db_path)
+            else:
+                conn = sqlite3.connect(self.db_path)
+        except Exception:
+            conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("PRAGMA wal_autocheckpoint=1000")
+        conn.execute("PRAGMA secure_delete=ON")
+        return conn
+
     def _init_db(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS app_state (
@@ -26,17 +43,21 @@ class LocalStore:
                 """
             )
             from posting_queue_store import init_posting_queue_schema
+            from ocr_exceptions_store import init_ocr_exceptions_schema
+            from hal_employee_workflows import init_employee_workflow_schemas
 
             init_posting_queue_schema(conn)
+            init_ocr_exceptions_schema(conn)
+            init_employee_workflow_schemas(conn)
 
     def get(self, key: str) -> str | None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             row = conn.execute("SELECT value FROM app_state WHERE key = ?", (key,)).fetchone()
             return row[0] if row else None
 
     def set(self, key: str, value: str) -> None:
         now = datetime.now(timezone.utc).isoformat()
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO app_state (key, value, updated_at)

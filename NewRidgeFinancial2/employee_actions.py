@@ -9,6 +9,7 @@ from typing import Any
 WORK_LOG_KEY = "nr2:hal:employee-work-log"
 STANDING_POLICIES_KEY = "nr2:hal:employee-standing-policies"
 EMPLOYEE_STATE_KEY = "nr2:hal:employee-state"
+SHIFT_KEY = "nr2:employee:shift"
 
 LEVEL_NAMES = {
     1: "Digital clerk",
@@ -186,6 +187,87 @@ def set_standing_policies(store, policies: dict[str, Any], *, target_level: int 
         payload["targetLevel"] = max(1, min(int(target_level), 7))
     store.set(STANDING_POLICIES_KEY, json.dumps(payload))
     return get_standing_policies(store, target_level=int(payload.get("targetLevel") or target_level or 7))
+
+
+def clock_in_shift(store, *, employee_id: str = "HAL", tier: int | None = None) -> dict[str, Any]:
+    if not store:
+        return {"ok": False, "error": "no_store"}
+    level = max(1, min(int(tier or 7), 7))
+    shift = {
+        "employeeId": str(employee_id or "HAL"),
+        "tier": level,
+        "clockedInAt": _utc_now(),
+        "active": True,
+        "levelName": LEVEL_NAMES.get(level, "Unknown"),
+    }
+    store.set(SHIFT_KEY, json.dumps(shift))
+    return {"ok": True, "shift": shift}
+
+
+def get_current_shift_context(store=None) -> dict[str, Any]:
+    raw = store.get(SHIFT_KEY) if store else None
+    if not raw:
+        return {
+            "ok": True,
+            "active": False,
+            "tier": 1,
+            "employeeId": "HAL",
+            "levelName": LEVEL_NAMES.get(1, "Unknown"),
+        }
+    try:
+        shift = json.loads(raw)
+    except json.JSONDecodeError:
+        shift = {}
+    tier = max(1, min(int(shift.get("tier") or 1), 7))
+    return {
+        "ok": True,
+        "active": bool(shift.get("active")),
+        "tier": tier,
+        "employeeId": str(shift.get("employeeId") or "HAL"),
+        "clockedInAt": shift.get("clockedInAt"),
+        "levelName": LEVEL_NAMES.get(tier, LEVEL_NAMES.get(1, "Unknown")),
+    }
+
+
+def check_action_consent(
+    employee_id: str,
+    action_type: str,
+    amount: float | None = None,
+    *,
+    store=None,
+    target_level: int | None = None,
+) -> dict[str, Any]:
+    action = str(action_type or "").strip().lower()
+    ctx = get_current_shift_context(store) if store else {"tier": target_level or 7, "employeeId": employee_id}
+    tier = max(1, min(int(ctx.get("tier") or target_level or 1), 7))
+    pol_resp = get_standing_policies(store, target_level=tier) if store else get_standing_policies(None, target_level=tier)
+    policies = pol_resp.get("policies") or {}
+    allowed = standing_allows(action, target_level=tier, policies=policies)
+    max_usd = policies.get("qbo-post-max-usd")
+    reason = "standing_policy"
+
+    if action in ("qbo-post", "batch-post", "posting") and amount is not None:
+        cap = float(policies.get("qbo-post-max-usd") or 0)
+        amt = float(amount or 0)
+        if not allowed:
+            reason = "action_not_permitted_at_tier"
+        elif cap > 0 and amt > cap:
+            allowed = False
+            reason = "amount_exceeds_tier_cap"
+        elif cap == 0 and tier < 7 and amt > 0:
+            allowed = False
+            reason = "unlimited_post_requires_executive_tier"
+
+    return {
+        "ok": True,
+        "allowed": allowed,
+        "action": action,
+        "employeeId": str(employee_id or ctx.get("employeeId") or "HAL"),
+        "tier": tier,
+        "maxAmountUsd": max_usd,
+        "amount": amount,
+        "reason": reason if allowed else reason,
+    }
 
 
 def standing_allows(kind: str, *, target_level: int = 1, policies: dict[str, Any] | None = None) -> bool:

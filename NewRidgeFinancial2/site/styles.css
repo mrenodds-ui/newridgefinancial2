@@ -7541,3 +7541,137 @@ body.ws-msg-popup-window .ws-sn-notify__btn {
 body.ws-msg-popup-window .ws-sn-notify__btn--ghost {
   background: #ece9e4;
 }
+
+.nr2-import-banner {
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.nr2-import-banner--fresh {
+  background: rgba(46, 125, 50, 0.12);
+  border: 1px solid rgba(46, 125, 50, 0.35);
+  color: #c8e6c9;
+}
+
+.nr2-import-banner--stale {
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fde68a;
+}
+
+.nr2-import-banner--warn {
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  color: #fecaca;
+}
+
+.nr2-import-banner--sync {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #bfdbfe;
+}
+
+.hal-stale-data-warning {
+  background: rgba(220, 38, 38, 0.15);
+  border: 1px solid rgba(220, 38, 38, 0.45);
+  border-radius: 6px;
+  color: #fecaca;
+  font-size: 0.8125rem;
+  margin: 0 0 0.65rem;
+  padding: 0.5rem 0.65rem;
+}
+
+#nr2-tab-blocker {
+  align-items: center;
+  background: rgba(8, 12, 18, 0.82);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 100000;
+}
+
+.nr2-tab-blocker__card {
+  background: #1a2332;
+  border: 1px solid #2d3a4d;
+  border-radius: 10px;
+  color: #e8eef4;
+  max-width: 22rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.nr2-tab-blocker__card h2 {
+  margin: 0 0 0.5rem;
+}
+
+.nr2-tab-blocker__card button {
+  margin-right: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+#nr2-import-readiness-gate {
+  align-items: center;
+  background: rgba(8, 12, 18, 0.88);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  pointer-events: auto;
+  position: fixed;
+  visibility: visible;
+  z-index: 99999;
+}
+
+.nr2-import-gate__card {
+  background: #1a2332;
+  border: 1px solid rgba(220, 38, 38, 0.45);
+  border-radius: 10px;
+  color: #e8eef4;
+  max-width: 26rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.nr2-import-gate__card h2 {
+  color: #fecaca;
+  margin: 0 0 0.5rem;
+}
+
+.nr2-import-gate__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.nr2-import-traffic {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.nr2-import-traffic--green { background: rgba(34, 197, 94, 0.15); }
+.nr2-import-traffic--yellow { background: rgba(234, 179, 8, 0.18); }
+.nr2-import-traffic--red { background: rgba(239, 68, 68, 0.2); }
+.nr2-import-traffic__dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: currentColor; }
+.nr2-import-traffic__refresh { margin-left: auto; font-size: 0.75rem; }
+.nr2-panel { margin: 1rem 0; padding: 0.75rem; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; }
+.nr2-kanban-col { display: inline-block; vertical-align: top; min-width: 140px; margin-right: 0.5rem; }
+.nr2-kanban-card { padding: 0.35rem; margin: 0.25rem 0; background: rgba(0,0,0,0.2); border-radius: 4px; font-size: 0.8rem; }
+.nr2-hal-lane-badge {
+  display: inline-block;
+  margin: 0.35rem 0.5rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+.nr2-hal-transparency { margin-top: 0.75rem; }
+.nr2-hal-audit-list { font-size: 0.8rem; margin: 0.5rem 0; padding-left: 1.1rem; }

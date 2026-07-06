@@ -173,5 +173,9 @@
     renderBootFailure("Design schema failed to load", errors);
   }
 
+  if (typeof navigator !== "undefined" && navigator.serviceWorker && location.protocol.startsWith("http")) {
+    navigator.serviceWorker.register("sw.js?v=hal-10025").catch(() => {});
+  }
+
   globalThis.NR2Boot = boot;
 })();

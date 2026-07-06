@@ -151,6 +151,16 @@ def _age_days(date_value: str) -> int:
     return max(0, delta.days)
 
 
+def _ocr_confidence_acceptable(row: dict[str, Any]) -> bool:
+    if int(row.get("review_required") or 0):
+        return False
+    confidence = str(row.get("confidence_label") or "").strip().lower()
+    if not confidence:
+        return True
+    low_markers = ("low", "manual", "review", "uncertain", "poor", "failed", "reject")
+    return not any(marker in confidence for marker in low_markers)
+
+
 def _status_for_row(row: dict[str, Any]) -> str:
     if int(row.get("review_required") or 0):
         return "Pending Review"
@@ -501,7 +511,29 @@ def sync_accounting_documents(store: Any) -> dict[str, Any]:
     previews: dict[str, Any] = {}
     seen: set[str] = set()
     missing_sources = 0
+    skipped_low_confidence = 0
     for row in rows:
+        if not _ocr_confidence_acceptable(row):
+            skipped_low_confidence += 1
+            try:
+                from ocr_exceptions_store import upsert_exception
+
+                doc_id = _document_id(row)
+                with store._connect() as conn:
+                    upsert_exception(
+                        conn,
+                        {
+                            "id": f"ocr-{doc_id}",
+                            "source_doc": str(row.get("source_name") or doc_id),
+                            "confidence_label": str(row.get("confidence_label") or "low"),
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "status": "pending",
+                            "preview": str(row.get("text_preview") or "")[:500],
+                        },
+                    )
+            except Exception:
+                pass
+            continue
         sha = str(row.get("sha256") or "").strip()
         doc, preview = _queue_entry_from_row(row, archive_dir)
         dedupe_key = sha or doc["id"]
@@ -518,6 +550,11 @@ def sync_accounting_documents(store: Any) -> dict[str, Any]:
     if missing_sources:
         result["warnings"].append(
             f"{missing_sources} document(s) reference a source file removed by retention; preview unavailable."
+        )
+    if skipped_low_confidence:
+        result["skippedLowConfidence"] = skipped_low_confidence
+        result["warnings"].append(
+            f"Skipped {skipped_low_confidence} OCR row(s) below confidence threshold — not auto-queued."
         )
 
     state["queue"] = manual_queue + auto_queue

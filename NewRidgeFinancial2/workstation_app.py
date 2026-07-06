@@ -331,6 +331,9 @@ def main() -> int:
     set_workstation_mode(True)
     desktop_token = uuid.uuid4().hex
     set_desktop_session_token(desktop_token)
+    from nr2_http_server import set_browser_session_token
+
+    set_browser_session_token(desktop_token)
     set_site_root(SITE_DIR)
     set_workstation_show_callback(api.show_workstation_main_window)
     start_url = f"http://127.0.0.1:{http_port}/workstation/index.html?nr2dt={desktop_token}"

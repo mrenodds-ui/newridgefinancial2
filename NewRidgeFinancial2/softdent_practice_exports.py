@@ -315,9 +315,18 @@ def _aggregate_hygiene_recall(conn: sqlite3.Connection, periods: list[str]) -> l
         placeholders = ",".join("?" for _ in periods) if periods else None
         cur = conn.cursor()
         if placeholders:
-            cur.execute(f"SELECT * FROM {table} WHERE {period_col} IN ({placeholders})", periods)
+            sql = (
+                "SELECT * FROM "
+                + table
+                + " WHERE "
+                + period_col
+                + " IN ("
+                + placeholders
+                + ")"
+            )
+            cur.execute(sql, periods)
         else:
-            cur.execute(f"SELECT * FROM {table}")
+            cur.execute("SELECT * FROM " + table)
         rows = []
         for raw in cur.fetchall():
             mapping = dict(zip([d[0] for d in cur.description], raw))

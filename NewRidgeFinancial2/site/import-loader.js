@@ -2016,6 +2016,62 @@ const ImportLoader = (function () {
     return lines.join("\n");
   }
 
+  const FINANCIAL_FRESHNESS_PAGES = new Set([
+    "financial",
+    "financial-canvas",
+    "ar",
+    "quickbooks",
+    "taxes",
+    "claims",
+  ]);
+
+  function importFreshnessLevel(bundle, syncStatus) {
+    if (!bundle) return "unknown";
+    const loadedAt = Date.parse(bundle.loadedAt || "");
+    if (!Number.isFinite(loadedAt)) return "unknown";
+    const ageHours = (Date.now() - loadedAt) / 3600000;
+    if (ageHours > 168) return "expired";
+    if (ageHours > 24) return "stale";
+    const diagApi = diagnosticsApi();
+    const diagnostics = bundle.diagnostics || (diagApi ? diagApi.evaluateBundle(bundle) : null);
+    const summary = (diagnostics && diagnostics.summary) || {};
+    if ((summary.missing || 0) > (summary.missingOptional || 0) || (summary.stale || 0) > 0) {
+      return "degraded";
+    }
+    if ((summary.partial || 0) > 0) return "partial";
+    if (syncStatus && syncStatus.status === "running") return "syncing";
+    return "fresh";
+  }
+
+  function buildImportFreshnessBanner(bundle, syncStatus, pageId) {
+    if (!pageId || !FINANCIAL_FRESHNESS_PAGES.has(pageId)) return "";
+    const level = (syncStatus && syncStatus.level) || importFreshnessLevel(bundle, syncStatus);
+    const loadedLabel = bundle && bundle.loadedAt ? formatFreshness(bundle.loadedAt) : "Unknown";
+    const syncLabel =
+      syncStatus && syncStatus.completedAt
+        ? formatFreshness(syncStatus.completedAt)
+        : syncStatus && syncStatus.startedAt && syncStatus.status === "running"
+          ? "Sync running…"
+          : null;
+    let message = `Last import load: ${loadedLabel}.`;
+    if (syncLabel) message += ` Last sync: ${syncLabel}.`;
+    let cls = "nr2-import-banner nr2-import-banner--fresh";
+    if (level === "stale" || level === "partial") {
+      cls = "nr2-import-banner nr2-import-banner--stale";
+      message = `Data may be stale — ${message} Refresh imports before month-end or posting decisions.`;
+    } else if (level === "expired" || level === "degraded") {
+      cls = "nr2-import-banner nr2-import-banner--warn";
+      message = `Import health degraded — ${message} Posting queue writes are blocked until imports refresh.`;
+    } else if (level === "syncing") {
+      cls = "nr2-import-banner nr2-import-banner--sync";
+      message = `Import sync in progress — ${message}`;
+    } else if (level === "unknown") {
+      cls = "nr2-import-banner nr2-import-banner--warn";
+      message = "Import freshness unknown — refresh imports before trusting financial widgets.";
+    }
+    return `<div class="${cls}" role="status" aria-live="polite">${message}</div>`;
+  }
+
   return {
     shouldLoadImports,
     PRIMARY_PROVIDER,
@@ -2030,6 +2086,8 @@ const ImportLoader = (function () {
     emptyDashboard,
     mergeClaimsState,
     formatImportStatus,
+    buildImportFreshnessBanner,
+    importFreshnessLevel,
     attachBundleDiagnostics,
     normalizePeriodKey,
     latestQuickbooksPeriod,

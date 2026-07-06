@@ -14,6 +14,16 @@ scripts\start_nr2_browser.ps1
 
 The launcher starts the NR2 server on **http://127.0.0.1:8765/** and opens your default browser to that address.
 
+The server binds to **127.0.0.1 only** (not LAN). API write routes (posting queue, outbound) require a per-session loopback token issued at `/api/app-info` and reject cross-origin mutation requests in browser mode.
+
+### Operator security checklist
+
+- Use **one browser tab** for NR2 financial work (a second tab shows a warning).
+- Prefer a **dedicated browser profile** with extensions disabled for `http://127.0.0.1:8765/`.
+- Confirm port **8765** is not reachable from another PC on the LAN.
+- **Cloud HAL** is off by default in browser mode; set `sessionStorage.nr2AllowCloudHal = "1"` only if you explicitly need cloud reasoning.
+- Financial pages show **Last import load**; amber/red banners mean refresh imports before posting or month-end decisions.
+
 ## Files
 
 ```

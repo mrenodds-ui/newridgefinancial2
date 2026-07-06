@@ -206,17 +206,32 @@ const PageViews = (function () {
   function chromeOptsFromState(state) {
     const snap = state && state.programSnapshot;
     const fin = snap && snap.dashboards && snap.dashboards.financial;
+    const opts = {};
     if (fin && fin.dateRange) {
-      return {
-        periodLabel: fin.dateRange,
-        reportRange: fin.footer && fin.footer.refreshed ? `Refreshed ${fin.footer.refreshed}` : snap.label || "",
-      };
+      opts.periodLabel = fin.dateRange;
+      opts.reportRange = fin.footer && fin.footer.refreshed ? `Refreshed ${fin.footer.refreshed}` : snap.label || "";
+    } else {
+      const sd = snap && snap.dashboards && snap.dashboards.softdent;
+      if (sd && sd.date) {
+        opts.periodLabel = sd.date;
+        opts.reportRange = sd.source || "";
+      } else if (snap && snap.label) {
+        opts.periodLabel = snap.label;
+        opts.reportRange = "";
+      }
     }
-    const sd = snap && snap.dashboards && snap.dashboards.softdent;
-    if (sd && sd.date) {
-      return { periodLabel: sd.date, reportRange: sd.source || "" };
+    const IL = typeof ImportLoader !== "undefined" ? ImportLoader : null;
+    const bundle = snap && snap.importBundle;
+    let syncStatus = (bundle && bundle.syncStatus) || null;
+    const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+    if (db && typeof db.getCachedImportReadiness === "function") {
+      const readiness = db.getCachedImportReadiness();
+      if (readiness && readiness.level) syncStatus = readiness;
     }
-    return snap && snap.label ? { periodLabel: snap.label, reportRange: "" } : null;
+    if (IL && typeof IL.buildImportFreshnessBanner === "function" && state && state.pageId) {
+      opts.importFreshnessHtml = IL.buildImportFreshnessBanner(bundle, syncStatus, state.pageId);
+    }
+    return Object.keys(opts).length ? opts : null;
   }
 
   async function refreshLiveIntegrationHealth() {
@@ -255,6 +270,9 @@ const PageViews = (function () {
       pageChrome(state, Canvas.renderBody(pageId, halWidgetFeed, programSnapshot), chromeOptsFromState(state)),
     );
     wireCommon(container, onNavigate);
+    if (typeof NR2MoonshotUI !== "undefined" && NR2MoonshotUI.enhancePage) {
+      NR2MoonshotUI.enhancePage(pageId, container).catch(() => {});
+    }
     refreshLiveIntegrationHealth().catch(() => {
       /* integration health optional; skip second full repaint to avoid page flash */
     });

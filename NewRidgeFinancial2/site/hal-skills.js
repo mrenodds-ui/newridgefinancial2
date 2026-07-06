@@ -2106,7 +2106,7 @@ const HalSkills = (function () {
         key: "journalPostingQueue",
         title: "Journal Posting Queue",
         status: journalStatus,
-        summary: "Local SQLite journal posting queue for reviewed accruals. Desktop mode required for live queue access.",
+        summary: "Local SQLite journal posting queue for reviewed accruals. Requires NR2 server on loopback (Start Program).",
         navTarget: WIDGET_NAV.journalPostingQueue,
         metrics: {
           queueCount: metricValue(journalItems.length || journalQueue.metrics?.pending || null),

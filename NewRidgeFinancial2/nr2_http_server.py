@@ -28,6 +28,7 @@ _sync_state = {
 }
 
 _desktop_session_token: str | None = None
+_browser_session_token: str | None = None
 _site_root: Path | None = None
 _workstation_show_fn = None
 
@@ -40,6 +41,18 @@ def set_workstation_show_callback(fn) -> None:
 def set_desktop_session_token(token: str | None) -> None:
     global _desktop_session_token
     _desktop_session_token = str(token) if token else None
+
+
+def set_browser_session_token(token: str | None) -> None:
+    global _browser_session_token
+    _browser_session_token = str(token) if token else None
+
+
+def ensure_browser_session_token() -> str:
+    global _browser_session_token
+    if not _browser_session_token:
+        _browser_session_token = uuid.uuid4().hex
+    return _browser_session_token
 
 
 def set_site_root(path: Path | str | None) -> None:
@@ -68,6 +81,125 @@ def _request_desktop_token() -> str | None:
 def _loopback_request() -> bool:
     remote = str(getattr(bottle.request, "remote_addr", "") or "")
     return remote in ("127.0.0.1", "::1", "localhost")
+
+
+def _state_changing_request() -> bool:
+    method = (bottle.request.method or "GET").upper()
+    return method in ("POST", "PUT", "DELETE", "PATCH")
+
+
+def _request_browser_session_token() -> str | None:
+    header = bottle.request.headers.get("X-NR2-Session-Token")
+    if header:
+        return str(header).strip()
+    refresh = bottle.request.headers.get("X-NR2-Refresh-Token")
+    if refresh:
+        return str(refresh).strip()
+    cookie = bottle.request.get_cookie("nr2st")
+    if cookie:
+        return str(cookie).strip()
+    return None
+
+
+_import_overrides: dict[str, dict] = {}
+
+
+def _get_import_readiness(*, operation: str | None = None) -> dict:
+    from import_diagnostics import assess_import_readiness
+
+    with _sync_lock:
+        sync_state = dict(_sync_state)
+    readiness = assess_import_readiness(sync_state=sync_state, operation=operation)
+    token = _request_browser_session_token() or _browser_session_token or ""
+    override = _import_overrides.get(str(token))
+    if override and float(override.get("expires") or 0) > datetime.now(timezone.utc).timestamp():
+        readiness = {
+            **readiness,
+            "ok": True,
+            "level": "fresh",
+            "override": True,
+            "overrideReasonHash": override.get("reason_hash"),
+            "overrideExpires": override.get("expires"),
+        }
+    return readiness
+
+
+def _audit_mutation(action: str, *, detail: dict | None = None, actor: str | None = None) -> None:
+    try:
+        from nr2_audit_log import append_audit_event
+
+        body: dict = {}
+        path = ""
+        try:
+            path = bottle.request.path or ""
+            raw = bottle.request.body.read() if bottle.request.body else b""
+            if raw:
+                parsed = json.loads(raw.decode("utf-8") or "{}")
+                if isinstance(parsed, dict):
+                    body = parsed
+        except Exception:
+            pass
+        resolved_actor = str(
+            actor
+            or body.get("actor")
+            or body.get("reviewerActor")
+            or body.get("reviewer")
+            or body.get("enabledBy")
+            or "Staff"
+        )
+        append_audit_event(
+            action,
+            actor=resolved_actor,
+            detail=detail if detail is not None else body,
+            path=path or None,
+        )
+    except Exception:
+        pass
+
+
+def _browser_api_request() -> bool:
+    path = bottle.request.path or "/"
+    return path.startswith("/api/")
+
+
+def _browser_mutation_auth_ok() -> bool:
+    from nr2_browser_security import mutation_auth_failure_reason
+
+    if not _browser_app():
+        return True
+    if not _state_changing_request():
+        return True
+    path = bottle.request.path or "/"
+    if path.startswith("/js_api/"):
+        return True
+    if not _loopback_request():
+        return False
+    expected = _browser_session_token or ensure_browser_session_token()
+    return mutation_auth_failure_reason(expected) is None
+
+
+def _browser_mutation_auth_reason() -> str:
+    from nr2_browser_security import mutation_auth_failure_reason
+
+    expected = _browser_session_token or ensure_browser_session_token()
+    return mutation_auth_failure_reason(expected) or "token_invalid"
+
+
+def _require_imports_for_posting():
+    gate = _require_import_readiness_level("fresh", for_posting=True)
+    return gate
+
+
+def _require_import_readiness_level(required_level: str = "fresh", *, for_posting: bool = False):
+    from nr2_browser_security import abort_import_read
+
+    readiness = _get_import_readiness()
+    level = str(readiness.get("level") or "unknown")
+    if required_level == "fresh" and level != "fresh":
+        if for_posting:
+            return _json_response({"ok": False, **readiness}, status=409)
+        abort_import_read(readiness)
+    return None
 
 
 def _lan_hal_hub_access_ok() -> bool:
@@ -115,6 +247,10 @@ def _browser_app() -> bool:
         return True
     val = os.environ.get("NR2_BROWSER_APP", "").strip().lower()
     return val in ("1", "true", "yes")
+
+
+def _loopback_secured() -> bool:
+    return _browser_app() or _workstation_app()
 
 
 def _desktop_access_ok() -> bool:
@@ -235,6 +371,7 @@ def _run_import_sync_http(store) -> None:
                 "error": None,
                 "result": result,
             }
+        _audit_mutation("refresh_imports_complete", detail={"status": "success", "resultKeys": list(result.keys()) if isinstance(result, dict) else []})
     except Exception as exc:
         with _sync_lock:
             _sync_state = {
@@ -244,6 +381,7 @@ def _run_import_sync_http(store) -> None:
                 "error": str(exc),
                 "result": None,
             }
+        _audit_mutation("refresh_imports_complete", detail={"status": "failed", "error": str(exc)})
 
 
 class NR2BottleServer(BottleServer):
@@ -269,9 +407,74 @@ class NR2BottleServer(BottleServer):
 
         @app.hook("before_request")
         def _enforce_desktop_only():
-            if _desktop_access_ok():
-                return None
-            bottle.abort(403, _desktop_only_html())
+            import hashlib
+            import json as _json
+
+            from nr2_browser_security import abort_browser_auth, financial_read_path, host_allowed, register_browser_session, token_fingerprint
+            from nr2_rate_limit import classify_route, is_allowed
+
+            if not _desktop_access_ok():
+                bottle.abort(403, _desktop_only_html())
+            if _loopback_secured() and _browser_api_request() and not host_allowed():
+                abort_browser_auth("host_rejected", "Host header not allowed for NR2 loopback.")
+            active_token = _browser_session_token or _desktop_session_token
+            if _loopback_secured() and active_token:
+                register_browser_session(active_token)
+            if _loopback_secured() and _browser_api_request():
+                token = _request_browser_session_token() or active_token or ""
+                route_class = classify_route(bottle.request.path or "", bottle.request.method or "GET")
+                ok, retry = is_allowed(token_fingerprint(token), route_class)
+                if not ok:
+                    bottle.response.content_type = "application/json"
+                    bottle.response.headers["Retry-After"] = str(retry)
+                    bottle.abort(429, _json.dumps({"ok": False, "error": "rate_limited", "retryAfter": retry}))
+            if _browser_app() and _state_changing_request() and not _browser_mutation_auth_ok():
+                abort_browser_auth(_browser_mutation_auth_reason(), "Loopback mutation auth failed.")
+            if (
+                _browser_app()
+                and bottle.request.method == "GET"
+                and financial_read_path(bottle.request.path or "")
+            ):
+                gate = _require_import_readiness_level("fresh")
+                if gate is not None:
+                    return gate
+            return None
+
+        @app.hook("after_request")
+        def _audit_financial_reads():
+            from nr2_audit_log import append_read_audit
+            from nr2_browser_security import financial_read_path, token_fingerprint
+            from nr2_rbac import current_role
+
+            if not _browser_app():
+                return
+            if bottle.request.method != "GET":
+                return
+            path = bottle.request.path or ""
+            if not financial_read_path(path):
+                return
+            token = _request_browser_session_token() or _browser_session_token or ""
+            append_read_audit(
+                token_fingerprint=token_fingerprint(token),
+                path=path,
+                role=current_role(),
+                params=dict(bottle.request.params) if bottle.request.params else None,
+            )
+
+        @app.hook("after_request")
+        def _browser_security_headers():
+            from nr2_browser_security import apply_browser_security_headers, maybe_rotate_session_token
+
+            if not _loopback_secured():
+                return
+            rotated = None
+            global _browser_session_token
+            if _browser_session_token:
+                new_token, did = maybe_rotate_session_token(_browser_session_token)
+                if did:
+                    _browser_session_token = new_token
+                    rotated = new_token
+            apply_browser_security_headers(rotated)
 
         @app.hook("after_request")
         def _hal_hub_cors_headers():
@@ -312,18 +515,348 @@ class NR2BottleServer(BottleServer):
                 bundle = load_import_bundle(sync=False, deep=False)
                 from hal_hub import resolve_hub_data_dir, resolve_hal_hub_url
 
-                return _json_response(
-                    {
-                        "mode": "loopback",
-                        "version": "2.0",
-                        "importMode": bundle.get("importMode"),
-                        "runtimeAccess": True,
-                        "halHubUrl": resolve_hal_hub_url(),
-                        "officeHubData": str(resolve_hub_data_dir()),
-                    }
-                )
+                payload = {
+                    "mode": "loopback",
+                    "version": "2.0",
+                    "importMode": bundle.get("importMode"),
+                    "runtimeAccess": True,
+                    "halHubUrl": resolve_hal_hub_url(),
+                    "officeHubData": str(resolve_hub_data_dir()),
+                }
+                if _browser_app():
+                    token = ensure_browser_session_token()
+                    from nr2_browser_security import bind_session_user_agent
+
+                    bind_session_user_agent(token)
+                    from nr2_browser_security import register_browser_session
+
+                    register_browser_session(token)
+                    readiness = _get_import_readiness()
+                    payload["sessionToken"] = token
+                    payload["csrfToken"] = token
+                    payload["importReadiness"] = readiness
+                    from nr2_settings_store import read_cloud_hal_settings
+                    from nr2_rbac import app_info_rbac
+
+                    payload["cloudHal"] = read_cloud_hal_settings(_local_store())
+                    payload.update(app_info_rbac())
+                return _json_response(payload)
             except Exception as exc:
-                return _json_response({"mode": "loopback", "version": "2.0", "error": str(exc)})
+                payload = {"mode": "loopback", "version": "2.0", "error": str(exc)}
+                if _browser_app():
+                    token = ensure_browser_session_token()
+                    payload["sessionToken"] = token
+                    payload["csrfToken"] = token
+                    try:
+                        payload["importReadiness"] = _get_import_readiness()
+                    except Exception:
+                        pass
+                return _json_response(payload)
+
+        @app.get("/api/import-readiness")
+        def import_readiness_api():
+            operation = str(bottle.request.params.get("operation") or "").strip() or None
+            return _json_response(_get_import_readiness(operation=operation))
+
+        @app.get("/api/hal/import-guard")
+        def hal_import_guard_api():
+            from nr2_browser_security import classify_financial_query, import_guard_response
+
+            query = str(bottle.request.params.get("q") or bottle.request.params.get("query") or "")
+            readiness = _get_import_readiness()
+            financial = classify_financial_query(query)
+            return _json_response(import_guard_response(readiness, financial_intent=financial))
+
+        @app.post("/api/hal/evaluate-query")
+        def hal_evaluate_query_api():
+            from employee_actions import get_current_shift_context
+            from nr2_hal_gateway import evaluate_query, resolve_lane, route_by_complexity
+            from nr2_audit_log import record_hal_session
+            from nr2_settings_store import read_cloud_hal_settings
+
+            if bottle.request.headers.get("X-Direct-Ollama"):
+                return _json_response({"ok": False, "error": "direct_ollama_rejected"}, status=403)
+
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            if payload.get("cloud") or str(payload.get("lane") or "").lower() == "cloud":
+                settings = read_cloud_hal_settings(_local_store())
+                if not settings.get("enabled"):
+                    return _json_response({"ok": False, "error": "cloud_hal_disabled"}, status=400)
+                if not settings.get("baaSignedAt"):
+                    return _json_response({"ok": False, "error": "cloud_hal_baa_required"}, status=400)
+            store = _local_store()
+            readiness = _get_import_readiness()
+            shift_context = payload.get("shiftContext") if isinstance(payload.get("shiftContext"), dict) else None
+            if not shift_context:
+                shift_context = get_current_shift_context(store)
+            query = str(payload.get("query") or "")
+            requested_lane = payload.get("lane") or payload.get("requestedLane")
+            lane_key = str(requested_lane or route_by_complexity(query, shift_context=shift_context))
+            resolved = resolve_lane(lane_key)
+            model = str(payload.get("model") or resolved["model"])
+            session_id = str(payload.get("sessionId") or payload.get("session_id") or "")
+            use_stream = bool(payload.get("stream"))
+            if use_stream:
+                from nr2_hal_gateway import evaluate_query_stream
+
+                result = evaluate_query_stream(
+                    query=query,
+                    readiness=readiness,
+                    model=model,
+                    system_prompt=str(payload.get("systemPrompt") or payload.get("system") or ""),
+                    messages=payload.get("messages") if isinstance(payload.get("messages"), list) else None,
+                    options=payload.get("options") if isinstance(payload.get("options"), dict) else None,
+                    shift_context=shift_context,
+                    requested_lane=lane_key,
+                    store=store,
+                )
+            else:
+                result = evaluate_query(
+                    query=query,
+                    readiness=readiness,
+                    model=model,
+                    system_prompt=str(payload.get("systemPrompt") or payload.get("system") or ""),
+                    messages=payload.get("messages") if isinstance(payload.get("messages"), list) else None,
+                    options=payload.get("options") if isinstance(payload.get("options"), dict) else None,
+                    shift_context=shift_context,
+                    requested_lane=lane_key,
+                    store=store,
+                )
+            result["resolvedLane"] = result.get("resolvedLane") or resolved["lane"]
+            bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
+            bottle.response.set_header("X-HAL-Lane-Used", str(result.get("resolvedLane") or resolved["lane"]))
+            if session_id:
+                record_hal_session(
+                    store,
+                    session_id,
+                    {
+                        "type": "evaluate_query",
+                        "lane": result.get("resolvedLane"),
+                        "intent": result.get("intent"),
+                        "blocked": bool(result.get("blocked")),
+                        "error": result.get("error"),
+                    },
+                )
+            if result.get("blocked") or result.get("error") == "HAL_UNAVAILABLE_STALE_DATA":
+                return _json_response(result, status=503)
+            if not result.get("ok"):
+                return _json_response(result, status=502)
+            return _json_response(result)
+
+        @app.post("/api/hal/acknowledge-stale")
+        def hal_acknowledge_stale_api():
+            from nr2_hal_gateway import acknowledge_stale
+
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            result = acknowledge_stale(
+                _local_store(),
+                actor=str(payload.get("actor") or "Staff"),
+                reason=str(payload.get("reason") or ""),
+            )
+            return _json_response(result)
+
+        @app.get("/api/audit/hal-session/<session_id>")
+        def audit_hal_session_api(session_id: str):
+            from nr2_audit_log import get_hal_session
+
+            return _json_response(get_hal_session(_local_store(), session_id))
+
+        @app.post("/api/audit/explain-block")
+        def audit_explain_block_api():
+            from nr2_audit_log import explain_hal_block
+
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            return _json_response(explain_hal_block(_local_store(), payload))
+
+        @app.post("/api/import-readiness/override")
+        def import_readiness_override_api():
+            import hashlib
+
+            from nr2_rbac import current_role
+
+            role = current_role()
+            if role not in ("office_manager", "admin", "dentist"):
+                return _json_response({"ok": False, "error": "insufficient_privilege", "role": role}, status=403)
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            reason = str(payload.get("reason") or "").strip()
+            if len(reason) < 5:
+                return _json_response({"ok": False, "error": "reason_required"}, status=400)
+            ttl_minutes = min(int(payload.get("ttl_minutes") or payload.get("ttl") or 60), 240)
+            token = _request_browser_session_token() or _browser_session_token or ""
+            expires = datetime.now(timezone.utc).timestamp() + ttl_minutes * 60
+            reason_hash = hashlib.sha256(reason.encode("utf-8")).hexdigest()
+            _import_overrides[str(token)] = {
+                "expires": expires,
+                "reason_hash": reason_hash,
+                "scopes": payload.get("scopes") or ["posting", "ar"],
+            }
+            _audit_mutation("import_readiness_override", detail={"reason_hash": reason_hash, "ttl_minutes": ttl_minutes})
+            return _json_response({"ok": True, "expires": expires, "reasonHash": reason_hash})
+
+        @app.get("/api/health")
+        def health_api():
+            from integration_health import integration_health_snapshot
+            from nr2_db_crypto import db_encryption_enabled
+
+            store = _local_store()
+            health = integration_health_snapshot(store)
+            ollama_ok = bool((health.get("ollama") or {}).get("ok"))
+            db_ok = store.db_path.is_file()
+            readiness = _get_import_readiness()
+            backup_dir = NR2_DATA_DIR / "backups"
+            backup_last = None
+            if backup_dir.is_dir():
+                backups = sorted(backup_dir.glob("*.sqlite3*"), key=lambda p: p.stat().st_mtime, reverse=True)
+                if backups:
+                    backup_last = datetime.fromtimestamp(backups[0].stat().st_mtime, tz=timezone.utc).isoformat()
+            payload = {
+                "ok": db_ok and ollama_ok,
+                "db": db_ok,
+                "ollama": ollama_ok,
+                "importPipeline": readiness.get("level") not in ("expired", "degraded"),
+                "readinessLevel": readiness.get("level"),
+                "backupLastAt": backup_last,
+                "encryptionEnabled": db_encryption_enabled(),
+            }
+            status = 200 if payload["ok"] else 503
+            return _json_response(payload, status=status)
+
+        @app.get("/api/audit-log/mutations")
+        def audit_log_mutations_api():
+            from nr2_audit_log import read_audit_tail
+
+            limit = int(bottle.request.params.get("limit") or 100)
+            return _json_response({"ok": True, "items": read_audit_tail("mutations", limit=limit)})
+
+        @app.get("/api/audit-log/reads")
+        def audit_log_reads_api():
+            from nr2_audit_log import read_audit_tail
+            from nr2_rbac import has_capability
+
+            if not has_capability("read_financial") and not has_capability("read_all"):
+                return _json_response({"ok": False, "error": "capability_rejected"}, status=403)
+            limit = int(bottle.request.params.get("limit") or 100)
+            return _json_response({"ok": True, "items": read_audit_tail("reads", limit=limit)})
+
+        @app.get("/api/clinical-summaries")
+        def clinical_summaries_api():
+            from nr2_clinical_bridge import load_clinical_context
+            from nr2_rbac import has_capability
+
+            limit = int(bottle.request.params.get("limit") or 5)
+            patient_id = str(bottle.request.params.get("patientId") or bottle.request.params.get("patient_id") or "").strip()
+            patient_name = str(bottle.request.params.get("patientName") or bottle.request.params.get("patient_name") or "").strip()
+            ctx = load_clinical_context(
+                _local_store(),
+                patient_id=patient_id,
+                patient_name=patient_name,
+                limit=limit,
+            )
+            read_only = not has_capability("write_clinical")
+            return _json_response({**ctx, "source": "clinical-bridge", "readOnly": read_only, "proxyMode": True})
+
+        @app.get("/api/v1/import-readiness")
+        def api_v1_import_readiness():
+            operation = str(bottle.request.params.get("operation") or "").strip() or None
+            return _json_response(_get_import_readiness(operation=operation))
+
+        @app.get("/api/v1/health")
+        def api_v1_health():
+            return health_api()
+
+        @app.post("/api/webhooks/patient-payment")
+        def patient_payment_webhook_api():
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            _audit_mutation("patient_payment_webhook", detail={"patientId": payload.get("patientId"), "amount": payload.get("amount")})
+            return _json_response({"ok": True, "freshnessInvalidated": True, "patientId": payload.get("patientId")})
+
+        @app.get("/api/ocr-exceptions")
+        def ocr_exceptions_list_api():
+            from ocr_exceptions_store import list_exceptions
+
+            status = str(bottle.request.params.get("status") or "pending").strip() or None
+            with _local_store()._connect() as conn:
+                items = list_exceptions(conn, status=status, limit=int(bottle.request.params.get("limit") or 200))
+            return _json_response({"ok": True, "items": items, "count": len(items)})
+
+        @app.post("/api/ocr-exceptions/<exc_id>/resolve")
+        def ocr_exceptions_resolve_api(exc_id: str):
+            from nr2_rbac import has_capability
+
+            if not has_capability("manage_ocr"):
+                return _json_response({"ok": False, "error": "capability_rejected"}, status=403)
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            from ocr_exceptions_store import resolve_exception
+
+            with _local_store()._connect() as conn:
+                result = resolve_exception(
+                    conn,
+                    exc_id,
+                    action=str(payload.get("action") or "resolve"),
+                    notes=str(payload.get("notes") or payload.get("resolution_notes") or ""),
+                )
+            _audit_mutation("ocr_exception_resolve", detail={"id": exc_id, "result": result})
+            return _json_response(result)
+
+        @app.get("/api/settings/cloud-hal")
+        def cloud_hal_settings_get():
+            from nr2_settings_store import read_cloud_hal_settings
+
+            return _json_response(read_cloud_hal_settings(_local_store()))
+
+        @app.post("/api/settings/cloud-hal")
+        def cloud_hal_settings_post():
+            from nr2_rbac import has_capability
+            from nr2_settings_store import read_cloud_hal_settings, write_cloud_hal_settings
+
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            confirm = str(payload.get("confirm") or "")
+            enable = bool(payload.get("enable"))
+            if enable and not has_capability("cloud_hal"):
+                return _json_response({"ok": False, "error": "insufficient_privilege"}, status=403)
+            if enable and confirm != "ENABLE CLOUD HAL":
+                return _json_response({"ok": False, "error": "confirm phrase required"}, status=400)
+            baa_ack = str(payload.get("baaAcknowledgement") or payload.get("baa_ack") or "").strip()
+            if enable and baa_ack != "BAA ON FILE":
+                return _json_response({"ok": False, "error": "cloud_hal_baa_required"}, status=400)
+            if enable:
+                record = write_cloud_hal_settings(
+                    _local_store(),
+                    enabled=True,
+                    enabled_by=str(payload.get("enabledBy") or "Staff"),
+                    baa_signed=True,
+                )
+            else:
+                record = write_cloud_hal_settings(
+                    _local_store(),
+                    enabled=False,
+                    enabled_by=str(payload.get("enabledBy") or "Staff"),
+                )
+            return _json_response({"ok": True, "settings": read_cloud_hal_settings(_local_store()), "record": record})
+
+        @app.post("/api/import-sync-reset")
+        def import_sync_reset_api():
+            global _sync_state
+            with _sync_lock:
+                if _sync_state.get("status") != "running":
+                    return _json_response({"ok": False, "error": "sync not running"})
+                _sync_state = {
+                    "status": "idle",
+                    "startedAt": None,
+                    "completedAt": datetime.now(timezone.utc).isoformat(),
+                    "error": "reset by operator",
+                    "result": None,
+                }
+                state = dict(_sync_state)
+            _audit_mutation("import_sync_reset", detail=state)
+            return _json_response({"ok": True, "state": state})
 
         @app.get("/api/import-sync-status")
         def import_sync_status_api():
@@ -347,6 +880,7 @@ class NR2BottleServer(BottleServer):
             store = _local_store()
             thread = threading.Thread(target=_run_import_sync_http, args=(store,), daemon=True)
             thread.start()
+            _audit_mutation("refresh_imports", detail=state)
             return _json_response(state)
 
         @app.get("/api/practice-source-catalog")
@@ -814,6 +1348,141 @@ class NR2BottleServer(BottleServer):
             except Exception as exc:
                 return _json_response({"ok": False, "error": str(exc)}, status=500)
 
+        @app.get("/api/employee/current-shift")
+        def employee_current_shift_api():
+            try:
+                from employee_actions import get_current_shift_context
+
+                return _json_response(get_current_shift_context(_local_store()))
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/employee/standing-consent/<action_type>")
+        def employee_standing_consent_api(action_type: str):
+            try:
+                from employee_actions import check_action_consent
+
+                amount_raw = bottle.request.params.get("amount")
+                amount = float(amount_raw) if amount_raw not in (None, "") else None
+                employee_id = str(bottle.request.params.get("employeeId") or "HAL")
+                return _json_response(
+                    check_action_consent(employee_id, action_type, amount, store=_local_store())
+                )
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/employee/clock-in")
+        def employee_clock_in_api():
+            try:
+                from employee_actions import clock_in_shift
+
+                payload = bottle.request.json or {}
+                return _json_response(
+                    clock_in_shift(
+                        _local_store(),
+                        employee_id=str(payload.get("employeeId") or "HAL"),
+                        tier=int(payload.get("tier") or payload.get("targetLevel") or 7),
+                    )
+                )
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/hal/lane-history")
+        def hal_lane_history_api():
+            from nr2_hal_gateway import list_lane_history
+
+            limit = int(bottle.request.params.get("limit") or 20)
+            return _json_response(list_lane_history(_local_store(), limit=limit))
+
+        @app.post("/api/collections/generate-queue")
+        def collections_generate_queue_api():
+            from hal_employee_workflows import generate_collections_queue
+
+            payload = bottle.request.json or {}
+            limit = int(payload.get("limit") or 25)
+            return _json_response(generate_collections_queue(_local_store(), limit=limit))
+
+        @app.get("/api/collections/queue")
+        def collections_queue_api():
+            from hal_employee_workflows import list_collections_queue
+
+            limit = int(bottle.request.params.get("limit") or 50)
+            return _json_response(list_collections_queue(_local_store(), limit=limit))
+
+        @app.post("/api/collections/letter")
+        def collections_letter_api():
+            from hal_employee_workflows import generate_collection_letter
+
+            payload = bottle.request.json or {}
+            return _json_response(generate_collection_letter(_local_store(), payload))
+
+        @app.post("/api/collections/schedule-call")
+        def collections_schedule_call_api():
+            from hal_employee_workflows import schedule_call_task
+
+            payload = bottle.request.json or {}
+            return _json_response(schedule_call_task(_local_store(), payload))
+
+        @app.post("/api/import/heal")
+        def import_heal_api():
+            from import_healing import heal_import_pipeline
+
+            payload = bottle.request.json or {}
+            force = bool((payload or {}).get("force"))
+            return _json_response(heal_import_pipeline(force=force))
+
+        @app.post("/api/era/parse")
+        def era_parse_api():
+            from hal_employee_workflows import parse_era_import
+
+            payload = bottle.request.json or {}
+            return _json_response(parse_era_import(_local_store(), payload))
+
+        @app.post("/api/deposits/analyze")
+        def deposits_analyze_api():
+            from hal_employee_workflows import draft_deposit_reconciliation
+
+            payload = bottle.request.json or {}
+            return _json_response(draft_deposit_reconciliation(_local_store(), payload))
+
+        @app.post("/api/deposits/draft-recon")
+        def deposits_draft_recon_api():
+            from hal_employee_workflows import draft_deposit_reconciliation
+
+            payload = bottle.request.json or {}
+            return _json_response(draft_deposit_reconciliation(_local_store(), payload))
+
+        @app.post("/api/claims/preflight")
+        def claims_preflight_api():
+            from hal_employee_workflows import stage_claim_preflight
+
+            payload = bottle.request.json or {}
+            return _json_response(stage_claim_preflight(_local_store(), payload))
+
+        @app.post("/api/eob/match")
+        def eob_match_api():
+            from hal_employee_workflows import process_eob_match
+
+            payload = bottle.request.json or {}
+            return _json_response(process_eob_match(_local_store(), payload))
+
+        @app.post("/api/posting/batch-approve")
+        def posting_batch_approve_api():
+            from hal_employee_workflows import batch_approve_postings
+
+            payload = bottle.request.json or {}
+            result = batch_approve_postings(_local_store(), payload)
+            status = 403 if result.get("error") == "consent_denied" else 200
+            return _json_response(result, status=status)
+
+        @app.post("/api/close/generate-tasks")
+        def close_generate_tasks_api():
+            from hal_employee_workflows import generate_month_end_tasks
+
+            payload = bottle.request.json or {}
+            period = str(payload.get("period") or "") if isinstance(payload, dict) else ""
+            return _json_response(generate_month_end_tasks(_local_store(), period=period or None))
+
         @app.get("/api/employee/status")
         def employee_status_api():
             try:
@@ -915,10 +1584,145 @@ class NR2BottleServer(BottleServer):
                 from local_store import LocalStore
 
                 store = LocalStore(NR2_DATA_DIR)
-                return json.dumps(list_posting_queue(store.db_path, limit=20))
+                limit = int(bottle.request.params.get("limit") or 20)
+                status = str(bottle.request.params.get("status") or "").strip() or None
+                return json.dumps(list_posting_queue(store.db_path, limit=limit, status=status))
             except Exception as exc:
                 bottle.response.status = 500
                 return json.dumps({"error": str(exc)})
+
+        @app.post("/api/posting-queue/enqueue")
+        def posting_queue_enqueue_api():
+            from nr2_rbac import has_capability
+
+            if not has_capability("write_posting"):
+                return _json_response({"ok": False, "error": "capability_rejected"}, status=403)
+            gate = _require_imports_for_posting()
+            if gate is not None:
+                return gate
+            bottle.response.content_type = "application/json"
+            try:
+                from accounting_bridge import enqueue_journal_posting, parse_context_json
+                from local_store import LocalStore
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                if not isinstance(payload, dict):
+                    return _json_response({"ok": False, "error": "payload must be a JSON object"}, status=400)
+                store = LocalStore(NR2_DATA_DIR)
+                result = enqueue_journal_posting(
+                    store.db_path,
+                    description=str(payload.get("description") or "Journal entry"),
+                    period=str(payload.get("period") or ""),
+                    amount=float(payload.get("amount") or 0),
+                    actor=str(payload.get("actor") or "Staff"),
+                    context=parse_context_json(json.dumps(payload.get("context") or {})),
+                    transaction_date=str(payload.get("transactionDate") or "") or None,
+                    enqueue_mode=str(payload.get("enqueueMode") or "manual_review_queue"),
+                )
+                _audit_mutation("posting_queue_enqueue", detail=result if isinstance(result, dict) else {"result": result})
+                return _json_response(result)
+            except ValueError as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=400)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/posting-queue/review")
+        def posting_queue_review_api():
+            from nr2_rbac import has_capability
+
+            if not has_capability("write_posting"):
+                return _json_response({"ok": False, "error": "capability_rejected"}, status=403)
+            gate = _require_imports_for_posting()
+            if gate is not None:
+                return gate
+            bottle.response.content_type = "application/json"
+            try:
+                from accounting_bridge import review_posting_queue_entry
+                from local_store import LocalStore
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                if not isinstance(payload, dict):
+                    return _json_response({"ok": False, "error": "payload must be a JSON object"}, status=400)
+                queue_id = str(payload.get("queueId") or payload.get("queue_id") or "").strip()
+                action = str(payload.get("action") or "").strip()
+                reviewer = str(payload.get("reviewerActor") or payload.get("reviewer") or "Staff").strip()
+                note = str(payload.get("reviewNote") or payload.get("note") or "")
+                if not queue_id:
+                    return _json_response({"ok": False, "error": "queueId required"}, status=400)
+                store = LocalStore(NR2_DATA_DIR)
+                result = review_posting_queue_entry(
+                    store.db_path,
+                    queue_id=queue_id,
+                    action=action,
+                    reviewer_actor=reviewer,
+                    review_note=note or None,
+                )
+                _audit_mutation("posting_queue_review", detail=result if isinstance(result, dict) else {"result": result})
+                return _json_response(result)
+            except ValueError as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=400)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/posting-queue/bulk-review")
+        def posting_queue_bulk_review_api():
+            from nr2_rbac import has_capability
+
+            if not has_capability("write_posting"):
+                return _json_response({"ok": False, "error": "capability_rejected"}, status=403)
+            gate = _require_imports_for_posting()
+            if gate is not None:
+                return gate
+            bottle.response.content_type = "application/json"
+            try:
+                from accounting_bridge import bulk_review_posting_queue
+                from local_store import LocalStore
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                if not isinstance(payload, dict):
+                    return _json_response({"ok": False, "error": "payload must be a JSON object"}, status=400)
+                store = LocalStore(NR2_DATA_DIR)
+                result = bulk_review_posting_queue(
+                    store.db_path,
+                    action=str(payload.get("action") or "approved"),
+                    reviewer_actor=str(payload.get("reviewerActor") or payload.get("reviewer") or "Staff"),
+                    review_note=str(payload.get("reviewNote") or payload.get("note") or "") or None,
+                    limit=int(payload.get("limit") or 50),
+                )
+                _audit_mutation("posting_queue_bulk_review", detail=result if isinstance(result, dict) else {"result": result})
+                return _json_response(result)
+            except ValueError as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=400)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/posting-queue/export-approved")
+        def posting_queue_export_approved_api():
+            from nr2_rbac import has_capability
+
+            if not has_capability("write_posting"):
+                return _json_response({"ok": False, "error": "capability_rejected"}, status=403)
+            gate = _require_imports_for_posting()
+            if gate is not None:
+                return gate
+            bottle.response.content_type = "application/json"
+            try:
+                from accounting_bridge import export_approved_posting_queue_csv
+                from local_store import LocalStore
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                if not isinstance(payload, dict):
+                    payload = {}
+                store = LocalStore(NR2_DATA_DIR)
+                result = export_approved_posting_queue_csv(store.db_path, limit=int(payload.get("limit") or 200))
+                _audit_mutation("posting_queue_export_approved", detail=result if isinstance(result, dict) else {"result": result})
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
 
         def _local_store():
             from local_store import LocalStore
@@ -965,6 +1769,10 @@ class NR2BottleServer(BottleServer):
 
         @app.get("/api/financial-reports")
         def financial_reports_api():
+            from nr2_rbac import has_capability
+
+            if _browser_app() and not (has_capability("read_financial") or has_capability("read_all")):
+                return _json_response({"ok": False, "error": "capability_rejected"}, status=403)
             bottle.response.content_type = "application/json"
             try:
                 from financial_reports import build_financial_reports
@@ -1041,6 +1849,34 @@ class NR2BottleServer(BottleServer):
                 bottle.response.status = 500
                 bottle.response.content_type = "application/json"
                 return json.dumps({"error": str(exc)})
+
+        @app.get("/api/v1/financial-reports")
+        def api_v1_financial_reports():
+            return financial_reports_api()
+
+        @app.get("/api/v1/posting-queue")
+        def api_v1_posting_queue():
+            return posting_queue_api()
+
+        @app.get("/api/v1/ocr-exceptions")
+        def api_v1_ocr_exceptions():
+            return ocr_exceptions_list_api()
+
+        @app.post("/api/v1/eob/auto-match")
+        def eob_auto_match_api():
+            from hal_employee_workflows import process_eob_match
+
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            return _json_response(process_eob_match(_local_store(), payload))
+
+        @app.post("/api/v1/era/import")
+        def era_import_api():
+            from hal_employee_workflows import parse_era_import
+
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            return _json_response(parse_era_import(_local_store(), payload))
 
         @app.get("/")
         def index():

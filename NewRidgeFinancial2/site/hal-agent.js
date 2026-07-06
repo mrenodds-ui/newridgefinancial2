@@ -128,11 +128,33 @@ const HalAgent = (function () {
     return Object.assign({}, runtime, { structuredAgent: true, ollamaTools: schemas });
   }
 
+  function browserCloudHalBlocked() {
+    if (typeof window === "undefined" || !window.location) return false;
+    if (typeof globalThis !== "undefined" && globalThis.NR2_WORKSTATION_ONLY) return false;
+    const host = String(window.location.hostname || "").toLowerCase();
+    const isLoopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
+    if (!isLoopback) return false;
+    const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+    if (db && typeof db.getCachedCloudHalSettings === "function" && db.getCachedCloudHalSettings()?.enabled) return false;
+    if (db && db.cloudHalSettingsCache && db.cloudHalSettingsCache.enabled) return false;
+    return true;
+  }
+
+  async function cloudHalEnabledAsync(ctx) {
+    const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+    if (db && typeof db.getCloudHalSettings === "function") {
+      const settings = await db.getCloudHalSettings();
+      return !!(settings && settings.enabled);
+    }
+    return false;
+  }
+
   function cloudAgentEligible(plan, ctx) {
     if (typeof ctx.cloudAgentEligible === "function") return ctx.cloudAgentEligible(plan);
+    if (ctx && ctx.cloudHalEnabled === true && plan && plan.agentToolLoop) return true;
     if (typeof ctx.cloudModelReady !== "function" || !ctx.cloudModelReady()) return false;
     const cfg = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.cloudReasoning) || {};
-    if (cfg.enabled === true) return !!(plan && plan.agentToolLoop);
+    if (cfg.enabled !== true) return false;
     if (cfg.autoEnableWhenKeySet === false) return false;
     if (!plan || !plan.agentToolLoop) return false;
     if (cfg.preferForAllAgentLoops === true) return true;
@@ -317,6 +339,249 @@ const HalAgent = (function () {
       run: async (ctx) => {
         if (!ctx.halWorkSession) return { ok: true, summary: "No active work session." };
         return { ok: true, summary: ctx.workSessionStatusText() };
+      },
+    },
+    read_shift_context: {
+      label: "Read HAL employee shift and tier",
+      run: async () => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        const state =
+          (typeof window !== "undefined" && window.nr2ShiftState) ||
+          (bridge && typeof bridge.pollShiftState === "function" ? await bridge.pollShiftState() : null);
+        if (!state) return { ok: false, summary: "Shift context unavailable." };
+        const lines = [
+          `Tier ${state.tier} (${state.levelName || "Unknown"})`,
+          state.active ? `On shift since ${state.clockedInAt || "unknown"}` : "Off shift",
+          `Employee: ${state.employeeId || "HAL"}`,
+        ];
+        return { ok: true, summary: lines.join("\n"), shift: state };
+      },
+    },
+    read_model_lane_history: {
+      label: "Read recent HAL model lane routing history",
+      run: async () => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Lane history requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/hal/lane-history?limit=10");
+        const items = (data && data.items) || [];
+        if (!items.length) return { ok: true, summary: "No lane history recorded yet." };
+        const lines = items.map(
+          (it, idx) => `${idx + 1}. ${it.lane || "?"} · ${it.intent || ""} · ${String(it.queryPreview || "").slice(0, 80)}`,
+        );
+        return { ok: true, summary: lines.join("\n"), items };
+      },
+    },
+    read_clinical_summary: {
+      label: "Read clinical summary context (read-only)",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.fetchClinicalContext !== "function") {
+          return { ok: false, summary: "Clinical context requires loopback server." };
+        }
+        const patientId = String(args.patientId || args.query || "").trim();
+        const data = await bridge.fetchClinicalContext({ limit: 5, patientId: patientId || undefined });
+        const items = (data && data.items) || [];
+        if (!items.length) return { ok: true, summary: "No clinical summaries on file." };
+        const lines = items.map((it, idx) => `${idx + 1}. ${String(it.summary || it.text || "").slice(0, 240)}`);
+        return { ok: true, summary: lines.join("\n\n"), readOnly: true };
+      },
+    },
+    build_collections_queue: {
+      label: "Generate A/R collections follow-up queue",
+      run: async () => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Collections queue requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/collections/generate-queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ limit: 25 }),
+        });
+        const items = (data && data.items) || [];
+        if (!items.length) return { ok: true, summary: "No balances flagged for collections." };
+        const lines = items.map((it) => `- ${it.patientName}: $${it.balance} (${it.priority})`);
+        return { ok: true, summary: `${items.length} account(s) queued:\n${lines.join("\n")}` };
+      },
+    },
+    generate_collection_letter: {
+      label: "Draft patient collection letter (approval queue)",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Collection letter requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/collections/letter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patientName: args.patientName || args.patient_name,
+            balance: args.balance,
+            patientId: args.patientId,
+          }),
+        });
+        return {
+          ok: true,
+          summary: data.requiresApproval
+            ? `Letter drafted (requires email consent approval):\n${data.letter}`
+            : `Letter ready:\n${data.letter}`,
+        };
+      },
+    },
+    schedule_call_task: {
+      label: "Schedule A/R collection call with script",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Call scheduling requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/collections/schedule-call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patientName: args.patientName || args.patient_name,
+            balance: args.balance,
+            priority: args.priority || "high",
+          }),
+        });
+        return { ok: true, summary: `Call scheduled.\nScript: ${data.callScript || ""}` };
+      },
+    },
+    heal_import_pipeline: {
+      label: "Predictive import heal (retry sync)",
+      run: async () => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Import heal requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/import/heal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force: false }),
+        });
+        const hints = (data.hints || []).map((h) => `- ${h}`).join("\n");
+        return { ok: true, summary: `${data.message || "Heal complete."}${hints ? `\n${hints}` : ""}` };
+      },
+    },
+    parse_era_835: {
+      label: "Parse ERA/835 and fuzzy-match claims",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "ERA parse requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/era/parse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: args.content || args.era835 || args.query || "" }),
+        });
+        const count = (data.matches || []).length;
+        return { ok: true, summary: `ERA parsed: ${count} segment(s) matched/reviewed.` };
+      },
+    },
+    draft_deposit_reconciliation: {
+      label: "Draft bank deposit reconciliation",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Deposit recon requires loopback server." };
+        }
+        const bank = Number(args.bankAmount || args.bank_amount || 0);
+        const ledger = Number(args.ledgerAmount || args.ledger_amount || 0);
+        const data = await bridge.loopbackJson("/api/deposits/draft-recon", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bankAmount: bank, ledgerAmount: ledger, depositDate: args.depositDate || "" }),
+        });
+        const draft = (data && data.draft) || {};
+        const actions = (draft.suggestedActions || []).map((a) => `- ${a}`).join("\n");
+        return {
+          ok: true,
+          summary: `Variance $${data.variance}. ${actions || "Balanced."}`,
+          draft,
+        };
+      },
+    },
+    stage_claim_preflight: {
+      label: "Stage claim submission preflight checklist",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Claim preflight requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/claims/preflight", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            claimId: args.claimId || args.query || "",
+            patientId: args.patientId || "",
+            payer: args.payer || "",
+          }),
+        });
+        const checklist = (data && data.checklist) || {};
+        const lines = Object.entries(checklist).map(([k, v]) => `- ${k}: ${v ? "yes" : "no"}`);
+        return { ok: true, summary: `Status ${data.status}.\n${lines.join("\n")}`, checklist };
+      },
+    },
+    match_eob_era: {
+      label: "Match EOB or ERA payment to claim",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "EOB/ERA match requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/eob/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            referenceId: args.referenceId || args.query || "",
+            claimId: args.claimId || "",
+            sourceType: args.sourceType || "eob",
+            paidAmount: args.paidAmount,
+          }),
+        });
+        return {
+          ok: true,
+          summary: `Match ${data.status}: ref ${(data.detail && data.detail.referenceId) || ""} → claim ${(data.detail && data.detail.claimId) || ""}`,
+          detail: data.detail,
+        };
+      },
+    },
+    batch_approve_postings: {
+      label: "Batch approve posting queue entries (consent-gated)",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Batch approve requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/posting/batch-approve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ queueIds: args.queueIds || [], reviewerActor: "HAL" }),
+        });
+        if (data.error === "consent_denied") {
+          return { ok: false, summary: `Consent denied at tier ${(data.consent && data.consent.tier) || "?"}.` };
+        }
+        return { ok: true, summary: "Batch approval completed.", result: data };
+      },
+    },
+    generate_month_end_tasks: {
+      label: "Generate month-end close task list",
+      run: async () => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Month-end tasks require loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/close/generate-tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const tasks = (data && data.tasks) || [];
+        const lines = tasks.map((t) => `- [${t.priority}] ${t.title}`);
+        return { ok: true, summary: `Period ${data.period}:\n${lines.join("\n")}`, tasks };
       },
     },
     search_document_library: {
@@ -1277,6 +1542,42 @@ const HalAgent = (function () {
     if (route.useClaimReadiness || (/\b(claim|denied|packet)\b/i.test(query) && !route.text)) {
       tools.push("read_claims_summary");
     }
+    if (/\b(shift|tier|employee level|standing consent)\b/i.test(query)) {
+      tools.push("read_shift_context");
+    }
+    if (/\b(lane history|model lane|which model|escalat)\b/i.test(query)) {
+      tools.push("read_model_lane_history");
+    }
+    if (/\b(clinical summary|clinical context|sidenotes|procedure narrative)\b/i.test(query)) {
+      tools.push("read_clinical_summary");
+    }
+    if (/\b(collection letter|collection call|schedule call)\b/i.test(query)) {
+      tools.push("generate_collection_letter", "schedule_call_task");
+    }
+    if (/\b(heal import|import heal|refresh import|fix import)\b/i.test(query)) {
+      tools.push("heal_import_pipeline");
+    }
+    if (/\b(era|835|eob match|parse era)\b/i.test(query)) {
+      tools.push("parse_era_835", "match_eob_era");
+    }
+    if (/\b(collections queue|collect from|past due|follow.?up queue)\b/i.test(query)) {
+      tools.push("build_collections_queue");
+    }
+    if (/\b(deposit reconc|bank deposit|variance)\b/i.test(query)) {
+      tools.push("draft_deposit_reconciliation");
+    }
+    if (/\b(claim preflight|preflight|before submit)\b/i.test(query)) {
+      tools.push("stage_claim_preflight");
+    }
+    if (/\b(eob|era|835|auto.?match)\b/i.test(query)) {
+      tools.push("match_eob_era");
+    }
+    if (/\b(batch approve|approve postings|approve queue)\b/i.test(query)) {
+      tools.push("batch_approve_postings");
+    }
+    if (/\b(month.?end|close tasks|month end tasks)\b/i.test(query)) {
+      tools.push("generate_month_end_tasks");
+    }
     if (
       route.useOfficeMessageSend ||
       (/\b(message|tell|notify|alert|ping|send)\b/i.test(query) &&
@@ -1502,6 +1803,20 @@ const HalAgent = (function () {
       .join("\n");
   }
 
+  function shiftContextBlock() {
+    const state = typeof window !== "undefined" ? window.nr2ShiftState : null;
+    if (!state) return "";
+    const lines = [
+      "[SHIFT_CONTEXT]",
+      `Tier: ${state.tier} (${state.levelName || "Unknown"})`,
+      `Active: ${state.active ? "yes" : "no"}`,
+      `Employee: ${state.employeeId || "HAL"}`,
+      "Respect standing consent policies for outbound and posting actions at this tier.",
+      "[END_SHIFT_CONTEXT]",
+    ];
+    return lines.join("\n");
+  }
+
   function buildAgentSystemPrompt(ctx, plan, toolResults, working, longTerm) {
     const query = plan && plan.originalQuery ? plan.originalQuery : "";
     const usePlanStyle =
@@ -1563,6 +1878,9 @@ const HalAgent = (function () {
       const guidance = HalSkills.memoryGuidanceText(approvedMemories);
       if (guidance) parts.push("", guidance);
     }
+
+    const shiftBlock = shiftContextBlock();
+    if (shiftBlock) parts.push("", shiftBlock);
 
     const toolText = summarizeToolResults(toolResults);
     if (toolText) {
@@ -1989,10 +2307,19 @@ const HalAgent = (function () {
         : route.useModel
           ? 3500
           : AGENT_BUDGET.maxModelContextChars;
+    ctx.cloudHalEnabled = await cloudHalEnabledAsync(ctx);
     let combinedPrompt = agentPrompt;
     if (!fastChatSkipsProgramContext(route, ctx) && !snapshotToolRan) {
       const programContext = await ctx.getProgramContextText();
       if (programContext) combinedPrompt += "\n\nProgram context:\n" + programContext.slice(0, ctxCap);
+    }
+    if (typeof HalImportReadiness !== "undefined" && HalImportReadiness.buildImportReadinessContext) {
+      const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+      if (db && typeof db.getImportReadiness === "function") {
+        const readiness = await db.getImportReadiness();
+        const block = HalImportReadiness.buildImportReadinessContext(readiness);
+        if (block) combinedPrompt = block + "\n\n" + combinedPrompt;
+      }
     }
 
     if (route.useEscalation) {
@@ -2009,7 +2336,17 @@ const HalAgent = (function () {
       const text = await ctx.runModel(om, combinedPrompt, userText, "Local OSS draft", onToken);
       return { text, lane: "oss120b" };
     }
-    const useCloudAgent = plan && plan.agentToolLoop && cloudAgentEligible(plan, ctx);
+    const useCloudAgent =
+      plan &&
+      plan.agentToolLoop &&
+      cloudAgentEligible(plan, ctx) &&
+      (!browserCloudHalBlocked() || (await cloudHalEnabledAsync(ctx)));
+    if (useCloudAgent && browserCloudHalBlocked() && !(await cloudHalEnabledAsync(ctx))) {
+      return {
+        text: "Cloud HAL is disabled. Enable it from server settings with operator confirmation (ENABLE CLOUD HAL).",
+        lane: "cloud · blocked",
+      };
+    }
     if (useCloudAgent) {
       const cloudPolicy = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.cloudReasoning) || {};
       const shouldSanitize = cloudPolicy.sanitizeBeforeCloud !== false;
@@ -2369,6 +2706,15 @@ const HalAgent = (function () {
     workingMemory.currentPage = ctx.getCurrentPage ? ctx.getCurrentPage() : null;
     workingMemory.activeWorkSession = !!(ctx.halWorkSession);
     recordTurn("user", trimmed, { focus: workingMemory.currentPage });
+
+    if (typeof HalImportReadiness !== "undefined" && HalImportReadiness.guardBeforeModel) {
+      const readinessBlock = await HalImportReadiness.guardBeforeModel(trimmed, ctx);
+      if (readinessBlock) {
+        recordTurn("hal", readinessBlock.text, { intent: readinessBlock.intent || "readiness:import-stale", tools: [] });
+        saveMemory(ctx);
+        return readinessBlock;
+      }
+    }
 
     let route = downgradeRouteIfReasoningOffline(
       applyHigherReasoningRoute(HalCore.routeHalCommand(ctx.halData, ctx.halModels, ctx.pages, routeQuery), routeQuery, ctx),
