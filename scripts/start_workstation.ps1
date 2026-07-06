@@ -5,7 +5,8 @@
 [CmdletBinding()]
 param(
     [switch]$SkipModelWarmup,
-    [switch]$SkipValidation
+    [switch]$SkipValidation,
+    [switch]$Hidden
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,6 +38,37 @@ if (-not $env:NR2_WORKSTATION_FAST_HAL) { $env:NR2_WORKSTATION_FAST_HAL = '1' }
 
 $env:NR2_WORKSTATION_PORT = [string]$DefaultPort
 $nr2Port = [int]$env:NR2_WORKSTATION_PORT
+
+function Test-WorkstationListening {
+    param([int]$Port)
+    try {
+        $null = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/workstation/index.html" -UseBasicParsing -TimeoutSec 4
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Show-RunningWorkstation {
+    param([int]$Port)
+    try {
+        $result = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/workstation/show" -Method Post -TimeoutSec 8
+        if ($result -and $result.ok -ne $false) {
+            Write-Host 'NR2 Workstation window opened.' -ForegroundColor Green
+            return $true
+        }
+    } catch {}
+    return $false
+}
+
+if (-not $Hidden) {
+    if (Test-WorkstationListening -Port $nr2Port) {
+        if (Show-RunningWorkstation -Port $nr2Port) { return }
+    }
+    $env:NR2_WORKSTATION_START_HIDDEN = '0'
+} else {
+    $env:NR2_WORKSTATION_START_HIDDEN = '1'
+}
 
 function Resolve-Python {
     $candidates = @(

@@ -301,11 +301,17 @@ def main() -> int:
     )
     print(f"NR2 workstation: HAL hub URL={hal_hub_url} (set NR2_HAL_HUB_URL for LAN hub PC)", file=sys.stderr)
 
-    from nr2_http_server import NR2BottleServer, set_desktop_session_token, set_site_root
+    from nr2_http_server import (
+        NR2BottleServer,
+        set_desktop_session_token,
+        set_site_root,
+        set_workstation_show_callback,
+    )
 
     desktop_token = uuid.uuid4().hex
     set_desktop_session_token(desktop_token)
     set_site_root(SITE_DIR)
+    set_workstation_show_callback(api.show_workstation_main_window)
     start_url = f"http://127.0.0.1:{http_port}/workstation/index.html?nr2dt={desktop_token}"
     win_x, win_y = _center_window_pos(WORKSTATION_WINDOW_WIDTH, WORKSTATION_WINDOW_HEIGHT)
     on_top = _env_flag("NR2_WORKSTATION_ON_TOP", True)

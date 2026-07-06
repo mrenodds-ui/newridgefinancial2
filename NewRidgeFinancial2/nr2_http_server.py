@@ -29,6 +29,12 @@ _sync_state = {
 
 _desktop_session_token: str | None = None
 _site_root: Path | None = None
+_workstation_show_fn = None
+
+
+def set_workstation_show_callback(fn) -> None:
+    global _workstation_show_fn
+    _workstation_show_fn = fn
 
 
 def set_desktop_session_token(token: str | None) -> None:
@@ -59,6 +65,11 @@ def _request_desktop_token() -> str | None:
     return None
 
 
+def _loopback_request() -> bool:
+    remote = str(getattr(bottle.request, "remote_addr", "") or "")
+    return remote in ("127.0.0.1", "::1", "localhost")
+
+
 def _lan_hal_hub_access_ok() -> bool:
     """Allow workstation clients on the LAN to reach hub relay APIs without desktop cookie."""
     path = bottle.request.path or "/"
@@ -66,6 +77,8 @@ def _lan_hal_hub_access_ok() -> bool:
     if path.startswith("/api/hal-hub"):
         return True
     if path == "/api/office-channel" and method in ("GET", "OPTIONS"):
+        return True
+    if path == "/api/workstation/show" and method in ("POST", "OPTIONS") and _loopback_request():
         return True
     if method == "OPTIONS" and path.startswith("/api/"):
         return True
@@ -356,8 +369,23 @@ class NR2BottleServer(BottleServer):
         @app.route("/api/hal-hub/stations", method=["OPTIONS"])
         @app.route("/api/hal-hub/stations/heartbeat", method=["OPTIONS"])
         @app.route("/api/office-channel", method=["OPTIONS"])
+        @app.route("/api/workstation/show", method=["OPTIONS"])
         def hal_hub_options():
             return ""
+
+        @app.post("/api/workstation/show")
+        def workstation_show_api():
+            if not _workstation_show_fn:
+                return _json_response({"ok": False, "error": "workstation show not available"}, status=404)
+            if not _loopback_request():
+                return _json_response({"ok": False, "error": "loopback only"}, status=403)
+            try:
+                result = _workstation_show_fn()
+                if isinstance(result, dict):
+                    return _json_response(result)
+                return _json_response({"ok": True})
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
 
         @app.get("/api/hal-hub/stations")
         def hal_hub_stations_api():

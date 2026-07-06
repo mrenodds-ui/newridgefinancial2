@@ -81,7 +81,7 @@ if (-not (Test-Path $py32)) {
 }
 
 # Deploy scaffolding at package root.
-foreach ($f in @('Install.bat', 'Start-NR2-Workstation.bat', 'Start-Workstation.ps1', 'Setup-Workstation.ps1', '.env.example')) {
+foreach ($f in @('Install.bat', 'Start-NR2-Workstation.bat', 'Start-NR2-Workstation-Hidden.bat', 'Start-Workstation.ps1', 'Setup-Workstation.ps1', '.env.example')) {
     Copy-Item (Join-Path $DeployDir $f) (Join-Path $Pkg $f) -Force
 }
 Copy-Item (Join-Path $DeployDir 'README-WORKSTATION.md') (Join-Path $Pkg 'README.md') -Force

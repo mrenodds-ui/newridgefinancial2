@@ -17,6 +17,7 @@ $AppDir = Join-Path $PkgRoot 'NewRidgeFinancial2'
 $EnvPath = Join-Path $PkgRoot '.env'
 $EnvExample = Join-Path $PkgRoot '.env.example'
 $Launcher = Join-Path $PkgRoot 'Start-NR2-Workstation.bat'
+$HiddenLauncher = Join-Path $PkgRoot 'Start-NR2-Workstation-Hidden.bat'
 $Icon = Join-Path $PkgRoot 'assets\nr2-icon.ico'
 $ReqFile = Join-Path $AppDir 'requirements-workstation.txt'
 $PythonDir = Join-Path $PkgRoot 'python'
@@ -110,11 +111,12 @@ function Write-EnvFile {
 function New-Shortcut {
     param(
         [string]$LinkPath,
-        [string]$Description
+        [string]$Description,
+        [string]$Target = $Launcher
     )
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($LinkPath)
-    $shortcut.TargetPath = $Launcher
+    $shortcut.TargetPath = $Target
     $shortcut.WorkingDirectory = $PkgRoot
     if (Test-Path $Icon) { $shortcut.IconLocation = "$Icon,0" }
     $shortcut.Description = $Description
@@ -206,7 +208,7 @@ if (-not $NoStartup) {
     $startup = [Environment]::GetFolderPath('Startup')
     if ($startup) {
         $link = Join-Path $startup 'NR2 Workstation.lnk'
-        New-Shortcut -LinkPath $link -Description "NR2 Office Workstation auto-start ($schemaVersion)"
+        New-Shortcut -LinkPath $link -Target $HiddenLauncher -Description "NR2 Office Workstation auto-start ($schemaVersion)"
         Write-Info "Startup shortcut: $link"
     }
 }
@@ -217,7 +219,7 @@ if (-not $Quiet) {
     $startNow = (Read-Host 'Start NR2 Workstation now? [Y/n]').Trim().ToLowerInvariant()
 }
 if ($startNow -eq '' -or $startNow -eq 'y' -or $startNow -eq 'yes') {
-    & (Join-Path $PkgRoot 'Start-Workstation.ps1')
+    & (Join-Path $PkgRoot 'Start-Workstation.ps1') -Hidden
 }
 
 Write-Info ''

@@ -1,9 +1,14 @@
 <#
 .SYNOPSIS
   Launch NR2 Office Workstation from the installed package folder.
+
+.DESCRIPTION
+  Default (desktop shortcut): show messenger window, or raise an already-running instance.
+  -Hidden: background start for Startup folder (popups only, no main window).
 #>
 [CmdletBinding()]
 param(
+    [switch]$Hidden,
     [switch]$SkipModelWarmup
 )
 
@@ -31,7 +36,6 @@ function Import-DotEnvFile {
 Import-DotEnvFile (Join-Path $PkgRoot '.env')
 
 if (-not $env:NR2_WORKSTATION_FAST_HAL) { $env:NR2_WORKSTATION_FAST_HAL = '1' }
-if (-not $env:NR2_WORKSTATION_START_HIDDEN) { $env:NR2_WORKSTATION_START_HIDDEN = '1' }
 $env:NR2_WORKSTATION_PORT = [string]$DefaultPort
 $nr2Port = [int]$env:NR2_WORKSTATION_PORT
 
@@ -50,6 +54,28 @@ function Resolve-PackagedPython {
     throw "Python not found. Re-run Install.bat on this package folder."
 }
 
+function Test-WorkstationListening {
+    param([int]$Port)
+    try {
+        $null = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/workstation/index.html" -UseBasicParsing -TimeoutSec 4
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Show-RunningWorkstation {
+    param([int]$Port)
+    try {
+        $result = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/workstation/show" -Method Post -TimeoutSec 8
+        if ($result -and $result.ok -ne $false) {
+            Write-Host 'NR2 Workstation window opened.' -ForegroundColor Green
+            return $true
+        }
+    } catch {}
+    return $false
+}
+
 function Stop-PortListener {
     param([int]$Port)
     Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | ForEach-Object {
@@ -60,6 +86,15 @@ function Stop-PortListener {
 
 if (-not (Test-Path (Join-Path $SiteDir 'workstation\index.html'))) {
     throw "Workstation UI missing: $(Join-Path $SiteDir 'workstation\index.html')"
+}
+
+if (-not $Hidden) {
+    if (Test-WorkstationListening -Port $nr2Port) {
+        if (Show-RunningWorkstation -Port $nr2Port) { return }
+    }
+    $env:NR2_WORKSTATION_START_HIDDEN = '0'
+} else {
+    $env:NR2_WORKSTATION_START_HIDDEN = '1'
 }
 
 $manifestPath = Join-Path $AppDir 'nr2-build.json'
@@ -102,4 +137,8 @@ if ($python -match 'python\.exe$') { $windowStyle = 'Normal' }
 
 $process = Start-Process -FilePath $python -ArgumentList @($WorkstationScript) -WorkingDirectory $AppDir -WindowStyle $windowStyle -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -PassThru
 Set-Content -Path $pidFile -Value $process.Id
-Write-Host "NR2 Workstation started (schema $schemaVersion, port $nr2Port, PID $($process.Id))." -ForegroundColor Green
+if ($Hidden) {
+    Write-Host "NR2 Workstation started in background (schema $schemaVersion, port $nr2Port, PID $($process.Id))." -ForegroundColor Green
+} else {
+    Write-Host "NR2 Workstation messenger opened (schema $schemaVersion, port $nr2Port, PID $($process.Id))." -ForegroundColor Green
+}
