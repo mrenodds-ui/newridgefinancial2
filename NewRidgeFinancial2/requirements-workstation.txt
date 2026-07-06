@@ -1,0 +1,4 @@
+# Minimal Python deps for NR2 Office Workstation (pywebview desktop shell).
+pywebview==5.4
+bottle
+python-dotenv

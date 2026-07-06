@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-10023",
-  "schemaVersion": "hal-10023",
+  "assetVersion": "hal-10024",
+  "schemaVersion": "hal-10024",
   "builtAt": "2026-07-05T22:10:00.000Z",
-  "notes": "Mirror of ../nr2-build.json — HAL hub office message relay."
+  "notes": "Mirror of ../nr2-build.json — workstation fast HAL profile."
 }

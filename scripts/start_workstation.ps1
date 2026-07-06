@@ -33,6 +33,8 @@ function Import-DotEnvFile {
 Import-DotEnvFile (Join-Path $Root '.env')
 Import-DotEnvFile (Join-Path $AppDir '.env')
 
+if (-not $env:NR2_WORKSTATION_FAST_HAL) { $env:NR2_WORKSTATION_FAST_HAL = '1' }
+
 $env:NR2_WORKSTATION_PORT = [string]$DefaultPort
 $nr2Port = [int]$env:NR2_WORKSTATION_PORT
 

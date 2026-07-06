@@ -18,6 +18,16 @@ const HalAgent = (function () {
     maxRecentTurns: 12,
   };
 
+  function workstationFastHalActive() {
+    if (typeof globalThis === "undefined") return false;
+    if (globalThis._halWorkstationFastMode === false) return false;
+    if (globalThis._halWorkstationFastMode === true) return true;
+    if (globalThis.NR2_WORKSTATION_FAST_HAL === false) return false;
+    if (globalThis.NR2_WORKSTATION_FAST_HAL === true) return true;
+    if (globalThis.NR2_WORKSTATION_ONLY && globalThis.NR2_WORKSTATION_FAST_HAL !== false) return true;
+    return false;
+  }
+
   function syncAgentBudgetFromModels(halModels) {
     const ap = (halModels && halModels.config && halModels.config.agentProgramming) || {};
     if (typeof ap.maxToolsPerTurn === "number" && ap.maxToolsPerTurn > 0) {
@@ -1199,6 +1209,7 @@ const HalAgent = (function () {
     if (ctx && ctx.halModels) syncAgentBudgetFromModels(ctx.halModels);
     const agentCfg = (ctx && ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
     const interviewMode = typeof globalThis !== "undefined" && globalThis._halInterviewMode;
+    const workstationFast = workstationFastHalActive();
     const intent = route.intent || "";
     const isUnsafe = false;
     const tools = [];
@@ -1323,6 +1334,7 @@ const HalAgent = (function () {
 
     if (
       !interviewMode &&
+      !workstationFast &&
       typeof HalChat9000 !== "undefined" &&
       HalChat9000.isEnabled(ctx.halModels) &&
       HalChat9000.config(ctx.halModels).alwaysGatherTools !== false
@@ -1344,18 +1356,26 @@ const HalAgent = (function () {
       filtered.forEach((id) => tools.push(id));
     }
 
+    if (workstationFast) {
+      const essential = new Set(["read_current_context", "search_document_library", "read_registry"]);
+      const filtered = [...new Set(tools)].filter((id) => essential.has(id));
+      tools.length = 0;
+      filtered.forEach((id) => tools.push(id));
+    }
+
     const uniqueTools = [...new Set(tools)].slice(0, AGENT_BUDGET.maxTools);
     const planOnly = typeof HalAgentLoop !== "undefined" && HalAgentLoop.isPlanOnlyQuery(query);
 
     let agentToolLoop = !planOnly && shouldUseAgentToolLoop(query, route, agentCfg);
-    if (
+    if (workstationFast) {
+      agentToolLoop = false;
+    } else if (
       !interviewMode &&
       typeof HalChat10000 !== "undefined" &&
       HalChat10000.shouldAlwaysAgentLoop(ctx.halModels, route, query)
     ) {
       agentToolLoop = !planOnly;
-    }
-    if (
+    } else if (
       !interviewMode &&
       typeof HalChat9000 !== "undefined" &&
       HalChat9000.shouldAlwaysAgentLoop(ctx.halModels, route, query)
@@ -1429,6 +1449,7 @@ const HalAgent = (function () {
   }
 
   function shouldAutoEscalate(checked, route, agentCfg) {
+    if (workstationFastHalActive()) return false;
     if (agentCfg && agentCfg.autoEscalate === false) return false;
     if (!checked || checked.pass) return false;
     if (!route || route.useReasoning || route.useEscalation || route.useOss) return false;
@@ -1767,6 +1788,7 @@ const HalAgent = (function () {
   }
 
   function preferHigherReasoning(ctx) {
+    if (workstationFastHalActive()) return false;
     if (typeof globalThis !== "undefined" && globalThis._halForceReasoning === false) return false;
     if (typeof globalThis !== "undefined" && (globalThis._halRandomQaUseReasoning || globalThis._halForceReasoning)) {
       return true;
@@ -1818,6 +1840,19 @@ const HalAgent = (function () {
 
   function applyHigherReasoningRoute(route, query, ctx) {
     if (!route) return route;
+    if (workstationFastHalActive()) {
+      if (route.text && String(route.text).trim()) return route;
+      if (routeIsOperational(route)) return route;
+      const r = Object.assign({}, route);
+      r.useReasoning = false;
+      r.useEscalation = false;
+      r.useOss = false;
+      r.useModel = true;
+      r.lane = "chat8b";
+      if (/^reasoning:/.test(String(r.intent || ""))) r.intent = "model: query";
+      if (!r.text) r.prompt = r.prompt || query;
+      return r;
+    }
     if (typeof globalThis !== "undefined" && globalThis._halInterviewMode) {
       if (route.useReasoning || route.useEscalation || route.useOss) {
         const r = Object.assign({}, route);
@@ -1922,6 +1957,7 @@ const HalAgent = (function () {
   }
 
   function fastChatSkipsProgramContext(route, ctx) {
+    if (workstationFastHalActive()) return true;
     if (typeof HalChat9000 !== "undefined" && ctx && HalChat9000.isEnabled(ctx.halModels) && HalChat9000.config(ctx.halModels).alwaysGatherTools !== false) {
       return false;
     }
@@ -2782,6 +2818,7 @@ const HalAgent = (function () {
     buildAgentSystemPrompt,
     isFastChatRoute,
     fastChatSkipsProgramContext,
+    workstationFastHalActive,
     processQuery,
     composeAboutMeInterview,
     loadMemory,

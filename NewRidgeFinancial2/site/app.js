@@ -3,6 +3,17 @@
 const NR2_WORKSTATION_ONLY =
   typeof window !== "undefined" && !!window.NR2_WORKSTATION_ONLY;
 
+function workstationFastHalEnabled() {
+  if (typeof globalThis !== "undefined") {
+    if (globalThis._halWorkstationFastMode === false) return false;
+    if (globalThis._halWorkstationFastMode === true) return true;
+    if (globalThis.NR2_WORKSTATION_FAST_HAL === false) return false;
+    if (globalThis.NR2_WORKSTATION_FAST_HAL === true) return true;
+    if (NR2_WORKSTATION_ONLY && globalThis.NR2_WORKSTATION_FAST_HAL !== false) return true;
+  }
+  return false;
+}
+
 function getPages() {
   if (NR2_WORKSTATION_ONLY && typeof WorkstationSchema !== "undefined" && WorkstationSchema.page) {
     const ws = WorkstationSchema.page;
@@ -2024,7 +2035,11 @@ function pageInfoMap() {
 }
 
 function localModelConfig() {
-  return HalCore.laneRuntime(halModels, "chat8b");
+  const runtime = HalCore.laneRuntime(halModels, "chat8b");
+  if (!workstationFastHalEnabled()) return runtime;
+  const cfg = Object.assign({ fastChat: true }, runtime);
+  cfg.options = Object.assign({}, cfg.options || {}, { num_predict: 768 });
+  return cfg;
 }
 
 function escalationModelConfig() {
@@ -2774,6 +2789,7 @@ function buildHalAgentCtx(extras) {
     ossModelReady,
     offlineModelMessage,
     localModelConfig,
+    workstationFastHal: workstationFastHalEnabled,
     reasoningModelConfig,
     escalationModelConfig,
     ossModelConfig,
@@ -4876,6 +4892,12 @@ async function boot() {
         window.setInterval(flushPopups, 400);
       }
     }
+    if (info && info.workstationFastHal === false) {
+      globalThis._halWorkstationFastMode = false;
+      globalThis.NR2_WORKSTATION_FAST_HAL = false;
+    } else if (NR2_WORKSTATION_ONLY && (info == null || info.workstationFastHal !== false)) {
+      globalThis._halWorkstationFastMode = true;
+    }
     if (info && info.designSchemaVersion) {
       nr2DesignSchemaVersion = info.designSchemaVersion;
       const expectedSchemaVersion =
@@ -4930,16 +4952,17 @@ async function boot() {
     });
   }
   if (window.HalAgent) await HalAgent.loadMemory(buildHalAgentCtx());
-  if (window.HalProactive && typeof HalProactive.startPlacementTimer === "function") {
+  const skipAutonomousHal = NR2_WORKSTATION_ONLY && workstationFastHalEnabled();
+  if (!skipAutonomousHal && window.HalProactive && typeof HalProactive.startPlacementTimer === "function") {
     HalProactive.startPlacementTimer(buildHalAgentCtx);
     if (typeof HalProactive.startBriefingScheduler === "function") {
       HalProactive.startBriefingScheduler(buildHalAgentCtx);
     }
   }
-  if (window.HalAutonomousOps && typeof HalAutonomousOps.start === "function") {
+  if (!skipAutonomousHal && window.HalAutonomousOps && typeof HalAutonomousOps.start === "function") {
     HalAutonomousOps.start(buildHalAgentCtx);
   }
-  if (window.HalDirector && typeof HalDirector.start === "function") {
+  if (!skipAutonomousHal && window.HalDirector && typeof HalDirector.start === "function") {
     HalDirector.start(buildHalAgentCtx);
   }
   startSideNoteMonitor();

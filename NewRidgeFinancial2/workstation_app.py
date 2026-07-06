@@ -126,6 +126,7 @@ class WorkstationApi(DesktopApi):
         info["halHubUrl"] = os.environ.get("NR2_HAL_HUB_URL", "http://127.0.0.1:8765").strip()
         info["workstationPort"] = int(os.environ.get("NR2_WORKSTATION_PORT", "8766"))
         info["hubPopupWatcher"] = _env_flag("NR2_HUB_POPUP_WATCHER", True)
+        info["workstationFastHal"] = _env_flag("NR2_WORKSTATION_FAST_HAL", True)
         return info
 
     def sidenotes_status(self) -> dict:
