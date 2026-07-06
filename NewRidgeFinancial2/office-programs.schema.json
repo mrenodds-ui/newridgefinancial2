@@ -1,0 +1,68 @@
+{
+  "schema": "nr2-office-programs-v1",
+  "version": "1.1.0",
+  "description": "Two separate desktop programs sharing the NR2 HAL hub office channel.",
+  "officeChannel": {
+    "dataSchema": "nr2-office-channel-v1",
+    "store": "app_data/nr2/office/office-channel.json",
+    "inboundQueue": "app_data/nr2/office/hal-hub-inbound.json",
+    "api": "/api/office-channel",
+    "hubInboundApi": "POST /api/hal-hub/inbound"
+  },
+  "programs": [
+    {
+      "id": "nr2-financial",
+      "title": "NewRidgeFinancial 2.0",
+      "launcher": "StartProgram.bat",
+      "entryHtml": "site/index.html",
+      "loopbackPort": 8765,
+      "windowTitle": "NewRidgeFinancial 2.0",
+      "roles": [
+        "Owner and admin financial dashboard",
+        "HAL command center — main hub for practice-wide office messages and monitoring"
+      ],
+      "halHub": {
+        "dispatchesOfficeMessages": true,
+        "monitorsAllStations": true,
+        "pages": ["hal", "financial", "taxes", "office-manager"],
+        "api": {
+          "inbound": "POST /api/hal-hub/inbound",
+          "process": "POST /api/hal-hub/process",
+          "status": "GET /api/hal-hub/status",
+          "announce": "POST /api/hal-hub/announce"
+        }
+      }
+    },
+    {
+      "id": "nr2-workstation",
+      "title": "NR2 Office Workstation",
+      "launcher": "StartWorkstation.bat",
+      "entryHtml": "site/workstation/index.html",
+      "loopbackPort": 8766,
+      "windowTitle": "NR2 Office Workstation",
+      "roles": [
+        "Operatory and front-desk station client",
+        "Send Message to rooms / Everyone",
+        "Receive messages for THIS PC",
+        "Ask HAL (local Q&A, text only)"
+      ],
+      "stationBinding": {
+        "storageKey": "workstationStationName",
+        "requiredBeforeSend": true
+      }
+    }
+  ],
+  "messageFlow": [
+    "Every office PC runs StartWorkstation, names itself (Frontdesk 1, Room 2, etc.), and heartbeats to HAL hub every 30s.",
+    "Station staff send messages via StartWorkstation → POST /api/hal-hub/inbound on the HAL hub PC (Start Program, port 8765).",
+    "HAL hub queues inbound, dispatches to shared office-channel.json, and when speak:true ducks office music and announces once on hub speakers (Python SAPI).",
+    "All LAN workstations poll GET /api/office-channel on the hub URL (NR2_HAL_HUB_URL). SideNotes watchers remain supported and merge into the HAL station roster.",
+    "Set NR2_OFFICE_HUB_DATA to a shared network folder so hub + all workstations use the same office-channel and station registry when not using HTTP relay alone."
+  ],
+  "environment": {
+    "NR2_HAL_HUB_URL": "On each workstation: hub PC LAN URL (e.g. http://192.168.1.50:8765). Hub PC auto-advertises LAN IP when unset.",
+    "NR2_OFFICE_HUB_DATA": "Shared directory for hal-hub-inbound.json, office-channel.json, office-stations.json (default app_data/nr2/office)",
+    "NR2_HAL_HUB_DUCK_MUSIC": "1 to duck background music during hub announcements (default 1)",
+    "NR2_HAL_HUB_VOICE_STYLE": "SAPI voice style for hub announcer (default hal9000)"
+  }
+}

@@ -50,16 +50,8 @@ const HalLiveWidgetBridge = (function () {
     events.length = 0;
   }
 
-  function flashElement(element, tone) {
-    if (!element || !element.classList) return;
-    const cls = tone === "red" ? "pv-hal-live-flash--red" : tone === "cyan" ? "pv-hal-live-flash--cyan" : "pv-hal-live-flash--gold";
-    element.classList.remove("pv-hal-live-flash", "pv-hal-live-flash--gold", "pv-hal-live-flash--cyan", "pv-hal-live-flash--red");
-    // Reflow so repeated clicks replay the animation.
-    void element.offsetWidth;
-    element.classList.add("pv-hal-live-flash", cls);
-    window.setTimeout(() => {
-      element.classList.remove("pv-hal-live-flash", cls);
-    }, 1400);
+  function flashElement(_element, _tone) {
+    /* Widget flash disabled — avoids transient blue/gold rings on every HAL refresh. */
   }
 
   return {

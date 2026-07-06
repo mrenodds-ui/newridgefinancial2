@@ -28,8 +28,8 @@ date/time, unread flag) — **never the message body**.
 2. Double-click **`Install.bat`**.
 3. Answer two prompts:
    - **Station** — pick this computer's SideNotesIM station name
-     (Server, Room 2, Room 3, Room 4, Room 5, Frontdesk 1, Frontdesk 2,
-     Office Manager), or type a custom one.
+     (Frontdesk 1, Frontdesk 2, Office Manager, Room 1, Room 2, Room 3,
+     Room 4, Room 5, Server, Darkroom), or type a custom one.
    - **Shared data folder** — press Enter to use
      `C:\softdent\HAL-SideNotes-Workstation\data`, or type the UNC path that
      reaches the same shared folder.
@@ -55,12 +55,12 @@ Add `-NoStartup` to skip the auto-start shortcut.
 
 HAL merges these exact station files:
 
-`sidenotes-inbox-server.json`, `-room-2`, `-room-3`, `-room-4`, `-room-5`,
-`-frontdesk-1`, `-frontdesk-2`, `-office-manager`.
+`sidenotes-inbox-frontdesk-1.json`, `-frontdesk-2`, `-office-manager`,
+`-room-1`, `-room-2`, `-room-3`, `-room-4`, `-room-5`, `-server`, `-darkroom`.
 
-So set the station to one of: **Server, Room 2, Room 3, Room 4, Room 5,
-Frontdesk 1, Frontdesk 2, Office Manager**. (Custom names work too, but then
-add the matching file name to HAL's merge list in `site/app.js`.)
+So set the station to one of: **Frontdesk 1, Frontdesk 2, Office Manager,
+Room 1, Room 2, Room 3, Room 4, Room 5, Server, Darkroom**. (Custom names work
+too, but then add the matching file name to HAL's roster in `site/hal-page.js`.)
 
 ## Privacy
 

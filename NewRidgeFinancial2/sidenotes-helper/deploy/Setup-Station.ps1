@@ -61,8 +61,9 @@ if (-not (Test-Path (Join-Path $simDir "VistaDBCOM20.DLL"))) {
 
 # --- 1. Station name ----------------------------------------------------------
 $knownStations = @(
-  "Server","Room 2","Room 3","Room 4","Room 5",
-  "Frontdesk 1","Frontdesk 2","Office Manager"
+  "Frontdesk 1","Frontdesk 2","Office Manager",
+  "Room 1","Room 2","Room 3","Room 4","Room 5",
+  "Server","Darkroom"
 )
 if (-not $Station) {
   Write-Info "Which SideNotesIM station is THIS computer?"

@@ -65,9 +65,13 @@ class SideNote:
     time: str
     unread: bool
     status: str
+    messageBody: str = ""
 
-    def to_dict(self) -> dict:
-        return asdict(self)
+    def to_dict(self, include_body: bool = False) -> dict:
+        data = asdict(self)
+        if not include_body:
+            data.pop("messageBody", None)
+        return data
 
 
 def _split_station(value: Optional[str]) -> tuple[str, str]:
@@ -149,7 +153,16 @@ class SideNotesReader:
         finally:
             self._cleanup(tmp)
 
-    def read_new(self, since_row_id: int, limit: int = 50) -> list[SideNote]:
+    def read_recent(self, limit: int = 48, include_body: bool = False) -> list[SideNote]:
+        """Return the newest messages, oldest first."""
+        top = self.max_row_id()
+        if top <= 0:
+            return []
+        since = max(0, top - max(1, int(limit)) - 5)
+        notes = self.read_new(since, limit=max(1, int(limit)) + 5, include_body=include_body)
+        return notes[-int(limit) :]
+
+    def read_new(self, since_row_id: int, limit: int = 50, include_body: bool = False) -> list[SideNote]:
         """Return messages with RowId > since_row_id, oldest first."""
         tmp = _copy_live(self.history_path)
         notes: list[SideNote] = []
@@ -172,7 +185,7 @@ class SideNotesReader:
                         break
                     if rid <= since_row_id:
                         break
-                    notes.append(self._read_row(tbl, rid))
+                    notes.append(self._read_row(tbl, rid, include_body=include_body))
                     count += 1
                     tbl.Prior()
             finally:
@@ -183,7 +196,7 @@ class SideNotesReader:
         notes.reverse()  # oldest -> newest
         return notes
 
-    def _read_row(self, tbl, rid: int) -> SideNote:
+    def _read_row(self, tbl, rid: int, include_body: bool = False) -> SideNote:
         def memo(col: str) -> str:
             try:
                 val = tbl.GetMemo(col, 32767)
@@ -207,6 +220,7 @@ class SideNotesReader:
             time=memo("dTime"),
             unread=memo("dNew").strip() == "1",
             status=memo("dStatus"),
+            messageBody=memo("dMessage") if include_body else "",
         )
 
     @staticmethod

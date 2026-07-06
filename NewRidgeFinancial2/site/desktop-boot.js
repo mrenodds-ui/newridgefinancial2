@@ -17,6 +17,9 @@
   }
 
   function expectedSchemaVersion() {
+    if (typeof WorkstationSchema !== "undefined" && WorkstationSchema.SCHEMA_VERSION) {
+      return String(WorkstationSchema.SCHEMA_VERSION);
+    }
     if (typeof PageSchema !== "undefined" && PageSchema.SCHEMA_VERSION) {
       return String(PageSchema.SCHEMA_VERSION);
     }
@@ -34,12 +37,22 @@
     const detailHtml = (details || [])
       .map((line) => `<li>${String(line).replace(/</g, "&lt;")}</li>`)
       .join("");
-    frame.innerHTML =
-      `<div class="pv-state pv-state--error nr2-boot-error" role="alert">` +
+    const inner =
       `<strong class="pv-state__title">${String(message).replace(/</g, "&lt;")}</strong>` +
       (detailHtml ? `<ul class="pv-state__list">${detailHtml}</ul>` : "") +
-      `<p class="pv-state__msg">Close the window and launch <strong>Start Program</strong> again. If this persists, run scripts/Refresh-NR2-DesktopShortcut.ps1.</p>` +
-      `</div>`;
+      `<p class="pv-state__msg">Close the window and launch <strong>${typeof WorkstationSchema !== "undefined" ? "Start Workstation" : "Start Program"}</strong> again. If this persists, run scripts/Refresh-NR2-DesktopShortcut.ps1.</p>`;
+    if (typeof WorkstationSchema !== "undefined" && frame.querySelector("#workstationPage")) {
+      let banner = frame.querySelector(".nr2-boot-error");
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.className = "pv-state pv-state--error nr2-boot-error ws-boot-error";
+        banner.setAttribute("role", "alert");
+        frame.insertBefore(banner, frame.firstChild);
+      }
+      banner.innerHTML = inner;
+      return;
+    }
+    frame.innerHTML = `<div class="pv-state pv-state--error nr2-boot-error" role="alert">${inner}</div>`;
   }
 
   const schemaVersion = expectedSchemaVersion();
@@ -50,7 +63,9 @@
     errors.push("page-chrome.js failed to load (PageChrome is undefined).");
   }
   if (typeof PageSchema === "undefined" || typeof PageSchema.navPages !== "function") {
-    errors.push("page-schema.js failed to load (PageSchema.navPages missing).");
+    if (typeof WorkstationSchema === "undefined") {
+      errors.push("page-schema.js failed to load (PageSchema.navPages missing).");
+    }
   }
 
   const assetVersions = readScriptAssetVersions();
@@ -70,7 +85,7 @@
     schemaVersion,
     async verifyBuildManifest() {
       try {
-        const res = await fetch("nr2-build.json", { cache: "no-store" });
+        const res = await fetch("/nr2-build.json", { cache: "no-store" });
         if (!res.ok) return { ok: true, skipped: true };
         const manifest = await res.json();
         const manifestVersion = manifest && (manifest.schemaVersion || manifest.assetVersion);

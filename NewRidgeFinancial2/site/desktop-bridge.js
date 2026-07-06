@@ -16,8 +16,11 @@ const DesktopBridge = (function () {
     return Boolean(window.pywebview && window.pywebview.api);
   }
 
-  function hasLoopbackApi() {
-    return isLoopbackHost() && typeof fetch === "function";
+function hasLoopbackApi() {
+    if (!isLoopbackHost()) return false;
+    if (typeof fetch !== "function") return false;
+    // Loopback HTTP is desktop-shell only; browser tabs are blocked by the server.
+    return Boolean(hasDesktopApi());
   }
 
   function hasRuntimeAccess() {
@@ -52,10 +55,7 @@ const DesktopBridge = (function () {
 
   function desktopRequiredMessage(feature) {
     const label = feature || "This feature";
-    if (hasLoopbackApi()) {
-      return `${label} is available through the NR2 loopback server on this machine.`;
-    }
-    return `${label} requires the NR2 desktop app or loopback server. Launch StartProgram.bat (http://127.0.0.1:8765/). Browser file preview has no import or SQLite access.`;
+    return `${label} requires the NR2 desktop app. Launch StartProgram.bat — do not open a browser tab.`;
   }
 
   function whenReady(callback) {
@@ -88,7 +88,7 @@ const DesktopBridge = (function () {
       const text = await window.pywebview.api.read_data_file(name);
       return JSON.parse(text);
     }
-    const response = await fetch(`data/${name}`, { cache: "no-store" });
+    const response = await fetch(`/data/${name}`, { cache: "no-store" });
     if (!response.ok) throw new Error(`Data file unavailable: ${name}`);
     return response.json();
   }
@@ -914,6 +914,34 @@ const DesktopBridge = (function () {
     return { ok: false, text: "Batch patch requires the NR2 desktop app.", count: 0 };
   }
 
+  async function showWorkstationMessagePopup(payload) {
+    if (hasDesktopApi() && window.pywebview.api.show_workstation_message_popup) {
+      return window.pywebview.api.show_workstation_message_popup(payload || {});
+    }
+    return { ok: false, text: "Message popups require the NR2 Workstation app." };
+  }
+
+  async function flushMessagePopups() {
+    if (hasDesktopApi() && window.pywebview.api.flush_message_popups) {
+      return window.pywebview.api.flush_message_popups();
+    }
+    return { ok: false, count: 0 };
+  }
+
+  async function setPopupStation(name) {
+    if (hasDesktopApi() && window.pywebview.api.set_popup_station) {
+      return window.pywebview.api.set_popup_station(String(name || ""));
+    }
+    return { ok: false };
+  }
+
+  async function showWorkstationMainWindow() {
+    if (hasDesktopApi() && window.pywebview.api.show_workstation_main_window) {
+      return window.pywebview.api.show_workstation_main_window();
+    }
+    return { ok: false };
+  }
+
   return {
     hasDesktopApi,
     hasLoopbackApi,
@@ -977,6 +1005,10 @@ const DesktopBridge = (function () {
     runGitReadonly,
     runAllowlistedCommand,
     applyProgramPatches,
+    showWorkstationMessagePopup,
+    flushMessagePopups,
+    setPopupStation,
+    showWorkstationMainWindow,
     searchHalMemories,
     readClipboard,
     writeClipboard,

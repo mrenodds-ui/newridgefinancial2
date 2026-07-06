@@ -689,6 +689,19 @@
     return speak(line, { interrupt: true, profile: HAL9000 });
   }
 
+  function speakOfficeAnnounce(text) {
+    const line = String(text || "").replace(/\s+/g, " ").trim();
+    if (!line) return { started: false, durationMs: 0 };
+    speak(line, { interrupt: true, profile: HAL9000 });
+    return {
+      started: true,
+      durationMs: estimateDurationMs(line, HAL9000),
+      spokenText: line,
+      profile: "hal9000-office",
+      engine: "browser-hal9000",
+    };
+  }
+
   function resolveSpokenText(displayText, options) {
     options = options || {};
     if (independentThoughtActive(options)) {
@@ -858,6 +871,7 @@
     speakMirandaBriefing,
     speakHal9000Briefing,
     announceSidenote,
+    speakOfficeAnnounce,
     speakHalReply,
     cancelSpeech,
     estimateDurationMs,

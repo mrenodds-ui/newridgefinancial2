@@ -3,6 +3,57 @@
  * Values come from hal-manager.json / hal-models.json and session audit log only.
  */
 const HalPage = (function () {
+  const WORKSTATION_STATIONS = [
+    "Frontdesk 1",
+    "Frontdesk 2",
+    "Office Manager",
+    "Room 1",
+    "Room 2",
+    "Room 3",
+    "Room 4",
+    "Room 5",
+    "Server",
+    "Darkroom",
+  ];
+
+  function normalizeStationName(value) {
+    return String(value || "")
+      .replace(/[_-]+/g, " ")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+  }
+
+  function stationSlug(value) {
+    return (
+      String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "unknown"
+    );
+  }
+
+  function buildStationRoster(monitorRows) {
+    const rows = Array.isArray(monitorRows) ? monitorRows : [];
+    const byName = new Map();
+    rows.forEach((row) => {
+      if (row && row.station) byName.set(normalizeStationName(row.station), row);
+    });
+    return WORKSTATION_STATIONS.map((name) => {
+      const hit = byName.get(normalizeStationName(name));
+      if (hit) return Object.assign({}, hit, { station: name, live: hit.live === true });
+      return {
+        station: name,
+        live: false,
+        status: "offline",
+        announce: false,
+        bellSuppressed: false,
+        checkedAt: "",
+      };
+    });
+  }
+
   function esc(value) {
     return String(value == null ? "" : value)
       .replaceAll("&", "&amp;")
@@ -133,32 +184,55 @@ const HalPage = (function () {
     return Number.isFinite(checkedMs) && Date.now() - checkedMs < 45000;
   }
 
-  function stationRosterHtml(inbox) {
-    const stations = (inbox && inbox.monitor && inbox.monitor.stations) || [];
-    if (!stations.length) {
-      return `<p class="hp-sn-empty">No workstation watchers registered yet. Run <code>run-sidenotes-helper.bat</code> on each SideNotesIM PC.</p>`;
-    }
+  function staffFacingMode(opts) {
+    return !!(opts && (opts.staffFacing || opts.hideDiagnostics));
+  }
+
+  function stationRosterHtml(inbox, opts) {
+    const staff = staffFacingMode(opts);
+    const monitorRows = (inbox && inbox.monitor && inbox.monitor.stations) || [];
+    const stations = buildStationRoster(monitorRows);
     const rows = stations
       .map((station) => {
         const live = station.live === true;
         const badge = live
           ? '<span class="hp-sn-badge hp-sn-badge--ok">LIVE</span>'
           : '<span class="hp-sn-badge hp-sn-badge--off">OFFLINE</span>';
-        const flags = [
-          station.announce ? "voice" : "silent",
-          station.bellSuppressed ? "bell muted" : "bell on",
-        ].join(" · ");
-        const checked = station.checkedAt ? esc(station.checkedAt.slice(11, 19)) + " UTC" : "—";
+        const checked = station.checkedAt ? esc(station.checkedAt.slice(11, 19)) : "—";
+        if (staff) {
+          return `<tr>
+          <td><strong>${esc(station.station || "—")}</strong></td>
+          <td>${badge}</td>
+          <td>${esc(checked)}</td>
+        </tr>`;
+        }
+        const flags = station.live
+          ? [
+              station.nr2Workstation || String(station.source || "").startsWith("nr2")
+                ? "NR2 workstation"
+                : station.announce
+                  ? "SideNotes voice"
+                  : "SideNotes silent",
+              station.announce ? "voice" : "silent",
+              station.bellSuppressed ? "bell muted" : "bell on",
+            ]
+              .filter((v, i, arr) => arr.indexOf(v) === i)
+              .join(" · ")
+          : "awaiting client";
+        const checkedUtc = station.checkedAt ? esc(station.checkedAt.slice(11, 19)) + " UTC" : "—";
         return `<tr>
           <td><strong>${esc(station.station || "—")}</strong></td>
           <td>${badge}</td>
           <td>${esc(flags)}</td>
-          <td>${esc(checked)}</td>
+          <td>${esc(checkedUtc)}</td>
         </tr>`;
       })
       .join("");
+    const head = staff
+      ? "<thead><tr><th>Station</th><th>Status</th><th>Last seen</th></tr></thead>"
+      : "<thead><tr><th>Station</th><th>Watcher</th><th>Mode</th><th>Checked</th></tr></thead>";
     return `<div class="hp-sn-stations-wrap">
-      <table class="hp-table hp-sn-stations"><thead><tr><th>Station</th><th>Watcher</th><th>Mode</th><th>Checked</th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="hp-table hp-sn-stations">${head}<tbody>${rows}</tbody></table>
     </div>`;
   }
 
@@ -167,31 +241,39 @@ const HalPage = (function () {
     return `<p class="hp-sn-foot">Shared hub: ${hub} · external SideNotesIM helper · routing metadata only · ${online ? "network feed active" : "waiting for watchers"}</p>`;
   }
 
-  function liveSideNotesHtml(inbox) {
-    // Live feed from the SideNotesIM watcher helper (routing metadata only —
-    // message bodies are never read). `inbox` is null when the helper is offline.
+  function liveSideNotesHtml(inbox, opts) {
+    const staff = staffFacingMode(opts);
     const mon = (inbox && inbox.monitor) || {};
     const online = isSideNotesInboxLive(inbox);
     const items = (inbox && Array.isArray(inbox.items) ? inbox.items : []).slice().reverse();
     const statusBadge = online
       ? '<span class="hp-sn-badge hp-sn-badge--ok">LIVE</span>'
       : '<span class="hp-sn-badge hp-sn-badge--off">OFFLINE</span>';
+    const totalStations = mon.totalStations || WORKSTATION_STATIONS.length;
+    const liveCount = mon.stationCount != null ? mon.stationCount : 0;
     const stationText =
-      mon.stationCount && mon.stationCount > 1
-        ? `${mon.stationCount}/${mon.totalStations || mon.stationCount} stations live`
+      totalStations > 1
+        ? staff
+          ? `${liveCount} of ${totalStations} workstations`
+          : `${liveCount}/${totalStations} stations live`
         : `station ${mon.station || "—"}`;
     const flags = online
-      ? `<span class="hp-sn-stat">${mon.announce ? "voice on" : "voice off"} · ${mon.bellSuppressed ? "bell muted" : "bell on"} · ${esc(stationText)}${mon.voiceStyle === "hal9000" ? " · HAL 9000 voice" : ""}</span>`
-      : '<span class="hp-sn-stat">watcher not running</span>';
-    const voiceBtn =
-      `<button type="button" class="hp-sn-voice" data-hal-voice-test title="Test Miranda voice (American neural)" aria-label="Test Miranda voice">${uiIcon("voice")} TEST VOICE</button>`;
-    const checked = online && mon.checkedAt ? esc(mon.checkedAt.slice(11, 19)) + " UTC" : "—";
+      ? `<span class="hp-sn-stat">${staff ? esc(stationText) : `${mon.announce ? "voice on" : "voice off"} · ${mon.bellSuppressed ? "bell muted" : "bell on"} · ${esc(stationText)}${mon.voiceStyle === "hal9000" ? " · HAL 9000 voice" : ""}`}</span>`
+      : staff
+        ? '<span class="hp-sn-stat">Not connected</span>'
+        : '<span class="hp-sn-stat">watcher not running</span>';
+    const voiceBtn = staff
+      ? ""
+      : `<button type="button" class="hp-sn-voice" data-hal-voice-test title="Test Miranda voice (American neural)" aria-label="Test Miranda voice">${uiIcon("voice")} TEST VOICE</button>`;
+    const checked = online && mon.checkedAt ? esc(mon.checkedAt.slice(11, 19)) + (staff ? "" : " UTC") : "";
+    const checkedHtml = checked && !staff ? `<span class="hp-sn-time">checked ${checked}</span>` : "";
     let listHtml;
     if (!online) {
-      listHtml =
-        '<li class="hp-sn-empty">SideNotesIM watcher offline. Run <code>run-sidenotes-helper.bat</code> to let HAL announce incoming messages.</li>';
+      listHtml = staff
+        ? '<li class="hp-sn-empty">SideNotesIM watcher offline on this PC. Open SideNotesIM to read message text.</li>'
+        : '<li class="hp-sn-empty">SideNotesIM watcher offline. Run <code>run-sidenotes-helper.bat</code> to let HAL announce incoming messages.</li>';
     } else if (!items.length) {
-      listHtml = '<li class="hp-sn-empty">No new messages since the watcher started.</li>';
+      listHtml = '<li class="hp-sn-empty">No new messages.</li>';
     } else {
       listHtml = items
         .slice(0, 8)
@@ -203,7 +285,7 @@ const HalPage = (function () {
           const when = esc([m.date, m.time].filter(Boolean).join(" "));
           const sender = m.senderLabel || m.sender || "Unknown";
           const recipient = m.recipientLabel || m.recipient || "—";
-          const source = m.sourceStation ? ` · via ${esc(m.sourceStation)}` : "";
+          const source = !staff && m.sourceStation ? ` · via ${esc(m.sourceStation)}` : "";
           return `<li class="hp-sn-item hp-sn-item--live">
               ${dot}${kind}
               <span class="hp-sn-item__text"><strong>${esc(sender)}</strong> <span class="hp-sn-arrow">→ ${esc(recipient)}</span></span>
@@ -212,20 +294,26 @@ const HalPage = (function () {
         })
         .join("");
     }
+    const title = staff ? "SIDENOTESIM ALERTS" : "SIDENOTESIM MONITOR";
+    const footnote = staff
+      ? '<p class="hp-sn-foot ws-feed-note">Routing only — open SideNotesIM to read message text. HAL announces the sender name only.</p>'
+      : '<p class="hp-sn-foot">HAL 9000 voice announces sender only · message text is never read</p>';
     return `<div class="hp-sn-live">
       <div class="hp-sn-head">
-        <h4>SIDENOTESIM MONITOR</h4>
+        <h4>${title}</h4>
         ${statusBadge}
         ${flags}
         ${voiceBtn}
-        <span class="hp-sn-time">checked ${checked}</span>
+        ${checkedHtml}
       </div>
       <ul class="hp-sn-list">${listHtml}</ul>
-      <p class="hp-sn-foot">HAL 9000 voice announces sender only · message text is never read</p>
+      ${footnote}
     </div>`;
   }
 
-  function sideNotesMonitorHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox, hubPath) {
+  function sideNotesMonitorHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox, hubPath, opts) {
+    const expandWatchers = !!(opts && opts.expandWatchers);
+    const staff = staffFacingMode(opts);
     const notes = Array.isArray(halSideNotes) ? halSideNotes : [];
     const mon = halSideNoteMonitor || { activeCount: 0, openCount: 0, pinnedCount: 0, highPriorityCount: 0 };
     const active = notes.filter((n) => n.status !== "archived");
@@ -245,39 +333,59 @@ const HalPage = (function () {
           )
           .join("")
       : '<li class="hp-sn-empty">No local notes — add one below or ask HAL.</li>';
+    const hideRoster = staff && opts && opts.hideWorkstationRoster;
+    const hideLocalNotes = staff && opts && opts.hideLocalNotes;
     return `<div class="hp-sidenotes-monitor" data-panel="sidenotes">
-      ${liveSideNotesHtml(halSideNotesInbox)}
-      <details class="hp-details">
-        <summary>Workstation watchers</summary>
-        ${stationRosterHtml(halSideNotesInbox)}
-      </details>
-      <div class="hp-sn-head hp-sn-head--local">
+      ${liveSideNotesHtml(halSideNotesInbox, opts)}
+      ${
+        hideRoster
+          ? ""
+          : `<details class="hp-details"${expandWatchers ? " open" : ""}>
+        <summary>${staff ? "Workstations" : `Workstation watchers (${WORKSTATION_STATIONS.length})`}</summary>
+        ${stationRosterHtml(halSideNotesInbox, opts)}
+      </details>`
+      }
+      ${
+        hideLocalNotes
+          ? ""
+          : `<div class="hp-sn-head hp-sn-head--local">
         <h4>LOCAL NOTES</h4>
-        ${changeBadge}
-        <span class="hp-sn-stat">${mon.activeCount || 0} active · ${mon.pinnedCount || 0} pinned</span>
+        ${
+          staff && opts && opts.stationLabel
+            ? `<span class="hp-sn-compose__station"><span class="hp-sn-badge hp-sn-badge--ok">FROM</span> <strong>${esc(opts.stationLabel)}</strong></span>`
+            : `${changeBadge}<span class="hp-sn-stat">${mon.activeCount || 0} active · ${mon.pinnedCount || 0} pinned</span>`
+        }
       </div>
       <ul class="hp-sn-list">${listHtml}</ul>
       <form class="hp-sn-form" id="hpSideNoteForm" onsubmit="return false">
-        <input class="hp-sn-input" id="hpSideNoteInput" type="text" maxlength="500" placeholder="Quick sidenote — local only, HAL monitors changes" aria-label="Add sidenote" />
+        <input class="hp-sn-input" id="hpSideNoteInput" type="text" maxlength="500" placeholder="${staff ? "Quick note for this station" : "Quick sidenote — local only, HAL monitors changes"}" aria-label="Add sidenote" />
         <button type="button" class="hp-sn-add" data-hal-sidenote-add>${uiIcon("add")} ADD</button>
-      </form>
-      <div class="hp-chips hp-sn-actions">
+      </form>`
+      }
+      ${
+        staff
+          ? ""
+          : `<div class="hp-chips hp-sn-actions">
         <button type="button" class="hp-action hp-action--icon" data-hal-cmd="Monitor sidenotes">${uiIcon("monitor")} Monitor</button>
         <button type="button" class="hp-action hp-action--icon" data-hal-cmd="Show sidenotes">${navIcon("sidenotes")} Show notes</button>
         <button type="button" class="hp-action hp-action--icon" data-hal-drawer="sidenotes">${uiIcon("info")} Setup</button>
       </div>
-      ${sideNotesHubFootnote(hubPath, isSideNotesInboxLive(halSideNotesInbox))}
+      ${sideNotesHubFootnote(hubPath, isSideNotesInboxLive(halSideNotesInbox))}`
+      }
     </div>`;
   }
 
   function sideNotesProgramCardHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox, hubPath) {
     const online = isSideNotesInboxLive(halSideNotesInbox);
     const stationCount = (halSideNotesInbox && halSideNotesInbox.monitor && halSideNotesInbox.monitor.stationCount) || 0;
+    const totalStations =
+      (halSideNotesInbox && halSideNotesInbox.monitor && halSideNotesInbox.monitor.totalStations) ||
+      WORKSTATION_STATIONS.length;
     const unread = (Array.isArray(halSideNotesInbox && halSideNotesInbox.items) ? halSideNotesInbox.items : []).filter(
       (m) => m && m.unread,
     ).length;
     const statusChip = online
-      ? `<span class="hp-sn-badge hp-sn-badge--ok">${stationCount > 1 ? stationCount + " STATIONS" : "LIVE"}</span>`
+      ? `<span class="hp-sn-badge hp-sn-badge--ok">${stationCount}/${totalStations} LIVE</span>`
       : '<span class="hp-sn-badge hp-sn-badge--off">WATCHERS OFFLINE</span>';
     return `<section class="hp-card hp-card--sidenotes" data-panel="sidenotes" style="grid-area:sidenotes;">
       ${cardHead(
@@ -556,7 +664,19 @@ const HalPage = (function () {
     if (input && ctx.halAskDraft) input.value = ctx.halAskDraft;
   }
 
-  return { render, sideNotesMonitorHtml, sideNotesProgramCardHtml, widgetsMonitorHtml, isSideNotesInboxLive, surfNavTarget };
+  return {
+    render,
+    sideNotesMonitorHtml,
+    sideNotesProgramCardHtml,
+    widgetsMonitorHtml,
+    isSideNotesInboxLive,
+    surfNavTarget,
+    WORKSTATION_STATIONS,
+    buildStationRoster,
+    stationRosterHtml,
+    stationSlug,
+    normalizeStationName,
+  };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

@@ -317,9 +317,9 @@ const HalCore = (function () {
   function buildHelpChatReply(halData) {
     const consent = consentPolicy(halData);
     return pickVariant([
-      "I'm HAL — local program manager for this office. I open pages, explain imports, run readiness checks, and draft work. Outbound actions like email, submit, and post require your explicit consent each time.",
-      "I read SoftDent and QuickBooks imports, place data on dashboards, and flag gaps. Outbound actions need your consent. Name a page, widget, import task, or say Run readiness check for specifics.",
-      `I help staff review this program locally — pages, imports, readiness, and drafts. ${consent.summary} Ask about a specific page or say Run readiness check to go deeper.`,
+      "I'm HAL — local program manager for this office. I open pages, explain imports, run readiness checks, and draft work. I can message any room or Everyone with a desktop popup — try Message Room 2: Patient is ready. Outbound actions like email, submit, and post require your explicit consent each time.",
+      "I read SoftDent and QuickBooks imports, place data on dashboards, and flag gaps. I send office popups to Frontdesk, Room 1–5, or Everyone through the HAL hub. Outbound actions need your consent. Name a page, widget, import task, or say Run readiness check for specifics.",
+      `I help staff review this program locally — pages, imports, readiness, and drafts. ${consent.summary} Ask about a specific page, message a room, or say Run readiness check to go deeper.`,
     ]);
   }
 
@@ -2263,6 +2263,18 @@ const HalCore = (function () {
       return { intent: "office: attention", lane: "local", useOfficeAttention: true, text: "", actions: [] };
     }
 
+    const officeMsg = matchOfficeMessageRoute(rawQuery);
+    if (officeMsg) {
+      return {
+        intent: "office: message",
+        lane: "local",
+        useOfficeMessageSend: true,
+        officeMessage: officeMsg,
+        text: "",
+        actions: [],
+      };
+    }
+
     // Sidenotes: monitor
     if (/\b(monitor|watch|check|status)\b.*\bsidenotes?\b|\bsidenotes?\b.*\b(monitor|watch|status)\b/.test(query)) {
       return { intent: "sidenotes: monitor", lane: "local", useSideNoteMonitor: true, text: "", actions: [] };
@@ -3344,6 +3356,85 @@ const HalCore = (function () {
     return null;
   }
 
+  const OFFICE_STATION_NAMES = [
+    "Frontdesk 1",
+    "Frontdesk 2",
+    "Office Manager",
+    "Room 1",
+    "Room 2",
+    "Room 3",
+    "Room 4",
+    "Room 5",
+    "Server",
+    "Darkroom",
+  ];
+
+  function normalizeOfficeStationToken(value) {
+    return String(value || "")
+      .replace(/[_-]+/g, " ")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+  }
+
+  function resolveOfficeStationToken(token) {
+    const raw = String(token || "").trim();
+    if (!raw) return null;
+    if (/^(all|everyone|every\s*body|broadcast|whole\s*office)$/i.test(raw)) return "all";
+    const room = raw.match(/^room\s*(\d)$/i);
+    if (room) return `Room ${room[1]}`;
+    const desk = raw.match(/^(?:frontdesk|front\s*desk)\s*(\d)$/i);
+    if (desk) return `Frontdesk ${desk[1]}`;
+    if (/^office\s*manager$/i.test(raw)) return "Office Manager";
+    const key = normalizeOfficeStationToken(raw);
+    for (const name of OFFICE_STATION_NAMES) {
+      if (normalizeOfficeStationToken(name) === key) return name;
+    }
+    return null;
+  }
+
+  function parseOfficeMessageRoute(rawQuery) {
+    const q = String(rawQuery || "").trim();
+    if (!q) return null;
+    const head =
+      /^\s*(?:message|tell|notify|alert|ping|send(?:\s+(?:a\s+)?message)?(?:\s+to)?)\s+(everyone|all|every\s*body|broadcast|whole\s*office)\b[:\-,]\s*(.+)$/i;
+    let m = q.match(head);
+    if (m && m[2]) return { targets: ["all"], text: m[2].trim() };
+    for (const station of OFFICE_STATION_NAMES) {
+      const escaped = station.replace(/\s+/g, "\\s+");
+      const re = new RegExp(
+        `^\\s*(?:message|tell|notify|alert|ping|send(?:\\s+(?:a\\s+)?message)?(?:\\s+to)?)\\s+${escaped}\\b[:\\-,]\\s*(.+)$`,
+        "i",
+      );
+      m = q.match(re);
+      if (m && m[1]) return { targets: [station], text: m[1].trim() };
+    }
+    m = q.match(
+      /^\s*(?:message|tell|notify|alert|ping|send(?:\s+(?:a\s+)?message)?(?:\s+to)?)\s+(room\s*\d|frontdesk\s*\d|front\s*desk\s*\d|office\s*manager|server|darkroom)\b[:\-,]\s*(.+)$/i,
+    );
+    if (m && m[2]) {
+      const station = resolveOfficeStationToken(m[1]);
+      if (station && station !== "all") return { targets: [station], text: m[2].trim() };
+    }
+    return null;
+  }
+
+  function matchOfficeMessageRoute(rawQuery) {
+    const parsed = parseOfficeMessageRoute(rawQuery);
+    if (parsed && parsed.text && parsed.text.length >= 1) return parsed;
+    const q = String(rawQuery || "").trim();
+    if (!/\b(message|tell|notify|alert|ping|send)\b/i.test(q)) return null;
+    if (!/\b(room|frontdesk|front desk|everyone|office manager|server|darkroom|all)\b/i.test(q)) return null;
+    return { targets: ["all"], text: "", needsClarification: true };
+  }
+
+  function formatOfficeMessageTargets(targets) {
+    const list = Array.isArray(targets) ? targets : [];
+    if (!list.length || list.some((t) => /^(all|everyone)$/i.test(String(t)))) return "Everyone";
+    if (list.length === 1) return list[0];
+    return list.join(", ");
+  }
+
   function routeHalCommand(halData, halModels, pages, rawQuery, opts) {
     opts = opts || {};
     const query = String(rawQuery)
@@ -4018,6 +4109,10 @@ const HalCore = (function () {
     buildEscalationPrompt,
     cleanModelText,
     routeHalCommand,
+    OFFICE_STATION_NAMES,
+    parseOfficeMessageRoute,
+    matchOfficeMessageRoute,
+    formatOfficeMessageTargets,
     sessionTemplates,
     sessionTemplateById,
     findSessionTemplate,

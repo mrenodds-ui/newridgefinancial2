@@ -55,16 +55,18 @@ Each helper writes:
 - a station-specific file such as `sidenotes-inbox-room-2.json`,
   `sidenotes-inbox-frontdesk-1.json`, or `sidenotes-inbox-office-manager.json`
 
-The HAL screen reads and merges these station inboxes:
+The HAL screen reads and merges these station inboxes (10 workstations):
 
-- `sidenotes-inbox-server.json`
+- `sidenotes-inbox-frontdesk-1.json`
+- `sidenotes-inbox-frontdesk-2.json`
+- `sidenotes-inbox-office-manager.json`
+- `sidenotes-inbox-room-1.json`
 - `sidenotes-inbox-room-2.json`
 - `sidenotes-inbox-room-3.json`
 - `sidenotes-inbox-room-4.json`
 - `sidenotes-inbox-room-5.json`
-- `sidenotes-inbox-frontdesk-1.json`
-- `sidenotes-inbox-frontdesk-2.json`
-- `sidenotes-inbox-office-manager.json`
+- `sidenotes-inbox-server.json`
+- `sidenotes-inbox-darkroom.json`
 
 Recommended station setup:
 

@@ -105,7 +105,7 @@ const PageChrome = (function () {
         <p class="pv-canvas-shell__error">Page schema unavailable for <strong>${esc(state && state.pageId)}</strong>. Reload the desktop app.</p>
       </div>`;
     }
-    const insight = resolveInsight(state);
+    const insight = o.compact ? null : resolveInsight(state);
     const practice = schemaApi() && schemaApi().PRACTICE ? schemaApi().PRACTICE : null;
     const periodLabel = o.periodLabel
       ? `<span class="pv-hero-period">${esc(o.periodLabel)}</span>${o.reportRange ? `<span class="pv-hero-range">${esc(o.reportRange)}</span>` : ""}`
@@ -146,7 +146,7 @@ const PageChrome = (function () {
       toolbar,
       insight: insight ? U.PageInsight(insight) : "",
       strip: "",
-      commands: halCommandSurface(state.pageId, schema.title, { registry: state.halData && state.halData.registry }),
+      commands: o.compact ? "" : halCommandSurface(state.pageId, schema.title, { registry: state.halData && state.halData.registry }),
     });
   }
 

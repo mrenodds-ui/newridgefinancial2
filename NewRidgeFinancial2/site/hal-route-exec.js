@@ -659,6 +659,45 @@ const HalRouteExec = (function () {
       return outcome(HalSkills.formatOfficeManagerAttention(resp), "office", result.intent);
     }
 
+    if (result.useOfficeMessageSend) {
+      const parsed =
+        result.officeMessage ||
+        (typeof HalCore !== "undefined" && HalCore.parseOfficeMessageRoute
+          ? HalCore.parseOfficeMessageRoute(trimmed)
+          : null);
+      if (!parsed || parsed.needsClarification || !String(parsed.text || "").trim()) {
+        const stations =
+          typeof HalCore !== "undefined" && HalCore.OFFICE_STATION_NAMES
+            ? HalCore.OFFICE_STATION_NAMES.join(", ")
+            : "Room 1, Frontdesk 1, Everyone";
+        return outcome(
+          `Tell me who and what to send. Example: "Message Room 2: Patient is ready" or "Tell Everyone: Team meeting at 3." Stations: ${stations}.`,
+          "office",
+          result.intent,
+        );
+      }
+      const targets = Array.isArray(parsed.targets) && parsed.targets.length ? parsed.targets : ["all"];
+      const send =
+        typeof globalThis.sendHalOfficePopupMessage === "function"
+          ? globalThis.sendHalOfficePopupMessage
+          : typeof sendHalOfficePopupMessage === "function"
+            ? sendHalOfficePopupMessage
+            : null;
+      if (!send) {
+        return outcome("Office messaging requires the NR2 desktop app with HAL hub running.", "office", result.intent);
+      }
+      await send(parsed.text, targets);
+      const routeLabel =
+        typeof HalCore !== "undefined" && HalCore.formatOfficeMessageTargets
+          ? HalCore.formatOfficeMessageTargets(targets)
+          : targets.join(", ");
+      return outcome(
+        `Sent to ${routeLabel}. A desktop popup with the full message should appear on those workstations.`,
+        "office",
+        result.intent,
+      );
+    }
+
     if (result.useOfficeBriefing) {
       const officeApi =
         typeof HalOfficeManager !== "undefined"

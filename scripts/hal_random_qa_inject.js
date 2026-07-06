@@ -170,14 +170,26 @@
   if (window._halRandomQaRun && window._halRandomQaRun.running) {
     return "already running";
   }
-  if (typeof handleHalSubmit !== "function") {
-    return "handleHalSubmit missing — open HAL Command Center first";
+  const workstationMode =
+    !!window._halRandomQaWorkstation ||
+    (typeof window !== "undefined" && !!window.NR2_WORKSTATION_ONLY);
+  const submitFn =
+    workstationMode && typeof handleWorkstationHalSubmit === "function"
+      ? handleWorkstationHalSubmit
+      : typeof handleHalSubmit === "function"
+        ? handleHalSubmit
+        : null;
+  if (!submitFn) {
+    return workstationMode
+      ? "handleWorkstationHalSubmit missing — open NR2 Workstation Ask HAL first"
+      : "handleHalSubmit missing — open HAL Command Center first";
   }
 
   if (window._halRandomQaUseReasoning === undefined) window._halRandomQaUseReasoning = true;
   window._halForceReasoning = window._halRandomQaUseReasoning !== false;
 
-  const questionCount = Math.max(1, Math.min(500, Number(window._halRandomQaCount) || 50));
+  const maxCount = workstationMode ? 1000 : 500;
+  const questionCount = Math.max(1, Math.min(maxCount, Number(window._halRandomQaCount) || 50));
   const skipSpeech = !!window._halRandomQaSkipSpeech;
   const useReasoning = window._halRandomQaUseReasoning !== false;
   window._halRandomQaUseReasoning = useReasoning;
@@ -189,6 +201,7 @@
     empty: 0,
     running: true,
     useReasoning,
+    workstationMode,
     startedAt: Date.now(),
   };
   window._halRandomQaLog = [];
@@ -280,15 +293,21 @@
         Number(window._halRandomQaTimeoutMs) || (useReasoning ? 130000 : 65000);
       try {
         await Promise.race([
-          handleHalSubmit(questions[n]),
+          submitFn(questions[n]),
           new Promise((_, reject) =>
             setTimeout(() => reject(new Error("question timeout after " + perQTimeoutMs + "ms")), perQTimeoutMs),
           ),
         ]);
-        const hist = typeof halChatHistory !== "undefined" ? halChatHistory : [];
+        const hist =
+          workstationMode && typeof workstationChatHistory !== "undefined"
+            ? workstationChatHistory
+            : typeof halChatHistory !== "undefined"
+              ? halChatHistory
+              : [];
         const last = hist.length ? hist[hist.length - 1] : null;
         const answer = last && last.role === "hal" ? String(last.text || "") : "";
-        if (typeof renderHalScreen === "function") renderHalScreen();
+        if (workstationMode && typeof renderWorkstationScreen === "function") renderWorkstationScreen();
+        else if (typeof renderHalScreen === "function") renderHalScreen();
         const pendingEntry = {
           q: questions[n],
           intent: last && last.intent ? last.intent : "",
@@ -326,7 +345,12 @@
           entry.issue = "instruction_leak";
         }
         window._halRandomQaLog.push(entry);
-        if (hist.length > 24 && typeof halChatHistory !== "undefined") {
+        if (workstationMode && typeof workstationChatHistory !== "undefined") {
+          if (workstationChatHistory.length > 24) {
+            workstationChatHistory = workstationChatHistory.slice(-16);
+            if (typeof saveWorkstationChatHistory === "function") saveWorkstationChatHistory();
+          }
+        } else if (hist.length > 24 && typeof halChatHistory !== "undefined") {
           halChatHistory = hist.slice(-16);
           if (typeof saveChatHistory === "function") saveChatHistory();
         }
@@ -358,6 +382,8 @@
     questions.length +
     " random HAL questions (reasoning=" +
     useReasoning +
+    ", workstation=" +
+    workstationMode +
     ", default count=" +
     questionCount +
     ")"

@@ -27,6 +27,101 @@ _sync_state = {
     "result": None,
 }
 
+_desktop_session_token: str | None = None
+_site_root: Path | None = None
+
+
+def set_desktop_session_token(token: str | None) -> None:
+    global _desktop_session_token
+    _desktop_session_token = str(token) if token else None
+
+
+def set_site_root(path: Path | str | None) -> None:
+    global _site_root
+    _site_root = Path(path) if path else None
+
+
+def _loopback_browser_allowed() -> bool:
+    val = os.environ.get("NR2_ALLOW_BROWSER_LOOPBACK", "").strip().lower()
+    return val in ("1", "true", "yes")
+
+
+def _request_desktop_token() -> str | None:
+    token = bottle.request.get_cookie("nr2dt")
+    if token:
+        return str(token)
+    token = bottle.request.params.get("nr2dt")
+    if token:
+        return str(token)
+    header = bottle.request.headers.get("X-NR2-Desktop-Token")
+    if header:
+        return str(header)
+    return None
+
+
+def _lan_hal_hub_access_ok() -> bool:
+    """Allow workstation clients on the LAN to reach hub relay APIs without desktop cookie."""
+    path = bottle.request.path or "/"
+    method = (bottle.request.method or "GET").upper()
+    if path.startswith("/api/hal-hub"):
+        return True
+    if path == "/api/office-channel" and method in ("GET", "OPTIONS"):
+        return True
+    if method == "OPTIONS" and path.startswith("/api/"):
+        return True
+    return False
+
+
+def _desktop_access_ok() -> bool:
+    if _loopback_browser_allowed():
+        return True
+    if _lan_hal_hub_access_ok():
+        return True
+    if not _desktop_session_token:
+        return True
+    path = bottle.request.path or "/"
+    if path.startswith("/js_api/"):
+        return True
+    return _request_desktop_token() == _desktop_session_token
+
+
+def _maybe_set_desktop_cookie() -> None:
+    if not _desktop_session_token:
+        return
+    if bottle.request.params.get("nr2dt") != _desktop_session_token:
+        return
+    bottle.response.set_cookie(
+        "nr2dt",
+        _desktop_session_token,
+        path="/",
+        httponly=True,
+        samesite="Strict",
+        max_age=60 * 60 * 24 * 30,
+    )
+
+
+def _desktop_only_html() -> str:
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NewRidgeFinancial 2.0 — Desktop Only</title>
+  <style>
+    body { font-family: Segoe UI, system-ui, sans-serif; background: #0f1419; color: #e8eef4; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { max-width: 32rem; padding: 2rem 2.25rem; background: #1a2332; border: 1px solid #2d3a4d; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.35); }
+    h1 { margin: 0 0 .75rem; font-size: 1.35rem; color: #f5c518; }
+    p { margin: 0 0 .85rem; line-height: 1.55; color: #b8c5d6; }
+    strong { color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Desktop app only</h1>
+    <p>NewRidgeFinancial 2.0 is a <strong>desktop program</strong>, not a website. Send Message, Ask HAL, and all staff tools run in the Start Program window.</p>
+    <p>Close this browser tab and double-click <strong>StartProgram.bat</strong> on your desktop (or use the Start Program shortcut).</p>
+  </div>
+</body>
+</html>"""
 
 def _json_response(payload, status=200):
     bottle.response.content_type = "application/json"
@@ -93,9 +188,29 @@ class NR2BottleServer(BottleServer):
 
         local_urls = [u.split("#")[0] for u in urls if is_local_url(u)]
         common_path = os.path.dirname(os.path.commonpath(local_urls)) if local_urls else None
+        if common_path is None and _site_root is not None:
+            common_path = str(_site_root)
         server.root_path = abspath(common_path) if common_path is not None else None
         logger.debug("HTTP server root path: %s", server.root_path)
         app = bottle.Bottle()
+
+        @app.hook("before_request")
+        def _enforce_desktop_only():
+            if _desktop_access_ok():
+                return None
+            bottle.response.status = 403
+            bottle.response.content_type = "text/html; charset=utf-8"
+            return _desktop_only_html()
+
+        @app.hook("after_request")
+        def _hal_hub_cors_headers():
+            path = bottle.request.path or ""
+            if path.startswith("/api/hal-hub") or path == "/api/office-channel":
+                bottle.response.headers["Access-Control-Allow-Origin"] = "*"
+                bottle.response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+                bottle.response.headers["Access-Control-Allow-Headers"] = (
+                    "Origin, Accept, Content-Type, X-Requested-With"
+                )
 
         @app.post(f"/js_api/{server.uid}")
         def js_api():
@@ -124,12 +239,16 @@ class NR2BottleServer(BottleServer):
                 from import_loader import load_import_bundle
 
                 bundle = load_import_bundle(sync=False, deep=False)
+                from hal_hub import resolve_hub_data_dir, resolve_hal_hub_url
+
                 return _json_response(
                     {
                         "mode": "loopback",
                         "version": "2.0",
                         "importMode": bundle.get("importMode"),
                         "runtimeAccess": True,
+                        "halHubUrl": resolve_hal_hub_url(),
+                        "officeHubData": str(resolve_hub_data_dir()),
                     }
                 )
             except Exception as exc:
@@ -217,6 +336,175 @@ class NR2BottleServer(BottleServer):
                 return _json_response({"ok": True, "key": key})
             except Exception as exc:
                 return _json_response({"error": str(exc), "ok": False}, status=500)
+
+        from hal_hub import (
+            append_office_channel_message,
+            hub_announce,
+            hub_status,
+            load_office_channel,
+            process_pending,
+            register_station_heartbeat,
+            resolve_hal_hub_url,
+            stations_status,
+            submit_inbound,
+        )
+
+        @app.route("/api/hal-hub/inbound", method=["OPTIONS"])
+        @app.route("/api/hal-hub/process", method=["OPTIONS"])
+        @app.route("/api/hal-hub/status", method=["OPTIONS"])
+        @app.route("/api/hal-hub/announce", method=["OPTIONS"])
+        @app.route("/api/hal-hub/stations", method=["OPTIONS"])
+        @app.route("/api/hal-hub/stations/heartbeat", method=["OPTIONS"])
+        @app.route("/api/office-channel", method=["OPTIONS"])
+        def hal_hub_options():
+            return ""
+
+        @app.get("/api/hal-hub/stations")
+        def hal_hub_stations_api():
+            try:
+                return _json_response(stations_status())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/hal-hub/stations/heartbeat")
+        def hal_hub_station_heartbeat_api():
+            try:
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                station = str(payload.get("station") or "").strip()
+                if not station:
+                    return _json_response({"ok": False, "error": "empty station"}, status=400)
+                remote = bottle.request.remote or ""
+                host = str(payload.get("host") or remote or "").strip()
+                port_raw = payload.get("port")
+                port = int(port_raw) if port_raw is not None and str(port_raw).strip() != "" else None
+                source = str(payload.get("source") or "nr2-workstation").strip()
+                program_id = str(payload.get("programId") or payload.get("program") or "nr2-workstation").strip()
+                entry = register_station_heartbeat(
+                    station,
+                    host=host,
+                    port=port,
+                    source=source,
+                    program_id=program_id,
+                )
+                return _json_response({"ok": True, "station": entry, "roster": stations_status()})
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/hal-hub/status")
+        def hal_hub_status_api():
+            try:
+                return _json_response(hub_status())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/hal-hub/inbound")
+        def hal_hub_inbound_api():
+            try:
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                text = str(payload.get("text") or "").strip()
+                if not text:
+                    return _json_response({"ok": False, "error": "empty text"}, status=400)
+                from_station = str(payload.get("from") or payload.get("fromStation") or "Staff").strip()
+                raw_targets = payload.get("targets")
+                targets = raw_targets if isinstance(raw_targets, list) else None
+                speak = bool(payload.get("speak"))
+                role = str(payload.get("role") or "staff")
+                type_ = str(payload.get("type") or "announce")
+                item = submit_inbound(from_station, targets, text, speak=speak, role=role, type_=type_)
+                result = process_pending()
+                return _json_response({"ok": True, "inbound": item, "dispatch": result})
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/hal-hub/process")
+        def hal_hub_process_api():
+            try:
+                return _json_response(process_pending())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/hal-hub/announce")
+        def hal_hub_announce_api():
+            try:
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                text = str(payload.get("text") or "").strip()
+                sender = str(payload.get("from") or payload.get("sender") or "").strip()
+                broadcast = bool(payload.get("broadcast"))
+                phrase_only = bool(payload.get("phraseOnly") or payload.get("phrase_only"))
+                if phrase_only and not sender:
+                    return _json_response({"ok": False, "error": "sender required for phraseOnly"}, status=400)
+                result = hub_announce(
+                    text,
+                    sender=sender,
+                    broadcast=broadcast,
+                    phrase_only=phrase_only,
+                )
+                status = 200 if result.get("ok") else 500
+                return _json_response(result, status=status)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/office-channel")
+        def office_channel_get_api():
+            try:
+                return _json_response(load_office_channel())
+            except Exception as exc:
+                return _json_response({"error": str(exc), "messages": []}, status=500)
+
+        @app.post("/api/office-channel")
+        def office_channel_post_api():
+            try:
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                msg = payload.get("message") if isinstance(payload.get("message"), dict) else payload
+                entry = append_office_channel_message(msg)
+                data = load_office_channel()
+                return _json_response({"ok": True, "message": entry, "channel": data})
+            except ValueError as exc:
+                return _json_response({"error": str(exc), "ok": False}, status=400)
+            except Exception as exc:
+                return _json_response({"error": str(exc), "ok": False}, status=500)
+
+        @app.get("/api/sidenotes/status")
+        def sidenotes_status_api():
+            try:
+                from sidenotes_bridge import sidenotes_status
+
+                return _json_response(sidenotes_status())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/sidenotes/messages")
+        def sidenotes_messages_api():
+            try:
+                from sidenotes_bridge import sidenotes_read_messages
+
+                station = bottle.request.params.get("station") or ""
+                limit = int(bottle.request.params.get("limit") or 48)
+                return _json_response(sidenotes_read_messages(station=station, limit=limit, include_body=True))
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc), "messages": []}, status=500)
+
+        @app.post("/api/sidenotes/send")
+        def sidenotes_send_api():
+            try:
+                from sidenotes_bridge import sidenotes_send_message
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                from_station = str(payload.get("from") or payload.get("fromStation") or "").strip()
+                to_station = str(payload.get("to") or payload.get("target") or "Everyone").strip()
+                text = str(payload.get("text") or "").strip()
+                if not text:
+                    return _json_response({"ok": False, "error": "empty text"}, status=400)
+                if not from_station:
+                    return _json_response({"ok": False, "error": "from station required"}, status=400)
+                return _json_response(sidenotes_send_message(from_station, to_station, text))
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
 
         @app.get("/api/hal-memories")
         def hal_memories_api():
@@ -666,6 +954,17 @@ class NR2BottleServer(BottleServer):
         def index():
             if not server.root_path:
                 return ""
+            _maybe_set_desktop_cookie()
+            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            bottle.response.set_header("Pragma", "no-cache")
+            bottle.response.set_header("Expires", 0)
+            return bottle.static_file("index.html", root=server.root_path)
+
+        @app.get("/index.html")
+        def index_html():
+            if not server.root_path:
+                return ""
+            _maybe_set_desktop_cookie()
             bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
             bottle.response.set_header("Pragma", "no-cache")
             bottle.response.set_header("Expires", 0)

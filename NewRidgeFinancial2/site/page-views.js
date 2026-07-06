@@ -255,13 +255,8 @@ const PageViews = (function () {
       pageChrome(state, Canvas.renderBody(pageId, halWidgetFeed, programSnapshot), chromeOptsFromState(state)),
     );
     wireCommon(container, onNavigate);
-    refreshLiveIntegrationHealth().then((health) => {
-      if (!health || !container.isConnected) return;
-      container.innerHTML = pageShell(
-        state,
-        pageChrome(state, Canvas.renderBody(pageId, halWidgetFeed, programSnapshot), chromeOptsFromState(state)),
-      );
-      wireCommon(container, onNavigate);
+    refreshLiveIntegrationHealth().catch(() => {
+      /* integration health optional; skip second full repaint to avoid page flash */
     });
   }
 

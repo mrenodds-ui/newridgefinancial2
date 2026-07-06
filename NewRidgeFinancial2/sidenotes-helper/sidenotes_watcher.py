@@ -54,6 +54,9 @@ def load_config() -> dict:
         cfg["historyPath"] = os.path.join(os.environ.get("APPDATA", ""), "SideNotesIM", "history.vdb")
     cfg.setdefault("simDir", r"C:\Program Files (x86)\SideNotesIM")
     cfg.setdefault("myStation", "Server")
+    env_station = os.environ.get("NR2_SIDENOTES_MY_STATION", "").strip()
+    if env_station:
+        cfg["myStation"] = env_station
     cfg.setdefault("pollSeconds", 2.0)
     cfg.setdefault("announce", True)
     cfg.setdefault("announceTemplate", "New message from {sender}.")
@@ -71,6 +74,7 @@ def load_config() -> dict:
     cfg.setdefault(
         "stationPeople",
         {
+            "room 1": "",
             "room 2": "Mayci",
             "room 3": "Nicole",
             "room 4": "Nicole",
@@ -78,6 +82,8 @@ def load_config() -> dict:
             "frontdesk 1": "Andrea and Jeannie",
             "frontdesk 2": "Andrea and Jeannie",
             "office manager": "Steve",
+            "server": "",
+            "darkroom": "",
         },
     )
     cfg.setdefault("duckMusic", True)

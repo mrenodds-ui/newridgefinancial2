@@ -447,6 +447,39 @@ const HalAgent = (function () {
         };
       },
     },
+    send_office_message: {
+      label: "Send desktop popup to office room or Everyone",
+      run: async (_ctx, args) => {
+        const text = String((args && (args.text || args.message)) || "").trim();
+        const rawTargets = args && (args.targets || args.stations || args.target);
+        let targets = ["all"];
+        if (Array.isArray(rawTargets) && rawTargets.length) {
+          targets = rawTargets.map((t) => String(t).trim()).filter(Boolean);
+        } else if (rawTargets) {
+          targets = String(rawTargets)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        }
+        if (!text) return { ok: false, summary: "Message text is required." };
+        const send =
+          typeof globalThis.sendHalOfficePopupMessage === "function"
+            ? globalThis.sendHalOfficePopupMessage
+            : typeof HalHubClient !== "undefined" && HalHubClient.sendHalPopupMessage
+              ? (body, t) => HalHubClient.sendHalPopupMessage(body, t)
+              : null;
+        if (!send) return { ok: false, summary: "Office popup messaging requires the NR2 desktop HAL hub." };
+        await send(text, targets);
+        const routeLabel =
+          typeof HalCore !== "undefined" && HalCore.formatOfficeMessageTargets
+            ? HalCore.formatOfficeMessageTargets(targets)
+            : targets.join(", ");
+        return {
+          ok: true,
+          summary: `Sent popup message to ${routeLabel}: ${text.slice(0, 240)}`,
+        };
+      },
+    },
     read_registry: {
       label: "Read HAL capability registry",
       run: async (ctx) => {
@@ -1232,6 +1265,13 @@ const HalAgent = (function () {
     }
     if (route.useClaimReadiness || (/\b(claim|denied|packet)\b/i.test(query) && !route.text)) {
       tools.push("read_claims_summary");
+    }
+    if (
+      route.useOfficeMessageSend ||
+      (/\b(message|tell|notify|alert|ping|send)\b/i.test(query) &&
+        /\b(room|frontdesk|front desk|everyone|office manager|server|darkroom|everyone)\b/i.test(query))
+    ) {
+      tools.push("send_office_message");
     }
     if (
       (route.useOfficeAttention || route.useTaskList || route.useTaskCreate) &&

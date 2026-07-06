@@ -3,7 +3,7 @@
  * Single source of truth for nav, page chrome, HAL commands, and widget inventory.
  */
 const PageSchema = (function () {
-  const SCHEMA_VERSION = "hal-10000";
+  const SCHEMA_VERSION = "hal-10022";
 
   const PRACTICE = {
     name: "New Ridge Family Dental",
@@ -214,16 +214,16 @@ const PageSchema = (function () {
       id: "hal",
       label: "HAL",
       title: "HAL Command Center",
-      subtitle: "Ask questions · monitor widgets · jump to staff work surfaces",
+      subtitle: "Ask questions · office message hub · monitor widgets",
       accent: "gold",
-      filters: ["Current period", "All surfaces", "Direct-first imports"],
+      filters: ["Current period", "All surfaces", "Office channel"],
       commands: [
         "Make a plan for today",
+        "Send office announcement",
         "Show manager dashboard widgets",
         "Import status",
-        "What needs review",
       ],
-      safety: "Local manager · Consent before outbound · Direct-first imports",
+      safety: "Local manager · Office channel hub · Consent before outbound",
       widgets: [
         { key: "halAskHal", title: "Ask HAL" },
         { key: "halImportHealth", title: "Import & Source Health" },

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SideNotes IM</title>
+    <link rel="stylesheet" href="/styles.css?v=hal-10023" />
+  </head>
+  <body class="ws-msg-popup-window ws-msg-popup-window--sidenotes">
+    <article class="ws-sn-notify">
+      <p class="ws-sn-notify__from" id="wsPopupFrom"></p>
+      <p class="ws-sn-notify__text" id="wsPopupText"></p>
+      <footer class="ws-sn-notify__foot">
+        <button type="button" class="ws-sn-notify__btn" id="wsPopupOpen">Open Messages</button>
+        <button type="button" class="ws-sn-notify__btn ws-sn-notify__btn--ghost" id="wsPopupDismiss">Dismiss</button>
+      </footer>
+    </article>
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const from = params.get("from") || "Office";
+        const text = params.get("text") || "";
+        document.getElementById("wsPopupFrom").textContent = from;
+        document.getElementById("wsPopupText").textContent = text;
+        const close = () => {
+          try {
+            window.close();
+          } catch (_) {}
+        };
+        document.getElementById("wsPopupDismiss").addEventListener("click", close);
+        document.getElementById("wsPopupOpen").addEventListener("click", () => {
+          try {
+            window.location.href = "/workstation/index.html#history";
+          } catch (_) {
+            close();
+          }
+        });
+        window.setTimeout(close, 16000);
+      })();
+    </script>
+  </body>
+</html>

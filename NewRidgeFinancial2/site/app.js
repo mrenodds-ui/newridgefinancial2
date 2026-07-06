@@ -1,6 +1,17 @@
 // NewRidgeFinancial 2.0 — mission-control pages (nav from PageSchema).
 
+const NR2_WORKSTATION_ONLY =
+  typeof window !== "undefined" && !!window.NR2_WORKSTATION_ONLY;
+
 function getPages() {
+  if (NR2_WORKSTATION_ONLY && typeof WorkstationSchema !== "undefined" && WorkstationSchema.page) {
+    const ws = WorkstationSchema.page;
+    return [{ id: ws.id, label: ws.label, title: ws.title }];
+  }
+  if (NR2_WORKSTATION_ONLY && typeof PageSchema !== "undefined" && PageSchema.byId) {
+    const ws = PageSchema.byId("workstation");
+    return ws ? [{ id: ws.id, label: ws.label, title: ws.title }] : [];
+  }
   if (typeof PageSchema !== "undefined" && PageSchema.navPages) {
     return PageSchema.navPages();
   }
@@ -12,6 +23,9 @@ function appPages() {
 }
 
 function defaultPageId() {
+  if (NR2_WORKSTATION_ONLY) return "workstation";
+  const preferred = getPages().find((p) => p.id === "financial");
+  if (preferred) return preferred.id;
   const staff = getPages().find((p) => p.id !== "hal");
   return staff ? staff.id : getPages()[0]?.id || "financial";
 }
@@ -43,6 +57,8 @@ let nav = document.getElementById("nav");
 const appPage = document.getElementById("appPage");
 const halPage = document.getElementById("halPage");
 const halPageRoot = document.getElementById("halPageRoot");
+const workstationPage = document.getElementById("workstationPage");
+const workstationPageRoot = document.getElementById("workstationPageRoot");
 const drawer = document.getElementById("drawer");
 const drawerClose = document.getElementById("drawerClose");
 const drawerTitle = document.getElementById("drawerTitle");
@@ -52,6 +68,32 @@ let halData = FALLBACK_HAL;
 let halModels = FALLBACK_MODELS;
 let currentDrawerKey = null;
 let halChatHistory = [];
+let workstationChatHistory = [];
+let workstationAskDraft = "";
+let workstationAskLoading = false;
+let officeChannelData = { schema: "nr2-office-channel-v1", messages: [] };
+let officeChannelDraft = "";
+let officeChannelTargets = ["all"];
+let officeChannelGroup = "";
+let officeChannelPickerOpen = false;
+let workstationMainTab = "send";
+let workstationLeftTab = "users";
+let workstationReadIds = new Set();
+let workstationSendReturnTab = "send";
+let officeChannelLoading = false;
+let officeChannelSendFlash = false;
+let workstationStationName = null;
+let workstationMessagePrompts = null;
+let workstationPromptsEditing = false;
+let officeChannelAnnouncedIds = new Set();
+let sidenotesMessages = [];
+let sidenotesLive = false;
+let sidenotesAnnouncedIds = new Set();
+let workstationPopupSeenIds = new Set();
+let workstationPopupBaselineDone = false;
+let officeChannelPollTimer = null;
+let officeWorkflowDigestKey = "";
+let officeChannelHubLive = false;
 let halAudit = [];
 let halAskDraft = "";
 let halAskLoading = false;
@@ -62,9 +104,14 @@ function persistLocal(key, value) {
   DesktopBridge.storageSet(key, value).catch(() => {});
 }
 
-function isDesktopMode() {
+function hasRuntimeAccess() {
   const bridge = window.DesktopBridge;
   if (bridge && bridge.hasRuntimeAccess && bridge.hasRuntimeAccess()) return true;
+  return Boolean(bridge && bridge.hasDesktopApi && bridge.hasDesktopApi());
+}
+
+function isDesktopMode() {
+  const bridge = window.DesktopBridge;
   return Boolean(bridge && bridge.hasDesktopApi && bridge.hasDesktopApi());
 }
 
@@ -75,38 +122,730 @@ function desktopRequiredMessage(feature) {
   return `${feature || "This feature"} requires the NR2 desktop app. Browser mode is a UI preview only.`;
 }
 
+function dismissAllPopupBoxes() {
+  if (typeof document === "undefined") return;
+  ["runtimeModeBanner", "halProactiveBanner", "opsHealthBanner", "halActionNotice"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  });
+  closeDrawer();
+}
+
 function renderRuntimeModeBanner() {
-  if (isDesktopMode()) {
-    const existing = document.getElementById("runtimeModeBanner");
-    if (existing) existing.remove();
-    return;
-  }
-  const bridge = window.DesktopBridge;
-  const loopbackOnly = bridge && bridge.hasLoopbackApi && bridge.hasLoopbackApi() && !(bridge.hasDesktopApi && bridge.hasDesktopApi());
-  let banner = document.getElementById("runtimeModeBanner");
+  dismissAllPopupBoxes();
+  if (NR2_WORKSTATION_ONLY) return;
+  if (window.DesktopBridge && DesktopBridge.hasDesktopApi && DesktopBridge.hasDesktopApi()) return;
+  const msg = desktopRequiredMessage("Full NR2 data access");
+  let banner = document.querySelector(".runtime-banner");
   if (!banner) {
     banner = document.createElement("div");
-    banner.id = "runtimeModeBanner";
     banner.className = "runtime-banner";
-    document.body.prepend(banner);
+    banner.setAttribute("role", "status");
+    document.body.insertBefore(banner, document.body.firstChild);
   }
-  if (loopbackOnly) {
-    banner.className = "runtime-banner runtime-banner--loopback";
-    banner.innerHTML = `
-      <strong>Loopback mode</strong>
-      <span>HAL has full local data access via the NR2 server. Pywebview shell features (clipboard, agent patch tools) need Start Program.</span>
-    `;
-    return;
-  }
-  banner.className = "runtime-banner";
-  banner.innerHTML = `
-    <strong>Browser preview mode</strong>
-    <span>${escapeHtml(desktopRequiredMessage("Full NR2 data access"))}</span>
-  `;
+  banner.innerHTML = `<strong>Browser mode</strong><span>${msg}</span>`;
 }
 
 function saveChatHistory() {
   persistLocal("halChatHistory", halChatHistory);
+}
+
+function saveWorkstationChatHistory() {
+  persistLocal("workstationChatHistory", workstationChatHistory);
+}
+
+function defaultWorkstationMessagePrompts() {
+  if (window.WorkstationPage && WorkstationPage.defaultMessagePrompts) {
+    return WorkstationPage.defaultMessagePrompts();
+  }
+  return [];
+}
+
+function normalizeWorkstationMessagePrompts(list) {
+  if (window.WorkstationPage && WorkstationPage.normalizeMessagePrompts) {
+    return WorkstationPage.normalizeMessagePrompts(list);
+  }
+  return defaultWorkstationMessagePrompts();
+}
+
+function effectiveWorkstationMessagePrompts() {
+  return normalizeWorkstationMessagePrompts(workstationMessagePrompts || defaultWorkstationMessagePrompts());
+}
+
+function saveWorkstationMessagePrompts(prompts) {
+  workstationMessagePrompts = normalizeWorkstationMessagePrompts(prompts);
+  persistLocal("workstationMessagePrompts", workstationMessagePrompts);
+}
+
+function collectWorkstationPromptEditsFromDom(root) {
+  const scope = root || workstationPageRoot;
+  if (!scope) return effectiveWorkstationMessagePrompts();
+  const defaults = defaultWorkstationMessagePrompts();
+  const WP = window.WorkstationPage || {};
+  const templateFromBody = WP.templateFromPromptBody || ((body) => `{station}: ${String(body || "").trim()}`);
+  const labelFromBody = WP.labelFromPromptBody || ((body, fb) => fb || "Quick note");
+  return defaults.map((fallback, index) => {
+    const input = scope.querySelector(`[data-ws-prompt-body="${index}"]`);
+    const body = input ? String(input.value || "").trim() : promptBodyFromTemplate(fallback.template);
+    return {
+      label: labelFromBody(body, fallback.label),
+      template: templateFromBody(body),
+    };
+  });
+}
+
+function promptBodyFromTemplate(template) {
+  if (window.WorkstationPage && WorkstationPage.promptBodyFromTemplate) {
+    return WorkstationPage.promptBodyFromTemplate(template);
+  }
+  return String(template || "");
+}
+
+function workstationStationLabel() {
+  if (workstationStationName) return String(workstationStationName);
+  if (typeof globalThis !== "undefined" && globalThis._nr2WorkstationStation) {
+    return String(globalThis._nr2WorkstationStation);
+  }
+  return "Workstation";
+}
+
+function applyWorkstationStation(name, { persist = true } = {}) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return;
+  workstationStationName = trimmed;
+  globalThis._nr2WorkstationStation = trimmed;
+  if (persist) persistLocal("workstationStationName", trimmed);
+  if (persist && typeof DesktopBridge !== "undefined" && DesktopBridge.setPopupStation) {
+    DesktopBridge.setPopupStation(trimmed).catch(() => {});
+  }
+  if (typeof HalHubClient !== "undefined" && HalHubClient.sendHeartbeat && trimmed !== "Workstation") {
+    startWorkstationHubHeartbeat();
+    HalHubClient.sendHeartbeat({ station: trimmed }).catch(() => {});
+  }
+}
+
+async function resolveWorkstationStationFromInbox() {
+  if (workstationStationName) return workstationStationName;
+  const saved = await DesktopBridge.storageGet("workstationStationName");
+  if (saved) {
+    applyWorkstationStation(saved, { persist: false });
+    return workstationStationName;
+  }
+  const inbox = halSideNotesInbox;
+  if (inbox && inbox.monitor && inbox.monitor.station) {
+    applyWorkstationStation(inbox.monitor.station, { persist: true });
+    return workstationStationName;
+  }
+  try {
+    const localInbox = await DesktopBridge.readDataFile("sidenotes-inbox.json");
+    if (localInbox && localInbox.monitor && localInbox.monitor.station) {
+      applyWorkstationStation(localInbox.monitor.station, { persist: true });
+    }
+  } catch (_) {
+    /* optional */
+  }
+  return workstationStationName;
+}
+
+async function refreshSideNotesMessages() {
+  if (typeof SideNotesHub === "undefined") return { messages: [] };
+  const station = workstationStationLabel();
+  try {
+    const live = await SideNotesHub.fetchMessages(station === "Workstation" ? "" : station);
+    sidenotesMessages = Array.isArray(live.messages) ? live.messages : [];
+    sidenotesLive = !!(live && live.ok);
+    maybeAnnounceSideNotesMessages(sidenotesMessages);
+    maybePopupIncomingWorkstationMessages(sidenotesMessages, "sidenotes");
+  } catch (_) {
+    sidenotesMessages = [];
+    sidenotesLive = false;
+  }
+  return { messages: sidenotesMessages };
+}
+
+function messageTargetsThisStation(item, source) {
+  const station = workstationStationLabel();
+  if (source === "sidenotes" && typeof SideNotesHub !== "undefined" && SideNotesHub.messageTargetsForStation) {
+    return SideNotesHub.messageTargetsForStation(item, station);
+  }
+  if (typeof OfficeHub !== "undefined" && OfficeHub.messageTargetsForStation) {
+    return OfficeHub.messageTargetsForStation(item, station);
+  }
+  return true;
+}
+
+function isIncomingMessageForPopup(item, source) {
+  const station = workstationStationLabel();
+  const from = String((item && item.from) || "")
+    .trim()
+    .toLowerCase();
+  const self = String(station || "")
+    .trim()
+    .toLowerCase();
+  if (from && self && from === self) return false;
+  if (!messageTargetsThisStation(item, source)) return false;
+  if (source === "sidenotes" && item && item.unread === false) return false;
+  return true;
+}
+
+function maybePopupIncomingWorkstationMessages(messages, source) {
+  if (!NR2_WORKSTATION_ONLY) return;
+  if (typeof globalThis !== "undefined" && globalThis.NR2_PYTHON_POPUP_WATCHER) return;
+  if (typeof WorkstationMessagePopup === "undefined") return;
+  if (!Array.isArray(messages)) {
+    if (!workstationPopupBaselineDone) workstationPopupBaselineDone = true;
+    return;
+  }
+  for (const item of messages) {
+    const id = item && item.id;
+    if (!id) continue;
+    const key = String(id);
+    if (!workstationPopupBaselineDone) {
+      workstationPopupSeenIds.add(key);
+      continue;
+    }
+    if (workstationPopupSeenIds.has(key)) continue;
+    workstationPopupSeenIds.add(key);
+    if (!isIncomingMessageForPopup(item, source)) continue;
+    const text = String((item && item.text) || "").trim();
+    if (!text) continue;
+    WorkstationMessagePopup.present({
+      id: key,
+      from: (item && item.from) || "Office",
+      text,
+      target: item && item.target,
+      targets: item && item.targets,
+    });
+    if (window.HalVoice && HalVoice.announceSidenote) {
+      const target = String((item && item.target) || "");
+      const targets = Array.isArray(item && item.targets) ? item.targets : [];
+      const broadcast =
+        /^(all|everyone)$/i.test(target) ||
+        targets.some((t) => /^(all|everyone)$/i.test(String(t)));
+      HalVoice.announceSidenote((item && item.from) || "Office", broadcast);
+    }
+  }
+  if (!workstationPopupBaselineDone) workstationPopupBaselineDone = true;
+}
+
+function openWorkstationHistoryTab() {
+  workstationMainTab = "history";
+  markWorkstationInboxRead(mergedInboxMessagesForUi());
+  renderWorkstationScreen();
+}
+if (typeof globalThis !== "undefined") globalThis.openWorkstationHistoryTab = openWorkstationHistoryTab;
+
+function maybeAnnounceSideNotesMessages(messages) {
+  if (typeof WorkstationMessagePopup !== "undefined") return;
+  if (!window.HalVoice || !Array.isArray(messages)) return;
+  if (workstationPage && workstationPage.hidden) return;
+  const station = workstationStationLabel();
+  const forStation =
+    typeof SideNotesHub !== "undefined" && SideNotesHub.messageTargetsForStation
+      ? (item) => SideNotesHub.messageTargetsForStation(item, station)
+      : () => true;
+  for (const item of messages) {
+    const id = item && item.id;
+    if (!id || sidenotesAnnouncedIds.has(id)) continue;
+    if (!forStation(item)) continue;
+    if (item.unread === false) continue;
+    const fromSelf = String(item.from || "").trim().toLowerCase() === String(station).trim().toLowerCase();
+    if (fromSelf) continue;
+    sidenotesAnnouncedIds.add(id);
+    const sender = item.from || "Unknown";
+    const broadcast = /^(all|everyone)$/i.test(String(item.target || ""));
+    if (HalVoice.announceSidenote) HalVoice.announceSidenote(sender, broadcast);
+  }
+}
+
+async function refreshOfficeChannel() {
+  if (typeof OfficeHub === "undefined") return officeChannelData;
+  try {
+    const live = await OfficeHub.fetchChannel();
+    const fallback = await OfficeHub.loadFallback();
+    officeChannelData = OfficeHub.mergeChannels(live, fallback);
+    officeChannelHubLive = !!(live && live.messages && !live.localOnly);
+  } catch (_) {
+    officeChannelData = { schema: "nr2-office-channel-v1", messages: [] };
+  }
+  maybeAnnounceOfficeChannel(officeChannelData.messages || []);
+  if (NR2_WORKSTATION_ONLY) {
+    maybePopupIncomingWorkstationMessages(officeChannelData.messages || [], "hub");
+    await refreshSideNotesMessages();
+  }
+  return officeChannelData;
+}
+
+function normalizeOfficeChannelTargetsList(list) {
+  if (!Array.isArray(list) || !list.length) return [];
+  const cleaned = list.map((s) => String(s).trim()).filter(Boolean);
+  if (cleaned.some((t) => /^(all|everyone)$/i.test(t))) return ["all"];
+  const seen = new Set();
+  const out = [];
+  cleaned.forEach((name) => {
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(name);
+  });
+  return out;
+}
+
+function toggleOfficeChannelTarget(name) {
+  officeChannelGroup = "";
+  const raw = String(name || "").trim();
+  if (!raw) return;
+  if (/^(all|everyone)$/i.test(raw)) {
+    officeChannelTargets = ["all"];
+    return;
+  }
+  let list = officeChannelTargets.filter((t) => !/^(all|everyone)$/i.test(String(t)));
+  const key = raw.toLowerCase();
+  const self = String(workstationStationLabel() || "").toLowerCase();
+  if (key === self) return;
+  const idx = list.findIndex((t) => String(t).toLowerCase() === key);
+  if (idx >= 0) list = list.filter((_, i) => i !== idx);
+  else list = list.concat(raw);
+  officeChannelTargets = normalizeOfficeChannelTargetsList(list);
+}
+
+function selectOfficeChannelTarget(name) {
+  const raw = String(name || "").trim();
+  officeChannelGroup = "";
+  if (!raw || /^(all|everyone)$/i.test(raw)) officeChannelTargets = ["all"];
+  else officeChannelTargets = [raw];
+}
+
+function selectOfficeChannelGroup(groupId) {
+  const id = String(groupId || "").trim();
+  officeChannelGroup = id;
+  const groups =
+    typeof WorkstationSchema !== "undefined" && Array.isArray(WorkstationSchema.STATION_GROUPS)
+      ? WorkstationSchema.STATION_GROUPS
+      : [];
+  const group = groups.find((g) => g.id === id);
+  if (!group || !Array.isArray(group.members) || !group.members.length) return;
+  if (group.members.some((m) => /^(all|everyone)$/i.test(String(m)))) {
+    officeChannelTargets = ["all"];
+    return;
+  }
+  officeChannelTargets = normalizeOfficeChannelTargetsList(group.members.slice());
+}
+
+function loadWorkstationReadIdsFromStorage(raw) {
+  if (Array.isArray(raw)) workstationReadIds = new Set(raw.map(String));
+  else workstationReadIds = new Set();
+}
+
+function mergedInboxMessagesForUi() {
+  return [...(officeChannelData.messages || []), ...(sidenotesMessages || [])];
+}
+
+function saveWorkstationReadIds() {
+  persistLocal("workstationReadIds", [...workstationReadIds]);
+}
+
+function markWorkstationInboxRead(messages) {
+  if (!Array.isArray(messages)) return;
+  let changed = false;
+  messages.forEach((m) => {
+    const id = String((m && m.id) || `${m && m.from}-${m && m.at}-${m && m.text}`);
+    if (!workstationReadIds.has(id)) {
+      workstationReadIds.add(id);
+      changed = true;
+    }
+  });
+  if (changed) saveWorkstationReadIds();
+}
+
+function workstationPracticeName() {
+  if (typeof globalThis !== "undefined" && globalThis.NR2_PRACTICE_NAME) {
+    return String(globalThis.NR2_PRACTICE_NAME);
+  }
+  if (typeof WorkstationSchema !== "undefined" && WorkstationSchema.practiceName) {
+    return WorkstationSchema.practiceName;
+  }
+  const page =
+    typeof WorkstationSchema !== "undefined" && WorkstationSchema.page ? WorkstationSchema.page : null;
+  if (page && page.practiceName) return page.practiceName;
+  if (halData && halData.status && halData.status.title) return String(halData.status.title);
+  return "Office";
+}
+
+async function mirrorMessageToSideNotes(partial) {
+  if (typeof SideNotesHub === "undefined" || !SideNotesHub.sendMessage) return;
+  try {
+    const status = await SideNotesHub.status();
+    if (!status || !status.ok) return;
+  } catch (_) {
+    return;
+  }
+  const text = String((partial && partial.text) || "").trim();
+  const from = String((partial && partial.from) || workstationStationLabel()).trim();
+  if (!text || !from || from === "Workstation") return;
+  const targets = normalizeOfficeChannelTargetsList((partial && partial.targets) || ["all"]);
+  if (!targets.length || targets.includes("all")) {
+    await SideNotesHub.sendMessage({ from, targets: ["all"], text }).catch(() => {});
+    return;
+  }
+  for (const target of targets) {
+    await SideNotesHub.sendMessage({ from, targets: [target], text }).catch(() => {});
+  }
+}
+
+function isWorkstationMessagingMode() {
+  return (
+    NR2_WORKSTATION_ONLY ||
+    (workstationPage && !workstationPage.hidden)
+  );
+}
+
+function maybeAnnounceOfficeChannel(messages) {
+  if (!window.HalVoice || !Array.isArray(messages)) return;
+  if (workstationPage && workstationPage.hidden) return;
+  const station = workstationStationLabel();
+  const forStation =
+    typeof OfficeHub !== "undefined" && OfficeHub.messageTargetsForStation
+      ? (item) => OfficeHub.messageTargetsForStation(item, station)
+      : () => true;
+  for (const item of messages) {
+    const id = item && item.id;
+    if (!item || !item.speak || item.hubAnnounced || !id || officeChannelAnnouncedIds.has(id)) continue;
+    if (!forStation(item)) continue;
+    officeChannelAnnouncedIds.add(id);
+    if (HalVoice.speakOfficeAnnounce) HalVoice.speakOfficeAnnounce(item.text);
+    else if (HalVoice.speak) HalVoice.speak(String(item.text || ""), { interrupt: true });
+  }
+}
+
+async function postOfficeChannelMessage(partial) {
+  if (typeof OfficeHub === "undefined") return null;
+  const isWorkstationUi = isWorkstationMessagingMode();
+  if (isWorkstationUi) {
+    officeChannelLoading = true;
+    officeChannelSendFlash = false;
+    workstationSendReturnTab = workstationMainTab;
+    renderWorkstationScreen();
+  }
+  try {
+    let res = null;
+    const routeViaHub =
+      typeof HalHubClient !== "undefined" &&
+      HalHubClient.submitToHalHub &&
+      (isWorkstationUi || isDesktopMode() || (partial && (partial.role === "hal" || partial.hub === true)));
+    if (routeViaHub) {
+      res = await HalHubClient.submitToHalHub(partial);
+    } else {
+      res = await OfficeHub.appendMessage(partial);
+    }
+    await mirrorMessageToSideNotes(partial);
+    await refreshOfficeChannel();
+    if (isWorkstationUi) await refreshSideNotesMessages().catch(() => {});
+    const msg = res && (res.message || (res.dispatch && res.dispatch.messages && res.dispatch.messages[0] && res.dispatch.messages[0].message));
+    if (msg && msg.speak && !msg.hubAnnounced) maybeAnnounceOfficeChannel([msg]);
+    if (isWorkstationUi) {
+      officeChannelDraft = "";
+      officeChannelLoading = false;
+      officeChannelSendFlash = true;
+      renderWorkstationScreen();
+      window.setTimeout(() => {
+        officeChannelSendFlash = false;
+        workstationMainTab = workstationSendReturnTab || "send";
+        if (workstationPage && !workstationPage.hidden) renderWorkstationScreen();
+      }, 900);
+    }
+    return res;
+  } catch (_) {
+    if (isWorkstationUi) {
+      officeChannelLoading = false;
+      renderWorkstationScreen();
+    }
+    return null;
+  }
+}
+
+async function sendHalOfficePopupMessage(text, targets, options) {
+  const body = String(text || "").trim();
+  if (!body) return null;
+  const list = normalizeOfficeChannelTargetsList(targets || ["all"]);
+  return postOfficeChannelMessage({
+    role: "hal",
+    from: "HAL",
+    text: body,
+    speak: !!(options && options.speak),
+    type: (options && options.type) || "announce",
+    targets: list.length ? list : ["all"],
+    target: list.includes("all") ? "all" : list.join(", "),
+    hub: true,
+  });
+}
+if (typeof globalThis !== "undefined") globalThis.sendHalOfficePopupMessage = sendHalOfficePopupMessage;
+
+async function tickOfficeWorkflowMonitor() {
+  if (!workstationPage || workstationPage.hidden) return;
+  if (!window.HalCore || !halData) return;
+  const waiting = HalCore.registryList(halData).filter((entry) => /blocked|needs review/i.test(entry.state));
+  if (!waiting.length) {
+    officeWorkflowDigestKey = "";
+    return;
+  }
+  const key = waiting.map((entry) => `${entry.id}:${entry.state}`).join("|");
+  if (key === officeWorkflowDigestKey) return;
+  officeWorkflowDigestKey = key;
+  const names = waiting
+    .slice(0, 3)
+    .map((entry) => entry.name)
+    .join(", ");
+  await postOfficeChannelMessage({
+    role: "hal",
+    from: "HAL",
+    text: `Workflow: ${names} need attention. Refresh imports before outbound steps.`,
+    speak: false,
+    type: "workflow",
+  });
+}
+
+function startOfficeChannelPoll() {
+  if (officeChannelPollTimer) return;
+  const pollMs = NR2_WORKSTATION_ONLY ? 3000 : 12000;
+  refreshOfficeChannel()
+    .then(() => renderWorkstationScreen())
+    .catch(() => {});
+  tickOfficeWorkflowMonitor().catch(() => {});
+  officeChannelPollTimer = window.setInterval(() => {
+    refreshOfficeChannel()
+      .then(() => {
+        renderWorkstationScreen();
+        return tickOfficeWorkflowMonitor();
+      })
+      .catch(() => {});
+  }, pollMs);
+}
+
+function stopOfficeChannelPoll() {
+  if (officeChannelPollTimer) {
+    clearInterval(officeChannelPollTimer);
+    officeChannelPollTimer = null;
+  }
+}
+
+let halHubProcessTimer = null;
+let workstationHeartbeatTimer = null;
+const WORKSTATION_HEARTBEAT_MS = 30000;
+
+function startWorkstationHubHeartbeat() {
+  if (workstationHeartbeatTimer) return;
+  if (typeof HalHubClient === "undefined" || !HalHubClient.sendHeartbeat) return;
+  const tick = () => {
+    const station = workstationStationLabel();
+    if (!station || station === "Workstation") return;
+    HalHubClient.sendHeartbeat({ station }).catch(() => {});
+  };
+  tick();
+  workstationHeartbeatTimer = window.setInterval(tick, WORKSTATION_HEARTBEAT_MS);
+}
+
+function stopWorkstationHubHeartbeat() {
+  if (workstationHeartbeatTimer) {
+    clearInterval(workstationHeartbeatTimer);
+    workstationHeartbeatTimer = null;
+  }
+}
+
+function mergeHubStationsIntoInbox(inbox, hubStations) {
+  if (!hubStations || !Array.isArray(hubStations.stations)) return inbox;
+  const hubMonitor = hubStations.monitor || {};
+  const hubRows = hubStations.stations;
+  if (!inbox) {
+    return {
+      meta: { schema: "nr2-sidenotes-inbox-v1", source: "HAL hub", merged: true },
+      generatedAt: hubStations.checkedAt || new Date().toISOString(),
+      monitor: Object.assign(
+        {
+          checkedAt: hubStations.checkedAt || null,
+          station: hubMonitor.station || "Network",
+          status: hubMonitor.status || "offline",
+          stationCount: hubStations.stationCount || 0,
+          totalStations: hubStations.totalStations || hubRows.length,
+          stations: hubRows,
+        },
+        hubMonitor,
+      ),
+      items: [],
+    };
+  }
+  const normalize =
+    typeof HalPage !== "undefined" && HalPage.normalizeStationName
+      ? HalPage.normalizeStationName
+      : (value) =>
+          String(value || "")
+            .trim()
+            .toLowerCase();
+  const byName = new Map();
+  ((inbox.monitor && inbox.monitor.stations) || []).forEach((row) => {
+    if (row && row.station) byName.set(normalize(row.station), Object.assign({}, row));
+  });
+  hubRows.forEach((row) => {
+    if (!row || !row.station) return;
+    const key = normalize(row.station);
+    const prev = byName.get(key);
+    const nr2Live = row.live === true && String(row.source || "").startsWith("nr2");
+    if (nr2Live) {
+      byName.set(
+        key,
+        Object.assign({}, prev || {}, row, {
+          live: true,
+          status: "live",
+          nr2Workstation: true,
+        }),
+      );
+    } else if (!prev) {
+      byName.set(key, row);
+    }
+  });
+  const roster =
+    typeof HalPage !== "undefined" && HalPage.buildStationRoster
+      ? HalPage.buildStationRoster(Array.from(byName.values()))
+      : Array.from(byName.values());
+  const liveCount = roster.filter((row) => row.live).length;
+  const totalStations =
+    hubStations.totalStations ||
+    (typeof HalPage !== "undefined" && HalPage.WORKSTATION_STATIONS
+      ? HalPage.WORKSTATION_STATIONS.length
+      : roster.length);
+  return Object.assign({}, inbox, {
+    monitor: Object.assign({}, inbox.monitor || {}, hubMonitor, {
+      stations: roster,
+      stationCount: liveCount,
+      totalStations,
+      nr2WorkstationCount: hubStations.nr2WorkstationCount || 0,
+      checkedAt: hubStations.checkedAt || (inbox.monitor && inbox.monitor.checkedAt) || null,
+      status: liveCount ? "live" : inbox.monitor && inbox.monitor.status,
+    }),
+  });
+}
+
+async function refreshHalHubStations() {
+  if (typeof HalHubClient === "undefined" || !HalHubClient.fetchStations) return null;
+  try {
+    return await HalHubClient.fetchStations();
+  } catch (_) {
+    return null;
+  }
+}
+
+function startHalHubDispatcher() {
+  if (NR2_WORKSTATION_ONLY) return;
+  if (halHubProcessTimer) return;
+  if (typeof HalHubClient === "undefined" || !HalHubClient.processPending) return;
+  const tick = () => {
+    HalHubClient.processPending().catch(() => {});
+  };
+  tick();
+  halHubProcessTimer = window.setInterval(tick, 4000);
+}
+
+function stopHalHubDispatcher() {
+  if (halHubProcessTimer) {
+    clearInterval(halHubProcessTimer);
+    halHubProcessTimer = null;
+  }
+}
+
+function renderWorkstationScreen() {
+  const root = document.getElementById("workstationPageRoot");
+  if (!root || !window.WorkstationPage) return;
+  WorkstationPage.render({
+    root: root,
+    workstationChatHistory,
+    workstationAskDraft,
+    workstationAskLoading,
+    officeChannel: officeChannelData,
+    officeChannelDraft,
+    officeChannelTargets,
+    officeChannelGroup,
+    workstationLeftTab,
+    workstationReadIds,
+    practiceName: workstationPracticeName(),
+    officeChannelPickerOpen,
+    workstationMainTab,
+    officeChannelLoading,
+    officeChannelSendFlash,
+    workstationMessagePrompts: effectiveWorkstationMessagePrompts(),
+    workstationPromptsEditing,
+    stationLabel: workstationStationLabel(),
+    officeHubLive: officeChannelHubLive,
+    sidenotesMessages,
+    sidenotesLive,
+    halSideNotes,
+    halSideNoteMonitor:
+      halSideNoteMonitor || (window.HalSkills ? HalSkills.buildSideNoteMonitor(halSideNotes) : null),
+    halSideNotesInbox,
+    nr2SidenotesHubPath,
+    halData,
+    halModels,
+    halWidgetFeed,
+    halProgramSnapshot,
+  });
+}
+
+async function handleWorkstationHalSubmit(query) {
+  const trimmed = String(query || "").trim();
+  if (!trimmed) return;
+  globalThis._halWorkstationQaMode = true;
+  const savedHist = halChatHistory;
+  const savedSave = saveChatHistory;
+  if (halTypeTimer) {
+    clearInterval(halTypeTimer);
+    halTypeTimer = null;
+  }
+  halChatHistory = [];
+  saveChatHistory = saveWorkstationChatHistory;
+  workstationAskLoading = true;
+  renderWorkstationScreen();
+  try {
+    await handleHalSubmit(trimmed);
+    const lastUser = [...halChatHistory].reverse().find((m) => m.role === "user");
+    const lastHal = [...halChatHistory].reverse().find((m) => m.role === "hal");
+    workstationChatHistory = [lastUser, lastHal].filter(Boolean);
+    saveWorkstationChatHistory();
+  } finally {
+    halChatHistory = savedHist;
+    saveChatHistory = savedSave;
+    workstationAskLoading = false;
+    globalThis._halWorkstationQaMode = false;
+    renderWorkstationScreen();
+    requestAnimationFrame(() => typewriteWorkstationHalReply());
+  }
+}
+
+async function handleOfficeChannelSubmit(query, speak) {
+  const trimmed = String(query || "").trim();
+  if (!trimmed) return;
+  if (workstationStationLabel() === "Workstation") return;
+  let text = trimmed;
+  let doSpeak = speak !== false;
+  let type = "announce";
+  if (/^note:\s*/i.test(text)) {
+    text = text.replace(/^note:\s*/i, "").trim();
+    doSpeak = false;
+    type = "note";
+  } else if (/^announce:\s*/i.test(text)) {
+    text = text.replace(/^announce:\s*/i, "").trim();
+    doSpeak = true;
+  }
+  if (!text) return;
+  const targets = normalizeOfficeChannelTargetsList(officeChannelTargets);
+  if (!targets.length) return;
+  await postOfficeChannelMessage({
+    role: "staff",
+    from: workstationStationLabel(),
+    text,
+    speak: doSpeak,
+    type,
+    targets,
+    target: targets.includes("all") ? "all" : targets.join(", "),
+  });
 }
 
 let halWorkSession = null;
@@ -166,50 +905,12 @@ async function runHalProactiveCycle(options) {
 }
 
 function renderProactiveBanner() {
-  if (typeof document === "undefined" || !window.HalProactive) return;
-  const pageId = (window.location.hash || "").replace("#", "") || "financial";
-  if (typeof PageSchema !== "undefined" && PageSchema.isStaffPage && PageSchema.isStaffPage(pageId)) return;
-  const existing = document.getElementById("halProactiveBanner");
+  const existing = typeof document !== "undefined" ? document.getElementById("halProactiveBanner") : null;
   if (existing) existing.remove();
-  const briefing = halProactiveBriefing || HalProactive.getLastBriefing();
-  if (!HalProactive.shouldSurfaceBanner(briefing)) return;
-  const top = briefing.topAction;
-  const acted = briefing.placement && briefing.placement.refreshed;
-  const banner = document.createElement("div");
-  banner.id = "halProactiveBanner";
-  banner.className = "proactive-banner";
-  const label = acted ? "HAL placed data" : "HAL is fixing";
-  const message = acted
-    ? briefing.headline || "HAL refreshed imports and placed updated data into dashboards."
-    : top
-      ? `${top.title} — ${top.rationale}`
-      : briefing.headline || "HAL is monitoring program data.";
-  banner.innerHTML = `<strong>${escapeHtml(label)}</strong><span>${escapeHtml(message)}</span>`;
-  const actions = document.createElement("div");
-  actions.className = "proactive-banner__actions";
-  if (top && top.action && top.action.type === "navigate" && top.action.target) {
-    const openBtn = document.createElement("button");
-    openBtn.type = "button";
-    openBtn.className = "proactive-banner__btn";
-    openBtn.textContent = `Open ${top.action.target}`;
-    openBtn.addEventListener("click", () => select(top.action.target));
-    actions.appendChild(openBtn);
-  }
-  const askBtn = document.createElement("button");
-  askBtn.type = "button";
-  askBtn.className = "proactive-banner__btn proactive-banner__btn--ghost";
-  askBtn.textContent = "Ask HAL why";
-  askBtn.addEventListener("click", () => {
-    openDrawer("askHal");
-    setTimeout(() => handleHalSubmit("What should HAL do for the program right now?"), 50);
-  });
-  actions.appendChild(askBtn);
-  banner.appendChild(actions);
-  const app = document.querySelector(".app");
-  if (app && app.parentNode) app.parentNode.insertBefore(banner, app);
 }
 
-function scheduleHalWidgetRefresh(snapshot) {
+function scheduleHalWidgetRefresh(snapshot, options) {
+  const repaint = !!(options && options.repaint);
   if (halWidgetRefreshInFlight) return halWidgetRefreshInFlight;
   halWidgetRefreshInFlight = refreshHalWidgetFeed(snapshot)
     .then(async (feed) => {
@@ -217,7 +918,17 @@ function scheduleHalWidgetRefresh(snapshot) {
       renderHalScreen();
       if (currentDrawerKey === "sources") renderPanel("sources");
       const currentId = (window.location.hash || "").replace("#", "") || getPages()[0].id;
-      if (currentId !== "hal" && appPage && !appPage.hidden && PageViews && PageViews.hasPage(currentId)) {
+      if (PageViews && PageViews.setHalFeed) {
+        PageViews.setHalFeed(halWidgetFeed, halProgramSnapshot);
+      }
+      if (
+        repaint &&
+        currentId !== "hal" &&
+        appPage &&
+        !appPage.hidden &&
+        PageViews &&
+        PageViews.hasPage(currentId)
+      ) {
         PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
       }
       refreshOpsHealthStatus().catch(() => {
@@ -254,17 +965,33 @@ let halStressTest = {
 };
 let halStressRunner = null;
 const SIDENOTE_MONITOR_MS = 8000;
-const SIDENOTE_INBOX_FILES = [
-  "sidenotes-inbox.json",
-  "sidenotes-inbox-server.json",
-  "sidenotes-inbox-room-2.json",
-  "sidenotes-inbox-room-3.json",
-  "sidenotes-inbox-room-4.json",
-  "sidenotes-inbox-room-5.json",
-  "sidenotes-inbox-frontdesk-1.json",
-  "sidenotes-inbox-frontdesk-2.json",
-  "sidenotes-inbox-office-manager.json",
-];
+const SIDENOTE_INBOX_FILES = (function buildSideNoteInboxFiles() {
+  const roster =
+    typeof HalPage !== "undefined" && HalPage.WORKSTATION_STATIONS
+      ? HalPage.WORKSTATION_STATIONS
+      : [
+          "Frontdesk 1",
+          "Frontdesk 2",
+          "Office Manager",
+          "Room 1",
+          "Room 2",
+          "Room 3",
+          "Room 4",
+          "Room 5",
+          "Server",
+          "Darkroom",
+        ];
+  const slug =
+    typeof HalPage !== "undefined" && HalPage.stationSlug
+      ? HalPage.stationSlug
+      : (name) =>
+          String(name || "")
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "") || "unknown";
+  return ["sidenotes-inbox.json", ...roster.map((name) => `sidenotes-inbox-${slug(name)}.json`)];
+})();
 
 function saveSideNotes() {
   persistLocal("halSideNotes", halSideNotes);
@@ -290,6 +1017,14 @@ function mergeSideNotesInboxes(inboxes) {
     .filter(Boolean)
     .map((mon) => Object.assign({}, mon, { live: isSideNotesWatcherLive({ monitor: mon }) }));
   const liveRows = monitorRows.filter((mon) => mon.live);
+  const roster =
+    typeof HalPage !== "undefined" && HalPage.buildStationRoster
+      ? HalPage.buildStationRoster(monitorRows)
+      : monitorRows;
+  const totalStations =
+    typeof HalPage !== "undefined" && HalPage.WORKSTATION_STATIONS
+      ? HalPage.WORKSTATION_STATIONS.length
+      : roster.length;
   const itemsByKey = new Map();
   valid.forEach((inbox) => {
     const station = (inbox.monitor && inbox.monitor.station) || "Unknown";
@@ -324,8 +1059,8 @@ function mergeSideNotesInboxes(inboxes) {
       voiceStyle: (liveRows.find((mon) => mon.voiceStyle) || monitorRows.find((mon) => mon.voiceStyle) || {}).voiceStyle || "",
       duckMusic: liveRows.some((mon) => mon.duckMusic),
       stationCount: liveRows.length,
-      totalStations: monitorRows.length,
-      stations: monitorRows,
+      totalStations,
+      stations: roster,
     },
     items: Array.from(itemsByKey.values()).sort((a, b) => {
       const aText = [a.date, a.time, a.rowId].filter(Boolean).join(" ");
@@ -339,7 +1074,17 @@ function mergeSideNotesInboxes(inboxes) {
 // station files are expected until that PC has the helper installed/running.
 async function loadSideNotesInbox() {
   const inboxes = await Promise.all(SIDENOTE_INBOX_FILES.map(tryReadSideNotesInbox));
-  const data = mergeSideNotesInboxes(inboxes);
+  let data = mergeSideNotesInboxes(inboxes);
+  let hubStations = null;
+  try {
+    hubStations = await Promise.race([
+      refreshHalHubStations(),
+      new Promise((resolve) => window.setTimeout(() => resolve(null), 2500)),
+    ]);
+  } catch (_) {
+    hubStations = null;
+  }
+  if (hubStations) data = mergeHubStationsIntoInbox(data, hubStations);
   halSideNotesInbox = data;
   if (data) maybeAnnounceSideNotesInbox(data);
   return halSideNotesInbox;
@@ -376,8 +1121,12 @@ function refreshSideNoteMonitor({ patchUi } = {}) {
   const prev = halSideNoteMonitor;
   halSideNoteMonitor = HalSkills.buildSideNoteMonitor(halSideNotes, prev);
   persistLocal("halSideNoteMonitor", halSideNoteMonitor);
-  if (patchUi && halPageRoot && !halTypeTimer) {
-    patchSideNoteMonitorDom();
+  if (patchUi) {
+    if (workstationPage && !workstationPage.hidden) {
+      renderWorkstationScreen();
+    } else if (halPageRoot && !halTypeTimer) {
+      patchSideNoteMonitorDom();
+    }
   }
   return halSideNoteMonitor;
 }
@@ -840,8 +1589,8 @@ function saveReadinessDiagnostics() {
 function collectReadinessRuntime() {
   return {
     halImage: "",
-    storageMode: isDesktopMode() ? "sqlite" : "sessionStorage",
-    desktopBridgeOk: isDesktopMode(),
+    storageMode: hasRuntimeAccess() ? "sqlite" : "sessionStorage",
+    desktopBridgeOk: hasRuntimeAccess(),
     activeSession: halWorkSession,
   };
 }
@@ -1016,29 +1765,12 @@ async function refreshHalWidgetFeed(snapshot) {
   return halWidgetFeed;
 }
 
-function flashHalWidgets(pageId) {
-  const bridge = typeof HalLiveWidgetBridge !== "undefined" ? HalLiveWidgetBridge : window.HalLiveWidgetBridge;
-  if (!bridge || typeof bridge.flashElement !== "function" || !appPage) return;
-  const scope = pageId ? appPage.querySelector(`[data-pv-page="${pageId}"]`) || appPage : appPage;
-  scope.querySelectorAll("[data-hal-widget-key]").forEach((el) => bridge.flashElement(el, "cyan"));
+function flashHalWidgets(_pageId) {
+  /* Widget flash disabled — avoids transient rings on every page. */
 }
 
-function showHalActionNotice(message, tone) {
-  if (typeof document === "undefined" || !message) return;
-  const existing = document.getElementById("halActionNotice");
-  if (existing) existing.remove();
-  const notice = document.createElement("div");
-  notice.id = "halActionNotice";
-  notice.className = `hal-action-notice hal-action-notice--${tone || "info"}`;
-  notice.setAttribute("role", "status");
-  const closeIcon = typeof AppIcons !== "undefined" ? AppIcons.ui("close") : "";
-  notice.innerHTML = `<span>${escapeHtml(message)}</span><button type="button" class="hal-action-notice__close" aria-label="Dismiss">${closeIcon}</button>`;
-  notice.querySelector(".hal-action-notice__close").addEventListener("click", () => notice.remove());
-  const app = document.querySelector(".app");
-  if (app && app.parentNode) app.parentNode.insertBefore(notice, app);
-  window.setTimeout(() => {
-    if (notice.isConnected) notice.remove();
-  }, 8000);
+function showHalActionNotice(_message, _tone) {
+  /* Top HAL notice bar disabled — avoids transient banner pop-in on every refresh. */
 }
 
 async function forceHalWidgetPlacement(detail) {
@@ -1086,7 +1818,7 @@ async function forceHalWidgetPlacement(detail) {
     }
   }
 
-  await scheduleHalWidgetRefresh(snapshot);
+  await scheduleHalWidgetRefresh(snapshot, { repaint: true });
   flashHalWidgets(pageId);
   showHalActionNotice(placementNote, desktop && desktop.hasDesktopApi && desktop.hasDesktopApi() ? "info" : "warn");
 
@@ -2139,9 +2871,35 @@ async function executeHalConsentAction(consentText) {
   }
 }
 
+function refreshHalSubmitUi(wsSilent, opts) {
+  const o = opts || {};
+  if (wsSilent) {
+    workstationAskLoading = !!halAskLoading;
+    renderWorkstationScreen();
+    if (o.scrollQaLog) {
+      requestAnimationFrame(() => {
+        const log = document.getElementById("wsQaLog");
+        if (log) log.scrollTop = log.scrollHeight;
+      });
+    }
+    return;
+  }
+  if (o.halScreenOnly) {
+    renderHalScreen();
+    return;
+  }
+  if (o.chatLogOnly) {
+    renderChatLog();
+    return;
+  }
+  renderChatLog();
+  renderHalScreen();
+}
+
 async function handleHalSubmit(query) {
   const trimmed = String(query).trim();
   if (!trimmed) return;
+  const wsSilent = !!globalThis._halWorkstationQaMode;
 
   if (window.HalConsent) {
     await HalConsent.loadPending();
@@ -2150,19 +2908,17 @@ async function handleHalSubmit(query) {
       halChatHistory.push({ role: "user", text: trimmed, actions: [] });
       halChatHistory.push({ role: "hal", text: "Cancelled the pending outbound action.", lane: "local", actions: [] });
       saveChatHistory();
-      renderChatLog();
+      refreshHalSubmitUi(wsSilent, { chatLogOnly: true });
       return;
     }
     if (HalConsent.isConsentPhrase(trimmed)) {
       halAskLoading = true;
       halChatHistory.push({ role: "user", text: trimmed, actions: [] });
-      renderHalScreen();
-      renderChatLog();
+      refreshHalSubmitUi(wsSilent);
       await executeHalConsentAction(trimmed);
       halAskLoading = false;
       saveChatHistory();
-      renderChatLog();
-      renderHalScreen();
+      refreshHalSubmitUi(wsSilent);
       return;
     }
   }
@@ -2199,10 +2955,10 @@ async function handleHalSubmit(query) {
         actions: [],
         intent: "capability:continue-followup",
         userQuery: trimmed,
+        skipChatSpeech: wsSilent,
       });
       saveChatHistory();
-      renderChatLog();
-      renderHalScreen();
+      refreshHalSubmitUi(wsSilent);
       logAudit(trimmed, "capability:continue-followup");
       return;
     }
@@ -2239,10 +2995,10 @@ async function handleHalSubmit(query) {
         actions: [],
         intent: "capability:brief-followup",
         userQuery: trimmed,
+        skipChatSpeech: wsSilent,
       });
       saveChatHistory();
-      renderChatLog();
-      renderHalScreen();
+      refreshHalSubmitUi(wsSilent);
       logAudit(trimmed, "capability:brief-followup");
       return;
     }
@@ -2250,7 +3006,7 @@ async function handleHalSubmit(query) {
 
   const effectiveQuery = expandHalUserQuery(trimmed);
   halAskLoading = true;
-  renderHalScreen();
+  refreshHalSubmitUi(wsSilent, { halScreenOnly: true });
   halChatHistory.push({ role: "user", text: trimmed, actions: [] });
   saveChatHistory();
 
@@ -2284,6 +3040,7 @@ async function handleHalSubmit(query) {
           actions: normalizeActions(fastOutcome.actions),
           intent: fastOutcome.intent || preRoute.intent || "",
           userQuery: trimmed,
+          skipChatSpeech: wsSilent,
         });
         logAudit(trimmed, fastOutcome.intent || preRoute.intent);
       }
@@ -2299,8 +3056,7 @@ async function handleHalSubmit(query) {
       clearTimeout(fastTimer);
       halAskLoading = false;
       saveChatHistory();
-      renderChatLog();
-      renderHalScreen();
+      refreshHalSubmitUi(wsSilent);
     }
     return;
   }
@@ -2351,8 +3107,7 @@ async function handleHalSubmit(query) {
       clearTimeout(aboutTimer);
       halAskLoading = false;
       saveChatHistory();
-      renderChatLog();
-      renderHalScreen();
+      refreshHalSubmitUi(wsSilent);
     }
     return;
   }
@@ -2377,8 +3132,7 @@ async function handleHalSubmit(query) {
     halChatHistory.push(placeholder);
     saveChatHistory();
     halTypeSig = halChatHistory.length + ":" + placeholder.text.length;
-    renderChatLog();
-    renderHalScreen();
+    refreshHalSubmitUi(wsSilent);
   }
 
   const onToolProgress = placeholder
@@ -2388,7 +3142,7 @@ async function handleHalSubmit(query) {
         if (ev.phase === "start" && ev.tool && !placeholder.tools.includes(ev.tool)) {
           placeholder.tools.push(ev.tool);
           placeholder.text = "Gathering: " + formatHalToolsUsed(placeholder.tools) + "…";
-          renderChatLog();
+          if (!wsSilent) refreshHalSubmitUi(wsSilent, { chatLogOnly: true });
         }
       }
     : undefined;
@@ -2397,10 +3151,11 @@ async function handleHalSubmit(query) {
     ? (partial) => {
         if (!partial) return;
         placeholder.text = partial;
+        if (wsSilent) return;
         const now = Date.now();
         if (now - streamRenderAt < 40) return;
         streamRenderAt = now;
-        renderChatLog();
+        refreshHalSubmitUi(wsSilent, { chatLogOnly: true, scrollQaLog: true });
         setInlineHalStreamingText(partial);
       }
     : undefined;
@@ -2459,7 +3214,7 @@ async function handleHalSubmit(query) {
       placeholder.followUpChips = outcome.followUpChips || [];
       placeholder.intent = outcome.intent || "";
       placeholder.spokenScript = outcome.spokenScript || "";
-      placeholder.skipChatSpeech = !!outcome.skipSpeech;
+      placeholder.skipChatSpeech = wsSilent || !!outcome.skipSpeech;
       placeholder.userQuery = trimmed;
       placeholder.tools = (outcome.plan && outcome.plan.tools) || placeholder.tools || [];
       placeholder.toolSummaries = summarizeToolResultsBrief(outcome.toolResults);
@@ -2474,7 +3229,7 @@ async function handleHalSubmit(query) {
         followUpChips: outcome.followUpChips || [],
         intent: outcome.intent || "",
         spokenScript: outcome.spokenScript || "",
-        skipChatSpeech: !!outcome.skipSpeech,
+        skipChatSpeech: wsSilent || !!outcome.skipSpeech,
         userQuery: trimmed,
         tools: (outcome.plan && outcome.plan.tools) || [],
         toolSummaries: summarizeToolResultsBrief(outcome.toolResults),
@@ -2512,12 +3267,10 @@ async function handleHalSubmit(query) {
     clearTimeout(queryTimer);
     halAskLoading = false;
     saveChatHistory();
-    renderChatLog();
+    refreshHalSubmitUi(wsSilent);
     renderAuditLog();
-    if (outcome && outcome.refreshHal) renderHalScreen();
     if (outcome && outcome.refreshPanel && currentDrawerKey) renderPanel(currentDrawerKey);
     if (outcome && /^sidenotes:/.test(String(outcome.intent || ""))) scrollHalPanelIntoView("sidenotes");
-    renderHalScreen();
   }
 }
 
@@ -2963,15 +3716,13 @@ function renderPanel(key) {
   drawerContent.innerHTML = `<p>${escapeHtml(data.summary || "")}</p>`;
 }
 
-function openDrawer(key) {
-  currentDrawerKey = key;
-  renderPanel(key);
-  drawer.classList.add("open");
-  drawer.setAttribute("aria-hidden", "false");
+function openDrawer(_key) {
+  closeDrawer();
 }
 
 function closeDrawer() {
   currentDrawerKey = null;
+  if (!drawer) return;
   drawer.classList.remove("open");
   drawer.setAttribute("aria-hidden", "true");
 }
@@ -3021,21 +3772,8 @@ function removeOpsHealthBanner() {
   if (existing) existing.remove();
 }
 
-function renderOpsHealthBanner(health) {
-  if (typeof document === "undefined") return;
-  let banner = document.getElementById("opsHealthBanner");
-  if (!banner) {
-    banner = document.createElement("div");
-    banner.id = "opsHealthBanner";
-    banner.className = "ops-health-banner";
-    const app = document.querySelector(".app");
-    if (app && app.parentNode) app.parentNode.insertBefore(banner, app);
-    else document.body.prepend(banner);
-  }
-  const status = String(health?.status || "degraded").toUpperCase();
-  const failed = (health?.integrations || []).filter((row) => !row.ok).slice(0, 2);
-  const hint = failed.map((row) => row.label).join(", ");
-  banner.innerHTML = `<strong>Integration health: ${escapeHtml(status)}</strong><span>${escapeHtml(hint || "Review imports and automation jobs.")} · Ask HAL: integration health</span>`;
+function renderOpsHealthBanner(_health) {
+  removeOpsHealthBanner();
 }
 
 function buildSidebarPages() {
@@ -3093,6 +3831,47 @@ async function refreshOpsHealthStatus() {
 
 let halTypeSig = null;
 let halTypeTimer = null;
+let workstationHalTypeSig = null;
+
+function typewriteWorkstationHalReply() {
+  const log = document.getElementById("wsQaLog");
+  if (!log) return;
+  const rows = log.querySelectorAll(".ws-sn-hal-row--hal:not(.ws-sn-hal-row--loading)");
+  if (!rows.length) return;
+  const p = rows[rows.length - 1].querySelector(".ws-sn-hal-row__text");
+  if (!p) return;
+  const full = String(p.textContent || "");
+  if (!full.trim()) return;
+  const sig = full.length + ":" + full.slice(0, 48);
+  if (sig === workstationHalTypeSig && halTypeTimer) return;
+  workstationHalTypeSig = sig;
+  if (halTypeTimer) {
+    clearInterval(halTypeTimer);
+    halTypeTimer = null;
+  }
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce || full.length < 2) {
+    p.textContent = full;
+    p.classList.remove("ws-sn-hal-typing");
+    return;
+  }
+  p.textContent = "";
+  p.classList.add("ws-sn-hal-typing");
+  const step = Math.max(1, Math.ceil(full.length / 90));
+  const typeDelayMs = Math.max(20, Math.min(45, Math.floor(3200 / Math.max(Math.ceil(full.length / step), 1))));
+  let i = 0;
+  halTypeTimer = setInterval(() => {
+    i += step;
+    p.textContent = full.slice(0, i);
+    log.scrollTop = log.scrollHeight;
+    if (i >= full.length) {
+      clearInterval(halTypeTimer);
+      halTypeTimer = null;
+      p.textContent = full;
+      p.classList.remove("ws-sn-hal-typing");
+    }
+  }, typeDelayMs);
+}
 
 function setInlineHalStreamingText(text) {
   if (!halPageRoot) return;
@@ -3364,6 +4143,7 @@ function renderHalScreen() {
 }
 
 function renderSidebar(activeId) {
+  if (NR2_WORKSTATION_ONLY) return;
   if (!sidebar || !window.UI || typeof PageSchema === "undefined") return;
   sidebar.innerHTML = UI.Sidebar({
     activeId,
@@ -3388,14 +4168,30 @@ function renderSidebar(activeId) {
 }
 
 function select(id) {
+  if (NR2_WORKSTATION_ONLY) {
+    if (workstationPage) workstationPage.hidden = false;
+    renderWorkstationScreen();
+    stopOfficeChannelPoll();
+    startOfficeChannelPoll();
+    loadSideNotesInbox()
+      .then(() => resolveWorkstationStationFromInbox())
+      .then(() => {
+        refreshSideNoteMonitor({ patchUi: false });
+        renderWorkstationScreen();
+      })
+      .catch(() => renderWorkstationScreen());
+    return;
+  }
   const pageId = resolvePageId(id);
   const page = getPages().find((p) => p.id === pageId) || getPages().find((p) => p.id === defaultPageId()) || getPages()[0];
   if (!page) return;
   const isHal = page.id === "hal" && PageViews && !PageViews.hasPage(page.id);
+  const isWorkstation = page.id === "workstation" && PageViews && !PageViews.hasPage(page.id);
   if (halPage) halPage.hidden = !isHal;
+  if (workstationPage) workstationPage.hidden = !isWorkstation;
   if (appPage) {
-    appPage.hidden = isHal;
-    if (!isHal) {
+    appPage.hidden = isHal || isWorkstation;
+    if (!isHal && !isWorkstation) {
       appPage.hidden = false;
       if (PageViews && PageViews.hasPage(page.id)) {
         PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed, halProgramSnapshot);
@@ -3408,6 +4204,19 @@ function select(id) {
     }
   }
   renderSidebar(page.id);
+  if (isWorkstation) {
+    stopOfficeChannelPoll();
+    startOfficeChannelPoll();
+    loadSideNotesInbox()
+      .then(() => resolveWorkstationStationFromInbox())
+      .then(() => {
+        refreshSideNoteMonitor({ patchUi: false });
+        renderWorkstationScreen();
+      })
+      .catch(() => renderWorkstationScreen());
+  } else {
+    stopOfficeChannelPoll();
+  }
   if (isHal) {
     renderHalScreen();
     activateSideNotesPanel().catch(() => {
@@ -3423,7 +4232,9 @@ function select(id) {
 
 function assertDesignSchemaLoaded() {
   if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return false;
-  if (typeof PageSchema !== "undefined" && typeof PageChrome !== "undefined") return true;
+  const hasWorkstationSchema = typeof WorkstationSchema !== "undefined";
+  const hasPageSchema = typeof PageSchema !== "undefined" && typeof PageChrome !== "undefined";
+  if (NR2_WORKSTATION_ONLY ? hasWorkstationSchema && typeof PageChrome !== "undefined" : hasPageSchema) return true;
   const frame = document.getElementById("pageFrame");
   if (frame) {
     frame.innerHTML =
@@ -3437,20 +4248,33 @@ function renderSchemaVersionMismatch(pythonVersion, jsVersion) {
   const sidebar = document.getElementById("sidebar");
   if (sidebar) sidebar.innerHTML = "";
   if (!frame) return;
-  frame.innerHTML =
-    `<div class="pv-state pv-state--error nr2-boot-error" role="alert">` +
+  const launcher = NR2_WORKSTATION_ONLY ? "Start Workstation" : "Start Program";
+  const inner =
     `<strong class="pv-state__title">Desktop build mismatch</strong>` +
     `<p class="pv-state__msg">Python shell reports <strong>${String(pythonVersion).replace(/</g, "&lt;")}</strong> but the loaded page schema is <strong>${String(jsVersion).replace(/</g, "&lt;")}</strong>.</p>` +
-    `<p class="pv-state__msg">Close this window completely, then launch <strong>Start Program</strong> again.</p>` +
-    `</div>`;
+    `<p class="pv-state__msg">Close this window completely, then launch <strong>${launcher}</strong> again.</p>`;
+  if (NR2_WORKSTATION_ONLY && frame.querySelector("#workstationPage")) {
+    let banner = frame.querySelector(".nr2-boot-error");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.className = "pv-state pv-state--error nr2-boot-error ws-boot-error";
+      banner.setAttribute("role", "alert");
+      frame.insertBefore(banner, frame.firstChild);
+    }
+    banner.innerHTML = inner;
+    return;
+  }
+  frame.innerHTML = `<div class="pv-state pv-state--error nr2-boot-error" role="alert">${inner}</div>`;
 }
 
 renderRuntimeModeBanner();
-if (assertDesignSchemaLoaded()) {
+if (assertDesignSchemaLoaded() && !NR2_WORKSTATION_ONLY) {
   renderSidebar(resolvePageId(window.location.hash));
 }
 
-drawerClose.addEventListener("click", closeDrawer);
+if (drawerClose) {
+  drawerClose.addEventListener("click", closeDrawer);
+}
 
 if (halPage) {
   halPage.addEventListener("submit", async (event) => {
@@ -3652,6 +4476,260 @@ if (halPage) {
   });
 }
 
+if (workstationPage) {
+  workstationPage.addEventListener("submit", async (event) => {
+    if (event.target.id === "wsQaForm") {
+      event.preventDefault();
+      const input = document.getElementById("wsQaInput");
+      const value = input ? input.value : "";
+      workstationAskDraft = value;
+      await handleWorkstationHalSubmit(value);
+      if (input) {
+        input.value = "";
+        workstationAskDraft = "";
+      }
+      return;
+    }
+    if (event.target.id === "wsOfficeForm" || event.target.id === "wsOfficeChatForm") {
+      event.preventDefault();
+      const form = event.target;
+      const fromChat = form.id === "wsOfficeChatForm";
+      const input = document.getElementById(fromChat ? "wsOfficeChatInput" : "wsOfficeInput");
+      const value = input ? input.value : "";
+      if (fromChat) officeChannelTargets = ["all"];
+      await handleOfficeChannelSubmit(value, false);
+      if (input) input.value = "";
+      officeChannelDraft = "";
+      return;
+    }
+  });
+
+  workstationPage.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!target) return;
+    if (target.id === "wsOfficeInput" || target.id === "wsOfficeChatInput") {
+      officeChannelDraft = target.value || "";
+    }
+  });
+
+  workstationPage.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!target) return;
+    if (target.matches("[data-ws-station-select]")) {
+      const name = target.value || "";
+      if (name) {
+        applyWorkstationStation(name);
+        renderWorkstationScreen();
+      }
+      return;
+    }
+  });
+
+  workstationPage.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (!target || event.key !== "Enter" || event.shiftKey) return;
+    if (target.id === "wsQaInput") {
+      event.preventDefault();
+      const form = document.getElementById("wsQaForm");
+      if (form && typeof form.requestSubmit === "function") form.requestSubmit();
+      return;
+    }
+    if (target.id === "wsOfficeInput" || target.id === "wsOfficeChatInput") {
+      event.preventDefault();
+      const form = target.closest("form");
+      if (form && typeof form.requestSubmit === "function") form.requestSubmit();
+    }
+    const halCmdKey = event.target.closest("[data-hal-cmd],[data-hal-activity-cmd]");
+    if (halCmdKey && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      const cmd =
+        halCmdKey.getAttribute("data-hal-cmd") || halCmdKey.getAttribute("data-hal-activity-cmd");
+      if (cmd) handleWorkstationHalSubmit(cmd);
+    }
+  });
+
+  workstationPage.addEventListener("click", async (event) => {
+    const copyResponse = event.target.closest("[data-hal-copy-response]");
+    if (copyResponse) {
+      const row = copyResponse.closest(".hp-chat-row");
+      const text = row && row.querySelector("p") ? row.querySelector("p").textContent : "";
+      if (text) {
+        DesktopBridge.writeClipboard(text)
+          .then((ok) => {
+            if (ok) logAudit("Copy HAL response", "clipboard: hal-response");
+            renderAuditLog();
+          })
+          .catch(() => {
+            /* clipboard optional */
+          });
+      }
+      return;
+    }
+    const drawerBtn = event.target.closest("[data-hal-drawer]");
+    if (drawerBtn) {
+      openDrawer(drawerBtn.getAttribute("data-hal-drawer"));
+      return;
+    }
+    const suggest = event.target.closest("[data-hal-suggest]");
+    if (suggest) {
+      await handleWorkstationHalSubmit(suggest.getAttribute("data-hal-suggest"));
+      return;
+    }
+    const followup = event.target.closest("[data-hal-followup]");
+    if (followup) {
+      await handleWorkstationHalSubmit(followup.getAttribute("data-hal-followup"));
+      return;
+    }
+    const voiceTest = event.target.closest("[data-hal-voice-test]");
+    if (voiceTest) {
+      if (window.HalVoice) HalVoice.test();
+      return;
+    }
+    const officePrompt = event.target.closest("[data-ws-office-prompt]");
+    if (officePrompt) {
+      if (workstationPromptsEditing) return;
+      const text = officePrompt.getAttribute("data-ws-office-prompt") || "";
+      if (!text.trim()) return;
+      await handleOfficeChannelSubmit(text, false);
+      return;
+    }
+    const promptEdit = event.target.closest("[data-ws-prompt-edit]");
+    if (promptEdit) {
+      workstationPromptsEditing = true;
+      renderWorkstationScreen();
+      const first = workstationPageRoot && workstationPageRoot.querySelector("[data-ws-prompt-body='0']");
+      if (first && typeof first.focus === "function") first.focus();
+      return;
+    }
+    const promptSave = event.target.closest("[data-ws-prompt-save]");
+    if (promptSave) {
+      const next = collectWorkstationPromptEditsFromDom(workstationPageRoot);
+      saveWorkstationMessagePrompts(next);
+      workstationPromptsEditing = false;
+      renderWorkstationScreen();
+      return;
+    }
+    const promptCancel = event.target.closest("[data-ws-prompt-cancel]");
+    if (promptCancel) {
+      workstationPromptsEditing = false;
+      renderWorkstationScreen();
+      return;
+    }
+    const promptReset = event.target.closest("[data-ws-prompt-reset]");
+    if (promptReset) {
+      saveWorkstationMessagePrompts(defaultWorkstationMessagePrompts());
+      workstationPromptsEditing = false;
+      renderWorkstationScreen();
+      return;
+    }
+    const snLeftTab = event.target.closest("[data-ws-sn-left-tab]");
+    if (snLeftTab) {
+      workstationLeftTab = String(snLeftTab.getAttribute("data-ws-sn-left-tab") || "users").toLowerCase();
+      renderWorkstationScreen();
+      return;
+    }
+    const snGroup = event.target.closest("[data-ws-sn-group]");
+    if (snGroup) {
+      selectOfficeChannelGroup(snGroup.getAttribute("data-ws-sn-group"));
+      workstationLeftTab = "groups";
+      renderWorkstationScreen();
+      return;
+    }
+    const snTarget = event.target.closest("[data-ws-sn-target]");
+    if (snTarget) {
+      toggleOfficeChannelTarget(snTarget.getAttribute("data-ws-sn-target") || "all");
+      workstationLeftTab = "users";
+      renderWorkstationScreen();
+      return;
+    }
+    const targetPick = event.target.closest("[data-ws-office-target]");
+    if (targetPick) {
+      toggleOfficeChannelTarget(targetPick.getAttribute("data-ws-office-target") || "all");
+      officeChannelPickerOpen = false;
+      renderWorkstationScreen();
+      return;
+    }
+    const clearDraft = event.target.closest("[data-ws-office-clear]");
+    if (clearDraft) {
+      officeChannelDraft = "";
+      renderWorkstationScreen();
+      return;
+    }
+    const openPicker = event.target.closest("[data-ws-open-picker]");
+    if (openPicker) {
+      officeChannelPickerOpen = true;
+      renderWorkstationScreen();
+      return;
+    }
+    const closePicker = event.target.closest("[data-ws-close-picker]");
+    if (closePicker) {
+      officeChannelPickerOpen = false;
+      renderWorkstationScreen();
+      return;
+    }
+    const pageTab = event.target.closest("[data-ws-page-tab]");
+    if (pageTab) {
+      const next = String(pageTab.getAttribute("data-ws-page-tab") || "send").toLowerCase();
+      workstationMainTab =
+        next === "askhal"
+          ? "askhal"
+          : next === "history"
+            ? "history"
+            : next === "officechat"
+              ? "officechat"
+              : "send";
+      if (workstationMainTab === "history" || workstationMainTab === "officechat") {
+        markWorkstationInboxRead(mergedInboxMessagesForUi());
+      }
+      if (workstationMainTab === "officechat") {
+        officeChannelTargets = ["all"];
+        officeChannelGroup = "everyone";
+      }
+      if (workstationMainTab !== "send" && workstationMainTab !== "officechat") workstationPromptsEditing = false;
+      renderWorkstationScreen();
+      return;
+    }
+    const sideNoteAdd = event.target.closest("[data-hal-sidenote-add]");
+    if (sideNoteAdd) {
+      const input = document.getElementById("hpSideNoteInput");
+      const text = input ? input.value : "";
+      if (String(text).trim().length >= 2) {
+        addSideNote(text);
+        if (input) input.value = "";
+        renderWorkstationScreen();
+      }
+      return;
+    }
+    const sideNotePin = event.target.closest("[data-hal-sidenote-pin]");
+    if (sideNotePin) {
+      const id = sideNotePin.getAttribute("data-hal-sidenote-pin");
+      const idx = halSideNotes.findIndex((n) => n.noteId === id);
+      if (idx >= 0) {
+        const nextStatus = halSideNotes[idx].status === "pinned" ? "open" : "pinned";
+        halSideNotes[idx] = HalSkills.applySideNoteUpdate(halSideNotes[idx], { status: nextStatus });
+        saveSideNotes();
+        renderWorkstationScreen();
+      }
+      return;
+    }
+    const sideNoteArchive = event.target.closest("[data-hal-sidenote-archive]");
+    if (sideNoteArchive) {
+      const id = sideNoteArchive.getAttribute("data-hal-sidenote-archive");
+      const idx = halSideNotes.findIndex((n) => n.noteId === id);
+      if (idx >= 0) {
+        halSideNotes[idx] = HalSkills.applySideNoteUpdate(halSideNotes[idx], { status: "archived" });
+        saveSideNotes();
+        renderWorkstationScreen();
+      }
+      return;
+    }
+    const cmd = event.target.closest("[data-hal-cmd]");
+    if (cmd) {
+      await handleWorkstationHalSubmit(cmd.getAttribute("data-hal-cmd"));
+    }
+  });
+}
+
 if (appPage) {
   appPage.addEventListener("click", async (event) => {
     if (await handleHalChromeInteraction(event)) return;
@@ -3688,7 +4766,7 @@ document.addEventListener("click", (event) => {
     handleNr2Export(exportBtn.getAttribute("data-nr2-export"));
     return;
   }
-  if (!currentDrawerKey) return;
+  if (!drawer || !currentDrawerKey) return;
   const panel = drawer.querySelector(".drawer__panel");
   if (panel && panel.contains(event.target)) return;
   if (
@@ -3719,6 +4797,15 @@ window.addEventListener("hal-force-widget-placement", (event) => {
 async function loadPersistedState() {
   halAudit = (await DesktopBridge.storageGet("halAudit")) || [];
   halChatHistory = (await DesktopBridge.storageGet("halChatHistory")) || [];
+  workstationChatHistory = (await DesktopBridge.storageGet("workstationChatHistory")) || [];
+  if (workstationChatHistory.length > 2) {
+    workstationChatHistory = workstationChatHistory.slice(-2);
+    saveWorkstationChatHistory();
+  }
+  const savedPrompts = await DesktopBridge.storageGet("workstationMessagePrompts");
+  workstationMessagePrompts = savedPrompts ? normalizeWorkstationMessagePrompts(savedPrompts) : null;
+  const savedStation = await DesktopBridge.storageGet("workstationStationName");
+  if (savedStation) applyWorkstationStation(savedStation, { persist: false });
   halWorkSession = (await DesktopBridge.storageGet("halWorkSession")) || null;
   halEvidencePacket = (await DesktopBridge.storageGet("halEvidencePacket")) || null;
   halReadinessDiagnostics = (await DesktopBridge.storageGet("halDiagnostics")) || null;
@@ -3730,6 +4817,7 @@ async function loadPersistedState() {
   }
   halSideNotes = (await DesktopBridge.storageGet("halSideNotes")) || [];
   halSideNoteMonitor = (await DesktopBridge.storageGet("halSideNoteMonitor")) || null;
+  loadWorkstationReadIdsFromStorage(await DesktopBridge.storageGet("workstationReadIds"));
   refreshSideNoteMonitor();
 }
 
@@ -3754,7 +4842,16 @@ async function refreshImportsInBackground() {
 
 async function boot() {
   renderRuntimeModeBanner();
-  if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return;
+  if (NR2_WORKSTATION_ONLY) {
+    document.title = "NR2 Office Workstation";
+    document.body.classList.add("nr2-workstation-app");
+    const sidebar = document.getElementById("sidebar");
+    if (sidebar) sidebar.setAttribute("hidden", "");
+  }
+  if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) {
+    if (NR2_WORKSTATION_ONLY) select("workstation");
+    return;
+  }
   await loadPersistedState();
   try {
     if (typeof NR2Boot !== "undefined" && NR2Boot.verifyDesktopManifest) {
@@ -3765,18 +4862,35 @@ async function boot() {
         } else if (manifest.manifestVersion && manifest.jsVersion) {
           renderSchemaVersionMismatch(manifest.manifestVersion, manifest.jsVersion);
         }
-        return;
+        if (!NR2_WORKSTATION_ONLY) return;
       }
     }
     const info = await DesktopBridge.getAppInfo();
     if (info && info.sidenotesHub) nr2SidenotesHubPath = info.sidenotesHub;
+    if (info && info.halHubUrl) window.NR2_HAL_HUB_URL = info.halHubUrl;
+    if (info && info.hubPopupWatcher) {
+      globalThis.NR2_PYTHON_POPUP_WATCHER = true;
+      if (typeof DesktopBridge !== "undefined" && DesktopBridge.flushMessagePopups) {
+        const flushPopups = () => DesktopBridge.flushMessagePopups().catch(() => {});
+        flushPopups();
+        window.setInterval(flushPopups, 400);
+      }
+    }
     if (info && info.designSchemaVersion) {
       nr2DesignSchemaVersion = info.designSchemaVersion;
-      if (PageSchema && PageSchema.SCHEMA_VERSION && info.designSchemaVersion !== PageSchema.SCHEMA_VERSION) {
-        renderSchemaVersionMismatch(info.designSchemaVersion, PageSchema.SCHEMA_VERSION);
-        return;
+      const expectedSchemaVersion =
+        NR2_WORKSTATION_ONLY && typeof WorkstationSchema !== "undefined" && WorkstationSchema.SCHEMA_VERSION
+          ? WorkstationSchema.SCHEMA_VERSION
+          : PageSchema && PageSchema.SCHEMA_VERSION
+            ? PageSchema.SCHEMA_VERSION
+            : null;
+      if (expectedSchemaVersion && info.designSchemaVersion !== expectedSchemaVersion) {
+        renderSchemaVersionMismatch(info.designSchemaVersion, expectedSchemaVersion);
+        if (!NR2_WORKSTATION_ONLY) return;
       }
-      renderSidebar(window.location.hash.replace("#", "") || getPages()[0].id);
+      if (!NR2_WORKSTATION_ONLY) {
+        renderSidebar(window.location.hash.replace("#", "") || getPages()[0].id);
+      }
     }
   } catch {
     /* desktop info optional in browser preview */
@@ -3847,8 +4961,13 @@ async function boot() {
       /* boot self-heal optional */
     });
   }
-  const initial = resolvePageId(window.location.hash);
+  const initial = NR2_WORKSTATION_ONLY ? "workstation" : resolvePageId(window.location.hash);
   select(initial);
+  if (!NR2_WORKSTATION_ONLY) startHalHubDispatcher();
+  if (NR2_WORKSTATION_ONLY) {
+    startWorkstationHubHeartbeat();
+    return;
+  }
   if (typeof ImportCoordinator !== "undefined") {
     ImportCoordinator.refresh({ reason: "boot" })
       .then(() => forceHalWidgetPlacement({ reason: "boot" }))

@@ -74,18 +74,7 @@ const PrintUtils = (function () {
     if (typeof window === "undefined" || typeof document === "undefined") {
       return { ok: false, method: "none", error: "no document" };
     }
-    let win = null;
-    try {
-      win = window.open("", "_blank", "noopener,noreferrer");
-    } catch (_err) {
-      win = null;
-    }
-    if (!win) return printViaIframe(title, bodyHtml);
-    win.document.open();
-    win.document.write(buildDocument(title, bodyHtml));
-    win.document.close();
-    triggerPrint(win);
-    return { ok: true, method: "window" };
+    return printViaIframe(title, bodyHtml);
   }
 
   function sanitizeClone(root) {

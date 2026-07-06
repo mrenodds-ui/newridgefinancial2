@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import threading
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -66,6 +67,7 @@ class DesktopApi:
 
     def get_app_info(self) -> dict:
         from document_sync import resolve_archive_path, resolve_inbox_path
+        from hal_hub import resolve_hub_data_dir, resolve_hal_hub_url
 
         return {
             "mode": "desktop",
@@ -81,6 +83,8 @@ class DesktopApi:
             "sidenotesHub": str(SIDENOTES_HUB_DATA_DIR),
             "dataDir": str(self.store.data_dir),
             "directFirstImports": self._direct_first_imports_enabled(),
+            "halHubUrl": resolve_hal_hub_url(),
+            "officeHubData": str(resolve_hub_data_dir()),
         }
 
     @staticmethod
@@ -710,14 +714,21 @@ def main() -> int:
         file=sys.stderr,
     )
     print(
-        f"NR2 desktop: UI at http://127.0.0.1:{http_port}/ (pywebview http_server=True).",
+        f"NR2 desktop: UI in pywebview window only (loopback port {http_port} is not for browser use).",
         file=sys.stderr,
     )
-    from nr2_http_server import NR2BottleServer
+    from hal_hub import resolve_hub_data_dir
 
+    print(f"NR2 desktop: HAL hub data={resolve_hub_data_dir()} (NR2_OFFICE_HUB_DATA)", file=sys.stderr)
+    from nr2_http_server import NR2BottleServer, set_desktop_session_token, set_site_root
+
+    desktop_token = uuid.uuid4().hex
+    set_desktop_session_token(desktop_token)
+    set_site_root(SITE_DIR)
+    start_url = f"http://127.0.0.1:{http_port}/?nr2dt={desktop_token}"
     window = webview.create_window(
         f"NewRidgeFinancial 2.0 ({DESIGN_SCHEMA_VERSION})",
-        str(INDEX_HTML),
+        start_url,
         width=1440,
         height=920,
         min_size=(1024, 700),

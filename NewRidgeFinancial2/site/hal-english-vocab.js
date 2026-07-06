@@ -5,7 +5,7 @@
   "use strict";
 
   const SEED_FLAG = "nr2:englishDictionarySeeded";
-  const WORD_INDEX_PATH = "data/english-words-alpha.txt";
+  const WORD_INDEX_PATH = "/data/english-words-alpha.txt";
   let wordCache = null;
   let librarySeedCache = null;
 
@@ -45,7 +45,7 @@
 
   async function loadLibrarySeed() {
     if (librarySeedCache) return librarySeedCache;
-    librarySeedCache = await fetchJson("data/english-dictionary-library.json");
+    librarySeedCache = await fetchJson("/data/english-dictionary-library.json");
     return librarySeedCache;
   }
 

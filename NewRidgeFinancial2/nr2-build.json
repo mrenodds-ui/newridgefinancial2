@@ -1,6 +1,6 @@
 {
-  "assetVersion": "hal-10000",
-  "schemaVersion": "hal-10000",
-  "builtAt": "2026-07-05T00:23:55.569Z",
-  "notes": "HAL hal-153 — fix QA timeouts: capability fast path, define period, import currency."
+  "assetVersion": "hal-10023",
+  "schemaVersion": "hal-10023",
+  "builtAt": "2026-07-05T22:10:00.000Z",
+  "notes": "HAL hub message flow — workstation inbound queue, hub SAPI announce, shared office channel."
 }
