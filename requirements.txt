@@ -73,6 +73,7 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 python-multipart==0.0.20
 pywin32==312
+bottle==0.13.4
 pywebview==5.4
 PyYAML==6.0.3
 referencing==0.37.0

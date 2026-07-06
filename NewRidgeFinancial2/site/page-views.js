@@ -46,7 +46,7 @@ const PageViews = (function () {
       return U
         ? U.ErrorState({
             title: "Design schema not loaded",
-            message: "page-chrome.js must load before page-views.js. Restart the desktop app.",
+            message: "page-chrome.js must load before page-views.js. Run StartProgram.bat and reload http://127.0.0.1:8765/.",
           })
         : bodyHtml || "";
     }

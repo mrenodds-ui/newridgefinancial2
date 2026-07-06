@@ -236,6 +236,11 @@ const HalPage = (function () {
     </div>`;
   }
 
+  function sideNotesImIntegration(opts) {
+    if (opts && Object.prototype.hasOwnProperty.call(opts, "sideNotesIm")) return !!opts.sideNotesIm;
+    return typeof globalThis !== "undefined" && !!globalThis.NR2_WORKSTATION_ONLY;
+  }
+
   function sideNotesHubFootnote(hubPath, online) {
     const hub = hubPath ? `<code>${esc(hubPath)}</code>` : "<code>NR2_SIDENOTES_HUB_DATA</code> (not configured)";
     return `<p class="hp-sn-foot">Shared hub: ${hub} · external SideNotesIM helper · routing metadata only · ${online ? "network feed active" : "waiting for watchers"}</p>`;
@@ -314,6 +319,7 @@ const HalPage = (function () {
   function sideNotesMonitorHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox, hubPath, opts) {
     const expandWatchers = !!(opts && opts.expandWatchers);
     const staff = staffFacingMode(opts);
+    const showSideNotesIm = sideNotesImIntegration(opts);
     const notes = Array.isArray(halSideNotes) ? halSideNotes : [];
     const mon = halSideNoteMonitor || { activeCount: 0, openCount: 0, pinnedCount: 0, highPriorityCount: 0 };
     const active = notes.filter((n) => n.status !== "archived");
@@ -336,14 +342,14 @@ const HalPage = (function () {
     const hideRoster = staff && opts && opts.hideWorkstationRoster;
     const hideLocalNotes = staff && opts && opts.hideLocalNotes;
     return `<div class="hp-sidenotes-monitor" data-panel="sidenotes">
-      ${liveSideNotesHtml(halSideNotesInbox, opts)}
+      ${showSideNotesIm ? liveSideNotesHtml(halSideNotesInbox, opts) : ""}
       ${
-        hideRoster
-          ? ""
-          : `<details class="hp-details"${expandWatchers ? " open" : ""}>
+        showSideNotesIm && !hideRoster
+          ? `<details class="hp-details"${expandWatchers ? " open" : ""}>
         <summary>${staff ? "Workstations" : `Workstation watchers (${WORKSTATION_STATIONS.length})`}</summary>
         ${stationRosterHtml(halSideNotesInbox, opts)}
       </details>`
+          : ""
       }
       ${
         hideLocalNotes
@@ -368,14 +374,15 @@ const HalPage = (function () {
           : `<div class="hp-chips hp-sn-actions">
         <button type="button" class="hp-action hp-action--icon" data-hal-cmd="Monitor sidenotes">${uiIcon("monitor")} Monitor</button>
         <button type="button" class="hp-action hp-action--icon" data-hal-cmd="Show sidenotes">${navIcon("sidenotes")} Show notes</button>
-        <button type="button" class="hp-action hp-action--icon" data-hal-drawer="sidenotes">${uiIcon("info")} Setup</button>
+        ${showSideNotesIm ? `<button type="button" class="hp-action hp-action--icon" data-hal-drawer="sidenotes">${uiIcon("info")} Setup</button>` : ""}
       </div>
-      ${sideNotesHubFootnote(hubPath, isSideNotesInboxLive(halSideNotesInbox))}`
+      ${showSideNotesIm ? sideNotesHubFootnote(hubPath, isSideNotesInboxLive(halSideNotesInbox)) : '<p class="hp-sn-foot">Local staff notes only — office messaging uses NR2 Workstation, not SideNotesIM.</p>'}`
       }
     </div>`;
   }
 
   function sideNotesProgramCardHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox, hubPath) {
+    const showSideNotesIm = sideNotesImIntegration();
     const online = isSideNotesInboxLive(halSideNotesInbox);
     const stationCount = (halSideNotesInbox && halSideNotesInbox.monitor && halSideNotesInbox.monitor.stationCount) || 0;
     const totalStations =
@@ -384,17 +391,21 @@ const HalPage = (function () {
     const unread = (Array.isArray(halSideNotesInbox && halSideNotesInbox.items) ? halSideNotesInbox.items : []).filter(
       (m) => m && m.unread,
     ).length;
-    const statusChip = online
-      ? `<span class="hp-sn-badge hp-sn-badge--ok">${stationCount}/${totalStations} LIVE</span>`
-      : '<span class="hp-sn-badge hp-sn-badge--off">WATCHERS OFFLINE</span>';
+    const activeNotes = (Array.isArray(halSideNotes) ? halSideNotes : []).filter((n) => n && n.status !== "archived").length;
+    const statusChip = showSideNotesIm
+      ? online
+        ? `<span class="hp-sn-badge hp-sn-badge--ok">${stationCount}/${totalStations} LIVE</span>`
+        : '<span class="hp-sn-badge hp-sn-badge--off">WATCHERS OFFLINE</span>'
+      : `<span class="hp-sn-badge hp-sn-badge--ok">${activeNotes} LOCAL</span>`;
+    const cardTitle = showSideNotesIm
+      ? `SIDENOTES PROGRAM <span class="hp-muted">(SIDENOTESIM · EXTERNAL)</span>`
+      : "STAFF NOTES";
+    const cardHint = showSideNotesIm
+      ? "Open SideNotes program setup and station detail"
+      : "Local HAL scratch notes — use NR2 Workstation for office messaging";
     return `<section class="hp-card hp-card--sidenotes" data-panel="sidenotes" style="grid-area:sidenotes;">
-      ${cardHead(
-        `SIDENOTES PROGRAM <span class="hp-muted">(SIDENOTESIM · EXTERNAL)</span>`,
-        "sidenotes",
-        "Open SideNotes program setup and station detail",
-        cardIconRaw("nav", "sidenotes"),
-      )}
-      <div class="hp-sn-head__tools hp-sn-head__tools--card">${statusChip}${unread ? `<span class="hp-sn-badge hp-sn-badge--change">${unread} UNREAD</span>` : ""}</div>
+      ${cardHead(cardTitle, "sidenotes", cardHint, cardIconRaw("nav", "sidenotes"))}
+      <div class="hp-sn-head__tools hp-sn-head__tools--card">${statusChip}${showSideNotesIm && unread ? `<span class="hp-sn-badge hp-sn-badge--change">${unread} UNREAD</span>` : ""}</div>
       <div class="hp-sidenotes-program">${sideNotesMonitorHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox, hubPath)}</div>
     </section>`;
   }

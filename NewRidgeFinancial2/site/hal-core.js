@@ -3081,7 +3081,7 @@ const HalCore = (function () {
             "HAL page image",
             ok ? "Pass" : "Fail",
             runtime.halImage,
-            ok ? null : "Hard refresh (Ctrl+Shift+R) or restart the desktop app.",
+            ok ? null : "Hard refresh (Ctrl+Shift+R) or restart StartProgram.bat.",
           ),
         );
       }

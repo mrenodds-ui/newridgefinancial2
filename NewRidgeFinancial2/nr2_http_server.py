@@ -86,6 +86,7 @@ def _lan_hal_hub_access_ok() -> bool:
 
 
 _workstation_mode = False
+_browser_mode = False
 
 
 def set_workstation_mode(enabled: bool = True) -> None:
@@ -95,10 +96,24 @@ def set_workstation_mode(enabled: bool = True) -> None:
         os.environ["NR2_WORKSTATION_APP"] = "1"
 
 
+def set_browser_mode(enabled: bool = True) -> None:
+    global _browser_mode
+    _browser_mode = bool(enabled)
+    if enabled:
+        os.environ["NR2_BROWSER_APP"] = "1"
+
+
 def _workstation_app() -> bool:
     if _workstation_mode:
         return True
     val = os.environ.get("NR2_WORKSTATION_APP", "").strip().lower()
+    return val in ("1", "true", "yes")
+
+
+def _browser_app() -> bool:
+    if _browser_mode:
+        return True
+    val = os.environ.get("NR2_BROWSER_APP", "").strip().lower()
     return val in ("1", "true", "yes")
 
 
@@ -114,6 +129,8 @@ def _desktop_access_ok() -> bool:
         if _desktop_session_token and _request_desktop_token() == _desktop_session_token:
             return True
         return False
+    if _browser_app() and _loopback_request():
+        return True
     if _desktop_session_token:
         return _request_desktop_token() == _desktop_session_token
     return True
@@ -161,7 +178,7 @@ def _desktop_only_html() -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>NewRidgeFinancial 2.0 — Desktop Only</title>
+  <title>NewRidgeFinancial 2.0 — Server Required</title>
   <style>
     body { font-family: Segoe UI, system-ui, sans-serif; background: #0f1419; color: #e8eef4; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
     .card { max-width: 32rem; padding: 2rem 2.25rem; background: #1a2332; border: 1px solid #2d3a4d; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.35); }
@@ -172,9 +189,9 @@ def _desktop_only_html() -> str:
 </head>
 <body>
   <div class="card">
-    <h1>Desktop app only</h1>
-    <p>NewRidgeFinancial 2.0 is a <strong>desktop program</strong>, not a website. Send Message, Ask HAL, and all staff tools run in the Start Program window.</p>
-    <p>Close this browser tab and double-click <strong>StartProgram.bat</strong> on your desktop (or use the Start Program shortcut).</p>
+    <h1>NR2 server not running</h1>
+    <p>NewRidgeFinancial 2.0 is a <strong>browser program</strong> served from this PC. Financial pages, HAL, and imports run at <strong>http://127.0.0.1:8765/</strong> after you start the program.</p>
+    <p>Run <strong>StartProgram.bat</strong>, then open that address in Chrome or Edge.</p>
   </div>
 </body>
 </html>"""
@@ -539,6 +556,8 @@ class NR2BottleServer(BottleServer):
 
         @app.get("/api/sidenotes/status")
         def sidenotes_status_api():
+            if not _workstation_app():
+                return _json_response({"ok": False, "error": "sidenotes API is workstation-only"}, status=404)
             try:
                 from sidenotes_bridge import sidenotes_status
 
@@ -548,6 +567,8 @@ class NR2BottleServer(BottleServer):
 
         @app.get("/api/sidenotes/messages")
         def sidenotes_messages_api():
+            if not _workstation_app():
+                return _json_response({"ok": False, "error": "sidenotes API is workstation-only", "messages": []}, status=404)
             try:
                 from sidenotes_bridge import sidenotes_read_messages
 
@@ -559,6 +580,8 @@ class NR2BottleServer(BottleServer):
 
         @app.post("/api/sidenotes/send")
         def sidenotes_send_api():
+            if not _workstation_app():
+                return _json_response({"ok": False, "error": "sidenotes API is workstation-only"}, status=404)
             try:
                 from sidenotes_bridge import sidenotes_send_message
 

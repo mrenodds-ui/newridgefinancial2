@@ -188,7 +188,7 @@
       "Install SideNotesIM on each operatory and front-desk PC.",
       "Copy sidenotes-helper to each workstation and run run-sidenotes-helper.bat (or Start-HAL-SideNotes.bat from the workstation package).",
       "Point NR2_SIDENOTES_HUB_DATA at the shared folder where station inbox JSON files are written.",
-      "Launch NR2 desktop on the server/manager PC — HAL merges all station inboxes into this panel."
+      "Run StartProgram.bat on the manager PC — HAL merges all station inboxes into this panel."
     ]
   },
   "sources": {

@@ -125,7 +125,7 @@ assert.ok(indexHtml.includes('id="halPageRoot"'), "index must have HAL root cont
 assert.ok(!indexHtml.includes("page-sample-data.js"), "index must not load mock sample data");
 assert.ok(!appJs.includes("Kiera Serrano"), "must not use fake operator name");
 assert.ok(appJs.includes("renderRuntimeModeBanner"), "app must render an explicit browser/degraded-mode banner");
-assert.ok(appJs.includes("desktopRequiredMessage(\"Full NR2 data access\")"), "browser banner must explain full data access requires desktop mode");
+assert.ok(appJs.includes("serverRequiredMessage(\"Full NR2 data access\")"), "offline banner must explain full data access requires NR2 server");
 assert.ok(stylesCss.includes(".runtime-banner"), "styles must include runtime/degraded-mode banner styling");
 assert.ok(indexHtml.includes("import-coordinator.js"), "index must load ImportCoordinator");
 assert.ok(indexHtml.includes("import-diagnostics.js"), "index must load ImportDiagnostics");

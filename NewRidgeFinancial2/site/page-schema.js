@@ -231,7 +231,7 @@ const PageSchema = (function () {
         { key: "careDeliveryPerformance", title: "Care Delivery Summary" },
         { key: "quickbooksProfitLossDetail", title: "Profit & Loss Summary" },
         { key: "officeManagerSurfaces", title: "Staff Work Surfaces" },
-        { key: "sidenotesProgram", title: "SideNotes" },
+        { key: "sidenotesProgram", title: "Staff Notes" },
       ],
     },
   };

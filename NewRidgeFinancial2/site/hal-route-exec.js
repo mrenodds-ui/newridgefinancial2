@@ -157,7 +157,7 @@ const HalRouteExec = (function () {
         const message =
           desktop && desktop.desktopRequiredMessage
             ? desktop.desktopRequiredMessage("Direct QuickBooks and SoftDent source access")
-            : "Direct source access requires the NR2 desktop app or loopback server.";
+            : "Direct source access requires the NR2 server.";
         return outcome(message, "sources", result.intent, [], { refreshHal: false });
       }
       let catalog = null;
@@ -171,7 +171,7 @@ const HalRouteExec = (function () {
     if (result.usePracticeSourcePull) {
       const Svc = ctx.Services;
       if (!Svc || typeof Svc.pullPracticeSources !== "function") {
-        return outcome("Practice source pull requires Services.pullPracticeSources in the desktop app.", "sources", result.intent, [], {
+        return outcome("Practice source pull requires the NR2 server.", "sources", result.intent, [], {
           refreshHal: false,
         });
       }
@@ -223,7 +223,7 @@ const HalRouteExec = (function () {
         const message =
           desktop && desktop.desktopRequiredMessage
             ? desktop.desktopRequiredMessage("Direct QuickBooks and SoftDent source access")
-            : "Direct source access requires the NR2 desktop app or loopback server.";
+            : "Direct source access requires the NR2 server.";
         return outcome(message, "sources", result.intent, [], { refreshHal: false });
       }
       const request = result.practiceSourceRequest || (HalSkills.resolvePracticeSourceRequest ? HalSkills.resolvePracticeSourceRequest(trimmed) : {});
@@ -249,7 +249,7 @@ const HalRouteExec = (function () {
         const message =
           desktop && desktop.desktopRequiredMessage
             ? desktop.desktopRequiredMessage("Import status and refresh")
-            : "Import status and refresh require the NR2 desktop app or loopback server.";
+            : "Import status and refresh require the NR2 server.";
         return outcome(message, "imports", result.intent, [], { refreshHal: false });
       }
       const Svc = ctx.Services;
@@ -510,7 +510,7 @@ const HalRouteExec = (function () {
     if (result.useOutboundAudit) {
       const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
       if (!db || typeof db.listOutboundAudit !== "function") {
-        return outcome("Outbound audit log requires the NR2 desktop app or loopback server.", "outbound", result.intent);
+        return outcome("Outbound audit log requires the NR2 server.", "outbound", result.intent);
       }
       const audit = await db.listOutboundAudit(12);
       const items = (audit && audit.items) || [];
@@ -529,7 +529,7 @@ const HalRouteExec = (function () {
     if (result.useJournalBulkApprove) {
       const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : window.DesktopBridge;
       if (!db || typeof db.bulkReviewPostingQueue !== "function") {
-        return outcome("Bulk journal review requires the NR2 desktop app.", "ops", result.intent);
+        return outcome("Bulk journal review requires the NR2 server.", "ops", result.intent);
       }
       const bulk = await db.bulkReviewPostingQueue(
         "approved",
@@ -684,7 +684,7 @@ const HalRouteExec = (function () {
             ? sendHalOfficePopupMessage
             : null;
       if (!send) {
-        return outcome("Office messaging requires the NR2 desktop app with HAL hub running.", "office", result.intent);
+        return outcome("Office messaging requires the NR2 Workstation desktop app with HAL hub running.", "office", result.intent);
       }
       await send(parsed.text, targets);
       const routeLabel =
@@ -722,7 +722,7 @@ const HalRouteExec = (function () {
         const message =
           desktop && desktop.desktopRequiredMessage
             ? desktop.desktopRequiredMessage("Saving durable HAL learned facts")
-            : "Learning requires the NR2 desktop app or loopback server.";
+            : "Learning requires the NR2 server.";
         return outcome(message, "memory", result.intent);
       }
       const wantsWeb = /\bweb\b/i.test(trimmed);

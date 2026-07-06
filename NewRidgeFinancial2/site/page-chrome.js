@@ -102,7 +102,7 @@ const PageChrome = (function () {
     const schema = schemaApi() && state && state.pageId ? schemaApi().byId(state.pageId) : null;
     if (!U || !schema) {
       return `<div class="pv-canvas-shell pv-canvas-shell--missing" role="alert">
-        <p class="pv-canvas-shell__error">Page schema unavailable for <strong>${esc(state && state.pageId)}</strong>. Reload the desktop app.</p>
+        <p class="pv-canvas-shell__error">Page schema unavailable for <strong>${esc(state && state.pageId)}</strong>. Run StartProgram.bat and reload http://127.0.0.1:8765/.</p>
       </div>`;
     }
     const insight = o.compact ? null : resolveInsight(state);

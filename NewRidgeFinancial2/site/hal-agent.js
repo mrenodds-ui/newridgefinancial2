@@ -344,7 +344,7 @@ const HalAgent = (function () {
               ? window.DesktopBridge
               : null;
         if (!bridge || typeof bridge.webResearch !== "function") {
-          return { ok: false, summary: "Web research requires the NR2 desktop app." };
+          return { ok: false, summary: "Web research requires the NR2 server." };
         }
         const q = String(args.query || "").trim();
         if (!q) return { ok: false, summary: "No query for web research." };
@@ -379,7 +379,7 @@ const HalAgent = (function () {
               ? window.DesktopBridge
               : null;
         if (!bridge || typeof bridge.rememberHalFact !== "function") {
-          return { ok: false, summary: "Learning requires the NR2 desktop app." };
+          return { ok: false, summary: "Learning requires the NR2 server." };
         }
         const text = String(args.text || args.query || "").trim();
         if (!text) return { ok: false, summary: "No fact text to remember." };
@@ -606,7 +606,7 @@ const HalAgent = (function () {
               ? window.DesktopBridge
               : null;
         if (!bridge || typeof bridge.getProgramHelp !== "function") {
-          return { ok: false, summary: "Program help requires the NR2 desktop app." };
+          return { ok: false, summary: "Program help requires the NR2 server." };
         }
         const payload = await bridge.getProgramHelp(String(args.query || ""));
         const text = payload && payload.text ? String(payload.text) : "No help topic matched.";
@@ -623,7 +623,7 @@ const HalAgent = (function () {
               ? window.DesktopBridge
               : null;
         if (!bridge || typeof bridge.grepProgramSource !== "function") {
-          return { ok: false, summary: "Program source search requires the NR2 desktop app." };
+          return { ok: false, summary: "Program source search requires the NR2 server." };
         }
         const raw = String(args.query || "").trim();
         const term =
@@ -645,7 +645,7 @@ const HalAgent = (function () {
               ? window.DesktopBridge
               : null;
         if (!bridge || typeof bridge.searchHalMemories !== "function") {
-          return { ok: false, summary: "Memory search requires the NR2 desktop app." };
+          return { ok: false, summary: "Memory search requires the NR2 server." };
         }
         const payload = await bridge.searchHalMemories(String(args.query || ""), 6);
         const text = payload && payload.text ? String(payload.text) : "No matching memories.";
@@ -666,7 +666,7 @@ const HalAgent = (function () {
               ? window.DesktopBridge
               : null;
         if (!bridge || typeof bridge.readProgramFile !== "function") {
-          return { ok: false, summary: "Program file read requires the NR2 desktop app." };
+          return { ok: false, summary: "Program file read requires the NR2 server." };
         }
         const raw = String(args.query || "");
         const pathMatch =
@@ -689,7 +689,7 @@ const HalAgent = (function () {
       run: async (ctx, args) => {
         const bridge = bridgeFromCtx(ctx);
         if (!bridge || typeof bridge.listProgramFiles !== "function") {
-          return { ok: false, summary: "Program file list requires the NR2 desktop app." };
+          return { ok: false, summary: "Program file list requires the NR2 server." };
         }
         const payload = await bridge.listProgramFiles("site", 60);
         return {
@@ -712,7 +712,7 @@ const HalAgent = (function () {
           };
         }
         if (!bridge || typeof bridge.applyProgramPatch !== "function") {
-          return { ok: false, summary: "Program patch requires the NR2 desktop app." };
+          return { ok: false, summary: "Program patch requires the NR2 server." };
         }
         const payload = await bridge.applyProgramPatch(spec.file, spec.old, spec.new, false);
         const text = payload && payload.text ? String(payload.text) : "Patch failed.";
@@ -754,7 +754,7 @@ const HalAgent = (function () {
             return { ok: false, summary: msg.slice(-5000), exitCode: err.status || 1 };
           }
         }
-        return { ok: false, summary: "HAL validation requires the NR2 desktop app or Node runtime." };
+        return { ok: false, summary: "HAL validation requires the NR2 server or Node runtime." };
       },
     },
     run_node_syntax_check: {
@@ -770,7 +770,7 @@ const HalAgent = (function () {
           paths.push("site/hal-core.js", "site/hal-agent.js", "site/app.js");
         }
         if (!bridge || typeof bridge.runNodeSyntaxCheck !== "function") {
-          return { ok: false, summary: "Syntax check requires the NR2 desktop app." };
+          return { ok: false, summary: "Syntax check requires the NR2 server." };
         }
         const payload = await bridge.runNodeSyntaxCheck(paths);
         const text = payload && payload.text ? String(payload.text) : "Syntax check failed.";
@@ -797,7 +797,7 @@ const HalAgent = (function () {
             hits: fallback && fallback.matches ? fallback.matches : [],
           };
         }
-        return { ok: false, summary: "Semantic search requires the NR2 desktop app or grep fallback." };
+        return { ok: false, summary: "Semantic search requires the NR2 server or grep fallback." };
       },
     },
     run_git_readonly: {
@@ -810,7 +810,7 @@ const HalAgent = (function () {
         else if (/diff-names|diff names|changed files/.test(raw)) cmd = "diff-names";
         else if (/log|history/.test(raw)) cmd = "log";
         if (!bridge || typeof bridge.runGitReadonly !== "function") {
-          return { ok: false, summary: "Git read requires the NR2 desktop app." };
+          return { ok: false, summary: "Git read requires the NR2 server." };
         }
         const payload = await bridge.runGitReadonly(cmd);
         const text = payload && payload.text ? String(payload.text) : "Git unavailable.";
@@ -836,7 +836,7 @@ const HalAgent = (function () {
         else if (/validate|validation/.test(raw)) cmdId = "validate-hal";
         else if (/^[a-z0-9-]+$/.test(raw)) cmdId = raw;
         if (!bridge || typeof bridge.runAllowlistedCommand !== "function") {
-          return { ok: false, summary: "Allowlisted commands require the NR2 desktop app." };
+          return { ok: false, summary: "Allowlisted commands require the NR2 server." };
         }
         const payload = await bridge.runAllowlistedCommand(cmdId);
         const text = payload && payload.text ? String(payload.text) : "Command unavailable.";

@@ -68,7 +68,7 @@ const PortalOps = (function () {
     if (db && db.hasDesktopApi && db.hasDesktopApi() && typeof db.getProgramHelp === "function") {
       return db.getProgramHelp(String(query || ""));
     }
-    return { text: "Program help requires the NR2 desktop bridge.", match: null };
+    return { text: "Program help requires the NR2 server.", match: null };
   }
 
   function formatIntegrationHealth(snapshot) {

@@ -1,5 +1,5 @@
 @echo off
-REM Start Program — NewRidgeFinancial 2.0 desktop app (single pywebview window).
+REM Start Program — NewRidgeFinancial 2.0 browser app (financial pages + HAL at http://127.0.0.1:8765/).
 setlocal
 set "ROOT_DIR=%~dp0"
 cd /d "%ROOT_DIR%"

@@ -319,7 +319,7 @@ const HalPageCanvas = (function () {
             <button type="button" class="hp-ctrl__btn" data-hal-cmd="Run operator smoke test"><span class="hp-ctrl__ico">${H.uiIcon("smoke")}</span><strong>Smoke</strong></button>
             <button type="button" class="hp-ctrl__btn" data-hal-cmd="Staff handoff summary"><span class="hp-ctrl__ico">${H.uiIcon("handoff")}</span><strong>Handoff</strong></button>
             <button type="button" class="hp-ctrl__btn" data-hal-about-me><span class="hp-ctrl__ico">${H.uiIcon("voice")}</span><strong>About me</strong></button>
-            <button type="button" class="hp-ctrl__btn" data-hal-cmd="Monitor sidenotes"><span class="hp-ctrl__ico">${H.navIcon("sidenotes")}</span><strong>SideNotes</strong></button>
+            <button type="button" class="hp-ctrl__btn" data-hal-cmd="Monitor sidenotes"><span class="hp-ctrl__ico">${H.navIcon("sidenotes")}</span><strong>Staff notes</strong></button>
             <button type="button" class="hp-ctrl__btn" data-hal-drawer="status"><span class="hp-ctrl__ico">${H.uiIcon("audit")}</span><strong>Audit</strong></button>
           </div>
           <p class="hp-card__foot">Registry: ${H.esc(stats.readyCount)} ready · ${H.esc(stats.blockedCount)} blocked · Last receipt: ${H.esc(lastReceiptText)}</p>

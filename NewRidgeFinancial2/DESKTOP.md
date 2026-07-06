@@ -1,23 +1,26 @@
-# NewRidgeFinancial 2.0 Desktop
+# NewRidgeFinancial 2.0 — Browser App
 
-Single-window pywebview app for staff pages and HAL. The UI loads from `site/` over loopback HTTP (not `file://`).
+Browser-based mission-control program for staff pages and HAL. The UI loads from `site/` over loopback HTTP at **http://127.0.0.1:8765/**.
+
+> **NR2 Workstation** (operatory messaging, popups) is a separate **desktop-only** app on port 8766. This guide is for the financial / Start Program browser app only.
 
 ## Launch (staff)
 
-1. Use **Start Program** on the desktop (`StartProgram.bat`).
-2. Do not open `site/index.html` directly in a browser for daily work.
-3. After git pull or schema changes, close the NR2 window and launch Start Program again.
+1. Double-click **Start Program** (`StartProgram.bat` at repo root).
+2. Your default browser opens **http://127.0.0.1:8765/** automatically.
+3. Do not open `site/index.html` directly as a `file://` page for daily work.
+4. After git pull or schema changes, close the browser tab and run Start Program again.
 
 ## Verify the correct build loaded
 
 | Check | Expected |
 |-------|----------|
-| Window title | `NewRidgeFinancial 2.0 (hal-XX)` |
+| Browser tab title | `NewRidgeFinancial 2.0 (hal-XX)` |
 | Sidebar footer | `Design hal-XX` |
 | Navigation | Grouped sections: Overview, Clinical, Revenue, Operations |
 | Financial page | Colored hero, filter pills, insight strip |
 
-If boot fails, the app shows an error screen instead of silently falling back to the old layout.
+If boot fails, the page shows an error screen instead of silently falling back to the old layout.
 
 ## Developers
 
@@ -68,8 +71,8 @@ powershell -File scripts/Audit-NR2-DesktopShortcuts.ps1 -FixShortcuts
 ```
 StartProgram.bat
   → scripts/start_program.ps1
-  → scripts/start_nr2_desktop.ps1   (port 8765, stops prior PID, runs validators)
-  → NewRidgeFinancial2/desktop_app.py
+  → scripts/start_nr2_browser.ps1   (port 8765, stops prior PID, runs validators)
+  → NewRidgeFinancial2/browser_app.py
       → loopback HTTP → site/index.html
           → page-schema.js + page-chrome.js (canonical shell)
           → desktop-boot.js (boot gate)
@@ -77,15 +80,16 @@ StartProgram.bat
 ```
 
 Build manifest: `NewRidgeFinancial2/nr2-build.json`  
-WebView profile (per schema): `app_data/nr2/webview/hal-XX/`
+Local SQLite state: `app_data/nr2/`
 
 ### Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| Old flat pages, no hero | Stale shortcut or zombie process | Kill pythonw, run Audit script, Refresh shortcuts |
+| Old flat pages, no hero | Stale shortcut or zombie process | Kill pythonw on 8765, run Audit script, Refresh shortcuts |
 | Boot error: mixed versions | Hand-edited index.html | Run bump script or fix all `?v=` tags |
-| Python/JS version mismatch | Desktop not restarted after bump | Close window, Start Program again |
+| Server/JS version mismatch | Server not restarted after bump | Close tab, run Start Program again |
 | "Page not found" | Wrong launcher or backup folder copy | Confirm shortcut targets repo `StartProgram.bat` |
+| NR2 server offline banner | Server not running | Run StartProgram.bat |
 
-Legacy React mockup in `frontend/` is dev-only and is **not** the desktop app.
+Legacy React mockup in `frontend/` is dev-only and is **not** the production program.

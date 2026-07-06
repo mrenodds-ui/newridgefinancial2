@@ -85,7 +85,7 @@ const HalPageSchema = (function () {
     { id: "status", gridArea: "status", title: "Program Status", kind: "status-rail" },
     { id: "widgets", gridArea: "widgets", title: "Manager Widgets", kind: "widget-monitor" },
     { id: "nav", gridArea: "nav", title: "Staff Work Surfaces", kind: "surface-list", icon: { type: "ui", key: "surface" } },
-    { id: "sidenotes", gridArea: "sidenotes", title: "SideNotes", kind: "sidenotes", icon: { type: "nav", key: "sidenotes" } },
+    { id: "sidenotes", gridArea: "sidenotes", title: "Staff Notes", kind: "sidenotes", icon: { type: "nav", key: "sidenotes" } },
     { id: "session", gridArea: "session", title: "Session", kind: "session-footer" },
   ];
 

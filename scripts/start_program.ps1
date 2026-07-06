@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Start Program — launch NewRidgeFinancial 2.0 desktop app (pywebview, no browser).
+  Start Program — launch NewRidgeFinancial 2.0 browser app (loopback HTTP + default browser).
 #>
 [CmdletBinding()]
 param(
@@ -10,9 +10,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$StartScript = Join-Path $PSScriptRoot 'start_nr2_desktop.ps1'
+$StartScript = Join-Path $PSScriptRoot 'start_nr2_browser.ps1'
 if (-not (Test-Path $StartScript)) {
-    throw "Desktop start script not found: $StartScript"
+    throw "Browser start script not found: $StartScript"
 }
 
 $argsList = @()

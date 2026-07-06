@@ -363,10 +363,10 @@ const HalProactive = (function () {
       briefing.headline = "HAL placement is waiting — refresh was throttled. Use Force HAL placement if you just added exports.";
       briefing.programPosture = "monitor";
     } else if (placement && placement.reason === "browser-only") {
-      briefing.headline = "HAL placement needs the desktop app — browser preview cannot refresh imports.";
+      briefing.headline = "HAL placement needs the NR2 server — run StartProgram.bat and open http://127.0.0.1:8765/.";
       briefing.programPosture = "monitor";
     } else if (placement && placement.reason === "no-refresh-path") {
-      briefing.headline = "HAL could not refresh imports in this runtime — launch Start Program on the desktop app.";
+      briefing.headline = "HAL could not refresh imports — ensure StartProgram.bat is running and reload the browser tab.";
       briefing.programPosture = "monitor";
     }
     return briefing;
@@ -385,7 +385,7 @@ const HalProactive = (function () {
           briefing.placement.refreshed && briefing.placement.reason !== "browser-only"
             ? " Imports refreshed."
             : briefing.placement.reason === "browser-only"
-              ? " Browser preview — use Start Program for live imports."
+              ? " NR2 server offline — run StartProgram.bat."
               : "";
         lines.push(`Placement: ${briefing.placement.placed ? "active" : "skipped"} (${briefing.placement.reason}).${refreshNote}`);
       }
@@ -418,7 +418,7 @@ const HalProactive = (function () {
         briefing.placement.refreshed && briefing.placement.reason !== "browser-only"
           ? " — import refresh completed."
           : briefing.placement.reason === "browser-only"
-            ? " — browser preview cannot refresh imports (use Start Program)."
+            ? " — NR2 server offline (run StartProgram.bat)."
             : "";
       lines.push(
         `Placement: ${briefing.placement.placed ? "active" : "skipped"} (${briefing.placement.reason})${refreshNote}`,

@@ -142,7 +142,7 @@ const HalAutonomousOps = (function () {
     const s = st || status();
     return [
       `HAL 9000 autonomous ops: ${s.running ? "running" : "stopped"}${s.paused ? " (paused)" : ""}.`,
-      `Runtime: ${s.runtime ? "desktop/loopback" : "browser preview"}.`,
+      `Runtime: ${s.runtime ? "NR2 server" : "offline"}.`,
       s.lastTickAt ? `Last tick: ${s.lastTickAt}.` : "No tick yet.",
       s.orchestrator && s.orchestrator.topAgent
         ? `Orchestrator lead: ${s.orchestrator.topAgent.label} (${s.orchestrator.topAgent.count} items).`

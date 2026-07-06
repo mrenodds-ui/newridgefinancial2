@@ -46,7 +46,7 @@ const HalOutbound = (function () {
       }
       return resp.json();
     }
-    throw new Error("Outbound actions require the NR2 desktop app or loopback server.");
+    throw new Error("Outbound actions require the NR2 server.");
   }
 
   async function executePending(pending, consentText) {

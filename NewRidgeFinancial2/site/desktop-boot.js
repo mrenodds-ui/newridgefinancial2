@@ -31,7 +31,7 @@
     const sidebar = document.getElementById("sidebar");
     if (sidebar) {
       sidebar.innerHTML =
-        '<div class="sidebar__boot-error"><strong>Desktop boot failed</strong><p>Restart Start Program.</p></div>';
+        '<div class="sidebar__boot-error"><strong>NR2 boot failed</strong><p>Restart Start Program.</p></div>';
     }
     if (!frame) return;
     const detailHtml = (details || [])
@@ -117,7 +117,13 @@
           };
         }
       }
-      if (!window.DesktopBridge || !DesktopBridge.hasDesktopApi || !DesktopBridge.hasDesktopApi()) {
+      const hasPywebview = Boolean(
+        window.DesktopBridge && DesktopBridge.hasDesktopApi && DesktopBridge.hasDesktopApi(),
+      );
+      const hasLoopback = Boolean(
+        window.DesktopBridge && DesktopBridge.hasLoopbackApi && DesktopBridge.hasLoopbackApi(),
+      );
+      if (!hasPywebview) {
         if (workstationOnly) {
           return {
             ok: false,
@@ -125,7 +131,25 @@
             error: "NR2 Workstation must run in the desktop app — close any browser tab and launch Start Workstation.",
           };
         }
-        return { ok: true, mode: "browser-dev" };
+        if (hasLoopback) {
+          try {
+            const info = await DesktopBridge.getAppInfo();
+            const serverVersion = info && (info.designSchemaVersion || info.assetVersion);
+            if (serverVersion && schemaVersion && serverVersion !== schemaVersion) {
+              return {
+                ok: false,
+                mode: "browser",
+                serverVersion,
+                pythonVersion: serverVersion,
+                jsVersion: schemaVersion,
+              };
+            }
+            return { ok: true, mode: "browser", serverVersion: serverVersion || null };
+          } catch (err) {
+            return { ok: false, mode: "browser", error: String(err && err.message ? err.message : err) };
+          }
+        }
+        return { ok: true, mode: "offline" };
       }
       try {
         const info = await DesktopBridge.getAppInfo();

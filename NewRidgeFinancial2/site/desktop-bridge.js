@@ -1,6 +1,6 @@
 /**
- * Desktop bridge — local file reads and SQLite-backed storage via pywebview.
- * Loopback HTTP fallbacks when served from http://127.0.0.1 (full HAL data access without pywebview).
+ * Runtime bridge — SQLite-backed storage and practice data via loopback HTTP on port 8765.
+ * Workstation (8766) still uses pywebview; the financial program is browser-only at 8765.
  */
 const DesktopBridge = (function () {
   function isLoopbackHost() {
@@ -16,11 +16,13 @@ const DesktopBridge = (function () {
     return Boolean(window.pywebview && window.pywebview.api);
   }
 
-function hasLoopbackApi() {
+  function hasLoopbackApi() {
     if (!isLoopbackHost()) return false;
     if (typeof fetch !== "function") return false;
-    // Loopback HTTP is desktop-shell only; browser tabs are blocked by the server.
-    return Boolean(hasDesktopApi());
+    if (typeof globalThis !== "undefined" && globalThis.NR2_WORKSTATION_ONLY) {
+      return Boolean(hasDesktopApi());
+    }
+    return true;
   }
 
   function hasRuntimeAccess() {
@@ -48,17 +50,17 @@ function hasLoopbackApi() {
   }
 
   function runtimeMode() {
+    if (hasLoopbackApi()) return "browser";
     if (hasDesktopApi()) return "desktop";
-    if (hasLoopbackApi()) return "loopback";
-    return "browser-dev";
+    return "offline";
   }
 
   function desktopRequiredMessage(feature) {
     const label = feature || "This feature";
     if (typeof globalThis !== "undefined" && globalThis.NR2_WORKSTATION_ONLY) {
-      return `${label} requires the NR2 Workstation desktop app. Launch Start Workstation — do not open a browser tab.`;
+      return `${label} requires the NR2 Workstation desktop app. Launch Start Workstation.`;
     }
-    return `${label} requires the NR2 desktop app. Launch StartProgram.bat — do not open a browser tab.`;
+    return `${label} requires the NR2 server. Run StartProgram.bat and open http://127.0.0.1:8765/ in your browser.`;
   }
 
   function whenReady(callback) {
@@ -832,7 +834,7 @@ function hasLoopbackApi() {
     if (hasDesktopApi() && window.pywebview.api.get_program_help) {
       return window.pywebview.api.get_program_help(String(query || ""));
     }
-    return { text: "Program help requires the NR2 desktop app.", match: null };
+    return { text: "Program help requires the NR2 server.", match: null };
   }
 
   async function searchHalMemories(query, limit) {
@@ -846,21 +848,21 @@ function hasLoopbackApi() {
     if (hasDesktopApi() && window.pywebview.api.grep_program_source) {
       return window.pywebview.api.grep_program_source(String(query || ""), Number(limit || 24));
     }
-    return { hits: [], count: 0, text: "Program source search requires the NR2 desktop app." };
+    return { hits: [], count: 0, text: "Program source search requires the NR2 server." };
   }
 
   async function readProgramFile(relPath, maxChars) {
     if (hasDesktopApi() && window.pywebview.api.read_program_file) {
       return window.pywebview.api.read_program_file(String(relPath || ""), Number(maxChars || 12000));
     }
-    return { ok: false, text: "Program file read requires the NR2 desktop app." };
+    return { ok: false, text: "Program file read requires the NR2 server." };
   }
 
   async function listProgramFiles(subdir, limit) {
     if (hasDesktopApi() && window.pywebview.api.list_program_files) {
       return window.pywebview.api.list_program_files(String(subdir || "site"), Number(limit || 80));
     }
-    return { ok: false, files: [], text: "Program file list requires the NR2 desktop app." };
+    return { ok: false, files: [], text: "Program file list requires the NR2 server." };
   }
 
   async function applyProgramPatch(relPath, oldString, newString, dryRun) {
@@ -872,49 +874,49 @@ function hasLoopbackApi() {
         Boolean(dryRun),
       );
     }
-    return { ok: false, text: "Program patch requires the NR2 desktop app." };
+    return { ok: false, text: "Program patch requires the NR2 server." };
   }
 
   async function runHalValidation(timeoutSec) {
     if (hasDesktopApi() && window.pywebview.api.run_hal_validation) {
       return window.pywebview.api.run_hal_validation(Number(timeoutSec || 120));
     }
-    return { ok: false, text: "HAL validation requires the NR2 desktop app.", exitCode: -1 };
+    return { ok: false, text: "HAL validation requires the NR2 server.", exitCode: -1 };
   }
 
   async function runNodeSyntaxCheck(relPaths) {
     if (hasDesktopApi() && window.pywebview.api.run_node_syntax_check) {
       return window.pywebview.api.run_node_syntax_check(Array.isArray(relPaths) ? relPaths : []);
     }
-    return { ok: false, text: "Syntax check requires the NR2 desktop app.", results: [] };
+    return { ok: false, text: "Syntax check requires the NR2 server.", results: [] };
   }
 
   async function semanticSearchProgram(query, limit) {
     if (hasDesktopApi() && window.pywebview.api.semantic_search_program) {
       return window.pywebview.api.semantic_search_program(String(query || ""), Number(limit || 15));
     }
-    return { hits: [], count: 0, text: "Semantic search requires the NR2 desktop app." };
+    return { hits: [], count: 0, text: "Semantic search requires the NR2 server." };
   }
 
   async function runGitReadonly(command) {
     if (hasDesktopApi() && window.pywebview.api.run_git_readonly) {
       return window.pywebview.api.run_git_readonly(String(command || "status"));
     }
-    return { ok: false, text: "Git read requires the NR2 desktop app." };
+    return { ok: false, text: "Git read requires the NR2 server." };
   }
 
   async function runAllowlistedCommand(commandId) {
     if (hasDesktopApi() && window.pywebview.api.run_allowlisted_command) {
       return window.pywebview.api.run_allowlisted_command(String(commandId || "validate-hal"));
     }
-    return { ok: false, text: "Allowlisted commands require the NR2 desktop app." };
+    return { ok: false, text: "Allowlisted commands require the NR2 server." };
   }
 
   async function applyProgramPatches(patches, dryRun) {
     if (hasDesktopApi() && window.pywebview.api.apply_program_patches) {
       return window.pywebview.api.apply_program_patches(Array.isArray(patches) ? patches : [], Boolean(dryRun));
     }
-    return { ok: false, text: "Batch patch requires the NR2 desktop app.", count: 0 };
+    return { ok: false, text: "Batch patch requires the NR2 server.", count: 0 };
   }
 
   async function showWorkstationMessagePopup(payload) {
