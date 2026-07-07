@@ -2042,6 +2042,9 @@ print(out["text"])`,
     assert(HalAgent.TOOL_DEFS.clock_out_shift, "Phase 2 clock_out_shift tool");
     assert(HalAgent.TOOL_DEFS.record_era_match_feedback, "Phase 2 ERA feedback tool");
     assert(HalAgent.TOOL_DEFS.acknowledge_alert, "Phase 2 alert ack tool");
+    assert(HalAgent.TOOL_DEFS.undo_scheduler_run, "Phase 2B undo_scheduler_run tool");
+    assert(HalAgent.TOOL_DEFS.predict_claim_denial_risk, "Phase 2A predict_claim_denial_risk tool");
+    assert(HalAgent.TOOL_DEFS.pull_qb_payments, "Phase 2B pull_qb_payments tool");
   }
   const phase2Routes = [
     "clock out",
@@ -2050,6 +2053,15 @@ print(out["text"])`,
     "send billing sms",
     "classify document",
     "quickbooks sync",
+    "undo morning routine",
+    "predict denial risk before submit",
+    "pull qb payments",
+    "pilot phase cutover status",
+  ];
+  const phase2ToolExpectations = [
+    ["undo autonomous scheduler run", "undo_scheduler_run"],
+    ["pre-submit denial scrub", "predict_claim_denial_risk"],
+    ["pull quickbooks payments read only", "pull_qb_payments"],
   ];
   for (const q of phase2Routes) {
     if (typeof HalAgent === "undefined" || !HalAgent.planTools) continue;
@@ -2058,15 +2070,25 @@ print(out["text"])`,
     assert(tools.length >= 1, `Phase 2 operator scenario should plan tools for: ${q}`);
     passed++;
   }
-  if (typeof NR2MoonshotUI !== "undefined") {
-    assert(typeof NR2MoonshotUI.renderEraMatchCard === "function", "ERA match UI export");
+  for (const [q, expectTool] of phase2ToolExpectations) {
+    if (typeof HalAgent === "undefined" || !HalAgent.planTools) continue;
+    const plan = HalAgent.planTools(q, {}, { halData: {}, halModels: {} });
+    const tools = (plan && plan.tools) || [];
+    assert(tools.includes(expectTool), `Phase 2A-2C tool ${expectTool} for: ${q} got ${tools.join(",")}`);
+    passed++;
   }
+  const NR2MoonshotUI = require(join(siteDir, "nr2-moonshot-ui.js"));
+  assert(typeof NR2MoonshotUI.renderEraMatchCard === "function", "ERA match UI export");
+  assert(typeof NR2MoonshotUI.renderPilotPhaseBanner === "function", "pilot phase banner export");
+  assert(typeof NR2MoonshotUI.installPilotBanner === "function", "installPilotBanner export");
+  passed += 2;
   if (typeof NR2AlertsUI !== "undefined") {
     assert(typeof NR2AlertsUI.install === "function", "Alerts SSE UI export");
   }
-  if (typeof HalTransparency !== "undefined") {
-    assert(typeof HalTransparency.openClockOutModal === "function", "Shift handoff UI export");
-  }
+  const HalTransparency = require(join(siteDir, "hal-transparency.js"));
+  assert(typeof HalTransparency.openClockOutModal === "function", "Shift handoff UI export");
+  assert(typeof HalTransparency.showActionConfidence === "function", "HAL confidence overlay export");
+  passed++;
   if (typeof NR2Charts !== "undefined" && NR2Charts.renderPracticePulse) {
     passed++;
   }

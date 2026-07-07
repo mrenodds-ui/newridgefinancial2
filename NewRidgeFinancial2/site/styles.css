@@ -7658,6 +7658,42 @@ body.ws-msg-popup-window .ws-sn-notify__btn--ghost {
 .nr2-import-traffic--red { background: rgba(239, 68, 68, 0.2); }
 .nr2-import-traffic__dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: currentColor; }
 .nr2-import-traffic__refresh { margin-left: auto; font-size: 0.75rem; }
+
+.nr2-pilot-phase-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(59, 130, 246, 0.12);
+}
+.nr2-pilot-phase-banner--shadow { background: rgba(148, 163, 184, 0.15); }
+.nr2-pilot-phase-banner--supervised { background: rgba(234, 179, 8, 0.16); }
+.nr2-pilot-phase-banner--cutover { background: rgba(34, 197, 94, 0.14); }
+.nr2-pilot-phase-banner__label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.72rem; }
+.nr2-pilot-phase-banner__detail { opacity: 0.92; }
+
+.nr2-hal-confidence-toast {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 9999;
+  max-width: min(22rem, 92vw);
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.nr2-hal-confidence-toast--warn {
+  border-color: rgba(234, 179, 8, 0.55);
+}
+
 .nr2-panel { margin: 1rem 0; padding: 0.75rem; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; }
 .nr2-kanban-col { display: inline-block; vertical-align: top; min-width: 140px; margin-right: 0.5rem; }
 .nr2-kanban-card { padding: 0.35rem; margin: 0.25rem 0; background: rgba(0,0,0,0.2); border-radius: 4px; font-size: 0.8rem; }

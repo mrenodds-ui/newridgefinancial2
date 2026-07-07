@@ -29,16 +29,49 @@ const NR2MoonshotUI = (function () {
     return r.json();
   }
 
-  async function postJson(path, body) {
-    if (typeof DesktopBridge !== "undefined" && DesktopBridge.loopbackJson) {
-      return DesktopBridge.loopbackJson(path, { method: "POST", body: JSON.stringify(body || {}) });
+  function pilotPhaseLabel(phase) {
+    const p = String(phase || "shadow").toLowerCase();
+    if (p === "cutover") return "Cutover — system of record";
+    if (p === "supervised") return "Supervised pilot";
+    return "Shadow mode";
+  }
+
+  async function renderPilotPhaseBanner() {
+    if (typeof document === "undefined") return;
+    let info = null;
+    try {
+      info = await fetchJson("/api/app-info");
+    } catch {
+      return;
     }
-    const r = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body || {}),
-    });
-    return r.json();
+    const pilot = (info && info.pilot) || {};
+    const phase = pilot.phase || "shadow";
+    let bar = document.getElementById("nr2-pilot-phase-banner");
+    if (!bar) {
+      const host = document.getElementById("appPage") || document.body;
+      bar = document.createElement("div");
+      bar.id = "nr2-pilot-phase-banner";
+      bar.className = "nr2-pilot-phase-banner";
+      const traffic = document.getElementById("nr2-import-traffic-banner");
+      if (traffic && traffic.parentNode) traffic.parentNode.insertBefore(bar, traffic.nextSibling);
+      else if (host.firstChild) host.insertBefore(bar, host.firstChild);
+      else host.appendChild(bar);
+    }
+    bar.className = `nr2-pilot-phase-banner nr2-pilot-phase-banner--${String(phase).replace(/[^a-z0-9_-]/gi, "")}`;
+    bar.innerHTML =
+      `<strong>Pilot:</strong> ${esc(pilotPhaseLabel(phase))}` +
+      (pilot.systemOfRecord ? " · NR2 is system of record on this workstation" : " · SoftDent remains parallel system of record") +
+      (pilot.cutoverAttested ? " · attested" : "");
+    bar.setAttribute("role", "status");
+  }
+
+  function installPilotBanner() {
+    renderPilotPhaseBanner().catch(() => {});
+    if (typeof window !== "undefined") {
+      window.addEventListener("nr2-import-readiness-changed", () => {
+        renderPilotPhaseBanner().catch(() => {});
+      });
+    }
   }
 
   function confidenceBadgeClass(badge) {
@@ -321,7 +354,17 @@ const NR2MoonshotUI = (function () {
     if (pageId === "financial" || pageId === "taxes") renderCloseWizard(panelHost);
   }
 
-  return { enhancePage, renderEraMatchCard, renderEraMatchPanel };
+  return { enhancePage, renderEraMatchCard, renderEraMatchPanel, renderPilotPhaseBanner, installPilotBanner };
 })();
 
-if (typeof window !== "undefined") window.NR2MoonshotUI = NR2MoonshotUI;
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = NR2MoonshotUI;
+}
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  window.NR2MoonshotUI = NR2MoonshotUI;
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => NR2MoonshotUI.installPilotBanner());
+  } else {
+    NR2MoonshotUI.installPilotBanner();
+  }
+}

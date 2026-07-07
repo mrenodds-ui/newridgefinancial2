@@ -811,6 +811,69 @@ const HalAgent = (function () {
         return { ok: true, summary: `Morning routine ${data.runId}: ${(data.actions || []).length} action(s).` };
       },
     },
+    undo_scheduler_run: {
+      label: "Undo autonomous morning run within 4-hour window",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Scheduler undo requires loopback server." };
+        }
+        const runId = String(args.runId || args.run_id || "").trim();
+        if (!runId) return { ok: false, summary: "runId required for undo." };
+        const data = await bridge.loopbackJson("/api/scheduler/undo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ runId }),
+        });
+        if (!data.ok) return { ok: false, summary: data.detail || data.error || "Undo failed.", result: data };
+        return { ok: true, summary: `Undid autonomous run ${runId}.`, result: data };
+      },
+    },
+    predict_claim_denial_risk: {
+      label: "Predict pre-submit claim denial risk (local rules stub)",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Denial predict requires loopback server." };
+        }
+        const codes = args.cdtCodes || args.cdt_codes || args.codes || [];
+        const data = await bridge.loopbackJson("/api/era/denial-predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cdtCodes: Array.isArray(codes) ? codes : String(codes || "").split(/[\s,]+/).filter(Boolean),
+            payerId: args.payerId || args.payer_id || "",
+            hasNarrative: args.hasNarrative !== false,
+            priorDenials: Number(args.priorDenials || args.prior_denials || 0),
+          }),
+        });
+        const pct = Math.round(Number(data.riskScore || 0) * 100);
+        return {
+          ok: Boolean(data.ok),
+          summary: `Denial risk ${pct}%${data.highRisk ? " — review before submit" : ""}.`,
+          prediction: data,
+        };
+      },
+    },
+    pull_qb_payments: {
+      label: "Pull QuickBooks payments read-only for reconciliation",
+      run: async () => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "QB pull requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/qb/pull", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        return {
+          ok: Boolean(data.ok),
+          summary: `QB pull (${data.mode || "unknown"}): ${data.paymentCount ?? (data.payments || []).length} payment(s).`,
+          result: data,
+        };
+      },
+    },
     search_document_library: {
       label: "Search document library",
       run: async (ctx, args) => {
@@ -1824,7 +1887,19 @@ const HalAgent = (function () {
       tools.push("record_era_match_feedback");
     }
     if (/\b(morning routine|autonomous|scheduler|proactive alert)\b/i.test(query)) {
-      tools.push("run_morning_routine", "acknowledge_alert");
+      tools.push("run_morning_routine", "acknowledge_alert", "undo_scheduler_run");
+    }
+    if (/\b(undo morning|undo scheduler|undo autonomous)\b/i.test(query)) {
+      tools.push("undo_scheduler_run");
+    }
+    if (/\b(denial risk|deny before submit|predict denial|pre.?submit scrub)\b/i.test(query)) {
+      tools.push("predict_claim_denial_risk");
+    }
+    if (/\b(pull qb|pull quickbooks|qb payments|qb pull)\b/i.test(query)) {
+      tools.push("pull_qb_payments", "get_qb_reconciliation_status");
+    }
+    if (/\b(pilot phase|cutover|shadow mode|system of record)\b/i.test(query)) {
+      tools.push("read_current_context");
     }
     if (
       route.useOfficeMessageSend ||

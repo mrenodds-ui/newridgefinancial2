@@ -162,6 +162,27 @@ const HalTransparency = (function () {
       panel.appendChild(btn);
   }
 
+  function showActionConfidence(confidence, label) {
+    if (typeof document === "undefined") return;
+    const score = Number(confidence);
+    if (!Number.isFinite(score)) return;
+    let toast = document.getElementById("nr2-hal-confidence-toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "nr2-hal-confidence-toast";
+      toast.className = "nr2-hal-confidence-toast";
+      document.body.appendChild(toast);
+    }
+    const pct = Math.round(score * 100);
+    toast.className = `nr2-hal-confidence-toast${score < 0.8 ? " nr2-hal-confidence-toast--warn" : ""}`;
+    toast.textContent = `${label || "HAL confidence"}: ${pct}%${score < 0.8 ? " — human co-sign required" : ""}`;
+    toast.hidden = false;
+    window.clearTimeout(showActionConfidence._t);
+    showActionConfidence._t = window.setTimeout(() => {
+      toast.hidden = true;
+    }, 6000);
+  }
+
   function install() {
     if (typeof window === "undefined") return;
     ensureSessionId();
@@ -210,6 +231,7 @@ const HalTransparency = (function () {
     renderAuditPanel,
     explainBlock,
     openClockOutModal,
+    showActionConfidence,
     install,
   };
 })();
