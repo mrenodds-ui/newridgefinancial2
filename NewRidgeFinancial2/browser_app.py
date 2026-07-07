@@ -91,6 +91,46 @@ def main() -> int:
 
     threading.Thread(target=_startup_import_sync, daemon=True, name="nr2-import-sync").start()
 
+    def _background_scheduler() -> None:
+        try:
+            from apscheduler.schedulers.background import BackgroundScheduler
+            from apscheduler.triggers.cron import CronTrigger
+            from apscheduler.triggers.interval import IntervalTrigger
+            from local_store import LocalStore
+
+            store = LocalStore(DATA_DIR)
+
+            def _alert_tick() -> None:
+                try:
+                    from hal_alerts import AlertMonitor
+                    from import_diagnostics import assess_import_readiness
+
+                    readiness = assess_import_readiness(operation="dailyOps")
+                    conn = store._connect()
+                    AlertMonitor(store).evaluate(readiness=readiness)
+                except Exception as exc:
+                    print(f"Alert scheduler tick failed: {exc}", file=sys.stderr)
+
+            def _morning_tick() -> None:
+                try:
+                    from nr2_scheduler import morning_routine_tick
+
+                    morning_routine_tick(store)
+                except Exception as exc:
+                    print(f"Morning routine tick failed: {exc}", file=sys.stderr)
+
+            sched = BackgroundScheduler(daemon=True)
+            sched.add_job(_alert_tick, IntervalTrigger(minutes=15), id="nr2-alerts")
+            sched.add_job(_morning_tick, CronTrigger(hour=6, minute=30), id="nr2-morning")
+            sched.start()
+            print("NR2 background scheduler: alerts every 15m, morning routine 06:30 UTC", file=sys.stderr)
+        except ImportError:
+            print("APScheduler not installed — background alert/morning ticks disabled.", file=sys.stderr)
+        except Exception as exc:
+            print(f"Background scheduler failed to start: {exc}", file=sys.stderr)
+
+    threading.Thread(target=_background_scheduler, daemon=True, name="nr2-scheduler").start()
+
     scheme = "https" if tls_cert and tls_key else "http"
     print(
         f"NR2 browser app: schema={DESIGN_SCHEMA_VERSION} site={SITE_DIR} port={http_port} bind={bind_host} tls={scheme}",

@@ -29,6 +29,79 @@ const NR2MoonshotUI = (function () {
     return r.json();
   }
 
+  async function postJson(path, body) {
+    if (typeof DesktopBridge !== "undefined" && DesktopBridge.loopbackJson) {
+      return DesktopBridge.loopbackJson(path, { method: "POST", body: JSON.stringify(body || {}) });
+    }
+    const r = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    return r.json();
+  }
+
+  function confidenceBadgeClass(badge) {
+    const b = String(badge || "low").toLowerCase();
+    if (b === "high") return "nr2-era-badge--high";
+    if (b === "medium") return "nr2-era-badge--medium";
+    return "nr2-era-badge--low";
+  }
+
+  function renderEraMatchCard(match, host) {
+    if (!host || !match) return;
+    const card = document.createElement("article");
+    card.className = "nr2-era-card";
+    card.dataset.eraLineId = String(match.eraLineId || match.id || "");
+    card.innerHTML =
+      `<header><span class="nr2-era-badge ${confidenceBadgeClass(match.confidenceBadge)}">${esc(
+        (match.confidenceBadge || "low").toUpperCase(),
+      )}</span> ` +
+      `<strong>${esc(match.referenceId || match.id)}</strong> → ${esc(match.predictedClaimId || "—")}</header>` +
+      `<p class="nr2-muted">Confidence ${Math.round(Number(match.confidence || 0) * 100)}% · $${esc(match.paidAmount || "0")}</p>` +
+      `<div class="nr2-era-actions">` +
+      `<button type="button" class="nr2-era-up" title="Correct match">👍</button>` +
+      `<button type="button" class="nr2-era-down" title="Wrong match">👎</button>` +
+      `</div>`;
+    card.querySelector(".nr2-era-up").addEventListener("click", async () => {
+      await postJson("/api/era/match-feedback", {
+        eraLineId: match.eraLineId || match.id,
+        predictedClaimId: match.predictedClaimId,
+        approved: true,
+        confidence: match.confidence,
+      });
+      card.remove();
+    });
+    card.querySelector(".nr2-era-down").addEventListener("click", async () => {
+      const corrected = window.prompt("Correct claim ID (optional):") || "";
+      await postJson("/api/era/match-feedback", {
+        eraLineId: match.eraLineId || match.id,
+        predictedClaimId: match.predictedClaimId,
+        correctedClaimId: corrected || undefined,
+        approved: false,
+        confidence: match.confidence,
+      });
+      card.remove();
+    });
+    host.appendChild(card);
+  }
+
+  async function renderEraMatchPanel(container) {
+    if (!container) return;
+    const data = await fetchJson("/api/era/pending-matches?limit=12");
+    const items = (data && data.items) || [];
+    const section = document.createElement("section");
+    section.className = "nr2-panel nr2-panel--era";
+    section.innerHTML = `<h3>ERA Match Review (${items.length})</h3><div class="nr2-era-list"></div>`;
+    container.appendChild(section);
+    const list = section.querySelector(".nr2-era-list");
+    if (!items.length) {
+      list.innerHTML = `<p class="nr2-muted">No ERA matches pending review.</p>`;
+      return;
+    }
+    items.forEach((m) => renderEraMatchCard(m, list));
+  }
+
   async function resolveOcrItem(excId, action) {
     return postJson(`/api/ocr-exceptions/${encodeURIComponent(excId)}/resolve`, { action });
   }
@@ -145,6 +218,31 @@ const NR2MoonshotUI = (function () {
   async function renderCharts(pageId, container) {
     if (!container || typeof NR2Charts === "undefined") return;
     if (pageId === "financial" || pageId === "ar") {
+      const pulse = document.createElement("canvas");
+      pulse.id = "nr2-practice-pulse";
+      pulse.width = 360;
+      pulse.height = 140;
+      container.appendChild(pulse);
+      const waterfall = document.createElement("canvas");
+      waterfall.id = "nr2-ar-waterfall";
+      waterfall.width = 360;
+      waterfall.height = 120;
+      container.appendChild(waterfall);
+      let reports = {};
+      try {
+        reports = await fetchJson("/api/financial-reports");
+      } catch {
+        reports = {};
+      }
+      const ar = reports.arAging || {};
+      const metrics = {
+        productionUsd: reports.productionUsd || ar.totalOutstanding,
+        collectionsUsd: reports.collectionsUsd || 0,
+        arTotalUsd: ar.totalOutstanding || 0,
+      };
+      if (typeof NR2Charts !== "undefined" && NR2Charts.renderPracticePulse) {
+        NR2Charts.renderPracticePulse("nr2-practice-pulse", metrics);
+      }
       const heat = document.createElement("canvas");
       heat.id = "nr2-ar-heatmap";
       heat.width = 360;
@@ -166,6 +264,9 @@ const NR2MoonshotUI = (function () {
         ];
       }
       NR2Charts.renderARHeatmap("nr2-ar-heatmap", buckets);
+      if (typeof NR2Charts.renderArWaterfall === "function") {
+        NR2Charts.renderArWaterfall("nr2-ar-waterfall", buckets);
+      }
     }
     if (pageId === "financial" || pageId === "quickbooks") {
       const timeline = document.createElement("canvas");
@@ -216,10 +317,11 @@ const NR2MoonshotUI = (function () {
     if (pageId === "documents") await renderOcrExceptions(panelHost);
     if (pageId === "financial" || pageId === "settings") await renderAuditDashboard(panelHost);
     if (pageId === "claims" || pageId === "financial") await renderClinicalBridge(panelHost);
+    if (pageId === "claims" || pageId === "financial") await renderEraMatchPanel(panelHost);
     if (pageId === "financial" || pageId === "taxes") renderCloseWizard(panelHost);
   }
 
-  return { enhancePage };
+  return { enhancePage, renderEraMatchCard, renderEraMatchPanel };
 })();
 
 if (typeof window !== "undefined") window.NR2MoonshotUI = NR2MoonshotUI;

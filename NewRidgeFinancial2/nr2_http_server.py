@@ -1610,6 +1610,13 @@ class NR2BottleServer(BottleServer):
             payload = bottle.request.json or {}
             return _json_response(record_era_match_feedback_api(_local_store(), payload))
 
+        @app.get("/api/era/pending-matches")
+        def era_pending_matches_api():
+            from hal_employee_workflows import list_pending_era_matches
+
+            limit = int(bottle.request.query.get("limit") or 25)
+            return _json_response(list_pending_era_matches(_local_store(), limit=limit))
+
         @app.post("/api/era/train-predictor")
         def era_train_predictor_api():
             from era_ml_trainer import train_era_model
@@ -1739,7 +1746,33 @@ class NR2BottleServer(BottleServer):
             from qb_connector import store_oauth_tokens
 
             payload = bottle.request.json or {}
-            return _json_response(store_oauth_tokens(_local_store(), code=str(payload.get("code") or "")))
+            return _json_response(
+                store_oauth_tokens(
+                    _local_store(),
+                    code=str(payload.get("code") or ""),
+                    realm_id=str(payload.get("realmId") or payload.get("realm_id") or ""),
+                )
+            )
+
+        @app.post("/api/rbac/writeoff/approve")
+        def rbac_writeoff_approve_api():
+            from nr2_rbac import current_role, evaluate_writeoff_approval
+
+            payload = bottle.request.json or {}
+            try:
+                amount = float(payload.get("amountUsd") or payload.get("amount") or 0)
+            except (TypeError, ValueError):
+                amount = 0.0
+            prior = payload.get("priorApprovals") if isinstance(payload.get("priorApprovals"), list) else []
+            result = evaluate_writeoff_approval(amount_usd=amount, role=current_role(), prior_approvals=prior)
+            if result.get("allowed"):
+                _audit_mutation(
+                    "writeoff_approval",
+                    detail={"amountUsd": amount, "chain": result.get("chain"), "role": current_role()},
+                )
+            status = 200 if result.get("allowed") else 403
+            bottle.response.status = status
+            return _json_response(result)
 
         @app.post("/api/qb/sync")
         def qb_sync_api():
@@ -1792,13 +1825,14 @@ class NR2BottleServer(BottleServer):
 
         @app.post("/api/sms/webhook")
         def sms_webhook_api():
-            from sms_actions import handle_inbound_sms, validate_twilio_signature
+            from sms_actions import handle_inbound_sms, inbound_webhook_allowed
 
             payload = bottle.request.forms if bottle.request.forms else {}
             params = {k: payload.get(k) for k in payload.keys()} if hasattr(payload, "keys") else {}
             sig = bottle.request.headers.get("X-Twilio-Signature") or ""
-            if sig and not validate_twilio_signature(bottle.request.url, params, sig):
-                return _json_response({"ok": False, "error": "invalid_signature"}, status=403)
+            gate = inbound_webhook_allowed(url=bottle.request.url, params=params, signature=sig)
+            if not gate.get("ok"):
+                return _json_response(gate, status=403)
             conn = _local_store()._connect()
             return _json_response(
                 handle_inbound_sms(

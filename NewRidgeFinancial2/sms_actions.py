@@ -14,6 +14,8 @@ from typing import Any
 TWILIO_AUTH_TOKEN = os.environ.get("NR2_TWILIO_AUTH_TOKEN", "").strip()
 TWILIO_ACCOUNT_SID = os.environ.get("NR2_TWILIO_ACCOUNT_SID", "").strip()
 TWILIO_FROM_NUMBER = os.environ.get("NR2_TWILIO_FROM_NUMBER", "").strip()
+SMS_RATE_LIMIT_PER_HOUR = int(os.environ.get("NR2_SMS_RATE_LIMIT_PER_HOUR", "30"))
+SMS_REQUIRE_SIGNATURE = os.environ.get("NR2_SMS_REQUIRE_SIGNATURE", "1").strip() not in {"0", "false", "False"}
 
 
 def _utc_now() -> str:
@@ -70,6 +72,19 @@ def sms_consent_allowed(conn: sqlite3.Connection, patient_id: str) -> bool:
     return bool(row[0])
 
 
+def _sms_rate_ok(conn: sqlite3.Connection) -> bool:
+    ensure_sms_schema(conn)
+    cur = conn.execute(
+        """
+        SELECT COUNT(*) FROM sms_outbound
+        WHERE created_at_utc >= datetime('now', '-1 hour')
+        """,
+    )
+    row = cur.fetchone()
+    count = int(row[0]) if row else 0
+    return count < SMS_RATE_LIMIT_PER_HOUR
+
+
 def send_billing_sms(
     conn: sqlite3.Connection,
     *,
@@ -80,6 +95,8 @@ def send_billing_sms(
     variables: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     ensure_sms_schema(conn)
+    if not _sms_rate_ok(conn):
+        return {"ok": False, "error": "sms_rate_limited", "limitPerHour": SMS_RATE_LIMIT_PER_HOUR}
     if not sms_consent_allowed(conn, patient_id):
         return {"ok": False, "error": "sms_consent_denied"}
     number = str(phone_number or "").strip()
@@ -126,6 +143,8 @@ def send_billing_sms(
 
 def validate_twilio_signature(url: str, params: dict[str, Any], signature: str) -> bool:
     if not TWILIO_AUTH_TOKEN:
+        return not SMS_REQUIRE_SIGNATURE
+    if not signature:
         return False
     pieces = [url] + [f"{k}{params[k]}" for k in sorted(params.keys())]
     digest = hmac.new(TWILIO_AUTH_TOKEN.encode(), "".join(pieces).encode(), hashlib.sha1).digest()
@@ -133,6 +152,12 @@ def validate_twilio_signature(url: str, params: dict[str, Any], signature: str) 
 
     expected = base64.b64encode(digest).decode()
     return hmac.compare_digest(expected, str(signature or ""))
+
+
+def inbound_webhook_allowed(*, url: str, params: dict[str, Any], signature: str) -> dict[str, Any]:
+    if SMS_REQUIRE_SIGNATURE and TWILIO_AUTH_TOKEN and not validate_twilio_signature(url, params, signature):
+        return {"ok": False, "error": "invalid_twilio_signature"}
+    return {"ok": True}
 
 
 def handle_inbound_sms(

@@ -4,9 +4,19 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from typing import Any
 
+import requests
+
 from employee_actions import check_action_consent
+
+QBO_TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
+OAUTH_STORE_KEY = "nr2:qb:oauth"
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def auth_url() -> dict[str, Any]:
@@ -22,12 +32,64 @@ def auth_url() -> dict[str, Any]:
     return {"ok": True, "authUrl": url}
 
 
-def store_oauth_tokens(store, *, code: str) -> dict[str, Any]:
+def exchange_authorization_code(store, *, code: str, realm_id: str = "") -> dict[str, Any]:
+    """Exchange Intuit OAuth authorization code for refresh/access tokens."""
+    client_id = os.environ.get("NR2_QBO_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("NR2_QBO_CLIENT_SECRET", "").strip()
+    redirect = os.environ.get("NR2_QBO_REDIRECT_URI", "http://127.0.0.1:8765/api/qb/callback").strip()
+    if not client_id or not client_secret:
+        return {"ok": False, "error": "qbo_not_configured", "message": "Set NR2_QBO_CLIENT_ID and NR2_QBO_CLIENT_SECRET."}
+    if not code:
+        return {"ok": False, "error": "missing_code"}
+    try:
+        resp = requests.post(
+            QBO_TOKEN_URL,
+            auth=(client_id, client_secret),
+            headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "grant_type": "authorization_code",
+                "code": str(code),
+                "redirect_uri": redirect,
+            },
+            timeout=45,
+        )
+        if resp.status_code >= 400:
+            return {"ok": False, "error": "token_exchange_failed", "message": resp.text[:400], "status": resp.status_code}
+        payload = resp.json()
+        tokens = {
+            "access_token": payload.get("access_token"),
+            "refresh_token": payload.get("refresh_token"),
+            "expires_in": payload.get("expires_in"),
+            "realm_id": str(realm_id or os.environ.get("NR2_QBO_REALM_ID", "")).strip(),
+            "exchangedAt": _utc_now(),
+        }
+        if store:
+            store.set(OAUTH_STORE_KEY, json.dumps(tokens))
+        return {"ok": True, "stored": True, "realmId": tokens.get("realm_id"), "expiresIn": tokens.get("expires_in")}
+    except Exception as exc:
+        return {"ok": False, "error": "token_exchange_exception", "message": str(exc)}
+
+
+def store_oauth_tokens(store, *, code: str, realm_id: str = "") -> dict[str, Any]:
     if not store:
         return {"ok": False, "error": "no_store"}
-    payload = {"code": str(code or ""), "storedAt": "pending_exchange"}
-    store.set("nr2:qb:oauth", json.dumps(payload))
-    return {"ok": True, "stored": True, "note": "Exchange code with Intuit token endpoint in production."}
+    exchanged = exchange_authorization_code(store, code=str(code or ""), realm_id=str(realm_id or ""))
+    if exchanged.get("ok"):
+        return exchanged
+    payload = {"code": str(code or ""), "storedAt": _utc_now(), "note": "pending_exchange"}
+    store.set(OAUTH_STORE_KEY, json.dumps(payload))
+    return {"ok": True, "stored": True, "exchange": exchanged}
+
+
+def load_stored_tokens(store) -> dict[str, Any]:
+    if not store:
+        return {}
+    raw = store.get(OAUTH_STORE_KEY)
+    try:
+        data = json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def sync_read_only(store) -> dict[str, Any]:
@@ -78,4 +140,10 @@ def detect_variance(ledger_total: float, qb_total: float) -> dict[str, Any]:
 
 def reconciliation_status(store) -> dict[str, Any]:
     status = sync_read_only(store)
-    return {"ok": True, "connected": bool((status.get("status") or {}).get("configured")), "status": status}
+    tokens = load_stored_tokens(store)
+    return {
+        "ok": True,
+        "connected": bool(tokens.get("refresh_token") or (status.get("status") or {}).get("configured")),
+        "status": status,
+        "hasRefreshToken": bool(tokens.get("refresh_token")),
+    }

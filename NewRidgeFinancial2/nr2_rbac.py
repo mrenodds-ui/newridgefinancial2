@@ -23,10 +23,14 @@ ROLE_CAPS: dict[str, set[str]] = {
         "manage_ocr",
         "read_ar",
         "cloud_hal",
+        "approve_writeoff_tier1",
     },
-    "dentist": {"read_all", "write_clinical", "approve_closeout", "read_financial"},
+    "dentist": {"read_all", "write_clinical", "approve_closeout", "read_financial", "approve_writeoff_tier2"},
     "admin": {"*"},
 }
+
+WRITEOFF_TIER1_MAX_USD = float(os.environ.get("NR2_WRITEOFF_TIER1_MAX_USD", "250"))
+WRITEOFF_DUAL_APPROVAL_MIN_USD = float(os.environ.get("NR2_WRITEOFF_DUAL_APPROVAL_MIN_USD", "250"))
 
 
 def current_role() -> str:
@@ -90,3 +94,44 @@ def require_capability(cap: str) -> Callable:
 def app_info_rbac() -> dict[str, Any]:
     role = current_role()
     return {"role": role, "capabilities": capabilities_for_role(role)}
+
+
+def evaluate_writeoff_approval(
+    *,
+    amount_usd: float,
+    role: str | None = None,
+    prior_approvals: list[str] | None = None,
+) -> dict[str, Any]:
+    """Approval chain: office_manager tier1 up to WRITEOFF_TIER1_MAX; dual dentist+OM above."""
+    amt = abs(float(amount_usd or 0))
+    r = str(role or current_role()).lower()
+    prior = {str(a).lower() for a in (prior_approvals or [])}
+    if r == "admin" or has_capability("*", r):
+        return {"ok": True, "allowed": True, "chain": "admin_override", "amountUsd": amt}
+    if amt <= WRITEOFF_TIER1_MAX_USD:
+        if has_capability("approve_writeoff_tier1", r) or has_capability("approve_writeoff_tier2", r):
+            return {"ok": True, "allowed": True, "chain": "tier1_single", "amountUsd": amt}
+        return {
+            "ok": True,
+            "allowed": False,
+            "chain": "tier1_single",
+            "requiredCapability": "approve_writeoff_tier1",
+            "amountUsd": amt,
+        }
+    if amt >= WRITEOFF_DUAL_APPROVAL_MIN_USD:
+        need = {"office_manager", "dentist"}
+        have = prior | {r}
+        if need.issubset(have):
+            return {"ok": True, "allowed": True, "chain": "dual_approval", "amountUsd": amt}
+        missing = sorted(need - have)
+        return {
+            "ok": True,
+            "allowed": False,
+            "chain": "dual_approval",
+            "missingRoles": missing,
+            "amountUsd": amt,
+            "message": f"Write-off ${amt:.2f} requires office_manager and dentist approval.",
+        }
+    if has_capability("approve_writeoff_tier2", r):
+        return {"ok": True, "allowed": True, "chain": "tier2_single", "amountUsd": amt}
+    return {"ok": True, "allowed": False, "chain": "tier2_single", "requiredCapability": "approve_writeoff_tier2", "amountUsd": amt}

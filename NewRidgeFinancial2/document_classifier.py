@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import urllib.request
 from pathlib import Path
 from typing import Any
+
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+VISION_MODEL = os.environ.get("NR2_DOC_VISION_MODEL", "llava").strip() or "llava"
 
 CATEGORY_PATTERNS: dict[str, re.Pattern[str]] = {
     "EOB_ERA": re.compile(r"(?i)\b(835|eob|era|remittance|claim payment)\b"),
@@ -39,11 +45,70 @@ def classify_document_text(text: str) -> dict[str, Any]:
     }
 
 
+def classify_document_vision(path: str | Path) -> dict[str, Any]:
+    """Classify image/PDF scan via Ollama vision model (llava). Falls back to filename heuristic."""
+    p = Path(path)
+    if not p.is_file():
+        return {"ok": False, "error": "file_not_found"}
+    suffix = p.suffix.lower()
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".pdf"}:
+        return classify_document_path(p)
+    try:
+        import base64
+
+        raw = p.read_bytes()
+        if len(raw) > 8_000_000:
+            return {"ok": False, "error": "file_too_large_for_vision"}
+        b64 = base64.b64encode(raw).decode("ascii")
+        prompt = (
+            "Classify this dental office mail document into exactly one category: "
+            "EOB_ERA, EFT_Notice, Credentialing, Invoice, Correspondence, Unknown. "
+            "Reply JSON only: {\"category\":\"...\",\"confidence\":0.0-1.0}"
+        )
+        payload = {
+            "model": VISION_MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "images": [b64],
+        }
+        req = urllib.request.Request(
+            f"{OLLAMA_HOST}/api/generate",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        text = str(body.get("response") or "")
+        match = re.search(r"\{[^}]+\}", text)
+        if match:
+            parsed = json.loads(match.group(0))
+            cat = str(parsed.get("category") or "Unknown")
+            conf = float(parsed.get("confidence") or 0.75)
+            return {
+                "ok": True,
+                "category": cat,
+                "confidence": round(conf, 3),
+                "method": "ollama_vision",
+                "model": VISION_MODEL,
+                "path": str(p),
+                "requiresHumanInbox": conf < 0.85,
+            }
+    except Exception as exc:
+        fallback = classify_document_path(p)
+        fallback["visionError"] = str(exc)[:200]
+        fallback["method"] = "vision_fallback_heuristic"
+        return fallback
+    return classify_document_path(p)
+
+
 def classify_document_path(path: str | Path) -> dict[str, Any]:
     p = Path(path)
     if not p.is_file():
         return {"ok": False, "error": "file_not_found"}
     suffix = p.suffix.lower()
+    if suffix in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".pdf"):
+        return classify_document_vision(p)
     if suffix in (".txt", ".csv", ".835", ".edi"):
         try:
             text = p.read_text(encoding="utf-8", errors="replace")[:12000]

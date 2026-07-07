@@ -29,11 +29,16 @@ const ImportTrafficBanner = (function () {
     const level = (readiness && readiness.level) || "unknown";
     const t = tone(level);
     const mins = minutesSince(readiness);
+    const completeness = readiness && readiness.completeness;
+    const compText =
+      completeness && completeness.scorePct != null
+        ? ` · completeness ${completeness.scorePct}%`
+        : "";
     return (
       `<div id="nr2-import-traffic-banner" class="nr2-import-traffic nr2-import-traffic--${t}" role="status">` +
       `<span class="nr2-import-traffic__dot" aria-hidden="true"></span>` +
       `<strong>Import ${esc(level.toUpperCase())}</strong>` +
-      `<span> · ${mins === "unknown" ? "sync time unknown" : mins + " min since load"}</span>` +
+      `<span> · ${mins === "unknown" ? "sync time unknown" : mins + " min since load"}${esc(compText)}</span>` +
       `<button type="button" class="nr2-import-traffic__refresh" data-nr2-force-refresh>Force Refresh</button>` +
       `</div>`
     );

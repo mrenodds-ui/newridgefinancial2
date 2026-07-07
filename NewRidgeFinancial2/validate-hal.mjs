@@ -2037,6 +2037,40 @@ print(out["text"])`,
     passed++;
   }
 
+  // Phase 2 Moonshot operator scenarios (SSE, ERA feedback, clock-out, alerts, QB, SMS)
+  if (typeof HalAgent !== "undefined" && HalAgent.TOOL_DEFS) {
+    assert(HalAgent.TOOL_DEFS.clock_out_shift, "Phase 2 clock_out_shift tool");
+    assert(HalAgent.TOOL_DEFS.record_era_match_feedback, "Phase 2 ERA feedback tool");
+    assert(HalAgent.TOOL_DEFS.acknowledge_alert, "Phase 2 alert ack tool");
+  }
+  const phase2Routes = [
+    "clock out",
+    "era feedback",
+    "acknowledge alert",
+    "send billing sms",
+    "classify document",
+    "quickbooks sync",
+  ];
+  for (const q of phase2Routes) {
+    if (typeof HalAgent === "undefined" || !HalAgent.planTools) continue;
+    const plan = HalAgent.planTools(q, {}, { halData: {}, halModels: {} });
+    const tools = (plan && plan.tools) || [];
+    assert(tools.length >= 1, `Phase 2 operator scenario should plan tools for: ${q}`);
+    passed++;
+  }
+  if (typeof NR2MoonshotUI !== "undefined") {
+    assert(typeof NR2MoonshotUI.renderEraMatchCard === "function", "ERA match UI export");
+  }
+  if (typeof NR2AlertsUI !== "undefined") {
+    assert(typeof NR2AlertsUI.install === "function", "Alerts SSE UI export");
+  }
+  if (typeof HalTransparency !== "undefined") {
+    assert(typeof HalTransparency.openClockOutModal === "function", "Shift handoff UI export");
+  }
+  if (typeof NR2Charts !== "undefined" && NR2Charts.renderPracticePulse) {
+    passed++;
+  }
+
   console.log(`HAL validation passed (${passed} suites)`);
 }
 

@@ -172,6 +172,51 @@ def record_era_match_feedback_api(store, payload: dict[str, Any]) -> dict[str, A
     )
 
 
+def list_pending_era_matches(store, *, limit: int = 25) -> dict[str, Any]:
+    if not store:
+        return {"ok": False, "items": []}
+    conn = store._connect()
+    init_employee_workflow_schemas(conn)
+    cur = conn.execute(
+        """
+        SELECT id, created_at_utc, source_type, reference_id, matched_claim_id, status, detail_json
+        FROM nr2_eob_match
+        WHERE status IN ('pending', 'review')
+        ORDER BY created_at_utc DESC
+        LIMIT ?
+        """,
+        (max(1, min(int(limit or 25), 100)),),
+    )
+    items = []
+    for row in cur.fetchall():
+        try:
+            detail = json.loads(row[6] or "{}")
+        except json.JSONDecodeError:
+            detail = {}
+        conf = float(detail.get("confidenceScore") or 0)
+        if conf >= 0.85:
+            badge = "high"
+        elif conf >= 0.6:
+            badge = "medium"
+        else:
+            badge = "low"
+        items.append(
+            {
+                "id": row[0],
+                "eraLineId": row[0],
+                "createdAt": row[1],
+                "sourceType": row[2],
+                "referenceId": row[3],
+                "predictedClaimId": row[4],
+                "status": row[5],
+                "confidence": conf,
+                "confidenceBadge": badge,
+                "paidAmount": detail.get("paidAmount"),
+            }
+        )
+    return {"ok": True, "items": items, "count": len(items)}
+
+
 def _parse_money(value: Any) -> float:
     raw = str(value or "").replace("$", "").replace(",", "").strip()
     try:

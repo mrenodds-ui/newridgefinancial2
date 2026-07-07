@@ -91,6 +91,77 @@ const HalTransparency = (function () {
     });
   }
 
+  async function postJson(path, body) {
+    if (typeof DesktopBridge !== "undefined" && DesktopBridge.loopbackJson) {
+      return DesktopBridge.loopbackJson(path, { method: "POST", body: JSON.stringify(body || {}) });
+    }
+    const r = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    return r.json();
+  }
+
+  function ensureClockOutModal() {
+    let modal = document.getElementById("nr2-clock-out-modal");
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "nr2-clock-out-modal";
+    modal.className = "nr2-modal nr2-modal--hidden";
+    modal.innerHTML =
+      `<div class="nr2-modal__backdrop" data-nr2-close-modal></div>` +
+      `<div class="nr2-modal__panel" role="dialog" aria-labelledby="nr2-clock-out-title">` +
+      `<h3 id="nr2-clock-out-title">End HAL Shift</h3>` +
+      `<p class="nr2-muted">Generate shift handoff report and clock HAL out.</p>` +
+      `<pre class="nr2-handoff-preview nr2-muted">Handoff preview will appear here.</pre>` +
+      `<div class="nr2-modal__actions">` +
+      `<button type="button" class="nr2-clock-out-cancel" data-nr2-close-modal>Cancel</button>` +
+      `<button type="button" class="nr2-clock-out-confirm">Clock out &amp; save handoff</button>` +
+      `</div></div>`;
+    document.body.appendChild(modal);
+    modal.querySelectorAll("[data-nr2-close-modal]").forEach((el) => {
+      el.addEventListener("click", () => modal.classList.add("nr2-modal--hidden"));
+    });
+    return modal;
+  }
+
+  function openClockOutModal() {
+    const modal = ensureClockOutModal();
+    modal.classList.remove("nr2-modal--hidden");
+    const preview = modal.querySelector(".nr2-handoff-preview");
+    if (preview) preview.textContent = "Ready to compile open collections, import health, and month-end tasks.";
+    const confirm = modal.querySelector(".nr2-clock-out-confirm");
+    if (confirm && !confirm.dataset.wired) {
+      confirm.dataset.wired = "1";
+      confirm.addEventListener("click", async () => {
+        confirm.disabled = true;
+        try {
+          const data = await postJson("/api/employee/clock-out", { employeeId: "HAL" });
+          if (preview) preview.textContent = data.reportMarkdown || "Handoff saved.";
+          window.nr2ShiftState = { active: false, tier: 0, levelName: "Off shift" };
+          window.dispatchEvent(new CustomEvent("nr2-shift-state-changed", { detail: window.nr2ShiftState }));
+        } catch (exc) {
+          if (preview) preview.textContent = String(exc || "Clock-out failed.");
+        } finally {
+          confirm.disabled = false;
+        }
+      });
+    }
+  }
+
+  function installClockOutButton(panel) {
+    if (!panel || panel.querySelector("[data-nr2-clock-out]")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "nr2-clock-out-btn";
+    btn.dataset.nr2ClockOut = "1";
+    btn.textContent = "Clock out shift";
+    btn.addEventListener("click", openClockOutModal);
+    panel.querySelector(".nr2-panel--hal-audit")?.appendChild(btn) ||
+      panel.appendChild(btn);
+  }
+
   function install() {
     if (typeof window === "undefined") return;
     ensureSessionId();
@@ -118,7 +189,10 @@ const HalTransparency = (function () {
       panel.className = "nr2-hal-transparency";
       halRoot.appendChild(panel);
     }
-    if (panel) renderAuditPanel(panel).catch(() => {});
+    if (panel) {
+      renderAuditPanel(panel).catch(() => {});
+      installClockOutButton(panel);
+    }
   }
 
   if (typeof document !== "undefined") {
@@ -135,6 +209,7 @@ const HalTransparency = (function () {
     renderLaneBadge,
     renderAuditPanel,
     explainBlock,
+    openClockOutModal,
     install,
   };
 })();

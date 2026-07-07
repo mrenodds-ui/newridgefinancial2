@@ -340,6 +340,50 @@ def evaluate_bundle(
     }
 
 
+IMPORT_COMPLETENESS_MIN_PCT = float(os.environ.get("NR2_IMPORT_COMPLETENESS_MIN_PCT", "85"))
+
+
+def assess_import_completeness(diagnostics: dict[str, Any] | None) -> dict[str, Any]:
+    """Score required (non-optional) datasets for row presence and connection status."""
+    if not isinstance(diagnostics, dict):
+        return {"ok": False, "scorePct": 0.0, "required": 0, "connected": 0, "gaps": []}
+    required: list[dict[str, Any]] = []
+    connected = 0
+    gaps: list[dict[str, Any]] = []
+    for row in diagnostics.get("datasets") or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("severity") or "") == "optional":
+            continue
+        if row.get("automated") is False:
+            continue
+        required.append(row)
+        status = str(row.get("status") or "")
+        row_count = int(row.get("rowCount") or 0)
+        if status == STATUS_CONNECTED and row_count > 0:
+            connected += 1
+        elif status in {STATUS_MISSING, STATUS_STALE} or row_count <= 0:
+            gaps.append(
+                {
+                    "datasetKey": row.get("datasetKey"),
+                    "status": status,
+                    "rowCount": row_count,
+                    "detail": row.get("detail"),
+                }
+            )
+    total = len(required) or 1
+    score = round((connected / total) * 100.0, 1)
+    min_pct = IMPORT_COMPLETENESS_MIN_PCT
+    return {
+        "ok": score >= min_pct and not gaps,
+        "scorePct": score,
+        "minPct": min_pct,
+        "required": len(required),
+        "connected": connected,
+        "gaps": gaps,
+    }
+
+
 def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Datasets whose missing/stale state should degrade integration health imports."""
     if not isinstance(diagnostics, dict):
@@ -497,17 +541,31 @@ def assess_import_readiness(
     diagnostics = evaluate_bundle(bundle, deep=False)
     blocking = blocking_import_issues(diagnostics)
     summary = diagnostics.get("summary") or {}
+    completeness = assess_import_completeness(diagnostics)
 
     base = {
         "loadedAt": bundle.get("loadedAt"),
         "ageHours": round(age_hours, 1) if age_hours is not None else None,
         "summary": summary,
         "blocking": blocking,
+        "completeness": completeness,
         "thresholds": thresholds,
         "operationContext": operation_context,
         "syncState": sync_state,
         "sources": _build_source_delta(diagnostics, bundle, stale_hours=stale_hours),
     }
+
+    if not completeness.get("ok"):
+        return {
+            **base,
+            "ok": False,
+            "level": "degraded",
+            "codes": ["import_incomplete"],
+            "error": (
+                f"Import completeness {completeness.get('scorePct')}% "
+                f"below minimum {completeness.get('minPct')}%."
+            ),
+        }
 
     if age_hours is not None and age_hours > float(posting_max_hours):
         return {
