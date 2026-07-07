@@ -225,6 +225,15 @@ def _require_imports_for_posting():
     return gate
 
 
+def _require_pilot_posting_gate(operation: str):
+    from nr2_pilot import check_posting_gate
+
+    denied = check_posting_gate(operation)
+    if denied:
+        return _json_response(denied, status=403)
+    return None
+
+
 def _require_import_readiness_level(required_level: str = "fresh", *, for_posting: bool = False):
     from nr2_browser_security import abort_import_read
 
@@ -579,6 +588,9 @@ class NR2BottleServer(BottleServer):
 
                     payload["cloudHal"] = read_cloud_hal_settings(_local_store())
                     payload.update(app_info_rbac())
+                    from nr2_pilot import pilot_info
+
+                    payload["pilot"] = pilot_info()
                 return _json_response(payload)
             except Exception as exc:
                 payload = {"mode": "loopback", "version": "2.0", "error": str(exc)}
@@ -1735,6 +1747,14 @@ class NR2BottleServer(BottleServer):
 
             return _json_response(halt_autonomous_run(_local_store()))
 
+        @app.post("/api/scheduler/undo")
+        def scheduler_undo_api():
+            from nr2_scheduler import undo_autonomous_run
+
+            payload = bottle.request.json or {}
+            run_id = str(payload.get("runId") or payload.get("run_id") or "").strip()
+            return _json_response(undo_autonomous_run(_local_store(), run_id=run_id))
+
         @app.get("/api/qb/auth-url")
         def qb_auth_url_api():
             from qb_connector import auth_url
@@ -1805,6 +1825,29 @@ class NR2BottleServer(BottleServer):
             from qb_connector import reconciliation_status
 
             return _json_response(reconciliation_status(_local_store()))
+
+        @app.post("/api/qb/pull")
+        def qb_pull_api():
+            from qb_connector import pull_payments_read_only
+
+            return _json_response(pull_payments_read_only(_local_store()))
+
+        @app.post("/api/era/denial-predict")
+        def era_denial_predict_api():
+            from era_denial_trainer import predict_denial_risk
+
+            payload = bottle.request.json or {}
+            codes = payload.get("cdtCodes") or payload.get("cdt_codes") or []
+            if not isinstance(codes, list):
+                codes = []
+            return _json_response(
+                predict_denial_risk(
+                    cdt_codes=[str(c) for c in codes],
+                    payer_id=str(payload.get("payerId") or payload.get("payer_id") or ""),
+                    has_narrative=bool(payload.get("hasNarrative", True)),
+                    prior_denials=int(payload.get("priorDenials") or payload.get("prior_denials") or 0),
+                )
+            )
 
         @app.post("/api/sms/send")
         def sms_send_api():
@@ -2056,6 +2099,9 @@ class NR2BottleServer(BottleServer):
             gate = _require_imports_for_posting()
             if gate is not None:
                 return gate
+            pilot_gate = _require_pilot_posting_gate("posting_queue_bulk_review")
+            if pilot_gate is not None:
+                return pilot_gate
             bottle.response.content_type = "application/json"
             try:
                 from accounting_bridge import bulk_review_posting_queue
@@ -2089,6 +2135,9 @@ class NR2BottleServer(BottleServer):
             gate = _require_imports_for_posting()
             if gate is not None:
                 return gate
+            pilot_gate = _require_pilot_posting_gate("posting_queue_export_approved")
+            if pilot_gate is not None:
+                return pilot_gate
             bottle.response.content_type = "application/json"
             try:
                 from accounting_bridge import export_approved_posting_queue_csv

@@ -140,6 +140,53 @@ class QbConnectorTests(unittest.TestCase):
         v = detect_variance(1000.0, 999.0)
         self.assertTrue(v["requiresReview"])
 
+    def test_pull_payments_fallback(self) -> None:
+        from qb_connector import pull_payments_read_only
+
+        store = _FakeStore()
+        result = pull_payments_read_only(store)
+        self.assertTrue(result.get("ok"))
+
+
+class Moonshot2ABCStubsTests(unittest.TestCase):
+    def test_denial_predict_high_risk_without_narrative(self) -> None:
+        from era_denial_trainer import predict_denial_risk
+
+        result = predict_denial_risk(cdt_codes=["D2740"], payer_id="delta", has_narrative=False)
+        self.assertTrue(result.get("ok"))
+        self.assertGreaterEqual(result.get("riskScore", 0), 0.5)
+
+    def test_scheduler_undo_within_window(self) -> None:
+        from nr2_scheduler import morning_routine_tick, undo_autonomous_run
+
+        store = _FakeStore()
+        tick = morning_routine_tick(store, force=True)
+        run_id = str(tick.get("runId") or "")
+        self.assertTrue(run_id)
+        undone = undo_autonomous_run(store, run_id=run_id)
+        self.assertTrue(undone.get("undone"))
+
+    def test_voip_twilio_twiml_stub(self) -> None:
+        from voip_actions import create_twilio_stream_twiml
+
+        twiml = create_twilio_stream_twiml(call_sid="CA123")
+        self.assertIn("Stream", twiml)
+        self.assertIn("CA123", twiml)
+
+    def test_finetune_local_hal_dry_run(self) -> None:
+        import subprocess
+        import sys
+
+        script = Path(__file__).resolve().parent / "scripts" / "finetune_local_hal.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), "--dry-run"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("2C_stub", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

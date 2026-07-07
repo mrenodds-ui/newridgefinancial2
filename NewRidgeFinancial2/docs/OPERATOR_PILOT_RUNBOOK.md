@@ -112,3 +112,38 @@ Copy `NewRidgeFinancial2/docs/examples/workstation_role.json.example` to
 
 **Still not system of record** until Phase 3 — keep reconciling to SoftDent daily.
 
+---
+
+## Phase 3 — Production cutover (days 61+)
+
+**Enable only after Phase 2 supervised pilot completes** and the office manager attests import accuracy.
+
+Moonshot operational criteria (no dedicated Moonshot code file — implemented from batch5 validator patterns + financial report):
+
+- **30+ days** shadow compare to SoftDent (`NR2_PILOT_MIN_SHADOW_DAYS`, default 30)
+- **30+ days** supervised posting with human sign-off (`NR2_PILOT_MIN_SUPERVISED_DAYS`)
+- Phase 2 validator passing
+- Signed **`app_data/nr2/pilot_cutover.json`** (see `docs/examples/pilot_cutover_attestation.json.example`)
+
+```powershell
+powershell -File NewRidgeFinancial2\scripts\Start-Pilot-Phase3.ps1
+py -3.14 NewRidgeFinancial2\scripts\validate_cutover_readiness.py
+```
+
+| Capability | Operator rule |
+|------------|----------------|
+| **System of record** | NR2 is primary for A/R and posting on this workstation |
+| **Export approved postings** | Unlocked only in cutover phase |
+| **SoftDent** | Keep read-only exports for backup until leadership signs off on full retirement |
+| **Rollback** | Set `NR2_PILOT_PHASE=supervised` and restore from `app_data\nr2\backups\` if mismatch |
+
+**Pilot phase env (optional):** `NR2_PILOT_PHASE=shadow|supervised|cutover` overrides `app_data/nr2/pilot_phase.json`.
+
+Phase 1 setup (records shadow start):
+
+```powershell
+powershell -File NewRidgeFinancial2\scripts\Start-Pilot-Phase1.ps1
+```
+
+Dev-only bypass of day counters: `NR2_PILOT_SKIP_DAY_CHECKS=1` (not for production cutover).
+

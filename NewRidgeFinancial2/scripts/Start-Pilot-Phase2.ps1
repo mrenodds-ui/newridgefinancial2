@@ -41,6 +41,12 @@ if (-not $SkipValidation) {
     $py = Get-Command py -ErrorAction SilentlyContinue
     if (-not $py) { $py = Get-Command python -ErrorAction SilentlyContinue }
     if ($py) {
+        & $py.Source -c @"
+import sys
+sys.path.insert(0, r'$Nr2')
+from nr2_pilot import ensure_phase_started
+print(ensure_phase_started('supervised'))
+"@
         & $py.Source (Join-Path $Nr2 "scripts\validate_supervised_pilot.py")
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }

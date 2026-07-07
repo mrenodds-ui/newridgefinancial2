@@ -141,3 +141,48 @@ def list_call_log(conn: sqlite3.Connection, *, patient_id: str = "", limit: int 
         for r in cur.fetchall()
     ]
     return {"ok": True, "items": items, "count": len(items)}
+
+
+def create_twilio_stream_twiml(*, employee_id: str = "HAL", call_sid: str = "") -> str:
+    """Moonshot 2A — Twilio Media Streams TwiML stub (workstation VoIP bridge)."""
+    sid = str(call_sid or "pending")
+    eid = str(employee_id or "HAL")
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<Response>\n"
+        "  <Connect>\n"
+        f'    <Stream url="wss://127.0.0.1:8766/voip/media">\n'
+        f'      <Parameter name="employee_id" value="{eid}"/>\n'
+        f'      <Parameter name="call_sid" value="{sid}"/>\n'
+        "    </Stream>\n"
+        "  </Connect>\n"
+        "</Response>"
+    )
+
+
+class TwilioMediaStreamHandler:
+    """Stub handler for Twilio Media Streams WebSocket events (2A)."""
+
+    def __init__(self, *, employee_id: str, call_sid: str) -> None:
+        self.employee_id = str(employee_id or "HAL")
+        self.call_sid = str(call_sid or "")
+        self.is_active = False
+        self.hal_context: dict[str, Any] = {}
+
+    def handle_event(self, payload: dict[str, Any]) -> dict[str, Any]:
+        event_type = str(payload.get("event") or "")
+        if event_type == "start":
+            start = payload.get("start") if isinstance(payload.get("start"), dict) else {}
+            self.hal_context = {
+                "callSid": start.get("callSid") or self.call_sid,
+                "from": start.get("from"),
+                "to": start.get("to"),
+            }
+            self.is_active = True
+            return {"ok": True, "event": "start", "context": self.hal_context}
+        if event_type == "stop":
+            self.is_active = False
+            return {"ok": True, "event": "stop"}
+        if event_type == "media":
+            return {"ok": True, "event": "media", "note": "stt_hal_tts_stub"}
+        return {"ok": True, "event": event_type or "unknown"}

@@ -147,3 +147,35 @@ def reconciliation_status(store) -> dict[str, Any]:
         "status": status,
         "hasRefreshToken": bool(tokens.get("refresh_token")),
     }
+
+
+def pull_payments_read_only(store) -> dict[str, Any]:
+    """Moonshot 2B — bi-directional QB pull stub (payments vs NR2 ledger)."""
+    tokens = load_stored_tokens(store)
+    if not tokens.get("refresh_token"):
+        return {
+            "ok": True,
+            "mode": "import_fallback",
+            "payments": [],
+            "note": "No QBO refresh token — using import cache only.",
+        }
+    try:
+        from import_loader import load_import_bundle
+
+        bundle = load_import_bundle(sync=False, deep=False)
+        qb = bundle.get("quickbooks") if isinstance(bundle, dict) else {}
+        payments = []
+        if isinstance(qb, dict):
+            for key in ("recentPayments", "payments", "deposits"):
+                chunk = qb.get(key)
+                if isinstance(chunk, list):
+                    payments.extend(chunk[:50])
+        return {
+            "ok": True,
+            "mode": "read_only_pull",
+            "paymentCount": len(payments),
+            "payments": payments[:25],
+            "hasRefreshToken": True,
+        }
+    except Exception as exc:
+        return {"ok": False, "error": "pull_failed", "message": str(exc)[:200]}

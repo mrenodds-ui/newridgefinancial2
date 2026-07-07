@@ -10,6 +10,7 @@ from typing import Any
 
 AUTONOMOUS_RUNS_KEY = "nr2:scheduler:autonomous-state"
 MAX_AUTONOMOUS_TICKS_PER_DAY = 3
+UNDO_WINDOW_HOURS = 4
 
 
 def _utc_now() -> str:
@@ -71,6 +72,46 @@ def halt_autonomous_run(store) -> dict[str, Any]:
         )
         conn.commit()
     return {"ok": True, "halted": True}
+
+
+def _parse_ts(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    except ValueError:
+        return None
+
+
+def undo_autonomous_run(store, *, run_id: str) -> dict[str, Any]:
+    """Moonshot 2B — undo an autonomous morning run within UNDO_WINDOW_HOURS."""
+    if not store or not run_id:
+        return {"ok": False, "error": "missing_run_id"}
+    conn = store._connect()
+    ensure_scheduler_schema(conn)
+    cur = conn.execute(
+        "SELECT started_at_utc, status FROM autonomous_runs WHERE id = ?",
+        (str(run_id),),
+    )
+    row = cur.fetchone()
+    if not row:
+        return {"ok": False, "error": "run_not_found"}
+    started = _parse_ts(str(row[0] or ""))
+    if started:
+        elapsed_h = (datetime.now(timezone.utc) - started).total_seconds() / 3600.0
+        if elapsed_h > UNDO_WINDOW_HOURS:
+            return {"ok": False, "error": "undo_window_expired", "windowHours": UNDO_WINDOW_HOURS}
+    if str(row[1] or "") == "undone":
+        return {"ok": True, "undone": True, "runId": run_id, "alreadyUndone": True}
+    conn.execute(
+        "UPDATE autonomous_runs SET status = 'undone', ended_at_utc = ? WHERE id = ?",
+        (_utc_now(), str(run_id)),
+    )
+    conn.commit()
+    return {"ok": True, "undone": True, "runId": run_id, "windowHours": UNDO_WINDOW_HOURS}
 
 
 def morning_routine_tick(store, *, force: bool = False) -> dict[str, Any]:
