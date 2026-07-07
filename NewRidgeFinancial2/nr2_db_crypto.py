@@ -78,6 +78,22 @@ def open_encrypted_db(db_path: Path) -> sqlite3.Connection:
     return sqlite3.connect(str(db_path))
 
 
+def copy_plaintext_sqlite_to_sqlcipher(plain_path: Path, enc_path: Path) -> None:
+    """Copy a plaintext SQLite file into a new SQLCipher database (iterdump — works across drivers)."""
+    enc_path.parent.mkdir(parents=True, exist_ok=True)
+    if enc_path.is_file():
+        enc_path.unlink()
+    src = sqlite3.connect(str(plain_path))
+    dst = _sqlcipher_connect(enc_path)
+    try:
+        dump = "\n".join(src.iterdump())
+        if dump.strip():
+            dst.executescript(dump)
+    finally:
+        src.close()
+        dst.close()
+
+
 def migrate_plaintext_to_encrypted(plain_path: Path, enc_path: Path) -> dict:
     """Atomic plaintext → SQLCipher copy with row-count verification."""
     if not plain_path.is_file():
@@ -94,11 +110,7 @@ def migrate_plaintext_to_encrypted(plain_path: Path, enc_path: Path) -> dict:
         tmp.unlink()
 
     try:
-        src = sqlite3.connect(str(plain_path))
-        dst = _sqlcipher_connect(tmp)
-        src.backup(dst)
-        src.close()
-        dst.close()
+        copy_plaintext_sqlite_to_sqlcipher(plain_path, tmp)
 
         verify_plain = sqlite3.connect(str(plain_path))
         plain_count = verify_plain.execute("SELECT COUNT(*) FROM app_state").fetchone()[0]

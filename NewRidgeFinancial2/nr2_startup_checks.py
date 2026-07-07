@@ -69,7 +69,12 @@ def _is_plaintext_sqlite(db_path: Path) -> bool:
 
 def ensure_encrypted_database(db_path: Path) -> dict:
     """Create or migrate DB to SQLCipher at db_path."""
-    from nr2_db_crypto import _sqlcipher_connect, db_encryption_enabled, get_master_key
+    from nr2_db_crypto import (
+        _sqlcipher_connect,
+        copy_plaintext_sqlite_to_sqlcipher,
+        db_encryption_enabled,
+        get_master_key,
+    )
 
     if not db_encryption_enabled():
         return {"ok": False, "error": "encryption_disabled"}
@@ -102,15 +107,22 @@ def ensure_encrypted_database(db_path: Path) -> dict:
 
     shutil.copy2(db_path, backup)
     if tmp.is_file():
-        tmp.unlink()
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
     try:
-        src = sqlite3.connect(str(db_path))
-        dst = _sqlcipher_connect(tmp)
-        src.backup(dst)
-        src.close()
-        dst.close()
-        plain_count = sqlite3.connect(str(db_path)).execute("SELECT COUNT(*) FROM app_state").fetchone()[0]
-        enc_count = _sqlcipher_connect(tmp).execute("SELECT COUNT(*) FROM app_state").fetchone()[0]
+        copy_plaintext_sqlite_to_sqlcipher(db_path, tmp)
+        plain_conn = sqlite3.connect(str(db_path))
+        try:
+            plain_count = plain_conn.execute("SELECT COUNT(*) FROM app_state").fetchone()[0]
+        finally:
+            plain_conn.close()
+        enc_conn = _sqlcipher_connect(tmp)
+        try:
+            enc_count = enc_conn.execute("SELECT COUNT(*) FROM app_state").fetchone()[0]
+        finally:
+            enc_conn.close()
         if plain_count != enc_count:
             tmp.unlink(missing_ok=True)
             return {"ok": False, "error": "row_count_mismatch"}
@@ -119,7 +131,10 @@ def ensure_encrypted_database(db_path: Path) -> dict:
         _ = get_master_key()
         return {"ok": True, "migrated": True, "backup": str(backup), "path": str(db_path)}
     except Exception as exc:
-        tmp.unlink(missing_ok=True)
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
         return {"ok": False, "error": str(exc)}
 
 
