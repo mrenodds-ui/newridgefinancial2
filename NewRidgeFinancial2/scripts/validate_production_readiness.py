@@ -24,7 +24,7 @@ def run_checks() -> dict:
     from nr2_tls import ensure_localhost_tls_certificates, tls_enforced
 
     enforced = tls_enforced()
-    cert, key = ensure_localhost_tls_certificates(REPO_ROOT / "app_data" / "nr2")
+    cert, key = ensure_localhost_tls_certificates(REPO_ROOT)
     checks.append(_check("tls_enforced", enforced, f"cert={'yes' if cert else 'no'}"))
     checks.append(_check("tls_certs_present", bool(cert and key), str(cert or "")))
 
@@ -41,12 +41,13 @@ def run_checks() -> dict:
     enc = db_encryption_enabled()
     checks.append(_check("db_encryption_enabled", enc, "NR2_DB_ENCRYPTION"))
     if enc:
-        try:
-            import pysqlcipher3  # noqa: F401
+        from nr2_db_crypto import sqlcipher_available, sqlcipher_module
 
-            checks.append(_check("pysqlcipher3_installed", True, "ok"))
-        except ImportError:
-            checks.append(_check("pysqlcipher3_installed", False, "pip install pysqlcipher3"))
+        if sqlcipher_available():
+            _, backend = sqlcipher_module()
+            checks.append(_check("sqlcipher_installed", True, backend or "ok"))
+        else:
+            checks.append(_check("sqlcipher_installed", False, "pip install sqlcipher3"))
 
     from import_diagnostics import assess_import_readiness
 

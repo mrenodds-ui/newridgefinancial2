@@ -35,26 +35,24 @@ def require_loopback_bind_host(host: str) -> None:
 
 
 def require_sqlcipher_available() -> None:
-    from nr2_db_crypto import db_encryption_enabled
+    from nr2_db_crypto import db_encryption_enabled, sqlcipher_available, sqlcipher_module
 
     if not db_encryption_enabled():
         print(
             "FATAL: NR2 requires SQLCipher (NR2_DB_ENCRYPTION=1 by default). "
-            "Install: pip install pysqlcipher3 keyring",
+            "Install: pip install sqlcipher3 keyring",
             file=sys.stderr,
         )
         raise SystemExit(1)
-    try:
-        from pysqlcipher3 import dbapi2 as _sqlcipher  # type: ignore  # noqa: F401
-    except ImportError:
-        try:
-            import sqlcipher3 as _sqlcipher  # type: ignore  # noqa: F401
-        except ImportError:
-            print(
-                "FATAL: pysqlcipher3 or sqlcipher3 required. pip install pysqlcipher3 keyring",
-                file=sys.stderr,
-            )
-            raise SystemExit(1) from None
+    if not sqlcipher_available():
+        print(
+            "FATAL: sqlcipher3 or pysqlcipher3 required. pip install sqlcipher3 keyring",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    _, backend = sqlcipher_module()
+    if backend:
+        print(f"NR2 SQLCipher backend: {backend}", file=sys.stderr)
 
 
 def _is_plaintext_sqlite(db_path: Path) -> bool:

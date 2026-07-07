@@ -39,17 +39,33 @@ def get_master_key() -> str:
         return key
 
 
-def _sqlcipher_connect(db_path: Path):
+def sqlcipher_module():
+    """Return (module, backend_name) for SQLCipher or (None, None)."""
     try:
         from pysqlcipher3 import dbapi2 as sqlcipher  # type: ignore
+
+        return sqlcipher, "pysqlcipher3"
     except ImportError:
         try:
             import sqlcipher3 as sqlcipher  # type: ignore
-        except ImportError as exc:
-            raise RuntimeError(
-                "NR2_DB_ENCRYPTION=1 requires pysqlcipher3 or sqlcipher3. "
-                "Install with: pip install pysqlcipher3 keyring"
-            ) from exc
+
+            return sqlcipher, "sqlcipher3"
+        except ImportError:
+            return None, None
+
+
+def sqlcipher_available() -> bool:
+    mod, _ = sqlcipher_module()
+    return mod is not None
+
+
+def _sqlcipher_connect(db_path: Path):
+    sqlcipher, backend = sqlcipher_module()
+    if sqlcipher is None:
+        raise RuntimeError(
+            "NR2_DB_ENCRYPTION=1 requires pysqlcipher3 or sqlcipher3. "
+            "Install with: pip install sqlcipher3 keyring"
+        )
     conn = sqlcipher.connect(str(db_path))
     key = get_master_key().replace("'", "''")
     conn.execute(f"PRAGMA key = '{key}'")

@@ -3,5 +3,7 @@ pywebview==5.4
 bottle
 python-dotenv
 keyring
+sqlcipher3
 APScheduler>=3.10
 requests
+cryptography>=42.0
