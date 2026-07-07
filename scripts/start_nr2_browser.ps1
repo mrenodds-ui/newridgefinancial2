@@ -90,9 +90,33 @@ function Start-ModelWarmup {
     }
 }
 
+function Get-Nr2BaseUrl {
+    param([int]$Port)
+    $allowHttp = $env:NR2_ALLOW_HTTP -match '^(1|true|yes)$'
+    $enforceTls = -not $allowHttp -and ($env:NR2_ENFORCE_TLS -ne '0')
+    if (-not $env:NR2_ENFORCE_TLS) { $enforceTls = $true }
+    $scheme = if ($enforceTls) { 'https' } else { 'http' }
+    return "${scheme}://127.0.0.1:$Port/"
+}
+
+function Enable-LocalhostTlsBypass {
+    if (-not ([System.Management.Automation.PSTypeName]'TrustAllCertsPolicy').Type) {
+        Add-Type @"
+using System.Net;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+public class TrustAllCertsPolicy {
+    public static bool Validator(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors) { return true; }
+}
+"@
+    }
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { param($s,$c,$ch,$e) return $true }
+}
+
 function Wait-ForServer {
     param([int]$Port, [int]$TimeoutSec = 45)
-    $url = "http://127.0.0.1:$Port/"
+    $url = Get-Nr2BaseUrl -Port $Port
+    if ($url.StartsWith('https')) { Enable-LocalhostTlsBypass }
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     while ((Get-Date) -lt $deadline) {
         try {
@@ -110,7 +134,8 @@ if (-not (Test-Path (Join-Path $SiteDir 'index.html'))) {
 }
 
 Write-Host 'Start Program - NewRidgeFinancial 2.0 (browser app)' -ForegroundColor Green
-Write-Host "Server: http://127.0.0.1:$nr2Port/ - financial pages + HAL in your browser." -ForegroundColor Cyan
+$basePreview = Get-Nr2BaseUrl -Port $nr2Port
+Write-Host "Server: $basePreview - financial pages + HAL in your browser." -ForegroundColor Cyan
 
 if (-not $SkipValidation) {
     $validatorScript = Join-Path $Root 'scripts\Invoke-NR2Validators.ps1'
@@ -171,12 +196,14 @@ Set-Content -Path $pidFile -Value $process.Id
 Write-Host "NR2 server started (schema $schemaVersion, PID $($process.Id))." -ForegroundColor Green
 
 if (-not $NoBrowser) {
+    $openUrl = Get-Nr2BaseUrl -Port $nr2Port
     if (Wait-ForServer -Port $nr2Port) {
-        Start-Process "http://127.0.0.1:$nr2Port/"
-        Write-Host "Opened http://127.0.0.1:$nr2Port/ in your default browser." -ForegroundColor Green
+        Start-Process $openUrl
+        Write-Host "Opened $openUrl in your default browser." -ForegroundColor Green
     } else {
-        Write-Host "Server did not respond in time - open http://127.0.0.1:$nr2Port/ manually." -ForegroundColor Yellow
+        Write-Host "Server did not respond in time - open $openUrl manually." -ForegroundColor Yellow
     }
 } else {
-    Write-Host "Browser launch skipped (-NoBrowser). Open http://127.0.0.1:$nr2Port/ when ready." -ForegroundColor DarkGray
+    $openUrl = Get-Nr2BaseUrl -Port $nr2Port
+    Write-Host "Browser launch skipped (-NoBrowser). Open $openUrl when ready." -ForegroundColor DarkGray
 }
