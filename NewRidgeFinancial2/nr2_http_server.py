@@ -124,6 +124,16 @@ def _get_import_readiness(*, operation: str | None = None) -> dict:
     return readiness
 
 
+def _coerce_amount(payload: dict) -> float | None:
+    for key in ("amount", "paidAmount", "totalAmount", "variance", "balance"):
+        if key in payload and payload[key] is not None:
+            try:
+                return float(payload[key])
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
 def _audit_mutation(action: str, *, detail: dict | None = None, actor: str | None = None) -> None:
     try:
         from nr2_audit_log import append_audit_event
@@ -147,12 +157,37 @@ def _audit_mutation(action: str, *, detail: dict | None = None, actor: str | Non
             or body.get("enabledBy")
             or "Staff"
         )
+        hal_involved = str(resolved_actor).upper() == "HAL" or bool(body.get("halInvolved"))
+        audit_detail = detail if detail is not None else body
         append_audit_event(
             action,
             actor=resolved_actor,
-            detail=detail if detail is not None else body,
+            detail=audit_detail,
             path=path or None,
         )
+        if str(action or "") in {
+            "posting_queue_enqueue",
+            "posting_queue_review",
+            "posting_queue_bulk_review",
+            "posting_batch_approve",
+            "eob_era_match",
+            "deposit_reconciliation",
+            "qb_journal_post",
+        }:
+            from nr2_audit_log import append_financial_mutation
+
+            result_detail = audit_detail if isinstance(audit_detail, dict) else {}
+            append_financial_mutation(
+                str(action or "unknown"),
+                actor=resolved_actor,
+                patient_id=str(result_detail.get("patientId") or result_detail.get("patient_id") or "") or None,
+                before=result_detail.get("before") if isinstance(result_detail.get("before"), dict) else None,
+                after=result_detail.get("after") if isinstance(result_detail.get("after"), dict) else result_detail,
+                amount=_coerce_amount(result_detail),
+                hal_involved=hal_involved,
+                detail=result_detail,
+                path=path or None,
+            )
     except Exception:
         pass
 
@@ -388,7 +423,11 @@ class NR2BottleServer(BottleServer):
     """pywebview BottleServer with / → index.html (fixes HTTP 500 on root URL)."""
 
     @classmethod
-    def start_server(cls, urls, http_port, keyfile=None, certfile=None):
+    def start_server(cls, urls, http_port, keyfile=None, certfile=None, bind_host: str | None = None):
+        from nr2_startup_checks import require_loopback_bind_host
+
+        host = str(bind_host or os.environ.get("NR2_BIND_HOST", "127.0.0.1")).strip() or "127.0.0.1"
+        require_loopback_bind_host(host)
         from webview import _state
 
         apps = [u for u in urls if is_app(u)]
@@ -579,6 +618,14 @@ class NR2BottleServer(BottleServer):
 
             body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
             payload = json.loads(body or "{}")
+            query = str(payload.get("query") or "")
+            from nr2_hal_gateway import reject_financial_lane_downgrade
+
+            if reject_financial_lane_downgrade(query, bottle.request.headers.get("X-HAL-Model-Override")):
+                return _json_response(
+                    {"ok": False, "error": "financial_lane_downgrade_rejected", "minimumLane": "reason21b"},
+                    status=403,
+                )
             if payload.get("cloud") or str(payload.get("lane") or "").lower() == "cloud":
                 settings = read_cloud_hal_settings(_local_store())
                 if not settings.get("enabled"):
@@ -590,9 +637,8 @@ class NR2BottleServer(BottleServer):
             shift_context = payload.get("shiftContext") if isinstance(payload.get("shiftContext"), dict) else None
             if not shift_context:
                 shift_context = get_current_shift_context(store)
-            query = str(payload.get("query") or "")
             requested_lane = payload.get("lane") or payload.get("requestedLane")
-            lane_key = str(requested_lane or route_by_complexity(query, shift_context=shift_context))
+            lane_key = str(requested_lane or route_by_complexity(query, shift_context=shift_context, store=store))
             resolved = resolve_lane(lane_key)
             model = str(payload.get("model") or resolved["model"])
             session_id = str(payload.get("sessionId") or payload.get("session_id") or "")
@@ -1450,7 +1496,9 @@ class NR2BottleServer(BottleServer):
             from hal_employee_workflows import draft_deposit_reconciliation
 
             payload = bottle.request.json or {}
-            return _json_response(draft_deposit_reconciliation(_local_store(), payload))
+            result = draft_deposit_reconciliation(_local_store(), payload)
+            _audit_mutation("deposit_reconciliation", detail=result if isinstance(result, dict) else {"result": result})
+            return _json_response(result)
 
         @app.post("/api/claims/preflight")
         def claims_preflight_api():
@@ -1464,7 +1512,9 @@ class NR2BottleServer(BottleServer):
             from hal_employee_workflows import process_eob_match
 
             payload = bottle.request.json or {}
-            return _json_response(process_eob_match(_local_store(), payload))
+            result = process_eob_match(_local_store(), payload)
+            _audit_mutation("eob_era_match", detail=result if isinstance(result, dict) else {"result": result})
+            return _json_response(result)
 
         @app.post("/api/posting/batch-approve")
         def posting_batch_approve_api():
@@ -1472,6 +1522,11 @@ class NR2BottleServer(BottleServer):
 
             payload = bottle.request.json or {}
             result = batch_approve_postings(_local_store(), payload)
+            _audit_mutation(
+                "posting_batch_approve",
+                detail=result if isinstance(result, dict) else {"result": result},
+                actor=str(payload.get("reviewerActor") or payload.get("actor") or "Staff"),
+            )
             status = 403 if result.get("error") == "consent_denied" else 200
             return _json_response(result, status=status)
 
@@ -1482,6 +1537,298 @@ class NR2BottleServer(BottleServer):
             payload = bottle.request.json or {}
             period = str(payload.get("period") or "") if isinstance(payload, dict) else ""
             return _json_response(generate_month_end_tasks(_local_store(), period=period or None))
+
+        @app.post("/api/v1/hal/stream-sse")
+        def hal_stream_sse_api():
+            from employee_actions import get_current_shift_context
+            from nr2_hal_gateway import evaluate_query_sse_frames, reject_financial_lane_downgrade, route_by_complexity, resolve_lane
+
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            query = str(payload.get("query") or "")
+            if reject_financial_lane_downgrade(query, bottle.request.headers.get("X-HAL-Model-Override")):
+                bottle.response.content_type = "text/event-stream; charset=utf-8"
+                bottle.response.set_header("Cache-Control", "no-cache")
+                bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
+                return f"event: error\ndata: {json.dumps({'error': 'financial_lane_downgrade_rejected', 'done': True})}\n\n"
+            store = _local_store()
+            readiness = _get_import_readiness()
+            shift_context = payload.get("shiftContext") if isinstance(payload.get("shiftContext"), dict) else None
+            if not shift_context:
+                shift_context = get_current_shift_context(store)
+            lane_key = str(
+                payload.get("lane")
+                or payload.get("requestedLane")
+                or route_by_complexity(query, shift_context=shift_context, store=store)
+            )
+            resolved = resolve_lane(lane_key)
+            bottle.response.content_type = "text/event-stream; charset=utf-8"
+            bottle.response.set_header("Cache-Control", "no-cache")
+            bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
+            bottle.response.set_header("X-HAL-Lane-Used", str(resolved["lane"]))
+
+            def _gen():
+                yield from evaluate_query_sse_frames(
+                    query=query,
+                    readiness=readiness,
+                    model=str(payload.get("model") or resolved["model"]),
+                    system_prompt=str(payload.get("systemPrompt") or payload.get("system") or ""),
+                    messages=payload.get("messages") if isinstance(payload.get("messages"), list) else None,
+                    options=payload.get("options") if isinstance(payload.get("options"), dict) else None,
+                    shift_context=shift_context,
+                    requested_lane=lane_key,
+                    store=store,
+                )
+
+            return _gen()
+
+        @app.get("/api/lane/enforce-financial")
+        def lane_enforce_financial_api():
+            from nr2_hal_gateway import financial_lane_policy_status
+
+            return _json_response(financial_lane_policy_status())
+
+        @app.post("/api/employee/clock-out")
+        def employee_clock_out_api():
+            from employee_actions import clock_out_shift
+
+            payload = bottle.request.json or {}
+            return _json_response(
+                clock_out_shift(_local_store(), employee_id=str(payload.get("employeeId") or "HAL"))
+            )
+
+        @app.get("/api/shift/handoff/<handoff_id>")
+        def shift_handoff_get_api(handoff_id: str):
+            from employee_actions import get_shift_handoff
+
+            return _json_response(get_shift_handoff(_local_store(), handoff_id))
+
+        @app.post("/api/era/match-feedback")
+        def era_match_feedback_api():
+            from hal_employee_workflows import record_era_match_feedback_api
+
+            payload = bottle.request.json or {}
+            return _json_response(record_era_match_feedback_api(_local_store(), payload))
+
+        @app.post("/api/era/train-predictor")
+        def era_train_predictor_api():
+            from era_ml_trainer import train_era_model
+
+            store = _local_store()
+            conn = store._connect()
+            return _json_response(train_era_model(conn))
+
+        @app.post("/api/voip/dial")
+        def voip_dial_api():
+            from voip_actions import get_voice_script, initiate_call
+
+            payload = bottle.request.json or {}
+            store = _local_store()
+            conn = store._connect()
+            scenario = str(payload.get("scriptScenario") or payload.get("context") or "collections")
+            script = get_voice_script(
+                scenario,
+                patient_name=str(payload.get("patientName") or ""),
+                balance=str(payload.get("balance") or ""),
+            )
+            dial = initiate_call(
+                conn,
+                phone_number=str(payload.get("phoneNumber") or payload.get("phone") or ""),
+                patient_id=str(payload.get("patientId") or ""),
+                reason=scenario,
+                call_id=str(payload.get("callId") or "") or None,
+            )
+            dial["script"] = script.get("script")
+            return _json_response(dial)
+
+        @app.post("/api/voip/log")
+        def voip_log_api():
+            from voip_actions import log_call_outcome
+
+            payload = bottle.request.json or {}
+            conn = _local_store()._connect()
+            return _json_response(
+                log_call_outcome(
+                    conn,
+                    call_id=str(payload.get("callId") or payload.get("call_id") or ""),
+                    outcome=str(payload.get("outcome") or "unknown"),
+                    notes=str(payload.get("notes") or ""),
+                    duration_sec=int(payload.get("durationSec") or payload.get("duration_sec") or 0) or None,
+                )
+            )
+
+        @app.get("/api/voip/scripts/<scenario>")
+        def voip_scripts_api(scenario: str):
+            from voip_actions import get_voice_script
+
+            return _json_response(
+                get_voice_script(
+                    scenario,
+                    patient_name=str(bottle.request.params.get("patientName") or ""),
+                    balance=str(bottle.request.params.get("balance") or ""),
+                )
+            )
+
+        @app.get("/api/v1/calls/log")
+        def calls_log_list_api():
+            from voip_actions import list_call_log
+
+            patient_id = str(bottle.request.params.get("patientId") or "")
+            conn = _local_store()._connect()
+            return _json_response(list_call_log(conn, patient_id=patient_id))
+
+        @app.get("/api/alerts/active")
+        def alerts_active_api():
+            from hal_alerts import list_active_alerts
+
+            conn = _local_store()._connect()
+            return _json_response(list_active_alerts(conn))
+
+        @app.get("/api/alerts/stream")
+        def alerts_stream_api():
+            from hal_alerts import AlertMonitor, list_active_alerts
+
+            store = _local_store()
+            readiness = _get_import_readiness()
+            AlertMonitor(store).evaluate(readiness=readiness)
+            conn = store._connect()
+            items = list_active_alerts(conn).get("items") or []
+
+            def _gen():
+                yield f"data: {json.dumps({'type': 'snapshot', 'items': items})}\n\n"
+
+            bottle.response.content_type = "text/event-stream; charset=utf-8"
+            bottle.response.set_header("Cache-Control", "no-cache")
+            return _gen()
+
+        @app.post("/api/alerts/<alert_id>/ack")
+        def alerts_ack_api(alert_id: str):
+            from hal_alerts import acknowledge_alert
+
+            conn = _local_store()._connect()
+            return _json_response(acknowledge_alert(conn, alert_id))
+
+        @app.get("/api/scheduler/status")
+        def scheduler_status_api():
+            from nr2_scheduler import scheduler_status
+
+            return _json_response(scheduler_status(_local_store()))
+
+        @app.post("/api/scheduler/morning-run")
+        def scheduler_morning_run_api():
+            from nr2_scheduler import morning_routine_tick
+
+            payload = bottle.request.json or {}
+            force = bool((payload or {}).get("force"))
+            return _json_response(morning_routine_tick(_local_store(), force=force))
+
+        @app.post("/api/scheduler/halt")
+        def scheduler_halt_api():
+            from nr2_scheduler import halt_autonomous_run
+
+            return _json_response(halt_autonomous_run(_local_store()))
+
+        @app.get("/api/qb/auth-url")
+        def qb_auth_url_api():
+            from qb_connector import auth_url
+
+            return _json_response(auth_url())
+
+        @app.post("/api/qb/callback")
+        def qb_callback_api():
+            from qb_connector import store_oauth_tokens
+
+            payload = bottle.request.json or {}
+            return _json_response(store_oauth_tokens(_local_store(), code=str(payload.get("code") or "")))
+
+        @app.post("/api/qb/sync")
+        def qb_sync_api():
+            from qb_connector import sync_read_only
+
+            return _json_response(sync_read_only(_local_store()))
+
+        @app.post("/api/qb/push")
+        def qb_push_api():
+            from qb_connector import push_journal_with_consent
+
+            payload = bottle.request.json or {}
+            amount = payload.get("amount")
+            try:
+                amount_f = float(amount) if amount is not None else None
+            except (TypeError, ValueError):
+                amount_f = None
+            result = push_journal_with_consent(
+                _local_store(),
+                entries=payload.get("entries") if isinstance(payload.get("entries"), list) else None,
+                memo=str(payload.get("memo") or ""),
+                amount=amount_f,
+            )
+            _audit_mutation("qb_journal_post", detail=result if isinstance(result, dict) else {"result": result})
+            status = 403 if result.get("error") == "consent_denied" else 200
+            return _json_response(result, status=status)
+
+        @app.get("/api/qb/reconciliation")
+        def qb_reconciliation_api():
+            from qb_connector import reconciliation_status
+
+            return _json_response(reconciliation_status(_local_store()))
+
+        @app.post("/api/sms/send")
+        def sms_send_api():
+            from sms_actions import send_billing_sms
+
+            payload = bottle.request.json or {}
+            conn = _local_store()._connect()
+            return _json_response(
+                send_billing_sms(
+                    conn,
+                    patient_id=str(payload.get("patientId") or ""),
+                    phone_number=str(payload.get("phoneNumber") or payload.get("phone") or ""),
+                    template_key=str(payload.get("templateKey") or payload.get("template") or "reminder"),
+                    body=str(payload.get("body") or ""),
+                    variables=payload.get("variables") if isinstance(payload.get("variables"), dict) else None,
+                )
+            )
+
+        @app.post("/api/sms/webhook")
+        def sms_webhook_api():
+            from sms_actions import handle_inbound_sms, validate_twilio_signature
+
+            payload = bottle.request.forms if bottle.request.forms else {}
+            params = {k: payload.get(k) for k in payload.keys()} if hasattr(payload, "keys") else {}
+            sig = bottle.request.headers.get("X-Twilio-Signature") or ""
+            if sig and not validate_twilio_signature(bottle.request.url, params, sig):
+                return _json_response({"ok": False, "error": "invalid_signature"}, status=403)
+            conn = _local_store()._connect()
+            return _json_response(
+                handle_inbound_sms(
+                    conn,
+                    phone_number=str(params.get("From") or ""),
+                    body=str(params.get("Body") or ""),
+                    patient_id=str(params.get("patientId") or ""),
+                )
+            )
+
+        @app.get("/api/sms/thread/<patient_id>")
+        def sms_thread_api(patient_id: str):
+            from sms_actions import get_sms_thread
+
+            conn = _local_store()._connect()
+            return _json_response(get_sms_thread(conn, patient_id=patient_id))
+
+        @app.post("/api/documents/classify")
+        def documents_classify_api():
+            from document_classifier import classify_document_text, route_for_category
+
+            payload = bottle.request.json or {}
+            text = str(payload.get("text") or payload.get("content") or "")
+            if not text and payload.get("path"):
+                from document_classifier import classify_document_path
+
+                return _json_response(classify_document_path(str(payload.get("path"))))
+            result = classify_document_text(text)
+            result["suggestedRoute"] = route_for_category(result.get("category") or "Unknown")
+            return _json_response(result)
 
         @app.get("/api/employee/status")
         def employee_status_api():
@@ -1924,7 +2271,11 @@ class NR2BottleServer(BottleServer):
             server_adapter = ThreadedAdapter
         server.thread = threading.Thread(
             target=lambda: bottle.run(
-                app=app, server=server_adapter, port=server.port, quiet=not _state["debug"]
+                app=app,
+                server=server_adapter,
+                host=host,
+                port=server.port,
+                quiet=not _state["debug"],
             ),
             daemon=True,
         )

@@ -229,6 +229,76 @@ def get_current_shift_context(store=None) -> dict[str, Any]:
     }
 
 
+def clock_out_shift(store, *, employee_id: str = "HAL") -> dict[str, Any]:
+    if not store:
+        return {"ok": False, "error": "no_store"}
+    from hal_employee_workflows import compile_shift_handoff, init_employee_workflow_schemas
+    import uuid
+
+    ctx = get_current_shift_context(store)
+    emp = str(employee_id or ctx.get("employeeId") or "HAL")
+    handoff = compile_shift_handoff(store, employee_id=emp)
+    conn = store._connect()
+    init_employee_workflow_schemas(conn)
+    handoff_id = f"handoff-{uuid.uuid4().hex[:12]}"
+    conn.execute(
+        """
+        INSERT INTO shift_handoffs (id, created_at_utc, employee_id, report_markdown, open_item_count)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            handoff_id,
+            _utc_now(),
+            emp,
+            str(handoff.get("reportMarkdown") or ""),
+            int(handoff.get("openItemCount") or 0),
+        ),
+    )
+    conn.commit()
+    store.set(SHIFT_KEY, json.dumps({"active": False, "employeeId": emp, "clockedOutAt": _utc_now()}))
+    append_employee_work_log(
+        store,
+        action="clock_out",
+        summary=f"Shift handoff generated ({handoff.get('openItemCount', 0)} open items).",
+        level=int(ctx.get("tier") or 1),
+        actor=emp,
+        result={"handoffId": handoff_id},
+    )
+    return {
+        "ok": True,
+        "handoffId": handoff_id,
+        "reportMarkdown": handoff.get("reportMarkdown"),
+        "openItemCount": handoff.get("openItemCount"),
+        "shift": {"active": False, "employeeId": emp},
+    }
+
+
+def get_shift_handoff(store, handoff_id: str) -> dict[str, Any]:
+    if not store:
+        return {"ok": False, "error": "no_store"}
+    from hal_employee_workflows import init_employee_workflow_schemas
+
+    conn = store._connect()
+    init_employee_workflow_schemas(conn)
+    cur = conn.execute(
+        "SELECT id, created_at_utc, employee_id, report_markdown, open_item_count FROM shift_handoffs WHERE id = ?",
+        (str(handoff_id or ""),),
+    )
+    row = cur.fetchone()
+    if not row:
+        return {"ok": False, "error": "not_found"}
+    return {
+        "ok": True,
+        "handoff": {
+            "id": row[0],
+            "createdAt": row[1],
+            "employeeId": row[2],
+            "reportMarkdown": row[3],
+            "openItemCount": row[4],
+        },
+    }
+
+
 def check_action_consent(
     employee_id: str,
     action_type: str,

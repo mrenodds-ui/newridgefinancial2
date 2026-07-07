@@ -361,8 +361,8 @@ def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str,
     return blocking
 
 
-POSTING_MAX_AGE_HOURS = int(os.environ.get("NR2_IMPORT_POSTING_MAX_HOURS", "48"))
-DAILY_OPS_HOURS = int(os.environ.get("NR2_IMPORT_DAILY_OPS_HOURS", "8"))
+POSTING_MAX_AGE_HOURS = int(os.environ.get("NR2_IMPORT_POSTING_MAX_HOURS", "24"))
+DAILY_OPS_HOURS = int(os.environ.get("NR2_IMPORT_DAILY_OPS_HOURS", "24"))
 TAX_OPS_HOURS = int(os.environ.get("NR2_IMPORT_TAX_OPS_HOURS", "168"))
 AR_OPS_HOURS = int(os.environ.get("NR2_IMPORT_AR_OPS_HOURS", "24"))
 AMBER_HOURS = int(os.environ.get("NR2_IMPORT_AMBER_HOURS", "24"))

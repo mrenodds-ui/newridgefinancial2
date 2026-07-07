@@ -22,13 +22,18 @@ const HalTransparency = (function () {
     return map[String(lane || "").toLowerCase()] || String(lane || "—");
   }
 
-  function renderLaneBadge(lane) {
+  function renderLaneBadge(lane, routingReason) {
     const host =
       (typeof document !== "undefined" && document.getElementById("halLaneBadge")) ||
       (typeof document !== "undefined" && document.querySelector("[data-hal-lane-badge]"));
     if (!host) return;
-    host.textContent = laneLabel(lane);
+    const suffix =
+      routingReason === "financial_math_policy" || String(routingReason || "").includes("financial")
+        ? " 💰"
+        : "";
+    host.textContent = laneLabel(lane) + suffix;
     host.setAttribute("data-lane", String(lane || ""));
+    host.setAttribute("title", routingReason === "financial_math_policy" ? "Financial calculation mode enforced" : "");
     host.classList.add("nr2-hal-lane-badge");
   }
 
@@ -91,7 +96,8 @@ const HalTransparency = (function () {
     ensureSessionId();
     window.addEventListener("nr2-hal-lane-used", (ev) => {
       const lane = ev && ev.detail && ev.detail.lane;
-      if (lane) renderLaneBadge(lane);
+      const routingReason = ev && ev.detail && ev.detail.routingReason;
+      if (lane) renderLaneBadge(lane, routingReason);
     });
     window.addEventListener("nr2-shift-state-changed", () => {
       const panel = document.getElementById("halTransparencyPanel");

@@ -2539,6 +2539,8 @@ async function runModel(runtime, systemPrompt, userText, draftLabel, onToken, ab
         messages: payload.messages,
         options: payload.options,
         stream: wantStream,
+        onToken: wantStream && typeof onToken === "function" ? onToken : undefined,
+        signal: abortSignal,
         shiftContext: typeof window !== "undefined" && window.nr2ShiftState ? window.nr2ShiftState : undefined,
         sessionId: typeof window !== "undefined" && window.nr2HalSessionId ? window.nr2HalSessionId : undefined,
       });

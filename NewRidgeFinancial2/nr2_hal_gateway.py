@@ -22,7 +22,11 @@ LANE_MODELS = {
     "escalate30b": "hal-escalate:30b",
 }
 LANE_HISTORY_KEY = "nr2:hal:lane-history"
+LANE_OVERRIDE_KEY = "nr2:hal:lane-override-log"
 _STALE_ACK_KEY = "nr2:hal:stale-ack"
+_FINANCIAL_MATH_PATTERN = re.compile(
+    r"(?i)(\$\d+|\b\d{5}\b|\badjustment\b|\bposting\b|\bledger\b|\bdeposit\b|\breconcile\b|\bwrite[\s-]?off\b)"
+)
 
 FINANCIAL_OBFUSCATION = re.compile(
     r"(?i)\b(owe|balance|paid|bill|money|amount\s*due|outstanding|insurance|eob|era|adjustment|write[\s-]?off)\b"
@@ -83,12 +87,71 @@ def is_soft_stale(readiness: dict[str, Any]) -> bool:
         return False
 
 
-def route_by_complexity(query: str, *, shift_context: dict[str, Any] | None = None) -> str:
+def requires_financial_reasoning(query: str) -> bool:
+    q = str(query or "")
+    if _FINANCIAL_MATH_PATTERN.search(q):
+        return True
+    if is_financial_query(q) and (_AMOUNT_PATTERN.search(q) or _FINANCIAL_MATH_PATTERN.search(q)):
+        return True
+    return False
+
+
+def append_lane_override_log(store, *, query: str, from_lane: str, to_lane: str, reason: str) -> None:
+    if not store:
+        return
+    raw = store.get(LANE_OVERRIDE_KEY)
+    try:
+        items = json.loads(raw) if raw else []
+    except json.JSONDecodeError:
+        items = []
+    if not isinstance(items, list):
+        items = []
+    items.append(
+        {
+            "queryPreview": str(query or "")[:120],
+            "fromLane": from_lane,
+            "toLane": to_lane,
+            "reason": reason,
+        }
+    )
+    store.set(LANE_OVERRIDE_KEY, json.dumps(items[-200:]))
+
+
+def reject_financial_lane_downgrade(query: str, override_header: str | None) -> bool:
+    if str(override_header or "").strip().lower() != "chat8b":
+        return False
+    return requires_financial_reasoning(query)
+
+
+def financial_lane_policy_status() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "policy": "financial_math_reason21b_minimum",
+        "minimumLane": "reason21b",
+        "enforced": True,
+    }
+
+
+def route_by_complexity(
+    query: str,
+    *,
+    shift_context: dict[str, Any] | None = None,
+    store=None,
+) -> str:
     q = str(query or "")
     tier = max(1, min(int((shift_context or {}).get("tier") or 1), 7))
     intent = classify_query_intent(q)
     if tier >= 5 or _COMPLEXITY_PATTERN.search(q) or len(q) > 400 or intent == "clinical":
         return "escalate30b"
+    if requires_financial_reasoning(q):
+        append_lane_override_log(
+            store,
+            query=q,
+            from_lane="chat8b",
+            to_lane="reason21b",
+            reason="financial_math_policy",
+        )
+        return "reason21b"
     if len(q) < 80 and not _ANALYTICAL_PATTERN.search(q) and not _COMPLEXITY_PATTERN.search(q):
         return "chat8b"
     if tier >= 3 or intent == "analytical" or bool(re.search(r"(?i)\b(reason|plan|prioriti|compare)\b", q)):
@@ -156,6 +219,66 @@ def acknowledge_stale(store, *, actor: str = "Staff", reason: str = "") -> dict[
     return {"ok": True, "acknowledged": payload}
 
 
+def build_chat_messages(
+    *,
+    query: str,
+    readiness: dict[str, Any],
+    system_prompt: str = "",
+    messages: list[dict[str, Any]] | None = None,
+) -> tuple[list[dict[str, Any]], str, bool, str]:
+    level = str(readiness.get("level") or "unknown")
+    intent = classify_query_intent(query)
+    soft_stale = is_soft_stale(readiness)
+    chat_messages: list[dict[str, Any]] = []
+    if system_prompt:
+        chat_messages.append({"role": "system", "content": system_prompt})
+    if level != "fresh":
+        chat_messages.append({"role": "system", "content": build_import_readiness_context(readiness)})
+        if soft_stale and intent in ("analytical", "clinical"):
+            chat_messages.append({"role": "system", "content": SOFT_STALE_WATERMARK})
+    if messages:
+        chat_messages.extend(messages)
+    else:
+        chat_messages.append({"role": "user", "content": str(query or "")})
+    return chat_messages, intent, soft_stale, level
+
+
+def iter_ollama_sse_tokens(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    lane: str,
+    options: dict[str, Any] | None = None,
+    timeout: float = 120.0,
+):
+    """Yield SSE frames: meta event first, then token data events."""
+    yield f"event: meta\ndata: {json.dumps({'lane': lane, 'model': model, 'done': False})}\n\n"
+    payload: dict[str, Any] = {"model": model, "messages": messages, "stream": True}
+    if options:
+        payload["options"] = options
+    req = urllib.request.Request(
+        OLLAMA_CHAT,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            for line in resp:
+                try:
+                    obj = json.loads(line.decode("utf-8"))
+                except json.JSONDecodeError:
+                    continue
+                delta = str((obj.get("message") or {}).get("content") or "")
+                if delta:
+                    yield f"data: {json.dumps({'token': delta, 'done': False})}\n\n"
+                if obj.get("done"):
+                    break
+        yield f"data: {json.dumps({'token': '', 'done': True})}\n\n"
+    except Exception as exc:
+        yield f"event: error\ndata: {json.dumps({'error': str(exc), 'done': True})}\n\n"
+
+
 def call_ollama_chat(
     *,
     model: str,
@@ -213,9 +336,12 @@ def evaluate_query_stream(
     level = str(readiness.get("level") or "unknown")
     intent = classify_query_intent(query)
     soft_stale = is_soft_stale(readiness)
-    lane_key = str(requested_lane or route_by_complexity(query, shift_context=shift_context))
+    lane_key = str(
+        requested_lane or route_by_complexity(query, shift_context=shift_context, store=store)
+    )
     resolved = resolve_lane(lane_key)
     model = str(model or resolved["model"])
+    routing_reason = "financial_math_policy" if requires_financial_reasoning(query) else ""
 
     if financial and level != "fresh":
         if intent == "transactional" or not soft_stale:
@@ -228,17 +354,12 @@ def evaluate_query_stream(
                 "resolvedLane": resolved["lane"],
             }
 
-    chat_messages: list[dict[str, Any]] = []
-    if system_prompt:
-        chat_messages.append({"role": "system", "content": system_prompt})
-    if level != "fresh":
-        chat_messages.append({"role": "system", "content": build_import_readiness_context(readiness)})
-        if soft_stale and intent in ("analytical", "clinical"):
-            chat_messages.append({"role": "system", "content": SOFT_STALE_WATERMARK})
-    if messages:
-        chat_messages.extend(messages)
-    else:
-        chat_messages.append({"role": "user", "content": str(query or "")})
+    chat_messages, intent, soft_stale, level = build_chat_messages(
+        query=query,
+        readiness=readiness,
+        system_prompt=system_prompt,
+        messages=messages,
+    )
 
     result = call_ollama_chat(model=model, messages=chat_messages, stream=True, options=options)
     if not result.get("ok"):
@@ -268,8 +389,51 @@ def evaluate_query_stream(
         "intent": intent,
         "softStale": soft_stale,
         "resolvedLane": resolved["lane"],
+        "routingReason": routing_reason or None,
         "streamed": True,
     }
+
+
+def evaluate_query_sse_frames(
+    *,
+    query: str,
+    readiness: dict[str, Any],
+    model: str = "hal-chat:8b",
+    system_prompt: str = "",
+    messages: list[dict[str, Any]] | None = None,
+    options: dict[str, Any] | None = None,
+    shift_context: dict[str, Any] | None = None,
+    requested_lane: str | None = None,
+    store=None,
+):
+    """Generator of SSE frames for true browser token streaming."""
+    financial = is_financial_query(query)
+    level = str(readiness.get("level") or "unknown")
+    intent = classify_query_intent(query)
+    soft_stale = is_soft_stale(readiness)
+    lane_key = str(
+        requested_lane or route_by_complexity(query, shift_context=shift_context, store=store)
+    )
+    resolved = resolve_lane(lane_key)
+    model = str(model or resolved["model"])
+
+    if financial and level != "fresh" and (intent == "transactional" or not soft_stale):
+        yield f"event: error\ndata: {json.dumps({'error': 'HAL_UNAVAILABLE_STALE_DATA', 'blocked': True, 'done': True})}\n\n"
+        return
+
+    chat_messages, intent, soft_stale, level = build_chat_messages(
+        query=query,
+        readiness=readiness,
+        system_prompt=system_prompt,
+        messages=messages,
+    )
+    append_lane_history(store, lane=resolved["lane"], model=model, query=query, intent=intent)
+    yield from iter_ollama_sse_tokens(
+        model=model,
+        messages=chat_messages,
+        lane=resolved["lane"],
+        options=options,
+    )
 
 
 def evaluate_query(
@@ -288,9 +452,12 @@ def evaluate_query(
     level = str(readiness.get("level") or "unknown")
     intent = classify_query_intent(query)
     soft_stale = is_soft_stale(readiness)
-    lane_key = str(requested_lane or route_by_complexity(query, shift_context=shift_context))
+    lane_key = str(
+        requested_lane or route_by_complexity(query, shift_context=shift_context, store=store)
+    )
     resolved = resolve_lane(lane_key)
     model = str(model or resolved["model"])
+    routing_reason = "financial_math_policy" if requires_financial_reasoning(query) else ""
 
     if financial and level != "fresh":
         if intent == "transactional" or (not soft_stale):
@@ -312,17 +479,12 @@ def evaluate_query(
                 "resolvedLane": resolved["lane"],
             }
 
-    chat_messages: list[dict[str, Any]] = []
-    if system_prompt:
-        chat_messages.append({"role": "system", "content": system_prompt})
-    if level != "fresh":
-        chat_messages.append({"role": "system", "content": build_import_readiness_context(readiness)})
-        if soft_stale and intent in ("analytical", "clinical"):
-            chat_messages.append({"role": "system", "content": SOFT_STALE_WATERMARK})
-    if messages:
-        chat_messages.extend(messages)
-    else:
-        chat_messages.append({"role": "user", "content": str(query or "")})
+    chat_messages, intent, soft_stale, level = build_chat_messages(
+        query=query,
+        readiness=readiness,
+        system_prompt=system_prompt,
+        messages=messages,
+    )
 
     result = call_ollama_chat(model=model, messages=chat_messages, stream=False, options=options)
     if not result.get("ok"):
@@ -354,4 +516,5 @@ def evaluate_query(
         "intent": intent,
         "softStale": soft_stale,
         "resolvedLane": resolved["lane"],
+        "routingReason": routing_reason or None,
     }

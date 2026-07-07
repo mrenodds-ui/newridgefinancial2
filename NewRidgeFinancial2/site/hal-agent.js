@@ -584,6 +584,233 @@ const HalAgent = (function () {
         return { ok: true, summary: `Period ${data.period}:\n${lines.join("\n")}`, tasks };
       },
     },
+    record_era_match_feedback: {
+      label: "Record ERA match correction for ML training",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "ERA feedback requires loopback server." };
+        }
+        await bridge.loopbackJson("/api/era/match-feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eraLineId: args.eraLineId || args.era_transaction_id,
+            predictedClaimId: args.predictedClaimId || args.claim_id,
+            correctedClaimId: args.correctedClaimId || args.correction_claim_id,
+            approved: args.is_correct !== false,
+            confidence: args.confidence,
+          }),
+        });
+        return { ok: true, summary: "ERA match feedback recorded for training." };
+      },
+    },
+    clock_out_shift: {
+      label: "Clock out and generate shift handoff report",
+      run: async () => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Clock-out requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/employee/clock-out", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        return {
+          ok: true,
+          summary: `Handoff ${data.handoffId}: ${data.openItemCount || 0} open item(s).\n${data.reportMarkdown || ""}`,
+          handoff: data,
+        };
+      },
+    },
+    get_last_handoff_report: {
+      label: "Retrieve prior shift handoff report",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Handoff retrieval requires loopback server." };
+        }
+        const id = args.shiftId || args.handoffId;
+        if (!id) return { ok: false, summary: "handoffId required." };
+        const data = await bridge.loopbackJson(`/api/shift/handoff/${encodeURIComponent(String(id))}`);
+        const md = (data.handoff && data.handoff.reportMarkdown) || "";
+        return { ok: true, summary: md || "Empty handoff.", handoff: data.handoff };
+      },
+    },
+    click_to_dial: {
+      label: "Initiate patient phone call with script",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "VoIP dial requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/voip/dial", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patientId: args.patientId || args.patient_id,
+            phoneNumber: args.phoneNumber || args.phone_number,
+            scriptScenario: args.scriptScenario || args.context || "collections",
+            patientName: args.patientName,
+            balance: args.balance,
+          }),
+        });
+        if (data.telUri && typeof window !== "undefined") {
+          try {
+            window.location.href = data.telUri;
+          } catch {
+            /* softphone may handle via bridge */
+          }
+        }
+        return {
+          ok: true,
+          summary: `Call ${data.callId} initiated.\nScript:\n${data.script || ""}`,
+          callId: data.callId,
+        };
+      },
+    },
+    log_call_outcome: {
+      label: "Log VoIP call outcome",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Call logging requires loopback server." };
+        }
+        await bridge.loopbackJson("/api/voip/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            callId: args.callId || args.call_reference,
+            outcome: args.outcome || "unknown",
+            notes: args.notes || "",
+            durationSec: args.duration_sec,
+          }),
+        });
+        return { ok: true, summary: `Call ${args.callId || ""} logged as ${args.outcome || "unknown"}.` };
+      },
+    },
+    send_billing_sms: {
+      label: "Send billing reminder SMS",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "SMS requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/sms/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patientId: args.patientId || args.patient_id,
+            phoneNumber: args.phoneNumber || args.phone,
+            templateKey: args.templateKey || args.template || "reminder",
+            variables: args.variables,
+          }),
+        });
+        return { ok: data.ok !== false, summary: `SMS ${data.messageId || ""} status: ${data.status || "queued"}.` };
+      },
+    },
+    get_sms_thread: {
+      label: "Read SMS conversation thread",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "SMS thread requires loopback server." };
+        }
+        const pid = args.patientId || args.patient_id;
+        const data = await bridge.loopbackJson(`/api/sms/thread/${encodeURIComponent(String(pid || ""))}`);
+        const lines = (data.thread || []).map((m) => `[${m.direction}] ${m.body}`);
+        return { ok: true, summary: lines.join("\n") || "No SMS history." };
+      },
+    },
+    sync_qb_customers: {
+      label: "Sync QuickBooks read-only status",
+      run: async () => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "QB sync requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/qb/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        return { ok: true, summary: JSON.stringify(data.status || data).slice(0, 1500) };
+      },
+    },
+    push_journal_entry_to_qb: {
+      label: "Post journal entry to QuickBooks (consent-gated)",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "QB post requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/qb/push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entries: args.entries, memo: args.memo, amount: args.amount }),
+        });
+        if (data.error === "consent_denied") return { ok: false, summary: "QB post consent denied at current tier." };
+        return { ok: true, summary: "Journal entry submitted to QB connector.", result: data };
+      },
+    },
+    get_qb_reconciliation_status: {
+      label: "Check QB vs ledger reconciliation",
+      run: async () => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "QB reconciliation requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/qb/reconciliation");
+        return { ok: true, summary: JSON.stringify(data).slice(0, 1200) };
+      },
+    },
+    classify_incoming_document: {
+      label: "Classify scanned mail/document type",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Document classify requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/documents/classify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: args.text || args.content, path: args.path || args.document_id }),
+        });
+        return {
+          ok: true,
+          summary: `${data.category} (${Math.round((data.confidence || 0) * 100)}%) → route ${data.suggestedRoute || "human_inbox"}`,
+          classification: data,
+        };
+      },
+    },
+    acknowledge_alert: {
+      label: "Acknowledge proactive HAL alert",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Alerts require loopback server." };
+        }
+        await bridge.loopbackJson(`/api/alerts/${encodeURIComponent(String(args.alertId || args.alert_id || ""))}/ack`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        return { ok: true, summary: "Alert acknowledged." };
+      },
+    },
+    run_morning_routine: {
+      label: "Trigger autonomous morning routine (admin)",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Scheduler requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/scheduler/morning-run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force: Boolean(args && args.force) }),
+        });
+        if (data.skipped) return { ok: true, summary: `Morning routine skipped: ${data.reason}.` };
+        return { ok: true, summary: `Morning routine ${data.runId}: ${(data.actions || []).length} action(s).` };
+      },
+    },
     search_document_library: {
       label: "Search document library",
       run: async (ctx, args) => {
@@ -1577,6 +1804,27 @@ const HalAgent = (function () {
     }
     if (/\b(month.?end|close tasks|month end tasks)\b/i.test(query)) {
       tools.push("generate_month_end_tasks");
+    }
+    if (/\b(clock out|shift handoff|end shift|handoff report)\b/i.test(query)) {
+      tools.push("clock_out_shift", "get_last_handoff_report");
+    }
+    if (/\b(click.?to.?dial|call patient|phone script|voip)\b/i.test(query)) {
+      tools.push("click_to_dial", "log_call_outcome");
+    }
+    if (/\b(sms|text reminder|billing text)\b/i.test(query)) {
+      tools.push("send_billing_sms", "get_sms_thread");
+    }
+    if (/\b(quickbooks|qbo|qb sync|journal entry)\b/i.test(query)) {
+      tools.push("sync_qb_customers", "push_journal_entry_to_qb", "get_qb_reconciliation_status");
+    }
+    if (/\b(classify document|mail sort|scan document|incoming mail)\b/i.test(query)) {
+      tools.push("classify_incoming_document");
+    }
+    if (/\b(era feedback|match confidence|wrong match)\b/i.test(query)) {
+      tools.push("record_era_match_feedback");
+    }
+    if (/\b(morning routine|autonomous|scheduler|proactive alert)\b/i.test(query)) {
+      tools.push("run_morning_routine", "acknowledge_alert");
     }
     if (
       route.useOfficeMessageSend ||

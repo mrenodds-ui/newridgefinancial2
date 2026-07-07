@@ -70,6 +70,106 @@ def init_employee_workflow_schemas(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS era_match_feedback (
+            id TEXT PRIMARY KEY,
+            era_line_id TEXT NOT NULL,
+            predicted_claim_id TEXT,
+            corrected_claim_id TEXT,
+            confidence_at_prediction REAL,
+            operator_verified INTEGER,
+            feedback_ts TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS shift_handoffs (
+            id TEXT PRIMARY KEY,
+            created_at_utc TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            report_markdown TEXT NOT NULL,
+            open_item_count INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    from hal_alerts import ensure_alert_schema
+    from voip_actions import ensure_call_log_schema
+    from sms_actions import ensure_sms_schema
+    from nr2_scheduler import ensure_scheduler_schema
+
+    ensure_alert_schema(conn)
+    ensure_call_log_schema(conn)
+    ensure_sms_schema(conn)
+    ensure_scheduler_schema(conn)
+
+
+def compile_shift_handoff(store, *, employee_id: str = "HAL") -> dict[str, Any]:
+    """Aggregate open work into markdown handoff report."""
+    open_collections = list_collections_queue(store, limit=100).get("items") or []
+    open_items = [i for i in open_collections if str(i.get("status") or "open") == "open"]
+    heal_note = "Import heal not run this shift."
+    try:
+        from import_healing import heal_import_pipeline
+
+        heal = heal_import_pipeline(force=False)
+        heal_note = str(heal.get("message") or heal.get("status") or "heal checked")
+    except Exception:
+        pass
+    consent = check_action_consent(str(employee_id or "HAL"), "qbo-post", None, store=store)
+    month_end = generate_month_end_tasks(store)
+    tasks = (month_end.get("tasks") or []) if isinstance(month_end, dict) else []
+    open_tasks = [t for t in tasks if not t.get("completed")]
+    lines = [
+        f"# HAL Shift Handoff — {_utc_now()}",
+        f"Employee: {employee_id}",
+        "",
+        "## Import Health",
+        f"- {heal_note}",
+        "",
+        "## Collections (open)",
+    ]
+    for item in open_items[:15]:
+        lines.append(f"- {item.get('patientName') or item.get('patient_id')}: ${item.get('balance', 0)}")
+    if not open_items:
+        lines.append("- None")
+    lines.extend(
+        [
+            "",
+            "## Consent Budget",
+            f"- Tier {consent.get('tier')}; qbo-post allowed: {consent.get('allowed')}",
+            "",
+            "## Month-End Tasks Open",
+        ]
+    )
+    for task in open_tasks[:10]:
+        lines.append(f"- {task.get('title') or task.get('id')}")
+    if not open_tasks:
+        lines.append("- None")
+    report = "\n".join(lines)
+    return {
+        "ok": True,
+        "reportMarkdown": report,
+        "openItemCount": len(open_items),
+        "openCollections": len(open_items),
+        "openMonthEndTasks": len(open_tasks),
+    }
+
+
+def record_era_match_feedback_api(store, payload: dict[str, Any]) -> dict[str, Any]:
+    from era_ml_trainer import record_match_feedback
+
+    conn = store._connect()
+    init_employee_workflow_schemas(conn)
+    return record_match_feedback(
+        conn,
+        era_line_id=str(payload.get("eraLineId") or payload.get("era_line_id") or payload.get("referenceId") or ""),
+        predicted_claim_id=str(payload.get("predictedClaimId") or payload.get("predicted_claim_id") or ""),
+        corrected_claim_id=str(payload.get("correctedClaimId") or payload.get("corrected_claim_id") or "") or None,
+        approved=bool(payload.get("approved", payload.get("is_correct", True))),
+        confidence_at_prediction=float(payload.get("confidence") or payload.get("confidenceScore") or 0),
+    )
 
 
 def _parse_money(value: Any) -> float:

@@ -16,14 +16,11 @@ class LocalStore:
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
-        try:
-            from nr2_db_crypto import db_encryption_enabled, open_encrypted_db
+        from nr2_db_crypto import db_encryption_enabled, open_encrypted_db
 
-            if db_encryption_enabled():
-                conn = open_encrypted_db(self.db_path)
-            else:
-                conn = sqlite3.connect(self.db_path)
-        except Exception:
+        if db_encryption_enabled():
+            conn = open_encrypted_db(self.db_path)
+        else:
             conn = sqlite3.connect(self.db_path)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=5000")

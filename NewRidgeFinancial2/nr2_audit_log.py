@@ -13,12 +13,35 @@ from typing import Any
 _AUDIT_DIR = Path(__file__).resolve().parent.parent / "app_data" / "nr2" / "audit"
 _MUTATIONS_LOG = _AUDIT_DIR / "nr2_mutations.log"
 _READS_LOG = _AUDIT_DIR / "nr2_reads.log"
+_FINANCIAL_MUTATIONS_LOG = _AUDIT_DIR / "nr2_financial_mutations.log"
 _last_mutation_hmac = ""
 _last_read_hmac = ""
+_last_financial_hmac = ""
+
+FINANCIAL_MUTATION_ACTIONS = frozenset(
+    {
+        "posting_queue_enqueue",
+        "posting_queue_review",
+        "posting_queue_bulk_review",
+        "posting_queue_export_approved",
+        "posting_batch_approve",
+        "eob_era_match",
+        "era_parse_apply",
+        "deposit_reconciliation",
+        "qb_journal_post",
+        "patient_payment_webhook",
+        "collections_adjustment",
+    }
+)
 
 
 def read_audit_tail(kind: str, *, limit: int = 100) -> list[dict[str, Any]]:
-    path = _READS_LOG if kind == "reads" else _MUTATIONS_LOG
+    if kind == "reads":
+        path = _READS_LOG
+    elif kind == "financial":
+        path = _FINANCIAL_MUTATIONS_LOG
+    else:
+        path = _MUTATIONS_LOG
     if not path.is_file():
         return []
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -106,6 +129,40 @@ def append_audit_event(
     _last_mutation_hmac = _append_chained(_MUTATIONS_LOG, record, global_prev=_last_mutation_hmac)
 
 
+def append_financial_mutation(
+    action: str,
+    *,
+    actor: str = "Staff",
+    patient_id: str | None = None,
+    before: dict[str, Any] | None = None,
+    after: dict[str, Any] | None = None,
+    amount: float | None = None,
+    hal_involved: bool = False,
+    detail: dict[str, Any] | None = None,
+    path: str | None = None,
+) -> None:
+    global _last_financial_hmac
+    record: dict[str, Any] = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "action": str(action or "unknown"),
+        "actor": str(actor or "Staff"),
+        "halInvolved": bool(hal_involved),
+    }
+    if path:
+        record["path"] = str(path)
+    if patient_id:
+        record["patientId"] = str(patient_id)
+    if amount is not None:
+        record["amount"] = float(amount)
+    if before:
+        record["before"] = before
+    if after:
+        record["after"] = after
+    if detail:
+        record["detail"] = detail
+    _last_financial_hmac = _append_chained(_FINANCIAL_MUTATIONS_LOG, record, global_prev=_last_financial_hmac)
+
+
 def append_read_audit(*, token_fingerprint: str, path: str, role: str = "unknown", params: dict[str, Any] | None = None) -> None:
     global _last_read_hmac
     record: dict[str, Any] = {
@@ -117,6 +174,29 @@ def append_read_audit(*, token_fingerprint: str, path: str, role: str = "unknown
     if params:
         record["params"] = params
     _last_read_hmac = _append_chained(_READS_LOG, record, global_prev=_last_read_hmac)
+
+
+def verify_financial_audit_chain(*, limit: int = 500) -> dict[str, Any]:
+    if not _FINANCIAL_MUTATIONS_LOG.is_file():
+        return {"ok": True, "count": 0, "verified": True}
+    lines = _FINANCIAL_MUTATIONS_LOG.read_text(encoding="utf-8").splitlines()
+    prev = ""
+    count = 0
+    for line in lines[-limit:]:
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        core = {k: v for k, v in record.items() if k != "hmac"}
+        expected_prev = str(core.get("prev_hmac") or "")
+        if expected_prev != prev:
+            return {"ok": False, "error": "chain_break", "count": count}
+        hm = str(record.get("hmac") or "")
+        check = _chain_hmac(prev, core)
+        if hm != check:
+            return {"ok": False, "error": "hmac_mismatch", "count": count}
+        prev = hm
+        count += 1
+    return {"ok": True, "count": count, "verified": True}
 
 
 HAL_SESSIONS_KEY = "nr2:hal:audit-sessions"

@@ -248,11 +248,92 @@ const DesktopBridge = (function () {
     if (!body.shiftContext && typeof window !== "undefined" && window.nr2ShiftState) {
       body.shiftContext = window.nr2ShiftState;
     }
+    if (body.stream && typeof body.onToken === "function") {
+      return evaluateHalQueryStream(body, body.onToken, body.signal);
+    }
     return loopbackJson("/api/hal/evaluate-query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+  }
+
+  async function evaluateHalQueryStream(payload, onToken, abortSignal) {
+    if (!hasLoopbackApi()) throw new Error("HAL gateway requires loopback server");
+    const body = Object.assign({}, payload || {});
+    delete body.onToken;
+    delete body.signal;
+    if (!body.shiftContext && typeof window !== "undefined" && window.nr2ShiftState) {
+      body.shiftContext = window.nr2ShiftState;
+    }
+    const token = await ensureLoopbackSession();
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["X-NR2-Session-Token"] = token;
+    const resp = await fetch(loopbackUrl("/api/v1/hal/stream-sse"), {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      cache: "no-store",
+      signal: abortSignal,
+    });
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => "");
+      throw new Error(`HTTP ${resp.status}: ${detail}`);
+    }
+    const lane = resp.headers.get("X-HAL-Lane-Used") || "";
+    let full = "";
+    let resolvedLane = lane;
+    const reader = resp.body && resp.body.getReader ? resp.body.getReader() : null;
+    if (!reader) {
+      return { ok: false, error: "stream_unsupported" };
+    }
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() || "";
+      for (const part of parts) {
+        const lines = part.split("\n");
+        let eventType = "message";
+        let dataLine = "";
+        for (const line of lines) {
+          if (line.startsWith("event:")) eventType = line.slice(6).trim();
+          if (line.startsWith("data:")) dataLine = line.slice(5).trim();
+        }
+        if (!dataLine) continue;
+        let obj;
+        try {
+          obj = JSON.parse(dataLine);
+        } catch {
+          continue;
+        }
+        if (eventType === "meta" && obj.lane) {
+          resolvedLane = obj.lane;
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("nr2-hal-lane-used", { detail: { lane: obj.lane, routingReason: obj.routingReason } }));
+          }
+          continue;
+        }
+        if (eventType === "error" && obj.error) {
+          throw new Error(obj.error);
+        }
+        if (obj.token) {
+          full += obj.token;
+          if (typeof onToken === "function") onToken(obj.token);
+        }
+        if (obj.done) break;
+      }
+    }
+    return {
+      ok: true,
+      text: full,
+      message: { content: full },
+      resolvedLane,
+      streamed: true,
+    };
   }
 
   let shiftPollTimer = null;
@@ -1194,6 +1275,7 @@ const DesktopBridge = (function () {
     getCachedCloudHalSettings: () => cloudHalSettingsCache,
     fetchHalImportGuard,
     evaluateHalQuery,
+    evaluateHalQueryStream,
     pollShiftState,
     startShiftPolling,
     fetchClinicalContext,

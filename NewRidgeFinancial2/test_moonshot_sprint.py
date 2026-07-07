@@ -64,8 +64,8 @@ class ImportThresholdDefaultsTests(unittest.TestCase):
     def test_moonshot_defaults(self) -> None:
         from import_diagnostics import DAILY_OPS_HOURS, POSTING_MAX_AGE_HOURS, SYNC_STALL_MINUTES
 
-        self.assertEqual(DAILY_OPS_HOURS, 8)
-        self.assertEqual(POSTING_MAX_AGE_HOURS, 48)
+        self.assertEqual(DAILY_OPS_HOURS, 24)
+        self.assertEqual(POSTING_MAX_AGE_HOURS, 24)
         self.assertEqual(SYNC_STALL_MINUTES, 12)
 
 
