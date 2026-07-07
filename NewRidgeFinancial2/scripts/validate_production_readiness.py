@@ -21,10 +21,10 @@ def _check(name: str, ok: bool, detail: str = "") -> dict:
 def run_checks() -> dict:
     checks: list[dict] = []
 
-    from nr2_tls import ensure_localhost_tls_certificates, tls_enforced
+    from nr2_tls import resolve_tls_certificates, tls_enforced
 
     enforced = tls_enforced()
-    cert, key = ensure_localhost_tls_certificates(REPO_ROOT)
+    cert, key = resolve_tls_certificates(REPO_ROOT)
     checks.append(_check("tls_enforced", enforced, f"cert={'yes' if cert else 'no'}"))
     checks.append(_check("tls_certs_present", bool(cert and key), str(cert or "")))
 

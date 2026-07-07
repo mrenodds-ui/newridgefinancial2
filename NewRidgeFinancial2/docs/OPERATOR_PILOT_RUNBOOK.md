@@ -87,3 +87,28 @@ TLS files live in **`app_data\nr2\tls\`**. Dev-only bypass (not for production):
 ---
 
 *Build: hal-10025 · Pilot: CONDITIONAL APPROVE · Moonshot must-fix items implemented.*
+
+---
+
+## Phase 2 — Supervised pilot (days 31–60)
+
+**Enable once shadow-mode Week 1 checks pass.**
+
+```powershell
+powershell -File NewRidgeFinancial2\scripts\Start-Pilot-Phase2.ps1
+py -3.14 NewRidgeFinancial2\scripts\validate_supervised_pilot.py
+```
+
+| Capability | Operator rule |
+|------------|----------------|
+| **Alert toasts + morning routine** | Acknowledge alerts; review autonomous tick log weekly |
+| **ERA auto-match** | Every match gets 👍/👎; no batch approve without review |
+| **Posting queue** | Office manager approves each queue item; HAL never auto-posts |
+| **Import automation** | Scheduled sync every 5 min (after Phase 2 setup script) |
+| **QB read-only** | Optional — set `NR2_QBO_CLIENT_ID` / secret for sync only |
+
+Copy `NewRidgeFinancial2/docs/examples/workstation_role.json.example` to  
+`app_data/nr2/workstation_role.json` if not created by the setup script.
+
+**Still not system of record** until Phase 3 — keep reconciling to SoftDent daily.
+

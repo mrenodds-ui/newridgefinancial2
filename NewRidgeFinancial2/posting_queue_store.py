@@ -46,7 +46,11 @@ def init_posting_queue_schema(conn: sqlite3.Connection) -> None:
     )
 
 
-def _map_row(row: sqlite3.Row) -> dict[str, Any]:
+def _dict_row_factory(cursor, row):
+    return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+
+
+def _map_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "queueId": row["queue_id"],
         "createdAtUtc": row["created_at_utc"],
@@ -73,8 +77,10 @@ class PostingQueueStore:
         self.db_path = db_path
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        from nr2_db_crypto import open_encrypted_db
+
+        conn = open_encrypted_db(Path(self.db_path))
+        conn.row_factory = _dict_row_factory
         init_posting_queue_schema(conn)
         return conn
 
