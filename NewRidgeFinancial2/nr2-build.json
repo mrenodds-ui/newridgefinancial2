@@ -1,8 +1,8 @@
 {
-  "BUILD_ID": "hal-10082",
-  "assetVersion": "hal-10082",
-  "schemaVersion": "hal-10082",
+  "BUILD_ID": "hal-10083",
+  "assetVersion": "hal-10083",
+  "schemaVersion": "hal-10083",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "builtAt": "2026-07-08T00:00:00.000Z",
-  "notes": "Moonshot deep visual: layout integrity, chart unify, page flow, HAL S0/S1 (hal-10082)."
+  "notes": "Moonshot Tier S2: wired filter chips, period scrubber, taxes scenario sliders (hal-10083)."
 }

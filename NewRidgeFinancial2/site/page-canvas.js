@@ -833,6 +833,11 @@ const PageCanvas = (function () {
     const payerMetrics = metricsFromWidget("payerMixAndCollections");
     const collectionPct = parsePct(payerMetrics.collectionRate || payerMetrics.latestMonthCollectionRate);
     const compare = D && D.financialCompare ? D.financialCompare() : [];
+    const priorCompare = D && D.financialPriorCompare ? D.financialPriorCompare() : [];
+    const finFilters =
+      typeof NR2PageFilters !== "undefined" && NR2PageFilters.filterContext
+        ? NR2PageFilters.filterContext("financial")
+        : {};
     const ribbon = D && D.nr2KpiRibbonTiles ? D.nr2KpiRibbonTiles() : { tiles: [] };
     const alerts = D && D.nr2AlertTicker ? D.nr2AlertTicker() : { items: [] };
     const goal = D && D.nr2GoalScorecard ? D.nr2GoalScorecard() : {};
@@ -852,6 +857,17 @@ const PageCanvas = (function () {
 
     return `${stackOpen()}
       ${canvasAlertTicker(alertItems)}
+      ${
+        finFilters.compareMode && priorCompare.length
+          ? canvasPanel({
+              title: "Compare mode — current vs prior month",
+              accent: "green",
+              widgetKey: "practiceFinancialOverview",
+              colSpan: 12,
+              body: `<div class="compare-mode-grid">${canvasCompareStrip(compare)}${canvasCompareStrip(priorCompare)}</div>`,
+            })
+          : ""
+      }
       ${canvasPanel({
         title: "Cross-Analytics KPI Ribbon",
         accent: "green",
@@ -1716,6 +1732,7 @@ const PageCanvas = (function () {
             .join("")}</div>`
         : canvasEmpty("Load QuickBooks P&amp;L to model compensation scenarios.");
     return `${stackOpen()}
+      ${typeof NR2PageFilters !== "undefined" && NR2PageFilters.renderTaxScenarioPanelHtml ? NR2PageFilters.renderTaxScenarioPanelHtml() : ""}
       ${heroKpiRow(kpis, 4)}
       ${canvasGrid12(`
         ${gridCol(

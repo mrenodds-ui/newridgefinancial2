@@ -295,6 +295,9 @@ const PageViews = (function () {
     );
     document.body.setAttribute("data-nr2-layout", "moonshot-mockup-grid");
     wireCommon(container, onNavigate);
+    if (typeof NR2PageFilters !== "undefined" && NR2PageFilters.mountPageFilters) {
+      NR2PageFilters.mountPageFilters(container, pageId, { snapshot: programSnapshot });
+    }
     if (typeof NR2MoonshotUI !== "undefined" && NR2MoonshotUI.enhancePage) {
       NR2MoonshotUI.enhancePage(pageId, container).catch(() => {});
     }

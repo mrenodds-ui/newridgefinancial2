@@ -3,7 +3,7 @@
  * HAL validation — JSON, router, firewall, registry, and suggestion routes.
  * Usage: node validate-hal.mjs
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
@@ -1808,7 +1808,13 @@ async function main() {
   const halOverridesCss = readFileSync(join(siteDir, "hal-mockup-overrides.css"), "utf8");
   assert(halOverridesCss.includes("prefers-reduced-motion"), "hal mockup overrides must respect reduced motion");
   const completeDoc = readFileSync(join(__dirname, "docs", "MOONSHOT_FULLEST_EXTENT_COMPLETE_2026-07-09.md"), "utf8");
-  assert(completeDoc.includes("hal-10082") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10082");
+  assert(existsSync(join(siteDir, "nr2-page-filters.js")), "nr2-page-filters.js must exist for Tier S2");
+  assert(readFileSync(join(siteDir, "nr2-page-filters.js"), "utf8").includes("data-nr2-filter-chip"), "filter chips must be wired");
+  assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes("data-nr2-filter-chip"), "mockup chrome must render wired filter chips");
+  assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes("period-scrubber"), "period scrubber CSS must exist");
+  assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("renderTaxScenarioPanelHtml"), "taxes page must render scenario sliders");
+  assert(readFileSync(join(siteDir, "nr2-moonshot-ui.js"), "utf8").includes("NR2Charts"), "unified chart mount policy must expose NR2Charts");
+  assert(completeDoc.includes("hal-10083") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10083");
 
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;

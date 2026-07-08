@@ -582,6 +582,20 @@ const NR2MoonshotUI = (function () {
     if (pageId === "financial" || pageId === "taxes") renderCloseWizard(panelHost);
   }
 
+  function mountChart(host, renderFn) {
+    if (!host) return null;
+    host.classList.add("chart-mount");
+    host.innerHTML = "";
+    if (typeof renderFn === "function") renderFn(host);
+    return host;
+  }
+
+  const NR2Charts = {
+    mount: mountChart,
+    overlayHost: chartOverlayHost,
+    policy: "replace-not-stack",
+  };
+
   return {
     enhancePage,
     enhanceCanvasCharts,
@@ -590,6 +604,8 @@ const NR2MoonshotUI = (function () {
     renderEraMatchPanel,
     renderPilotPhaseBanner,
     installPilotBanner,
+    mountChart,
+    NR2Charts,
   };
 })();
 
@@ -598,6 +614,7 @@ if (typeof module !== "undefined" && module.exports) {
 }
 if (typeof window !== "undefined" && typeof document !== "undefined") {
   window.NR2MoonshotUI = NR2MoonshotUI;
+  window.NR2Charts = NR2MoonshotUI.NR2Charts;
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => NR2MoonshotUI.installPilotBanner());
   } else {

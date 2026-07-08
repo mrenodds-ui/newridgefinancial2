@@ -176,11 +176,16 @@ const MoonshotMockupChrome = (function () {
     </section>`;
   }
 
-  function renderFilterBar(filters) {
+  function renderFilterBar(filters, pageId) {
+    const PF = typeof NR2PageFilters !== "undefined" ? NR2PageFilters : null;
+    const activeIdx = PF && pageId ? (PF.getPage(pageId).chipIndex || 0) : 0;
     const chips = (filters || [])
-      .map((label, i) => `<span class="chip${i === 0 ? " active" : ""}">${esc(label)}</span>`)
+      .map(
+        (label, i) =>
+          `<button type="button" class="chip${i === activeIdx ? " active" : ""}" data-nr2-filter-chip="${i}" aria-pressed="${i === activeIdx ? "true" : "false"}">${esc(label)}</button>`,
+      )
       .join("");
-    return `<div class="filter-bar">${chips}</div>`;
+    return `<div class="filter-bar"${pageId ? ` data-nr2-filter-bar="${esc(pageId)}"` : ""}>${chips}</div>`;
   }
 
   function renderPageCommandChips(commands) {
@@ -322,7 +327,7 @@ const MoonshotMockupChrome = (function () {
       ${renderTopHeader(state)}
       ${renderHero(schema)}
       ${headerTools}
-      ${renderFilterBar(schema && schema.filters)}
+      ${renderFilterBar(schema && schema.filters, schema && schema.id)}
       ${insight ? renderHalInsight(insight) : ""}
       ${o.halReadinessStrip || ""}
     </div>`;

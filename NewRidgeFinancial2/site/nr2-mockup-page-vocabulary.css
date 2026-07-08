@@ -1131,3 +1131,105 @@
   grid-column: span 12;
   padding: 0;
 }
+
+/* Tier S2 — period scrubber, scenario sliders, compare mode (hal-10083) */
+.app--moonshot-mockup .filter-bar .chip {
+  cursor: pointer;
+  font: inherit;
+}
+
+.app--moonshot-mockup .filter-bar .chip:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+.app--moonshot-mockup .period-scrubber {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -12px 0 20px;
+}
+
+.app--moonshot-mockup .period-scrubber__label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .period-scrubber__track {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .period-scrubber__pill {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 12px;
+}
+
+.app--moonshot-mockup .period-scrubber__pill.active {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .nr2-scenario-panel {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.08), rgba(96, 165, 250, 0.06));
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  border-radius: 10px;
+  grid-column: span 12;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+}
+
+.app--moonshot-mockup .nr2-scenario-panel__head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.app--moonshot-mockup .nr2-scenario-panel__hint {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .nr2-scenario-sliders {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.app--moonshot-mockup .nr2-scenario-slider {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 110px 1fr auto;
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .nr2-scenario-slider input[type="range"] {
+  width: 100%;
+}
+
+.app--moonshot-mockup .nr2-scenario-narrative {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+
+.app--moonshot-mockup .compare-mode-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}

@@ -317,10 +317,30 @@ const PageCanvasData = (function () {
   function productionTrendSeries() {
     const fin = dash("financial") || {};
     const trend = fin.productionTrend || {};
-    const production = (trend.production || []).map(parseAmount);
+    const labels = trend.labels || [];
+    let production = (trend.production || []).map(parseAmount);
     const average = (trend.average || []).map(parseAmount);
     if (!production.length) return null;
-    return { production, average: average.length ? average : null, max: Math.max(...production, 1) * 1.1 };
+    const filters =
+      typeof NR2PageFilters !== "undefined" && NR2PageFilters.filterContext
+        ? NR2PageFilters.filterContext("financial")
+        : {};
+    const sliced =
+      typeof NR2PageFilters !== "undefined" && NR2PageFilters.applyPeriodSlice
+        ? NR2PageFilters.applyPeriodSlice(labels, production, filters)
+        : { labels, values: production };
+    production = sliced.values;
+    const slicedLabels = sliced.labels;
+    const avgSlice =
+      average.length && slicedLabels.length
+        ? average.slice(-slicedLabels.length)
+        : null;
+    return {
+      production,
+      average: avgSlice && avgSlice.length ? avgSlice : null,
+      max: Math.max(...production, 1) * 1.1,
+      labels: slicedLabels,
+    };
   }
 
   function payerDonut() {
@@ -1477,9 +1497,47 @@ const PageCanvasData = (function () {
     ]);
   }
 
+  function financialPriorCompare() {
+    const fin = dash("financial") || {};
+    const trend = fin.productionTrend || {};
+    const labels = trend.labels || [];
+    const prod = (trend.production || []).map(parseAmount);
+    if (labels.length < 2 || prod.length < 2) return [];
+    const cur = prod[prod.length - 1];
+    const prev = prod[prod.length - 2];
+    const deltaPct = prev ? Math.round(((cur - prev) / prev) * 100) : null;
+    return [
+      {
+        label: `Current (${labels[labels.length - 1] || "period"})`,
+        value: fmt(cur),
+        delta: deltaPct != null ? `${deltaPct >= 0 ? "+" : ""}${deltaPct}% vs prior` : "—",
+        tone: deltaPct != null && deltaPct >= 0 ? "success" : "warning",
+      },
+      {
+        label: `Prior (${labels[labels.length - 2] || "period"})`,
+        value: fmt(prev),
+        delta: "baseline",
+        tone: "neutral",
+      },
+    ];
+  }
+
   function taxPlan() {
     if (typeof TaxEngine !== "undefined" && TaxEngine.buildTaxPlanFromSnapshot) {
-      return TaxEngine.buildTaxPlanFromSnapshot(snapshot, feed);
+      const inputs =
+        typeof TaxEngine.collectInputsFromSnapshot === "function"
+          ? TaxEngine.collectInputsFromSnapshot(snapshot, feed)
+          : {};
+      const filters =
+        typeof NR2PageFilters !== "undefined" && NR2PageFilters.filterContext
+          ? NR2PageFilters.filterContext("taxes")
+          : {};
+      if (filters.revenueAdjPct) {
+        const base = inputs.bookNetIncome || 0;
+        inputs.bookNetIncome = Math.round(base * (1 + (filters.revenueAdjPct || 0) / 100));
+      }
+      if (filters.modeledW2 != null) inputs.modeledOfficerW2 = filters.modeledW2;
+      return TaxEngine.buildTaxPlan(inputs);
     }
     return null;
   }
@@ -1668,7 +1726,24 @@ const PageCanvasData = (function () {
 
   function nr2MonthlyTrendCombo() {
     const A = analyticsApi();
-    return A ? A.monthlyTrendCombo(snapshot) : { labels: [], hasData: false };
+    const combo = A ? A.monthlyTrendCombo(snapshot) : { labels: [], hasData: false };
+    if (!combo.labels || !combo.labels.length) return combo;
+    const filters =
+      typeof NR2PageFilters !== "undefined" && NR2PageFilters.filterContext
+        ? NR2PageFilters.filterContext("financial")
+        : {};
+    const PF = typeof NR2PageFilters !== "undefined" ? NR2PageFilters : null;
+    if (!PF || !PF.applyPeriodSlice) return combo;
+    const prodSlice = PF.applyPeriodSlice(combo.labels, combo.production || [], filters);
+    const collSlice = PF.applyPeriodSlice(combo.labels, combo.collections || [], filters);
+    const revSlice = PF.applyPeriodSlice(combo.labels, combo.revenue || [], filters);
+    return Object.assign({}, combo, {
+      labels: prodSlice.labels,
+      production: prodSlice.values,
+      collections: collSlice.values,
+      revenue: revSlice.values,
+      hasData: prodSlice.labels.length > 0,
+    });
   }
 
   function qbReportsApi() {
@@ -1745,6 +1820,7 @@ const PageCanvasData = (function () {
     softdentKpis,
     documentsKpis,
     financialCompare,
+    financialPriorCompare,
     financialWeeklyBars,
     financialYtdBars,
     productionTrendSeries,
