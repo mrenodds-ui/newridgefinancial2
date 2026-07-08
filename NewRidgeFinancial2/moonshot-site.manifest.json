@@ -56,6 +56,7 @@
     "hal-period-requirements.js",
     "narrative-review.js",
     "hal-narrative-library.js",
+    "moonshot-kimi-wire-hal.js",
     "hal-skills.js",
     "hal-widget-master-chart.js",
     "hal-page-widgets.js",

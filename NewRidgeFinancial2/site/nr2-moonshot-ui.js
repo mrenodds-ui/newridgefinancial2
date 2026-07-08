@@ -647,3 +647,77 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     NR2MoonshotUI.installPilotBanner();
   }
 }
+
+// nr2-moonshot-ui.js — Chart lifecycle (replace-not-stack)
+
+window.NR2UI = window.NR2UI || {};
+
+(function (NS) {
+  const _charts = new WeakMap(); // canvas -> Chart instance
+
+  /**
+   * Mount a Chart.js instance on a <canvas>.
+   * Replace-not-stack: destroys any existing chart on the exact canvas first.
+   */
+  NS.mountChart = function (canvas, type = 'bar', data = {}, options = {}) {
+    if (!canvas || !(canvas instanceof HTMLCanvasElement)) {
+      console.warn('[NR2UI] mountChart requires a <canvas> element');
+      return null;
+    }
+
+    // Clear Chart.js global registry
+    if (window.Chart && Chart.getChart) {
+      const existing = Chart.getChart(canvas);
+      if (existing) existing.destroy();
+    }
+
+    // Clear local WeakMap
+    if (_charts.has(canvas)) {
+      _charts.get(canvas).destroy();
+      _charts.delete(canvas);
+    }
+
+    const ctx = canvas.getContext('2d');
+    const chart = new Chart(ctx, {
+      type,
+      data: data.labels ? data : { labels: [], datasets: [] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } },
+        ...options,
+      },
+    });
+
+    _charts.set(canvas, chart);
+    return chart;
+  };
+
+  /**
+   * enhancePage — idempotent scan for chart placeholders.
+   */
+  NS.enhancePage = function () {
+    if (!window.Chart) {
+      console.warn('[NR2UI] Chart.js not loaded');
+      return;
+    }
+
+    document.querySelectorAll('.chart-container[data-chart-type]').forEach((container) => {
+      let canvas = container.querySelector('canvas');
+      if (!canvas) {
+        canvas = document.createElement('canvas');
+        container.innerHTML = '';
+        container.appendChild(canvas);
+      }
+
+      // Skip if already mounted
+      if (Chart.getChart && Chart.getChart(canvas)) return;
+
+      const type = container.dataset.chartType || 'bar';
+      const widgetKey = container.dataset.widget;
+      const payload = window.NR2Data?.[widgetKey] || { labels: ['A','B','C'], datasets: [{ label: 'Dataset', data: [3,1,4] }] };
+
+      NS.mountChart(canvas, type, payload);
+    });
+  };
+})(window.NR2UI);

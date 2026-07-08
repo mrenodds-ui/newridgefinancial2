@@ -6021,3 +6021,42 @@ DesktopBridge.whenReady(() => {
   if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return;
   boot();
 });
+
+// app.js — renderPageView tail hook
+
+async function renderPageView(pageName, data = {}) {
+  const canvas = document.getElementById('page-canvas');
+  if (!canvas) return;
+
+  if (typeof PageCanvas !== 'undefined' && PageCanvas.setFeed) {
+    PageCanvas.setFeed(data.feed || null, data.snapshot);
+  }
+
+  // Clear previous view to prevent ghost DOM/charts
+  canvas.innerHTML = '';
+
+  const renderers = {
+    financial: renderFinancialPage,
+    taxes: renderTaxesPage,
+    softdent: renderSoftdentPage,
+    narratives: renderNarrativesPage,
+    claims: renderClaimsPage,
+    ar: renderARPage,
+    'office-manager': renderOfficeManagerPage,
+    documents: renderDocumentsPage,
+    quickbooks: renderQuickbooksPage,
+    library: renderLibraryPage,
+  };
+
+  const renderer = renderers[pageName];
+  if (typeof renderer === 'function') {
+    renderer(canvas, data);
+  } else {
+    canvas.innerHTML = `<div class="empty-state">Page <code>${pageName}</code> not found.</div>`;
+  }
+
+  // Moonshot hook: mount charts after DOM flush
+  if (window.NR2UI?.enhancePage) {
+    requestAnimationFrame(() => window.NR2UI.enhancePage());
+  }
+}

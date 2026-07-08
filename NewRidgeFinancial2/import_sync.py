@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import os
 import shutil
 from datetime import datetime, timezone
@@ -1009,6 +1010,62 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
         result["warnings"].append(f"SQLite backup skipped: {exc}")
 
     return result
+
+
+# import_sync.py — append to collector registry
+COLLECTOR_MAP = {}
+COLLECTOR_MAP.update({
+    "softdent.procedures": {
+        "source": "softdent",
+        "endpoint": "/export/procedures",
+        "query": """
+            SELECT procedure_code, procedure_description, fee, provider_id,
+                   procedure_date, tooth_number, surface, status
+            FROM procedures
+            WHERE procedure_date >= :rolling_90d
+            ORDER BY procedure_date DESC
+        """,
+        "schedule": "0 6,14 * * *",   # 06:00 + 14:00 daily
+        "fallback_csv": "softdent_procedures.csv",
+        "required_for": ["softdent", "narratives", "claims"],
+    },
+    "softdent.claimStatus": {
+        "source": "softdent",
+        "endpoint": "/export/claim_status",
+        "query": """
+            SELECT claim_id, patient_id, payer_name, claim_status,
+                   billed_amount, paid_amount, date_submitted, date_resolved,
+                   denial_reason, narrative_needed
+            FROM claim_status
+            WHERE date_submitted >= :rolling_90d
+            ORDER BY date_submitted DESC
+        """,
+        "schedule": "0 7 * * *",      # 07:00 daily
+        "fallback_csv": "softdent_claim_status.csv",
+        "required_for": ["softdent", "claims"],
+    }
+})
+
+# ------------------------------------------------------------------
+# QuickBooks stale-force refresh
+# ------------------------------------------------------------------
+def ensure_quickbooks_fresh(max_age_minutes: int = 1440):
+    qb_sets = [
+        "quickbooks.revenue",
+        "quickbooks.profitAndLoss",
+        "quickbooks.expenses",
+        "quickbooks.expenseCategories",
+        "quickbooks.ar",
+    ]
+    for ds_key in qb_sets:
+        meta = get_dataset_meta(ds_key)
+        age = meta.get("age_minutes", 999999) if meta else 999999
+        if age > max_age_minutes:
+            logging.warning(f"[SYNC] QB dataset {ds_key} stale ({age}m). Queuing priority sync.")
+            queue_priority_sync(ds_key, source="quickbooks", reason="stale_refresh")
+
+# Invoke inside the main scheduler loop before widget-feed generation:
+# ensure_quickbooks_fresh()
 
 
 if __name__ == "__main__":

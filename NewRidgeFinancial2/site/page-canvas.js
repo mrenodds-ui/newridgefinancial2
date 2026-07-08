@@ -294,7 +294,7 @@ const PageCanvas = (function () {
         <div class="widget-header"><span class="widget-title">${chrome.icon || widgetHeaderIcon(widgetKey)}${esc(title)}</span><div class="widget-menu" aria-hidden="true">⋮</div></div>
         <div class="widget-body">${body}${chrome.note || ""}</div>
         ${caption ? `<p class="widget-caption">${esc(caption)}</p>` : ""}
-      </section>`;
+    </section>`;
   }
 
   function canvasStat(value, label, tone, widgetKey) {
@@ -903,16 +903,16 @@ const PageCanvas = (function () {
         finFilters.compareMode && priorCompare.length
           ? canvasPanel({
               title: "Compare mode — current vs prior month",
-              accent: "green",
+          accent: "green",
               widgetKey: "practiceFinancialOverview",
               colSpan: 12,
               body: `<div class="compare-mode-grid">${canvasCompareStrip(compare)}${canvasCompareStrip(priorCompare)}</div>`,
             })
           : ""
       }
-      ${canvasPanel({
+        ${canvasPanel({
         title: "Cross-Analytics KPI Ribbon",
-        accent: "green",
+          accent: "green",
         widgetKey: "nr2KpiRibbon",
         colSpan: 12,
         body: canvasKpiRibbon(ribbon.tiles),
@@ -981,7 +981,7 @@ const PageCanvas = (function () {
         ${gridCol(
           8,
           canvasPanel({
-            title: wTitle("financial", 2),
+          title: wTitle("financial", 2),
             accent: "green",
             caption: "12-month production vs trailing average",
             widgetKey: "financialProductionTrend",
@@ -1004,7 +1004,7 @@ const PageCanvas = (function () {
           canvasPanel({
             title: "Provider production share",
             accent: "green",
-            caption: "Provider production split",
+          caption: "Provider production split",
             widgetKey: "nr2ProviderCompensationWidget",
             body: canvasProviderCompShare(provComp.hasData ? provComp : providers ? { providers: providers.items.map((item) => ({ name: item.name, production: parseAmount(item.amount), pct: item.pct })), totalProduction: parseAmount(providers.total), hasData: true } : { providers: [] }),
           }),
@@ -1160,7 +1160,7 @@ const PageCanvas = (function () {
             title: wTitle("softdent", 7),
             widgetKey: wKey("softdent", 7),
             body: (() => {
-              const resp = D ? D.softdentResponsibilityDonut() : null;
+    const resp = D ? D.softdentResponsibilityDonut() : null;
               return resp ? conicDonut(resp.slices, "") : canvasEmpty("Insurance vs patient split unavailable.");
             })(),
           }),
@@ -1200,11 +1200,11 @@ const PageCanvas = (function () {
         ${gridCol(
           12,
           canvasPanel({
-            title: wTitle("softdent", 0),
-            accent: "green",
+        title: wTitle("softdent", 0),
+        accent: "green",
             caption: "Care delivery at a glance",
-            widgetKey: wKey("softdent", 0),
-            body: canvasStatGrid(D ? D.softdentGlanceStats() : []),
+        widgetKey: wKey("softdent", 0),
+        body: canvasStatGrid(D ? D.softdentGlanceStats() : []),
           }),
         )}
         ${gridCol(
@@ -1279,7 +1279,7 @@ const PageCanvas = (function () {
           }),
         )}
       `)}
-      ${canvasPanel({
+        ${canvasPanel({
         title: "QuickBooks ↔ NR2 Reconciliation",
         widgetKey: "ebitdaNormalization",
         colSpan: 12,
@@ -1337,7 +1337,7 @@ const PageCanvas = (function () {
         <div class="card chart-large widget-glow-border" data-hal-widget-key="quickbooksProfitLossDetail" data-nr2-chart-host="quickbooksProfitLossDetail">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksProfitLossDetail")}Profit &amp; Loss Trend (YTD)</span></div>
           ${plChartBody}
-        </div>
+      </div>
         <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksExpenseBreakdown">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksExpenseBreakdown")}Operating Expenses</span></div>
           ${expenseBody}
@@ -1457,10 +1457,10 @@ const PageCanvas = (function () {
         ${gridCol(
           8,
           canvasPanel({
-            title: wTitle("ar", 0),
-            accent: "orange",
+        title: wTitle("ar", 0),
+        accent: "orange",
             caption: "Payer × aging heatmap",
-            widgetKey: wKey("ar", 0),
+        widgetKey: wKey("ar", 0),
             chartHost: true,
             body: heat ? canvasHeatmap(heat.rowLabels, heat.colLabels, heat.matrix) : canvasHeatmapPlaceholder(),
           }),
@@ -1479,13 +1479,13 @@ const PageCanvas = (function () {
         ${gridCol(
           12,
           canvasPanel({
-            title: wTitle("ar", 1),
-            accent: "orange",
-            caption: "Top outstanding claims",
-            widgetKey: wKey("ar", 1),
-            body: claims.length
-              ? canvasTable(["Patient", "Procedure", "Payer", "Balance", "Age"], claims, true)
-              : canvasEmpty("Outstanding claim detail will appear when SoftDent claims export is loaded."),
+        title: wTitle("ar", 1),
+        accent: "orange",
+        caption: "Top outstanding claims",
+        widgetKey: wKey("ar", 1),
+        body: claims.length
+          ? canvasTable(["Patient", "Procedure", "Payer", "Balance", "Age"], claims, true)
+          : canvasEmpty("Outstanding claim detail will appear when SoftDent claims export is loaded."),
           }),
         )}
       `)}
@@ -1515,10 +1515,10 @@ const PageCanvas = (function () {
         ${gridCol(
           8,
           canvasPanel({
-            title: wTitle("claims", 0),
-            accent: "purple",
-            caption: lanes.length ? "Claims pipeline from SoftDent import" : "Pipeline lanes · waiting on claims export",
-            widgetKey: wKey("claims", 0),
+        title: wTitle("claims", 0),
+        accent: "purple",
+        caption: lanes.length ? "Claims pipeline from SoftDent import" : "Pipeline lanes · waiting on claims export",
+        widgetKey: wKey("claims", 0),
             body: canvasKanbanLanes(kanbanLanes, wKey("claims", 0), { claims: true }),
           }),
         )}
@@ -1535,34 +1535,34 @@ const PageCanvas = (function () {
         ${gridCol(
           6,
           canvasPanel({
-            title: "Claim detail",
-            accent: "purple",
-            caption: claim ? `${claim.patient || "Claim"} · ${claim.procedure || "—"}` : "Selected claim",
+          title: "Claim detail",
+          accent: "purple",
+          caption: claim ? `${claim.patient || "Claim"} · ${claim.procedure || "—"}` : "Selected claim",
             halSubpanel: "claimsClaimDetail",
-            body: claim
+          body: claim
               ? `<div class="claim-detail">
-                <strong>${esc(claim.procedure || claim.id || "Claim")}</strong>
-                <p>${esc(claim.patient || "—")} · ${esc(claim.payer || "—")}</p>
-                ${canvasStatGrid([
-                  { value: fmtClaim(claim.amount), label: "Billed amount" },
-                  { value: fmtClaim(claim.serviceDate), label: "Service date" },
-                ])}
-              </div>`
-              : canvasEmpty("Select a claim from the pipeline when claims import is loaded."),
+            <strong>${esc(claim.procedure || claim.id || "Claim")}</strong>
+            <p>${esc(claim.patient || "—")} · ${esc(claim.payer || "—")}</p>
+            ${canvasStatGrid([
+              { value: fmtClaim(claim.amount), label: "Billed amount" },
+              { value: fmtClaim(claim.serviceDate), label: "Service date" },
+            ])}
+          </div>`
+            : canvasEmpty("Select a claim from the pipeline when claims import is loaded."),
           }),
         )}
         ${gridCol(
           6,
           canvasPanel({
-            title: "Claim status",
-            caption: claim ? claim.id || "First open claim" : "Claim history",
+          title: "Claim status",
+          caption: claim ? claim.id || "First open claim" : "Claim history",
             halSubpanel: "claimsClaimStatus",
-            body: claim
-              ? canvasTimeline([
-                  { time: fmtClaim(claim.serviceDate), title: claim.status || "Open", detail: `${fmtClaim(claim.amount)} · ${claim.payer || "—"}`, active: true },
-                  { time: "Import", title: "SoftDent claims export", detail: "Read-only workbench" },
-                ])
-              : canvasEmpty("Claim history will appear with SoftDent claims data."),
+          body: claim
+            ? canvasTimeline([
+                { time: fmtClaim(claim.serviceDate), title: claim.status || "Open", detail: `${fmtClaim(claim.amount)} · ${claim.payer || "—"}`, active: true },
+                { time: "Import", title: "SoftDent claims export", detail: "Read-only workbench" },
+              ])
+            : canvasEmpty("Claim history will appear with SoftDent claims data."),
           }),
         )}
         ${gridCol(
@@ -1607,7 +1607,7 @@ const PageCanvas = (function () {
                   `<div class="cdt-item${i === 0 ? " active" : ""}" role="listitem"><div class="cdt-code">${esc(code.split(" ")[0])}</div><div class="cdt-desc">${esc(code.slice(code.indexOf(" ") + 1))}</div></div>`,
               )
               .join("")}</div>
-          </div>
+            </div>
         </div>
         <div class="panel">
           <div class="composer-toolbar">
@@ -1697,28 +1697,28 @@ const PageCanvas = (function () {
         ${gridCol(
           8,
           canvasPanel({
-            title: wTitle("documents", 0),
-            accent: "cyan",
+          title: wTitle("documents", 0),
+          accent: "cyan",
             caption: "OCR intake queue",
-            widgetKey: wKey("documents", 0),
-            body: queue.length ? canvasTable(["Document", "Category", "Amount", "Date"], queue, true) : canvasEmpty("Accounting documents will appear when the local document queue is populated."),
+          widgetKey: wKey("documents", 0),
+          body: queue.length ? canvasTable(["Document", "Category", "Amount", "Date"], queue, true) : canvasEmpty("Accounting documents will appear when the local document queue is populated."),
           }),
         )}
         ${gridCol(
           4,
           canvasPanel({
-            title: wTitle("documents", 1),
-            accent: "cyan",
-            widgetKey: wKey("documents", 1),
-            body: `${canvasDocPreview(doc ? doc.vendor || doc.id || "Document" : "Document preview", doc && doc.pages ? doc.pages : 1)}${doc ? "" : canvasEmpty("Document preview will appear when a document is selected.")}`,
+          title: wTitle("documents", 1),
+          accent: "cyan",
+          widgetKey: wKey("documents", 1),
+          body: `${canvasDocPreview(doc ? doc.vendor || doc.id || "Document" : "Document preview", doc && doc.pages ? doc.pages : 1)}${doc ? "" : canvasEmpty("Document preview will appear when a document is selected.")}`,
           }),
         )}
         ${gridCol(
           12,
           canvasPanel({
-            title: wTitle("documents", 4),
-            caption: "Local journal queue",
-            widgetKey: wKey("documents", 4),
+        title: wTitle("documents", 4),
+        caption: "Local journal queue",
+        widgetKey: wKey("documents", 4),
             body: journalItems.length ? renderJournalQueuePanel(journalItems) : canvasEmpty("Journal posting queue requires the NR2 server. Run StartProgram.bat."),
           }),
         )}
@@ -1843,26 +1843,26 @@ const PageCanvas = (function () {
         ${gridCol(
           8,
           canvasPanel({
-            title: "Book-to-tax bridge",
-            accent: "blue",
-            caption: plan ? `${plan.federalRateLabel} · ${plan.kansasRateLabel}` : "Planning rates",
+        title: "Book-to-tax bridge",
+        accent: "blue",
+        caption: plan ? `${plan.federalRateLabel} · ${plan.kansasRateLabel}` : "Planning rates",
             widgetKey: "taxBookToTaxBridge",
-            body: bridge.length
+        body: bridge.length
               ? `${canvasWaterfall(bridge.slice(0, 6).map((row, i) => ({ label: row[0], value: row[1], type: i === 0 ? "total" : "neg" })))}${canvasTable(["Line item", "Amount"], bridge, true)}`
-              : canvasEmpty("P&amp;L net income will drive the book-to-tax bridge when QuickBooks export is loaded."),
+          : canvasEmpty("P&amp;L net income will drive the book-to-tax bridge when QuickBooks export is loaded."),
           }),
         )}
         ${gridCol(
           4,
           canvasPanel({
-            title: "Estimated owner tax split",
-            accent: "blue",
-            caption: "Federal + Kansas on K-1 flow-through",
+          title: "Estimated owner tax split",
+          accent: "blue",
+          caption: "Federal + Kansas on K-1 flow-through",
             widgetKey: "taxFederalStateSplit",
             chartHost: true,
-            body:
-              split.length && totalTax
-                ? taxUsageBar(split, totalTax, `Planning total ${fmtTaxMoney(totalTax)} · not a filed return`)
+          body:
+            split.length && totalTax
+              ? taxUsageBar(split, totalTax, `Planning total ${fmtTaxMoney(totalTax)} · not a filed return`)
                 : taxUsageBar(
                     [
                       { id: "federal", label: "Federal", amount: 0 },
@@ -1886,31 +1886,31 @@ const PageCanvas = (function () {
         ${gridCol(
           6,
           canvasPanel({
-            title: "Quarterly estimates",
-            accent: "blue",
-            caption: "1040-ES + Kansas vouchers",
+          title: "Quarterly estimates",
+          accent: "blue",
+          caption: "1040-ES + Kansas vouchers",
             widgetKey: "taxQuarterlyEstimates",
-            body: quarterly.length
-              ? canvasTable(["Period", "Federal", "Kansas", "Due", "Status"], quarterly, true)
-              : canvasEmpty("Quarterly plan appears when book income is available."),
+          body: quarterly.length
+            ? canvasTable(["Period", "Federal", "Kansas", "Due", "Status"], quarterly, true)
+            : canvasEmpty("Quarterly plan appears when book income is available."),
           }),
         )}
         ${splitRow(
           canvasPanel({
-            title: wTitle("taxes", 0),
-            accent: "blue",
+          title: wTitle("taxes", 0),
+          accent: "blue",
             widgetKey: "quickbooksProfitLossDetail",
-            body: bookIncome.length
-              ? canvasTable(["Account", "Amount", "Notes"], bookIncome, true)
-              : canvasEmpty("P&amp;L rows will appear when QuickBooks export is loaded."),
+          body: bookIncome.length
+            ? canvasTable(["Account", "Amount", "Notes"], bookIncome, true)
+            : canvasEmpty("P&amp;L rows will appear when QuickBooks export is loaded."),
           }),
           canvasPanel({
-            title: wTitle("taxes", 1),
-            accent: "blue",
+          title: wTitle("taxes", 1),
+          accent: "blue",
             widgetKey: "ebitdaNormalization",
-            body: ebitda.length
-              ? canvasTable(["Adjustment", "Amount", "Reviewer", "Notes"], ebitda, true)
-              : canvasEmpty("EBITDA add-backs will appear when expense categories are loaded."),
+          body: ebitda.length
+            ? canvasTable(["Adjustment", "Amount", "Reviewer", "Notes"], ebitda, true)
+            : canvasEmpty("EBITDA add-backs will appear when expense categories are loaded."),
           }),
         )}
         ${splitRow(
@@ -1978,20 +1978,20 @@ const PageCanvas = (function () {
       ${canvasGrid12(`
         ${splitRow(
           canvasPanel({
-            title: wTitle("office-manager", 0),
-            accent: "yellow",
+        title: wTitle("office-manager", 0),
+        accent: "yellow",
             caption: "Today's priorities",
-            widgetKey: wKey("office-manager", 0),
+        widgetKey: wKey("office-manager", 0),
             chartHost: true,
             body: canvasFocusCards(kpis),
           }),
           canvasPanel({
-            title: "Office task queue",
-            accent: "yellow",
-            caption: D ? D.periodSubtitle() : "Local tasks",
-            widgetKey: wKey("office-manager", 0),
+          title: "Office task queue",
+          accent: "yellow",
+          caption: D ? D.periodSubtitle() : "Local tasks",
+          widgetKey: wKey("office-manager", 0),
             halSubpanel: "officeTaskQueue",
-            body: tasks.length ? canvasTable(["Due", "Category", "Task", "Status"], tasks, true) : canvasEmpty("Local office tasks will appear when HAL or staff create them."),
+          body: tasks.length ? canvasTable(["Due", "Category", "Task", "Status"], tasks, true) : canvasEmpty("Local office tasks will appear when HAL or staff create them."),
           }),
         )}
         ${gridCol(
@@ -2000,7 +2000,7 @@ const PageCanvas = (function () {
             title: "Operatory schedule",
             accent: "yellow",
             caption: "Today's timeline",
-            widgetKey: wKey("office-manager", 0),
+          widgetKey: wKey("office-manager", 0),
             halSubpanel: "officeOperatorySchedule",
             body: canvasScheduleTimeline(timeline.length ? timeline : [{ time: "8:30", title: "Morning huddle", detail: "Review open tasks" }]),
           }),
@@ -2018,10 +2018,10 @@ const PageCanvas = (function () {
         ${gridCol(
           12,
           canvasPanel({
-            title: wTitle("office-manager", 1),
-            caption: "Jump to staff work surfaces",
-            widgetKey: wKey("office-manager", 1),
-            body: canvasNavPills(staffPages),
+        title: wTitle("office-manager", 1),
+        caption: "Jump to staff work surfaces",
+        widgetKey: wKey("office-manager", 1),
+        body: canvasNavPills(staffPages),
           }),
         )}
       `)}
@@ -2081,4 +2081,368 @@ if (typeof globalThis !== "undefined") {
 }
 if (typeof window !== "undefined") {
   window.PageCanvas = PageCanvas;
+}
+
+/**
+ * page-canvas.js — data-resolution + empty-state guard
+ */
+
+// 1. Shared honesty / resolution helpers
+PageCanvas.hasRenderableData = function(datasetKey, minRows = 1) {
+  const snap = (window.HAL?.bus?.snapshot?.datasets) || {};
+  const ds = snap[datasetKey];
+  if (!ds) return false;
+  const rows = Array.isArray(ds) ? ds : (ds.rows || ds.data);
+  if (Array.isArray(rows)) return rows.length >= minRows;
+  if (typeof ds === 'object' && Object.keys(ds).length > 0) return true;
+  return false;
+};
+
+// Resolve passed page data against live HAL bus datasets when renderer bag is empty
+PageCanvas.resolveData = function(pageId, passedData) {
+  if (passedData && Object.keys(passedData).length > 0) return passedData;
+  const snap = window.HAL?.bus?.snapshot?.datasets || {};
+  const out = { ...(passedData || {}) };
+  Object.keys(snap).forEach(dsKey => {
+    if (dsKey.startsWith(pageId + '.')) {
+      const short = dsKey.split('.').pop();
+      out[short] = snap[dsKey];
+    }
+  });
+  return out;
+};
+
+// 2. Example: patch renderSoftdent so it NEVER shows global empty placeholder
+//    when HAL has ANY softdent dataset (including the new ones).
+PageCanvas.renderSoftdent = function(pageId, data) {
+  const root = document.getElementById('appPage');
+  if (!root) return;
+
+  data = this.resolveData('softdent', data || {});
+
+  const hasAny = [
+    'softdent.dashboard','softdent.claims','softdent.clinicalNotes',
+    'softdent.ar','softdent.newPatients','softdent.treatmentPlans',
+    'softdent.caseAcceptance','softdent.hygieneRecall','softdent.operatory',
+    'softdent.procedures','softdent.claimStatus'
+  ].some(k => PageCanvas.hasRenderableData(k));
+
+  if (!hasAny) {
+    root.innerHTML = `<div class="empty-placeholder">No SoftDent data connected</div>`;
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="softdent-page">
+      <div class="widget-grid" data-hal-widget-key="softdentOverview">
+        ${this.canvasMetricTile({ title: 'Production', value: data.dashboard?.production })}
+        ${this.canvasMetricTile({ title: 'Collections', value: data.dashboard?.collections })}
+      </div>
+
+      <div class="widget-grid" data-hal-widget-key="softdentFunnel">
+        ${this.canvasFunnel(data.funnel || {})}
+      </div>
+
+      <div class="widget-grid" data-hal-widget-key="softdentOperatory">
+        ${this.operatoryGrid?.(data.operatory) || '<div class="empty-state">Operatory timeline not configured</div>'}
+      </div>
+
+      <div class="widget-grid" data-hal-widget-key="softdentRecall">
+        ${this.recallTable?.(data.hygieneRecall) || ''}
+      </div>
+
+      <div class="chart-panel-grid">
+        <div class="chart-container" data-hal-widget-key="softdentProduction">
+          ${PageCanvas.hasRenderableData('softdent.procedures')
+            ? this.proceduresTable(PageCanvasData.softdentProcedures())
+            : '<div class="empty-state">Procedures loading…</div>'}
+        </div>
+        <div class="chart-container" data-hal-widget-key="softdentClaimStatus">
+          ${PageCanvas.hasRenderableData('softdent.claimStatus')
+            ? this.claimStatusPanel(PageCanvasData.softdentClaimStatus())
+            : '<div class="empty-state">Claim status loading…</div>'}
+        </div>
+        <div class="chart-container" data-hal-widget-key="softdentCollections"></div>
+        <div class="chart-container" data-hal-widget-key="softdentAging"></div>
+      </div>
+    </div>
+  `;
+};
+
+/**
+ * page-canvas.js — replace renderQuickbooks to remove nested wrappers
+ */
+
+PageCanvas.renderQuickbooks = function(pageId, data) {
+  const root = document.getElementById('appPage');
+  if (!root) return;
+
+  // Detect stale from HAL if not provided in data bag
+  const qbExp = PageCanvasData.quickbooksExpenseCategories?.();
+  const qbAr  = PageCanvasData.quickbooksAr?.();
+  const isStale = qbExp?.stale || qbAr?.stale || data?.qbStale;
+
+  root.innerHTML = `
+    <div class="dashboard-grid" data-page="quickbooks" data-hal-widget-key="qbDashboard">
+      <div class="dashboard-grid__header">
+        <h2 class="dashboard-grid__title">QuickBooks Overview</h2>
+        <span class="sync-badge ${isStale ? 'sync-badge--stale' : ''}" data-qb-sync-status>
+          ${isStale ? 'Stale — refresh needed' : 'Synced'}
+        </span>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card" data-hal-widget-key="qbRevenue">
+          <div class="kpi-value">${data?.revenueYtd ?? '—'}</div>
+          <div class="kpi-label">Revenue YTD</div>
+        </div>
+        <div class="kpi-card" data-hal-widget-key="qbExpenses">
+          <div class="kpi-value">${data?.expensesYtd ?? '—'}</div>
+          <div class="kpi-label">Expenses YTD</div>
+        </div>
+        <div class="kpi-card" data-hal-widget-key="qbNetIncome">
+          <div class="kpi-value">${data?.netIncome ?? '—'}</div>
+          <div class="kpi-label">Net Income</div>
+        </div>
+        <div class="kpi-card" data-hal-widget-key="qbAr">
+          <div class="kpi-value">${data?.arOutstanding ?? '—'}</div>
+          <div class="kpi-label">AR Outstanding</div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid__charts">
+        <div class="chart-large chart-container" data-hal-widget-key="qbRevenueTrend"></div>
+        <div class="chart-medium chart-container" data-hal-widget-key="qbProfitLoss"></div>
+        <div class="chart-medium chart-container" data-hal-widget-key="qbExpenseCategories"></div>
+        <div class="chart-large chart-container" data-hal-widget-key="qbCashFlow"></div>
+        <div class="chart-medium chart-container" data-hal-widget-key="qbAging"></div>
+        <div class="chart-medium chart-container" data-hal-widget-key="qbVendorSpend"></div>
+      </div>
+    </div>
+  `;
+};
+
+/**
+ * page-canvas.js — Issue 4: Panel-count parity renderers
+ * Covers: financial, softdent, ar, claims, office-manager, documents
+ * Depends on Issue 2 helpers: PageCanvas.resolveData, PageCanvas.hasRenderableData
+ */
+
+PageCanvas.renderFinancial = function(pageId, data) {
+  const root = document.getElementById('appPage');
+  if (!root) return;
+  data = this.resolveData('financial', data || {});
+  const hasAny = this.hasRenderableData('quickbooks.revenue')
+              || this.hasRenderableData('quickbooks.profitAndLoss')
+              || this.hasRenderableData('quickbooks.expenses');
+  if (!hasAny) {
+    root.innerHTML = `<div class="empty-placeholder">No financial data connected</div>`;
+    return;
+  }
+  root.innerHTML = `
+    <div class="financial-page">
+      <div class="kpi-grid">
+        ${this.canvasMetricTile({ title: 'Revenue', value: data.revenue })}
+        ${this.canvasMetricTile({ title: 'Expenses', value: data.expenses })}
+        ${this.canvasMetricTile({ title: 'Net Income', value: data.netIncome })}
+      </div>
+      <div class="chart-panel-grid">
+        <div class="chart-container" data-hal-widget-key="financialRevenueTrend"></div>
+        <div class="chart-container" data-hal-widget-key="financialExpenseBreakdown"></div>
+        <div class="chart-container" data-hal-widget-key="financialProfitLoss"></div>
+        <div class="chart-container" data-hal-widget-key="financialAging"></div>
+      </div>
+    </div>
+  `;
+};
+
+PageCanvas.renderSoftdent = function(pageId, data) {
+  const root = document.getElementById('appPage');
+  if (!root) return;
+  data = this.resolveData('softdent', data || {});
+  const hasAny = [
+    'softdent.dashboard','softdent.claims','softdent.clinicalNotes',
+    'softdent.ar','softdent.newPatients','softdent.treatmentPlans',
+    'softdent.caseAcceptance','softdent.hygieneRecall','softdent.operatory',
+    'softdent.procedures','softdent.claimStatus'
+  ].some(k => this.hasRenderableData(k));
+  if (!hasAny) {
+    root.innerHTML = `<div class="empty-placeholder">No SoftDent data connected</div>`;
+    return;
+  }
+  root.innerHTML = `
+    <div class="softdent-page">
+      <div class="widget-grid" data-hal-widget-key="softdentOverview">
+        ${this.canvasMetricTile({ title: 'Production', value: data.dashboard?.production })}
+        ${this.canvasMetricTile({ title: 'Collections', value: data.dashboard?.collections })}
+      </div>
+      <div class="widget-grid" data-hal-widget-key="softdentFunnel">
+        ${this.canvasFunnel?.(data.funnel) || '<div class="empty-state">Funnel data unavailable</div>'}
+      </div>
+      <div class="widget-grid" data-hal-widget-key="softdentOperatory">
+        ${this.operatoryGrid?.(data.operatory) || '<div class="empty-state">Operatory timeline not configured</div>'}
+      </div>
+      <div class="widget-grid" data-hal-widget-key="softdentRecall">
+        ${this.recallTable?.(data.hygieneRecall) || ''}
+      </div>
+      <div class="chart-panel-grid">
+        <div class="chart-container" data-hal-widget-key="softdentProduction">
+          ${this.hasRenderableData('softdent.procedures')
+            ? this.proceduresTable?.(PageCanvasData.softdentProcedures()) || ''
+            : '<div class="empty-state">Procedures loading…</div>'}
+        </div>
+        <div class="chart-container" data-hal-widget-key="softdentClaimStatus">
+          ${this.hasRenderableData('softdent.claimStatus')
+            ? this.claimStatusPanel?.(PageCanvasData.softdentClaimStatus()) || ''
+            : '<div class="empty-state">Claim status loading…</div>'}
+        </div>
+        <div class="chart-container" data-hal-widget-key="softdentCollections"></div>
+        <div class="chart-container" data-hal-widget-key="softdentAging"></div>
+      </div>
+    </div>
+  `;
+};
+
+// page-canvas.js — page renderers for mockup parity
+
+function renderARPage(container, data = {}) {
+  const kpi = (i) => `
+    <div class="kpi-card">
+      <h4>${['0-30 Days','31-60 Days','61-90 Days'][i]}</h4>
+      <div class="metric" data-widget="ar.age${i+1}">$0</div>
+    </div>`;
+  const chart = (i) => `
+    <div class="chart-container" data-chart-type="bar" data-widget="ar.chart${i+1}">
+      <canvas></canvas>
+    </div>`;
+
+  container.innerHTML = `
+    <section class="page-ar">
+      <header class="page-header"><h2>Accounts Receivable</h2></header>
+      <div class="kpi-grid">${[0,1,2].map(kpi).join('')}</div>
+      <div class="chart-row">${[0,1,2].map(chart).join('')}</div>
+    </section>`;
+}
+
+function renderClaimsPage(container, data = {}) {
+  const chart = (i) => `
+    <div class="chart-container" data-chart-type="doughnut" data-widget="claims.chart${i+1}">
+      <canvas></canvas>
+    </div>`;
+  const claim = (i) => `
+    <article class="claim-card" data-widget="claims.claim${i+1}">
+      <span class="claim-id">CLM-${1000+i}</span>
+      <span class="claim-status badge">Pending</span>
+    </article>`;
+
+  container.innerHTML = `
+    <section class="page-claims">
+      <header class="page-header"><h2>Claims</h2></header>
+      <div class="chart-row">${[0,1,2,3].map(chart).join('')}</div>
+      <div class="claims-grid">${Array.from({length:23},(_,i)=>claim(i)).join('')}</div>
+    </section>`;
+}
+
+function renderOfficeManagerPage(container, data = {}) {
+  const panel = (i) => `
+    <div class="dashboard-panel" data-widget="office.panel${i+1}">
+      <h4>Office Panel ${i+1}</h4>
+    </div>`;
+  const chart = (i) => `
+    <div class="chart-container" data-chart-type="line" data-widget="office.chart${i+1}">
+      <canvas></canvas>
+    </div>`;
+
+  container.innerHTML = `
+    <section class="page-office-manager">
+      <header class="page-header"><h2>Office Manager</h2></header>
+      <div class="dashboard-grid">${[0,1,2].map(panel).join('')}</div>
+      <div class="chart-row">${[0,1].map(chart).join('')}</div>
+    </section>`;
+}
+
+function renderDocumentsPage(container, data = {}) {
+  const widget = (i) => `
+    <div class="widget-card" data-widget="docs.widget${i+1}">
+      <h4>Doc Set ${i+1}</h4>
+      <div class="doc-count">0</div>
+    </div>`;
+
+  container.innerHTML = `
+    <section class="page-documents">
+      <header class="page-header"><h2>Documents</h2></header>
+      <div class="widget-grid">${[0,1,2].map(widget).join('')}</div>
+    </section>`;
+}
+
+// Moonshot app.js renderPageView — page mount adapters (DOM + string fallbacks)
+
+function moonshotMountDomPage(mountFn, pageId, container, data) {
+  const el = container || document.getElementById("page-canvas");
+  if (!el || typeof mountFn !== "function") return;
+  const origGet = document.getElementById.bind(document);
+  document.getElementById = function (id) {
+    if (id === "appPage") return el;
+    return origGet(id);
+  };
+  try {
+    mountFn.call(typeof PageCanvas !== "undefined" ? PageCanvas : null, pageId, data || {});
+  } finally {
+    document.getElementById = origGet;
+  }
+}
+
+function moonshotMountStringPage(pageId, container) {
+  const el = container || document.getElementById("page-canvas");
+  if (!el || typeof PageCanvas === "undefined" || typeof PageCanvas.renderBody !== "function") return;
+  el.innerHTML = PageCanvas.renderBody(pageId);
+}
+
+function renderFinancialPage(container, data) {
+  if (typeof PageCanvas !== "undefined" && typeof PageCanvas.renderFinancial === "function") {
+    moonshotMountDomPage(PageCanvas.renderFinancial, "financial", container, data);
+  } else {
+    moonshotMountStringPage("financial", container);
+  }
+}
+
+function renderSoftdentPage(container, data) {
+  if (typeof PageCanvas !== "undefined" && typeof PageCanvas.renderSoftdent === "function") {
+    moonshotMountDomPage(PageCanvas.renderSoftdent, "softdent", container, data);
+  } else {
+    moonshotMountStringPage("softdent", container);
+  }
+}
+
+function renderQuickbooksPage(container, data) {
+  if (typeof PageCanvas !== "undefined" && typeof PageCanvas.renderQuickbooks === "function") {
+    moonshotMountDomPage(PageCanvas.renderQuickbooks, "quickbooks", container, data);
+  } else {
+    moonshotMountStringPage("quickbooks", container);
+  }
+}
+
+function renderTaxesPage(container, data) {
+  moonshotMountStringPage("taxes", container);
+}
+
+function renderNarrativesPage(container, data) {
+  moonshotMountStringPage("narratives", container);
+}
+
+function renderLibraryPage(container, data) {
+  moonshotMountStringPage("library", container);
+}
+
+if (typeof globalThis !== "undefined") {
+  globalThis.renderFinancialPage = renderFinancialPage;
+  globalThis.renderSoftdentPage = renderSoftdentPage;
+  globalThis.renderQuickbooksPage = renderQuickbooksPage;
+  globalThis.renderTaxesPage = renderTaxesPage;
+  globalThis.renderNarrativesPage = renderNarrativesPage;
+  globalThis.renderLibraryPage = renderLibraryPage;
+  globalThis.renderARPage = renderARPage;
+  globalThis.renderClaimsPage = renderClaimsPage;
+  globalThis.renderOfficeManagerPage = renderOfficeManagerPage;
+  globalThis.renderDocumentsPage = renderDocumentsPage;
 }

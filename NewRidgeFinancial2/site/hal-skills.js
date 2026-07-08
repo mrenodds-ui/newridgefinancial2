@@ -4413,3 +4413,51 @@ if (typeof globalThis !== "undefined") {
 if (typeof window !== "undefined") {
   window.HalSkills = HalSkills;
 }
+
+/**
+ * hal-skills.js — register missing datasets and health checks
+ */
+
+HAL.skills.defineSource('softdent', {
+  datasets: [
+    'softdent.dashboard','softdent.claims','softdent.clinicalNotes',
+    'softdent.ar','softdent.newPatients','softdent.treatmentPlans',
+    'softdent.caseAcceptance','softdent.hygieneRecall','softdent.operatory',
+    'softdent.procedures',        // NEW
+    'softdent.claimStatus'        // NEW
+  ],
+  healthCheck() {
+    const critical = ['softdent.dashboard','softdent.claims','softdent.procedures','softdent.claimStatus'];
+    const present = critical.filter(k => HAL.bus?.snapshot?.datasets?.[k]);
+    const ok = present.length === critical.length;
+    return {
+      status: ok ? 'SUCCESS' : 'DEGRADED',
+      detail: ok ? 'All critical SoftDent datasets present' : `${present.length}/${critical.length} critical datasets present`
+    };
+  }
+});
+
+HAL.skills.defineSource('quickbooks', {
+  datasets: [
+    'quickbooks.revenue','quickbooks.profitAndLoss','quickbooks.expenses',
+    'quickbooks.expenseCategories','quickbooks.ar'
+  ],
+  healthCheck() {
+    const staleThreshold = 1440;
+    const sets = [
+      'quickbooks.revenue','quickbooks.profitAndLoss','quickbooks.expenses',
+      'quickbooks.expenseCategories','quickbooks.ar'
+    ];
+    let staleCount = 0;
+    sets.forEach(k => {
+      const ds = HAL.bus?.snapshot?.datasets?.[k];
+      if (!ds) return;
+      const age = ds.freshnessMinutes || ds.ageMinutes || 0;
+      if (age > staleThreshold) staleCount++;
+    });
+    return {
+      status: staleCount === 0 ? 'SUCCESS' : (staleCount >= 2 ? 'DEGRADED' : 'WARNING'),
+      detail: staleCount > 0 ? `${staleCount} QB dataset(s) stale (>24h)` : 'All QB datasets fresh'
+    };
+  }
+});

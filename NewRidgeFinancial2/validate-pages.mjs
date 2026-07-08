@@ -31,6 +31,9 @@ require(join(siteDir, "office-task-store.js"));
 require(join(siteDir, "hal-proactive.js"));
 require(join(siteDir, "hal-office-manager.js"));
 require(join(siteDir, "widget-contract.js"));
+if (!globalThis.HAL) {
+  globalThis.HAL = { skills: { defineSource() {} } };
+}
 require(join(siteDir, "hal-skills.js"));
 require(join(siteDir, "hal-widget-master-chart.js"));
 require(join(siteDir, "hal-page-widgets.js"));

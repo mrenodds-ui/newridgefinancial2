@@ -382,7 +382,7 @@ const PageViews = (function () {
 
     container.innerHTML = pageShell(
       state,
-      pageChrome(state, Canvas.renderBody(pageId, halWidgetFeed, programSnapshot), chromeOptsFromState(state)),
+      pageChrome(state, '<div id="page-canvas"></div>', chromeOptsFromState(state)),
     );
     document.body.setAttribute("data-nr2-layout", "moonshot-mockup-grid");
     wireCommon(container, onNavigate);
@@ -391,6 +391,17 @@ const PageViews = (function () {
     }
     if (typeof NR2Tier3 !== "undefined" && NR2Tier3.mountPage) {
       NR2Tier3.mountPage(container, pageId, { snapshot: programSnapshot });
+    }
+    if (typeof globalThis.renderPageView === "function") {
+      void globalThis.renderPageView(pageId, {
+        feed: halWidgetFeed,
+        snapshot: programSnapshot,
+      });
+    } else {
+      const canvas = container.querySelector("#page-canvas");
+      if (canvas && Canvas.renderBody) {
+        canvas.innerHTML = Canvas.renderBody(pageId, halWidgetFeed, programSnapshot);
+      }
     }
     if (typeof NR2MoonshotUI !== "undefined" && NR2MoonshotUI.enhancePage) {
       NR2MoonshotUI.enhancePage(pageId, container).catch(() => {});

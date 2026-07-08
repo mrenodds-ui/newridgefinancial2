@@ -36,6 +36,9 @@ for (const f of [
   "hal-page-canvas.js",
   "hal-page.js",
 ]) {
+  if (f === "hal-skills.js" && !globalThis.HAL) {
+    globalThis.HAL = { skills: { defineSource() {} } };
+  }
   require(join(site, f));
 }
 
