@@ -61,6 +61,13 @@ const HalWidgetMasterChart = (function () {
       readyWhen: "QuickBooks revenue and expenses are available from the import cache.",
       primarySystem: "QuickBooks",
     },
+    quickbooksExpenseBreakdown: {
+      title: "Operating Expenses",
+      purpose: "Show monthly expense trend and category breakdown for owner review.",
+      expectedData: ["QuickBooks monthly expenses", "QuickBooks expense category slices"],
+      readyWhen: "QuickBooks expense categories or monthly expense series are loaded.",
+      primarySystem: "QuickBooks",
+    },
     accountsPayableAutomation: {
       title: "Accounts Payable Automation",
       purpose: "Track accounting-document review and vendor/posting readiness.",
@@ -171,6 +178,13 @@ const HalWidgetMasterChart = (function () {
       purpose: "Show hygiene completed and recall due counts by period.",
       expectedData: ["SoftDent hygiene_recall_summary export"],
       readyWhen: "Hygiene/recall summary export is configured and loaded.",
+      primarySystem: "SoftDent",
+    },
+    softdentOperatoryGrid: {
+      title: "Operatory Schedule",
+      purpose: "Show operatory chair columns and scheduled slots from SoftDent.",
+      expectedData: ["SoftDent operatory schedule export (operatory_schedule.json)", "operatoryChairs array with name and slots"],
+      readyWhen: "operatory_schedule.json is present with a non-empty operatoryChairs array.",
       primarySystem: "SoftDent",
     },
     narrativeWorkflow: {

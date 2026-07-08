@@ -13,6 +13,27 @@ HELPER_DIR = ROOT / "sidenotes-helper"
 PY32 = HELPER_DIR / "py32" / "python.exe"
 CLI = HELPER_DIR / "sidenotes_cli.py"
 WATCHER = HELPER_DIR / "sidenotes_watcher.py"
+WATCHER_PID_PATH = HELPER_DIR / "sidenotes-watcher.pid"
+
+
+def sidenotes_watcher_pid() -> int | None:
+    if not WATCHER_PID_PATH.is_file():
+        return None
+    try:
+        pid = int(WATCHER_PID_PATH.read_text(encoding="utf-8").strip())
+    except (ValueError, OSError):
+        return None
+    if pid <= 0:
+        return None
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return None
+    return pid
+
+
+def sidenotes_watcher_running() -> bool:
+    return sidenotes_watcher_pid() is not None
 
 
 def _python_cmd() -> list[str]:
@@ -85,6 +106,9 @@ def sidenotes_send_message(from_station: str, to_station: str, text: str) -> dic
 
 def start_sidenotes_watcher(station: str | None = None) -> subprocess.Popen | None:
     if not WATCHER.is_file():
+        return None
+    existing = sidenotes_watcher_pid()
+    if existing:
         return None
     python = PY32 if PY32.is_file() else Path(sys.executable)
     env = os.environ.copy()

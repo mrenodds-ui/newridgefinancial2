@@ -2,7 +2,7 @@
  * NR2 Office Workstation — standalone program schema (not part of financial app nav).
  */
 const WorkstationSchema = (function () {
-  const SCHEMA_VERSION = "hal-10025";
+  const SCHEMA_VERSION = "hal-10062";
 
   const PROGRAM = {
     id: "nr2-workstation",
@@ -41,11 +41,6 @@ const WorkstationSchema = (function () {
     subtitle: "Send messages between rooms or ask HAL",
     accent: "gold",
     practiceName,
-    insight: {
-      tone: "info",
-      title: "Station messaging",
-      body: "Run in the background on each PC. HAL (Start Program) sends popup messages to any room or Everyone at any time — no need to open this window to read them.",
-    },
     askHalSuggestions: [
       "What is the ADA code for dental office accessibility?",
       "How do I verify a patient's insurance eligibility?",

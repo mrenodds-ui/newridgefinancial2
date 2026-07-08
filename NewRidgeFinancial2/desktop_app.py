@@ -720,10 +720,11 @@ def main() -> int:
     from hal_hub import resolve_hub_data_dir
 
     print(f"NR2 desktop: HAL hub data={resolve_hub_data_dir()} (NR2_OFFICE_HUB_DATA)", file=sys.stderr)
-    from nr2_http_server import NR2BottleServer, set_desktop_session_token, set_site_root
+    from nr2_http_server import NR2BottleServer, set_desktop_session_token, set_site_root, set_workstation_mode
 
     desktop_token = uuid.uuid4().hex
     set_desktop_session_token(desktop_token)
+    set_workstation_mode(False)
     set_site_root(SITE_DIR)
     start_url = f"http://127.0.0.1:{http_port}/?nr2dt={desktop_token}"
     window = webview.create_window(

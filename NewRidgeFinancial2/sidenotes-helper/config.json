@@ -12,7 +12,11 @@
 
   "voiceStyle": "hal9000",
 
-  "processedAudio": true,
+  "processedAudio": false,
+
+  "neuralTts": true,
+
+  "neuralPython": "",
 
   "announceVaried": true,
 
@@ -49,9 +53,9 @@
 
   "voiceHint": "David",
 
-  "voiceRate": -6,
+  "voiceRate": 0,
 
-  "voiceVolume": 90,
+  "voiceVolume": 100,
 
   "inboxPath": "",
 

@@ -1,6 +1,8 @@
 {
-  "assetVersion": "hal-10025",
-  "schemaVersion": "hal-10025",
-  "builtAt": "2026-07-05T22:10:00.000Z",
-  "notes": "Workstation fast HAL profile — chat8b-only Ask HAL on operatory PCs."
+  "BUILD_ID": "hal-10062",
+  "assetVersion": "hal-10062",
+  "schemaVersion": "hal-10062",
+  "REQUIRED_EPOCH": "moonshot-mockup",
+  "builtAt": "2026-07-07T23:05:00.000Z",
+  "notes": "Moonshot P2 polish — widget icons, hub status, posting API alias, QB toggle, sidenotes fallback (hal-10062)."
 }

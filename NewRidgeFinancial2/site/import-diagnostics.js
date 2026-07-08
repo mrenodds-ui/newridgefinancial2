@@ -20,6 +20,7 @@ const ImportDiagnostics = (function () {
     "softdent.treatmentPlans",
     "softdent.caseAcceptance",
     "softdent.hygieneRecall",
+    "softdent.operatory",
     "quickbooks.revenue",
     "quickbooks.profitAndLoss",
     "quickbooks.expenses",
@@ -210,13 +211,46 @@ const ImportDiagnostics = (function () {
     }
 
     const rows = datasetPayload.rows || [];
-    const rowCount = Array.isArray(rows) ? rows.length : 0;
+    let rowCount = Array.isArray(rows) ? rows.length : 0;
     const modifiedAt = datasetPayload.modifiedAt || null;
     const datasetAge = ageMinutes(modifiedAt);
-    const validation = validateRowsForContract(contract, rows);
-    const requiredFieldFailures = validation.requiredFieldFailures || [];
     const upstreamFile =
       upstreamRoots && contract && contract.filenames ? findNewestUpstream(upstreamRoots, contract.filenames) : null;
+
+    if (contract && contract.bundleKey === "operatory") {
+      const chairs = datasetPayload.operatoryChairs;
+      rowCount = Array.isArray(chairs) ? chairs.length : 0;
+      let status = STATUS.CONNECTED;
+      let detail = "Operatory schedule export loaded.";
+      if (datasetAge !== null && datasetAge > freshnessMax) {
+        status = STATUS.STALE;
+        detail = `Operatory export is stale (${datasetAge} min old; max ${freshnessMax} min).`;
+      } else if (!rowCount) {
+        status = STATUS.MISSING;
+        detail = "operatory_schedule.json missing operatoryChairs array.";
+      }
+      return {
+        datasetKey,
+        system: contract && contract.system,
+        bundleKey: contract.bundleKey,
+        status,
+        severity,
+        automated: true,
+        found: true,
+        rowCount,
+        sourceFile: datasetPayload.sourceFile,
+        modifiedAt,
+        ageMinutes: datasetAge,
+        freshnessMaxMinutes: freshnessMax,
+        requiredFieldFailures: rowCount ? [] : ["operatoryChairs"],
+        collectorHint: hint,
+        upstreamFile,
+        detail,
+      };
+    }
+
+    const validation = validateRowsForContract(contract, rows);
+    const requiredFieldFailures = validation.requiredFieldFailures || [];
 
     let status = STATUS.CONNECTED;
     let detail = "Dataset loaded and required fields pass.";

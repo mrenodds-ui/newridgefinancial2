@@ -257,25 +257,25 @@ const MonthEndClose = (function () {
     const badgeLabel = checklist.ready ? "Ready for review" : checklist.blockers ? "Blockers remain" : "Advisory gaps";
     const rows = (checklist.items || [])
       .map(
-        (row) => `<li class="pv-month-end__item pv-month-end__item--${escape(row.status)}">
-        <span class="pv-month-end__mark" aria-hidden="true">${row.status === "ok" ? "✓" : row.status === "warn" ? "!" : "✗"}</span>
+        (row) => `<li class="ms-month-end__item ms-month-end__item--${escape(row.status)}">
+        <span class="ms-month-end__mark" aria-hidden="true">${row.status === "ok" ? "✓" : row.status === "warn" ? "!" : "✗"}</span>
         <div><strong>${escape(row.label)}</strong><p>${escape(row.detail)}</p></div>
       </li>`,
       )
       .join("");
-    return `<section class="pv-card pv-month-end" data-hal-widget-key="periodCloseAndPosting">
-      <div class="pv-card__head pv-month-end__head">
+    return `<section class="widget-card ms-month-end" data-hal-widget-key="periodCloseAndPosting">
+      <div class="widget-card__head ms-month-end__head">
         <h3>Month-End Close Checklist</h3>
-        <span class="pv-month-end__badge pv-month-end__badge--${badgeClass}">${escape(badgeLabel)}</span>
+        <span class="ms-month-end__badge ms-month-end__badge--${badgeClass}">${escape(badgeLabel)}</span>
       </div>
-      <p class="pv-muted pv-month-end__meta">Period ${escape(checklist.period)} · ${escape(checklist.summary)}</p>
-      <ul class="pv-month-end__list">${rows}</ul>
-      <div class="pv-month-end__actions">
-        <button type="button" class="pv-button" data-recon-export="text">Export reconciliation summary</button>
-        <button type="button" class="pv-button" data-recon-export="csv">Download CSV</button>
-        <button type="button" class="pv-button pv-button--primary" data-recon-copy="1">Copy checklist</button>
+      <p class="ms-muted ms-month-end__meta">Period ${escape(checklist.period)} · ${escape(checklist.summary)}</p>
+      <ul class="ms-month-end__list">${rows}</ul>
+      <div class="ms-month-end__actions">
+        <button type="button" class="ms-button" data-recon-export="text">Export reconciliation summary</button>
+        <button type="button" class="ms-button" data-recon-export="csv">Download CSV</button>
+        <button type="button" class="ms-button ms-button--primary" data-recon-copy="1">Copy checklist</button>
       </div>
-      <p class="pv-lock-note">Local review only — NR2 does not post to QuickBooks or SoftDent.</p>
+      <p class="ms-lock-note">Local review only — NR2 does not post to QuickBooks or SoftDent.</p>
     </section>`;
   }
 
@@ -283,7 +283,7 @@ const MonthEndClose = (function () {
     const escape = typeof esc === "function" ? esc : (value) => String(value || "");
     const rows = Array.isArray(audit) ? audit : [];
     if (!rows.length) {
-      return `<section class="pv-card pv-posting-audit"><div class="pv-card__head"><h3>Posting Audit Trail</h3></div><p class="pv-muted">Status changes will appear here when staff updates document posting states.</p></section>`;
+      return `<section class="widget-card ms-posting-audit"><div class="widget-card__head"><h3>Posting Audit Trail</h3></div><p class="ms-muted">Status changes will appear here when staff updates document posting states.</p></section>`;
     }
     const body = rows
       .slice(0, 12)
@@ -297,8 +297,8 @@ const MonthEndClose = (function () {
       </tr>`,
       )
       .join("");
-    return `<section class="pv-card pv-posting-audit"><div class="pv-card__head"><h3>Posting Audit Trail</h3></div>
-      <div class="pv-table-wrap"><table class="pv-table pv-table--compact"><thead><tr><th>When (UTC)</th><th>Document</th><th>Vendor</th><th>Transition</th><th>Reviewer</th></tr></thead><tbody>${body}</tbody></table></div>
+    return `<section class="widget-card ms-posting-audit"><div class="widget-card__head"><h3>Posting Audit Trail</h3></div>
+      <div class="ms-table-wrap"><table class="ms-table ms-table--compact"><thead><tr><th>When (UTC)</th><th>Document</th><th>Vendor</th><th>Transition</th><th>Reviewer</th></tr></thead><tbody>${body}</tbody></table></div>
     </section>`;
   }
 
@@ -312,13 +312,13 @@ const MonthEndClose = (function () {
     const list = chips
       .map((row) => `<li><strong>${escape(row.label)}</strong> — ${escape(row.detail)}</li>`)
       .join("");
-    return `<div class="pv-month-end-blocker" role="status">
-      <div class="pv-month-end-blocker__head">
+    return `<div class="ms-month-end-blocker" role="status">
+      <div class="ms-month-end-blocker__head">
         <strong>Month-end blockers</strong>
-        <span class="pv-month-end__badge pv-month-end__badge--fail">${escape(checklist.blockers)} blocker(s)</span>
+        <span class="ms-month-end__badge ms-month-end__badge--fail">${escape(checklist.blockers)} blocker(s)</span>
       </div>
-      <ul class="pv-month-end-blocker__list">${list}</ul>
-      <p class="pv-muted">Resolve imports and data quality before period close. Full checklist is below.</p>
+      <ul class="ms-month-end-blocker__list">${list}</ul>
+      <p class="ms-muted">Resolve imports and data quality before period close. Full checklist is below.</p>
     </div>`;
   }
 

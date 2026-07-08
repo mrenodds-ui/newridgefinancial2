@@ -33,6 +33,19 @@ def ensure_alert_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _has_active_alert(conn: sqlite3.Connection, *, alert_type: str, title: str) -> bool:
+    ensure_alert_schema(conn)
+    row = conn.execute(
+        """
+        SELECT 1 FROM hal_alerts
+        WHERE acknowledged_at IS NULL AND alert_type = ? AND title = ?
+        LIMIT 1
+        """,
+        (str(alert_type or ""), str(title or "")[:200]),
+    ).fetchone()
+    return row is not None
+
+
 def create_alert(
     conn: sqlite3.Connection,
     *,
@@ -129,36 +142,40 @@ class AlertMonitor:
         except (TypeError, ValueError):
             age_f = None
         if level != "fresh" and age_f is not None and age_f >= 1:
-            created.append(
-                create_alert(
-                    conn,
-                    alert_type="soft_stale",
-                    severity="high",
-                    title="Import data stale",
-                    body="Refresh imports before posting or batch actions.",
-                    meta={"level": level, "ageHours": age_f},
+            if not _has_active_alert(conn, alert_type="soft_stale", title="Import data stale"):
+                created.append(
+                    create_alert(
+                        conn,
+                        alert_type="soft_stale",
+                        severity="high",
+                        title="Import data stale",
+                        body="Refresh imports before posting or batch actions.",
+                        meta={"level": level, "ageHours": age_f},
+                    )
                 )
-            )
         if pending_batch_usd >= 5000:
-            created.append(
-                create_alert(
-                    conn,
-                    alert_type="high_value_batch",
-                    severity="medium",
-                    title="High-value batch awaiting consent",
-                    body=f"${pending_batch_usd:,.2f} pending approval.",
-                    meta={"pendingUsd": pending_batch_usd},
+            if not _has_active_alert(conn, alert_type="high_value_batch", title="High-value batch awaiting consent"):
+                created.append(
+                    create_alert(
+                        conn,
+                        alert_type="high_value_batch",
+                        severity="medium",
+                        title="High-value batch awaiting consent",
+                        body=f"${pending_batch_usd:,.2f} pending approval.",
+                        meta={"pendingUsd": pending_batch_usd},
+                    )
                 )
-            )
-        if level in ("degraded", "expired", "syncing"):
-            created.append(
-                create_alert(
-                    conn,
-                    alert_type="import_failure",
-                    severity="high",
-                    title="Import pipeline requires attention",
-                    body=f"Import readiness: {level}.",
-                    meta={"level": level},
+        if level in ("degraded", "expired"):
+            title = "Import pipeline requires attention"
+            if not _has_active_alert(conn, alert_type="import_failure", title=title):
+                created.append(
+                    create_alert(
+                        conn,
+                        alert_type="import_failure",
+                        severity="high",
+                        title=title,
+                        body=f"Import readiness: {level}.",
+                        meta={"level": level},
+                    )
                 )
-            )
         return created

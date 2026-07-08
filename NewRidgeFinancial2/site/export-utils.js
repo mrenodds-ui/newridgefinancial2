@@ -140,8 +140,10 @@ const ExportUtils = (function () {
   }
 
   function exportCurrentPage(opts) {
-    const halEl = typeof document !== "undefined" ? document.getElementById("halPage") : null;
-    const halVisible = opts && opts.halPageVisible != null ? opts.halPageVisible : halEl && !halEl.hidden;
+    const halVisible =
+      opts && opts.halPageVisible != null
+        ? opts.halPageVisible
+        : !!(typeof document !== "undefined" && document.querySelector("#appPage .ms-page--hal"));
     if (halVisible) return exportWidgetFeedCsv(opts && opts.feed);
     return exportCurrentPageCsv(opts);
   }

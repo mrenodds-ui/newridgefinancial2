@@ -39,9 +39,33 @@ const NR2AlertsUI = (function () {
     return host;
   }
 
+  function shouldShowAlert(alert) {
+    if (!alert) return false;
+    const type = String(alert.alertType || alert.alert_type || "");
+    const body = String(alert.body || "");
+    const title = String(alert.title || "");
+    if (type === "import_failure" && /syncing/i.test(body)) return false;
+    if (title === "Import pipeline requires attention" && /syncing/i.test(body)) return false;
+    if (typeof ImportTrafficBanner !== "undefined" && type === "import_failure") return false;
+    return true;
+  }
+
+  function dedupeAlerts(items) {
+    const seen = new Set();
+    const out = [];
+    for (const alert of Array.isArray(items) ? items : []) {
+      if (!shouldShowAlert(alert)) continue;
+      const key = `${alert.alertType || ""}|${alert.title || ""}|${alert.body || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(alert);
+    }
+    return out;
+  }
+
   function renderToasts(items) {
     const host = ensureHost();
-    const list = Array.isArray(items) ? items.slice(0, 5) : [];
+    const list = dedupeAlerts(items).slice(0, 3);
     host.innerHTML = list
       .map(
         (a) =>

@@ -13,12 +13,21 @@ const HalHubClient = (function () {
     return DEFAULT_HUB;
   }
 
+  function hubAuthHeaders(extra) {
+    const headers = Object.assign({}, extra || {});
+    const token =
+      (typeof window !== "undefined" && window.NR2_HUB_TOKEN) ||
+      (typeof window !== "undefined" && window.NR2_BUILD && window.NR2_BUILD.hubToken) ||
+      "";
+    if (token) headers["X-Hub-Token"] = String(token);
+    return headers;
+  }
+
   async function hubFetch(path, options) {
     const url = `${getHalHubUrl()}${path}`;
-    const res = await fetch(
-      url,
-      Object.assign({ cache: "no-store", mode: "cors" }, options || {}),
-    );
+    const opts = Object.assign({ cache: "no-store", mode: "cors" }, options || {});
+    opts.headers = hubAuthHeaders(opts.headers);
+    const res = await fetch(url, opts);
     if (!res.ok) {
       const err = new Error(`hal-hub ${res.status} ${path}`);
       err.status = res.status;
@@ -122,6 +131,20 @@ const HalHubClient = (function () {
     });
   }
 
+  async function notifyHubBroadcast(partial) {
+    const payload = partial || {};
+    return hubFetch("/api/hub/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: payload.from || payload.fromStation || "Workstation",
+        target: payload.target || "all",
+        channel: payload.channel || "office",
+        at: payload.at,
+      }),
+    });
+  }
+
   return {
     getHalHubUrl,
     submitToHalHub,
@@ -132,6 +155,7 @@ const HalHubClient = (function () {
     fetchOfficeChannel,
     fetchStations,
     sendHeartbeat,
+    notifyHubBroadcast,
   };
 })();
 

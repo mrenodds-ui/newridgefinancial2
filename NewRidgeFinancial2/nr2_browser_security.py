@@ -35,7 +35,7 @@ CSP_BROWSER = (
     "script-src 'self'; "
     "style-src 'self' 'unsafe-inline'; "
     "connect-src 'self' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:* "
-    "ws://127.0.0.1:* ws://localhost:*; "
+    "ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:*; "
     "img-src 'self' data:; "
     "object-src 'none'; "
     "base-uri 'none'; "
@@ -48,6 +48,7 @@ FINANCIAL_READ_PREFIXES = (
     "/api/financial-reports",
     "/api/daily-closeout",
     "/api/posting-queue",
+    "/api/financial/post-queue",
     "/api/integration-health",
     "/api/documents-state",
 )
@@ -279,7 +280,9 @@ def financial_read_path(path: str) -> bool:
         return False
     if p == "/api/posting-queue" and bottle.request.method == "GET":
         return True
-    return any(p == prefix or p.startswith(prefix + "/") for prefix in FINANCIAL_READ_PREFIXES if prefix != "/api/posting-queue")
+    if p == "/api/financial/post-queue" and bottle.request.method == "GET":
+        return True
+    return any(p == prefix or p.startswith(prefix + "/") for prefix in FINANCIAL_READ_PREFIXES if prefix not in ("/api/posting-queue", "/api/financial/post-queue"))
 
 
 def classify_financial_query(query: str) -> bool:

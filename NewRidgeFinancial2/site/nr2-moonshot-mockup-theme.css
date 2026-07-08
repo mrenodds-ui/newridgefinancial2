@@ -1,0 +1,2394 @@
+/**
+ * Moonshot 2026-07-07 mockup theme — sole layout for financial program (hal-10040+).
+ * Matches .local_logs/.../page_mockups/*.html; no pv-canvas shell.
+ */
+
+/* Legacy schema leak guard — mockup DOM must never carry old shell classes */
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-shell,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv--canvas,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-hero,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-body,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-toolbar,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-insight,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-filter-pill,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-hal-command-wrap,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-hal-command__box,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-command,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-table-wrap,
+.app--moonshot-mockup:not(.nr2-workstation-app) .hp-grid,
+.app--moonshot-mockup:not(.nr2-workstation-app) .hp-card,
+.app--moonshot-mockup:not(.nr2-workstation-app) .pv-card {
+  display: none !important;
+}
+
+/* All staff + HAL pages — block legacy styles.css pv/hp/hal-chat bleed inside page body */
+.app--moonshot-mockup .ms-page .pv-badge,
+.app--moonshot-mockup .ms-page .pv-chip,
+.app--moonshot-mockup .ms-page .pv-card,
+.app--moonshot-mockup .ms-page .pv-table,
+.app--moonshot-mockup .ms-page .pv-input,
+.app--moonshot-mockup .ms-page .pv-field,
+.app--moonshot-mockup .ms-page .pv-pill,
+.app--moonshot-mockup .ms-page .pv-canvas-shell,
+.app--moonshot-mockup .ms-page .pv-canvas-hero,
+.app--moonshot-mockup .ms-page .pv-canvas-body,
+.app--moonshot-mockup .ms-page .pv-canvas-toolbar,
+.app--moonshot-mockup .ms-page .pv-canvas-insight,
+.app--moonshot-mockup .ms-page .pv-filter-pill,
+.app--moonshot-mockup .ms-page .pv-hal-command-wrap,
+.app--moonshot-mockup .ms-page .pv-hal-command__box,
+.app--moonshot-mockup .ms-page .pv-hal-command,
+.app--moonshot-mockup .ms-page .pv-canvas-command,
+.app--moonshot-mockup .ms-page .pv-hero-period,
+.app--moonshot-mockup .ms-page .pv-hero-range,
+.app--moonshot-mockup .ms-page .hal-chat,
+.app--moonshot-mockup .ms-page .hal-msg,
+.app--moonshot-mockup .ms-page [class*=" hp-"],
+.app--moonshot-mockup .ms-page [class^="hp-"] {
+  display: none !important;
+}
+
+.app--moonshot-mockup {
+  --bg-primary: #181818;
+  --bg-surface: #1f1f1f;
+  --bg-elevated: #252525;
+  --accent-sage: #7cb88a;
+  --accent-gold: #d4a853;
+  --accent-cyan: #22d3ee;
+  --text-primary: #f5f5f5;
+  --text-secondary: #a3a3a3;
+  --border-subtle: #333333;
+  --bg: var(--bg-primary);
+  --panel: var(--bg-surface);
+  --line: var(--border-subtle);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --gold: var(--accent-gold);
+  --sage: var(--accent-sage);
+  --cyan: var(--accent-cyan);
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.app--moonshot-mockup .nav-rail {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 0;
+  overflow-y: auto;
+}
+
+.app--moonshot-mockup .nav-brand {
+  padding: 0 20px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 16px;
+}
+
+.app--moonshot-mockup .nav-brand h2 {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.app--moonshot-mockup .nav-brand span {
+  font-size: 11px;
+  color: var(--accent-sage);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.app--moonshot-mockup .nav-practice {
+  padding: 0 20px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 12px;
+}
+
+.app--moonshot-mockup .nav-practice__name {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.app--moonshot-mockup .nav-practice__meta {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.app--moonshot-mockup .nav-rail-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+.app--moonshot-mockup .nav-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.app--moonshot-mockup .nav-sublist {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 6px;
+  padding: 0 0 4px 36px;
+  border-left: 1px solid var(--border-subtle);
+  margin-left: 20px;
+}
+
+.app--moonshot-mockup .nav-subitem {
+  display: block;
+  width: 100%;
+  padding: 6px 12px 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.app--moonshot-mockup .nav-subitem:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.app--moonshot-mockup .nav-subitem__label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app--moonshot-mockup .nav-page--active .nav-subitem:focus-visible {
+  outline: 1px solid var(--accent-cyan);
+  outline-offset: 1px;
+}
+
+.app--moonshot-mockup .nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app--moonshot-mockup .nav-section__title {
+  margin: 8px 0 4px;
+  padding: 0 20px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .nav-section:first-child .nav-section__title {
+  margin-top: 0;
+}
+
+.app--moonshot-mockup .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 20px;
+  border: none;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  margin: 0;
+  position: relative;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.app--moonshot-mockup .nav-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.app--moonshot-mockup .nav-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.app--moonshot-mockup .nav-item:hover,
+.app--moonshot-mockup .nav-item.active {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.app--moonshot-mockup .nav-item.active {
+  border-left-color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .nav-item.active::after {
+  content: "";
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.55);
+}
+
+.app--moonshot-mockup .main,
+.app--moonshot-mockup .main-content {
+  background: var(--bg-primary);
+  overflow-x: hidden;
+}
+
+.app--moonshot-mockup .stage,
+.app--moonshot-mockup .page-frame {
+  background: transparent;
+}
+
+.app--moonshot-mockup .ms-page {
+  padding: 24px 32px 48px;
+}
+
+.app--moonshot-mockup .top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.app--moonshot-mockup .practice-info h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.app--moonshot-mockup .practice-info p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .safety-badge {
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent-gold);
+  color: var(--accent-gold);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .hero {
+  margin-bottom: 24px;
+}
+
+.app--moonshot-mockup .hero h2 {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.app--moonshot-mockup .hero p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 4px 0 0;
+}
+
+.app--moonshot-mockup .accent-stripe {
+  width: 80px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-sage));
+  margin-top: 12px;
+  border-radius: 2px;
+}
+
+.app--moonshot-mockup .filter-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.app--moonshot-mockup .chip {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .chip.active {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.app--moonshot-mockup .hal-insight {
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.1), rgba(124, 184, 138, 0.1));
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.app--moonshot-mockup .hal-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(34, 211, 238, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-cyan);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.app--moonshot-mockup .hal-text strong {
+  color: var(--accent-cyan);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.app--moonshot-mockup .hal-text p {
+  font-size: 14px;
+  margin: 4px 0 0;
+  color: var(--text-primary);
+}
+
+.app--moonshot-mockup .widget-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 20px;
+}
+
+.app--moonshot-mockup .widget-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.app--moonshot-mockup .widget-card.col-3 { grid-column: span 3; }
+.app--moonshot-mockup .widget-card.col-4 { grid-column: span 4; }
+.app--moonshot-mockup .widget-card.col-6 { grid-column: span 6; }
+.app--moonshot-mockup .widget-card.col-8 { grid-column: span 8; }
+.app--moonshot-mockup .widget-card.col-12 { grid-column: span 12; }
+
+.app--moonshot-mockup .widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.app--moonshot-mockup .widget-menu {
+  opacity: 0.5;
+}
+
+.app--moonshot-mockup .kpi-large .kpi-value {
+  font-size: 42px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--text-primary), var(--accent-sage));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 8px 0;
+}
+
+.app--moonshot-mockup .trend-indicator {
+  font-size: 13px;
+  color: var(--accent-sage);
+}
+
+.app--moonshot-mockup .widget-caption {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .ms-page-body {
+  margin-top: 0;
+}
+
+/* Mockup-only widget internals (no legacy pv-canvas shell) */
+.app--moonshot-mockup .widget-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .ms-stat-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.app--moonshot-mockup .ms-stat {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+
+.app--moonshot-mockup .ms-stat strong {
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.app--moonshot-mockup .ms-stat span {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.app--moonshot-mockup .ms-stat--success strong { color: var(--accent-sage); }
+.app--moonshot-mockup .ms-stat--warning strong { color: #fb923c; }
+
+.app--moonshot-mockup .ms-textarea,
+.app--moonshot-mockup .ms-search {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.app--moonshot-mockup .ms-search-wrap {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 0 4px;
+}
+
+.app--moonshot-mockup .ms-search-btn {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .widget-kanban__lanes {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.app--moonshot-mockup .widget-kanban__lane {
+  flex: 1;
+  min-width: 140px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .widget-kanban__lane-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .widget-kanban__card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .filter-bar--nav {
+  flex-wrap: wrap;
+}
+
+.app--moonshot-mockup .ms-editor-toolbar,
+.app--moonshot-mockup .ms-composer-cdt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.app--moonshot-mockup .ms-doc-preview {
+  min-height: 180px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  padding: 20px;
+  background: var(--bg-elevated);
+}
+
+.app--moonshot-mockup .ms-focus-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.app--moonshot-mockup .ms-focus-card {
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+}
+
+.app--moonshot-mockup .widget-section-head {
+  grid-column: span 12;
+  margin: 8px 0 0;
+}
+
+.app--moonshot-mockup .widget-section-head h2 {
+  margin: 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1100px) {
+  .app--moonshot-mockup .widget-card.col-4,
+  .app--moonshot-mockup .widget-card.col-6,
+  .app--moonshot-mockup .widget-card.col-8 {
+    grid-column: span 12;
+  }
+}
+
+/* Staff page widget internals — ms-* only (no legacy pv-canvas overlay) */
+.app--moonshot-mockup .ms-page .ms-fin-line {
+  display: block;
+  height: 150px;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .ms-chart-line {
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+
+.app--moonshot-mockup .ms-page .ms-chart-axis {
+  fill: var(--text-secondary);
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .ms-page .ms-vbars {
+  align-items: stretch;
+  display: flex;
+  gap: 8px;
+  height: 200px;
+  padding-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-vbar {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.app--moonshot-mockup .ms-page .ms-vbar__fill {
+  border-radius: 6px 6px 0 0;
+  display: block;
+  min-height: 8px;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .ms-vbar__lbl {
+  color: var(--text-secondary);
+  font-size: 9px;
+  text-align: center;
+}
+
+.app--moonshot-mockup .ms-page .ms-vbar--active .ms-vbar__fill {
+  outline: 2px solid rgba(96, 165, 250, 0.55);
+}
+
+.app--moonshot-mockup .ms-page .ms-hbars {
+  display: grid;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-hbar {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto auto;
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-hbar__track {
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .ms-hbar__fill {
+  background: var(--accent-gold, #d4a853);
+  display: block;
+  height: 100%;
+}
+
+.app--moonshot-mockup .ms-page .ms-hbar__pct {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page .ms-donut-wrap {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.app--moonshot-mockup .ms-page .ms-donut-chart {
+  border-radius: 50%;
+  position: relative;
+}
+
+.app--moonshot-mockup .ms-page .ms-donut-chart__hole {
+  align-items: center;
+  background: var(--bg-surface);
+  border-radius: 50%;
+  display: flex;
+  height: 58%;
+  justify-content: center;
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 58%;
+}
+
+.app--moonshot-mockup .ms-page .ms-legend {
+  display: grid;
+  gap: 6px;
+}
+
+.app--moonshot-mockup .ms-page .ms-legend__row {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-legend__dot {
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-table-wrap {
+  overflow-x: auto;
+}
+
+.app--moonshot-mockup .ms-page .ms-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .ms-table th,
+.app--moonshot-mockup .ms-page .ms-table td {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.app--moonshot-mockup .ms-page .ms-table th {
+  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .ms-table--striped tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.app--moonshot-mockup .ms-page .ms-table--compact {
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-button {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-button--primary {
+  background: rgba(34, 211, 238, 0.15);
+  border-color: rgba(34, 211, 238, 0.35);
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .ms-page .ms-button--ghost {
+  background: transparent;
+}
+
+.app--moonshot-mockup .ms-page .ms-button--sm {
+  font-size: 11px;
+  padding: 5px 10px;
+}
+
+.app--moonshot-mockup .ms-page .ms-muted {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-journal-toolbar,
+.app--moonshot-mockup .ms-page .ms-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-journal-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.app--moonshot-mockup .ms-page .ms-total-row {
+  align-items: center;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.app--moonshot-mockup .ms-page .widget-note {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+.app--moonshot-mockup .ms-page .ms-gauge {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.app--moonshot-mockup .ms-page .ms-gauge__val {
+  color: var(--accent-gold, #d4a853);
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .ms-gauge__lbl {
+  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .ms-ring__donut {
+  align-items: center;
+  background: conic-gradient(var(--accent-sage, #7cb88a) var(--ms-ring-pct, 0%), var(--bg-elevated) 0);
+  border-radius: 50%;
+  display: grid;
+  height: 96px;
+  place-items: center;
+  width: 96px;
+}
+
+.app--moonshot-mockup .ms-page .ms-ring__hole {
+  align-items: center;
+  background: var(--bg-surface);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  height: 68px;
+  justify-content: center;
+  width: 68px;
+}
+
+.app--moonshot-mockup .ms-page .ms-aging {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .ms-aging__tile {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-aging__bar {
+  background: var(--bg-primary);
+  border-radius: 999px;
+  height: 4px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .ms-aging__bar span {
+  background: linear-gradient(90deg, var(--accent-gold, #d4a853), var(--accent-cyan));
+  display: block;
+  height: 100%;
+}
+
+.app--moonshot-mockup .ms-page .ms-funnel {
+  display: grid;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-funnel__step {
+  align-items: center;
+  background: var(--bg-elevated);
+  border-left: 3px solid var(--accent-gold, #d4a853);
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-heatmap__row {
+  align-items: center;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 72px repeat(var(--ms-heatmap-cols, 4), minmax(0, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .ms-heatmap__cell {
+  border-radius: 4px;
+  font-size: 10px;
+  min-height: 28px;
+  padding: 4px;
+  text-align: center;
+}
+
+.app--moonshot-mockup .ms-page .ms-waterfall {
+  align-items: flex-end;
+  display: flex;
+  gap: 8px;
+  height: 140px;
+  padding-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-waterfall__bar {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.app--moonshot-mockup .ms-page .ms-waterfall__fill {
+  border-radius: 4px 4px 0 0;
+  display: block;
+  min-height: 8px;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .ms-waterfall__fill--pos {
+  background: var(--accent-sage, #7cb88a);
+}
+
+.app--moonshot-mockup .ms-page .ms-waterfall__fill--neg {
+  background: #fb923c;
+}
+
+.app--moonshot-mockup .ms-page .ms-waterfall__fill--total {
+  background: #60a5fa;
+}
+
+.app--moonshot-mockup .ms-page .ms-treemap__row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-treemap__track {
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .ms-treemap__fill {
+  background: linear-gradient(90deg, #fb923c, #d4a853);
+  display: block;
+  height: 100%;
+}
+
+.app--moonshot-mockup .ms-page .ms-queue {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app--moonshot-mockup .ms-page .ms-queue__row {
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr auto auto;
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-sidebar {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .ms-sidebar__card,
+.app--moonshot-mockup .ms-page .ms-sidebar-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-doc-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .ms-doc-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-wizard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-wizard__step {
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.app--moonshot-mockup .ms-page .ms-wizard__step--active {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .ms-page .ms-wizard__step--done {
+  border-color: var(--accent-sage);
+  color: var(--accent-sage);
+}
+
+.app--moonshot-mockup .ms-page .ms-recall {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-recall__day {
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  display: flex;
+  font-size: 11px;
+  height: 28px;
+  justify-content: center;
+}
+
+.app--moonshot-mockup .ms-page .ms-recall__day--hot {
+  border-color: #fb923c;
+  color: #fb923c;
+}
+
+.app--moonshot-mockup .ms-page .ms-tax-split__track {
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .ms-tax-split__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-tax-memo {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app--moonshot-mockup .ms-page .ms-ops-data .ms-ops-stat {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-widget__note {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-readiness-strip,
+.app--moonshot-mockup .ms-page .ms-hal-strip {
+  align-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-strip--ok,
+.app--moonshot-mockup .ms-page .ms-hal-readiness-strip.ms-hal-strip--ok {
+  border-color: rgba(0, 230, 118, 0.35);
+  background: rgba(0, 230, 118, 0.08);
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-strip--warn,
+.app--moonshot-mockup .ms-page .ms-hal-readiness-strip.ms-hal-strip--warn {
+  border-color: rgba(212, 168, 83, 0.35);
+  background: rgba(212, 168, 83, 0.08);
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-strip--off,
+.app--moonshot-mockup .ms-page .ms-hal-readiness-strip.ms-hal-strip--off {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-strip__mark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-strip__force {
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 6px;
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--accent-cyan);
+  cursor: pointer;
+  font-size: 11px;
+  margin-left: auto;
+  padding: 4px 10px;
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-widget__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-widget__badge--ok {
+  color: #00e676;
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-widget__badge--warn {
+  color: var(--accent-gold);
+}
+
+.app--moonshot-mockup .ms-page .ms-hal-widget__badge--off {
+  color: #f08080;
+}
+
+.app--moonshot-mockup .widget-header .widget-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .widget-header .ms-panel-ico,
+.app--moonshot-mockup .card-header .ms-panel-ico {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0;
+  vertical-align: middle;
+}
+
+.app--moonshot-mockup .ms-page .ms-panel-ico {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.app--moonshot-mockup .ms-page .widget-body {
+  display: grid;
+  gap: 12px;
+}
+
+/* HAL Command Center — mockup layout (hal.html) */
+.app--moonshot-mockup .ms-page--hal {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 0px);
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page-chrome--hal {
+  flex-shrink: 0;
+}
+
+.app--moonshot-mockup .alert-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  font-size: 13px;
+  background: linear-gradient(90deg, rgba(255, 152, 0, 0.15) 0%, rgba(255, 152, 0, 0.05) 100%);
+  border-bottom: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+.app--moonshot-mockup .alert-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ff9800;
+  color: #181818;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.app--moonshot-mockup .alert-text {
+  color: #ff9800;
+  font-weight: 500;
+}
+
+.app--moonshot-mockup .alert-meta {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: "Courier New", monospace;
+}
+
+.app--moonshot-mockup .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(24, 24, 24, 0.85);
+  backdrop-filter: blur(10px);
+}
+
+.app--moonshot-mockup .header .header-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app--moonshot-mockup .header .header-title h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .badge-live {
+  background: var(--accent-cyan);
+  color: #181818;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.35);
+}
+
+.app--moonshot-mockup .header .header-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .header .status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.app--moonshot-mockup .header .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00e676;
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.6);
+}
+
+.app--moonshot-mockup .header .header-clock {
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  text-align: right;
+}
+
+.app--moonshot-mockup .ms-hal-page-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .hal-dashboard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app--moonshot-mockup .content-wrapper {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page--hal .dashboard-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  padding: 24px;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.app--moonshot-mockup .ms-page--hal .lane-badge {
+  grid-column: span 2;
+  background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-elevated) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page--hal .lane-badge::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-cyan), #7c4dff);
+}
+
+.app--moonshot-mockup .ms-page--hal .lane-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.app--moonshot-mockup .ms-page--hal .lane-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .ms-page--hal .lane-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 8px 0;
+  font-family: "Courier New", monospace;
+  letter-spacing: -1px;
+}
+
+.app--moonshot-mockup .ms-page--hal .lane-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .ms-page--hal .lane-metric strong {
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .lane-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #00e676;
+}
+
+.app--moonshot-mockup .ms-page--hal .import-health {
+  grid-column: span 2;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.app--moonshot-mockup .ms-page--hal .health-score {
+  font-size: 28px;
+  font-weight: 700;
+  color: #00e676;
+  margin: 4px 0 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .health-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 8px 0 12px;
+}
+
+.app--moonshot-mockup .ms-page--hal .health-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00e676, var(--accent-cyan));
+  border-radius: 3px;
+}
+
+.app--moonshot-mockup .ms-page--hal .health-details {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: auto;
+}
+
+.app--moonshot-mockup .ms-page--hal .health-item {
+  text-align: center;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+}
+
+.app--moonshot-mockup .ms-page--hal .health-item-value {
+  font-size: 18px;
+  font-weight: 700;
+  display: block;
+}
+
+.app--moonshot-mockup .ms-page--hal .health-item-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+.app--moonshot-mockup .ms-page--hal .dashboard-grid .widget-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 20px;
+  min-height: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-panel--widgets {
+  grid-column: span 4;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-panel--nav {
+  grid-column: span 2;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-panel--sidenotes {
+  grid-column: span 2;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-panel--session {
+  grid-column: span 4;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .ms-page--hal .header-icon--btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin-right: 6px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .header-icon--btn:hover {
+  filter: brightness(1.15);
+}
+
+.app--moonshot-mockup .chat-rail {
+  width: 320px;
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app--moonshot-mockup .chat-rail-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.app--moonshot-mockup .chat-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(34, 211, 238, 0.05);
+  flex-shrink: 0;
+}
+
+.app--moonshot-mockup .chat-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.app--moonshot-mockup .chat-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-cyan), #7c4dff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .chat-status {
+  font-size: 11px;
+  color: #00e676;
+  margin-top: 6px;
+  margin-left: 42px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app--moonshot-mockup .chat-status .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00e676;
+}
+
+.app--moonshot-mockup .chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app--moonshot-mockup .chat-placeholder {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .message {
+  max-width: 95%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.app--moonshot-mockup .message-hal {
+  background: rgba(34, 211, 238, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.15);
+  align-self: flex-start;
+}
+
+.app--moonshot-mockup .message-user {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  align-self: flex-end;
+}
+
+.app--moonshot-mockup .chat-input {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.app--moonshot-mockup .chat-input .chat-textarea {
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.app--moonshot-mockup .chat-suggestions {
+  padding: 8px 16px 16px;
+  flex-shrink: 0;
+}
+
+/* HAL internals — mockup-only (no legacy hp-* overlay from styles.css) */
+.app--moonshot-mockup .ms-page--hal .text-muted {
+  color: var(--text-secondary);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.app--moonshot-mockup .ms-page--hal .text-ok {
+  color: #00e676;
+}
+
+.app--moonshot-mockup .ms-page--hal .prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .prompt-chips--tight {
+  gap: 6px;
+}
+
+.app--moonshot-mockup .ms-page--hal .prompt-chip,
+.app--moonshot-mockup .ms-page--hal .prompt-chip {
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .prompt-chip--action,
+.app--moonshot-mockup .ms-page--hal .prompt-chip--icon {
+  border-color: rgba(34, 211, 238, 0.35);
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .prompt-chip--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+}
+
+.app--moonshot-mockup .ms-page--hal .status-btn {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .ms-page--hal .status-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.app--moonshot-mockup .ms-page--hal .info-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .info-btn__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-card--active {
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-card--active:hover {
+  border-color: rgba(34, 211, 238, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .status-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+.app--moonshot-mockup .ms-page--hal .status-badge--ok {
+  background: rgba(0, 230, 118, 0.12);
+  color: #00e676;
+  border-color: rgba(0, 230, 118, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .status-badge--warn {
+  background: rgba(255, 160, 80, 0.12);
+  color: #ffb070;
+  border-color: rgba(255, 160, 80, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .status-badge--off {
+  background: rgba(150, 90, 90, 0.12);
+  color: #d98a8a;
+  border-color: rgba(150, 90, 90, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-section summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .surface-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app--moonshot-mockup .ms-page--hal .surface-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .surface-chev {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  padding: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .session-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.app--moonshot-mockup .ms-page--hal .control-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .control-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .activity-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.app--moonshot-mockup .ms-page--hal .activity-row--active {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .activity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-badge {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-badge--ok {
+  background: rgba(0, 230, 118, 0.12);
+  color: #00e676;
+  border: 1px solid rgba(0, 230, 118, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-badge--off {
+  background: rgba(150, 90, 90, 0.12);
+  color: #d98a8a;
+  border: 1px solid rgba(150, 90, 90, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-add {
+  border: 1px solid rgba(34, 211, 238, 0.45);
+  border-radius: 6px;
+  background: rgba(34, 211, 238, 0.12);
+  color: var(--accent-cyan);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-status {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-status--ok {
+  color: #00e676;
+  border-color: rgba(0, 230, 118, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-status--fail {
+  color: #f08080;
+  border-color: rgba(240, 128, 128, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-status--run {
+  color: #7ec8ff;
+  border-color: rgba(126, 200, 255, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-fail-num,
+.app--moonshot-mockup .ms-page--hal .stress-fail-count {
+  color: #f08080;
+}
+
+.app--moonshot-mockup .ms-page--hal .chat-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .chat-send {
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--accent-cyan), #7c4dff);
+  color: #0a0e14;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 8px 18px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app--moonshot-mockup .ms-page--hal .message p.message-typing::after {
+  content: "▋";
+  animation: ms-hal-blink 0.9s step-end infinite;
+  margin-left: 2px;
+}
+
+@keyframes ms-hal-blink {
+  50% { opacity: 0; }
+}
+
+.app--moonshot-mockup .hal-msg__followups .prompt-chip {
+  border-radius: 999px;
+}
+
+/* HAL internals — remaining ms-hal-* (mockup-only, replaces styles.css hp-* / pv-*) */
+.app--moonshot-mockup .ms-page--hal .header-badge {
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 999px;
+  color: var(--accent-cyan);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-head h4 {
+  margin: 0;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-badge--change {
+  background: rgba(255, 160, 80, 0.12);
+  color: #ffb070;
+  border: 1px solid rgba(255, 160, 80, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 2px 4px;
+}
+
+.app--moonshot-mockup .ms-page--hal .sidenote-btn:hover {
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-card--active {
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-card--active:hover {
+  border-color: rgba(34, 211, 238, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-head strong {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-metrics,
+.app--moonshot-mockup .ms-page--hal .widget-card-summary {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-open,
+.app--moonshot-mockup .ms-page--hal .widget-card-configure {
+  justify-self: start;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 5px;
+  background: rgba(34, 211, 238, 0.08);
+  color: var(--accent-cyan);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 4px 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-row__title {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card-row__metrics {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .ms-page--hal .metric-widget-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-card.span-1 {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .metric-large {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .details-panel {
+  margin-top: 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .details-panel summary {
+  cursor: pointer;
+  color: var(--accent-cyan);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.app--moonshot-mockup .ms-page--hal .checklist-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app--moonshot-mockup .ms-page--hal .checklist-row--active,
+.app--moonshot-mockup .ms-page--hal .checklist-active--btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .checklist-allowed,
+.app--moonshot-mockup .ms-page--hal .checklist-score {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 6px 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .session-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .stats-grid dt {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .stats-grid dd {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.app--moonshot-mockup .ms-page--hal .ai-readiness-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.app--moonshot-mockup .ms-page--hal .ai-readiness-panel__title {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  margin: 0 0 8px;
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .input-field,
+.app--moonshot-mockup .ms-page--hal .stress-input {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .ms-page--hal .action-btn,
+.app--moonshot-mockup .ms-page--hal .stress-run,
+.app--moonshot-mockup .ms-page--hal .stress-stop {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 6px 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-run {
+  border-color: rgba(0, 230, 118, 0.35);
+  color: #00e676;
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-stop {
+  border-color: rgba(240, 128, 128, 0.35);
+  color: #f08080;
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+  margin: 8px 0 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #00e676, var(--accent-cyan));
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-failures {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-failures li {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.app--moonshot-mockup .ms-page--hal .stress-note {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+.app--moonshot-mockup .ms-page--hal .session-note {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .chat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page--hal .data-table th,
+.app--moonshot-mockup .ms-page--hal .data-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+}
+
+.app--moonshot-mockup .ms-page--hal .activity-dot--gold {
+  background: var(--accent-gold);
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 1200px) {
+  .app--moonshot-mockup .content-wrapper {
+    flex-direction: column;
+  }
+  .app--moonshot-mockup .chat-rail {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border-subtle);
+    max-height: 360px;
+  }
+  .app--moonshot-mockup .ms-page--hal .lane-badge,
+  .app--moonshot-mockup .ms-page--hal .import-health,
+  .app--moonshot-mockup .ms-page--hal .hal-panel--nav,
+  .app--moonshot-mockup .ms-page--hal .hal-panel--sidenotes {
+    grid-column: span 4;
+  }
+}

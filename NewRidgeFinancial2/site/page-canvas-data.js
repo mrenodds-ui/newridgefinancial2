@@ -407,6 +407,8 @@ const PageCanvasData = (function () {
           : ca.plansAccepted != null && ca.plansPresented != null
             ? `${fmt(ca.plansAccepted)} / ${fmt(ca.plansPresented)}`
             : null,
+      treatmentScheduled: fmt(ca.plansScheduled || tp.scheduledCount || pr.treatmentPlans?.scheduled),
+      treatmentCompleted: fmt(ca.completedCount || tp.completedCount || pr.treatmentPlans?.completed),
       hygieneCompleted: fmt(hr.hygieneCompleted || pr.hygieneRecall?.completed),
       recallDue: hr.recallDue != null ? `${fmt(hr.recallDue)} recall due` : pr.hygieneRecall?.due != null ? `${fmt(pr.hygieneRecall.due)} recall due` : null,
       hygienePeriod: fmt(hr.period || pr.hygieneRecall?.period),
@@ -954,6 +956,32 @@ const PageCanvasData = (function () {
     ];
   }
 
+  function quickbooksPlTrend() {
+    const qb = dash("quickbooks") || {};
+    const monthly = qb.monthlyNetIncome || qb.monthlyPl || qb.monthlyRevenue;
+    if (monthly && monthly.labels && monthly.values) {
+      return {
+        labels: monthly.labels,
+        series: [{ name: "Net income", values: monthly.values.map(parseAmount) }],
+      };
+    }
+    const expenseMonthly = qb.monthlyExpenses || {};
+    if (expenseMonthly.labels && expenseMonthly.values && expenseMonthly.values.length) {
+      return {
+        labels: expenseMonthly.labels,
+        series: [{ name: "Expenses", values: expenseMonthly.values.map(parseAmount) }],
+      };
+    }
+    return null;
+  }
+
+  function softdentOperatoryGrid() {
+    const sd = dash("softdent") || {};
+    const chairs = sd.operatoryChairs;
+    if (Array.isArray(chairs) && chairs.length) return chairs;
+    return null;
+  }
+
   function quickbooksPlRows() {
     const qb = dash("quickbooks") || {};
     const rows = (qb.pl && qb.pl.rows) || [];
@@ -1101,10 +1129,7 @@ const PageCanvasData = (function () {
     if (claims.claims && claims.claims.length) {
       const lanes = {};
       CLAIM_LANES.forEach((lane) => {
-        lanes[lane] = claims.claims
-          .filter((c) => c.status === lane)
-          .slice(0, 6)
-          .map((c) => `${c.patient || "Unknown"} · ${c.procedure || "—"} · ${fmt(c.amount)}`);
+        lanes[lane] = claims.claims.filter((c) => c.status === lane).slice(0, 6);
       });
       return CLAIM_LANES.filter((lane) => lanes[lane].length).map((lane) => ({
         lane,
@@ -1224,19 +1249,19 @@ const PageCanvasData = (function () {
     const cards = rows
       .map((row) => {
         const icon = typeof AppIcons !== "undefined" ? AppIcons.widget(row.widgetKey) : "";
-        return `<article class="pv-canvas-stat pv-ops-data__stat" data-hal-widget-key="${escHtml(row.widgetKey)}" data-hal-cmd="Explain ${escHtml(row.label)}" role="button" tabindex="0">
-          <span class="pv-canvas-stat__ico">${icon}</span>
+        return `<article class="ms-ops-stat ms-ops-data__stat" data-hal-widget-key="${escHtml(row.widgetKey)}" data-hal-cmd="Explain ${escHtml(row.label)}" role="button" tabindex="0">
+          <span class="ms-ops-stat__ico">${icon}</span>
           <strong>${escHtml(row.value)}</strong>
           <span>${escHtml(row.label)}</span>
         </article>`;
       })
       .join("");
-    return `<section class="pv-card pv-ops-data" data-hal-widget-key="officeManagerPriorities">
-      <div class="pv-card__head"><h3>Practice data</h3><span class="pv-muted">Live snapshot · API-backed counts</span></div>
-      <div class="pv-canvas-stat-grid pv-ops-data__grid">${cards}</div>
-      <div class="pv-month-end__actions">
-        <button type="button" class="pv-button" data-ops-refresh-health="1">Refresh data</button>
-        <button type="button" class="pv-button pv-button--primary" data-ops-support-bundle="1">Export support bundle</button>
+    return `<section class="widget-card col-12 ms-ops-data" data-hal-widget-key="officeManagerPriorities">
+      <div class="widget-header"><span class="widget-title">Practice data</span><span class="ms-muted">Live snapshot · API-backed counts</span></div>
+      <div class="ms-stat-grid ms-ops-data__grid">${cards}</div>
+      <div class="ms-actions">
+        <button type="button" class="ms-button" data-ops-refresh-health="1">Refresh data</button>
+        <button type="button" class="ms-button ms-button--primary" data-ops-support-bundle="1">Export support bundle</button>
       </div>
     </section>`;
   }
@@ -1559,6 +1584,8 @@ const PageCanvasData = (function () {
     taxesImportNotice,
     quickbooksImportNotice,
     quickbooksKpis,
+    quickbooksPlTrend,
+    softdentOperatoryGrid,
     libraryKpis,
     quickbooksPlRows,
     quickbooksExpenseBars,

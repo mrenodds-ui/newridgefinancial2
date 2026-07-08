@@ -1284,6 +1284,7 @@ const HalSkills = (function () {
     providerPerformance: "financial",
     ebitdaNormalization: "quickbooks",
     quickbooksProfitLossDetail: "quickbooks",
+    quickbooksExpenseBreakdown: "quickbooks",
     accountsPayableAutomation: "documents",
     documentIntakeQueue: "documents",
     documentPreview: "documents",
@@ -1298,6 +1299,7 @@ const HalSkills = (function () {
     treatmentPlanSummary: "softdent",
     caseAcceptance: "softdent",
     hygieneRecall: "softdent",
+    softdentOperatoryGrid: "softdent",
     arAgingAndCollections: "ar",
     arOutstandingClaims: "ar",
     narrativeWorkflow: "narratives",
@@ -1317,6 +1319,7 @@ const HalSkills = (function () {
     "providerPerformance",
     "ebitdaNormalization",
     "quickbooksProfitLossDetail",
+    "quickbooksExpenseBreakdown",
     "accountsPayableAutomation",
     "documentIntakeQueue",
     "documentPreview",
@@ -1333,6 +1336,7 @@ const HalSkills = (function () {
     "treatmentPlanSummary",
     "caseAcceptance",
     "hygieneRecall",
+    "softdentOperatoryGrid",
     "narrativeWorkflow",
     "documentLibrary",
     "halAskHal",
@@ -1347,6 +1351,7 @@ const HalSkills = (function () {
     providerPerformance: ["SoftDent dashboard export for Dr. Michael Reno"],
     ebitdaNormalization: ["QuickBooks expenses export", "Staff-reviewed EBITDA add-back categories"],
     quickbooksProfitLossDetail: ["QuickBooks revenue/P&L export", "QuickBooks expenses export"],
+    quickbooksExpenseBreakdown: ["QuickBooks expense category export", "QuickBooks monthly expenses"],
     accountsPayableAutomation: ["Local accounting document queue", "QuickBooks expenses or vendor document imports"],
     documentIntakeQueue: ["SoftDent and QuickBooks financial summary rows synced into the document queue", "Optional manual Add document entries"],
     documentPreview: ["Selected local document metadata and extracted fields"],
@@ -1363,6 +1368,7 @@ const HalSkills = (function () {
     treatmentPlanSummary: ["SoftDent treatment_plan_summary.csv (analytics sync via softdent_practice_exports.py when tables exist)"],
     caseAcceptance: ["SoftDent case acceptance export or derived treatment plan summary"],
     hygieneRecall: ["SoftDent hygiene_recall_summary.csv (analytics sync via softdent_practice_exports.py when tables exist)"],
+    softdentOperatoryGrid: ["SoftDent operatory schedule export (operatory_schedule.json → operatoryChairs[])"],
     narrativeWorkflow: ["Local narrative drafts or claim source facts from SoftDent claims"],
     documentLibrary: ["Local library documents or indexed document metadata"],
     halImportHealth: ["Import bundle diagnostics", "SoftDent and QuickBooks dataset contracts"],
@@ -1910,6 +1916,14 @@ const HalSkills = (function () {
       practiceConfigured.hygieneRecall ? practiceStatus : "FAILED",
       "Hygiene completed and recall due counts from SoftDent when hygiene_recall_summary export is configured.",
     );
+    const operatoryChairs = (practiceDash && practiceDash.operatoryChairs) || [];
+    const operatoryConfigured = Array.isArray(operatoryChairs) && operatoryChairs.length > 0;
+    const operatoryGridWidget = buildContractWidget(
+      "softdentOperatoryGrid",
+      contractCtx,
+      operatoryConfigured ? practiceStatus : "FAILED",
+      "Operatory chair schedule from SoftDent when the dashboard export includes operatory columns.",
+    );
     const monthlyRevenue = overviewWidget
       ? overviewWidget.metrics.monthlyRevenue
       : metricValue(qb.revenue);
@@ -2044,6 +2058,23 @@ const HalSkills = (function () {
           grossProfit: rowAmount(qb.pl?.rows, "Gross Profit"),
           operatingExpenses: rowAmount(qb.pl?.rows, "Operating Expenses"),
           netIncome: rowAmount(qb.pl?.rows, "Net Income"),
+        },
+      },
+      quickbooksExpenseBreakdown: {
+        key: "quickbooksExpenseBreakdown",
+        title: "Operating Expenses",
+        status:
+          qb.expenseCategories?.slices?.length || qb.monthlyExpenses?.values?.length ? qbStatus : "FAILED",
+        summary: "Monthly expense trend and category breakdown from the QuickBooks import cache.",
+        navTarget: WIDGET_NAV.quickbooksExpenseBreakdown,
+        metrics: {
+          expenseCategoriesTotal: metricValue(qb.expenseCategories?.total),
+          expenseCategoriesScope: metricValue(qb.expenseCategories?.scopeLabel),
+          monthlyExpensesLatest: metricValue(qb.expenseCategories?.monthlyExpensesLatest || qb.expenses),
+          topCategory: metricValue(firstItem(qb.expenseCategories?.slices)?.label),
+          topCategoryShare: metricValue(
+            firstItem(qb.expenseCategories?.slices)?.pct != null ? `${firstItem(qb.expenseCategories?.slices).pct}%` : null,
+          ),
         },
       },
       accountsPayableAutomation: {
@@ -2274,6 +2305,18 @@ const HalSkills = (function () {
           hygieneCompleted: "Not Configured",
           recallDue: "Not Configured",
           period: "Not Configured",
+        },
+      },
+      softdentOperatoryGrid: operatoryGridWidget || {
+        key: "softdentOperatoryGrid",
+        title: "Operatory Schedule",
+        status: "FAILED",
+        summary: "Operatory chair schedule from SoftDent when the dashboard export includes operatory columns.",
+        navTarget: WIDGET_NAV.softdentOperatoryGrid,
+        metrics: {
+          chairCount: "Not Configured",
+          activeChairs: "Not Configured",
+          nextOpenSlot: "Not Configured",
         },
       },
       narrativeWorkflow: {
@@ -2625,6 +2668,8 @@ const HalSkills = (function () {
     "softdent.newPatients": { label: "SoftDent new patients export", files: ["softdent_new_patients.csv"], importDir: "app_data/nr2/document_inbox/softdent", required: ["Count"], optional: ["Period"], automated: true, generatedBy: ["softdent_practice_exports.py"] },
     "softdent.treatmentPlans": { label: "SoftDent treatment plan summary export", files: ["treatment_plan_summary.csv"], importDir: "app_data/nr2/document_inbox/softdent", required: [], optional: ["Presented", "Accepted", "Amount"], automated: true, generatedBy: ["softdent_practice_exports.py"] },
     "softdent.caseAcceptance": { label: "SoftDent case acceptance export", files: ["case_acceptance.csv"], importDir: "app_data/nr2/document_inbox/softdent", required: [], optional: ["AcceptanceRate", "Presented", "Accepted"], automated: true, generatedBy: ["softdent_practice_exports.py"] },
+    "softdent.hygieneRecall": { label: "SoftDent hygiene recall export", files: ["hygiene_recall_summary.csv"], importDir: "app_data/nr2/document_inbox/softdent", required: [], optional: ["Period", "HygieneCompleted", "RecallDue"], automated: true, generatedBy: ["softdent_practice_exports.py"] },
+    "softdent.operatory": { label: "SoftDent operatory schedule export", files: ["operatory_schedule.json", "softdent_operatory_chairs.json"], importDir: "app_data/nr2/document_inbox/softdent", required: ["operatoryChairs"], optional: [], automated: true, generatedBy: ["softdent_practice_exports.py"] },
     "quickbooks.revenue": { label: "QuickBooks revenue/P&L export", files: ["quickbooks_revenue.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["TotalIncome"], optional: ["Month"], automated: true },
     "quickbooks.expenses": { label: "QuickBooks expenses export", files: ["quickbooks_expenses.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["TotalExpense"], optional: ["Month"], automated: true },
     "quickbooks.expenseCategories": { label: "QuickBooks expense categories export", files: ["quickbooks_expense_categories.csv"], importDir: "app_data/nr2/document_inbox/quickbooks", required: ["Category"], optional: ["Amount", "Period", "Scope"], automated: true },
@@ -2641,6 +2686,7 @@ const HalSkills = (function () {
     providerPerformance: ["softdent.dashboard"],
     ebitdaNormalization: ["quickbooks.expenses", "quickbooks.expenseCategories"],
     quickbooksProfitLossDetail: ["quickbooks.revenue", "quickbooks.expenses"],
+    quickbooksExpenseBreakdown: ["quickbooks.expenses"],
     accountsPayableAutomation: ["local:documents", "quickbooks.expenses"],
     documentIntakeQueue: ["local:documents"],
     documentPreview: ["local:documents"],
@@ -2657,6 +2703,7 @@ const HalSkills = (function () {
     treatmentPlanSummary: ["softdent.treatmentPlans"],
     caseAcceptance: ["softdent.caseAcceptance"],
     hygieneRecall: ["softdent.hygieneRecall"],
+    softdentOperatoryGrid: ["softdent.operatory"],
     narrativeWorkflow: ["local:narratives", "softdent.claims"],
     documentLibrary: ["local:library"],
   };

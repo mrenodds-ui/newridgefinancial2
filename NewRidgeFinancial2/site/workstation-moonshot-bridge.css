@@ -1,0 +1,240 @@
+/**
+ * Moonshot Phase 6 — Workstation (8766) visual bridge.
+ * Maps moonshot-mockup tokens onto legacy hp-* / ws-* markup. No class renames.
+ */
+body.nr2-workstation-app {
+  --bg-primary: #181818;
+  --bg-surface: #1f1f1f;
+  --bg-elevated: #252525;
+  --accent-sage: #7cb88a;
+  --accent-gold: #d4a853;
+  --accent-cyan: #22d3ee;
+  --text-primary: #f5f5f5;
+  --text-secondary: #a3a3a3;
+  --border-subtle: #333333;
+
+  --bg: var(--bg-primary);
+  --panel: var(--bg-surface);
+  --panel-2: var(--bg-elevated);
+  --elevated: var(--bg-elevated);
+  --line: var(--border-subtle);
+  --line-subtle: var(--border-subtle);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --muted-soft: rgba(163, 163, 163, 0.65);
+  --fill-primary: rgba(245, 245, 245, 0.12);
+  --fill-secondary: var(--bg-surface);
+  --fill-tertiary: var(--bg-elevated);
+  --gold: var(--accent-gold);
+  --sage: var(--accent-sage);
+  --cyan: var(--accent-cyan);
+  --red: #f87171;
+
+  --hp-gold: var(--accent-gold);
+  --hp-line: var(--border-subtle);
+  --hp-card: var(--bg-surface);
+  --hp-card-2: var(--bg-elevated);
+  --hp-ok: var(--accent-sage);
+  --hp-cyan: var(--accent-cyan);
+  --hp-red: #f87171;
+
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .ws-root,
+body.nr2-workstation-app .main--workstation-only,
+body.nr2-workstation-app .stage--workstation-only,
+body.nr2-workstation-app .page-frame--workstation-only,
+body.nr2-workstation-app .app--workstation-only {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .pv--sidenotes {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .ws-sn-toolbar {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+body.nr2-workstation-app .ws-sn-toolbar-tab {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-bottom: none;
+  color: var(--text-secondary);
+}
+
+body.nr2-workstation-app .ws-sn-toolbar-tab--active {
+  background: var(--bg-primary);
+  border-color: var(--accent-gold);
+  color: var(--text-primary);
+  box-shadow: inset 0 -2px 0 var(--accent-gold);
+}
+
+body.nr2-workstation-app .ws-page-tabs {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+body.nr2-workstation-app .ws-page-tab {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+body.nr2-workstation-app .ws-page-tab--active,
+body.nr2-workstation-app .ws-page-tab[aria-selected="true"] {
+  background: var(--bg-primary);
+  border-color: var(--accent-gold);
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .ws-sn-shell,
+body.nr2-workstation-app .ws-sn-body,
+body.nr2-workstation-app .ws-sn-left,
+body.nr2-workstation-app .ws-sn-right,
+body.nr2-workstation-app .ws-sn-history-panel,
+body.nr2-workstation-app .ws-sn-hal-panel,
+body.nr2-workstation-app .ws-sn-officechat-panel {
+  background: var(--bg-surface);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .ws-sn-left-tab {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+body.nr2-workstation-app .ws-sn-left-tab--active {
+  border-color: var(--accent-gold);
+  color: var(--text-primary);
+  background: rgba(212, 168, 83, 0.1);
+}
+
+body.nr2-workstation-app .ws-sn-user {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .ws-sn-user--active {
+  border-color: var(--accent-gold);
+  background: rgba(212, 168, 83, 0.12);
+}
+
+body.nr2-workstation-app .ws-sn-input,
+body.nr2-workstation-app .ws-input,
+body.nr2-workstation-app .hp-live-textarea,
+body.nr2-workstation-app .ws-msg-input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .ws-sn-key {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .ws-sn-key--gold {
+  border-color: rgba(212, 168, 83, 0.45);
+  color: var(--accent-gold);
+}
+
+body.nr2-workstation-app .ws-sn-key--amber {
+  border-color: rgba(212, 168, 83, 0.35);
+}
+
+body.nr2-workstation-app .ws-sn-key--blue {
+  border-color: rgba(34, 211, 238, 0.35);
+  color: var(--accent-cyan);
+}
+
+body.nr2-workstation-app .hp {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .hp-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+body.nr2-workstation-app .hp-card--sidenotes {
+  background: linear-gradient(180deg, rgba(212, 168, 83, 0.06) 0%, var(--bg-surface) 42%);
+}
+
+body.nr2-workstation-app .hp-top,
+body.nr2-workstation-app .hp-rail {
+  background: var(--bg-surface);
+  border-color: var(--border-subtle);
+}
+
+body.nr2-workstation-app .hp-top__copy strong {
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .hp-top__copy span,
+body.nr2-workstation-app .hp-status,
+body.nr2-workstation-app .hp-clock span {
+  color: var(--text-secondary);
+}
+
+body.nr2-workstation-app .hp-nav__item {
+  color: var(--text-secondary);
+}
+
+body.nr2-workstation-app .hp-nav__item.is-active {
+  background: rgba(212, 168, 83, 0.1);
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .ws-pane {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+body.nr2-workstation-app .ws-pane--office {
+  border-color: rgba(212, 168, 83, 0.35);
+}
+
+body.nr2-workstation-app .ws-title,
+body.nr2-workstation-app .ws-pane__head h2 {
+  color: var(--text-primary);
+}
+
+body.nr2-workstation-app .ws-eyebrow,
+body.nr2-workstation-app .ws-sub,
+body.nr2-workstation-app .ws-muted,
+body.nr2-workstation-app .ws-empty {
+  color: var(--text-secondary);
+}
+
+body.nr2-workstation-app .ws-badge {
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+body.nr2-workstation-app .ws-badge--ok {
+  border-color: rgba(124, 184, 138, 0.45);
+  color: var(--accent-sage);
+}
+
+body.nr2-workstation-app .ws-send,
+body.nr2-workstation-app .ws-sn-send {
+  background: var(--accent-gold);
+  border: 1px solid rgba(212, 168, 83, 0.55);
+  color: #1a1a1a;
+}
+
+body.nr2-workstation-app .ws-boot-loading {
+  color: var(--text-secondary);
+}

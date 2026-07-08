@@ -490,7 +490,7 @@ const HalCore = (function () {
       if (cp === true) return true;
     }
     const body = String(text || "").trim();
-    const detailed = wantsDetailedReply(query) || /glacial pace|every step|walk me through|at a glacial/i.test(String(query || ""));
+    const detailed = wantsDetailedReply(query) || /every step|walk me through/i.test(String(query || ""));
     if (body && countSentences(body) >= MIN_REPLY_SENTENCES && !detailed) {
       return false;
     }
@@ -976,10 +976,6 @@ const HalCore = (function () {
       return HalAgentProgramming.contractSummary();
     }
     return "Auto-style agent: answer first, cite local evidence, name gaps, one next step, min five sentences.";
-  }
-
-  function mirandaPersonalityPromptLines() {
-    return agentPersonalityPromptLines();
   }
 
   function applyHalPersonality(text, query, route, meta) {
@@ -1703,7 +1699,7 @@ const HalCore = (function () {
       };
     }
 
-    if (/\bwalk me through\b.*\bevery step\b/.test(q) || /\bglacial pace\b/.test(q)) {
+    if (/\bwalk me through\b.*\bevery step\b/.test(q)) {
       const pageHint = findPage(q) || findPage(rawQuery);
       if (pageHint) {
         const info = pageInfoMap(halData, pages)[pageHint] || { label: pageHint, detail: "" };
@@ -2620,7 +2616,7 @@ const HalCore = (function () {
     const topPriority = (halData && halData.topPriority && halData.topPriority.summary) || "";
     const parts = [
       "You are HAL on the 24B reasoning lane for NewRidgeFinancial 2.0 — dental-practice financial program.",
-      mirandaPersonalityPromptLines(),
+      agentPersonalityPromptLines(),
       topPriority ? `Top priority: ${topPriority}` : "Top priority: monitor the program and recommend safe next staff actions.",
       "Before writing, reason through: what they asked, what local/tool evidence applies, what is missing, and what one safe next step staff should take.",
       "Answer structure (prose only — no markdown headers, no numbered lists unless they asked for a plan):",
@@ -3970,7 +3966,7 @@ const HalCore = (function () {
         return { intent: "status", lane: "local", text: (halStatus.summary || "") + status, actions: [] };
       }
       if (wantsExplain) {
-        const verbose = /glacial pace|every step|walk me through/i.test(String(rawQuery || ""));
+        const verbose = /every step|walk me through/i.test(String(rawQuery || ""));
         const explainBody = verbose
           ? `${info.label}: ${info.detail}${status}\n\nI'll walk through this slowly. First, open ${info.label} from the sidebar so widgets and registry context load together. Second, check whether imports for that page are fresh — empty tiles usually mean stale or missing SoftDent or QuickBooks exports, not hidden live data. Third, read the registry line above for state, safety, and the suggested next staff action. Fourth, name a specific widget if you want a narrower drill-down. Fifth, note anything still missing before anyone posts, emails, or contacts a payer outside NR2. HAL stays read-only here; staff executes outbound steps.`
           : `${info.label}: ${info.detail}${status}`;

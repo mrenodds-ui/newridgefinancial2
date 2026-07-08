@@ -75,6 +75,10 @@ _FALLBACK_DATASET_NAMES: dict[str, tuple[str, ...]] = {
         "softdent_hygiene_recall.csv",
         "hygiene_recall_summary.json",
     ),
+    "softdent.operatory": (
+        "operatory_schedule.json",
+        "softdent_operatory_chairs.json",
+    ),
 }
 
 _manifest_warnings: list[str] = []
@@ -190,3 +194,4 @@ SOFTDENT_NEW_PATIENTS_NAMES = _MANIFEST_NAMES["softdent.newPatients"]
 SOFTDENT_TREATMENT_PLANS_NAMES = _MANIFEST_NAMES["softdent.treatmentPlans"]
 SOFTDENT_CASE_ACCEPTANCE_NAMES = _MANIFEST_NAMES["softdent.caseAcceptance"]
 SOFTDENT_HYGIENE_RECALL_NAMES = _MANIFEST_NAMES["softdent.hygieneRecall"]
+SOFTDENT_OPERATORY_NAMES = _MANIFEST_NAMES["softdent.operatory"]

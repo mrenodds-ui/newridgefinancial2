@@ -2,6 +2,8 @@
 
 const NR2_WORKSTATION_ONLY =
   typeof window !== "undefined" && !!window.NR2_WORKSTATION_ONLY;
+const NR2_FINANCIAL_ONLY =
+  typeof window !== "undefined" && !!window.NR2_FINANCIAL_ONLY && !NR2_WORKSTATION_ONLY;
 
 /** Real SideNotesIM.exe — NR2 Workstation only; HAL financial app uses local staff notes + office channel. */
 function sideNotesImEnabled() {
@@ -51,6 +53,7 @@ function resolvePageId(raw) {
     .replace(/^#/, "")
     .split(/[?&]/)[0]
     .trim();
+  if (NR2_FINANCIAL_ONLY && cleaned === "workstation") return defaultPageId();
   if (cleaned && getPages().some((p) => p.id === cleaned)) return cleaned;
   return defaultPageId();
 }
@@ -71,8 +74,15 @@ const FALLBACK_MODELS = { config: { mode: "offline" }, lanes: [] };
 const sidebar = document.getElementById("sidebar");
 let nav = document.getElementById("nav");
 const appPage = document.getElementById("appPage");
-const halPage = document.getElementById("halPage");
-const halPageRoot = document.getElementById("halPageRoot");
+
+function halMountRoot() {
+  return appPage;
+}
+
+function isHalPageVisible() {
+  const root = halMountRoot();
+  return !!(root && !root.hidden && root.querySelector(".ms-page--hal"));
+}
 const workstationPage = document.getElementById("workstationPage");
 const workstationPageRoot = document.getElementById("workstationPageRoot");
 const drawer = document.getElementById("drawer");
@@ -171,72 +181,84 @@ function serverRequiredMessage(feature) {
 }
 
 function enforceSingleFinancialTab() {
-  const LOCK_KEY = "nr2TabLock";
-  const tabId = sessionStorage.getItem("nr2TabId") || Math.random().toString(36).slice(2);
-  sessionStorage.setItem("nr2TabId", tabId);
-  const channel =
-    typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("nr2-financial-tab") : null;
-  let blocked = false;
+  const LOCK_KEY = "nr2_financial_tab_lock";
+  const LEASE_TTL_MS = 6000;
+  const HEARTBEAT_MS = 2000;
 
-  function showTabBlocker() {
-    if (document.getElementById("nr2-tab-blocker")) return;
-    blocked = true;
-    const overlay = document.createElement("div");
-    overlay.id = "nr2-tab-blocker";
-    overlay.setAttribute("role", "alertdialog");
-    overlay.innerHTML =
-      '<div class="nr2-tab-blocker__card">' +
-      "<h2>NR2 already open</h2>" +
-      "<p>Use one browser tab for NewRidgeFinancial to avoid SQLite conflicts.</p>" +
-      '<button type="button" id="nr2-tab-steal">Use this tab</button>' +
-      '<button type="button" id="nr2-tab-close">Close this tab</button>' +
-      "</div>";
-    document.body.appendChild(overlay);
-    overlay.querySelector("#nr2-tab-steal").addEventListener("click", () => {
-      if (channel) channel.postMessage({ type: "steal", tabId });
-      localStorage.setItem(LOCK_KEY, `${tabId}:${Date.now()}`);
-      overlay.remove();
-      blocked = false;
-    });
-    overlay.querySelector("#nr2-tab-close").addEventListener("click", () => {
-      window.close();
-    });
-  }
-
-  if (channel) {
-    channel.postMessage({ type: "hello", tabId });
-    channel.onmessage = (event) => {
-      const data = event.data || {};
-      if (data.type === "hello" && data.tabId !== tabId) {
-        channel.postMessage({ type: "deny", tabId });
+  function nr2EpochCheckBroadcast() {
+    if (NR2_WORKSTATION_ONLY) return;
+    if (window.PageSchema && window.PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: "NR2_KILL_LEGACY" });
       }
-      if (data.type === "deny" && data.tabId !== tabId) showTabBlocker();
-      if (data.type === "steal" && data.tabId !== tabId) showTabBlocker();
-    };
+      if (window.BroadcastChannel) {
+        const bc = new BroadcastChannel("nr2_tab");
+        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10062" });
+      }
+    }
   }
 
-  const heartbeat = () => {
+  function readLock() {
     try {
-      localStorage.setItem(LOCK_KEY, `${tabId}:${Date.now()}`);
+      return JSON.parse(localStorage.getItem(LOCK_KEY));
     } catch {
-      /* storage unavailable */
+      return null;
     }
-  };
-  const existing = localStorage.getItem(LOCK_KEY);
-  if (existing) {
-    const [ownerId, tsRaw] = existing.split(":");
-    const age = Date.now() - Number(tsRaw || 0);
-    if (ownerId && ownerId !== tabId && age < 8000) showTabBlocker();
   }
-  heartbeat();
-  if (!window.__nr2TabLockInterval) {
-    window.__nr2TabLockInterval = window.setInterval(heartbeat, 3000);
+
+  function writeLock(id) {
+    localStorage.setItem(LOCK_KEY, JSON.stringify({ id, ts: Date.now() }));
+  }
+
+  function clearMyLock(id) {
+    const cur = readLock();
+    if (cur && cur.id === id) localStorage.removeItem(LOCK_KEY);
+  }
+
+  function canAcquire(myId) {
+    const cur = readLock();
+    if (!cur) return true;
+    if (cur.id === myId) return true;
+    const stale = Date.now() - cur.ts > LEASE_TTL_MS;
+    return stale;
+  }
+
+  function showTabBlockedMessage() {
+    const app = document.getElementById("app") || document.body;
+    app.innerHTML =
+      '<div style="font-family:system-ui;padding:2rem;text-align:center;">' +
+      "<h2>NewRidge Financial is already open</h2>" +
+      "<p>This application can only run in one tab at a time to protect financial data.</p>" +
+      '<p>Please return to the other tab, or wait a few seconds and <a href="javascript:location.reload()">try again</a>.</p>' +
+      "</div>";
+  }
+
+  function acquireTabLock() {
+    const myId = `${performance.now().toFixed(0)}-${Math.random().toString(36).slice(2, 7)}`;
+
+    if (!canAcquire(myId)) {
+      showTabBlockedMessage();
+      return false;
+    }
+
+    writeLock(myId);
+    const heartbeat = window.setInterval(() => {
+      writeLock(myId);
+      nr2EpochCheckBroadcast();
+    }, HEARTBEAT_MS);
+    setInterval(nr2EpochCheckBroadcast, 6000);
     window.addEventListener("beforeunload", () => {
-      const cur = localStorage.getItem(LOCK_KEY);
-      if (cur && cur.startsWith(`${tabId}:`)) localStorage.removeItem(LOCK_KEY);
-      if (channel) channel.close();
+      clearInterval(heartbeat);
+      clearMyLock(myId);
     });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return;
+      writeLock(myId);
+    });
+    return true;
   }
+
+  acquireTabLock();
 }
 
 function saveChatHistory() {
@@ -245,6 +267,17 @@ function saveChatHistory() {
 
 function saveWorkstationChatHistory() {
   persistLocal("workstationChatHistory", workstationChatHistory);
+}
+
+function isWorkstationHalPlaceholderMessage(message) {
+  const text = String((message && message.text) || "").trim();
+  if (!text) return true;
+  return /^(HAL 9000 )?(gathering|reasoning|escalating|thinking locally|reasoning locally|escalating locally)\b/i.test(text);
+}
+
+function sanitizeWorkstationChatHistory(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((message) => message && !isWorkstationHalPlaceholderMessage(message));
 }
 
 function defaultWorkstationMessagePrompts() {
@@ -343,12 +376,17 @@ async function resolveWorkstationStationFromInbox() {
 async function refreshSideNotesMessages() {
   if (!sideNotesImEnabled()) return { messages: [] };
   if (typeof SideNotesHub === "undefined") return { messages: [] };
+  await loadSideNotesInbox().catch(() => {});
   const station = workstationStationLabel();
   try {
     const live = await SideNotesHub.fetchMessages(station === "Workstation" ? "" : station);
     sidenotesMessages = Array.isArray(live.messages) ? live.messages : [];
     sidenotesLive = !!(live && live.ok);
-    maybeAnnounceSideNotesMessages(sidenotesMessages);
+    if (!sideNotesHelperSpeaks()) {
+      maybeAnnounceSideNotesMessages(sidenotesMessages);
+    } else {
+      markSideNotesInboxAnnounced(halSideNotesInbox);
+    }
     maybePopupIncomingWorkstationMessages(sidenotesMessages, "sidenotes");
   } catch (_) {
     sidenotesMessages = [];
@@ -410,14 +448,6 @@ function maybePopupIncomingWorkstationMessages(messages, source) {
       target: item && item.target,
       targets: item && item.targets,
     });
-    if (window.HalVoice && HalVoice.announceSidenote) {
-      const target = String((item && item.target) || "");
-      const targets = Array.isArray(item && item.targets) ? item.targets : [];
-      const broadcast =
-        /^(all|everyone)$/i.test(target) ||
-        targets.some((t) => /^(all|everyone)$/i.test(String(t)));
-      HalVoice.announceSidenote((item && item.from) || "Office", broadcast);
-    }
   }
   if (!workstationPopupBaselineDone) workstationPopupBaselineDone = true;
 }
@@ -431,6 +461,7 @@ if (typeof globalThis !== "undefined") globalThis.openWorkstationHistoryTab = op
 
 function maybeAnnounceSideNotesMessages(messages) {
   if (typeof WorkstationMessagePopup !== "undefined") return;
+  if (sideNotesHelperSpeaks()) return;
   if (!window.HalVoice || !Array.isArray(messages)) return;
   if (workstationPage && workstationPage.hidden) return;
   const station = workstationStationLabel();
@@ -463,6 +494,7 @@ async function refreshOfficeChannel() {
     officeChannelData = { schema: "nr2-office-channel-v1", messages: [] };
   }
   maybeAnnounceOfficeChannel(officeChannelData.messages || []);
+  await refreshHubBroadcastBadge();
   if (NR2_WORKSTATION_ONLY) {
     maybePopupIncomingWorkstationMessages(officeChannelData.messages || [], "hub");
     await refreshSideNotesMessages();
@@ -634,6 +666,30 @@ async function postOfficeChannelMessage(partial) {
       res = await OfficeHub.appendMessage(partial);
     }
     await mirrorMessageToSideNotes(partial);
+    if (isWorkstationUi) await notifyHubBroadcastAfterOfficeSend(partial);
+    else {
+      const targets = normalizeOfficeChannelTargetsList(
+        (partial && partial.targets) || (partial && partial.target ? [partial.target] : []),
+      );
+      if (targets.includes("all")) {
+        await notifyHubBroadcastAfterOfficeSend(partial);
+        if (
+          typeof SideNotesOfficeFallback !== "undefined" &&
+          SideNotesOfficeFallback.workstationReachable &&
+          SideNotesOfficeFallback.recordBroadcastFallback
+        ) {
+          const wsUp = await SideNotesOfficeFallback.workstationReachable();
+          if (!wsUp) {
+            SideNotesOfficeFallback.recordBroadcastFallback({
+              from: (partial && partial.from) || "Staff",
+              target: "all",
+              channel: "office",
+            });
+            patchHubBroadcastBadgeDom();
+          }
+        }
+      }
+    }
     await refreshOfficeChannel();
     if (isWorkstationUi) await refreshSideNotesMessages().catch(() => {});
     const msg = res && (res.message || (res.dispatch && res.dispatch.messages && res.dispatch.messages[0] && res.dispatch.messages[0].message));
@@ -926,7 +982,7 @@ async function handleWorkstationHalSubmit(query) {
     await handleHalSubmit(trimmed);
     const lastUser = [...halChatHistory].reverse().find((m) => m.role === "user");
     const lastHal = [...halChatHistory].reverse().find((m) => m.role === "hal");
-    workstationChatHistory = [lastUser, lastHal].filter(Boolean);
+    workstationChatHistory = sanitizeWorkstationChatHistory([lastUser, lastHal].filter(Boolean));
     saveWorkstationChatHistory();
   } finally {
     halChatHistory = savedHist;
@@ -1041,7 +1097,6 @@ function scheduleHalWidgetRefresh(snapshot, options) {
         PageViews.setHalFeed(halWidgetFeed, halProgramSnapshot);
       }
       if (
-        repaint &&
         currentId !== "hal" &&
         appPage &&
         !appPage.hidden &&
@@ -1049,6 +1104,9 @@ function scheduleHalWidgetRefresh(snapshot, options) {
         PageViews.hasPage(currentId)
       ) {
         PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
+        if (typeof PageChrome !== "undefined" && PageChrome.refreshHalReadinessStrip) {
+          PageChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
+        }
       }
       refreshOpsHealthStatus().catch(() => {
         /* ops health optional */
@@ -1220,15 +1278,23 @@ function isSideNotesWatcherLive(inbox) {
   return Number.isFinite(checkedMs) && Date.now() - checkedMs < 45000;
 }
 
+function sideNotesHelperSpeaks(inbox) {
+  const data = inbox || halSideNotesInbox;
+  if (!data || !data.monitor) return false;
+  return isSideNotesWatcherLive(data) && !!data.monitor.announce;
+}
+
+function markSideNotesInboxAnnounced(inbox) {
+  const items = inbox && Array.isArray(inbox.items) ? inbox.items : [];
+  items.forEach((m) => {
+    if (m && (m.announceId || m.id)) halSideNotesAnnouncedIds.add(m.announceId || m.id);
+  });
+}
+
 function maybeAnnounceSideNotesInbox(inbox) {
   if (!inbox || !Array.isArray(inbox.items) || !window.HalVoice) return;
-  const live = isSideNotesWatcherLive(inbox);
-  const helperSpeaks = live && inbox.monitor && inbox.monitor.announce;
-  // When the watcher is speaking via SAPI, skip browser TTS to avoid doubling up.
-  if (helperSpeaks) {
-    inbox.items.forEach((m) => {
-      if (m && (m.announceId || m.id)) halSideNotesAnnouncedIds.add(m.announceId || m.id);
-    });
+  if (sideNotesHelperSpeaks(inbox)) {
+    markSideNotesInboxAnnounced(inbox);
     return;
   }
   for (const item of inbox.items) {
@@ -1247,7 +1313,7 @@ function refreshSideNoteMonitor({ patchUi } = {}) {
   if (patchUi) {
     if (workstationPage && !workstationPage.hidden) {
       renderWorkstationScreen();
-    } else if (halPageRoot && !halTypeTimer) {
+    } else if (halMountRoot() && !halTypeTimer) {
       patchSideNoteMonitorDom();
     }
   }
@@ -1255,18 +1321,49 @@ function refreshSideNoteMonitor({ patchUi } = {}) {
 }
 
 function patchSideNoteMonitorDom() {
-  if (!halPageRoot || !window.HalPage) return;
-  const el = halPageRoot.querySelector(".hp-sidenotes-program");
+  const root = halMountRoot();
+  if (!root || !window.HalPage) return;
+  const el = root.querySelector(".sidenotes-program");
   if (!el) return;
   el.innerHTML = HalPage.sideNotesMonitorHtml(halSideNotes, halSideNoteMonitor, halSideNotesInbox, nr2SidenotesHubPath);
 }
 
 function scrollHalPanelIntoView(panelKey) {
-  if (!halPageRoot || !panelKey) return;
-  const panel = halPageRoot.querySelector(`[data-panel="${panelKey}"]`);
+  const root = halMountRoot();
+  if (!root || !panelKey) return;
+  const panel = root.querySelector(`[data-panel="${panelKey}"]`);
   if (panel && typeof panel.scrollIntoView === "function") {
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
+}
+
+function scrollStaffWidgetIntoView(widgetKey) {
+  const root = appPage || document.getElementById("appPage");
+  if (!root || !widgetKey) return;
+  const target = root.querySelector(`[data-hal-widget-key="${widgetKey}"]`);
+  if (target && typeof target.scrollIntoView === "function") {
+    target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function scrollPageSectionIntoView(pageId, opts) {
+  const o = opts || {};
+  if (pageId === "hal") {
+    if (o.panelKey) scrollHalPanelIntoView(o.panelKey);
+    else if (o.widgetKey) {
+      const panelMap = {
+        halAskHal: "askHal",
+        halImportHealth: "importHealth",
+        sidenotesProgram: "sidenotes",
+        officeManagerSurfaces: "workSurfaces",
+      };
+      const panel = panelMap[o.widgetKey];
+      if (panel) scrollHalPanelIntoView(panel);
+      else scrollStaffWidgetIntoView(o.widgetKey);
+    }
+    return;
+  }
+  if (o.widgetKey) scrollStaffWidgetIntoView(o.widgetKey);
 }
 
 function isHalPanelTarget(target) {
@@ -1279,15 +1376,149 @@ async function activateSideNotesPanel({ scroll } = {}) {
   if (scroll) scrollHalPanelIntoView("sidenotes");
 }
 
+let hubLastBroadcast = null;
+
+async function ensureHubToken() {
+  if (typeof window !== "undefined" && window.NR2_HUB_TOKEN) return window.NR2_HUB_TOKEN;
+  try {
+    const res = await fetch("/api/app-info", { cache: "no-store" });
+    if (res.ok) {
+      const info = await res.json();
+      if (info && info.hubToken && typeof window !== "undefined") {
+        window.NR2_HUB_TOKEN = String(info.hubToken);
+      }
+    }
+  } catch {
+    /* optional */
+  }
+  return typeof window !== "undefined" ? window.NR2_HUB_TOKEN || null : null;
+}
+
+async function refreshHubBroadcastBadge() {
+  await ensureHubToken();
+  let serverBroadcast = null;
+  try {
+    const headers = {};
+    if (typeof window !== "undefined" && window.NR2_HUB_TOKEN) {
+      headers["X-Hub-Token"] = String(window.NR2_HUB_TOKEN);
+    }
+    const res = await fetch("/api/hub/last-broadcast", { cache: "no-store", headers });
+    if (res.ok) {
+      serverBroadcast = await res.json();
+      if (serverBroadcast && serverBroadcast.at) {
+        hubLastBroadcast = serverBroadcast;
+        if (typeof window !== "undefined") window.__NR2_HUB_BROADCAST = hubLastBroadcast;
+      }
+    }
+  } catch {
+    serverBroadcast = null;
+  }
+  if (!serverBroadcast || !serverBroadcast.at) {
+    if (
+      typeof SideNotesOfficeFallback !== "undefined" &&
+      SideNotesOfficeFallback.applyFallbackBroadcast
+    ) {
+      const fb = SideNotesOfficeFallback.applyFallbackBroadcast();
+      if (fb && fb.at) hubLastBroadcast = fb;
+      else {
+        hubLastBroadcast = null;
+        if (typeof window !== "undefined") window.__NR2_HUB_BROADCAST = null;
+      }
+    } else {
+      hubLastBroadcast = null;
+      if (typeof window !== "undefined") window.__NR2_HUB_BROADCAST = null;
+    }
+  }
+  patchHubBroadcastBadgeDom();
+}
+
+function patchHubBroadcastBadgeDom() {
+  const root = halMountRoot();
+  if (!root || !window.HalPage || typeof HalPage.hubBroadcastBadgeHtml !== "function") return;
+  const html = HalPage.hubBroadcastBadgeHtml();
+  root.querySelectorAll(".sidenotes-monitor .sidenote-head").forEach((head) => {
+    const existing = head.querySelector(".sidenote-badge--hub-broadcast");
+    if (!html) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) {
+      existing.outerHTML = html;
+    } else {
+      const title = head.querySelector("h4");
+      if (title) title.insertAdjacentHTML("afterend", html);
+    }
+  });
+}
+
+async function notifyHubBroadcastAfterOfficeSend(partial) {
+  await ensureHubToken();
+  const targets = normalizeOfficeChannelTargetsList(
+    (partial && partial.targets) || (partial && partial.target ? [partial.target] : []),
+  );
+  if (!targets.includes("all")) return;
+  const payload = {
+    from: (partial && partial.from) || workstationStationName || "Workstation",
+    target: "all",
+    channel: "office",
+  };
+  try {
+    if (typeof HalHubClient !== "undefined" && HalHubClient.notifyHubBroadcast) {
+      await HalHubClient.notifyHubBroadcast(payload);
+    } else {
+      await fetch("/api/hub/notify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(typeof window !== "undefined" && window.NR2_HUB_TOKEN ? { "X-Hub-Token": String(window.NR2_HUB_TOKEN) } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+    }
+  } catch {
+    /* 8765 may be offline — badge poll stays quiet */
+  }
+}
+
+function buildPageHalContext(pageId) {
+  const pid = pageId || resolvePageId(window.location.hash);
+  const schema = typeof PageSchema !== "undefined" && PageSchema.byId ? PageSchema.byId(pid) : null;
+  const D = typeof PageCanvasData !== "undefined" ? PageCanvasData : null;
+  const lines = [`Active page: ${schema ? schema.title : pid}`];
+  if (!D) return lines.join("\n");
+  if (pid === "financial" && D.financialKpis) {
+    D.financialKpis()
+      .slice(0, 4)
+      .forEach((k) => lines.push(`${k.label}: ${k.value}`));
+  } else if (pid === "quickbooks" && D.quickbooksKpis) {
+    D.quickbooksKpis()
+      .slice(0, 4)
+      .forEach((k) => lines.push(`${k.label}: ${k.value}`));
+  } else if (pid === "softdent" && D.softdentKpis) {
+    D.softdentKpis()
+      .slice(0, 4)
+      .forEach((k) => lines.push(`${k.label}: ${k.value}`));
+  } else if (pid === "ar" && D.arKpis) {
+    D.arKpis()
+      .slice(0, 4)
+      .forEach((k) => lines.push(`${k.label}: ${k.value}`));
+  }
+  return lines.join("\n");
+}
+
 async function runHalPageCmd(cmd, opts) {
   const text = String(cmd || "").trim();
   if (!text) return;
   const openHal = !opts || opts.openHal !== false;
-  if (openHal && halPage && halPage.hidden) select("hal");
-  await handleHalSubmit(text);
+  if (openHal && !isHalPageVisible()) select("hal");
+  const pageId = resolvePageId(window.location.hash);
+  const withContext = !(opts && opts.raw);
+  const query = withContext ? `${text}\n\n[Page context]\n${buildPageHalContext(pageId)}` : text;
+  await handleHalSubmit(query);
   renderHalScreen();
 }
 if (typeof window !== "undefined") {
+  window.NR2_FLAGS = Object.assign({ hal_commands: true }, window.NR2_FLAGS || {});
   window.runHalPageCmd = runHalPageCmd;
 }
 
@@ -1400,7 +1631,7 @@ function sideNotesDrawerHtml() {
     </div>
     <div class="drawer-section">
       <h3 class="drawer-section__title">Station watchers</h3>
-      <table class="hp-table hp-sn-stations"><thead><tr><th>Station</th><th>Status</th><th>Checked</th></tr></thead><tbody>${stationRows}</tbody></table>
+      <table class="data-table sidenote-stations-table"><thead><tr><th>Station</th><th>Status</th><th>Checked</th></tr></thead><tbody>${stationRows}</tbody></table>
     </div>
     <div class="drawer-section">
       <h3 class="drawer-section__title">Recent SideNotesIM routing</h3>
@@ -2184,8 +2415,24 @@ function ossModelConfig() {
 const ollamaModelCache = { at: 0, names: null, loading: null };
 
 async function refreshOllamaModelNames() {
+  try {
+    if (typeof DesktopBridge !== "undefined" && typeof DesktopBridge.loopbackJson === "function") {
+      const data = await DesktopBridge.loopbackJson("/api/ollama/tags");
+      const names = (data.models || [])
+        .map((m) => (typeof m === "string" ? m : m && m.name))
+        .filter(Boolean);
+      ollamaModelCache.names = new Set(names);
+      ollamaModelCache.at = Date.now();
+      return names;
+    }
+  } catch {
+    /* fall through to direct probe on plain HTTP dev only */
+  }
   const runtime = HalCore.laneRuntime(halModels, "chat8b");
   if (!runtime || !runtime.endpoint) return [];
+  if (typeof window !== "undefined" && window.location && window.location.protocol === "https:") {
+    return [];
+  }
   const base = String(runtime.endpoint).replace(/\/api\/chat\/?$/i, "");
   try {
     const res = await fetch(base + "/api/tags", { cache: "no-store" });
@@ -2368,7 +2615,7 @@ function modelRuntimeOptions(runtime) {
     },
     runtime.options || {},
   );
-  // Miranda voice sampling is for the fast 8B chat lane only — not reasoning/escalation.
+  // Natural-voice sampling applies to the fast 8B chat lane only — not reasoning/escalation.
   if (runtime && runtime.fastChat) {
     Object.assign(options, profile);
   }
@@ -2677,17 +2924,17 @@ function formatHalMessageHtml(text) {
 
 function renderFollowUpChipsHtml(chips) {
   if (!chips || !chips.length) return "";
-  return `<div class="hal-msg__followups hp-chips">${chips
+  return `<div class="hal-msg__followups prompt-chips">${chips
     .map((c) => {
       const label = escapeHtml(c.label);
       const consentAttr = c.consent ? ' data-hal-consent="1"' : c.cancel ? ' data-hal-cancel="1"' : "";
       if (c.action && c.action.type === "openPage" && c.action.page) {
-        return `<button type="button" class="hp-chip hp-chip--action" data-hal-action="openPage" data-open-page="${escapeHtml(c.action.page)}" data-hal-followup="${escapeHtml(c.query || c.label)}"${consentAttr}>${label}</button>`;
+        return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-action="openPage" data-open-page="${escapeHtml(c.action.page)}" data-hal-followup="${escapeHtml(c.query || c.label)}"${consentAttr}>${label}</button>`;
       }
       if (c.action && c.action.type === "refreshImports") {
-        return `<button type="button" class="hp-chip hp-chip--action" data-hal-action="refreshImports" data-hal-followup="Refresh imports"${consentAttr}>${label}</button>`;
+        return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-action="refreshImports" data-hal-followup="Refresh imports"${consentAttr}>${label}</button>`;
       }
-      return `<button type="button" class="hp-chip${c.consent ? " hp-chip--action" : ""}" data-hal-followup="${escapeHtml(c.query || c.label)}"${consentAttr}>${label}</button>`;
+      return `<button type="button" class="prompt-chip${c.consent ? " prompt-chip--action" : ""}" data-hal-followup="${escapeHtml(c.query || c.label)}"${consentAttr}>${label}</button>`;
     })
     .join("")}</div>`;
 }
@@ -2737,7 +2984,7 @@ function renderChatLog() {
           : "";
       const patchChip =
         message.role === "hal" && /<<<patch/i.test(String(message.text || ""))
-          ? `<button type="button" class="hp-chip hp-chip--action" data-hal-apply-patches="${idx}">Apply patches</button>`
+          ? `<button type="button" class="prompt-chip prompt-chip--action" data-hal-apply-patches="${idx}">Apply patches</button>`
           : "";
       const actions = normalizeActions(message.actions)
         .map((action) => {
@@ -3342,7 +3589,6 @@ async function handleHalSubmit(query) {
       placeholder.tools = (outcome.plan && outcome.plan.tools) || placeholder.tools || [];
       placeholder.toolSummaries = summarizeToolResultsBrief(outcome.toolResults);
       placeholder.agentLoopTurns = outcome.agentLoopTurns || 0;
-      halTypeSig = halChatHistory.length + ":" + String(outcome.text || "").length;
     } else {
       halChatHistory.push({
         role: "hal",
@@ -3413,7 +3659,7 @@ function bindOpenPageButtons(root) {
       logAudit("Open " + target, "navigate: drawer");
       closeDrawer();
       if (isHalPanelTarget(target)) {
-        if (halPage && halPage.hidden) select("hal");
+        if (!isHalPageVisible()) select("hal");
         handleHalSurfaceNav(target);
         return;
       }
@@ -3904,7 +4150,7 @@ function handleNr2Print(scope) {
   PU.printCurrentView({
     pageId,
     title: page ? page.title : pageId,
-    halPageVisible: halPage && !halPage.hidden,
+    halPageVisible: isHalPageVisible(),
     drawerOpen: drawer && drawer.classList.contains("open"),
   });
 }
@@ -3920,7 +4166,7 @@ function handleNr2Export(scope) {
     pageId,
     snapshot: halProgramSnapshot,
     feed: halWidgetFeed,
-    halPageVisible: halPage && !halPage.hidden,
+    halPageVisible: isHalPageVisible(),
   });
 }
 
@@ -4035,10 +4281,11 @@ function typewriteWorkstationHalReply() {
 }
 
 function setInlineHalStreamingText(text) {
-  if (!halPageRoot) return;
-  const box = halPageRoot.querySelector(".hp-inline-chat");
+  const root = halMountRoot();
+  if (!root) return;
+  const box = root.querySelector(".chat-messages");
   if (!box) return;
-  const rows = box.querySelectorAll(".hp-chat-row--hal");
+  const rows = box.querySelectorAll(".message.message-hal");
   if (!rows.length) return;
   const p = rows[rows.length - 1].querySelector("p");
   if (!p) return;
@@ -4046,7 +4293,7 @@ function setInlineHalStreamingText(text) {
     clearInterval(halTypeTimer);
     halTypeTimer = null;
   }
-  p.classList.remove("hp-typing");
+  p.classList.remove("message-typing");
   p.textContent = text;
   box.scrollTop = box.scrollHeight;
 }
@@ -4078,13 +4325,14 @@ function halSpeechContextForLastReply(displayText) {
 }
 
 function typewriteLastHalMessage() {
-  if (!halPageRoot) return;
-  const box = halPageRoot.querySelector(".hp-inline-chat");
+  const root = halMountRoot();
+  if (!root) return;
+  const box = root.querySelector(".chat-messages");
   if (!box) return;
-  const rows = box.querySelectorAll(".hp-chat-row");
+  const rows = box.querySelectorAll(".message");
   if (!rows.length) return;
   const last = rows[rows.length - 1];
-  if (!last.classList.contains("hp-chat-row--hal")) return;
+  if (!last.classList.contains("message-hal")) return;
   const p = last.querySelector("p");
   if (!p) return;
   const full = p.textContent;
@@ -4098,32 +4346,36 @@ function typewriteLastHalMessage() {
   const lastHal = halChatHistory.length ? halChatHistory[halChatHistory.length - 1] : null;
   if (lastHal && lastHal.skipChatSpeech) {
     p.textContent = full;
-    p.classList.remove("hp-typing");
+    p.classList.remove("message-typing");
     return;
   }
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reduce || full.length < 2) {
     p.textContent = full;
-    p.classList.remove("hp-typing");
-    if (window.HalVoice && HalVoice.speakHalReply && !window._halRandomQaSkipSpeech) {
+    p.classList.remove("message-typing");
+    if (window.HalVoice && HalVoice.speakHalReply && !window._halRandomQaSkipSpeech && !(lastHal && lastHal.speechStarted)) {
       const speechCtx = halSpeechContextForLastReply(full);
       HalVoice.speakHalReply(full, { interrupt: true, ...speechCtx });
     }
     return;
   }
   p.textContent = "";
-  p.classList.add("hp-typing");
+  p.classList.add("message-typing");
   const step = Math.max(1, Math.ceil(full.length / 110));
   const iterations = Math.ceil(full.length / step);
   let speechMs = 2400;
   const speechCtx = halSpeechContextForLastReply(full);
-  if (window.HalVoice && !window._halRandomQaSkipSpeech) {
+  if (window.HalVoice && !window._halRandomQaSkipSpeech && !(lastHal && lastHal.speechStarted)) {
     if (HalVoice.speakHalReply) {
       const spoken = HalVoice.speakHalReply(full, { interrupt: true, ...speechCtx });
       speechMs = (spoken && spoken.durationMs) || speechMs;
     } else if (HalVoice.estimateDurationMs) {
       speechMs = HalVoice.estimateDurationMs(speechCtx.spokenText || full);
     }
+  } else if (window.HalVoice && HalVoice.estimateConversationalDurationMs) {
+    speechMs = HalVoice.estimateConversationalDurationMs(speechCtx.spokenText || full);
+  } else if (window.HalVoice && HalVoice.estimateDurationMs) {
+    speechMs = HalVoice.estimateDurationMs(speechCtx.spokenText || full);
   }
   // Type quickly enough to stay ahead of HAL's voice, but not instant.
   const typeDelayMs = Math.max(16, Math.min(42, Math.floor(speechMs / Math.max(iterations, 1))));
@@ -4136,7 +4388,7 @@ function typewriteLastHalMessage() {
       clearInterval(halTypeTimer);
       halTypeTimer = null;
       p.textContent = full;
-      p.classList.remove("hp-typing");
+      p.classList.remove("message-typing");
     }
   }, typeDelayMs);
 }
@@ -4167,14 +4419,14 @@ function updateHalStressUi() {
 
   const statusEl = document.getElementById("hpStressStatus");
   if (statusEl) {
-    statusEl.className = "hp-stress__status";
-    if (st.status === "Pass") statusEl.classList.add("hp-stress__status--ok");
-    else if (st.status === "Fail") statusEl.classList.add("hp-stress__status--fail");
-    else if (st.running) statusEl.classList.add("hp-stress__status--run");
+    statusEl.className = "stress-status";
+    if (st.status === "Pass") statusEl.classList.add("stress-status--ok");
+    else if (st.status === "Fail") statusEl.classList.add("stress-status--fail");
+    else if (st.running) statusEl.classList.add("stress-status--run");
   }
 
   const failEl = document.getElementById("hpStressFailures");
-  if (failEl) failEl.classList.toggle("hp-stress__fail-num", !!st.failureTotal);
+  if (failEl) failEl.classList.toggle("stress-fail-num", !!st.failureTotal);
 
   const list = document.getElementById("hpStressFailList");
   if (list && Array.isArray(st.topFailures)) {
@@ -4183,10 +4435,10 @@ function updateHalStressUi() {
           .slice(0, 12)
           .map(
             (f) =>
-              `<li><span class="hp-stress__fail-count">${escapeHtml(String(f.count))}×</span> <code>${escapeHtml(f.stage)}</code> — ${escapeHtml(f.error)}<br><em class="hp-muted">${escapeHtml(String(f.example || "").slice(0, 120))}</em></li>`,
+              `<li><span class="stress-fail-count">${escapeHtml(String(f.count))}×</span> <code>${escapeHtml(f.stage)}</code> — ${escapeHtml(f.error)}<br><em class="text-muted">${escapeHtml(String(f.example || "").slice(0, 120))}</em></li>`,
           )
           .join("")
-      : '<li class="hp-stress__empty">No failures yet.</li>';
+      : '<li class="stress-empty">No failures yet.</li>';
   }
 
   const runBtn = document.getElementById("hpStressRun");
@@ -4280,9 +4532,10 @@ function stopHalStressTest() {
 }
 
 function renderHalScreen() {
-  if (!halPageRoot || !window.HalPage) return;
+  const root = halMountRoot();
+  if (!root || !window.HalPage) return;
   HalPage.render({
-    root: halPageRoot,
+    root,
     halData,
     halModels,
     halAudit,
@@ -4305,19 +4558,23 @@ function renderHalScreen() {
 
 function renderSidebar(activeId) {
   if (NR2_WORKSTATION_ONLY) return;
-  if (!sidebar || !window.UI || typeof PageSchema === "undefined") return;
-  sidebar.innerHTML = UI.Sidebar({
-    activeId,
-    navGroups: PageSchema.NAV_GROUPS,
-    pages: buildSidebarPages(),
-    practice: PageSchema.PRACTICE,
-    user: {
-      initials: "NR",
-      name: PageSchema.PRACTICE.operator || "Dr. Michael Reno",
-      role: "Owner",
-    },
-    status: nr2SidebarStatus,
-  });
+  if (!sidebar || typeof PageSchema === "undefined") return;
+  if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
+    sidebar.innerHTML =
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10062&__nr2_purge=1</div>';
+    return;
+  }
+  const MC =
+    (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome) ||
+    (typeof globalThis !== "undefined" && globalThis.MoonshotMockupChrome) ||
+    null;
+  if (!MC || typeof MC.renderNavRail !== "function") {
+    sidebar.innerHTML = '<div class="sidebar__boot-error">Moonshot mockup chrome failed to load.</div>';
+    return;
+  }
+  sidebar.className = "nav-rail";
+  sidebar.setAttribute("aria-label", "Main navigation");
+  sidebar.innerHTML = MC.renderNavRail(activeId);
   nav = document.getElementById("nav");
   Object.keys(buttons).forEach((key) => delete buttons[key]);
   if (!nav) return;
@@ -4326,9 +4583,24 @@ function renderSidebar(activeId) {
     buttons[id] = button;
     button.addEventListener("click", () => select(id));
   });
+  nav.querySelectorAll("[data-nav-widget], [data-nav-panel]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const pageId = button.getAttribute("data-nav-page");
+      const widgetKey = button.getAttribute("data-nav-widget");
+      const panelKey = button.getAttribute("data-nav-panel");
+      if (!pageId) return;
+      const scrollOpts = panelKey ? { panelKey } : widgetKey ? { widgetKey } : null;
+      if (pageId === activeId) {
+        if (scrollOpts) scrollPageSectionIntoView(pageId, scrollOpts);
+        return;
+      }
+      select(pageId, scrollOpts ? { scrollTo: scrollOpts } : undefined);
+    });
+  });
 }
 
-function select(id) {
+function select(id, options) {
   if (NR2_WORKSTATION_ONLY) {
     if (workstationPage) workstationPage.hidden = false;
     renderWorkstationScreen();
@@ -4347,21 +4619,30 @@ function select(id) {
   const page = getPages().find((p) => p.id === pageId) || getPages().find((p) => p.id === defaultPageId()) || getPages()[0];
   if (!page) return;
   const isHal = page.id === "hal" && PageViews && !PageViews.hasPage(page.id);
-  const isWorkstation = page.id === "workstation" && PageViews && !PageViews.hasPage(page.id);
-  if (halPage) halPage.hidden = !isHal;
-  if (workstationPage) workstationPage.hidden = !isWorkstation;
+  const isWorkstation =
+    !NR2_FINANCIAL_ONLY && page.id === "workstation" && PageViews && !PageViews.hasPage(page.id);
   if (appPage) {
-    appPage.hidden = isHal || isWorkstation;
-    if (!isHal && !isWorkstation) {
+    if (isHal) {
+      appPage.hidden = false;
+      renderHalScreen();
+      activateSideNotesPanel().catch(() => {
+        /* sidenotes inbox optional */
+      });
+    } else if (!isWorkstation) {
       appPage.hidden = false;
       if (PageViews && PageViews.hasPage(page.id)) {
         PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed, halProgramSnapshot);
+        if (typeof PageChrome !== "undefined" && PageChrome.refreshHalReadinessStrip) {
+          PageChrome.refreshHalReadinessStrip(page.id, halWidgetFeed);
+        }
       } else if (window.UI && window.UI.ErrorState) {
-        appPage.innerHTML = `<div class="page-view"><article class="pv pv--app pv--canvas" data-pv-page="${page.id}">${UI.ErrorState({
+        appPage.innerHTML = `<div class="page-view"><article class="ms-page" data-pv-page="${page.id}">${UI.ErrorState({
           title: "Page not available",
           message: `Could not open "${page.id}". Choose a page from the sidebar or restart Start Program.`,
         })}</article></div>`;
       }
+    } else {
+      appPage.hidden = true;
     }
   }
   renderSidebar(page.id);
@@ -4378,12 +4659,6 @@ function select(id) {
   } else {
     stopOfficeChannelPoll();
   }
-  if (isHal) {
-    renderHalScreen();
-    activateSideNotesPanel().catch(() => {
-      /* sidenotes inbox optional */
-    });
-  }
   closeDrawer();
   const nextHash = "#" + page.id;
   if (window.location.hash !== nextHash) {
@@ -4392,13 +4667,28 @@ function select(id) {
   if (typeof ImportReadinessGate !== "undefined" && ImportReadinessGate.evaluate) {
     ImportReadinessGate.evaluate(page.id);
   }
+  const scrollTo = options && options.scrollTo;
+  if (scrollTo) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => scrollPageSectionIntoView(page.id, scrollTo));
+    });
+  }
 }
 
 function assertDesignSchemaLoaded() {
+  if (NR2_WORKSTATION_ONLY) {
+    if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return false;
+    if (typeof WorkstationSchema !== "undefined" && typeof PageChrome !== "undefined") return true;
+    const frame = document.getElementById("pageFrame");
+    if (frame) {
+      frame.innerHTML =
+        '<div class="pv-state pv-state--error" role="alert"><strong class="pv-state__title">Workstation schema failed to load</strong><p class="pv-state__msg">workstation-schema.js and page-chrome.js are required. Launch Start Workstation.bat and reload.</p></div>';
+    }
+    return false;
+  }
   if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return false;
-  const hasWorkstationSchema = typeof WorkstationSchema !== "undefined";
   const hasPageSchema = typeof PageSchema !== "undefined" && typeof PageChrome !== "undefined";
-  if (NR2_WORKSTATION_ONLY ? hasWorkstationSchema && typeof PageChrome !== "undefined" : hasPageSchema) return true;
+  if (hasPageSchema) return true;
   const frame = document.getElementById("pageFrame");
   if (frame) {
     frame.innerHTML =
@@ -4434,7 +4724,7 @@ function renderSchemaVersionMismatch(pythonVersion, jsVersion) {
 }
 
 renderRuntimeModeBanner();
-if (assertDesignSchemaLoaded() && !NR2_WORKSTATION_ONLY) {
+if (!NR2_WORKSTATION_ONLY && assertDesignSchemaLoaded()) {
   renderSidebar(resolvePageId(window.location.hash));
 }
 
@@ -4442,8 +4732,8 @@ if (drawerClose) {
   drawerClose.addEventListener("click", closeDrawer);
 }
 
-if (halPage) {
-  halPage.addEventListener("submit", async (event) => {
+if (appPage) {
+  appPage.addEventListener("submit", async (event) => {
     if (event.target.id !== "hpAskForm") return;
     event.preventDefault();
     const input = document.getElementById("hpAskInput");
@@ -4457,7 +4747,7 @@ if (halPage) {
     renderHalScreen();
   });
 
-  halPage.addEventListener("keydown", (event) => {
+  appPage.addEventListener("keydown", (event) => {
     const target = event.target;
     if (target && target.id === "hpSideNoteInput" && event.key === "Enter") {
       event.preventDefault();
@@ -4494,7 +4784,7 @@ if (halPage) {
     }
   });
 
-  halPage.addEventListener("dblclick", async (event) => {
+  appPage.addEventListener("dblclick", async (event) => {
     const ring = event.target.closest("[data-hal-ring-cmd]");
     if (!ring) return;
     const cmd = ring.getAttribute("data-hal-ring-cmd");
@@ -4503,10 +4793,10 @@ if (halPage) {
     renderHalScreen();
   });
 
-  halPage.addEventListener("click", async (event) => {
+  appPage.addEventListener("click", async (event) => {
     const copyResponse = event.target.closest("[data-hal-copy-response]");
     if (copyResponse) {
-      const row = copyResponse.closest(".hp-chat-row");
+      const row = copyResponse.closest(".message");
       const text = row && row.querySelector("p") ? row.querySelector("p").textContent : "";
       if (text) {
         DesktopBridge.writeClipboard(text)
@@ -4729,7 +5019,7 @@ if (workstationPage) {
   workstationPage.addEventListener("click", async (event) => {
     const copyResponse = event.target.closest("[data-hal-copy-response]");
     if (copyResponse) {
-      const row = copyResponse.closest(".hp-chat-row");
+      const row = copyResponse.closest(".message");
       const text = row && row.querySelector("p") ? row.querySelector("p").textContent : "";
       if (text) {
         DesktopBridge.writeClipboard(text)
@@ -4910,6 +5200,31 @@ if (workstationPage) {
 
 if (appPage) {
   appPage.addEventListener("click", async (event) => {
+    const pageCmd = event.target.closest("[data-page-command]");
+    if (pageCmd && window.NR2_FLAGS && window.NR2_FLAGS.hal_commands !== false) {
+      await runHalPageCmd(pageCmd.getAttribute("data-page-command"));
+      return;
+    }
+    const qbToggle = event.target.closest("[data-qb-view-toggle]");
+    if (qbToggle) {
+      const mode = qbToggle.getAttribute("data-qb-view-toggle") || "mockup";
+      try {
+        localStorage.setItem("qb.viewMode", mode === "legacy" ? "legacy" : "mockup");
+      } catch {
+        /* private mode */
+      }
+      const currentId = resolvePageId(window.location.hash);
+      if (currentId === "quickbooks" && PageViews && PageViews.hasPage("quickbooks")) {
+        PageViews.renderPageView(appPage, halData, "quickbooks", select, halWidgetFeed, halProgramSnapshot);
+        if (typeof PageChrome !== "undefined" && PageChrome.refreshHalReadinessStrip) {
+          PageChrome.refreshHalReadinessStrip("quickbooks", halWidgetFeed);
+        }
+        if (typeof NR2MoonshotUI !== "undefined" && NR2MoonshotUI.enhancePage) {
+          NR2MoonshotUI.enhancePage("quickbooks", appPage).catch(() => {});
+        }
+      }
+      return;
+    }
     if (await handleHalChromeInteraction(event)) return;
     const configure = event.target.closest("[data-hal-configure-export]");
     if (configure) {
@@ -4926,8 +5241,8 @@ if (appPage) {
       );
       return;
     }
-    const navBtn = event.target.closest("[data-pv-nav]");
-    if (navBtn) select(navBtn.getAttribute("data-pv-nav"));
+    const navBtn = event.target.closest("[data-ms-nav]");
+    if (navBtn) select(navBtn.getAttribute("data-ms-nav"));
   });
 }
 
@@ -4975,15 +5290,20 @@ window.addEventListener("hal-force-widget-placement", (event) => {
 async function loadPersistedState() {
   halAudit = (await DesktopBridge.storageGet("halAudit")) || [];
   halChatHistory = (await DesktopBridge.storageGet("halChatHistory")) || [];
-  workstationChatHistory = (await DesktopBridge.storageGet("workstationChatHistory")) || [];
-  if (workstationChatHistory.length > 2) {
-    workstationChatHistory = workstationChatHistory.slice(-2);
+  if (NR2_WORKSTATION_ONLY) {
+    workstationChatHistory = sanitizeWorkstationChatHistory(
+      (await DesktopBridge.storageGet("workstationChatHistory")) || [],
+    );
+    if (workstationChatHistory.length > 2) {
+      workstationChatHistory = workstationChatHistory.slice(-2);
+    }
     saveWorkstationChatHistory();
+    const savedPrompts = await DesktopBridge.storageGet("workstationMessagePrompts");
+    workstationMessagePrompts = savedPrompts ? normalizeWorkstationMessagePrompts(savedPrompts) : null;
+    const savedStation = await DesktopBridge.storageGet("workstationStationName");
+    if (savedStation) applyWorkstationStation(savedStation, { persist: false });
+    loadWorkstationReadIdsFromStorage(await DesktopBridge.storageGet("workstationReadIds"));
   }
-  const savedPrompts = await DesktopBridge.storageGet("workstationMessagePrompts");
-  workstationMessagePrompts = savedPrompts ? normalizeWorkstationMessagePrompts(savedPrompts) : null;
-  const savedStation = await DesktopBridge.storageGet("workstationStationName");
-  if (savedStation) applyWorkstationStation(savedStation, { persist: false });
   halWorkSession = (await DesktopBridge.storageGet("halWorkSession")) || null;
   halEvidencePacket = (await DesktopBridge.storageGet("halEvidencePacket")) || null;
   halReadinessDiagnostics = (await DesktopBridge.storageGet("halDiagnostics")) || null;
@@ -4995,7 +5315,6 @@ async function loadPersistedState() {
   }
   halSideNotes = (await DesktopBridge.storageGet("halSideNotes")) || [];
   halSideNoteMonitor = (await DesktopBridge.storageGet("halSideNoteMonitor")) || null;
-  loadWorkstationReadIdsFromStorage(await DesktopBridge.storageGet("workstationReadIds"));
   refreshSideNoteMonitor();
 }
 
@@ -5050,6 +5369,7 @@ async function boot() {
       );
       return;
     }
+    select("workstation");
   }
   if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) {
     if (NR2_WORKSTATION_ONLY) select("workstation");
@@ -5126,7 +5446,7 @@ async function boot() {
     HalEmployee.ensureTargetLevel(halModels, 7);
   }
   const bootInitialPage = resolvePageId(window.location.hash);
-  if (bootInitialPage === "hal" && halPage && halPageRoot && typeof select === "function") {
+  if (bootInitialPage === "hal" && appPage && typeof select === "function") {
     select("hal");
   }
   await ensureOllamaModelCache(0).catch(() => {});
@@ -5249,6 +5569,9 @@ if (typeof window !== "undefined") {
     const currentId = (window.location.hash || "").replace("#", "") || getPages()[0].id;
     if (currentId !== "hal" && appPage && !appPage.hidden && PageViews && PageViews.hasPage(currentId)) {
       PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
+      if (typeof PageChrome !== "undefined" && PageChrome.refreshHalReadinessStrip) {
+        PageChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
+      }
     }
   });
   window.addEventListener("nr2:narratives-updated", () => {
@@ -5261,6 +5584,9 @@ DesktopBridge.whenReady(() => {
   DesktopBridge.installClipboardHandlers();
   if (typeof ImportReadinessGate !== "undefined" && ImportReadinessGate.installListeners) {
     ImportReadinessGate.installListeners();
+  }
+  if (typeof SideNotesOfficeFallback !== "undefined" && SideNotesOfficeFallback.install) {
+    SideNotesOfficeFallback.install();
   }
   if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return;
   boot();

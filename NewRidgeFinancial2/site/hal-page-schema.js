@@ -1,12 +1,28 @@
 /**
- * HAL Command Center page schema (hal-102).
- * Cleaner layout: Ask HAL + status rail, compact widget monitor, quick nav, session footer.
+ * HAL Command Center page schema — derived from PageSchema (single source of truth).
+ * Layout zones stay HAL-specific; widget catalog mirrors staff page inventory.
  */
+(function () {
+  if (typeof window === "undefined") return;
+  if (window.NR2_WORKSTATION_ONLY) return;
+  if (!window.PageSchema) {
+    throw new Error("[NR2] HAL_SCHEMA_ABORT: PageSchema missing. Legacy schema retired.");
+  }
+  if (window.PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
+    throw new Error("[NR2] HAL_SCHEMA_ABORT: Expected moonshot-mockup epoch.");
+  }
+  window.PageSchema.SCHEMA_VERSION = "hal-10062";
+})();
+
 const HalPageSchema = (function () {
-  const SCHEMA_VERSION = "hal-104";
+  function pageSchemaApi() {
+    if (typeof PageSchema !== "undefined") return PageSchema;
+    if (typeof globalThis !== "undefined" && globalThis.PageSchema) return globalThis.PageSchema;
+    return null;
+  }
 
   const GRID = {
-    className: "hp-grid hp-grid--hal-102",
+    className: "dashboard-grid",
     areas: {
       command: "command",
       status: "status",
@@ -17,69 +33,6 @@ const HalPageSchema = (function () {
     },
   };
 
-  /** Widget catalog grouped for the compact monitor (not separate grid cards). */
-  const WIDGET_GROUPS = [
-    {
-      id: "financial",
-      title: "Financial Widgets",
-      accent: "green",
-      icon: { type: "nav", key: "financial" },
-      widgets: [
-        { key: "practiceFinancialOverview", nav: "financial" },
-        { key: "financialProductionTrend", nav: "financial" },
-        { key: "payerMixAndCollections", nav: "financial" },
-        { key: "providerPerformance", nav: "financial" },
-      ],
-    },
-    {
-      id: "clinical",
-      title: "Clinical Widgets",
-      accent: "green",
-      icon: { type: "nav", key: "softdent" },
-      widgets: [
-        { key: "careDeliveryPerformance", nav: "softdent" },
-        { key: "softdentArAging", nav: "softdent" },
-        { key: "softdentResponsibility", nav: "softdent" },
-        { key: "newPatients", nav: "softdent" },
-        { key: "treatmentPlanSummary", nav: "softdent" },
-        { key: "caseAcceptance", nav: "softdent" },
-        { key: "hygieneRecall", nav: "softdent" },
-      ],
-    },
-    {
-      id: "revenue",
-      title: "Revenue & A/R",
-      accent: "blue",
-      icon: { type: "nav", key: "quickbooks" },
-      widgets: [
-        { key: "quickbooksProfitLossDetail", nav: "quickbooks" },
-        { key: "ebitdaNormalization", nav: "quickbooks" },
-        { key: "arAgingAndCollections", nav: "ar" },
-        { key: "arOutstandingClaims", nav: "ar" },
-        { key: "smartClaimsAndReceivables", nav: "ar" },
-        { key: "claimsPipeline", nav: "claims" },
-      ],
-    },
-    {
-      id: "ops",
-      title: "Operations",
-      accent: "yellow",
-      icon: { type: "nav", key: "office-manager" },
-      widgets: [
-        { key: "documentIntakeQueue", nav: "documents" },
-        { key: "documentPreview", nav: "documents" },
-        { key: "periodCloseAndPosting", nav: "documents" },
-        { key: "journalPostingQueue", nav: "documents" },
-        { key: "accountsPayableAutomation", nav: "documents" },
-        { key: "narrativeWorkflow", nav: "narratives" },
-        { key: "documentLibrary", nav: "library" },
-        { key: "halImportHealth", nav: "hal" },
-        { key: "officeManagerPriorities", nav: "office-manager" },
-        { key: "officeManagerSurfaces", nav: "office-manager" },
-      ],
-    },
-  ];
-
   const ZONES = [
     { id: "command", gridArea: "command", title: "Ask HAL", kind: "command-composer" },
     { id: "status", gridArea: "status", title: "Program Status", kind: "status-rail" },
@@ -89,16 +42,78 @@ const HalPageSchema = (function () {
     { id: "session", gridArea: "session", title: "Session", kind: "session-footer" },
   ];
 
-  const PAGE = {
-    id: "hal",
-    label: "HAL",
-    title: "HAL Command Center",
-    subtitle: "Ask HAL · monitor widgets · open staff surfaces",
-    accent: "gold",
-    safety: "Local manager · Consent before outbound · Direct-first imports",
-    commands: ["Make a plan for today", "Show manager dashboard widgets", "Import status", "What needs review"],
-    widgets: WIDGET_GROUPS.flatMap((g) => g.widgets).concat([{ key: "halAskHal" }, { key: "sidenotesProgram" }]),
+  const SECTION_META = {
+    Overview: { accent: "green", iconPage: "financial", title: "Financial Widgets" },
+    Clinical: { accent: "green", iconPage: "softdent", title: "Clinical Widgets" },
+    Revenue: { accent: "blue", iconPage: "quickbooks", title: "Revenue & A/R" },
+    Operations: { accent: "yellow", iconPage: "office-manager", title: "Operations" },
   };
+
+  /** Staff-page widget groups only — HAL meta widgets already have dedicated panels on the HAL page. */
+  function buildWidgetGroups(PS) {
+    if (!PS || !PS.NAV_GROUPS) return [];
+
+    const groups = [];
+
+    PS.NAV_GROUPS.forEach((group) => {
+      const pageIds = group.pages.filter((id) => id !== "hal");
+      const seen = new Set();
+      const widgets = [];
+      pageIds.forEach((pageId) => {
+        const entries = PS.widgetsFor ? PS.widgetsFor(pageId) : (PS.byId(pageId) && PS.byId(pageId).widgets) || [];
+        entries.forEach((entry) => {
+          if (!entry || !entry.key || seen.has(entry.key)) return;
+          seen.add(entry.key);
+          widgets.push({ key: entry.key, nav: pageId, title: entry.title });
+        });
+      });
+      if (!widgets.length) return;
+      const meta = SECTION_META[group.section] || { accent: "gray", iconPage: pageIds[0] || "financial" };
+      groups.push({
+        id: String(group.section || "group")
+          .toLowerCase()
+          .replace(/\s+/g, "-"),
+        title: meta.title || group.section,
+        accent: meta.accent,
+        icon: { type: "nav", key: meta.iconPage },
+        widgets,
+      });
+    });
+
+    return groups;
+  }
+
+  function buildPage(PS, widgetGroups) {
+    const hal = PS && PS.byId ? PS.byId("hal") : null;
+    const widgets = widgetGroups.flatMap((group) => group.widgets);
+    if (hal) {
+      return {
+        id: hal.id,
+        label: hal.label,
+        title: hal.title,
+        subtitle: hal.subtitle,
+        accent: hal.accent,
+        safety: hal.safety,
+        commands: hal.commands,
+        filters: hal.filters,
+        widgets,
+      };
+    }
+    return {
+      id: "hal",
+      label: "HAL",
+      title: "HAL Command Center",
+      subtitle: "Ask HAL · monitor widgets · open staff surfaces",
+      accent: "gold",
+      safety: "Local manager · Consent before outbound · Direct-first imports",
+      commands: ["Make a plan for today", "Show manager dashboard widgets", "Import status", "What needs review"],
+      widgets,
+    };
+  }
+
+  const PS = pageSchemaApi();
+  const WIDGET_GROUPS = buildWidgetGroups(PS);
+  const PAGE = buildPage(PS, WIDGET_GROUPS);
 
   function zoneById(id) {
     return ZONES.find((z) => z.id === id) || null;
@@ -108,8 +123,15 @@ const HalPageSchema = (function () {
     return WIDGET_GROUPS;
   }
 
+  function syncedSchemaVersion() {
+    const ps = pageSchemaApi();
+    return (ps && ps.SCHEMA_VERSION) || "hal-10040";
+  }
+
   return {
-    SCHEMA_VERSION,
+    get SCHEMA_VERSION() {
+      return syncedSchemaVersion();
+    },
     GRID,
     ZONES,
     WIDGET_GROUPS,

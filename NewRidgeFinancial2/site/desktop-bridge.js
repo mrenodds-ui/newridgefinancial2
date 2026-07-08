@@ -31,7 +31,7 @@ const DesktopBridge = (function () {
 
   function loopbackUrl(path) {
     if (typeof window === "undefined" || !window.location) {
-      return `http://127.0.0.1:8765${path}`;
+      return `https://127.0.0.1:8765${path}`;
     }
     const port = window.location.port || "8765";
     const host = (typeof window !== "undefined" && window.location && window.location.hostname) || "127.0.0.1";
@@ -70,6 +70,9 @@ const DesktopBridge = (function () {
         if (refresh) loopbackSessionToken = refresh;
         const info = await resp.json();
         loopbackSessionToken = (info && (info.sessionToken || info.csrfToken)) || loopbackSessionToken;
+        if (info && info.hubToken && typeof window !== "undefined") {
+          window.NR2_HUB_TOKEN = String(info.hubToken);
+        }
         importReadinessCache = (info && info.importReadiness) || importReadinessCache;
         cloudHalSettingsCache = (info && info.cloudHal) || cloudHalSettingsCache;
         if (info && info.importReadiness) notifyImportReadinessChanged(info.importReadiness);
@@ -577,9 +580,13 @@ const DesktopBridge = (function () {
     }
     if (hasLoopbackApi()) {
       try {
-        return await loopbackJson("/api/posting-queue");
+        return await loopbackJson("/api/financial/post-queue");
       } catch {
-        return { items: [], metrics: { pendingReview: 0, approved: 0, rejected: 0, total: 0 }, unavailable: true };
+        try {
+          return await loopbackJson("/api/posting-queue");
+        } catch {
+          return { items: [], metrics: { pendingReview: 0, approved: 0, rejected: 0, total: 0 }, unavailable: true };
+        }
       }
     }
     return { items: [], metrics: { pendingReview: 0, approved: 0, rejected: 0, total: 0 }, unavailable: true };

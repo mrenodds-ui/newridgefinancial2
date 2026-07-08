@@ -1,13 +1,7 @@
 /**
- * HAL Command Center canvas — hal-102 compact layout.
+ * HAL Command Center canvas — moonshot mockup layout only.
  */
 const HalPageCanvas = (function () {
-  function schemaApi() {
-    if (typeof HalPageSchema !== "undefined") return HalPageSchema;
-    if (typeof globalThis !== "undefined" && globalThis.HalPageSchema) return globalThis.HalPageSchema;
-    return null;
-  }
-
   function widgetsApi() {
     if (typeof HalPageWidgets !== "undefined") return HalPageWidgets;
     if (typeof globalThis !== "undefined" && globalThis.HalPageWidgets) return globalThis.HalPageWidgets;
@@ -27,19 +21,38 @@ const HalPageCanvas = (function () {
     return "";
   }
 
-  function statusClass(status) {
-    const s = String(status || "").toUpperCase();
-    if (s === "SUCCESS") return "hp-wg-badge--ok";
-    if (s === "DEGRADED") return "hp-wg-badge--warn";
-    return "hp-wg-badge--off";
-  }
-
-  function zoneIcon(zone, H) {
-    const spec = zone.icon || { type: "hal" };
-    if (spec.type === "nav") return H.cardIconRaw("nav", spec.key);
-    if (spec.type === "widget") return H.cardIconRaw("widget", spec.key);
-    if (spec.type === "ui") return H.cardIconRaw("ui", spec.key);
-    return H.cardIconRaw("hal");
+  function renderWidgetMonitor(ctx, H) {
+    const feed = ctx.halWidgetFeed || {};
+    const metricSpecs = [
+      { key: "practiceFinancialOverview", label: "Production MTD" },
+      { key: "careDeliveryPerformance", label: "Collections" },
+      { key: "quickbooksProfitLossDetail", label: "Net income" },
+      { key: "arAgingAndCollections", label: "Outstanding A/R" },
+      { key: "claimsPipeline", label: "Open claims" },
+      { key: "caseAcceptance", label: "Case acceptance" },
+      { key: "documentIntakeQueue", label: "Documents" },
+      { key: "officeManagerPriorities", label: "Office tasks" },
+    ];
+    let readyTotal = 0;
+    const missionTiles = metricSpecs
+      .map((spec) => {
+        const w = widgetFromFeed(feed, spec.key);
+        const ok = w && String(w.status).toUpperCase() === "SUCCESS";
+        if (ok) readyTotal += 1;
+        const metrics = formatMetrics(w);
+        const status = (w && w.status) || "FAILED";
+        const cmd = `Explain the ${spec.label} widget status`;
+        const deltaClass = ok ? "delta-positive" : "delta-negative";
+        return `<article class="widget-card span-1" data-hal-widget-key="${H.esc(spec.key)}" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0">
+          <div class="widget-header"><span class="widget-title">${H.esc(spec.label)}</span></div>
+          <div class="metric-large">${H.esc(metrics || status)}</div>
+          <div class="metric-delta ${deltaClass}"><span>${H.esc(status)}</span></div>
+          <div class="widget-footer"><span>HAL widget</span><span>${H.esc(status)}</span></div>
+        </article>`;
+      })
+      .join("");
+    const widgetTotal = metricSpecs.length;
+    return `${missionTiles}<p class="widget-meta widget-meta--hal">${readyTotal}/${widgetTotal} ready · click a tile to ask HAL · ${H.esc((feed && feed.importMode) || "direct-first")}</p>`;
   }
 
   function registryStats(ctx) {
@@ -54,78 +67,6 @@ const HalPageCanvas = (function () {
     };
   }
 
-  function widgetRow(spec, feed, H) {
-    const key = spec.key;
-    const w = widgetFromFeed(feed, key);
-    const nav = spec.nav || (w && w.navTarget) || "";
-    if (!w) {
-      return `<div class="hp-wg-row hp-wg-row--empty" data-hal-widget-key="${H.esc(key)}">
-        <span class="hp-wg-ico">${H.widgetIcon(key)}</span>
-        <span class="hp-wg-row__title">${H.esc(key)}</span>
-        <span class="hp-wg-badge hp-wg-badge--off">NO FEED</span>
-      </div>`;
-    }
-    const widgetCmd = `Explain why the ${w.title} widget shows its current status and what data is missing`;
-    const metrics = formatMetrics(w);
-    const configure =
-      w.status === "FAILED" && widgetsApi() && widgetsApi().canConfigureWidget && widgetsApi().canConfigureWidget(w)
-        ? `<button type="button" class="hp-wg-configure" data-hal-configure-export="${H.esc(key)}">Fix</button>`
-        : "";
-    return `<div class="hp-wg-row hp-wg-card--active" data-hal-widget-key="${H.esc(key)}" data-hal-cmd="${H.esc(widgetCmd)}" title="${H.esc(widgetCmd)}">
-      <span class="hp-wg-ico">${H.widgetIcon(key)}</span>
-      <div class="hp-wg-row__body">
-        <strong class="hp-wg-row__title">${H.esc(w.title || key)}</strong>
-        ${metrics ? `<span class="hp-wg-row__metrics">${H.esc(metrics)}</span>` : ""}
-      </div>
-      <span class="hp-wg-badge ${statusClass(w.status)}">${H.esc(w.status || "FAILED")}</span>
-      <button type="button" class="hp-wg-open hp-wg-open--compact" data-hal-widget-nav="${H.esc(nav)}">${H.uiIcon("externalLink")}</button>
-      ${configure}
-    </div>`;
-  }
-
-  function groupNeedsAttention(group, feed) {
-    return (group.widgets || []).some((spec) => {
-      const w = widgetFromFeed(feed, spec.key);
-      const s = String((w && w.status) || "FAILED").toUpperCase();
-      return s !== "SUCCESS";
-    });
-  }
-
-  function renderWidgetMonitor(ctx, H) {
-    const schema = schemaApi();
-    const groups = schema ? schema.widgetGroupZones() : [];
-    const feed = ctx.halWidgetFeed;
-    let readyTotal = 0;
-    let widgetTotal = 0;
-    const sections = groups
-      .map((group) => {
-        const rows = (group.widgets || []).map((spec) => widgetRow(spec, feed, H)).join("");
-        widgetTotal += (group.widgets || []).length;
-        readyTotal += (group.widgets || []).filter((s) => {
-          const w = widgetFromFeed(feed, s.key);
-          return w && String(w.status).toUpperCase() === "SUCCESS";
-        }).length;
-        const open = groupNeedsAttention(group, feed);
-        return `<details class="hp-wg-section hp-wg-section--${H.esc(group.accent || "gold")}" ${open ? "open" : ""}>
-          <summary class="hp-wg-section__head">
-            <span class="hp-wg-section__ico">${zoneIcon({ icon: group.icon }, H)}</span>
-            <span class="hp-wg-section__title">${H.esc(group.title)}</span>
-            <span class="hp-wg-section__count">${(group.widgets || []).filter((s) => {
-              const w = widgetFromFeed(feed, s.key);
-              return w && String(w.status).toUpperCase() === "SUCCESS";
-            }).length}/${(group.widgets || []).length}</span>
-          </summary>
-          <div class="hp-wg-list">${rows}</div>
-        </details>`;
-      })
-      .join("");
-    return `<section class="hp-card hp-card--widgets" data-panel="widgets" style="grid-area:widgets;">
-      ${H.cardHead("MANAGER WIDGETS", "widgets", "Widget feed grouped by staff page", H.cardIconRaw("widget", "officeManagerPriorities"))}
-      <p class="hp-zone-meta">${readyTotal}/${widgetTotal} ready · click a row to ask HAL · ${H.esc((feed && feed.importMode) || "direct-first")}</p>
-      <div class="hp-wg-monitor">${sections || H.emptyNote("Widget feed not loaded.")}</div>
-    </section>`;
-  }
-
   function renderAskHal(ctx, H) {
     const { halAskDraft, halAskLoading, halChatHistory, halData } = ctx;
     const suggestions = (halData && halData.askHal && halData.askHal.suggestions ? halData.askHal.suggestions : []).slice(0, 6);
@@ -135,14 +76,15 @@ const HalPageCanvas = (function () {
           .map((m) => {
             const followups =
               m.role === "hal" && m.followUpChips && m.followUpChips.length
-                ? `<div class="hp-chips hp-live-actions">${m.followUpChips
+                ? `<div class="prompt-chips prompt-chips--live">${m.followUpChips
                     .map((c) => H.actionChip(c.label, `data-hal-followup="${H.esc(c.query)}"`))
                     .join("")}</div>`
                 : "";
-            return `<div class="hp-chat-row hp-chat-row--${m.role === "user" ? "user" : "hal"}">
-                <div class="hp-chat-row__head">
+            const roleClass = m.role === "user" ? "message message-user" : "message message-hal";
+            return `<div class="${roleClass}">
+                <div class="message-head">
                   <span>${m.role === "user" ? "You" : "HAL"}${m.lane ? ` · ${H.esc(m.lane)}` : ""}</span>
-                  ${m.role === "hal" ? `<button type="button" class="hp-chat-copy" data-hal-copy-response title="Copy response">${H.uiIcon("copy")}</button>` : ""}
+                  ${m.role === "hal" ? `<button type="button" class="message-copy" data-hal-copy-response title="Copy response">${H.uiIcon("copy")}</button>` : ""}
                 </div>
                 <p>${H.esc(m.text)}</p>
                 ${followups}
@@ -150,19 +92,22 @@ const HalPageCanvas = (function () {
           })
           .join("")
       : "";
-    return `<section class="hp-card hp-card--ask" data-panel="askHal" style="grid-area:command;">
-      ${H.cardHead("ASK HAL", "askHal", "Ask HAL and view the latest response", H.cardIconRaw("hal"))}
-      <form class="hp-ask__box hp-live-form" id="hpAskForm">
-        <textarea class="hp-live-input hp-live-textarea" id="hpAskInput" rows="2" enterkeyhint="send" placeholder="Ask HAL anything…  (Enter to send)" aria-label="Ask HAL">${H.esc(halAskDraft || "")}</textarea>
-        <div class="hp-ask__bar">
-          <span class="hp-ask__mode">MODE</span>
-          <span class="hp-ask__sel">${H.esc(ctx.halModels && ctx.halModels.config && ctx.halModels.config.mode === "online" ? "Auto" : "Registry only")}</span>
-          <button class="hp-ask__send hp-live-send" type="submit" ${halAskLoading ? "disabled" : ""}>${halAskLoading ? "…" : `${H.uiIcon("send")} SEND`}</button>
+    const modeLabel =
+      ctx.halModels && ctx.halModels.config && ctx.halModels.config.mode === "online" ? "Auto" : "Registry only";
+    return `<div class="chat-rail-panel" data-panel="askHal">
+      <div class="chat-header">
+        <div class="chat-title"><span class="chat-avatar" aria-hidden="true">AI</span> Ask HAL</div>
+        <div class="chat-status"><span class="status-dot" aria-hidden="true"></span>${H.esc(modeLabel)} · Local only</div>
+      </div>
+      <div class="chat-messages">${chatHtml || '<p class="chat-placeholder">Ask about imports, widgets, or today\'s plan…</p>'}</div>
+      <form class="chat-form chat-input" id="hpAskForm">
+        <textarea class="chat-textarea" id="hpAskInput" rows="2" enterkeyhint="send" placeholder="Ask HAL anything…  (Enter to send)" aria-label="Ask HAL">${H.esc(halAskDraft || "")}</textarea>
+        <div class="chat-input-row">
+          <button class="chat-send-btn" type="submit" ${halAskLoading ? "disabled" : ""}>${halAskLoading ? "…" : `${H.uiIcon("send")} SEND`}</button>
         </div>
       </form>
-      ${chatHtml ? `<div class="hp-inline-chat hp-inline-chat--compact">${chatHtml}</div>` : ""}
-      <div class="hp-chips hp-live-actions">${suggestions.map((s) => H.actionChip(s, `data-hal-suggest="${H.esc(s)}"`)).join("")}</div>
-    </section>`;
+      <div class="chat-suggestions prompt-chips prompt-chips--live">${suggestions.map((s) => H.actionChip(s, `data-hal-suggest="${H.esc(s)}"`)).join("")}</div>
+    </div>`;
   }
 
   function renderStatusRail(ctx, H) {
@@ -183,38 +128,47 @@ const HalPageCanvas = (function () {
       (ctx.halProactiveBriefing && ctx.halProactiveBriefing.topAction && ctx.halProactiveBriefing.topAction.title) ||
       "Review registry posture";
 
-    return `<section class="hp-card hp-card--status" data-panel="statusRail" style="grid-area:status;">
-      <div class="hp-status-rail">
-        <div class="hp-status-rail__block" data-panel="reasoning">
-          ${H.cardHead("PROGRAM POSTURE", "reasoning", "Registry and reasoning detail", H.cardIconRaw("widget", "halProgramPosture"))}
-          <dl class="hp-stats hp-stats--compact">
-            <div><dt>STATUS</dt><dd class="${stats.halLoaded ? "hp-ok" : ""}">${H.esc(stats.halLoaded ? "Active" : "Idle")}</dd></div>
-            <div><dt>READY</dt><dd class="hp-ok">${H.esc(stats.readyCount)}</dd></div>
-            <div><dt>BLOCKED</dt><dd>${H.esc(stats.blockedCount)}</dd></div>
-            <div><dt>MODE</dt><dd>${H.esc(modeLabel)}</dd></div>
-            <div><dt>PUBLISH</dt><dd>${H.esc(publish)}</dd></div>
-          </dl>
-          <p class="hp-card__foot hp-muted">Next: ${H.esc(topAction)}</p>
-          <details class="hp-details">
-            <summary>Local AI readiness</summary>
-            ${H.aiReadinessHtml(ctx.halModels)}
-          </details>
+    const healthTotal = Math.max(1, connected + partial + missing);
+    const healthPct = Math.round((connected / healthTotal) * 100);
+    const postureValue = stats.halLoaded ? `${stats.readyCount} READY` : "IDLE";
+    const postureBlock = `<div class="lane-badge hal-panel--posture" data-panel="statusRail">
+      <div class="lane-header">
+        <div>
+          <div class="lane-label">PROGRAM POSTURE</div>
+          <div class="lane-value">${H.esc(postureValue)}</div>
         </div>
-        <div class="hp-status-rail__block" data-panel="importHealth">
-          ${H.cardHead("IMPORT & SOURCE HEALTH", "importHealth", "Import mode and dataset health", H.cardIconRaw("widget", "halImportHealth"))}
-          <dl class="hp-stats hp-stats--compact">
-            <div><dt>MODE</dt><dd class="hp-ok">${H.esc(importMode)}</dd></div>
-            <div><dt>CONNECTED</dt><dd class="hp-ok">${H.esc(connected)}</dd></div>
-            <div><dt>PARTIAL</dt><dd>${H.esc(partial)}</dd></div>
-            <div><dt>MISSING</dt><dd>${H.esc(missing)}</dd></div>
-          </dl>
-          <div class="hp-chips hp-chips--tight">
-            ${H.actionChip("Import status", 'data-hal-cmd="Import status"')}
-            ${H.actionChip("Refresh imports", 'data-hal-cmd="Refresh imports"')}
-          </div>
+        <div class="lane-status">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>${H.esc(stats.halLoaded ? "ACTIVE" : "STANDBY")}</span>
         </div>
       </div>
-    </section>`;
+      <div class="lane-sub">
+        <div class="lane-metric"><span>BLOCKED</span> <strong>${H.esc(stats.blockedCount)}</strong></div>
+        <div class="lane-metric"><span>Mode:</span> <strong>${H.esc(modeLabel)}</strong></div>
+        <div class="lane-metric"><span>Publish:</span> <strong>${H.esc(publish)}</strong></div>
+      </div>
+      <p class="widget-footer">Next: ${H.esc(topAction)}</p>
+      <details class="details-panel" data-panel="reasoning">
+        <summary>Local AI readiness</summary>
+        ${H.aiReadinessHtml(ctx.halModels)}
+      </details>
+    </div>`;
+    const importBlock = `<div class="import-health hal-panel--import" data-panel="importHealth">
+      ${H.cardHead("IMPORT & SOURCE HEALTH", "importHealth", "Import mode and dataset health", H.cardIconRaw("widget", "halImportHealth"))}
+      <span class="health-score">${H.esc(healthPct)}%</span>
+      <div class="health-bar" aria-hidden="true"><div class="health-fill" style="width:${healthPct}%"></div></div>
+      <div class="health-details">
+        <div class="health-item"><span class="health-item-value">${H.esc(connected)}</span><div class="health-item-label">Connected</div></div>
+        <div class="health-item"><span class="health-item-value">${H.esc(partial)}</span><div class="health-item-label">Partial</div></div>
+        <div class="health-item"><span class="health-item-value">${H.esc(missing)}</span><div class="health-item-label">Missing</div></div>
+      </div>
+      <p class="widget-footer">Mode: ${H.esc(importMode)}</p>
+      <div class="prompt-chips prompt-chips--tight">
+        ${H.actionChip("Import status", 'data-hal-cmd="Import status"')}
+        ${H.actionChip("Refresh imports", 'data-hal-cmd="Refresh imports"')}
+      </div>
+    </div>`;
+    return postureBlock + importBlock;
   }
 
   function renderSurfaces(ctx, H) {
@@ -227,17 +181,17 @@ const HalPageCanvas = (function () {
         const state = live ? H.mapSurfaceState(live.status) : reg ? reg.state : "unknown";
         const surfOpen = H.surfNavTarget(item);
         const surfCmd = `Explain the ${item.label} work surface and what staff should do next`;
-        return `<li class="hp-surf__row hp-surf__row--compact" data-hal-surf-nav="${H.esc(surfOpen)}" data-hal-cmd="${H.esc(surfCmd)}" role="button" tabindex="0">
-          <span class="hp-surf__ico">${H.surfNavIcon(item)}</span>
-          <div class="hp-surf__main"><strong>${H.esc(item.label)}</strong></div>
-          <span class="hp-surf__state hp-wg-badge ${state === "Ready" ? "hp-wg-badge--ok" : state === "Needs review" ? "hp-wg-badge--warn" : "hp-wg-badge--off"}">${H.esc(state)}</span>
-          <button type="button" class="hp-surf__chev" data-hal-surf-open="${H.esc(surfOpen)}" title="Open">${H.uiIcon("chevronRight")}</button>
+        return `<li class="surface-item surface-item" data-hal-surf-nav="${H.esc(surfOpen)}" data-hal-cmd="${H.esc(surfCmd)}" role="button" tabindex="0">
+          <span class="surface-icon">${H.surfNavIcon(item)}</span>
+          <div class="surface-main"><strong>${H.esc(item.label)}</strong></div>
+          <span class="status-badge status-badge ${state === "Ready" ? "status-badge status-badge--ok" : state === "Needs review" ? "status-badge status-badge--warn" : "status-badge status-badge--off"}">${H.esc(state)}</span>
+          <button type="button" class="surface-open-btn" data-hal-surf-open="${H.esc(surfOpen)}" title="Open">${H.uiIcon("chevronRight")}</button>
         </li>`;
       })
       .join("");
-    return `<section class="hp-card hp-card--nav" data-panel="workSurfaces" style="grid-area:nav;">
+    return `<section class="widget-card hal-panel--nav" data-panel="workSurfaces">
       ${H.cardHead("STAFF WORK SURFACES", "workSurfaces", "Jump to staff pages", H.cardIconRaw("ui", "surface"))}
-      <ul class="hp-surf hp-surf--compact">${surfaces || H.emptyNote("No work surfaces configured.")}</ul>
+      <ul class="surface-list surface-list">${surfaces || H.emptyNote("No work surfaces configured.")}</ul>
     </section>`;
   }
 
@@ -249,7 +203,7 @@ const HalPageCanvas = (function () {
     const consentList = categories
       .map((item) => {
         const cmd = `Explain staff consent for ${item}`;
-        return `<li class="hp-fw__row--active" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>CONSENT</b></li>`;
+        return `<li class="checklist-item" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>CONSENT</b></li>`;
       })
       .join("");
     const localAlways = (consent.localAlways || []).slice(0, 5);
@@ -258,7 +212,7 @@ const HalPageCanvas = (function () {
       ? activity
           .map(
             (row) =>
-              `<li class="hp-log__row--active" data-hal-activity-cmd="${H.esc(row.query || row.label || "")}" role="button" tabindex="0"><i class="hp-log__dot hp-log__dot--gold"></i><span>${H.esc(row.query || row.label || "")}</span><time>${H.esc(row.time || "")}</time></li>`,
+              `<li class="activity-item" data-hal-activity-cmd="${H.esc(row.query || row.label || "")}" role="button" tabindex="0"><i class="activity-dot activity-dot activity-dot--gold"></i><span>${H.esc(row.query || row.label || "")}</span><time>${H.esc(row.time || "")}</time></li>`,
           )
           .join("")
       : H.emptyNote("No HAL activity in this session yet.");
@@ -284,46 +238,46 @@ const HalPageCanvas = (function () {
     const ao =
       typeof HalAutonomousOps !== "undefined" && HalAutonomousOps.status ? HalAutonomousOps.status() : null;
     const hciHtml = hci
-      ? `<p class="hp-fw__score"><b>HCI:</b> ${H.esc(String(hci.score))}/${H.esc(String(hci.max))} (${H.esc(String(hci.percent))}%) · ${H.esc(hci.band)}</p>
-          <button type="button" class="hp-chip hp-chip--action" data-hal-cmd="Show HAL capability index">Scorecard</button>
-          <button type="button" class="hp-chip hp-chip--action" data-hal-cmd="Run orchestrator triage">Orchestrator</button>`
+      ? `<p class="session-note"><b>HCI:</b> ${H.esc(String(hci.score))}/${H.esc(String(hci.max))} (${H.esc(String(hci.percent))}%) · ${H.esc(hci.band)}</p>
+          <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Show HAL capability index">Scorecard</button>
+          <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Run orchestrator triage">Orchestrator</button>`
       : "";
     const aoHtml = ao
-      ? `<p class="hp-fw__allowed"><b>HAL 9000 ops:</b> ${ao.running && !ao.paused ? "running" : ao.paused ? "paused" : "stopped"}</p>`
+      ? `<p class="session-note"><b>HAL 9000 ops:</b> ${ao.running && !ao.paused ? "running" : ao.paused ? "paused" : "stopped"}</p>`
       : "";
     const outboundList = outboundExecutors
-      .map((item) => `<li class="hp-fw__row--active" data-hal-cmd="Explain staff consent for ${H.esc(item)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>LIVE</b></li>`)
+      .map((item) => `<li class="checklist-item" data-hal-cmd="Explain staff consent for ${H.esc(item)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>LIVE</b></li>`)
       .join("");
-    return `<section class="hp-card hp-card--session" data-panel="session" style="grid-area:session;">
-      <div class="hp-session-grid">
-        <div class="hp-session-col" data-panel="consent">
+    return `<section class="widget-card hal-panel--session" data-panel="session">
+      <div class="session-grid">
+        <div class="session-col" data-panel="consent">
           ${H.cardHead("TRUST & CONSENT", "consent", "Staff consent policy", H.cardIconRaw("ui", "shield"))}
-          <button type="button" class="hp-fw__active hp-fw__active--btn" data-hal-cmd="Explain staff consent policy">${H.uiIcon("check")} CONSENT</button>
-          <ul class="hp-fw__list hp-fw__list--compact">${consentList}</ul>
-          <p class="hp-fw__allowed"><b>Executors (consent):</b></p>
-          <ul class="hp-fw__list hp-fw__list--compact">${outboundList}</ul>
+          <button type="button" class="consent-btn consent-btn" data-hal-cmd="Explain staff consent policy">${H.uiIcon("check")} CONSENT</button>
+          <ul class="checklist checklist">${consentList}</ul>
+          <p class="session-note"><b>Executors (consent):</b></p>
+          <ul class="checklist checklist">${outboundList}</ul>
           ${hciHtml}
           ${aoHtml}
-          <p class="hp-fw__allowed"><b>Always local:</b> ${localAlways.length ? localAlways.slice(0, 5).map(H.esc).join(" · ") : "Open pages · Explain status"}</p>
-          <button type="button" class="hp-chip hp-chip--action" data-hal-cmd="Show outbound audit log">Outbound audit</button>
-          ${halInlineFirewallResult ? `<p class="hp-live-note">${H.esc(halInlineFirewallResult.text || "")}</p>` : ""}
+          <p class="session-note"><b>Always local:</b> ${localAlways.length ? localAlways.slice(0, 5).map(H.esc).join(" · ") : "Open pages · Explain status"}</p>
+          <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Show outbound audit log">Outbound audit</button>
+          ${halInlineFirewallResult ? `<p class="session-note">${H.esc(halInlineFirewallResult.text || "")}</p>` : ""}
         </div>
-        <div class="hp-session-col" data-panel="status">
+        <div class="session-col" data-panel="status">
           ${H.cardHead("RECENT ACTIVITY", "status", "Session audit log", H.cardIconRaw("ui", "activity"))}
-          <ul class="hp-log hp-log--compact">${activityHtml}</ul>
+          <ul class="activity-log activity-log">${activityHtml}</ul>
         </div>
-        <div class="hp-session-col" data-panel="controls">
+        <div class="session-col" data-panel="controls">
           ${H.cardHead("SYSTEM CONTROLS", "controls", "Readiness and diagnostics", H.cardIconRaw("ui", "check"))}
-          <div class="hp-ctrl hp-ctrl--compact">
-            <button type="button" class="hp-ctrl__btn" data-hal-cmd="Run readiness check"><span class="hp-ctrl__ico">${H.uiIcon("check")}</span><strong>Readiness</strong></button>
-            <button type="button" class="hp-ctrl__btn" data-hal-cmd="Run operator smoke test"><span class="hp-ctrl__ico">${H.uiIcon("smoke")}</span><strong>Smoke</strong></button>
-            <button type="button" class="hp-ctrl__btn" data-hal-cmd="Staff handoff summary"><span class="hp-ctrl__ico">${H.uiIcon("handoff")}</span><strong>Handoff</strong></button>
-            <button type="button" class="hp-ctrl__btn" data-hal-about-me><span class="hp-ctrl__ico">${H.uiIcon("voice")}</span><strong>About me</strong></button>
-            <button type="button" class="hp-ctrl__btn" data-hal-cmd="Monitor sidenotes"><span class="hp-ctrl__ico">${H.navIcon("sidenotes")}</span><strong>Staff notes</strong></button>
-            <button type="button" class="hp-ctrl__btn" data-hal-drawer="status"><span class="hp-ctrl__ico">${H.uiIcon("audit")}</span><strong>Audit</strong></button>
+          <div class="control-grid control-grid">
+            <button type="button" class="control-btn" data-hal-cmd="Run readiness check"><span class="control-icon">${H.uiIcon("check")}</span><strong>Readiness</strong></button>
+            <button type="button" class="control-btn" data-hal-cmd="Run operator smoke test"><span class="control-icon">${H.uiIcon("smoke")}</span><strong>Smoke</strong></button>
+            <button type="button" class="control-btn" data-hal-cmd="Staff handoff summary"><span class="control-icon">${H.uiIcon("handoff")}</span><strong>Handoff</strong></button>
+            <button type="button" class="control-btn" data-hal-about-me><span class="control-icon">${H.uiIcon("voice")}</span><strong>About me</strong></button>
+            <button type="button" class="control-btn" data-hal-cmd="Monitor sidenotes"><span class="control-icon">${H.navIcon("sidenotes")}</span><strong>Staff notes</strong></button>
+            <button type="button" class="control-btn" data-hal-drawer="status"><span class="control-icon">${H.uiIcon("audit")}</span><strong>Audit</strong></button>
           </div>
-          <p class="hp-card__foot">Registry: ${H.esc(stats.readyCount)} ready · ${H.esc(stats.blockedCount)} blocked · Last receipt: ${H.esc(lastReceiptText)}</p>
-          <details class="hp-details">
+          <p class="widget-footer">Registry: ${H.esc(stats.readyCount)} ready · ${H.esc(stats.blockedCount)} blocked · Last receipt: ${H.esc(lastReceiptText)}</p>
+          <details class="details-panel">
             <summary>Runtime diagnostics</summary>
             ${H.agentHealthHtml(ctx.halAgentHealth, ctx.halModels, ctx.halSideNotesInbox)}
             ${H.stressTestHtml(ctx.halStressTest)}
@@ -334,15 +288,11 @@ const HalPageCanvas = (function () {
   }
 
   function renderSidenotes(ctx, H) {
-    return H.sideNotesProgramCardHtml(ctx.halSideNotes, ctx.halSideNoteMonitor, ctx.halSideNotesInbox, ctx.sidenotesHubPath).replace(
-      'style="grid-area:sidenotes;"',
-      'style="grid-area:sidenotes;"',
-    );
+    return H.sideNotesProgramCardHtml(ctx.halSideNotes, ctx.halSideNoteMonitor, ctx.halSideNotesInbox, ctx.sidenotesHubPath);
   }
 
-  function render(ctx, H) {
+  function renderDashboard(ctx, H) {
     return [
-      renderAskHal(ctx, H),
       renderStatusRail(ctx, H),
       renderWidgetMonitor(ctx, H),
       renderSurfaces(ctx, H),
@@ -351,12 +301,15 @@ const HalPageCanvas = (function () {
     ].join("");
   }
 
-  function gridClassName() {
-    const schema = schemaApi();
-    return schema && schema.GRID ? schema.GRID.className : "hp-grid hp-grid--hal-102";
+  function render(ctx, H) {
+    return renderDashboard(ctx, H) + renderAskHal(ctx, H);
   }
 
-  return { render, gridClassName, widgetRow, renderAskHal };
+  function gridClassName() {
+    return "dashboard-grid";
+  }
+
+  return { render, renderDashboard, renderAskHal, gridClassName };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

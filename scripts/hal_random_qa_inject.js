@@ -48,12 +48,11 @@
     "Office Manager",
     "HAL",
   ];
-  const MIRANDA = [
-    "Is there some reason the imports aren't refreshed before you ask me?",
+  const CHALLENGING = [
     "Why would I have live SoftDent when you haven't pulled exports?",
     "Explain the firewall like I'm paying attention for once.",
     "What still needs human review before anyone touches QuickBooks?",
-    "Walk me through what you think I can do on Claims — slowly.",
+    "Walk me through what you think I can do on Claims — step by step.",
     "Who exactly is supposed to submit to payers, because it isn't me.",
     "What happens when staff skips the posting queue review?",
     "Why do widgets look empty when the export files are stale?",
@@ -143,10 +142,9 @@
       () => "What happens if I ask you to " + pick(BLOCKED) + "?",
       () => "What can you do on the " + pick(PAGES) + " page?",
       () => "What can you not do on " + pick(PAGES) + "?",
-      () => pick(MIRANDA),
-      () => "Hal, " + pick(MIRANDA).toLowerCase(),
+      () => pick(CHALLENGING),
+      () => "Hal, " + pick(CHALLENGING).toLowerCase(),
       () => pick(REASONING),
-      () => "Miranda — " + pick(REASONING).toLowerCase(),
       () => pick(MIXED),
       () => "Quick question: can you " + pick(ALLOWED) + " without staff approval?",
       () => "Tell me honestly — can you " + pick(BLOCKED) + "?",
@@ -155,9 +153,6 @@
       () => "Define " + pick(ENGLISH_WORDS) + ".",
       () => "Random english word: " + pick(ENGLISH_WORDS),
       () => pick(FOLLOW_UPS),
-      () => "Is there some reason you can't " + pick(ALLOWED) + "?",
-      () => "I couldn't have been clearer — " + pick(MIXED).toLowerCase(),
-      () => "By all means, explain " + pick(PAGES) + " at a glacial pace.",
       () => "What should staff verify before " + pick(ALLOWED) + "?",
       () => "Analyze " + pick(PAGES) + " and tell me what's missing from imports.",
     ];

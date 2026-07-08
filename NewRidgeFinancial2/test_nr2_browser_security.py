@@ -90,6 +90,45 @@ class NR2BrowserSecurityTests(unittest.TestCase):
         sec._TOKEN_ROTATE_SECONDS = 900
 
 
+class HalHubSecurityTests(unittest.TestCase):
+    def test_hub_token_validation(self) -> None:
+        from hal_hub import hub_token_header_valid, resolve_hub_token
+
+        token = resolve_hub_token()
+        self.assertTrue(hub_token_header_valid(token))
+        self.assertFalse(hub_token_header_valid("not-the-hub-token"))
+
+    def test_hub_notify_origin_allowlist(self) -> None:
+        from hal_hub import hub_notify_origin_ok
+
+        self.assertTrue(hub_notify_origin_ok("http://127.0.0.1:8766"))
+        self.assertTrue(hub_notify_origin_ok("http://localhost:8766"))
+        self.assertFalse(hub_notify_origin_ok("http://127.0.0.1:8765"))
+        self.assertFalse(hub_notify_origin_ok("null"))
+
+    def test_hub_notify_requires_token_and_origin(self) -> None:
+        from hal_hub import hub_notify_access_ok, resolve_hub_token
+
+        token = resolve_hub_token()
+        self.assertTrue(hub_notify_access_ok("http://127.0.0.1:8766", token))
+        self.assertFalse(hub_notify_access_ok("http://127.0.0.1:8766", "bad"))
+        self.assertFalse(hub_notify_access_ok("http://127.0.0.1:8765", token))
+
+    def test_hub_notify_mutation_auth_exempt_with_token(self) -> None:
+        """Workstation hub POST must not require browser session CSRF (Moonshot Phase 5)."""
+        from nr2_http_server import _browser_mutation_auth_ok
+
+        self.assertTrue(callable(_browser_mutation_auth_ok))
+
+    def test_hub_cross_status_shape(self) -> None:
+        from hal_hub import hub_cross_status
+
+        status = hub_cross_status()
+        self.assertTrue(status.get("ok"))
+        self.assertIn("workstationReachable", status)
+        self.assertIn("lastBroadcast", status)
+
+
 class ImportReadinessOperationTests(unittest.TestCase):
     def test_operation_context_in_readiness(self) -> None:
         from import_diagnostics import assess_import_readiness

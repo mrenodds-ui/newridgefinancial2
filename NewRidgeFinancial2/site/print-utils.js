@@ -124,14 +124,16 @@ const PrintUtils = (function () {
 
   function printCurrentView(opts) {
     const o = opts || {};
-    const halEl = document.getElementById("halPage");
     const drawerEl = document.getElementById("drawer");
-    const halVisible = o.halPageVisible != null ? o.halPageVisible : halEl && !halEl.hidden;
+    const halVisible = o.halPageVisible != null ? o.halPageVisible : !!document.querySelector("#appPage .ms-page--hal");
     const drawerOpen = o.drawerOpen != null ? o.drawerOpen : drawerEl && drawerEl.classList.contains("open");
 
     if (drawerOpen) return printDrawer();
     if (halVisible) {
-      const root = document.getElementById("halPageRoot") || halEl;
+      const root =
+        document.querySelector("#appPage .ms-page--hal") ||
+        document.querySelector(".ms-page--hal") ||
+        document.getElementById("appPage");
       return printElement(root, o.title || "HAL Command Center");
     }
 

@@ -73,6 +73,20 @@ const UI = (function () {
   /* ---- Button ---- */
   function Sidebar(opts) {
     const o = opts || {};
+    const mockupEpoch =
+      typeof PageSchema !== "undefined" &&
+      PageSchema.LAYOUT_EPOCH === "moonshot-mockup" &&
+      !(typeof window !== "undefined" && window.NR2_WORKSTATION_ONLY);
+    const MC =
+      (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome) ||
+      (typeof globalThis !== "undefined" && globalThis.MoonshotMockupChrome) ||
+      null;
+    if (mockupEpoch && MC && typeof MC.renderNavRail === "function") {
+      return MC.renderNavRail(o.activeId);
+    }
+    if (mockupEpoch) {
+      return '<div class="sidebar__boot-error">Moonshot mockup nav required (nr2-moonshot-mockup-chrome.js).</div>';
+    }
     if (Array.isArray(o.navGroups) && o.navGroups.length) {
       const groups = o.navGroups
         .map((group) => {
@@ -183,9 +197,12 @@ const UI = (function () {
     const o = opts || {};
     const tone = o.tone || "info";
     return `
-      <aside class="pv-canvas-insight pv-canvas-insight--${esc(tone)}" role="note">
-        <strong>${esc(o.title || "")}</strong>
-        <p>${esc(o.body || "")}</p>
+      <aside class="pv-canvas-insight ms-hal-insight pv-canvas-insight--${esc(tone)}" role="status" aria-label="HAL insight">
+        <div class="ms-hal-insight__icon" aria-hidden="true">AI</div>
+        <div class="ms-hal-insight__body">
+          <strong>${esc(o.title || "")}</strong>
+          <p>${esc(o.body || "")}</p>
+        </div>
       </aside>`;
   }
 

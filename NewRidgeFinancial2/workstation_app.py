@@ -225,6 +225,17 @@ class WorkstationApi(DesktopApi):
                     win.restore()
                 except Exception:
                     pass
+                try:
+                    win.evaluate_js(
+                        "(() => {"
+                        "const root = document.getElementById('workstationPageRoot');"
+                        "if (!root || root.querySelector('.pv--workstation, .ws-sn-toolbar')) return;"
+                        "if (root.querySelector('.ws-boot-loading, .nr2-boot-error, .ws-boot-error')) return;"
+                        "if (!String(root.textContent || '').trim()) location.reload();"
+                        "})();"
+                    )
+                except Exception:
+                    pass
             return {"ok": True}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -282,8 +293,17 @@ def _start_sidenotes_popup_watcher() -> None:
 
 def _start_sidenotes_watcher() -> None:
     global _watcher_proc
-    from sidenotes_bridge import start_sidenotes_watcher
+    if not _env_flag("NR2_SIDENOTES_WATCHER", True):
+        return
+    from sidenotes_bridge import sidenotes_watcher_pid, start_sidenotes_watcher
 
+    existing = sidenotes_watcher_pid()
+    if existing:
+        print(
+            f"NR2 workstation: SideNotes watcher already running (PID {existing}); not starting a second copy.",
+            file=sys.stderr,
+        )
+        return
     station = os.environ.get("NR2_SIDENOTES_MY_STATION", "").strip() or None
     proc = start_sidenotes_watcher(station)
     if proc is not None:

@@ -12,8 +12,50 @@ from pathlib import Path
 
 import bottle
 
-from webview.http import BottleServer, SSLWSGIRefServer, ThreadedAdapter, _get_random_port, logger
+from webview.http import BottleServer, ThreadedAdapter, _get_random_port, logger
 from webview.util import abspath, is_app, is_local_url
+
+
+class NR2SSLWSGIRefServer(bottle.ServerAdapter):
+    """Loopback HTTPS for NR2 — persistent cert/key paths, no TLS renegotiation."""
+
+    def run(self, handler):  # pragma: no cover
+        import socket
+        import ssl
+        from socketserver import ThreadingMixIn
+        from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
+
+        adapter = self
+
+        class FixedHandler(WSGIRequestHandler):
+            def address_string(self) -> str:
+                return self.client_address[0]
+
+            def log_request(*args, **kwargs):
+                if not adapter.quiet:
+                    return WSGIRequestHandler.log_request(*args, **kwargs)
+
+        class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
+            daemon_threads = True
+
+        handler_cls = self.options.get("handler_class", FixedHandler)
+        server_cls = self.options.get("server_class", ThreadedWSGIServer)
+
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+        no_reneg = getattr(ssl, "OP_NO_RENEGOTIATION", 0)
+        if no_reneg:
+            ssl_context.options |= no_reneg
+        ssl_context.load_cert_chain(self.pywebview_certfile, self.pywebview_keyfile)
+
+        self.srv = make_server(self.host, self.port, handler, server_cls, handler_cls)
+        self.srv.socket = ssl_context.wrap_socket(self.srv.socket, server_side=True)
+        self.port = self.srv.server_port
+        try:
+            self.srv.serve_forever()
+        except KeyboardInterrupt:
+            self.srv.server_close()
+            raise
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NR2_DATA_DIR = REPO_ROOT / "app_data" / "nr2"
@@ -205,8 +247,14 @@ def _browser_mutation_auth_ok() -> bool:
     if not _state_changing_request():
         return True
     path = bottle.request.path or "/"
+    method = (bottle.request.method or "GET").upper()
     if path.startswith("/js_api/"):
         return True
+    if path == "/api/hub/notify" and method == "POST":
+        from hal_hub import hub_notify_access_ok
+
+        if hub_notify_access_ok():
+            return True
     if not _loopback_request():
         return False
     expected = _browser_session_token or ensure_browser_session_token()
@@ -252,8 +300,19 @@ def _lan_hal_hub_access_ok() -> bool:
     method = (bottle.request.method or "GET").upper()
     if path.startswith("/api/hal-hub"):
         return True
-    if path == "/api/office-channel" and method in ("GET", "OPTIONS"):
+    if path in ("/api/office-channel",) and method in ("GET", "POST", "OPTIONS"):
         return True
+    if path in ("/api/hub/notify", "/api/hub/last-broadcast", "/api/hub/status"):
+        if method == "OPTIONS":
+            return True
+        if path == "/api/hub/notify" and method == "POST":
+            from hal_hub import hub_notify_access_ok
+
+            return hub_notify_access_ok()
+        if path in ("/api/hub/last-broadcast", "/api/hub/status") and method == "GET":
+            from hal_hub import hub_last_broadcast_access_ok
+
+            return hub_last_broadcast_access_ok()
     if path == "/api/workstation/show" and method in ("POST", "OPTIONS") and _loopback_request():
         return True
     if method == "OPTIONS" and path.startswith("/api/"):
@@ -277,6 +336,29 @@ def set_browser_mode(enabled: bool = True) -> None:
     _browser_mode = bool(enabled)
     if enabled:
         os.environ["NR2_BROWSER_APP"] = "1"
+        os.environ.pop("NR2_WORKSTATION_APP", None)
+
+
+_WORKSTATION_ASSET_FILES = frozenset(
+    {
+        "workstation-page.js",
+        "workstation-message-popup.js",
+        "sidenotes-hub.js",
+    }
+)
+
+
+def _workstation_asset_blocked(path: str) -> bool:
+    """Financial / desktop programs must not serve workstation UI on the same origin."""
+    if _workstation_app():
+        return False
+    norm = (path or "").lstrip("/")
+    if not norm:
+        return False
+    if norm == "workstation" or norm.startswith("workstation/"):
+        return True
+    base = norm.split("/")[-1]
+    return base in _WORKSTATION_ASSET_FILES
 
 
 def _workstation_app() -> bool:
@@ -527,11 +609,11 @@ class NR2BottleServer(BottleServer):
         @app.hook("after_request")
         def _hal_hub_cors_headers():
             path = bottle.request.path or ""
-            if path.startswith("/api/hal-hub") or path == "/api/office-channel":
+            if path.startswith("/api/hal-hub") or path in ("/api/office-channel", "/api/hub/notify", "/api/hub/last-broadcast"):
                 bottle.response.headers["Access-Control-Allow-Origin"] = "*"
                 bottle.response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
                 bottle.response.headers["Access-Control-Allow-Headers"] = (
-                    "Origin, Accept, Content-Type, X-Requested-With"
+                    "Origin, Accept, Content-Type, X-Requested-With, X-Hub-Token"
                 )
 
         @app.post(f"/js_api/{server.uid}")
@@ -561,16 +643,39 @@ class NR2BottleServer(BottleServer):
                 from import_loader import load_import_bundle
 
                 bundle = load_import_bundle(sync=False, deep=False)
-                from hal_hub import resolve_hub_data_dir, resolve_hal_hub_url
+                from hal_hub import resolve_hub_data_dir, resolve_hal_hub_url, resolve_hub_token
+
+                build_manifest = {}
+                try:
+                    build_path = (_site_root or Path(__file__).resolve().parent / "site") / "nr2-build.json"
+                    if build_path.is_file():
+                        build_manifest = json.loads(build_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    build_manifest = {}
+
+                asset_version = str(
+                    build_manifest.get("assetVersion") or build_manifest.get("BUILD_ID") or ""
+                ).strip()
+                schema_version = str(
+                    build_manifest.get("schemaVersion") or asset_version or ""
+                ).strip()
 
                 payload = {
-                    "mode": "loopback",
+                    "mode": "workstation" if _workstation_app() else "financial",
+                    "program": "nr2-workstation" if _workstation_app() else "nr2-financial",
+                    "financialOnly": not _workstation_app(),
                     "version": "2.0",
                     "importMode": bundle.get("importMode"),
                     "runtimeAccess": True,
                     "halHubUrl": resolve_hal_hub_url(),
                     "officeHubData": str(resolve_hub_data_dir()),
+                    "hubToken": resolve_hub_token(),
                 }
+                if asset_version:
+                    payload["assetVersion"] = asset_version
+                if schema_version:
+                    payload["designSchemaVersion"] = schema_version
+                    payload["schemaVersion"] = schema_version
                 if _browser_app():
                     token = ensure_browser_session_token()
                     from nr2_browser_security import bind_session_user_agent
@@ -754,6 +859,22 @@ class NR2BottleServer(BottleServer):
             }
             _audit_mutation("import_readiness_override", detail={"reason_hash": reason_hash, "ttl_minutes": ttl_minutes})
             return _json_response({"ok": True, "expires": expires, "reasonHash": reason_hash})
+
+        @app.get("/api/ollama/tags")
+        def ollama_tags_api():
+            from integration_health import _probe_ollama
+
+            probe = _probe_ollama()
+            names = [str(n) for n in (probe.get("models") or []) if n]
+            return _json_response(
+                {
+                    "ok": bool(probe.get("ok")),
+                    "models": [{"name": n} for n in names],
+                    "modelCount": len(names),
+                    "endpoint": probe.get("endpoint"),
+                    "error": probe.get("error"),
+                }
+            )
 
         @app.get("/api/health")
         def health_api():
@@ -1004,8 +1125,10 @@ class NR2BottleServer(BottleServer):
             append_office_channel_message,
             hub_announce,
             hub_status,
+            last_hub_broadcast,
             load_office_channel,
             process_pending,
+            record_hub_broadcast,
             register_station_heartbeat,
             resolve_hal_hub_url,
             stations_status,
@@ -1019,6 +1142,8 @@ class NR2BottleServer(BottleServer):
         @app.route("/api/hal-hub/stations", method=["OPTIONS"])
         @app.route("/api/hal-hub/stations/heartbeat", method=["OPTIONS"])
         @app.route("/api/office-channel", method=["OPTIONS"])
+        @app.route("/api/hub/notify", method=["OPTIONS"])
+        @app.route("/api/hub/last-broadcast", method=["OPTIONS"])
         @app.route("/api/workstation/show", method=["OPTIONS"])
         def hal_hub_options():
             return ""
@@ -1145,6 +1270,40 @@ class NR2BottleServer(BottleServer):
                 return _json_response({"error": str(exc), "ok": False}, status=400)
             except Exception as exc:
                 return _json_response({"error": str(exc), "ok": False}, status=500)
+
+        @app.get("/api/hub/status")
+        def hub_cross_status_api():
+            try:
+                from hal_hub import hub_cross_status
+
+                return _json_response(hub_cross_status())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/hub/last-broadcast")
+        def hub_last_broadcast_api():
+            try:
+                data = last_hub_broadcast()
+                return _json_response({"ok": True, **data} if data else {"ok": True})
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/hub/notify")
+        def hub_notify_api():
+            try:
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                record_hub_broadcast(
+                    {
+                        "at": payload.get("at"),
+                        "from": payload.get("from") or payload.get("sender") or "Workstation",
+                        "channel": payload.get("channel") or "office",
+                        "target": payload.get("target") or "all",
+                    }
+                )
+                return _json_response({"ok": True, **last_hub_broadcast()})
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
 
         @app.get("/api/sidenotes/status")
         def sidenotes_status_api():
@@ -1999,6 +2158,10 @@ class NR2BottleServer(BottleServer):
                 bottle.response.status = 500
                 return json.dumps({"error": str(exc)})
 
+        @app.get("/api/financial/post-queue")
+        def financial_post_queue_api():
+            return posting_queue_api()
+
         @app.get("/api/posting-queue")
         def posting_queue_api():
             bottle.response.content_type = "application/json"
@@ -2250,7 +2413,7 @@ class NR2BottleServer(BottleServer):
             bottle.response.content_type = "application/json"
             bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
             try:
-                from miranda_tts import tts_status
+                from hal_tts import tts_status
 
                 return json.dumps(tts_status())
             except Exception as exc:
@@ -2260,19 +2423,19 @@ class NR2BottleServer(BottleServer):
         def hal_tts_api():
             bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
             try:
-                from miranda_tts import parse_tts_request, synthesize_demo_sync, synthesize_segments_sync
+                from hal_tts import parse_tts_request, synthesize_test_sync, synthesize_segments_sync
 
                 raw = bottle.request.body.read() if bottle.request.body else b""
                 payload = parse_tts_request(raw)
-                if payload.get("demo"):
-                    audio = synthesize_demo_sync()
+                if payload.get("test") or payload.get("demo"):
+                    audio = synthesize_test_sync()
                 else:
                     segments = payload.get("segments")
                     if not isinstance(segments, list) or not segments:
                         bottle.response.status = 400
                         bottle.response.content_type = "application/json"
                         return json.dumps({"error": "segments or demo required"})
-                    audio = synthesize_segments_sync(segments)
+                    audio = synthesize_segments_sync(segments, payload)
                 bottle.response.content_type = "audio/mpeg"
                 return audio
             except Exception as exc:
@@ -2336,6 +2499,11 @@ class NR2BottleServer(BottleServer):
         def asset(file):
             if not _desktop_access_ok():
                 bottle.abort(403, _desktop_only_html())
+            if _workstation_asset_blocked(file):
+                bottle.abort(
+                    404,
+                    "Workstation is not part of the financial program. Use Start Workstation on port 8766.",
+                )
             if not server.root_path:
                 return ""
             bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -2346,7 +2514,10 @@ class NR2BottleServer(BottleServer):
         server.root_path = abspath(common_path) if common_path is not None else None
         server.port = http_port or _get_random_port()
         if keyfile and certfile:
-            server_adapter = SSLWSGIRefServer()
+            from nr2_tls import ensure_tls_key_material
+
+            certfile, keyfile = ensure_tls_key_material(certfile, keyfile)
+            server_adapter = NR2SSLWSGIRefServer()
             server_adapter.port = server.port
             setattr(server_adapter, "pywebview_keyfile", keyfile)
             setattr(server_adapter, "pywebview_certfile", certfile)

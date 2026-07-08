@@ -12,7 +12,6 @@ SKIP_PARTS = {
     "node_modules",
     "app_data",
     "__pycache__",
-    "miranda_reference",
     ".git",
 }
 

@@ -7,9 +7,24 @@
 ## Daily start (2 minutes)
 
 1. Double-click **`StartProgram.bat`** at the repo root.
-2. Browser opens **`https://127.0.0.1:8765/`** — accept the local certificate warning once if prompted.
+2. Browser opens **`https://127.0.0.1:8765/?v=hal-10062&__nr2_purge=1`** — accept the local certificate warning once if prompted.
 3. Confirm the **import traffic banner** is green or amber (not red).
 4. In HAL, run **Staff handoff summary** or **Run readiness check** if starting a new shift.
+
+**Workstation (8766):** `https://127.0.0.1:8766/workstation/index.html?v=hal-10062&__nr2_purge=1`
+
+**Mockup gallery (visual parity CI):** `http://127.0.0.1:8799/index.html` — compare live 8765 pages side-by-side before sign-off.
+
+**Hard reload after updates:** append `?v=hal-10062&__nr2_purge=1` (financial) or bump `v=` on workstation URL.
+
+**Moonshot sign-off (before daily use):**
+
+```powershell
+cd NewRidgeFinancial2
+node scripts/run-moonshot-operator-signoff.mjs
+```
+
+Record results in `.local_logs/moonshot_financial_eval/OPERATOR_SIGNOFF_QB_SOFTDENT_SIDENOTES_2026-07-07.md`.
 
 ---
 
@@ -86,7 +101,7 @@ TLS files live in **`app_data\nr2\tls\`**. Dev-only bypass (not for production):
 
 ---
 
-*Build: hal-10025 · Pilot: CONDITIONAL APPROVE · Moonshot must-fix items implemented.*
+*Build: hal-10062 · Pilot: CONDITIONAL APPROVE · Moonshot P2 polish (icons, hub status, posting API, QB toggle).*
 
 ---
 

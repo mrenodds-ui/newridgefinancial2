@@ -1,0 +1,12 @@
+{
+  "description": "NR2 Office Workstation bundle — served only on port 8766 (Start Workstation), not the financial program.",
+  "workstation": [
+    "workstation/index.html",
+    "workstation/message-popup.html",
+    "workstation/workstation-schema.js",
+    "workstation-moonshot-bridge.css",
+    "sidenotes-hub.js",
+    "workstation-page.js",
+    "workstation-message-popup.js"
+  ]
+}

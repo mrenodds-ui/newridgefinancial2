@@ -248,6 +248,108 @@ const NR2MoonshotUI = (function () {
     };
   }
 
+  function chartOverlayHost(root, widgetKey) {
+    if (!root || !widgetKey) return null;
+    const panel = root.querySelector(`[data-hal-widget-key="${widgetKey}"]`);
+    if (!panel) return null;
+    let host = panel.querySelector(".nr2-chart-overlay");
+    if (!host) {
+      host = document.createElement("div");
+      host.className = "nr2-chart-overlay";
+      host.dataset.nr2ChartWidget = widgetKey;
+      const body = panel.querySelector(".widget-body") || panel;
+      body.appendChild(host);
+    }
+    if (host.dataset.nr2ChartMounted === "1") {
+      host.querySelectorAll("canvas").forEach((node, index) => {
+        if (index > 0) node.remove();
+      });
+      return null;
+    }
+    host.dataset.nr2ChartMounted = "1";
+    host.replaceChildren();
+    return host;
+  }
+
+  async function enhanceCanvasCharts(pageId, root) {
+    if (!root || typeof NR2Charts === "undefined") return;
+    if (pageId === "financial") {
+      const host = chartOverlayHost(root, "financialProductionTrend");
+      if (host) {
+        const canvas = document.createElement("canvas");
+        canvas.id = "nr2-practice-pulse-canvas";
+        canvas.width = 340;
+        canvas.height = 120;
+        host.appendChild(canvas);
+        let reports = {};
+        try {
+          reports = await fetchJson("/api/financial-reports");
+        } catch {
+          reports = {};
+        }
+        const ar = reports.arAging || {};
+        NR2Charts.renderPracticePulse("nr2-practice-pulse-canvas", {
+          productionUsd: reports.productionUsd || ar.totalOutstanding,
+          collectionsUsd: reports.collectionsUsd || 0,
+          arTotalUsd: ar.totalOutstanding || 0,
+        });
+      }
+    }
+    if (pageId === "ar") {
+      const host = chartOverlayHost(root, "arAgingAndCollections");
+      if (host) {
+        const canvas = document.createElement("canvas");
+        canvas.id = "nr2-ar-heatmap-canvas";
+        canvas.width = 340;
+        canvas.height = 120;
+        host.appendChild(canvas);
+        let buckets = [];
+        try {
+          const reports = await fetchJson("/api/financial-reports");
+          buckets = (reports && reports.arAgingBuckets) || [];
+        } catch {
+          buckets = [];
+        }
+        if (!buckets.length) {
+          buckets = [
+            { bucket: "0-30", amount: 0 },
+            { bucket: "31-60", amount: 0 },
+            { bucket: "61-90", amount: 0 },
+            { bucket: "90+", amount: 0 },
+          ];
+        }
+        NR2Charts.renderARHeatmap("nr2-ar-heatmap-canvas", buckets);
+      }
+    }
+    if (pageId === "quickbooks") {
+      const host = chartOverlayHost(root, "quickbooksProfitLossDetail");
+      if (host) {
+        const canvas = document.createElement("canvas");
+        canvas.id = "nr2-import-timeline-qb";
+        canvas.width = 340;
+        canvas.height = 100;
+        host.appendChild(canvas);
+        let sources = null;
+        try {
+          const readiness = await fetchJson("/api/v1/import-readiness");
+          sources = readiness && readiness.sources;
+        } catch {
+          sources = null;
+        }
+        if (!sources) {
+          const cached =
+            typeof DesktopBridge !== "undefined" && DesktopBridge.getCachedImportReadiness
+              ? DesktopBridge.getCachedImportReadiness()
+              : null;
+          sources = (cached && cached.sources) || [
+            { id: "quickbooks", name: "QuickBooks", lastSyncAt: cached && cached.loadedAt, level: cached && cached.level },
+          ];
+        }
+        NR2Charts.renderImportTimeline("nr2-import-timeline-qb", sources);
+      }
+    }
+  }
+
   async function renderCharts(pageId, container) {
     if (!container || typeof NR2Charts === "undefined") return;
     if (pageId === "financial" || pageId === "ar") {
@@ -343,7 +445,12 @@ const NR2MoonshotUI = (function () {
 
   async function enhancePage(pageId, root) {
     if (!root) return;
-    const panelHost = root.querySelector(".pv-canvas-body") || root.querySelector(".pv-body") || root;
+    const isCanvas = typeof PageCanvas !== "undefined" && PageCanvas.hasPage && PageCanvas.hasPage(pageId);
+    if (isCanvas) {
+      await enhanceCanvasCharts(pageId, root);
+      return;
+    }
+    const panelHost = root.querySelector(".ms-page-body") || root;
     if (!panelHost || panelHost.dataset.nr2MoonshotEnhanced) return;
     panelHost.dataset.nr2MoonshotEnhanced = "1";
     await renderCharts(pageId, panelHost);
@@ -354,7 +461,7 @@ const NR2MoonshotUI = (function () {
     if (pageId === "financial" || pageId === "taxes") renderCloseWizard(panelHost);
   }
 
-  return { enhancePage, renderEraMatchCard, renderEraMatchPanel, renderPilotPhaseBanner, installPilotBanner };
+  return { enhancePage, enhanceCanvasCharts, renderEraMatchCard, renderEraMatchPanel, renderPilotPhaseBanner, installPilotBanner };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

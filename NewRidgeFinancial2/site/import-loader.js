@@ -56,6 +56,7 @@ const ImportLoader = (function () {
     "softdent_hygiene_recall.csv",
     "hygiene_recall_summary.json",
   ];
+  const SOFTDENT_OPERATORY_NAMES = ["operatory_schedule.json", "softdent_operatory_chairs.json"];
 
   function loadManifestDatasets() {
     if (!isNode) return null;
@@ -91,6 +92,7 @@ const ImportLoader = (function () {
   const MANIFEST_SOFTDENT_TREATMENT_PLANS_NAMES = manifestFilenames("softdent.treatmentPlans", SOFTDENT_TREATMENT_PLANS_NAMES);
   const MANIFEST_SOFTDENT_CASE_ACCEPTANCE_NAMES = manifestFilenames("softdent.caseAcceptance", SOFTDENT_CASE_ACCEPTANCE_NAMES);
   const MANIFEST_SOFTDENT_HYGIENE_RECALL_NAMES = manifestFilenames("softdent.hygieneRecall", SOFTDENT_HYGIENE_RECALL_NAMES);
+  const MANIFEST_SOFTDENT_OPERATORY_NAMES = manifestFilenames("softdent.operatory", SOFTDENT_OPERATORY_NAMES);
 
   function bridge() {
     if (typeof DesktopBridge !== "undefined") return DesktopBridge;
@@ -340,6 +342,26 @@ const ImportLoader = (function () {
     return best;
   }
 
+  function loadOperatoryDatasetNode(dir, names, fs) {
+    const pathMod = require("node:path");
+    const path = newestExisting(dir, names, fs);
+    if (!path || !path.toLowerCase().endsWith(".json")) return null;
+    const stat = fs.statSync(path);
+    let payload = null;
+    try {
+      payload = JSON.parse(fs.readFileSync(path, "utf8"));
+    } catch {
+      return null;
+    }
+    if (!payload || !Array.isArray(payload.operatoryChairs)) return null;
+    return {
+      sourceFile: pathMod.basename(path),
+      modifiedAt: new Date(stat.mtimeMs).toISOString(),
+      operatoryChairs: payload.operatoryChairs,
+      rows: [],
+    };
+  }
+
   function loadDatasetNode(dir, names, fs) {
     if (!dir || !fs.existsSync(dir)) return null;
     const path = newestExisting(dir, names, fs);
@@ -366,6 +388,7 @@ const ImportLoader = (function () {
         treatmentPlans: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_TREATMENT_PLANS_NAMES, fs),
         caseAcceptance: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_CASE_ACCEPTANCE_NAMES, fs),
         hygieneRecall: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_HYGIENE_RECALL_NAMES, fs),
+        operatory: loadOperatoryDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_OPERATORY_NAMES, fs),
       },
       quickbooks: {
         dir: REPO_IMPORT_QUICKBOOKS,
@@ -1154,18 +1177,31 @@ const ImportLoader = (function () {
       .filter((row) => row.amount !== null);
     const arTotal = arBuckets.reduce((acc, row) => acc + row.amount, 0);
     const hasAr = arBuckets.length > 0 && arTotal > 0;
+    const opDataset = sd.operatory;
+    const operatoryChairs =
+      opDataset && Array.isArray(opDataset.operatoryChairs) && opDataset.operatoryChairs.length
+        ? opDataset.operatoryChairs
+        : null;
     const modifiedAt = (sd.dashboard && sd.dashboard.modifiedAt) || bundle.loadedAt;
     const exports = [];
-    ["dashboard", "claims", "clinicalNotes", "ar"].forEach((key) => {
+    ["dashboard", "claims", "clinicalNotes", "ar", "operatory"].forEach((key) => {
       const dataset = sd[key];
       if (!dataset || !dataset.sourceFile) return;
       exports.push({
         name: dataset.sourceFile,
         source: "SoftDent",
         dataset: key,
-        status: dataset.rows && dataset.rows.length ? "SUCCESS" : "EMPTY",
+        status:
+          key === "operatory"
+            ? dataset.operatoryChairs && dataset.operatoryChairs.length
+              ? "SUCCESS"
+              : "EMPTY"
+            : dataset.rows && dataset.rows.length
+              ? "SUCCESS"
+              : "EMPTY",
         completed: formatFreshness(dataset.modifiedAt),
-        records: String((dataset.rows || []).length),
+        records:
+          key === "operatory" ? String((dataset.operatoryChairs || []).length) : String((dataset.rows || []).length),
         size: "—",
       });
     });
@@ -1250,6 +1286,14 @@ const ImportLoader = (function () {
           ok: Boolean(sd.clinicalNotes && sd.clinicalNotes.rows && sd.clinicalNotes.rows.length),
         },
         { label: "A/R Export", value: hasAr ? sd.ar.sourceFile : "Not loaded", ok: hasAr },
+        {
+          label: "Operatory Schedule",
+          value:
+            opDataset && opDataset.sourceFile
+              ? opDataset.sourceFile
+              : "Missing — awaiting operatory_schedule.json export",
+          ok: Boolean(operatoryChairs && operatoryChairs.length),
+        },
         ...(collectionsPending
           ? [{ label: "Collections", value: "Awaiting daysheet export for comparable period", ok: true }]
           : displayTotals.production > 0 && displayTotals.collectionsReported === false
@@ -1260,6 +1304,8 @@ const ImportLoader = (function () {
       ],
       glance,
       exports,
+      operatoryChairs: operatoryChairs || undefined,
+      operatoryConfigured: Boolean(operatoryChairs && operatoryChairs.length),
     };
     return assignPatch(emptyDashboard("softdent"), Object.assign({ pageId: "softdent" }, patch));
   }
@@ -2018,7 +2064,6 @@ const ImportLoader = (function () {
 
   const FINANCIAL_FRESHNESS_PAGES = new Set([
     "financial",
-    "financial-canvas",
     "ar",
     "quickbooks",
     "taxes",

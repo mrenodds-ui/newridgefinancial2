@@ -72,8 +72,31 @@ const ImportTrafficBanner = (function () {
     }
   }
 
+  function mountOfflineInterstitial() {
+    if (typeof document === "undefined") return;
+    let bar = document.getElementById("nr2-offline-stale-banner");
+    if (!bar) {
+      const host = document.getElementById("appPage") || document.body;
+      bar = document.createElement("div");
+      bar.id = "nr2-offline-stale-banner";
+      bar.className = "nr2-offline-stale-banner";
+      bar.setAttribute("role", "alert");
+      bar.textContent = "Working Offline — Data Stale";
+      if (host.firstChild) host.insertBefore(bar, host.firstChild);
+      else host.prepend(bar);
+    }
+  }
+
+  function installOfflineInterstitial() {
+    if (typeof navigator === "undefined" || !navigator.serviceWorker) return;
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "nr2-offline-stale") mountOfflineInterstitial();
+    });
+  }
+
   function install() {
     if (typeof window === "undefined") return;
+    installOfflineInterstitial();
     window.addEventListener("nr2-import-readiness-changed", (ev) => {
       mount((ev && ev.detail) || (typeof DesktopBridge !== "undefined" && DesktopBridge.getCachedImportReadiness && DesktopBridge.getCachedImportReadiness()));
     });

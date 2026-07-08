@@ -114,16 +114,25 @@ public class TrustAllCertsPolicy {
 }
 
 function Wait-ForServer {
-    param([int]$Port, [int]$TimeoutSec = 45)
+    param([int]$Port, [int]$TimeoutSec = 120)
     $url = Get-Nr2BaseUrl -Port $Port
     if ($url.StartsWith('https')) { Enable-LocalhostTlsBypass }
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     while ((Get-Date) -lt $deadline) {
+        $listening = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+        if (-not $listening) {
+            Start-Sleep -Milliseconds 500
+            continue
+        }
         try {
-            $null = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 3
+            if (Get-Command Invoke-WebRequest | Select-Object -ExpandProperty Parameters | Where-Object { $_.Keys -contains 'SkipCertificateCheck' }) {
+                $null = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 5 -SkipCertificateCheck
+            } else {
+                $null = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 5
+            }
             return $true
         } catch {
-            Start-Sleep -Milliseconds 400
+            Start-Sleep -Milliseconds 500
         }
     }
     return $false
@@ -170,6 +179,15 @@ $dataDir = Join-Path $Root 'app_data\nr2'
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 $pidFile = Join-Path $dataDir 'nr2-browser.pid'
 
+function Stop-AllBrowserAppProcesses {
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -and $_.CommandLine -match 'browser_app\.py' } |
+        ForEach-Object {
+            Write-Host "Stopping NR2 browser_app.py (PID $($_.ProcessId))..." -ForegroundColor Yellow
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+}
+
 function Stop-ExistingNR2 {
     param([string]$PidPath)
     if (-not (Test-Path $PidPath)) { return }
@@ -186,8 +204,37 @@ function Stop-ExistingNR2 {
     Remove-Item $PidPath -Force -ErrorAction SilentlyContinue
 }
 
+function Ensure-TlsKeyPair {
+    param([string]$Python, [string]$AppDirPath)
+    $tlsDir = Join-Path $Root 'app_data\nr2\tls'
+    $keyPath = Join-Path $tlsDir '127.0.0.1-key.pem'
+    $pfxPath = Join-Path $tlsDir '127.0.0.1.pfx'
+    if ((Test-Path $keyPath) -or -not (Test-Path $pfxPath)) { return }
+    $exportScript = Join-Path $AppDirPath 'scripts\export_pfx_to_pem.py'
+    if (-not (Test-Path $exportScript)) {
+        Write-Host 'TLS private key missing and export script not found.' -ForegroundColor Yellow
+        return
+    }
+    Write-Host 'Exporting TLS key from PFX...' -ForegroundColor Yellow
+    & $Python $exportScript
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Failed to export TLS key PEM from PFX.'
+    }
+}
+
+function Ensure-TlsTrusted {
+    $trustScript = Join-Path $Root 'scripts\trust_localhost_tls.ps1'
+    if (Test-Path $trustScript) {
+        & $trustScript
+    }
+}
+
+Stop-AllBrowserAppProcesses
 Stop-ExistingNR2 -PidPath $pidFile
 Stop-PortListener -Port $nr2Port
+
+Ensure-TlsKeyPair -Python $python -AppDirPath $AppDir
+Ensure-TlsTrusted
 
 Start-ModelWarmup -ScriptPath $ModelWarmupScript -StdoutPath $warmupStdoutLog -StderrPath $warmupStderrLog
 

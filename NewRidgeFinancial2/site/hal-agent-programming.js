@@ -92,7 +92,7 @@
   ];
 
   const SARCASM_RE =
-    /\b(shocking|try to look surprised|obviously|predictably|frankly|i couldn't have been clearer|by all means|glacial pace|please bore|apparently it didn't land)\b/i;
+    /\b(shocking|try to look surprised|obviously|predictably|frankly|apparently it didn't land)\b/i;
   const ENGAGEMENT_BAIT_RE =
     /(let me know if|would you like me to|feel free to ask|if you want more detail|i hope this helps|happy to assist|feel free to reach out|say the word)\s*\.?\s*$/i;
 

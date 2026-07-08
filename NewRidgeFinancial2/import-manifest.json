@@ -317,6 +317,23 @@
         "RecallDue": ["RecallDue", "recallDue", "Due", "due", "Overdue", "overdue"]
       },
       "note": "Generated from analytics DB recall tables or derived from daysheet hygiene procedure codes."
+    },
+    "softdent.operatory": {
+      "system": "softdent",
+      "bundleKey": "operatory",
+      "filenames": [
+        "operatory_schedule.json",
+        "softdent_operatory_chairs.json"
+      ],
+      "sourceOwner": null,
+      "generatedBy": ["softdent_practice_exports.py"],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": true,
+      "requiredFields": ["operatoryChairs"],
+      "optionalFields": [],
+      "fieldAliases": {},
+      "note": "Canonical operatory schedule export. JSON root must include operatoryChairs: [{ name, slots: [{ time, patient, procedure, tone }] }]."
     }
   },
   "widgets": {
@@ -393,6 +410,14 @@
         "hygieneCompleted": { "dataset": "softdent.hygieneRecall", "dashboard": "practice", "path": "hygieneRecall.completed" },
         "recallDue": { "dataset": "softdent.hygieneRecall", "dashboard": "practice", "path": "hygieneRecall.due" },
         "period": { "dataset": "softdent.hygieneRecall", "dashboard": "practice", "path": "hygieneRecall.period" }
+      }
+    },
+    "softdentOperatoryGrid": {
+      "title": "Operatory Schedule",
+      "navTarget": "softdent",
+      "metrics": {
+        "chairCount": { "dataset": "softdent.operatory", "dashboard": "softdent", "path": "operatoryChairs.length" },
+        "activeChairs": { "dataset": "softdent.operatory", "dashboard": "softdent", "path": "operatoryChairs.length" }
       }
     }
   }

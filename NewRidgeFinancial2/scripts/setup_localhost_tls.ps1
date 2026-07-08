@@ -49,10 +49,21 @@ if (Get-Command mkcert -ErrorAction SilentlyContinue) {
   Pop-Location
   Write-Host "TLS certs written via mkcert: $certPath"
 } elseif (Get-Command openssl -ErrorAction SilentlyContinue) {
-  & openssl req -x509 -newkey rsa:2048 -keyout $keyPath -out $certPath -days 825 -nodes -subj "/CN=127.0.0.1"
+  & openssl req -x509 -newkey rsa:2048 -keyout $keyPath -out $certPath -days 825 -nodes -subj "/CN=NR2 Localhost" -addext "subjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1"
   Write-Host "TLS certs written via openssl: $certPath"
 } else {
-  $cert = New-SelfSignedCertificate -DnsName "127.0.0.1","localhost","::1" -CertStoreLocation "Cert:\CurrentUser\My" -FriendlyName "NR2 Localhost" -KeyExportPolicy Exportable
+  $cert = New-SelfSignedCertificate `
+    -Subject "CN=NR2 Localhost" `
+    -FriendlyName "NR2 Localhost" `
+    -KeyAlgorithm RSA -KeyLength 2048 `
+    -HashAlgorithm SHA256 `
+    -CertStoreLocation "Cert:\CurrentUser\My" `
+    -KeyExportPolicy Exportable `
+    -NotAfter (Get-Date).AddDays(825) `
+    -TextExtension @(
+      "2.5.29.37={text}1.3.6.1.5.5.7.3.1",
+      "2.5.29.17={text}IPAddress=127.0.0.1&IPAddress=::1&DNS=localhost&DNS=127.0.0.1"
+    )
   $pwd = ConvertTo-SecureString -String $pfxPassword -Force -AsPlainText
   Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $pwd | Out-Null
   if (Get-Command openssl -ErrorAction SilentlyContinue) {
@@ -76,6 +87,9 @@ if (Get-Command mkcert -ErrorAction SilentlyContinue) {
 }
 
 Write-Host "NR2 uses HTTPS by default (NR2_ENFORCE_TLS=1)."
+Write-Host "Trusting localhost certificate for Chrome/Edge..."
+$repoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+& (Join-Path $repoRoot "scripts\trust_localhost_tls.ps1")
 Write-Host "Optional overrides:"
 Write-Host "  NR2_TLS_CERT=$certPath"
 Write-Host "  NR2_TLS_KEY=$keyPath"

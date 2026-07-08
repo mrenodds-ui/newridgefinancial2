@@ -2,7 +2,7 @@
  * Read-path modal interstitial — blocks financial pages when import readiness is not fresh.
  */
 const ImportReadinessGate = (function () {
-  const FINANCIAL_PAGES = new Set(["financial", "ar", "quickbooks", "claims", "taxes"]);
+  const FINANCIAL_PAGES = new Set(["financial", "ar", "quickbooks", "claims"]);
   const DISMISS_KEY = "nr2ImportGateDismissed";
   let gateEl = null;
 
@@ -58,8 +58,8 @@ const ImportReadinessGate = (function () {
       `<p><strong>Do not act on financial data.</strong> Status: ${level}. Last load: ${loaded}.</p>` +
       `<p>${err}</p>` +
       `<div class="nr2-import-gate__actions">` +
-      `<button type="button" class="hp-chip hp-chip--action" data-import-gate-refresh>Refresh imports</button>` +
-      `<button type="button" class="hp-chip" data-import-gate-dismiss>Dismiss with warning</button>` +
+      `<button type="button" class="nr2-import-gate__btn" data-import-gate-refresh>Refresh imports</button>` +
+      `<button type="button" class="nr2-import-gate__btn nr2-import-gate__btn--muted" data-import-gate-dismiss>Dismiss with warning</button>` +
       `</div></div></div>`
     );
   }

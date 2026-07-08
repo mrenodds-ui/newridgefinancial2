@@ -71,14 +71,12 @@ const PageChrome = (function () {
   }
 
   function resolveInsight(state) {
-    const schema = schemaApi() && state && state.pageId ? schemaApi().byId(state.pageId) : null;
-    if (schema && schema.insight) return schema.insight;
     const proactive = proactiveInsight(state && state.halData);
     if (proactive) return proactive;
-    const feed = state && state.halWidgetFeed;
+    const feed = (state && state.halWidgetFeed) || {};
     const pageId = state && state.pageId;
     const HW = halWidgetsApi();
-    if (HW && feed && pageId) {
+    if (HW && pageId) {
       const readiness = HW.pageReadiness(pageId, feed);
       if (readiness.total) {
         const tone = readiness.empty === readiness.total ? "warning" : readiness.partial > 0 ? "info" : "success";
@@ -96,7 +94,54 @@ const PageChrome = (function () {
     return null;
   }
 
+  function isMockupLayout(state) {
+    return schemaApi() && schemaApi().LAYOUT_EPOCH === "moonshot-mockup";
+  }
+
+  function mockupInsight(state) {
+    const proactive = proactiveInsight(state && state.halData);
+    if (proactive) {
+      return { title: "HAL Insight", body: proactive.body || proactive.title };
+    }
+    const feed = (state && state.halWidgetFeed) || {};
+    const pageId = state && state.pageId;
+    const HW = halWidgetsApi();
+    if (HW && pageId) {
+      const first = HW.widgetsForPage(pageId, feed).find((item) => item.widget && item.widget.summary);
+      if (first && first.widget.summary) {
+        return { title: "HAL Insight", body: first.widget.summary };
+      }
+    }
+    return { title: "HAL Insight", body: "HAL reads local SoftDent and QuickBooks imports only." };
+  }
+
+  function mockupShell(state, opts) {
+    const o = opts || {};
+    if (o.compact) return "";
+    const schema = schemaApi() && state && state.pageId ? schemaApi().byId(state.pageId) : null;
+    const MC =
+      (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome) ||
+      (typeof globalThis !== "undefined" && globalThis.MoonshotMockupChrome) ||
+      null;
+    if (!schema || !MC) {
+      return `<div class="ms-page-chrome ms-page-chrome--missing" role="alert"><p>Page schema unavailable.</p></div>`;
+    }
+    if (state.pageId === "hal" && typeof MC.pageChromeHal === "function") {
+      return MC.pageChromeHal(state, schema, o);
+    }
+    const HW =
+      (typeof HalPageWidgets !== "undefined" && HalPageWidgets) ||
+      (typeof globalThis !== "undefined" && globalThis.HalPageWidgets) ||
+      null;
+    const halReadinessStrip =
+      HW && typeof HW.canvasPageStrip === "function" && state.halWidgetFeed
+        ? HW.canvasPageStrip(state.pageId, state.halWidgetFeed)
+        : "";
+    return MC.pageChrome(state, schema, mockupInsight(state), { halReadinessStrip, ...(o || {}) });
+  }
+
   function canvasShell(state, opts) {
+    if (isMockupLayout(state)) return mockupShell(state, opts);
     const o = opts || {};
     const U = ui();
     const schema = schemaApi() && state && state.pageId ? schemaApi().byId(state.pageId) : null;
@@ -142,24 +187,78 @@ const PageChrome = (function () {
     });
     const feed = (state && state.halWidgetFeed) || null;
     const freshnessStrip = (o && o.importFreshnessHtml) || "";
+    const halStripHtml =
+      state && state.pageId && state.pageId !== "hal" ? canvasHalStrip(state.pageId, feed) : "";
+    const combinedStrip = `${freshnessStrip}${halStripHtml}`;
     return U.CanvasShell({
       hero,
       toolbar,
       insight: insight ? U.PageInsight(insight) : "",
-      strip: freshnessStrip,
+      strip: combinedStrip,
       commands: o.compact ? "" : halCommandSurface(state.pageId, schema.title, { registry: state.halData && state.halData.registry }),
     });
   }
 
   function pageContent(state, bodyHtml, chromeOpts) {
-    return `${canvasShell(state, chromeOpts || {})}<div class="pv-canvas-body">${bodyHtml || ""}</div>`;
+    const bodyClass = state && state.pageId === "hal" ? "ms-hal-page-body" : "ms-page-body";
+    return `${mockupShell(state, chromeOpts || {})}<div class="${bodyClass}">${bodyHtml || ""}</div>`;
   }
 
   function sectionHead(title, subtitle) {
-    return `<header class="pv-section-head">
-      <h2 class="pv-section-head__title">${esc(title)}</h2>
-      ${subtitle ? `<p class="pv-section-head__subtitle">${esc(subtitle)}</p>` : ""}
+    return `<header class="widget-section-head">
+      <h2>${esc(title)}</h2>
+      ${subtitle ? `<p>${esc(subtitle)}</p>` : ""}
     </header>`;
+  }
+
+  let _halExportTimer = null;
+  const EXPORT_WAIT_LIMIT_MS = 30000;
+
+  function setHalReadiness(widgets, waitingExports) {
+    const strip = document.getElementById("nr2-hal-readiness");
+    if (!strip) return;
+
+    clearTimeout(_halExportTimer);
+    strip.style.background = "";
+    strip.style.color = "";
+
+    const hasWidgets = Array.isArray(widgets) && widgets.length > 0;
+
+    if (!hasWidgets) {
+      if (waitingExports > 0) {
+        strip.textContent = `HAL · 0 ready · ${waitingExports} waiting on export`;
+        _halExportTimer = setTimeout(() => {
+          strip.textContent = "HAL · Data sync delayed — figures may be incomplete";
+          strip.style.background = "#fff3cd";
+          strip.style.color = "#664d03";
+          window.dispatchEvent(new CustomEvent("nr2-hal-stalled", { detail: { waitingExports } }));
+        }, EXPORT_WAIT_LIMIT_MS);
+      } else {
+        strip.textContent = "HAL · Syncing…";
+      }
+      return;
+    }
+
+    const readyCount = widgets.filter((w) => w.ready !== false).length;
+    strip.textContent = `HAL · ${readyCount} ready · ${widgets.length - readyCount} pending`;
+  }
+
+  function refreshHalReadinessStrip(pageId, feed) {
+    const HW = halWidgetsApi();
+    if (!HW || !pageId) return;
+    const readiness = HW.pageReadiness(pageId, feed || {});
+    const widgets = readiness.items.map((item) => ({
+      ready: item.widget && String(item.widget.status).toUpperCase() === "SUCCESS",
+    }));
+    setHalReadiness(widgets, readiness.empty);
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("nr2-hal-stalled", () => {
+      document.querySelectorAll('[data-nr2-layout="moonshot-mockup-grid"], [data-nr2-layout="moonshot-grid"]').forEach((grid) => {
+        grid.classList.add("nr2-data-stale");
+      });
+    });
   }
 
   return {
@@ -170,6 +269,8 @@ const PageChrome = (function () {
     proactiveInsight,
     resolveInsight,
     sectionHead,
+    setHalReadiness,
+    refreshHalReadinessStrip,
   };
 })();
 

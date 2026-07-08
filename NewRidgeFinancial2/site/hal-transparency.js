@@ -195,7 +195,10 @@ const HalTransparency = (function () {
       const panel = document.getElementById("halTransparencyPanel");
       if (panel) renderAuditPanel(panel).catch(() => {});
     });
-    const halRoot = document.getElementById("halPageRoot");
+    const halRoot =
+      document.querySelector("#appPage .ms-page--hal") ||
+      document.querySelector(".ms-page--hal") ||
+      document.getElementById("appPage");
     if (halRoot && !document.getElementById("halLaneBadge")) {
       const badge = document.createElement("span");
       badge.id = "halLaneBadge";

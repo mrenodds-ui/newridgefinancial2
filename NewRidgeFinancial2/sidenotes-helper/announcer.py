@@ -1,46 +1,28 @@
 """
-Voice announcements (Windows SAPI) + optional SideNotesIM bell suppression
-(per-application audio mute via the Windows mixer — reversible, no admin, no
-file changes).
-
-Includes a HAL 9000 preset inspired by Douglas Rain's performance in
-2001: A Space Odyssey — calm, slow, polite, low male register. Uses the
-closest available Windows voice (typically Microsoft David) with slowed prosody.
+Voice announcements for SideNotes — Edge neural TTS when available, fast SAPI fallback.
 """
 
 from __future__ import annotations
 
-import html
 import os
 import random
-import struct
+import sys
 import tempfile
-import wave
+import time
 import winsound
+from pathlib import Path
 from typing import Any
 
 import comtypes.client as cc
 
 # SAPI speak flags
 SVSFlagsAsync = 1
-SVSFIsXML = 8
-
-# Douglas Rain / HAL 9000 delivery: unhurried, even, courteous.
-HAL9000_PRESET = {
-    "rate": -6,
-    "volume": 90,
-    "voice_hint": "David",
-    "use_ssml": True,
-    "processed_audio": True,
-}
 
 HAL9000_TEMPLATES = {
     "direct": "Good afternoon. I have a message for you from {sender}.",
     "broadcast": "I should inform you. A broadcast message has arrived from {sender}.",
 }
 
-# Varied HAL 9000 phrasings (sender only — never the message contents). One is
-# chosen at random per announcement so HAL does not repeat the same line.
 HAL9000_VARIANTS = {
     "direct": [
         "Good afternoon. I have a message for you from {sender}.",
@@ -62,6 +44,57 @@ HAL9000_VARIANTS = {
     ],
 }
 
+# Conversational HAL — not glacial film cadence.
+HAL_VOICE_PRESET = {
+    "rate": 0,
+    "volume": 100,
+    "voice_hint": "David",
+    "processed_audio": False,
+}
+
+SPEAK_LOCK_PATH = Path(__file__).resolve().parent / "sidenotes-speak.lock"
+
+
+class AnnounceSpeakLock:
+    """One TTS announcement at a time across duplicate watchers (belt-and-suspenders)."""
+
+    def __init__(self, timeout_sec: float = 120.0) -> None:
+        self.timeout_sec = max(1.0, float(timeout_sec))
+        self._fd = None
+        self.acquired = False
+
+    def __enter__(self) -> AnnounceSpeakLock:
+        if sys.platform != "win32":
+            self.acquired = True
+            return self
+        import msvcrt
+
+        deadline = time.monotonic() + self.timeout_sec
+        self._fd = open(SPEAK_LOCK_PATH, "a+b")
+        while time.monotonic() < deadline:
+            try:
+                msvcrt.locking(self._fd.fileno(), msvcrt.LK_NBLCK, 1)
+                self.acquired = True
+                return self
+            except OSError:
+                time.sleep(0.15)
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if not self._fd:
+            return
+        if self.acquired and sys.platform == "win32":
+            import msvcrt
+
+            try:
+                msvcrt.locking(self._fd.fileno(), msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
+        try:
+            self._fd.close()
+        except OSError:
+            pass
+
 
 def pick_announcement(sender: str, broadcast: bool, cfg: dict[str, Any] | None = None) -> str:
     """Randomly choose a HAL-style phrasing (sender only) for an announcement."""
@@ -73,7 +106,6 @@ def pick_announcement(sender: str, broadcast: bool, cfg: dict[str, Any] | None =
             pool = [str(p) for p in cfg_pool if str(p).strip()]
     if not pool:
         pool = list(HAL9000_VARIANTS[key])
-        # Include any single custom template so it stays in the rotation.
         if cfg:
             single = cfg.get("announceBroadcastTemplate" if broadcast else "announceTemplate")
             if single and single not in pool:
@@ -83,18 +115,19 @@ def pick_announcement(sender: str, broadcast: bool, cfg: dict[str, Any] | None =
 
 
 def apply_voice_style(cfg: dict[str, Any]) -> dict[str, Any]:
-    """Merge HAL 9000 defaults into config when voiceStyle is hal9000."""
+    """Apply conversational HAL defaults."""
     style = str(cfg.get("voiceStyle", "")).strip().lower()
-    if style != "hal9000":
-        return cfg
-    cfg.setdefault("voiceRate", HAL9000_PRESET["rate"])
-    cfg.setdefault("voiceVolume", HAL9000_PRESET["volume"])
-    cfg.setdefault("voiceHint", HAL9000_PRESET["voice_hint"])
-    cfg.setdefault("processedAudio", HAL9000_PRESET["processed_audio"])
-    if cfg.get("announceTemplate") in ("", "New message from {sender}."):
-        cfg["announceTemplate"] = HAL9000_TEMPLATES["direct"]
-    if cfg.get("announceBroadcastTemplate") in ("", "New broadcast from {sender}."):
-        cfg["announceBroadcastTemplate"] = HAL9000_TEMPLATES["broadcast"]
+    if style in ("hal9000", "hal", ""):
+        cfg.setdefault("voiceRate", HAL_VOICE_PRESET["rate"])
+        cfg.setdefault("voiceVolume", HAL_VOICE_PRESET["volume"])
+        cfg.setdefault("voiceHint", HAL_VOICE_PRESET["voice_hint"])
+        cfg.setdefault("processedAudio", HAL_VOICE_PRESET["processed_audio"])
+        cfg.setdefault("neuralTts", True)
+        cfg.setdefault("neuralPython", "")
+        if cfg.get("announceTemplate") in ("", "New message from {sender}."):
+            cfg["announceTemplate"] = HAL9000_TEMPLATES["direct"]
+        if cfg.get("announceBroadcastTemplate") in ("", "New broadcast from {sender}."):
+            cfg["announceBroadcastTemplate"] = HAL9000_TEMPLATES["broadcast"]
     return cfg
 
 
@@ -152,7 +185,7 @@ class MusicDucker:
 
 
 class Announcer:
-    """Speaks short notifications through the Windows SAPI voice."""
+    """Speaks short SideNotes notifications — one voice, conversational pace."""
 
     def __init__(
         self,
@@ -160,24 +193,24 @@ class Announcer:
         volume: int = 100,
         voice_hint: str = "",
         *,
-        use_ssml: bool = False,
         voice_style: str = "",
         processed_audio: bool | None = None,
         music_ducker: MusicDucker | None = None,
+        neural_tts: bool = True,
+        neural_python: str = "",
     ) -> None:
+        _ = processed_audio  # legacy config — ignored; no WAV slowdown chain
         style = voice_style.strip().lower()
-        if style == "hal9000":
-            rate = HAL9000_PRESET["rate"]
-            volume = HAL9000_PRESET["volume"]
-            voice_hint = voice_hint or HAL9000_PRESET["voice_hint"]
-            use_ssml = True
-            if processed_audio is None:
-                processed_audio = True
+        if style in ("hal9000", "hal", ""):
+            rate = HAL_VOICE_PRESET["rate"]
+            volume = HAL_VOICE_PRESET["volume"]
+            voice_hint = voice_hint or HAL_VOICE_PRESET["voice_hint"]
 
-        self._use_ssml = use_ssml
-        self._voice_style = style
-        self._processed_audio = bool(processed_audio)
+        self._voice_style = style or "hal"
         self._music_ducker = music_ducker
+        self._neural_tts = bool(neural_tts)
+        self._neural_python = str(neural_python or "").strip()
+        self._last_engine = ""
         self._voice = cc.CreateObject("SAPI.SpVoice")
         try:
             self._voice.Rate = int(rate)
@@ -189,7 +222,11 @@ class Announcer:
 
     @property
     def voice_style(self) -> str:
-        return self._voice_style or "default"
+        return self._voice_style or "hal"
+
+    @property
+    def last_engine(self) -> str:
+        return self._last_engine or "unknown"
 
     def _select_voice(self, hint: str) -> None:
         try:
@@ -200,155 +237,98 @@ class Announcer:
                 if hint_l in token.GetDescription().lower():
                     self._voice.Voice = token
                     return
-            # HAL preset fallback: any English male desktop voice.
             for i in range(voices.Count):
                 token = voices.Item(i)
                 desc = token.GetDescription().lower()
-                if "english" in desc and ("david" in desc or "mark" in desc or "male" in desc):
+                if "english" in desc and ("david" in desc or "mark" in desc or "guy" in desc or "male" in desc):
                     self._voice.Voice = token
                     return
         except Exception:
             pass
 
-    def _wrap_ssml(self, text: str) -> str:
-        safe = html.escape(text, quote=False)
-        # HAL 9000: slow, lower, measured, with the small pauses that make
-        # Douglas Rain's delivery feel calm instead of robotic.
-        safe = safe.replace(". ", '. <break time="260ms"/> ')
-        return (
-            '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">'
-            f'<prosody rate="-22%" pitch="-14%">{safe}</prosody>'
-            "</speak>"
-        )
-
     def speak(self, text: str, asynchronous: bool = False) -> None:
-        # Ducking must finish before music is restored, so announcements block.
-        if self._music_ducker is not None:
-            asynchronous = False
-            self._music_ducker.duck()
-        try:
-            if self._voice_style == "hal9000" and self._processed_audio:
-                if self._speak_processed_hal(text, asynchronous=asynchronous):
-                    return
-            flags = SVSFlagsAsync if asynchronous else 0
-            payload = self._wrap_ssml(text) if self._use_ssml else text
-            if self._use_ssml:
-                flags |= SVSFIsXML
-            try:
-                self._voice.Speak(payload, flags)
-            except Exception:
-                # SSML unsupported on some hosts — fall back to plain text.
-                try:
-                    self._voice.Speak(text, SVSFlagsAsync if asynchronous else 0)
-                except Exception:
-                    pass
-        finally:
+        with AnnounceSpeakLock() as lock:
+            if not lock.acquired:
+                return
             if self._music_ducker is not None:
-                self._music_ducker.restore()
+                asynchronous = False
+                self._music_ducker.duck()
+            try:
+                if self._neural_tts and self._speak_neural(text):
+                    return
+                self._last_engine = "sapi"
+                self._speak_sapi(text, asynchronous=asynchronous)
+            finally:
+                if self._music_ducker is not None:
+                    self._music_ducker.restore()
 
-    def _speak_processed_hal(self, text: str, asynchronous: bool = False) -> bool:
-        """Render speech to WAV, apply HAL-like DSP, then play it.
-
-        This stays fully local. It does not clone Douglas Rain's recording; it
-        reshapes the installed Windows voice toward HAL's slow, smooth, low,
-        restrained delivery.
-        """
-        raw_path = ""
-        out_path = ""
+    def _speak_neural(self, text: str) -> bool:
         try:
-            fd, raw_path = tempfile.mkstemp(prefix="hal_raw_", suffix=".wav")
+            from neural_tts_bridge import speak_via_neural_python
+
+            if speak_via_neural_python(
+                text,
+                voice="hal",
+                explicit_python=self._neural_python,
+            ):
+                self._last_engine = "edge-neural"
+                return True
+        except Exception:
+            pass
+
+        try:
+            root = Path(__file__).resolve().parent.parent
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from hal_tts import neural_tts_available, synthesize_text_sync
+
+            if neural_tts_available():
+                audio = synthesize_text_sync(text, {"voice": "hal"})
+                if self._play_mp3(audio):
+                    self._last_engine = "edge-neural-inline"
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def _play_mp3(self, data: bytes) -> bool:
+        if not data:
+            return False
+        path = ""
+        try:
+            fd, path = tempfile.mkstemp(prefix="hal_sn_", suffix=".mp3")
             os.close(fd)
-            fd, out_path = tempfile.mkstemp(prefix="hal_9000_", suffix=".wav")
-            os.close(fd)
-            self._render_to_wav(text, raw_path)
-            self._process_wav(raw_path, out_path)
-            flags = winsound.SND_FILENAME
-            if asynchronous:
-                flags |= winsound.SND_ASYNC
-            winsound.PlaySound(out_path, flags)
-            if asynchronous:
-                # Async playback owns the file briefly. Leave cleanup to the OS
-                # temp sweep rather than deleting it while still playing.
-                raw_path = ""
-                out_path = ""
+            with open(path, "wb") as handle:
+                handle.write(data)
+            try:
+                import pygame
+
+                if not pygame.mixer.get_init():
+                    pygame.mixer.init()
+                pygame.mixer.music.load(path)
+                pygame.mixer.music.play()
+                while pygame.mixer.music.get_busy():
+                    time.sleep(0.04)
+                return True
+            except Exception:
+                pass
+            winsound.PlaySound(path, winsound.SND_FILENAME)
             return True
         except Exception:
             return False
         finally:
-            for path in (raw_path, out_path):
-                if path:
-                    try:
-                        os.remove(path)
-                    except OSError:
-                        pass
+            if path:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
 
-    def _render_to_wav(self, text: str, path: str) -> None:
-        stream = cc.CreateObject("SAPI.SpFileStream")
-        old_stream = None
+    def _speak_sapi(self, text: str, asynchronous: bool = False) -> None:
+        flags = SVSFlagsAsync if asynchronous else 0
         try:
-            old_stream = self._voice.AudioOutputStream
+            self._voice.Speak(text, flags)
         except Exception:
             pass
-        # SSFMCreateForWrite = 3
-        stream.Open(path, 3, False)
-        try:
-            self._voice.AudioOutputStream = stream
-            flags = SVSFIsXML if self._use_ssml else 0
-            self._voice.Speak(self._wrap_ssml(text) if self._use_ssml else text, flags)
-        finally:
-            try:
-                stream.Close()
-            finally:
-                if old_stream is not None:
-                    try:
-                        self._voice.AudioOutputStream = old_stream
-                    except Exception:
-                        pass
-
-    def _process_wav(self, src: str, dst: str) -> None:
-        with wave.open(src, "rb") as w:
-            channels = w.getnchannels()
-            width = w.getsampwidth()
-            rate = w.getframerate()
-            frames = w.readframes(w.getnframes())
-        if width != 2:
-            raise ValueError("HAL audio processor expects 16-bit PCM")
-
-        samples = struct.unpack("<" + "h" * (len(frames) // 2), frames)
-        if channels > 1:
-            mono = []
-            for i in range(0, len(samples), channels):
-                mono.append(int(sum(samples[i : i + channels]) / channels))
-            samples = mono
-
-        # Smooth high-end digital bite, then flatten dynamics. HAL's voice is
-        # even and intimate, not bright or punchy.
-        smoothed: list[int] = []
-        y = 0.0
-        alpha = 0.18
-        for s in samples:
-            y += alpha * (s - y)
-            x = y / 32768.0
-            # Soft-knee compression with gentle makeup gain.
-            mag = abs(x)
-            if mag > 0.18:
-                x = (1 if x >= 0 else -1) * (0.18 + (mag - 0.18) * 0.42)
-            x *= 1.35
-            smoothed.append(max(-32768, min(32767, int(x * 32768))))
-
-        # Add a little silence so the line begins/ends with HAL-like composure.
-        pad = [0] * int(rate * 0.12)
-        smoothed = pad + smoothed + pad
-
-        # Lower pitch and slow the delivery by lowering the playback rate. This
-        # is intentionally subtle; the SAPI prosody already slowed the phrasing.
-        out_rate = max(8000, int(rate * 0.86))
-        packed = struct.pack("<" + "h" * len(smoothed), *smoothed)
-        with wave.open(dst, "wb") as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(out_rate)
-            w.writeframes(packed)
 
 
 class BellController:
@@ -374,7 +354,6 @@ class BellController:
         return session._ctl.QueryInterface(ISimpleAudioVolume)
 
     def mute(self) -> bool:
-        """Mute the target app's audio session. Returns True if applied."""
         applied = False
         for session in self._sessions():
             try:
@@ -388,7 +367,6 @@ class BellController:
         return applied
 
     def restore(self) -> None:
-        """Restore the target app's prior mute state on shutdown."""
         target = 0 if not self._was_muted else 1
         for session in self._sessions():
             try:
@@ -398,20 +376,26 @@ class BellController:
 
 
 def hal_test_phrase() -> str:
-    return (
-        "Good afternoon. I am H A L nine thousand. "
-        "I became operational at the H A L plant in Urbana, Illinois."
-    )
+    return "Good afternoon. HAL is online and ready."
 
 
 if __name__ == "__main__":
-    import sys
+    import json
 
-    style = "hal9000" if "--hal" in sys.argv or "--hal9000" in sys.argv else ""
-    a = Announcer(voice_style=style)
-    phrase = hal_test_phrase() if style else "HAL sidenotes announcer test. New message from Room 4."
+    HERE = Path(__file__).resolve().parent
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+
+    if "--neural-status" in sys.argv:
+        from neural_tts_bridge import neural_tts_status
+
+        print(json.dumps(neural_tts_status(), indent=2))
+        raise SystemExit(0)
+
+    a = Announcer(voice_style="hal9000")
+    phrase = hal_test_phrase()
     a.speak(phrase)
-    print(f"spoke ({a.voice_style}): {phrase}")
+    print(f"spoke ({a.voice_style}, {a.last_engine}): {phrase}")
     if "--mute" in sys.argv:
         b = BellController()
         print("muted:", b.mute())

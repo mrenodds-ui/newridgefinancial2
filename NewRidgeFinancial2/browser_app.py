@@ -49,9 +49,11 @@ def main() -> int:
         set_browser_session_token,
         set_desktop_session_token,
         set_site_root,
+        set_workstation_mode,
     )
 
     set_browser_mode(True)
+    set_workstation_mode(False)
     set_desktop_session_token(None)
     set_browser_session_token(uuid.uuid4().hex)
     set_site_root(SITE_DIR)

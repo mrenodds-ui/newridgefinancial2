@@ -18,6 +18,7 @@ from import_contract import (
     SOFTDENT_AR_NAMES,
     SOFTDENT_CASE_ACCEPTANCE_NAMES,
     SOFTDENT_HYGIENE_RECALL_NAMES,
+    SOFTDENT_OPERATORY_NAMES,
     SOFTDENT_CLAIMS_NAMES,
     SOFTDENT_CLINICAL_NAMES,
     SOFTDENT_DASHBOARD_NAMES,
@@ -174,6 +175,38 @@ def _rows_are_usable(rows: list[dict[str, Any]]) -> bool:
             if text.startswith("{") or "dataset_name" in text:
                 return False
     return True
+
+
+def _load_operatory_dataset(directory: Path, names: tuple[str, ...]) -> dict[str, Any] | None:
+    paths = _all_existing(directory, names)
+    for path in paths:
+        if path.suffix.lower() != ".json":
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        chairs = payload.get("operatoryChairs")
+        if not isinstance(chairs, list):
+            continue
+        file_sha: str | None = None
+        try:
+            from import_cache_ttl import sha256_file
+
+            file_sha = sha256_file(path)
+        except Exception:
+            pass
+        return {
+            "sourceFile": path.name,
+            "modifiedAt": _mtime_iso(path),
+            "sha256": file_sha,
+            "operatoryChairs": chairs,
+            "rows": [],
+            "readSource": "cache",
+        }
+    return None
 
 
 def _load_dataset(directory: Path, names: tuple[str, ...]) -> dict[str, Any] | None:
@@ -401,6 +434,7 @@ def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, An
             "treatmentPlans": _softdent("treatmentPlans", SOFTDENT_TREATMENT_PLANS_NAMES),
             "caseAcceptance": _softdent("caseAcceptance", SOFTDENT_CASE_ACCEPTANCE_NAMES),
             "hygieneRecall": _softdent("hygieneRecall", SOFTDENT_HYGIENE_RECALL_NAMES),
+            "operatory": _load_operatory_dataset(softdent_dir, SOFTDENT_OPERATORY_NAMES),
         },
         "quickbooks": {
             "dir": str(quickbooks_dir),

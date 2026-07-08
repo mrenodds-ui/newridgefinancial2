@@ -133,7 +133,106 @@ def append_office_channel_message(msg: dict) -> dict:
         if len(messages) > MAX_MESSAGES:
             data["messages"] = messages[-MAX_MESSAGES:]
         save_office_channel(data)
+    if any(str(t).lower() in ("all", "everyone") for t in targets):
+        record_hub_broadcast(
+            {
+                "at": entry["at"],
+                "from": entry["from"],
+                "channel": "office",
+                "target": target_label,
+            }
+        )
     return entry
+
+
+_last_hub_broadcast: dict = {}
+
+_HUB_TOKEN_PATH = REPO_ROOT / "app_data" / "nr2" / "hub_token.txt"
+
+
+def resolve_hub_token() -> str:
+    env = os.environ.get("NR2_HUB_TOKEN", "").strip()
+    if env:
+        return env
+    _HUB_TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if _HUB_TOKEN_PATH.is_file():
+        return _HUB_TOKEN_PATH.read_text(encoding="utf-8").strip()
+    import secrets
+
+    token = secrets.token_urlsafe(32)
+    _HUB_TOKEN_PATH.write_text(token, encoding="utf-8")
+    return token
+
+
+def hub_token_header_valid(header: str | None) -> bool:
+    import secrets
+
+    expected = resolve_hub_token()
+    if not expected:
+        return False
+    return secrets.compare_digest(str(header or "").strip(), expected)
+
+
+def _normalize_hub_origin(origin: str | None) -> str:
+    return str(origin or "").strip().lower().rstrip("/")
+
+
+def hub_notify_allowed_origins() -> set[str]:
+    origins = {
+        "http://127.0.0.1:8766",
+        "http://localhost:8766",
+        "https://127.0.0.1:8766",
+        "https://localhost:8766",
+        "http://[::1]:8766",
+        "https://[::1]:8766",
+    }
+    extra = os.environ.get("NR2_HUB_ORIGIN", "").strip()
+    if extra:
+        origins.add(_normalize_hub_origin(extra))
+    return origins
+
+
+def hub_notify_origin_ok(origin: str | None = None) -> bool:
+    if origin is None:
+        import bottle
+
+        origin = bottle.request.headers.get("Origin")
+    normalized = _normalize_hub_origin(origin)
+    if not normalized or normalized == "null":
+        return False
+    return normalized in hub_notify_allowed_origins()
+
+
+def hub_last_broadcast_access_ok(header: str | None = None) -> bool:
+    if header is None:
+        import bottle
+
+        header = bottle.request.headers.get("X-Hub-Token")
+    return hub_token_header_valid(header)
+
+
+def hub_notify_access_ok(origin: str | None = None, header: str | None = None) -> bool:
+    if header is None:
+        import bottle
+
+        header = bottle.request.headers.get("X-Hub-Token")
+    if not hub_notify_origin_ok(origin):
+        return False
+    return hub_token_header_valid(header)
+
+
+def record_hub_broadcast(payload: dict) -> None:
+    global _last_hub_broadcast
+    _last_hub_broadcast = {
+        "at": str(payload.get("at") or _now_iso()),
+        "from": str(payload.get("from") or ""),
+        "channel": str(payload.get("channel") or "office"),
+        "target": str(payload.get("target") or "all"),
+    }
+
+
+def last_hub_broadcast() -> dict:
+    return dict(_last_hub_broadcast)
 
 
 def _load_inbound() -> dict:
@@ -501,6 +600,21 @@ def resolve_hal_hub_url(port: int | None = None) -> str:
         return f"http://{ip}:{http_port}"
     except OSError:
         return f"http://127.0.0.1:{http_port}"
+
+
+def hub_cross_status() -> dict:
+    """Moonshot cross-runtime — 8765 polls workstation reachability + last broadcast."""
+    stations = stations_status()
+    ws_live = int(stations.get("nr2WorkstationCount") or 0) > 0
+    broadcast = last_hub_broadcast()
+    return {
+        "ok": True,
+        "workstationReachable": ws_live,
+        "stationCount": stations.get("stationCount"),
+        "totalStations": stations.get("totalStations"),
+        "nr2WorkstationCount": stations.get("nr2WorkstationCount"),
+        "lastBroadcast": broadcast if broadcast else None,
+    }
 
 
 def hub_status() -> dict:

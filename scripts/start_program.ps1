@@ -15,9 +15,9 @@ if (-not (Test-Path $StartScript)) {
     throw "Browser start script not found: $StartScript"
 }
 
-$argsList = @()
-if ($SkipModelWarmup) { $argsList += '-SkipModelWarmup' }
-if ($Restart) { $argsList += '-Restart' }
-if ($SkipValidation) { $argsList += '-SkipValidation' }
+$splat = @{}
+if ($SkipModelWarmup) { $splat.SkipModelWarmup = $true }
+if ($Restart) { $splat.Restart = $true }
+if ($SkipValidation) { $splat.SkipValidation = $true }
 
-& $StartScript @argsList
+& $StartScript @splat

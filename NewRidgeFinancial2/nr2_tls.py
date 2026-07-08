@@ -19,6 +19,25 @@ def default_tls_paths(repo_root: Path) -> tuple[Path, Path]:
     return tls_dir / "127.0.0.1.pem", tls_dir / "127.0.0.1-key.pem"
 
 
+def ensure_tls_key_material(certfile: str | Path, keyfile: str | Path) -> tuple[str, str]:
+    """Re-export PEM key if pywebview deleted it on a prior run."""
+    cert_path = Path(certfile)
+    key_path = Path(keyfile)
+    if key_path.is_file() and cert_path.is_file():
+        return str(cert_path), str(key_path)
+    pfx_path = cert_path.parent / "127.0.0.1.pfx"
+    if pfx_path.is_file():
+        script = Path(__file__).resolve().parent / "scripts" / "export_pfx_to_pem.py"
+        if script.is_file():
+            import subprocess
+            import sys
+
+            subprocess.run([sys.executable, str(script)], check=True, timeout=60)
+    if not key_path.is_file() or not cert_path.is_file():
+        raise RuntimeError(f"TLS key material missing: cert={cert_path} key={key_path}")
+    return str(cert_path), str(key_path)
+
+
 def ensure_localhost_tls_certificates(repo_root: Path) -> tuple[str, str]:
     cert_path, key_path = default_tls_paths(repo_root)
     if cert_path.is_file() and key_path.is_file():

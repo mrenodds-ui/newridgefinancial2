@@ -3,7 +3,7 @@
  * Kanban cards, chart bars, and other [data-hal-action] elements dispatch through HalLiveWidgetBridge.
  */
 const HalPilotWidgets = (function () {
-  const LEGACY_WIDGET_SCHEMA = {
+  const CANVAS_WIDGET_SCHEMA = {
     mode: "canvas-feed",
     note: "Staff pages render through PageCanvas with halWidgetFeed badges and HAL command wiring.",
     eventContract: ["pageId", "widgetKey", "library", "eventType", "payload", "halAction", "flash"],
@@ -70,7 +70,7 @@ const HalPilotWidgets = (function () {
     root.querySelectorAll("[data-hal-chart-bar]:not([data-hal-pilot-initialized])").forEach((bar) => {
       bar.setAttribute("data-hal-pilot-initialized", "1");
       bar.addEventListener("click", () => {
-        const card = bar.closest("[data-hal-widget-key]") || bar.closest(".pv-canvas-panel") || bar;
+        const card = bar.closest("[data-hal-widget-key]") || bar.closest(".widget-card") || bar;
         const metric = bar.getAttribute("data-hal-chart-bar") || "metric";
         const value = Number(bar.getAttribute("data-hal-value"));
         const pageId = bar.getAttribute("data-hal-page") || card.getAttribute("data-hal-widget-key") ? "financial" : "unknown";
@@ -89,7 +89,7 @@ const HalPilotWidgets = (function () {
   }
 
   return {
-    LEGACY_WIDGET_SCHEMA,
+    CANVAS_WIDGET_SCHEMA,
     init,
   };
 })();

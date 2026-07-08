@@ -419,6 +419,7 @@ async function main() {
   globalThis.AppIcons = require(join(siteDir, "icons.js"));
   require(join(siteDir, "page-schema.js"));
   require(join(siteDir, "hal-page-schema.js"));
+  require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
   require(join(siteDir, "hal-page-canvas.js"));
   require(join(siteDir, "components.js"));
   require(join(siteDir, "hal-pilot-widgets.js"));
@@ -501,18 +502,36 @@ async function main() {
   assert(!halHtml.includes("SIDENOTES PROGRAM"), "HAL financial app must not render external SideNotes program card");
   assert(halHtml.includes("data-hal-surf-nav=\"sidenotes\""), "HAL page must wire staff notes work surface navigation");
   assert(halHtml.includes("data-hal-surf-open="), "HAL page must wire work surface open chevrons");
-  assert(halHtml.includes("hp-wg-card--active"), "HAL page must wire widget cards to HAL");
+  assert(halHtml.includes("widget-card span-1") || halHtml.includes('class="widget-card span-1"'), "HAL page must wire widget cards to HAL");
   assert(halHtml.includes("data-hal-activity-cmd="), "HAL page must wire activity log replay to HAL");
-  assert(halHtml.includes("hp-status--btn"), "HAL page must wire status chips to HAL");
-  assert(halHtml.includes("pv-canvas-hero"), "HAL page must use the canvas page hero");
-  assert(halHtml.includes("hp-action--icon"), "HAL page must render icon-backed prompt chips");
+  assert(halHtml.includes("status-btn"), "HAL page must wire status chips to HAL");
+  assert(halHtml.includes('class="header"') || halHtml.includes("<header class=\"header\">"), "HAL page must use mockup HAL header");
+  assert((halHtml.match(/HAL Command Center/g) || []).length <= 1, "HAL Command Center title must not repeat as legacy widget group box");
+  assert(halHtml.includes("badge-live"), "HAL page must show LIVE badge");
+  assert(halHtml.includes("alert-strip"), "HAL page must show alert strip");
+  assert(halHtml.includes("chat-rail"), "HAL page must render Ask HAL chat rail");
+  assert(halHtml.includes("dashboard-grid"), "HAL page must use dashboard grid layout");
+  assert(!halHtml.includes("hp-grid"), "HAL page must not use legacy hp-grid");
+  assert(!halHtml.includes("hp-card"), "HAL page must not use legacy hp-card panels");
+  assert(!halHtml.match(/\bhp-[a-z]/), "HAL page must not use legacy hp-* class prefix");
+  assert(halHtml.includes("lane-badge"), "HAL page must render program posture lane badge");
+  assert(halHtml.includes("import-health"), "HAL page must render import health panel");
+  assert(halHtml.includes("widget-card"), "HAL page must use mockup widget-card panels");
+  assert(!halHtml.includes("pv-canvas-hero"), "HAL page must not use legacy pv-canvas hero");
+  assert(!halHtml.includes("pv-badge"), "HAL page must not use legacy pv-badge");
+  assert(!halHtml.match(/\bclass="[^"]*\bpv-/), "HAL page must not use legacy pv-* class prefix in markup");
+  assert(halHtml.includes("prompt-chip--icon"), "HAL page must render icon-backed prompt chips");
   assert(halHtml.includes("<svg") && halHtml.includes('class="app-ico"'), "HAL page must render SVG icons");
-  assert(halHtml.includes("hp-card__ico"), "HAL page must render section header icons");
-  assert(halHtml.includes("hp-ctrl__ico"), "HAL page must render system control icons");
-  assert(halHtml.includes("hp-grid--hal-102"), "HAL page must use hal-102 schema grid");
-  assert(halHtml.includes("Financial Widgets"), "HAL page must render financial widget group");
-  assert(halHtml.includes("Practice Financial Overview"), "HAL page must render financial widget");
-  assert(halHtml.includes("data-hal-widget-nav="), "HAL page must render widget navigation controls");
+  assert(halHtml.includes("header-icon"), "HAL page must render section header icons");
+  assert(halHtml.includes("control-icon"), "HAL page must render system control icons");
+  assert(halHtml.includes("metric-large"), "HAL page must render mission metric tiles");
+  assert(halHtml.includes("Production MTD"), "HAL page must surface production metric tile");
+  assert(!halHtml.includes("Financial Widgets"), "HAL page must not render staff widget group inventory");
+  assert(!halHtml.includes("Clinical Widgets"), "HAL page must not render clinical widget group inventory");
+  assert(!halHtml.includes("Revenue &amp; A/R"), "HAL page must not render revenue widget group inventory");
+  assert(!halHtml.includes("ms-hal-wg-section"), "HAL page must not render expandable widget group sections");
+  assert(!halHtml.includes("NO FEED"), "HAL page must not render NO FEED widget rows");
+  assert(halHtml.includes("data-hal-widget-key="), "HAL page must wire widget keys on mission tiles");
   assert(halHtml.includes('id="hpAskForm"'), "HAL page must keep Ask HAL chat form");
   assert(halHtml.includes('id="hpAskInput"'), "HAL page must keep Ask HAL chat input");
   assert(halHtml.includes("IMPORT & SOURCE HEALTH"), "HAL page must render import health panel");
@@ -597,9 +616,15 @@ async function main() {
   assert(halHtml.includes("HAL STATUS"), "HAL page empty render must still show status toolbar");
   const PageChromeMod = require(join(siteDir, "page-chrome.js"));
   const emptyShell = PageChromeMod.canvasShell({ pageId: "financial", halData: {}, halWidgetFeed: null });
-  assert(emptyShell.includes("pv-canvas-shell"), "page chrome must render financial shell with empty feed");
+  assert(
+    emptyShell.includes("ms-page-chrome") || emptyShell.includes("top-header"),
+    "page chrome must render financial mockup shell with empty feed",
+  );
   const missingShell = PageChromeMod.canvasShell({ pageId: "not-a-real-page", halData: {} });
-  assert(missingShell.includes("pv-canvas-shell--missing"), "page chrome must degrade when schema is missing");
+  assert(
+    missingShell.includes("ms-page-chrome--missing") || missingShell.includes("pv-canvas-shell--missing"),
+    "page chrome must degrade when schema is missing",
+  );
   passed++;
 
   // Full program read access
@@ -756,7 +781,7 @@ async function main() {
   const widgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show manager dashboard widgets");
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
-  assert(Object.keys(feed.widgets).length === 27, "widget feed must build 27 operational widgets");
+  assert(Object.keys(feed.widgets).length === 29, "widget feed must build 29 operational widgets");
   const masterChart = HalWidgetMasterChart.all();
   assert(masterChart.length === HalSkills.WIDGET_ORDER.length, "widget master chart must cover every HAL widget");
   assert(masterChart.every((row) => row.page && row.purpose && row.expectedData.length && row.readyWhen), "widget master chart rows must include page, purpose, expected data, and ready criteria");

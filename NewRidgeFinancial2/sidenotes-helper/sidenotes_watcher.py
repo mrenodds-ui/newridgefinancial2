@@ -30,6 +30,43 @@ from vdb_reader import SideNotesReader  # noqa: E402
 
 DEFAULT_INBOX = HERE.parent / "site" / "data" / "sidenotes-inbox.json"
 STATE_PATH = HERE / "watcher_state.json"
+WATCHER_PID_PATH = HERE / "sidenotes-watcher.pid"
+_WATCHER_MUTEX_HANDLE = None
+
+
+def acquire_watcher_instance() -> bool:
+    """Only one SideNotes watcher per user session (workstation + bat both start it)."""
+    global _WATCHER_MUTEX_HANDLE
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        ERROR_ALREADY_EXISTS = 183
+        _WATCHER_MUTEX_HANDLE = kernel32.CreateMutexW(None, True, "Local\\NR2SideNotesWatcher")
+        if kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+            if _WATCHER_MUTEX_HANDLE:
+                kernel32.CloseHandle(_WATCHER_MUTEX_HANDLE)
+            _WATCHER_MUTEX_HANDLE = None
+            return False
+    try:
+        WATCHER_PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
+    except OSError:
+        pass
+    return True
+
+
+def release_watcher_instance() -> None:
+    global _WATCHER_MUTEX_HANDLE
+    try:
+        if WATCHER_PID_PATH.is_file() and int(WATCHER_PID_PATH.read_text(encoding="utf-8").strip()) == os.getpid():
+            WATCHER_PID_PATH.unlink(missing_ok=True)
+    except (ValueError, OSError):
+        pass
+    if sys.platform == "win32" and _WATCHER_MUTEX_HANDLE:
+        import ctypes
+
+        ctypes.windll.kernel32.CloseHandle(_WATCHER_MUTEX_HANDLE)
+        _WATCHER_MUTEX_HANDLE = None
 
 
 def log(msg: str) -> None:
@@ -67,7 +104,9 @@ def load_config() -> dict:
     cfg.setdefault("voiceHint", "")
     cfg.setdefault("voiceRate", 0)
     cfg.setdefault("voiceVolume", 100)
-    cfg.setdefault("processedAudio", True)
+    cfg.setdefault("processedAudio", False)
+    cfg.setdefault("neuralTts", True)
+    cfg.setdefault("neuralPython", "")
     cfg.setdefault("announceVaried", True)
     cfg.setdefault("announceVariants", [])
     cfg.setdefault("announceBroadcastVariants", [])
@@ -195,6 +234,10 @@ def write_inboxes(cfg: dict, items: list[dict], monitor: dict) -> None:
 
 
 def main() -> int:
+    if not acquire_watcher_instance():
+        log("Another SideNotes watcher is already running — exiting (only one instance allowed).")
+        return 0
+
     cfg = load_config()
     log("HAL SideNotes watcher starting (local only; message body never read).")
     log(f"history: {cfg['historyPath']}")
@@ -230,10 +273,23 @@ def main() -> int:
                 volume=cfg["voiceVolume"],
                 voice_hint=cfg["voiceHint"],
                 voice_style=cfg.get("voiceStyle", ""),
-                processed_audio=cfg.get("processedAudio", True),
+                processed_audio=cfg.get("processedAudio", False),
                 music_ducker=music_ducker,
+                neural_tts=cfg.get("neuralTts", True),
+                neural_python=str(cfg.get("neuralPython") or ""),
             )
-            log(f"voice announcements: ON ({announcer.voice_style})")
+            engine_hint = "edge-neural via 64-bit Python" if cfg.get("neuralTts", True) else "sapi"
+            try:
+                from neural_tts_bridge import neural_tts_status
+
+                status = neural_tts_status(str(cfg.get("neuralPython") or ""))
+                if status.get("ok"):
+                    engine_hint = f"edge-neural ({status.get('voice', 'Guy')})"
+                elif cfg.get("neuralTts", True):
+                    engine_hint = "sapi fallback (neural unavailable)"
+            except Exception:
+                pass
+            log(f"voice announcements: ON ({announcer.voice_style}, {engine_hint})")
         except Exception as exc:
             log(f"voice init failed (continuing without TTS): {exc}")
 
@@ -360,6 +416,7 @@ def main() -> int:
         if bell is not None:
             bell.restore()
             log("bell mute restored.")
+        release_watcher_instance()
     return 0
 
 

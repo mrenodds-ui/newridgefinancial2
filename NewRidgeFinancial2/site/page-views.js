@@ -37,7 +37,8 @@ const PageViews = (function () {
   }
 
   function pageShell(state, body) {
-    return `<article class="pv pv--${esc(state.pageId)} pv--app pv--canvas" data-pv-page="${esc(state.pageId)}">${body}</article>`;
+    const pageClass = state && state.pageId === "hal" ? "ms-page ms-page--hal" : "ms-page";
+    return `<article class="${pageClass}" data-pv-page="${esc(state.pageId)}">${body}</article>`;
   }
 
   function pageChrome(state, bodyHtml, chromeOpts) {
@@ -55,8 +56,8 @@ const PageViews = (function () {
 
   function wireCommon(container, onNavigate) {
     if (!container) return;
-    container.querySelectorAll("[data-pv-nav]").forEach((btn) => {
-      btn.addEventListener("click", () => onNavigate && onNavigate(btn.getAttribute("data-pv-nav")));
+    container.querySelectorAll("[data-ms-nav]").forEach((btn) => {
+      btn.addEventListener("click", () => onNavigate && onNavigate(btn.getAttribute("data-ms-nav")));
     });
     if (!container.dataset.nr2WiredExport) {
       container.dataset.nr2WiredExport = "1";
@@ -205,8 +206,19 @@ const PageViews = (function () {
 
   function chromeOptsFromState(state) {
     const snap = state && state.programSnapshot;
-    const fin = snap && snap.dashboards && snap.dashboards.financial;
     const opts = {};
+    const bundle = snap && snap.importBundle;
+    let syncStatus = (bundle && bundle.syncStatus) || null;
+    const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+    if (db && typeof db.getCachedImportReadiness === "function") {
+      const readiness = db.getCachedImportReadiness();
+      if (readiness && readiness.level) syncStatus = readiness;
+    }
+    opts.importReadiness = syncStatus;
+    if (typeof PageSchema !== "undefined" && PageSchema.LAYOUT_EPOCH === "moonshot-mockup") {
+      return opts;
+    }
+    const fin = snap && snap.dashboards && snap.dashboards.financial;
     if (fin && fin.dateRange) {
       opts.periodLabel = fin.dateRange;
       opts.reportRange = fin.footer && fin.footer.refreshed ? `Refreshed ${fin.footer.refreshed}` : snap.label || "";
@@ -221,13 +233,6 @@ const PageViews = (function () {
       }
     }
     const IL = typeof ImportLoader !== "undefined" ? ImportLoader : null;
-    const bundle = snap && snap.importBundle;
-    let syncStatus = (bundle && bundle.syncStatus) || null;
-    const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
-    if (db && typeof db.getCachedImportReadiness === "function") {
-      const readiness = db.getCachedImportReadiness();
-      if (readiness && readiness.level) syncStatus = readiness;
-    }
     if (IL && typeof IL.buildImportFreshnessBanner === "function" && state && state.pageId) {
       opts.importFreshnessHtml = IL.buildImportFreshnessBanner(bundle, syncStatus, state.pageId);
     }
@@ -249,8 +254,27 @@ const PageViews = (function () {
 
   function renderPageView(container, halData, pageId, onNavigate, halWidgetFeed, programSnapshot) {
     if (!container) return;
+
+    const workstationOnly =
+      typeof window !== "undefined" && !!window.NR2_WORKSTATION_ONLY;
+
+    // PERMANENT: Legacy path killed. Absence of Moonshot deps is fatal (financial app only).
+    if (!workstationOnly) {
+      if (!window.PageSchema || window.PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
+        container.innerHTML =
+          '<div style="background:#900;color:#fff;padding:2rem;font-family:sans-serif;">[NR2] FATAL: Moonshot PageSchema required. Purging cache…</div>';
+        if (window.emergencyPurgeAndReload) window.emergencyPurgeAndReload("MISSING_MOONSHOT_SCHEMA");
+        return;
+      }
+      if (!window.PageCanvas || typeof window.PageCanvas.renderBody !== "function") {
+        container.innerHTML =
+          '<div style="background:#900;color:#fff;padding:2rem;font-family:sans-serif;">[NR2] FATAL: PageCanvas missing. Legacy renderer disabled.</div>';
+        return;
+      }
+    }
+
     const state = buildPageState(halData, pageId, halWidgetFeed, programSnapshot);
-    const Canvas = typeof PageCanvas !== "undefined" ? PageCanvas : null;
+    const Canvas = PageCanvas;
 
     if (!hasPage(pageId) || !Canvas) {
       container.innerHTML = pageShell(
@@ -269,6 +293,7 @@ const PageViews = (function () {
       state,
       pageChrome(state, Canvas.renderBody(pageId, halWidgetFeed, programSnapshot), chromeOptsFromState(state)),
     );
+    document.body.setAttribute("data-nr2-layout", "moonshot-mockup-grid");
     wireCommon(container, onNavigate);
     if (typeof NR2MoonshotUI !== "undefined" && NR2MoonshotUI.enhancePage) {
       NR2MoonshotUI.enhancePage(pageId, container).catch(() => {});

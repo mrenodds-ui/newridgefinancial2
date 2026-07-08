@@ -341,7 +341,9 @@ const Services = (function () {
         /* fall through */
       }
     }
-    const apiResult = await fetchLoopbackJson("/api/posting-queue");
+    const apiResult =
+      (await fetchLoopbackJson("/api/financial/post-queue")) ||
+      (await fetchLoopbackJson("/api/posting-queue"));
     if (apiResult && (apiResult.items || []).length) return apiResult;
     if (isNode) {
       const sqliteResult = readJournalPostingQueueFromSqlite();

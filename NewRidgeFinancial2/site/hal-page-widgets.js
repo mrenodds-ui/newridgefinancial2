@@ -56,14 +56,14 @@ const HalPageWidgets = (function () {
     const tone = statusTone(status);
     const label = statusLabel(status);
     const mark = typeof AppIcons !== "undefined" ? AppIcons.widget(widgetKey) : "";
-    return `<span class="pv-hal-widget__badge pv-hal-widget__badge--${tone}" title="HAL widget ${esc(widgetKey)}">${mark}<span class="pv-hal-widget__badge-copy">HAL · ${esc(label)}</span></span>`;
+    return `<span class="ms-hal-widget__badge ms-hal-widget__badge--${tone}" title="HAL widget ${esc(widgetKey)}">${mark}<span class="ms-hal-widget__badge-copy">HAL · ${esc(label)}</span></span>`;
   }
 
   function halStatusDot(widgetKey, widget) {
     const status = widget ? widget.status : "FAILED";
     const tone = statusTone(status);
     const label = statusLabel(status);
-    return `<span class="pv-hal-status pv-hal-status--${tone}" title="HAL · ${esc(label)} · ${esc(widgetKey)}"></span>`;
+    return `<span class="ms-hal-status ms-hal-status--${tone}" title="HAL · ${esc(label)} · ${esc(widgetKey)}"></span>`;
   }
 
   function widgetRequirementText(widget) {
@@ -87,44 +87,54 @@ const HalPageWidgets = (function () {
 
   function halNote(widget) {
     if (!widget) {
-      return `<p class="pv-hal-widget__note pv-hal-widget__note--off">No data yet — HAL fills this widget automatically once the source export is added. It is not broken.</p>`;
+      return `<p class="ms-hal-widget__note ms-hal-widget__note--off">No data yet — HAL fills this widget automatically once the source export is added. It is not broken.</p>`;
     }
     const status = String(widget.status || "FAILED").toUpperCase();
     const metrics = formatMetrics(widget);
     const needs = widgetRequirementText(widget);
     if (status === "SUCCESS") {
       const parts = [widget.summary, metrics].filter(Boolean);
-      return parts.length ? `<p class="pv-hal-widget__note">${esc(parts.join(" · "))}</p>` : "";
+      return parts.length ? `<p class="ms-hal-widget__note">${esc(parts.join(" · "))}</p>` : "";
     }
     const baseParts = [metrics].filter(Boolean);
-    const base = baseParts.length ? `<p class="pv-hal-widget__note">${esc(baseParts.join(" · "))}</p>` : "";
+    const base = baseParts.length ? `<p class="ms-hal-widget__note">${esc(baseParts.join(" · "))}</p>` : "";
     if (status === "DEGRADED") {
       const needsLine = needs ? ` To complete it, add: ${esc(needs)}.` : "";
-      return `${base}<p class="pv-hal-widget__note pv-hal-widget__note--warn">Partial data — this widget is working and showing what the import currently contains. Some values are waiting on a fuller export.${needsLine}</p>`;
+      return `${base}<p class="ms-hal-widget__note ms-hal-widget__note--warn">Partial data — this widget is working and showing what the import currently contains. Some values are waiting on a fuller export.${needsLine}</p>`;
     }
     const needsLine = needs ? ` Needs: ${esc(needs)}.` : "";
     const configure = canConfigureWidget(widget)
-      ? ` <button type="button" class="pv-hal-widget__configure" data-hal-configure-export="${esc(widget.key)}">Configure export</button>`
+      ? ` <button type="button" class="ms-hal-widget__configure" data-hal-configure-export="${esc(widget.key)}">Configure export</button>`
       : "";
-    return `<p class="pv-hal-widget__note pv-hal-widget__note--off">No data yet — HAL fills this automatically once the required export is added. It is not broken.${needsLine}${configure}</p>`;
+    return `<p class="ms-hal-widget__note ms-hal-widget__note--off">No data yet — HAL fills this automatically once the required export is added. It is not broken.${needsLine}${configure}</p>`;
   }
 
   function widgetsForPage(pageId, feed) {
-    const nav = widgetNavMap();
-    const items = Object.keys(nav)
-      .filter((key) => nav[key] === pageId)
-      .map((key) => ({ key, widget: widgetFromFeed(feed, key) }));
+    const schema =
+      typeof PageSchema !== "undefined" && PageSchema.widgetsFor ? PageSchema.widgetsFor(pageId) : null;
+    let items;
+    if (schema && schema.length) {
+      items = schema.map((entry) => ({
+        key: entry.key,
+        widget: widgetFromFeed(feed, entry.key),
+      }));
+    } else {
+      const nav = widgetNavMap();
+      items = Object.keys(nav)
+        .filter((key) => nav[key] === pageId)
+        .map((key) => ({ key, widget: widgetFromFeed(feed, key) }));
+      if (pageId === "taxes") {
+        ["quickbooksProfitLossDetail", "ebitdaNormalization"].forEach((key) => {
+          if (!items.some((item) => item.key === key)) {
+            items.push({ key, widget: widgetFromFeed(feed, key) });
+          }
+        });
+      }
+    }
     if (pageId === "office-manager" && feed && feed.officeWidgets) {
       Object.keys(feed.officeWidgets).forEach((key) => {
         if (!items.some((item) => item.key === key)) {
           items.push({ key, widget: feed.officeWidgets[key] });
-        }
-      });
-    }
-    if (pageId === "taxes") {
-      ["quickbooksProfitLossDetail", "ebitdaNormalization"].forEach((key) => {
-        if (!items.some((item) => item.key === key)) {
-          items.push({ key, widget: widgetFromFeed(feed, key) });
         }
       });
     }
@@ -152,7 +162,7 @@ const HalPageWidgets = (function () {
     const parts = [`${ready} ready`];
     if (partial) parts.push(`${partial} partial`);
     if (empty) parts.push(`${empty} waiting on export`);
-    return `<div class="pv-hal-strip pv-hal-strip--${tone}" role="status"><span class="pv-hal-strip__mark">${typeof AppIcons !== "undefined" ? AppIcons.hal() : ""}</span><strong>HAL</strong><span>${esc(parts.join(" · "))} on this page</span><button type="button" class="pv-hal-strip__force" data-hal-force-place="1" data-hal-page="${esc(pageId)}">Force HAL placement</button></div>`;
+    return `<div class="ms-hal-strip ms-hal-strip--${tone}" role="status"><span class="ms-hal-strip__mark">${typeof AppIcons !== "undefined" ? AppIcons.hal() : ""}</span><strong>HAL</strong><span>${esc(parts.join(" · "))} on this page</span><button type="button" class="ms-hal-strip__force" data-hal-force-place="1" data-hal-page="${esc(pageId)}">Force HAL placement</button></div>`;
   }
 
   function canvasPageStrip(pageId, feed) {
@@ -163,7 +173,7 @@ const HalPageWidgets = (function () {
     if (partial) parts.push(`${partial} partial`);
     if (empty) parts.push(`${empty} waiting on export`);
     const tone = ready === total ? "ok" : ready > 0 || partial > 0 ? "warn" : "off";
-    return `<div class="pv-canvas-hal-strip pv-hal-strip--${tone}" role="status"><span class="pv-hal-strip__mark">${mark}</span><strong>HAL</strong><span>${esc(parts.join(" · "))} on this page</span></div>`;
+    return `<div id="nr2-hal-readiness" class="ms-hal-readiness-strip ms-hal-strip--${tone}" role="status"><span class="ms-hal-strip__mark">${mark}</span><strong>HAL</strong><span>${esc(parts.join(" · "))} on this page</span></div>`;
   }
 
   function panelChrome(widgetKey, title, feed, opts) {
@@ -177,7 +187,7 @@ const HalPageWidgets = (function () {
       note = halNote(widget);
     } else if (widgetKey && dataOnly && widget && String(widget.status || "").toUpperCase() === "SUCCESS") {
       const metrics = formatMetrics(widget);
-      if (metrics) note = `<p class="pv-hal-widget__note">${esc(metrics)}</p>`;
+      if (metrics) note = `<p class="ms-hal-widget__note">${esc(metrics)}</p>`;
     }
     const cmdLabel = (widget && widget.title) || title || widgetKey;
     const halCmd = widgetKey && cmdLabel ? `Explain ${cmdLabel}` : "";
@@ -185,13 +195,13 @@ const HalPageWidgets = (function () {
     const attrs = widgetKey ? ` data-hal-widget-key="${esc(widgetKey)}"${cmdAttr}` : "";
     const icon =
       widgetKey && typeof AppIcons !== "undefined"
-        ? `<span class="pv-canvas-panel__ico">${AppIcons.widget(widgetKey)}</span>`
+        ? `<span class="ms-panel-ico">${AppIcons.widget(widgetKey)}</span>`
         : "";
     return {
       badge,
       note,
       attrs,
-      toneClass: widgetKey ? ` pv-hal-widget pv-hal-widget--${tone}` : "",
+      toneClass: widgetKey ? ` ms-hal-widget ms-hal-widget--${tone}` : "",
       icon,
     };
   }

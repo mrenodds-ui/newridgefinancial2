@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { execSync } from "node:child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const siteDir = join(__dirname, "site");
@@ -36,6 +37,7 @@ require(join(siteDir, "hal-page-widgets.js"));
 require(join(siteDir, "hal-live-widget-bridge.js"));
 const HalPilotWidgets = require(join(siteDir, "hal-pilot-widgets.js"));
 require(join(siteDir, "page-schema.js"));
+require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
 require(join(siteDir, "tax-engine.js"));
 require(join(siteDir, "page-chrome.js"));
 require(join(siteDir, "month-end-close.js"));
@@ -54,48 +56,60 @@ SnapshotStorePage.invalidate("pages-preview");
 const previewSnapshot = await SnapshotStorePage.get(() => ServicesMod.buildProgramSnapshotCore());
 const previewWidgetFeed = HalSkills.buildWidgetFeed(previewSnapshot);
 
+const MOCKUP_EPOCH = PageSchema.LAYOUT_EPOCH === "moonshot-mockup";
+
 const FUNCTIONAL_PAGES = [
-  { id: "financial", checks: ["pv-canvas-metric-grid", "pv-canvas-panel", "Production MTD"] },
-  { id: "taxes", checks: ["pv-canvas-metric-grid", "Book-to-tax bridge", "Reasonable compensation scenarios", "MemoAI evidence"] },
-  { id: "softdent", checks: ["pv-canvas-metric-grid", "Care Delivery Summary", "Case Acceptance Rate"] },
-  { id: "quickbooks", checks: ["pv-canvas-metric-grid", "pv-canvas-panel", "Loss Summary (YTD)", "EBITDA Normalization"] },
-  { id: "ar", checks: ["pv-canvas-metric-grid", "Follow-up Queue", "Outstanding Claims"] },
-  { id: "claims", checks: ["pv-canvas-metric-grid", "Insurance Claims Workbench", "Open Insurance Claims"] },
-  { id: "narratives", checks: ["pv-canvas-metric-grid", "pv-canvas-textarea", "Narrative Composer", "Draft history"] },
-  { id: "documents", checks: ["pv-canvas-panel", "Recent Accounting Documents", "Source breakdown"] },
-  { id: "library", checks: ["pv-canvas-metric-grid", "pv-canvas-search", "Document Library", "Library &amp; Preview"] },
-  { id: "office-manager", checks: ["pv-canvas-metric-grid", "Today&#039;s Focus", "Office task queue", "Practice data"] },
+  { id: "financial", checks: ["widget-grid", "widget-card", "Production MTD"] },
+  { id: "taxes", checks: ["widget-grid", "widget-card", "Book-to-tax bridge", "Reasonable compensation scenarios", "MemoAI evidence"] },
+  { id: "softdent", checks: ["widget-grid", "widget-card", "Care Delivery Summary", "Case Acceptance Rate", "Operatory Schedule", "funnel-label"] },
+  { id: "quickbooks", checks: ["dashboard-grid", "kpi-card", "sync-badge", "Loss Trend", "Operating Expenses"] },
+  { id: "ar", checks: ["widget-grid", "widget-card", "kpi-grid", "heatmap-grid", "queue-list", "Outstanding Claims"] },
+  { id: "claims", checks: ["widget-grid", "widget-card", "kanban-board", "claim-card", "Open Insurance Claims"] },
+  { id: "narratives", checks: ["composer-grid", "composer-textarea", "Procedure Codes", "Draft history"] },
+  { id: "documents", checks: ["widget-card", "data-table", "Recent Accounting Documents", "Source breakdown"] },
+  { id: "library", checks: ["widget-grid", "search-box", "document-grid", "Document Library", "Library &amp; Preview"] },
+  { id: "office-manager", checks: ["widget-grid", "widget-card", "stats-bar", "Today&#039;s Focus", "Office task queue", "Practice data"] },
 ];
 
 const HIGH_TECH_SURFACES = {
-  financial: ["pv-canvas-command", "pv-canvas-panel"],
-  taxes: ["pv-canvas-command", "pv-canvas-panel"],
-  softdent: ["pv-canvas-command", "pv-canvas-panel"],
-  quickbooks: ["pv-canvas-command", "pv-canvas-panel"],
-  ar: ["pv-canvas-command", "pv-hal-kanban", "pv-canvas-panel"],
-  claims: ["pv-canvas-command", "pv-hal-kanban"],
-  narratives: ["pv-canvas-command", "pv-hal-editor"],
-  documents: ["pv-canvas-command", "pv-hal-pdf", "pv-canvas-panel"],
-  library: ["pv-canvas-command", "pv-hal-pdf"],
-  "office-manager": ["pv-canvas-command", "pv-hal-kanban", "pv-canvas-panel"],
+  financial: ["widget-card", "provider-list", "chart-container"],
+  taxes: ["widget-card", "tax-split-chart"],
+  softdent: ["widget-card", "funnel-chart", "funnel-label", "operatory-grid"],
+  quickbooks: ["dashboard-grid", "kpi-card"],
+  ar: ["widget-card", "kpi-grid", "heatmap-grid", "queue-list"],
+  claims: ["widget-card", "kanban-board", "claim-card", "side-panel"],
+  narratives: ["composer-grid", "composer-textarea", "panel"],
+  documents: ["widget-card", "doc-preview", "data-table"],
+  library: ["widget-card", "doc-preview", "document-grid"],
+  "office-manager": ["widget-card", "stats-bar", "kanban-board"],
 };
 
 for (const page of FUNCTIONAL_PAGES) {
   assert.ok(PageViews.hasPage(page.id), `${page.id} page must be routable`);
   const html = await PageViews.previewPageHtml(halData, page.id, previewWidgetFeed, previewSnapshot);
   assert.ok(!html.includes("pv--mock-image"), `${page.id} must NOT render a mockup image`);
-  assert.ok(html.includes("pv--app"), `${page.id} must render the functional app surface`);
-  assert.ok(html.includes("pv-canvas-hero"), `${page.id} must use the canvas page hero`);
-  assert.ok(html.includes("pv-canvas-insight") || html.includes("pv-filter-pill"), `${page.id} must use canvas toolbar or insight chrome`);
+  assert.ok(html.includes("ms-page"), `${page.id} must render mockup ms-page surface`);
+  assert.ok(html.includes("ms-page-chrome") || html.includes("hero"), `${page.id} must use mockup page chrome`);
+  assert.ok(html.includes("hal-insight") || html.includes("filter-bar"), `${page.id} must use mockup insight or filter bar`);
   if (page.id !== "office-manager") {
     assert.ok(
-      html.includes("pv-canvas-insight") || html.includes("pv-filter-pill"),
-      `${page.id} must use canvas insight or filter toolbar`,
+      html.includes("hal-insight") || html.includes("filter-bar"),
+      `${page.id} must use insight or filter toolbar`,
     );
   }
   for (const check of page.checks) {
     assert.ok(html.includes(check), `${page.id} must include ${check}`);
   }
+  assert.ok(!html.includes("pv-canvas-hero"), `${page.id} must not render legacy pv-canvas hero`);
+  assert.ok(!html.includes("pv-canvas-body"), `${page.id} must not render legacy pv-canvas body`);
+  assert.ok(!html.includes("pv-canvas-grid-split"), `${page.id} must not render legacy pv-canvas grid split`);
+  assert.ok(!html.includes("pv-card"), `${page.id} must not use legacy pv-card panels`);
+  assert.ok(!html.includes("pv-table"), `${page.id} must not use legacy pv-table markup`);
+  assert.ok(!html.includes("pv-ms-"), `${page.id} must not use legacy pv-ms chart classes`);
+  assert.ok(!html.includes("pv-canvas-"), `${page.id} must not use legacy pv-canvas internals`);
+  assert.ok(!html.includes("pv-badge"), `${page.id} must not use legacy pv-badge`);
+  assert.ok(!html.match(/\bclass="[^"]*\bpv-/), `${page.id} must not use legacy pv-* class prefix in markup`);
+  assert.ok(!html.match(/\bhp-[a-z]/), `${page.id} must not use legacy hp-* class prefix`);
   const schema = PageSchema.byId(page.id);
   for (const widget of (schema && schema.widgets) || []) {
     assert.ok(
@@ -107,9 +121,12 @@ for (const page of FUNCTIONAL_PAGES) {
   if (page.id === "financial") {
     assert.ok(!html.includes("Dr. Adams"), "financial page must not render sample provider names");
     assert.ok(!html.includes("Hygiene Team"), "financial page must not render legacy sample provider names");
-    assert.ok(html.includes("pv-canvas-panel") || html.includes("pv-canvas-metric-grid"), "financial page must use canvas widget panels");
-    assert.ok(html.includes("pv-canvas-insight"), "financial page must show schema insight callout");
-    assert.ok(html.includes("pv-canvas-metric-grid"), "financial page must show API-backed KPI metric grid");
+    assert.ok(html.includes("widget-grid") || html.includes("widget-card"), "financial page must use mockup widget grid");
+    assert.ok(
+      html.includes("hal-insight") || html.includes("HAL Insight"),
+      "financial page must show HAL insight banner",
+    );
+    assert.ok(html.includes("widget-card") || html.includes("kpi-large"), "financial page must use mockup widget cards");
     assert.ok(html.includes("data-hal-widget-key"), "financial page must wire HAL widget keys on KPI tiles");
   }
   for (const cls of HIGH_TECH_SURFACES[page.id] || []) {
@@ -121,7 +138,8 @@ assert.equal(PageViews.hasPage("hal"), false, "HAL must route to the real HAL co
 
 assert.ok(!appJs.includes("127.0.0.1:8765/api") && !appJs.includes('"/api/hal'), "app.js must not reference NR2 desktop backend API routes");
 assert.ok(indexHtml.includes('id="appPage"'), "index must have app page container");
-assert.ok(indexHtml.includes('id="halPageRoot"'), "index must have HAL root container");
+assert.ok(!indexHtml.includes('id="halPageRoot"'), "index must not use legacy HAL root container");
+assert.ok(!indexHtml.includes('id="halPage"'), "index must not use legacy HAL page shell");
 assert.ok(!indexHtml.includes("page-sample-data.js"), "index must not load mock sample data");
 assert.ok(!appJs.includes("Kiera Serrano"), "must not use fake operator name");
 assert.ok(appJs.includes("renderRuntimeModeBanner"), "app must render an explicit browser/degraded-mode banner");
@@ -134,6 +152,27 @@ assert.ok(indexHtml.includes("hal-office-manager.js"), "index must load HalOffic
 assert.ok(indexHtml.includes("hal-page-widgets.js"), "index must load HalPageWidgets");
 assert.ok(indexHtml.includes("hal-widget-master-chart.js"), "index must load HalWidgetMasterChart");
 assert.ok(indexHtml.includes("hal-live-widget-bridge.js"), "index must load HalLiveWidgetBridge");
+assert.ok(indexHtml.includes("NR2_FINANCIAL_ONLY"), "financial index must declare NR2_FINANCIAL_ONLY");
+assert.ok(indexHtml.includes("nr2-moonshot-mockup-chrome.js"), "financial index must load mockup chrome");
+assert.ok(indexHtml.includes('class="nav-rail"'), "financial index must use mockup nav-rail");
+const navRailHtml =
+  typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.renderNavRail
+    ? MoonshotMockupChrome.renderNavRail("financial")
+    : "";
+assert.ok(navRailHtml.includes("nav-section"), "mockup nav must render grouped sections");
+assert.ok(navRailHtml.includes("nav-practice"), "mockup nav must render practice block");
+assert.ok(navRailHtml.includes('data-nav="hal"'), "mockup nav must include HAL");
+assert.ok(navRailHtml.includes("nav-sublist"), "active page nav must render widget subpages");
+assert.ok(navRailHtml.includes("Practice Financial Overview"), "financial nav must list widget subpages");
+assert.ok(indexHtml.includes("nr2-moonshot-mockup-theme.css"), "financial index must load moonshot mockup theme");
+assert.ok(indexHtml.includes("nr2-mockup-page-vocabulary.css"), "financial index must load mockup page vocabulary CSS");
+assert.ok(indexHtml.includes("data-nr2-program"), "financial index must tag html as financial program");
+assert.equal(
+  typeof PageSchema !== "undefined" ? PageSchema.LAYOUT_EPOCH : null,
+  "moonshot-mockup",
+  "PageSchema.LAYOUT_EPOCH must be moonshot-mockup",
+);
+assert.equal(buildManifest.REQUIRED_EPOCH, "moonshot-mockup", "nr2-build.json must require moonshot-mockup epoch");
 assert.ok(indexHtml.includes("page-schema.js"), "index must load PageSchema");
 assert.ok(indexHtml.includes("page-chrome.js"), "index must load PageChrome");
 assert.ok(indexHtml.includes("desktop-boot.js"), "index must load desktop boot gate");
@@ -153,7 +192,7 @@ assert.equal(
   expectedAssetVersion,
   "PageSchema.SCHEMA_VERSION must match nr2-build.json",
 );
-assert.equal(HalPilotWidgets.LEGACY_WIDGET_SCHEMA.mode, "canvas-feed", "staff pages must use canvas feed HAL wiring");
+assert.equal(HalPilotWidgets.CANVAS_WIDGET_SCHEMA.mode, "canvas-feed", "staff pages must use canvas feed HAL wiring");
 assert.ok(!stylesCss.includes(".pv-bento"), "styles must not include legacy bento layout rules");
 assert.ok(stylesCss.includes(".pv-canvas-hero"), "styles must include canvas page hero");
 assert.ok(stylesCss.includes(".pv-hal-kanban"), "styles must include Kanban plain styling");
@@ -224,7 +263,7 @@ const diagBundle = {
 };
 const diagnostics = ImportDiagnostics.evaluateBundle(diagBundle, manifest);
 assert.ok(diagnostics.datasets.length === Object.keys(manifest.datasets).length, "diagnostics must evaluate all manifest datasets");
-["softdent.newPatients", "softdent.treatmentPlans", "softdent.caseAcceptance", "softdent.hygieneRecall"].forEach((datasetKey) => {
+["softdent.newPatients", "softdent.treatmentPlans", "softdent.caseAcceptance", "softdent.hygieneRecall", "softdent.operatory"].forEach((datasetKey) => {
   const item = diagnostics.datasets.find((row) => row.datasetKey === datasetKey);
   assert.ok(item && item.status === "missing", `${datasetKey} must report missing until exports exist`);
 });
@@ -264,5 +303,8 @@ if (priorBridge === undefined) {
 } else {
   global.DesktopBridge = priorBridge;
 }
+
+execSync("node scripts/rebuild-moonshot-site.mjs --dry-run", { cwd: __dirname, stdio: "pipe" });
+execSync("node scripts/audit-page-schema.mjs", { cwd: __dirname, stdio: "inherit" });
 
 console.log("page validation passed");

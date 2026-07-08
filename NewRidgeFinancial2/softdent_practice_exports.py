@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -366,6 +367,7 @@ def read_practice_export_datasets(db_path: Path | None = None) -> dict[str, dict
         "treatmentPlans": None,
         "caseAcceptance": None,
         "hygieneRecall": None,
+        "operatory": None,
     }
     if not db_path or not db_path.is_file():
         return out
@@ -388,7 +390,57 @@ def read_practice_export_datasets(db_path: Path | None = None) -> dict[str, dict
         out["caseAcceptance"] = _practice_dataset(ca_rows, db_path=db_path, source_file="case_acceptance.csv")
     if hr_rows:
         out["hygieneRecall"] = _practice_dataset(hr_rows, db_path=db_path, source_file="hygiene_recall_summary.csv")
+    op_path = softdent_import_dir() / "operatory_schedule.json"
+    if op_path.is_file():
+        chairs = _read_operatory_chairs_file(op_path)
+        if chairs is not None:
+            out["operatory"] = {
+                "sourceFile": op_path.name,
+                "sourcePath": str(op_path),
+                "modifiedAt": datetime.fromtimestamp(op_path.stat().st_mtime, tz=timezone.utc).isoformat(),
+                "operatoryChairs": chairs,
+                "rows": [],
+                "readSource": "cache",
+                "sourceKind": "operatory-export",
+            }
     return out
+
+
+def _read_operatory_chairs_file(path: Path) -> list[dict[str, Any]] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    chairs = payload.get("operatoryChairs")
+    if not isinstance(chairs, list):
+        return None
+    return chairs
+
+
+def _aggregate_operatory_from_db(conn: sqlite3.Connection) -> list[dict[str, Any]] | None:
+    for table in ("operatory_schedule", "operatory_chairs", "chair_schedule"):
+        if not _table_exists(conn, table):
+            continue
+        columns = _table_columns(conn, table)
+        json_col = next((name for name in ("payload_json", "schedule_json", "operatory_json") if name in columns), None)
+        if not json_col:
+            continue
+        cur = conn.cursor()
+        cur.execute(f"SELECT {json_col} FROM {table} ORDER BY rowid DESC LIMIT 1")
+        row = cur.fetchone()
+        if not row or not row[0]:
+            continue
+        try:
+            payload = json.loads(str(row[0]))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("operatoryChairs"), list):
+            return payload["operatoryChairs"]
+        if isinstance(payload, list):
+            return payload
+    return None
 
 
 def sync_practice_exports(db_path: Path | None = None, destination: Path | None = None) -> dict[str, Any]:
@@ -439,6 +491,13 @@ def sync_practice_exports(db_path: Path | None = None, destination: Path | None 
             hr_path = destination / "hygiene_recall_summary.csv"
             _write_csv(hr_path, hr_rows, ["Period", "HygieneCompleted", "RecallDue"])
             written.append(hr_path.name)
+
+        op_path = destination / "operatory_schedule.json"
+        if not op_path.is_file() or _read_operatory_chairs_file(op_path) is None:
+            op_chairs = _aggregate_operatory_from_db(conn)
+            if op_chairs:
+                op_path.write_text(json.dumps({"operatoryChairs": op_chairs}, indent=2), encoding="utf-8")
+                written.append(op_path.name)
     finally:
         conn.close()
 

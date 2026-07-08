@@ -97,7 +97,7 @@ const HalCapabilityIndex = (function () {
     if (typeof HalVoice !== "undefined") {
       voice += 10;
       if (HalVoice.checkNeuralTts) voice += 5;
-      if (HalVoice.speakMirandaBriefing || HalVoice.speakHal9000Briefing) voice += 5;
+      if (HalVoice.speakHalBriefing || HalVoice.speakHal9000Briefing) voice += 5;
     }
     voice = Math.min(20, voice);
 
@@ -170,7 +170,7 @@ const HalCapabilityIndex = (function () {
     const chat9000 = (halModels && halModels.config && halModels.config.chat9000) || {};
     if (auto.hal9000Voice) voice9000 += 300;
     if (chat9000.enabled !== false && chat9000.hal9000Persona !== false) voice9000 += 450;
-    if (typeof HalVoice !== "undefined" && HalVoice.speakHal9000Briefing) voice9000 += 350;
+    if (typeof HalVoice !== "undefined" && HalVoice.speakHalBriefing) voice9000 += 350;
     voice9000 = Math.min(750, voice9000);
 
     let integration = 0;
