@@ -233,6 +233,30 @@ const NR2Tier3 = (function () {
     bindCitationClicks(host.closest(".ms-page") || document.getElementById("appPage") || document.body);
   }
 
+  async function hubAuthHeadersForNotify() {
+    const headers = { "Content-Type": "application/json" };
+    if (typeof window !== "undefined" && window.NR2_HUB_TOKEN) {
+      headers["X-Hub-Token"] = String(window.NR2_HUB_TOKEN);
+      return headers;
+    }
+    try {
+      const port = typeof window !== "undefined" && window.NR2_LOOPBACK_PORT ? Number(window.NR2_LOOPBACK_PORT) : 8765;
+      const host = typeof window !== "undefined" && window.location ? window.location.hostname || "127.0.0.1" : "127.0.0.1";
+      const protocol = typeof window !== "undefined" && window.location ? window.location.protocol || "http:" : "http:";
+      const res = await fetch(`${protocol}//${host}:${port}/api/app-info`, { cache: "no-store" });
+      if (res.ok) {
+        const info = await res.json();
+        if (info && info.hubToken && typeof window !== "undefined") {
+          window.NR2_HUB_TOKEN = String(info.hubToken);
+          headers["X-Hub-Token"] = window.NR2_HUB_TOKEN;
+        }
+      }
+    } catch {
+      /* optional */
+    }
+    return headers;
+  }
+
   async function publishHeroMetrics(pageId) {
     if (!isFinancialHub()) return;
     const pid = pageId || "financial";
@@ -256,9 +280,10 @@ const NR2Tier3 = (function () {
       const port = typeof window !== "undefined" && window.NR2_LOOPBACK_PORT ? Number(window.NR2_LOOPBACK_PORT) : 8765;
       const host = typeof window !== "undefined" && window.location ? window.location.hostname || "127.0.0.1" : "127.0.0.1";
       const protocol = typeof window !== "undefined" && window.location ? window.location.protocol || "http:" : "http:";
+      const headers = await hubAuthHeadersForNotify();
       await fetch(`${protocol}//${host}:${port}/api/hub/notify`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload),
         cache: "no-store",
       });
@@ -288,12 +313,18 @@ const NR2Tier3 = (function () {
     if (!isWorkstation()) return;
     const host = root || document.getElementById("workstationPage") || document.body;
     try {
-      const port = typeof window !== "undefined" && window.location ? String(window.location.port || "8766") : "8766";
-      const hostname = typeof window !== "undefined" && window.location ? window.location.hostname || "127.0.0.1" : "127.0.0.1";
-      const protocol = typeof window !== "undefined" && window.location ? window.location.protocol || "http:" : "http:";
-      const res = await fetch(`${protocol}//${hostname}:${port}/api/hub/last-broadcast`, { cache: "no-store" });
-      if (!res.ok) return;
-      const data = await res.json();
+      let data = null;
+      if (typeof HalHubClient !== "undefined" && typeof HalHubClient.fetchLastBroadcast === "function") {
+        data = await HalHubClient.fetchLastBroadcast();
+      } else {
+        const protocol = typeof window !== "undefined" && window.location ? window.location.protocol || "http:" : "http:";
+        const hostname = typeof window !== "undefined" && window.location ? window.location.hostname || "127.0.0.1" : "127.0.0.1";
+        const headers = {};
+        if (typeof window !== "undefined" && window.NR2_HUB_TOKEN) headers["X-Hub-Token"] = String(window.NR2_HUB_TOKEN);
+        const res = await fetch(`${protocol}//${hostname}:8765/api/hub/last-broadcast`, { cache: "no-store", headers });
+        if (!res.ok) return;
+        data = await res.json();
+      }
       const broadcast =
         data && data.kind === "hero-metrics"
           ? data

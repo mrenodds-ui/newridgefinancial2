@@ -114,6 +114,42 @@ class HalHubSecurityTests(unittest.TestCase):
         self.assertFalse(hub_notify_access_ok("http://127.0.0.1:8766", "bad"))
         self.assertFalse(hub_notify_access_ok("http://127.0.0.1:8765", token))
 
+    def test_hub_notify_loopback_financial_with_token(self) -> None:
+        from unittest.mock import MagicMock
+
+        import bottle
+
+        from hal_hub import hub_notify_access_ok, resolve_hub_token
+
+        token = resolve_hub_token()
+        orig_request = bottle.request
+        try:
+            bottle.request = MagicMock()
+            bottle.request.remote_addr = "127.0.0.1"
+            bottle.request.headers = {"Host": "127.0.0.1:8765"}
+            self.assertTrue(hub_notify_access_ok(None, token))
+            bottle.request.headers = {"Host": "127.0.0.1:8766"}
+            self.assertFalse(hub_notify_access_ok(None, token))
+        finally:
+            bottle.request = orig_request
+
+    def test_record_hub_broadcast_strips_text(self) -> None:
+        from hal_hub import last_hub_broadcast, record_hub_broadcast
+
+        record_hub_broadcast(
+            {
+                "from": "Test",
+                "text": "secret message body",
+                "kind": "hero-metrics",
+                "heroMetrics": [{"label": "Collections", "value": "$1"}],
+            }
+        )
+        broadcast = last_hub_broadcast()
+        self.assertNotIn("text", broadcast)
+        self.assertEqual(broadcast.get("from"), "Test")
+        self.assertEqual(broadcast.get("kind"), "hero-metrics")
+        self.assertEqual(len(broadcast.get("heroMetrics") or []), 1)
+
     def test_hub_notify_mutation_auth_exempt_with_token(self) -> None:
         """Workstation hub POST must not require browser session CSRF (Moonshot Phase 5)."""
         from nr2_http_server import _browser_mutation_auth_ok

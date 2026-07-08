@@ -1,9 +1,9 @@
-# Moonshot Fullest Extent — Complete (hal-10093)
+# Moonshot Fullest Extent — Complete (hal-10094)
 
-**Verdict:** Practical ceiling reached for a solo dental practice (per `MOONSHOT_FULLEST_EXTENT_REPORT_2026-07-08.md`). Visual/HAL program through hal-10085; **Moonshot post-ceiling data lane** at hal-10090; **Phase D claims narrative workflow** at hal-10092; **Phase E QuickBooks depth** at hal-10093.
+**Verdict:** Practical ceiling reached for a solo dental practice (per `MOONSHOT_FULLEST_EXTENT_REPORT_2026-07-08.md`). Visual/HAL program through hal-10085; **Moonshot post-ceiling data lane** at hal-10090; **Phase D claims narrative workflow** at hal-10092; **Phase E QuickBooks depth** at hal-10093; **Phase G hub hardening** at hal-10094.
 
-**Build:** `hal-10093`  
-**Reload:** `https://127.0.0.1:8765/?v=hal-10093&__nr2_purge=1`
+**Build:** `hal-10094`  
+**Reload:** `https://127.0.0.1:8765/?v=hal-10094&__nr2_purge=1`
 
 ## Phase completion matrix
 
@@ -27,6 +27,7 @@
 | hal-10090 | Data | Payment/adjustment fix, analytics widget fallback, operatory contract, procedures/claim status exports, hub sign-off | Done |
 | hal-10092 | Phase D | narrative-review.js, draft_insurance_narrative HAL tool, claims UI draft/save + citation chips, agent contract v14 | Done |
 | hal-10093 | Phase E | QB cold empty states, deposit probe export, collection_deposit_variance, proactive deposit alerts | Done |
+| hal-10094 | Phase G | Hub token hardening, hero mirror 8765 poll, loopback financial POST, sign-off G2/G3/G5 | Done |
 
 ## Engineering sign-off
 

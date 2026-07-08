@@ -1838,8 +1838,12 @@ async function main() {
   assert(readFileSync(join(__dirname, "nr2_analytics.py"), "utf8").includes("collection_deposit_variance"), "Python analytics must expose collection_deposit_variance");
   assert(readFileSync(join(__dirname, "import_sync.py"), "utf8").includes("quickbooks_deposits_summary.json"), "import sync must write deposit probe sidecar");
   assert(readFileSync(join(siteDir, "hal-proactive.js"), "utf8").includes("analyzeCollectionDepositVariance"), "proactive HAL must alert on deposit variance");
-  assert(readFileSync(join(__dirname, "docs", "MOONSHOT_PHASE5_HUB_PROTOCOL.md"), "utf8").includes("hal-10093"), "hub protocol doc must reflect hal-10093 sign-off");
-  assert(completeDoc.includes("hal-10093") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10093");
+  assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("hubAuthHeadersForNotify"), "hero metrics publish must attach hub token");
+  assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("fetchLastBroadcast"), "hero mirror must poll via HalHubClient");
+  assert(readFileSync(join(siteDir, "hal-hub-client.js"), "utf8").includes("fetchLastBroadcast"), "HalHubClient must expose fetchLastBroadcast");
+  assert(readFileSync(join(__dirname, "hal_hub.py"), "utf8").includes("hub_token_header_valid(header)"), "hub notify must validate token before origin");
+  assert(readFileSync(join(__dirname, "docs", "MOONSHOT_PHASE5_HUB_PROTOCOL.md"), "utf8").includes("hal-10094"), "hub protocol doc must reflect hal-10094 sign-off");
+  assert(completeDoc.includes("hal-10094") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10094");
 
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;

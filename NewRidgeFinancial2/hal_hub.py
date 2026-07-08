@@ -216,9 +216,21 @@ def hub_notify_access_ok(origin: str | None = None, header: str | None = None) -
         import bottle
 
         header = bottle.request.headers.get("X-Hub-Token")
-    if not hub_notify_origin_ok(origin):
+    if not hub_token_header_valid(header):
         return False
-    return hub_token_header_valid(header)
+    if hub_notify_origin_ok(origin):
+        return True
+    try:
+        import bottle
+
+        remote = str(getattr(bottle.request, "remote_addr", "") or "")
+        if remote in ("127.0.0.1", "::1", "localhost"):
+            host = str(bottle.request.headers.get("Host") or "").lower()
+            if ":8765" in host or host.endswith("8765"):
+                return True
+    except Exception:
+        pass
+    return False
 
 
 def record_hub_broadcast(payload: dict) -> None:

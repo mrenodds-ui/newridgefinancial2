@@ -1,8 +1,8 @@
 {
-  "BUILD_ID": "hal-10093",
-  "assetVersion": "hal-10093",
-  "schemaVersion": "hal-10093",
+  "BUILD_ID": "hal-10094",
+  "assetVersion": "hal-10094",
+  "schemaVersion": "hal-10094",
   "REQUIRED_EPOCH": "moonshot-mockup",
-  "builtAt": "2026-07-08T12:00:00.000Z",
-  "notes": "Phase E QuickBooks depth: deposit probe export, collection_deposit_variance, proactive briefing alerts (hal-10093)."
+  "builtAt": "2026-07-08T13:12:16.198Z",
+  "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server."
 }

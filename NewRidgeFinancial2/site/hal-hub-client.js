@@ -131,6 +131,10 @@ const HalHubClient = (function () {
     });
   }
 
+  async function fetchLastBroadcast() {
+    return hubFetch("/api/hub/last-broadcast", { method: "GET" });
+  }
+
   async function notifyHubBroadcast(partial) {
     const payload = partial || {};
     return hubFetch("/api/hub/notify", {
@@ -172,6 +176,7 @@ const HalHubClient = (function () {
     fetchStations,
     sendHeartbeat,
     notifyHubBroadcast,
+    fetchLastBroadcast,
     pushMorningBriefingToWorkstation,
   };
 })();

@@ -19,7 +19,7 @@ const repoRoot = join(root, "..");
 const site = join(root, "site");
 const mockups = join(repoRoot, ".local_logs", "moonshot_financial_eval", "page_mockups");
 const logDir = join(repoRoot, ".local_logs", "moonshot_financial_eval");
-const BUILD = "hal-10093";
+const BUILD = "hal-10094";
 const require = createRequire(import.meta.url);
 
 const results = [];
@@ -203,6 +203,30 @@ async function checkOffline(ctx) {
   } else {
     record(0, "Canonical operatoryChairs only", "FAIL", "fallback chain still present");
   }
+
+  // Phase G offline wiring
+  const tier3Src = readFileSync(join(site, "nr2-tier3.js"), "utf8");
+  const hubClientSrc = readFileSync(join(site, "hal-hub-client.js"), "utf8");
+  const hubPy = readFileSync(join(root, "hal_hub.py"), "utf8");
+  if (
+    tier3Src.includes("hubAuthHeadersForNotify") &&
+    tier3Src.includes("fetchLastBroadcast") &&
+    tier3Src.includes(":8765/api/hub/last-broadcast")
+  ) {
+    record(15, "Phase G hero mirror wiring", "PASS", "8765 poll + token on publishHeroMetrics");
+  } else {
+    record(15, "Phase G hero mirror wiring", "FAIL", "nr2-tier3.js missing hub token or 8765 poll");
+  }
+  if (hubClientSrc.includes("fetchLastBroadcast")) {
+    record(16, "HalHubClient fetchLastBroadcast", "PASS", "workstation polls financial hub");
+  } else {
+    record(16, "HalHubClient fetchLastBroadcast", "FAIL", "missing fetchLastBroadcast export");
+  }
+  if (hubPy.includes(":8765") && hubPy.includes("hub_token_header_valid")) {
+    record(17, "Hub auth matches protocol", "PASS", "token-first + loopback 8765 hero POST");
+  } else {
+    record(17, "Hub auth matches protocol", "FAIL", "hal_hub.py loopback path incomplete");
+  }
 }
 
 async function checkLive(base8765, base8766) {
@@ -264,11 +288,16 @@ async function checkLive(base8765, base8766) {
     record(7, "Reconciliation 768px scroll", "SKIP", String(e.message).slice(0, 120));
   }
 
-  // #5 hub broadcast API path
+  // #5 hub broadcast API path (Phase G: G2, G3, G5)
   try {
     const info = await fetchUrl(`${base8765}/api/app-info`);
     const token = JSON.parse(info.body).hubToken;
     if (!token) throw new Error("no hubToken");
+    const noToken = await fetchUrl(`${base8765}/api/hub/notify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "http://127.0.0.1:8766" },
+      body: JSON.stringify({ from: "SignoffRunner", target: "all", channel: "office" }),
+    });
     const notify = await fetchUrl(`${base8765}/api/hub/notify`, {
       method: "POST",
       headers: {
@@ -282,9 +311,38 @@ async function checkLive(base8765, base8766) {
       headers: { "X-Hub-Token": token },
     });
     const payload = JSON.parse(last.body);
-    const ok = notify.status === 200 && payload && payload.at && !payload.text;
-    if (ok) record(5, "Hub notify → last-broadcast", "PASS", "metadata only, no message text");
-    else record(5, "Hub notify → last-broadcast", "FAIL", `notify=${notify.status} last=${last.body.slice(0, 80)}`);
+    const heroNotify = await fetchUrl(`${base8765}/api/hub/notify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Hub-Token": token },
+      body: JSON.stringify({
+        kind: "hero-metrics",
+        from: "SignoffRunner",
+        heroMetrics: [{ label: "Collections", value: "$1", hint: "" }],
+        pageId: "financial",
+      }),
+    });
+    const heroLast = await fetchUrl(`${base8765}/api/hub/last-broadcast`, {
+      headers: { "X-Hub-Token": token },
+    });
+    const heroPayload = JSON.parse(heroLast.body);
+    const g5ok = noToken.status === 403;
+    const g2ok = notify.status === 200 && payload && payload.at && !payload.text;
+    const g3ok =
+      heroNotify.status === 200 &&
+      heroPayload &&
+      heroPayload.kind === "hero-metrics" &&
+      Array.isArray(heroPayload.heroMetrics) &&
+      heroPayload.heroMetrics.length > 0;
+    if (g5ok && g2ok && g3ok) {
+      record(5, "Hub notify → last-broadcast", "PASS", "G5 403 without token; metadata only; hero-metrics mirror");
+    } else {
+      record(
+        5,
+        "Hub notify → last-broadcast",
+        "FAIL",
+        `g5=${noToken.status} g2=${g2ok} g3=${heroNotify.status} hero=${(heroLast.body || "").slice(0, 80)}`,
+      );
+    }
   } catch (e) {
     record(5, "Hub notify → last-broadcast", "SKIP", String(e.message).slice(0, 120));
   }
@@ -357,7 +415,7 @@ function writeReport() {
   const passes = results.filter((r) => r.status === "PASS");
   const skips = results.filter((r) => r.status === "SKIP");
   const byId = new Map();
-  for (const r of results.filter((x) => x.id >= 1 && x.id <= 14)) {
+  for (const r of results.filter((x) => x.id >= 1 && x.id <= 17)) {
     const prev = byId.get(r.id);
     const rank = { FAIL: 3, PASS: 2, SKIP: 1 };
     if (!prev || (rank[r.status] || 0) >= (rank[prev.status] || 0)) byId.set(r.id, r);
@@ -366,7 +424,7 @@ function writeReport() {
   const checklistFails = checklist.filter((r) => r.status === "FAIL");
   const moonshotVerdict =
     checklistFails.length === 0 && checklist.filter((r) => r.status === "PASS").length >= 8
-      ? "APPROVE hal-10093 — Moonshot data lane: payments, operatory contract, procedures export, hub sign-off (automated sign-off; operator name still required)"
+      ? "APPROVE hal-10094 — Moonshot data lane + Phase G hub hardening (automated sign-off; operator name still required)"
       : checklistFails.length
         ? "CONDITIONAL APPROVE — fix FAIL items before daily use"
         : "CONDITIONAL APPROVE — complete SKIP items manually";
@@ -410,7 +468,7 @@ async function main() {
   record(
     11,
     "Moonshot hal-10069–10082 completion doc",
-    moonshotExtentSrc.includes("hal-10093") && moonshotExtentSrc.includes("Practical ceiling") ? "PASS" : "FAIL",
+    moonshotExtentSrc.includes("hal-10094") && moonshotExtentSrc.includes("Practical ceiling") ? "PASS" : "FAIL",
     "MOONSHOT_FULLEST_EXTENT_COMPLETE_2026-07-09.md",
   );
   const mockupChrome = readFileSync(join(site, "nr2-moonshot-mockup-chrome.js"), "utf8");
