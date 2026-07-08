@@ -659,7 +659,56 @@ def refresh_quickbooks_sdk_derived(destination: Path | None = None) -> list[str]
     """Rewrite SDK-derived QuickBooks CSVs (revenue, expenses, categories, A/R) from local probe."""
     dest = destination or quickbooks_import_dir()
     dest.mkdir(parents=True, exist_ok=True)
-    return _sync_quickbooks_sdk_summary(dest)
+    written = _sync_quickbooks_sdk_summary(dest)
+    written.extend(_sync_quickbooks_report_cache_derived(dest))
+    return written
+
+
+def _sync_quickbooks_report_cache_derived(destination: Path) -> list[str]:
+    """Derive expense category and A/R CSVs from qb_report_cache.json when SDK probe is blocked."""
+    cache_path = destination / "qb_report_cache.json"
+    if not cache_path.is_file():
+        return []
+    payload = _read_json(cache_path)
+    if not isinstance(payload, dict):
+        return []
+    reports = payload.get("reports") or {}
+    written: list[str] = []
+
+    categories_path = destination / "quickbooks_expense_categories.csv"
+    revenue_by_service = reports.get("revenue_by_service") or {}
+    slices = revenue_by_service.get("slices") or []
+    category_rows = [
+        {
+            "Category": str(item.get("label") or ""),
+            "Amount": item.get("amount"),
+            "Scope": "YTD",
+        }
+        for item in slices
+        if isinstance(item, dict) and item.get("amount") not in (None, "")
+    ]
+    if category_rows:
+        _write_csv(categories_path, category_rows, ["Category", "Amount", "Scope"])
+        written.append(categories_path.name)
+
+    ar_path = destination / "quickbooks_ar.csv"
+    ar_report = reports.get("ar_aging") or {}
+    buckets = ar_report.get("buckets") or []
+    ar_rows = [
+        {
+            "Bucket": str(item.get("bucket") or item.get("Bucket") or "Unknown"),
+            "Balance": item.get("balance") if item.get("balance") is not None else item.get("Balance"),
+        }
+        for item in buckets
+        if isinstance(item, dict) and (item.get("balance") not in (None, "") or item.get("Balance") not in (None, ""))
+    ]
+    if not ar_rows and ar_report.get("total") not in (None, ""):
+        ar_rows = [{"Bucket": "Total A/R", "Balance": ar_report.get("total")}]
+    if ar_rows:
+        _write_csv(ar_path, ar_rows, ["Bucket", "Balance"])
+        written.append(ar_path.name)
+
+    return written
 
 
 def _purge_sample_cache(destination: Path) -> list[str]:
@@ -906,6 +955,7 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
         result["quickbooks"]["generated"].extend(monthly_result["written"])
     else:
         result["quickbooks"]["generated"].extend(_sync_quickbooks_sdk_summary(quickbooks_dest))
+    result["quickbooks"]["generated"].extend(_sync_quickbooks_report_cache_derived(quickbooks_dest))
     recovered_categories = _recover_expense_categories_csv(quickbooks_dest)
     if recovered_categories:
         result["quickbooks"]["generated"].extend(recovered_categories)

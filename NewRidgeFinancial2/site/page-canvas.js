@@ -2232,6 +2232,11 @@ PageCanvas.moonshotQuickbooksBodyHtml = function (data) {
   const qbAr = D && D.quickbooksAr ? D.quickbooksAr() : { stale: true };
   const isStale = qbExp.stale || qbAr.stale || data.qbStale;
   const esc = (v) => String(v == null ? "—" : v);
+  const kpiCard = (label, value) =>
+    `<div class="card kpi-card">
+      <div class="card-header"><div class="card-title">${esc(label)}</div></div>
+      <div class="card-value">${esc(value)}</div>
+    </div>`;
   return `
     <div class="dashboard-grid" data-page="quickbooks" data-hal-widget-key="qbDashboard">
       <div class="dashboard-grid__header">
@@ -2240,37 +2245,40 @@ PageCanvas.moonshotQuickbooksBodyHtml = function (data) {
           ${isStale ? "Stale — refresh needed" : "Synced"}
         </span>
       </div>
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <div class="kpi-value">${esc(data.revenueYtd || revenueKpi.value)}</div>
-          <div class="kpi-label">Revenue YTD</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-value">${esc(data.expensesYtd || expenseKpi.value)}</div>
-          <div class="kpi-label">Expenses YTD</div>
-        </div>
-        <div class="kpi-card" data-hal-widget-key="quickbooksNetIncomeSummary">
-          <div class="kpi-value">${esc(data.netIncome || (netInc.hasData ? netInc.ytdNetIncome : "—"))}</div>
-          <div class="kpi-label">Net Income</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-value">${esc(data.arOutstanding || "—")}</div>
-          <div class="kpi-label">AR Outstanding</div>
-        </div>
+      ${kpiCard("Revenue YTD", data.revenueYtd || revenueKpi.value)}
+      ${kpiCard("Operating Expenses", data.expensesYtd || expenseKpi.value)}
+      ${kpiCard("Net Income", data.netIncome || (netInc.hasData ? netInc.ytdNetIncome : "—"))}
+      ${kpiCard("AR Outstanding", data.arOutstanding || "—")}
+    </div>
+    <div class="dashboard-grid">
+      <div class="card chart-large chart-container" data-hal-widget-key="quickbooksProfitLossDetail">
+        <div class="card-header"><div class="card-title">Profit &amp; Loss Trend (YTD)</div></div>
       </div>
-      <div class="dashboard-grid__charts">
-        <div class="chart-large chart-container" data-hal-widget-key="quickbooksProfitLossDetail">
-          <span class="card-title">Profit &amp; Loss Trend (YTD)</span>
-        </div>
-        <div class="chart-medium chart-container" data-hal-widget-key="quickbooksExpenseBreakdown">
-          <span class="card-title">Operating Expenses</span>
-        </div>
-        <div class="chart-medium chart-container" data-hal-widget-key="quickbooksBalanceSheetSummary"></div>
-        <div class="chart-large chart-container" data-hal-widget-key="quickbooksCashFlowTrend"></div>
-        <div class="chart-medium chart-container" data-hal-widget-key="quickbooksArAging"></div>
-        <div class="chart-medium chart-container" data-hal-widget-key="quickbooksMonthlyRevenue"></div>
-        <div class="chart-medium chart-container" data-hal-widget-key="quickbooksRevenueByService"></div>
-        <div class="chart-medium chart-container" data-hal-widget-key="ebitdaNormalization"></div>
+      <div class="card chart-medium chart-container" data-hal-widget-key="quickbooksExpenseBreakdown">
+        <div class="card-header"><div class="card-title">Operating Expenses</div></div>
+      </div>
+    </div>
+    <div class="dashboard-grid">
+      <div class="card chart-full chart-container" data-hal-widget-key="quickbooksBalanceSheetSummary">
+        <div class="card-header"><div class="card-title">Balance Sheet Summary</div></div>
+      </div>
+      <div class="card chart-medium chart-container" data-hal-widget-key="quickbooksCashFlowTrend">
+        <div class="card-header"><div class="card-title">Cash Flow Trend</div></div>
+      </div>
+      <div class="card chart-medium chart-container" data-hal-widget-key="quickbooksMonthlyRevenue">
+        <div class="card-header"><div class="card-title">Monthly Revenue Trend</div></div>
+      </div>
+      <div class="card chart-medium chart-container" data-hal-widget-key="quickbooksNetIncomeSummary">
+        <div class="card-header"><div class="card-title">Net Income Summary</div></div>
+      </div>
+      <div class="card chart-medium chart-container" data-hal-widget-key="quickbooksRevenueByService">
+        <div class="card-header"><div class="card-title">Revenue by Service</div></div>
+      </div>
+      <div class="card chart-medium chart-container" data-hal-widget-key="quickbooksArAging">
+        <div class="card-header"><div class="card-title">QuickBooks A/R Aging</div></div>
+      </div>
+      <div class="card chart-medium chart-container" data-hal-widget-key="ebitdaNormalization">
+        <div class="card-header"><div class="card-title">EBITDA Normalization</div></div>
       </div>
     </div>`;
 };
@@ -2410,19 +2418,19 @@ function renderClaimsPage(container, data = {}) {
 
 function renderOfficeManagerPage(container, data = {}) {
   const panel = (i) => `
-    <div class="dashboard-panel" data-widget="office.panel${i+1}">
-      <h4>Office Panel ${i+1}</h4>
+    <div class="dashboard-panel" data-widget="office.panel${i + 1}">
+      <h4>Office Panel ${i + 1}</h4>
     </div>`;
   const chart = (i) => `
-    <div class="chart-container" data-chart-type="line" data-widget="office.chart${i+1}">
+    <div class="chart-container" data-chart-type="line" data-widget="office.chart${i + 1}">
       <canvas></canvas>
     </div>`;
 
   container.innerHTML = `
     <section class="page-office-manager">
       <header class="page-header"><h2>Office Manager</h2></header>
-      <div class="dashboard-grid">${[0,1,2].map(panel).join('')}</div>
-      <div class="chart-row">${[0,1].map(chart).join('')}</div>
+      ${[0, 1, 2].map((i) => `<div class="dashboard-grid">${panel(i)}</div>`).join("")}
+      <div class="chart-row">${[0, 1].map(chart).join("")}</div>
     </section>`;
 }
 

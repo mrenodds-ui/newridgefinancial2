@@ -19,7 +19,7 @@ const repoRoot = join(root, "..");
 const site = join(root, "site");
 const mockups = join(repoRoot, ".local_logs", "moonshot_financial_eval", "page_mockups");
 const logDir = join(repoRoot, ".local_logs", "moonshot_financial_eval");
-const BUILD = "hal-10096";
+const BUILD = "hal-10100";
 const require = createRequire(import.meta.url);
 
 const results = [];
@@ -80,6 +80,9 @@ function loadPageContext() {
     "page-canvas.js",
     "components.js",
   ]) {
+    if (f === "hal-skills.js" && !globalThis.HAL) {
+      globalThis.HAL = { skills: { defineSource() {} } };
+    }
     require(join(site, f));
   }
   const Services = require(join(site, "services.js"));

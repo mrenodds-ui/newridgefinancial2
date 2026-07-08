@@ -126,6 +126,37 @@ def _find_newest_upstream(roots: list[Path], filenames: tuple[str, ...]) -> dict
     }
 
 
+def dataset_age_minutes(manifest: dict[str, Any] | None, dataset_key: str) -> int | None:
+    """Return dataset age in minutes from manifest checksums or newest import file."""
+    if manifest:
+        checksums = manifest.get("datasetChecksums") or {}
+        entry = checksums.get(dataset_key)
+        if isinstance(entry, dict) and entry.get("modifiedAt"):
+            age = _age_minutes(str(entry["modifiedAt"]))
+            if age is not None:
+                return age
+    try:
+        from import_contract import _FALLBACK_DATASET_NAMES
+        from import_loader import _newest_existing, quickbooks_import_dir, softdent_import_dir
+    except Exception:
+        return None
+    names = _FALLBACK_DATASET_NAMES.get(dataset_key)
+    if not names:
+        return None
+    system = dataset_key.split(".", 1)[0]
+    if system == "quickbooks":
+        directory = quickbooks_import_dir()
+    elif system == "softdent":
+        directory = softdent_import_dir()
+    else:
+        return None
+    path = _newest_existing(directory, names)
+    if path is None:
+        return None
+    modified = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    return _age_minutes(modified.isoformat())
+
+
 def evaluate_dataset(
     dataset_key: str,
     contract: dict[str, Any],
