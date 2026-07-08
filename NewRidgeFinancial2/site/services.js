@@ -1405,8 +1405,17 @@ const Services = (function () {
     });
   }
 
-  async function syncSoftdentOdbc() {
-    return loopbackPostJson("/api/admin/extract-softdent-odbc", { method: "POST" });
+  async function syncSoftdentOdbc(options) {
+    const opts = options || {};
+    return loopbackPostJson("/api/admin/extract-softdent-odbc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force: !!opts.force, maxAgeMinutes: opts.maxAgeMinutes != null ? opts.maxAgeMinutes : 0 }),
+    });
+  }
+
+  async function fetchSoftdentOdbcStatus() {
+    return loopbackPostJson("/api/softdent/odbc-status", { method: "GET" });
   }
 
   let softdentPrefetchPromise = null;
@@ -1509,6 +1518,7 @@ const Services = (function () {
     fetchHealth,
     syncQuickBooks,
     syncSoftdentOdbc,
+    fetchSoftdentOdbcStatus,
     prefetchSoftdentDaily,
     exportCpaPacket,
     exportPageStoryboard,

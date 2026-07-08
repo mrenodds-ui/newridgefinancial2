@@ -1033,6 +1033,17 @@ async function loadLocalSidenotesBridge() {
   }
 }
 
+async function refreshSoftdentOdbcStatus() {
+  if (!window.Services || typeof Services.fetchSoftdentOdbcStatus !== "function") return null;
+  try {
+    const status = await Services.fetchSoftdentOdbcStatus();
+    if (status && typeof window !== "undefined") window.__NR2_SOFTDENT_ODBC_STATUS = status;
+    return status;
+  } catch {
+    return null;
+  }
+}
+
 async function refreshWorkstationSyncHealth() {
   if (!window.Services || typeof Services.fetchHealth !== "function") return;
   const health = await Services.fetchHealth();
@@ -1065,7 +1076,9 @@ async function runWorkstationSync(kind) {
     const ok = !result || result.ok !== false;
     const detail =
       result && result.refreshed
-        ? "QuickBooks refresh completed."
+        ? key === "softdent"
+          ? `SoftDent extract refreshed (${(result.extract && result.extract.mode) || result.status?.lastMode || "ok"}).`
+          : "QuickBooks refresh completed."
         : result && result.message
           ? result.message
           : result && result.error
@@ -1079,6 +1092,7 @@ async function runWorkstationSync(kind) {
     });
     showHalActionNotice(detail, ok ? "info" : "warn");
     await refreshWorkstationSyncHealth();
+    if (key === "softdent") await refreshSoftdentOdbcStatus();
   } catch (err) {
     workstationSyncStatus = Object.assign({}, workstationSyncStatus, {
       loading: false,
@@ -1269,6 +1283,9 @@ function scheduleHalWidgetRefresh(snapshot, options) {
         }
         if (typeof NR2Tier3 !== "undefined" && NR2Tier3.publishHeroMetrics && currentId === "financial") {
           NR2Tier3.publishHeroMetrics(currentId);
+        }
+        if (currentId === "softdent") {
+          refreshSoftdentOdbcStatus().catch(() => {});
         }
       }
       refreshOpsHealthStatus().catch(() => {
@@ -4898,7 +4915,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10094&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10095&__nr2_purge=1</div>';
     return;
   }
   const MC =

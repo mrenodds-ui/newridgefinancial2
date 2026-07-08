@@ -917,7 +917,7 @@ const WorkstationPage = (function () {
           <button type="button" class="prompt-chip prompt-chip--action" data-ws-sync="imports"${disabled}>Refresh imports</button>
           <button type="button" class="prompt-chip" data-ws-open-hal>Open HAL hub (8765)</button>
         </div>
-        ${status.lastHealth ? `<p class="widget-footer">DB ${esc(String(status.lastHealth.db_size_mb != null ? status.lastHealth.db_size_mb + " MB" : "—"))} · bundle age ${esc(String(status.lastHealth.import_bundle_age_minutes != null ? status.lastHealth.import_bundle_age_minutes + "m" : "—"))}</p>` : ""}
+        ${status.lastHealth ? `<p class="widget-footer">DB ${esc(String(status.lastHealth.db_size_mb != null ? status.lastHealth.db_size_mb + " MB" : "—"))} · bundle age ${esc(String(status.lastHealth.import_bundle_age_minutes != null ? status.lastHealth.import_bundle_age_minutes + "m" : "—"))}${status.lastHealth.lastOdbcExtract ? ` · SoftDent ${esc(String(status.lastHealth.softdentOdbcMode || "extract"))} ${esc(String(status.lastHealth.softdentSdTablesPopulated != null ? status.lastHealth.softdentSdTablesPopulated + "/7 tables" : ""))}` : ""}</p>` : ""}
       </section>
     </div>`;
   }

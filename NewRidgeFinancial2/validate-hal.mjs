@@ -1843,7 +1843,12 @@ async function main() {
   assert(readFileSync(join(siteDir, "hal-hub-client.js"), "utf8").includes("fetchLastBroadcast"), "HalHubClient must expose fetchLastBroadcast");
   assert(readFileSync(join(__dirname, "hal_hub.py"), "utf8").includes("hub_token_header_valid(header)"), "hub notify must validate token before origin");
   assert(readFileSync(join(__dirname, "docs", "MOONSHOT_PHASE5_HUB_PROTOCOL.md"), "utf8").includes("hal-10094"), "hub protocol doc must reflect hal-10094 sign-off");
-  assert(completeDoc.includes("hal-10094") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10094");
+  assert(existsSync(join(__dirname, "docs", "MOONSHOT_PHASEF_ODBC_RUNBOOK.md")), "Phase F ODBC runbook must exist");
+  assert(readFileSync(join(siteDir, "hal-agent.js"), "utf8").includes("softdent_extract_status"), "HAL agent must expose softdent_extract_status tool");
+  assert(JSON.parse(readFileSync(halModelsPath, "utf8")).config.agentCapabilities.tools.includes("softdent_extract_status"), "hal-models must list softdent_extract_status");
+  assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("nr2-odbc-strip"), "SoftDent page must render ODBC extract strip");
+  assert(readFileSync(join(siteDir, "services.js"), "utf8").includes("fetchSoftdentOdbcStatus"), "services must fetch ODBC status");
+  assert(completeDoc.includes("hal-10095") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10095");
 
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;

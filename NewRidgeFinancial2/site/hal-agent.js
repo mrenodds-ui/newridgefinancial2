@@ -357,6 +357,27 @@ const HalAgent = (function () {
         };
       },
     },
+    softdent_extract_status: {
+      label: "SoftDent ODBC extract status",
+      run: async (ctx) => {
+        let status = null;
+        if (typeof Services !== "undefined" && typeof Services.fetchSoftdentOdbcStatus === "function") {
+          try {
+            status = await Services.fetchSoftdentOdbcStatus();
+          } catch {
+            status = null;
+          }
+        }
+        if (!status && window.HalSkills && typeof HalSkills.buildSoftdentExtractStatus === "function") {
+          status = HalSkills.buildSoftdentExtractStatus(await ctx.loadProgramSnapshot());
+        }
+        if (!window.HalSkills || typeof HalSkills.formatSoftdentExtractStatus !== "function") {
+          return { ok: false, summary: "SoftDent extract diagnostics unavailable." };
+        }
+        const resp = status || HalSkills.buildSoftdentExtractStatus(null);
+        return { ok: true, summary: HalSkills.formatSoftdentExtractStatus(resp).slice(0, 2800), status: resp };
+      },
+    },
     read_tasks: {
       label: "Read local office tasks",
       run: async (ctx) => {
@@ -1877,6 +1898,11 @@ const HalAgent = (function () {
       /\bdraft with hal\b/i.test(query)
     ) {
       tools.push("draft_insurance_narrative");
+    }
+    if (
+      /\bsoftdent\b.*\b(odbc|extract|sd_|sqlite)\b|\bodbc\b.*\bsoftdent\b|\bsd_\w+\b|\bextract status\b/i.test(query)
+    ) {
+      tools.push("softdent_extract_status");
     }
     if (/\b(shift|tier|employee level|standing consent)\b/i.test(query)) {
       tools.push("read_shift_context");

@@ -154,7 +154,8 @@
         "run_git_readonly",
         "research_web",
         "remember_fact",
-        "draft_insurance_narrative"
+        "draft_insurance_narrative",
+        "softdent_extract_status"
       ],
       "localWrites": ["remember_fact", "local office tasks", "journal drafts for review", "apply_program_patch (site bundle only, backed up)"],
       "externalBlocked": false

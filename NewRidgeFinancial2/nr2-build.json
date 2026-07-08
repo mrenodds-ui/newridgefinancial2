@@ -1,8 +1,8 @@
 {
-  "BUILD_ID": "hal-10094",
-  "assetVersion": "hal-10094",
-  "schemaVersion": "hal-10094",
+  "BUILD_ID": "hal-10095",
+  "assetVersion": "hal-10095",
+  "schemaVersion": "hal-10095",
   "REQUIRED_EPOCH": "moonshot-mockup",
-  "builtAt": "2026-07-08T13:12:16.198Z",
-  "notes": "Phase G hub hardening: hero mirror 8765 poll, loopback financial POST with token, sign-off G2/G3/G5 (hal-10094)."
+  "builtAt": "2026-07-08T13:25:29.036Z",
+  "notes": "Phase F ODBC deep extract: HAL softdent_extract_status, SoftDent sd_* strip, schema discovery save, operator runbook (hal-10095)."
 }

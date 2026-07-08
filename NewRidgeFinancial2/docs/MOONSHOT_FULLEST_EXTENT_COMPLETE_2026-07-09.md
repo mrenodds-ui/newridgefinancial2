@@ -1,9 +1,9 @@
-# Moonshot Fullest Extent — Complete (hal-10094)
+# Moonshot Fullest Extent — Complete (hal-10095)
 
-**Verdict:** Practical ceiling reached for a solo dental practice (per `MOONSHOT_FULLEST_EXTENT_REPORT_2026-07-08.md`). Visual/HAL program through hal-10085; **Moonshot post-ceiling data lane** at hal-10090; **Phase D claims narrative workflow** at hal-10092; **Phase E QuickBooks depth** at hal-10093; **Phase G hub hardening** at hal-10094.
+**Verdict:** Practical ceiling reached for a solo dental practice (per `MOONSHOT_FULLEST_EXTENT_REPORT_2026-07-08.md`). Visual/HAL program through hal-10085; **Moonshot post-ceiling data lane** at hal-10090; **Phase D claims narrative workflow** at hal-10092; **Phase E QuickBooks depth** at hal-10093; **Phase G hub hardening** at hal-10094; **Phase F ODBC deep extract** at hal-10095.
 
-**Build:** `hal-10094`  
-**Reload:** `https://127.0.0.1:8765/?v=hal-10094&__nr2_purge=1`
+**Build:** `hal-10095`  
+**Reload:** `https://127.0.0.1:8765/?v=hal-10095&__nr2_purge=1`
 
 ## Phase completion matrix
 
@@ -28,6 +28,7 @@
 | hal-10092 | Phase D | narrative-review.js, draft_insurance_narrative HAL tool, claims UI draft/save + citation chips, agent contract v14 | Done |
 | hal-10093 | Phase E | QB cold empty states, deposit probe export, collection_deposit_variance, proactive deposit alerts | Done |
 | hal-10094 | Phase G | Hub token hardening, hero mirror 8765 poll, loopback financial POST, sign-off G2/G3/G5 | Done |
+| hal-10095 | Phase F | ODBC status HAL tool, SoftDent extract strip, schema discovery save, operator runbook | Done |
 
 ## Engineering sign-off
 
@@ -43,7 +44,8 @@
 
 - **Financial dashboard** — live reconciliation, collection lag, KPI ribbon; full-width QuickBooks host; 12-column KPI discipline; **Executive view** toggle for condensed hero widgets
 - **HAL hub** — situational hero on load, morning briefing, mosaic deep links to staff widgets, voice PTT, agent loop in chat; **presence orb** (idle/thinking/alert); **citation chips** on streamed replies
-- **Workstation 8766** — QB/SoftDent sync triggers, HAL hub link, sidenotes bridge; **8765 hero metrics mirror** strip when financial hub publishes KPIs
+- **Workstation 8766** — QB/SoftDent sync triggers, HAL hub link, sidenotes bridge; **8765 hero metrics mirror** strip; **Sync SoftDent** runs consent-gated ODBC extract
+- **SoftDent ODBC (optional)** — read-only SQL DSN + query env vars → `sd_*` tables; HAL `softdent_extract_status`; runbook `MOONSHOT_PHASEF_ODBC_RUNBOOK.md`
 - **Hardening** — nightly SQLite backup (7-day retention), `/api/health`, operator audit log
 - **CPA export** — Financial page **CPA export** → zip with P&L, reconciliation, A/R aging, net income
 - **Print** — browser print strips cyber chrome; widget tiles expand full width

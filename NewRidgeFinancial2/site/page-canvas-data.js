@@ -1846,6 +1846,22 @@ const PageCanvasData = (function () {
       .replace(/>/g, "&gt;");
   }
 
+  function softdentOdbcStatus() {
+    if (typeof window !== "undefined" && window.__NR2_SOFTDENT_ODBC_STATUS) {
+      return window.__NR2_SOFTDENT_ODBC_STATUS;
+    }
+    const bundle = snapshot && snapshot.importBundle;
+    const lane = bundle && bundle.softdent && bundle.softdent.odbcExtract;
+    if (!lane) return null;
+    return {
+      lastMode: lane.mode || null,
+      lastExtractAt: lane.refreshedAt || null,
+      populatedTables: lane.populatedTables != null ? lane.populatedTables : null,
+      odbcConfigured: null,
+      tableCounts: {},
+    };
+  }
+
   return {
     bind,
     setLiveIntegrationHealth,
@@ -1953,6 +1969,7 @@ const PageCanvasData = (function () {
     softdentClaimsOutstandingData,
     softdentProviderProductionData,
     softdentAppointmentsSnapshotData,
+    softdentOdbcStatus,
     fmt,
   };
 })();

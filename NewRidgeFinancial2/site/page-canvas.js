@@ -1010,6 +1010,30 @@ const PageCanvas = (function () {
     </div>`;
   }
 
+  function renderSoftdentOdbcStrip(status) {
+    if (!status) return "";
+    const mode = String(status.lastMode || "none");
+    const populated = status.populatedTables != null ? status.populatedTables : 0;
+    const configured = status.odbcConfigured === true;
+    const queries = status.queriesConfigured != null ? status.queriesConfigured : 0;
+    const last = status.lastExtractAt ? String(status.lastExtractAt).slice(0, 19) : "never";
+    const tone = mode === "odbc" ? "green" : populated >= 3 ? "blue" : "orange";
+    const counts = status.tableCounts || {};
+    const countLine = ["patients", "procedures", "payments", "claims"]
+      .map((key) => `${key} ${counts["sd_" + key] != null ? counts["sd_" + key] : "—"}`)
+      .join(" · ");
+    const hint = configured
+      ? queries
+        ? "ODBC DSN + queries configured"
+        : "DSN set — run schema discovery for SQL queries"
+      : "JSON/daysheet fallback lane (ODBC optional)";
+    return `<div class="nr2-odbc-strip nr2-odbc-strip--${tone}" role="status" aria-label="SoftDent extract lane">
+      <span class="nr2-odbc-strip__badge">sd_* extract · ${esc(mode)}</span>
+      <span class="nr2-odbc-strip__meta">${esc(hint)} · ${populated}/7 tables · last ${esc(last)}</span>
+      <span class="nr2-odbc-strip__counts">${esc(countLine)}</span>
+    </div>`;
+  }
+
   function renderSoftdent() {
     const D = dataApi();
     const kpis = D ? D.softdentKpis() : [];
@@ -1034,6 +1058,7 @@ const PageCanvas = (function () {
       { label: "Completed", value: fmtClaim(practice.treatmentCompleted || ca.plansCompleted), count: funnelCounts[3] },
     ];
     return `${stackOpen()}
+      ${renderSoftdentOdbcStrip(D && D.softdentOdbcStatus ? D.softdentOdbcStatus() : null)}
       ${heroKpiRow(kpis, 4)}
       ${canvasGrid12(`
         ${gridCol(

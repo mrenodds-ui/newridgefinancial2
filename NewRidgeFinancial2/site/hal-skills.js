@@ -3727,6 +3727,59 @@ const HalSkills = (function () {
     return lines.join("\n");
   }
 
+  const SD_EXTRACT_TABLES = [
+    "sd_patients",
+    "sd_procedures",
+    "sd_payments",
+    "sd_claims",
+    "sd_appointments",
+    "sd_providers",
+    "sd_adjustments",
+  ];
+
+  function buildSoftdentExtractStatus(snapshot) {
+    const snap = snapshot || {};
+    const health = snap.health || snap.runtimeHealth || {};
+    const bundle = snap.importBundle || {};
+    const odbcLane = (bundle.softdent && bundle.softdent.odbcExtract) || {};
+    const tableCounts = (snap.softdentOdbcStatus && snap.softdentOdbcStatus.tableCounts) || {};
+    return {
+      lastExtractAt: health.lastOdbcExtract || odbcLane.refreshedAt || null,
+      lastMode: health.softdentOdbcMode || odbcLane.mode || null,
+      populatedTables: health.softdentSdTablesPopulated != null ? health.softdentSdTablesPopulated : odbcLane.populatedTables,
+      odbcConfigured: snap.softdentOdbcStatus ? snap.softdentOdbcStatus.odbcConfigured : null,
+      queriesConfigured: snap.softdentOdbcStatus ? snap.softdentOdbcStatus.queriesConfigured : null,
+      tableCounts,
+      nextSteps: (snap.softdentOdbcStatus && snap.softdentOdbcStatus.nextSteps) || [],
+    };
+  }
+
+  function formatSoftdentExtractStatus(status) {
+    const s = status || {};
+    const mode = s.lastMode || "none";
+    const populated = s.populatedTables != null ? s.populatedTables : 0;
+    const lines = [
+      "SoftDent extract lane (sd_* SQLite tables):",
+      `- Last extract: ${s.lastExtractAt || "never"}`,
+      `- Mode: ${mode}${s.stale ? " (stale)" : ""}`,
+      `- ODBC DSN configured: ${s.odbcConfigured === true ? "yes" : s.odbcConfigured === false ? "no" : "unknown"}`,
+      `- SQL queries configured: ${s.queriesConfigured != null ? s.queriesConfigured : "unknown"}`,
+      `- Populated tables: ${populated}/7`,
+    ];
+    const counts = s.tableCounts || {};
+    const countBits = SD_EXTRACT_TABLES.map((table) => `${table.replace("sd_", "")}=${counts[table] != null ? counts[table] : "—"}`);
+    if (countBits.length) lines.push(`- Row counts: ${countBits.join(", ")}`);
+    const steps = Array.isArray(s.nextSteps) ? s.nextSteps : [];
+    if (steps.length) {
+      lines.push("", "Next steps:");
+      steps.slice(0, 4).forEach((step) => lines.push(`- ${step}`));
+    }
+    if (mode === "json-fallback") {
+      lines.push("", "JSON/daysheet fallback is active — ODBC deep extract is optional until IT configures read-only SQL access.");
+    }
+    return lines.join("\n");
+  }
+
   function formatNarrativeForClaim(snapshot, query) {
     const lib = typeof HalNarrativeLibrary !== "undefined" ? HalNarrativeLibrary : globalThis.HalNarrativeLibrary;
     if (!lib) return "Narrative library is not loaded in this runtime.";
@@ -4304,6 +4357,8 @@ const HalSkills = (function () {
     formatPracticeSourcePullResult,
     buildDraftInsuranceNarrative,
     formatDraftInsuranceNarrativeResult,
+    buildSoftdentExtractStatus,
+    formatSoftdentExtractStatus,
     resolveClaimById,
     narrativeModelLane,
     formatNarrativeForClaim,

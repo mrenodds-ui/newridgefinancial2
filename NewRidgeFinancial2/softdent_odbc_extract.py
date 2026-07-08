@@ -81,6 +81,44 @@ def odbc_configured() -> bool:
     return bool(odbc_dsn())
 
 
+ODBC_QUERY_ENV_BY_TABLE = {
+    "sd_patients": "SOFTDENT_ODBC_PATIENTS_QUERY",
+    "sd_procedures": "SOFTDENT_ODBC_PROCEDURES_QUERY",
+    "sd_payments": "SOFTDENT_ODBC_PAYMENTS_QUERY",
+    "sd_claims": "SOFTDENT_ODBC_CLAIMS_QUERY",
+    "sd_appointments": "SOFTDENT_ODBC_APPOINTMENTS_QUERY",
+    "sd_providers": "SOFTDENT_ODBC_PROVIDERS_QUERY",
+    "sd_adjustments": "SOFTDENT_ODBC_ADJUSTMENTS_QUERY",
+}
+
+
+def discovery_output_path() -> Path:
+    configured = os.environ.get("NR2_SOFTDENT_SCHEMA_DISCOVERY", "").strip()
+    if configured:
+        candidate = Path(configured).expanduser()
+        if not candidate.is_absolute():
+            candidate = REPO_ROOT / candidate
+        return candidate.resolve()
+    return (REPO_ROOT / "app_data" / "nr2" / "softdent_schema_discovery.json").resolve()
+
+
+def configured_odbc_query_tables() -> list[str]:
+    tables: list[str] = []
+    for table, env_key in ODBC_QUERY_ENV_BY_TABLE.items():
+        if os.environ.get(env_key, "").strip():
+            tables.append(table)
+    return tables
+
+
+def pyodbc_available() -> bool:
+    try:
+        import pyodbc  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 def consent_executor_enabled() -> bool:
     try:
         from nr2_consent_executor import consent_executor_enabled as _enabled
@@ -200,14 +238,59 @@ def read_extract_status(db_path: Path | None = None) -> dict[str, Any]:
     meta = read_extract_meta(db_path)
     counts = table_row_counts(db_path) if db_path else {}
     populated = sum(1 for table in SD_TABLES if int(counts.get(table) or 0) > 0)
+    query_tables = configured_odbc_query_tables()
+    discovery_path = discovery_output_path()
+    last_extract_at = meta.get("last_extract_at")
+    stale = odbc_extract_stale(db_path) if db_path else True
     return {
+        "ok": True,
         "dbPath": str(db_path) if db_path else None,
-        "lastExtractAt": meta.get("last_extract_at"),
+        "lastExtractAt": last_extract_at,
         "lastMode": meta.get("last_mode"),
         "odbcConfigured": odbc_configured(),
+        "pyodbcAvailable": pyodbc_available(),
+        "queriesConfigured": len(query_tables),
+        "configuredQueryTables": query_tables,
+        "consentExecutorEnabled": consent_executor_enabled(),
+        "discoveryPresent": discovery_path.is_file(),
+        "discoveryPath": str(discovery_path) if discovery_path.is_file() else None,
         "tableCounts": counts,
         "populatedTables": populated,
+        "stale": bool(stale),
+        "nextSteps": _extract_status_next_steps(
+            odbc_configured=odbc_configured(),
+            query_tables=query_tables,
+            discovery_present=discovery_path.is_file(),
+            populated=populated,
+            last_mode=meta.get("last_mode"),
+        ),
     }
+
+
+def _extract_status_next_steps(
+    *,
+    odbc_configured: bool,
+    query_tables: list[str],
+    discovery_present: bool,
+    populated: int,
+    last_mode: str | None,
+) -> list[str]:
+    steps: list[str] = []
+    if not odbc_configured:
+        steps.append("Set SOFTDENT_ODBC_DSN (or NR2_SOFTDENT_ODBC_DSN) to a read-only System DSN.")
+    elif not query_tables:
+        steps.append("Run scripts/discover_softdent_odbc_schema.py --out app_data/nr2/softdent_schema_discovery.json and copy suggestedEnv queries into .env.")
+    if not discovery_present and odbc_configured:
+        steps.append("Save schema discovery output to app_data/nr2/softdent_schema_discovery.json for operator reference.")
+    if not consent_executor_enabled():
+        steps.append("Set NR2_CONSENT_EXECUTOR=1 to allow workstation Sync SoftDent / POST /api/admin/extract-softdent-odbc.")
+    if populated < 3:
+        steps.append("Drop SoftDent daysheet/claims exports or configure ODBC queries, then sync from workstation or Financial page.")
+    elif last_mode != "odbc" and odbc_configured and query_tables:
+        steps.append("ODBC is configured but last extract used json-fallback — verify DSN credentials and query table names.")
+    if not steps:
+        steps.append("Extract lane healthy — sd_* tables populated; refresh via import sync or workstation Sync SoftDent.")
+    return steps
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:

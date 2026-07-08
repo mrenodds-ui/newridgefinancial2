@@ -134,6 +134,23 @@ class SoftdentOdbcExtractTests(unittest.TestCase):
             status = read_extract_status(db_path)
             self.assertEqual(status["lastMode"], "json-fallback")
             self.assertGreaterEqual(int(status["populatedTables"] or 0), 3)
+            self.assertIn("nextSteps", status)
+            self.assertIsInstance(status["nextSteps"], list)
+
+    def test_read_extract_status_reports_query_config(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "SOFTDENT_ODBC_DSN": "TestDSN",
+                "SOFTDENT_ODBC_PATIENTS_QUERY": "SELECT 1 AS patient_id",
+            },
+            clear=False,
+        ):
+            with patch("softdent_odbc_extract.odbc_dsn", return_value="TestDSN"):
+                status = read_extract_status(None)
+        self.assertTrue(status["odbcConfigured"])
+        self.assertGreaterEqual(status["queriesConfigured"], 1)
+        self.assertIn("sd_patients", status["configuredQueryTables"])
 
 
 if __name__ == "__main__":

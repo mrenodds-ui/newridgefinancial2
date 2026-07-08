@@ -142,7 +142,7 @@ def discover() -> dict:
             suggested_env[env_key] = SUGGESTED_QUERIES[table]
         return {
             "ok": True,
-            "dsn": resolve_odbc_dsn(),
+            "dsn": odbc_dsn(),
             "tableCount": len(tables),
             "tables": tables[:200],
             "tableMatches": table_matches,
@@ -160,11 +160,31 @@ def discover() -> dict:
         conn.close()
 
 
+def default_discovery_path() -> Path:
+    configured = os.environ.get("NR2_SOFTDENT_SCHEMA_DISCOVERY", "").strip()
+    if configured:
+        candidate = Path(configured).expanduser()
+        if not candidate.is_absolute():
+            candidate = ROOT.parent / candidate
+        return candidate.resolve()
+    return (ROOT.parent / "app_data" / "nr2" / "softdent_schema_discovery.json").resolve()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Discover SoftDent ODBC schema for NR2 extract lane.")
     parser.add_argument("--json", action="store_true", help="Print JSON only.")
+    parser.add_argument(
+        "--out",
+        default="",
+        help="Write discovery JSON to this path (default: app_data/nr2/softdent_schema_discovery.json).",
+    )
     args = parser.parse_args()
     result = discover()
+    out_path = Path(args.out).expanduser() if args.out else default_discovery_path()
+    if result.get("ok") and out_path:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        result["savedTo"] = str(out_path)
     if args.json:
         print(json.dumps(result, indent=2))
     else:
