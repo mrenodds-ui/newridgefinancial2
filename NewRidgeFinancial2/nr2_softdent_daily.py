@@ -16,18 +16,70 @@ def _utc_now_month() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
-def _connect():
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
+    return cur.fetchone() is not None
+
+
+def _open_db():
     db_path = resolve_sd_sqlite_db()
     if not db_path or not db_path.is_file():
-        return None, db_path
-    counts = table_row_counts(db_path)
-    if sum(int(counts.get(table) or 0) for table in ("sd_procedures", "sd_payments", "sd_patients", "sd_claims")) <= 0:
         return None, db_path
     return sqlite3.connect(db_path), db_path
 
 
+def _connect():
+    conn, db_path = _open_db()
+    if not conn:
+        return None, db_path
+    counts = table_row_counts(db_path)
+    if sum(int(counts.get(table) or 0) for table in ("sd_procedures", "sd_payments", "sd_patients", "sd_claims")) <= 0:
+        conn.close()
+        return None, db_path
+    return conn, db_path
+
+
+def _collections_from_daysheet_totals(conn: sqlite3.Connection, *, limit: int) -> list[tuple[str, float]]:
+    if not _table_exists(conn, "daysheet_totals"):
+        return []
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT year_month, SUM(COALESCE(collections, 0))
+        FROM daysheet_totals
+        WHERE COALESCE(collections, 0) > 0
+        GROUP BY year_month
+        ORDER BY year_month
+        """
+    )
+    rows = [(str(period), float(total or 0)) for period, total in cur.fetchall() if period]
+    return rows[-limit:]
+
+
+def _provider_production_from_analytics(conn: sqlite3.Connection, *, limit: int) -> list[dict[str, Any]]:
+    if not _table_exists(conn, "production_by_provider"):
+        return []
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT COALESCE(provider_name, provider_label, provider_id), SUM(COALESCE(gross_production, 0)) AS total
+        FROM production_by_provider
+        WHERE COALESCE(gross_production, 0) > 0
+        GROUP BY COALESCE(provider_name, provider_label, provider_id)
+        ORDER BY total DESC
+        LIMIT ?
+        """,
+        (limit,),
+    )
+    providers: list[dict[str, Any]] = []
+    for label, total in cur.fetchall():
+        providers.append({"providerCode": str(label or "").strip() or "unknown", "production": round(float(total or 0), 2)})
+    return providers
+
+
 def collections_daily(*, limit: int = 30) -> dict[str, Any]:
-    conn, db_path = _connect()
+    conn, db_path = _open_db()
     if not conn:
         return {"hasData": False, "points": [], "labels": [], "values": []}
     try:
@@ -42,6 +94,10 @@ def collections_daily(*, limit: int = 30) -> dict[str, Any]:
             """
         )
         rows = [(str(day), float(total or 0)) for day, total in cur.fetchall() if day]
+        source = "sd_payments"
+        if not rows:
+            rows = _collections_from_daysheet_totals(conn, limit=limit)
+            source = "daysheet_totals"
     finally:
         conn.close()
     trimmed = rows[-limit:]
@@ -50,7 +106,7 @@ def collections_daily(*, limit: int = 30) -> dict[str, Any]:
         "labels": [day for day, _ in trimmed],
         "values": [round(total, 2) for _, total in trimmed],
         "points": [{"date": day, "collections": round(total, 2)} for day, total in trimmed],
-        "source": "sd_payments",
+        "source": source,
         "dbPath": str(db_path),
     }
 
@@ -148,6 +204,30 @@ def claims_outstanding(*, limit: int = 10) -> dict[str, Any]:
                     "status": str(status or ""),
                 }
             )
+        if not claims and _table_exists(conn, "outstanding_claims"):
+            cur.execute(
+                """
+                SELECT claim_id, patient_name, payer, service_date, claim_amount, claim_status
+                FROM outstanding_claims
+                WHERE COALESCE(claim_amount, 0) > 0
+                ORDER BY claim_amount DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            for claim_id, patient, payer, service_date, amount, status in cur.fetchall():
+                amt = float(amount or 0)
+                total += amt
+                claims.append(
+                    {
+                        "claimId": str(claim_id or ""),
+                        "patientName": str(patient or ""),
+                        "payer": str(payer or ""),
+                        "serviceDate": str(service_date or ""),
+                        "amount": round(amt, 2),
+                        "status": str(status or ""),
+                    }
+                )
     finally:
         conn.close()
     return {
@@ -160,7 +240,7 @@ def claims_outstanding(*, limit: int = 10) -> dict[str, Any]:
 
 
 def provider_production(*, limit: int = 8) -> dict[str, Any]:
-    conn, db_path = _connect()
+    conn, db_path = _open_db()
     if not conn:
         return {"hasData": False, "providers": []}
     try:
@@ -180,14 +260,18 @@ def provider_production(*, limit: int = 8) -> dict[str, Any]:
             {"providerCode": str(code or ""), "production": round(float(total or 0), 2)}
             for code, total in cur.fetchall()
         ]
+        source = "sd_procedures"
+        if not providers:
+            providers = _provider_production_from_analytics(conn, limit=limit)
+            source = "production_by_provider"
     finally:
         conn.close()
     grand = round(sum(item["production"] for item in providers), 2)
-    return {"hasData": bool(providers), "providers": providers, "total": grand, "source": "sd_procedures", "dbPath": str(db_path)}
+    return {"hasData": bool(providers), "providers": providers, "total": grand, "source": source, "dbPath": str(db_path)}
 
 
 def adjustment_log(*, limit: int = 10) -> dict[str, Any]:
-    conn, db_path = _connect()
+    conn, db_path = _open_db()
     if not conn:
         return {"hasData": False, "adjustments": []}
     try:
@@ -211,9 +295,32 @@ def adjustment_log(*, limit: int = 10) -> dict[str, Any]:
             }
             for row in cur.fetchall()
         ]
+        source = "sd_adjustments"
+        if not adjustments and _table_exists(conn, "writeoff_totals"):
+            cur.execute(
+                """
+                SELECT report_date, writeoff_type, amount
+                FROM writeoff_totals
+                WHERE COALESCE(amount, 0) != 0
+                ORDER BY report_date DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            for report_date, writeoff_type, amount in cur.fetchall():
+                adjustments.append(
+                    {
+                        "date": str(report_date or ""),
+                        "patientId": "",
+                        "code": str(writeoff_type or "writeoff"),
+                        "amount": round(abs(float(amount or 0)), 2),
+                        "description": str(writeoff_type or "Write-off"),
+                    }
+                )
+            source = "writeoff_totals"
     finally:
         conn.close()
-    return {"hasData": bool(adjustments), "adjustments": adjustments, "source": "sd_adjustments", "dbPath": str(db_path)}
+    return {"hasData": bool(adjustments), "adjustments": adjustments, "source": source, "dbPath": str(db_path)}
 
 
 def patient_retention(*, months: int = 6) -> dict[str, Any]:
@@ -243,5 +350,88 @@ def patient_retention(*, months: int = 6) -> dict[str, Any]:
         "returningRatePct": rate,
         "windowMonths": months,
         "source": "sd_patients+sd_appointments",
+        "dbPath": str(db_path),
+    }
+
+
+def operatory_grid() -> dict[str, Any]:
+    """Operatory chair grid from export file or sd_appointments-derived schedule."""
+    from import_loader import softdent_import_dir
+    from softdent_practice_exports import (
+        _aggregate_operatory_from_db,
+        _build_operatory_from_sd_appointments,
+        _read_operatory_chairs_file,
+    )
+
+    op_path = softdent_import_dir() / "operatory_schedule.json"
+    if op_path.is_file():
+        chairs = _read_operatory_chairs_file(op_path)
+        if chairs:
+            return {
+                "hasData": True,
+                "operatoryChairs": chairs,
+                "source": "operatory_schedule.json",
+                "sourcePath": str(op_path),
+            }
+
+    conn, db_path = _open_db()
+    if not conn:
+        return {"hasData": False, "operatoryChairs": []}
+    try:
+        chairs = _aggregate_operatory_from_db(conn)
+        if not chairs:
+            chairs = _build_operatory_from_sd_appointments(conn)
+        source = "analytics-db" if chairs else "none"
+        if chairs and not op_path.is_file():
+            source = "sd_appointments"
+    finally:
+        conn.close()
+    return {
+        "hasData": bool(chairs),
+        "operatoryChairs": chairs or [],
+        "source": source,
+        "dbPath": str(db_path),
+    }
+
+
+def production_daily(*, limit: int = 30) -> dict[str, Any]:
+    """Daily production series — sd_procedures with daysheet_totals fallback."""
+    conn, db_path = _open_db()
+    if not conn:
+        return {"hasData": False, "points": [], "labels": [], "values": []}
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT proc_date, SUM(COALESCE(production, 0))
+            FROM sd_procedures
+            WHERE proc_date IS NOT NULL AND proc_date != '' AND COALESCE(production, 0) > 0
+            GROUP BY proc_date
+            ORDER BY proc_date
+            """
+        )
+        rows = [(str(day), float(total or 0)) for day, total in cur.fetchall() if day]
+        source = "sd_procedures"
+        if not rows and _table_exists(conn, "daysheet_totals"):
+            cur.execute(
+                """
+                SELECT year_month, SUM(COALESCE(gross_production, net_production, 0))
+                FROM daysheet_totals
+                WHERE COALESCE(gross_production, net_production, 0) > 0
+                GROUP BY year_month
+                ORDER BY year_month
+                """
+            )
+            rows = [(str(period), float(total or 0)) for period, total in cur.fetchall() if period]
+            source = "daysheet_totals"
+    finally:
+        conn.close()
+    trimmed = rows[-limit:]
+    return {
+        "hasData": bool(trimmed),
+        "labels": [day for day, _ in trimmed],
+        "values": [round(total, 2) for _, total in trimmed],
+        "points": [{"date": day, "production": round(total, 2)} for day, total in trimmed],
+        "source": source,
         "dbPath": str(db_path),
     }

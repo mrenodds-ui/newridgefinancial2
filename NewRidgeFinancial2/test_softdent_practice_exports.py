@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -103,6 +104,49 @@ class SoftdentPracticeExportsTests(unittest.TestCase):
                 result = run_odbc_lane(force=True)
             self.assertIn("odbc", result)
             self.assertEqual(result["odbc"]["error"], "odbc_not_configured")
+
+    def test_operatory_export_from_sd_appointments(self) -> None:
+        from softdent_practice_exports import _build_operatory_from_sd_appointments, sync_practice_exports
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "analytics.sqlite3"
+            dest = Path(tmp) / "softdent"
+            dest.mkdir()
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE sd_appointments (
+                    practice_id TEXT, patient_id TEXT, appt_date TEXT,
+                    provider_code TEXT, status TEXT, extracted_at TEXT,
+                    PRIMARY KEY (practice_id, patient_id, appt_date, provider_code)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE sd_patients (
+                    patient_id TEXT PRIMARY KEY, patient_name TEXT,
+                    first_visit_date TEXT, last_visit_date TEXT,
+                    practice_id TEXT, extracted_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO sd_patients VALUES ('P1', 'Jane Doe', '', '', '', '')"
+            )
+            conn.execute(
+                "INSERT INTO sd_appointments VALUES ('', 'P1', '2026-07-08 09:30', 'DR1', 'scheduled', '')"
+            )
+            conn.commit()
+            chairs = _build_operatory_from_sd_appointments(conn)
+            conn.close()
+            self.assertTrue(chairs)
+            self.assertEqual(chairs[0]["slots"][0]["patient"], "Jane Doe")
+
+            result = sync_practice_exports(db_path=db_path, destination=dest)
+            self.assertIn("operatory_schedule.json", result["written"])
+            payload = json.loads((dest / "operatory_schedule.json").read_text(encoding="utf-8"))
+            self.assertTrue(payload["operatoryChairs"])
 
 
 if __name__ == "__main__":

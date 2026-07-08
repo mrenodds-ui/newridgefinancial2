@@ -2094,6 +2094,30 @@ class NR2BottleServer(BottleServer):
 
             return _json_response(kpi_ribbon())
 
+        @app.get("/api/analytics/goal-scorecard")
+        def analytics_goal_scorecard_api():
+            from nr2_analytics import goal_scorecard
+
+            return _json_response(goal_scorecard())
+
+        @app.get("/api/analytics/alert-ticker")
+        def analytics_alert_ticker_api():
+            from nr2_analytics import alert_ticker
+
+            return _json_response(alert_ticker())
+
+        @app.get("/api/analytics/provider-comp")
+        def analytics_provider_comp_api():
+            from nr2_analytics import provider_compensation
+
+            return _json_response(provider_compensation())
+
+        @app.get("/api/analytics/monthly-trend-combo")
+        def analytics_monthly_trend_combo_api():
+            from nr2_analytics import monthly_trend_combo
+
+            return _json_response(monthly_trend_combo())
+
         @app.get("/api/qb/balance-sheet")
         def qb_balance_sheet_api():
             from qb_connector import get_balance_sheet
@@ -2177,6 +2201,12 @@ class NR2BottleServer(BottleServer):
             from nr2_softdent_daily import patient_retention
 
             return _json_response(patient_retention())
+
+        @app.get("/api/softdent/operatory-grid")
+        def softdent_operatory_grid_api():
+            from nr2_softdent_daily import operatory_grid
+
+            return _json_response(operatory_grid())
 
         @app.post("/api/admin/extract-softdent-odbc")
         def extract_softdent_odbc_api():

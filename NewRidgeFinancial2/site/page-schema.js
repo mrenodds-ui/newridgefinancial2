@@ -8,11 +8,11 @@
   delete window.NR2_LEGACY_SCHEMA;
   delete window.OLD_PAGE_SCHEMA;
   delete window.PageSchemaLegacy;
-  window.__NR2_SCHEMA_LOADED = "hal-10074";
+  window.__NR2_SCHEMA_LOADED = "hal-10077";
 })();
 
 const PageSchema = (function () {
-  const SCHEMA_VERSION = "hal-10074";
+  const SCHEMA_VERSION = "hal-10077";
 
   const PRACTICE = {
     name: "New Ridge Family Dental",
@@ -47,14 +47,17 @@ const PageSchema = (function () {
       commands: ["Summarize MTD production", "Compare to prior month", "Explain payer mix"],
       safety: "🔒 Local data only",
       widgets: [
+        { key: "nr2AlertTicker", title: "Exception Alert Ticker" },
         { key: "practiceFinancialOverview", title: "Practice Financial Overview" },
         { key: "nr2KpiRibbon", title: "Cross-Analytics KPI Ribbon" },
+        { key: "nr2GoalScorecard", title: "Production Goal Scorecard" },
+        { key: "nr2MonthlyTrendCombo", title: "Executive Monthly Trend" },
         { key: "financialProductionTrend", title: "Production MTD & 12-Month Trend" },
         { key: "nr2ProductionReconciliation", title: "Production vs QuickBooks Reconciliation" },
         { key: "nr2CollectionLag", title: "Collection Lag (DSO)" },
+        { key: "nr2ProviderCompensationWidget", title: "Provider Production Share" },
         { key: "softdentProductionDaily", title: "SoftDent Production Trend" },
         { key: "payerMixAndCollections", title: "Payer Mix & Collection Rate" },
-        { key: "providerPerformance", title: "Production by Provider" },
       ],
     },
     taxes: {
@@ -74,6 +77,10 @@ const PageSchema = (function () {
       widgets: [
         { key: "quickbooksProfitLossDetail", title: "Book Income (QuickBooks YTD)" },
         { key: "ebitdaNormalization", title: "Owner Add-backs & Adjustments" },
+        { key: "taxBookToTaxBridge", title: "Book-to-Tax Bridge" },
+        { key: "taxReasonableComp", title: "Reasonable Compensation Scenarios" },
+        { key: "taxQuarterlyEstimates", title: "Quarterly Tax Estimates" },
+        { key: "taxFederalStateSplit", title: "Federal / State Tax Split" },
       ],
     },
     softdent: {
@@ -308,7 +315,7 @@ if (typeof window !== "undefined") {
   window.PageSchema = PageSchema;
 }
 
-PageSchema.SCHEMA_VERSION = "hal-10074";
+PageSchema.SCHEMA_VERSION = "hal-10077";
 Object.defineProperty(PageSchema, "LAYOUT_EPOCH", {
   value: "moonshot-mockup",
   writable: false,

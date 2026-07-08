@@ -60,6 +60,24 @@ def _money_value(raw: str) -> float | None:
         return None
 
 
+def _transaction_amount(cells: list[str], code: str) -> float | None:
+    """Resolve production/payment/write-off amount from SoftDent daysheet row cells."""
+    production = _money_value(cells[7] if len(cells) > 7 else "")
+    if production not in (None, 0):
+        return production
+    normalized = str(code or "").strip()
+    if normalized in INSURANCE_PAYMENT_CODES:
+        return _money_value(cells[11] if len(cells) > 11 else "")
+    if normalized in INSURANCE_WRITEOFF_CODES:
+        writeoff = _money_value(cells[9] if len(cells) > 9 else "")
+        return abs(writeoff) if writeoff is not None else None
+    fallback = _money_value(cells[11] if len(cells) > 11 else "")
+    if fallback not in (None, 0):
+        return fallback
+    adj = _money_value(cells[9] if len(cells) > 9 else "")
+    return abs(adj) if adj is not None else None
+
+
 def _is_account_name(name: str) -> bool:
     lowered = name.strip().lower()
     return any(marker in lowered for marker in ACCOUNT_NAME_MARKERS)
@@ -97,7 +115,7 @@ def _iter_daysheet_transactions(formatted_rows: list[list[Any]]) -> list[dict[st
         patient_name = _normalize_patient_name(cells[2])
         code = cells[5]
         description = cells[6]
-        production = _money_value(cells[7])
+        production = _transaction_amount(cells, code)
         transaction_note = cells[14]
 
         if patient_id and patient_name and not _is_account_name(patient_name):

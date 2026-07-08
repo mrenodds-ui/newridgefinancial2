@@ -19,7 +19,7 @@ const repoRoot = join(root, "..");
 const site = join(root, "site");
 const mockups = join(repoRoot, ".local_logs", "moonshot_financial_eval", "page_mockups");
 const logDir = join(repoRoot, ".local_logs", "moonshot_financial_eval");
-const BUILD = "hal-10074";
+const BUILD = "hal-10077";
 const require = createRequire(import.meta.url);
 
 const results = [];
@@ -366,7 +366,7 @@ function writeReport() {
   const checklistFails = checklist.filter((r) => r.status === "FAIL");
   const moonshotVerdict =
     checklistFails.length === 0 && checklist.filter((r) => r.status === "PASS").length >= 8
-      ? "APPROVE hal-10074 — Moonshot fullest extent complete (automated sign-off; operator name still required)"
+      ? "APPROVE hal-10077 — Moonshot visual phase complete (automated sign-off; operator name still required)"
       : checklistFails.length
         ? "CONDITIONAL APPROVE — fix FAIL items before daily use"
         : "CONDITIONAL APPROVE — complete SKIP items manually";
@@ -410,7 +410,7 @@ async function main() {
   record(
     11,
     "Moonshot hal-10069–10074 completion doc",
-    moonshotExtentSrc.includes("hal-10074") && moonshotExtentSrc.includes("Practical ceiling") ? "PASS" : "FAIL",
+    moonshotExtentSrc.includes("hal-10077") && moonshotExtentSrc.includes("Practical ceiling") ? "PASS" : "FAIL",
     "MOONSHOT_FULLEST_EXTENT_COMPLETE_2026-07-09.md",
   );
   const mockupChrome = readFileSync(join(site, "nr2-moonshot-mockup-chrome.js"), "utf8");

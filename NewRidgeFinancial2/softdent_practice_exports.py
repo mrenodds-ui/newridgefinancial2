@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -425,6 +426,107 @@ def _read_operatory_chairs_file(path: Path) -> list[dict[str, Any]] | None:
     return chairs
 
 
+def _slot_time_label(appt_date: str) -> str:
+    text = str(appt_date or "").strip()
+    if not text:
+        return ""
+    if "T" in text:
+        return text.split("T", 1)[-1][:5]
+    if " " in text:
+        return text.split(" ", 1)[-1][:5]
+    return text[:10]
+
+
+def _slot_tone(status: str) -> str:
+    normalized = str(status or "").strip().lower()
+    if normalized in {"seen", "completed", "checked-in", "checked in", "arrived"}:
+        return "ok"
+    if normalized in {"cancelled", "canceled", "no-show", "noshow"}:
+        return "warn"
+    return "default"
+
+
+def _build_operatory_from_sd_appointments(
+    conn: sqlite3.Connection,
+    *,
+    limit_per_chair: int = 8,
+) -> list[dict[str, Any]] | None:
+    if not _table_exists(conn, "sd_appointments"):
+        return None
+    patients_exists = _table_exists(conn, "sd_patients")
+    providers_exists = _table_exists(conn, "sd_providers")
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        SELECT a.appt_date, a.patient_id, a.provider_code, a.status,
+               {"COALESCE(p.patient_name, a.patient_id)" if patients_exists else "a.patient_id"},
+               {"COALESCE(pr.provider_name, a.provider_code)" if providers_exists else "a.provider_code"}
+        FROM sd_appointments a
+        {"LEFT JOIN sd_patients p ON p.patient_id = a.patient_id" if patients_exists else ""}
+        {"LEFT JOIN sd_providers pr ON pr.provider_code = a.provider_code" if providers_exists else ""}
+        ORDER BY a.appt_date DESC
+        LIMIT 200
+        """
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return None
+
+    chairs: dict[str, dict[str, Any]] = {}
+    for appt_date, patient_id, provider_code, status, patient_name, provider_name in rows:
+        key = str(provider_code or provider_name or "unassigned").strip() or "unassigned"
+        if key not in chairs:
+            chairs[key] = {
+                "name": str(provider_name or provider_code or "Operatory").strip() or "Operatory",
+                "slots": [],
+            }
+        chairs[key]["slots"].append(
+            {
+                "time": _slot_time_label(str(appt_date or "")),
+                "patient": str(patient_name or patient_id or "").strip(),
+                "procedure": str(status or "Appointment").strip() or "Appointment",
+                "tone": _slot_tone(str(status or "")),
+            }
+        )
+
+    result: list[dict[str, Any]] = []
+    for chair in chairs.values():
+        chair["slots"] = chair["slots"][:limit_per_chair]
+        result.append(chair)
+    return result or None
+
+
+def _softdent_export_roots() -> list[Path]:
+    roots: list[Path] = []
+    for key in ("NR2_SOFTDENT_EXPORT_SOURCE", "SOFTDENT_SOURCE_DIR"):
+        raw = os.environ.get(key, "").strip()
+        if not raw:
+            continue
+        path = Path(raw)
+        if path.is_dir():
+            roots.append(path.resolve())
+    db_path = resolve_analytics_db()
+    if db_path and db_path.is_file():
+        roots.append(db_path.parent.resolve())
+    deduped: list[Path] = []
+    for root in roots:
+        if root not in deduped:
+            deduped.append(root)
+    return deduped
+
+
+def _mirror_operatory_export(destination: Path, payload: dict[str, Any]) -> None:
+    text = json.dumps(payload, indent=2)
+    for root in _softdent_export_roots():
+        if root.resolve() == destination.resolve():
+            continue
+        target = root / "operatory_schedule.json"
+        try:
+            target.write_text(text, encoding="utf-8")
+        except OSError:
+            continue
+
+
 def _aggregate_operatory_from_db(conn: sqlite3.Connection) -> list[dict[str, Any]] | None:
     for table in ("operatory_schedule", "operatory_chairs", "chair_schedule"):
         if not _table_exists(conn, table):
@@ -446,7 +548,7 @@ def _aggregate_operatory_from_db(conn: sqlite3.Connection) -> list[dict[str, Any
             return payload["operatoryChairs"]
         if isinstance(payload, list):
             return payload
-    return None
+    return _build_operatory_from_sd_appointments(conn)
 
 
 def sync_practice_exports(db_path: Path | None = None, destination: Path | None = None) -> dict[str, Any]:
@@ -499,10 +601,19 @@ def sync_practice_exports(db_path: Path | None = None, destination: Path | None 
             written.append(hr_path.name)
 
         op_path = destination / "operatory_schedule.json"
-        if not op_path.is_file() or _read_operatory_chairs_file(op_path) is None:
-            op_chairs = _aggregate_operatory_from_db(conn)
-            if op_chairs:
-                op_path.write_text(json.dumps({"operatoryChairs": op_chairs}, indent=2), encoding="utf-8")
+        op_chairs = _aggregate_operatory_from_db(conn)
+        if op_chairs:
+            overwrite = not op_path.is_file()
+            if not overwrite:
+                try:
+                    existing = json.loads(op_path.read_text(encoding="utf-8-sig"))
+                    overwrite = existing.get("generatedFrom") in (None, "sd_appointments", "analytics-db")
+                except (json.JSONDecodeError, OSError):
+                    overwrite = True
+            if overwrite:
+                payload = {"operatoryChairs": op_chairs, "generatedFrom": "sd_appointments"}
+                op_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+                _mirror_operatory_export(destination, payload)
                 written.append(op_path.name)
     finally:
         conn.close()

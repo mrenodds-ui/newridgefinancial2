@@ -784,7 +784,7 @@ async function main() {
   const widgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show manager dashboard widgets");
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
-  assert(Object.keys(feed.widgets).length === 44, "widget feed must build 44 operational widgets");
+  assert(Object.keys(feed.widgets).length === 48, "widget feed must build 48 operational widgets");
   const masterChart = HalWidgetMasterChart.all();
   assert(masterChart.length === HalSkills.WIDGET_ORDER.length, "widget master chart must cover every HAL widget");
   assert(masterChart.every((row) => row.page && row.purpose && row.expectedData.length && row.readyWhen), "widget master chart rows must include page, purpose, expected data, and ready criteria");
@@ -1786,8 +1786,13 @@ async function main() {
   assert(workstationPageSrc.includes("data-ws-open-hal"), "workstation must link to HAL hub");
   const mockupChromeSrc = readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8");
   assert(mockupChromeSrc.includes('data-nr2-export="cpa-packet"'), "financial page must expose CPA export button");
+  assert(mockupChromeSrc.includes("renderPageHeaderTools"), "mockup chrome must unify page-header-tools");
+  assert(mockupChromeSrc.includes("data-page-command"), "mockup chrome must render HAL command chips");
+  assert(mockupChromeSrc.includes("STAFF_HEADER_TOOL_PAGES"), "mockup chrome must expose sync badges on staff pages");
   const glowCss = readFileSync(join(siteDir, "nr2-moonshot-glow.css"), "utf8");
   assert(glowCss.includes("@media print"), "moonshot glow css must include print-safe mode");
+  assert(glowCss.includes(".nr2-alert-ticker"), "moonshot glow css must style alert ticker");
+  assert(readFileSync(join(__dirname, "nr2_analytics.py"), "utf8").includes("def goal_scorecard"), "nr2_analytics must expose goal_scorecard");
   assert(readFileSync(join(__dirname, "cpa_packet_export.py"), "utf8").includes("WIDGET_KEYS"), "cpa_packet_export module must exist");
   const halCanvasSrc = readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8");
   assert(halCanvasSrc.includes("widget-mosaic-tile") && halCanvasSrc.includes("aria-label="), "HAL mosaic tiles must expose aria-label");
@@ -2191,7 +2196,8 @@ print(out["text"])`,
   const NR2MoonshotUI = require(join(siteDir, "nr2-moonshot-ui.js"));
   assert(typeof NR2MoonshotUI.renderEraMatchCard === "function", "ERA match UI export");
   assert(typeof NR2MoonshotUI.renderPilotPhaseBanner === "function", "pilot phase banner export");
-  assert(typeof NR2MoonshotUI.installPilotBanner === "function", "installPilotBanner export");
+  assert(typeof NR2MoonshotUI.enhanceCanvasPanels === "function", "canvas panel enhancement export");
+  assert(typeof NR2MoonshotUI.enhanceCanvasCharts === "function", "canvas chart enhancement export");
   passed += 2;
   if (typeof NR2AlertsUI !== "undefined") {
     assert(typeof NR2AlertsUI.install === "function", "Alerts SSE UI export");

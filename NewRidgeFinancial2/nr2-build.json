@@ -1,16 +1,16 @@
 {
 
-  "BUILD_ID": "hal-10074",
+  "BUILD_ID": "hal-10077",
 
-  "assetVersion": "hal-10074",
+  "assetVersion": "hal-10077",
 
-  "schemaVersion": "hal-10074",
+  "schemaVersion": "hal-10077",
 
   "REQUIRED_EPOCH": "moonshot-mockup",
 
-  "builtAt": "2026-07-09T00:00:00.000Z",
+  "builtAt": "2026-07-07T00:00:00.000Z",
 
-  "notes": "Moonshot Tier 4: print-safe mode and CPA packet export (hal-10074)."
+  "notes": "Moonshot visual phase: executive widgets, header tools, canvas charts (hal-10077)."
 
 }
 

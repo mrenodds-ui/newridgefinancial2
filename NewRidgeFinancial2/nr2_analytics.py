@@ -210,6 +210,36 @@ def production_reconciliation(*, bundle: dict[str, Any] | None = None) -> dict[s
     }
 
 
+def _collections_vs_qb(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Compare latest SoftDent collections to QuickBooks revenue (Phase 5 briefing)."""
+    bundle = bundle or load_import_bundle(sync=False)
+    sd_rows = _dashboard_rows(bundle)
+    qb_rows = _qb_monthly_rows(bundle)
+    if not sd_rows or not qb_rows:
+        return {"hasData": False, "variancePct": None, "summary": ""}
+    latest_sd = sd_rows[-1]
+    period = latest_sd["period"]
+    collections = float(latest_sd.get("collections") or 0)
+    qb_match = next((row for row in qb_rows if row["period"] == period), qb_rows[-1])
+    qb_revenue = float(qb_match.get("revenue") or 0)
+    if collections <= 0 or qb_revenue <= 0:
+        return {"hasData": False, "variancePct": None, "summary": ""}
+    variance_pct = round(((qb_revenue - collections) / collections) * 100, 1)
+    tone = "ok" if abs(variance_pct) <= 5 else ("warn" if abs(variance_pct) <= 12 else "alert")
+    return {
+        "hasData": True,
+        "period": period,
+        "softdentCollections": round(collections, 2),
+        "quickbooksRevenue": round(qb_revenue, 2),
+        "variancePct": variance_pct,
+        "tone": tone,
+        "summary": (
+            f"{period}: QuickBooks revenue is {variance_pct:+.1f}% vs SoftDent collections "
+            f"(${collections:,.0f} collected vs ${qb_revenue:,.0f} QB revenue)."
+        ),
+    }
+
+
 def collection_lag(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
     bundle = bundle or load_import_bundle(sync=False)
     ar_rows = (((bundle.get("softdent") or {}).get("ar") or {}).get("rows")) or []
@@ -326,6 +356,16 @@ def kpi_ribbon(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
                 "widgetKey": "softdentProductionDaily",
             }
         )
+    coll_vs_qb = _collections_vs_qb(bundle=bundle)
+    if coll_vs_qb.get("hasData") and coll_vs_qb.get("variancePct") is not None:
+        tiles.append(
+            {
+                "label": "Collections vs QB",
+                "value": f"{coll_vs_qb['variancePct']:+.1f}%",
+                "tone": coll_vs_qb.get("tone") or "neutral",
+                "widgetKey": "nr2CollectionLag",
+            }
+        )
     return {"tiles": tiles[:6], "hasData": bool(tiles), "generatedAt": datetime.now(timezone.utc).isoformat()}
 
 
@@ -337,4 +377,148 @@ def analytics_snapshot(*, bundle: dict[str, Any] | None = None) -> dict[str, Any
         "quickbooksMonthlyRevenue": quickbooks_monthly_revenue(bundle=bundle),
         "softdentProductionDaily": softdent_production_daily(bundle=bundle),
         "kpiRibbon": kpi_ribbon(bundle=bundle),
+        "collectionsVsQuickbooks": _collections_vs_qb(bundle=bundle),
+        "goalScorecard": goal_scorecard(bundle=bundle),
+        "alertTicker": alert_ticker(bundle=bundle),
+        "providerCompensation": provider_compensation(bundle=bundle),
+        "monthlyTrendCombo": monthly_trend_combo(bundle=bundle),
+    }
+
+
+def goal_scorecard(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    import os
+
+    bundle = bundle or load_import_bundle(sync=False)
+    sd_rows = _dashboard_rows(bundle)
+    ytd_prod = sum(row["production"] for row in sd_rows)
+    env_target = os.environ.get("NR2_GOAL_PRODUCTION_YTD", "").strip()
+    target = _parse_money(env_target) if env_target else 0.0
+    if target <= 0 and ytd_prod > 0:
+        target = round(ytd_prod * 1.05, 2)
+    pct = round((ytd_prod / target) * 100, 1) if target > 0 else None
+    tone = "ok" if pct is not None and pct >= 95 else "warn" if pct is not None and pct >= 80 else "alert"
+    return {
+        "ytdProduction": round(ytd_prod, 2),
+        "targetProduction": round(target, 2) if target > 0 else None,
+        "pctOfGoal": pct,
+        "tone": tone,
+        "hasData": ytd_prod > 0,
+    }
+
+
+def alert_ticker(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    bundle = bundle or load_import_bundle(sync=False)
+    alerts: list[dict[str, Any]] = []
+    recon = production_reconciliation(bundle=bundle)
+    latest = recon.get("latest") or {}
+    variance = latest.get("variancePct")
+    if variance is not None and abs(float(variance)) > 10:
+        alerts.append(
+            {
+                "level": "warn",
+                "text": f"Production vs QuickBooks variance {variance}% ({latest.get('period', 'latest')})",
+                "widgetKey": "nr2ProductionReconciliation",
+            }
+        )
+    lag = collection_lag(bundle=bundle)
+    avg_lag = lag.get("avgLagDays")
+    if avg_lag is not None and float(avg_lag) > 45:
+        alerts.append(
+            {
+                "level": "warn",
+                "text": f"Collection lag {avg_lag} days exceeds 45-day review threshold",
+                "widgetKey": "nr2CollectionLag",
+            }
+        )
+    ar_rows = (((bundle.get("softdent") or {}).get("ar") or {}).get("rows")) or []
+    if isinstance(ar_rows, list):
+        ninety_plus = 0.0
+        total = 0.0
+        for row in ar_rows:
+            if not isinstance(row, dict):
+                continue
+            amount = _parse_money(row.get("Balance") or row.get("Outstanding") or row.get("Amount"))
+            total += amount
+            bucket = str(row.get("Aging") or row.get("Bucket") or "")
+            if re.search(r"90\+|91\+|120", bucket):
+                ninety_plus += amount
+        if total > 0 and (ninety_plus / total) >= 0.15:
+            alerts.append(
+                {
+                    "level": "warn",
+                    "text": f"A/R 90+ bucket is {round((ninety_plus / total) * 100, 1)}% of outstanding receivables",
+                    "widgetKey": "arAgingAndCollections",
+                }
+            )
+    if not alerts:
+        alerts.append(
+            {
+                "level": "ok",
+                "text": "Cross-analytics within normal review thresholds for imported snapshot",
+                "widgetKey": "nr2KpiRibbon",
+            }
+        )
+    return {"items": alerts[:8], "hasData": True}
+
+
+def provider_compensation(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    bundle = bundle or load_import_bundle(sync=False)
+    providers: list[dict[str, Any]] = []
+    try:
+        from nr2_softdent_daily import provider_production
+
+        payload = provider_production()
+        providers = payload.get("providers") if isinstance(payload.get("providers"), list) else []
+    except ImportError:
+        providers = []
+    if not providers:
+        fin = (bundle.get("financial") if isinstance(bundle.get("financial"), dict) else {}) or {}
+        sd = bundle.get("softdent") if isinstance(bundle.get("softdent"), dict) else {}
+        provider_block = fin.get("providers") or sd.get("providers") or {}
+        raw_rows = provider_block.get("rows") if isinstance(provider_block, dict) else provider_block
+        if isinstance(raw_rows, list):
+            for row in raw_rows[:8]:
+                if not isinstance(row, dict):
+                    continue
+                providers.append(
+                    {
+                        "name": str(row.get("name") or row.get("provider") or "Provider"),
+                        "production": _parse_money(row.get("production") or row.get("amount")),
+                    }
+                )
+    total = sum(_parse_money(item.get("production")) for item in providers)
+    rows = []
+    for item in providers[:8]:
+        amount = _parse_money(item.get("production"))
+        rows.append(
+            {
+                "name": str(item.get("name") or "Provider"),
+                "production": round(amount, 2),
+                "pct": round((amount / total) * 100, 1) if total > 0 else 0,
+            }
+        )
+    return {"providers": rows, "totalProduction": round(total, 2), "hasData": bool(rows)}
+
+
+def monthly_trend_combo(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    bundle = bundle or load_import_bundle(sync=False)
+    sd_rows = _dashboard_rows(bundle)
+    qb_by = {row["period"]: row["revenue"] for row in _qb_monthly_rows(bundle)}
+    periods = sorted({row["period"] for row in sd_rows} | set(qb_by.keys()))[-12:]
+    labels: list[str] = []
+    production: list[float] = []
+    collections: list[float] = []
+    revenue: list[float] = []
+    for period in periods:
+        sd = next((row for row in sd_rows if row["period"] == period), None)
+        labels.append(period)
+        production.append(round(sd["production"], 2) if sd else 0.0)
+        collections.append(round(sd["collections"], 2) if sd else 0.0)
+        revenue.append(round(qb_by.get(period, 0.0), 2))
+    return {
+        "labels": labels,
+        "production": production,
+        "collections": collections,
+        "revenue": revenue,
+        "hasData": bool(labels),
     }

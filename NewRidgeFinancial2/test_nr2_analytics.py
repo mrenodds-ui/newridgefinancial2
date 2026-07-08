@@ -9,10 +9,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from nr2_analytics import (
+    alert_ticker,
     analytics_snapshot,
     collection_lag,
+    goal_scorecard,
     kpi_ribbon,
+    monthly_trend_combo,
     production_reconciliation,
+    provider_compensation,
     quickbooks_monthly_revenue,
     softdent_production_daily,
 )
@@ -86,8 +90,33 @@ class Nr2AnalyticsTests(unittest.TestCase):
             "quickbooksMonthlyRevenue",
             "softdentProductionDaily",
             "kpiRibbon",
+            "goalScorecard",
+            "alertTicker",
+            "providerCompensation",
+            "monthlyTrendCombo",
         ):
             self.assertIn(key, snap)
+
+    def test_goal_scorecard(self) -> None:
+        result = goal_scorecard(bundle=_sample_bundle())
+        self.assertTrue(result["hasData"])
+        self.assertGreater(result["ytdProduction"], 0)
+        self.assertIsNotNone(result["pctOfGoal"])
+
+    def test_alert_ticker(self) -> None:
+        result = alert_ticker(bundle=_sample_bundle())
+        self.assertTrue(result["hasData"])
+        self.assertGreaterEqual(len(result["items"]), 1)
+
+    def test_provider_compensation(self) -> None:
+        result = provider_compensation(bundle=_sample_bundle())
+        self.assertIn("providers", result)
+        self.assertIn("hasData", result)
+
+    def test_monthly_trend_combo(self) -> None:
+        result = monthly_trend_combo(bundle=_sample_bundle())
+        self.assertTrue(result["hasData"])
+        self.assertEqual(len(result["labels"]), len(result["production"]))
 
 
 if __name__ == "__main__":

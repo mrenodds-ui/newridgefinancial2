@@ -1351,6 +1351,19 @@ const Services = (function () {
     return loopbackPostJson("/api/admin/extract-softdent-odbc", { method: "POST" });
   }
 
+  let softdentPrefetchPromise = null;
+
+  async function prefetchSoftdentDaily() {
+    if (typeof NR2SoftdentDaily === "undefined" || typeof NR2SoftdentDaily.prefetchLive !== "function") {
+      return {};
+    }
+    if (softdentPrefetchPromise) return softdentPrefetchPromise;
+    softdentPrefetchPromise = NR2SoftdentDaily.prefetchLive().finally(() => {
+      softdentPrefetchPromise = null;
+    });
+    return softdentPrefetchPromise;
+  }
+
   async function exportCpaPacket() {
     const port = typeof window !== "undefined" && window.NR2_LOOPBACK_PORT ? Number(window.NR2_LOOPBACK_PORT) : 8765;
     const host = typeof window !== "undefined" && window.location ? window.location.hostname || "127.0.0.1" : "127.0.0.1";
@@ -1410,6 +1423,7 @@ const Services = (function () {
     fetchHealth,
     syncQuickBooks,
     syncSoftdentOdbc,
+    prefetchSoftdentDaily,
     exportCpaPacket,
     pullPracticeSources,
     invalidateSnapshot: () => {

@@ -196,6 +196,19 @@ const MoonshotMockupChrome = (function () {
     return `<div class="prompt-chips prompt-chips--page" data-nr2-hal-commands>${chips}</div>`;
   }
 
+  const STAFF_HEADER_TOOL_PAGES = new Set([
+    "financial",
+    "taxes",
+    "softdent",
+    "quickbooks",
+    "ar",
+    "claims",
+    "documents",
+    "office-manager",
+    "narratives",
+    "library",
+  ]);
+
   function renderQuickbooksSyncBadge(readiness) {
     const level = String((readiness && readiness.level) || "unknown").toLowerCase();
     const fresh = level === "fresh";
@@ -207,16 +220,45 @@ const MoonshotMockupChrome = (function () {
     </div>`;
   }
 
+  function renderImportSyncBadge(readiness, schemaId) {
+    if (schemaId === "quickbooks") return renderQuickbooksSyncBadge(readiness);
+    const level = String((readiness && readiness.level) || "unknown").toLowerCase();
+    const fresh = level === "fresh";
+    const syncing = level === "syncing";
+    const color = fresh ? "var(--accent-green, #2ecc71)" : "var(--accent-amber, #ffb800)";
+    const labels = {
+      financial: fresh ? "Imports synced" : syncing ? "Sync in progress" : "Import stale — review data",
+      taxes: fresh ? "Tax sources synced" : syncing ? "Sync in progress" : "Tax data stale",
+      softdent: fresh ? "SoftDent synced" : syncing ? "Sync in progress" : "SoftDent stale",
+      ar: fresh ? "A/R sources synced" : syncing ? "Sync in progress" : "A/R data stale",
+      claims: fresh ? "Claims synced" : syncing ? "Sync in progress" : "Claims stale",
+      documents: fresh ? "Documents synced" : syncing ? "Sync in progress" : "Documents stale",
+      "office-manager": fresh ? "Operations synced" : syncing ? "Sync in progress" : "Operations stale",
+      narratives: fresh ? "Narratives synced" : syncing ? "Sync in progress" : "Narratives stale",
+      library: fresh ? "Library synced" : syncing ? "Sync in progress" : "Library stale",
+    };
+    const label = labels[schemaId] || (fresh ? "Local imports fresh" : syncing ? "Sync in progress" : "Import stale — review sync");
+    return `<div class="sync-badge" role="status">
+      <span class="sync-indicator" style="background:${color}"></span>
+      <span>${esc(label)}</span>
+    </div>`;
+  }
+
   function renderFinancialCpaExportButton() {
     return `<button type="button" class="cpa-export-btn" data-nr2-export="cpa-packet" aria-label="Export CPA packet zip">CPA export</button>`;
   }
 
-  function renderPageHeaderExtras(schema, opts) {
+  function renderPageHeaderTools(schema, opts, commandChipsHtml) {
     const o = opts || {};
-    if (!schema) return "";
-    if (schema.id === "quickbooks") return renderQuickbooksSyncBadge(o.importReadiness);
-    if (schema.id === "financial") return renderFinancialCpaExportButton();
-    return "";
+    if (!schema || !schema.id) return commandChipsHtml ? `<div class="page-header-tools">${commandChipsHtml}</div>` : "";
+    const parts = [];
+    if (STAFF_HEADER_TOOL_PAGES.has(schema.id)) {
+      parts.push(renderImportSyncBadge(o.importReadiness, schema.id));
+    }
+    if (schema.id === "financial") parts.push(renderFinancialCpaExportButton());
+    if (commandChipsHtml) parts.push(commandChipsHtml);
+    if (!parts.length) return "";
+    return `<div class="page-header-tools">${parts.join("")}</div>`;
   }
 
   function renderHalInsight(insight) {
@@ -275,13 +317,12 @@ const MoonshotMockupChrome = (function () {
       typeof window !== "undefined" && window.NR2_FLAGS && window.NR2_FLAGS.hal_commands === false
         ? ""
         : renderPageCommandChips(commands);
-    const headerExtras = renderPageHeaderExtras(schema, o);
+    const headerTools = renderPageHeaderTools(schema, o, commandChips);
     return `<div class="ms-page-chrome">
       ${renderTopHeader(state)}
       ${renderHero(schema)}
-      ${headerExtras ? `<div class="page-header-tools">${headerExtras}</div>` : ""}
+      ${headerTools}
       ${renderFilterBar(schema && schema.filters)}
-      ${commandChips}
       ${insight ? renderHalInsight(insight) : ""}
       ${o.halReadinessStrip || ""}
     </div>`;

@@ -194,7 +194,7 @@ function enforceSingleFinancialTab() {
       }
       if (window.BroadcastChannel) {
         const bc = new BroadcastChannel("nr2_tab");
-        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10074" });
+        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10077" });
       }
     }
   }
@@ -1201,6 +1201,9 @@ function invalidateProgramCaches(reason) {
   programContextCache = null;
   const Svc = typeof Services !== "undefined" ? Services : window.Services;
   if (Svc && typeof Svc.invalidateSnapshot === "function") Svc.invalidateSnapshot();
+  if (typeof NR2SoftdentDaily !== "undefined" && typeof NR2SoftdentDaily.clearLiveCache === "function") {
+    NR2SoftdentDaily.clearLiveCache();
+  }
   if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate(reason || "app");
 }
 
@@ -4807,7 +4810,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10074&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10077&__nr2_purge=1</div>';
     return;
   }
   const MC =
@@ -4927,6 +4930,20 @@ function select(id, options) {
           if (appPage && !appPage.hidden && PageViews && PageViews.hasPage(page.id)) {
             PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed, halProgramSnapshot);
           }
+        }
+      })
+      .catch(() => {});
+  }
+  if (
+    !NR2_WORKSTATION_ONLY &&
+    page.id === "softdent" &&
+    typeof NR2SoftdentDaily !== "undefined" &&
+    typeof NR2SoftdentDaily.prefetchLive === "function"
+  ) {
+    NR2SoftdentDaily.prefetchLive()
+      .then(() => {
+        if (appPage && !appPage.hidden && PageViews && PageViews.hasPage(page.id)) {
+          PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed, halProgramSnapshot);
         }
       })
       .catch(() => {});
@@ -5617,6 +5634,9 @@ async function refreshImportsInBackground() {
   try {
     await Services.refreshImports();
     invalidateProgramCaches("import-refresh");
+    if (typeof Services.prefetchSoftdentDaily === "function") {
+      Services.prefetchSoftdentDaily().catch(() => {});
+    }
     await scheduleHalWidgetRefresh();
   } catch {
     /* background import sync optional */

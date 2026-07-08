@@ -1046,6 +1046,11 @@ const PageCanvasData = (function () {
   }
 
   function softdentOperatoryGrid() {
+    const S = softdentDailyApi();
+    if (S && typeof S.operatoryGrid === "function") {
+      const chairs = S.operatoryGrid(snapshot);
+      if (Array.isArray(chairs) && chairs.length) return chairs;
+    }
     const sd = dash("softdent") || {};
     const chairs = sd.operatoryChairs;
     if (Array.isArray(chairs) && chairs.length) return chairs;
@@ -1646,6 +1651,26 @@ const PageCanvasData = (function () {
     return A ? A.kpiRibbon(snapshot) : { tiles: [], hasData: false };
   }
 
+  function nr2GoalScorecard() {
+    const A = analyticsApi();
+    return A ? A.goalScorecard(snapshot) : { hasData: false };
+  }
+
+  function nr2AlertTicker() {
+    const A = analyticsApi();
+    return A ? A.alertTicker(snapshot) : { items: [], hasData: false };
+  }
+
+  function nr2ProviderCompensation() {
+    const A = analyticsApi();
+    return A ? A.providerCompensation(snapshot) : { providers: [], hasData: false };
+  }
+
+  function nr2MonthlyTrendCombo() {
+    const A = analyticsApi();
+    return A ? A.monthlyTrendCombo(snapshot) : { labels: [], hasData: false };
+  }
+
   function qbReportsApi() {
     return typeof NR2QbReports !== "undefined" ? NR2QbReports : null;
   }
@@ -1798,6 +1823,10 @@ const PageCanvasData = (function () {
     quickbooksMonthlyRevenueSeries,
     softdentProductionDailySeries,
     nr2KpiRibbonTiles,
+    nr2GoalScorecard,
+    nr2AlertTicker,
+    nr2ProviderCompensation,
+    nr2MonthlyTrendCombo,
     quickbooksBalanceSheetSummary,
     quickbooksCashFlowTrend,
     quickbooksNetIncomeSummary,

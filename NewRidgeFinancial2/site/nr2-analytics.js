@@ -207,7 +207,107 @@ const NR2Analytics = (function () {
         widgetKey: "softdentProductionDaily",
       });
     }
+    const sdRows = dashboardRows(snapshot);
+    const qbRows = qbMonthlyRows(snapshot);
+    if (sdRows.length && qbRows.length) {
+      const latestSd = sdRows[sdRows.length - 1];
+      const qbMatch = qbRows.find((row) => row.period === latestSd.period) || qbRows[qbRows.length - 1];
+      if (latestSd.collections > 0 && qbMatch.revenue > 0) {
+        const variancePct = Math.round(((qbMatch.revenue - latestSd.collections) / latestSd.collections) * 1000) / 10;
+        const tone = Math.abs(variancePct) <= 5 ? "ok" : Math.abs(variancePct) <= 12 ? "warn" : "alert";
+        tiles.push({
+          label: "Collections vs QB",
+          value: `${variancePct > 0 ? "+" : ""}${variancePct}%`,
+          tone,
+          widgetKey: "nr2CollectionLag",
+        });
+      }
+    }
     return { tiles: tiles.slice(0, 6), hasData: tiles.length > 0 };
+  }
+
+  function goalScorecard(snapshot) {
+    const sdRows = dashboardRows(snapshot);
+    const ytdProd = sdRows.reduce((sum, row) => sum + (row.production || 0), 0);
+    let target = 0;
+    if (typeof window !== "undefined" && window.NR2_GOAL_PRODUCTION_YTD) {
+      target = parseMoney(window.NR2_GOAL_PRODUCTION_YTD);
+    }
+    if (target <= 0 && ytdProd > 0) target = Math.round(ytdProd * 1.05);
+    const pct = target > 0 ? Math.round((ytdProd / target) * 1000) / 10 : null;
+    const tone = pct == null ? "neutral" : pct >= 95 ? "ok" : pct >= 80 ? "warn" : "alert";
+    return { ytdProduction: ytdProd, targetProduction: target || null, pctOfGoal: pct, tone, hasData: ytdProd > 0 };
+  }
+
+  function alertTicker(snapshot) {
+    const alerts = [];
+    const recon = productionReconciliation(snapshot);
+    const latest = recon.latest || {};
+    if (latest.variancePct != null && Math.abs(latest.variancePct) > 10) {
+      alerts.push({
+        level: "warn",
+        text: `Production vs QuickBooks variance ${latest.variancePct}% (${latest.period || "latest"})`,
+        widgetKey: "nr2ProductionReconciliation",
+      });
+    }
+    const lag = collectionLag(snapshot);
+    if (lag.avgLagDays != null && lag.avgLagDays > 45) {
+      alerts.push({
+        level: "warn",
+        text: `Collection lag ${lag.avgLagDays} days exceeds 45-day review threshold`,
+        widgetKey: "nr2CollectionLag",
+      });
+    }
+    if (!alerts.length) {
+      alerts.push({
+        level: "ok",
+        text: "Cross-analytics within normal review thresholds for imported snapshot",
+        widgetKey: "nr2KpiRibbon",
+      });
+    }
+    return { items: alerts.slice(0, 8), hasData: true };
+  }
+
+  function providerCompensation(snapshot) {
+    const fin = snapshot && snapshot.dashboards && snapshot.dashboards.financial;
+    const rows = (fin && fin.providers && fin.providers.rows) || [];
+    const mapped = (Array.isArray(rows) ? rows : []).slice(0, 8).map((row) => ({
+      name: String(row.name || row.provider || "Provider"),
+      production: parseMoney(row.production || row.amount),
+    }));
+    const total = mapped.reduce((sum, row) => sum + row.production, 0);
+    return {
+      providers: mapped.map((row) => ({
+        name: row.name,
+        production: row.production,
+        pct: total > 0 ? Math.round((row.production / total) * 1000) / 10 : 0,
+      })),
+      totalProduction: total,
+      hasData: mapped.length > 0,
+    };
+  }
+
+  function monthlyTrendCombo(snapshot) {
+    const sdRows = dashboardRows(snapshot);
+    const qbRows = qbMonthlyRows(snapshot);
+    const qbBy = {};
+    qbRows.forEach((row) => {
+      qbBy[row.period] = row.revenue;
+    });
+    const periods = Array.from(new Set(sdRows.map((row) => row.period).concat(Object.keys(qbBy)))).sort().slice(-12);
+    return {
+      labels: periods,
+      production: periods.map((period) => {
+        const row = sdRows.find((item) => item.period === period);
+        return row ? row.production : 0;
+      }),
+      collections: periods.map((period) => {
+        const row = sdRows.find((item) => item.period === period);
+        return row ? row.collections : 0;
+      }),
+      revenue: periods.map((period) => qbBy[period] || 0),
+      hasData: periods.length > 0,
+    };
   }
 
   return {
@@ -216,6 +316,10 @@ const NR2Analytics = (function () {
     quickbooksMonthlyRevenue,
     softdentProductionDaily,
     kpiRibbon,
+    goalScorecard,
+    alertTicker,
+    providerCompensation,
+    monthlyTrendCombo,
   };
 })();
 

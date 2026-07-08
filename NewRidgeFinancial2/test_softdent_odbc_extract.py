@@ -29,7 +29,8 @@ def _sample_daysheet(path: Path) -> None:
                 ["", "ID", "Name", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["June 15, 2026", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["", "1001", "Jane Doe", "", "DR1", "1110", "Prophylaxis - Adult", "120.00", "", "", "", "", "", "", ""],
-                ["", "1002", "John Smith", "", "DR1", "1200", "Visa Card Payment", "85.00", "", "", "", "", "", "", ""],
+                ["", "1002", "John Smith", "", "DR1", "2", "Insurance Check Payment", "", "", "($50.00)", "", "$85.00", "", "", ""],
+                ["", "1003", "Pat Lee", "", "DR1", "51", "Insurance Co Write-Off", "", "", "($40.00)", "", "", "", "", ""],
             ]
         },
     }
@@ -62,7 +63,8 @@ class SoftdentOdbcExtractTests(unittest.TestCase):
             self.assertGreater(counts["sd_procedures"], 0)
             self.assertGreater(counts["sd_patients"], 0)
             self.assertGreater(counts["sd_claims"], 0)
-            self.assertGreaterEqual(result["tableCounts"]["sd_payments"], 1)
+            self.assertGreaterEqual(counts["sd_payments"], 1)
+            self.assertGreaterEqual(counts["sd_adjustments"], 1)
 
     def test_odbc_lane_graceful_without_dsn(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

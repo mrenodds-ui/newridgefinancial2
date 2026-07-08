@@ -69,7 +69,7 @@ const FORBIDDEN_BODY = [
 ];
 
 const PAGE_REQUIRED = {
-  financial: ["provider-list", "chart-container", "widget-card"],
+  financial: ["provider-list", "chart-container", "widget-card", "nr2-alert-ticker", "kpi-ribbon"],
   ar: ["kpi-grid", "kpi-tile", "heatmap-grid", "queue-list", "queue-item"],
   claims: ["kanban-board", "kanban-column", "claim-card", "side-panel"],
   narratives: ["composer-grid", "panel", "composer-textarea", "cdt-list"],
@@ -112,7 +112,8 @@ for (const pageId of PageSchema.STAFF_PAGE_IDS || []) {
 
   const mockupPath = join(mockups, `${pageId}.html`);
   const SIGNATURE_BY_PAGE = {
-    financial: ["provider-list", "chart-container"],
+    financial: ["provider-list", "chart-container", "nr2-alert-ticker", "kpi-ribbon"],
+    quickbooks: ["dashboard-grid", "kpi-card", "sync-badge"],
     ar: ["kpi-grid", "heatmap-grid", "queue-list"],
     claims: ["kanban-board", "claim-card", "side-panel"],
     narratives: ["composer-grid", "composer-textarea"],

@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,11 +18,17 @@ from typing import Any
 
 from import_loader import softdent_import_dir
 from quickbooks_monthly_sync import resolve_analytics_db
+from softdent_operational_pipeline import (
+    INSURANCE_PAYMENT_CODES,
+    INSURANCE_WRITEOFF_CODES,
+    _money_value,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 PAYMENT_PROCEDURE_PREFIXES = ("1200", "1400", "4000", "5000")
-WRITEOFF_CODES = frozenset({"51", "52"})
+WRITEOFF_CODES = INSURANCE_WRITEOFF_CODES
+PAYMENT_CODES = INSURANCE_PAYMENT_CODES
 
 SD_TABLES = (
     "sd_providers",
@@ -231,15 +238,29 @@ def _is_payment(code: str, description: str) -> bool:
     text = str(description or "").lower()
     if normalized in WRITEOFF_CODES:
         return False
+    if normalized in PAYMENT_CODES:
+        return True
     if any(normalized.startswith(prefix) for prefix in PAYMENT_PROCEDURE_PREFIXES):
         return True
-    return any(token in text for token in ("payment", "visa", "mastercard", "check", "cash"))
+    return any(token in text for token in ("payment", "visa", "mastercard", "check", "cash", "insurance check"))
 
 
 def _is_adjustment(code: str, description: str) -> bool:
     normalized = str(code or "").strip()
     text = str(description or "").lower()
-    return normalized in WRITEOFF_CODES or "write-off" in text or "write off" in text or "adjustment" in text
+    if normalized in WRITEOFF_CODES:
+        return True
+    return "write-off" in text or "write off" in text or "adjustment" in text
+
+
+def _row_amount(row: dict[str, Any]) -> float:
+    production = row.get("production")
+    if production not in (None, "", 0):
+        try:
+            return abs(float(production))
+        except (TypeError, ValueError):
+            pass
+    return 0.0
 
 
 def _populate_from_daysheet(conn: sqlite3.Connection, path: Path, *, extracted_at: str) -> dict[str, int]:
@@ -259,7 +280,7 @@ def _populate_from_daysheet(conn: sqlite3.Connection, path: Path, *, extracted_a
         code = str(row.get("code") or "").strip()
         description = str(row.get("description") or "").strip()
         production = row.get("production")
-        amount = float(production) if production not in (None, "", 0) else 0.0
+        amount = _row_amount(row)
 
         if patient_id and patient_name:
             bucket = patients.setdefault(
@@ -292,7 +313,9 @@ def _populate_from_daysheet(conn: sqlite3.Connection, path: Path, *, extracted_a
         if not patient_id or not proc_date:
             continue
 
-        if _is_adjustment(code, description) and amount:
+        if _is_adjustment(code, description):
+            if amount <= 0 and not code:
+                continue
             conn.execute(
                 """
                 INSERT OR REPLACE INTO sd_adjustments
@@ -304,7 +327,9 @@ def _populate_from_daysheet(conn: sqlite3.Connection, path: Path, *, extracted_a
             counts["sd_adjustments"] += 1
             continue
 
-        if _is_payment(code, description) and amount:
+        if _is_payment(code, description):
+            if amount <= 0:
+                continue
             conn.execute(
                 """
                 INSERT OR REPLACE INTO sd_payments
@@ -606,6 +631,89 @@ def _resolve_daysheet_path() -> Path | None:
     return resolve_daysheet_jsonl_path()
 
 
+def _resolve_register_path() -> Path | None:
+    try:
+        from import_sync import SOFTDENT_FINANCIAL_EXPORTS, _find_newest, _softdent_direct_read_roots
+    except Exception:
+        return None
+    candidates: list[Path] = []
+    for root in _softdent_direct_read_roots():
+        found = _find_newest(root, ("register_for_period.jsonl",))
+        if found:
+            candidates.append(found)
+    direct = SOFTDENT_FINANCIAL_EXPORTS / "register_for_period.jsonl"
+    if direct.is_file():
+        candidates.append(direct)
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item.stat().st_mtime)
+
+
+def _register_period_end(path: Path) -> str:
+    match = re.search(r"(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})", path.name)
+    if match:
+        return match.group(2)
+    match = re.search(r"(\d{4}-\d{2}-\d{2})", str(path))
+    return match.group(1) if match else datetime.now(timezone.utc).date().isoformat()
+
+
+def _populate_from_register_jsonl(conn: sqlite3.Connection, path: Path, *, extracted_at: str) -> dict[str, int]:
+    counts = {"sd_payments": 0, "sd_adjustments": 0}
+    if not path.is_file():
+        return counts
+    payment_date = _register_period_end(path)
+    register_methods = frozenset({"cash", "check", "credit card", "eft", "carecredit", "ins plan collections", "regular collections"})
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if str(payload.get("dataset_name") or "") != "register_for_period":
+                continue
+            raw = payload.get("raw_row")
+            if not isinstance(raw, list):
+                continue
+            cells = [str(cell or "").strip() for cell in raw]
+            while len(cells) < 10:
+                cells.append("")
+            label = (cells[0] or cells[1]).strip()
+            lowered = label.lower()
+            amount = _money_value(cells[2]) or _money_value(cells[3])
+            if lowered == "adjustment to collections" or "adjustment to collections" in lowered:
+                if amount is None:
+                    continue
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO sd_adjustments
+                    (practice_id, patient_id, adj_date, ada_code, amount, description, extracted_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("", "register", payment_date, "adj", abs(float(amount)), label, extracted_at),
+                )
+                counts["sd_adjustments"] += 1
+                continue
+            method = cells[1].strip() if not cells[0] else cells[1].strip()
+            if method.lower() not in register_methods:
+                continue
+            if amount is None or amount <= 0:
+                continue
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO sd_payments
+                (practice_id, patient_id, payment_date, amount, payer, method, extracted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("", f"register:{method.lower().replace(' ', '_')}", payment_date, abs(float(amount)), "", method, extracted_at),
+            )
+            counts["sd_payments"] += 1
+    conn.commit()
+    return counts
+
+
 def _resolve_claims_path() -> Path | None:
     dest = softdent_import_dir()
     for name in ("softdent_claims_export.csv", "claims_export.csv"):
@@ -642,6 +750,11 @@ def extract_softdent_odbc(*, db_path: Path | None = None, force: bool = False) -
         daysheet_path = _resolve_daysheet_path()
         if daysheet_path:
             fallback_counts = _populate_from_daysheet(conn, daysheet_path, extracted_at=extracted_at)
+        register_path = _resolve_register_path()
+        if register_path:
+            register_counts = _populate_from_register_jsonl(conn, register_path, extracted_at=extracted_at)
+            for key, value in register_counts.items():
+                fallback_counts[key] = fallback_counts.get(key, 0) + int(value or 0)
         claims_count = _populate_from_claims_csv(conn, _resolve_claims_path() or Path(""), extracted_at=extracted_at)
         fallback_counts["sd_claims"] = fallback_counts.get("sd_claims", 0) + claims_count
         result["fallback"] = fallback_counts

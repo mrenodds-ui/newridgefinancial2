@@ -271,6 +271,25 @@ const NR2MoonshotUI = (function () {
     return host;
   }
 
+  async function mountPostingKanban(pageId, root) {
+    if (!root || typeof NR2Charts === "undefined" || !NR2Charts.renderPostingKanban) return;
+    const widgetKey = pageId === "documents" ? "periodCloseAndPosting" : "documentIntakeQueue";
+    const host = chartOverlayHost(root, widgetKey);
+    if (!host) return;
+    const kanban = document.createElement("div");
+    kanban.id = `nr2-posting-kanban-${pageId}`;
+    host.appendChild(kanban);
+    let posting = { items: [] };
+    let ocr = { items: [] };
+    try {
+      posting = await fetchJson("/api/posting-queue?limit=50");
+      ocr = await fetchJson("/api/ocr-exceptions?status=pending");
+    } catch {
+      /* optional */
+    }
+    NR2Charts.renderPostingKanban(kanban.id, mapKanbanColumns(posting.items, ocr.items));
+  }
+
   async function enhanceCanvasCharts(pageId, root) {
     if (!root || typeof NR2Charts === "undefined") return;
     if (pageId === "financial") {
@@ -348,6 +367,93 @@ const NR2MoonshotUI = (function () {
         NR2Charts.renderImportTimeline("nr2-import-timeline-qb", sources);
       }
     }
+    if (pageId === "softdent") {
+      const host = chartOverlayHost(root, "softdentArAging");
+      if (host) {
+        const canvas = document.createElement("canvas");
+        canvas.id = "nr2-softdent-ar-heatmap";
+        canvas.width = 340;
+        canvas.height = 120;
+        host.appendChild(canvas);
+        let buckets = [];
+        try {
+          const reports = await fetchJson("/api/financial-reports");
+          buckets = (reports && reports.arAgingBuckets) || [];
+        } catch {
+          buckets = [];
+        }
+        if (!buckets.length) {
+          buckets = [
+            { bucket: "0-30", amount: 0 },
+            { bucket: "31-60", amount: 0 },
+            { bucket: "61-90", amount: 0 },
+            { bucket: "90+", amount: 0 },
+          ];
+        }
+        NR2Charts.renderARHeatmap("nr2-softdent-ar-heatmap", buckets);
+      }
+    }
+    if (pageId === "documents" || pageId === "financial") {
+      await mountPostingKanban(pageId, root);
+    }
+    if (pageId === "taxes") {
+      const host = chartOverlayHost(root, "taxFederalStateSplit");
+      if (host) {
+        const canvas = document.createElement("canvas");
+        canvas.id = "nr2-tax-import-timeline";
+        canvas.width = 340;
+        canvas.height = 90;
+        host.appendChild(canvas);
+        let sources = null;
+        try {
+          const readiness = await fetchJson("/api/v1/import-readiness");
+          sources = readiness && readiness.sources;
+        } catch {
+          sources = null;
+        }
+        if (!sources) {
+          sources = [
+            { id: "quickbooks", name: "QuickBooks", level: "unknown" },
+            { id: "softdent", name: "SoftDent", level: "unknown" },
+          ];
+        }
+        NR2Charts.renderImportTimeline("nr2-tax-import-timeline", sources);
+      }
+    }
+    if (pageId === "office-manager") {
+      const host = chartOverlayHost(root, "officeManagerPriorities");
+      if (host) {
+        const canvas = document.createElement("canvas");
+        canvas.id = "nr2-office-import-timeline";
+        canvas.width = 340;
+        canvas.height = 90;
+        host.appendChild(canvas);
+        let sources = null;
+        let readiness = null;
+        try {
+          readiness = await fetchJson("/api/import-readiness");
+          sources = readiness && readiness.sources;
+        } catch {
+          sources = null;
+        }
+        if (!sources) {
+          sources = [{ id: "bundle", name: "Import bundle", level: (readiness && readiness.level) || "unknown" }];
+        }
+        NR2Charts.renderImportTimeline("nr2-office-import-timeline", sources);
+      }
+    }
+  }
+
+  async function enhanceCanvasPanels(pageId, root) {
+    if (!root) return;
+    const panelHost = root.querySelector(".widget-grid") || root.querySelector(".stack") || root;
+    if (!panelHost || panelHost.dataset.nr2MoonshotPanels === "1") return;
+    panelHost.dataset.nr2MoonshotPanels = "1";
+    if (pageId === "documents") await renderOcrExceptions(panelHost);
+    if (pageId === "financial" || pageId === "office-manager") await renderAuditDashboard(panelHost);
+    if (pageId === "claims" || pageId === "financial") await renderClinicalBridge(panelHost);
+    if (pageId === "claims" || pageId === "financial") await renderEraMatchPanel(panelHost);
+    if (pageId === "financial" || pageId === "taxes") renderCloseWizard(panelHost);
   }
 
   async function renderCharts(pageId, container) {
@@ -448,6 +554,7 @@ const NR2MoonshotUI = (function () {
     const isCanvas = typeof PageCanvas !== "undefined" && PageCanvas.hasPage && PageCanvas.hasPage(pageId);
     if (isCanvas) {
       await enhanceCanvasCharts(pageId, root);
+      await enhanceCanvasPanels(pageId, root);
       return;
     }
     const panelHost = root.querySelector(".ms-page-body") || root;
@@ -461,7 +568,15 @@ const NR2MoonshotUI = (function () {
     if (pageId === "financial" || pageId === "taxes") renderCloseWizard(panelHost);
   }
 
-  return { enhancePage, enhanceCanvasCharts, renderEraMatchCard, renderEraMatchPanel, renderPilotPhaseBanner, installPilotBanner };
+  return {
+    enhancePage,
+    enhanceCanvasCharts,
+    enhanceCanvasPanels,
+    renderEraMatchCard,
+    renderEraMatchPanel,
+    renderPilotPhaseBanner,
+    installPilotBanner,
+  };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

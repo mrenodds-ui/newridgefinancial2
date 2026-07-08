@@ -1282,6 +1282,10 @@ const HalSkills = (function () {
     nr2KpiRibbon: "financial",
     nr2ProductionReconciliation: "financial",
     nr2CollectionLag: "financial",
+    nr2GoalScorecard: "financial",
+    nr2AlertTicker: "financial",
+    nr2MonthlyTrendCombo: "financial",
+    nr2ProviderCompensationWidget: "financial",
     softdentProductionDaily: "financial",
     softdentCollectionsDaily: "softdent",
     softdentNewPatientsMTD: "softdent",
@@ -1332,6 +1336,10 @@ const HalSkills = (function () {
     "nr2KpiRibbon",
     "nr2ProductionReconciliation",
     "nr2CollectionLag",
+    "nr2GoalScorecard",
+    "nr2AlertTicker",
+    "nr2MonthlyTrendCombo",
+    "nr2ProviderCompensationWidget",
     "softdentProductionDaily",
     "financialProductionTrend",
     "payerMixAndCollections",
@@ -1379,6 +1387,10 @@ const HalSkills = (function () {
     nr2KpiRibbon: ["SoftDent dashboard export", "QuickBooks monthly P&L rows", "Optional SoftDent A/R aging for DSO"],
     nr2ProductionReconciliation: ["SoftDent dashboard monthly production rows", "QuickBooks monthly revenue/P&L rows with matching periods"],
     nr2CollectionLag: ["SoftDent A/R aging export for weighted DSO", "Or SoftDent dashboard production/collections for monthly proxy"],
+    nr2GoalScorecard: ["SoftDent dashboard production rows for YTD actuals", "Optional NR2_GOAL_PRODUCTION_YTD env override"],
+    nr2AlertTicker: ["SoftDent dashboard + QuickBooks P&L for variance alerts", "SoftDent A/R aging for 90+ bucket warnings"],
+    nr2MonthlyTrendCombo: ["SoftDent dashboard monthly production/collections", "QuickBooks monthly revenue rows"],
+    nr2ProviderCompensationWidget: ["SoftDent provider production rows or sd_procedures ODBC extract"],
     softdentProductionDaily: ["SoftDent sd_procedures table (ODBC extract)", "Or daysheet/dashboard JSON fallback"],
     financialProductionTrend: ["SoftDent dashboard export with current period production", "Period labels for trend comparison"],
     payerMixAndCollections: ["SoftDent collections and payer mix fields", "Verified collection-rate source"],
@@ -1905,6 +1917,17 @@ const HalSkills = (function () {
       risk = risk || `Collection lag at ${lag.avgLagDays} days — cash flow risk`;
     }
 
+    const collTile = (ribbon.tiles || []).find((tile) => tile.label === "Collections vs QB");
+    if (collTile && collTile.tone === "alert") {
+      domains.push("collections");
+      risk =
+        risk ||
+        `SoftDent collections vs QuickBooks revenue variance ${collTile.value} — investigate deposit timing`;
+      actuators.push({ label: "Review collection lag", actionId: "navigate", target: "softdent" });
+    } else if (collTile && collTile.tone === "warn" && !opportunity) {
+      opportunity = `Collections vs QuickBooks within watch band (${collTile.value})`;
+    }
+
     let sentence;
     if (risk && opportunity) {
       sentence = `${risk}; however, ${opportunity.charAt(0).toLowerCase()}${opportunity.slice(1)}.`;
@@ -1948,6 +1971,10 @@ const HalSkills = (function () {
         qbRev: { hasData: false, values: [], labels: [] },
         prodDaily: { hasData: false, points: [] },
         ribbon: { tiles: [], hasData: false },
+        goal: { hasData: false, ytdProduction: null, targetProduction: null, pctOfGoal: null },
+        alerts: { items: [], hasData: false },
+        provComp: { providers: [], hasData: false, totalProduction: 0 },
+        combo: { labels: [], hasData: false },
       };
     }
     return {
@@ -1956,6 +1983,10 @@ const HalSkills = (function () {
       qbRev: api.quickbooksMonthlyRevenue(snapshot),
       prodDaily: api.softdentProductionDaily(snapshot),
       ribbon: api.kpiRibbon(snapshot),
+      goal: api.goalScorecard ? api.goalScorecard(snapshot) : { hasData: false },
+      alerts: api.alertTicker ? api.alertTicker(snapshot) : { items: [], hasData: false },
+      provComp: api.providerCompensation ? api.providerCompensation(snapshot) : { providers: [], hasData: false },
+      combo: api.monthlyTrendCombo ? api.monthlyTrendCombo(snapshot) : { labels: [], hasData: false },
     };
   }
 
@@ -2285,6 +2316,62 @@ const HalSkills = (function () {
         metrics: {
           avgLagDays: metricValue(analyticsPack.lag.avgLagDays != null ? `${analyticsPack.lag.avgLagDays} days` : null),
           dsoProxy: metricValue(analyticsPack.lag.dsoProxy ? "A/R weighted" : analyticsPack.lag.hasData ? "Monthly proxy" : null),
+        },
+      },
+      nr2GoalScorecard: {
+        key: "nr2GoalScorecard",
+        title: "Production Goal Scorecard",
+        status: analyticsPack.goal.hasData ? (analyticsPack.goal.pctOfGoal != null && analyticsPack.goal.pctOfGoal >= 95 ? "SUCCESS" : "DEGRADED") : "FAILED",
+        summary: "YTD SoftDent production compared to operator goal (env NR2_GOAL_PRODUCTION_YTD or 105% of imported YTD).",
+        navTarget: WIDGET_NAV.nr2GoalScorecard,
+        metrics: {
+          ytdProduction: metricValue(
+            analyticsPack.goal.ytdProduction != null ? `$${Math.round(analyticsPack.goal.ytdProduction).toLocaleString()}` : null,
+          ),
+          targetProduction: metricValue(
+            analyticsPack.goal.targetProduction != null ? `$${Math.round(analyticsPack.goal.targetProduction).toLocaleString()}` : null,
+          ),
+          pctOfGoal: metricValue(analyticsPack.goal.pctOfGoal != null ? `${analyticsPack.goal.pctOfGoal}%` : null),
+        },
+      },
+      nr2AlertTicker: {
+        key: "nr2AlertTicker",
+        title: "Exception Alert Ticker",
+        status: analyticsPack.alerts.hasData ? "SUCCESS" : "FAILED",
+        summary: "Rolling exception strip from production variance, collection lag, and A/R 90+ bucket thresholds.",
+        navTarget: WIDGET_NAV.nr2AlertTicker,
+        metrics: {
+          alertCount: metricValue((analyticsPack.alerts.items || []).length || null),
+          topAlert: metricValue((analyticsPack.alerts.items && analyticsPack.alerts.items[0] && analyticsPack.alerts.items[0].text) || null),
+        },
+      },
+      nr2MonthlyTrendCombo: {
+        key: "nr2MonthlyTrendCombo",
+        title: "Executive Monthly Trend",
+        status: analyticsPack.combo.hasData ? mergeWidgetStatus(financialStatus, qbStatus) : "FAILED",
+        summary: "Combined SoftDent production, collections, and QuickBooks revenue by month for executive review.",
+        navTarget: WIDGET_NAV.nr2MonthlyTrendCombo,
+        metrics: {
+          periodCount: metricValue((analyticsPack.combo.labels || []).length || null),
+          latestPeriod: metricValue(
+            analyticsPack.combo.labels && analyticsPack.combo.labels.length
+              ? analyticsPack.combo.labels[analyticsPack.combo.labels.length - 1]
+              : null,
+          ),
+        },
+      },
+      nr2ProviderCompensationWidget: {
+        key: "nr2ProviderCompensationWidget",
+        title: "Provider Production Share",
+        status: analyticsPack.provComp.hasData ? softdentStatus : "FAILED",
+        summary: "Provider production share from SoftDent provider rows or sd_procedures ODBC extract.",
+        navTarget: WIDGET_NAV.nr2ProviderCompensationWidget,
+        metrics: {
+          providerCount: metricValue((analyticsPack.provComp.providers || []).length || null),
+          topProvider: metricValue((analyticsPack.provComp.providers && analyticsPack.provComp.providers[0] && analyticsPack.provComp.providers[0].name) || null),
+          totalProduction: metricValue(
+            analyticsPack.provComp.totalProduction != null ? `$${Math.round(analyticsPack.provComp.totalProduction).toLocaleString()}` : null,
+          ),
         },
       },
       softdentProductionDaily: {

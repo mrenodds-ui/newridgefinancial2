@@ -154,6 +154,71 @@ body.nr2-workstation-app .ws-hal-pane {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
 }
 
+.app--moonshot-mockup .page-header-tools {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.app--moonshot-mockup .page-header-tools .prompt-chips--page {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.app--moonshot-mockup .page-header-tools .sync-badge {
+  margin: 0;
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 184, 0, 0.25);
+  border-radius: 8px;
+  background: rgba(255, 184, 0, 0.06);
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker__item {
+  font-size: 0.8125rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker__item--warn {
+  background: rgba(255, 184, 0, 0.15);
+  color: var(--accent-amber, #ffb800);
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker__item--ok {
+  background: rgba(46, 204, 113, 0.12);
+  color: var(--accent-green, #2ecc71);
+}
+
+.app--moonshot-mockup .ms-page .kpi-card .kpi-spark-bars,
+.app--moonshot-mockup .ms-page .metric-tile .kpi-spark-bars {
+  align-items: flex-end;
+  display: flex;
+  gap: 2px;
+  height: 28px;
+  margin-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page .kpi-card .kpi-spark-bar,
+.app--moonshot-mockup .ms-page .metric-tile .kpi-spark-bar {
+  flex: 1;
+  min-width: 3px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent-cyan, #00d4ff);
+}
+
 .app--moonshot-mockup .page-header-tools .cpa-export-btn {
   border: 1px solid rgba(0, 212, 255, 0.35);
   background: rgba(0, 212, 255, 0.08);

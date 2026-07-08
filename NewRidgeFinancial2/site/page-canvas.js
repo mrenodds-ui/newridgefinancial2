@@ -197,9 +197,11 @@ const PageCanvas = (function () {
     const halTone = widgetKey && HW ? ` hal-widget-status hal-widget-status--${HW.statusTone(widget ? widget.status : "FAILED")}` : "";
     const attrs = widgetKey ? ` data-hal-widget-key="${esc(widgetKey)}"${halCmd} role="button" tabindex="0"` : "";
     const trend = kpi.hint ? `<div class="trend-indicator"><span>↑</span> ${esc(kpi.hint)}</div>` : "";
+    const sparkHtml = kpi.spark && kpi.spark.length ? barSparkline(kpi.spark, kpi.tone) : "";
     return `<div class="widget-card col-4 kpi-large kpi-glow-card${halTone}"${attrs}>
         <div class="widget-header"><span class="widget-title">${widgetHeaderIcon(widgetKey)}${esc(String(kpi.label || ""))}</span><div class="widget-menu" aria-hidden="true">⋮</div></div>
         <div class="kpi-value">${esc(kpi.value)}</div>
+        ${sparkHtml}
         ${trend}
       </div>`;
   }
@@ -211,7 +213,8 @@ const PageCanvas = (function () {
     const deltaClass = kpi.tone === "success" ? "kpi-positive" : kpi.tone === "warning" ? "kpi-negative" : "";
     const arrow = kpi.tone === "warning" ? "↓" : "↑";
     const delta = kpi.hint ? `<div class="kpi-delta ${deltaClass}"><span>${arrow}</span> ${esc(kpi.hint)}</div>` : "";
-    return `<div class="kpi-tile"${halCmd}><div class="kpi-label">${esc(kpi.label)}</div><div class="kpi-value">${esc(kpi.value)}</div>${delta}</div>`;
+    const sparkHtml = kpi.spark && kpi.spark.length ? barSparkline(kpi.spark, kpi.tone) : "";
+    return `<div class="kpi-tile"${halCmd}><div class="kpi-label">${esc(kpi.label)}</div><div class="kpi-value">${esc(kpi.value)}</div>${sparkHtml}${delta}</div>`;
   }
 
   function canvasKpiGrid(kpis) {
@@ -715,9 +718,65 @@ const PageCanvas = (function () {
     };
   }
 
+  function canvasAlertTicker(items) {
+    if (!items || !items.length) return "";
+    return `<div class="nr2-alert-ticker" role="status" data-hal-widget-key="nr2AlertTicker">${items
+      .map(
+        (item) =>
+          `<span class="nr2-alert-ticker__item nr2-alert-ticker__item--${esc(item.level || "info")}">${esc(item.text || "")}</span>`,
+      )
+      .join("")}</div>`;
+  }
+
+  function canvasGoalScorecard(goal) {
+    if (!goal || !goal.hasData) {
+      return canvasEmpty("Production goal scorecard appears when SoftDent dashboard production rows are loaded.");
+    }
+    const pct = goal.pctOfGoal != null ? `${goal.pctOfGoal}%` : "—";
+    const pctNum = goal.pctOfGoal != null ? Number(goal.pctOfGoal) : 0;
+    return `${canvasGauge(pctNum, "Of YTD goal", goal.tone === "ok" ? "var(--sage)" : "var(--accent-amber)")}${canvasStatGrid([
+      { value: fmtClaim(goal.ytdProduction), label: "YTD production", widgetKey: "nr2GoalScorecard" },
+      { value: fmtClaim(goal.targetProduction), label: "Goal target", widgetKey: "nr2GoalScorecard" },
+      { value: pct, label: "Progress", tone: goal.tone, widgetKey: "nr2GoalScorecard" },
+    ])}`;
+  }
+
+  function canvasProviderCompShare(payload) {
+    const rows = (payload && payload.providers) || [];
+    if (!rows.length) {
+      return canvasEmpty("Provider production share appears when SoftDent provider rows or ODBC extract are loaded.");
+    }
+    return `${hBarChart(
+      rows.map((row) => ({ name: row.name, amount: row.production, pct: row.pct })),
+      "amount",
+      "name",
+      "pct",
+    )}<div class="total-row"><span>Total production</span><strong>${fmtClaim(payload.totalProduction)}</strong></div>`;
+  }
+
+  function canvasMonthlyTrendCombo(combo) {
+    if (!combo || !combo.hasData || !combo.labels || !combo.labels.length) {
+      return canvasEmpty("Executive monthly trend populates when SoftDent and QuickBooks share monthly periods.");
+    }
+    return `${chartContainer(
+      dualLineChart(
+        combo.labels,
+        [
+          { tone: "info", data: combo.production || [] },
+          { tone: "success", data: combo.revenue || [] },
+        ],
+        150,
+      ),
+      true,
+    )}${chartContainer(
+      dualLineChart(combo.labels, [{ tone: "warning", data: combo.collections || [] }], 90),
+      true,
+    )}`;
+  }
+
   function canvasKpiRibbon(tiles) {
     if (!tiles || !tiles.length) {
-      return canvasEmpty("Cross-analytics KPI ribbon populates when SoftDent and QuickBooks imports share comparable periods.");
+      return `<div class="kpi-ribbon">${canvasEmpty("Cross-analytics KPI ribbon populates when SoftDent and QuickBooks imports share comparable periods.")}</div>`;
     }
     return `<div class="kpi-ribbon">${tiles
       .map(
@@ -752,6 +811,10 @@ const PageCanvas = (function () {
     const collectionPct = parsePct(payerMetrics.collectionRate || payerMetrics.latestMonthCollectionRate);
     const compare = D && D.financialCompare ? D.financialCompare() : [];
     const ribbon = D && D.nr2KpiRibbonTiles ? D.nr2KpiRibbonTiles() : { tiles: [] };
+    const alerts = D && D.nr2AlertTicker ? D.nr2AlertTicker() : { items: [] };
+    const goal = D && D.nr2GoalScorecard ? D.nr2GoalScorecard() : {};
+    const combo = D && D.nr2MonthlyTrendCombo ? D.nr2MonthlyTrendCombo() : {};
+    const provComp = D && D.nr2ProviderCompensation ? D.nr2ProviderCompensation() : {};
     const recon = D && D.nr2ProductionReconciliation ? D.nr2ProductionReconciliation() : { rows: [] };
     const lag = D && D.nr2CollectionLag ? D.nr2CollectionLag() : {};
     const prodDaily = D && D.softdentProductionDailySeries ? D.softdentProductionDailySeries() : { points: [] };
@@ -759,7 +822,13 @@ const PageCanvas = (function () {
       ? [{ label: "Collection lag (DSO)", value: `${lag.avgLagDays} days`, hint: lag.dsoProxy ? "A/R weighted" : "Monthly proxy", widgetKey: "nr2CollectionLag" }]
       : [{ label: "Collection lag (DSO)", value: "—", hint: "Awaiting A/R aging export", widgetKey: "nr2CollectionLag" }];
 
+    const alertItems =
+      alerts.items && alerts.items.length
+        ? alerts.items
+        : [{ level: "ok", text: "Load imports to evaluate cross-analytics exception thresholds.", widgetKey: "nr2AlertTicker" }];
+
     return `${stackOpen()}
+      ${canvasAlertTicker(alertItems)}
       ${canvasPanel({
         title: "Cross-Analytics KPI Ribbon",
         accent: "green",
@@ -769,6 +838,26 @@ const PageCanvas = (function () {
       })}
       ${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}
       ${canvasGrid12(`
+        ${gridCol(
+          4,
+          canvasPanel({
+            title: "Production Goal Scorecard",
+            accent: "green",
+            caption: "YTD production vs operator goal",
+            widgetKey: "nr2GoalScorecard",
+            body: canvasGoalScorecard(goal),
+          }),
+        )}
+        ${gridCol(
+          8,
+          canvasPanel({
+            title: "Executive Monthly Trend",
+            accent: "green",
+            caption: "SoftDent production, collections, and QuickBooks revenue",
+            widgetKey: "nr2MonthlyTrendCombo",
+            body: canvasMonthlyTrendCombo(combo),
+          }),
+        )}
         ${gridCol(
           6,
           canvasPanel({
@@ -814,7 +903,7 @@ const PageCanvas = (function () {
             title: wTitle("financial", 2),
             accent: "green",
             caption: "12-month production vs trailing average",
-            widgetKey: wKey("financial", 2),
+            widgetKey: "financialProductionTrend",
             body: trend ? chartContainer(finTrendChart(trend.production, trend.average, trend.max), true) : canvasEmpty("12-month production trend unavailable."),
           }),
         )}
@@ -824,7 +913,7 @@ const PageCanvas = (function () {
             title: wTitle("financial", 6),
             accent: "green",
             caption: "Collection rate gauge",
-            widgetKey: wKey("financial", 6),
+            widgetKey: "payerMixAndCollections",
             body: `${canvasGauge(collectionPct, "Collection rate", "var(--sage)")}${payer ? conicDonut(payer.slices, payer.center, 88) : ""}`,
           }),
         )}
@@ -834,10 +923,8 @@ const PageCanvas = (function () {
             title: wTitle("financial", 7),
             accent: "green",
             caption: "Provider production split",
-            widgetKey: wKey("financial", 7),
-            body: providers
-              ? `${hBarChart(providers.items, "amount", "name", "pct")}<div class="total-row"><span>Total</span><strong>${esc(providers.total)}</strong></div>`
-              : canvasEmpty("Provider rows will appear when SoftDent dashboard export includes providers."),
+            widgetKey: "nr2ProviderCompensationWidget",
+            body: canvasProviderCompShare(provComp.hasData ? provComp : providers ? { providers: providers.items.map((item) => ({ name: item.name, production: parseAmount(item.amount), pct: item.pct })), totalProduction: parseAmount(providers.total), hasData: true } : { providers: [] }),
           }),
         )}
         ${gridCol(
@@ -1124,9 +1211,11 @@ const PageCanvas = (function () {
       .map((k, i) => {
         const widgetKey = k.widgetKey || (i === 3 ? "ebitdaNormalization" : "quickbooksProfitLossDetail");
         const delta = k.delta ? `<span class="trend${String(k.delta).trim().startsWith("-") ? " negative" : ""}">${esc(k.delta)}</span>` : "";
+        const sparkHtml = k.spark && k.spark.length ? barSparkline(k.spark, k.tone) : "";
         return `<div class="card kpi-card kpi-glow-card" data-hal-widget-key="${esc(widgetKey)}">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon(widgetKey)}${esc(k.label || k.title || "KPI")}</span></div>
           <div class="card-value">${esc(k.value || "—")}</div>
+          ${sparkHtml}
           ${delta}
         </div>`;
       })
@@ -1618,7 +1707,7 @@ const PageCanvas = (function () {
             title: "Book-to-tax bridge",
             accent: "blue",
             caption: plan ? `${plan.federalRateLabel} · ${plan.kansasRateLabel}` : "Planning rates",
-            widgetKey: wKey("taxes", 0),
+            widgetKey: "taxBookToTaxBridge",
             body: bridge.length
               ? `${canvasWaterfall(bridge.slice(0, 6).map((row, i) => ({ label: row[0], value: row[1], type: i === 0 ? "total" : "neg" })))}${canvasTable(["Line item", "Amount"], bridge, true)}`
               : canvasEmpty("P&amp;L net income will drive the book-to-tax bridge when QuickBooks export is loaded."),
@@ -1630,7 +1719,7 @@ const PageCanvas = (function () {
             title: "Reasonable compensation scenarios",
             accent: "blue",
             caption: "Employer FICA by modeled W-2",
-            widgetKey: wKey("taxes", 0),
+            widgetKey: "taxReasonableComp",
             body: `${canvasGauge(plan && plan.compScenarios && plan.compScenarios[0] ? parsePct(plan.compScenarios[0].employerFica) : 0, "Employer FICA", "#60a5fa")}${compBars}`,
           }),
         )}
@@ -1650,7 +1739,7 @@ const PageCanvas = (function () {
             title: "Quarterly estimates",
             accent: "blue",
             caption: "1040-ES + Kansas vouchers",
-            widgetKey: wKey("taxes", 0),
+            widgetKey: "taxQuarterlyEstimates",
             body: quarterly.length
               ? canvasTable(["Period", "Federal", "Kansas", "Due", "Status"], quarterly, true)
               : canvasEmpty("Quarterly plan appears when book income is available."),
@@ -1661,7 +1750,7 @@ const PageCanvas = (function () {
             title: "Estimated owner tax split",
             accent: "blue",
             caption: "Federal + Kansas on K-1 flow-through",
-            widgetKey: wKey("taxes", 0),
+            widgetKey: "taxFederalStateSplit",
             body:
               split.length && totalTax
                 ? taxUsageBar(split, totalTax, `Planning total ${fmtTaxMoney(totalTax)} · not a filed return`)
@@ -1700,7 +1789,7 @@ const PageCanvas = (function () {
           canvasPanel({
             title: wTitle("taxes", 0),
             accent: "blue",
-            widgetKey: wKey("taxes", 0),
+            widgetKey: "quickbooksProfitLossDetail",
             body: bookIncome.length
               ? canvasTable(["Account", "Amount", "Notes"], bookIncome, true)
               : canvasEmpty("P&amp;L rows will appear when QuickBooks export is loaded."),
@@ -1708,7 +1797,7 @@ const PageCanvas = (function () {
           canvasPanel({
             title: wTitle("taxes", 1),
             accent: "blue",
-            widgetKey: wKey("taxes", 1),
+            widgetKey: "ebitdaNormalization",
             body: ebitda.length
               ? canvasTable(["Adjustment", "Amount", "Reviewer", "Notes"], ebitda, true)
               : canvasEmpty("EBITDA add-backs will appear when expense categories are loaded."),
