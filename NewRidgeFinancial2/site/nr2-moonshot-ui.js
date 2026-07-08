@@ -301,157 +301,167 @@ const NR2MoonshotUI = (function () {
     NR2Charts.renderPostingKanban(kanban.id, mapKanbanColumns(posting.items, ocr.items));
   }
 
+  function chartsEngine() {
+    if (typeof window !== "undefined" && window.NR2Charts) return window.NR2Charts;
+    return null;
+  }
+
+  function mountCanvasChart(root, widgetKey, renderFn) {
+    const engine = chartsEngine();
+    const host = engine && engine.overlayHost ? engine.overlayHost(root, widgetKey) : chartOverlayHost(root, widgetKey);
+    if (!host) return null;
+    if (engine && typeof engine.mount === "function") return engine.mount(host, renderFn);
+    host.innerHTML = "";
+    if (typeof renderFn === "function") renderFn(host);
+    return host;
+  }
+
   async function enhanceCanvasCharts(pageId, root) {
-    if (!root || typeof NR2Charts === "undefined") return;
+    if (!root) return;
+    const charts = chartsEngine();
+    if (!charts) return;
     if (pageId === "financial") {
-      const host = chartOverlayHost(root, "financialProductionTrend");
-      if (host) {
+      mountCanvasChart(root, "financialProductionTrend", (host) => {
         const canvas = document.createElement("canvas");
         canvas.id = "nr2-practice-pulse-canvas";
         canvas.width = 340;
         canvas.height = 120;
         host.appendChild(canvas);
-        let reports = {};
-        try {
-          reports = await fetchJson("/api/financial-reports");
-        } catch {
-          reports = {};
+        if (typeof charts.renderPracticePulse === "function") {
+          fetchJson("/api/financial-reports")
+            .then((reports) => {
+              const ar = (reports && reports.arAging) || {};
+              charts.renderPracticePulse("nr2-practice-pulse-canvas", {
+                productionUsd: reports.productionUsd || ar.totalOutstanding,
+                collectionsUsd: reports.collectionsUsd || 0,
+                arTotalUsd: ar.totalOutstanding || 0,
+              });
+            })
+            .catch(() => {});
         }
-        const ar = reports.arAging || {};
-        NR2Charts.renderPracticePulse("nr2-practice-pulse-canvas", {
-          productionUsd: reports.productionUsd || ar.totalOutstanding,
-          collectionsUsd: reports.collectionsUsd || 0,
-          arTotalUsd: ar.totalOutstanding || 0,
-        });
-      }
+      });
     }
     if (pageId === "ar") {
-      const host = chartOverlayHost(root, "arAgingAndCollections");
-      if (host) {
+      mountCanvasChart(root, "arAgingAndCollections", (host) => {
         const canvas = document.createElement("canvas");
         canvas.id = "nr2-ar-heatmap-canvas";
         canvas.width = 340;
         canvas.height = 120;
         host.appendChild(canvas);
-        let buckets = [];
-        try {
-          const reports = await fetchJson("/api/financial-reports");
-          buckets = (reports && reports.arAgingBuckets) || [];
-        } catch {
-          buckets = [];
+        if (typeof charts.renderARHeatmap === "function") {
+          fetchJson("/api/financial-reports")
+            .then((reports) => {
+              let buckets = (reports && reports.arAgingBuckets) || [];
+              if (!buckets.length) {
+                buckets = [
+                  { bucket: "0-30", amount: 0 },
+                  { bucket: "31-60", amount: 0 },
+                  { bucket: "61-90", amount: 0 },
+                  { bucket: "90+", amount: 0 },
+                ];
+              }
+              charts.renderARHeatmap("nr2-ar-heatmap-canvas", buckets);
+            })
+            .catch(() => {});
         }
-        if (!buckets.length) {
-          buckets = [
-            { bucket: "0-30", amount: 0 },
-            { bucket: "31-60", amount: 0 },
-            { bucket: "61-90", amount: 0 },
-            { bucket: "90+", amount: 0 },
-          ];
-        }
-        NR2Charts.renderARHeatmap("nr2-ar-heatmap-canvas", buckets);
-      }
+      });
     }
     if (pageId === "quickbooks") {
-      const host = chartOverlayHost(root, "quickbooksProfitLossDetail");
-      if (host) {
+      mountCanvasChart(root, "quickbooksProfitLossDetail", (host) => {
         const canvas = document.createElement("canvas");
         canvas.id = "nr2-import-timeline-qb";
         canvas.width = 340;
         canvas.height = 100;
         host.appendChild(canvas);
-        let sources = null;
-        try {
-          const readiness = await fetchJson("/api/v1/import-readiness");
-          sources = readiness && readiness.sources;
-        } catch {
-          sources = null;
+        if (typeof charts.renderImportTimeline === "function") {
+          fetchJson("/api/v1/import-readiness")
+            .then((readiness) => {
+              let sources = readiness && readiness.sources;
+              if (!sources) {
+                const cached =
+                  typeof DesktopBridge !== "undefined" && DesktopBridge.getCachedImportReadiness
+                    ? DesktopBridge.getCachedImportReadiness()
+                    : null;
+                sources = (cached && cached.sources) || [
+                  { id: "quickbooks", name: "QuickBooks", lastSyncAt: cached && cached.loadedAt, level: cached && cached.level },
+                ];
+              }
+              charts.renderImportTimeline("nr2-import-timeline-qb", sources);
+            })
+            .catch(() => {});
         }
-        if (!sources) {
-          const cached =
-            typeof DesktopBridge !== "undefined" && DesktopBridge.getCachedImportReadiness
-              ? DesktopBridge.getCachedImportReadiness()
-              : null;
-          sources = (cached && cached.sources) || [
-            { id: "quickbooks", name: "QuickBooks", lastSyncAt: cached && cached.loadedAt, level: cached && cached.level },
-          ];
-        }
-        NR2Charts.renderImportTimeline("nr2-import-timeline-qb", sources);
-      }
+      });
     }
     if (pageId === "softdent") {
-      const host = chartOverlayHost(root, "softdentArAging");
-      if (host) {
+      mountCanvasChart(root, "softdentArAging", (host) => {
         const canvas = document.createElement("canvas");
         canvas.id = "nr2-softdent-ar-heatmap";
         canvas.width = 340;
         canvas.height = 120;
         host.appendChild(canvas);
-        let buckets = [];
-        try {
-          const reports = await fetchJson("/api/financial-reports");
-          buckets = (reports && reports.arAgingBuckets) || [];
-        } catch {
-          buckets = [];
+        if (typeof charts.renderARHeatmap === "function") {
+          fetchJson("/api/financial-reports")
+            .then((reports) => {
+              let buckets = (reports && reports.arAgingBuckets) || [];
+              if (!buckets.length) {
+                buckets = [
+                  { bucket: "0-30", amount: 0 },
+                  { bucket: "31-60", amount: 0 },
+                  { bucket: "61-90", amount: 0 },
+                  { bucket: "90+", amount: 0 },
+                ];
+              }
+              charts.renderARHeatmap("nr2-softdent-ar-heatmap", buckets);
+            })
+            .catch(() => {});
         }
-        if (!buckets.length) {
-          buckets = [
-            { bucket: "0-30", amount: 0 },
-            { bucket: "31-60", amount: 0 },
-            { bucket: "61-90", amount: 0 },
-            { bucket: "90+", amount: 0 },
-          ];
-        }
-        NR2Charts.renderARHeatmap("nr2-softdent-ar-heatmap", buckets);
-      }
+      });
     }
     if (pageId === "documents" || pageId === "financial") {
       await mountPostingKanban(pageId, root);
     }
     if (pageId === "taxes") {
-      const host = chartOverlayHost(root, "taxFederalStateSplit");
-      if (host) {
+      mountCanvasChart(root, "taxFederalStateSplit", (host) => {
         const canvas = document.createElement("canvas");
         canvas.id = "nr2-tax-import-timeline";
         canvas.width = 340;
         canvas.height = 90;
         host.appendChild(canvas);
-        let sources = null;
-        try {
-          const readiness = await fetchJson("/api/v1/import-readiness");
-          sources = readiness && readiness.sources;
-        } catch {
-          sources = null;
+        if (typeof charts.renderImportTimeline === "function") {
+          fetchJson("/api/v1/import-readiness")
+            .then((readiness) => {
+              let sources = readiness && readiness.sources;
+              if (!sources) {
+                sources = [
+                  { id: "quickbooks", name: "QuickBooks", level: "unknown" },
+                  { id: "softdent", name: "SoftDent", level: "unknown" },
+                ];
+              }
+              charts.renderImportTimeline("nr2-tax-import-timeline", sources);
+            })
+            .catch(() => {});
         }
-        if (!sources) {
-          sources = [
-            { id: "quickbooks", name: "QuickBooks", level: "unknown" },
-            { id: "softdent", name: "SoftDent", level: "unknown" },
-          ];
-        }
-        NR2Charts.renderImportTimeline("nr2-tax-import-timeline", sources);
-      }
+      });
     }
     if (pageId === "office-manager") {
-      const host = chartOverlayHost(root, "officeManagerPriorities");
-      if (host) {
+      mountCanvasChart(root, "officeManagerPriorities", (host) => {
         const canvas = document.createElement("canvas");
         canvas.id = "nr2-office-import-timeline";
         canvas.width = 340;
         canvas.height = 90;
         host.appendChild(canvas);
-        let sources = null;
-        let readiness = null;
-        try {
-          readiness = await fetchJson("/api/import-readiness");
-          sources = readiness && readiness.sources;
-        } catch {
-          sources = null;
+        if (typeof charts.renderImportTimeline === "function") {
+          fetchJson("/api/import-readiness")
+            .then((readiness) => {
+              let sources = readiness && readiness.sources;
+              if (!sources) {
+                sources = [{ id: "bundle", name: "Import bundle", level: (readiness && readiness.level) || "unknown" }];
+              }
+              charts.renderImportTimeline("nr2-office-import-timeline", sources);
+            })
+            .catch(() => {});
         }
-        if (!sources) {
-          sources = [{ id: "bundle", name: "Import bundle", level: (readiness && readiness.level) || "unknown" }];
-        }
-        NR2Charts.renderImportTimeline("nr2-office-import-timeline", sources);
-      }
+      });
     }
   }
 
@@ -590,7 +600,7 @@ const NR2MoonshotUI = (function () {
     return host;
   }
 
-  const NR2Charts = {
+  const chartMountPolicy = {
     mount: mountChart,
     overlayHost: chartOverlayHost,
     policy: "replace-not-stack",
@@ -605,7 +615,8 @@ const NR2MoonshotUI = (function () {
     renderPilotPhaseBanner,
     installPilotBanner,
     mountChart,
-    NR2Charts,
+    mountCanvasChart,
+    chartMountPolicy,
   };
 })();
 
@@ -614,7 +625,7 @@ if (typeof module !== "undefined" && module.exports) {
 }
 if (typeof window !== "undefined" && typeof document !== "undefined") {
   window.NR2MoonshotUI = NR2MoonshotUI;
-  window.NR2Charts = NR2MoonshotUI.NR2Charts;
+  window.NR2Charts = Object.assign({}, window.NR2Charts || {}, NR2MoonshotUI.chartMountPolicy);
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => NR2MoonshotUI.installPilotBanner());
   } else {

@@ -19,7 +19,7 @@ const repoRoot = join(root, "..");
 const site = join(root, "site");
 const mockups = join(repoRoot, ".local_logs", "moonshot_financial_eval", "page_mockups");
 const logDir = join(repoRoot, ".local_logs", "moonshot_financial_eval");
-const BUILD = "hal-10083";
+const BUILD = "hal-10084";
 const require = createRequire(import.meta.url);
 
 const results = [];
@@ -96,7 +96,7 @@ async function runValidators() {
     execSync("node validate-hal.mjs", { cwd: root, stdio: "pipe" });
     execSync("node validate-pages.mjs", { cwd: root, stdio: "pipe" });
     execSync("node scripts/audit-mockup-parity.mjs", { cwd: root, stdio: "pipe" });
-    execSync("py -3.14 -m pytest test_backup_db.py test_cpa_packet_export.py -q", { cwd: root, stdio: "pipe" });
+    execSync("py -3.14 -m pytest test_backup_db.py test_cpa_packet_export.py test_page_storyboard_export.py -q", { cwd: root, stdio: "pipe" });
     return true;
   } catch (e) {
     console.error(String(e.stderr || e.stdout || e.message));
@@ -366,7 +366,7 @@ function writeReport() {
   const checklistFails = checklist.filter((r) => r.status === "FAIL");
   const moonshotVerdict =
     checklistFails.length === 0 && checklist.filter((r) => r.status === "PASS").length >= 8
-      ? "APPROVE hal-10083 — Moonshot Tier S2 interactive filters (automated sign-off; operator name still required)"
+      ? "APPROVE hal-10084 — Moonshot Tier S2 storyboard + chart polish (automated sign-off; operator name still required)"
       : checklistFails.length
         ? "CONDITIONAL APPROVE — fix FAIL items before daily use"
         : "CONDITIONAL APPROVE — complete SKIP items manually";
@@ -410,7 +410,7 @@ async function main() {
   record(
     11,
     "Moonshot hal-10069–10082 completion doc",
-    moonshotExtentSrc.includes("hal-10083") && moonshotExtentSrc.includes("Practical ceiling") ? "PASS" : "FAIL",
+    moonshotExtentSrc.includes("hal-10084") && moonshotExtentSrc.includes("Practical ceiling") ? "PASS" : "FAIL",
     "MOONSHOT_FULLEST_EXTENT_COMPLETE_2026-07-09.md",
   );
   const mockupChrome = readFileSync(join(site, "nr2-moonshot-mockup-chrome.js"), "utf8");

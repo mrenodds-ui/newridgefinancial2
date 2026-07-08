@@ -2695,6 +2695,29 @@ class NR2BottleServer(BottleServer):
                 bottle.response.status = 500
                 return json.dumps({"ok": False, "error": str(exc)})
 
+        @app.post("/api/export/page-storyboard")
+        def export_page_storyboard_api():
+            from nr2_rbac import has_capability
+
+            if _browser_app() and not (has_capability("read_financial") or has_capability("read_all")):
+                bottle.response.content_type = "application/json"
+                bottle.response.status = 403
+                return json.dumps({"ok": False, "error": "capability_rejected"})
+            try:
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                page_id = str(payload.get("pageId") or "financial").strip().lower()
+                from page_storyboard_export import build_page_storyboard_zip_bytes
+
+                filename, data = build_page_storyboard_zip_bytes(page_id)
+                bottle.response.content_type = "application/zip"
+                bottle.response.set_header("Content-Disposition", f'attachment; filename="{filename}"')
+                return data
+            except Exception as exc:
+                bottle.response.content_type = "application/json"
+                bottle.response.status = 500
+                return json.dumps({"ok": False, "error": str(exc)})
+
         @app.get("/api/financial-reports")
         def financial_reports_api():
             from nr2_rbac import has_capability

@@ -4416,6 +4416,10 @@ function handleNr2Export(scope) {
     exportCpaPacketFlow();
     return;
   }
+  if (scope === "page-storyboard") {
+    exportPageStoryboardFlow();
+    return;
+  }
   const EU = typeof ExportUtils !== "undefined" ? ExportUtils : null;
   if (!EU) {
     showHalActionNotice("Export utilities failed to load. Reload the app.", "warn");
@@ -4428,6 +4432,42 @@ function handleNr2Export(scope) {
     feed: halWidgetFeed,
     halPageVisible: isHalPageVisible(),
   });
+}
+
+async function exportPageStoryboardFlow() {
+  const pageId = resolvePageId(window.location.hash);
+  if (typeof Services !== "undefined" && typeof Services.exportPageStoryboard === "function") {
+    showHalActionNotice("Building page storyboard…", "info");
+    try {
+      const result = await Services.exportPageStoryboard(pageId);
+      if (!result || !result.ok) {
+        showHalActionNotice((result && result.error) || "Storyboard export failed.", "warn");
+        return;
+      }
+      const EU = typeof ExportUtils !== "undefined" ? ExportUtils : null;
+      if (!EU || typeof EU.downloadBlob !== "function") {
+        showHalActionNotice("Export utilities failed to load.", "warn");
+        return;
+      }
+      EU.downloadBlob(result.filename, result.blob);
+      postOperatorAudit("export:page-storyboard", { pageKey: pageId });
+      showHalActionNotice(`Storyboard downloaded (${result.filename}). Open storyboard.html → Print → Save as PDF.`, "success");
+      return;
+    } catch (err) {
+      showHalActionNotice(String((err && err.message) || err || "Storyboard export failed."), "warn");
+      return;
+    }
+  }
+  const EU = typeof ExportUtils !== "undefined" ? ExportUtils : null;
+  if (EU && typeof EU.exportPageStoryboardHtml === "function") {
+    const result = EU.exportPageStoryboardHtml({ pageId, snapshot: halProgramSnapshot, feed: halWidgetFeed });
+    if (result && result.ok) {
+      postOperatorAudit("export:page-storyboard-local", { pageKey: pageId });
+      showHalActionNotice(`Storyboard saved (${result.filename}). Open in browser → Print → Save as PDF.`, "success");
+    }
+    return;
+  }
+  showHalActionNotice("Storyboard export requires the NR2 server.", "warn");
 }
 
 async function exportCpaPacketFlow() {
@@ -4847,7 +4887,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10083&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10084&__nr2_purge=1</div>';
     return;
   }
   const MC =

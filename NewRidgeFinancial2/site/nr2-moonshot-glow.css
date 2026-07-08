@@ -219,7 +219,8 @@ body.nr2-workstation-app .ws-hal-pane {
   background: var(--accent-cyan, #00d4ff);
 }
 
-.app--moonshot-mockup .page-header-tools .cpa-export-btn {
+.app--moonshot-mockup .page-header-tools .cpa-export-btn,
+.app--moonshot-mockup .page-header-tools .storyboard-export-btn {
   border: 1px solid rgba(0, 212, 255, 0.35);
   background: rgba(0, 212, 255, 0.08);
   color: var(--text-primary, #e8e8e8);
@@ -229,11 +230,13 @@ body.nr2-workstation-app .ws-hal-pane {
   cursor: pointer;
 }
 
-.app--moonshot-mockup .page-header-tools .cpa-export-btn:hover {
+.app--moonshot-mockup .page-header-tools .cpa-export-btn:hover,
+.app--moonshot-mockup .page-header-tools .storyboard-export-btn:hover {
   background: rgba(0, 212, 255, 0.16);
 }
 
-.app--moonshot-mockup .page-header-tools .cpa-export-btn:focus-visible {
+.app--moonshot-mockup .page-header-tools .cpa-export-btn:focus-visible,
+.app--moonshot-mockup .page-header-tools .storyboard-export-btn:focus-visible {
   outline: 2px solid var(--accent-cyan, #00d4ff);
   outline-offset: 2px;
 }

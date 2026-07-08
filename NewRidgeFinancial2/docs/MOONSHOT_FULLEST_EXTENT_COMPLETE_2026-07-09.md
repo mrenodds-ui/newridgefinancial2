@@ -1,9 +1,9 @@
-# Moonshot Fullest Extent — Complete (hal-10083)
+# Moonshot Fullest Extent — Complete (hal-10084)
 
-**Verdict:** Practical ceiling reached for a solo dental practice (per `MOONSHOT_FULLEST_EXTENT_REPORT_2026-07-08.md`). Visual presentation integrity and HAL spectacular S1 complete through hal-10082; Tier S2 interactive filters begin at hal-10083 (per `MOONSHOT_AI_DEEP_VISUAL_HAL_2026-07-07.md`).
+**Verdict:** Practical ceiling reached for a solo dental practice (per `MOONSHOT_FULLEST_EXTENT_REPORT_2026-07-08.md`). Visual presentation integrity and HAL spectacular S1 complete through hal-10082; Tier S2 at hal-10083–10084 (per `MOONSHOT_AI_DEEP_VISUAL_HAL_2026-07-07.md`).
 
-**Build:** `hal-10083`  
-**Reload:** `https://127.0.0.1:8765/?v=hal-10083&__nr2_purge=1`
+**Build:** `hal-10084`  
+**Reload:** `https://127.0.0.1:8765/?v=hal-10084&__nr2_purge=1`
 
 ## Phase completion matrix
 
@@ -22,6 +22,7 @@
 | hal-10081 | S0 | HAL span-2 mosaic, live spark bars, chat scrollback | Done |
 | hal-10082 | S1 | HAL situational hero, agent loop UI, mosaic deep links | Done |
 | hal-10083 | S2 | Wired filter chips, period scrubber, taxes scenario sliders, compare mode | Done |
+| hal-10084 | S2 | Per-page storyboard zip (Print→PDF), unified chart mount merge | Done |
 
 ## Engineering sign-off
 
@@ -58,4 +59,4 @@
 
 See also: `docs/MOONSHOT_AI_DEEP_VISUAL_HAL_2026-07-07.md`, `docs/MOONSHOT_DISASTER_RECOVERY.md`, `docs/OPERATOR_PILOT_RUNBOOK.md`.
 
-**Tier S2 (hal-10084+)** — unified chart engine polish, print/PDF storyboards per page — deferred until operator daily-drives hal-10083 filters for two weeks (per Moonshot deep consultation).
+**Tier S3 (hal-10085+)** — semantic zoom, HAL avatar, multi-monitor sync — R&D deferred (per Moonshot deep consultation).

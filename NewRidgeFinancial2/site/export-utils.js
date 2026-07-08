@@ -154,6 +154,29 @@ const ExportUtils = (function () {
     return exportCurrentPageCsv(opts);
   }
 
+  function exportPageStoryboardHtml(opts) {
+    const o = opts || {};
+    const pageId =
+      o.pageId ||
+      String(typeof window !== "undefined" ? window.location.hash : "")
+        .replace(/^#/, "")
+        .trim() ||
+      "financial";
+    const payload = pageExportRows(pageId, o.snapshot, o.feed);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const rows = payload.rows || [];
+    const bodyRows = rows
+      .slice(1)
+      .map((row) => `<tr><td>${esc(row[0])}</td><td>${esc(row[1] != null ? row[1] : row.slice(1).join(" · "))}</td></tr>`)
+      .join("");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(payload.title)} — Storyboard</title>
+<style>@page{margin:0.75in}body{font-family:"Segoe UI",system-ui,sans-serif;margin:24px;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6px 10px}th{background:#f0f4f8}</style>
+</head><body><h1>${esc(payload.title)}</h1><p>New Ridge Family Dental · ${esc(stamp)} · Local data only</p>
+<table><thead><tr><th>Section</th><th>Detail</th></tr></thead><tbody>${bodyRows}</tbody></table>
+<p>Open this file in a browser and use Print → Save as PDF.</p></body></html>`;
+    return downloadText(`${pageId}-storyboard-${stamp}.html`, html, "text/html;charset=utf-8");
+  }
+
   return {
     esc,
     csvEscape,
@@ -164,6 +187,7 @@ const ExportUtils = (function () {
     exportCurrentPageCsv,
     exportWidgetFeedCsv,
     exportCurrentPage,
+    exportPageStoryboardHtml,
     exportText,
   };
 })();

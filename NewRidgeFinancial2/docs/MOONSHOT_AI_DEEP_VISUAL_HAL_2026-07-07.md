@@ -1,12 +1,12 @@
 # Moonshot AI Deep Consultation — Flow, Layout, and HAL Spectacular Ceiling
 
 **Date:** 2026-07-07  
-**Build epoch:** `hal-10083` (`LAYOUT_EPOCH = "moonshot-mockup"`)  
+**Build epoch:** `hal-10084` (`LAYOUT_EPOCH = "moonshot-mockup"`)  
 **Model:** Moonshot AI (extended codebase audit + layout forensics)  
-**Status:** **IMPLEMENTED through hal-10083** (layout emergency → HAL spectacular S1 → Tier S2 filters)  
+**Status:** **IMPLEMENTED through hal-10084** (layout → HAL S1 → Tier S2 filters + storyboard export)  
 **Prior status:** PROPOSED ONLY — operator approved 2026-07-08
 
-**Live reload:** https://127.0.0.1:8765/?v=hal-10083&__nr2_purge=1
+**Live reload:** https://127.0.0.1:8765/?v=hal-10084&__nr2_purge=1
 **Mockup gallery:** `.local_logs/moonshot_financial_eval/page_mockups/` · `http://127.0.0.1:8799/index.html`
 
 **Validator snapshot (post /hal-10082):** `validate-hal.mjs` 103 suites · `validate-pages.mjs` pass · `audit-mockup-parity.mjs` 10/10 · `test_nr2_analytics.py` 10/10

@@ -253,12 +253,17 @@ const MoonshotMockupChrome = (function () {
     return `<button type="button" class="cpa-export-btn" data-nr2-export="cpa-packet" aria-label="Export CPA packet zip">CPA export</button>`;
   }
 
+  function renderPageStoryboardButton() {
+    return `<button type="button" class="storyboard-export-btn" data-nr2-export="page-storyboard" aria-label="Export page storyboard zip for PDF print">Storyboard</button>`;
+  }
+
   function renderPageHeaderTools(schema, opts, commandChipsHtml) {
     const o = opts || {};
     if (!schema || !schema.id) return commandChipsHtml ? `<div class="page-header-tools">${commandChipsHtml}</div>` : "";
     const parts = [];
     if (STAFF_HEADER_TOOL_PAGES.has(schema.id)) {
       parts.push(renderImportSyncBadge(o.importReadiness, schema.id));
+      parts.push(renderPageStoryboardButton());
     }
     if (schema.id === "financial") parts.push(renderFinancialCpaExportButton());
     if (commandChipsHtml) parts.push(commandChipsHtml);

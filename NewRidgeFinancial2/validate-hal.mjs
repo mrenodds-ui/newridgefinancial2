@@ -1813,8 +1813,10 @@ async function main() {
   assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes("data-nr2-filter-chip"), "mockup chrome must render wired filter chips");
   assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes("period-scrubber"), "period scrubber CSS must exist");
   assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("renderTaxScenarioPanelHtml"), "taxes page must render scenario sliders");
-  assert(readFileSync(join(siteDir, "nr2-moonshot-ui.js"), "utf8").includes("NR2Charts"), "unified chart mount policy must expose NR2Charts");
-  assert(completeDoc.includes("hal-10083") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10083");
+  assert(readFileSync(join(siteDir, "nr2-moonshot-ui.js"), "utf8").includes("chartMountPolicy"), "unified chart mount policy must merge with NR2Charts");
+  assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes('data-nr2-export="page-storyboard"'), "staff pages must expose storyboard export");
+  assert(existsSync(join(__dirname, "page_storyboard_export.py")), "page_storyboard_export module must exist");
+  assert(completeDoc.includes("hal-10084") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10084");
 
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;
