@@ -29,12 +29,29 @@ def _open_db():
     return sqlite3.connect(db_path), db_path
 
 
+def _conn_has_operational_data(conn: sqlite3.Connection) -> bool:
+    for table in ("sd_procedures", "sd_payments", "sd_patients", "sd_claims"):
+        if not _table_exists(conn, table):
+            continue
+        cur = conn.cursor()
+        cur.execute(f"SELECT COUNT(*) FROM {table}")
+        if int(cur.fetchone()[0] or 0) > 0:
+            return True
+    for table in ("daysheet_totals", "production_by_provider", "transactions", "writeoff_totals", "production_by_ada"):
+        if not _table_exists(conn, table):
+            continue
+        cur = conn.cursor()
+        cur.execute(f"SELECT COUNT(*) FROM {table}")
+        if int(cur.fetchone()[0] or 0) > 0:
+            return True
+    return False
+
+
 def _connect():
     conn, db_path = _open_db()
     if not conn:
         return None, db_path
-    counts = table_row_counts(db_path)
-    if sum(int(counts.get(table) or 0) for table in ("sd_procedures", "sd_payments", "sd_patients", "sd_claims")) <= 0:
+    if not _conn_has_operational_data(conn):
         conn.close()
         return None, db_path
     return conn, db_path
@@ -84,17 +101,19 @@ def collections_daily(*, limit: int = 30) -> dict[str, Any]:
         return {"hasData": False, "points": [], "labels": [], "values": []}
     try:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT payment_date, SUM(COALESCE(amount, 0))
-            FROM sd_payments
-            WHERE payment_date IS NOT NULL AND payment_date != '' AND COALESCE(amount, 0) > 0
-            GROUP BY payment_date
-            ORDER BY payment_date
-            """
-        )
-        rows = [(str(day), float(total or 0)) for day, total in cur.fetchall() if day]
+        rows: list[tuple[str, float]] = []
         source = "sd_payments"
+        if _table_exists(conn, "sd_payments"):
+            cur.execute(
+                """
+                SELECT payment_date, SUM(COALESCE(amount, 0))
+                FROM sd_payments
+                WHERE payment_date IS NOT NULL AND payment_date != '' AND COALESCE(amount, 0) > 0
+                GROUP BY payment_date
+                ORDER BY payment_date
+                """
+            )
+            rows = [(str(day), float(total or 0)) for day, total in cur.fetchall() if day]
         if not rows:
             rows = _collections_from_daysheet_totals(conn, limit=limit)
             source = "daysheet_totals"
@@ -144,7 +163,7 @@ def new_patients_mtd(*, period: str | None = None) -> dict[str, Any]:
 
 
 def appointments_snapshot(*, limit: int = 12) -> dict[str, Any]:
-    conn, db_path = _connect()
+    conn, db_path = _open_db()
     if not conn:
         return {"hasData": False, "appointments": []}
     try:
@@ -167,9 +186,33 @@ def appointments_snapshot(*, limit: int = 12) -> dict[str, Any]:
             }
             for row in cur.fetchall()
         ]
+        source = "sd_appointments"
+        if not appointments:
+            cur.execute(
+                """
+                SELECT proc_date, patient_id, provider_code, 'seen'
+                FROM sd_procedures
+                WHERE COALESCE(patient_id, '') != '' AND COALESCE(proc_date, '') != ''
+                GROUP BY proc_date, patient_id, provider_code
+                ORDER BY proc_date DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            appointments = [
+                {
+                    "date": str(row[0] or ""),
+                    "patientId": str(row[1] or ""),
+                    "provider": str(row[2] or ""),
+                    "status": str(row[3] or ""),
+                }
+                for row in cur.fetchall()
+            ]
+            if appointments:
+                source = "sd_procedures"
     finally:
         conn.close()
-    return {"hasData": bool(appointments), "appointments": appointments, "source": "sd_appointments", "dbPath": str(db_path)}
+    return {"hasData": bool(appointments), "appointments": appointments, "source": source, "dbPath": str(db_path)}
 
 
 def claims_outstanding(*, limit: int = 10) -> dict[str, Any]:

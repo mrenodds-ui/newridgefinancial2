@@ -17,8 +17,9 @@ from import_sync import (
     _softdent_direct_read_roots,
 )
 
-INSURANCE_WRITEOFF_CODES = frozenset({"51"})
+INSURANCE_WRITEOFF_CODES = frozenset({"51", "52"})
 INSURANCE_PAYMENT_CODES = frozenset({"2"})
+PATIENT_PAYMENT_CODES = frozenset({"11", "12", "17", "48", "60", "61"})
 SKIP_CLINICAL_CODES = frozenset({"2", "11", "12", "17", "48", "60", "61"})
 ACCOUNT_NAME_MARKERS = (" account",)
 
@@ -274,6 +275,59 @@ def build_claims_rows(transactions: list[dict[str, Any]]) -> list[dict[str, Any]
     return claims
 
 
+def build_procedures_rows(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    procedures: list[dict[str, Any]] = []
+    for row in transactions:
+        code = str(row.get("code") or "").strip()
+        if not code or code in INSURANCE_PAYMENT_CODES or code in INSURANCE_WRITEOFF_CODES:
+            continue
+        if code in SKIP_CLINICAL_CODES:
+            continue
+        production = row.get("production")
+        if production in (None, 0):
+            continue
+        patient = _normalize_patient_name(str(row.get("patientName") or ""))
+        patient_id = str(row.get("patientId") or "")
+        report_date = str(row.get("reportDate") or "")
+        if not patient_id or not report_date:
+            continue
+        if patient.lower() in SAMPLE_PATIENT_MARKERS or _is_account_name(patient):
+            continue
+        procedures.append(
+            {
+                "PatientName": patient,
+                "MRN": patient_id,
+                "Date": report_date,
+                "Code": code,
+                "Tooth": str(row.get("tooth") or ""),
+                "Surface": str(row.get("surface") or ""),
+                "Description": str(row.get("description") or code),
+                "Provider": str(row.get("providerId") or ""),
+                "Production": f"{float(production):.2f}",
+            }
+        )
+        if len(procedures) >= 500:
+            break
+    return procedures
+
+
+def build_daysheet_procedures_dataset(path: Path | None = None) -> dict[str, Any] | None:
+    path = path or resolve_daysheet_jsonl_path()
+    if not path or not path.is_file():
+        return None
+    rows = build_procedures_rows(_load_daysheet_transactions(path))
+    if not rows:
+        return None
+    return {
+        "sourceFile": "softdent_procedures_export.csv",
+        "sourcePath": str(path),
+        "modifiedAt": datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat(),
+        "rows": rows,
+        "readSource": "direct",
+        "sourceKind": "pipeline-daysheet",
+    }
+
+
 def build_daysheet_clinical_dataset(path: Path | None = None) -> dict[str, Any] | None:
     path = path or resolve_daysheet_jsonl_path()
     if not path or not path.is_file():
@@ -286,6 +340,36 @@ def build_daysheet_clinical_dataset(path: Path | None = None) -> dict[str, Any] 
         "sourcePath": str(path),
         "modifiedAt": datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat(),
         "rows": rows,
+        "readSource": "direct",
+        "sourceKind": "pipeline-daysheet",
+    }
+
+
+def build_daysheet_claim_status_dataset(path: Path | None = None) -> dict[str, Any] | None:
+    path = path or resolve_daysheet_jsonl_path()
+    if not path or not path.is_file():
+        return None
+    rows = build_claims_rows(_load_daysheet_transactions(path))
+    if not rows or _is_sample_claims(rows):
+        return None
+    status_rows = [
+        {
+            "ClaimId": row.get("ClaimId"),
+            "Status": row.get("ClaimStatus"),
+            "Payer": row.get("Payer"),
+            "ServiceDate": row.get("ServiceDate"),
+            "Amount": row.get("ClaimAmount"),
+            "DenialReason": row.get("DenialReason"),
+            "PatientName": row.get("PatientName"),
+            "Procedure": row.get("Procedure"),
+        }
+        for row in rows
+    ]
+    return {
+        "sourceFile": "softdent_claim_status_export.csv",
+        "sourcePath": str(path),
+        "modifiedAt": datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat(),
+        "rows": status_rows,
         "readSource": "direct",
         "sourceKind": "pipeline-daysheet",
     }

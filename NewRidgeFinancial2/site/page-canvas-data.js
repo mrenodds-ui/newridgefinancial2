@@ -1071,9 +1071,6 @@ const PageCanvasData = (function () {
       const chairs = S.operatoryGrid(snapshot);
       if (Array.isArray(chairs) && chairs.length) return chairs;
     }
-    const sd = dash("softdent") || {};
-    const chairs = sd.operatoryChairs;
-    if (Array.isArray(chairs) && chairs.length) return chairs;
     return null;
   }
 

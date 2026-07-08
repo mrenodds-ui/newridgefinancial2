@@ -8,11 +8,11 @@
   delete window.NR2_LEGACY_SCHEMA;
   delete window.OLD_PAGE_SCHEMA;
   delete window.PageSchemaLegacy;
-  window.__NR2_SCHEMA_LOADED = "hal-10085";
+  window.__NR2_SCHEMA_LOADED = "hal-10090";
 })();
 
 const PageSchema = (function () {
-  const SCHEMA_VERSION = "hal-10085";
+  const SCHEMA_VERSION = "hal-10090";
 
   const PRACTICE = {
     name: "New Ridge Family Dental",
@@ -314,7 +314,7 @@ if (typeof window !== "undefined") {
   window.PageSchema = PageSchema;
 }
 
-PageSchema.SCHEMA_VERSION = "hal-10085";
+PageSchema.SCHEMA_VERSION = "hal-10090";
 Object.defineProperty(PageSchema, "LAYOUT_EPOCH", {
   value: "moonshot-mockup",
   writable: false,

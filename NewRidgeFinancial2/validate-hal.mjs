@@ -1823,7 +1823,12 @@ async function main() {
   assert(readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8").includes("hal-presence-orb"), "HAL chat must render presence orb");
   assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes("nr2-hero-mirror"), "hero mirror CSS must exist");
   assert(readFileSync(join(__dirname, "hal_hub.py"), "utf8").includes("heroMetrics"), "hub broadcast must store hero metrics");
-  assert(completeDoc.includes("hal-10085") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10085");
+  assert(readFileSync(join(__dirname, "import-manifest.json"), "utf8").includes("softdent.procedures"), "import manifest must define procedures export");
+  assert(readFileSync(join(__dirname, "import-manifest.json"), "utf8").includes("softdent.claimStatus"), "import manifest must define claim status export");
+  assert(readFileSync(join(__dirname, "softdent_operational_pipeline.py"), "utf8").includes("build_procedures_rows"), "operational pipeline must export procedures rows");
+  assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("No operatory schedule available"), "operatory empty state must be visible");
+  assert(readFileSync(join(__dirname, "docs", "MOONSHOT_PHASE5_HUB_PROTOCOL.md"), "utf8").includes("hal-10090"), "hub protocol doc must reflect hal-10090 sign-off");
+  assert(completeDoc.includes("hal-10090") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10090");
 
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;

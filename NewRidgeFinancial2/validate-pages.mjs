@@ -263,7 +263,7 @@ const diagBundle = {
 };
 const diagnostics = ImportDiagnostics.evaluateBundle(diagBundle, manifest);
 assert.ok(diagnostics.datasets.length === Object.keys(manifest.datasets).length, "diagnostics must evaluate all manifest datasets");
-["softdent.newPatients", "softdent.treatmentPlans", "softdent.caseAcceptance", "softdent.hygieneRecall", "softdent.operatory"].forEach((datasetKey) => {
+["softdent.newPatients", "softdent.treatmentPlans", "softdent.caseAcceptance", "softdent.hygieneRecall", "softdent.operatory", "softdent.procedures", "softdent.claimStatus"].forEach((datasetKey) => {
   const item = diagnostics.datasets.find((row) => row.datasetKey === datasetKey);
   assert.ok(item && item.status === "missing", `${datasetKey} must report missing until exports exist`);
 });

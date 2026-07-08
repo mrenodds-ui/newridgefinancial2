@@ -79,5 +79,28 @@ class Nr2SoftdentDailyTests(unittest.TestCase):
             self.assertEqual(result["providers"][0]["providerCode"], "DR1")
 
 
+    def test_collections_daily_daysheet_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "analytics.sqlite3"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE daysheet_totals (
+                    year_month TEXT, gross_production REAL, net_production REAL,
+                    collections REAL, new_patients INTEGER
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO daysheet_totals (year_month, collections) VALUES ('2026-06', 500.0)"
+            )
+            conn.commit()
+            conn.close()
+            with patch("nr2_softdent_daily.resolve_sd_sqlite_db", return_value=db_path):
+                result = collections_daily()
+            self.assertTrue(result["hasData"])
+            self.assertEqual(result["source"], "daysheet_totals")
+
+
 if __name__ == "__main__":
     unittest.main()

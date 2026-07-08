@@ -1,8 +1,8 @@
 {
-  "BUILD_ID": "hal-10085",
-  "assetVersion": "hal-10085",
-  "schemaVersion": "hal-10085",
+  "BUILD_ID": "hal-10090",
+  "assetVersion": "hal-10090",
+  "schemaVersion": "hal-10090",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "builtAt": "2026-07-08T00:00:00.000Z",
-  "notes": "Moonshot Tier S3: semantic zoom, HAL presence, hero mirror, stream citations (hal-10085)."
+  "notes": "Moonshot post-ceiling data lane: payments/adjustments, analytics widget fallback, operatory contract, procedures/claim status exports, hub sign-off (hal-10090)."
 }

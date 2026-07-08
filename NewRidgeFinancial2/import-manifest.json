@@ -334,6 +334,49 @@
       "optionalFields": [],
       "fieldAliases": {},
       "note": "Canonical operatory schedule export. JSON root must include operatoryChairs: [{ name, slots: [{ time, patient, procedure, tone }] }]."
+    },
+    "softdent.procedures": {
+      "system": "softdent",
+      "bundleKey": "procedures",
+      "filenames": [
+        "softdent_procedures_export.csv",
+        "softdent_procedures_data.csv",
+        "softdent_procedures_export.json"
+      ],
+      "sourceOwner": null,
+      "generatedBy": ["softdent_operational_pipeline.py", "import_sync.py"],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": true,
+      "requiredFields": ["Code", "Date", "MRN"],
+      "optionalFields": ["Tooth", "Surface", "Description", "Provider", "Production"],
+      "fieldAliases": {
+        "Code": ["Code", "code", "ADACode", "ada_code"],
+        "Date": ["Date", "date", "ServiceDate", "service_date"],
+        "MRN": ["MRN", "mrn", "PatientId", "patient_id"]
+      },
+      "note": "Procedure detail export for claims narratives and production depth."
+    },
+    "softdent.claimStatus": {
+      "system": "softdent",
+      "bundleKey": "claimStatus",
+      "filenames": [
+        "softdent_claim_status_export.csv",
+        "softdent_claim_status_data.csv",
+        "softdent_claim_status_export.json"
+      ],
+      "sourceOwner": null,
+      "generatedBy": ["softdent_operational_pipeline.py", "import_sync.py"],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": true,
+      "requiredFields": ["ClaimId", "Status"],
+      "optionalFields": ["Payer", "ServiceDate", "Amount", "DenialReason", "Procedure"],
+      "fieldAliases": {
+        "ClaimId": ["ClaimId", "claim_id", "ClaimID"],
+        "Status": ["Status", "status", "ClaimStatus", "claim_status"]
+      },
+      "note": "Claim status export derived from daysheet or SoftDent claims report."
     }
   },
   "widgets": {

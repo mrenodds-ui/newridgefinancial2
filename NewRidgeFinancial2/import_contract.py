@@ -79,6 +79,16 @@ _FALLBACK_DATASET_NAMES: dict[str, tuple[str, ...]] = {
         "operatory_schedule.json",
         "softdent_operatory_chairs.json",
     ),
+    "softdent.procedures": (
+        "softdent_procedures_export.csv",
+        "softdent_procedures_data.csv",
+        "softdent_procedures_export.json",
+    ),
+    "softdent.claimStatus": (
+        "softdent_claim_status_export.csv",
+        "softdent_claim_status_data.csv",
+        "softdent_claim_status_export.json",
+    ),
 }
 
 _manifest_warnings: list[str] = []

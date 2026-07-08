@@ -1,9 +1,9 @@
-# Moonshot Fullest Extent — Complete (hal-10085)
+# Moonshot Fullest Extent — Complete (hal-10090)
 
-**Verdict:** Practical ceiling reached for a solo dental practice (per `MOONSHOT_FULLEST_EXTENT_REPORT_2026-07-08.md`). Visual presentation integrity and HAL spectacular S1 complete through hal-10082; Tier S2 at hal-10083–10084; Tier S3 at hal-10085 (per `MOONSHOT_AI_DEEP_VISUAL_HAL_2026-07-07.md`).
+**Verdict:** Practical ceiling reached for a solo dental practice (per `MOONSHOT_FULLEST_EXTENT_REPORT_2026-07-08.md`). Visual/HAL program through hal-10085; **Moonshot post-ceiling data lane** delivered at hal-10090 per merged Moonshot roadmap.
 
-**Build:** `hal-10085`  
-**Reload:** `https://127.0.0.1:8765/?v=hal-10085&__nr2_purge=1`
+**Build:** `hal-10090`  
+**Reload:** `https://127.0.0.1:8765/?v=hal-10090&__nr2_purge=1`
 
 ## Phase completion matrix
 
@@ -24,6 +24,7 @@
 | hal-10083 | S2 | Wired filter chips, period scrubber, taxes scenario sliders, compare mode | Done |
 | hal-10084 | S2 | Per-page storyboard zip (Print→PDF), unified chart mount merge | Done |
 | hal-10085 | S3 | Semantic zoom, HAL presence orb, 8765→8766 hero mirror, stream citation chips | Done |
+| hal-10090 | Data | Payment/adjustment fix, analytics widget fallback, operatory contract, procedures/claim status exports, hub sign-off | Done |
 
 ## Engineering sign-off
 
@@ -60,4 +61,4 @@
 
 See also: `docs/MOONSHOT_AI_DEEP_VISUAL_HAL_2026-07-07.md`, `docs/MOONSHOT_DISASTER_RECOVERY.md`, `docs/OPERATOR_PILOT_RUNBOOK.md`.
 
-**Practical ceiling:** No further programmed Moonshot tiers beyond hal-10085 in the consultation roadmap.
+**Practical ceiling:** Visual program through hal-10085; Moonshot merged data lane through hal-10090. Narrative HAL workflow remains next optional phase (see `MOONSHOT_DETAIL_PLAN_REPORT_2026-07-08.md` Phase D).

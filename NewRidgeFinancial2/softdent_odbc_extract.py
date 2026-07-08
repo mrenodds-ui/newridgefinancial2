@@ -21,6 +21,7 @@ from quickbooks_monthly_sync import resolve_analytics_db
 from softdent_operational_pipeline import (
     INSURANCE_PAYMENT_CODES,
     INSURANCE_WRITEOFF_CODES,
+    PATIENT_PAYMENT_CODES,
     _money_value,
 )
 
@@ -238,7 +239,7 @@ def _is_payment(code: str, description: str) -> bool:
     text = str(description or "").lower()
     if normalized in WRITEOFF_CODES:
         return False
-    if normalized in PAYMENT_CODES:
+    if normalized in PAYMENT_CODES or normalized in PATIENT_PAYMENT_CODES:
         return True
     if any(normalized.startswith(prefix) for prefix in PAYMENT_PROCEDURE_PREFIXES):
         return True
@@ -255,9 +256,11 @@ def _is_adjustment(code: str, description: str) -> bool:
 
 def _row_amount(row: dict[str, Any]) -> float:
     production = row.get("production")
-    if production not in (None, "", 0):
+    if production not in (None, ""):
         try:
-            return abs(float(production))
+            val = float(production)
+            if val != 0:
+                return abs(val)
         except (TypeError, ValueError):
             pass
     return 0.0
@@ -328,6 +331,8 @@ def _populate_from_daysheet(conn: sqlite3.Connection, path: Path, *, extracted_a
             continue
 
         if _is_payment(code, description):
+            if amount <= 0:
+                amount = _row_amount({"production": production})
             if amount <= 0:
                 continue
             conn.execute(
@@ -662,7 +667,25 @@ def _populate_from_register_jsonl(conn: sqlite3.Connection, path: Path, *, extra
     if not path.is_file():
         return counts
     payment_date = _register_period_end(path)
-    register_methods = frozenset({"cash", "check", "credit card", "eft", "carecredit", "ins plan collections", "regular collections"})
+    register_methods = frozenset(
+        {
+            "cash",
+            "check",
+            "credit card",
+            "credit cards",
+            "debit card",
+            "eft",
+            "carecredit",
+            "ins plan collections",
+            "regular collections",
+            "insurance collections",
+            "patient collections",
+            "visa",
+            "mastercard",
+            "amex",
+            "discover",
+        }
+    )
     with path.open("r", encoding="utf-8") as handle:
         for line in handle:
             line = line.strip()

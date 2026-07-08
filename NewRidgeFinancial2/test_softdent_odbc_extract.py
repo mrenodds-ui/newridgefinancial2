@@ -66,6 +66,30 @@ class SoftdentOdbcExtractTests(unittest.TestCase):
             self.assertGreaterEqual(counts["sd_payments"], 1)
             self.assertGreaterEqual(counts["sd_adjustments"], 1)
 
+    def test_register_jsonl_populates_payments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "analytics.sqlite3"
+            register = Path(tmp) / "register_for_period_2026-06-01_2026-06-15.jsonl"
+            register.write_text(
+                json.dumps(
+                    {
+                        "dataset_name": "register_for_period",
+                        "raw_row": ["", "Cash", "125.50", "", "", "", "", "", "", ""],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            with patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
+                "softdent_odbc_extract._resolve_daysheet_path", return_value=None
+            ), patch("softdent_odbc_extract._resolve_register_path", return_value=register), patch(
+                "softdent_odbc_extract._resolve_claims_path", return_value=Path("")
+            ):
+                result = extract_softdent_odbc(force=True)
+            self.assertTrue(result["refreshed"] or result["mode"] in ("json-fallback", "none"))
+            counts = table_row_counts(db_path)
+            self.assertGreaterEqual(counts["sd_payments"], 1)
+
     def test_odbc_lane_graceful_without_dsn(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "analytics.sqlite3"

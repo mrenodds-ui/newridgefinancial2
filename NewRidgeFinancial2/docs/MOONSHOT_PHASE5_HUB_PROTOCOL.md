@@ -1,8 +1,22 @@
 # Moonshot Phase 5 — SideNotes Hub Broadcast Protocol
 
 **Date:** 2026-07-07  
-**Build:** `hal-10062`  
+**Build:** `hal-10090`  
 **Ports:** Workstation `8766` → Financial HAL `8765`
+
+## Implementation status (hal-10090)
+
+- `hal_hub.hub_notify_access_ok()` — validates `Origin` (8766 / `NR2_HUB_ORIGIN`) **and** `X-Hub-Token`
+- `hal_hub.hub_last_broadcast_access_ok()` — validates `X-Hub-Token` on GET
+- `nr2_http_server._lan_hal_hub_access_ok()` — routes hub APIs through the checks above
+- Hero metrics mirror: financial hub `POST /api/hub/notify` with `kind: "hero-metrics"` → workstation polls `GET /api/hub/last-broadcast` (Tier S3)
+
+## Manual sign-off (operator)
+
+1. Start 8765 (`StartProgram.bat`) and 8766 (`StartWorkstation.bat`)
+2. On 8766, send office message with target **Everyone**
+3. Within ~15s, 8765 HAL SideNotes panel shows **OFFICE BROADCAST** badge — **no message body**
+4. Load Financial page on 8765 — 8766 workstation shows hero KPI mirror strip when present
 
 ## Purpose
 

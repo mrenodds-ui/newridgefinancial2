@@ -506,7 +506,12 @@ def _sync_operational_softdent_exports(destination: Path) -> list[str]:
     """Refresh claims/clinical notes from the live daysheet pipeline when exports are stale."""
     written: list[str] = []
     try:
-        from softdent_operational_pipeline import build_daysheet_claims_dataset, build_daysheet_clinical_dataset
+        from softdent_operational_pipeline import (
+            build_daysheet_claim_status_dataset,
+            build_daysheet_claims_dataset,
+            build_daysheet_clinical_dataset,
+            build_daysheet_procedures_dataset,
+        )
 
         claims = build_daysheet_claims_dataset()
         claim_rows = (claims or {}).get("rows") or []
@@ -516,6 +521,24 @@ def _sync_operational_softdent_exports(destination: Path) -> list[str]:
             _write_csv(claims_path, claim_rows, fieldnames)
             _write_csv_json_sidecar(claims_path)
             written.append(claims_path.name)
+
+            status = build_daysheet_claim_status_dataset()
+            status_rows = (status or {}).get("rows") or []
+            if status_rows:
+                status_path = destination / "softdent_claim_status_export.csv"
+                status_fields = list(status_rows[0].keys())
+                _write_csv(status_path, status_rows, status_fields)
+                _write_csv_json_sidecar(status_path)
+                written.append(status_path.name)
+
+        procedures = build_daysheet_procedures_dataset()
+        proc_rows = (procedures or {}).get("rows") or []
+        if proc_rows:
+            proc_path = destination / "softdent_procedures_export.csv"
+            proc_fields = list(proc_rows[0].keys())
+            _write_csv(proc_path, proc_rows, proc_fields)
+            _write_csv_json_sidecar(proc_path)
+            written.append(proc_path.name)
 
         clinical = build_daysheet_clinical_dataset()
         clinical_rows = (clinical or {}).get("rows") or []
