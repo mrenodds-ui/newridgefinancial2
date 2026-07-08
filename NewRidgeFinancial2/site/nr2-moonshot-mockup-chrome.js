@@ -359,19 +359,154 @@ const MoonshotMockupChrome = (function () {
     </div>`;
   }
 
+  function halWidgetsApi() {
+    if (typeof HalPageWidgets !== "undefined") return HalPageWidgets;
+    if (typeof globalThis !== "undefined" && globalThis.HalPageWidgets) return globalThis.HalPageWidgets;
+    return null;
+  }
+
+  function proactiveInsight(halData) {
+    const briefing = halData && halData.runtime && halData.runtime.proactiveBriefing;
+    if (!briefing || !briefing.headline) return null;
+    const top = briefing.topAction;
+    const body = top
+      ? `${top.title}${top.rationale ? ` — ${top.rationale}` : ""}`
+      : briefing.headline;
+    const tone =
+      briefing.placement && briefing.placement.refreshed
+        ? "success"
+        : Array.isArray(briefing.blockers) && briefing.blockers.length
+          ? "warning"
+          : "info";
+    return { tone, title: briefing.headline, body };
+  }
+
+  function mockupInsight(state) {
+    const proactive = proactiveInsight(state && state.halData);
+    if (proactive) {
+      return { title: "HAL Insight", body: proactive.body || proactive.title };
+    }
+    const feed = (state && state.halWidgetFeed) || {};
+    const pageId = state && state.pageId;
+    const HW = halWidgetsApi();
+    if (HW && pageId) {
+      const first = HW.widgetsForPage(pageId, feed).find((item) => item.widget && item.widget.summary);
+      if (first && first.widget.summary) {
+        return { title: "HAL Insight", body: first.widget.summary };
+      }
+    }
+    return { title: "HAL Insight", body: "HAL reads local SoftDent and QuickBooks imports only." };
+  }
+
+  function pageShell(state, opts) {
+    const o = opts || {};
+    if (o.compact) return "";
+    const schema = typeof PageSchema !== "undefined" && state && state.pageId ? PageSchema.byId(state.pageId) : null;
+    if (!schema) {
+      return `<div class="ms-page-chrome ms-page-chrome--missing" role="alert"><p>Page unavailable.</p></div>`;
+    }
+    if (state.pageId === "hal") {
+      return pageChromeHal(state, schema, o);
+    }
+    const HW = halWidgetsApi();
+    const halReadinessStrip =
+      HW && typeof HW.canvasPageStrip === "function" && state.halWidgetFeed
+        ? HW.canvasPageStrip(state.pageId, state.halWidgetFeed)
+        : "";
+    return pageChrome(state, schema, mockupInsight(state), { halReadinessStrip, ...(o || {}) });
+  }
+
+  function pageContent(state, bodyHtml, chromeOpts) {
+    const bodyClass = state && state.pageId === "hal" ? "ms-hal-page-body" : "ms-page-body";
+    return `${pageShell(state, chromeOpts || {})}<div class="${bodyClass}">${bodyHtml || ""}</div>`;
+  }
+
+  function canvasShell(state, opts) {
+    return pageShell(state, opts);
+  }
+
+  function sectionHead(title, subtitle) {
+    return `<header class="widget-section-head">
+      <h2>${esc(title)}</h2>
+      ${subtitle ? `<p>${esc(subtitle)}</p>` : ""}
+    </header>`;
+  }
+
+  let _halExportTimer = null;
+  const EXPORT_WAIT_LIMIT_MS = 30000;
+
+  function setHalReadiness(widgets, waitingExports) {
+    const strip = document.getElementById("nr2-hal-readiness");
+    if (!strip) return;
+
+    clearTimeout(_halExportTimer);
+    strip.style.background = "";
+    strip.style.color = "";
+
+    const hasWidgets = Array.isArray(widgets) && widgets.length > 0;
+
+    if (!hasWidgets) {
+      if (waitingExports > 0) {
+        strip.textContent = `HAL · 0 ready · ${waitingExports} waiting on export`;
+        _halExportTimer = setTimeout(() => {
+          strip.textContent = "HAL · Data sync delayed — figures may be incomplete";
+          strip.style.background = "#fff3cd";
+          strip.style.color = "#664d03";
+          window.dispatchEvent(new CustomEvent("nr2-hal-stalled", { detail: { waitingExports } }));
+        }, EXPORT_WAIT_LIMIT_MS);
+      } else {
+        strip.textContent = "HAL · Syncing…";
+      }
+      return;
+    }
+
+    const readyCount = widgets.filter((w) => w.ready !== false).length;
+    strip.textContent = `HAL · ${readyCount} ready · ${widgets.length - readyCount} pending`;
+  }
+
+  function refreshHalReadinessStrip(pageId, feed) {
+    const HW = halWidgetsApi();
+    if (!HW || !pageId) return;
+    const readiness = HW.pageReadiness(pageId, feed || {});
+    const widgets = readiness.items.map((item) => ({
+      ready: item.widget && String(item.widget.status).toUpperCase() === "SUCCESS",
+    }));
+    setHalReadiness(widgets, readiness.empty);
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("nr2-hal-stalled", () => {
+      document.querySelectorAll('[data-nr2-layout="moonshot-mockup-grid"], [data-nr2-layout="moonshot-grid"]').forEach((grid) => {
+        grid.classList.add("nr2-data-stale");
+      });
+    });
+  }
+
   return {
     NAV_ICONS,
     renderNavRail,
     pageChrome,
     pageChromeHal,
+    pageContent,
+    pageShell,
+    canvasShell,
+    sectionHead,
     renderHalInsight,
     renderAlertStrip,
+    refreshHalReadinessStrip,
+    setHalReadiness,
+    mockupInsight,
   };
 })();
 
 if (typeof window !== "undefined") {
   window.MoonshotMockupChrome = MoonshotMockupChrome;
+  window.PageChrome = MoonshotMockupChrome;
 }
 if (typeof globalThis !== "undefined") {
   globalThis.MoonshotMockupChrome = MoonshotMockupChrome;
+  globalThis.PageChrome = MoonshotMockupChrome;
+}
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = MoonshotMockupChrome;
 }

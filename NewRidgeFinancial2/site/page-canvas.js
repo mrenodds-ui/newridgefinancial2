@@ -1053,8 +1053,12 @@ const PageCanvas = (function () {
           }</div>
         </div>
         <div class="composer-panel panel" data-hal-subpanel="narrativeReferences">
-          <div class="panel-header"><span>References</span></div>
-          <div class="panel-content">${canvasEmpty("Citation widgets and payer rules appear when claims data is loaded.")}</div>
+          <div class="panel-header"><span>Payer &amp; eligibility</span></div>
+          <div class="panel-content">${
+            typeof NarrativePayerPanel !== "undefined" && NarrativePayerPanel.renderHtml
+              ? NarrativePayerPanel.renderHtml(claim)
+              : `<div class="npp-muted">Load narrative-payer-panel.js for payer reference and eligibility cache.</div>`
+          }</div>
         </div>
       </div>
     </div>`;
@@ -1174,6 +1178,19 @@ const PageCanvas = (function () {
     };
   }
 
+  function mockupPreviewGate(pageId) {
+    const H = buildMoonshotHelpers();
+    const mockPath = `.local_logs/moonshot_financial_eval/page_mockups_elite/${pageId}.html`;
+    const noticeHtml = canvasImportNotice(pageImportNotice(pageId));
+    const gate = `<section class="widget-card col-12 ms-mockup-preview-gate" data-ms-page-gate="${H.esc(pageId)}">
+      <div class="widget-header"><span class="widget-title">Mockup preview only</span><span class="ms-muted">Live wiring disabled</span></div>
+      <p class="ms-mockup-preview-gate__lead">Staff page bodies render from elite HTML mockups only. Layout engine integration is not wired until operator sign-off.</p>
+      <p class="ms-mockup-preview-gate__path"><code>${H.esc(mockPath)}</code></p>
+      <p class="ms-muted">Gallery index: <code>.local_logs/moonshot_financial_eval/page_mockups_elite/index.html</code></p>
+    </section>`;
+    return noticeHtml + gate;
+  }
+
   function renderBody(pageId, feed, programSnapshot) {
     if (
       typeof window !== "undefined" &&
@@ -1186,6 +1203,11 @@ const PageCanvas = (function () {
     activeSnapshot = programSnapshot || null;
     const D = dataApi();
     if (D) D.bind(activeFeed, activeSnapshot);
+    return mockupPreviewGate(pageId);
+  }
+
+  function renderWiredLayout(pageId) {
+    activePageId = pageId;
     if (typeof MoonshotLayoutEngine === "undefined" || !MoonshotLayoutEngine.hasPage(pageId)) {
       return canvasImportNotice(pageImportNotice(pageId));
     }
@@ -1202,10 +1224,13 @@ const PageCanvas = (function () {
   }
 
   function hasPage(pageId) {
+    if (typeof PageSchema !== "undefined" && typeof PageSchema.isStaffPage === "function") {
+      return PageSchema.isStaffPage(pageId);
+    }
     return typeof MoonshotLayoutEngine !== "undefined" && MoonshotLayoutEngine.hasPage(pageId);
   }
 
-  return { renderBody, hasPage, setFeed, buildMoonshotHelpers };
+  return { renderBody, renderWiredLayout, hasPage, setFeed, buildMoonshotHelpers, mockupPreviewGate };
 })();
 
 if (typeof module !== "undefined" && module.exports) {
@@ -1288,6 +1313,9 @@ PageCanvas.resolveData = function(pageId, passedData) {
 PageCanvas.moonshotPreviewHtml = function moonshotPreviewHtml(pageId, feed, snapshot) {
   if (typeof this.setFeed === "function") {
     this.setFeed(feed, snapshot);
+  }
+  if (typeof this.renderWiredLayout === "function") {
+    return this.renderWiredLayout(pageId);
   }
   return typeof this.renderBody === "function" ? this.renderBody(pageId, feed, snapshot) : "";
 };

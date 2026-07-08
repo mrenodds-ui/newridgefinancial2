@@ -1926,3 +1926,20 @@
 .ms-boot-error__list { color: var(--muted, #9ca3af); font-size: 12px; margin: 8px 0 0; max-width: 480px; text-align: left; }
 .nr2-boot-error { margin: 24px auto; max-width: 560px; }
 .sidebar__boot-error { color: var(--muted, #9ca3af); font-size: 12px; padding: 16px; }
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-gate {
+  border: 1px dashed rgba(214, 177, 94, 0.45);
+  min-height: 12rem;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-gate__lead {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0 0 10px;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-gate__path code {
+  font-size: 12px;
+  word-break: break-all;
+}

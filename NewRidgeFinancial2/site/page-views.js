@@ -1,6 +1,7 @@
 /**
  * NewRidgeFinancial 2.0 — staff page mount layer.
- * Body content from PageCanvas; chrome from PageChrome + PageSchema; HAL from halWidgetFeed.
+ * Body content from PageCanvas (mock preview gate live; wired layouts via moonshotPreviewHtml for tooling only).
+ * Shell from MoonshotMockupChrome + PageSchema registry.
  */
 const PageViews = (function () {
   function resolveUI() {
@@ -38,20 +39,20 @@ const PageViews = (function () {
 
   function pageShell(state, body) {
     const pageClass = state && state.pageId === "hal" ? "ms-page ms-page--hal" : "ms-page";
-    return `<article class="${pageClass}" data-pv-page="${esc(state.pageId)}">${body}</article>`;
+    return `<article class="${pageClass}" data-ms-page="${esc(state.pageId)}">${body}</article>`;
   }
 
   function pageChrome(state, bodyHtml, chromeOpts) {
-    const PC = typeof PageChrome !== "undefined" ? PageChrome : null;
-    if (!PC) {
+    const MC = typeof MoonshotMockupChrome !== "undefined" ? MoonshotMockupChrome : null;
+    if (!MC || typeof MC.pageContent !== "function") {
       return U
         ? U.ErrorState({
-            title: "Design schema not loaded",
-            message: "page-chrome.js must load before page-views.js. Run StartProgram.bat and reload http://127.0.0.1:8765/.",
+            title: "Page shell not loaded",
+            message: "nr2-moonshot-mockup-chrome.js must load before page-views.js. Run StartProgram.bat and reload http://127.0.0.1:8765/.",
           })
         : bodyHtml || "";
     }
-    return PC.pageContent(state, bodyHtml, chromeOpts);
+    return MC.pageContent(state, bodyHtml, chromeOpts);
   }
 
   function wireCommon(container, onNavigate) {
@@ -389,22 +390,24 @@ const PageViews = (function () {
     if (typeof NR2PageFilters !== "undefined" && NR2PageFilters.mountPageFilters) {
       NR2PageFilters.mountPageFilters(container, pageId, { snapshot: programSnapshot });
     }
-    if (typeof NR2Tier3 !== "undefined" && NR2Tier3.mountPage) {
-      NR2Tier3.mountPage(container, pageId, { snapshot: programSnapshot });
+    const canvas = container.querySelector("#page-canvas");
+    if (canvas && Canvas.renderBody) {
+      if (typeof Canvas.setFeed === "function") {
+        Canvas.setFeed(halWidgetFeed, programSnapshot);
+      }
+      canvas.innerHTML = Canvas.renderBody(pageId, halWidgetFeed, programSnapshot);
     }
-    if (typeof globalThis.renderPageView === "function") {
-      void globalThis.renderPageView(pageId, {
-        feed: halWidgetFeed,
-        snapshot: programSnapshot,
-      });
-    } else {
-      const canvas = container.querySelector("#page-canvas");
-      if (canvas && Canvas.renderBody) {
-        canvas.innerHTML = Canvas.renderBody(pageId, halWidgetFeed, programSnapshot);
+    if (typeof NR2Tier3 !== "undefined" && NR2Tier3.mountPage) {
+      const canvasEl = container.querySelector("#page-canvas");
+      if (!canvasEl || !canvasEl.querySelector(".ms-mockup-preview-gate")) {
+        NR2Tier3.mountPage(container, pageId, { snapshot: programSnapshot });
       }
     }
     if (typeof NR2MoonshotUI !== "undefined" && NR2MoonshotUI.enhancePage) {
-      NR2MoonshotUI.enhancePage(pageId, container).catch(() => {});
+      const canvasEl = container.querySelector("#page-canvas");
+      if (!canvasEl || !canvasEl.querySelector(".ms-mockup-preview-gate")) {
+        NR2MoonshotUI.enhancePage(pageId, container).catch(() => {});
+      }
     }
     refreshLiveIntegrationHealth().catch(() => {
       /* integration health optional; skip second full repaint to avoid page flash */
