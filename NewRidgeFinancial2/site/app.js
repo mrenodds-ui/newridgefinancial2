@@ -194,7 +194,7 @@ function enforceSingleFinancialTab() {
       }
       if (window.BroadcastChannel) {
         const bc = new BroadcastChannel("nr2_tab");
-        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10077" });
+        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10082" });
       }
     }
   }
@@ -1735,6 +1735,12 @@ async function handleHalChromeInteraction(event) {
   }
   const widgetCard = event.target.closest("[data-hal-widget-key]");
   if (widgetCard && !event.target.closest("[data-hal-widget-nav]") && !event.target.closest("[data-hal-action]") && !event.target.closest("[data-hal-actuator]")) {
+    const openPage = widgetCard.getAttribute("data-open-page");
+    const scrollWidget = widgetCard.getAttribute("data-hal-scroll-widget") || widgetCard.getAttribute("data-hal-widget-key");
+    if (openPage && openPage !== "hal") {
+      select(openPage);
+      if (scrollWidget) setTimeout(() => scrollStaffWidgetIntoView(scrollWidget), 120);
+    }
     let cmd = widgetCard.getAttribute("data-hal-cmd");
     if (!cmd) {
       const key = widgetCard.getAttribute("data-hal-widget-key");
@@ -1744,6 +1750,20 @@ async function handleHalChromeInteraction(event) {
       await runHalPageCmd(cmd);
       return true;
     }
+  }
+  const voicePtt = event.target.closest("[data-hal-voice-ptt]");
+  if (voicePtt) {
+    const briefing =
+      (typeof HalProactive !== "undefined" && HalProactive.lastBriefing && HalProactive.lastBriefing.morningBriefing) ||
+      null;
+    const line =
+      (briefing && briefing.sentence) ||
+      "HAL is monitoring SoftDent and QuickBooks imports on this workstation.";
+    if (typeof HalVoice !== "undefined" && HalVoice.speak) HalVoice.speak(line, { interrupt: true });
+    else if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(line));
+    }
+    return true;
   }
   const actuatorBtn = event.target.closest("[data-hal-actuator]");
   if (actuatorBtn) {
@@ -3808,7 +3828,14 @@ async function handleHalSubmit(query) {
       placeholder.tools = (outcome.plan && outcome.plan.tools) || placeholder.tools || [];
       placeholder.toolSummaries = summarizeToolResultsBrief(outcome.toolResults);
       placeholder.agentLoopTurns = outcome.agentLoopTurns || 0;
+      const loopTools = placeholder.tools || [];
+      placeholder.agentLoop = [
+        { phase: "Plan", detail: outcome.intent || "Local route" },
+        ...(loopTools.slice(0, 4).map((t) => ({ phase: "Tool", detail: String(t) }))),
+        { phase: "Result", detail: String(outcome.lane || "local") },
+      ];
     } else {
+      const loopTools = (outcome.plan && outcome.plan.tools) || [];
       halChatHistory.push({
         role: "hal",
         text: outcome.text,
@@ -3819,9 +3846,14 @@ async function handleHalSubmit(query) {
         spokenScript: outcome.spokenScript || "",
         skipChatSpeech: wsSilent || !!outcome.skipSpeech,
         userQuery: trimmed,
-        tools: (outcome.plan && outcome.plan.tools) || [],
+        tools: loopTools,
         toolSummaries: summarizeToolResultsBrief(outcome.toolResults),
         agentLoopTurns: outcome.agentLoopTurns || 0,
+        agentLoop: [
+          { phase: "Plan", detail: outcome.intent || "Local route" },
+          ...loopTools.slice(0, 4).map((t) => ({ phase: "Tool", detail: String(t) })),
+          { phase: "Result", detail: String(outcome.lane || "local") },
+        ],
       });
     }
     logAudit(trimmed, outcome.intent);
@@ -3874,7 +3906,9 @@ function escapeHtml(value) {
 function bindOpenPageButtons(root) {
   root.querySelectorAll("[data-open-page]").forEach((button) => {
     button.addEventListener("click", () => {
-      const target = button.dataset.openPage;
+      const target = button.dataset.openPage || button.getAttribute("data-open-page");
+      const scrollWidget =
+        button.dataset.halScrollWidget || button.getAttribute("data-hal-scroll-widget") || "";
       logAudit("Open " + target, "navigate: drawer");
       closeDrawer();
       if (isHalPanelTarget(target)) {
@@ -3883,6 +3917,9 @@ function bindOpenPageButtons(root) {
         return;
       }
       select(target);
+      if (scrollWidget) {
+        setTimeout(() => scrollStaffWidgetIntoView(scrollWidget), 120);
+      }
     });
   });
 }
@@ -4810,7 +4847,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10077&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10082&__nr2_purge=1</div>';
     return;
   }
   const MC =

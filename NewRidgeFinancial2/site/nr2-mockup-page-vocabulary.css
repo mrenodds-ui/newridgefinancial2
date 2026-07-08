@@ -904,15 +904,230 @@
 }
 
 .app--moonshot-mockup .ms-page .nr2-chart-overlay {
-  margin-top: 8px;
+  inset: 0;
   min-height: 100px;
   pointer-events: none;
-  position: relative;
+  position: absolute;
   width: 100%;
+  z-index: 2;
 }
 
 .app--moonshot-mockup .ms-page .nr2-chart-overlay canvas {
   display: block;
-  height: auto;
+  height: 100%;
   max-width: 100%;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas .trend-chart-svg,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > svg,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .bar-chart,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .heatmap-grid {
+  display: none;
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile {
+  background: var(--bg-elevated, #1a1a1a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile strong {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile--ok {
+  border-color: rgba(46, 204, 113, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile--warn,
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile--alert {
+  border-color: rgba(255, 184, 0, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .stat-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .stat-box {
+  background: var(--bg-elevated, #1a1a1a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .ms-page .stat-box strong {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .stat-box span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page .stat-box--success {
+  border-color: rgba(46, 204, 113, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .tax-split-chart {
+  display: grid;
+  gap: 10px;
+}
+
+.app--moonshot-mockup .ms-page .tax-split-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .tax-split-seg {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+}
+
+.app--moonshot-mockup .ms-page .tax-split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.app--moonshot-mockup .ms-page .tax-split-key {
+  align-items: center;
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.app--moonshot-mockup .ms-page .tax-split-key i {
+  border-radius: 999px;
+  display: inline-block;
+  height: 8px;
+  width: 8px;
+}
+
+.app--moonshot-mockup .ms-page .wizard-steps {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app--moonshot-mockup .ms-page .wizard-step {
+  align-items: center;
+  background: var(--bg-elevated, #1a1a1a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page .wizard-step--done {
+  border-color: rgba(46, 204, 113, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .wizard-step--active {
+  border-color: rgba(0, 212, 255, 0.45);
+}
+
+.app--moonshot-mockup .ms-page .recall-calendar {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .recall-day {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  min-height: 44px;
+  padding: 6px;
+  text-align: center;
+}
+
+.app--moonshot-mockup .ms-page .recall-day--hot {
+  background: rgba(251, 146, 60, 0.35);
+  border: 1px solid #fb923c;
+}
+
+.app--moonshot-mockup .ms-page .recall-day--warm {
+  background: rgba(214, 177, 94, 0.25);
+}
+
+.app--moonshot-mockup .ms-page .compare-strip {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-top: 12px;
+}
+
+.app--moonshot-mockup .ms-page .compare-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page .compare-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .compare-value {
+  font-size: 16px;
+}
+
+.app--moonshot-mockup .ms-page .compare-delta--ok {
+  color: var(--accent-green, #2ecc71);
+}
+
+.app--moonshot-mockup .ms-page .compare-delta--warn,
+.app--moonshot-mockup .ms-page .compare-delta--alert {
+  color: var(--accent-amber, #ffb800);
+}
+
+.app--moonshot-mockup .ms-page .total-row {
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker {
+  grid-column: span 12;
+}
+
+.app--moonshot-mockup .ms-page .dashboard-grid-host {
+  background: transparent;
+  border: none;
+  grid-column: span 12;
+  padding: 0;
 }

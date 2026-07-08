@@ -252,13 +252,20 @@ const NR2MoonshotUI = (function () {
     if (!root || !widgetKey) return null;
     const panel = root.querySelector(`[data-hal-widget-key="${widgetKey}"]`);
     if (!panel) return null;
-    let host = panel.querySelector(".nr2-chart-overlay");
+    const body = panel.querySelector(".widget-body") || panel;
+    let container = body.querySelector(".chart-container");
+    if (!container) {
+      container = document.createElement("div");
+      container.className = "chart-container chart-mount";
+      body.prepend(container);
+    }
+    container.classList.add("chart-mount", "chart-mount--canvas");
+    let host = container.querySelector(".nr2-chart-overlay");
     if (!host) {
       host = document.createElement("div");
       host.className = "nr2-chart-overlay";
       host.dataset.nr2ChartWidget = widgetKey;
-      const body = panel.querySelector(".widget-body") || panel;
-      body.appendChild(host);
+      container.appendChild(host);
     }
     if (host.dataset.nr2ChartMounted === "1") {
       host.querySelectorAll("canvas").forEach((node, index) => {
@@ -269,6 +276,10 @@ const NR2MoonshotUI = (function () {
     host.dataset.nr2ChartMounted = "1";
     host.replaceChildren();
     return host;
+  }
+
+  function wrapEnhancementPanel(html) {
+    return `<section class="widget-card col-12 nr2-panel-host">${html}</section>`;
   }
 
   async function mountPostingKanban(pageId, root) {
@@ -449,11 +460,14 @@ const NR2MoonshotUI = (function () {
     const panelHost = root.querySelector(".widget-grid") || root.querySelector(".stack") || root;
     if (!panelHost || panelHost.dataset.nr2MoonshotPanels === "1") return;
     panelHost.dataset.nr2MoonshotPanels = "1";
-    if (pageId === "documents") await renderOcrExceptions(panelHost);
-    if (pageId === "financial" || pageId === "office-manager") await renderAuditDashboard(panelHost);
-    if (pageId === "claims" || pageId === "financial") await renderClinicalBridge(panelHost);
-    if (pageId === "claims" || pageId === "financial") await renderEraMatchPanel(panelHost);
-    if (pageId === "financial" || pageId === "taxes") renderCloseWizard(panelHost);
+    const host = document.createElement("div");
+    host.className = "widget-card col-12 nr2-panel-host";
+    panelHost.appendChild(host);
+    if (pageId === "documents") await renderOcrExceptions(host);
+    if (pageId === "financial" || pageId === "office-manager") await renderAuditDashboard(host);
+    if (pageId === "claims" || pageId === "financial") await renderClinicalBridge(host);
+    if (pageId === "claims" || pageId === "financial") await renderEraMatchPanel(host);
+    if (pageId === "financial" || pageId === "taxes") renderCloseWizard(host);
   }
 
   async function renderCharts(pageId, container) {

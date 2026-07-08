@@ -8,11 +8,11 @@
   delete window.NR2_LEGACY_SCHEMA;
   delete window.OLD_PAGE_SCHEMA;
   delete window.PageSchemaLegacy;
-  window.__NR2_SCHEMA_LOADED = "hal-10077";
+  window.__NR2_SCHEMA_LOADED = "hal-10082";
 })();
 
 const PageSchema = (function () {
-  const SCHEMA_VERSION = "hal-10077";
+  const SCHEMA_VERSION = "hal-10082";
 
   const PRACTICE = {
     name: "New Ridge Family Dental",
@@ -101,7 +101,6 @@ const PageSchema = (function () {
         { key: "softdentAppointmentsSnapshot", title: "Appointments Snapshot" },
         { key: "softdentArAging", title: "Accounts Receivable Aging" },
         { key: "softdentResponsibility", title: "Insurance vs Patient Balance" },
-        { key: "newPatients", title: "New Patients (MTD)" },
         { key: "treatmentPlanSummary", title: "Treatment Plans Presented" },
         { key: "caseAcceptance", title: "Case Acceptance Rate" },
         { key: "hygieneRecall", title: "Hygiene & Recall" },
@@ -315,7 +314,7 @@ if (typeof window !== "undefined") {
   window.PageSchema = PageSchema;
 }
 
-PageSchema.SCHEMA_VERSION = "hal-10077";
+PageSchema.SCHEMA_VERSION = "hal-10082";
 Object.defineProperty(PageSchema, "LAYOUT_EPOCH", {
   value: "moonshot-mockup",
   writable: false,

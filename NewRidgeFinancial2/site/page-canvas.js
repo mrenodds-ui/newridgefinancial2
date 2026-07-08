@@ -96,23 +96,29 @@ const PageCanvas = (function () {
       .map((v, i) => `<circle cx="${xAt(i, production.length).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="2.6" fill="#d6b15e"/>`)
       .join("");
     const avgLine = average ? `<path d="${path(average)}" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="5 4"/>` : "";
-    return `<svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Trend chart">${grid}${avgLine}<path d="${path(production)}" fill="none" stroke="#d6b15e" stroke-width="2.5"/>${dots}</svg>`;
+    return `<svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Trend chart">${grid}${avgLine}<path d="${path(production)}" fill="none" stroke="#d6b15e" stroke-width="2.5"/>${dots}</svg>`;
   }
 
   function dualLineChart(labels, series, height) {
     const h = height || 120;
     const w = 460;
     const pad = { t: 8, r: 8, b: 22, l: 8 };
-    const all = series.flatMap((s) => (s && Array.isArray(s.data) ? s.data : []));
+    const normalized = (series || []).map((s) => {
+      if (!s) return s;
+      if (Array.isArray(s.data)) return s;
+      if (Array.isArray(s.values)) return Object.assign({}, s, { data: s.values });
+      return s;
+    });
+    const all = normalized.flatMap((s) => (s && Array.isArray(s.data) ? s.data : []));
     const max = Math.max(...all, 1) * 1.05;
     const min = 0;
     const range = max - min || 1;
     const innerW = w - pad.l - pad.r;
     const innerH = h - pad.t - pad.b;
-    const xAt = (i, len) => pad.l + (i / (len - 1)) * innerW;
+    const xAt = (i, len) => pad.l + (i / Math.max(len - 1, 1)) * innerW;
     const yAt = (v) => pad.t + innerH - ((v - min) / range) * innerH;
     const colors = { info: "#60a5fa", success: "#78a86b", warning: "#fb923c" };
-    const paths = series
+    const paths = normalized
       .filter((s) => s && Array.isArray(s.data) && s.data.length)
       .map((s) => {
         const stroke = colors[s.tone] || "#d6b15e";
@@ -123,7 +129,7 @@ const PageCanvas = (function () {
     const xLabels = (labels || [])
       .map((label, i) => `<text x="${xAt(i, labels.length)}" y="${h - 4}" class="chart-axis-label" text-anchor="middle">${esc(label)}</text>`)
       .join("");
-    return `<svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img">${paths}${xLabels}</svg>`;
+    return `<svg class="trend-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" role="img">${paths}${xLabels}</svg>`;
   }
 
   function vBarChart(labels, values, color) {
@@ -188,7 +194,7 @@ const PageCanvas = (function () {
     return `<span class="ms-panel-ico">${AppIcons.widget(widgetKey)}</span>`;
   }
 
-  function canvasMetricTile(kpi) {
+  function canvasMetricTile(kpi, colSpan) {
     const widgetKey = kpi.widgetKey || "";
     const HW = halWidgetsApi();
     const widget = HW && widgetKey && activeFeed ? HW.widgetFromFeed(activeFeed, widgetKey) : null;
@@ -198,12 +204,24 @@ const PageCanvas = (function () {
     const attrs = widgetKey ? ` data-hal-widget-key="${esc(widgetKey)}"${halCmd} role="button" tabindex="0"` : "";
     const trend = kpi.hint ? `<div class="trend-indicator"><span>↑</span> ${esc(kpi.hint)}</div>` : "";
     const sparkHtml = kpi.spark && kpi.spark.length ? barSparkline(kpi.spark, kpi.tone) : "";
-    return `<div class="widget-card col-4 kpi-large kpi-glow-card${halTone}"${attrs}>
+    const col = colSpan || 3;
+    return `<div class="widget-card col-${col} kpi-large kpi-glow-card${halTone}"${attrs}>
         <div class="widget-header"><span class="widget-title">${widgetHeaderIcon(widgetKey)}${esc(String(kpi.label || ""))}</span><div class="widget-menu" aria-hidden="true">⋮</div></div>
         <div class="kpi-value">${esc(kpi.value)}</div>
         ${sparkHtml}
         ${trend}
       </div>`;
+  }
+
+  function heroKpiRow(kpis, max = 4) {
+    const list = (kpis || []).slice(0, max);
+    if (!list.length) return "";
+    const span = list.length >= 4 ? 3 : list.length === 3 ? 4 : list.length === 2 ? 6 : 12;
+    return list.map((kpi) => canvasMetricTile(kpi, span)).join("");
+  }
+
+  function dashboardHost(inner) {
+    return `<div class="dashboard-grid-host col-12">${inner}</div>`;
   }
 
   function canvasKpiTile(kpi) {
@@ -711,10 +729,15 @@ const PageCanvas = (function () {
     if (!aging) return null;
     const cols = aging.labels.slice(0, 4);
     const vals = aging.values.slice(0, 4);
+    const payer = ["Insurance", "Patient", "Other"];
+    const matrix = payer.map((label, rowIdx) => {
+      const factor = rowIdx === 0 ? 0.55 : rowIdx === 1 ? 0.35 : 0.1;
+      return vals.map((v) => String(Math.round(Number(v || 0) * factor)));
+    });
     return {
-      rowLabels: ["Current"],
+      rowLabels: payer,
       colLabels: cols,
-      matrix: [vals.map((v) => String(v))],
+      matrix,
     };
   }
 
@@ -836,18 +859,8 @@ const PageCanvas = (function () {
         colSpan: 12,
         body: canvasKpiRibbon(ribbon.tiles),
       })}
-      ${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}
+      ${heroKpiRow(kpis, 4)}
       ${canvasGrid12(`
-        ${gridCol(
-          4,
-          canvasPanel({
-            title: "Production Goal Scorecard",
-            accent: "green",
-            caption: "YTD production vs operator goal",
-            widgetKey: "nr2GoalScorecard",
-            body: canvasGoalScorecard(goal),
-          }),
-        )}
         ${gridCol(
           8,
           canvasPanel({
@@ -859,7 +872,17 @@ const PageCanvas = (function () {
           }),
         )}
         ${gridCol(
-          6,
+          4,
+          canvasPanel({
+            title: "Production Goal Scorecard",
+            accent: "green",
+            caption: "YTD production vs operator goal",
+            widgetKey: "nr2GoalScorecard",
+            body: canvasGoalScorecard(goal),
+          }),
+        )}
+        ${gridCol(
+          12,
           canvasPanel({
             title: "Production vs QuickBooks Reconciliation",
             accent: "green",
@@ -869,17 +892,17 @@ const PageCanvas = (function () {
           }),
         )}
         ${gridCol(
-          3,
+          6,
           canvasPanel({
             title: "Collection Lag",
             accent: "orange",
             caption: lag.summary || "DSO proxy from A/R aging buckets",
             widgetKey: "nr2CollectionLag",
-            body: `${metricRowOpen()}${lagKpi.map(canvasMetricTile).join("")}${metricRowClose()}`,
+            body: canvasKpiGrid(lagKpi),
           }),
         )}
         ${gridCol(
-          3,
+          6,
           canvasPanel({
             title: "SoftDent Production Trend",
             accent: "green",
@@ -920,7 +943,7 @@ const PageCanvas = (function () {
         ${gridCol(
           6,
           canvasPanel({
-            title: wTitle("financial", 7),
+            title: "Provider production share",
             accent: "green",
             caption: "Provider production split",
             widgetKey: "nr2ProviderCompensationWidget",
@@ -965,10 +988,20 @@ const PageCanvas = (function () {
       { label: "Completed", value: fmtClaim(practice.treatmentCompleted || ca.plansCompleted), count: funnelCounts[3] },
     ];
     return `${stackOpen()}
-      ${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}
+      ${heroKpiRow(kpis, 4)}
       ${canvasGrid12(`
         ${gridCol(
-          6,
+          12,
+          canvasPanel({
+            title: "Operatory Schedule",
+            accent: "green",
+            caption: "Today's chair timeline",
+            widgetKey: "softdentOperatoryGrid",
+            body: canvasOperatoryGrid(D ? D.softdentOperatoryGrid() : null),
+          }),
+        )}
+        ${gridCol(
+          8,
           canvasPanel({
             title: "Collections Trend",
             accent: "green",
@@ -980,16 +1013,32 @@ const PageCanvas = (function () {
           }),
         )}
         ${gridCol(
-          3,
+          4,
           canvasPanel({
-            title: "New Patients (MTD)",
+            title: "Appointments Snapshot",
             accent: "green",
-            widgetKey: "softdentNewPatientsMTD",
-            body: canvasStat(npMtd.hasData ? String(npMtd.count) : practice.newPatients || "—", "New patients MTD", npMtd.hasData ? "success" : undefined, "softdentNewPatientsMTD"),
+            widgetKey: "softdentAppointmentsSnapshot",
+            body: apptSnap.hasData
+              ? canvasTable(
+                  ["Date", "Patient", "Provider", "Status"],
+                  apptSnap.appointments.map((a) => [a.date, a.patientId, a.provider, a.status]),
+                  true,
+                )
+              : canvasEmpty("Appointment snapshot appears when sd_appointments or operatory schedule is loaded."),
           }),
         )}
         ${gridCol(
-          3,
+          6,
+          canvasPanel({
+            title: wTitle("softdent", 9),
+            accent: "green",
+            caption: "Case acceptance funnel",
+            widgetKey: wKey("softdent", 9),
+            body: canvasFunnel(funnelSteps),
+          }),
+        )}
+        ${gridCol(
+          6,
           canvasPanel({
             title: "Provider Production",
             accent: "green",
@@ -1011,6 +1060,27 @@ const PageCanvas = (function () {
         ${gridCol(
           6,
           canvasPanel({
+            title: wTitle("softdent", 6),
+            accent: "green",
+            caption: "A/R aging buckets",
+            widgetKey: wKey("softdent", 6),
+            body: aging ? chartContainer(vBarChart(aging.labels, aging.values, "#60a5fa")) : canvasEmpty("A/R aging buckets will appear when SoftDent A/R export is loaded."),
+          }),
+        )}
+        ${gridCol(
+          6,
+          canvasPanel({
+            title: wTitle("softdent", 7),
+            widgetKey: wKey("softdent", 7),
+            body: (() => {
+              const resp = D ? D.softdentResponsibilityDonut() : null;
+              return resp ? conicDonut(resp.slices, "") : canvasEmpty("Insurance vs patient split unavailable.");
+            })(),
+          }),
+        )}
+        ${gridCol(
+          6,
+          canvasPanel({
             title: "Outstanding Claims",
             accent: "orange",
             widgetKey: "softdentClaimsOutstanding",
@@ -1024,48 +1094,20 @@ const PageCanvas = (function () {
           }),
         )}
         ${gridCol(
-          6,
+          3,
           canvasPanel({
-            title: "Appointments Snapshot",
+            title: "New Patients (MTD)",
             accent: "green",
-            widgetKey: "softdentAppointmentsSnapshot",
-            body: apptSnap.hasData
-              ? canvasTable(
-                  ["Date", "Patient", "Provider", "Status"],
-                  apptSnap.appointments.map((a) => [a.date, a.patientId, a.provider, a.status]),
-                  true,
-                )
-              : canvasEmpty("Appointment snapshot appears when sd_appointments or operatory schedule is loaded."),
+            widgetKey: "softdentNewPatientsMTD",
+            body: canvasStat(npMtd.hasData ? String(npMtd.count) : practice.newPatients || "—", "New patients MTD", npMtd.hasData ? "success" : undefined, "softdentNewPatientsMTD"),
           }),
         )}
         ${gridCol(
-          6,
+          3,
           canvasPanel({
-            title: wTitle("softdent", 6),
-            accent: "green",
-            caption: "A/R aging buckets",
-            widgetKey: wKey("softdent", 6),
-            body: aging ? chartContainer(vBarChart(aging.labels, aging.values, "#60a5fa")) : canvasEmpty("A/R aging buckets will appear when SoftDent A/R export is loaded."),
-          }),
-        )}
-        ${gridCol(
-          6,
-          canvasPanel({
-            title: wTitle("softdent", 10),
-            accent: "green",
-            caption: "Case acceptance funnel",
-            widgetKey: wKey("softdent", 10),
-            body: canvasFunnel(funnelSteps),
-          }),
-        )}
-        ${gridCol(
-          12,
-          canvasPanel({
-            title: "Operatory Schedule",
-            accent: "green",
-            caption: "Today's chair timeline",
-            widgetKey: "softdentOperatoryGrid",
-            body: canvasOperatoryGrid(D ? D.softdentOperatoryGrid() : null),
+            title: wTitle("softdent", 8),
+            widgetKey: wKey("softdent", 8),
+            body: canvasStat(practice.treatmentPresented || "—", "Treatment presented", undefined, wKey("softdent", 8)),
           }),
         )}
         ${gridCol(
@@ -1081,38 +1123,11 @@ const PageCanvas = (function () {
         ${gridCol(
           12,
           canvasPanel({
-            title: wTitle("softdent", 11),
+            title: wTitle("softdent", 10),
             accent: "green",
             caption: "Hygiene recall calendar · next 14 days",
-            widgetKey: wKey("softdent", 11),
-            body: `${canvasRecallCalendar(practice)}${canvasStat(practice.hygieneCompleted || "—", "Hygiene completed", widgetTone("hygieneRecall") === "success" ? "success" : undefined, wKey("softdent", 11))}`,
-          }),
-        )}
-        ${gridCol(
-          4,
-          canvasPanel({
-            title: wTitle("softdent", 8),
-            widgetKey: wKey("softdent", 8),
-            body: `${canvasStat(practice.newPatients || "—", "New patients MTD", widgetTone("newPatients") === "success" ? "success" : undefined, wKey("softdent", 8))}${practice.newPatientsHint ? `<p class="widget-caption">${esc(practice.newPatientsHint)}</p>` : ""}`,
-          }),
-        )}
-        ${gridCol(
-          4,
-          canvasPanel({
-            title: wTitle("softdent", 9),
-            widgetKey: wKey("softdent", 9),
-            body: canvasStat(practice.treatmentPresented || "—", "Treatment presented", undefined, wKey("softdent", 9)),
-          }),
-        )}
-        ${gridCol(
-          4,
-          canvasPanel({
-            title: wTitle("softdent", 7),
-            widgetKey: wKey("softdent", 7),
-            body: (() => {
-              const resp = D ? D.softdentResponsibilityDonut() : null;
-              return resp ? conicDonut(resp.slices, "") : canvasEmpty("Insurance vs patient split unavailable.");
-            })(),
+            widgetKey: wKey("softdent", 10),
+            body: `${canvasRecallCalendar(practice)}${canvasStat(practice.hygieneCompleted || "—", "Hygiene completed", widgetTone("hygieneRecall") === "success" ? "success" : undefined, wKey("softdent", 10))}`,
           }),
         )}
       `)}
@@ -1230,16 +1245,8 @@ const PageCanvas = (function () {
       : chartContainer(canvasEmpty("Awaiting QuickBooks sync — expense breakdown will appear when export is loaded."));
 
     return `${stackOpen()}
-      <div class="dashboard-grid">${kpiCards}</div>
-      <div class="dashboard-grid">
-        <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksMonthlyRevenue">
-          <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksMonthlyRevenue")}Monthly Revenue Trend</span></div>
-          ${
-            moRev.hasData
-              ? chartContainer(vBarChart(moRev.labels, moRev.values, "#00d4ff"))
-              : canvasEmpty("Monthly revenue trend appears when QuickBooks P&amp;L monthly rows are in the import cache.")
-          }
-        </div>
+      ${dashboardHost(`<div class="dashboard-grid">${kpiCards}</div>`)}
+      ${dashboardHost(`<div class="dashboard-grid">
         <div class="card chart-large widget-glow-border" data-hal-widget-key="quickbooksProfitLossDetail">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksProfitLossDetail")}Profit &amp; Loss Trend (YTD)</span></div>
           ${plChartBody}
@@ -1248,13 +1255,31 @@ const PageCanvas = (function () {
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksExpenseBreakdown")}Operating Expenses</span></div>
           ${expenseBody}
         </div>
-      </div>
-      <div class="dashboard-grid">
+      </div>`)}
+      ${dashboardHost(`<div class="dashboard-grid">
         <div class="card kpi-card kpi-glow-card" data-hal-widget-key="quickbooksNetIncomeSummary">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksNetIncomeSummary")}Net Income (YTD)</span></div>
           <div class="card-value">${netInc.hasData && netInc.ytdNetIncome != null ? esc(`$${Math.round(netInc.ytdNetIncome).toLocaleString()}`) : "—"}</div>
           ${netInc.latestMonth ? `<span class="trend">${esc(netInc.latestMonth)} latest</span>` : ""}
         </div>
+        <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksMonthlyRevenue">
+          <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksMonthlyRevenue")}Monthly Revenue Trend</span></div>
+          ${
+            moRev.hasData
+              ? chartContainer(vBarChart(moRev.labels, moRev.values, "#00d4ff"))
+              : canvasEmpty("Monthly revenue trend appears when QuickBooks P&amp;L monthly rows are in the import cache.")
+          }
+        </div>
+        <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksCashFlowTrend">
+          <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksCashFlowTrend")}Cash Flow Trend</span></div>
+          ${
+            cf.hasData
+              ? chartContainer(dualLineChart(cf.labels, [{ label: "Net", tone: "success", data: cf.net }]), true)
+              : canvasEmpty("Cash flow trend appears when QuickBooks monthly P&amp;L rows are in the import cache.")
+          }
+        </div>
+      </div>`)}
+      ${dashboardHost(`<div class="dashboard-grid">
         <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksBalanceSheetSummary">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksBalanceSheetSummary")}Balance Sheet Summary</span></div>
           ${
@@ -1265,14 +1290,6 @@ const PageCanvas = (function () {
                   true,
                 )
               : canvasEmpty("Balance sheet summary appears when QuickBooks A/R and P&amp;L imports are loaded.")
-          }
-        </div>
-        <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksCashFlowTrend">
-          <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksCashFlowTrend")}Cash Flow Trend</span></div>
-          ${
-            cf.hasData
-              ? chartContainer(dualLineChart(cf.labels, [{ label: "Net", values: cf.net }]), true)
-              : canvasEmpty("Cash flow trend appears when QuickBooks monthly P&amp;L rows are in the import cache.")
           }
         </div>
         <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksRevenueByService">
@@ -1291,13 +1308,13 @@ const PageCanvas = (function () {
               : canvasEmpty("QuickBooks A/R aging appears when quickbooks_ar.csv or SDK probe is loaded.")
           }
         </div>
-      </div>
-      <div class="dashboard-grid">
+      </div>`)}
+      ${dashboardHost(`<div class="dashboard-grid">
         <div class="card chart-full widget-accent-orange widget-glow-border" data-hal-widget-key="ebitdaNormalization">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("ebitdaNormalization")}QuickBooks ↔ NR2 Reconciliation</span></div>
           ${reconcileRows.length ? canvasTable(["Account", "Amount", "Source", "Sync"], reconcileRows, true) : canvasEmpty("Awaiting QuickBooks sync — P&amp;L rows will appear when export is loaded.")}
         </div>
-      </div>
+      </div>`)}
       ${quickbooksViewToggleHtml("legacy")}
     </div>`;
   }
@@ -1332,11 +1349,11 @@ const PageCanvas = (function () {
         ${gridCol(
           8,
           canvasPanel({
-            title: wTitle("ar", 0),
+            title: wTitle("ar", 2),
             accent: "orange",
-            caption: "Payer × aging heatmap",
-            widgetKey: wKey("ar", 0),
-            body: heat ? canvasHeatmap(heat.rowLabels, heat.colLabels, heat.matrix) : canvasHeatmapPlaceholder(),
+            caption: "Priority follow-up queue",
+            widgetKey: wKey("ar", 2),
+            body: canvasPriorityQueue(kanbanLanes, wKey("ar", 2)),
           }),
         )}
         ${gridCol(
@@ -1350,23 +1367,23 @@ const PageCanvas = (function () {
           }),
         )}
         ${gridCol(
-          6,
+          8,
+          canvasPanel({
+            title: wTitle("ar", 0),
+            accent: "orange",
+            caption: "Payer × aging heatmap",
+            widgetKey: wKey("ar", 0),
+            body: heat ? canvasHeatmap(heat.rowLabels, heat.colLabels, heat.matrix) : canvasHeatmapPlaceholder(),
+          }),
+        )}
+        ${gridCol(
+          4,
           canvasPanel({
             title: "Collections waterfall",
             accent: "orange",
             caption: "Recent collections trend",
             widgetKey: wKey("ar", 0),
             body: waterfallItems.length ? chartContainer(canvasWaterfall(waterfallItems)) : chart ? chartContainer(dualLineChart(chart.labels, chart.series)) : canvasEmpty("Collections trend will appear when A/R dashboard data is loaded."),
-          }),
-        )}
-        ${gridCol(
-          6,
-          canvasPanel({
-            title: wTitle("ar", 2),
-            accent: "orange",
-            caption: "Priority follow-up queue",
-            widgetKey: wKey("ar", 2),
-            body: canvasPriorityQueue(kanbanLanes, wKey("ar", 2)),
           }),
         )}
         ${gridCol(
@@ -1400,10 +1417,10 @@ const PageCanvas = (function () {
             { lane: "Denied", tone: "orange", items: [] },
           ];
     return `${stackOpen()}
-      ${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}
+      ${heroKpiRow(kpis, 4)}
       ${canvasGrid12(`
         ${gridCol(
-          9,
+          8,
           canvasPanel({
             title: wTitle("claims", 0),
             accent: "purple",
@@ -1413,12 +1430,12 @@ const PageCanvas = (function () {
           }),
         )}
         ${gridCol(
-          3,
+          4,
           canvasPanel({
             title: "Pipeline analytics",
             accent: "purple",
             caption: "Denial risk · ERA · attachments",
-            widgetKey: wKey("claims", 0),
+            widgetKey: "claimsPipeline",
             body: canvasClaimSidebar(claim, wKey("claims", 0)),
           }),
         )}
@@ -1428,7 +1445,7 @@ const PageCanvas = (function () {
             title: "Claim detail",
             accent: "purple",
             caption: claim ? `${claim.patient || "Claim"} · ${claim.procedure || "—"}` : "Selected claim",
-            widgetKey: wKey("claims", 0),
+            widgetKey: "claimsPipeline",
             body: claim
               ? `<div class="claim-detail">
                 <strong>${esc(claim.procedure || claim.id || "Claim")}</strong>
@@ -1446,7 +1463,7 @@ const PageCanvas = (function () {
           canvasPanel({
             title: "Claim status",
             caption: claim ? claim.id || "First open claim" : "Claim history",
-            widgetKey: wKey("claims", 0),
+            widgetKey: "claimsPipeline",
             body: claim
               ? canvasTimeline([
                   { time: fmtClaim(claim.serviceDate), title: claim.status || "Open", detail: `${fmtClaim(claim.amount)} · ${claim.payer || "—"}`, active: true },
@@ -1554,10 +1571,20 @@ const PageCanvas = (function () {
     const postedPct = parsePct(periodStats[1] && periodStats[1].value);
     const wizardSteps = ["Intake", "Review", "Approve", "Post", "Close"];
     return `${stackOpen()}
-      ${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}
+      ${heroKpiRow(kpis, 4)}
       ${canvasGrid12(`
         ${gridCol(
-          6,
+          12,
+          canvasPanel({
+            title: wTitle("documents", 2),
+            accent: "cyan",
+            caption: "Period close wizard",
+            widgetKey: wKey("documents", 2),
+            body: `${canvasWizardSteps(wizardSteps, postedPct > 0 ? 2 : 0)}${periodStats.length ? canvasStatGrid(periodStats) : canvasEmpty("Period close metrics will appear when documents are assigned to a period.")}`,
+          }),
+        )}
+        ${gridCol(
+          8,
           canvasPanel({
             title: wTitle("documents", 0),
             accent: "cyan",
@@ -1567,7 +1594,7 @@ const PageCanvas = (function () {
           }),
         )}
         ${gridCol(
-          6,
+          4,
           canvasPanel({
             title: wTitle("documents", 1),
             accent: "cyan",
@@ -1576,13 +1603,12 @@ const PageCanvas = (function () {
           }),
         )}
         ${gridCol(
-          6,
+          12,
           canvasPanel({
-            title: wTitle("documents", 2),
-            accent: "cyan",
-            caption: "Period close wizard",
-            widgetKey: wKey("documents", 2),
-            body: `${canvasWizardSteps(wizardSteps, postedPct > 0 ? 2 : 0)}${periodStats.length ? canvasStatGrid(periodStats) : canvasEmpty("Period close metrics will appear when documents are assigned to a period.")}`,
+            title: wTitle("documents", 4),
+            caption: "Local journal queue",
+            widgetKey: wKey("documents", 4),
+            body: journalItems.length ? renderJournalQueuePanel(journalItems) : canvasEmpty("Journal posting queue requires the NR2 server. Run StartProgram.bat."),
           }),
         )}
         ${gridCol(
@@ -1595,21 +1621,12 @@ const PageCanvas = (function () {
           }),
         )}
         ${gridCol(
-          12,
+          6,
           canvasPanel({
             title: "Source breakdown",
             accent: "cyan",
             widgetKey: wKey("documents", 0),
             body: canvasStatGrid(D ? D.documentsSourceBreakdown() : []),
-          }),
-        )}
-        ${gridCol(
-          12,
-          canvasPanel({
-            title: wTitle("documents", 4),
-            caption: "Local journal queue",
-            widgetKey: wKey("documents", 4),
-            body: journalItems.length ? renderJournalQueuePanel(journalItems) : canvasEmpty("Journal posting queue requires the NR2 server. Run StartProgram.bat."),
           }),
         )}
       `)}
@@ -1622,7 +1639,7 @@ const PageCanvas = (function () {
     const rows = D ? D.libraryRows() : [];
     const doc = D ? D.firstLibraryDoc() : null;
     return `${stackOpen()}
-      ${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}
+      ${heroKpiRow(kpis, 4)}
       ${canvasSearch("Search contracts, compliance, vendors…", wKey("library", 0))}
       ${canvasGrid12(`${splitRow(
         canvasPanel({
@@ -1699,10 +1716,18 @@ const PageCanvas = (function () {
             .join("")}</div>`
         : canvasEmpty("Load QuickBooks P&amp;L to model compensation scenarios.");
     return `${stackOpen()}
-      ${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}
+      ${heroKpiRow(kpis, 4)}
       ${canvasGrid12(`
         ${gridCol(
-          6,
+          12,
+          canvasPanel({
+            title: "Related surfaces",
+            widgetKey: "taxBookToTaxBridge",
+            body: canvasNavPills(["financial", "quickbooks", "documents"]),
+          }),
+        )}
+        ${gridCol(
+          8,
           canvasPanel({
             title: "Book-to-tax bridge",
             accent: "blue",
@@ -1714,38 +1739,7 @@ const PageCanvas = (function () {
           }),
         )}
         ${gridCol(
-          3,
-          canvasPanel({
-            title: "Reasonable compensation scenarios",
-            accent: "blue",
-            caption: "Employer FICA by modeled W-2",
-            widgetKey: "taxReasonableComp",
-            body: `${canvasGauge(plan && plan.compScenarios && plan.compScenarios[0] ? parsePct(plan.compScenarios[0].employerFica) : 0, "Employer FICA", "#60a5fa")}${compBars}`,
-          }),
-        )}
-        ${gridCol(
-          3,
-          canvasPanel({
-            title: "MemoAI evidence",
-            accent: "green",
-            caption: "Memories cited for this plan",
-            widgetKey: wKey("taxes", 0),
-            body: memoList,
-          }),
-        )}
-        ${gridCol(
-          12,
-          canvasPanel({
-            title: "Quarterly estimates",
-            accent: "blue",
-            caption: "1040-ES + Kansas vouchers",
-            widgetKey: "taxQuarterlyEstimates",
-            body: quarterly.length
-              ? canvasTable(["Period", "Federal", "Kansas", "Due", "Status"], quarterly, true)
-              : canvasEmpty("Quarterly plan appears when book income is available."),
-          }),
-        )}
-        ${splitRow(
+          4,
           canvasPanel({
             title: "Estimated owner tax split",
             accent: "blue",
@@ -1763,26 +1757,27 @@ const PageCanvas = (function () {
                     "Tax split appears when book income is available.",
                   ),
           }),
+        )}
+        ${gridCol(
+          6,
           canvasPanel({
-            title: "Key deadlines",
+            title: "Reasonable compensation scenarios",
             accent: "blue",
-            caption: "Calendar-year S corp",
-            widgetKey: wKey("taxes", 0),
-            body: calendar.length ? canvasTable(["Date", "Jurisdiction", "Action"], calendar, true) : canvasEmpty("—"),
+            caption: "Employer FICA by modeled W-2",
+            widgetKey: "taxReasonableComp",
+            body: `${canvasGauge(plan && plan.compScenarios && plan.compScenarios[0] ? parsePct(plan.compScenarios[0].employerFica) : 0, "Employer FICA", "#60a5fa")}${compBars}`,
           }),
         )}
-        ${splitRow(
+        ${gridCol(
+          6,
           canvasPanel({
-            title: "Federal obligations",
+            title: "Quarterly estimates",
             accent: "blue",
-            widgetKey: wKey("taxes", 0),
-            body: federal.length ? canvasTable(["Item", "Purpose", "Timing", "Notes"], federal, true) : canvasEmpty("—"),
-          }),
-          canvasPanel({
-            title: "Kansas obligations",
-            accent: "blue",
-            widgetKey: wKey("taxes", 0),
-            body: kansas.length ? canvasTable(["Item", "Purpose", "Timing", "Notes"], kansas, true) : canvasEmpty("—"),
+            caption: "1040-ES + Kansas vouchers",
+            widgetKey: "taxQuarterlyEstimates",
+            body: quarterly.length
+              ? canvasTable(["Period", "Federal", "Kansas", "Due", "Status"], quarterly, true)
+              : canvasEmpty("Quarterly plan appears when book income is available."),
           }),
         )}
         ${splitRow(
@@ -1803,13 +1798,38 @@ const PageCanvas = (function () {
               : canvasEmpty("EBITDA add-backs will appear when expense categories are loaded."),
           }),
         )}
+        ${splitRow(
+          canvasPanel({
+            title: "Key deadlines",
+            accent: "blue",
+            caption: "Calendar-year S corp",
+            widgetKey: "taxQuarterlyEstimates",
+            body: calendar.length ? canvasTable(["Date", "Jurisdiction", "Action"], calendar, true) : canvasEmpty("—"),
+          }),
+          canvasPanel({
+            title: "MemoAI evidence",
+            accent: "green",
+            caption: "Memories cited for this plan",
+            widgetKey: "taxBookToTaxBridge",
+            body: memoList,
+          }),
+        )}
         ${gridCol(
           12,
-          canvasPanel({
-            title: "Related surfaces",
-            widgetKey: wKey("taxes", 0),
-            body: canvasNavPills(["financial", "quickbooks", "documents"]),
-          }),
+          `<details class="widget-card col-12 details-panel"><summary>Federal &amp; Kansas obligations</summary>${splitRow(
+            canvasPanel({
+              title: "Federal obligations",
+              accent: "blue",
+              widgetKey: "taxFederalStateSplit",
+              body: federal.length ? canvasTable(["Item", "Purpose", "Timing", "Notes"], federal, true) : canvasEmpty("—"),
+            }),
+            canvasPanel({
+              title: "Kansas obligations",
+              accent: "blue",
+              widgetKey: "taxFederalStateSplit",
+              body: kansas.length ? canvasTable(["Item", "Purpose", "Timing", "Notes"], kansas, true) : canvasEmpty("—"),
+            }),
+          )}</details>`,
         )}
       `)}
     </div>`;

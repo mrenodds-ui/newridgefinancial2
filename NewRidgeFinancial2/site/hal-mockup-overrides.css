@@ -101,6 +101,86 @@
   gap: 12px;
 }
 
+.app--moonshot-mockup .ms-page--hal .span-1 {
+  grid-column: span 1;
+}
+
+.app--moonshot-mockup .ms-page--hal .span-2 {
+  grid-column: span 2;
+}
+
+.app--moonshot-mockup .ms-page--hal .span-3 {
+  grid-column: span 3;
+}
+
+.app--moonshot-mockup .ms-page--hal .span-4 {
+  grid-column: span 4;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-panel--morning-briefing {
+  grid-column: span 2;
+  min-height: 180px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-situational-hero {
+  grid-column: span 4;
+  align-items: stretch;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 2fr 1fr;
+  margin-bottom: 4px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-situational-hero__alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-agent-loop {
+  border-top: 1px solid rgba(0, 212, 255, 0.15);
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-agent-loop__step {
+  background: rgba(0, 212, 255, 0.06);
+  border-left: 3px solid var(--accent-cyan, #00d4ff);
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-agent-loop__step strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.app--moonshot-mockup .ms-page--hal .chat-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-sparkline {
+  align-items: flex-end;
+  display: flex;
+  gap: 2px;
+  height: 36px;
+  margin-top: 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-sparkline .kpi-spark-bar {
+  background: linear-gradient(180deg, rgba(0, 212, 255, 0.9), rgba(0, 230, 118, 0.55));
+  border-radius: 2px 2px 0 0;
+  flex: 1;
+  min-width: 3px;
+}
+
 .app--moonshot-mockup .ms-page--hal .widget-mosaic-tile {
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
@@ -109,14 +189,6 @@
   transform: translateY(-2px);
   border-color: rgba(0, 212, 255, 0.35);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), var(--ms-glow-cyan);
-}
-
-.app--moonshot-mockup .ms-page--hal .widget-sparkline {
-  height: 36px;
-  margin-top: 10px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, rgba(0, 212, 255, 0.08), rgba(0, 230, 118, 0.12));
-  opacity: 0.85;
 }
 
 .app--moonshot-mockup .ms-page--hal .hal-health-ring[data-health-score] {

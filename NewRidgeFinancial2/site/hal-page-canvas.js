@@ -21,6 +21,31 @@ const HalPageCanvas = (function () {
     return "";
   }
 
+  function sparkBarsFromMetrics(widget) {
+    const metrics = (widget && widget.metrics) || {};
+    const nums = Object.values(metrics)
+      .map((v) => {
+        const n = Number(String(v == null ? "" : v).replace(/[^0-9.-]/g, ""));
+        return Number.isFinite(n) ? Math.abs(n) : null;
+      })
+      .filter((n) => n != null)
+      .slice(0, 8);
+    if (!nums.length) {
+      return `<div class="widget-sparkline" aria-hidden="true"><span class="kpi-spark-bar" style="height:8px"></span><span class="kpi-spark-bar" style="height:14px"></span><span class="kpi-spark-bar" style="height:10px"></span><span class="kpi-spark-bar" style="height:18px"></span></div>`;
+    }
+    const max = Math.max(...nums, 1);
+    return `<div class="widget-sparkline" aria-hidden="true">${nums
+      .map((n) => `<span class="kpi-spark-bar" style="height:${Math.max(4, Math.round((n / max) * 28))}px"></span>`)
+      .join("")}</div>`;
+  }
+
+  function mosaicNavTarget(key) {
+    if (typeof HalSkills !== "undefined" && HalSkills.WIDGET_NAV && HalSkills.WIDGET_NAV[key]) {
+      return HalSkills.WIDGET_NAV[key];
+    }
+    return "financial";
+  }
+
   function renderWidgetMonitor(ctx, H) {
     const feed = ctx.halWidgetFeed || {};
     const metricSpecs = [
@@ -43,17 +68,18 @@ const HalPageCanvas = (function () {
         const status = (w && w.status) || "FAILED";
         const cmd = `Explain the ${spec.label} widget status`;
         const deltaClass = ok ? "delta-positive" : "delta-negative";
-        return `<article class="widget-card widget-mosaic-tile widget-mount-glow span-1" data-hal-widget-key="${H.esc(spec.key)}" data-panel="${H.esc(spec.key)}" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0" aria-label="${H.esc(spec.label)} widget — ${H.esc(status)}">
+        const page = mosaicNavTarget(spec.key);
+        return `<article class="widget-card widget-mosaic-tile widget-mount-glow span-1" data-hal-widget-key="${H.esc(spec.key)}" data-panel="${H.esc(spec.key)}" data-hal-cmd="${H.esc(cmd)}" data-open-page="${H.esc(page)}" data-hal-scroll-widget="${H.esc(spec.key)}" role="button" tabindex="0" aria-label="${H.esc(spec.label)} widget — ${H.esc(status)}">
           <div class="widget-header"><span class="widget-title">${H.esc(spec.label)}</span></div>
           <div class="metric-large text-glow">${H.esc(metrics || status)}</div>
           <div class="metric-delta ${deltaClass}"><span>${H.esc(status)}</span></div>
-          <div class="widget-sparkline" aria-hidden="true"></div>
-          <div class="widget-footer"><span>HAL widget</span><span>${H.esc(status)}</span></div>
+          ${sparkBarsFromMetrics(w)}
+          <div class="widget-footer"><span>HAL · ${H.esc(page)}</span><span>${H.esc(status)}</span></div>
         </article>`;
       })
       .join("");
     const widgetTotal = metricSpecs.length;
-    return `<section class="hal-panel--widgets hal-widget-mosaic" data-panel="widgetMosaic">${missionTiles}<p class="widget-meta widget-meta--hal">${readyTotal}/${widgetTotal} ready · click a tile to ask HAL · ${H.esc((feed && feed.importMode) || "direct-first")}</p></section>`;
+    return `<section class="hal-panel--widgets hal-widget-mosaic" data-panel="widgetMosaic">${missionTiles}<p class="widget-meta widget-meta--hal">${readyTotal}/${widgetTotal} ready · click a tile to open page + ask HAL · ${H.esc((feed && feed.importMode) || "direct-first")}</p></section>`;
   }
 
   function registryStats(ctx) {
@@ -71,9 +97,9 @@ const HalPageCanvas = (function () {
   function renderAskHal(ctx, H) {
     const { halAskDraft, halAskLoading, halChatHistory, halData } = ctx;
     const suggestions = (halData && halData.askHal && halData.askHal.suggestions ? halData.askHal.suggestions : []).slice(0, 6);
-    const messages = (halChatHistory || []).slice(-1);
+    const messages = (halChatHistory || []).slice(-20);
     const chatHtml = messages.length
-      ? messages
+      ? `<div class="chat-history">${messages
           .map((m) => {
             const followups =
               m.role === "hal" && m.followUpChips && m.followUpChips.length
@@ -81,6 +107,20 @@ const HalPageCanvas = (function () {
                     .map((c) => H.actionChip(c.label, `data-hal-followup="${H.esc(c.query)}"`))
                     .join("")}</div>`
                 : "";
+            const loop =
+              m.role === "hal" && Array.isArray(m.agentLoop) && m.agentLoop.length
+                ? `<div class="hal-agent-loop" aria-label="HAL agent loop">${m.agentLoop
+                    .map(
+                      (step) =>
+                        `<div class="hal-agent-loop__step"><strong>${H.esc(step.phase || step.title || "Step")}</strong>${H.esc(step.detail || step.text || "")}</div>`,
+                    )
+                    .join("")}</div>`
+                : m.role === "hal" && Array.isArray(m.tools) && m.tools.length
+                  ? `<div class="hal-agent-loop" aria-label="HAL tool plan">${m.tools
+                      .slice(0, 4)
+                      .map((t) => `<div class="hal-agent-loop__step"><strong>Tool</strong>${H.esc(t)}</div>`)
+                      .join("")}</div>`
+                  : "";
             const roleClass = m.role === "user" ? "message message-user" : "message message-hal";
             return `<div class="${roleClass}">
                 <div class="message-head">
@@ -88,10 +128,11 @@ const HalPageCanvas = (function () {
                   ${m.role === "hal" ? `<button type="button" class="message-copy" data-hal-copy-response title="Copy response">${H.uiIcon("copy")}</button>` : ""}
                 </div>
                 <p>${H.esc(m.text)}</p>
+                ${loop}
                 ${followups}
               </div>`;
           })
-          .join("")
+          .join("")}</div>`
       : "";
     const modeLabel =
       ctx.halModels && ctx.halModels.config && ctx.halModels.config.mode === "online" ? "Auto" : "Registry only";
@@ -336,8 +377,56 @@ const HalPageCanvas = (function () {
     </section>`;
   }
 
+  function renderSituationalHero(ctx, H) {
+    const briefing =
+      ctx.halMorningBriefing ||
+      (ctx.halProactiveBriefing && ctx.halProactiveBriefing.morningBriefing) ||
+      null;
+    const sentence =
+      (briefing && briefing.sentence) ||
+      (ctx.halProactiveBriefing && ctx.halProactiveBriefing.headline) ||
+      "HAL is monitoring SoftDent and QuickBooks imports locally.";
+    const feed = ctx.halWidgetFeed || {};
+    const alertItems = [];
+    const ticker = feed.widgets && feed.widgets.nr2AlertTicker;
+    if (ticker && ticker.metrics && ticker.metrics.topAlert) {
+      alertItems.push({ text: ticker.metrics.topAlert, level: "warn" });
+    }
+    const lag = feed.widgets && feed.widgets.nr2CollectionLag;
+    if (lag && String(lag.status || "").toUpperCase() !== "SUCCESS") {
+      alertItems.push({ text: lag.summary || "Collection lag needs review", level: "warn" });
+    }
+    const recon = feed.widgets && feed.widgets.nr2ProductionReconciliation;
+    if (recon && String(recon.status || "").toUpperCase() === "DEGRADED") {
+      alertItems.push({ text: recon.summary || "Production vs QuickBooks variance elevated", level: "warn" });
+    }
+    while (alertItems.length < 3) {
+      alertItems.push({ text: "Cross-analytics within review thresholds", level: "ok" });
+    }
+    const alertsHtml = alertItems
+      .slice(0, 3)
+      .map(
+        (item) =>
+          `<button type="button" class="prompt-chip prompt-chip--action nr2-alert-ticker__item nr2-alert-ticker__item--${H.esc(item.level)}" data-hal-cmd="${H.esc(item.text)}">${H.esc(item.text)}</button>`,
+      )
+      .join("");
+    return `<section class="widget-card hal-situational-hero span-4" data-panel="situationalHero" data-hal-widget-key="halAskHal">
+      <div>
+        ${H.cardHead("SITUATIONAL HERO", "situationalHero", "Living command posture", H.cardIconRaw("widget", "nr2KpiRibbon"))}
+        <p class="hal-morning-briefing__sentence text-glow">${H.esc(sentence)}</p>
+        <div class="prompt-chips prompt-chips--live">
+          <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Summarize MTD production">Explain variance</button>
+          <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Show import health">Import health</button>
+          <button type="button" class="prompt-chip prompt-chip--action" data-hal-voice-ptt="1">Voice</button>
+        </div>
+      </div>
+      <div class="hal-situational-hero__alerts" aria-label="HAL exceptions">${alertsHtml}</div>
+    </section>`;
+  }
+
   function renderDashboard(ctx, H) {
     return [
+      renderSituationalHero(ctx, H),
       renderMorningBriefing(ctx, H),
       renderStatusRail(ctx, H),
       renderWidgetMonitor(ctx, H),

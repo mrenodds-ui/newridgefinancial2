@@ -11,7 +11,7 @@
   if (window.PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     throw new Error("[NR2] HAL_SCHEMA_ABORT: Expected moonshot-mockup epoch.");
   }
-  window.PageSchema.SCHEMA_VERSION = "hal-10077";
+  window.PageSchema.SCHEMA_VERSION = "hal-10082";
 })();
 
 const HalPageSchema = (function () {

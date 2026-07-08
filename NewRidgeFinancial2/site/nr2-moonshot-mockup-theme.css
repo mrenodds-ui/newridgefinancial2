@@ -407,9 +407,21 @@
 
 .app--moonshot-mockup .widget-card.col-3 { grid-column: span 3; }
 .app--moonshot-mockup .widget-card.col-4 { grid-column: span 4; }
+.app--moonshot-mockup .widget-card.col-5 { grid-column: span 5; }
 .app--moonshot-mockup .widget-card.col-6 { grid-column: span 6; }
+.app--moonshot-mockup .widget-card.col-7 { grid-column: span 7; }
 .app--moonshot-mockup .widget-card.col-8 { grid-column: span 8; }
+.app--moonshot-mockup .widget-card.col-9 { grid-column: span 9; }
+.app--moonshot-mockup .widget-card.col-10 { grid-column: span 10; }
+.app--moonshot-mockup .widget-card.col-11 { grid-column: span 11; }
 .app--moonshot-mockup .widget-card.col-12 { grid-column: span 12; }
+.app--moonshot-mockup .widget-grid > .dashboard-grid,
+.app--moonshot-mockup .widget-grid > .dashboard-grid-host,
+.app--moonshot-mockup .widget-grid > .nr2-alert-ticker,
+.app--moonshot-mockup .widget-grid > .nr2-panel,
+.app--moonshot-mockup .widget-grid > .kpi-grid {
+  grid-column: span 12;
+}
 
 .app--moonshot-mockup .widget-header {
   display: flex;

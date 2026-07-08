@@ -1789,6 +1789,15 @@ async function main() {
   assert(mockupChromeSrc.includes("renderPageHeaderTools"), "mockup chrome must unify page-header-tools");
   assert(mockupChromeSrc.includes("data-page-command"), "mockup chrome must render HAL command chips");
   assert(mockupChromeSrc.includes("STAFF_HEADER_TOOL_PAGES"), "mockup chrome must expose sync badges on staff pages");
+  assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes(".kpi-ribbon"), "vocabulary css must style kpi-ribbon");
+  assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-theme.css"), "utf8").includes(".widget-card.col-9"), "theme must define col-9 span");
+  assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("dashboardHost"), "QB mockup must wrap dashboard-grid in dashboardHost");
+  assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("heroKpiRow"), "staff pages must use 12-col hero KPI rows");
+  assert(readFileSync(join(siteDir, "nr2-moonshot-ui.js"), "utf8").includes("chart-mount--canvas"), "chart overlays must replace inline chart mounts");
+  assert(readFileSync(join(siteDir, "hal-mockup-overrides.css"), "utf8").includes(".span-2"), "HAL mosaic must define span-2");
+  assert(readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8").includes("slice(-20)"), "HAL chat must keep scrollback");
+  assert(readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8").includes("hal-situational-hero"), "HAL must render situational hero");
+  assert(readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8").includes("data-hal-scroll-widget"), "HAL mosaic tiles must deep-link to staff widgets");
   const glowCss = readFileSync(join(siteDir, "nr2-moonshot-glow.css"), "utf8");
   assert(glowCss.includes("@media print"), "moonshot glow css must include print-safe mode");
   assert(glowCss.includes(".nr2-alert-ticker"), "moonshot glow css must style alert ticker");
