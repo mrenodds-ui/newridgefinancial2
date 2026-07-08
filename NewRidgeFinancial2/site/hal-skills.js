@@ -3776,6 +3776,8 @@ const HalSkills = (function () {
     }
     if (mode === "json-fallback") {
       lines.push("", "JSON/daysheet fallback is active — ODBC deep extract is optional until IT configures read-only SQL access.");
+    } else if (mode === "sensei-datasync" || mode === "sensei+json-fallback") {
+      lines.push("", "Sensei DataSync lane is active — sd_* tables refresh from live Carestream Gateway JSON on this SoftDent server.");
     }
     return lines.join("\n");
   }

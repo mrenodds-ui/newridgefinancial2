@@ -1,9 +1,42 @@
-# Moonshot Phase F — SoftDent ODBC Deep Extract Runbook
+# Moonshot Phase F — SoftDent Deep Extract Runbook
 
-**Build:** `hal-10095`  
-**Scope:** Optional read-only SQL Server extract into `sd_*` SQLite tables (patients, procedures, payments, claims, appointments, providers, adjustments).
+**Build:** `hal-10097`  
+**Scope:** Live Carestream Sensei DataSync JSON and optional read-only SQL ODBC into `sd_*` SQLite tables (patients, procedures, payments, claims, appointments, providers, adjustments).
 
-## When to use ODBC
+## Live lane on SoftDent SERVER (Sensei DataSync)
+
+On the practice server (`SERVER`), SoftDent stores live data in Carestream **Sensei Gateway Client** sync files — not in a reachable SQL ODBC DSN. NR2 auto-detects:
+
+`C:\ProgramData\Sensei Gateway Client\DataSync\<tenant>\`
+
+and ingests `Reference/*.json` plus incremental `patient/`, `appointment/`, and `dentist/` folders.
+
+**Trigger extract:**
+
+```powershell
+cd NewRidgeFinancial2
+py -3.14 -c "from softdent_odbc_extract import extract_softdent_odbc; print(extract_softdent_odbc(force=True))"
+```
+
+Or use **Sync SoftDent** on the Financial page / workstation (requires `NR2_CONSENT_EXECUTOR=1`).
+
+**Success indicators:**
+
+- `lastMode`: `sensei-datasync` or `sensei+json-fallback`
+- `sd_patients` / `sd_appointments` counts in the thousands (Reference cache)
+- HAL tool `softdent_extract_status` or `/api/softdent/odbc-status`
+
+**Optional env:**
+
+```env
+SOFTDENT_SOURCE_DIR=C:\ProgramData\Sensei Gateway Client\DataSync
+NR2_SENSEI_DATASYNC_TENANT=0000950863
+NR2_SENSEI_INCLUDE_REFERENCE=1
+```
+
+Set `NR2_SENSEI_INCLUDE_REFERENCE=0` for incremental-only refresh (faster, fewer rows).
+
+## When to use SQL ODBC
 
 Use the ODBC lane when you need **patient-level depth**, live appointments, or claim rows beyond what daysheet/CSV exports provide. The JSON/daysheet fallback lane remains sufficient for daily collections and production widgets when ODBC is not configured.
 

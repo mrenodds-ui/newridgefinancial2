@@ -1017,7 +1017,7 @@ const PageCanvas = (function () {
     const configured = status.odbcConfigured === true;
     const queries = status.queriesConfigured != null ? status.queriesConfigured : 0;
     const last = status.lastExtractAt ? String(status.lastExtractAt).slice(0, 19) : "never";
-    const tone = mode === "odbc" ? "green" : populated >= 3 ? "blue" : "orange";
+    const tone = mode === "odbc" ? "green" : mode.startsWith("sensei") ? "green" : populated >= 3 ? "blue" : "orange";
     const counts = status.tableCounts || {};
     const countLine = ["patients", "procedures", "payments", "claims"]
       .map((key) => `${key} ${counts["sd_" + key] != null ? counts["sd_" + key] : "—"}`)
@@ -1026,7 +1026,9 @@ const PageCanvas = (function () {
       ? queries
         ? "ODBC DSN + queries configured"
         : "DSN set — run schema discovery for SQL queries"
-      : "JSON/daysheet fallback lane (ODBC optional)";
+      : mode.startsWith("sensei")
+        ? "Sensei DataSync live lane (Carestream JSON)"
+        : "JSON/daysheet fallback lane (ODBC optional)";
     return `<div class="nr2-odbc-strip nr2-odbc-strip--${tone}" role="status" aria-label="SoftDent extract lane">
       <span class="nr2-odbc-strip__badge">sd_* extract · ${esc(mode)}</span>
       <span class="nr2-odbc-strip__meta">${esc(hint)} · ${populated}/7 tables · last ${esc(last)}</span>

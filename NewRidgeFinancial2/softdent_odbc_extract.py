@@ -1,8 +1,9 @@
 """SoftDent ODBC extract lane → sd_* SQLite tables (hal-10070).
 
 When ``SOFTDENT_ODBC_DSN`` / ``NR2_SOFTDENT_ODBC_DSN`` is configured and optional
-env SQL queries are present, rows are pulled via pyodbc. Otherwise (or on failure)
-the JSON/daysheet/claims fallback lane populates the same tables from local exports.
+env SQL queries are present, rows are pulled via pyodbc. When Sensei Gateway DataSync
+JSON is present on the SoftDent server, ``sensei-datasync`` populates sd_* from live
+Carestream sync files. Otherwise the JSON/daysheet/claims fallback lane fills gaps.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from import_loader import softdent_import_dir
+from import_sync import SENSEI_DATASYNC
 from quickbooks_monthly_sync import resolve_analytics_db
 from softdent_operational_pipeline import (
     INSURANCE_PAYMENT_CODES,
@@ -40,6 +42,13 @@ SD_TABLES = (
     "sd_payments",
     "sd_adjustments",
 )
+
+SENSEI_ENTITY_WRAPPERS = {
+    "patient": "PATIENT",
+    "dentist": "DENTIST",
+    "appointment": "APPTS",
+}
+SENSEI_APPT_PROC_SLOTS = 12
 
 
 def _utc_now() -> str:
@@ -242,6 +251,7 @@ def read_extract_status(db_path: Path | None = None) -> dict[str, Any]:
     discovery_path = discovery_output_path()
     last_extract_at = meta.get("last_extract_at")
     stale = odbc_extract_stale(db_path) if db_path else True
+    sensei_root = resolve_sensei_datasync_root()
     return {
         "ok": True,
         "dbPath": str(db_path) if db_path else None,
@@ -254,6 +264,8 @@ def read_extract_status(db_path: Path | None = None) -> dict[str, Any]:
         "consentExecutorEnabled": consent_executor_enabled(),
         "discoveryPresent": discovery_path.is_file(),
         "discoveryPath": str(discovery_path) if discovery_path.is_file() else None,
+        "senseiDatasyncAvailable": bool(sensei_root),
+        "senseiDatasyncPath": str(sensei_root) if sensei_root else None,
         "tableCounts": counts,
         "populatedTables": populated,
         "stale": bool(stale),
@@ -263,6 +275,7 @@ def read_extract_status(db_path: Path | None = None) -> dict[str, Any]:
             discovery_present=discovery_path.is_file(),
             populated=populated,
             last_mode=meta.get("last_mode"),
+            sensei_available=bool(sensei_root),
         ),
     }
 
@@ -274,10 +287,14 @@ def _extract_status_next_steps(
     discovery_present: bool,
     populated: int,
     last_mode: str | None,
+    sensei_available: bool = False,
 ) -> list[str]:
     steps: list[str] = []
     if not odbc_configured:
-        steps.append("Set SOFTDENT_ODBC_DSN (or NR2_SOFTDENT_ODBC_DSN) to a read-only System DSN.")
+        if sensei_available:
+            steps.append("Sensei DataSync JSON is available — sd_* tables refresh from live Carestream sync (no SQL ODBC required).")
+        else:
+            steps.append("Set SOFTDENT_ODBC_DSN (or NR2_SOFTDENT_ODBC_DSN) to a read-only System DSN.")
     elif not query_tables:
         steps.append("Run scripts/discover_softdent_odbc_schema.py --out app_data/nr2/softdent_schema_discovery.json and copy suggestedEnv queries into .env.")
     if not discovery_present and odbc_configured:
@@ -285,9 +302,11 @@ def _extract_status_next_steps(
     if not consent_executor_enabled():
         steps.append("Set NR2_CONSENT_EXECUTOR=1 to allow workstation Sync SoftDent / POST /api/admin/extract-softdent-odbc.")
     if populated < 3:
-        steps.append("Drop SoftDent daysheet/claims exports or configure ODBC queries, then sync from workstation or Financial page.")
-    elif last_mode != "odbc" and odbc_configured and query_tables:
-        steps.append("ODBC is configured but last extract used json-fallback — verify DSN credentials and query table names.")
+        steps.append("Drop SoftDent daysheet/claims exports, ensure Sensei Gateway Client is running, then sync from workstation or Financial page.")
+    elif last_mode == "json-fallback" and sensei_available:
+        steps.append("Last extract used daysheet fallback only — run Sync SoftDent to pull Sensei DataSync into sd_* tables.")
+    elif last_mode not in ("odbc", "sensei-datasync", "sensei+json-fallback") and odbc_configured and query_tables:
+        steps.append("ODBC is configured but last extract did not use SQL — verify DSN credentials and query table names.")
     if not steps:
         steps.append("Extract lane healthy — sd_* tables populated; refresh via import sync or workstation Sync SoftDent.")
     return steps
@@ -829,6 +848,236 @@ def _resolve_claims_path() -> Path | None:
     return None
 
 
+def _sensei_include_reference() -> bool:
+    return os.environ.get("NR2_SENSEI_INCLUDE_REFERENCE", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def resolve_sensei_datasync_root() -> Path | None:
+    """Resolve tenant DataSync root (e.g. .../DataSync/0000950863)."""
+    configured = (
+        os.environ.get("NR2_SENSEI_DATASYNC_ROOT", "").strip()
+        or os.environ.get("SOFTDENT_SOURCE_DIR", "").strip()
+    )
+    tenant = os.environ.get("NR2_SENSEI_DATASYNC_TENANT", "").strip()
+    bases: list[Path] = []
+    if configured:
+        candidate = Path(configured).expanduser()
+        if not candidate.is_absolute():
+            candidate = REPO_ROOT / candidate
+        bases.append(candidate.resolve())
+    elif SENSEI_DATASYNC.is_dir():
+        bases.append(SENSEI_DATASYNC.resolve())
+
+    def _tenant_root(base: Path) -> Path | None:
+        if (base / "Reference").is_dir() or (base / "patient").is_dir():
+            return base
+        if tenant and (base / tenant).is_dir():
+            return (base / tenant).resolve()
+        for child in sorted(base.iterdir()):
+            if not child.is_dir() or not child.name.isdigit():
+                continue
+            if (child / "Reference").is_dir() or (child / "patient").is_dir():
+                return child.resolve()
+        return None
+
+    for base in bases:
+        resolved = _tenant_root(base)
+        if resolved:
+            return resolved
+    return None
+
+
+def _normalize_sensei_date(raw: Any) -> str:
+    text = str(raw or "").strip()
+    if not text or text.lower() in {"none", "00:00", "null"}:
+        return ""
+    normalized = text.replace("/", "-").split("T")[0].split(" ")[0]
+    return normalized
+
+
+def _sensei_person_name(first: Any, last: Any) -> str:
+    first_text = str(first or "").strip()
+    last_text = str(last or "").strip()
+    if first_text and last_text:
+        return f"{first_text} {last_text}"
+    return first_text or last_text
+
+
+def _load_sensei_entity(path: Path, wrapper_key: str) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    inner = payload.get(wrapper_key)
+    if isinstance(inner, dict):
+        return inner
+    return payload
+
+
+def _iter_sensei_entity_files(root: Path, entity: str) -> list[Path]:
+    files: dict[str, Path] = {}
+    entity_dir = root / entity
+    if entity_dir.is_dir():
+        for path in entity_dir.glob(f"{entity}_*.json"):
+            if "ChangeQTrans" in str(path):
+                continue
+            files[str(path.resolve())] = path
+    if _sensei_include_reference():
+        ref_dir = root / "Reference"
+        if ref_dir.is_dir():
+            for path in ref_dir.glob(f"{entity}_*.json"):
+                files[str(path.resolve())] = path
+    return list(files.values())
+
+
+def _sensei_patient_id(entity: dict[str, Any]) -> str:
+    for key in ("UniqueID", "PatUniqueID", "Id", "PatientId", "PatientID"):
+        value = entity.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def _sensei_appt_status(entity: dict[str, Any]) -> str:
+    checked_in = str(entity.get("CheckedIn") or "").strip()
+    if checked_in and checked_in not in {"00:00", "None"}:
+        return "checked-in"
+    for key in ("Status", "ApptStatus", "Confirmed"):
+        value = str(entity.get(key) or "").strip()
+        if value and value.lower() not in {"none", "null"}:
+            return value.lower()
+    return "scheduled"
+
+
+def _populate_from_sensei_datasync(
+    conn: sqlite3.Connection,
+    root: Path,
+    *,
+    extracted_at: str,
+) -> dict[str, int]:
+    counts = {table: 0 for table in SD_TABLES}
+    if not root.is_dir():
+        return counts
+
+    for path in _iter_sensei_entity_files(root, "dentist"):
+        entity = _load_sensei_entity(path, SENSEI_ENTITY_WRAPPERS["dentist"])
+        if not entity:
+            continue
+        provider_code = str(entity.get("Id") or entity.get("Code") or "").strip()
+        if not provider_code:
+            continue
+        provider_name = _sensei_person_name(entity.get("Firstname"), entity.get("Lastname"))
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO sd_providers
+            (provider_code, provider_name, practice_id, extracted_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (provider_code, provider_name or provider_code, "", extracted_at),
+        )
+        counts["sd_providers"] += 1
+
+    for path in _iter_sensei_entity_files(root, "patient"):
+        entity = _load_sensei_entity(path, SENSEI_ENTITY_WRAPPERS["patient"])
+        if not entity:
+            continue
+        patient_id = _sensei_patient_id(entity)
+        if not patient_id:
+            continue
+        patient_name = _sensei_person_name(entity.get("Firstname"), entity.get("Lastname"))
+        first_visit = _normalize_sensei_date(entity.get("FirstVisit") or entity.get("FirstVisitDate"))
+        last_visit = _normalize_sensei_date(entity.get("LastVisit") or entity.get("LastVisitDate"))
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO sd_patients
+            (patient_id, patient_name, first_visit_date, last_visit_date, practice_id, extracted_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (patient_id, patient_name, first_visit, last_visit, "", extracted_at),
+        )
+        counts["sd_patients"] += 1
+
+    for path in _iter_sensei_entity_files(root, "appointment"):
+        entity = _load_sensei_entity(path, SENSEI_ENTITY_WRAPPERS["appointment"])
+        if not entity:
+            continue
+        patient_id = _sensei_patient_id(entity)
+        appt_date = _normalize_sensei_date(entity.get("Date") or entity.get("ApptDate"))
+        provider_code = str(entity.get("Dr") or entity.get("ProviderCode") or entity.get("DentistId") or "unknown").strip()
+        if not patient_id or not appt_date:
+            continue
+        status = _sensei_appt_status(entity)
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO sd_appointments
+            (practice_id, patient_id, appt_date, provider_code, status, extracted_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("", patient_id, appt_date, provider_code, status, extracted_at),
+        )
+        counts["sd_appointments"] += 1
+
+        for index in range(SENSEI_APPT_PROC_SLOTS):
+            code = str(entity.get(f"Proc{index}_Code") or "").strip()
+            if not code or code in {"0", "0000"}:
+                continue
+            fee_raw = entity.get(f"Proc{index}_Fee")
+            try:
+                production = abs(float(fee_raw or 0))
+            except (TypeError, ValueError):
+                production = 0.0
+            tooth = str(entity.get(f"Proc{index}_Tooth") or "").strip()
+            if tooth.lower() in {"none", "null"}:
+                tooth = ""
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO sd_procedures
+                (practice_id, patient_id, proc_date, ada_code, tooth, surface, provider_code, description, production, extracted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("", patient_id, appt_date, code, tooth, "", provider_code, "", production, extracted_at),
+            )
+            counts["sd_procedures"] += 1
+
+    conn.commit()
+    return counts
+
+
+def _sensei_lane_populated(counts: dict[str, int]) -> bool:
+    return any(int(counts.get(table) or 0) > 0 for table in ("sd_patients", "sd_appointments", "sd_providers"))
+
+
+def _fallback_lane_populated(counts: dict[str, int]) -> bool:
+    return any(int(counts.get(table) or 0) > 0 for table in SD_TABLES)
+
+
+def _resolve_extract_mode(
+    *,
+    odbc_ok: bool,
+    sensei_counts: dict[str, int],
+    fallback_counts: dict[str, int],
+    populated: int,
+) -> str:
+    if odbc_ok:
+        return "odbc"
+    sensei_ok = _sensei_lane_populated(sensei_counts)
+    fallback_ok = _fallback_lane_populated(fallback_counts)
+    if sensei_ok and fallback_ok:
+        return "sensei+json-fallback"
+    if sensei_ok:
+        return "sensei-datasync"
+    if populated > 0:
+        return "json-fallback"
+    return "none"
+
+
 def extract_softdent_odbc(*, db_path: Path | None = None, force: bool = False) -> dict[str, Any]:
     db_path = Path(db_path) if db_path else resolve_sd_sqlite_db()
     extracted_at = _utc_now()
@@ -852,6 +1101,11 @@ def extract_softdent_odbc(*, db_path: Path | None = None, force: bool = False) -
         ensure_sd_schema(conn)
         odbc_result = _populate_from_odbc(conn, extracted_at=extracted_at)
         result["odbc"] = odbc_result
+        sensei_root = resolve_sensei_datasync_root()
+        sensei_counts: dict[str, int] = {table: 0 for table in SD_TABLES}
+        if sensei_root:
+            sensei_counts = _populate_from_sensei_datasync(conn, sensei_root, extracted_at=extracted_at)
+        result["sensei"] = {"root": str(sensei_root) if sensei_root else None, "tables": sensei_counts}
         fallback_counts: dict[str, int] = {}
         daysheet_path = _resolve_daysheet_path()
         if daysheet_path:
@@ -870,17 +1124,19 @@ def extract_softdent_odbc(*, db_path: Path | None = None, force: bool = False) -
         populated = sum(1 for table in SD_TABLES if int(counts.get(table) or 0) > 0)
         result["ok"] = populated >= 3
         result["refreshed"] = bool(force or populated > 0)
-        if odbc_result.get("ok"):
-            result["mode"] = "odbc"
-        elif populated > 0:
-            result["mode"] = "json-fallback"
-        else:
-            result["mode"] = "none"
-            if odbc_result.get("error"):
-                result["warnings"].append(str(odbc_result["error"]))
+        result["mode"] = _resolve_extract_mode(
+            odbc_ok=bool(odbc_result.get("ok")),
+            sensei_counts=sensei_counts,
+            fallback_counts=fallback_counts,
+            populated=populated,
+        )
+        if result["mode"] == "none" and odbc_result.get("error"):
+            result["warnings"].append(str(odbc_result["error"]))
 
         _set_meta(conn, "last_extract_at", extracted_at)
         _set_meta(conn, "last_mode", str(result["mode"]))
+        if sensei_root:
+            _set_meta(conn, "last_sensei_root", str(sensei_root))
         conn.commit()
     finally:
         conn.close()

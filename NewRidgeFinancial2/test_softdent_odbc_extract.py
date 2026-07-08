@@ -37,6 +37,57 @@ def _sample_daysheet(path: Path) -> None:
     path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
+def _sample_claims(path: Path) -> None:
+    path.write_text(
+        "ClaimId,PatientName,Payer,ServiceDate,ClaimAmount,ClaimStatus\n"
+        "CLM-001,Jane Doe,Delta Dental,2026-06-10,420.00,Ready\n",
+        encoding="utf-8",
+    )
+
+
+def _sample_sensei_root(path: Path) -> None:
+    ref = path / "Reference"
+    ref.mkdir(parents=True)
+    (ref / "patient_1001.json").write_text(
+        json.dumps(
+            {
+                "PATIENT": {
+                    "Id": 1001,
+                    "UniqueID": 1001,
+                    "Firstname": "Jane",
+                    "Lastname": "Doe",
+                    "FirstVisit": "2020/01/15",
+                    "LastVisit": "2026/06/01",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (ref / "dentist_1.json").write_text(
+        json.dumps({"DENTIST": {"Id": 1, "Firstname": "Michael", "Lastname": "Reno"}}),
+        encoding="utf-8",
+    )
+    (ref / "appointment_9001.json").write_text(
+        json.dumps(
+            {
+                "APPTS": {
+                    "PatUniqueID": 1001,
+                    "Date": "2026/06/15",
+                    "Dr": 1,
+                    "CheckedIn": "09:30",
+                    "Proc0_Code": "1110",
+                    "Proc0_Fee": "120.00",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _patch_no_sensei():
+    return patch("softdent_odbc_extract.resolve_sensei_datasync_root", return_value=None)
+
+
 class SoftdentOdbcExtractTests(unittest.TestCase):
     def test_odbc_not_configured_by_default(self) -> None:
         with patch("softdent_odbc_extract.odbc_dsn", return_value=""):
@@ -48,12 +99,8 @@ class SoftdentOdbcExtractTests(unittest.TestCase):
             daysheet = Path(tmp) / "daysheet.jsonl"
             claims = Path(tmp) / "softdent_claims_export.csv"
             _sample_daysheet(daysheet)
-            claims.write_text(
-                "ClaimId,PatientName,Payer,ServiceDate,ClaimAmount,ClaimStatus\n"
-                "CLM-001,Jane Doe,Delta Dental,2026-06-10,420.00,Ready\n",
-                encoding="utf-8",
-            )
-            with patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
+            _sample_claims(claims)
+            with _patch_no_sensei(), patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
                 "softdent_odbc_extract._resolve_daysheet_path", return_value=daysheet
             ), patch("softdent_odbc_extract._resolve_claims_path", return_value=claims):
                 result = extract_softdent_odbc(force=True)
@@ -65,6 +112,43 @@ class SoftdentOdbcExtractTests(unittest.TestCase):
             self.assertGreater(counts["sd_claims"], 0)
             self.assertGreaterEqual(counts["sd_payments"], 1)
             self.assertGreaterEqual(counts["sd_adjustments"], 1)
+
+    def test_sensei_datasync_populates_sd_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "analytics.sqlite3"
+            sensei_root = Path(tmp) / "sensei"
+            _sample_sensei_root(sensei_root)
+            with patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
+                "softdent_odbc_extract.resolve_sensei_datasync_root", return_value=sensei_root
+            ), patch("softdent_odbc_extract._resolve_daysheet_path", return_value=None), patch(
+                "softdent_odbc_extract._resolve_register_path", return_value=None
+            ), patch("softdent_odbc_extract._resolve_claims_path", return_value=Path("")):
+                result = extract_softdent_odbc(force=True)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["mode"], "sensei-datasync")
+            counts = table_row_counts(db_path)
+            self.assertEqual(counts["sd_patients"], 1)
+            self.assertEqual(counts["sd_providers"], 1)
+            self.assertEqual(counts["sd_appointments"], 1)
+            self.assertEqual(counts["sd_procedures"], 1)
+
+    def test_sensei_plus_json_fallback_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "analytics.sqlite3"
+            daysheet = Path(tmp) / "daysheet.jsonl"
+            sensei_root = Path(tmp) / "sensei"
+            _sample_daysheet(daysheet)
+            _sample_sensei_root(sensei_root)
+            with patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
+                "softdent_odbc_extract.resolve_sensei_datasync_root", return_value=sensei_root
+            ), patch("softdent_odbc_extract._resolve_daysheet_path", return_value=daysheet), patch(
+                "softdent_odbc_extract._resolve_claims_path", return_value=Path("")
+            ):
+                result = extract_softdent_odbc(force=True)
+            self.assertEqual(result["mode"], "sensei+json-fallback")
+            counts = table_row_counts(db_path)
+            self.assertGreaterEqual(counts["sd_patients"], 1)
+            self.assertGreaterEqual(counts["sd_payments"], 1)
 
     def test_register_jsonl_populates_payments(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -80,7 +164,7 @@ class SoftdentOdbcExtractTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            with patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
+            with _patch_no_sensei(), patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
                 "softdent_odbc_extract._resolve_daysheet_path", return_value=None
             ), patch("softdent_odbc_extract._resolve_register_path", return_value=register), patch(
                 "softdent_odbc_extract._resolve_claims_path", return_value=Path("")
@@ -96,7 +180,7 @@ class SoftdentOdbcExtractTests(unittest.TestCase):
             conn = sqlite3.connect(db_path)
             ensure_sd_schema(conn)
             conn.close()
-            with patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
+            with _patch_no_sensei(), patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
                 "softdent_odbc_extract.odbc_dsn", return_value=""
             ), patch("softdent_odbc_extract._resolve_daysheet_path", return_value=None), patch(
                 "softdent_odbc_extract._resolve_claims_path", return_value=Path("")
@@ -127,7 +211,7 @@ class SoftdentOdbcExtractTests(unittest.TestCase):
             db_path = Path(tmp) / "analytics.sqlite3"
             daysheet = Path(tmp) / "daysheet.jsonl"
             _sample_daysheet(daysheet)
-            with patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
+            with _patch_no_sensei(), patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
                 "softdent_odbc_extract._resolve_daysheet_path", return_value=daysheet
             ), patch("softdent_odbc_extract._resolve_claims_path", return_value=Path("")):
                 extract_softdent_odbc(force=True)
