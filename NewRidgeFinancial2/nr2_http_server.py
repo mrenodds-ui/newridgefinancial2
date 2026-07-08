@@ -1953,6 +1953,29 @@ class NR2BottleServer(BottleServer):
             bottle.response.status = status
             return _json_response(result)
 
+        @app.post("/api/qb/sync-if-stale")
+        def qb_sync_if_stale_api():
+            from import_loader import quickbooks_import_dir
+            from quickbooks_monthly_sync import ensure_quickbooks_fresh
+
+            payload = bottle.request.json or {}
+            try:
+                max_age = int(payload.get("maxAgeMinutes") or 60)
+            except (TypeError, ValueError):
+                max_age = 60
+            qb_dest = quickbooks_import_dir()
+            probe_payload = None
+            probe_path = qb_dest / "quickbooks_diagnostics" / "quickbooks_sdk_report_probe_summary.json"
+            if probe_path.is_file():
+                try:
+                    probe_payload = json.loads(probe_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    probe_payload = None
+            result = ensure_quickbooks_fresh(qb_dest, max_age_minutes=max(1, max_age), probe_payload=probe_payload)
+            if result.get("refreshed"):
+                _audit_mutation("qb_sync_if_stale", detail={"refreshed": True, "destination": result.get("destination")})
+            return _json_response(result)
+
         @app.post("/api/qb/sync")
         def qb_sync_api():
             from qb_connector import sync_read_only

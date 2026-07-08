@@ -270,7 +270,12 @@ def _rows_from_sdk_monthly(month_count: int) -> tuple[list[dict[str, Any]], list
     return _normalize_monthly_rows(rows), warnings
 
 
-def _should_fetch_sdk_monthly(existing_months: int) -> bool:
+def _should_fetch_sdk_monthly(existing_months: int, *, force: bool = False) -> bool:
+    if force:
+        mode = os.environ.get("NR2_QB_MONTHLY_SDK", "auto").strip().lower()
+        if mode in {"0", "false", "no", "off"}:
+            return False
+        return True
     if os.environ.get("NR2_AUTO_PULL_EXPORTS", "1").strip().lower() in {"0", "false", "no", "off"}:
         return False
     mode = os.environ.get("NR2_QB_MONTHLY_SDK", "auto").strip().lower()
@@ -324,10 +329,66 @@ def _write_monthly_exports(destination: Path, monthly_rows: list[dict[str, Any]]
     return written
 
 
+def _newest_quickbooks_export_mtime(destination: Path) -> float | None:
+    best: float | None = None
+    for name in (
+        "quickbooks_profit_and_loss.csv",
+        "quickbooks_revenue.csv",
+        "quickbooks_expenses.csv",
+        "quickbooks_expense_categories.csv",
+    ):
+        path = destination / name
+        if not path.is_file():
+            continue
+        mtime = path.stat().st_mtime
+        if best is None or mtime > best:
+            best = mtime
+    return best
+
+
+def quickbooks_cache_stale(destination: Path, max_age_minutes: int = 60) -> bool:
+    destination = Path(destination)
+    if not destination.is_dir():
+        return True
+    mtime = _newest_quickbooks_export_mtime(destination)
+    if mtime is None:
+        return True
+    return (datetime.now(timezone.utc).timestamp() - mtime) > max(1, max_age_minutes) * 60
+
+
+def ensure_quickbooks_fresh(
+    destination: Path | None = None,
+    *,
+    max_age_minutes: int = 60,
+    probe_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    from import_loader import quickbooks_import_dir
+
+    destination = Path(destination or quickbooks_import_dir())
+    stale = quickbooks_cache_stale(destination, max_age_minutes)
+    result: dict[str, Any] = {
+        "stale": stale,
+        "refreshed": False,
+        "destination": str(destination),
+        "sync": None,
+    }
+    if not stale:
+        return result
+    sync = sync_quickbooks_monthly_exports(
+        destination,
+        probe_payload=probe_payload,
+        force_sdk=True,
+    )
+    result["refreshed"] = bool(sync.get("written"))
+    result["sync"] = sync
+    return result
+
+
 def sync_quickbooks_monthly_exports(
     destination: Path,
     *,
     probe_payload: dict[str, Any] | None = None,
+    force_sdk: bool = False,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "months": 0,
@@ -350,7 +411,7 @@ def sync_quickbooks_monthly_exports(
                 monthly_rows = analytics_rows
                 result["sources"].append("analytics-db")
 
-    if _should_fetch_sdk_monthly(len(monthly_rows)):
+    if _should_fetch_sdk_monthly(len(monthly_rows), force=force_sdk):
         month_count = max(2, min(int(os.environ.get("NR2_QB_MONTHLY_SDK_MONTHS", "2")), 3))
         sdk_rows, sdk_warnings = _rows_from_sdk_monthly(month_count)
         result["warnings"].extend(sdk_warnings)

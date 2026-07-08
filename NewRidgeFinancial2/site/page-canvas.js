@@ -103,8 +103,8 @@ const PageCanvas = (function () {
     const h = height || 120;
     const w = 460;
     const pad = { t: 8, r: 8, b: 22, l: 8 };
-    const all = series.flatMap((s) => s.data);
-    const max = Math.max(...all) * 1.05;
+    const all = series.flatMap((s) => (s && Array.isArray(s.data) ? s.data : []));
+    const max = Math.max(...all, 1) * 1.05;
     const min = 0;
     const range = max - min || 1;
     const innerW = w - pad.l - pad.r;
@@ -113,6 +113,7 @@ const PageCanvas = (function () {
     const yAt = (v) => pad.t + innerH - ((v - min) / range) * innerH;
     const colors = { info: "#60a5fa", success: "#78a86b", warning: "#fb923c" };
     const paths = series
+      .filter((s) => s && Array.isArray(s.data) && s.data.length)
       .map((s) => {
         const stroke = colors[s.tone] || "#d6b15e";
         const d = s.data.map((v, i) => `${i ? "L" : "M"}${xAt(i, s.data.length).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
@@ -196,7 +197,7 @@ const PageCanvas = (function () {
     const halTone = widgetKey && HW ? ` hal-widget-status hal-widget-status--${HW.statusTone(widget ? widget.status : "FAILED")}` : "";
     const attrs = widgetKey ? ` data-hal-widget-key="${esc(widgetKey)}"${halCmd} role="button" tabindex="0"` : "";
     const trend = kpi.hint ? `<div class="trend-indicator"><span>↑</span> ${esc(kpi.hint)}</div>` : "";
-    return `<div class="widget-card col-4 kpi-large${halTone}"${attrs}>
+    return `<div class="widget-card col-4 kpi-large kpi-glow-card${halTone}"${attrs}>
         <div class="widget-header"><span class="widget-title">${widgetHeaderIcon(widgetKey)}${esc(String(kpi.label || ""))}</span><div class="widget-menu" aria-hidden="true">⋮</div></div>
         <div class="kpi-value">${esc(kpi.value)}</div>
         ${trend}
@@ -255,7 +256,8 @@ const PageCanvas = (function () {
             icon: "",
           };
     const col = colSpan ? ` col-${colSpan}` : "";
-    return `<section class="widget-card${col}${(chrome.toneClass || "").trim() ? " " + esc(chrome.toneClass.trim()) : ""}"${chrome.attrs}>
+    const accentClass = accent === "orange" ? " widget-accent-orange" : "";
+    return `<section class="widget-card widget-glow-border widget-mount-glow${col}${accentClass}${(chrome.toneClass || "").trim() ? " " + esc(chrome.toneClass.trim()) : ""}"${chrome.attrs}>
         <div class="widget-header"><span class="widget-title">${chrome.icon || widgetHeaderIcon(widgetKey)}${esc(title)}</span><div class="widget-menu" aria-hidden="true">⋮</div></div>
         <div class="widget-body">${body}${chrome.note || ""}</div>
         ${caption ? `<p class="widget-caption">${esc(caption)}</p>` : ""}
@@ -325,7 +327,7 @@ const PageCanvas = (function () {
         </div>`;
       })
       .join("");
-    return `<div class="kanban-board${claimsMode ? " kanban-board--claims" : ""}" data-hal-widget-key="${esc(widgetKey || "")}">${laneHtml}</div>`;
+    return `<div class="kanban-board claims-pipeline${claimsMode ? " kanban-board--claims" : ""}" data-hal-widget-key="${esc(widgetKey || "")}">${laneHtml}</div>`;
   }
 
   function canvasTimeline(items) {
@@ -382,7 +384,32 @@ const PageCanvas = (function () {
   }
 
   function canvasImportNotice(notice) {
-    return "";
+    if (!notice) return "";
+    const staleBadge = notice.stale
+      ? `<p class="sync-stale-badge" role="status">${esc(notice.staleLabel || "Last-known data — sync stale")}</p>`
+      : "";
+    if (!notice.message) return staleBadge;
+    const tone = notice.tone || "info";
+    return `${staleBadge}<p class="ms-import-notice ms-import-notice--${esc(tone)}" role="status">${esc(notice.message)}</p>`;
+  }
+
+  function pageImportNotice(pageId) {
+    const D = dataApi();
+    if (!D) return null;
+    const map = {
+      financial: D.financialImportNotice,
+      softdent: D.softdentImportNotice,
+      quickbooks: D.quickbooksImportNotice,
+      ar: D.arImportNotice,
+      claims: D.claimsImportNotice,
+      documents: D.documentsImportNotice,
+      library: D.libraryImportNotice,
+      "office-manager": D.officeManagerImportNotice,
+      narratives: D.narrativesImportNotice,
+      taxes: D.taxesImportNotice,
+    };
+    const fn = map[pageId];
+    return fn ? fn() : null;
   }
 
   function dataApi() {
@@ -432,7 +459,7 @@ const PageCanvas = (function () {
     return `<div class="operatory-grid">${chairs
       .map((chair) => {
         const slots = chair.slots || chair.appointments || [];
-        return `<div class="operatory-column">
+        return `<div class="operatory-column operatory-chair">
           <header class="operatory-column__head">${esc(chair.name || chair.label || "Operatory")}</header>
           ${slots.length
             ? slots
@@ -511,12 +538,14 @@ const PageCanvas = (function () {
     if (!steps || !steps.length) return canvasEmpty("Funnel metrics will appear when case acceptance data is loaded.");
     const amounts = steps.map((step) => parseAmount(step.count != null ? step.count : step.value));
     const base = Math.max(amounts[0] || 0, ...amounts, 1);
+    const maxIdx = amounts.reduce((best, val, idx, arr) => (val > arr[best] ? idx : best), 0);
     return `<div class="funnel-chart">${steps
       .map((step, i) => {
         const amt = amounts[i];
         const widthPct = base > 0 ? Math.max(8, Math.round((amt / base) * 100)) : 0;
         const pctLabel = step.pct != null ? step.pct : base > 0 ? `${Math.round((amt / base) * 100)}%` : "—";
-        return `<div class="funnel-step">
+        const activeCls = i === maxIdx && amt > 0 ? " funnel-step--active" : "";
+        return `<div class="funnel-step${activeCls}">
           <span class="funnel-label">${esc(step.label)}</span>
           <div class="funnel-bar" style="width:${widthPct}%">${esc(String(step.value != null ? step.value : amt || "—"))}</div>
           <span class="funnel-value">${esc(String(pctLabel))}</span>
@@ -628,7 +657,7 @@ const PageCanvas = (function () {
       .slice(0, 12)
       .map(
         (row) =>
-          `<article class="doc-card" data-hal-widget-key="${esc(widgetKey || "")}" data-hal-cmd="Open ${esc(row[0])}" role="button" tabindex="0"><strong>${esc(row[0])}</strong><span>${esc(row[1])}</span><em>${esc(row[2])}${row[3] ? ` · exp ${esc(row[3])}` : ""}</em></article>`,
+          `<article class="doc-card library-card" data-hal-widget-key="${esc(widgetKey || "")}" data-hal-cmd="Open ${esc(row[0])}" role="button" tabindex="0"><strong>${esc(row[0])}</strong><span>${esc(row[1])}</span><em>${esc(row[2])}${row[3] ? ` · exp ${esc(row[3])}` : ""}</em></article>`,
       )
       .join("")}</div>`;
   }
@@ -934,7 +963,7 @@ const PageCanvas = (function () {
       .map((k, i) => {
         const widgetKey = k.widgetKey || (i === 3 ? "ebitdaNormalization" : "quickbooksProfitLossDetail");
         const delta = k.delta ? `<span class="trend${String(k.delta).trim().startsWith("-") ? " negative" : ""}">${esc(k.delta)}</span>` : "";
-        return `<div class="card kpi-card" data-hal-widget-key="${esc(widgetKey)}">
+        return `<div class="card kpi-card kpi-glow-card" data-hal-widget-key="${esc(widgetKey)}">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon(widgetKey)}${esc(k.label || k.title || "KPI")}</span></div>
           <div class="card-value">${esc(k.value || "—")}</div>
           ${delta}
@@ -953,17 +982,17 @@ const PageCanvas = (function () {
     return `${stackOpen()}
       <div class="dashboard-grid">${kpiCards}</div>
       <div class="dashboard-grid">
-        <div class="card chart-large" data-hal-widget-key="quickbooksProfitLossDetail">
+        <div class="card chart-large widget-glow-border" data-hal-widget-key="quickbooksProfitLossDetail">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksProfitLossDetail")}Profit &amp; Loss Trend (YTD)</span></div>
           ${plChartBody}
         </div>
-        <div class="card chart-medium" data-hal-widget-key="quickbooksExpenseBreakdown">
+        <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksExpenseBreakdown">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksExpenseBreakdown")}Operating Expenses</span></div>
           ${expenseBody}
         </div>
       </div>
       <div class="dashboard-grid">
-        <div class="card chart-full" data-hal-widget-key="ebitdaNormalization">
+        <div class="card chart-full widget-accent-orange widget-glow-border" data-hal-widget-key="ebitdaNormalization">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("ebitdaNormalization")}QuickBooks ↔ NR2 Reconciliation</span></div>
           ${reconcileRows.length ? canvasTable(["Account", "Amount", "Source", "Sync"], reconcileRows, true) : canvasEmpty("Awaiting QuickBooks sync — P&amp;L rows will appear when export is loaded.")}
         </div>
@@ -1583,7 +1612,8 @@ const PageCanvas = (function () {
     if (D) D.bind(activeFeed, activeSnapshot);
     const fn = RENDERERS[pageId];
     const html = fn ? fn() : "";
-    return html || "";
+    const noticeHtml = canvasImportNotice(pageImportNotice(pageId));
+    return noticeHtml + (html || "");
   }
 
   function setFeed(feed, programSnapshot) {

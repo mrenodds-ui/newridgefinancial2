@@ -252,8 +252,8 @@ const HalPage = (function () {
     const online = isSideNotesInboxLive(inbox);
     const items = (inbox && Array.isArray(inbox.items) ? inbox.items : []).slice().reverse();
     const statusBadge = online
-      ? '<span class="sidenote-badge sidenote-badge--ok">LIVE</span>'
-      : '<span class="sidenote-badge sidenote-badge--off">OFFLINE</span>';
+      ? '<span class="sidenote-badge sidenote-badge--ok badge-live">LIVE</span>'
+      : '<span class="sidenote-badge sidenote-badge--off badge-offline">OFFLINE</span>';
     const totalStations = mon.totalStations || WORKSTATION_STATIONS.length;
     const liveCount = mon.stationCount != null ? mon.stationCount : 0;
     const stationText =
@@ -623,6 +623,19 @@ const HalPage = (function () {
     };
   }
 
+  function halStatusRing(label, value, pct, tone) {
+    const r = 16;
+    const c = 2 * Math.PI * r;
+    const dash = Math.max(0, Math.min(c, (Number(pct) / 100) * c)).toFixed(2);
+    return `<div class="hal-status-ring hal-status-pulse hal-status-ring--${tone} badge-live" data-health-score="${esc(String(pct))}" aria-label="${esc(label)}">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="${r}" fill="none" stroke="#333333" stroke-width="3"/>
+        <circle cx="20" cy="20" r="${r}" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="${dash} ${c.toFixed(2)}" transform="rotate(-90 20 20)"/>
+      </svg>
+      <span class="hal-status-ring__label">${esc(label)} <b>${esc(value)}</b></span>
+    </div>`;
+  }
+
   function render(ctx) {
     const root = ctx.root;
     if (!root) return;
@@ -642,13 +655,21 @@ const HalPage = (function () {
     const directBadge =
       importMode === "direct-first" ? `<span class="header-badge import-badge">Direct-first</span>` : "";
 
-    const halStatusToolbar = `
-            <button type="button" class="status-pill status-btn" data-hal-cmd="What can you do" title="Ask HAL what it can do"><i class="status-dot status-dot" aria-hidden="true"></i>HAL STATUS <b>${esc(halStatusLabel)}</b></button>
-            <button type="button" class="status-pill status-btn" data-hal-cmd="Run readiness check" title="Run local readiness check"><i class="status-dot status-dot" aria-hidden="true"></i>LOCAL CORE <b>${esc(coreStatusLabel)}</b></button>
-            <button type="button" class="status-pill status-btn" data-hal-about-me title="HAL speaks your executive partner briefing"><i class="status-dot status-dot" aria-hidden="true"></i>ABOUT ME</button>
-            <button type="button" class="status-pill status-btn" data-hal-cmd="Explain staff consent policy" title="Consent policy"><i class="status-dot status-dot" aria-hidden="true"></i>CONSENT <b>ON</b></button>
+    const health = (halWidgetFeed && halWidgetFeed.sourceHealth) || {};
+    const connected = health.connected != null ? health.connected : 0;
+    const missing = health.missing != null ? health.missing : 0;
+    const partial = health.partial != null ? health.partial : 0;
+    const healthTotal = Math.max(1, connected + partial + missing);
+    const healthPct = Math.round((connected / healthTotal) * 100);
+
+    const halStatusToolbar = `<div class="hal-status-grid">
+            ${halStatusRing("HAL STATUS", halStatusLabel, halLoaded ? 100 : 12, halLoaded ? "green" : "cyan")}
+            ${halStatusRing("LOCAL CORE", coreStatusLabel, healthPct, healthPct >= 80 ? "green" : "cyan")}
+            <button type="button" class="hal-consent-chip" data-hal-about-me title="HAL speaks your executive partner briefing">ABOUT ME</button>
+            <button type="button" class="hal-consent-chip" data-hal-cmd="Explain staff consent policy" title="Consent policy">CONSENT ON</button>
             ${directBadge}
-            <span class="header-clock"><strong>${esc(now.toISOString().slice(11, 19))} UTC</strong><span>${esc(now.toISOString().slice(0, 10))}</span></span>`;
+            <span class="header-clock"><strong>${esc(now.toISOString().slice(11, 19))} UTC</strong><span>${esc(now.toISOString().slice(0, 10))}</span></span>
+          </div>`;
 
     const H = canvasHelpers();
     const Canvas = typeof HalPageCanvas !== "undefined" ? HalPageCanvas : null;
@@ -656,7 +677,7 @@ const HalPage = (function () {
     const dashHtml = Canvas && Canvas.renderDashboard ? Canvas.renderDashboard(ctx, H) : Canvas ? Canvas.render(ctx, H) : widgetsMonitorHtml(halWidgetFeed);
     const gridClass =
       Canvas && Canvas.gridClassName ? Canvas.gridClassName() : "dashboard-grid";
-    const halBodyInner = `<div class="hal-dashboard"><div class="content-wrapper">
+    const halBodyInner = `<div class="hal-dashboard hal-cyber-grid"><div class="content-wrapper">
       <div class="${gridClass}">${dashHtml}</div>
       <aside class="chat-rail" aria-label="Ask HAL">${askHtml}</aside>
     </div></div>`;

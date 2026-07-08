@@ -43,16 +43,17 @@ const HalPageCanvas = (function () {
         const status = (w && w.status) || "FAILED";
         const cmd = `Explain the ${spec.label} widget status`;
         const deltaClass = ok ? "delta-positive" : "delta-negative";
-        return `<article class="widget-card span-1" data-hal-widget-key="${H.esc(spec.key)}" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0">
+        return `<article class="widget-card widget-mosaic-tile widget-mount-glow span-1" data-hal-widget-key="${H.esc(spec.key)}" data-panel="${H.esc(spec.key)}" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0">
           <div class="widget-header"><span class="widget-title">${H.esc(spec.label)}</span></div>
-          <div class="metric-large">${H.esc(metrics || status)}</div>
+          <div class="metric-large text-glow">${H.esc(metrics || status)}</div>
           <div class="metric-delta ${deltaClass}"><span>${H.esc(status)}</span></div>
+          <div class="widget-sparkline" aria-hidden="true"></div>
           <div class="widget-footer"><span>HAL widget</span><span>${H.esc(status)}</span></div>
         </article>`;
       })
       .join("");
     const widgetTotal = metricSpecs.length;
-    return `${missionTiles}<p class="widget-meta widget-meta--hal">${readyTotal}/${widgetTotal} ready · click a tile to ask HAL · ${H.esc((feed && feed.importMode) || "direct-first")}</p>`;
+    return `<section class="hal-panel--widgets hal-widget-mosaic" data-panel="widgetMosaic">${missionTiles}<p class="widget-meta widget-meta--hal">${readyTotal}/${widgetTotal} ready · click a tile to ask HAL · ${H.esc((feed && feed.importMode) || "direct-first")}</p></section>`;
   }
 
   function registryStats(ctx) {
@@ -130,6 +131,14 @@ const HalPageCanvas = (function () {
 
     const healthTotal = Math.max(1, connected + partial + missing);
     const healthPct = Math.round((connected / healthTotal) * 100);
+    const lastSync =
+      (bundle && bundle.lastSyncAt) ||
+      (health && health.lastSyncAt) ||
+      (diag && diag.lastSyncAt) ||
+      "";
+    const staleImport =
+      lastSync && Number.isFinite(Date.parse(lastSync)) && Date.now() - Date.parse(lastSync) > 3600000;
+    const importStaleClass = staleImport ? " hal-health-ring--stale" : "";
     const postureValue = stats.halLoaded ? `${stats.readyCount} READY` : "IDLE";
     const postureBlock = `<div class="lane-badge hal-panel--posture" data-panel="statusRail">
       <div class="lane-header">
@@ -153,9 +162,9 @@ const HalPageCanvas = (function () {
         ${H.aiReadinessHtml(ctx.halModels)}
       </details>
     </div>`;
-    const importBlock = `<div class="import-health hal-panel--import" data-panel="importHealth">
+    const importBlock = `<div class="import-health hal-panel--import hal-health-ring${importStaleClass}" data-panel="importHealth" data-health-score="${healthPct}" data-last-sync="${H.esc(lastSync || "")}">
       ${H.cardHead("IMPORT & SOURCE HEALTH", "importHealth", "Import mode and dataset health", H.cardIconRaw("widget", "halImportHealth"))}
-      <span class="health-score">${H.esc(healthPct)}%</span>
+      <span class="health-score text-glow">${H.esc(healthPct)}%</span>
       <div class="health-bar" aria-hidden="true"><div class="health-fill" style="width:${healthPct}%"></div></div>
       <div class="health-details">
         <div class="health-item"><span class="health-item-value">${H.esc(connected)}</span><div class="health-item-label">Connected</div></div>
@@ -189,7 +198,7 @@ const HalPageCanvas = (function () {
         </li>`;
       })
       .join("");
-    return `<section class="widget-card hal-panel--nav" data-panel="workSurfaces">
+    return `<section class="widget-card hal-panel--nav surface-grid" data-panel="workSurfaces">
       ${H.cardHead("STAFF WORK SURFACES", "workSurfaces", "Jump to staff pages", H.cardIconRaw("ui", "surface"))}
       <ul class="surface-list surface-list">${surfaces || H.emptyNote("No work surfaces configured.")}</ul>
     </section>`;

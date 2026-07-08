@@ -687,7 +687,7 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
         relevant_period_labels,
         write_manifest,
     )
-    from quickbooks_monthly_sync import sync_quickbooks_monthly_exports
+    from quickbooks_monthly_sync import ensure_quickbooks_fresh, sync_quickbooks_monthly_exports
 
     previous_manifest = load_manifest()
     previous_checksums = dict((previous_manifest or {}).get("datasetChecksums") or {})
@@ -806,10 +806,19 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
     result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_EXPENSE_CATEGORY_NAMES))
     result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_AR_NAMES))
     probe_payload = _resolve_qb_probe_payload(quickbooks_dest)
-    monthly_result = sync_quickbooks_monthly_exports(
-        quickbooks_dest,
-        probe_payload=probe_payload if isinstance(probe_payload, dict) else None,
-    )
+    probe_dict = probe_payload if isinstance(probe_payload, dict) else None
+    qb_fresh = ensure_quickbooks_fresh(quickbooks_dest, probe_payload=probe_dict)
+    result["quickbooks"]["ensureFresh"] = {
+        "stale": bool(qb_fresh.get("stale")),
+        "refreshed": bool(qb_fresh.get("refreshed")),
+    }
+    if qb_fresh.get("refreshed") and isinstance(qb_fresh.get("sync"), dict):
+        monthly_result = qb_fresh["sync"]
+    else:
+        monthly_result = sync_quickbooks_monthly_exports(
+            quickbooks_dest,
+            probe_payload=probe_dict,
+        )
     result["quickbooks"]["monthly"] = monthly_result
     if monthly_result.get("written"):
         result["quickbooks"]["generated"].extend(monthly_result["written"])

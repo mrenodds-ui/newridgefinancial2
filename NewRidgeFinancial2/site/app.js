@@ -193,7 +193,7 @@ function enforceSingleFinancialTab() {
       }
       if (window.BroadcastChannel) {
         const bc = new BroadcastChannel("nr2_tab");
-        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10062" });
+        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10068" });
       }
     }
   }
@@ -4561,7 +4561,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10062&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10068&__nr2_purge=1</div>';
     return;
   }
   const MC =
@@ -4666,6 +4666,24 @@ function select(id, options) {
   }
   if (typeof ImportReadinessGate !== "undefined" && ImportReadinessGate.evaluate) {
     ImportReadinessGate.evaluate(page.id);
+  }
+  if (
+    !NR2_WORKSTATION_ONLY &&
+    (page.id === "quickbooks" || page.id === "financial" || page.id === "hal") &&
+    typeof Services !== "undefined" &&
+    Services.ensureQuickBooksFresh
+  ) {
+    Services.ensureQuickBooksFresh()
+      .then((qb) => {
+        if (qb && qb.refreshed) {
+          invalidateProgramCaches("qb-sync-if-stale");
+          scheduleHalWidgetRefresh();
+          if (appPage && !appPage.hidden && PageViews && PageViews.hasPage(page.id)) {
+            PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed, halProgramSnapshot);
+          }
+        }
+      })
+      .catch(() => {});
   }
   const scrollTo = options && options.scrollTo;
   if (scrollTo) {

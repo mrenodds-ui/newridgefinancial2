@@ -8,11 +8,11 @@
   delete window.NR2_LEGACY_SCHEMA;
   delete window.OLD_PAGE_SCHEMA;
   delete window.PageSchemaLegacy;
-  window.__NR2_SCHEMA_LOADED = "hal-10062";
+  window.__NR2_SCHEMA_LOADED = "hal-10068";
 })();
 
 const PageSchema = (function () {
-  const SCHEMA_VERSION = "hal-10062";
+  const SCHEMA_VERSION = "hal-10068";
 
   const PRACTICE = {
     name: "New Ridge Family Dental",
@@ -204,6 +204,25 @@ const PageSchema = (function () {
         "Import status",
       ],
       safety: "Local manager · Office channel hub · Consent before outbound",
+      navGroups: [
+        {
+          label: "Command",
+          widgets: ["halAskHal"],
+        },
+        {
+          label: "Health",
+          widgets: [
+            "halImportHealth",
+            "practiceFinancialOverview",
+            "careDeliveryPerformance",
+            "quickbooksProfitLossDetail",
+          ],
+        },
+        {
+          label: "Surfaces",
+          widgets: ["officeManagerSurfaces", "sidenotesProgram"],
+        },
+      ],
       widgets: [
         { key: "halAskHal", title: "Ask HAL" },
         { key: "halImportHealth", title: "Import & Source Health" },
@@ -274,7 +293,7 @@ if (typeof window !== "undefined") {
   window.PageSchema = PageSchema;
 }
 
-PageSchema.SCHEMA_VERSION = "hal-10062";
+PageSchema.SCHEMA_VERSION = "hal-10068";
 Object.defineProperty(PageSchema, "LAYOUT_EPOCH", {
   value: "moonshot-mockup",
   writable: false,

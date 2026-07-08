@@ -3,6 +3,9 @@
  * Maps moonshot-mockup tokens onto legacy hp-* / ws-* markup. No class renames.
  */
 body.nr2-workstation-app {
+  --ms-glow-cyan: 0 0 8px rgba(0, 212, 255, 0.55);
+  --ms-glow-green: 0 0 8px rgba(0, 230, 118, 0.45);
+  --ms-glow-orange: 0 0 8px rgba(255, 152, 0, 0.45);
   --bg-primary: #181818;
   --bg-surface: #1f1f1f;
   --bg-elevated: #252525;
@@ -70,9 +73,9 @@ body.nr2-workstation-app .ws-sn-toolbar-tab {
 
 body.nr2-workstation-app .ws-sn-toolbar-tab--active {
   background: var(--bg-primary);
-  border-color: var(--accent-gold);
+  border-color: var(--accent-cyan);
   color: var(--text-primary);
-  box-shadow: inset 0 -2px 0 var(--accent-gold);
+  box-shadow: inset 0 -2px 0 var(--accent-cyan), var(--ms-glow-cyan);
 }
 
 body.nr2-workstation-app .ws-page-tabs {
@@ -233,6 +236,19 @@ body.nr2-workstation-app .ws-sn-send {
   background: var(--accent-gold);
   border: 1px solid rgba(212, 168, 83, 0.55);
   color: #1a1a1a;
+}
+
+body.nr2-workstation-app .ws-root {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(0, 212, 255, 0.06) 1px, transparent 0),
+    linear-gradient(180deg, #181818 0%, #141414 100%);
+  background-size: 24px 24px, 100% 100%;
+}
+
+body.nr2-workstation-app .ws-sn-shell,
+body.nr2-workstation-app .ws-pane,
+body.nr2-workstation-app .hp-card {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
 }
 
 body.nr2-workstation-app .ws-boot-loading {

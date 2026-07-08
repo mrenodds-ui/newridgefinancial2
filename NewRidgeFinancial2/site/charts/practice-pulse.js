@@ -7,7 +7,15 @@ function renderPracticePulse(canvasId, metrics) {
   const ctx = canvas.getContext("2d");
   const w = canvas.width || 360;
   const h = canvas.height || 140;
+  const pad = 24;
   ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  for (let gy = 36; gy < h - 20; gy += 24) {
+    ctx.beginPath();
+    ctx.moveTo(pad, gy);
+    ctx.lineTo(w - pad, gy);
+    ctx.stroke();
+  }
   const m = metrics || {};
   const production = Number(m.productionUsd || m.production || 0);
   const collections = Number(m.collectionsUsd || m.collections || 0);
@@ -18,7 +26,6 @@ function renderPracticePulse(canvasId, metrics) {
     { label: "Coll", val: collections, color: "#10b981" },
     { label: "A/R", val: arTotal, color: "#f59e0b" },
   ];
-  const pad = 24;
   const barW = (w - pad * 2) / bars.length - 12;
   ctx.font = "11px system-ui,sans-serif";
   ctx.fillStyle = "#64748b";

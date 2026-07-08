@@ -103,7 +103,7 @@ for (const pageId of PageSchema.STAFF_PAGE_IDS || []) {
   }
 
   if (pageId === "softdent") {
-    const funnelSteps = (html.match(/class="funnel-step"/g) || []).length;
+    const funnelSteps = (html.match(/class="funnel-step(?:[^"]*)"/g) || []).length;
     if (funnelSteps < 4) {
       console.error(`FAIL softdent: expected 4 funnel-step rows, got ${funnelSteps}`);
       failures += 1;

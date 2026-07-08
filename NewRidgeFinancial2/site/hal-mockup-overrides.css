@@ -1,0 +1,186 @@
+/**
+ * Moonshot Phase 1 (hal-10063) — HAL Command Center mock parity overrides.
+ * Scoped to HAL page; complements nr2-moonshot-mockup-theme.css.
+ */
+.app--moonshot-mockup {
+  --neon-cyan: #00d4ff;
+  --neon-green: #00e676;
+  --neon-orange: #ff9800;
+  --ms-bg-deep: #181818;
+  --ms-glow-cyan: 0 0 8px rgba(0, 212, 255, 0.55);
+  --ms-glow-green: 0 0 8px rgba(0, 230, 118, 0.5);
+  --ms-glow-orange: 0 0 8px rgba(255, 152, 0, 0.45);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-cyber-grid {
+  background-color: var(--ms-bg-deep);
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(0, 212, 255, 0.07) 1px, transparent 0),
+    radial-gradient(ellipse at 20% 0%, rgba(124, 77, 255, 0.08), transparent 45%);
+  background-size: 24px 24px, 100% 100%;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-ring {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid var(--border-subtle, #333);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--neon-cyan);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-ring svg {
+  flex-shrink: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-ring__label b {
+  color: var(--text-primary, #fff);
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-ring--green {
+  color: var(--neon-green);
+  box-shadow: var(--ms-glow-green);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-ring--cyan {
+  box-shadow: var(--ms-glow-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-pulse {
+  animation: hal-status-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes hal-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.82;
+  }
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-consent-chip {
+  border: 1px solid rgba(0, 230, 118, 0.35);
+  background: rgba(0, 230, 118, 0.08);
+  color: var(--neon-green);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-consent-chip:hover {
+  box-shadow: var(--ms-glow-green);
+}
+
+.app--moonshot-mockup .ms-page--hal .text-glow {
+  text-shadow: 0 0 12px rgba(0, 212, 255, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-widget-mosaic {
+  grid-column: span 4;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-mosaic-tile {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-mosaic-tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 212, 255, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), var(--ms-glow-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-sparkline {
+  height: 36px;
+  margin-top: 10px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.08), rgba(0, 230, 118, 0.12));
+  opacity: 0.85;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-health-ring[data-health-score] {
+  position: relative;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-health-ring[data-health-score].hal-health-ring--stale .health-score {
+  color: var(--neon-orange);
+  text-shadow: var(--ms-glow-orange);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-prompt-chip,
+.app--moonshot-mockup .ms-page--hal .chat-suggestions .prompt-chip {
+  border-color: rgba(0, 212, 255, 0.25);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-prompt-chip:hover,
+.app--moonshot-mockup .ms-page--hal .chat-suggestions .prompt-chip:hover {
+  box-shadow: var(--ms-glow-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .badge-live {
+  color: var(--neon-green);
+  box-shadow: var(--ms-glow-green);
+  animation: hal-status-pulse 2s ease-in-out infinite;
+}
+
+.app--moonshot-mockup .ms-page--hal .badge-offline {
+  color: #ff5252;
+  box-shadow: 0 0 8px rgba(255, 82, 82, 0.4);
+}
+
+.app--moonshot-mockup .ms-page--hal .surface-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.app--moonshot-mockup .nav-item.active[data-nav="hal"],
+.app--moonshot-mockup .nav-page--active .nav-item[data-nav="hal"] {
+  border-left: 3px solid var(--neon-cyan);
+  box-shadow: inset 0 0 12px rgba(0, 212, 255, 0.08);
+}
+
+.app--moonshot-mockup .nav-subgroup__title {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #888);
+  padding: 8px 24px 4px;
+  margin: 0;
+}
+
+.app--moonshot-mockup .widget-mount-glow {
+  animation: widget-mount-glow 0.45s ease-out;
+}
+
+@keyframes widget-mount-glow {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

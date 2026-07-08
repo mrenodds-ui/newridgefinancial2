@@ -1,8 +1,8 @@
 {
-  "BUILD_ID": "hal-10062",
-  "assetVersion": "hal-10062",
-  "schemaVersion": "hal-10062",
+  "BUILD_ID": "hal-10068",
+  "assetVersion": "hal-10068",
+  "schemaVersion": "hal-10068",
   "REQUIRED_EPOCH": "moonshot-mockup",
-  "builtAt": "2026-07-07T23:05:00.000Z",
-  "notes": "Moonshot P2 polish — widget icons, hub status, posting API alias, QB toggle, sidenotes fallback (hal-10062)."
+  "builtAt": "2026-07-08T02:45:00.000Z",
+  "notes": "Moonshot full-capacity Phases 1–5: HAL mock parity, SoftDent stale badges, QB auto-sync, staff glow/charts, workstation chrome (hal-10068)."
 }

@@ -502,9 +502,12 @@ async function main() {
   assert(!halHtml.includes("SIDENOTES PROGRAM"), "HAL financial app must not render external SideNotes program card");
   assert(halHtml.includes("data-hal-surf-nav=\"sidenotes\""), "HAL page must wire staff notes work surface navigation");
   assert(halHtml.includes("data-hal-surf-open="), "HAL page must wire work surface open chevrons");
-  assert(halHtml.includes("widget-card span-1") || halHtml.includes('class="widget-card span-1"'), "HAL page must wire widget cards to HAL");
+  assert(
+    halHtml.includes("widget-mosaic-tile") || halHtml.includes("widget-card span-1") || halHtml.includes('class="widget-card span-1"'),
+    "HAL page must wire widget cards to HAL",
+  );
   assert(halHtml.includes("data-hal-activity-cmd="), "HAL page must wire activity log replay to HAL");
-  assert(halHtml.includes("status-btn"), "HAL page must wire status chips to HAL");
+  assert(halHtml.includes("hal-status-ring") || halHtml.includes("status-btn"), "HAL page must wire status chips to HAL");
   assert(halHtml.includes('class="header"') || halHtml.includes("<header class=\"header\">"), "HAL page must use mockup HAL header");
   assert((halHtml.match(/HAL Command Center/g) || []).length <= 1, "HAL Command Center title must not repeat as legacy widget group box");
   assert(halHtml.includes("badge-live"), "HAL page must show LIVE badge");

@@ -1275,6 +1275,51 @@ const Services = (function () {
     },
   };
 
+  let qbFreshPromise = null;
+  let qbFreshAt = 0;
+
+  async function ensureQuickBooksFresh(options) {
+    const opts = options || {};
+    const debounceMs = Number(opts.debounceMs || 120000);
+    if (qbFreshPromise) return qbFreshPromise;
+    if (!opts.force && Date.now() - qbFreshAt < debounceMs) {
+      return { skipped: true, reason: "debounced" };
+    }
+    const br = bridge();
+    const postJson =
+      br && typeof br.loopbackJson === "function"
+        ? (path, init) => br.loopbackJson(path, init)
+        : async (path, init) => {
+            if (typeof fetch !== "function" || !isLoopbackHost()) return null;
+            const response = await fetch(path, Object.assign({ cache: "no-store" }, init || {}));
+            if (!response.ok) return null;
+            return response.json();
+          };
+    qbFreshPromise = (async () => {
+      try {
+        const result = await postJson("/api/qb/sync-if-stale", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ maxAgeMinutes: opts.maxAgeMinutes || 60 }),
+        });
+        qbFreshAt = Date.now();
+        if (result && result.refreshed) {
+          importBundleCache = null;
+          importBundleAt = 0;
+          if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate("qb-sync-if-stale");
+          await refreshImports({ reason: "qb-sync-if-stale", waitForCompletion: false }).catch(() => {});
+        }
+        return result || { stale: false, refreshed: false };
+      } catch (err) {
+        if (typeof RuntimeIssues !== "undefined") RuntimeIssues.record("services.ensureQuickBooksFresh", err, opts);
+        return { stale: false, refreshed: false, error: err && err.message ? err.message : String(err) };
+      } finally {
+        qbFreshPromise = null;
+      }
+    })();
+    return qbFreshPromise;
+  }
+
   async function resetAll() {
     Object.keys(mem).forEach((k) => delete mem[k]);
     importBundleCache = null;
@@ -1302,6 +1347,7 @@ const Services = (function () {
     buildDashboardsFromBundle,
     loadImportBundle,
     refreshImports,
+    ensureQuickBooksFresh,
     pullPracticeSources,
     invalidateSnapshot: () => {
       if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate("services");

@@ -8,6 +8,13 @@ function renderARHeatmap(canvasId, buckets) {
   const w = canvas.width || 320;
   const h = canvas.height || 120;
   ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  for (let gy = 8; gy < h; gy += 28) {
+    ctx.beginPath();
+    ctx.moveTo(70, gy);
+    ctx.lineTo(w - 8, gy);
+    ctx.stroke();
+  }
   data.forEach((row, i) => {
     const amount = Number(row.amount || row.total || 0);
     const max = Math.max(...data.map((r) => Number(r.amount || r.total || 0)), 1);

@@ -54,6 +54,37 @@ const MoonshotMockupChrome = (function () {
 
   function renderNavSubitems(page, activeId) {
     if (!page || page.id !== activeId) return "";
+    if (Array.isArray(page.navGroups) && page.navGroups.length) {
+      const widgets = pageWidgets(page);
+      const byKey = Object.fromEntries(widgets.map((widget) => [widget.key, widget]));
+      const groups = page.navGroups
+        .map((group) => {
+          const keys = Array.isArray(group.widgets) ? group.widgets : [];
+          const items = keys
+            .map((key) => byKey[key])
+            .filter(Boolean)
+            .map((widget) => {
+              const label = widget.title || widget.key;
+              const panel = page.id === "hal" ? halWidgetPanelKey(widget.key) : null;
+              const attrs = panel
+                ? ` data-nav-page="${esc(page.id)}" data-nav-panel="${esc(panel)}"`
+                : ` data-nav-page="${esc(page.id)}" data-nav-widget="${esc(widget.key)}"`;
+              return `<button type="button" class="nav-subitem"${attrs} title="${esc(label)}">
+          <span class="nav-subitem__label">${esc(label)}</span>
+        </button>`;
+            })
+            .join("");
+          if (!items) return "";
+          return `<div class="nav-subgroup">
+          <p class="nav-subgroup__title">${esc(group.label || "")}</p>
+          ${items}
+        </div>`;
+        })
+        .join("");
+      if (groups) {
+        return `<div class="nav-sublist nav-sublist--grouped" aria-label="${esc(pageLabel(page))} sections">${groups}</div>`;
+      }
+    }
     const widgets = pageWidgets(page);
     if (!widgets.length) return "";
     const items = widgets

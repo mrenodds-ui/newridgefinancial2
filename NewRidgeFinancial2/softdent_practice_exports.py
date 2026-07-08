@@ -379,6 +379,7 @@ def read_practice_export_datasets(db_path: Path | None = None) -> dict[str, dict
         tp_rows = _aggregate_treatment_plans(conn, periods)
         ca_rows = _derive_case_acceptance(tp_rows) if tp_rows else []
         hr_rows = _aggregate_hygiene_recall(conn, periods)
+        op_chairs_db = _aggregate_operatory_from_db(conn)
     finally:
         conn.close()
 
@@ -391,18 +392,23 @@ def read_practice_export_datasets(db_path: Path | None = None) -> dict[str, dict
     if hr_rows:
         out["hygieneRecall"] = _practice_dataset(hr_rows, db_path=db_path, source_file="hygiene_recall_summary.csv")
     op_path = softdent_import_dir() / "operatory_schedule.json"
+    op_chairs = None
     if op_path.is_file():
-        chairs = _read_operatory_chairs_file(op_path)
-        if chairs is not None:
-            out["operatory"] = {
-                "sourceFile": op_path.name,
-                "sourcePath": str(op_path),
-                "modifiedAt": datetime.fromtimestamp(op_path.stat().st_mtime, tz=timezone.utc).isoformat(),
-                "operatoryChairs": chairs,
-                "rows": [],
-                "readSource": "cache",
-                "sourceKind": "operatory-export",
-            }
+        op_chairs = _read_operatory_chairs_file(op_path)
+    if op_chairs is None and op_chairs_db:
+        op_chairs = op_chairs_db
+    if op_chairs is not None:
+        out["operatory"] = {
+            "sourceFile": op_path.name if op_path.is_file() else "analytics-db",
+            "sourcePath": str(op_path if op_path.is_file() else db_path),
+            "modifiedAt": datetime.fromtimestamp(
+                (op_path if op_path.is_file() else db_path).stat().st_mtime, tz=timezone.utc
+            ).isoformat(),
+            "operatoryChairs": op_chairs,
+            "rows": [],
+            "readSource": "cache" if op_path.is_file() else "direct",
+            "sourceKind": "operatory-export" if op_path.is_file() else "analytics-db",
+        }
     return out
 
 

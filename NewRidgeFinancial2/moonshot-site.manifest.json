@@ -5,6 +5,9 @@
     "index.html",
     "styles.css",
     "nr2-moonshot-mockup-theme.css",
+    "hal-mockup-overrides.css",
+    "nr2-mockup-page-vocabulary.css",
+    "nr2-moonshot-glow.css",
     "sw.js",
     "nr2-build.json"
   ],

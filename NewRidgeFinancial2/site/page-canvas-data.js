@@ -445,6 +445,52 @@ const PageCanvasData = (function () {
     return (bundle && bundle.softdent && bundle.softdent.dashboard) || null;
   }
 
+  function importBundleAgeMinutes() {
+    const bundle = snapshot && snapshot.importBundle;
+    const syncStatus = bundle && bundle.syncStatus;
+    const loadedAt =
+      (bundle && bundle.loadedAt) ||
+      (syncStatus && (syncStatus.syncedAt || syncStatus.finishedAt || syncStatus.updatedAt)) ||
+      null;
+    if (!loadedAt) return null;
+    const t = Date.parse(String(loadedAt));
+    if (!Number.isFinite(t)) return null;
+    return Math.max(0, (Date.now() - t) / 60000);
+  }
+
+  function withStaleBadge(notice, options) {
+    const opts = options || {};
+    const maxAgeMinutes = Number(opts.maxAgeMinutes || 60);
+    const qb = dash("quickbooks") || {};
+    const ageMin = importBundleAgeMinutes();
+    const datasetKeys = Array.isArray(opts.datasetKeys) ? opts.datasetKeys : [];
+    const datasetStale =
+      datasetKeys.length > 0 &&
+      datasetIssuesForKeys(datasetKeys).some((item) => item.status === "stale" || item.status === "partial");
+    const syncStale = /stale|blocked|pending/i.test(String(qb.syncStatus || qb.lastSync || ""));
+    const ageStale = ageMin != null && ageMin > maxAgeMinutes;
+    if (!datasetStale && !syncStale && !ageStale) return notice;
+    const merged = notice ? Object.assign({}, notice) : {};
+    merged.stale = true;
+    if (!merged.staleLabel) {
+      const ageLabel = ageMin != null ? `${Math.round(ageMin)}m ago` : "stale";
+      merged.staleLabel = opts.staleLabel || `Last-known data — last sync ${ageLabel}`;
+    }
+    return merged;
+  }
+
+  function quickbooksSyncStale() {
+    const qb = dash("quickbooks") || {};
+    const issues = quickbooksDatasetIssues();
+    const partial = issues.some((item) => item.status === "stale" || item.status === "partial");
+    const ageMin = importBundleAgeMinutes();
+    return (
+      partial ||
+      /stale|blocked|pending/i.test(String(qb.syncStatus || qb.lastSync || "")) ||
+      (ageMin != null && ageMin > 60)
+    );
+  }
+
   function datasetIssuesForKeys(datasetKeys) {
     const bundle = snapshot && snapshot.importBundle;
     const diagnostics = bundle && bundle.diagnostics;
@@ -506,9 +552,12 @@ const PageCanvasData = (function () {
       };
     }
     if (overview && overview.status === "DEGRADED" && overview.summary) {
-      return { tone: "info", message: overview.summary };
+      return withStaleBadge({ tone: "info", message: overview.summary }, { maxAgeMinutes: 1440, datasetKeys: ["softdent.dashboard", "quickbooks.profitAndLoss"] });
     }
-    return null;
+    return withStaleBadge(null, {
+      maxAgeMinutes: 1440,
+      datasetKeys: ["softdent.dashboard", "quickbooks.profitAndLoss", "quickbooks.revenue"],
+    });
   }
 
   function softdentImportNotice() {
@@ -544,9 +593,15 @@ const PageCanvasData = (function () {
     }
     const care = widget("careDeliveryPerformance");
     if (care && care.status === "FAILED") {
-      return { tone: "warning", message: care.summary || "SoftDent dashboard import not loaded." };
+      return withStaleBadge(
+        { tone: "warning", message: care.summary || "SoftDent dashboard import not loaded." },
+        { maxAgeMinutes: 1440, datasetKeys: ["softdent.dashboard", "softdent.clinical"] },
+      );
     }
-    return null;
+    return withStaleBadge(null, {
+      maxAgeMinutes: 1440,
+      datasetKeys: ["softdent.dashboard", "softdent.clinical", "softdent.ar"],
+    });
   }
 
   function arImportNotice() {
@@ -874,12 +929,27 @@ const PageCanvasData = (function () {
       };
     }
     if (/blocked|stale|pending/i.test(String(qb.syncStatus || qb.lastSync || ""))) {
-      return {
-        tone: "warning",
-        message: `QuickBooks sync status: ${qb.syncStatus || qb.lastSync}. Charts may be incomplete until sync completes.`,
-      };
+      return withStaleBadge(
+        {
+          tone: "warning",
+          message: `QuickBooks sync status: ${qb.syncStatus || qb.lastSync}. Charts may be incomplete until sync completes.`,
+        },
+        { maxAgeMinutes: 60, datasetKeys: ["quickbooks.profitAndLoss", "quickbooks.expenses"] },
+      );
     }
-    return null;
+    if (hasAny && quickbooksSyncStale()) {
+      return withStaleBadge(
+        {
+          tone: "info",
+          message: "QuickBooks charts show last-known export values while sync catches up.",
+        },
+        { maxAgeMinutes: 60, datasetKeys: ["quickbooks.profitAndLoss", "quickbooks.expenses", "quickbooks.expenseCategories"] },
+      );
+    }
+    return withStaleBadge(null, {
+      maxAgeMinutes: 60,
+      datasetKeys: ["quickbooks.profitAndLoss", "quickbooks.expenses", "quickbooks.expenseCategories"],
+    });
   }
 
   function quickbooksKpis() {
@@ -1583,6 +1653,9 @@ const PageCanvasData = (function () {
     narrativesImportNotice,
     taxesImportNotice,
     quickbooksImportNotice,
+    quickbooksSyncStale,
+    withStaleBadge,
+    importBundleAgeMinutes,
     quickbooksKpis,
     quickbooksPlTrend,
     softdentOperatoryGrid,
