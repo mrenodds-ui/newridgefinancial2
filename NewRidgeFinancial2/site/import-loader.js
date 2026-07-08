@@ -57,6 +57,16 @@ const ImportLoader = (function () {
     "hygiene_recall_summary.json",
   ];
   const SOFTDENT_OPERATORY_NAMES = ["operatory_schedule.json", "softdent_operatory_chairs.json"];
+  const SOFTDENT_PROCEDURES_NAMES = [
+    "softdent_procedures_export.csv",
+    "softdent_procedures_data.csv",
+    "softdent_procedures_export.json",
+  ];
+  const SOFTDENT_CLAIM_STATUS_NAMES = [
+    "softdent_claim_status_export.csv",
+    "softdent_claim_status_data.csv",
+    "softdent_claim_status_export.json",
+  ];
 
   function loadManifestDatasets() {
     if (!isNode) return null;
@@ -93,6 +103,8 @@ const ImportLoader = (function () {
   const MANIFEST_SOFTDENT_CASE_ACCEPTANCE_NAMES = manifestFilenames("softdent.caseAcceptance", SOFTDENT_CASE_ACCEPTANCE_NAMES);
   const MANIFEST_SOFTDENT_HYGIENE_RECALL_NAMES = manifestFilenames("softdent.hygieneRecall", SOFTDENT_HYGIENE_RECALL_NAMES);
   const MANIFEST_SOFTDENT_OPERATORY_NAMES = manifestFilenames("softdent.operatory", SOFTDENT_OPERATORY_NAMES);
+  const MANIFEST_SOFTDENT_PROCEDURES_NAMES = manifestFilenames("softdent.procedures", SOFTDENT_PROCEDURES_NAMES);
+  const MANIFEST_SOFTDENT_CLAIM_STATUS_NAMES = manifestFilenames("softdent.claimStatus", SOFTDENT_CLAIM_STATUS_NAMES);
 
   function bridge() {
     if (typeof DesktopBridge !== "undefined") return DesktopBridge;
@@ -389,6 +401,8 @@ const ImportLoader = (function () {
         caseAcceptance: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_CASE_ACCEPTANCE_NAMES, fs),
         hygieneRecall: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_HYGIENE_RECALL_NAMES, fs),
         operatory: loadOperatoryDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_OPERATORY_NAMES, fs),
+        procedures: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_PROCEDURES_NAMES, fs),
+        claimStatus: loadDatasetNode(REPO_IMPORT_SOFTDENT, MANIFEST_SOFTDENT_CLAIM_STATUS_NAMES, fs),
       },
       quickbooks: {
         dir: REPO_IMPORT_QUICKBOOKS,

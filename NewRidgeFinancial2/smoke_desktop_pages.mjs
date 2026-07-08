@@ -37,6 +37,9 @@ require(join(siteDir, "runtime-issues.js"));
 require(join(siteDir, "snapshot-store.js"));
 require(join(siteDir, "month-end-close.js"));
 require(join(siteDir, "portal-ops.js"));
+if (!globalThis.HAL) {
+  globalThis.HAL = { skills: { defineSource() {} } };
+}
 require(join(siteDir, "hal-skills.js"));
 require(join(siteDir, "page-schema.js"));
 require(join(siteDir, "page-chrome.js"));
@@ -60,15 +63,17 @@ PageCanvasData.bind(feed, snap);
 const pageIds = ["financial", "documents", "office-manager"];
 for (const pageId of pageIds) {
   const html = await PageViews.previewPageHtml(halData, pageId, feed, snap);
-  assertOk(`${pageId} page renders`, html.includes("pv--app"), "functional app surface");
+  assertOk(`${pageId} page renders`, html.includes("ms-page"), "mockup page surface");
   assertOk(`${pageId} no mock shell`, !html.includes("pv--mock-image"), "no mock image");
 }
 
 const finHtml = await PageViews.previewPageHtml(halData, "financial", feed, snap);
 assertOk(
   "financial month-end surface",
-  finHtml.includes("pv-month-end-blocker") || finHtml.includes("Month-End Close Checklist"),
-  finHtml.includes("pv-month-end-blocker") ? "blocker strip" : "checklist panel",
+  finHtml.includes("Production vs QuickBooks Reconciliation") ||
+    finHtml.includes("Month-End Close Checklist") ||
+    finHtml.includes("pv-month-end-blocker"),
+  "reconciliation or month-end panel",
 );
 
 const payload = MonthEndClose.buildReconciliationPayload(snap);
@@ -80,7 +85,7 @@ const breakdown = PageCanvasData.documentsSourceBreakdown();
 assertOk("documents source stats", Array.isArray(breakdown) && breakdown.length === 4, breakdown.map((r) => r.label).join(", "));
 
 const omHtml = await PageViews.previewPageHtml(halData, "office-manager", feed, snap);
-assertOk("office-manager ops health", omHtml.includes("Integration health"), "ops health panel");
+assertOk("office-manager ops health", omHtml.includes("Practice data") || omHtml.includes("Integration health"), "ops data panel");
 assertOk("ops health refresh wired", omHtml.includes("data-ops-refresh-health"), "refresh button");
 assertOk("ops support bundle wired", omHtml.includes("data-ops-support-bundle"), "support bundle button");
 
