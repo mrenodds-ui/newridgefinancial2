@@ -1780,6 +1780,10 @@ async function main() {
     HalHubClient && typeof HalHubClient.pushMorningBriefingToWorkstation === "function",
     "hal hub client must push morning briefings",
   );
+  const workstationPageSrc = readFileSync(join(siteDir, "workstation-page.js"), "utf8");
+  assert(workstationPageSrc.includes("data-ws-sync=\"qb\""), "workstation must expose QuickBooks sync trigger");
+  assert(workstationPageSrc.includes("data-ws-sync=\"softdent\""), "workstation must expose SoftDent sync trigger");
+  assert(workstationPageSrc.includes("data-ws-open-hal"), "workstation must link to HAL hub");
 
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;

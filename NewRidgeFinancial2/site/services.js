@@ -1320,6 +1320,37 @@ const Services = (function () {
     return qbFreshPromise;
   }
 
+  function loopbackPostJson(path, init) {
+    const br = bridge();
+    if (br && typeof br.loopbackJson === "function") {
+      return br.loopbackJson(path, init);
+    }
+    if (typeof fetch !== "function" || !isLoopbackHost()) return Promise.resolve(null);
+    const port = typeof window !== "undefined" && window.location ? window.location.port || "8765" : "8765";
+    const host = typeof window !== "undefined" && window.location ? window.location.hostname || "127.0.0.1" : "127.0.0.1";
+    const protocol = typeof window !== "undefined" && window.location ? window.location.protocol || "http:" : "http:";
+    return fetch(`${protocol}//${host}:${port}${path}`, Object.assign({ cache: "no-store" }, init || {})).then((res) =>
+      res.ok ? res.json() : null,
+    );
+  }
+
+  async function fetchHealth() {
+    return loopbackPostJson("/api/health", { method: "GET" });
+  }
+
+  async function syncQuickBooks(options) {
+    const opts = options || {};
+    return loopbackPostJson("/api/qb/sync-if-stale", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ maxAgeMinutes: opts.maxAgeMinutes || 0, force: !!opts.force }),
+    });
+  }
+
+  async function syncSoftdentOdbc() {
+    return loopbackPostJson("/api/admin/extract-softdent-odbc", { method: "POST" });
+  }
+
   async function resetAll() {
     Object.keys(mem).forEach((k) => delete mem[k]);
     importBundleCache = null;
@@ -1348,6 +1379,9 @@ const Services = (function () {
     loadImportBundle,
     refreshImports,
     ensureQuickBooksFresh,
+    fetchHealth,
+    syncQuickBooks,
+    syncSoftdentOdbc,
     pullPracticeSources,
     invalidateSnapshot: () => {
       if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate("services");

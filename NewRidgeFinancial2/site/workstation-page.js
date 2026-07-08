@@ -462,6 +462,7 @@ const WorkstationPage = (function () {
       <button type="button" class="ws-sn-toolbar-tab${active === "send" ? " ws-sn-toolbar-tab--active" : ""}" role="tab" data-ws-page-tab="send">Type a Message</button>
       <button type="button" class="ws-sn-toolbar-tab${active === "history" ? " ws-sn-toolbar-tab--active" : ""}" role="tab" data-ws-page-tab="history">${esc(historyLabel)}</button>
       <button type="button" class="ws-sn-toolbar-tab${active === "officechat" ? " ws-sn-toolbar-tab--active" : ""}" role="tab" data-ws-page-tab="officechat">Office Chat</button>
+      <button type="button" class="ws-sn-toolbar-tab${active === "sync" ? " ws-sn-toolbar-tab--active" : ""}" role="tab" data-ws-page-tab="sync">Sync</button>
       <button type="button" class="ws-sn-toolbar-tab${active === "askhal" ? " ws-sn-toolbar-tab--active" : ""}" role="tab" data-ws-page-tab="askhal">Ask HAL</button>
     </div>`;
   }
@@ -891,7 +892,34 @@ const WorkstationPage = (function () {
     if (tab === "askhal") return "askhal";
     if (tab === "history") return "history";
     if (tab === "officechat") return "officechat";
+    if (tab === "sync") return "sync";
     return "send";
+  }
+
+  function syncPanelHtml(ctx) {
+    const active = workstationMainTab(ctx) === "sync";
+    const status = ctx.workstationSyncStatus || {};
+    const loading = !!status.loading;
+    const message = status.message || "Trigger QuickBooks or SoftDent sync from this workstation.";
+    const consent = status.consentEnabled !== false;
+    const disabled = loading || !consent ? " disabled" : "";
+    const consentNote = consent
+      ? ""
+      : '<p class="ws-sync-note">Sync disabled — set NR2_CONSENT_EXECUTOR=1 on the NR2 server.</p>';
+    return `<div class="ws-page-panel ws-page-panel--sync${active ? "" : " ws-page-panel--hidden"}" role="tabpanel" aria-hidden="${active ? "false" : "true"}">
+      <section class="widget-card ws-sync-panel" data-panel="workstationSync">
+        ${cardHead("DATA SYNC", "workstationSync", "QuickBooks and SoftDent refresh", cardIconRaw("nav", "quickbooks"))}
+        <p class="widget-meta">${esc(message)}</p>
+        ${consentNote}
+        <div class="prompt-chips prompt-chips--live ws-sync-actions">
+          <button type="button" class="prompt-chip prompt-chip--action" data-ws-sync="qb"${disabled}>${uiIcon("check")} Sync QuickBooks</button>
+          <button type="button" class="prompt-chip prompt-chip--action" data-ws-sync="softdent"${disabled}>${uiIcon("check")} Sync SoftDent</button>
+          <button type="button" class="prompt-chip prompt-chip--action" data-ws-sync="imports"${disabled}>Refresh imports</button>
+          <button type="button" class="prompt-chip" data-ws-open-hal>Open HAL hub (8765)</button>
+        </div>
+        ${status.lastHealth ? `<p class="widget-footer">DB ${esc(String(status.lastHealth.db_size_mb != null ? status.lastHealth.db_size_mb + " MB" : "—"))} · bundle age ${esc(String(status.lastHealth.import_bundle_age_minutes != null ? status.lastHealth.import_bundle_age_minutes + "m" : "—"))}</p>` : ""}
+      </section>
+    </div>`;
   }
 
   function workstationPageTabBarHtml(ctx) {
@@ -973,7 +1001,7 @@ const WorkstationPage = (function () {
     if (!root) return;
     const station = esc(ctx.stationLabel || "Workstation");
     const tabsHtml = workstationPageTabBarHtml(ctx);
-    const panelsHtml = `<div class="ws-page-panels">${sendMessagePanelHtml(ctx)}${historyPanelHtml(ctx)}${officeChatPanelHtml(ctx)}${askHalPanelHtml(ctx)}</div>`;
+    const panelsHtml = `<div class="ws-page-panels">${sendMessagePanelHtml(ctx)}${historyPanelHtml(ctx)}${officeChatPanelHtml(ctx)}${syncPanelHtml(ctx)}${askHalPanelHtml(ctx)}</div>`;
     const toolbar = `<span class="hp-status"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>STATION <b>${station}</b></span>`;
     const PC = typeof PageChrome !== "undefined" ? PageChrome : null;
     const compact =

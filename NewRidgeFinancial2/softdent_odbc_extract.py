@@ -74,7 +74,12 @@ def odbc_configured() -> bool:
 
 
 def consent_executor_enabled() -> bool:
-    return os.environ.get("NR2_CONSENT_EXECUTOR", "0").strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        from nr2_consent_executor import consent_executor_enabled as _enabled
+
+        return _enabled()
+    except Exception:
+        return os.environ.get("NR2_CONSENT_EXECUTOR", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def ensure_sd_schema(conn: sqlite3.Connection) -> None:

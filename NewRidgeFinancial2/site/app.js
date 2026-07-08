@@ -121,6 +121,7 @@ let workstationPopupBaselineDone = false;
 let officeChannelPollTimer = null;
 let officeWorkflowDigestKey = "";
 let officeChannelHubLive = false;
+let workstationSyncStatus = { loading: false, message: "", consentEnabled: true, lastHealth: null };
 let halAudit = [];
 let halAskDraft = "";
 let halAskLoading = false;
@@ -193,7 +194,7 @@ function enforceSingleFinancialTab() {
       }
       if (window.BroadcastChannel) {
         const bc = new BroadcastChannel("nr2_tab");
-        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10072" });
+        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10073" });
       }
     }
   }
@@ -961,7 +962,159 @@ function renderWorkstationScreen(options) {
     halModels,
     halWidgetFeed,
     halProgramSnapshot,
+    workstationSyncStatus,
   });
+}
+
+async function postOperatorAudit(action, detail) {
+  const pageId = NR2_WORKSTATION_ONLY ? "workstation" : resolvePageId(window.location.hash);
+  const payload = {
+    action: String(action || "unknown"),
+    pageKey: pageId,
+    widgetKey: detail && detail.widgetKey ? detail.widgetKey : null,
+    detail: detail && typeof detail === "object" ? detail : { intent: String(detail || "") },
+  };
+  try {
+    if (typeof DesktopBridge !== "undefined" && typeof DesktopBridge.loopbackJson === "function") {
+      await DesktopBridge.loopbackJson("/api/audit/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return;
+    }
+    if (typeof fetch !== "function") return;
+    const port = window.location.port || "8765";
+    const host = window.location.hostname || "127.0.0.1";
+    await fetch(`${window.location.protocol}//${host}:${port}/api/audit/log`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+  } catch {
+    /* fire-and-forget */
+  }
+}
+
+async function loadLocalSidenotesBridge() {
+  try {
+    let data = null;
+    if (typeof DesktopBridge !== "undefined" && typeof DesktopBridge.loopbackJson === "function") {
+      data = await DesktopBridge.loopbackJson("/api/sidenotes/local");
+    } else if (typeof fetch === "function") {
+      const port = window.location.port || "8765";
+      const host = window.location.hostname || "127.0.0.1";
+      const res = await fetch(`${window.location.protocol}//${host}:${port}/api/sidenotes/local`, { cache: "no-store" });
+      if (!res.ok) return;
+      data = await res.json();
+    }
+    const notes = (data && data.notes) || [];
+    if (!notes.length || !window.HalSkills) return;
+    notes.forEach((row) => {
+      const exists = halSideNotes.some((n) => n.noteId === row.id || n.sourceId === row.id);
+      if (exists) return;
+      const note = HalSkills.createSideNote(
+        {
+          text: `[${row.source || "workstation"}${row.station ? " · " + row.station : ""}] ${row.text}`,
+          source: row.source || "workstation",
+          sourceId: row.id,
+        },
+        { actor: "sidenote-bridge" },
+      );
+      halSideNotes.unshift(note);
+    });
+    if (notes.length) saveSideNotes();
+  } catch {
+    /* optional bridge */
+  }
+}
+
+async function refreshWorkstationSyncHealth() {
+  if (!window.Services || typeof Services.fetchHealth !== "function") return;
+  const health = await Services.fetchHealth();
+  if (health) {
+    workstationSyncStatus = Object.assign({}, workstationSyncStatus, {
+      lastHealth: health,
+      consentEnabled: health.consentExecutorEnabled !== false,
+    });
+  }
+}
+
+async function runWorkstationSync(kind) {
+  if (!window.Services) return;
+  const key = String(kind || "").toLowerCase();
+  workstationSyncStatus = Object.assign({}, workstationSyncStatus, {
+    loading: true,
+    message: key === "qb" ? "Syncing QuickBooks…" : key === "softdent" ? "Syncing SoftDent…" : "Refreshing imports…",
+  });
+  renderWorkstationScreen({ force: true });
+  postOperatorAudit("workstation:sync:" + key, { widgetKey: "workstationSync" });
+  try {
+    let result = null;
+    if (key === "qb" && typeof Services.syncQuickBooks === "function") {
+      result = await Services.syncQuickBooks({ force: true });
+    } else if (key === "softdent" && typeof Services.syncSoftdentOdbc === "function") {
+      result = await Services.syncSoftdentOdbc();
+    } else if (typeof Services.refreshImports === "function") {
+      result = await Services.refreshImports({ reason: "workstation-sync", waitForCompletion: true });
+    }
+    const ok = !result || result.ok !== false;
+    const detail =
+      result && result.refreshed
+        ? "QuickBooks refresh completed."
+        : result && result.message
+          ? result.message
+          : result && result.error
+            ? String(result.error)
+            : ok
+              ? "Sync completed."
+              : "Sync failed.";
+    workstationSyncStatus = Object.assign({}, workstationSyncStatus, {
+      loading: false,
+      message: detail,
+    });
+    showHalActionNotice(detail, ok ? "info" : "warn");
+    await refreshWorkstationSyncHealth();
+  } catch (err) {
+    workstationSyncStatus = Object.assign({}, workstationSyncStatus, {
+      loading: false,
+      message: err && err.message ? err.message : "Sync failed.",
+    });
+    showHalActionNotice(workstationSyncStatus.message, "warn");
+  }
+  renderWorkstationScreen({ force: true });
+}
+
+async function postWorkstationSidenote(text) {
+  const station = workstationStationLabel();
+  const payload = {
+    text,
+    source: "workstation",
+    station: station !== "Workstation" ? station : null,
+    timestamp: new Date().toISOString(),
+  };
+  try {
+    if (typeof DesktopBridge !== "undefined" && typeof DesktopBridge.loopbackJson === "function") {
+      return DesktopBridge.loopbackJson("/api/sidenote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    }
+    if (typeof fetch !== "function") return null;
+    const port = window.location.port || "8766";
+    const host = window.location.hostname || "127.0.0.1";
+    const res = await fetch(`${window.location.protocol}//${host}:${port}/api/sidenote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
 }
 
 async function handleWorkstationHalSubmit(query) {
@@ -2891,6 +3044,7 @@ function routeHalCommand(rawQuery) {
 function logAudit(query, intent) {
   halAudit.push({ time: new Date().toLocaleTimeString(), query, intent });
   persistLocal("halAudit", halAudit);
+  postOperatorAudit(String(query || intent || "audit"), { intent: String(intent || "") });
 }
 
 function normalizeActions(actions) {
@@ -4624,7 +4778,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10072&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10073&__nr2_purge=1</div>';
     return;
   }
   const MC =
@@ -5222,6 +5376,17 @@ if (workstationPage) {
       renderWorkstationScreen();
       return;
     }
+    const syncBtn = event.target.closest("[data-ws-sync]");
+    if (syncBtn) {
+      await runWorkstationSync(syncBtn.getAttribute("data-ws-sync"));
+      return;
+    }
+    const openHal = event.target.closest("[data-ws-open-hal]");
+    if (openHal) {
+      const url = `${String(window.NR2_HAL_HUB_URL || "http://127.0.0.1:8765").replace(/\/+$/, "")}/#hal`;
+      window.open(url, "_blank", "noopener");
+      return;
+    }
     const pageTab = event.target.closest("[data-ws-page-tab]");
     if (pageTab) {
       const next = String(pageTab.getAttribute("data-ws-page-tab") || "send").toLowerCase();
@@ -5232,13 +5397,18 @@ if (workstationPage) {
             ? "history"
             : next === "officechat"
               ? "officechat"
-              : "send";
+              : next === "sync"
+                ? "sync"
+                : "send";
       if (workstationMainTab === "history" || workstationMainTab === "officechat") {
         markWorkstationInboxRead(mergedInboxMessagesForUi());
       }
       if (workstationMainTab === "officechat") {
         officeChannelTargets = ["all"];
         officeChannelGroup = "everyone";
+      }
+      if (workstationMainTab === "sync") {
+        refreshWorkstationSyncHealth().then(() => renderWorkstationScreen({ force: true }));
       }
       if (workstationMainTab !== "send" && workstationMainTab !== "officechat") workstationPromptsEditing = false;
       renderWorkstationScreen();
@@ -5606,8 +5776,10 @@ async function boot() {
   if (!NR2_WORKSTATION_ONLY) startHalHubDispatcher();
   if (NR2_WORKSTATION_ONLY) {
     startWorkstationHubHeartbeat();
+    refreshWorkstationSyncHealth().catch(() => {});
     return;
   }
+  loadLocalSidenotesBridge().catch(() => {});
   if (typeof ImportCoordinator !== "undefined") {
     ImportCoordinator.refresh({ reason: "boot" })
       .then(() => forceHalWidgetPlacement({ reason: "boot" }))

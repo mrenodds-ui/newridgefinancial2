@@ -2,7 +2,7 @@
  * NR2 Office Workstation — standalone program schema (not part of financial app nav).
  */
 const WorkstationSchema = (function () {
-  const SCHEMA_VERSION = "hal-10072";
+  const SCHEMA_VERSION = "hal-10073";
 
   const PROGRAM = {
     id: "nr2-workstation",

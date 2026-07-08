@@ -1,8 +1,8 @@
 {
-  "BUILD_ID": "hal-10072",
-  "assetVersion": "hal-10072",
-  "schemaVersion": "hal-10072",
+  "BUILD_ID": "hal-10073",
+  "assetVersion": "hal-10073",
+  "schemaVersion": "hal-10073",
   "REQUIRED_EPOCH": "moonshot-mockup",
-  "builtAt": "2026-07-08T22:00:00.000Z",
-  "notes": "Moonshot Tier 3: HAL cross-domain synthesis + proactive morning briefings (hal-10072)."
+  "builtAt": "2026-07-08T23:00:00.000Z",
+  "notes": "Moonshot Tier 5-6: workstation sync parity, backup, health, audit, sidenotes bridge (hal-10073)."
 }

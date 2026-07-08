@@ -33,6 +33,13 @@ const DesktopBridge = (function () {
     if (typeof window === "undefined" || !window.location) {
       return `https://127.0.0.1:8765${path}`;
     }
+    if (typeof globalThis !== "undefined" && globalThis.NR2_WORKSTATION_ONLY) {
+      const hub =
+        (typeof window !== "undefined" && window.NR2_HAL_HUB_URL) ||
+        (typeof window !== "undefined" && window.NR2_BUILD && window.NR2_BUILD.halHubUrl) ||
+        "http://127.0.0.1:8765";
+      return `${String(hub).replace(/\/+$/, "")}${path}`;
+    }
     const port = window.location.port || "8765";
     const host = (typeof window !== "undefined" && window.location && window.location.hostname) || "127.0.0.1";
     const protocol = (typeof window !== "undefined" && window.location && window.location.protocol) || "http:";

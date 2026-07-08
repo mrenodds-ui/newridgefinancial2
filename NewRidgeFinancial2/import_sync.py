@@ -936,6 +936,15 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
     except Exception as exc:
         result["warnings"].append(f"Document queue sync skipped: {exc}")
 
+    try:
+        from backup_db import run_scheduled_backup
+        from local_store import LocalStore
+
+        backup_store = LocalStore(REPO_ROOT / "app_data" / "nr2")
+        result["backup"] = run_scheduled_backup(backup_store)
+    except Exception as exc:
+        result["warnings"].append(f"SQLite backup skipped: {exc}")
+
     return result
 
 

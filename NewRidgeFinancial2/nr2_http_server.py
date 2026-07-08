@@ -878,8 +878,10 @@ class NR2BottleServer(BottleServer):
 
         @app.get("/api/health")
         def health_api():
+            from import_loader import load_import_bundle
             from integration_health import integration_health_snapshot
             from nr2_db_crypto import db_encryption_enabled
+            from nr2_consent_executor import consent_executor_enabled
             from softdent_odbc_extract import read_extract_status
 
             store = _local_store()
@@ -891,9 +893,26 @@ class NR2BottleServer(BottleServer):
             backup_dir = NR2_DATA_DIR / "backups"
             backup_last = None
             if backup_dir.is_dir():
-                backups = sorted(backup_dir.glob("*.sqlite3*"), key=lambda p: p.stat().st_mtime, reverse=True)
+                backups = sorted(backup_dir.glob("nr2-*.sqlite3"), key=lambda p: p.stat().st_mtime, reverse=True)
                 if backups:
                     backup_last = datetime.fromtimestamp(backups[0].stat().st_mtime, tz=timezone.utc).isoformat()
+            import_bundle_age_minutes = None
+            last_qb_sync = None
+            try:
+                bundle = load_import_bundle(sync=False)
+                loaded_at = bundle.get("loadedAt") or (bundle.get("syncStatus") or {}).get("completedAt")
+                if loaded_at:
+                    dt = datetime.fromisoformat(str(loaded_at).replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    import_bundle_age_minutes = int((datetime.now(timezone.utc) - dt).total_seconds() / 60)
+                qb = bundle.get("quickbooks") if isinstance(bundle.get("quickbooks"), dict) else {}
+                last_qb_sync = qb.get("lastSync") or qb.get("syncedAt") or (bundle.get("syncStatus") or {}).get("completedAt")
+            except Exception:
+                pass
+            db_size_mb = None
+            if db_ok:
+                db_size_mb = round(store.db_path.stat().st_size / (1024 * 1024), 2)
             payload = {
                 "ok": db_ok and ollama_ok,
                 "db": db_ok,
@@ -905,9 +924,96 @@ class NR2BottleServer(BottleServer):
                 "lastOdbcExtract": sd_extract.get("lastExtractAt"),
                 "softdentOdbcMode": sd_extract.get("lastMode"),
                 "softdentSdTablesPopulated": sd_extract.get("populatedTables"),
+                "import_bundle_age_minutes": import_bundle_age_minutes,
+                "last_qb_sync": last_qb_sync,
+                "db_size_mb": db_size_mb,
+                "consentExecutorEnabled": consent_executor_enabled(),
             }
             status = 200 if payload["ok"] else 503
             return _json_response(payload, status=status)
+
+        @app.post("/api/audit/log")
+        def operator_audit_log_api():
+            from operator_audit_store import append_operator_audit
+
+            payload = bottle.request.json or {}
+            action = str(payload.get("action") or "").strip()
+            if not action:
+                return _json_response({"ok": False, "error": "action required"}, status=400)
+            store = _local_store()
+            with store._connect() as conn:
+                row = append_operator_audit(
+                    conn,
+                    action=action,
+                    page_key=str(payload.get("pageKey") or payload.get("page_key") or "").strip() or None,
+                    widget_key=str(payload.get("widgetKey") or payload.get("widget_key") or "").strip() or None,
+                    detail=payload.get("detail") if isinstance(payload.get("detail"), dict) else None,
+                    session_hash=str(payload.get("sessionHash") or payload.get("session_hash") or "").strip() or None,
+                )
+                conn.commit()
+            return _json_response({"ok": True, "record": row})
+
+        @app.get("/api/audit/operator")
+        def operator_audit_tail_api():
+            from operator_audit_store import read_operator_audit_tail
+
+            limit = int(bottle.request.params.get("limit") or 50)
+            store = _local_store()
+            with store._connect() as conn:
+                items = read_operator_audit_tail(conn, limit=limit)
+            return _json_response({"ok": True, "items": items})
+
+        @app.post("/api/sidenote")
+        def sidenote_bridge_api():
+            from sidenotes_local_store import insert_sidenote_local
+
+            payload = bottle.request.json or {}
+            text = str(payload.get("text") or "").strip()
+            if not text:
+                return _json_response({"ok": False, "error": "text required"}, status=400)
+            store = _local_store()
+            try:
+                with store._connect() as conn:
+                    note = insert_sidenote_local(
+                        conn,
+                        text=text,
+                        source=str(payload.get("source") or "workstation"),
+                        station=str(payload.get("station") or payload.get("from") or "").strip() or None,
+                        timestamp=str(payload.get("timestamp") or "").strip() or None,
+                    )
+                    conn.commit()
+            except ValueError as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=400)
+            return _json_response({"ok": True, "note": note})
+
+        @app.get("/api/sidenotes/local")
+        def sidenotes_local_api():
+            from sidenotes_local_store import list_sidenotes_local
+
+            limit = int(bottle.request.params.get("limit") or 48)
+            store = _local_store()
+            with store._connect() as conn:
+                notes = list_sidenotes_local(conn, limit=limit)
+            return _json_response({"ok": True, "notes": notes})
+
+        @app.post("/api/admin/backup-db")
+        def backup_db_api():
+            from backup_db import run_scheduled_backup
+            from nr2_consent_executor import consent_executor_enabled
+
+            if not consent_executor_enabled():
+                return _json_response(
+                    {
+                        "ok": False,
+                        "error": "consent_executor_disabled",
+                        "message": "Set NR2_CONSENT_EXECUTOR=1 to run backups.",
+                    },
+                    status=403,
+                )
+            store = _local_store()
+            result = run_scheduled_backup(store)
+            status = 200 if result.get("ok") else 500
+            return _json_response(result, status=status)
 
         @app.get("/api/audit-log/mutations")
         def audit_log_mutations_api():
