@@ -1617,6 +1617,93 @@ const PageCanvasData = (function () {
     }));
   }
 
+  function analyticsApi() {
+    return typeof NR2Analytics !== "undefined" ? NR2Analytics : null;
+  }
+
+  function nr2ProductionReconciliation() {
+    const A = analyticsApi();
+    return A ? A.productionReconciliation(snapshot) : { rows: [], hasData: false };
+  }
+
+  function nr2CollectionLag() {
+    const A = analyticsApi();
+    return A ? A.collectionLag(snapshot) : { avgLagDays: null, hasData: false };
+  }
+
+  function quickbooksMonthlyRevenueSeries() {
+    const A = analyticsApi();
+    return A ? A.quickbooksMonthlyRevenue(snapshot) : { labels: [], values: [], hasData: false };
+  }
+
+  function softdentProductionDailySeries() {
+    const A = analyticsApi();
+    return A ? A.softdentProductionDaily(snapshot) : { points: [], hasData: false, granularity: "none" };
+  }
+
+  function nr2KpiRibbonTiles() {
+    const A = analyticsApi();
+    return A ? A.kpiRibbon(snapshot) : { tiles: [], hasData: false };
+  }
+
+  function qbReportsApi() {
+    return typeof NR2QbReports !== "undefined" ? NR2QbReports : null;
+  }
+
+  function softdentDailyApi() {
+    return typeof NR2SoftdentDaily !== "undefined" ? NR2SoftdentDaily : null;
+  }
+
+  function quickbooksBalanceSheetSummary() {
+    const Q = qbReportsApi();
+    return Q ? Q.balanceSheetSummary(snapshot) : { hasData: false, assets: [] };
+  }
+
+  function quickbooksCashFlowTrend() {
+    const Q = qbReportsApi();
+    return Q ? Q.cashFlowTrend(snapshot) : { hasData: false, labels: [], net: [] };
+  }
+
+  function quickbooksNetIncomeSummary() {
+    const Q = qbReportsApi();
+    return Q ? Q.netIncomeSummary(snapshot) : { hasData: false };
+  }
+
+  function quickbooksRevenueByService() {
+    const Q = qbReportsApi();
+    return Q ? Q.revenueByService(snapshot) : { hasData: false, slices: [] };
+  }
+
+  function quickbooksQbArAging() {
+    const Q = qbReportsApi();
+    return Q ? Q.arAging(snapshot) : { hasData: false, buckets: [] };
+  }
+
+  function softdentCollectionsDailySeries() {
+    const S = softdentDailyApi();
+    return S ? S.collectionsDaily(snapshot) : { hasData: false, labels: [], values: [] };
+  }
+
+  function softdentNewPatientsMtdData() {
+    const S = softdentDailyApi();
+    return S ? S.newPatientsMtd(snapshot) : { hasData: false, count: 0 };
+  }
+
+  function softdentClaimsOutstandingData() {
+    const S = softdentDailyApi();
+    return S ? S.claimsOutstanding(snapshot) : { hasData: false, claims: [] };
+  }
+
+  function softdentProviderProductionData() {
+    const S = softdentDailyApi();
+    return S ? S.providerProduction(snapshot) : { hasData: false, providers: [] };
+  }
+
+  function softdentAppointmentsSnapshotData() {
+    const S = softdentDailyApi();
+    return S ? S.appointmentsSnapshot(snapshot) : { hasData: false, appointments: [] };
+  }
+
   function escHtml(value) {
     return String(value == null ? "" : value)
       .replace(/&/g, "&amp;")
@@ -1706,6 +1793,21 @@ const PageCanvasData = (function () {
     taxMemoTopics,
     taxBookIncomeRows,
     taxEbitdaRows,
+    nr2ProductionReconciliation,
+    nr2CollectionLag,
+    quickbooksMonthlyRevenueSeries,
+    softdentProductionDailySeries,
+    nr2KpiRibbonTiles,
+    quickbooksBalanceSheetSummary,
+    quickbooksCashFlowTrend,
+    quickbooksNetIncomeSummary,
+    quickbooksRevenueByService,
+    quickbooksQbArAging,
+    softdentCollectionsDailySeries,
+    softdentNewPatientsMtdData,
+    softdentClaimsOutstandingData,
+    softdentProviderProductionData,
+    softdentAppointmentsSnapshotData,
     fmt,
   };
 })();

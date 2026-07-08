@@ -1,8 +1,8 @@
-{
-  "BUILD_ID": "hal-10068",
-  "assetVersion": "hal-10068",
-  "schemaVersion": "hal-10068",
-  "REQUIRED_EPOCH": "moonshot-mockup",
-  "builtAt": "2026-07-08T02:45:00.000Z",
-  "notes": "Moonshot full-capacity Phases 1–5: HAL mock parity, SoftDent stale badges, QB auto-sync, staff glow/charts, workstation chrome (hal-10068)."
-}
+{
+  "BUILD_ID": "hal-10072",
+  "assetVersion": "hal-10072",
+  "schemaVersion": "hal-10072",
+  "REQUIRED_EPOCH": "moonshot-mockup",
+  "builtAt": "2026-07-08T22:00:00.000Z",
+  "notes": "Moonshot Tier 3: HAL cross-domain synthesis + proactive morning briefings (hal-10072)."
+}

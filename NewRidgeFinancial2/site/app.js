@@ -193,7 +193,7 @@ function enforceSingleFinancialTab() {
       }
       if (window.BroadcastChannel) {
         const bc = new BroadcastChannel("nr2_tab");
-        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10068" });
+        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10072" });
       }
     }
   }
@@ -1053,6 +1053,7 @@ function invalidateProgramCaches(reason) {
 
 // HAL proactive program assessment (independent local recommendations).
 let halProactiveBriefing = null;
+let halMorningBriefing = null;
 
 async function runHalProactiveCycle(options) {
   if (!window.HalProactive) return null;
@@ -1506,6 +1507,48 @@ function buildPageHalContext(pageId) {
   return lines.join("\n");
 }
 
+async function handleHalActuatorClick(button) {
+  if (!button || !button.hasAttribute("data-hal-consent")) return;
+  const actionId = button.getAttribute("data-hal-actuator") || "";
+  const target = button.getAttribute("data-hal-actuator-target") || button.getAttribute("data-open-page") || null;
+  const halAction = button.getAttribute("data-hal-action");
+  if (halAction === "openPage" && target) {
+    logAudit("HAL actuator navigate: " + target, "actuator: consent");
+    select(target);
+    return;
+  }
+  if (
+    window.HalAgentLoop &&
+    typeof HalAgentLoop.executeActuatorIfConsented === "function" &&
+    (actionId === "refresh-imports" || actionId === "sync-qb" || actionId === "sync-softdent")
+  ) {
+    button.disabled = true;
+    try {
+      const result = await HalAgentLoop.executeActuatorIfConsented(
+        { actionId, target, label: button.textContent },
+        buildHalAgentCtx(),
+      );
+      if (result && result.navigate) {
+        select(result.navigate);
+      } else if (result && result.ok) {
+        showHalActionNotice(result.message || "Action completed.", "info");
+        invalidateProgramCaches("hal-actuator");
+        scheduleHalWidgetRefresh();
+      } else {
+        showHalActionNotice("Action blocked — " + ((result && result.reason) || "unavailable"), "warn");
+      }
+    } finally {
+      button.disabled = false;
+    }
+    return;
+  }
+  if (halAction === "refreshImports" || actionId === "refresh-imports") {
+    await handleHalSubmit("Refresh imports");
+    return;
+  }
+  await handleHalSubmit(button.getAttribute("data-hal-followup") || button.textContent || "Proceed");
+}
+
 async function runHalPageCmd(cmd, opts) {
   const text = String(cmd || "").trim();
   if (!text) return;
@@ -1535,7 +1578,7 @@ async function handleHalChromeInteraction(event) {
     return true;
   }
   const widgetCard = event.target.closest("[data-hal-widget-key]");
-  if (widgetCard && !event.target.closest("[data-hal-widget-nav]") && !event.target.closest("[data-hal-action]")) {
+  if (widgetCard && !event.target.closest("[data-hal-widget-nav]") && !event.target.closest("[data-hal-action]") && !event.target.closest("[data-hal-actuator]")) {
     let cmd = widgetCard.getAttribute("data-hal-cmd");
     if (!cmd) {
       const key = widgetCard.getAttribute("data-hal-widget-key");
@@ -1545,6 +1588,11 @@ async function handleHalChromeInteraction(event) {
       await runHalPageCmd(cmd);
       return true;
     }
+  }
+  const actuatorBtn = event.target.closest("[data-hal-actuator]");
+  if (actuatorBtn) {
+    await handleHalActuatorClick(actuatorBtn);
+    return true;
   }
   const cmdEl = event.target.closest("[data-hal-cmd]");
   if (cmdEl) {
@@ -2888,7 +2936,16 @@ function formatHalMessageHtml(text) {
       "</pre></details>"
     );
   });
-  const withTools = withPatches.replace(/<<<tool[\s\S]*?>>>/gi, "");
+  const withActuators = withPatches.replace(/<<<actuator\s+([\s\S]*?)>>>/gi, (full, body) => {
+    if (window.HalAgentLoop && typeof HalAgentLoop.parseActuatorProposals === "function") {
+      const proposals = HalAgentLoop.parseActuatorProposals(full);
+      if (proposals.length && typeof HalAgentLoop.renderActuatorButtonsHtml === "function") {
+        return `<div class="hal-msg__actuators prompt-chips">${HalAgentLoop.renderActuatorButtonsHtml(proposals)}</div>`;
+      }
+    }
+    return "";
+  });
+  const withTools = withActuators.replace(/<<<tool[\s\S]*?>>>/gi, "");
 
   const blocks = [];
   let lastIndex = 0;
@@ -3012,6 +3069,11 @@ function renderChatLog() {
       logAudit("Open " + target, "navigate: confirmed");
       closeDrawer();
       select(target);
+    });
+  });
+  log.querySelectorAll("[data-hal-actuator]").forEach((button) => {
+    button.addEventListener("click", () => {
+      handleHalActuatorClick(button);
     });
   });
   log.querySelectorAll("[data-hal-followup]").forEach((button) => {
@@ -4549,6 +4611,7 @@ function renderHalScreen() {
     halWidgetFeed,
     halProgramSnapshot,
     halProactiveBriefing,
+    halMorningBriefing,
     halStressTest,
     halAgentHealth: window.HalAgent ? HalAgent.getHealth() : null,
     sidenotesHubPath: nr2SidenotesHubPath,
@@ -4561,7 +4624,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10068&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10072&__nr2_purge=1</div>';
     return;
   }
   const MC =
@@ -4852,7 +4915,7 @@ if (appPage) {
       return;
     }
     const widgetCard = event.target.closest("[data-hal-widget-key]");
-    if (widgetCard && !event.target.closest("[data-hal-widget-nav]") && !event.target.closest("[data-hal-action]")) {
+    if (widgetCard && !event.target.closest("[data-hal-widget-nav]") && !event.target.closest("[data-hal-action]") && !event.target.closest("[data-hal-actuator]")) {
       let cmd = widgetCard.getAttribute("data-hal-cmd");
       if (!cmd) {
         const key = widgetCard.getAttribute("data-hal-widget-key");
@@ -4876,6 +4939,12 @@ if (appPage) {
     const suggest = event.target.closest("[data-hal-suggest]");
     if (suggest) {
       await runHalPageCmd(suggest.getAttribute("data-hal-suggest"));
+      return;
+    }
+    const actuatorBtn = event.target.closest("[data-hal-actuator]");
+    if (actuatorBtn) {
+      event.stopPropagation();
+      await handleHalActuatorClick(actuatorBtn);
       return;
     }
     const followup = event.target.closest("[data-hal-followup]");
@@ -5504,6 +5573,22 @@ async function boot() {
   await refreshHalWidgetFeed().catch(() => {
     /* widget feed optional on boot */
   });
+  if (!skipAutonomousHal && window.HalProactive && typeof HalProactive.maybeFireMorningBriefingOnBoot === "function") {
+    HalProactive.maybeFireMorningBriefingOnBoot(buildHalAgentCtx())
+      .then((card) => {
+        if (!card) return;
+        halMorningBriefing = card;
+        if (halProactiveBriefing) {
+          halProactiveBriefing.morningBriefing = card;
+        }
+        renderHalScreen();
+        if (window.HalHubClient && typeof HalHubClient.pushMorningBriefingToWorkstation === "function") {
+          HalHubClient.pushMorningBriefingToWorkstation(card).catch(() => {});
+        }
+        showHalActionNotice(`Morning briefing: ${card.sentence}`, "info");
+      })
+      .catch(() => {});
+  }
   refreshOpsHealthStatus().catch(() => {
     /* ops health optional on boot */
   });

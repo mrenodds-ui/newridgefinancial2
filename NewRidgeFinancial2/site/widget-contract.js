@@ -27,6 +27,46 @@ const WidgetContract = (function () {
         ytdCollectionRate: { dataset: "softdent.dashboard", dashboard: "financial", path: "productionTrend.ytd", label: "Trailing Collection Rate" },
       },
     },
+    nr2ProductionReconciliation: {
+      title: "Production vs QuickBooks Reconciliation",
+      navTarget: "financial",
+      metrics: {
+        productionTrendLatest: { dataset: "softdent.dashboard", dashboard: "financial", path: "productionTrend.production", index: -1 },
+        monthlyRevenue: { dataset: "quickbooks.revenue", dashboard: "quickbooks", path: "revenue" },
+      },
+    },
+    nr2CollectionLag: {
+      title: "Collection Lag (DSO)",
+      navTarget: "financial",
+      metrics: {
+        collectionRate: { dataset: "softdent.dashboard", dashboard: "financial", path: "payerMix.rate" },
+        totalOutstanding: { dataset: "softdent.ar", dashboard: "ar", path: "kpis", index: 0, subpath: "value" },
+      },
+    },
+    nr2KpiRibbon: {
+      title: "Cross-Analytics KPI Ribbon",
+      navTarget: "financial",
+      metrics: {
+        productionTotal: { dataset: "softdent.dashboard", dashboard: "softdent", path: "production" },
+        monthlyRevenue: { dataset: "quickbooks.revenue", dashboard: "quickbooks", path: "revenue" },
+      },
+    },
+    softdentProductionDaily: {
+      title: "SoftDent Production Trend",
+      navTarget: "financial",
+      metrics: {
+        productionTrendLatest: { dataset: "softdent.dashboard", dashboard: "financial", path: "productionTrend.production", index: -1 },
+        productionMtd: { dataset: "softdent.dashboard", dashboard: "financial", path: "productionMtd.value" },
+      },
+    },
+    quickbooksMonthlyRevenue: {
+      title: "Monthly Revenue Trend",
+      navTarget: "quickbooks",
+      metrics: {
+        monthlyRevenue: { dataset: "quickbooks.revenue", dashboard: "quickbooks", path: "revenue" },
+        monthlyExpensesLatest: { dataset: "quickbooks.expenses", dashboard: "quickbooks", path: "expenses" },
+      },
+    },
     payerMixAndCollections: {
       title: "Payer Mix & Collections",
       navTarget: "financial",

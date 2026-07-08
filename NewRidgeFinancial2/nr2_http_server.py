@@ -880,9 +880,11 @@ class NR2BottleServer(BottleServer):
         def health_api():
             from integration_health import integration_health_snapshot
             from nr2_db_crypto import db_encryption_enabled
+            from softdent_odbc_extract import read_extract_status
 
             store = _local_store()
             health = integration_health_snapshot(store)
+            sd_extract = read_extract_status()
             ollama_ok = bool((health.get("ollama") or {}).get("ok"))
             db_ok = store.db_path.is_file()
             readiness = _get_import_readiness()
@@ -900,6 +902,9 @@ class NR2BottleServer(BottleServer):
                 "readinessLevel": readiness.get("level"),
                 "backupLastAt": backup_last,
                 "encryptionEnabled": db_encryption_enabled(),
+                "lastOdbcExtract": sd_extract.get("lastExtractAt"),
+                "softdentOdbcMode": sd_extract.get("lastMode"),
+                "softdentSdTablesPopulated": sd_extract.get("populatedTables"),
             }
             status = 200 if payload["ok"] else 503
             return _json_response(payload, status=status)
@@ -1952,6 +1957,157 @@ class NR2BottleServer(BottleServer):
             status = 200 if result.get("allowed") else 403
             bottle.response.status = status
             return _json_response(result)
+
+        @app.get("/api/analytics/production-reconciliation")
+        def analytics_production_reconciliation_api():
+            from nr2_analytics import production_reconciliation
+
+            return _json_response(production_reconciliation())
+
+        @app.get("/api/analytics/collection-lag")
+        def analytics_collection_lag_api():
+            from nr2_analytics import collection_lag
+
+            return _json_response(collection_lag())
+
+        @app.get("/api/qb/monthly-revenue")
+        def qb_monthly_revenue_api():
+            from nr2_analytics import quickbooks_monthly_revenue
+
+            return _json_response(quickbooks_monthly_revenue())
+
+        @app.get("/api/softdent/production-daily")
+        def softdent_production_daily_api():
+            from nr2_analytics import softdent_production_daily
+
+            return _json_response(softdent_production_daily())
+
+        @app.get("/api/analytics/kpi-ribbon")
+        def analytics_kpi_ribbon_api():
+            from nr2_analytics import kpi_ribbon
+
+            return _json_response(kpi_ribbon())
+
+        @app.get("/api/qb/balance-sheet")
+        def qb_balance_sheet_api():
+            from qb_connector import get_balance_sheet
+
+            return _json_response(get_balance_sheet())
+
+        @app.get("/api/qb/cash-flow")
+        def qb_cash_flow_api():
+            from qb_connector import get_cash_flow_trend
+
+            return _json_response(get_cash_flow_trend())
+
+        @app.get("/api/qb/net-income")
+        def qb_net_income_api():
+            from qb_connector import get_net_income_summary
+
+            return _json_response(get_net_income_summary())
+
+        @app.get("/api/qb/revenue-by-service")
+        def qb_revenue_by_service_api():
+            from qb_connector import get_revenue_by_service
+
+            return _json_response(get_revenue_by_service())
+
+        @app.get("/api/qb/ap-aging")
+        def qb_ap_aging_api():
+            from qb_connector import get_ap_aging
+
+            return _json_response(get_ap_aging())
+
+        @app.get("/api/qb/ar-aging")
+        def qb_ar_aging_api():
+            from qb_connector import get_ar_aging
+
+            return _json_response(get_ar_aging())
+
+        @app.get("/api/qb/credit-cards")
+        def qb_credit_cards_api():
+            from qb_connector import get_credit_card_balances
+
+            return _json_response(get_credit_card_balances())
+
+        @app.get("/api/softdent/collections-daily")
+        def softdent_collections_daily_api():
+            from nr2_softdent_daily import collections_daily
+
+            return _json_response(collections_daily())
+
+        @app.get("/api/softdent/new-patients-mtd")
+        def softdent_new_patients_mtd_api():
+            from nr2_softdent_daily import new_patients_mtd
+
+            return _json_response(new_patients_mtd())
+
+        @app.get("/api/softdent/appointments-snapshot")
+        def softdent_appointments_snapshot_api():
+            from nr2_softdent_daily import appointments_snapshot
+
+            return _json_response(appointments_snapshot())
+
+        @app.get("/api/softdent/claims-outstanding")
+        def softdent_claims_outstanding_api():
+            from nr2_softdent_daily import claims_outstanding
+
+            return _json_response(claims_outstanding())
+
+        @app.get("/api/softdent/provider-production")
+        def softdent_provider_production_api():
+            from nr2_softdent_daily import provider_production
+
+            return _json_response(provider_production())
+
+        @app.get("/api/softdent/adjustment-log")
+        def softdent_adjustment_log_api():
+            from nr2_softdent_daily import adjustment_log
+
+            return _json_response(adjustment_log())
+
+        @app.get("/api/softdent/patient-retention")
+        def softdent_patient_retention_api():
+            from nr2_softdent_daily import patient_retention
+
+            return _json_response(patient_retention())
+
+        @app.post("/api/admin/extract-softdent-odbc")
+        def extract_softdent_odbc_api():
+            from softdent_odbc_extract import consent_executor_enabled, ensure_softdent_odbc_fresh
+
+            if not consent_executor_enabled():
+                bottle.response.status = 403
+                return _json_response(
+                    {
+                        "ok": False,
+                        "error": "consent_executor_disabled",
+                        "message": "Set NR2_CONSENT_EXECUTOR=1 to run SoftDent ODBC extract.",
+                    }
+                )
+            payload = bottle.request.json or {}
+            force = bool(payload.get("force"))
+            try:
+                max_age = int(payload.get("maxAgeMinutes") or 60)
+            except (TypeError, ValueError):
+                max_age = 60
+            result = ensure_softdent_odbc_fresh(max_age_minutes=max(1, max_age), force=force)
+            if result.get("refreshed"):
+                _audit_mutation(
+                    "softdent_odbc_extract",
+                    detail={
+                        "refreshed": True,
+                        "mode": ((result.get("extract") or {}).get("mode")),
+                        "populatedTables": int((result.get("status") or {}).get("populatedTables") or 0),
+                    },
+                )
+            return _json_response(result)
+
+        @app.get("/api/softdent/odbc-status")
+        def softdent_odbc_status_api():
+            from softdent_odbc_extract import read_extract_status
+
+            return _json_response(read_extract_status())
 
         @app.post("/api/qb/sync-if-stale")
         def qb_sync_if_stale_api():

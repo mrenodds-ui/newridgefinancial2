@@ -13,6 +13,7 @@ from softdent_practice_exports import (
     _aggregate_new_patients,
     _aggregate_treatment_plans,
     _aggregate_treatment_plans_from_production,
+    run_odbc_lane,
     sync_practice_exports,
 )
 
@@ -91,6 +92,17 @@ class SoftdentPracticeExportsTests(unittest.TestCase):
                 self.assertEqual(rows[0]["Accepted"], 12.0)
             finally:
                 conn.close()
+
+
+    def test_odbc_lane_graceful_skip_without_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "analytics.sqlite3"
+            with patch("softdent_odbc_extract.resolve_sd_sqlite_db", return_value=db_path), patch(
+                "softdent_odbc_extract._resolve_daysheet_path", return_value=None
+            ), patch("softdent_odbc_extract._resolve_claims_path", return_value=Path("")):
+                result = run_odbc_lane(force=True)
+            self.assertIn("odbc", result)
+            self.assertEqual(result["odbc"]["error"], "odbc_not_configured")
 
 
 if __name__ == "__main__":

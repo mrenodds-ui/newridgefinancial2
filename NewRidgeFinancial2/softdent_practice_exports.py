@@ -528,3 +528,15 @@ if __name__ == "__main__":
     import json as _json
 
     print(_json.dumps(sync_practice_exports(), indent=2))
+
+
+from softdent_odbc_extract import ensure_softdent_odbc_fresh, extract_softdent_odbc, read_extract_status, run_odbc_lane
+
+__all__ = [
+    "ensure_softdent_odbc_fresh",
+    "extract_softdent_odbc",
+    "read_extract_status",
+    "run_odbc_lane",
+    "sync_practice_exports",
+    "read_practice_export_datasets",
+]

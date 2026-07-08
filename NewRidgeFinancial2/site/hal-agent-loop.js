@@ -30,6 +30,12 @@
     "For run_command use query: validate-hal | node-check-agent | node-check-app | git-status.",
     "After tool results appear in context, either request more tools or write the final staff-facing answer (no <<<tool blocks in the final answer).",
     "To propose code changes, include <<<patch blocks; they may be applied automatically when task completion is enabled.",
+    "To propose operator actions (sync, refresh, navigate), include <<<actuator blocks; execution requires an explicit operator click — never run POST/automation without consent:",
+    "<<<actuator",
+    "label: Sync QuickBooks now?",
+    "action_id: refresh-imports",
+    ">>>",
+    "Allowed action_id values: refresh-imports, sync-qb, sync-softdent, navigate (add target: page-id).",
   ].join("\n");
 
   function normalizeToolId(id) {
@@ -102,6 +108,92 @@
     return String(text || "")
       .replace(/<<<tool[\s\S]*?>>>/gi, "")
       .trim();
+  }
+
+  function parseActuatorProposals(text) {
+    const blocks = [];
+    const re = /<<<actuator\s+([\s\S]*?)>>>/gi;
+    let m;
+    while ((m = re.exec(String(text || ""))) !== null) {
+      const body = m[1];
+      const labelMatch = body.match(/^\s*label:\s*(.+)$/im);
+      const actionMatch = body.match(/^\s*action_id:\s*(.+)$/im) || body.match(/^\s*action:\s*(.+)$/im);
+      const targetMatch = body.match(/^\s*target:\s*(.+)$/im);
+      if (!labelMatch || !actionMatch) continue;
+      blocks.push({
+        label: labelMatch[1].trim(),
+        actionId: actionMatch[1].trim().replace(/\s+/g, "-").toLowerCase(),
+        target: targetMatch ? targetMatch[1].trim() : null,
+        requiresConsent: true,
+      });
+    }
+    return blocks.slice(0, 4);
+  }
+
+  function stripActuatorBlocks(text) {
+    return String(text || "")
+      .replace(/<<<actuator[\s\S]*?>>>/gi, "")
+      .trim();
+  }
+
+  function proposeConsentActuators(proposals) {
+    return (proposals || []).map((item) => ({
+      label: item.label,
+      actionId: item.actionId,
+      target: item.target || null,
+      requiresConsent: item.requiresConsent !== false,
+      action:
+        item.actionId === "navigate" && item.target
+          ? { type: "openPage", page: item.target, query: item.label }
+          : item.actionId === "refresh-imports" || item.actionId === "sync-qb" || item.actionId === "sync-softdent"
+            ? { type: "refreshImports", query: item.label }
+            : { type: "followup", query: item.label },
+    }));
+  }
+
+  function renderActuatorButtonsHtml(proposals) {
+    const chips = proposeConsentActuators(proposals);
+    return chips
+      .map((chip) => {
+        const label = String(chip.label || chip.actionId || "Proceed")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/"/g, "&quot;");
+        const actionId = String(chip.actionId || "")
+          .replace(/"/g, "&quot;");
+        const target = chip.target ? ` data-hal-actuator-target="${String(chip.target).replace(/"/g, "&quot;")}"` : "";
+        if (chip.action && chip.action.type === "openPage" && chip.action.page) {
+          return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-actuator="${actionId}" data-hal-action="openPage" data-open-page="${String(chip.action.page).replace(/"/g, "&quot;")}" data-hal-consent="1"${target}>${label}</button>`;
+        }
+        if (chip.action && chip.action.type === "refreshImports") {
+          return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-actuator="${actionId}" data-hal-action="refreshImports" data-hal-consent="1"${target}>${label}</button>`;
+        }
+        return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-actuator="${actionId}" data-hal-consent="1"${target}>${label}</button>`;
+      })
+      .join("");
+  }
+
+  async function executeActuatorIfConsented(proposal, ctx) {
+    if (!proposal || !proposal.actionId) {
+      return { ok: false, reason: "no-proposal", autonomous: false };
+    }
+    const id = String(proposal.actionId).toLowerCase();
+    if (id === "navigate" && proposal.target) {
+      return { ok: true, navigate: proposal.target, autonomous: false };
+    }
+    if (id === "refresh-imports" || id === "sync-qb" || id === "sync-softdent") {
+      const Svc = ctx && ctx.Services;
+      if (Svc && typeof Svc.refreshImports === "function") {
+        await Svc.refreshImports({ reason: "hal-actuator-consent", waitForCompletion: true });
+        return { ok: true, message: "Import refresh completed.", autonomous: false };
+      }
+      if (typeof ImportCoordinator !== "undefined" && ImportCoordinator.refresh) {
+        await ImportCoordinator.refresh({ reason: "hal-actuator-consent" });
+        return { ok: true, message: "Import refresh started.", autonomous: false };
+      }
+      return { ok: false, reason: "no-refresh-path", autonomous: false };
+    }
+    return { ok: false, reason: "unknown-action", autonomous: false };
   }
 
   function shouldUseAgentLoop(query, route, plan, cfg) {
@@ -453,6 +545,11 @@
     parseCloudToolCalls,
     parseToolRequests,
     parseAllPatches,
+    parseActuatorProposals,
+    stripActuatorBlocks,
+    proposeConsentActuators,
+    renderActuatorButtonsHtml,
+    executeActuatorIfConsented,
     stripToolBlocks,
     shouldUseAgentLoop,
     suggestAutoTools,

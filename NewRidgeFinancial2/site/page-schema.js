@@ -8,11 +8,11 @@
   delete window.NR2_LEGACY_SCHEMA;
   delete window.OLD_PAGE_SCHEMA;
   delete window.PageSchemaLegacy;
-  window.__NR2_SCHEMA_LOADED = "hal-10068";
+  window.__NR2_SCHEMA_LOADED = "hal-10072";
 })();
 
 const PageSchema = (function () {
-  const SCHEMA_VERSION = "hal-10068";
+  const SCHEMA_VERSION = "hal-10072";
 
   const PRACTICE = {
     name: "New Ridge Family Dental",
@@ -48,7 +48,11 @@ const PageSchema = (function () {
       safety: "🔒 Local data only",
       widgets: [
         { key: "practiceFinancialOverview", title: "Practice Financial Overview" },
+        { key: "nr2KpiRibbon", title: "Cross-Analytics KPI Ribbon" },
         { key: "financialProductionTrend", title: "Production MTD & 12-Month Trend" },
+        { key: "nr2ProductionReconciliation", title: "Production vs QuickBooks Reconciliation" },
+        { key: "nr2CollectionLag", title: "Collection Lag (DSO)" },
+        { key: "softdentProductionDaily", title: "SoftDent Production Trend" },
         { key: "payerMixAndCollections", title: "Payer Mix & Collection Rate" },
         { key: "providerPerformance", title: "Production by Provider" },
       ],
@@ -83,6 +87,11 @@ const PageSchema = (function () {
       safety: "Read-only · HAL reads SoftDent only",
       widgets: [
         { key: "careDeliveryPerformance", title: "Care Delivery Summary" },
+        { key: "softdentCollectionsDaily", title: "Collections Trend" },
+        { key: "softdentNewPatientsMTD", title: "New Patients (MTD)" },
+        { key: "softdentClaimsOutstanding", title: "Outstanding Claims" },
+        { key: "softdentProviderProduction", title: "Provider Production (Daily)" },
+        { key: "softdentAppointmentsSnapshot", title: "Appointments Snapshot" },
         { key: "softdentArAging", title: "Accounts Receivable Aging" },
         { key: "softdentResponsibility", title: "Insurance vs Patient Balance" },
         { key: "newPatients", title: "New Patients (MTD)" },
@@ -107,6 +116,12 @@ const PageSchema = (function () {
       safety: "Read-only · HAL reads QuickBooks only",
       widgets: [
         { key: "quickbooksProfitLossDetail", title: "Profit & Loss Summary (YTD)" },
+        { key: "quickbooksMonthlyRevenue", title: "Monthly Revenue Trend" },
+        { key: "quickbooksNetIncomeSummary", title: "Net Income Summary" },
+        { key: "quickbooksBalanceSheetSummary", title: "Balance Sheet Summary" },
+        { key: "quickbooksCashFlowTrend", title: "Cash Flow Trend" },
+        { key: "quickbooksRevenueByService", title: "Revenue by Service" },
+        { key: "quickbooksArAging", title: "QuickBooks A/R Aging" },
         { key: "ebitdaNormalization", title: "EBITDA Normalization" },
         { key: "quickbooksExpenseBreakdown", title: "Operating Expenses" },
       ],
@@ -293,7 +308,7 @@ if (typeof window !== "undefined") {
   window.PageSchema = PageSchema;
 }
 
-PageSchema.SCHEMA_VERSION = "hal-10068";
+PageSchema.SCHEMA_VERSION = "hal-10072";
 Object.defineProperty(PageSchema, "LAYOUT_EPOCH", {
   value: "moonshot-mockup",
   writable: false,

@@ -145,6 +145,22 @@ const HalHubClient = (function () {
     });
   }
 
+  async function pushMorningBriefingToWorkstation(briefing) {
+    if (!briefing || !briefing.sentence) return null;
+    const domains = Array.isArray(briefing.domains) ? briefing.domains.slice(0, 4) : [];
+    const text = `[HAL Morning Briefing] ${String(briefing.sentence).slice(0, 280)}${
+      domains.length ? ` (${domains.join(" + ")})` : ""
+    }`;
+    return submitToHalHub({
+      from: "HAL",
+      role: "hal",
+      targets: ["workstation", "sidenotes"],
+      text,
+      speak: false,
+      type: "briefing",
+    });
+  }
+
   return {
     getHalHubUrl,
     submitToHalHub,
@@ -156,7 +172,11 @@ const HalHubClient = (function () {
     fetchStations,
     sendHeartbeat,
     notifyHubBroadcast,
+    pushMorningBriefingToWorkstation,
   };
 })();
 
 if (typeof globalThis !== "undefined") globalThis.HalHubClient = HalHubClient;
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = HalHubClient;
+}

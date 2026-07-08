@@ -179,3 +179,45 @@ def pull_payments_read_only(store) -> dict[str, Any]:
         }
     except Exception as exc:
         return {"ok": False, "error": "pull_failed", "message": str(exc)[:200]}
+
+
+def get_balance_sheet(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    from nr2_qb_reports import balance_sheet_summary
+
+    return balance_sheet_summary(bundle=bundle)
+
+
+def get_cash_flow_trend(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    from nr2_qb_reports import cash_flow_trend
+
+    return cash_flow_trend(bundle=bundle)
+
+
+def get_ap_aging(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    from nr2_qb_reports import ap_aging
+
+    return ap_aging(bundle=bundle)
+
+
+def get_ar_aging(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    from nr2_qb_reports import ar_aging
+
+    return ar_aging(bundle=bundle)
+
+
+def get_credit_card_balances(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    from nr2_qb_reports import credit_card_balances
+
+    return credit_card_balances(bundle=bundle)
+
+
+def get_revenue_by_service(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    from nr2_qb_reports import revenue_by_service
+
+    return revenue_by_service(bundle=bundle)
+
+
+def get_net_income_summary(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    from nr2_qb_reports import net_income_summary
+
+    return net_income_summary(bundle=bundle)

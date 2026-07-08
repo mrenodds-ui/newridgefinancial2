@@ -426,4 +426,15 @@ def sync_quickbooks_monthly_exports(
         result["periods"] = [row["Period"] for row in monthly_rows]
     else:
         result["warnings"].append("No QuickBooks period rows were available for the current or prior month.")
+    try:
+        from nr2_qb_reports import sync_extended_qb_reports
+
+        extended = sync_extended_qb_reports()
+        result["extendedReports"] = {
+            "ok": bool(extended.get("ok")),
+            "populated": extended.get("populated"),
+            "written": extended.get("written"),
+        }
+    except Exception as exc:
+        result["warnings"].append(f"Extended QB reports cache skipped: {exc}")
     return result

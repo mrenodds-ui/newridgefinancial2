@@ -715,6 +715,32 @@ const PageCanvas = (function () {
     };
   }
 
+  function canvasKpiRibbon(tiles) {
+    if (!tiles || !tiles.length) {
+      return canvasEmpty("Cross-analytics KPI ribbon populates when SoftDent and QuickBooks imports share comparable periods.");
+    }
+    return `<div class="kpi-ribbon">${tiles
+      .map(
+        (tile) =>
+          `<div class="kpi-ribbon-tile kpi-ribbon-tile--${esc(tile.tone || "neutral")} kpi-glow-card" data-hal-widget-key="${esc(tile.widgetKey || "nr2KpiRibbon")}" role="button" tabindex="0"><span>${esc(tile.label)}</span><strong>${esc(tile.value)}</strong></div>`,
+      )
+      .join("")}</div>`;
+  }
+
+  function canvasReconciliationTable(recon) {
+    const rows = (recon && recon.rows) || [];
+    if (!rows.length) {
+      return canvasEmpty("Production reconciliation appears when SoftDent dashboard and QuickBooks monthly P&amp;L share periods.");
+    }
+    const tableRows = rows.map((row) => [
+      row.period,
+      row.softdentProduction != null ? `$${Math.round(row.softdentProduction).toLocaleString()}` : "—",
+      row.quickbooksRevenue != null ? `$${Math.round(row.quickbooksRevenue).toLocaleString()}` : "—",
+      row.variancePct != null ? `${row.variancePct}%` : "—",
+    ]);
+    return canvasTable(["Period", "SoftDent production", "QB revenue", "Variance"], tableRows, true);
+  }
+
   function renderFinancial() {
     const D = dataApi();
     const kpis = D ? D.financialKpis() : [];
@@ -725,37 +751,90 @@ const PageCanvas = (function () {
     const payerMetrics = metricsFromWidget("payerMixAndCollections");
     const collectionPct = parsePct(payerMetrics.collectionRate || payerMetrics.latestMonthCollectionRate);
     const compare = D && D.financialCompare ? D.financialCompare() : [];
+    const ribbon = D && D.nr2KpiRibbonTiles ? D.nr2KpiRibbonTiles() : { tiles: [] };
+    const recon = D && D.nr2ProductionReconciliation ? D.nr2ProductionReconciliation() : { rows: [] };
+    const lag = D && D.nr2CollectionLag ? D.nr2CollectionLag() : {};
+    const prodDaily = D && D.softdentProductionDailySeries ? D.softdentProductionDailySeries() : { points: [] };
+    const lagKpi = lag.hasData
+      ? [{ label: "Collection lag (DSO)", value: `${lag.avgLagDays} days`, hint: lag.dsoProxy ? "A/R weighted" : "Monthly proxy", widgetKey: "nr2CollectionLag" }]
+      : [{ label: "Collection lag (DSO)", value: "—", hint: "Awaiting A/R aging export", widgetKey: "nr2CollectionLag" }];
 
     return `${stackOpen()}
+      ${canvasPanel({
+        title: "Cross-Analytics KPI Ribbon",
+        accent: "green",
+        widgetKey: "nr2KpiRibbon",
+        colSpan: 12,
+        body: canvasKpiRibbon(ribbon.tiles),
+      })}
       ${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}
       ${canvasGrid12(`
         ${gridCol(
+          6,
+          canvasPanel({
+            title: "Production vs QuickBooks Reconciliation",
+            accent: "green",
+            caption: recon.latest && recon.latest.variancePct != null ? `Latest variance ${recon.latest.variancePct}%` : "Monthly SoftDent production vs QB revenue",
+            widgetKey: "nr2ProductionReconciliation",
+            body: canvasReconciliationTable(recon),
+          }),
+        )}
+        ${gridCol(
+          3,
+          canvasPanel({
+            title: "Collection Lag",
+            accent: "orange",
+            caption: lag.summary || "DSO proxy from A/R aging buckets",
+            widgetKey: "nr2CollectionLag",
+            body: `${metricRowOpen()}${lagKpi.map(canvasMetricTile).join("")}${metricRowClose()}`,
+          }),
+        )}
+        ${gridCol(
+          3,
+          canvasPanel({
+            title: "SoftDent Production Trend",
+            accent: "green",
+            caption: prodDaily.granularity === "daily" ? "Daily production (daysheet)" : "Monthly production from dashboard export",
+            widgetKey: "softdentProductionDaily",
+            body:
+              prodDaily.points && prodDaily.points.length
+                ? chartContainer(
+                    vBarChart(
+                      prodDaily.points.map((p) => p.date),
+                      prodDaily.points.map((p) => p.production),
+                      "#60a5fa",
+                    ),
+                  )
+                : canvasEmpty("Production trend appears when SoftDent dashboard or daysheet export is loaded."),
+          }),
+        )}
+        ${gridCol(
           8,
           canvasPanel({
-            title: wTitle("financial", 1),
+            title: wTitle("financial", 2),
             accent: "green",
             caption: "12-month production vs trailing average",
-            widgetKey: wKey("financial", 1),
+            widgetKey: wKey("financial", 2),
             body: trend ? chartContainer(finTrendChart(trend.production, trend.average, trend.max), true) : canvasEmpty("12-month production trend unavailable."),
           }),
         )}
         ${gridCol(
           4,
           canvasPanel({
-            title: wTitle("financial", 2),
+            title: wTitle("financial", 6),
             accent: "green",
             caption: "Collection rate gauge",
-            widgetKey: wKey("financial", 2),
+            widgetKey: wKey("financial", 6),
             body: `${canvasGauge(collectionPct, "Collection rate", "var(--sage)")}${payer ? conicDonut(payer.slices, payer.center, 88) : ""}`,
           }),
         )}
         ${gridCol(
           6,
           canvasPanel({
-            title: wTitle("financial", 3),
+            title: wTitle("financial", 7),
             accent: "green",
             caption: "Provider production split",
-            widgetKey: wKey("financial", 3),
+            widgetKey: wKey("financial", 7),
             body: providers
               ? `${hBarChart(providers.items, "amount", "name", "pct")}<div class="total-row"><span>Total</span><strong>${esc(providers.total)}</strong></div>`
               : canvasEmpty("Provider rows will appear when SoftDent dashboard export includes providers."),
@@ -767,7 +846,7 @@ const PageCanvas = (function () {
             title: "A/R aging summary",
             accent: "green",
             caption: "SoftDent receivables buckets",
-            widgetKey: wKey("financial", 0),
+            widgetKey: "practiceFinancialOverview",
             body: `${canvasAgingTiles(aging)}${compare.length ? canvasCompareStrip(compare) : ""}`,
           }),
         )}
@@ -780,6 +859,11 @@ const PageCanvas = (function () {
     const kpis = D ? D.softdentKpis() : [];
     const practice = D ? D.practiceStats() : {};
     const aging = D ? D.softdentAgingBars() : null;
+    const collDaily = D && D.softdentCollectionsDailySeries ? D.softdentCollectionsDailySeries() : { labels: [], values: [] };
+    const npMtd = D && D.softdentNewPatientsMtdData ? D.softdentNewPatientsMtdData() : { count: 0 };
+    const claimsOut = D && D.softdentClaimsOutstandingData ? D.softdentClaimsOutstandingData() : { claims: [] };
+    const provProd = D && D.softdentProviderProductionData ? D.softdentProviderProductionData() : { providers: [] };
+    const apptSnap = D && D.softdentAppointmentsSnapshotData ? D.softdentAppointmentsSnapshotData() : { appointments: [] };
     const ca = metricsFromWidget("caseAcceptance");
     const funnelCounts = [
       parseAmount(ca.plansPresented || practice.treatmentPresented),
@@ -799,20 +883,91 @@ const PageCanvas = (function () {
         ${gridCol(
           6,
           canvasPanel({
-            title: wTitle("softdent", 1),
+            title: "Collections Trend",
             accent: "green",
-            caption: "A/R aging buckets",
-            widgetKey: wKey("softdent", 1),
-            body: aging ? chartContainer(vBarChart(aging.labels, aging.values, "#60a5fa")) : chartContainer(canvasEmpty("A/R aging buckets will appear when SoftDent A/R export is loaded.")),
+            caption: "Collections from sd_payments or dashboard export",
+            widgetKey: "softdentCollectionsDaily",
+            body: collDaily.hasData
+              ? chartContainer(vBarChart(collDaily.labels, collDaily.values, "#34d399"))
+              : canvasEmpty("Collections trend appears when sd_payments or SoftDent dashboard collections are loaded."),
+          }),
+        )}
+        ${gridCol(
+          3,
+          canvasPanel({
+            title: "New Patients (MTD)",
+            accent: "green",
+            widgetKey: "softdentNewPatientsMTD",
+            body: canvasStat(npMtd.hasData ? String(npMtd.count) : practice.newPatients || "—", "New patients MTD", npMtd.hasData ? "success" : undefined, "softdentNewPatientsMTD"),
+          }),
+        )}
+        ${gridCol(
+          3,
+          canvasPanel({
+            title: "Provider Production",
+            accent: "green",
+            widgetKey: "softdentProviderProduction",
+            body: provProd.hasData
+              ? hBarChart(
+                  provProd.providers.map((p) => ({
+                    name: p.providerCode,
+                    amount: `$${Math.round(p.production).toLocaleString()}`,
+                    pct: provProd.total ? Math.round((p.production / provProd.total) * 100) : 0,
+                  })),
+                  "amount",
+                  "name",
+                  "pct",
+                )
+              : canvasEmpty("Provider production appears when sd_procedures or financial provider rows are loaded."),
           }),
         )}
         ${gridCol(
           6,
           canvasPanel({
-            title: wTitle("softdent", 5),
+            title: "Outstanding Claims",
+            accent: "orange",
+            widgetKey: "softdentClaimsOutstanding",
+            body: claimsOut.hasData
+              ? canvasTable(
+                  ["Claim", "Patient", "Amount", "Status"],
+                  claimsOut.claims.map((c) => [c.claimId, c.patientName, `$${c.amount.toLocaleString()}`, c.status]),
+                  true,
+                )
+              : canvasEmpty("Outstanding claims appear when sd_claims or SoftDent claims export is loaded."),
+          }),
+        )}
+        ${gridCol(
+          6,
+          canvasPanel({
+            title: "Appointments Snapshot",
+            accent: "green",
+            widgetKey: "softdentAppointmentsSnapshot",
+            body: apptSnap.hasData
+              ? canvasTable(
+                  ["Date", "Patient", "Provider", "Status"],
+                  apptSnap.appointments.map((a) => [a.date, a.patientId, a.provider, a.status]),
+                  true,
+                )
+              : canvasEmpty("Appointment snapshot appears when sd_appointments or operatory schedule is loaded."),
+          }),
+        )}
+        ${gridCol(
+          6,
+          canvasPanel({
+            title: wTitle("softdent", 6),
+            accent: "green",
+            caption: "A/R aging buckets",
+            widgetKey: wKey("softdent", 6),
+            body: aging ? chartContainer(vBarChart(aging.labels, aging.values, "#60a5fa")) : canvasEmpty("A/R aging buckets will appear when SoftDent A/R export is loaded."),
+          }),
+        )}
+        ${gridCol(
+          6,
+          canvasPanel({
+            title: wTitle("softdent", 10),
             accent: "green",
             caption: "Case acceptance funnel",
-            widgetKey: wKey("softdent", 5),
+            widgetKey: wKey("softdent", 10),
             body: canvasFunnel(funnelSteps),
           }),
         )}
@@ -839,34 +994,34 @@ const PageCanvas = (function () {
         ${gridCol(
           12,
           canvasPanel({
-            title: wTitle("softdent", 6),
+            title: wTitle("softdent", 11),
             accent: "green",
             caption: "Hygiene recall calendar · next 14 days",
-            widgetKey: wKey("softdent", 6),
-            body: `${canvasRecallCalendar(practice)}${canvasStat(practice.hygieneCompleted || "—", "Hygiene completed", widgetTone("hygieneRecall") === "success" ? "success" : undefined, wKey("softdent", 6))}`,
+            widgetKey: wKey("softdent", 11),
+            body: `${canvasRecallCalendar(practice)}${canvasStat(practice.hygieneCompleted || "—", "Hygiene completed", widgetTone("hygieneRecall") === "success" ? "success" : undefined, wKey("softdent", 11))}`,
           }),
         )}
         ${gridCol(
           4,
           canvasPanel({
-            title: wTitle("softdent", 3),
-            widgetKey: wKey("softdent", 3),
-            body: `${canvasStat(practice.newPatients || "—", "New patients MTD", widgetTone("newPatients") === "success" ? "success" : undefined, wKey("softdent", 3))}${practice.newPatientsHint ? `<p class="widget-caption">${esc(practice.newPatientsHint)}</p>` : ""}`,
+            title: wTitle("softdent", 8),
+            widgetKey: wKey("softdent", 8),
+            body: `${canvasStat(practice.newPatients || "—", "New patients MTD", widgetTone("newPatients") === "success" ? "success" : undefined, wKey("softdent", 8))}${practice.newPatientsHint ? `<p class="widget-caption">${esc(practice.newPatientsHint)}</p>` : ""}`,
           }),
         )}
         ${gridCol(
           4,
           canvasPanel({
-            title: wTitle("softdent", 4),
-            widgetKey: wKey("softdent", 4),
-            body: canvasStat(practice.treatmentPresented || "—", "Treatment presented", undefined, wKey("softdent", 4)),
+            title: wTitle("softdent", 9),
+            widgetKey: wKey("softdent", 9),
+            body: canvasStat(practice.treatmentPresented || "—", "Treatment presented", undefined, wKey("softdent", 9)),
           }),
         )}
         ${gridCol(
           4,
           canvasPanel({
-            title: wTitle("softdent", 2),
-            widgetKey: wKey("softdent", 2),
+            title: wTitle("softdent", 7),
+            widgetKey: wKey("softdent", 7),
             body: (() => {
               const resp = D ? D.softdentResponsibilityDonut() : null;
               return resp ? conicDonut(resp.slices, "") : canvasEmpty("Insurance vs patient split unavailable.");
@@ -954,6 +1109,12 @@ const PageCanvas = (function () {
     const plRows = D ? D.quickbooksPlRows() : [];
     const expenseBars = D ? D.quickbooksExpenseBars() : null;
     const plTrend = D ? D.quickbooksPlTrend() : null;
+    const moRev = D && D.quickbooksMonthlyRevenueSeries ? D.quickbooksMonthlyRevenueSeries() : { labels: [], values: [] };
+    const netInc = D && D.quickbooksNetIncomeSummary ? D.quickbooksNetIncomeSummary() : {};
+    const bs = D && D.quickbooksBalanceSheetSummary ? D.quickbooksBalanceSheetSummary() : { assets: [] };
+    const cf = D && D.quickbooksCashFlowTrend ? D.quickbooksCashFlowTrend() : { labels: [], net: [] };
+    const revSvc = D && D.quickbooksRevenueByService ? D.quickbooksRevenueByService() : { slices: [] };
+    const qbAr = D && D.quickbooksQbArAging ? D.quickbooksQbArAging() : { buckets: [] };
     const reconcileRows = plRows.length
       ? plRows.slice(0, 8).map((row) => [row[0], row[1], "QuickBooks", "Synced"])
       : [];
@@ -982,6 +1143,14 @@ const PageCanvas = (function () {
     return `${stackOpen()}
       <div class="dashboard-grid">${kpiCards}</div>
       <div class="dashboard-grid">
+        <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksMonthlyRevenue">
+          <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksMonthlyRevenue")}Monthly Revenue Trend</span></div>
+          ${
+            moRev.hasData
+              ? chartContainer(vBarChart(moRev.labels, moRev.values, "#00d4ff"))
+              : canvasEmpty("Monthly revenue trend appears when QuickBooks P&amp;L monthly rows are in the import cache.")
+          }
+        </div>
         <div class="card chart-large widget-glow-border" data-hal-widget-key="quickbooksProfitLossDetail">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksProfitLossDetail")}Profit &amp; Loss Trend (YTD)</span></div>
           ${plChartBody}
@@ -989,6 +1158,49 @@ const PageCanvas = (function () {
         <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksExpenseBreakdown">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksExpenseBreakdown")}Operating Expenses</span></div>
           ${expenseBody}
+        </div>
+      </div>
+      <div class="dashboard-grid">
+        <div class="card kpi-card kpi-glow-card" data-hal-widget-key="quickbooksNetIncomeSummary">
+          <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksNetIncomeSummary")}Net Income (YTD)</span></div>
+          <div class="card-value">${netInc.hasData && netInc.ytdNetIncome != null ? esc(`$${Math.round(netInc.ytdNetIncome).toLocaleString()}`) : "—"}</div>
+          ${netInc.latestMonth ? `<span class="trend">${esc(netInc.latestMonth)} latest</span>` : ""}
+        </div>
+        <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksBalanceSheetSummary">
+          <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksBalanceSheetSummary")}Balance Sheet Summary</span></div>
+          ${
+            bs.hasData
+              ? canvasTable(
+                  ["Asset", "Amount"],
+                  (bs.assets || []).map((row) => [row.label, `$${Math.round(row.amount).toLocaleString()}`]),
+                  true,
+                )
+              : canvasEmpty("Balance sheet summary appears when QuickBooks A/R and P&amp;L imports are loaded.")
+          }
+        </div>
+        <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksCashFlowTrend">
+          <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksCashFlowTrend")}Cash Flow Trend</span></div>
+          ${
+            cf.hasData
+              ? chartContainer(dualLineChart(cf.labels, [{ label: "Net", values: cf.net }]), true)
+              : canvasEmpty("Cash flow trend appears when QuickBooks monthly P&amp;L rows are in the import cache.")
+          }
+        </div>
+        <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksRevenueByService">
+          <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksRevenueByService")}Revenue by Service</span></div>
+          ${
+            revSvc.hasData
+              ? chartContainer(vBarChart(revSvc.slices.map((s) => s.label), revSvc.slices.map((s) => s.amount), "#00d4aa"))
+              : canvasEmpty("Revenue-by-service appears when QuickBooks category exports are loaded.")
+          }
+        </div>
+        <div class="card chart-medium widget-glow-border" data-hal-widget-key="quickbooksArAging">
+          <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksArAging")}QuickBooks A/R Aging</span></div>
+          ${
+            qbAr.hasData
+              ? chartContainer(vBarChart(qbAr.buckets.map((b) => b.bucket), qbAr.buckets.map((b) => b.balance), "#f59e0b"))
+              : canvasEmpty("QuickBooks A/R aging appears when quickbooks_ar.csv or SDK probe is loaded.")
+          }
         </div>
       </div>
       <div class="dashboard-grid">

@@ -793,6 +793,24 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
             )
     for issue in (pipeline.get("collectionsDiagnostic") or {}).get("issues") or []:
         result["warnings"].append(f"Collections: {issue}")
+    try:
+        from softdent_odbc_extract import ensure_softdent_odbc_fresh
+
+        max_age = int(os.environ.get("NR2_SOFTDENT_ODBC_MAX_AGE_MINUTES", "60"))
+        sd_odbc = ensure_softdent_odbc_fresh(max_age_minutes=max(1, max_age))
+        result["softdent"]["odbcExtract"] = {
+            "stale": bool(sd_odbc.get("stale")),
+            "refreshed": bool(sd_odbc.get("refreshed")),
+            "mode": ((sd_odbc.get("extract") or {}).get("mode") if sd_odbc.get("extract") else (sd_odbc.get("status") or {}).get("lastMode")),
+            "populatedTables": int((sd_odbc.get("status") or {}).get("populatedTables") or 0),
+        }
+        if sd_odbc.get("refreshed") and isinstance(sd_odbc.get("extract"), dict):
+            extract = sd_odbc["extract"]
+            if not extract.get("ok"):
+                for warning in extract.get("warnings") or []:
+                    result["warnings"].append(f"SoftDent ODBC extract: {warning}")
+    except Exception as exc:
+        result["warnings"].append(f"SoftDent ODBC extract skipped: {exc}")
     if pipeline.get("practiceSync") and not (pipeline["practiceSync"].get("written") or []):
         db_hint = (pipeline["practiceSync"].get("collectionsDiagnostic") or {}).get("analyticsDb")
         if db_hint:

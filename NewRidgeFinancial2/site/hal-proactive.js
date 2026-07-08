@@ -7,11 +7,14 @@ const HalProactive = (function () {
   const CYCLE_MIN_MS = 5 * 60 * 1000;
   const PLACEMENT_TIMER_MS = 5 * 60 * 1000;
   const BRIEFING_CHECK_MS = 60 * 1000;
+  const MORNING_BRIEFING_STALE_MS = 18 * 60 * 60 * 1000;
+  const MORNING_BRIEFING_KEY = "halLastMorningBriefingAt";
   const MAX_RECOMMENDATIONS = 8;
   const AUTO_TASK_SEVERITIES = new Set(["critical", "warning"]);
 
   let lastCycleAt = 0;
   let lastBriefing = null;
+  let lastMorningBriefing = null;
   let lastPlacementAt = 0;
   let placementTimer = null;
   let briefingTimer = null;
@@ -306,9 +309,163 @@ const HalProactive = (function () {
     }
   }
 
+  function analyzeCrossDomain(snapshot, recommendations, seen) {
+    const cross =
+      typeof HalSkills !== "undefined" && HalSkills.crossReconcileSkill
+        ? HalSkills.crossReconcileSkill(snapshot)
+        : null;
+    if (!cross || !cross.sentence) return cross;
+    const severity = cross.risk ? (cross.domains.includes("imports") ? "critical" : "warning") : "info";
+    pushRecommendation(recommendations, seen, {
+      id: "cross-domain-synthesis",
+      severity,
+      title: "Cross-domain synthesis",
+      rationale: cross.sentence,
+      action: cross.actuators && cross.actuators[0] && cross.actuators[0].actionId === "navigate"
+        ? { type: "navigate", target: cross.actuators[0].target || "financial" }
+        : { type: "command", command: "Show cross-domain briefing" },
+      autoTaskTitle: severity === "critical" ? `${TASK_PREFIX}Review cross-domain variance` : null,
+      crossDomain: cross,
+    });
+    return cross;
+  }
+
+  function buildMorningBriefingCard(snapshot) {
+    const cross =
+      typeof HalSkills !== "undefined" && HalSkills.crossReconcileSkill
+        ? HalSkills.crossReconcileSkill(snapshot)
+        : {
+            sentence: "Cross-domain briefing unavailable — refresh imports and reload.",
+            domains: [],
+            kpiTiles: [],
+            actuators: [{ label: "Refresh imports", actionId: "refresh-imports", requiresConsent: true }],
+          };
+    const feed = snapshot && snapshot.widgets;
+    const importHealth = feed && feed.widgets && feed.widgets.halImportHealth;
+    const ribbonWidget = feed && feed.widgets && feed.widgets.nr2KpiRibbon;
+    const kpiTiles =
+      cross.kpiTiles && cross.kpiTiles.length
+        ? cross.kpiTiles
+        : ribbonWidget && ribbonWidget.metrics
+          ? Object.keys(ribbonWidget.metrics)
+              .slice(0, 4)
+              .map((key) => ({ label: key, value: ribbonWidget.metrics[key], tone: "neutral" }))
+          : [];
+    return {
+      generatedAt: new Date().toISOString(),
+      kind: "morning",
+      sentence: cross.sentence,
+      domains: cross.domains || [],
+      risk: cross.risk || null,
+      opportunity: cross.opportunity || null,
+      importHealthStatus: cross.importHealthStatus || (importHealth && importHealth.status) || "UNKNOWN",
+      importHealthSummary: cross.importHealthSummary || (importHealth && importHealth.summary) || "",
+      kpiTiles,
+      actuators: cross.actuators || [],
+      reconSummary: cross.reconSummary || "",
+      netIncomeLatest: cross.netIncomeLatest != null ? cross.netIncomeLatest : null,
+    };
+  }
+
+  function isMorningBriefingStale(lastAt, nowMs) {
+    const now = nowMs != null ? nowMs : Date.now();
+    if (!lastAt || !Number.isFinite(lastAt)) return true;
+    return now - lastAt > MORNING_BRIEFING_STALE_MS;
+  }
+
+  async function readLastMorningBriefingAt() {
+    if (typeof DesktopBridge !== "undefined" && DesktopBridge.storageGet) {
+      try {
+        const raw = await DesktopBridge.storageGet(MORNING_BRIEFING_KEY);
+        if (raw != null) {
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : Date.parse(String(raw)) || 0;
+        }
+      } catch {
+        /* optional */
+      }
+    }
+    if (typeof localStorage !== "undefined") {
+      try {
+        const raw = localStorage.getItem(MORNING_BRIEFING_KEY);
+        if (raw) {
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : Date.parse(raw) || 0;
+        }
+      } catch {
+        /* optional */
+      }
+    }
+    return 0;
+  }
+
+  async function writeLastMorningBriefingAt(ts) {
+    const value = ts != null ? ts : Date.now();
+    if (typeof DesktopBridge !== "undefined" && DesktopBridge.storageSet) {
+      try {
+        await DesktopBridge.storageSet(MORNING_BRIEFING_KEY, value);
+      } catch {
+        /* optional */
+      }
+    }
+    if (typeof localStorage !== "undefined") {
+      try {
+        localStorage.setItem(MORNING_BRIEFING_KEY, String(value));
+      } catch {
+        /* optional */
+      }
+    }
+  }
+
+  function formatMorningBriefingCard(card) {
+    if (!card) return "Morning briefing unavailable.";
+    const lines = ["HAL morning briefing (cross-domain · consent-gated actions):", card.sentence || ""];
+    if (card.domains && card.domains.length) {
+      lines.push(`Domains: ${card.domains.join(", ")}.`);
+    }
+    if (card.importHealthSummary) {
+      lines.push(`Import health: ${card.importHealthStatus || "—"} — ${card.importHealthSummary}`);
+    }
+    if (card.kpiTiles && card.kpiTiles.length) {
+      lines.push(
+        "KPI ribbon:",
+        ...card.kpiTiles.map((tile) => `- ${tile.label}: ${tile.value}`),
+      );
+    }
+    return lines.join("\n");
+  }
+
+  async function maybeFireMorningBriefingOnBoot(ctx, options) {
+    if (!ctx) return null;
+    const force = options && options.force;
+    const lastAt = await readLastMorningBriefingAt();
+    if (!force && !isMorningBriefingStale(lastAt)) {
+      return lastMorningBriefing;
+    }
+    let snapshot =
+      typeof ctx.loadProgramSnapshot === "function" ? await ctx.loadProgramSnapshot() : null;
+    if (!snapshot) return null;
+    if (typeof ctx.refreshHalWidgetFeed === "function") {
+      const feed = await ctx.refreshHalWidgetFeed(snapshot);
+      if (feed) snapshot = Object.assign({}, snapshot, { widgets: feed });
+    }
+    const card = buildMorningBriefingCard(snapshot);
+    lastMorningBriefing = card;
+    await writeLastMorningBriefingAt(Date.now());
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("nr2:morning-briefing", { detail: { card } }));
+    }
+    return card;
+  }
+
+  function getLastMorningBriefing() {
+    return lastMorningBriefing;
+  }
+
   function buildProactiveBriefing(snapshot, ctx) {
     const recommendations = [];
     const seen = new Set();
+    const crossDomain = analyzeCrossDomain(snapshot, recommendations, seen);
     const diagnostics = analyzeImportDiagnostics(snapshot, recommendations, seen);
     analyzeDataQuality(snapshot, recommendations, seen);
     analyzeWidgets(snapshot, recommendations, seen);
@@ -344,6 +501,8 @@ const HalProactive = (function () {
       placement: null,
       officePriorities,
       officeManager: null,
+      crossDomain,
+      morningBriefing: buildMorningBriefingCard(snapshot),
     };
   }
 
@@ -712,8 +871,17 @@ const HalProactive = (function () {
   return {
     TASK_PREFIX,
     CYCLE_MIN_MS,
+    MORNING_BRIEFING_STALE_MS,
+    MORNING_BRIEFING_KEY,
     buildProactiveBriefing,
+    buildMorningBriefingCard,
+    formatMorningBriefingCard,
     formatProactiveBriefing,
+    isMorningBriefingStale,
+    readLastMorningBriefingAt,
+    writeLastMorningBriefingAt,
+    maybeFireMorningBriefingOnBoot,
+    getLastMorningBriefing,
     applyAutoTasks,
     runAutonomousPlacement,
     runCycle,

@@ -784,7 +784,7 @@ async function main() {
   const widgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show manager dashboard widgets");
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
-  assert(Object.keys(feed.widgets).length === 29, "widget feed must build 29 operational widgets");
+  assert(Object.keys(feed.widgets).length === 44, "widget feed must build 44 operational widgets");
   const masterChart = HalWidgetMasterChart.all();
   assert(masterChart.length === HalSkills.WIDGET_ORDER.length, "widget master chart must cover every HAL widget");
   assert(masterChart.every((row) => row.page && row.purpose && row.expectedData.length && row.readyWhen), "widget master chart rows must include page, purpose, expected data, and ready criteria");
@@ -1713,6 +1713,74 @@ async function main() {
     /NR2 server|StartProgram\.bat/i.test(browserBriefText),
     "browser preview briefing must direct staff to Start Program",
   );
+
+  require(join(siteDir, "nr2-analytics.js"));
+  require(join(siteDir, "nr2-qb-reports.js"));
+  const crossSnapshot = {
+    dashboards: { financial: { dataSource: "import" } },
+    importBundle: {
+      softdent: {
+        dashboard: {
+          rows: [{ Period: "2026-01", Production: 100000, Collections: 80000 }],
+        },
+      },
+      quickbooks: {
+        profitAndLoss: {
+          rows: [{ Period: "2026-01", TotalIncome: 85000, TotalExpense: 55000, NetIncome: 30000 }],
+        },
+      },
+      diagnostics: {
+        summary: { connected: 2, partial: 0, missing: 0, stale: 0, notConfigured: 0 },
+        datasets: [
+          { datasetKey: "softdent.dashboard", status: "connected", severity: "info", automated: true },
+          { datasetKey: "quickbooks.pl", status: "connected", severity: "info", automated: true },
+        ],
+      },
+    },
+  };
+  const cross = HalSkills.crossReconcileSkill(crossSnapshot);
+  assert(cross.sentence && cross.domains.length >= 2, "cross_reconcile_skill must reference at least two domains");
+  assert(
+    cross.domains.includes("production") && cross.domains.includes("expenses"),
+    "cross reconcile must span production and expenses",
+  );
+  assert(HalProactive.isMorningBriefingStale(0) === true, "missing morning briefing timestamp must be stale");
+  assert(HalProactive.isMorningBriefingStale(Date.now()) === false, "fresh morning briefing must not be stale");
+  assert(
+    HalProactive.isMorningBriefingStale(Date.now() - 19 * 3600000) === true,
+    "19h old morning briefing must be stale",
+  );
+  const morningCard = HalProactive.buildMorningBriefingCard(crossSnapshot);
+  assert(
+    morningCard.sentence && morningCard.domains.length >= 2,
+    "morning briefing card must synthesize cross-domain data",
+  );
+  const actuatorText = "Review options.\n<<<actuator\nlabel: Sync QB now?\naction_id: refresh-imports\n>>>";
+  const proposals = HalAgentLoop.parseActuatorProposals(actuatorText);
+  assert(proposals.length === 1 && proposals[0].requiresConsent !== false, "actuator proposals must parse");
+  const chips = HalAgentLoop.proposeConsentActuators(proposals);
+  assert(chips[0].requiresConsent === true, "actuator proposals must require consent");
+  let actuatorAutoRan = false;
+  const actuatorCtx = {
+    Services: {
+      refreshImports: async () => {
+        actuatorAutoRan = true;
+      },
+    },
+  };
+  assert(actuatorAutoRan === false, "actuator must not auto-execute during parse");
+  await HalAgentLoop.executeActuatorIfConsented(proposals[0], actuatorCtx);
+  assert(actuatorAutoRan === true, "actuator executes only after explicit consent call");
+  assert(
+    (await HalAgentLoop.executeActuatorIfConsented(null, actuatorCtx)).autonomous === false,
+    "actuator must report non-autonomous execution",
+  );
+  const HalHubClient = globalThis.HalHubClient || require(join(siteDir, "hal-hub-client.js"));
+  assert(
+    HalHubClient && typeof HalHubClient.pushMorningBriefingToWorkstation === "function",
+    "hal hub client must push morning briefings",
+  );
+
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;
   const writebackRoute = HalCore.routeHalCommand(halData, halModels, pages, "Write back to SoftDent");

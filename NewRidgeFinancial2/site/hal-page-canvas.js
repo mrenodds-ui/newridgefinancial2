@@ -300,8 +300,45 @@ const HalPageCanvas = (function () {
     return H.sideNotesProgramCardHtml(ctx.halSideNotes, ctx.halSideNoteMonitor, ctx.halSideNotesInbox, ctx.sidenotesHubPath);
   }
 
+  function renderMorningBriefing(ctx, H) {
+    const card =
+      ctx.halMorningBriefing ||
+      (ctx.halProactiveBriefing && ctx.halProactiveBriefing.morningBriefing) ||
+      null;
+    if (!card || !card.sentence) return "";
+    const domainChips = (card.domains || [])
+      .map((d) => `<span class="status-chip status-chip--ok">${H.esc(d)}</span>`)
+      .join(" ");
+    const kpiHtml = (card.kpiTiles || [])
+      .slice(0, 4)
+      .map(
+        (tile) =>
+          `<div class="kpi-ribbon-tile kpi-ribbon-tile--${H.esc(tile.tone || "neutral")}" data-hal-widget-key="${H.esc(tile.widgetKey || "nr2KpiRibbon")}"><span>${H.esc(tile.label)}</span><strong>${H.esc(tile.value)}</strong></div>`,
+      )
+      .join("");
+    const actuatorHtml = (card.actuators || [])
+      .map((act) => {
+        const id = H.esc(act.actionId || "refresh-imports");
+        const label = H.esc(act.label || "Proceed");
+        if (act.actionId === "navigate" && act.target) {
+          return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-actuator="${id}" data-hal-action="openPage" data-open-page="${H.esc(act.target)}" data-hal-consent="1">${label}</button>`;
+        }
+        return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-actuator="${id}" data-hal-action="refreshImports" data-hal-consent="1">${label}</button>`;
+      })
+      .join("");
+    return `<section class="widget-card hal-panel--morning-briefing span-2" data-panel="morningBriefing" data-hal-widget-key="halMorningBriefing">
+      ${H.cardHead("MORNING BRIEFING", "morningBriefing", "Cross-domain synthesis · operator consent required for actions", H.cardIconRaw("widget", "nr2KpiRibbon"))}
+      <p class="hal-morning-briefing__sentence text-glow">${H.esc(card.sentence)}</p>
+      <div class="hal-morning-briefing__domains">${domainChips || H.emptyNote("Awaiting import data.")}</div>
+      ${kpiHtml ? `<div class="kpi-ribbon hal-morning-briefing__kpi">${kpiHtml}</div>` : ""}
+      <p class="widget-footer">${H.esc(card.importHealthSummary || "Import health included in synthesis.")}</p>
+      ${actuatorHtml ? `<div class="prompt-chips prompt-chips--live hal-morning-briefing__actuators">${actuatorHtml}</div>` : ""}
+    </section>`;
+  }
+
   function renderDashboard(ctx, H) {
     return [
+      renderMorningBriefing(ctx, H),
       renderStatusRail(ctx, H),
       renderWidgetMonitor(ctx, H),
       renderSurfaces(ctx, H),

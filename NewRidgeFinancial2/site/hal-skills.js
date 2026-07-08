@@ -1279,11 +1279,26 @@ const HalSkills = (function () {
 
   const WIDGET_NAV = {
     practiceFinancialOverview: "financial",
+    nr2KpiRibbon: "financial",
+    nr2ProductionReconciliation: "financial",
+    nr2CollectionLag: "financial",
+    softdentProductionDaily: "financial",
+    softdentCollectionsDaily: "softdent",
+    softdentNewPatientsMTD: "softdent",
+    softdentClaimsOutstanding: "softdent",
+    softdentProviderProduction: "softdent",
+    softdentAppointmentsSnapshot: "softdent",
     financialProductionTrend: "financial",
     payerMixAndCollections: "financial",
     providerPerformance: "financial",
     ebitdaNormalization: "quickbooks",
     quickbooksProfitLossDetail: "quickbooks",
+    quickbooksMonthlyRevenue: "quickbooks",
+    quickbooksNetIncomeSummary: "quickbooks",
+    quickbooksBalanceSheetSummary: "quickbooks",
+    quickbooksCashFlowTrend: "quickbooks",
+    quickbooksRevenueByService: "quickbooks",
+    quickbooksArAging: "quickbooks",
     quickbooksExpenseBreakdown: "quickbooks",
     accountsPayableAutomation: "documents",
     documentIntakeQueue: "documents",
@@ -1314,11 +1329,21 @@ const HalSkills = (function () {
 
   const WIDGET_ORDER = [
     "practiceFinancialOverview",
+    "nr2KpiRibbon",
+    "nr2ProductionReconciliation",
+    "nr2CollectionLag",
+    "softdentProductionDaily",
     "financialProductionTrend",
     "payerMixAndCollections",
     "providerPerformance",
     "ebitdaNormalization",
     "quickbooksProfitLossDetail",
+    "quickbooksMonthlyRevenue",
+    "quickbooksNetIncomeSummary",
+    "quickbooksBalanceSheetSummary",
+    "quickbooksCashFlowTrend",
+    "quickbooksRevenueByService",
+    "quickbooksArAging",
     "quickbooksExpenseBreakdown",
     "accountsPayableAutomation",
     "documentIntakeQueue",
@@ -1337,6 +1362,11 @@ const HalSkills = (function () {
     "caseAcceptance",
     "hygieneRecall",
     "softdentOperatoryGrid",
+    "softdentCollectionsDaily",
+    "softdentNewPatientsMTD",
+    "softdentClaimsOutstanding",
+    "softdentProviderProduction",
+    "softdentAppointmentsSnapshot",
     "narrativeWorkflow",
     "documentLibrary",
     "halAskHal",
@@ -1346,11 +1376,21 @@ const HalSkills = (function () {
 
   const WIDGET_FILL_REQUIREMENTS = {
     practiceFinancialOverview: ["SoftDent dashboard export with production/collections", "QuickBooks revenue/P&L export"],
+    nr2KpiRibbon: ["SoftDent dashboard export", "QuickBooks monthly P&L rows", "Optional SoftDent A/R aging for DSO"],
+    nr2ProductionReconciliation: ["SoftDent dashboard monthly production rows", "QuickBooks monthly revenue/P&L rows with matching periods"],
+    nr2CollectionLag: ["SoftDent A/R aging export for weighted DSO", "Or SoftDent dashboard production/collections for monthly proxy"],
+    softdentProductionDaily: ["SoftDent sd_procedures table (ODBC extract)", "Or daysheet/dashboard JSON fallback"],
     financialProductionTrend: ["SoftDent dashboard export with current period production", "Period labels for trend comparison"],
     payerMixAndCollections: ["SoftDent collections and payer mix fields", "Verified collection-rate source"],
     providerPerformance: ["SoftDent dashboard export for Dr. Michael Reno"],
     ebitdaNormalization: ["QuickBooks expenses export", "Staff-reviewed EBITDA add-back categories"],
     quickbooksProfitLossDetail: ["QuickBooks revenue/P&L export", "QuickBooks expenses export"],
+    quickbooksMonthlyRevenue: ["QuickBooks revenue/P&L export with monthly TotalIncome rows"],
+    quickbooksNetIncomeSummary: ["QuickBooks monthly P&L rows with NetIncome"],
+    quickbooksBalanceSheetSummary: ["QuickBooks A/R export", "QuickBooks revenue/P&L for equity proxy"],
+    quickbooksCashFlowTrend: ["QuickBooks monthly P&L rows (income/expense by period)"],
+    quickbooksRevenueByService: ["QuickBooks expense categories or revenue proxy from P&L"],
+    quickbooksArAging: ["QuickBooks A/R export or SDK probe ar_aging"],
     quickbooksExpenseBreakdown: ["QuickBooks expense category export", "QuickBooks monthly expenses"],
     accountsPayableAutomation: ["Local accounting document queue", "QuickBooks expenses or vendor document imports"],
     documentIntakeQueue: ["SoftDent and QuickBooks financial summary rows synced into the document queue", "Optional manual Add document entries"],
@@ -1369,6 +1409,11 @@ const HalSkills = (function () {
     caseAcceptance: ["SoftDent case acceptance export or derived treatment plan summary"],
     hygieneRecall: ["SoftDent hygiene_recall_summary.csv (analytics sync via softdent_practice_exports.py when tables exist)"],
     softdentOperatoryGrid: ["SoftDent operatory schedule export (operatory_schedule.json → operatoryChairs[])"],
+    softdentCollectionsDaily: ["sd_payments ODBC extract", "Or SoftDent dashboard collections rows"],
+    softdentNewPatientsMTD: ["sd_patients first_visit_date", "Or softdent_new_patients.csv export"],
+    softdentClaimsOutstanding: ["sd_claims table", "Or softdent_claims_export.csv"],
+    softdentProviderProduction: ["sd_procedures grouped by provider", "Or financial dashboard provider rows"],
+    softdentAppointmentsSnapshot: ["sd_appointments", "Or operatoryChairs[] schedule export"],
     narrativeWorkflow: ["Local narrative drafts or claim source facts from SoftDent claims"],
     documentLibrary: ["Local library documents or indexed document metadata"],
     halImportHealth: ["Import bundle diagnostics", "SoftDent and QuickBooks dataset contracts"],
@@ -1805,6 +1850,165 @@ const HalSkills = (function () {
     };
   }
 
+  function crossReconcileSkill(snapshot) {
+    const analytics = buildAnalyticsPack(snapshot);
+    const qb = buildQbReportsPack(snapshot);
+    const importWidget = buildImportHealthWidget(snapshot && snapshot.importBundle);
+    const recon = analytics.recon || { hasData: false, latest: null };
+    const net = qb.netIncome || { hasData: false };
+    const ribbon = analytics.ribbon || { tiles: [], hasData: false };
+    const lag = analytics.lag || { hasData: false };
+    const domains = [];
+    const actuators = [];
+    let risk = null;
+    let opportunity = null;
+
+    if (recon.hasData && recon.latest) {
+      domains.push("production");
+      const variance = recon.latest.variancePct;
+      const period = recon.latest.period || "latest period";
+      if (variance != null) {
+        const abs = Math.abs(variance);
+        if (abs > 10) {
+          risk = `Production vs QuickBooks revenue diverged ${variance}% in ${period}`;
+          actuators.push({ label: "Review reconciliation", actionId: "navigate", target: "financial" });
+        } else if (abs <= 3) {
+          opportunity = `Production and QuickBooks aligned within ${abs}% for ${period}`;
+        }
+      }
+    }
+
+    if (net.hasData) {
+      domains.push("expenses");
+      if (net.latestNetIncome != null && net.latestNetIncome < 0) {
+        risk =
+          risk ||
+          `Net income is negative (${net.latestNetIncome}) for ${net.latestMonth || "latest month"}`;
+        actuators.push({ label: "Open QuickBooks summary", actionId: "navigate", target: "quickbooks" });
+      } else if (net.latestNetIncome > 0 && !opportunity) {
+        opportunity = `Net income ${net.latestNetIncome} for ${net.latestMonth || "latest month"}`;
+      }
+    }
+
+    if (importWidget.status !== "SUCCESS") {
+      domains.push("imports");
+      const missing = importWidget.metrics && importWidget.metrics.missingDatasets;
+      const missingCount = missing != null && missing !== "—" ? Number(missing) : 0;
+      if (missingCount > 0) {
+        risk = risk || `${missingCount} import dataset(s) missing — cross-domain widgets may be incomplete`;
+        actuators.push({ label: "Sync imports now?", actionId: "refresh-imports", requiresConsent: true });
+      }
+    }
+
+    if (lag.hasData && lag.avgLagDays != null && lag.avgLagDays > 45) {
+      domains.push("collections");
+      risk = risk || `Collection lag at ${lag.avgLagDays} days — cash flow risk`;
+    }
+
+    let sentence;
+    if (risk && opportunity) {
+      sentence = `${risk}; however, ${opportunity.charAt(0).toLowerCase()}${opportunity.slice(1)}.`;
+    } else if (risk) {
+      sentence = `${risk} — review cross-domain metrics before decisions.`;
+    } else if (opportunity) {
+      sentence = `${opportunity} — imports and KPIs look steady across domains.`;
+    } else if (domains.length >= 2) {
+      sentence = `Cross-check: ${domains.join(" + ")} data loaded; no urgent variance flagged.`;
+    } else {
+      sentence =
+        "Morning briefing pending — import SoftDent and QuickBooks data for cross-domain synthesis.";
+      actuators.push({ label: "Refresh imports", actionId: "refresh-imports", requiresConsent: true });
+    }
+
+    return {
+      sentence,
+      domains: [...new Set(domains)],
+      risk,
+      opportunity,
+      importHealthStatus: importWidget.status,
+      importHealthSummary: importWidget.summary,
+      kpiTiles: (ribbon.tiles || []).slice(0, 4),
+      actuators,
+      reconSummary: recon.summary || "",
+      netIncomeLatest: net.latestNetIncome != null ? net.latestNetIncome : null,
+    };
+  }
+
+  function buildAnalyticsPack(snapshot) {
+    const api =
+      typeof NR2Analytics !== "undefined"
+        ? NR2Analytics
+        : typeof window !== "undefined" && window.NR2Analytics
+          ? window.NR2Analytics
+          : null;
+    if (!api) {
+      return {
+        recon: { rows: [], hasData: false, latest: null },
+        lag: { hasData: false, avgLagDays: null },
+        qbRev: { hasData: false, values: [], labels: [] },
+        prodDaily: { hasData: false, points: [] },
+        ribbon: { tiles: [], hasData: false },
+      };
+    }
+    return {
+      recon: api.productionReconciliation(snapshot),
+      lag: api.collectionLag(snapshot),
+      qbRev: api.quickbooksMonthlyRevenue(snapshot),
+      prodDaily: api.softdentProductionDaily(snapshot),
+      ribbon: api.kpiRibbon(snapshot),
+    };
+  }
+
+  function buildQbReportsPack(snapshot) {
+    const api =
+      typeof NR2QbReports !== "undefined"
+        ? NR2QbReports
+        : typeof window !== "undefined" && window.NR2QbReports
+          ? window.NR2QbReports
+          : null;
+    if (!api) {
+      return {
+        netIncome: { hasData: false },
+        balanceSheet: { hasData: false, assets: [] },
+        cashFlow: { hasData: false, labels: [] },
+        revenueSvc: { hasData: false, slices: [] },
+        arAging: { hasData: false, buckets: [] },
+      };
+    }
+    return {
+      netIncome: api.netIncomeSummary(snapshot),
+      balanceSheet: api.balanceSheetSummary(snapshot),
+      cashFlow: api.cashFlowTrend(snapshot),
+      revenueSvc: api.revenueByService(snapshot),
+      arAging: api.arAging(snapshot),
+    };
+  }
+
+  function buildSoftdentDailyPack(snapshot) {
+    const api =
+      typeof NR2SoftdentDaily !== "undefined"
+        ? NR2SoftdentDaily
+        : typeof window !== "undefined" && window.NR2SoftdentDaily
+          ? window.NR2SoftdentDaily
+          : null;
+    if (!api) {
+      return {
+        collections: { hasData: false },
+        newPatients: { hasData: false, count: 0 },
+        claims: { hasData: false, claims: [] },
+        providers: { hasData: false, providers: [] },
+        appointments: { hasData: false, appointments: [] },
+      };
+    }
+    return {
+      collections: api.collectionsDaily(snapshot),
+      newPatients: api.newPatientsMtd(snapshot),
+      claims: api.claimsOutstanding(snapshot),
+      providers: api.providerProduction(snapshot),
+      appointments: api.appointmentsSnapshot(snapshot),
+    };
+  }
+
   function buildWidgetFeed(snapshot) {
     const snap = snapshot || {};
     const dashboards = snap.dashboards || {};
@@ -1858,6 +2062,32 @@ const HalSkills = (function () {
       ar: arDash,
       practice: practiceDash,
     });
+    const analyticsPack = buildAnalyticsPack(snap);
+    const qbReportsPack = buildQbReportsPack(snap);
+    const sdDailyPack = buildSoftdentDailyPack(snap);
+    const reconComparable = (analyticsPack.recon.rows || []).filter(
+      (row) => row.quickbooksRevenue != null && row.softdentProduction > 0,
+    );
+    const reconStatus =
+      reconComparable.length >= 2
+        ? "SUCCESS"
+        : reconComparable.length === 1 || analyticsPack.recon.hasData
+          ? "DEGRADED"
+          : mergeWidgetStatus(softdentStatus, qbStatus) === "FAILED"
+            ? "FAILED"
+            : "DEGRADED";
+    const lagStatus = analyticsPack.lag.hasData
+      ? analyticsPack.lag.dsoProxy
+        ? "SUCCESS"
+        : "DEGRADED"
+      : arAvailable
+        ? "DEGRADED"
+        : "FAILED";
+    const qbRevStatus = analyticsPack.qbRev.hasData ? qbStatus : qbStatus === "SUCCESS" ? "DEGRADED" : "FAILED";
+    const prodDailyStatus = analyticsPack.prodDaily.hasData ? softdentStatus : softdentStatus === "SUCCESS" ? "DEGRADED" : "FAILED";
+    const ribbonStatus = analyticsPack.ribbon.hasData
+      ? mergeWidgetStatus(reconStatus, lagStatus, qbRevStatus, prodDailyStatus)
+      : "FAILED";
     const docs = snap.documents || {};
     const claimsSnap = snap.claims || {};
     const narratives = snap.narratives || {};
@@ -1996,6 +2226,83 @@ const HalSkills = (function () {
           ),
         },
       },
+      nr2KpiRibbon: {
+        key: "nr2KpiRibbon",
+        title: "Cross-Analytics KPI Ribbon",
+        status: ribbonStatus,
+        summary: "Composite KPI tiles from production reconciliation, collection lag, QuickBooks revenue, and SoftDent production trend.",
+        navTarget: WIDGET_NAV.nr2KpiRibbon,
+        metrics: {
+          tileCount: metricValue((analyticsPack.ribbon.tiles || []).length || null),
+          latestVariancePct: metricValue(
+            analyticsPack.recon.latest && analyticsPack.recon.latest.variancePct != null
+              ? `${analyticsPack.recon.latest.variancePct}%`
+              : null,
+          ),
+          collectionLagDays: metricValue(analyticsPack.lag.avgLagDays != null ? `${analyticsPack.lag.avgLagDays} days` : null),
+          latestQbRevenue: metricValue(
+            analyticsPack.qbRev.values && analyticsPack.qbRev.values.length
+              ? `$${Math.round(analyticsPack.qbRev.values[analyticsPack.qbRev.values.length - 1]).toLocaleString()}`
+              : null,
+          ),
+        },
+      },
+      nr2ProductionReconciliation: {
+        key: "nr2ProductionReconciliation",
+        title: "Production vs QuickBooks Reconciliation",
+        status: reconStatus,
+        summary:
+          "Monthly SoftDent production compared to QuickBooks revenue (cash-basis deposits). Variance highlights timing and basis differences — not posting errors.",
+        navTarget: WIDGET_NAV.nr2ProductionReconciliation,
+        metrics: {
+          comparablePeriods: metricValue(reconComparable.length || null),
+          latestPeriod: metricValue(analyticsPack.recon.latest ? analyticsPack.recon.latest.period : null),
+          latestVariancePct: metricValue(
+            analyticsPack.recon.latest && analyticsPack.recon.latest.variancePct != null
+              ? `${analyticsPack.recon.latest.variancePct}%`
+              : null,
+          ),
+          latestSoftdentProduction: metricValue(
+            analyticsPack.recon.latest && analyticsPack.recon.latest.softdentProduction != null
+              ? `$${Math.round(analyticsPack.recon.latest.softdentProduction).toLocaleString()}`
+              : null,
+          ),
+          latestQuickbooksRevenue: metricValue(
+            analyticsPack.recon.latest && analyticsPack.recon.latest.quickbooksRevenue != null
+              ? `$${Math.round(analyticsPack.recon.latest.quickbooksRevenue).toLocaleString()}`
+              : null,
+          ),
+        },
+      },
+      nr2CollectionLag: {
+        key: "nr2CollectionLag",
+        title: "Collection Lag (DSO)",
+        status: lagStatus,
+        summary: analyticsPack.lag.dsoProxy
+          ? "Weighted days-sales-outstanding proxy from SoftDent A/R aging buckets."
+          : "Collection lag proxy from latest SoftDent production vs collections when A/R aging is unavailable.",
+        navTarget: WIDGET_NAV.nr2CollectionLag,
+        metrics: {
+          avgLagDays: metricValue(analyticsPack.lag.avgLagDays != null ? `${analyticsPack.lag.avgLagDays} days` : null),
+          dsoProxy: metricValue(analyticsPack.lag.dsoProxy ? "A/R weighted" : analyticsPack.lag.hasData ? "Monthly proxy" : null),
+        },
+      },
+      softdentProductionDaily: {
+        key: "softdentProductionDaily",
+        title: "SoftDent Production Trend",
+        status: prodDailyStatus,
+        summary: "Recent SoftDent production by period from sd_procedures (ODBC extract) or daysheet/dashboard fallback.",
+        navTarget: WIDGET_NAV.softdentProductionDaily,
+        metrics: {
+          granularity: metricValue(analyticsPack.prodDaily.granularity || null),
+          pointCount: metricValue((analyticsPack.prodDaily.points || []).length || null),
+          latestProduction: metricValue(
+            analyticsPack.prodDaily.points && analyticsPack.prodDaily.points.length
+              ? `$${Math.round(analyticsPack.prodDaily.points[analyticsPack.prodDaily.points.length - 1].production).toLocaleString()}`
+              : null,
+          ),
+        },
+      },
       payerMixAndCollections: payerWidget || {
         key: "payerMixAndCollections",
         title: "Payer Mix & Collections",
@@ -2058,6 +2365,94 @@ const HalSkills = (function () {
           grossProfit: rowAmount(qb.pl?.rows, "Gross Profit"),
           operatingExpenses: rowAmount(qb.pl?.rows, "Operating Expenses"),
           netIncome: rowAmount(qb.pl?.rows, "Net Income"),
+        },
+      },
+      quickbooksMonthlyRevenue: {
+        key: "quickbooksMonthlyRevenue",
+        title: "Monthly Revenue Trend",
+        status: qbRevStatus,
+        summary: "QuickBooks monthly TotalIncome from the read-only P&L/revenue import cache (cash-basis deposits).",
+        navTarget: WIDGET_NAV.quickbooksMonthlyRevenue,
+        metrics: {
+          monthCount: metricValue((analyticsPack.qbRev.labels || []).length || null),
+          latestMonth: metricValue(
+            analyticsPack.qbRev.labels && analyticsPack.qbRev.labels.length
+              ? analyticsPack.qbRev.labels[analyticsPack.qbRev.labels.length - 1]
+              : null,
+          ),
+          latestRevenue: metricValue(
+            analyticsPack.qbRev.values && analyticsPack.qbRev.values.length
+              ? `$${Math.round(analyticsPack.qbRev.values[analyticsPack.qbRev.values.length - 1]).toLocaleString()}`
+              : null,
+          ),
+        },
+      },
+      quickbooksNetIncomeSummary: {
+        key: "quickbooksNetIncomeSummary",
+        title: "Net Income Summary",
+        status: qbReportsPack.netIncome.hasData ? qbStatus : qbStatus === "SUCCESS" ? "DEGRADED" : "FAILED",
+        summary: "YTD and latest-month net income from QuickBooks monthly P&L import rows.",
+        navTarget: WIDGET_NAV.quickbooksNetIncomeSummary,
+        metrics: {
+          ytdNetIncome: metricValue(
+            qbReportsPack.netIncome.ytdNetIncome != null ? `$${Math.round(qbReportsPack.netIncome.ytdNetIncome).toLocaleString()}` : null,
+          ),
+          latestMonth: metricValue(qbReportsPack.netIncome.latestMonth),
+          latestNetIncome: metricValue(
+            qbReportsPack.netIncome.latestNetIncome != null ? `$${Math.round(qbReportsPack.netIncome.latestNetIncome).toLocaleString()}` : null,
+          ),
+        },
+      },
+      quickbooksBalanceSheetSummary: {
+        key: "quickbooksBalanceSheetSummary",
+        title: "Balance Sheet Summary",
+        status: qbReportsPack.balanceSheet.hasData ? qbStatus : "DEGRADED",
+        summary: "Asset and equity proxy from QuickBooks A/R plus P&L import cache.",
+        navTarget: WIDGET_NAV.quickbooksBalanceSheetSummary,
+        metrics: {
+          assetLines: metricValue((qbReportsPack.balanceSheet.assets || []).length || null),
+          equity: metricValue(
+            qbReportsPack.balanceSheet.equity != null ? `$${Math.round(qbReportsPack.balanceSheet.equity).toLocaleString()}` : null,
+          ),
+        },
+      },
+      quickbooksCashFlowTrend: {
+        key: "quickbooksCashFlowTrend",
+        title: "Cash Flow Trend",
+        status: qbReportsPack.cashFlow.hasData ? qbStatus : "DEGRADED",
+        summary: "Monthly net cash flow proxy from QuickBooks P&L income minus expenses.",
+        navTarget: WIDGET_NAV.quickbooksCashFlowTrend,
+        metrics: {
+          monthCount: metricValue((qbReportsPack.cashFlow.labels || []).length || null),
+          latestNet: metricValue(
+            qbReportsPack.cashFlow.net && qbReportsPack.cashFlow.net.length
+              ? `$${Math.round(qbReportsPack.cashFlow.net[qbReportsPack.cashFlow.net.length - 1]).toLocaleString()}`
+              : null,
+          ),
+        },
+      },
+      quickbooksRevenueByService: {
+        key: "quickbooksRevenueByService",
+        title: "Revenue by Service",
+        status: qbReportsPack.revenueSvc.hasData ? qbStatus : "DEGRADED",
+        summary: "Category/service revenue slices from QuickBooks expense categories or P&L proxy.",
+        navTarget: WIDGET_NAV.quickbooksRevenueByService,
+        metrics: {
+          sliceCount: metricValue((qbReportsPack.revenueSvc.slices || []).length || null),
+          topService: metricValue(firstItem(qbReportsPack.revenueSvc.slices)?.label),
+        },
+      },
+      quickbooksArAging: {
+        key: "quickbooksArAging",
+        title: "QuickBooks A/R Aging",
+        status: qbReportsPack.arAging.hasData ? qbStatus : "DEGRADED",
+        summary: "QuickBooks A/R aging buckets from import cache (informational cross-check vs SoftDent A/R).",
+        navTarget: WIDGET_NAV.quickbooksArAging,
+        metrics: {
+          bucketCount: metricValue((qbReportsPack.arAging.buckets || []).length || null),
+          totalAr: metricValue(
+            qbReportsPack.arAging.total != null ? `$${Math.round(qbReportsPack.arAging.total).toLocaleString()}` : null,
+          ),
         },
       },
       quickbooksExpenseBreakdown: {
@@ -2317,6 +2712,71 @@ const HalSkills = (function () {
           chairCount: "Not Configured",
           activeChairs: "Not Configured",
           nextOpenSlot: "Not Configured",
+        },
+      },
+      softdentCollectionsDaily: {
+        key: "softdentCollectionsDaily",
+        title: "Collections Trend",
+        status: sdDailyPack.collections.hasData ? softdentStatus : softdentStatus === "SUCCESS" ? "DEGRADED" : "FAILED",
+        summary: "Daily or monthly collections from sd_payments ODBC extract or SoftDent dashboard rows.",
+        navTarget: WIDGET_NAV.softdentCollectionsDaily,
+        metrics: {
+          pointCount: metricValue((sdDailyPack.collections.labels || sdDailyPack.collections.points || []).length || null),
+          latestCollections: metricValue(
+            sdDailyPack.collections.values && sdDailyPack.collections.values.length
+              ? `$${Math.round(sdDailyPack.collections.values[sdDailyPack.collections.values.length - 1]).toLocaleString()}`
+              : null,
+          ),
+        },
+      },
+      softdentNewPatientsMTD: {
+        key: "softdentNewPatientsMTD",
+        title: "New Patients (MTD)",
+        status: sdDailyPack.newPatients.hasData ? practiceStatus : "DEGRADED",
+        summary: "New patient count for the current month from sd_patients or practice export.",
+        navTarget: WIDGET_NAV.softdentNewPatientsMTD,
+        metrics: {
+          count: metricValue(sdDailyPack.newPatients.count),
+          period: metricValue(sdDailyPack.newPatients.period),
+        },
+      },
+      softdentClaimsOutstanding: {
+        key: "softdentClaimsOutstanding",
+        title: "Outstanding Claims",
+        status: sdDailyPack.claims.hasData ? claimsStatus : "DEGRADED",
+        summary: "Top outstanding claims from sd_claims or SoftDent claims export.",
+        navTarget: WIDGET_NAV.softdentClaimsOutstanding,
+        metrics: {
+          claimCount: metricValue((sdDailyPack.claims.claims || []).length || null),
+          totalOutstanding: metricValue(
+            sdDailyPack.claims.totalOutstanding != null
+              ? `$${Math.round(sdDailyPack.claims.totalOutstanding).toLocaleString()}`
+              : null,
+          ),
+        },
+      },
+      softdentProviderProduction: {
+        key: "softdentProviderProduction",
+        title: "Provider Production (Daily)",
+        status: sdDailyPack.providers.hasData ? financialStatus : "DEGRADED",
+        summary: "Provider production totals from sd_procedures or financial dashboard provider split.",
+        navTarget: WIDGET_NAV.softdentProviderProduction,
+        metrics: {
+          providerCount: metricValue((sdDailyPack.providers.providers || []).length || null),
+          topProvider: metricValue(firstItem(sdDailyPack.providers.providers)?.providerCode),
+          totalProduction: metricValue(
+            sdDailyPack.providers.total != null ? `$${Math.round(sdDailyPack.providers.total).toLocaleString()}` : null,
+          ),
+        },
+      },
+      softdentAppointmentsSnapshot: {
+        key: "softdentAppointmentsSnapshot",
+        title: "Appointments Snapshot",
+        status: sdDailyPack.appointments.hasData ? practiceStatus : "DEGRADED",
+        summary: "Recent appointments from sd_appointments or operatory chair schedule.",
+        navTarget: WIDGET_NAV.softdentAppointmentsSnapshot,
+        metrics: {
+          appointmentCount: metricValue((sdDailyPack.appointments.appointments || []).length || null),
         },
       },
       narrativeWorkflow: {
@@ -3621,6 +4081,7 @@ const HalSkills = (function () {
     WIDGET_ORDER,
     WIDGET_FILL_REQUIREMENTS,
     buildWidgetFeed,
+    crossReconcileSkill,
     enforceReceivablesArPolicy,
     formatPostingQueueList,
     formatWidgetFeed,
