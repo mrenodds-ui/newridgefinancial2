@@ -89,9 +89,9 @@ const MoonshotLayoutEngine = (function () {
     if (panel.type === "hero-kpi" && (!panel.colSpan || panel.colSpan >= 12)) {
       const kpis = resolveHeroKpis(panel, D, H, pageId);
       if (pageId === "ar" && kpis && kpis.length) {
-        return H.canvasKpiGrid(kpis);
+        return kpis.length >= 5 ? H.heroKpiRow(kpis, 6) : H.canvasKpiGrid(kpis);
       }
-      const maxKpis = pageId === "financial" ? 5 : 4;
+      const maxKpis = pageId === "financial" ? 5 : pageId === "ar" ? 6 : 4;
       return kpis && kpis.length ? H.heroKpiRow(kpis, maxKpis) : "";
     }
     return H.canvasPanel({
@@ -196,6 +196,14 @@ const MoonshotLayoutEngine = (function () {
     }
     if (pageId === "claims" && panel.kpis && panel.kpis.length) {
       return D.claimsPipelineSummary ? D.claimsPipelineSummary() : D.claimsKpis ? D.claimsKpis() : [];
+    }
+    if (pageId === "ar" && panel.kpis && panel.kpis.length) {
+      const built = D.arEliteKpis ? D.arEliteKpis() : D.arKpis ? D.arKpis() : [];
+      const bySub = Object.fromEntries(built.filter((k) => k.halSubpanel).map((k) => [k.halSubpanel, k]));
+      return panel.kpis.map((spec) => {
+        const base = bySub[spec.halSubpanel] || { label: spec.label, value: "—", halSubpanel: spec.halSubpanel };
+        return { ...base, label: spec.label || base.label, halSubpanel: spec.halSubpanel };
+      });
     }
     if (pageId === "claims" && panel.halSubpanel) {
       const all = D.claimsKpis ? D.claimsKpis() : [];
@@ -471,10 +479,21 @@ const MoonshotLayoutEngine = (function () {
             ];
       return H.canvasKanbanLanes(kanbanLanes, "claimsPipeline", { claims: true });
     },
-    arAgingAndCollections(D, H) {
-      const aging = D && D.softdentAgingBars ? D.softdentAgingBars() : null;
+    arAgingAndCollections(D, H, panel) {
+      const aging = D && D.arAgingBars ? D.arAgingBars() : D && D.softdentAgingBars ? D.softdentAgingBars() : null;
       const heat = H.arHeatmapFromAging ? H.arHeatmapFromAging(aging) : null;
-      return heat ? H.canvasHeatmap(heat.rowLabels, heat.colLabels, heat.matrix) : H.canvasHeatmapPlaceholder();
+      const waterfall =
+        aging && aging.labels && aging.values
+          ? `<div class="ms-elite-waterfall">${aging.labels
+              .map((label, i) => {
+                const max = Math.max(...aging.values, 1);
+                const pct = Math.round(((aging.values[i] || 0) / max) * 100);
+                return `<div class="ms-elite-waterfall-row"><span class="ms-elite-waterfall-label">${H.esc(label)}</span><div class="ms-elite-waterfall-track"><div class="ms-elite-waterfall-fill" style="--w:${pct}%"></div></div><span class="ms-elite-stat-num">$${Math.round(aging.values[i] || 0).toLocaleString()}</span></div>`;
+              })
+              .join("")}</div>`
+          : `<div class="ms-elite-waterfall"><div class="ms-elite-waterfall-row"><span class="ms-elite-waterfall-label">A/R buckets</span><div class="ms-elite-waterfall-track"><div class="ms-elite-waterfall-fill" style="--w:0%"></div></div><span class="ms-elite-stat-num">—</span></div></div>`;
+      const heatHtml = heat ? H.canvasHeatmap(heat.rowLabels, heat.colLabels, heat.matrix) : H.canvasHeatmapPlaceholder();
+      return `${waterfall}${heatHtml}`;
     },
     smartClaimsAndReceivables(D, H) {
       const kanban = D && D.arFollowUpKanban ? D.arFollowUpKanban() : [];

@@ -414,137 +414,126 @@ const MOONSHOT_PAGE_LAYOUTS = {
       ]
     },
     "ar": {
-      "title": "A/R & Collections",
+      "title": "A/R Mission Control",
       "shell": "widget-grid",
       "panels": [
         {
           "id": "ar-hero-kpis",
           "type": "hero-kpi",
           "colSpan": 12,
-          "title": "Revenue Cycle KPIs",
-          "dataBind": "PageCanvasData.arKpis()"
+          "dataBind": "PageCanvasData.arEliteKpis()",
+          "kpis": [
+            { "halSubpanel": "arKpiTotal", "label": "Total A/R" },
+            { "halSubpanel": "arKpiCurrent", "label": "Current (0–30)" },
+            { "halSubpanel": "arKpi3160", "label": "31–60 Days" },
+            { "halSubpanel": "arKpi6190", "label": "61–90 Days" },
+            { "halSubpanel": "arKpi90plus", "label": "90+ Days" },
+            { "halSubpanel": "arKpiDso", "label": "DSO" }
+          ]
         },
         {
           "id": "ar-aging-heatmap",
-          "type": "heatmap",
+          "type": "custom",
           "widgetKey": "arAgingAndCollections",
           "colSpan": 8,
-          "title": "Aging & Collections Trend",
-          "dataBind": "PageCanvasData.arAgingHeatmap()"
+          "title": "A/R Waterfall & Collections Heatmap"
         },
         {
-          "id": "ar-distribution-donut",
-          "type": "donut",
-          "halSubpanel": "arDistribution",
+          "id": "ar-outstanding-claims",
+          "type": "table",
+          "widgetKey": "arOutstandingClaims",
           "colSpan": 4,
-          "title": "A/R Distribution",
-          "dataBind": "PageCanvasData.arDistribution()",
-          "chartType": "donut"
+          "title": "Outstanding Claims",
+          "dataBind": "PageCanvasData.arTopClaimsTable()"
         },
         {
-          "id": "ar-followup-kanban",
+          "id": "ar-follow-up-queue",
           "type": "kanban",
           "widgetKey": "smartClaimsAndReceivables",
           "colSpan": 12,
           "title": "Follow-up Queue",
-          "dataBind": "PageCanvasData.followUpQueue()"
-        },
-        {
-          "id": "ar-outstanding-table",
-          "type": "table",
-          "widgetKey": "arOutstandingClaims",
-          "colSpan": 12,
-          "title": "Outstanding Claims",
-          "dataBind": "PageCanvasData.outstandingClaims()"
+          "dataBind": "PageCanvasData.arFollowUpKanban()"
         }
       ]
     },
     "quickbooks": {
       "title": "QuickBooks Integration",
-      "shell": "dashboard-grid",
+      "shell": "widget-grid",
       "panels": [
         {
-          "id": "qb-hero-kpis",
-          "type": "hero-kpi",
-          "colSpan": 12,
-          "title": "Financial Performance",
-          "dataBind": "PageCanvasData.quickbooksKpis()"
-        },
-        {
-          "id": "qb-revenue-trend",
-          "type": "chart",
-          "widgetKey": "quickbooksMonthlyRevenue",
-          "colSpan": 8,
-          "title": "Profit & Loss Trend",
-          "dataBind": "PageCanvasData.revenueTrendSeries()",
-          "chartType": "dual"
-        },
-        {
-          "id": "qb-revenue-service",
-          "type": "donut",
-          "widgetKey": "quickbooksRevenueByService",
-          "colSpan": 4,
-          "title": "Revenue by Service",
-          "dataBind": "PageCanvasData.revenueByService()",
-          "chartType": "donut"
-        },
-        {
           "id": "qb-pl-summary",
-          "type": "stat-grid",
+          "type": "table",
           "widgetKey": "quickbooksProfitLossDetail",
           "colSpan": 6,
-          "title": "Profit & Loss Summary",
-          "dataBind": "PageCanvasData.plSummary()"
+          "title": "Profit & Loss Summary (YTD)",
+          "dataBind": "PageCanvasData.quickbooksPlRows()"
         },
         {
-          "id": "qb-net-income-gauge",
-          "type": "gauge",
-          "widgetKey": "quickbooksNetIncomeSummary",
+          "id": "qb-ebitda-bridge",
+          "type": "table",
+          "widgetKey": "ebitdaNormalization",
           "colSpan": 6,
-          "title": "Net Income Performance",
-          "dataBind": "PageCanvasData.netIncomeGauge()"
-        },
-        {
-          "id": "qb-balance-sheet",
-          "type": "stat-grid",
-          "widgetKey": "quickbooksBalanceSheetSummary",
-          "colSpan": 6,
-          "title": "Balance Sheet Summary",
-          "dataBind": "PageCanvasData.balanceSheetMetrics()"
+          "title": "EBITDA Normalization",
+          "dataBind": "PageCanvasData.ebitdaRows()"
         },
         {
           "id": "qb-cash-flow",
           "type": "chart",
           "widgetKey": "quickbooksCashFlowTrend",
-          "colSpan": 6,
+          "colSpan": 8,
           "title": "Cash Flow Trend",
-          "dataBind": "PageCanvasData.cashFlowSeries()",
-          "chartType": "line"
-        },
-        {
-          "id": "qb-ebitda-funnel",
-          "type": "funnel",
-          "widgetKey": "ebitdaNormalization",
-          "colSpan": 6,
-          "title": "EBITDA Normalization",
-          "dataBind": "PageCanvasData.ebitdaBridge()"
+          "dataBind": "PageCanvasData.quickbooksCashFlowTrend()",
+          "chartType": "dual"
         },
         {
           "id": "qb-expense-breakdown",
-          "type": "chart",
+          "type": "stat-grid",
           "widgetKey": "quickbooksExpenseBreakdown",
-          "colSpan": 6,
+          "colSpan": 4,
           "title": "Operating Expenses",
-          "dataBind": "PageCanvasData.expenseBreakdown()",
+          "dataBind": "PageCanvasData.quickbooksExpenseBars()"
+        },
+        {
+          "id": "qb-monthly-revenue",
+          "type": "chart",
+          "widgetKey": "quickbooksMonthlyRevenue",
+          "colSpan": 6,
+          "title": "Monthly Revenue Trend",
+          "dataBind": "PageCanvasData.quickbooksMonthlyRevenueSeries()",
           "chartType": "bar"
+        },
+        {
+          "id": "qb-net-income",
+          "type": "stat-grid",
+          "widgetKey": "quickbooksNetIncomeSummary",
+          "colSpan": 6,
+          "title": "Net Income Summary",
+          "dataBind": "PageCanvasData.quickbooksNetIncomeSummary()"
+        },
+        {
+          "id": "qb-balance-sheet",
+          "type": "table",
+          "widgetKey": "quickbooksBalanceSheetSummary",
+          "colSpan": 6,
+          "title": "Balance Sheet Summary",
+          "dataBind": "PageCanvasData.quickbooksBalanceSheetSummary()"
+        },
+        {
+          "id": "qb-revenue-service",
+          "type": "donut",
+          "widgetKey": "quickbooksRevenueByService",
+          "colSpan": 3,
+          "title": "Revenue by Service",
+          "dataBind": "PageCanvasData.quickbooksRevenueByService()",
+          "chartType": "donut"
         },
         {
           "id": "qb-ar-aging",
           "type": "table",
           "widgetKey": "quickbooksArAging",
-          "colSpan": 12,
+          "colSpan": 3,
           "title": "QuickBooks A/R Aging",
-          "dataBind": "PageCanvasData.qbArAging()"
+          "dataBind": "PageCanvasData.quickbooksQbArAging()"
         }
       ]
     },

@@ -1287,6 +1287,46 @@ const PageCanvasData = (function () {
     return [];
   }
 
+  function arAgingBars() {
+    if (!verifiedArWidgetReady("arAgingAndCollections")) return null;
+    const ar = dash("ar") || {};
+    const aging = ar.aging || ar.buckets || [];
+    if (aging.length) {
+      return {
+        labels: aging.map((a) => a.bucket || a.label),
+        values: aging.map((a) => parseAmount(a.amount || a.pct)),
+      };
+    }
+    if (verifiedArWidgetReady("softdentArAging")) return softdentAgingBars();
+    return null;
+  }
+
+  function arEliteKpis() {
+    const ar = dash("ar") || {};
+    const wm = metrics("arAgingAndCollections");
+    const lag = nr2CollectionLag();
+    const dsoTile = (nr2KpiRibbonTiles().tiles || []).find((t) => /dso|days|ar/i.test(String(t.label || "")));
+    const dsoValue = lag.hasData && lag.avgLagDays != null ? String(lag.avgLagDays) : dsoTile ? dsoTile.value : "—";
+    const buckets = ar.aging || ar.buckets || [];
+    const findBucket = (re) => {
+      const row = buckets.find((a) => re.test(String(a.bucket || a.label || "")));
+      return row ? fmt(row.amount || row.pct) : "—";
+    };
+    return [
+      {
+        label: "Total A/R",
+        value: fmt(wm.totalOutstanding),
+        halSubpanel: "arKpiTotal",
+        tone: widgetTone("arAgingAndCollections") || "warning",
+      },
+      { label: "Current (0–30)", value: findBucket(/0-30|current/i), halSubpanel: "arKpiCurrent" },
+      { label: "31–60 Days", value: findBucket(/31-60|31\s*to\s*60/i), halSubpanel: "arKpi3160" },
+      { label: "61–90 Days", value: findBucket(/61-90|61\s*to\s*90/i), halSubpanel: "arKpi6190" },
+      { label: "90+ Days", value: findBucket(/90\+|^\s*90/i), halSubpanel: "arKpi90plus", tone: "warning" },
+      { label: "DSO", value: dsoValue, halSubpanel: "arKpiDso" },
+    ];
+  }
+
   function arKpis() {
     const ar = dash("ar") || {};
     const wm = metrics("arAgingAndCollections");
@@ -2113,6 +2153,8 @@ const PageCanvasData = (function () {
     quickbooksExpenseDonut,
     ebitdaRows,
     arKpis,
+    arEliteKpis,
+    arAgingBars,
     arCollectionsChart,
     arTopClaimsTable,
     arFollowUpKanban,
