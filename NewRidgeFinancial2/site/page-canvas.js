@@ -194,6 +194,12 @@ const PageCanvas = (function () {
     return `<span class="ms-panel-ico">${AppIcons.widget(widgetKey)}</span>`;
   }
 
+  function kpiRefHalAttrs(widgetKey, cmdLabel) {
+    if (!widgetKey) return "";
+    const label = cmdLabel || widgetKey;
+    return ` data-hal-kpi-ref="${esc(widgetKey)}" data-hal-cmd="Explain ${esc(label)}" role="button" tabindex="0"`;
+  }
+
   function canvasMetricTile(kpi, colSpan) {
     const widgetKey = kpi.widgetKey || "";
     const HW = halWidgetsApi();
@@ -201,7 +207,7 @@ const PageCanvas = (function () {
     const cmdLabel = (widget && widget.title) || kpi.label || widgetKey;
     const halCmd = widgetKey && cmdLabel ? ` data-hal-cmd="Explain ${esc(cmdLabel)}"` : "";
     const halTone = widgetKey && HW ? ` hal-widget-status hal-widget-status--${HW.statusTone(widget ? widget.status : "FAILED")}` : "";
-    const attrs = widgetKey ? ` data-hal-widget-key="${esc(widgetKey)}"${halCmd} role="button" tabindex="0"` : "";
+    const attrs = widgetKey ? kpiRefHalAttrs(widgetKey, cmdLabel) : "";
     const trend = kpi.hint ? `<div class="trend-indicator"><span>↑</span> ${esc(kpi.hint)}</div>` : "";
     const sparkHtml = kpi.spark && kpi.spark.length ? barSparkline(kpi.spark, kpi.tone) : "";
     const col = colSpan || 3;
@@ -227,7 +233,7 @@ const PageCanvas = (function () {
   function canvasKpiTile(kpi) {
     const widgetKey = kpi.widgetKey || "";
     const cmdLabel = kpi.label || widgetKey;
-    const halCmd = widgetKey ? ` data-hal-widget-key="${esc(widgetKey)}" data-hal-cmd="Explain ${esc(cmdLabel)}" role="button" tabindex="0"` : "";
+    const halCmd = widgetKey ? kpiRefHalAttrs(widgetKey, cmdLabel) : "";
     const deltaClass = kpi.tone === "success" ? "kpi-positive" : kpi.tone === "warning" ? "kpi-negative" : "";
     const arrow = kpi.tone === "warning" ? "↓" : "↑";
     const delta = kpi.hint ? `<div class="kpi-delta ${deltaClass}"><span>${arrow}</span> ${esc(kpi.hint)}</div>` : "";
@@ -247,7 +253,7 @@ const PageCanvas = (function () {
       .slice(0, 5)
       .map(
         (kpi, i) =>
-          `<div class="stat-item"${kpi.widgetKey ? ` data-hal-widget-key="${esc(kpi.widgetKey)}"` : ""}><div class="stat-icon">${icons[i] || "◈"}</div><div class="stat-info"><h4>${esc(kpi.value)}</h4><span>${esc(kpi.label)}</span></div></div>`,
+          `<div class="stat-item"${kpi.widgetKey ? kpiRefHalAttrs(kpi.widgetKey, kpi.label) : ""}><div class="stat-icon">${icons[i] || "◈"}</div><div class="stat-info"><h4>${esc(kpi.value)}</h4><span>${esc(kpi.label)}</span></div></div>`,
       )
       .join("")}</div>`;
   }
@@ -264,21 +270,27 @@ const PageCanvas = (function () {
       .join("")}</div>`;
   }
 
-  function canvasPanel({ title, caption, accent, widgetKey, body, dataOnly, colSpan }) {
+  function canvasPanel({ title, caption, accent, widgetKey, body, dataOnly, colSpan, chartHost, halSubpanel }) {
     const HW = halWidgetsApi();
+    const useSubpanel = Boolean(halSubpanel);
     const chrome =
-      HW && widgetKey
+      HW && widgetKey && !useSubpanel
         ? HW.panelChrome(widgetKey, title, activeFeed, { dataOnly: dataOnly !== false })
         : {
             badge: "",
             note: "",
-            attrs: widgetKey ? ` data-hal-widget-key="${esc(widgetKey)}"` : "",
+            attrs: useSubpanel
+              ? ` data-hal-subpanel="${esc(halSubpanel)}"`
+              : widgetKey
+                ? ` data-hal-widget-key="${esc(widgetKey)}"`
+                : "",
             toneClass: "",
             icon: "",
           };
+    const chartHostAttr = widgetKey && chartHost && !useSubpanel ? ` data-nr2-chart-host="${esc(widgetKey)}"` : "";
     const col = colSpan ? ` col-${colSpan}` : "";
     const accentClass = accent === "orange" ? " widget-accent-orange" : "";
-    return `<section class="widget-card widget-glow-border widget-mount-glow${col}${accentClass}${(chrome.toneClass || "").trim() ? " " + esc(chrome.toneClass.trim()) : ""}"${chrome.attrs}>
+    return `<section class="widget-card widget-glow-border widget-mount-glow${col}${accentClass}${(chrome.toneClass || "").trim() ? " " + esc(chrome.toneClass.trim()) : ""}"${chrome.attrs}${chartHostAttr}>
         <div class="widget-header"><span class="widget-title">${chrome.icon || widgetHeaderIcon(widgetKey)}${esc(title)}</span><div class="widget-menu" aria-hidden="true">⋮</div></div>
         <div class="widget-body">${body}${chrome.note || ""}</div>
         ${caption ? `<p class="widget-caption">${esc(caption)}</p>` : ""}
@@ -288,7 +300,7 @@ const PageCanvas = (function () {
   function canvasStat(value, label, tone, widgetKey) {
     const toneClass = tone ? ` stat-box--${tone}` : "";
     const wk = widgetKey || "";
-    const attrs = wk ? ` data-hal-widget-key="${esc(wk)}" data-hal-cmd="Explain ${esc(label)}" role="button" tabindex="0"` : "";
+    const attrs = wk ? kpiRefHalAttrs(wk, label) : "";
     return `<div class="stat-box${toneClass}"${attrs}><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`;
   }
 
@@ -350,7 +362,7 @@ const PageCanvas = (function () {
         </div>`;
       })
       .join("");
-    return `<div class="kanban-board claims-pipeline${claimsMode ? " kanban-board--claims" : ""}" data-hal-widget-key="${esc(widgetKey || "")}">${laneHtml}</div>`;
+    return `<div class="kanban-board claims-pipeline${claimsMode ? " kanban-board--claims" : ""}" data-hal-subpanel="${esc(widgetKey || "kanban")}-board">${laneHtml}</div>`;
   }
 
   function canvasTimeline(items) {
@@ -410,7 +422,7 @@ const PageCanvas = (function () {
 
   function canvasSearch(placeholder, widgetKey) {
     const wk = widgetKey || "documentLibrary";
-    return `<div class="search-container" data-hal-widget-key="${esc(wk)}">
+    return `<div class="search-container" data-hal-subpanel="${esc(wk)}-search">
       <input class="search-box" type="search" placeholder="${esc(placeholder)}" data-hal-library-query="1" aria-label="Search library" />
       <button type="button" class="search-action" data-hal-library-search="1">Search with HAL</button>
     </div>`;
@@ -687,7 +699,7 @@ const PageCanvas = (function () {
     return `<div class="queue-list">${items
       .map(
         (item) =>
-          `<div class="queue-item" data-hal-widget-key="${esc(widgetKey || "")}" data-hal-cmd="Review ${esc(item.label)}" role="button" tabindex="0"><div><div class="queue-patient">${esc(item.label)}</div><div class="queue-meta">${esc(item.meta)}</div></div><div style="text-align:right;">${item.amount ? `<div class="queue-amount">${esc(item.amount)}</div>` : ""}<button type="button" class="queue-action action-btn action-btn--sm" data-hal-action="1">Review</button></div></div>`,
+          `<div class="queue-item" data-hal-subpanel="${esc(widgetKey || "followUpQueue")}" data-hal-cmd="Review ${esc(item.label)}" role="button" tabindex="0"><div><div class="queue-patient">${esc(item.label)}</div><div class="queue-meta">${esc(item.meta)}</div></div><div style="text-align:right;">${item.amount ? `<div class="queue-amount">${esc(item.amount)}</div>` : ""}<button type="button" class="queue-action action-btn action-btn--sm" data-hal-action="1">Review</button></div></div>`,
       )
       .join("")}</div>`;
   }
@@ -696,9 +708,9 @@ const PageCanvas = (function () {
     const wk = widgetKey || "claimsPipeline";
     const denial = claim && claim.status === "Denied";
     return `<div class="side-panel">
-      <article class="panel-card" data-hal-widget-key="${esc(wk)}"><h4>Denial risk</h4><p>${denial ? "Selected claim is denied — review attachments and payer notes." : "Pipeline claims are monitored for denial patterns."}</p></article>
-      <article class="panel-card" data-hal-widget-key="${esc(wk)}"><h4>ERA matches</h4><p>${claim ? `${esc(claim.payer || "Payer")} · ${fmtClaim(claim.amount)}` : "ERA reconciliation appears when claims export is loaded."}</p></article>
-      <article class="panel-card" data-hal-widget-key="${esc(wk)}"><h4>Attachments</h4><p>${claim ? "Verify narrative and perio chart before resubmit." : "Attachment checklist populates from open claims."}</p></article>
+      <article class="panel-card" data-hal-subpanel="${esc(wk)}"><h4>Denial risk</h4><p>${denial ? "Selected claim is denied — review attachments and payer notes." : "Pipeline claims are monitored for denial patterns."}</p></article>
+      <article class="panel-card" data-hal-subpanel="${esc(wk)}"><h4>ERA matches</h4><p>${claim ? `${esc(claim.payer || "Payer")} · ${fmtClaim(claim.amount)}` : "ERA reconciliation appears when claims export is loaded."}</p></article>
+      <article class="panel-card" data-hal-subpanel="${esc(wk)}"><h4>Attachments</h4><p>${claim ? "Verify narrative and perio chart before resubmit." : "Attachment checklist populates from open claims."}</p></article>
     </div>`;
   }
 
@@ -708,7 +720,7 @@ const PageCanvas = (function () {
       .slice(0, 12)
       .map(
         (row) =>
-          `<article class="doc-card library-card" data-hal-widget-key="${esc(widgetKey || "")}" data-hal-cmd="Open ${esc(row[0])}" role="button" tabindex="0"><strong>${esc(row[0])}</strong><span>${esc(row[1])}</span><em>${esc(row[2])}${row[3] ? ` · exp ${esc(row[3])}` : ""}</em></article>`,
+          `<article class="doc-card library-card" data-hal-subpanel="${esc(widgetKey || "documentLibrary")}" data-hal-cmd="Open ${esc(row[0])}" role="button" tabindex="0"><strong>${esc(row[0])}</strong><span>${esc(row[1])}</span><em>${esc(row[2])}${row[3] ? ` · exp ${esc(row[3])}` : ""}</em></article>`,
       )
       .join("")}</div>`;
   }
@@ -739,7 +751,7 @@ const PageCanvas = (function () {
       .slice(0, 3)
       .map(
         (s) =>
-          `<article class="focus-item"${s.widgetKey ? ` data-hal-widget-key="${esc(s.widgetKey)}" data-hal-cmd="Explain ${esc(s.label)}" role="button" tabindex="0"` : ""}><span>${esc(String(s.label || "").toUpperCase())}</span><strong>${esc(s.value)}</strong></article>`,
+          `<article class="focus-item"${s.widgetKey ? kpiRefHalAttrs(s.widgetKey, s.label) : ""}><span>${esc(String(s.label || "").toUpperCase())}</span><strong>${esc(s.value)}</strong></article>`,
       )
       .join("")}</div>`;
   }
@@ -834,7 +846,7 @@ const PageCanvas = (function () {
     return `<div class="kpi-ribbon">${tiles
       .map(
         (tile) =>
-          `<div class="kpi-ribbon-tile kpi-ribbon-tile--${esc(tile.tone || "neutral")} kpi-glow-card" data-hal-widget-key="${esc(tile.widgetKey || "nr2KpiRibbon")}" role="button" tabindex="0"><span>${esc(tile.label)}</span><strong>${esc(tile.value)}</strong></div>`,
+          `<div class="kpi-ribbon-tile kpi-ribbon-tile--${esc(tile.tone || "neutral")} kpi-glow-card"${kpiRefHalAttrs(tile.widgetKey || "nr2KpiRibbon", tile.label)}><span>${esc(tile.label)}</span><strong>${esc(tile.value)}</strong></div>`,
       )
       .join("")}</div>`;
   }
@@ -973,6 +985,7 @@ const PageCanvas = (function () {
             accent: "green",
             caption: "12-month production vs trailing average",
             widgetKey: "financialProductionTrend",
+            chartHost: true,
             body: trend ? chartContainer(finTrendChart(trend.production, trend.average, trend.max), true) : canvasEmpty("12-month production trend unavailable."),
           }),
         )}
@@ -1137,6 +1150,7 @@ const PageCanvas = (function () {
             accent: "green",
             caption: "A/R aging buckets",
             widgetKey: wKey("softdent", 6),
+            chartHost: true,
             body: aging ? chartContainer(vBarChart(aging.labels, aging.values, "#60a5fa")) : canvasEmpty("A/R aging buckets will appear when SoftDent A/R export is loaded."),
           }),
         )}
@@ -1300,7 +1314,7 @@ const PageCanvas = (function () {
         const widgetKey = k.widgetKey || (i === 3 ? "ebitdaNormalization" : "quickbooksProfitLossDetail");
         const delta = k.delta ? `<span class="trend${String(k.delta).trim().startsWith("-") ? " negative" : ""}">${esc(k.delta)}</span>` : "";
         const sparkHtml = k.spark && k.spark.length ? barSparkline(k.spark, k.tone) : "";
-        return `<div class="card kpi-card kpi-glow-card" data-hal-widget-key="${esc(widgetKey)}">
+        return `<div class="card kpi-card kpi-glow-card"${kpiRefHalAttrs(widgetKey, k.label || k.title || widgetKey)}>
           <div class="card-header"><span class="card-title">${widgetHeaderIcon(widgetKey)}${esc(k.label || k.title || "KPI")}</span></div>
           <div class="card-value">${esc(k.value || "—")}</div>
           ${sparkHtml}
@@ -1320,7 +1334,7 @@ const PageCanvas = (function () {
     return `${stackOpen()}
       ${dashboardHost(`<div class="dashboard-grid">${kpiCards}</div>`)}
       ${dashboardHost(`<div class="dashboard-grid">
-        <div class="card chart-large widget-glow-border" data-hal-widget-key="quickbooksProfitLossDetail">
+        <div class="card chart-large widget-glow-border" data-hal-widget-key="quickbooksProfitLossDetail" data-nr2-chart-host="quickbooksProfitLossDetail">
           <div class="card-header"><span class="card-title">${widgetHeaderIcon("quickbooksProfitLossDetail")}Profit &amp; Loss Trend (YTD)</span></div>
           ${plChartBody}
         </div>
@@ -1436,6 +1450,7 @@ const PageCanvas = (function () {
             accent: "orange",
             caption: "Collections by payer",
             widgetKey: wKey("ar", 0),
+            halSubpanel: "arPayerMix",
             body: payerDonut ? conicDonut(payerDonut.slices, payerDonut.center, 96) : canvasEmpty("Payer mix will appear when collections data is loaded."),
           }),
         )}
@@ -1446,6 +1461,7 @@ const PageCanvas = (function () {
             accent: "orange",
             caption: "Payer × aging heatmap",
             widgetKey: wKey("ar", 0),
+            chartHost: true,
             body: heat ? canvasHeatmap(heat.rowLabels, heat.colLabels, heat.matrix) : canvasHeatmapPlaceholder(),
           }),
         )}
@@ -1456,6 +1472,7 @@ const PageCanvas = (function () {
             accent: "orange",
             caption: "Recent collections trend",
             widgetKey: wKey("ar", 0),
+            halSubpanel: "arCollectionsWaterfall",
             body: waterfallItems.length ? chartContainer(canvasWaterfall(waterfallItems)) : chart ? chartContainer(dualLineChart(chart.labels, chart.series)) : canvasEmpty("Collections trend will appear when A/R dashboard data is loaded."),
           }),
         )}
@@ -1511,7 +1528,7 @@ const PageCanvas = (function () {
             title: "Pipeline analytics",
             accent: "purple",
             caption: "Denial risk · ERA · attachments",
-            widgetKey: "claimsPipeline",
+            halSubpanel: "claimsPipelineAnalytics",
             body: canvasClaimSidebar(claim, wKey("claims", 0)),
           }),
         )}
@@ -1521,7 +1538,7 @@ const PageCanvas = (function () {
             title: "Claim detail",
             accent: "purple",
             caption: claim ? `${claim.patient || "Claim"} · ${claim.procedure || "—"}` : "Selected claim",
-            widgetKey: "claimsPipeline",
+            halSubpanel: "claimsClaimDetail",
             body: claim
               ? `<div class="claim-detail">
                 <strong>${esc(claim.procedure || claim.id || "Claim")}</strong>
@@ -1539,7 +1556,7 @@ const PageCanvas = (function () {
           canvasPanel({
             title: "Claim status",
             caption: claim ? claim.id || "First open claim" : "Claim history",
-            widgetKey: "claimsPipeline",
+            halSubpanel: "claimsClaimStatus",
             body: claim
               ? canvasTimeline([
                   { time: fmtClaim(claim.serviceDate), title: claim.status || "Open", detail: `${fmtClaim(claim.amount)} · ${claim.payer || "—"}`, active: true },
@@ -1556,7 +1573,7 @@ const PageCanvas = (function () {
             caption: "Local review only · not submitted to payers",
             widgetKey: "narrativeWorkflow",
             body: `${canvasNarrativeSelectors(composerOpts, claim)}
-              <div class="composer-panel narrative-draft-panel" data-hal-widget-key="${esc(wKey("narratives", 0))}" data-narrative-claim-id="${esc(claim && claim.id ? claim.id : "")}">
+              <div class="composer-panel narrative-draft-panel" data-narrative-claim-id="${esc(claim && claim.id ? claim.id : "")}">
                 ${canvasTextArea(draft || "", 8, true)}
                 ${draft ? canvasNarrativeCitations(citationWidgets) : canvasEmpty("Select a claim and choose Draft with HAL, or generate from the controls above.")}
               </div>`,
@@ -1580,7 +1597,7 @@ const PageCanvas = (function () {
       ${kpis.length ? `${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}` : `${metricRowOpen()}${canvasMetricTile({ label: "Narrative Composer", value: "Ready", widgetKey: wKey("narratives", 0) })}${metricRowClose()}`}
       ${canvasNarrativeSelectors(composerOpts, claim)}
       <div class="composer-grid">
-        <div class="panel" data-hal-widget-key="${esc(wKey("narratives", 0))}">
+        <div class="panel" data-hal-subpanel="narrativeProcedureCodes">
           <div class="panel-header"><span>Procedure Codes</span><span style="font-size:12px;color:var(--text-secondary)">CDT 2024</span></div>
           <div class="panel-content">
             <input class="search-box" type="search" placeholder="Search codes…" aria-label="Search CDT codes" />
@@ -1598,12 +1615,12 @@ const PageCanvas = (function () {
             <button type="button" class="chip" data-narrative-generate="1">Draft with HAL</button>
             <button type="button" class="chip" data-narrative-save="1">Save draft locally</button>
           </div>
-          <div class="composer-panel" data-hal-widget-key="${esc(wKey("narratives", 0))}" data-narrative-claim-id="${esc(claim && claim.id ? claim.id : "")}">
+          <div class="composer-panel" data-hal-widget-key="narrativeWorkflow" data-narrative-claim-id="${esc(claim && claim.id ? claim.id : "")}">
             ${canvasTextArea(draft || "", 12, true)}
             ${draft ? `<div class="confidence-bar"><span style="color:var(--text-secondary)">AI Confidence:</span><div class="confidence-meter"><span class="confidence-fill" style="width:${confidencePct}%"></span></div><span>${confidencePct}%</span></div>${canvasNarrativeCitations(citationWidgets)}` : canvasEmpty("Start typing or ask HAL to draft a narrative for staff review.")}
           </div>
         </div>
-        <div class="panel" data-hal-widget-key="${esc(wKey("narratives", 0))}">
+        <div class="panel" data-hal-subpanel="narrativeDraftHistory">
           <div class="panel-header"><span>Draft history</span></div>
           <div class="panel-content">${
             history.length
@@ -1720,6 +1737,7 @@ const PageCanvas = (function () {
             title: "Source breakdown",
             accent: "cyan",
             widgetKey: wKey("documents", 0),
+            halSubpanel: "documentSourceBreakdown",
             body: canvasStatGrid(D ? D.documentsSourceBreakdown() : []),
           }),
         )}
@@ -1747,6 +1765,7 @@ const PageCanvas = (function () {
           title: "Preview",
           accent: "gray",
           widgetKey: wKey("library", 0),
+          halSubpanel: "documentLibraryPreview",
           body: `${canvasDocPreview(doc ? doc.title || doc.name || "Document" : "Library preview", doc && doc.pages ? doc.pages : 1)}
             ${doc ? `<div class="side-panel-meta">
               <article class="panel-card"><h4>Metadata</h4><p>${esc(doc.title || doc.name || "Document")} · ${esc(doc.category || "—")}</p></article>
@@ -1817,7 +1836,7 @@ const PageCanvas = (function () {
           12,
           canvasPanel({
             title: "Related surfaces",
-            widgetKey: "taxBookToTaxBridge",
+            halSubpanel: "taxRelatedSurfaces",
             body: canvasNavPills(["financial", "quickbooks", "documents"]),
           }),
         )}
@@ -1840,6 +1859,7 @@ const PageCanvas = (function () {
             accent: "blue",
             caption: "Federal + Kansas on K-1 flow-through",
             widgetKey: "taxFederalStateSplit",
+            chartHost: true,
             body:
               split.length && totalTax
                 ? taxUsageBar(split, totalTax, `Planning total ${fmtTaxMoney(totalTax)} · not a filed return`)
@@ -1899,6 +1919,7 @@ const PageCanvas = (function () {
             accent: "blue",
             caption: "Calendar-year S corp",
             widgetKey: "taxQuarterlyEstimates",
+            halSubpanel: "taxKeyDeadlines",
             body: calendar.length ? canvasTable(["Date", "Jurisdiction", "Action"], calendar, true) : canvasEmpty("—"),
           }),
           canvasPanel({
@@ -1906,6 +1927,7 @@ const PageCanvas = (function () {
             accent: "green",
             caption: "Memories cited for this plan",
             widgetKey: "taxBookToTaxBridge",
+            halSubpanel: "taxMemoEvidence",
             body: memoList,
           }),
         )}
@@ -1916,12 +1938,14 @@ const PageCanvas = (function () {
               title: "Federal obligations",
               accent: "blue",
               widgetKey: "taxFederalStateSplit",
+              halSubpanel: "taxFederalObligations",
               body: federal.length ? canvasTable(["Item", "Purpose", "Timing", "Notes"], federal, true) : canvasEmpty("—"),
             }),
             canvasPanel({
               title: "Kansas obligations",
               accent: "blue",
               widgetKey: "taxFederalStateSplit",
+              halSubpanel: "taxKansasObligations",
               body: kansas.length ? canvasTable(["Item", "Purpose", "Timing", "Notes"], kansas, true) : canvasEmpty("—"),
             }),
           )}</details>`,
@@ -1958,6 +1982,7 @@ const PageCanvas = (function () {
             accent: "yellow",
             caption: "Today's priorities",
             widgetKey: wKey("office-manager", 0),
+            chartHost: true,
             body: canvasFocusCards(kpis),
           }),
           canvasPanel({
@@ -1965,6 +1990,7 @@ const PageCanvas = (function () {
             accent: "yellow",
             caption: D ? D.periodSubtitle() : "Local tasks",
             widgetKey: wKey("office-manager", 0),
+            halSubpanel: "officeTaskQueue",
             body: tasks.length ? canvasTable(["Due", "Category", "Task", "Status"], tasks, true) : canvasEmpty("Local office tasks will appear when HAL or staff create them."),
           }),
         )}
@@ -1975,6 +2001,7 @@ const PageCanvas = (function () {
             accent: "yellow",
             caption: "Today's timeline",
             widgetKey: wKey("office-manager", 0),
+            halSubpanel: "officeOperatorySchedule",
             body: canvasScheduleTimeline(timeline.length ? timeline : [{ time: "8:30", title: "Morning huddle", detail: "Review open tasks" }]),
           }),
         )}
@@ -1984,7 +2011,7 @@ const PageCanvas = (function () {
             title: wTitle("office-manager", 0),
             accent: "yellow",
             caption: "HAL office priorities kanban",
-            widgetKey: wKey("office-manager", 0),
+            halSubpanel: "officePrioritiesKanban",
             body: canvasKanbanLanes(kanbanLanes, wKey("office-manager", 0)),
           }),
         )}

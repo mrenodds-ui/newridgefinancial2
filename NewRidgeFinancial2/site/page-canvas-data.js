@@ -1386,7 +1386,7 @@ const PageCanvasData = (function () {
         </article>`;
       })
       .join("");
-    return `<section class="widget-card col-12 ms-ops-data" data-hal-widget-key="officeManagerPriorities">
+    return `<section class="widget-card col-12 ms-ops-data" data-hal-subpanel="officeOpsData">
       <div class="widget-header"><span class="widget-title">Practice data</span><span class="ms-muted">Live snapshot · API-backed counts</span></div>
       <div class="ms-stat-grid ms-ops-data__grid">${cards}</div>
       <div class="ms-actions">

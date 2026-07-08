@@ -1,8 +1,8 @@
 {
-  "BUILD_ID": "hal-10097",
-  "assetVersion": "hal-10097",
-  "schemaVersion": "hal-10097",
+  "BUILD_ID": "hal-10099",
+  "assetVersion": "hal-10099",
+  "schemaVersion": "hal-10099",
   "REQUIRED_EPOCH": "moonshot-mockup",
-  "builtAt": "2026-07-08T14:00:00.000Z",
-  "notes": "hal-10097: Sensei DataSync live sd_* extract on SoftDent SERVER."
+  "builtAt": "2026-07-08T15:30:00.000Z",
+  "notes": "hal-10099: staff page widget/overlay conflict repair across all pages."
 }

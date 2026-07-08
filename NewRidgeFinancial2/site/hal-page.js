@@ -349,7 +349,7 @@ const HalPage = (function () {
       : '<li class="sidenote-empty">No local notes — add one below or ask HAL.</li>';
     const hideRoster = staff && opts && opts.hideWorkstationRoster;
     const hideLocalNotes = staff && opts && opts.hideLocalNotes;
-    return `<div class="sidenotes-monitor" data-panel="sidenotes">
+    return `<div class="sidenotes-monitor">
       ${showSideNotesIm ? liveSideNotesHtml(halSideNotesInbox, opts) : ""}
       ${
         showSideNotesIm && !hideRoster

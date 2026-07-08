@@ -535,6 +535,16 @@ async function main() {
   assert(!halHtml.includes("ms-hal-wg-section"), "HAL page must not render expandable widget group sections");
   assert(!halHtml.includes("NO FEED"), "HAL page must not render NO FEED widget rows");
   assert(halHtml.includes("data-hal-widget-key="), "HAL page must wire widget keys on mission tiles");
+  const halPanelCounts = {};
+  for (const match of halHtml.matchAll(/data-panel="([^"]+)"/g)) {
+    const key = match[1];
+    halPanelCounts[key] = (halPanelCounts[key] || 0) + 1;
+  }
+  const duplicateHalPanels = Object.entries(halPanelCounts).filter(([, count]) => count > 1);
+  assert(duplicateHalPanels.length === 0, `HAL page must not duplicate data-panel keys: ${duplicateHalPanels.map(([k, c]) => `${k}x${c}`).join(", ")}`);
+  assert(halHtml.includes('data-hal-widget-key="halSituationalHero"'), "HAL situational hero must use halSituationalHero widget key");
+  assert(halHtml.includes('data-panel="mosaic-'), "HAL mosaic tiles must use mosaic-* panel keys");
+  assert(readFileSync(join(siteDir, "app.js"), "utf8").includes("explicitCmd && explicitCmd !== widgetCard"), "HAL chrome must prefer nested data-hal-cmd over parent widget card");
   assert(halHtml.includes('id="hpAskForm"'), "HAL page must keep Ask HAL chat form");
   assert(halHtml.includes('id="hpAskInput"'), "HAL page must keep Ask HAL chat input");
   assert(halHtml.includes("IMPORT & SOURCE HEALTH"), "HAL page must render import health panel");
@@ -784,7 +794,7 @@ async function main() {
   const widgetRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show manager dashboard widgets");
   assert(widgetRoute.intent === "widgets: feed" && widgetRoute.useWidgetFeed === true, "widget feed must route locally");
   const feed = HalSkills.buildWidgetFeed(snapshot);
-  assert(Object.keys(feed.widgets).length === 48, "widget feed must build 48 operational widgets");
+  assert(Object.keys(feed.widgets).length === HalSkills.WIDGET_ORDER.length, "widget feed must build one widget per WIDGET_ORDER entry");
   const masterChart = HalWidgetMasterChart.all();
   assert(masterChart.length === HalSkills.WIDGET_ORDER.length, "widget master chart must cover every HAL widget");
   assert(masterChart.every((row) => row.page && row.purpose && row.expectedData.length && row.readyWhen), "widget master chart rows must include page, purpose, expected data, and ready criteria");

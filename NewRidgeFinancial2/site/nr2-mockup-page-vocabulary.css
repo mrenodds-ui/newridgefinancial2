@@ -963,7 +963,11 @@
 .app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas .trend-chart-svg,
 .app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > svg,
 .app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .bar-chart,
-.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .heatmap-grid {
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .heatmap-grid,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .tax-split-chart,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .donut-chart,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .waterfall-chart,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas .conic-donut {
   display: none;
 }
 

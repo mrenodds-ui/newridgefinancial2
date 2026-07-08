@@ -45,6 +45,8 @@ const MoonshotMockupChrome = (function () {
   function halWidgetPanelKey(widgetKey) {
     const map = {
       halAskHal: "askHal",
+      halMorningBriefing: "morningBriefing",
+      halSituationalHero: "situationalHero",
       halImportHealth: "importHealth",
       sidenotesProgram: "sidenotes",
       officeManagerSurfaces: "workSurfaces",

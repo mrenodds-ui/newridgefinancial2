@@ -248,9 +248,33 @@ const NR2MoonshotUI = (function () {
     };
   }
 
+  function resolveWidgetMount(root, widgetKey) {
+    if (!root || !widgetKey) return null;
+    const selectors = [
+      `[data-nr2-chart-host="${widgetKey}"]`,
+      `.widget-card[data-hal-widget-key="${widgetKey}"]`,
+      `.panel[data-hal-widget-key="${widgetKey}"]`,
+      `.card.chart-large[data-hal-widget-key="${widgetKey}"]`,
+      `.card.chart-medium[data-hal-widget-key="${widgetKey}"]`,
+      `.card.chart-full[data-hal-widget-key="${widgetKey}"]`,
+    ];
+    for (const selector of selectors) {
+      const node = root.querySelector(selector);
+      if (node) return node;
+    }
+    const fallback = root.querySelector(`[data-hal-widget-key="${widgetKey}"]`);
+    if (
+      fallback &&
+      !fallback.matches(".kpi-tile,.kpi-card,.stat-item,.stat-box,.kpi-ribbon-tile,[data-hal-kpi-ref]")
+    ) {
+      return fallback;
+    }
+    return null;
+  }
+
   function chartOverlayHost(root, widgetKey) {
     if (!root || !widgetKey) return null;
-    const panel = root.querySelector(`[data-hal-widget-key="${widgetKey}"]`);
+    const panel = resolveWidgetMount(root, widgetKey);
     if (!panel) return null;
     const body = panel.querySelector(".widget-body") || panel;
     let container = body.querySelector(".chart-container");
@@ -283,8 +307,8 @@ const NR2MoonshotUI = (function () {
   }
 
   async function mountPostingKanban(pageId, root) {
-    if (!root || typeof NR2Charts === "undefined" || !NR2Charts.renderPostingKanban) return;
-    const widgetKey = pageId === "documents" ? "periodCloseAndPosting" : "documentIntakeQueue";
+    if (pageId !== "documents" || !root || typeof NR2Charts === "undefined" || !NR2Charts.renderPostingKanban) return;
+    const widgetKey = "periodCloseAndPosting";
     const host = chartOverlayHost(root, widgetKey);
     if (!host) return;
     const kanban = document.createElement("div");
@@ -417,7 +441,7 @@ const NR2MoonshotUI = (function () {
         }
       });
     }
-    if (pageId === "documents" || pageId === "financial") {
+    if (pageId === "documents") {
       await mountPostingKanban(pageId, root);
     }
     if (pageId === "taxes") {
@@ -473,11 +497,12 @@ const NR2MoonshotUI = (function () {
     const host = document.createElement("div");
     host.className = "widget-card col-12 nr2-panel-host";
     panelHost.appendChild(host);
-    if (pageId === "documents") await renderOcrExceptions(host);
     if (pageId === "financial" || pageId === "office-manager") await renderAuditDashboard(host);
     if (pageId === "claims" || pageId === "financial") await renderClinicalBridge(host);
     if (pageId === "claims" || pageId === "financial") await renderEraMatchPanel(host);
-    if (pageId === "financial" || pageId === "taxes") renderCloseWizard(host);
+    if (pageId === "taxes" && !root.querySelector('[data-hal-widget-key="periodCloseAndPosting"]')) {
+      renderCloseWizard(host);
+    }
   }
 
   async function renderCharts(pageId, container) {
@@ -557,19 +582,8 @@ const NR2MoonshotUI = (function () {
       }
       NR2Charts.renderImportTimeline("nr2-import-timeline", sources);
     }
-    if (pageId === "documents" || pageId === "financial") {
-      const kanban = document.createElement("div");
-      kanban.id = "nr2-posting-kanban";
-      container.appendChild(kanban);
-      let posting = { items: [] };
-      let ocr = { items: [] };
-      try {
-        posting = await fetchJson("/api/posting-queue?limit=50");
-        ocr = await fetchJson("/api/ocr-exceptions?status=pending");
-      } catch {
-        /* optional */
-      }
-      NR2Charts.renderPostingKanban("nr2-posting-kanban", mapKanbanColumns(posting.items, ocr.items));
+    if (pageId === "documents") {
+      await mountPostingKanban(pageId, root);
     }
   }
 
@@ -616,6 +630,7 @@ const NR2MoonshotUI = (function () {
     installPilotBanner,
     mountChart,
     mountCanvasChart,
+    resolveWidgetMount,
     chartMountPolicy,
   };
 })();

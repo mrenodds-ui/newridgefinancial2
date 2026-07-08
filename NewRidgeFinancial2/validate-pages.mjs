@@ -118,6 +118,28 @@ for (const page of FUNCTIONAL_PAGES) {
     );
   }
   assert.ok(html.includes("data-hal-widget-key"), `${page.id} must wire HAL into page widgets`);
+  const widgetKeys = [...html.matchAll(/data-hal-widget-key="([^"]+)"/g)].map((m) => m[1]);
+  const widgetKeyCounts = widgetKeys.reduce((acc, key) => {
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const duplicateWidgetKeys = Object.entries(widgetKeyCounts).filter(([, count]) => count > 1);
+  assert.equal(
+    duplicateWidgetKeys.length,
+    0,
+    `${page.id} must not duplicate data-hal-widget-key (${duplicateWidgetKeys.map(([k, c]) => `${k}x${c}`).join(", ")})`,
+  );
+  const chartHosts = [...html.matchAll(/data-nr2-chart-host="([^"]+)"/g)].map((m) => m[1]);
+  const chartHostCounts = chartHosts.reduce((acc, key) => {
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const duplicateChartHosts = Object.entries(chartHostCounts).filter(([, count]) => count > 1);
+  assert.equal(
+    duplicateChartHosts.length,
+    0,
+    `${page.id} must not duplicate chart overlay hosts (${duplicateChartHosts.map(([k, c]) => `${k}x${c}`).join(", ")})`,
+  );
   if (page.id === "financial") {
     assert.ok(!html.includes("Dr. Adams"), "financial page must not render sample provider names");
     assert.ok(!html.includes("Hygiene Team"), "financial page must not render legacy sample provider names");

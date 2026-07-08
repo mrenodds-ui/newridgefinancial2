@@ -362,6 +362,20 @@ const HalWidgetMasterChart = (function () {
       readyWhen: "HAL runtime and widget feed are available.",
       primarySystem: "HAL",
     },
+    halMorningBriefing: {
+      title: "Morning Briefing",
+      purpose: "Cross-domain synthesis card with KPI ribbon and consent-gated actuators.",
+      expectedData: ["HalProactive morning briefing", "Import health summary", "KPI tiles"],
+      readyWhen: "Proactive briefing lane has import data to synthesize.",
+      primarySystem: "HAL",
+    },
+    halSituationalHero: {
+      title: "Situational Hero",
+      purpose: "Living command posture with alert ticker and quick HAL prompt chips.",
+      expectedData: ["Morning briefing sentence", "Alert ticker widgets", "Collection lag / reconciliation signals"],
+      readyWhen: "Widget feed and proactive briefing are loaded.",
+      primarySystem: "HAL",
+    },
     sidenotesProgram: {
       title: "SideNotes Program",
       purpose: "Monitor SideNotesIM workstation routing and local note handoff.",

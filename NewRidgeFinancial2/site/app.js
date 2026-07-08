@@ -1530,7 +1530,15 @@ function scrollHalPanelIntoView(panelKey) {
 function scrollStaffWidgetIntoView(widgetKey) {
   const root = appPage || document.getElementById("appPage");
   if (!root || !widgetKey) return;
-  const target = root.querySelector(`[data-hal-widget-key="${widgetKey}"]`);
+  const resolve =
+    typeof NR2MoonshotUI !== "undefined" && NR2MoonshotUI.resolveWidgetMount
+      ? NR2MoonshotUI.resolveWidgetMount(root, widgetKey)
+      : null;
+  const target =
+    resolve ||
+    root.querySelector(`[data-nr2-chart-host="${widgetKey}"]`) ||
+    root.querySelector(`.widget-card[data-hal-widget-key="${widgetKey}"]`) ||
+    root.querySelector(`[data-hal-widget-key="${widgetKey}"]`);
   if (target && typeof target.scrollIntoView === "function") {
     target.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
@@ -1543,6 +1551,8 @@ function scrollPageSectionIntoView(pageId, opts) {
     else if (o.widgetKey) {
       const panelMap = {
         halAskHal: "askHal",
+        halSituationalHero: "situationalHero",
+        halMorningBriefing: "morningBriefing",
         halImportHealth: "importHealth",
         sidenotesProgram: "sidenotes",
         officeManagerSurfaces: "workSurfaces",
@@ -1766,11 +1776,25 @@ async function handleHalChromeInteraction(event) {
     await runHalPageCmd(suggest.getAttribute("data-hal-suggest"));
     return true;
   }
+  const kpiRef = event.target.closest("[data-hal-kpi-ref]");
+  if (kpiRef && !event.target.closest("[data-hal-widget-nav]") && !event.target.closest("[data-hal-action]")) {
+    const cmd = kpiRef.getAttribute("data-hal-cmd");
+    if (cmd) {
+      await runHalPageCmd(cmd, { openHal: false });
+      return true;
+    }
+  }
   const widgetCard = event.target.closest("[data-hal-widget-key]");
+  const explicitCmd = event.target.closest("[data-hal-cmd]");
+  if (explicitCmd && explicitCmd !== widgetCard && !explicitCmd.closest("[data-hal-kpi-ref]")) {
+    await runHalPageCmd(explicitCmd.getAttribute("data-hal-cmd"), { openHal: false });
+    return true;
+  }
   if (widgetCard && !event.target.closest("[data-hal-widget-nav]") && !event.target.closest("[data-hal-action]") && !event.target.closest("[data-hal-actuator]")) {
     const openPage = widgetCard.getAttribute("data-open-page");
     const scrollWidget = widgetCard.getAttribute("data-hal-scroll-widget") || widgetCard.getAttribute("data-hal-widget-key");
-    if (openPage && openPage !== "hal") {
+    const navigatesAway = Boolean(openPage && openPage !== "hal");
+    if (navigatesAway) {
       select(openPage);
       if (scrollWidget) setTimeout(() => scrollStaffWidgetIntoView(scrollWidget), 120);
     }
@@ -1780,7 +1804,7 @@ async function handleHalChromeInteraction(event) {
       if (key) cmd = `Explain ${key} widget on this page`;
     }
     if (cmd) {
-      await runHalPageCmd(cmd);
+      await runHalPageCmd(cmd, { openHal: !navigatesAway });
       return true;
     }
   }
@@ -4925,7 +4949,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10097&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10099&__nr2_purge=1</div>';
     return;
   }
   const MC =
@@ -5229,37 +5253,10 @@ if (appPage) {
       handleHalPageNav(insightOpen.getAttribute("data-hal-insight-open"));
       return;
     }
-    const widgetCard = event.target.closest("[data-hal-widget-key]");
-    if (widgetCard && !event.target.closest("[data-hal-widget-nav]") && !event.target.closest("[data-hal-action]") && !event.target.closest("[data-hal-actuator]")) {
-      let cmd = widgetCard.getAttribute("data-hal-cmd");
-      if (!cmd) {
-        const key = widgetCard.getAttribute("data-hal-widget-key");
-        if (key) cmd = `Explain ${key} widget on this page`;
-      }
-      if (cmd) await runHalPageCmd(cmd, { openHal: false });
-      return;
-    }
     const activityReplay = event.target.closest("[data-hal-activity-cmd]");
     if (activityReplay) {
       const cmd = activityReplay.getAttribute("data-hal-activity-cmd");
       if (cmd) await runHalPageCmd(cmd);
-      return;
-    }
-    const widgetNav = event.target.closest("[data-hal-widget-nav]");
-    if (widgetNav) {
-      const target = widgetNav.getAttribute("data-hal-widget-nav");
-      if (target) select(target);
-      return;
-    }
-    const suggest = event.target.closest("[data-hal-suggest]");
-    if (suggest) {
-      await runHalPageCmd(suggest.getAttribute("data-hal-suggest"));
-      return;
-    }
-    const actuatorBtn = event.target.closest("[data-hal-actuator]");
-    if (actuatorBtn) {
-      event.stopPropagation();
-      await handleHalActuatorClick(actuatorBtn);
       return;
     }
     const followup = event.target.closest("[data-hal-followup]");
@@ -5326,10 +5323,6 @@ if (appPage) {
         renderHalScreen();
       }
       return;
-    }
-    const cmd = event.target.closest("[data-hal-cmd]");
-    if (cmd) {
-      await runHalPageCmd(cmd.getAttribute("data-hal-cmd"));
     }
   });
 }
@@ -5636,9 +5629,6 @@ if (appPage) {
         PageViews.renderPageView(appPage, halData, "quickbooks", select, halWidgetFeed, halProgramSnapshot);
         if (typeof PageChrome !== "undefined" && PageChrome.refreshHalReadinessStrip) {
           PageChrome.refreshHalReadinessStrip("quickbooks", halWidgetFeed);
-        }
-        if (typeof NR2MoonshotUI !== "undefined" && NR2MoonshotUI.enhancePage) {
-          NR2MoonshotUI.enhancePage("quickbooks", appPage).catch(() => {});
         }
       }
       return;

@@ -69,7 +69,7 @@ const HalPageCanvas = (function () {
         const cmd = `Explain the ${spec.label} widget status`;
         const deltaClass = ok ? "delta-positive" : "delta-negative";
         const page = mosaicNavTarget(spec.key);
-        return `<article class="widget-card widget-mosaic-tile widget-mount-glow span-1" data-hal-widget-key="${H.esc(spec.key)}" data-panel="${H.esc(spec.key)}" data-hal-cmd="${H.esc(cmd)}" data-open-page="${H.esc(page)}" data-hal-scroll-widget="${H.esc(spec.key)}" role="button" tabindex="0" aria-label="${H.esc(spec.label)} widget — ${H.esc(status)}">
+        return `<article class="widget-card widget-mosaic-tile widget-mount-glow span-1" data-hal-widget-key="${H.esc(spec.key)}" data-panel="mosaic-${H.esc(spec.key)}" data-hal-cmd="${H.esc(cmd)}" data-open-page="${H.esc(page)}" data-hal-scroll-widget="${H.esc(spec.key)}" role="button" tabindex="0" aria-label="${H.esc(spec.label)} widget — ${H.esc(status)}">
           <div class="widget-header"><span class="widget-title">${H.esc(spec.label)}</span></div>
           <div class="metric-large text-glow">${H.esc(metrics || status)}</div>
           <div class="metric-delta ${deltaClass}"><span>${H.esc(status)}</span></div>
@@ -360,8 +360,8 @@ const HalPageCanvas = (function () {
     const kpiHtml = (card.kpiTiles || [])
       .slice(0, 4)
       .map(
-        (tile) =>
-          `<div class="kpi-ribbon-tile kpi-ribbon-tile--${H.esc(tile.tone || "neutral")}" data-hal-widget-key="${H.esc(tile.widgetKey || "nr2KpiRibbon")}"><span>${H.esc(tile.label)}</span><strong>${H.esc(tile.value)}</strong></div>`,
+        (tile, index) =>
+          `<div class="kpi-ribbon-tile kpi-ribbon-tile--${H.esc(tile.tone || "neutral")}" data-hal-kpi-tile="${index}"><span>${H.esc(tile.label)}</span><strong>${H.esc(tile.value)}</strong></div>`,
       )
       .join("");
     const actuatorHtml = (card.actuators || [])
@@ -417,7 +417,7 @@ const HalPageCanvas = (function () {
           `<button type="button" class="prompt-chip prompt-chip--action nr2-alert-ticker__item nr2-alert-ticker__item--${H.esc(item.level)}" data-hal-cmd="${H.esc(item.text)}">${H.esc(item.text)}</button>`,
       )
       .join("");
-    return `<section class="widget-card hal-situational-hero span-4" data-panel="situationalHero" data-hal-widget-key="halAskHal">
+    return `<section class="widget-card hal-situational-hero span-4" data-panel="situationalHero" data-hal-widget-key="halSituationalHero">
       <div>
         ${H.cardHead("SITUATIONAL HERO", "situationalHero", "Living command posture", H.cardIconRaw("widget", "nr2KpiRibbon"))}
         <p class="hal-morning-briefing__sentence text-glow">${H.esc(sentence)}</p>
