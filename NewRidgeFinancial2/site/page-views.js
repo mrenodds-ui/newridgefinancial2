@@ -422,7 +422,13 @@ const PageViews = (function () {
     }
     return pageShell(
       state,
-      pageChrome(state, Canvas.renderBody(pageId, halWidgetFeed, programSnapshot), chromeOptsFromState(state)),
+      pageChrome(
+        state,
+        Canvas.moonshotPreviewHtml
+          ? Canvas.moonshotPreviewHtml(pageId, halWidgetFeed, programSnapshot)
+          : Canvas.renderBody(pageId, halWidgetFeed, programSnapshot),
+        chromeOptsFromState(state),
+      ),
     );
   }
 

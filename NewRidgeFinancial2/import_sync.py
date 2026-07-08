@@ -1009,11 +1009,40 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
     except Exception as exc:
         result["warnings"].append(f"SQLite backup skipped: {exc}")
 
+    try:
+        refresh_stale_qb_datasets(max_age_minutes=1440)
+    except Exception as exc:
+        result["warnings"].append(f"QB dataset freshness guard skipped: {exc}")
+
     return result
 
 
 # import_sync.py — append to collector registry
 COLLECTOR_MAP = {}
+
+
+def get_dataset_meta(ds_key: str) -> dict[str, Any]:
+    try:
+        from import_cache_ttl import load_manifest
+        from import_diagnostics import dataset_age_minutes
+
+        manifest = load_manifest()
+        age = dataset_age_minutes(manifest, ds_key)
+        return {"age_minutes": age if age is not None else 999999}
+    except Exception:
+        return {"age_minutes": 999999}
+
+
+def queue_priority_sync(ds_key: str, source: str = "", reason: str = "") -> None:
+    logging.info("[SYNC] priority refresh for %s (%s): %s", ds_key, source, reason)
+    try:
+        from quickbooks_monthly_sync import ensure_quickbooks_fresh as qb_refresh
+
+        qb_refresh(quickbooks_import_dir(), max_age_minutes=1)
+    except Exception as exc:
+        logging.warning("[SYNC] priority QB refresh failed for %s: %s", ds_key, exc)
+
+
 COLLECTOR_MAP.update({
     "softdent.procedures": {
         "source": "softdent",
@@ -1049,7 +1078,7 @@ COLLECTOR_MAP.update({
 # ------------------------------------------------------------------
 # QuickBooks stale-force refresh
 # ------------------------------------------------------------------
-def ensure_quickbooks_fresh(max_age_minutes: int = 1440):
+def refresh_stale_qb_datasets(max_age_minutes: int = 1440):
     qb_sets = [
         "quickbooks.revenue",
         "quickbooks.profitAndLoss",
@@ -1064,8 +1093,7 @@ def ensure_quickbooks_fresh(max_age_minutes: int = 1440):
             logging.warning(f"[SYNC] QB dataset {ds_key} stale ({age}m). Queuing priority sync.")
             queue_priority_sync(ds_key, source="quickbooks", reason="stale_refresh")
 
-# Invoke inside the main scheduler loop before widget-feed generation:
-# ensure_quickbooks_fresh()
+# refresh_stale_qb_datasets() invoked from sync_imports() before widget-feed generation.
 
 
 if __name__ == "__main__":

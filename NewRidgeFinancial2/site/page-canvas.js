@@ -1597,7 +1597,7 @@ const PageCanvas = (function () {
       ${kpis.length ? `${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}` : `${metricRowOpen()}${canvasMetricTile({ label: "Narrative Composer", value: "Ready", widgetKey: wKey("narratives", 0) })}${metricRowClose()}`}
       ${canvasNarrativeSelectors(composerOpts, claim)}
       <div class="composer-grid">
-        <div class="panel" data-hal-subpanel="narrativeProcedureCodes">
+        <div class="composer-panel panel" data-hal-subpanel="narrativeProcedureCodes">
           <div class="panel-header"><span>Procedure Codes</span><span style="font-size:12px;color:var(--text-secondary)">CDT 2024</span></div>
           <div class="panel-content">
             <input class="search-box" type="search" placeholder="Search codes…" aria-label="Search CDT codes" />
@@ -1609,7 +1609,7 @@ const PageCanvas = (function () {
               .join("")}</div>
             </div>
         </div>
-        <div class="panel">
+        <div class="composer-panel panel">
           <div class="composer-toolbar">
             <button type="button" class="chip" data-hal-cmd="Insert prior history into narrative">Insert history</button>
             <button type="button" class="chip" data-narrative-generate="1">Draft with HAL</button>
@@ -1620,7 +1620,7 @@ const PageCanvas = (function () {
             ${draft ? `<div class="confidence-bar"><span style="color:var(--text-secondary)">AI Confidence:</span><div class="confidence-meter"><span class="confidence-fill" style="width:${confidencePct}%"></span></div><span>${confidencePct}%</span></div>${canvasNarrativeCitations(citationWidgets)}` : canvasEmpty("Start typing or ask HAL to draft a narrative for staff review.")}
           </div>
         </div>
-        <div class="panel" data-hal-subpanel="narrativeDraftHistory">
+        <div class="composer-panel panel" data-hal-subpanel="narrativeDraftHistory">
           <div class="panel-header"><span>Draft history</span></div>
           <div class="panel-content">${
             history.length
@@ -1632,6 +1632,10 @@ const PageCanvas = (function () {
                   .join("")
               : canvasEmpty("Saved drafts appear here after local save or HAL-assisted drafting.")
           }</div>
+        </div>
+        <div class="composer-panel panel" data-hal-subpanel="narrativeReferences">
+          <div class="panel-header"><span>References</span></div>
+          <div class="panel-content">${canvasEmpty("Citation widgets and payer rules appear when claims data is loaded.")}</div>
         </div>
       </div>
     </div>`;
@@ -1830,7 +1834,10 @@ const PageCanvas = (function () {
         : canvasEmpty("Load QuickBooks P&amp;L to model compensation scenarios.");
     return `${stackOpen()}
       ${typeof NR2PageFilters !== "undefined" && NR2PageFilters.renderTaxScenarioPanelHtml ? NR2PageFilters.renderTaxScenarioPanelHtml() : ""}
-      ${heroKpiRow(kpis, 4)}
+      <div class="taxes-kpi-section"><div class="kpi-grid">${(kpis.length ? kpis : [{ label: "Tax KPI", value: "—" }])
+        .slice(0, 4)
+        .map((k) => `<div class="kpi-card"><h4>${esc(k.label || k.title || "KPI")}</h4><div class="metric">${esc(k.value || "—")}</div></div>`)
+        .join("")}</div></div>
       ${canvasGrid12(`
         ${gridCol(
           12,
@@ -2378,17 +2385,38 @@ function renderDocumentsPage(container, data = {}) {
 // Moonshot app.js renderPageView — page mount adapters (DOM + string fallbacks)
 
 function moonshotMountDomPage(mountFn, pageId, container, data) {
-  const el = container || document.getElementById("page-canvas");
+  const el = container || (typeof document !== "undefined" ? document.getElementById("page-canvas") : null);
   if (!el || typeof mountFn !== "function") return;
-  const origGet = document.getElementById.bind(document);
-  document.getElementById = function (id) {
+
+  const getById = function (id) {
     if (id === "appPage") return el;
-    return origGet(id);
+    if (typeof document !== "undefined" && typeof document.getElementById === "function") {
+      return document.getElementById.__orig ? document.getElementById.__orig(id) : null;
+    }
+    return null;
   };
+
+  if (typeof document !== "undefined" && typeof document.getElementById === "function") {
+    const origGet = document.getElementById.bind(document);
+    document.getElementById = function (id) {
+      if (id === "appPage") return el;
+      return origGet(id);
+    };
+    try {
+      mountFn.call(typeof PageCanvas !== "undefined" ? PageCanvas : null, pageId, data || {});
+    } finally {
+      document.getElementById = origGet;
+    }
+    return;
+  }
+
+  const prevDoc = globalThis.document;
+  globalThis.document = { getElementById: getById };
   try {
     mountFn.call(typeof PageCanvas !== "undefined" ? PageCanvas : null, pageId, data || {});
   } finally {
-    document.getElementById = origGet;
+    if (prevDoc === undefined) delete globalThis.document;
+    else globalThis.document = prevDoc;
   }
 }
 
@@ -2446,3 +2474,39 @@ if (typeof globalThis !== "undefined") {
   globalThis.renderOfficeManagerPage = renderOfficeManagerPage;
   globalThis.renderDocumentsPage = renderDocumentsPage;
 }
+
+PageCanvas.moonshotPreviewHtml = function moonshotPreviewHtml(pageId, feed, snapshot) {
+  if (typeof this.setFeed === "function") {
+    this.setFeed(feed, snapshot);
+  }
+  if (typeof window === "undefined") {
+    return typeof this.renderBody === "function" ? this.renderBody(pageId, feed, snapshot) : "";
+  }
+  const mount = {
+    _html: "",
+    set innerHTML(value) {
+      this._html = String(value == null ? "" : value);
+    },
+    get innerHTML() {
+      return this._html;
+    },
+  };
+  const renderers = {
+    financial: renderFinancialPage,
+    taxes: renderTaxesPage,
+    softdent: renderSoftdentPage,
+    narratives: renderNarrativesPage,
+    claims: renderClaimsPage,
+    ar: renderARPage,
+    "office-manager": renderOfficeManagerPage,
+    documents: renderDocumentsPage,
+    quickbooks: renderQuickbooksPage,
+    library: renderLibraryPage,
+  };
+  const fn = renderers[pageId];
+  if (typeof fn === "function") {
+    fn(mount, {});
+    return mount.innerHTML;
+  }
+  return typeof this.renderBody === "function" ? this.renderBody(pageId, feed, snapshot) : "";
+};
