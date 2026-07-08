@@ -164,58 +164,24 @@ const UI = (function () {
       </div>`;
   }
 
-  function PageHero(opts) {
-    const o = opts || {};
-    const accent = o.accent || "gold";
-    const trailing = [o.dataBadge, o.periodLabel].filter(Boolean).join("");
-    return `
-      <header class="pv-canvas-hero pv-canvas-hero--${esc(accent)}">
-        <span class="pv-canvas-hero__accent" aria-hidden="true"></span>
-        <div class="pv-canvas-hero__main">
-          <p class="pv-canvas-hero__label">${esc(o.label || "")}</p>
-          <h1 class="pv-canvas-hero__title">${esc(o.title || "")}</h1>
-          <p class="pv-canvas-hero__subtitle">${esc(o.subtitle || "")}</p>
-        </div>
-        ${trailing ? `<div class="pv-canvas-hero__meta">${trailing}</div>` : ""}
-      </header>`;
+  function PageHero() {
+    return "";
   }
 
-  function PageToolbar(opts) {
-    const o = opts || {};
-    const filters = (o.filters || [])
-      .map((label, i) => `<span class="pv-filter-pill${i === 0 ? " is-active" : ""}">${esc(label)}</span>`)
-      .join("");
-    const actions = o.actions ? `<div class="pv-canvas-toolbar__actions">${o.actions}</div>` : "";
-    return `
-      <div class="pv-canvas-toolbar">
-        <div class="pv-canvas-toolbar__filters">${filters}</div>
-        ${actions}
-      </div>`;
+  function PageToolbar() {
+    return "";
   }
 
-  function PageInsight(opts) {
-    const o = opts || {};
-    const tone = o.tone || "info";
-    return `
-      <aside class="pv-canvas-insight ms-hal-insight pv-canvas-insight--${esc(tone)}" role="status" aria-label="HAL insight">
-        <div class="ms-hal-insight__icon" aria-hidden="true">AI</div>
-        <div class="ms-hal-insight__body">
-          <strong>${esc(o.title || "")}</strong>
-          <p>${esc(o.body || "")}</p>
-        </div>
-      </aside>`;
+  function PageInsight() {
+    return "";
   }
 
-  function CanvasShell(opts) {
-    const o = opts || {};
-    return `
-      <div class="pv-canvas-shell">
-        ${o.hero || ""}
-        ${o.toolbar || ""}
-        ${o.insight || ""}
-        ${o.strip || ""}
-        ${o.commands || ""}
-      </div>`;
+  function CanvasShell() {
+    return "";
+  }
+
+  function CanvasCommandStrip() {
+    return "";
   }
 
   /* ---- Card ---- */
@@ -338,20 +304,6 @@ const UI = (function () {
         <p class="pv-state__msg">${esc(o.message || "Please try again.")}</p>
         ${o.onRetry === false ? "" : retry}
       </div>`;
-  }
-
-  function CanvasCommandStrip(opts) {
-    const o = opts || {};
-    const cmds = (o.commands || [])
-      .map(
-        (cmd) =>
-          `<button type="button" class="pv-canvas-command__pill" data-hal-page="${esc(o.pageId || "")}" data-hal-cmd="${esc(cmd)}">${esc(cmd)}</button>`,
-      )
-      .join("");
-    return `<div class="pv-canvas-command">
-      <input class="pv-canvas-command__input" type="text" placeholder="Ask HAL or choose an action…" disabled />
-      <div class="pv-canvas-command__pills">${cmds}</div>
-    </div>`;
   }
 
   return {

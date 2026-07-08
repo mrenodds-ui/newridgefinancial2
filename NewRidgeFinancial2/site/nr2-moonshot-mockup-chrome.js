@@ -501,11 +501,9 @@ const MoonshotMockupChrome = (function () {
 
 if (typeof window !== "undefined") {
   window.MoonshotMockupChrome = MoonshotMockupChrome;
-  window.PageChrome = MoonshotMockupChrome;
 }
 if (typeof globalThis !== "undefined") {
   globalThis.MoonshotMockupChrome = MoonshotMockupChrome;
-  globalThis.PageChrome = MoonshotMockupChrome;
 }
 if (typeof module !== "undefined" && module.exports) {
   module.exports = MoonshotMockupChrome;

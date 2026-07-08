@@ -47,7 +47,6 @@ require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
 require(join(siteDir, "month-end-close.js"));
 require(join(siteDir, "portal-ops.js"));
 require(join(siteDir, "page-canvas-data.js"));
-require(join(siteDir, "moonshot-layout-engine.js"));
 require(join(siteDir, "page-canvas.js"));
 require(join(siteDir, "components.js"));
 const ServicesMod = require(join(siteDir, "services.js"));
@@ -63,31 +62,22 @@ const previewWidgetFeed = HalSkills.buildWidgetFeed(previewSnapshot);
 
 const MOCKUP_EPOCH = PageSchema.LAYOUT_EPOCH === "moonshot-mockup";
 
+const MOCK_PREVIEW_CHECKS = ["ms-mockup-preview-gate", "Mockup preview only", "page_mockups_elite"];
+
 const FUNCTIONAL_PAGES = [
-  { id: "financial", checks: ["widget-grid", "widget-card", "Production MTD"] },
-  { id: "taxes", checks: ["widget-grid", "widget-card", "Book Income", "Net Income Summary", "Cash Flow Trend", "Operating Expenses"] },
-  { id: "softdent", checks: ["widget-grid", "widget-card", "Care Delivery Summary", "Case Acceptance Rate", "Operatory Schedule", "heatmap-grid"] },
-  { id: "quickbooks", checks: ["widget-grid", "widget-card", "Profit &amp; Loss Summary", "Monthly Revenue Trend", "Operating Expenses"] },
-  { id: "ar", checks: ["widget-grid", "widget-card", "kpi-hero-row", "heatmap-grid", "queue-list", "Outstanding Claims"] },
-  { id: "claims", checks: ["widget-grid", "widget-card", "kanban-board", "claim-card", "Open Insurance Claims", "Total Open Value"] },
-  { id: "narratives", checks: ["widget-grid", "kanban-board", "Narrative Composer", "Draft"] },
-  { id: "documents", checks: ["widget-card", "data-table", "Recent Accounting Documents", "Source breakdown"] },
-  { id: "library", checks: ["widget-grid", "search-box", "document-grid", "Document Library", "Library &amp; Preview"] },
-  { id: "office-manager", checks: ["widget-grid", "widget-card", "stats-bar", "Today&#039;s Focus", "Office task queue", "Practice data"] },
+  { id: "financial", checks: MOCK_PREVIEW_CHECKS },
+  { id: "taxes", checks: MOCK_PREVIEW_CHECKS },
+  { id: "softdent", checks: MOCK_PREVIEW_CHECKS },
+  { id: "quickbooks", checks: MOCK_PREVIEW_CHECKS },
+  { id: "ar", checks: MOCK_PREVIEW_CHECKS },
+  { id: "claims", checks: MOCK_PREVIEW_CHECKS },
+  { id: "narratives", checks: MOCK_PREVIEW_CHECKS },
+  { id: "documents", checks: MOCK_PREVIEW_CHECKS },
+  { id: "library", checks: MOCK_PREVIEW_CHECKS },
+  { id: "office-manager", checks: MOCK_PREVIEW_CHECKS },
 ];
 
-const HIGH_TECH_SURFACES = {
-  financial: ["widget-card", "provider-list", "chart-container"],
-  taxes: ["widget-card", "chart-container", "ms-elite-stat-grid"],
-  softdent: ["widget-card", "funnel-chart", "funnel-label", "operatory-grid", "heatmap-grid"],
-  quickbooks: ["widget-card", "chart-container", "ms-elite-stat-grid"],
-  ar: ["widget-card", "kpi-hero-row", "heatmap-grid", "queue-list", "ms-elite-waterfall"],
-  claims: ["widget-card", "kanban-board", "claim-card", "kpi-hero-row"],
-  narratives: ["widget-card", "kanban-board", "narrative-card"],
-  documents: ["widget-card", "doc-preview", "data-table"],
-  library: ["widget-card", "doc-preview", "document-grid"],
-  "office-manager": ["widget-card", "stats-bar", "kanban-board"],
-};
+const HIGH_TECH_SURFACES = {};
 
 for (const page of FUNCTIONAL_PAGES) {
   assert.ok(PageViews.hasPage(page.id), `${page.id} page must be routable`);
@@ -115,46 +105,13 @@ for (const page of FUNCTIONAL_PAGES) {
   assert.ok(!html.includes("pv-badge"), `${page.id} must not use legacy pv-badge`);
   assert.ok(!html.match(/\bclass="[^"]*\bpv-/), `${page.id} must not use legacy pv-* class prefix in markup`);
   assert.ok(!html.match(/\bhp-[a-z]/), `${page.id} must not use legacy hp-* class prefix`);
-  const schema = PageSchema.byId(page.id);
-  for (const widget of (schema && schema.widgets) || []) {
-    assert.ok(
-      html.includes(`data-hal-widget-key="${widget.key}"`),
-      `${page.id} must wire HAL widget key ${widget.key}`,
-    );
-  }
-  assert.ok(html.includes("data-hal-widget-key"), `${page.id} must wire HAL into page widgets`);
-  const widgetKeys = [...html.matchAll(/data-hal-widget-key="([^"]+)"/g)].map((m) => m[1]);
-  const widgetKeyCounts = widgetKeys.reduce((acc, key) => {
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
-  const duplicateWidgetKeys = Object.entries(widgetKeyCounts).filter(([, count]) => count > 1);
-  assert.equal(
-    duplicateWidgetKeys.length,
-    0,
-    `${page.id} must not duplicate data-hal-widget-key (${duplicateWidgetKeys.map(([k, c]) => `${k}x${c}`).join(", ")})`,
-  );
-  const chartHosts = [...html.matchAll(/data-nr2-chart-host="([^"]+)"/g)].map((m) => m[1]);
-  const chartHostCounts = chartHosts.reduce((acc, key) => {
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
-  const duplicateChartHosts = Object.entries(chartHostCounts).filter(([, count]) => count > 1);
-  assert.equal(
-    duplicateChartHosts.length,
-    0,
-    `${page.id} must not duplicate chart overlay hosts (${duplicateChartHosts.map(([k, c]) => `${k}x${c}`).join(", ")})`,
-  );
+  assert.ok(!html.includes("data-nr2-chart-host"), `${page.id} must not mount chart overlay hosts`);
   if (page.id === "financial") {
-    assert.ok(!html.includes("Dr. Adams"), "financial page must not render sample provider names");
-    assert.ok(!html.includes("Hygiene Team"), "financial page must not render legacy sample provider names");
-    assert.ok(html.includes("widget-grid") || html.includes("widget-card"), "financial page must use mockup widget grid");
+    assert.ok(html.includes("ms-mockup-preview-gate"), "financial page must use mock preview gate");
     assert.ok(
       html.includes("hal-insight") || html.includes("HAL Insight"),
       "financial page must show HAL insight banner",
     );
-    assert.ok(html.includes("widget-card") || html.includes("kpi-large"), "financial page must use mockup widget cards");
-    assert.ok(html.includes("data-hal-widget-key"), "financial page must wire HAL widget keys on KPI tiles");
   }
   for (const cls of HIGH_TECH_SURFACES[page.id] || []) {
     assert.ok(html.includes(cls), `${page.id} must render high-tech HAL surface ${cls}`);
@@ -205,6 +162,9 @@ assert.ok(!indexHtml.includes("moonshot-page-layouts.json"), "index must not loa
 assert.ok(indexHtml.includes("moonshot-page-registry.js"), "index must load Moonshot page registry");
 assert.ok(indexHtml.includes("nr2-moonshot-mockup-chrome.js"), "index must load Moonshot mockup chrome");
 assert.ok(!indexHtml.includes("page-chrome.js"), "index must not load legacy page-chrome.js");
+assert.ok(!indexHtml.includes("page-schema.js"), "index must not load legacy page-schema.js");
+assert.ok(!indexHtml.includes("hal-page-schema.js"), "index must not load legacy hal-page-schema.js");
+assert.ok(!indexHtml.includes("moonshot-layout-engine.js"), "index must not load layout engine until mock pages are wired");
 assert.ok(indexHtml.includes("desktop-boot.js"), "index must load desktop boot gate");
 const scriptVersions = [...indexHtml.matchAll(/\.js\?v=([^"&]+)/g)].map((match) => match[1]);
 assert.ok(scriptVersions.length >= 1, "index must load versioned scripts");
@@ -236,7 +196,6 @@ assert.ok(!indexHtml.includes('class="topbar"'), "index must not include legacy 
 assert.ok(appJs.includes("PageSchema.navPages") || appJs.includes("appPages"), "app must derive navigation from PageSchema");
 assert.ok(indexHtml.includes("tax-engine.js"), "index must load TaxEngine");
 assert.ok(indexHtml.includes("page-canvas-data.js"), "index must load PageCanvasData");
-assert.ok(indexHtml.includes("moonshot-layout-engine.js"), "index must load MoonshotLayoutEngine");
 assert.ok(indexHtml.includes("page-canvas.js"), "index must load PageCanvas");
 const pageViewsJs = readFileSync(join(siteDir, "page-views.js"), "utf8");
 const pageCanvasJs = readFileSync(join(siteDir, "page-canvas.js"), "utf8");
@@ -246,7 +205,8 @@ assert.ok(!pageViewsJs.includes("MOCK_IMAGES"), "page-views must not use mock im
 assert.ok(!pageViewsJs.includes("readDashboard"), "page-views must not fetch legacy dashboard renderers");
 assert.ok(pageViewsJs.includes("renderBody(pageId"), "page-views must delegate body HTML to PageCanvas");
 assert.ok(pageCanvasJs.includes("PageCanvasData") || pageCanvasJs.includes("dataApi"), "page-canvas must render from HAL program snapshot data");
-assert.ok(pageCanvasJs.includes("MoonshotLayoutEngine"), "page-canvas must delegate to MoonshotLayoutEngine");
+assert.ok(pageCanvasJs.includes("ms-mockup-preview-gate"), "page-canvas must gate staff pages on mock HTML previews");
+assert.ok(!pageCanvasJs.includes("MoonshotLayoutEngine.render"), "page-canvas must not wire MoonshotLayoutEngine in live path");
 assert.ok(moonshotLayoutJs.includes("moonshot-page-layouts.js"), "moonshot layout engine must load inlined manifest");
 assert.ok(!moonshotLayoutJs.includes("moonshot-page-layouts.json"), "layout engine must not fetch external layout JSON");
 assert.ok(!pageCanvasJs.includes("renderFinancial"), "page-canvas must not use legacy renderFinancial");

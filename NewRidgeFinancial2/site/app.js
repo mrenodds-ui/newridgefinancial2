@@ -1288,8 +1288,8 @@ function scheduleHalWidgetRefresh(snapshot, options) {
         PageViews.hasPage(currentId)
       ) {
         PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
-        if (typeof PageChrome !== "undefined" && PageChrome.refreshHalReadinessStrip) {
-          PageChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
+        if (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
+          MoonshotMockupChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
         }
         if (typeof NR2Tier3 !== "undefined" && NR2Tier3.publishHeroMetrics && currentId === "financial") {
           NR2Tier3.publishHeroMetrics(currentId);
@@ -5020,11 +5020,11 @@ function select(id, options) {
       appPage.hidden = false;
       if (PageViews && PageViews.hasPage(page.id)) {
         PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed, halProgramSnapshot);
-        if (typeof PageChrome !== "undefined" && PageChrome.refreshHalReadinessStrip) {
-          PageChrome.refreshHalReadinessStrip(page.id, halWidgetFeed);
+        if (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
+          MoonshotMockupChrome.refreshHalReadinessStrip(page.id, halWidgetFeed);
         }
       } else if (window.UI && window.UI.ErrorState) {
-        appPage.innerHTML = `<div class="page-view"><article class="ms-page" data-pv-page="${page.id}">${UI.ErrorState({
+        appPage.innerHTML = `<div class="page-view"><article class="ms-page" data-ms-page="${page.id}">${UI.ErrorState({
           title: "Page not available",
           message: `Could not open "${page.id}". Choose a page from the sidebar or restart Start Program.`,
         })}</article></div>`;
@@ -5098,21 +5098,21 @@ function select(id, options) {
 function assertDesignSchemaLoaded() {
   if (NR2_WORKSTATION_ONLY) {
     if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return false;
-    if (typeof WorkstationSchema !== "undefined" && typeof PageChrome !== "undefined") return true;
+    if (typeof WorkstationSchema !== "undefined" && typeof MoonshotMockupChrome !== "undefined") return true;
     const frame = document.getElementById("pageFrame");
     if (frame) {
       frame.innerHTML =
-        '<div class="pv-state pv-state--error" role="alert"><strong class="pv-state__title">Workstation schema failed to load</strong><p class="pv-state__msg">workstation-schema.js and page-chrome.js are required. Launch Start Workstation.bat and reload.</p></div>';
+        '<div class="ms-boot-error" role="alert"><strong class="ms-boot-error__title">Workstation failed to load</strong><p class="ms-boot-error__msg">workstation-schema.js and mockup chrome are required. Launch Start Workstation.bat and reload.</p></div>';
     }
     return false;
   }
   if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return false;
-  const hasPageSchema = typeof PageSchema !== "undefined" && typeof PageChrome !== "undefined";
+  const hasPageSchema = typeof PageSchema !== "undefined" && typeof MoonshotMockupChrome !== "undefined";
   if (hasPageSchema) return true;
   const frame = document.getElementById("pageFrame");
   if (frame) {
     frame.innerHTML =
-      '<div class="pv-state pv-state--error" role="alert"><strong class="pv-state__title">Design schema failed to load</strong><p class="pv-state__msg">page-schema.js and page-chrome.js are required. Run StartProgram.bat and reload http://127.0.0.1:8765/.</p></div>';
+      '<div class="ms-boot-error" role="alert"><strong class="ms-boot-error__title">Page registry failed to load</strong><p class="ms-boot-error__msg">moonshot-page-registry.js and nr2-moonshot-mockup-chrome.js are required. Run StartProgram.bat and reload http://127.0.0.1:8765/.</p></div>';
   }
   return false;
 }
@@ -5126,21 +5126,21 @@ function renderSchemaVersionMismatch(pythonVersion, jsVersion) {
   const mismatchTitle = NR2_WORKSTATION_ONLY ? "Desktop build mismatch" : "Build mismatch";
   const serverLabel = NR2_WORKSTATION_ONLY ? "Desktop shell reports" : "NR2 server reports";
   const inner =
-    `<strong class="pv-state__title">${mismatchTitle}</strong>` +
-    `<p class="pv-state__msg">${serverLabel} <strong>${String(pythonVersion).replace(/</g, "&lt;")}</strong> but the loaded page schema is <strong>${String(jsVersion).replace(/</g, "&lt;")}</strong>.</p>` +
-    `<p class="pv-state__msg">Close this tab or window completely, then launch <strong>${launcher}</strong> again.</p>`;
+    `<strong class="ms-boot-error__title">${mismatchTitle}</strong>` +
+    `<p class="ms-boot-error__msg">${serverLabel} <strong>${String(pythonVersion).replace(/</g, "&lt;")}</strong> but the loaded page registry is <strong>${String(jsVersion).replace(/</g, "&lt;")}</strong>.</p>` +
+    `<p class="ms-boot-error__msg">Close this tab or window completely, then launch <strong>${launcher}</strong> again.</p>`;
   if (NR2_WORKSTATION_ONLY && frame.querySelector("#workstationPage")) {
     let banner = frame.querySelector(".nr2-boot-error");
     if (!banner) {
       banner = document.createElement("div");
-      banner.className = "pv-state pv-state--error nr2-boot-error ws-boot-error";
+      banner.className = "ms-boot-error nr2-boot-error ws-boot-error";
       banner.setAttribute("role", "alert");
       frame.insertBefore(banner, frame.firstChild);
     }
     banner.innerHTML = inner;
     return;
   }
-  frame.innerHTML = `<div class="pv-state pv-state--error nr2-boot-error" role="alert">${inner}</div>`;
+  frame.innerHTML = `<div class="ms-boot-error nr2-boot-error" role="alert">${inner}</div>`;
 }
 
 renderRuntimeModeBanner();
@@ -5627,8 +5627,8 @@ if (appPage) {
       const currentId = resolvePageId(window.location.hash);
       if (currentId === "quickbooks" && PageViews && PageViews.hasPage("quickbooks")) {
         PageViews.renderPageView(appPage, halData, "quickbooks", select, halWidgetFeed, halProgramSnapshot);
-        if (typeof PageChrome !== "undefined" && PageChrome.refreshHalReadinessStrip) {
-          PageChrome.refreshHalReadinessStrip("quickbooks", halWidgetFeed);
+        if (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
+          MoonshotMockupChrome.refreshHalReadinessStrip("quickbooks", halWidgetFeed);
         }
       }
       return;
@@ -5754,14 +5754,14 @@ function renderWorkstationDesktopRequired(message) {
   const root = document.getElementById("workstationPageRoot");
   const msg = message || "NR2 Office Workstation runs only in the desktop app.";
   const inner =
-    `<strong class="pv-state__title">Desktop app required</strong>` +
-    `<p class="pv-state__msg">${String(msg).replace(/</g, "&lt;")}</p>` +
-    `<p class="pv-state__msg">Close any browser tab. Launch <strong>Start Workstation</strong> or double-click the <strong>NR2 Workstation</strong> shortcut.</p>`;
+    `<strong class="ms-boot-error__title">Desktop app required</strong>` +
+    `<p class="ms-boot-error__msg">${String(msg).replace(/</g, "&lt;")}</p>` +
+    `<p class="ms-boot-error__msg">Close any browser tab. Launch <strong>Start Workstation</strong> or double-click the <strong>NR2 Workstation</strong> shortcut.</p>`;
   if (root) {
-    root.innerHTML = `<div class="pv-state pv-state--error nr2-boot-error ws-boot-error" role="alert">${inner}</div>`;
+    root.innerHTML = `<div class="ms-boot-error nr2-boot-error ws-boot-error" role="alert">${inner}</div>`;
     return;
   }
-  frame.innerHTML = `<div class="pv-state pv-state--error nr2-boot-error" role="alert">${inner}</div>`;
+  frame.innerHTML = `<div class="ms-boot-error nr2-boot-error" role="alert">${inner}</div>`;
 }
 
 async function boot() {
@@ -5999,8 +5999,8 @@ if (typeof window !== "undefined") {
     const currentId = (window.location.hash || "").replace("#", "") || getPages()[0].id;
     if (currentId !== "hal" && appPage && !appPage.hidden && PageViews && PageViews.hasPage(currentId)) {
       PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
-      if (typeof PageChrome !== "undefined" && PageChrome.refreshHalReadinessStrip) {
-        PageChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
+      if (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
+        MoonshotMockupChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
       }
     }
   });
@@ -6022,41 +6022,19 @@ DesktopBridge.whenReady(() => {
   boot();
 });
 
-// app.js — renderPageView tail hook
+// app.js — renderPageView tail hook (Moonshot: renderBody only; legacy DOM stubs retired)
 
 async function renderPageView(pageName, data = {}) {
-  const canvas = document.getElementById('page-canvas');
-  if (!canvas) return;
+  const canvas = document.getElementById("page-canvas");
+  if (!canvas || typeof PageCanvas === "undefined" || typeof PageCanvas.renderBody !== "function") return;
 
-  if (typeof PageCanvas !== 'undefined' && PageCanvas.setFeed) {
+  if (typeof PageCanvas.setFeed === "function") {
     PageCanvas.setFeed(data.feed || null, data.snapshot);
   }
 
-  // Clear previous view to prevent ghost DOM/charts
-  canvas.innerHTML = '';
+  canvas.innerHTML = PageCanvas.renderBody(pageName, data.feed, data.snapshot);
+}
 
-  const renderers = {
-    financial: renderFinancialPage,
-    taxes: renderTaxesPage,
-    softdent: renderSoftdentPage,
-    narratives: renderNarrativesPage,
-    claims: renderClaimsPage,
-    ar: renderARPage,
-    'office-manager': renderOfficeManagerPage,
-    documents: renderDocumentsPage,
-    quickbooks: renderQuickbooksPage,
-    library: renderLibraryPage,
-  };
-
-  const renderer = renderers[pageName];
-  if (typeof renderer === 'function') {
-    renderer(canvas, data);
-  } else {
-    canvas.innerHTML = `<div class="empty-state">Page <code>${pageName}</code> not found.</div>`;
-  }
-
-  // Moonshot hook: mount charts after DOM flush
-  if (window.NR2UI?.enhancePage) {
-    requestAnimationFrame(() => window.NR2UI.enhancePage());
-  }
+if (typeof globalThis !== "undefined") {
+  globalThis.renderPageView = renderPageView;
 }

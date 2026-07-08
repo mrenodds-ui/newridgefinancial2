@@ -1,7 +1,6 @@
 /**
  * NewRidgeFinancial 2.0 — staff page mount layer.
- * Body content from PageCanvas (mock preview gate live; wired layouts via moonshotPreviewHtml for tooling only).
- * Shell from MoonshotMockupChrome + PageSchema registry.
+ * Body content from PageCanvas mock preview gate only (no layout wiring, no chart overlays).
  */
 const PageViews = (function () {
   function resolveUI() {
@@ -397,18 +396,6 @@ const PageViews = (function () {
       }
       canvas.innerHTML = Canvas.renderBody(pageId, halWidgetFeed, programSnapshot);
     }
-    if (typeof NR2Tier3 !== "undefined" && NR2Tier3.mountPage) {
-      const canvasEl = container.querySelector("#page-canvas");
-      if (!canvasEl || !canvasEl.querySelector(".ms-mockup-preview-gate")) {
-        NR2Tier3.mountPage(container, pageId, { snapshot: programSnapshot });
-      }
-    }
-    if (typeof NR2MoonshotUI !== "undefined" && NR2MoonshotUI.enhancePage) {
-      const canvasEl = container.querySelector("#page-canvas");
-      if (!canvasEl || !canvasEl.querySelector(".ms-mockup-preview-gate")) {
-        NR2MoonshotUI.enhancePage(pageId, container).catch(() => {});
-      }
-    }
     refreshLiveIntegrationHealth().catch(() => {
       /* integration health optional; skip second full repaint to avoid page flash */
     });
@@ -427,9 +414,7 @@ const PageViews = (function () {
       state,
       pageChrome(
         state,
-        Canvas.moonshotPreviewHtml
-          ? Canvas.moonshotPreviewHtml(pageId, halWidgetFeed, programSnapshot)
-          : Canvas.renderBody(pageId, halWidgetFeed, programSnapshot),
+        Canvas.renderBody(pageId, halWidgetFeed, programSnapshot),
         chromeOptsFromState(state),
       ),
     );

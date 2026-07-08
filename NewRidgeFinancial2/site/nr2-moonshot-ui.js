@@ -276,29 +276,28 @@ const NR2MoonshotUI = (function () {
     if (!root || !widgetKey) return null;
     const panel = resolveWidgetMount(root, widgetKey);
     if (!panel) return null;
-    const body = panel.querySelector(".widget-body") || panel;
-    let container = body.querySelector(".chart-container");
-    if (!container) {
-      container = document.createElement("div");
-      container.className = "chart-container chart-mount";
-      body.prepend(container);
-    }
-    container.classList.add("chart-mount", "chart-mount--canvas");
-    let host = container.querySelector(".nr2-chart-overlay");
-    if (!host) {
-      host = document.createElement("div");
-      host.className = "nr2-chart-overlay";
-      host.dataset.nr2ChartWidget = widgetKey;
-      container.appendChild(host);
-    }
-    if (host.dataset.nr2ChartMounted === "1") {
-      host.querySelectorAll("canvas").forEach((node, index) => {
-        if (index > 0) node.remove();
-      });
+    const body = panel.querySelector(".widget-body") || panel.querySelector(".card") || panel;
+    if (
+      body.querySelector(
+        ".chart-container svg, .chart-container canvas, .sparkline-svg, .stat-grid, .data-table, .compare-mode-grid, .kpi-ribbon, .goal-scorecard",
+      )
+    ) {
       return null;
     }
-    host.dataset.nr2ChartMounted = "1";
-    host.replaceChildren();
+    let container = body.querySelector(".chart-container[data-nr2-chart-host], .chart-container:empty");
+    if (!container) {
+      const hostAttr = panel.querySelector(`[data-nr2-chart-host="${widgetKey}"]`);
+      if (hostAttr && !hostAttr.querySelector(".widget-body")) {
+        container = hostAttr;
+      }
+    }
+    if (!container) return null;
+    container.classList.add("chart-mount", "chart-mount--canvas");
+    container.replaceChildren();
+    const host = document.createElement("div");
+    host.className = "nr2-chart-mount";
+    host.dataset.nr2ChartWidget = widgetKey;
+    container.appendChild(host);
     return host;
   }
 
@@ -342,6 +341,7 @@ const NR2MoonshotUI = (function () {
 
   async function enhanceCanvasCharts(pageId, root) {
     if (!root) return;
+    if (root.querySelector('[data-nr2-layout="moonshot-layout"]')) return;
     const charts = chartsEngine();
     if (!charts) return;
     if (pageId === "financial") {
@@ -589,10 +589,18 @@ const NR2MoonshotUI = (function () {
 
   async function enhancePage(pageId, root) {
     if (!root) return;
+    if (
+      pageId !== "hal" &&
+      typeof PageSchema !== "undefined" &&
+      typeof PageSchema.isStaffPage === "function" &&
+      PageSchema.isStaffPage(pageId)
+    ) {
+      return;
+    }
+    if (root.querySelector(".ms-mockup-preview-gate")) return;
     const isCanvas = typeof PageCanvas !== "undefined" && PageCanvas.hasPage && PageCanvas.hasPage(pageId);
     if (isCanvas) {
       await enhanceCanvasCharts(pageId, root);
-      await enhanceCanvasPanels(pageId, root);
       return;
     }
     const panelHost = root.querySelector(".ms-page-body") || root;

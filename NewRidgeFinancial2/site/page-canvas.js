@@ -375,7 +375,7 @@ const PageCanvas = (function () {
             toneClass: "",
             icon: "",
           };
-    const chartHostAttr = widgetKey && chartHost && !useSubpanel ? ` data-nr2-chart-host="${esc(widgetKey)}"` : "";
+    const chartHostAttr = "";
     const col = colSpan ? ` col-${colSpan}` : "";
     const accentClass = accent === "orange" ? " widget-accent-orange" : "";
     return `<section class="widget-card widget-glow-border widget-mount-glow${col}${accentClass}${(chrome.toneClass || "").trim() ? " " + esc(chrome.toneClass.trim()) : ""}"${chrome.attrs}${chartHostAttr}>
@@ -1206,16 +1206,6 @@ const PageCanvas = (function () {
     return mockupPreviewGate(pageId);
   }
 
-  function renderWiredLayout(pageId) {
-    activePageId = pageId;
-    if (typeof MoonshotLayoutEngine === "undefined" || !MoonshotLayoutEngine.hasPage(pageId)) {
-      return canvasImportNotice(pageImportNotice(pageId));
-    }
-    const html = MoonshotLayoutEngine.render(pageId, buildMoonshotHelpers());
-    const noticeHtml = canvasImportNotice(pageImportNotice(pageId));
-    return noticeHtml + (html || "");
-  }
-
   function setFeed(feed, programSnapshot) {
     activeFeed = feed || null;
     if (programSnapshot !== undefined) activeSnapshot = programSnapshot || null;
@@ -1227,10 +1217,10 @@ const PageCanvas = (function () {
     if (typeof PageSchema !== "undefined" && typeof PageSchema.isStaffPage === "function") {
       return PageSchema.isStaffPage(pageId);
     }
-    return typeof MoonshotLayoutEngine !== "undefined" && MoonshotLayoutEngine.hasPage(pageId);
+    return false;
   }
 
-  return { renderBody, renderWiredLayout, hasPage, setFeed, buildMoonshotHelpers, mockupPreviewGate };
+  return { renderBody, hasPage, setFeed, buildMoonshotHelpers, mockupPreviewGate };
 })();
 
 if (typeof module !== "undefined" && module.exports) {
@@ -1311,11 +1301,5 @@ PageCanvas.resolveData = function(pageId, passedData) {
 };
 
 PageCanvas.moonshotPreviewHtml = function moonshotPreviewHtml(pageId, feed, snapshot) {
-  if (typeof this.setFeed === "function") {
-    this.setFeed(feed, snapshot);
-  }
-  if (typeof this.renderWiredLayout === "function") {
-    return this.renderWiredLayout(pageId);
-  }
   return typeof this.renderBody === "function" ? this.renderBody(pageId, feed, snapshot) : "";
 };
