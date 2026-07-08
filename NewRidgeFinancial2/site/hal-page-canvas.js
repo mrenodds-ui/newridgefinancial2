@@ -43,7 +43,7 @@ const HalPageCanvas = (function () {
         const status = (w && w.status) || "FAILED";
         const cmd = `Explain the ${spec.label} widget status`;
         const deltaClass = ok ? "delta-positive" : "delta-negative";
-        return `<article class="widget-card widget-mosaic-tile widget-mount-glow span-1" data-hal-widget-key="${H.esc(spec.key)}" data-panel="${H.esc(spec.key)}" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0">
+        return `<article class="widget-card widget-mosaic-tile widget-mount-glow span-1" data-hal-widget-key="${H.esc(spec.key)}" data-panel="${H.esc(spec.key)}" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0" aria-label="${H.esc(spec.label)} widget — ${H.esc(status)}">
           <div class="widget-header"><span class="widget-title">${H.esc(spec.label)}</span></div>
           <div class="metric-large text-glow">${H.esc(metrics || status)}</div>
           <div class="metric-delta ${deltaClass}"><span>${H.esc(status)}</span></div>

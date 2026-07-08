@@ -1351,6 +1351,34 @@ const Services = (function () {
     return loopbackPostJson("/api/admin/extract-softdent-odbc", { method: "POST" });
   }
 
+  async function exportCpaPacket() {
+    const port = typeof window !== "undefined" && window.NR2_LOOPBACK_PORT ? Number(window.NR2_LOOPBACK_PORT) : 8765;
+    const host = typeof window !== "undefined" && window.location ? window.location.hostname || "127.0.0.1" : "127.0.0.1";
+    const protocol = typeof window !== "undefined" && window.location ? window.location.protocol || "http:" : "http:";
+    const response = await fetch(`${protocol}//${host}:${port}/api/export/cpa-packet`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      let error = "CPA export failed";
+      try {
+        const payload = await response.json();
+        if (payload && payload.error) error = String(payload.error);
+      } catch {
+        /* ignore */
+      }
+      return { ok: false, error };
+    }
+    const blob = await response.blob();
+    let filename = "nr2-cpa-packet.zip";
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="([^"]+)"/);
+    if (match) filename = match[1];
+    return { ok: true, blob, filename };
+  }
+
   async function resetAll() {
     Object.keys(mem).forEach((k) => delete mem[k]);
     importBundleCache = null;
@@ -1382,6 +1410,7 @@ const Services = (function () {
     fetchHealth,
     syncQuickBooks,
     syncSoftdentOdbc,
+    exportCpaPacket,
     pullPracticeSources,
     invalidateSnapshot: () => {
       if (typeof SnapshotStore !== "undefined") SnapshotStore.invalidate("services");

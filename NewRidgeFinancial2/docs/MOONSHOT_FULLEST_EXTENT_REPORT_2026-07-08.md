@@ -424,4 +424,12 @@ Post-hal-10068, the program is a high-fidelity financial cockpit with a function
   - `/api/health` returns valid JSON.
   - Backup script produces a `.db` file in `backups/` within 5 seconds.
 
-### hal-10074 — Print
+### hal-10074 — Print + CPA Export + Accessibility
+- **Scope**: Print-safe CSS, CPA packet zip export, focus-visible toolbar, reduced-motion, mosaic aria-labels.
+- **Files**: `nr2-moonshot-glow.css`, `hal-mockup-overrides.css`, `cpa_packet_export.py`, `nr2_http_server.py`, `nr2-moonshot-mockup-chrome.js`, `app.js`, `services.js`.
+- **Acceptance**:
+  - `@media print` in glow CSS; Financial page CPA export downloads zip with 4 widget JSON files.
+  - `validate-hal.mjs` 103+ suites PASS; `test_cpa_packet_export.py` PASS.
+  - Moonshot completion doc at `docs/MOONSHOT_FULLEST_EXTENT_COMPLETE_2026-07-09.md`.
+
+**End of Moonshot fullest-extent plan (hal-10069 → hal-10074).**

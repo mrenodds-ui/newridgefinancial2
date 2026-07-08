@@ -1784,6 +1784,17 @@ async function main() {
   assert(workstationPageSrc.includes("data-ws-sync=\"qb\""), "workstation must expose QuickBooks sync trigger");
   assert(workstationPageSrc.includes("data-ws-sync=\"softdent\""), "workstation must expose SoftDent sync trigger");
   assert(workstationPageSrc.includes("data-ws-open-hal"), "workstation must link to HAL hub");
+  const mockupChromeSrc = readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8");
+  assert(mockupChromeSrc.includes('data-nr2-export="cpa-packet"'), "financial page must expose CPA export button");
+  const glowCss = readFileSync(join(siteDir, "nr2-moonshot-glow.css"), "utf8");
+  assert(glowCss.includes("@media print"), "moonshot glow css must include print-safe mode");
+  assert(readFileSync(join(__dirname, "cpa_packet_export.py"), "utf8").includes("WIDGET_KEYS"), "cpa_packet_export module must exist");
+  const halCanvasSrc = readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8");
+  assert(halCanvasSrc.includes("widget-mosaic-tile") && halCanvasSrc.includes("aria-label="), "HAL mosaic tiles must expose aria-label");
+  const halOverridesCss = readFileSync(join(siteDir, "hal-mockup-overrides.css"), "utf8");
+  assert(halOverridesCss.includes("prefers-reduced-motion"), "hal mockup overrides must respect reduced motion");
+  const completeDoc = readFileSync(join(__dirname, "docs", "MOONSHOT_FULLEST_EXTENT_COMPLETE_2026-07-09.md"), "utf8");
+  assert(completeDoc.includes("hal-10074") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist");
 
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;

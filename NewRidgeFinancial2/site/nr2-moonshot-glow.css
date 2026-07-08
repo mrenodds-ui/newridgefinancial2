@@ -153,3 +153,72 @@ body.nr2-workstation-app .ws-hal-pane {
   border: 1px solid rgba(0, 212, 255, 0.12);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
 }
+
+.app--moonshot-mockup .page-header-tools .cpa-export-btn {
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--text-primary, #e8e8e8);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .page-header-tools .cpa-export-btn:hover {
+  background: rgba(0, 212, 255, 0.16);
+}
+
+.app--moonshot-mockup .page-header-tools .cpa-export-btn:focus-visible {
+  outline: 2px solid var(--accent-cyan, #00d4ff);
+  outline-offset: 2px;
+}
+
+.app--moonshot-mockup .filter-bar button:focus-visible,
+.app--moonshot-mockup .page-header-tools button:focus-visible,
+.app--moonshot-mockup [data-nr2-print]:focus-visible,
+.app--moonshot-mockup [data-nr2-export]:focus-visible {
+  outline: 2px solid var(--accent-cyan, #00d4ff);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app--moonshot-mockup .ms-page .widget-mount-glow {
+    animation: none !important;
+  }
+}
+
+@media print {
+  .app--moonshot-mockup,
+  .app--moonshot-mockup .ms-page,
+  body.nr2-workstation-app,
+  body.nr2-workstation-app .ws-root {
+    background: #fff !important;
+    background-image: none !important;
+    color: #000 !important;
+  }
+
+  .app--moonshot-mockup .ms-page .card,
+  .app--moonshot-mockup .ms-page .widget-mosaic-tile,
+  .app--moonshot-mockup .ms-page .widget-card,
+  .app--moonshot-mockup .ms-page .kpi-card,
+  .app--moonshot-mockup .ms-page .chart-large,
+  .app--moonshot-mockup .ms-page .chart-medium {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border-color: #ccc !important;
+    color: #000 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .app--moonshot-mockup nav,
+  .app--moonshot-mockup .alert-strip,
+  .app--moonshot-mockup .filter-bar,
+  .app--moonshot-mockup .page-header-tools,
+  .app--moonshot-mockup .hal-insight,
+  .app--moonshot-mockup [data-nr2-print],
+  .app--moonshot-mockup .cpa-export-btn {
+    display: none !important;
+  }
+}

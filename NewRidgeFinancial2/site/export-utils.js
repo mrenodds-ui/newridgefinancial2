@@ -20,10 +20,16 @@ const ExportUtils = (function () {
   function downloadText(filename, text, mime) {
     if (typeof document === "undefined") return { ok: false, error: "no document" };
     const blob = new Blob([text], { type: mime || "text/plain;charset=utf-8" });
+    return downloadBlob(filename, blob);
+  }
+
+  function downloadBlob(filename, blob) {
+    if (typeof document === "undefined") return { ok: false, error: "no document" };
+    if (!blob) return { ok: false, error: "no blob" };
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = filename || "export.txt";
+    link.download = filename || "export.bin";
     link.rel = "noopener";
     document.body.appendChild(link);
     link.click();
@@ -153,6 +159,7 @@ const ExportUtils = (function () {
     csvEscape,
     rowsToCsv,
     downloadText,
+    downloadBlob,
     pageExportRows,
     exportCurrentPageCsv,
     exportWidgetFeedCsv,

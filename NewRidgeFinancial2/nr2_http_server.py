@@ -2645,6 +2645,26 @@ class NR2BottleServer(BottleServer):
                 bottle.response.status = 500
                 return json.dumps({"error": str(exc)})
 
+        @app.post("/api/export/cpa-packet")
+        def export_cpa_packet_api():
+            from nr2_rbac import has_capability
+
+            if _browser_app() and not (has_capability("read_financial") or has_capability("read_all")):
+                bottle.response.content_type = "application/json"
+                bottle.response.status = 403
+                return json.dumps({"ok": False, "error": "capability_rejected"})
+            try:
+                from cpa_packet_export import build_cpa_packet_zip_bytes
+
+                filename, data = build_cpa_packet_zip_bytes()
+                bottle.response.content_type = "application/zip"
+                bottle.response.set_header("Content-Disposition", f'attachment; filename="{filename}"')
+                return data
+            except Exception as exc:
+                bottle.response.content_type = "application/json"
+                bottle.response.status = 500
+                return json.dumps({"ok": False, "error": str(exc)})
+
         @app.get("/api/financial-reports")
         def financial_reports_api():
             from nr2_rbac import has_capability

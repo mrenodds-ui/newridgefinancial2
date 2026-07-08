@@ -207,10 +207,16 @@ const MoonshotMockupChrome = (function () {
     </div>`;
   }
 
+  function renderFinancialCpaExportButton() {
+    return `<button type="button" class="cpa-export-btn" data-nr2-export="cpa-packet" aria-label="Export CPA packet zip">CPA export</button>`;
+  }
+
   function renderPageHeaderExtras(schema, opts) {
     const o = opts || {};
-    if (!schema || schema.id !== "quickbooks") return "";
-    return renderQuickbooksSyncBadge(o.importReadiness);
+    if (!schema) return "";
+    if (schema.id === "quickbooks") return renderQuickbooksSyncBadge(o.importReadiness);
+    if (schema.id === "financial") return renderFinancialCpaExportButton();
+    return "";
   }
 
   function renderHalInsight(insight) {

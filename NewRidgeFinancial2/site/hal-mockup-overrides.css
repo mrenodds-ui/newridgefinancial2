@@ -184,3 +184,19 @@
     transform: translateY(0);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .app--moonshot-mockup .ms-page--hal .widget-mosaic-tile,
+  .app--moonshot-mockup .ms-page--hal .widget-mosaic-tile:hover {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .app--moonshot-mockup .ms-page--hal .badge-live {
+    animation: none !important;
+  }
+
+  .app--moonshot-mockup .widget-mount-glow {
+    animation: none !important;
+  }
+}

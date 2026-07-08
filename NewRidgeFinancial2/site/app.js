@@ -194,7 +194,7 @@ function enforceSingleFinancialTab() {
       }
       if (window.BroadcastChannel) {
         const bc = new BroadcastChannel("nr2_tab");
-        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10073" });
+        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10074" });
       }
     }
   }
@@ -4372,6 +4372,10 @@ function handleNr2Print(scope) {
 }
 
 function handleNr2Export(scope) {
+  if (scope === "cpa-packet") {
+    exportCpaPacketFlow();
+    return;
+  }
   const EU = typeof ExportUtils !== "undefined" ? ExportUtils : null;
   if (!EU) {
     showHalActionNotice("Export utilities failed to load. Reload the app.", "warn");
@@ -4384,6 +4388,31 @@ function handleNr2Export(scope) {
     feed: halWidgetFeed,
     halPageVisible: isHalPageVisible(),
   });
+}
+
+async function exportCpaPacketFlow() {
+  if (typeof Services === "undefined" || typeof Services.exportCpaPacket !== "function") {
+    showHalActionNotice("CPA export requires the NR2 server.", "warn");
+    return;
+  }
+  showHalActionNotice("Building CPA packet…", "info");
+  try {
+    const result = await Services.exportCpaPacket();
+    if (!result || !result.ok) {
+      showHalActionNotice((result && result.error) || "CPA export failed.", "warn");
+      return;
+    }
+    const EU = typeof ExportUtils !== "undefined" ? ExportUtils : null;
+    if (!EU || typeof EU.downloadBlob !== "function") {
+      showHalActionNotice("Export utilities failed to load.", "warn");
+      return;
+    }
+    EU.downloadBlob(result.filename, result.blob);
+    postOperatorAudit("export:cpa-packet", { pageKey: "financial", widgetKey: "practiceFinancialOverview" });
+    showHalActionNotice(`CPA packet downloaded (${result.filename}).`, "success");
+  } catch (err) {
+    showHalActionNotice(String((err && err.message) || err || "CPA export failed."), "warn");
+  }
 }
 
 let nr2OpsHealth = null;
@@ -4778,7 +4807,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10073&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10074&__nr2_purge=1</div>';
     return;
   }
   const MC =
