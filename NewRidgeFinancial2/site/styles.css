@@ -7169,6 +7169,23 @@ body.nr2-workstation-app .ws-sn-statusbar__dot--live {
   background: #4caf50;
 }
 
+body.nr2-workstation-app .ws-sn-statusbar__watcher {
+  margin-left: auto;
+  opacity: 0.92;
+}
+
+body.nr2-workstation-app .ws-sn-statusbar__watcher--ok {
+  color: #1b5e20;
+}
+
+body.nr2-workstation-app .ws-sn-statusbar__watcher--warn {
+  color: #8d6e00;
+}
+
+body.nr2-workstation-app .ws-sn-statusbar__watcher--off {
+  color: #b71c1c;
+}
+
 body.nr2-workstation-app .ws-sn-history-panel {
   background: #f5f3ef;
   padding: 4px 6px;

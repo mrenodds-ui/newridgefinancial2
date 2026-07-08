@@ -272,6 +272,11 @@ def _start_background_services(api: WorkstationApi, hal_hub_url: str) -> None:
         daemon=True,
         name="nr2-ws-background-services",
     ).start()
+    threading.Thread(
+        target=_run_sidenotes_watcher_supervisor,
+        daemon=True,
+        name="nr2-sidenotes-watcher-supervisor",
+    ).start()
 
 
 def _start_sidenotes_popup_watcher() -> None:
@@ -295,20 +300,49 @@ def _start_sidenotes_watcher() -> None:
     global _watcher_proc
     if not _env_flag("NR2_SIDENOTES_WATCHER", True):
         return
-    from sidenotes_bridge import sidenotes_watcher_pid, start_sidenotes_watcher
+    from sidenotes_bridge import ensure_sidenotes_watcher, sidenotes_watcher_pid
 
-    existing = sidenotes_watcher_pid()
-    if existing:
+    station = os.environ.get("NR2_SIDENOTES_MY_STATION", "").strip() or None
+    result = ensure_sidenotes_watcher(station)
+    pid = result.get("pid") or sidenotes_watcher_pid()
+    if pid:
         print(
-            f"NR2 workstation: SideNotes watcher already running (PID {existing}); not starting a second copy.",
+            f"NR2 workstation: SideNotes watcher {result.get('action', 'ready')} (PID {pid}).",
             file=sys.stderr,
         )
+    elif not result.get("ok"):
+        print(
+            f"NR2 workstation: SideNotes watcher not started — {result.get('error', 'unknown')}.",
+            file=sys.stderr,
+        )
+
+
+def _run_sidenotes_watcher_supervisor() -> None:
+    if not _env_flag("NR2_SIDENOTES_WATCHER", True):
         return
+    if not _env_flag("NR2_SIDENOTES_WATCHER_SUPERVISOR", True):
+        return
+    import time
+    from sidenotes_bridge import ensure_sidenotes_watcher, sidenotes_watcher_health
+
+    interval = max(15, int(os.environ.get("NR2_SIDENOTES_WATCHER_INTERVAL_SEC", "20")))
     station = os.environ.get("NR2_SIDENOTES_MY_STATION", "").strip() or None
-    proc = start_sidenotes_watcher(station)
-    if proc is not None:
-        _watcher_proc = proc
-        print(f"NR2 workstation: SideNotes watcher started (PID {proc.pid}).", file=sys.stderr)
+    fail_streak = 0
+    while True:
+        try:
+            health = sidenotes_watcher_health()
+            if not health.get("watcherRunning"):
+                fail_streak += 1
+                result = ensure_sidenotes_watcher(station)
+                print(
+                    f"NR2 workstation: watcher supervisor restart attempt #{fail_streak} → {result.get('action')}",
+                    file=sys.stderr,
+                )
+            else:
+                fail_streak = 0
+        except Exception as exc:
+            print(f"NR2 workstation: watcher supervisor error: {exc}", file=sys.stderr)
+        time.sleep(interval)
 
 
 def main() -> int:

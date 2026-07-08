@@ -414,11 +414,35 @@ const WorkstationPage = (function () {
   function sideNotesStatusBarHtml(ctx, station) {
     const hubLive = ctx.officeHubLive !== false || ctx.sidenotesLive === true;
     const practice = esc(practiceNameFor(ctx));
+    const watcher = ctx.sidenotesWatcherHealth || {};
+    const watcherOn = watcher.watcherRunning === true;
+    const historyOk = watcher.historyExists !== false;
+    const watcherClass =
+      watcherOn && historyOk ? "ws-sn-statusbar__watcher--ok" : watcherOn ? "ws-sn-statusbar__watcher--warn" : "ws-sn-statusbar__watcher--off";
+    const watcherLabel = watcherOn
+      ? historyOk
+        ? "Bridge live"
+        : "Watcher · no history"
+      : "Watcher offline";
     return `<footer class="ws-sn-statusbar">
         <span class="ws-sn-statusbar__dot${hubLive ? " ws-sn-statusbar__dot--live" : ""}" aria-hidden="true"></span>
         <span class="ws-sn-statusbar__practice">${practice}</span>
         <span class="ws-sn-statusbar__station">${station}</span>
+        <span class="ws-sn-statusbar__watcher ${watcherClass}" title="SideNotesIM bridge">${esc(watcherLabel)}</span>
       </footer>`;
+  }
+
+  function sidenotesWatcherChipHtml(ctx) {
+    const watcher = ctx.sidenotesWatcherHealth || {};
+    const watcherOn = watcher.watcherRunning === true;
+    const historyOk = watcher.historyExists !== false;
+    if (!watcherOn) {
+      return '<span class="ws-oc-badge ws-oc-badge--off" title="SideNotes watcher offline">Watcher offline</span>';
+    }
+    if (!historyOk) {
+      return '<span class="ws-oc-badge ws-oc-badge--muted" title="SideNotesIM history.vdb not found">Watcher · no history</span>';
+    }
+    return '<span class="ws-oc-badge ws-oc-badge--ok" title="SideNotes bridge online">SideNotes bridge</span>';
   }
 
   function sideNotesComposeShell(ctx, options) {
@@ -948,6 +972,8 @@ const WorkstationPage = (function () {
       typeof HalPage !== "undefined" && HalPage.isSideNotesInboxLive
         ? HalPage.isSideNotesInboxLive(inbox)
         : false;
+    const localWatcher =
+      ctx.sidenotesWatcherHealth && ctx.sidenotesWatcherHealth.watcherRunning === true;
     const stationCount = (inbox && inbox.monitor && inbox.monitor.stationCount) || 0;
     const totalStations =
       (inbox && inbox.monitor && inbox.monitor.totalStations) ||
@@ -960,7 +986,10 @@ const WorkstationPage = (function () {
       stationCount > 0
         ? `<span class="ws-oc-badge ws-oc-badge--muted">${stationCount}/${totalStations} office stations live${nr2Count ? ` (${nr2Count} NR2)` : ""}</span>`
         : "";
-    const watcherChip = watcherOnline && !stationCount ? `<span class="ws-oc-badge ws-oc-badge--muted">SideNotes watcher</span>` : stationChip;
+    const watcherChip =
+      localWatcher || (watcherOnline && !stationCount)
+        ? sidenotesWatcherChipHtml(ctx)
+        : stationChip;
     return `<div class="ws-page-panel ws-page-panel--send${active ? "" : " ws-page-panel--hidden"}" role="tabpanel" aria-hidden="${active ? "false" : "true"}">
       <section class="hp-card hp-card--office" data-panel="officeChannel">
         ${cardHead("OFFICE MESSAGES", "sidenotes", "Send to workstations and read the office channel", cardIconRaw("ui", "send"))}

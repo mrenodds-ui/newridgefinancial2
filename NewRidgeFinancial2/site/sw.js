@@ -1,5 +1,5 @@
 /* Offline read-only cache — Moonshot Phase 9; SRI fail-closed at install (kimi-k2.6 eval). */
-const BUILD_ID = "hal-10095";
+const BUILD_ID = "hal-10096";
 const CACHE = "nr2-offline-v11";const INTEGRITY = "nr2-offline-integrity-v1";
 const SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/desktop-bridge.js", "/hal-transparency.js"];
 

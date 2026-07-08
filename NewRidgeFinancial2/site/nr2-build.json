@@ -1,8 +1,7 @@
 {
-  "BUILD_ID": "hal-10095",
-  "assetVersion": "hal-10095",
-  "schemaVersion": "hal-10095",
+  "BUILD_ID": "hal-10096",
+  "assetVersion": "hal-10096",
+  "schemaVersion": "hal-10096",
   "REQUIRED_EPOCH": "moonshot-mockup",
-  "builtAt": "2026-07-08T13:25:29.036Z",
-  "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server."
+  "builtAt": "2026-07-08T14:00:00.000Z"
 }

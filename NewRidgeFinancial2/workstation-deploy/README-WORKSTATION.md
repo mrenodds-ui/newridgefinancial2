@@ -20,8 +20,8 @@ Drop this folder on each operatory / front-desk PC. It runs **Send Message**, **
 1. Copy **`NR2-Office-Workstation.zip`** to the PC and extract to e.g. `C:\NR2-Workstation\`.
 2. Double-click **`Install.bat`**.
 3. Enter:
-   - **Station** — `Room 1`, `Frontdesk 1`, etc. (must match SideNotes)
-   - **HAL hub URL** — e.g. `http://192.168.1.50:8765` (the Start Program PC on your LAN)
+   - **Station** — `Room 1`, `Frontdesk 1`, etc. (must match SideNotes; setup validates canonical names)
+   - **HAL hub URL** — e.g. `http://192.168.1.50:8765` (setup pings `/api/app-info` when hub is running)
 4. Setup creates `.env`, desktop + startup shortcuts, a **Scheduled Task** at sign-in, and starts the workstation in the background.
 
 ## After install

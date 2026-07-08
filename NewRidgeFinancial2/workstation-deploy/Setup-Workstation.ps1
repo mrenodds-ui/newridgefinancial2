@@ -8,7 +8,8 @@ param(
     [string]$HalHubUrl,
     [switch]$NoStartup,
     [switch]$Quiet,
-    [switch]$SkipPythonBootstrap
+    [switch]$SkipPythonBootstrap,
+    [switch]$RequireHubTest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -85,6 +86,51 @@ Install Python from https://www.python.org/downloads/ (check "Add to PATH"), the
     & $pip install --disable-pip-version-check -r $ReqFile
     if ($LASTEXITCODE -ne 0) { throw 'pip install failed for workstation requirements' }
     Write-Info "Python runtime ready at $PythonDir"
+}
+
+function Test-HalHubUrl {
+    param([string]$Url)
+    $trim = $Url.Trim().TrimEnd('/')
+    if ($trim -notmatch '^https?://') {
+        throw "HAL hub URL must start with http:// or https://"
+    }
+    try {
+        $resp = Invoke-WebRequest -Uri "$trim/api/app-info" -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+        if ($resp.StatusCode -ne 200) {
+            throw "HAL hub returned HTTP $($resp.StatusCode)"
+        }
+        $json = $resp.Content | ConvertFrom-Json
+        $build = if ($json.schemaVersion) { [string]$json.schemaVersion } else { 'unknown' }
+        Write-Info "HAL hub OK: $trim (build $build)"
+        if (-not $json.hubToken) {
+            Write-Info 'Warning: hub responded but hubToken missing — reload Start Program if Ask HAL fails.'
+        }
+        return $true
+    } catch {
+        $msg = $_.Exception.Message
+        if ($RequireHubTest) {
+            throw "Cannot reach HAL hub at $trim — start Start Program on the hub PC first. $msg"
+        }
+        Write-Info "WARNING: Could not reach HAL hub at $trim — verify NR2_HAL_HUB_URL after Start Program is running. $msg"
+        return $false
+    }
+}
+
+function Test-StationName {
+    param(
+        [string]$Name,
+        [string[]]$Known
+    )
+    $trim = $Name.Trim()
+    if ([string]::IsNullOrWhiteSpace($trim)) {
+        throw 'Station name is required (must match SideNotes routing).'
+    }
+    $match = $Known | Where-Object { $_.Equals($trim, [System.StringComparison]::OrdinalIgnoreCase) }
+    if (-not $match) {
+        Write-Info "Warning: '$trim' is not in the canonical station list — SideNotes routing may fail."
+        return $false
+    }
+    return $true
 }
 
 function Write-EnvFile {
@@ -170,6 +216,9 @@ $slug = Get-Slug $Station
 Write-Info ''
 Write-Info "Station: $Station"
 Write-Info "HAL hub:  $HalHubUrl"
+
+Test-StationName -Name $Station -Known $knownStations | Out-Null
+Test-HalHubUrl -Url $HalHubUrl | Out-Null
 
 Write-EnvFile -StationName $Station -HubUrl $HalHubUrl -SidenotesHub $defaultSidenotesHub
 

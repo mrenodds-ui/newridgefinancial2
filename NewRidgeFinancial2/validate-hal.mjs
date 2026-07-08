@@ -1848,7 +1848,7 @@ async function main() {
   assert(JSON.parse(readFileSync(halModelsPath, "utf8")).config.agentCapabilities.tools.includes("softdent_extract_status"), "hal-models must list softdent_extract_status");
   assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("nr2-odbc-strip"), "SoftDent page must render ODBC extract strip");
   assert(readFileSync(join(siteDir, "services.js"), "utf8").includes("fetchSoftdentOdbcStatus"), "services must fetch ODBC status");
-  assert(completeDoc.includes("hal-10095") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10095");
+  assert(completeDoc.includes("hal-10096") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10096");
 
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;

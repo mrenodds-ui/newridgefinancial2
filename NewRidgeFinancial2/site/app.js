@@ -115,6 +115,7 @@ let workstationRenderDeferred = false;
 let officeChannelAnnouncedIds = new Set();
 let sidenotesMessages = [];
 let sidenotesLive = false;
+let sidenotesWatcherHealth = null;
 let sidenotesAnnouncedIds = new Set();
 let workstationPopupSeenIds = new Set();
 let workstationPopupBaselineDone = false;
@@ -383,6 +384,13 @@ async function refreshSideNotesMessages() {
     const live = await SideNotesHub.fetchMessages(station === "Workstation" ? "" : station);
     sidenotesMessages = Array.isArray(live.messages) ? live.messages : [];
     sidenotesLive = !!(live && live.ok);
+    try {
+      const st = await SideNotesHub.status();
+      sidenotesWatcherHealth = (st && st.watcher) || null;
+      if (st && st.ok) sidenotesLive = true;
+    } catch (_) {
+      sidenotesWatcherHealth = null;
+    }
     if (!sideNotesHelperSpeaks()) {
       maybeAnnounceSideNotesMessages(sidenotesMessages);
     } else {
@@ -392,6 +400,7 @@ async function refreshSideNotesMessages() {
   } catch (_) {
     sidenotesMessages = [];
     sidenotesLive = false;
+    sidenotesWatcherHealth = null;
   }
   return { messages: sidenotesMessages };
 }
@@ -953,6 +962,7 @@ function renderWorkstationScreen(options) {
     officeHubLive: officeChannelHubLive,
     sidenotesMessages,
     sidenotesLive,
+    sidenotesWatcherHealth,
     halSideNotes,
     halSideNoteMonitor:
       halSideNoteMonitor || (window.HalSkills ? HalSkills.buildSideNoteMonitor(halSideNotes) : null),
@@ -4915,7 +4925,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10095&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Legacy schema blocked. Reload with ?v=hal-10096&__nr2_purge=1</div>';
     return;
   }
   const MC =
