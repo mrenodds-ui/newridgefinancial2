@@ -527,6 +527,102 @@ def _mirror_operatory_export(destination: Path, payload: dict[str, Any]) -> None
             continue
 
 
+def _normalize_schedule_date(raw: Any) -> str:
+    text = str(raw or "").strip().replace("/", "-")
+    if not text or text.startswith("0001"):
+        return ""
+    return text.split("T")[0].split(" ")[0]
+
+
+def _sensei_appt_procedure(entity: dict[str, Any]) -> str:
+    for index in range(12):
+        code = str(entity.get(f"Proc{index}_Code") or "").strip()
+        if code and code not in {"0", "0000", "889500"}:
+            return code
+    notes = str(entity.get("Notes0") or entity.get("Notes1") or "").strip()
+    if notes:
+        return notes[:64]
+    return "Scheduled"
+
+
+def _sensei_appt_tone(entity: dict[str, Any], status: str) -> str:
+    checked_out = str(entity.get("CheckedOut") or "").strip().lower()
+    if checked_out in {"true", "1", "yes"}:
+        return "ok"
+    return _slot_tone(status)
+
+
+def build_operatory_chairs_from_sensei(
+    root: Path | None = None,
+    *,
+    schedule_date: str | None = None,
+    days_ahead: int = 0,
+) -> list[dict[str, Any]] | None:
+    """Build live operatory grid from Sensei DataSync appointment JSON (Op / OpName / Time)."""
+    try:
+        from softdent_odbc_extract import (
+            SENSEI_ENTITY_WRAPPERS,
+            _iter_sensei_entity_files,
+            _load_sensei_entity,
+            _sensei_appt_status,
+            _sensei_person_name,
+            resolve_sensei_datasync_root,
+        )
+    except Exception:
+        return None
+
+    root = root or resolve_sensei_datasync_root()
+    if not root or not root.is_dir():
+        return None
+
+    anchor = schedule_date or datetime.now().date().isoformat()
+    allowed_dates = {anchor}
+    if days_ahead > 0:
+        from datetime import date, timedelta
+
+        start = date.fromisoformat(anchor)
+        for offset in range(1, days_ahead + 1):
+            allowed_dates.add((start + timedelta(days=offset)).isoformat())
+
+    chairs: dict[str, dict[str, Any]] = {}
+    for path in _iter_sensei_entity_files(root, "appointment"):
+        entity = _load_sensei_entity(path, SENSEI_ENTITY_WRAPPERS["appointment"])
+        if not entity:
+            continue
+        appt_date = _normalize_schedule_date(entity.get("Date") or entity.get("ApptDate"))
+        if appt_date not in allowed_dates:
+            continue
+        patient_name = _sensei_person_name(entity.get("Firstname"), entity.get("Lastname"))
+        if not patient_name:
+            continue
+        op_key = str(entity.get("LogicalOp") or entity.get("Op") or "").strip() or "unassigned"
+        op_name = str(entity.get("OpName") or f"Op {op_key}").strip() or f"Op {op_key}"
+        chair_key = f"{op_key}:{op_name}"
+        status = _sensei_appt_status(entity)
+        time_label = str(entity.get("Time") or "").strip()[:5]
+        if not time_label:
+            time_label = appt_date
+        chair = chairs.setdefault(chair_key, {"name": op_name, "slots": []})
+        chair["slots"].append(
+            {
+                "time": time_label,
+                "patient": patient_name,
+                "procedure": _sensei_appt_procedure(entity),
+                "tone": _sensei_appt_tone(entity, status),
+            }
+        )
+
+    if not chairs:
+        return None
+
+    result: list[dict[str, Any]] = []
+    for chair in chairs.values():
+        chair["slots"] = sorted(chair["slots"], key=lambda slot: str(slot.get("time") or ""))[:12]
+        result.append(chair)
+    result.sort(key=lambda item: str(item.get("name") or ""))
+    return result or None
+
+
 def _aggregate_operatory_from_db(conn: sqlite3.Connection) -> list[dict[str, Any]] | None:
     for table in ("operatory_schedule", "operatory_chairs", "chair_schedule"):
         if not _table_exists(conn, table):
@@ -601,17 +697,31 @@ def sync_practice_exports(db_path: Path | None = None, destination: Path | None 
             written.append(hr_path.name)
 
         op_path = destination / "operatory_schedule.json"
-        op_chairs = _aggregate_operatory_from_db(conn)
+        schedule_date = datetime.now().date().isoformat()
+        op_chairs = build_operatory_chairs_from_sensei(schedule_date=schedule_date)
+        generated_from = "sensei-datasync"
+        if not op_chairs:
+            op_chairs = _aggregate_operatory_from_db(conn)
+            generated_from = "sd_appointments"
         if op_chairs:
             overwrite = not op_path.is_file()
             if not overwrite:
                 try:
                     existing = json.loads(op_path.read_text(encoding="utf-8-sig"))
-                    overwrite = existing.get("generatedFrom") in (None, "sd_appointments", "analytics-db")
+                    overwrite = existing.get("generatedFrom") in (
+                        None,
+                        "sd_appointments",
+                        "analytics-db",
+                        "sensei-datasync",
+                    )
                 except (json.JSONDecodeError, OSError):
                     overwrite = True
             if overwrite:
-                payload = {"operatoryChairs": op_chairs, "generatedFrom": "sd_appointments"}
+                payload = {
+                    "operatoryChairs": op_chairs,
+                    "generatedFrom": generated_from,
+                    "scheduleDate": schedule_date,
+                }
                 op_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
                 _mirror_operatory_export(destination, payload)
                 written.append(op_path.name)
