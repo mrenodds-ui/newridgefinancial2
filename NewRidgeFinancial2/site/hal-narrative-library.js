@@ -193,6 +193,9 @@
   }
 
   const api = {
+    FOCUSES,
+    TONES,
+    LENGTHS,
     buildGenericDraftLibrary,
     selectBestNarrativeForClaim,
     formatNarrativeSelectionAnswer,

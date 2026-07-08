@@ -731,18 +731,73 @@ const Services = (function () {
       await delay();
       return clone(await load("narratives", emptyNarratives));
     },
+    buildClaimPacket(claim, snapshot, options) {
+      const nr = typeof NarrativeReview !== "undefined" ? NarrativeReview : null;
+      if (!nr || typeof nr.buildCasePacket !== "function") return { claim, missing_data: [] };
+      return nr.buildCasePacket(claim || {}, snapshot || {}, options || {});
+    },
+    validateDraft(payload) {
+      const nr = typeof NarrativeReview !== "undefined" ? NarrativeReview : null;
+      if (!nr || typeof nr.validateDraftPayload !== "function") return { ok: true, issues: [] };
+      return nr.validateDraftPayload(payload || {});
+    },
     async generate(payload) {
       await delay(420);
       const claim = payload && payload.claim;
+      const snap = payload && payload.snapshot;
+      const skills = typeof HalSkills !== "undefined" ? HalSkills : null;
+      if (skills && typeof skills.buildDraftInsuranceNarrative === "function" && claim) {
+        const result = skills.buildDraftInsuranceNarrative(snap || {}, {
+          claimId: claim.id || claim.ClaimId,
+          focus: payload.focus,
+          tone: payload.tone,
+          length: payload.length,
+          denialReason: payload.denialReason || claim.denialReason,
+        });
+        if (result && result.text) {
+          return {
+            text: result.text,
+            focus: result.focus,
+            tone: result.tone,
+            length: result.length,
+            missingFields: result.missingFields || [],
+            citationWidgets: result.citationWidgets || [],
+            citations: result.citations || [],
+            draftStatus: result.draftStatus,
+            modelLane: result.modelLane,
+            blocked: result.ok === false,
+          };
+        }
+      }
       const lib = typeof HalNarrativeLibrary !== "undefined" ? HalNarrativeLibrary : null;
       if (claim && lib && typeof lib.selectBestNarrativeForClaim === "function") {
         const selection = lib.selectBestNarrativeForClaim(claim);
-        if (selection && selection.selected && selection.selected.text) return selection.selected.text;
+        if (selection && selection.selected && selection.selected.text) {
+          return { text: selection.selected.text, focus: selection.selected.focus, tone: selection.selected.tone };
+        }
       }
-      return composeNarrative(payload || {});
+      const composed = composeNarrative(payload || {});
+      return { text: composed, focus: payload.focus, tone: payload.tone, length: payload.length };
     },
     async saveDraft(payload) {
       await delay(200);
+      const nr = typeof NarrativeReview !== "undefined" ? NarrativeReview : null;
+      if (nr && typeof nr.validateDraftPayload === "function") {
+        const validation = nr.validateDraftPayload({
+          text: payload.text,
+          claim: payload.claim,
+          snapshot: payload.snapshot,
+          focus: payload.focus,
+          tone: payload.tone,
+          length: payload.length,
+        });
+        if (validation.blocking) {
+          const err = new Error((validation.issues || ["Draft blocked"]).join("; "));
+          err.code = "NARRATIVE_REVIEW_BLOCKED";
+          err.validation = validation;
+          throw err;
+        }
+      }
       const state = clone(await load("narratives", emptyNarratives));
       const nextNum = state.drafts.length + 1;
       state.drafts.forEach((d) => (d.latest = false));
@@ -753,9 +808,12 @@ const Services = (function () {
         points: (payload.keyPoints || []).length,
         length: payload.length || "Standard",
         focus: payload.focus || "Medical Necessity",
+        tone: payload.tone || "Professional",
         by: "New Ridge Owner",
         text: payload.text || "",
         keyPoints: (payload.keyPoints || []).slice(),
+        claimId: payload.claimId || (payload.claim && payload.claim.id) || null,
+        citationWidgets: payload.citationWidgets || [],
       };
       state.drafts.unshift(draft);
       state.composer = {

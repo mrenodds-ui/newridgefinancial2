@@ -3606,6 +3606,114 @@ const HalSkills = (function () {
     return lines.join("\n");
   }
 
+  function resolveClaimById(snapshot, claimId) {
+    const ref = String(claimId || "").trim();
+    const claimsBlock = (snapshot && snapshot.claims) || {};
+    const claims = claimsBlock.claims || claimsBlock.top || [];
+    if (!claims.length) return null;
+    if (!ref) return claims[0];
+    return (
+      claims.find((c) => String(c.id || c.ClaimId || "").toLowerCase() === ref.toLowerCase()) ||
+      claims.find((c) => String(c.patient || "").toLowerCase().includes(ref.toLowerCase())) ||
+      claims[0]
+    );
+  }
+
+  function narrativeModelLane(focus, denialReason) {
+    const hay = `${focus || ""} ${denialReason || ""}`.toLowerCase();
+    if (/\b(denial appeal|alternate benefit|post-operative complication|appeal)\b/.test(hay) || /\bdenied\b/.test(hay)) {
+      return "reason24b";
+    }
+    if (/\b(prior authorization|periodontal|fracture documentation)\b/.test(hay)) {
+      return "fast14b";
+    }
+    return "chat8b";
+  }
+
+  function buildDraftInsuranceNarrative(snapshot, params) {
+    const lib = typeof HalNarrativeLibrary !== "undefined" ? HalNarrativeLibrary : globalThis.HalNarrativeLibrary;
+    const nr = typeof NarrativeReview !== "undefined" ? NarrativeReview : globalThis.NarrativeReview;
+    if (!lib || !nr) {
+      return { ok: false, summary: "Narrative draft tools are not loaded in this runtime." };
+    }
+    const p = params || {};
+    const claim = resolveClaimById(snapshot, p.claimId || p.claim_id);
+    if (!claim) {
+      return {
+        ok: false,
+        summary: "No claims are visible yet. Load the SoftDent claims export before drafting narratives.",
+        missingFields: ["missing_softdent_claims_export"],
+        citationWidgets: ["claimsPipeline"],
+      };
+    }
+    const focus = p.focus || (lib.selectBestNarrativeForClaim(claim).selected || {}).focus || "Medical Necessity";
+    const tone = p.tone || "Professional";
+    const length = p.length || "Standard";
+    const denialReason = p.denialReason || p.denial_reason || claim.denialReason || "";
+    const packet = nr.buildCasePacket(claim, snapshot, { focus, denialReason });
+    const library = lib.buildGenericDraftLibrary();
+    const match =
+      library.find((row) => row.focus === focus && row.tone === tone && row.length === length) ||
+      (lib.selectBestNarrativeForClaim(claim, library).selected || library[0]);
+    const facts = (packet.source_facts || []).filter((f) => f.text && !/empty/i.test(f.text));
+    const factLines = facts.map((f) => `${f.text} [${f.fact_id}]`).join(" ");
+    const lead = match ? match.text.split(".")[0] + "." : `Clinical summary for ${focus.toLowerCase()}.`;
+    const bodyParts = [lead];
+    if (factLines) bodyParts.push(`Supporting chart notes: ${factLines}`);
+    else bodyParts.push("No imported clinical note text was available — staff must add findings manually.");
+    if (denialReason) bodyParts.push(`Payer denial context (from claim export): ${denialReason}`);
+    bodyParts.push(
+      length === "Brief"
+        ? "Staff review required before any payer submission. Local draft only — not submitted."
+        : "Based on documented findings, the proposed procedure is medically necessary. Human review required; not submitted.",
+    );
+    const text = bodyParts.join(" ");
+    const validation = nr.validateDraftPayload({ text, claim, packet, snapshot, focus, tone, length });
+    const citationWidgets = ["narrativeWorkflow", "claimsPipeline"];
+    if (facts.length) citationWidgets.push("softdent.clinicalNotes");
+    return {
+      ok: validation.ok,
+      summary: validation.ok
+        ? `Draft ready for human review · ${claim.id || "claim"} · ${focus} · ${tone}`
+        : `Draft blocked: ${(validation.issues || []).slice(0, 3).join("; ")}`,
+      text,
+      focus,
+      tone,
+      length,
+      claimId: claim.id || p.claimId,
+      patient: claim.patient,
+      missingFields: validation.missingFields || [],
+      citationWidgets: Array.from(new Set(citationWidgets)),
+      citations: facts.map((f) => ({ fact_id: f.fact_id, excerpt: f.text })),
+      draftStatus: validation.status,
+      modelLane: narrativeModelLane(focus, denialReason),
+      packet_id: packet.packet_id,
+      draft_id: packet.draft_id,
+      localOnly: true,
+      notSubmitted: true,
+    };
+  }
+
+  function formatDraftInsuranceNarrativeResult(result) {
+    if (!result || result.ok === false) {
+      return result && result.summary
+        ? result.summary
+        : "Narrative draft could not be prepared — verify claims and clinical notes exports.";
+    }
+    const lines = [
+      `Insurance narrative draft (local only · ${result.modelLane || "chat8b"} lane):`,
+      "",
+      `Claim: ${result.claimId || "—"} · Patient: ${result.patient || "—"}`,
+      `Focus: ${result.focus} · Tone: ${result.tone} · Status: ${result.draftStatus}`,
+    ];
+    if (result.missingFields && result.missingFields.length) {
+      lines.push(`Missing / flagged: ${result.missingFields.join(", ")}`);
+    }
+    lines.push("", "Draft (staff must review; not submitted):", result.text || "");
+    lines.push("", "Nothing has been sent to a payer.");
+    return lines.join("\n");
+  }
+
   function formatNarrativeForClaim(snapshot, query) {
     const lib = typeof HalNarrativeLibrary !== "undefined" ? HalNarrativeLibrary : globalThis.HalNarrativeLibrary;
     if (!lib) return "Narrative library is not loaded in this runtime.";
@@ -4181,6 +4289,10 @@ const HalSkills = (function () {
     formatImportHealthSummary,
     formatSourceSystemGuide,
     formatPracticeSourcePullResult,
+    buildDraftInsuranceNarrative,
+    formatDraftInsuranceNarrativeResult,
+    resolveClaimById,
+    narrativeModelLane,
     formatNarrativeForClaim,
     formatHalJobRequirements,
     formatWidgetPeriodRequirements,

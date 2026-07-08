@@ -328,11 +328,13 @@ const PageCanvas = (function () {
       return `<div class="claim-card risk-medium" role="button" tabindex="0" data-hal-action="1" data-hal-page="${esc(pageId)}" data-hal-widget="${esc(wk)}" data-hal-payload-label="${esc(item)}"><div class="claim-patient">${esc(item)}</div></div>`;
     }
     const risk = claimRiskClass(item, item.status);
-    return `<div class="claim-card ${risk}" role="button" tabindex="0" data-hal-action="1" data-hal-page="${esc(pageId)}" data-hal-widget="${esc(wk)}" data-hal-payload-label="${esc(item.patient || item.id || "")}">
-      <div class="claim-header"><span class="claim-id">${esc(item.id || "CLM")}</span><span class="risk-badge ${risk}">${esc(claimRiskLabel(risk))}</span></div>
+    const claimId = esc(item.id || "CLM");
+    return `<div class="claim-card ${risk}" role="button" tabindex="0" data-hal-action="1" data-hal-page="${esc(pageId)}" data-hal-widget="${esc(wk)}" data-hal-payload-label="${esc(item.patient || item.id || "")}" data-claim-id="${claimId}">
+      <div class="claim-header"><span class="claim-id">${claimId}</span><span class="risk-badge ${risk}">${esc(claimRiskLabel(risk))}</span></div>
       <div class="claim-patient">${esc(item.patient || "Unknown")}</div>
       <div class="claim-procedure">${esc(item.procedure || "—")}</div>
       <div class="claim-meta"><span class="claim-payer">${esc(item.payer || "—")}</span><span class="claim-amount">${fmtClaim(item.amount)}</span></div>
+      <div class="claim-actions"><button type="button" class="chip chip--sm" data-narrative-draft="${claimId}">Draft with HAL</button></div>
     </div>`;
   }
 
@@ -370,6 +372,34 @@ const PageCanvas = (function () {
         <span>${esc(String(pages))} pages · PDF preview</span>
       </div>
     </div>`;
+  }
+
+  function canvasNarrativeSelectors(options, claim) {
+    const opts = options || {};
+    const selFocus = (name, values, selected) =>
+      `<label class="narrative-field"><span>${esc(name)}</span><select data-narrative-field="${esc(name.toLowerCase())}">${values
+        .map((v) => `<option value="${esc(v)}"${v === selected ? " selected" : ""}>${esc(v)}</option>`)
+        .join("")}</select></label>`;
+    return `<div class="narrative-draft-controls" data-narrative-draft-panel="1">
+      ${claim ? `<p class="widget-note">Claim ${esc(claim.id || "—")} · ${esc(claim.patient || "—")} · ${esc(claim.procedure || "—")}</p>` : ""}
+      <div class="narrative-field-row">
+        ${selFocus("Focus", opts.focuses || ["Medical Necessity"], opts.focus)}
+        ${selFocus("Tone", opts.tones || ["Professional"], opts.tone)}
+        ${selFocus("Length", opts.lengths || ["Standard", "Brief"], opts.length)}
+      </div>
+      <div class="composer-toolbar">
+        <button type="button" class="chip" data-narrative-generate="1">Generate draft</button>
+        <button type="button" class="chip" data-narrative-save="1">Save draft locally</button>
+        <button type="button" class="chip chip--ghost" data-narrative-draft-close="1">Close</button>
+      </div>
+    </div>`;
+  }
+
+  function canvasNarrativeCitations(widgetKeys) {
+    if (typeof NR2Tier3 !== "undefined" && NR2Tier3.renderCitationChipsHtml) {
+      return NR2Tier3.renderCitationChipsHtml(["draft_insurance_narrative"], widgetKeys || ["narrativeWorkflow", "claimsPipeline"]);
+    }
+    return "";
   }
 
   function canvasTextArea(value, rows, editable) {
@@ -1423,6 +1453,9 @@ const PageCanvas = (function () {
     const kpis = D ? D.claimsKpis() : [];
     const lanes = D ? D.claimsKanban() : [];
     const claim = D ? D.firstClaim() : null;
+    const composerOpts = D && D.narrativeComposerOptions ? D.narrativeComposerOptions() : {};
+    const draft = D ? D.narrativeDraft() : "";
+    const citationWidgets = D && D.narrativeCitationWidgets ? D.narrativeCitationWidgets() : [];
     const kanbanLanes =
       lanes.length > 0
         ? lanes
@@ -1488,6 +1521,20 @@ const PageCanvas = (function () {
               : canvasEmpty("Claim history will appear with SoftDent claims data."),
           }),
         )}
+        ${gridCol(
+          12,
+          canvasPanel({
+            title: "Narrative draft (HAL assist)",
+            accent: "purple",
+            caption: "Local review only · not submitted to payers",
+            widgetKey: "narrativeWorkflow",
+            body: `${canvasNarrativeSelectors(composerOpts, claim)}
+              <div class="composer-panel narrative-draft-panel" data-hal-widget-key="${esc(wKey("narratives", 0))}" data-narrative-claim-id="${esc(claim && claim.id ? claim.id : "")}">
+                ${canvasTextArea(draft || "", 8, true)}
+                ${draft ? canvasNarrativeCitations(citationWidgets) : canvasEmpty("Select a claim and choose Draft with HAL, or generate from the controls above.")}
+              </div>`,
+          }),
+        )}
       `)}
     </div>`;
   }
@@ -1497,10 +1544,14 @@ const PageCanvas = (function () {
     const draft = D ? D.narrativeDraft() : "";
     const history = D ? D.narrativeHistoryRows() : [];
     const kpis = D && D.narrativeKpis ? D.narrativeKpis() : [];
+    const composerOpts = D && D.narrativeComposerOptions ? D.narrativeComposerOptions() : {};
+    const claim = D ? D.firstClaim() : null;
+    const citationWidgets = D && D.narrativeCitationWidgets ? D.narrativeCitationWidgets() : [];
     const confidencePct = draft ? Math.min(95, 40 + Math.floor(draft.length / 20)) : 0;
     const cdtCodes = ["D2740 Crown", "D2950 Core buildup", "D4341 Perio scaling", "D7210 Extraction", "D6010 Implant"];
     return `${stackOpen()}
       ${kpis.length ? `${metricRowOpen()}${kpis.map(canvasMetricTile).join("")}${metricRowClose()}` : `${metricRowOpen()}${canvasMetricTile({ label: "Narrative Composer", value: "Ready", widgetKey: wKey("narratives", 0) })}${metricRowClose()}`}
+      ${canvasNarrativeSelectors(composerOpts, claim)}
       <div class="composer-grid">
         <div class="panel" data-hal-widget-key="${esc(wKey("narratives", 0))}">
           <div class="panel-header"><span>Procedure Codes</span><span style="font-size:12px;color:var(--text-secondary)">CDT 2024</span></div>
@@ -1517,12 +1568,12 @@ const PageCanvas = (function () {
         <div class="panel">
           <div class="composer-toolbar">
             <button type="button" class="chip" data-hal-cmd="Insert prior history into narrative">Insert history</button>
-            <button type="button" class="chip" data-hal-cmd="Draft crown narrative">Draft with HAL</button>
+            <button type="button" class="chip" data-narrative-generate="1">Draft with HAL</button>
             <button type="button" class="chip" data-narrative-save="1">Save draft locally</button>
           </div>
-          <div class="composer-panel" data-hal-widget-key="${esc(wKey("narratives", 0))}">
+          <div class="composer-panel" data-hal-widget-key="${esc(wKey("narratives", 0))}" data-narrative-claim-id="${esc(claim && claim.id ? claim.id : "")}">
             ${canvasTextArea(draft || "", 12, true)}
-            ${draft ? `<div class="confidence-bar"><span style="color:var(--text-secondary)">AI Confidence:</span><div class="confidence-meter"><span class="confidence-fill" style="width:${confidencePct}%"></span></div><span>${confidencePct}%</span></div>` : canvasEmpty("Start typing or ask HAL to draft a narrative for staff review.")}
+            ${draft ? `<div class="confidence-bar"><span style="color:var(--text-secondary)">AI Confidence:</span><div class="confidence-meter"><span class="confidence-fill" style="width:${confidencePct}%"></span></div><span>${confidencePct}%</span></div>${canvasNarrativeCitations(citationWidgets)}` : canvasEmpty("Start typing or ask HAL to draft a narrative for staff review.")}
           </div>
         </div>
         <div class="panel" data-hal-widget-key="${esc(wKey("narratives", 0))}">

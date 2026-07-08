@@ -407,6 +407,47 @@
   padding: 10px 12px;
 }
 
+.app--moonshot-mockup .ms-page .claim-actions {
+  margin-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page .claim-actions .chip {
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-draft-controls {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 12px 14px 8px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-field {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-field select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-draft-panel {
+  margin-top: 8px;
+}
+
 .app--moonshot-mockup .ms-page .composer-textarea {
   background: transparent;
   border: none;

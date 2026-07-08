@@ -172,16 +172,107 @@ const PageViews = (function () {
         const narrativeSave = event.target.closest("[data-narrative-save]");
         if (narrativeSave) {
           event.preventDefault();
-          const editor = narrativeSave.closest("[data-hal-widget-key]");
-          const textarea = editor && editor.querySelector("[data-narrative-body]");
+          event.stopPropagation();
+          const panel = narrativeSave.closest("[data-narrative-draft-panel], .composer-grid, .ms-page") || narrativeSave.closest("[data-hal-widget-key]");
+          const editor = panel && panel.querySelector("[data-narrative-body]");
+          const textarea = editor || (panel && panel.querySelector("textarea.composer-textarea"));
           const text = textarea ? textarea.value : "";
+          const controls = panel && panel.querySelector("[data-narrative-draft-panel]");
+          const focusSel = controls && controls.querySelector('[data-narrative-field="focus"]');
+          const toneSel = controls && controls.querySelector('[data-narrative-field="tone"]');
+          const lengthSel = controls && controls.querySelector('[data-narrative-field="length"]');
+          const focus = focusSel ? focusSel.value : "Medical Necessity";
+          const tone = toneSel ? toneSel.value : "Professional";
+          const length = lengthSel ? lengthSel.value : "Standard";
+          const claimWrap = panel && panel.querySelector("[data-narrative-claim-id]");
+          const claimId = claimWrap ? claimWrap.getAttribute("data-narrative-claim-id") : "";
+          const D = typeof PageCanvasData !== "undefined" ? PageCanvasData : null;
+          const claim =
+            D && D.allClaims && claimId
+              ? D.allClaims().find((c) => String(c.id) === claimId) || D.firstClaim()
+              : D && D.firstClaim
+                ? D.firstClaim()
+                : null;
           if (typeof Services !== "undefined" && Services.narratives && typeof Services.narratives.saveDraft === "function") {
-            await Services.narratives.saveDraft({ text, focus: "Medical Necessity", length: "Standard" });
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("nr2:page-refresh-requested"));
-              window.dispatchEvent(new CustomEvent("nr2:narratives-updated"));
+            try {
+              await Services.narratives.saveDraft({
+                text,
+                focus,
+                tone,
+                length,
+                claim,
+                claimId: claim && claim.id,
+                snapshot: typeof window !== "undefined" ? window.__nr2ProgramSnapshot : null,
+              });
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("nr2:page-refresh-requested"));
+                window.dispatchEvent(new CustomEvent("nr2:narratives-updated"));
+              }
+            } catch (err) {
+              if (typeof window !== "undefined") {
+                window.alert(err && err.message ? err.message : "Narrative save blocked by review rules.");
+              }
             }
           }
+          return;
+        }
+        const narrativeGenerate = event.target.closest("[data-narrative-generate]");
+        if (narrativeGenerate) {
+          event.preventDefault();
+          event.stopPropagation();
+          const panel = narrativeGenerate.closest("[data-narrative-draft-panel], .composer-grid, .ms-page");
+          const controls = panel && panel.querySelector("[data-narrative-draft-panel]");
+          const focusSel = controls && controls.querySelector('[data-narrative-field="focus"]');
+          const toneSel = controls && controls.querySelector('[data-narrative-field="tone"]');
+          const lengthSel = controls && controls.querySelector('[data-narrative-field="length"]');
+          const focus = focusSel ? focusSel.value : "Medical Necessity";
+          const tone = toneSel ? toneSel.value : "Professional";
+          const length = lengthSel ? lengthSel.value : "Standard";
+          const claimWrap = panel && panel.querySelector("[data-narrative-claim-id]");
+          const claimId = claimWrap ? claimWrap.getAttribute("data-narrative-claim-id") : "";
+          const D = typeof PageCanvasData !== "undefined" ? PageCanvasData : null;
+          const claim =
+            D && D.allClaims && claimId
+              ? D.allClaims().find((c) => String(c.id) === claimId) || D.firstClaim()
+              : D && D.firstClaim
+                ? D.firstClaim()
+                : null;
+          if (typeof Services !== "undefined" && Services.narratives && typeof Services.narratives.generate === "function") {
+            const snap =
+              (typeof window !== "undefined" && window.__nr2ProgramSnapshot) ||
+              (typeof SnapshotStore !== "undefined" && SnapshotStore.get ? SnapshotStore.get() : null);
+            const result = await Services.narratives.generate({ claim, snapshot: snap, focus, tone, length });
+            const textarea = panel && panel.querySelector("[data-narrative-body], textarea.composer-textarea");
+            if (textarea && result && result.text) textarea.value = result.text;
+            if (result && result.blocked && typeof window !== "undefined") {
+              window.alert(`Draft prepared with gaps: ${(result.missingFields || []).join(", ") || "review required"}`);
+            }
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("nr2:narratives-updated"));
+              window.dispatchEvent(new CustomEvent("nr2:page-refresh-requested"));
+            }
+          }
+          return;
+        }
+        const narrativeDraftBtn = event.target.closest("[data-narrative-draft]");
+        if (narrativeDraftBtn) {
+          event.preventDefault();
+          event.stopPropagation();
+          const claimId = narrativeDraftBtn.getAttribute("data-narrative-draft");
+          const D = typeof PageCanvasData !== "undefined" ? PageCanvasData : null;
+          if (D && typeof D.setSelectedClaimId === "function") D.setSelectedClaimId(claimId);
+          if (typeof onNavigate === "function") onNavigate("claims");
+          else if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("nr2:page-refresh-requested"));
+          }
+          return;
+        }
+        const narrativeClose = event.target.closest("[data-narrative-draft-close]");
+        if (narrativeClose) {
+          event.preventDefault();
+          const panel = narrativeClose.closest(".narrative-draft-panel, [data-narrative-draft-panel]");
+          const textarea = panel && panel.querySelector("textarea");
+          if (textarea) textarea.value = "";
           return;
         }
       });

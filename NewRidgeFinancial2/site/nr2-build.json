@@ -1,8 +1,8 @@
 {
-  "BUILD_ID": "hal-10090",
-  "assetVersion": "hal-10090",
-  "schemaVersion": "hal-10090",
+  "BUILD_ID": "hal-10092",
+  "assetVersion": "hal-10092",
+  "schemaVersion": "hal-10092",
   "REQUIRED_EPOCH": "moonshot-mockup",
-  "builtAt": "2026-07-08T00:00:00.000Z",
-  "notes": "Moonshot post-ceiling data lane: payments/adjustments, analytics widget fallback, operatory contract, procedures/claim status exports, hub sign-off (hal-10090)."
+  "builtAt": "2026-07-08T12:00:00.000Z",
+  "notes": "Phase D claims narrative workflow: narrative-review.js, draft_insurance_narrative HAL tool, claims UI draft/save flow (hal-10092)."
 }

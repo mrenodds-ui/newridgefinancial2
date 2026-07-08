@@ -46,7 +46,7 @@
       "policy": "Chat replies match Cursor Auto: proportional depth, collaborative tone, markdown when reviewing source."
     },
     "agentProgramming": {
-      "profile": "cursor-auto-v13",
+      "profile": "cursor-auto-v14",
       "minSentences": 5,
       "proportionalDepth": true,
       "allowMarkdown": true,
@@ -153,7 +153,8 @@
         "semantic_search_program",
         "run_git_readonly",
         "research_web",
-        "remember_fact"
+        "remember_fact",
+        "draft_insurance_narrative"
       ],
       "localWrites": ["remember_fact", "local office tasks", "journal drafts for review", "apply_program_patch (site bundle only, backed up)"],
       "externalBlocked": false

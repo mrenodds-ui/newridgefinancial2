@@ -1,10 +1,10 @@
 # Moonshot Phase 5 — SideNotes Hub Broadcast Protocol
 
 **Date:** 2026-07-07  
-**Build:** `hal-10090`  
+**Build:** `hal-10092`  
 **Ports:** Workstation `8766` → Financial HAL `8765`
 
-## Implementation status (hal-10090)
+## Implementation status (hal-10092)
 
 - `hal_hub.hub_notify_access_ok()` — validates `Origin` (8766 / `NR2_HUB_ORIGIN`) **and** `X-Hub-Token`
 - `hal_hub.hub_last_broadcast_access_ok()` — validates `X-Hub-Token` on GET

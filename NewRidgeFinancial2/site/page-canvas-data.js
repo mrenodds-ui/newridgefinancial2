@@ -6,6 +6,7 @@ const PageCanvasData = (function () {
   let feed = null;
   let snapshot = null;
   let liveIntegrationHealth = null;
+  let selectedClaimId = null;
 
   const COLORS = ["#78a86b", "#60a5fa", "#c084fc", "#d6b15e", "#fb923c", "#f472b6"];
   const CLAIM_LANES = ["Draft", "Needs Review", "Ready", "Denied"];
@@ -1236,9 +1237,46 @@ const PageCanvasData = (function () {
     }));
   }
 
-  function firstClaim() {
+  function allClaims() {
     const claims = snapshot && snapshot.claims && snapshot.claims.claims;
-    return (claims && claims[0]) || null;
+    return Array.isArray(claims) ? claims : [];
+  }
+
+  function setSelectedClaimId(claimId) {
+    selectedClaimId = claimId ? String(claimId) : null;
+  }
+
+  function selectedClaim() {
+    const claims = allClaims();
+    if (!claims.length) return null;
+    if (selectedClaimId) {
+      const match = claims.find((c) => String(c.id || "") === selectedClaimId);
+      if (match) return match;
+    }
+    return claims[0];
+  }
+
+  function firstClaim() {
+    return selectedClaim();
+  }
+
+  function narrativeComposerOptions() {
+    const lib = typeof HalNarrativeLibrary !== "undefined" ? HalNarrativeLibrary : null;
+    const nar = snapshot && snapshot.narratives;
+    return {
+      focuses: (lib && lib.FOCUSES) || ["Medical Necessity", "Denial Appeal"],
+      tones: (lib && lib.TONES) || ["Professional", "Clinical-Detailed"],
+      lengths: (lib && lib.LENGTHS) || ["Standard", "Brief"],
+      focus: (nar && nar.composer && nar.composer.focus) || (nar && nar.focus) || "Medical Necessity",
+      tone: (nar && nar.composer && nar.composer.tone) || "Professional",
+      length: (nar && nar.composer && nar.composer.length) || "Standard",
+    };
+  }
+
+  function narrativeCitationWidgets() {
+    const latest = snapshot && snapshot.narratives && snapshot.narratives.latest;
+    if (latest && latest.citationWidgets && latest.citationWidgets.length) return latest.citationWidgets;
+    return ["narrativeWorkflow", "claimsPipeline"];
   }
 
   function narrativeDraft() {
@@ -1855,8 +1893,13 @@ const PageCanvasData = (function () {
     arFollowUpKanban,
     claimsKpis,
     claimsKanban,
+    allClaims,
+    setSelectedClaimId,
+    selectedClaim,
     firstClaim,
     narrativeDraft,
+    narrativeComposerOptions,
+    narrativeCitationWidgets,
     narrativeHistoryRows,
     narrativeKpis,
     documentsQueueRows,

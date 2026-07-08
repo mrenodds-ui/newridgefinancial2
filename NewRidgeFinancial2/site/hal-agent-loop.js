@@ -26,7 +26,7 @@
     "name: tool_id",
     "query: arguments or search terms",
     ">>>",
-    "Allowed tool ids include: grep_program_source, read_program_file, semantic_search_program, read_import_diagnostics, read_widget_feed, read_program_snapshot, run_hal_validation, run_node_syntax_check, run_command, run_git_readonly, spawn_investigation, explain_route, read_program_help.",
+    "Allowed tool ids include: grep_program_source, read_program_file, semantic_search_program, read_import_diagnostics, read_widget_feed, read_program_snapshot, run_hal_validation, run_node_syntax_check, run_command, run_git_readonly, spawn_investigation, explain_route, read_program_help, draft_insurance_narrative.",
     "For run_command use query: validate-hal | node-check-agent | node-check-app | git-status.",
     "After tool results appear in context, either request more tools or write the final staff-facing answer (no <<<tool blocks in the final answer).",
     "To propose code changes, include <<<patch blocks; they may be applied automatically when task completion is enabled.",

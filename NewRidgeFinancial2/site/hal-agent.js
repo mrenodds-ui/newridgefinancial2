@@ -318,6 +318,45 @@ const HalAgent = (function () {
         return { ok: true, summary: HalSkills.formatClaimReadinessAnswer(resp).slice(0, 2500) };
       },
     },
+    draft_insurance_narrative: {
+      label: "Draft insurance narrative for claim",
+      run: async (ctx, args) => {
+        const snap = await ctx.loadProgramSnapshot();
+        if (!window.HalSkills || typeof HalSkills.buildDraftInsuranceNarrative !== "function") {
+          return { ok: false, summary: "Narrative drafting unavailable." };
+        }
+        const q = String((args && args.query) || "");
+        let params = {};
+        const jsonMatch = q.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            params = JSON.parse(jsonMatch[0]);
+          } catch {
+            params = {};
+          }
+        }
+        if (!params.claimId) {
+          const idMatch = q.match(/\b(CLM[-\w]+|\d{4,})\b/i);
+          if (idMatch) params.claimId = idMatch[1];
+        }
+        if (!params.focus) {
+          const focusMatch = q.match(/\bfocus[:\s]+([A-Za-z][\w\s-]+)/i);
+          if (focusMatch) params.focus = focusMatch[1].trim();
+        }
+        if (!params.tone) {
+          const toneMatch = q.match(/\btone[:\s]+([A-Za-z][\w-]+)/i);
+          if (toneMatch) params.tone = toneMatch[1].trim();
+        }
+        if (/\bappeal\b|\bdenial\b/i.test(q) && !params.focus) params.focus = "Denial Appeal";
+        const result = HalSkills.buildDraftInsuranceNarrative(snap, params);
+        return {
+          ok: result.ok !== false,
+          summary: HalSkills.formatDraftInsuranceNarrativeResult(result).slice(0, 3500),
+          draft: result,
+          citationWidgets: result.citationWidgets || ["narrativeWorkflow", "claimsPipeline"],
+        };
+      },
+    },
     read_tasks: {
       label: "Read local office tasks",
       run: async (ctx) => {
@@ -1831,6 +1870,13 @@ const HalAgent = (function () {
     }
     if (route.useClaimReadiness || (/\b(claim|denied|packet)\b/i.test(query) && !route.text)) {
       tools.push("read_claims_summary");
+    }
+    if (
+      /\b(draft|write|prepare|generate)\b.*\b(insurance\s+)?narrative\b/i.test(query) ||
+      /\bnarrative\b.*\b(for|on)\b.*\bclaim\b/i.test(query) ||
+      /\bdraft with hal\b/i.test(query)
+    ) {
+      tools.push("draft_insurance_narrative");
     }
     if (/\b(shift|tier|employee level|standing consent)\b/i.test(query)) {
       tools.push("read_shift_context");

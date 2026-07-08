@@ -1827,8 +1827,14 @@ async function main() {
   assert(readFileSync(join(__dirname, "import-manifest.json"), "utf8").includes("softdent.claimStatus"), "import manifest must define claim status export");
   assert(readFileSync(join(__dirname, "softdent_operational_pipeline.py"), "utf8").includes("build_procedures_rows"), "operational pipeline must export procedures rows");
   assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("No operatory schedule available"), "operatory empty state must be visible");
-  assert(readFileSync(join(__dirname, "docs", "MOONSHOT_PHASE5_HUB_PROTOCOL.md"), "utf8").includes("hal-10090"), "hub protocol doc must reflect hal-10090 sign-off");
-  assert(completeDoc.includes("hal-10090") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10090");
+  assert(existsSync(join(siteDir, "narrative-review.js")), "narrative-review.js must exist for Phase D");
+  assert(readFileSync(join(siteDir, "narrative-review.js"), "utf8").includes("validateDraftPayload"), "narrative review must validate drafts before save");
+  assert(readFileSync(join(siteDir, "hal-agent.js"), "utf8").includes("draft_insurance_narrative"), "HAL agent must expose draft_insurance_narrative tool");
+  assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("data-narrative-draft"), "claims kanban must expose Draft with HAL per row");
+  assert(readFileSync(join(siteDir, "hal-agent-programming.js"), "utf8").includes("auto-agent-v14"), "agent programming must bump to v14 for Phase D");
+  assert(JSON.parse(readFileSync(halModelsPath, "utf8")).config.agentCapabilities.tools.includes("draft_insurance_narrative"), "hal-models must list draft_insurance_narrative");
+  assert(readFileSync(join(__dirname, "docs", "MOONSHOT_PHASE5_HUB_PROTOCOL.md"), "utf8").includes("hal-10092"), "hub protocol doc must reflect hal-10092 sign-off");
+  assert(completeDoc.includes("hal-10092") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10092");
 
   global.DesktopBridge = priorPlacementBridge;
   global.ImportCoordinator = priorPlacementCoordinator;
@@ -1865,7 +1871,7 @@ async function main() {
   assert(HalAgent.SAFETY_POLICY.summary.includes("internal office manager"), "agent safety policy must describe office manager role");
 
   const HalAgentProgramming = globalThis.HalAgentProgramming;
-  assert(HalAgentProgramming && HalAgentProgramming.VERSION === "auto-agent-v13", "HalAgentProgramming v13 must load");
+  assert(HalAgentProgramming && HalAgentProgramming.VERSION === "auto-agent-v14", "HalAgentProgramming v14 must load");
   assert(/^PROGRAMMING:/m.test(HalAgentProgramming.contract()), "agent contract must start with PROGRAMMING");
   const wrapped = HalAgentProgramming.wrapSystemPrompt("Base prompt.");
   assert(wrapped.includes("Agent loop") && wrapped.includes("Base prompt."), "wrapSystemPrompt must prepend contract");
@@ -1877,7 +1883,7 @@ async function main() {
     sarcIssues,
   );
   assert(!/shocking/i.test(repairedSarc), "agent repair must strip sarcasm");
-  assert(halModels.config.agentProgramming.profile === "cursor-auto-v13", "hal-models agentProgramming profile must be cursor-auto-v13");
+  assert(halModels.config.agentProgramming.profile === "cursor-auto-v14", "hal-models agentProgramming profile must be cursor-auto-v14");
   assert(halModels.config.chat9000 && halModels.config.chat9000.enabled === true, "chat9000 must be enabled");
   const defineRoute = HalCore.routeHalCommand(halData, halModels, pages, "Define ability.");
   assert(defineRoute.useEnglishDefine === true && defineRoute.englishWord === "ability", "Define word must accept trailing period");

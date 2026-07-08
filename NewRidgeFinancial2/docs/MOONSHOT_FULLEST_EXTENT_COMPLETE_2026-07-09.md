@@ -1,9 +1,9 @@
-# Moonshot Fullest Extent — Complete (hal-10090)
+# Moonshot Fullest Extent — Complete (hal-10092)
 
-**Verdict:** Practical ceiling reached for a solo dental practice (per `MOONSHOT_FULLEST_EXTENT_REPORT_2026-07-08.md`). Visual/HAL program through hal-10085; **Moonshot post-ceiling data lane** delivered at hal-10090 per merged Moonshot roadmap.
+**Verdict:** Practical ceiling reached for a solo dental practice (per `MOONSHOT_FULLEST_EXTENT_REPORT_2026-07-08.md`). Visual/HAL program through hal-10085; **Moonshot post-ceiling data lane** at hal-10090; **Phase D claims narrative workflow** at hal-10092.
 
-**Build:** `hal-10090`  
-**Reload:** `https://127.0.0.1:8765/?v=hal-10090&__nr2_purge=1`
+**Build:** `hal-10092`  
+**Reload:** `https://127.0.0.1:8765/?v=hal-10092&__nr2_purge=1`
 
 ## Phase completion matrix
 
@@ -25,6 +25,7 @@
 | hal-10084 | S2 | Per-page storyboard zip (Print→PDF), unified chart mount merge | Done |
 | hal-10085 | S3 | Semantic zoom, HAL presence orb, 8765→8766 hero mirror, stream citation chips | Done |
 | hal-10090 | Data | Payment/adjustment fix, analytics widget fallback, operatory contract, procedures/claim status exports, hub sign-off | Done |
+| hal-10092 | Phase D | narrative-review.js, draft_insurance_narrative HAL tool, claims UI draft/save + citation chips, agent contract v14 | Done |
 
 ## Engineering sign-off
 

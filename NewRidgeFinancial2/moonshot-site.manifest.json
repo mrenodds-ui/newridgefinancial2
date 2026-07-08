@@ -54,6 +54,7 @@
     "hal-office-manager.js",
     "widget-contract.js",
     "hal-period-requirements.js",
+    "narrative-review.js",
     "hal-narrative-library.js",
     "hal-skills.js",
     "hal-widget-master-chart.js",
