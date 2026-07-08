@@ -1862,6 +1862,40 @@ const PageCanvasData = (function () {
     };
   }
 
+  function softdentProcedures() {
+    const bundle = snapshot && snapshot.importBundle;
+    const ds = bundle && bundle.softdent && bundle.softdent.procedures;
+    if (!ds) return [];
+    return Array.isArray(ds) ? ds : (ds.rows || []);
+  }
+
+  function softdentClaimStatus() {
+    const bundle = snapshot && snapshot.importBundle;
+    const ds = bundle && bundle.softdent && bundle.softdent.claimStatus;
+    if (!ds) return [];
+    return Array.isArray(ds) ? ds : (ds.rows || []);
+  }
+
+  function quickbooksExpenseCategories() {
+    const bundle = snapshot && snapshot.importBundle;
+    const ds = bundle && bundle.quickbooks && bundle.quickbooks.expenseCategories;
+    const diag = bundle && bundle.diagnostics && bundle.diagnostics["quickbooks.expenseCategories"];
+    const ageMin = diag && diag.ageMinutes != null ? diag.ageMinutes : Infinity;
+    if (!ds) return { rows: [], stale: true, ageMin };
+    const rows = Array.isArray(ds) ? ds : (ds.rows || []);
+    return { rows, stale: ageMin > 1440, ageMin };
+  }
+
+  function quickbooksAr() {
+    const bundle = snapshot && snapshot.importBundle;
+    const ds = bundle && bundle.quickbooks && bundle.quickbooks.ar;
+    const diag = bundle && bundle.diagnostics && bundle.diagnostics["quickbooks.ar"];
+    const ageMin = diag && diag.ageMinutes != null ? diag.ageMinutes : Infinity;
+    if (!ds) return { rows: [], stale: true, ageMin };
+    const rows = Array.isArray(ds) ? ds : (ds.rows || []);
+    return { rows, stale: ageMin > 1440, ageMin };
+  }
+
   return {
     bind,
     setLiveIntegrationHealth,
@@ -1970,6 +2004,10 @@ const PageCanvasData = (function () {
     softdentProviderProductionData,
     softdentAppointmentsSnapshotData,
     softdentOdbcStatus,
+    softdentProcedures,
+    softdentClaimStatus,
+    quickbooksExpenseCategories,
+    quickbooksAr,
     fmt,
   };
 })();
@@ -1983,39 +2021,3 @@ if (typeof globalThis !== "undefined") {
 if (typeof window !== "undefined") {
   window.PageCanvasData = PageCanvasData;
 }
-
-/**
- * page-canvas-data.js — append these binders to PageCanvasData
- */
-
-PageCanvasData.softdentProcedures = function() {
-  const snap = window.HAL?.bus?.snapshot?.datasets || {};
-  const ds = snap['softdent.procedures'];
-  if (!ds) return [];
-  return Array.isArray(ds) ? ds : (ds.rows || []);
-};
-
-PageCanvasData.softdentClaimStatus = function() {
-  const snap = window.HAL?.bus?.snapshot?.datasets || {};
-  const ds = snap['softdent.claimStatus'];
-  if (!ds) return [];
-  return Array.isArray(ds) ? ds : (ds.rows || []);
-};
-
-PageCanvasData.quickbooksExpenseCategories = function() {
-  const snap = window.HAL?.bus?.snapshot?.datasets || {};
-  const ds = snap['quickbooks.expenseCategories'];
-  if (!ds) return { rows: [], stale: true, ageMin: Infinity };
-  const rows = Array.isArray(ds) ? ds : (ds.rows || []);
-  const ageMin = ds.freshnessMinutes || ds.ageMinutes || 0;
-  return { rows, stale: ageMin > 1440, ageMin };
-};
-
-PageCanvasData.quickbooksAr = function() {
-  const snap = window.HAL?.bus?.snapshot?.datasets || {};
-  const ds = snap['quickbooks.ar'];
-  if (!ds) return { rows: [], stale: true, ageMin: Infinity };
-  const rows = Array.isArray(ds) ? ds : (ds.rows || []);
-  const ageMin = ds.freshnessMinutes || ds.ageMinutes || 0;
-  return { rows, stale: ageMin > 1440, ageMin };
-};

@@ -1293,6 +1293,9 @@ const PageCanvas = (function () {
 
   function renderQuickbooks() {
     if (quickbooksViewMode() === "legacy") return renderQuickbooksLegacy();
+    if (typeof PageCanvas !== "undefined" && PageCanvas.moonshotQuickbooksBodyHtml) {
+      return `${stackOpen()}${PageCanvas.moonshotQuickbooksBodyHtml()}`;
+    }
     const D = dataApi();
     const kpis = D ? D.quickbooksKpis() : [];
     const plRows = D ? D.quickbooksPlRows() : [];
@@ -2096,26 +2099,64 @@ if (typeof window !== "undefined") {
 
 // 1. Shared honesty / resolution helpers
 PageCanvas.hasRenderableData = function(datasetKey, minRows = 1) {
-  const snap = (window.HAL?.bus?.snapshot?.datasets) || {};
+  function okRows(rows) {
+    if (Array.isArray(rows)) return rows.length >= minRows;
+    return false;
+  }
+  const binderRows = {
+    "softdent.procedures": () =>
+      typeof PageCanvasData !== "undefined" && PageCanvasData.softdentProcedures
+        ? PageCanvasData.softdentProcedures()
+        : [],
+    "softdent.claimStatus": () =>
+      typeof PageCanvasData !== "undefined" && PageCanvasData.softdentClaimStatus
+        ? PageCanvasData.softdentClaimStatus()
+        : [],
+    "quickbooks.expenseCategories": () =>
+      typeof PageCanvasData !== "undefined" && PageCanvasData.quickbooksExpenseCategories
+        ? PageCanvasData.quickbooksExpenseCategories().rows
+        : [],
+    "quickbooks.ar": () =>
+      typeof PageCanvasData !== "undefined" && PageCanvasData.quickbooksAr ? PageCanvasData.quickbooksAr().rows : [],
+  };
+  if (binderRows[datasetKey]) {
+    const rows = binderRows[datasetKey]();
+    if (okRows(rows)) return true;
+  }
+  const snap = (typeof window !== "undefined" && window.HAL?.bus?.snapshot?.datasets) || {};
   const ds = snap[datasetKey];
   if (!ds) return false;
   const rows = Array.isArray(ds) ? ds : (ds.rows || ds.data);
   if (Array.isArray(rows)) return rows.length >= minRows;
-  if (typeof ds === 'object' && Object.keys(ds).length > 0) return true;
+  if (typeof ds === "object" && Object.keys(ds).length > 0) return true;
   return false;
 };
 
 // Resolve passed page data against live HAL bus datasets when renderer bag is empty
 PageCanvas.resolveData = function(pageId, passedData) {
   if (passedData && Object.keys(passedData).length > 0) return passedData;
-  const snap = window.HAL?.bus?.snapshot?.datasets || {};
   const out = { ...(passedData || {}) };
-  Object.keys(snap).forEach(dsKey => {
-    if (dsKey.startsWith(pageId + '.')) {
-      const short = dsKey.split('.').pop();
+  const snap =
+    (typeof window !== "undefined" && window.HAL?.bus?.snapshot?.datasets) || {};
+  Object.keys(snap).forEach((dsKey) => {
+    if (dsKey.startsWith(pageId + ".")) {
+      const short = dsKey.split(".").pop();
       out[short] = snap[dsKey];
     }
   });
+  if (pageId === "softdent" && typeof PageCanvasData !== "undefined") {
+    if (PageCanvasData.softdentProcedures) out.procedures = PageCanvasData.softdentProcedures();
+    if (PageCanvasData.softdentClaimStatus) out.claimStatus = PageCanvasData.softdentClaimStatus();
+  }
+  if (pageId === "financial" || pageId === "quickbooks") {
+    const D = typeof PageCanvasData !== "undefined" ? PageCanvasData : null;
+    if (D && D.quickbooksKpis) {
+      const kpis = D.quickbooksKpis() || [];
+      kpis.forEach((k) => {
+        if (k && k.widgetKey === "quickbooksNetIncomeSummary") out.netIncome = k.value;
+      });
+    }
+  }
   return out;
 };
 
@@ -2180,6 +2221,60 @@ PageCanvas.renderSoftdent = function(pageId, data) {
  * page-canvas.js — replace renderQuickbooks to remove nested wrappers
  */
 
+PageCanvas.moonshotQuickbooksBodyHtml = function (data) {
+  data = data || {};
+  const D = typeof PageCanvasData !== "undefined" ? PageCanvasData : null;
+  const kpis = D && D.quickbooksKpis ? D.quickbooksKpis() : [];
+  const netInc = D && D.quickbooksNetIncomeSummary ? D.quickbooksNetIncomeSummary() : {};
+  const revenueKpi = (kpis.find((k) => /revenue/i.test(String(k.label || k.title || ""))) || kpis[0]) || {};
+  const expenseKpi = (kpis.find((k) => /expense/i.test(String(k.label || k.title || ""))) || kpis[1]) || {};
+  const qbExp = D && D.quickbooksExpenseCategories ? D.quickbooksExpenseCategories() : { stale: true };
+  const qbAr = D && D.quickbooksAr ? D.quickbooksAr() : { stale: true };
+  const isStale = qbExp.stale || qbAr.stale || data.qbStale;
+  const esc = (v) => String(v == null ? "—" : v);
+  return `
+    <div class="dashboard-grid" data-page="quickbooks" data-hal-widget-key="qbDashboard">
+      <div class="dashboard-grid__header">
+        <h2 class="dashboard-grid__title">QuickBooks Overview</h2>
+        <span class="sync-badge ${isStale ? "sync-badge--stale" : ""}" data-qb-sync-status>
+          ${isStale ? "Stale — refresh needed" : "Synced"}
+        </span>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-value">${esc(data.revenueYtd || revenueKpi.value)}</div>
+          <div class="kpi-label">Revenue YTD</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value">${esc(data.expensesYtd || expenseKpi.value)}</div>
+          <div class="kpi-label">Expenses YTD</div>
+        </div>
+        <div class="kpi-card" data-hal-widget-key="quickbooksNetIncomeSummary">
+          <div class="kpi-value">${esc(data.netIncome || (netInc.hasData ? netInc.ytdNetIncome : "—"))}</div>
+          <div class="kpi-label">Net Income</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value">${esc(data.arOutstanding || "—")}</div>
+          <div class="kpi-label">AR Outstanding</div>
+        </div>
+      </div>
+      <div class="dashboard-grid__charts">
+        <div class="chart-large chart-container" data-hal-widget-key="quickbooksProfitLossDetail">
+          <span class="card-title">Profit &amp; Loss Trend (YTD)</span>
+        </div>
+        <div class="chart-medium chart-container" data-hal-widget-key="quickbooksExpenseBreakdown">
+          <span class="card-title">Operating Expenses</span>
+        </div>
+        <div class="chart-medium chart-container" data-hal-widget-key="quickbooksBalanceSheetSummary"></div>
+        <div class="chart-large chart-container" data-hal-widget-key="quickbooksCashFlowTrend"></div>
+        <div class="chart-medium chart-container" data-hal-widget-key="quickbooksArAging"></div>
+        <div class="chart-medium chart-container" data-hal-widget-key="quickbooksMonthlyRevenue"></div>
+        <div class="chart-medium chart-container" data-hal-widget-key="quickbooksRevenueByService"></div>
+        <div class="chart-medium chart-container" data-hal-widget-key="ebitdaNormalization"></div>
+      </div>
+    </div>`;
+};
+
 PageCanvas.renderQuickbooks = function(pageId, data) {
   const root = document.getElementById('appPage');
   if (!root) return;
@@ -2189,44 +2284,7 @@ PageCanvas.renderQuickbooks = function(pageId, data) {
   const qbAr  = PageCanvasData.quickbooksAr?.();
   const isStale = qbExp?.stale || qbAr?.stale || data?.qbStale;
 
-  root.innerHTML = `
-    <div class="dashboard-grid" data-page="quickbooks" data-hal-widget-key="qbDashboard">
-      <div class="dashboard-grid__header">
-        <h2 class="dashboard-grid__title">QuickBooks Overview</h2>
-        <span class="sync-badge ${isStale ? 'sync-badge--stale' : ''}" data-qb-sync-status>
-          ${isStale ? 'Stale — refresh needed' : 'Synced'}
-        </span>
-      </div>
-
-      <div class="kpi-grid">
-        <div class="kpi-card" data-hal-widget-key="qbRevenue">
-          <div class="kpi-value">${data?.revenueYtd ?? '—'}</div>
-          <div class="kpi-label">Revenue YTD</div>
-        </div>
-        <div class="kpi-card" data-hal-widget-key="qbExpenses">
-          <div class="kpi-value">${data?.expensesYtd ?? '—'}</div>
-          <div class="kpi-label">Expenses YTD</div>
-        </div>
-        <div class="kpi-card" data-hal-widget-key="qbNetIncome">
-          <div class="kpi-value">${data?.netIncome ?? '—'}</div>
-          <div class="kpi-label">Net Income</div>
-        </div>
-        <div class="kpi-card" data-hal-widget-key="qbAr">
-          <div class="kpi-value">${data?.arOutstanding ?? '—'}</div>
-          <div class="kpi-label">AR Outstanding</div>
-        </div>
-      </div>
-
-      <div class="dashboard-grid__charts">
-        <div class="chart-large chart-container" data-hal-widget-key="qbRevenueTrend"></div>
-        <div class="chart-medium chart-container" data-hal-widget-key="qbProfitLoss"></div>
-        <div class="chart-medium chart-container" data-hal-widget-key="qbExpenseCategories"></div>
-        <div class="chart-large chart-container" data-hal-widget-key="qbCashFlow"></div>
-        <div class="chart-medium chart-container" data-hal-widget-key="qbAging"></div>
-        <div class="chart-medium chart-container" data-hal-widget-key="qbVendorSpend"></div>
-      </div>
-    </div>
-  `;
+  root.innerHTML = PageCanvas.moonshotQuickbooksBodyHtml({ ...(data || {}), qbStale: isStale });
 };
 
 /**
@@ -2479,9 +2537,6 @@ PageCanvas.moonshotPreviewHtml = function moonshotPreviewHtml(pageId, feed, snap
   if (typeof this.setFeed === "function") {
     this.setFeed(feed, snapshot);
   }
-  if (typeof window === "undefined") {
-    return typeof this.renderBody === "function" ? this.renderBody(pageId, feed, snapshot) : "";
-  }
   const mount = {
     _html: "",
     set innerHTML(value) {
@@ -2491,6 +2546,18 @@ PageCanvas.moonshotPreviewHtml = function moonshotPreviewHtml(pageId, feed, snap
       return this._html;
     },
   };
+  const part3 = {
+    ar: renderARPage,
+    claims: renderClaimsPage,
+    "office-manager": renderOfficeManagerPage,
+    documents: renderDocumentsPage,
+  };
+  if (typeof window === "undefined") {
+    if (pageId === "quickbooks" && this.moonshotQuickbooksBodyHtml) {
+      return this.moonshotQuickbooksBodyHtml();
+    }
+    return typeof this.renderBody === "function" ? this.renderBody(pageId, feed, snapshot) : "";
+  }
   const renderers = {
     financial: renderFinancialPage,
     taxes: renderTaxesPage,

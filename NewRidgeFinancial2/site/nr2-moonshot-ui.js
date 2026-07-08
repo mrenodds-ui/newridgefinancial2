@@ -696,6 +696,38 @@ window.NR2UI = window.NR2UI || {};
   /**
    * enhancePage — idempotent scan for chart placeholders.
    */
+  NS.resolveChartPayload = function (widgetKey) {
+    const D = typeof PageCanvasData !== "undefined" ? PageCanvasData : null;
+    if (!D || !widgetKey) return null;
+    if (widgetKey.startsWith("ar.chart")) {
+      const aging = D.softdentAgingBars ? D.softdentAgingBars() : null;
+      if (aging && aging.labels && aging.values) {
+        return { labels: aging.labels, datasets: [{ label: "AR", data: aging.values }] };
+      }
+    }
+    if (widgetKey.startsWith("claims.chart")) {
+      const lanes = D.claimsKanban ? D.claimsKanban() : [];
+      const counts = lanes.map((lane) => (Array.isArray(lane && lane.items) ? lane.items.length : 0));
+      if (counts.some((n) => n > 0)) {
+        return {
+          labels: lanes.map((l) => (l && (l.lane || l.title)) || "Lane"),
+          datasets: [{ label: "Claims", data: counts }],
+        };
+      }
+    }
+    if (/quickbooks|financial/i.test(widgetKey)) {
+      const pl = D.quickbooksPlTrend ? D.quickbooksPlTrend() : null;
+      if (pl && pl.labels && pl.series && pl.series[0]) {
+        return { labels: pl.labels, datasets: [{ label: pl.series[0].label || "Trend", data: pl.series[0].values || pl.series[0].data }] };
+      }
+      const exp = D.quickbooksExpenseBars ? D.quickbooksExpenseBars() : null;
+      if (exp && exp.labels && exp.values) {
+        return { labels: exp.labels, datasets: [{ label: "Expenses", data: exp.values }] };
+      }
+    }
+    return null;
+  };
+
   NS.enhancePage = function () {
     if (!window.Chart) {
       console.warn('[NR2UI] Chart.js not loaded');
@@ -715,7 +747,10 @@ window.NR2UI = window.NR2UI || {};
 
       const type = container.dataset.chartType || 'bar';
       const widgetKey = container.dataset.widget;
-      const payload = window.NR2Data?.[widgetKey] || { labels: ['A','B','C'], datasets: [{ label: 'Dataset', data: [3,1,4] }] };
+      const payload =
+        NS.resolveChartPayload(widgetKey) ||
+        (window.NR2Data && window.NR2Data[widgetKey]) ||
+        { labels: ['A', 'B', 'C'], datasets: [{ label: 'Dataset', data: [3, 1, 4] }] };
 
       NS.mountChart(canvas, type, payload);
     });

@@ -23,6 +23,8 @@ from import_contract import (
     SOFTDENT_CLINICAL_NAMES,
     SOFTDENT_DASHBOARD_NAMES,
     SOFTDENT_NEW_PATIENTS_NAMES,
+    SOFTDENT_PROCEDURES_NAMES,
+    SOFTDENT_CLAIM_STATUS_NAMES,
     SOFTDENT_TREATMENT_PLANS_NAMES,
     manifest_warnings,
 )
@@ -435,6 +437,8 @@ def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, An
             "caseAcceptance": _softdent("caseAcceptance", SOFTDENT_CASE_ACCEPTANCE_NAMES),
             "hygieneRecall": _softdent("hygieneRecall", SOFTDENT_HYGIENE_RECALL_NAMES),
             "operatory": _load_operatory_dataset(softdent_dir, SOFTDENT_OPERATORY_NAMES),
+            "procedures": _softdent("procedures", SOFTDENT_PROCEDURES_NAMES),
+            "claimStatus": _softdent("claimStatus", SOFTDENT_CLAIM_STATUS_NAMES),
         },
         "quickbooks": {
             "dir": str(quickbooks_dir),
