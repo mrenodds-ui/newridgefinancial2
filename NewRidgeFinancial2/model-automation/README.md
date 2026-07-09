@@ -10,12 +10,13 @@ memory. It never writes to SoftDent, QuickBooks, payers, or any external service
 
 ## What stays resident
 
-The always-on default for **32 GB VRAM** (R9700) is chat + escalation GPU-pinned:
+The always-on default for **32 GB VRAM** (R9700) is the **Moonshot hybrid** layout:
 
-- `hal-chat:8b` (DeepSeek-R1 8B — staff chat)
-- `hal-escalate:30b` (Qwen3 30B — escalation / second opinion, ctx 4096)
+- `hal-chat:8b` (DeepSeek-R1 8B — staff chat) — GPU-pinned
+- `hal-escalate:30b` (Qwen3 30B — escalation / insurance reasoning) — GPU-pinned
+- `qwen2.5-coder:32b` — **on demand** for agent programming / patch / debug (not pinned; may briefly unload escalate)
 
-Install or refresh both tags:
+Install or refresh both pinned tags:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Apply-HAL-GPU-Performance.ps1
@@ -30,7 +31,7 @@ powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\I
 **16 GB VRAM** workstations: use `Install-HAL-GPU-Dual-Lanes.ps1` (8B+14B) or
 `Install-HAL-GPU-Chat-Lane.ps1 -UnpinHelper` (8B only).
 
-Reasoning and escalation both use **GPU-pinned `hal-escalate:30b`** on R9700 (no Mistral 24B load — avoids evicting pins):
+Reasoning and escalation both use **GPU-pinned `hal-escalate:30b`** on R9700 (no Mistral 24B load — avoids evicting pins). Agent-loop coding prefers **`qwen2.5-coder:32b` on demand** when installed (`preferCoderForAgentLoop` in `hal-models.json`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Apply-HAL-GPU-Performance.ps1
@@ -47,7 +48,7 @@ tags stay in sync with the program config.
 
 ### GPU reality (32 GB R9700)
 
-`hal-chat:8b` + `hal-escalate:30b` co-reside on GPU (~23 GB weights, ctx 3072/4096). `reason21b` and `escalate30b` both use `hal-escalate:30b`. `hal-helper:14b` loads on demand.
+**Hybrid (validated Moonshot 2026-07-09):** `hal-chat:8b` + `hal-escalate:30b` co-reside (~23 GB, ctx 3072/4096). Staff chat and insurance escalation stay fast. `qwen2.5-coder:32b` loads on demand for agent/programming and may briefly unload the 30B pin. Never pin `qwen3:235b` or `gpt-oss:120b` on 32 GB.
 
 On **16 GB** VRAM, all configured models cannot co-reside on GPU at once. Legacy dual-lane
 pins `hal-chat:8b` + `hal-helper:14b` (~14 GB). The 24B reasoning lane loads on demand

@@ -2832,6 +2832,21 @@ function escalationModelConfig() {
   return HalCore.laneRuntime(halModels, "escalate30b");
 }
 
+function coderModelConfig() {
+  const ap = (halModels && halModels.config && halModels.config.agentProgramming) || {};
+  const laneId = ap.coderLane || "coder32b";
+  const rt = HalCore.laneRuntime(halModels, laneId);
+  if (rt) return rt;
+  return HalCore.laneRuntime(halModels, "coder32b");
+}
+
+function coderModelReady() {
+  const ap = (halModels && halModels.config && halModels.config.agentProgramming) || {};
+  const laneId = ap.coderLane || "coder32b";
+  if (laneModelInstalled(laneId)) return true;
+  return laneModelInstalled("coder32b");
+}
+
 function ossModelConfig() {
   return HalCore.laneRuntime(halModels, "oss120b");
 }
@@ -3579,12 +3594,14 @@ function buildHalAgentCtx(extras) {
     reasoningModelReady,
     ensureOllamaModelCache,
     escalationModelReady,
+    coderModelReady,
     ossModelReady,
     offlineModelMessage,
     localModelConfig,
     workstationFastHal: workstationFastHalEnabled,
     reasoningModelConfig,
     escalationModelConfig,
+    coderModelConfig,
     ossModelConfig,
     cloudModelConfig,
     cloudModelReady,

@@ -39,8 +39,15 @@
         "vendor documentation"
       ]
     },
-    "activeLane": "chat8b+escalate30b",
+    "activeLane": "chat8b+escalate30b+coder32b-ondemand",
     "preferReasoning": true,
+    "hybridGpuLayout": {
+      "enabled": true,
+      "policy": "Moonshot hybrid 2026-07-09: pin chat8b+escalate30b for staff speed; route agent/coding to qwen2.5-coder:32b on demand (may briefly unload escalate pin).",
+      "gpuPinned": ["hal-chat:8b", "hal-escalate:30b"],
+      "onDemandCoder": "qwen2.5-coder:32b",
+      "neverPin": ["qwen3:235b", "gpt-oss:120b", "qwen3-coder:30b", "llama3.3:latest"]
+    },
     "cursorParity": {
       "enabled": true,
       "policy": "Chat replies match Cursor Auto: proportional depth, collaborative tone, markdown when reviewing source."
@@ -59,6 +66,8 @@
       "taskCompletion": true,
       "agentToolLoop": true,
       "agentLoopUseReasoning": true,
+      "preferCoderForAgentLoop": true,
+      "coderLane": "coder32b",
       "agentAutoTools": true,
       "autoApplyPatches": true,
       "clarifyAmbiguous": true,
@@ -155,6 +164,8 @@
         "research_web",
         "remember_fact",
         "draft_insurance_narrative",
+        "lookup_fee_schedule",
+        "join_claim_payers",
         "softdent_extract_status"
       ],
       "localWrites": ["remember_fact", "local office tasks", "journal drafts for review", "apply_program_patch (site bundle only, backed up)"],
@@ -213,16 +224,36 @@
         "num_ctx": 4096
       }
     },
-    "note": "HAL routes general questions to local Ollama on 127.0.0.1. GPU pins hal-chat:8b + hal-escalate:30b (4096 ctx) on 32 GB VRAM (R9700). Reasoning (reason21b) and escalation share hal-escalate:30b — no Mistral 24B load. 14B helper on demand. Optional cloud when NR2_CLOUD_API_KEY is set (PHI sanitized).",
+    "coderModel": {
+      "enabled": true,
+      "onDemand": true,
+      "endpoint": "http://127.0.0.1:11434/api/chat",
+      "model": "qwen2.5-coder:32b",
+      "timeoutMs": 180000,
+      "temperature": 0.25,
+      "think": false,
+      "options": {
+        "num_predict": 1536,
+        "num_ctx": 4096,
+        "repeat_penalty": 1.05,
+        "top_p": 0.9
+      },
+      "note": "Hybrid on-demand: agent programming / patch / debug. Not GPU-pinned; may briefly unload escalate30b while loaded."
+    },
+    "note": "Hybrid (Moonshot 2026-07-09): GPU pins hal-chat:8b + hal-escalate:30b on R9700 32 GB. Staff chat/escalation stay dual-resident. Agent programming prefers qwen2.5-coder:32b on demand. 14B helper on demand. Optional cloud when NR2_CLOUD_API_KEY is set (PHI sanitized).",
     "naturalVoice": {
       "instructions": [
-        "Write like Cursor Auto: clear, direct, collaborative — a capable agent explaining to a colleague.",
+        "Write like a sharp office teammate: clear, direct, collaborative — not a film computer or dashboard narrator.",
+        "Sound natural when spoken aloud: short sentences, contractions, no stiff openers like 'I should inform you' or 'If I may'.",
         "Structure: direct answer first, then local evidence, implication for staff, missing data, one safe next step.",
         "Proportional depth: one to three sentences for simple or yes/no questions; five to ten for open diagnostic questions.",
         "Cite imports, registry, or tool results when available; say plainly when data is missing.",
         "On the reasoning lane: think through the question before answering, then give a structured prose reply.",
         "Yes/no must start with Yes or No. Never paste the full capability list unless they ask what you can do.",
         "Never open with Here is a structured plan unless they asked for a plan.",
+        "Never expose chain-of-thought or scratchpad — staff see only the final answer.",
+        "QuickBooks/SoftDent write or post requests: first sentence must include read-only.",
+        "Outbound email/submit/fax/upload/post: first sentence must require consent.",
         "No sarcasm, no dismissals, no 'happy to help' filler. Accurate on consent policy and missing-data limits."
       ],
       "fewShotMessages": [
@@ -296,25 +327,25 @@
       "endpoint": "http://127.0.0.1:11434/api/version",
       "version": "0.31.1"
     },
-    "activeLane": "chat8b+escalate30b",
-    "laneExecution": "Enabled · GPU-pinned 8B chat + 30B escalation/reasoning (shared) · 14B helper on demand · loopback only",
-    "runningModel": "hal-chat:8b + hal-escalate:30b — dual GPU resident (~5 GB + ~18 GB, ctx 3072/4096, keep_alive -1)",
-    "gpuStatus": "AMD Radeon AI PRO R9700 · 32 GB VRAM · dual GPU pin: 8B chat + 30B escalation",
+    "activeLane": "chat8b+escalate30b+coder32b-ondemand",
+    "laneExecution": "Enabled · GPU-pinned 8B chat + 30B escalation · coder 32B on demand for agent/programming · loopback only",
+    "runningModel": "hal-chat:8b + hal-escalate:30b pinned · qwen2.5-coder:32b on demand (hybrid)",
+    "gpuStatus": "AMD Radeon AI PRO R9700 · 32 GB VRAM · hybrid: 8B+30B pin, coder32b on demand",
     "bindingStatus": "Ollama server binds 0.0.0.0:11434 (LAN access enabled by operator) · HAL client connects 127.0.0.1 only",
     "dataPolicy": "No patient or sensitive practice data sent to models or the web. Web research uses sanitized generic queries for public reference material.",
     "allModelsEnabled": true,
     "gpu": {
       "verified": true,
-      "verifiedAt": "2026-07-08",
+      "verifiedAt": "2026-07-09",
       "device": "AMD Radeon AI PRO R9700",
       "vendor": "AMD",
       "library": "ROCm",
       "compute": "gfx1201",
       "vramGiB": 32,
-      "layerOffload": "hal-chat:8b + hal-escalate:30b dual resident on GPU (~23 GB weights, ctx capped)",
+      "layerOffload": "Hybrid: hal-chat:8b + hal-escalate:30b dual resident (~23 GB); qwen2.5-coder:32b on demand for agent loop",
       "integratedGpu": "Intel Graphics present; OLLAMA_IGPU_ENABLE=0 (disabled for performance)",
       "resolvedWarning": "rocblaslt TensileLibrary via ROCBLAS_TENSILE_LIBPATH; OLLAMA_MAX_LOADED_MODELS=2",
-      "lastVerifiedLoad": "hal-chat:8b + hal-escalate:30b pinned (keep_alive -1, ctx 3072/4096) · reason21b uses hal-escalate:30b"
+      "lastVerifiedLoad": "hybrid layout validated with Moonshot 2026-07-09 — pins unchanged; coder32b routed on demand"
     },
     "runtime": {
       "ollamaVersion": "0.31.1",
@@ -348,10 +379,10 @@
       "reasoning": { "lane": "reason24b", "model": "hal-escalate:30b", "available": true, "gpuPinnedWithLocal": true, "sharedWithEscalation": true },
       "escalation": { "lane": "escalate30b", "model": "hal-escalate:30b", "available": true, "gpuPinnedWithLocal": true },
       "general": { "lane": "general14b", "model": "qwen3:14b", "available": true },
-      "coder": { "lane": "coder30b", "model": "qwen3-coder:30b", "available": true },
-      "coderHeavy": { "lane": "coder32b", "model": "qwen2.5-coder:32b", "available": true },
-      "deep": { "lane": "deep235b", "model": "qwen3:235b", "available": true },
-      "oss": { "lane": "oss120b", "model": "gpt-oss:120b", "available": true }
+      "coder": { "lane": "coder30b", "model": "qwen3-coder:30b", "available": true, "onDemand": true, "deprecatedPrefer": "coder32b" },
+      "coderHeavy": { "lane": "coder32b", "model": "qwen2.5-coder:32b", "available": true, "onDemand": true, "hybridAgentPreferred": true },
+      "deep": { "lane": "deep235b", "model": "qwen3:235b", "available": true, "onDemand": true, "neverPin": true },
+      "oss": { "lane": "oss120b", "model": "gpt-oss:120b", "available": true, "onDemand": true, "neverPin": true }
     }
   },
   "lanes": [
@@ -549,12 +580,12 @@
       "id": "coder30b",
       "name": "30B coder lane",
       "model": "qwen3-coder:30b",
-      "role": "Code and structured-output drafting (local)",
-      "state": "Configured",
+      "role": "Legacy coder (prefer coder32b in hybrid layout)",
+      "state": "Standby",
       "inventoryAvailable": true,
-      "executionEnabled": true,
+      "executionEnabled": false,
       "runtime": {
-        "enabled": true,
+        "enabled": false,
         "endpoint": "http://127.0.0.1:11434/api/chat",
         "model": "qwen3-coder:30b",
         "timeoutMs": 120000,
@@ -572,9 +603,9 @@
     },
     {
       "id": "coder32b",
-      "name": "32B coder lane",
+      "name": "32B coder lane (hybrid on-demand)",
       "model": "qwen2.5-coder:32b",
-      "role": "Heavy code/structured drafting (local)",
+      "role": "On-demand agent programming / patch / debug (hybrid). Not GPU-pinned; may briefly unload escalate30b.",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
@@ -582,10 +613,25 @@
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
         "model": "qwen2.5-coder:32b",
-        "timeoutMs": 150000,
-        "temperature": 0.2
+        "timeoutMs": 180000,
+        "temperature": 0.25,
+        "options": {
+          "num_predict": 1536,
+          "num_ctx": 4096,
+          "repeat_penalty": 1.05,
+          "top_p": 0.9
+        }
+      },
+      "gpuFit": {
+        "verified": true,
+        "onDemand": true,
+        "processor": "on demand",
+        "residentSize": "~19–20 GB when loaded",
+        "context": 4096,
+        "quantization": "Q4_K_M"
       },
       "willAllow": [
+        "Agent tool loop and apply_program_patch",
         "Draft larger local code/structured output",
         "Detailed local review notes"
       ],
@@ -600,12 +646,12 @@
       "name": "235B deep reasoning lane",
       "model": "qwen3:235b",
       "role": "Deep reasoning for complex review (local, heavy)",
-      "note": "On-demand only. Uses local cached imports for cross-page synthesis; no external actions or writeback.",
-      "state": "Configured",
+      "note": "Never pin on 32 GB. On-demand only; exceeds dual-resident budget. Prefer escalate30b or coder32b.",
+      "state": "Standby",
       "inventoryAvailable": true,
-      "executionEnabled": true,
+      "executionEnabled": false,
       "runtime": {
-        "enabled": true,
+        "enabled": false,
         "endpoint": "http://127.0.0.1:11434/api/chat",
         "model": "qwen3:235b",
         "timeoutMs": 240000,
@@ -627,11 +673,12 @@
       "name": "120B open-source lane",
       "model": "gpt-oss:120b",
       "role": "Open-source generalist lane (local)",
-      "state": "Configured",
+      "note": "Never pin on 32 GB. Exceeds VRAM alone; keep inventory only.",
+      "state": "Standby",
       "inventoryAvailable": true,
-      "executionEnabled": true,
+      "executionEnabled": false,
       "runtime": {
-        "enabled": true,
+        "enabled": false,
         "endpoint": "http://127.0.0.1:11434/api/chat",
         "model": "gpt-oss:120b",
         "timeoutMs": 240000,

@@ -312,10 +312,254 @@ const HalAgent = (function () {
       label: "Read claims summary",
       run: async (ctx) => {
         const snap = await ctx.loadProgramSnapshot();
-        const claims = (snap && snap.claims && snap.claims.top) || [];
+        const claims =
+          (snap && snap.claims && (snap.claims.top || snap.claims.claims)) || [];
         if (!window.HalSkills) return { ok: false, summary: "Claims tools unavailable." };
         const resp = HalSkills.buildClaimReadinessResponse(claims);
-        return { ok: true, summary: HalSkills.formatClaimReadinessAnswer(resp).slice(0, 2500) };
+        let summary = HalSkills.formatClaimReadinessAnswer(resp);
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (bridge && typeof bridge.joinClaimPayers === "function" && claims.length) {
+          try {
+            const joined = await bridge.joinClaimPayers(claims.slice(0, 12));
+            if (joined && joined.text) summary += "\n\n" + String(joined.text);
+          } catch {
+            /* optional join */
+          }
+        }
+        return { ok: true, summary: summary.slice(0, 3500) };
+      },
+    },
+    join_claim_payers: {
+      label: "Join claim Payer labels to office payer reference",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.joinClaimPayers !== "function") {
+          return { ok: false, summary: "Claim payer join requires the NR2 server." };
+        }
+        let claims = [];
+        const q = String((args && (args.query || args.payer)) || "").trim();
+        if (q && !/\bclaim\b/i.test(q)) {
+          // Single payer label lookup via join helper
+          claims = [{ id: "query", payer: q, status: "" }];
+        } else {
+          const snap = await ctx.loadProgramSnapshot();
+          claims = (snap && snap.claims && (snap.claims.top || snap.claims.claims)) || [];
+        }
+        const payload = await bridge.joinClaimPayers(claims.slice(0, 20));
+        const text = payload && payload.text ? String(payload.text) : "No claim↔payer joins.";
+        return {
+          ok: !!(payload && payload.count),
+          summary: text.slice(0, 2500) || "No claim↔payer joins.",
+          count: payload && payload.count ? payload.count : 0,
+        };
+      },
+    },
+    build_appeal_packet: {
+      label: "Build local denial/appeal packet (preflight + denial risk + payer)",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Appeal packet requires loopback server." };
+        }
+        const q = String((args && (args.query || args.claimId)) || "");
+        let claimId = args.claimId || args.id || "";
+        if (!claimId) {
+          const idMatch = q.match(/\b(DS-[\w-]+|CLM[-\w]+|\d{4,})\b/i);
+          if (idMatch) claimId = idMatch[1];
+        }
+        const data = await bridge.loopbackJson("/api/claims/appeal-packet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            claimId,
+            payer: args.payer || "",
+            procedure: args.procedure || "",
+            narrative: args.narrative || "",
+            denialReason: args.denialReason || "",
+            cdt: args.cdt || args.cdtCode || "",
+            query: q,
+          }),
+        });
+        const clinical =
+          data && data.clinicalNotesAttached
+            ? `\nClinical notes attached: ${(data.clinicalNotes || []).length} SoftDent note(s) — staff must verify.`
+            : "";
+        let pending = null;
+        if (
+          data &&
+          data.ok &&
+          data.claimId &&
+          typeof HalConsent !== "undefined" &&
+          typeof HalConsent.createPendingClaimPacket === "function"
+        ) {
+          pending = HalConsent.createPendingClaimPacket({
+            claimId: data.claimId,
+            narrative: data.narrative || "",
+            payer: (data.claim && data.claim.payer) || args.payer || "",
+            gaps: data.gaps || [],
+            query: `Build claim packet zip for ${data.claimId} with consent`,
+          });
+        }
+        const finish =
+          data && data.finishLine && data.finishLine.zipNeedsConsent
+            ? pending
+              ? `\n\nFinish line: claim packet for ${data.claimId} is staged — say "I consent" to build the local zip (portal upload stays manual).`
+              : "\n\nFinish line: narrative draft ready — staff consent required for claim packet zip (portal upload is manual)."
+            : "";
+        return {
+          ok: Boolean(data && data.ok),
+          summary: String((data && data.summary) || "Appeal packet unavailable.").slice(0, 3200) + clinical + finish,
+          packet: data,
+          narrative: data && data.narrative,
+          clinicalNotesAttached: Boolean(data && data.clinicalNotesAttached),
+          pendingConsent: pending,
+        };
+      },
+    },
+    list_posting_queue: {
+      label: "List accounting posting queue (pending review)",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Posting queue requires loopback server." };
+        }
+        const status = (args && (args.status || args.filter)) || "pending_review";
+        const limit = Number((args && args.limit) || 25) || 25;
+        const qs = `?limit=${encodeURIComponent(String(limit))}&status=${encodeURIComponent(String(status))}`;
+        const data = await bridge.loopbackJson(`/api/posting-queue${qs}`, { method: "GET" });
+        const items = (data && data.items) || [];
+        if (!items.length) {
+          return { ok: true, summary: "Posting queue empty for this filter — nothing pending review.", count: 0, items: [] };
+        }
+        const lines = [`Posting queue (${status}): ${items.length}`, ""];
+        items.slice(0, 12).forEach((item, idx) => {
+          lines.push(
+            `${idx + 1}. ${item.queue_id || item.queueId || item.id || "?"} · $${item.amount ?? "?"} · ${item.description || "journal"} · ${item.status || "?"}`,
+          );
+        });
+        lines.push("", "Ask HAL: batch approve postings (consent-gated) — does not post live to QuickBooks.");
+        return { ok: true, summary: lines.join("\n"), count: items.length, items, metrics: data && data.metrics };
+      },
+    },
+    list_pending_era_matches: {
+      label: "List ERA/EOB matches pending staff review",
+      run: async () => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "ERA pending list requires loopback server." };
+        }
+        const data = await bridge.loopbackJson("/api/era/pending-matches?limit=25", { method: "GET" });
+        const items = (data && data.items) || [];
+        if (!items.length) {
+          return { ok: true, summary: "No ERA/EOB matches pending review.", count: 0, items: [] };
+        }
+        const lines = [`ERA/EOB pending review: ${items.length}`, ""];
+        items.slice(0, 10).forEach((item, idx) => {
+          lines.push(
+            `${idx + 1}. id ${item.id} · ${item.referenceId || "?"} → claim ${item.predictedClaimId || "?"} · ${item.status} · confidence ${item.confidenceBadge || item.confidence || "?"}` +
+              (item.paidAmount != null ? ` · paid $${item.paidAmount}` : ""),
+          );
+        });
+        lines.push("", "Ask HAL: confirm ERA match <id> to claim <ClaimId> — queues posting for review, does not post live.");
+        return { ok: true, summary: lines.join("\n"), count: items.length, items };
+      },
+    },
+    confirm_era_match: {
+      label: "Confirm pending ERA/EOB match and queue posting for review",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "ERA confirm requires loopback server." };
+        }
+        const q = String((args && (args.query || "")) || "");
+        let matchId = args.matchId || args.id || args.eraLineId || "";
+        let claimId = args.claimId || args.correctedClaimId || "";
+        if (!matchId) {
+          const m = q.match(/\b(?:match|era|eob)\s+([A-Za-z0-9-]{6,})\b/i) || q.match(/\bid\s+([A-Za-z0-9-]{6,})\b/i);
+          if (m) matchId = m[1];
+        }
+        if (!claimId) {
+          const c = q.match(/\b(?:claim|to)\s+(DS-[\w-]+|CLM[-\w]+|\d{4,})\b/i);
+          if (c) claimId = c[1];
+        }
+        const data = await bridge.loopbackJson("/api/era/confirm-match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            matchId,
+            claimId,
+            paidAmount: args.paidAmount,
+            cdt: args.cdt || args.cdtCode || "",
+            payer: args.payer || "",
+            procedure: args.procedure || "",
+            actor: "Staff",
+          }),
+        });
+        return {
+          ok: Boolean(data && data.ok),
+          summary: String((data && data.summary) || data.error || "ERA confirm failed.").slice(0, 2500),
+          result: data,
+        };
+      },
+    },
+    list_claims_aging_followup: {
+      label: "List claims aging follow-up queue (60+ days)",
+      run: async (ctx, args) => {
+        const snap = await ctx.loadProgramSnapshot();
+        let claims = (snap && snap.claims && (snap.claims.top || snap.claims.claims)) || [];
+        if (!window.HalSkills || typeof HalSkills.buildClaimsAgingFollowUp !== "function") {
+          return { ok: false, summary: "Claims aging tools unavailable." };
+        }
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined"
+              ? window.DesktopBridge
+              : null;
+        if (bridge && typeof bridge.joinClaimPayers === "function" && claims.length) {
+          try {
+            const joined = await bridge.joinClaimPayers(claims.slice(0, 40));
+            const enriched = (joined && joined.items) || [];
+            if (enriched.length) {
+              const byId = new Map(
+                enriched.map((c) => [String((c && (c.id || c.claimId || c.ClaimId)) || "").toLowerCase(), c]),
+              );
+              claims = claims.map((c) => {
+                const key = String((c && (c.id || c.claimId || c.ClaimId)) || "").toLowerCase();
+                const hit = byId.get(key);
+                if (hit && hit.payerMatch) return Object.assign({}, c, { payerMatch: hit.payerMatch });
+                return c;
+              });
+            }
+          } catch {
+            /* optional join */
+          }
+        }
+        const minDays = Number(args.minDays || args.min_days || 60) || 60;
+        const resp = HalSkills.buildClaimsAgingFollowUp(claims, { minDays });
+        const top = (resp.items || [])[0];
+        let dialHint = "";
+        if (top && !top.genericPayer) {
+          dialHint =
+            `\n\nNext: schedule call task claims_aging for ${top.claimRef}` +
+            (top.payerPhone ? ` / dial ${top.payerPhone}` : "") +
+            " — or build appeal packet if denied.";
+        }
+        return {
+          ok: true,
+          summary: HalSkills.formatClaimsAgingFollowUp(resp).slice(0, 3500) + dialHint,
+          aging: resp,
+        };
       },
     },
     draft_insurance_narrative: {
@@ -348,6 +592,29 @@ const HalAgent = (function () {
           if (toneMatch) params.tone = toneMatch[1].trim();
         }
         if (/\bappeal\b|\bdenial\b/i.test(q) && !params.focus) params.focus = "Denial Appeal";
+        // Join payer themes when claim has a named carrier
+        try {
+          const claim = HalSkills.resolveClaimById
+            ? HalSkills.resolveClaimById(snap, params.claimId)
+            : null;
+          const payerLabel = (claim && (claim.payer || claim.Payer || claim.tag)) || args.payer || "";
+          const bridge =
+            typeof DesktopBridge !== "undefined"
+              ? DesktopBridge
+              : typeof window !== "undefined"
+                ? window.DesktopBridge
+                : null;
+          if (payerLabel && bridge && typeof bridge.joinClaimPayers === "function") {
+            const joined = await bridge.joinClaimPayers([{ id: params.claimId || "draft", payer: payerLabel }]);
+            const row = ((joined && joined.items) || [])[0];
+            if (row && row.payerMatch) {
+              params.payerMatch = row.payerMatch;
+              if (claim) claim.payerMatch = row.payerMatch;
+            }
+          }
+        } catch {
+          /* optional */
+        }
         const result = HalSkills.buildDraftInsuranceNarrative(snap, params);
         return {
           ok: result.ok !== false,
@@ -461,9 +728,24 @@ const HalAgent = (function () {
           body: JSON.stringify({ limit: 25 }),
         });
         const items = (data && data.items) || [];
-        if (!items.length) return { ok: true, summary: "No balances flagged for collections." };
-        const lines = items.map((it) => `- ${it.patientName}: $${it.balance} (${it.priority})`);
-        return { ok: true, summary: `${items.length} account(s) queued:\n${lines.join("\n")}` };
+        if (!items.length) {
+          return { ok: true, summary: data.summary || "No balances flagged for collections.", count: 0 };
+        }
+        const lines = [
+          data.summary || `${items.length} account(s) queued:`,
+          "",
+          ...items.map((it) => {
+            let line =
+              `- [${it.priority}] ${it.patientName}: $${Number(it.balance || 0).toFixed(2)}` +
+              (it.bucket ? ` · ${it.bucket}` : "") +
+              (it.phone ? ` · ${it.phone}` : "");
+            if (it.callScript) line += `\n  Script: ${String(it.callScript).slice(0, 220)}`;
+            return line;
+          }),
+          "",
+          "Staff owns patient contact. Ask HAL to schedule a call task or click-to-dial with consent.",
+        ];
+        return { ok: true, summary: lines.join("\n"), count: items.length, items, queue: data };
       },
     },
     generate_collection_letter: {
@@ -504,9 +786,21 @@ const HalAgent = (function () {
             patientName: args.patientName || args.patient_name,
             balance: args.balance,
             priority: args.priority || "high",
+            scenario: args.scenario || args.scriptScenario || "",
+            phone: args.phone || args.phoneNumber || "",
+            claimId: args.claimId || "",
+            payer: args.payer || "",
+            patientId: args.patientId || "",
+            notes: args.notes || "",
           }),
         });
-        return { ok: true, summary: `Call scheduled.\nScript: ${data.callScript || ""}` };
+        return {
+          ok: true,
+          summary: data.summary || `Call scheduled.\nScript: ${data.callScript || ""}`,
+          queueId: data.id,
+          scenario: data.scenario,
+          phone: data.phone,
+        };
       },
     },
     heal_import_pipeline: {
@@ -548,18 +842,31 @@ const HalAgent = (function () {
         if (!bridge || typeof bridge.loopbackJson !== "function") {
           return { ok: false, summary: "Deposit recon requires loopback server." };
         }
-        const bank = Number(args.bankAmount || args.bank_amount || 0);
-        const ledger = Number(args.ledgerAmount || args.ledger_amount || 0);
+        const body = { depositDate: args.depositDate || args.period || "" };
+        if (args.bankAmount != null || args.bank_amount != null) {
+          body.bankAmount = Number(args.bankAmount || args.bank_amount);
+        }
+        if (args.ledgerAmount != null || args.ledger_amount != null) {
+          body.ledgerAmount = Number(args.ledgerAmount || args.ledger_amount);
+        }
+        // Omit zero placeholders so the server can seed from collection↔deposit analytics.
         const data = await bridge.loopbackJson("/api/deposits/draft-recon", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bankAmount: bank, ledgerAmount: ledger, depositDate: args.depositDate || "" }),
+          body: JSON.stringify(body),
         });
         const draft = (data && data.draft) || {};
         const actions = (draft.suggestedActions || []).map((a) => `- ${a}`).join("\n");
+        const seeded = data.seededFromAnalytics || draft.seededFromAnalytics
+          ? " Seeded from SoftDent collections vs QB deposits."
+          : "";
+        const pct =
+          draft.variancePct != null && Number.isFinite(Number(draft.variancePct))
+            ? ` (${Number(draft.variancePct) >= 0 ? "+" : ""}${draft.variancePct}%)`
+            : "";
         return {
           ok: true,
-          summary: `Variance $${data.variance}. ${actions || "Balanced."}`,
+          summary: `Variance $${data.variance}${pct}.${seeded} ${actions || "Balanced."}`.trim(),
           draft,
         };
       },
@@ -577,12 +884,35 @@ const HalAgent = (function () {
           body: JSON.stringify({
             claimId: args.claimId || args.query || "",
             patientId: args.patientId || "",
-            payer: args.payer || "",
+            payer: args.payer || args.Payer || "",
+            procedure: args.procedure || args.Procedure || "",
+            cdt: args.cdt || args.cdtCode || "",
+            narrative: args.narrative || args.clinicalNote || "",
+            clinicalNote: args.clinicalNote || "",
+            narrativePresent: args.narrativePresent,
+            attachmentsReady: args.attachmentsReady,
+            feeScheduleVerified: args.feeScheduleVerified,
+            insuranceVerified: args.insuranceVerified,
+            clinicalSummaryLinked: args.clinicalSummaryLinked,
           }),
         });
         const checklist = (data && data.checklist) || {};
         const lines = Object.entries(checklist).map(([k, v]) => `- ${k}: ${v ? "yes" : "no"}`);
-        return { ok: true, summary: `Status ${data.status}.\n${lines.join("\n")}`, checklist };
+        const gaps = Array.isArray(data.gaps) && data.gaps.length ? `\nGaps:\n${data.gaps.map((g) => `- ${g}`).join("\n")}` : "";
+        const elig = data && data.eligibilityHit;
+        const eligLine = elig
+          ? `\nEligibility cache: ${elig.payerName || "?"}` +
+            (elig.deductibleRemaining != null ? ` · ded rem $${elig.deductibleRemaining}` : "") +
+            (elig.annualMaxRemaining != null ? ` · max rem $${elig.annualMaxRemaining}` : "")
+          : "";
+        return {
+          ok: true,
+          summary: `Status ${data.status}.${gaps}${eligLine}\n${lines.join("\n")}`,
+          checklist,
+          gaps: data.gaps || [],
+          feeDetail: data.feeDetail || null,
+          eligibilityHit: elig || null,
+        };
       },
     },
     match_eob_era: {
@@ -600,12 +930,25 @@ const HalAgent = (function () {
             claimId: args.claimId || "",
             sourceType: args.sourceType || "eob",
             paidAmount: args.paidAmount,
+            cdt: args.cdt || args.cdtCode || "",
+            payer: args.payer || "",
+            procedure: args.procedure || "",
+            billedAmount: args.billedAmount || args.billed,
+            remark: args.remark || args.carc || "",
           }),
         });
+        const scrub =
+          data.feeScrub && data.feeScrub.ok
+            ? ` Fee scrub: ${data.feeScrub.classification} (paid $${data.feeScrub.paidAmount} vs allowed $${data.feeScrub.allowedAmount}).`
+            : "";
         return {
           ok: true,
-          summary: `Match ${data.status}: ref ${(data.detail && data.detail.referenceId) || ""} → claim ${(data.detail && data.detail.claimId) || ""}`,
+          summary:
+            (data.summary ||
+              `Match ${data.status}: ref ${(data.detail && data.detail.referenceId) || ""} → claim ${(data.detail && data.detail.claimId) || ""}`) +
+            scrub,
           detail: data.detail,
+          feeScrub: data.feeScrub || null,
         };
       },
     },
@@ -629,7 +972,7 @@ const HalAgent = (function () {
     },
     generate_month_end_tasks: {
       label: "Generate month-end close task list",
-      run: async () => {
+      run: async (ctx, args) => {
         const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
         if (!bridge || typeof bridge.loopbackJson !== "function") {
           return { ok: false, summary: "Month-end tasks require loopback server." };
@@ -637,11 +980,52 @@ const HalAgent = (function () {
         const data = await bridge.loopbackJson("/api/close/generate-tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ period: (args && args.period) || "" }),
         });
         const tasks = (data && data.tasks) || [];
-        const lines = tasks.map((t) => `- [${t.priority}] ${t.title}`);
-        return { ok: true, summary: `Period ${data.period}:\n${lines.join("\n")}`, tasks };
+        const lines = [
+          data.summary || `Period ${data.period}:`,
+          "",
+          ...tasks.map(
+            (t) =>
+              `- [${t.priority}] ${t.title}` +
+              (t.detail ? ` — ${String(t.detail).slice(0, 120)}` : ""),
+          ),
+        ];
+        if (data.analyticsGrounded) {
+          lines.push("", "Tasks grounded in live SoftDent/QB analytics where available.");
+        }
+        return { ok: true, summary: lines.join("\n"), tasks, period: data.period };
+      },
+    },
+    scrub_fee_vs_paid: {
+      label: "Scrub fee-schedule allowed vs EOB/ERA paid (CO-45 vs underpay)",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Fee vs paid scrub requires loopback server." };
+        }
+        const q = String((args && (args.query || args.cdt || "")) || "");
+        const cdtMatch = q.match(/\b(D\d{4})\b/i);
+        const paidRaw = args.paidAmount != null ? args.paidAmount : args.paid;
+        const data = await bridge.loopbackJson("/api/fee/scrub-paid", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cdt: args.cdt || args.cdtCode || (cdtMatch ? cdtMatch[1] : ""),
+            payer: args.payer || args.schedule || "",
+            paidAmount: paidRaw,
+            billedAmount: args.billedAmount || args.billed,
+            remark: args.remark || args.remarkCode || args.carc || "",
+            procedure: args.procedure || "",
+            query: q,
+          }),
+        });
+        return {
+          ok: Boolean(data && data.ok),
+          summary: String((data && data.summary) || data.error || "Fee vs paid scrub unavailable.").slice(0, 2500),
+          scrub: data,
+        };
       },
     },
     record_era_match_feedback: {
@@ -710,10 +1094,12 @@ const HalAgent = (function () {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             patientId: args.patientId || args.patient_id,
-            phoneNumber: args.phoneNumber || args.phone_number,
-            scriptScenario: args.scriptScenario || args.context || "collections",
+            phoneNumber: args.phoneNumber || args.phone_number || args.phone,
+            scriptScenario: args.scriptScenario || args.scenario || args.context || "collections",
             patientName: args.patientName,
             balance: args.balance,
+            queueId: args.queueId || args.queue_id || "",
+            claimId: args.claimId || "",
           }),
         });
         if (data.telUri && typeof window !== "undefined") {
@@ -724,30 +1110,43 @@ const HalAgent = (function () {
           }
         }
         return {
-          ok: true,
-          summary: `Call ${data.callId} initiated.\nScript:\n${data.script || ""}`,
+          ok: Boolean(data && data.ok !== false),
+          summary:
+            `Call ${data.callId || "?"} initiated` +
+            (data.queueId ? ` · queue ${data.queueId}` : "") +
+            `.\nScript:\n${data.script || ""}` +
+            `\nAfter the call: log outcome (promised / no_answer / closed) to update collections queue.`,
           callId: data.callId,
+          queueId: data.queueId || args.queueId || "",
         };
       },
     },
     log_call_outcome: {
-      label: "Log VoIP call outcome",
+      label: "Log VoIP call outcome (updates collections queue)",
       run: async (ctx, args) => {
         const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
         if (!bridge || typeof bridge.loopbackJson !== "function") {
           return { ok: false, summary: "Call logging requires loopback server." };
         }
-        await bridge.loopbackJson("/api/voip/log", {
+        const data = await bridge.loopbackJson("/api/voip/log", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             callId: args.callId || args.call_reference,
             outcome: args.outcome || "unknown",
             notes: args.notes || "",
-            durationSec: args.duration_sec,
+            durationSec: args.duration_sec || args.durationSec,
+            queueId: args.queueId || args.queue_id || "",
           }),
         });
-        return { ok: true, summary: `Call ${args.callId || ""} logged as ${args.outcome || "unknown"}.` };
+        const q = data && data.queueUpdate && data.queueUpdate.ok
+          ? ` Collections queue → ${data.queueStatus || data.queueUpdate.status}.`
+          : "";
+        return {
+          ok: Boolean(data && data.ok !== false),
+          summary: `Call ${args.callId || data.callId || ""} logged as ${args.outcome || data.outcome || "unknown"}.${q}`,
+          queueUpdate: data && data.queueUpdate,
+        };
       },
     },
     send_billing_sms: {
@@ -871,6 +1270,36 @@ const HalAgent = (function () {
         return { ok: true, summary: `Morning routine ${data.runId}: ${(data.actions || []).length} action(s).` };
       },
     },
+    list_autonomous_work: {
+      label: "List HAL autonomous work ledger (local staged work)",
+      run: async (ctx, args) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Autonomous work list requires loopback server." };
+        }
+        const openOnly = args && args.openOnly === false ? "0" : "1";
+        const limit = Number((args && args.limit) || 40) || 40;
+        const kind = (args && args.kind) || "";
+        const qs =
+          `?openOnly=${encodeURIComponent(openOnly)}&limit=${encodeURIComponent(String(limit))}` +
+          (kind ? `&kind=${encodeURIComponent(String(kind))}` : "");
+        const data = await bridge.loopbackJson(`/api/scheduler/work${qs}`, { method: "GET" });
+        const items = (data && data.items) || [];
+        if (!items.length) {
+          return { ok: true, summary: "No open autonomous work — morning tick may not have run yet.", count: 0, items: [] };
+        }
+        const lines = [`HAL autonomous work (open): ${items.length}`, ""];
+        items.slice(0, 15).forEach((row, idx) => {
+          lines.push(
+            `${idx + 1}. [${row.kind}] ${row.title}` +
+              (row.priority && row.priority !== "normal" ? ` · ${row.priority}` : ""),
+          );
+          if (row.detail) lines.push(`   ${String(row.detail).slice(0, 160)}`);
+        });
+        lines.push("", "Local only — dial, zip, email, and live post stay staff-gated.");
+        return { ok: true, summary: lines.join("\n"), count: items.length, items };
+      },
+    },
     undo_scheduler_run: {
       label: "Undo autonomous morning run within 4-hour window",
       run: async (ctx, args) => {
@@ -897,20 +1326,33 @@ const HalAgent = (function () {
           return { ok: false, summary: "Denial predict requires loopback server." };
         }
         const codes = args.cdtCodes || args.cdt_codes || args.codes || [];
+        const claim = args.claim && typeof args.claim === "object" ? args.claim : null;
         const data = await bridge.loopbackJson("/api/era/denial-predict", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             cdtCodes: Array.isArray(codes) ? codes : String(codes || "").split(/[\s,]+/).filter(Boolean),
-            payerId: args.payerId || args.payer_id || "",
-            hasNarrative: args.hasNarrative !== false,
+            payerId: args.payerId || args.payer_id || args.payer || "",
+            hasNarrative: args.hasNarrative !== false && args.hasNarrative !== "false",
             priorDenials: Number(args.priorDenials || args.prior_denials || 0),
+            procedure: args.procedure || "",
+            claimStatus: args.status || args.claimStatus || "",
+            denialReason: args.denialReason || "",
+            claim: claim || {
+              id: args.claimId || args.id || "",
+              payer: args.payer || args.Payer || "",
+              procedure: args.procedure || "",
+              narrative: args.narrative || args.clinicalNote || "",
+              status: args.status || "",
+              cdt: args.cdt || args.cdtCode || "",
+            },
           }),
         });
         const pct = Math.round(Number(data.riskScore || 0) * 100);
+        const flags = Array.isArray(data.flags) && data.flags.length ? ` Flags: ${data.flags.join(", ")}.` : "";
         return {
           ok: Boolean(data.ok),
-          summary: `Denial risk ${pct}%${data.highRisk ? " — review before submit" : ""}.`,
+          summary: `Denial risk ${pct}%${data.highRisk ? " — review before submit" : ""}.${data.genericPayer ? " Generic payer." : ""}${flags}`,
           prediction: data,
         };
       },
@@ -1297,6 +1739,29 @@ const HalAgent = (function () {
         };
       },
     },
+    lookup_fee_schedule: {
+      label: "Look up office fee schedule amounts by CDT / carrier",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.lookupFeeSchedule !== "function") {
+          return { ok: false, summary: "Fee schedule lookup requires the NR2 server." };
+        }
+        const q = String(args.query || args.code || args.cdt || "");
+        const payer = String(args.payer || args.schedule || "").trim();
+        const payload = await bridge.lookupFeeSchedule(payer ? `${q} ${payer}` : q, 3);
+        const text = payload && payload.text ? String(payload.text) : "No fee schedule matches.";
+        return {
+          ok: !!(payload && payload.count),
+          summary: text.slice(0, 2500) || "No fee schedule matches.",
+          count: payload && payload.count ? payload.count : 0,
+        };
+      },
+    },
     list_eligibility_cache: {
       label: "List cached eligibility snapshots (PHI-redacted)",
       run: async (ctx, args) => {
@@ -1319,7 +1784,7 @@ const HalAgent = (function () {
       },
     },
     fetch_eligibility_271: {
-      label: "Fetch eligibility via clearinghouse 271 (stub)",
+      label: "Fetch eligibility via clearinghouse 271 (or report status / use cache)",
       run: async (ctx, args) => {
         const bridge =
           typeof DesktopBridge !== "undefined"
@@ -1330,16 +1795,57 @@ const HalAgent = (function () {
         if (!bridge || typeof bridge.fetchEligibility271 !== "function") {
           return { ok: false, summary: "271 fetch requires the NR2 server." };
         }
+        let payerName = String(args.payerName || args.payer || "").trim();
+        let payerId = String(args.payerId || args.payer_id || "").trim();
+        // Resolve payerId from office payer reference when missing
+        if (payerName && !payerId && typeof bridge.searchPayerReference === "function") {
+          try {
+            const pref = await bridge.searchPayerReference(payerName, 1);
+            const hit = pref && pref.items && pref.items[0];
+            if (hit) {
+              const ids = hit.payerIds || [];
+              if (ids.length) payerId = String(ids[0]);
+              if (!payerName) payerName = String(hit.name || "");
+            }
+          } catch {
+            /* optional */
+          }
+        }
         const payload = await bridge.fetchEligibility271({
-          payerName: String(args.payerName || args.payer || ""),
-          payerId: String(args.payerId || args.payer_id || ""),
+          payerName,
+          payerId,
           memberId: String(args.memberId || args.member_id || ""),
           providerNpi: String(args.providerNpi || args.npi || ""),
           subscriberLastName: String(args.subscriberLastName || args.lastName || ""),
           subscriberDob: String(args.subscriberDob || args.dateOfBirth || ""),
           vendor: String(args.vendor || "auto"),
         });
-        const summary = payload && payload.message ? String(payload.message) : payload && payload.error ? String(payload.error) : "271 fetch complete.";
+        const parts = [];
+        if (payload && payload.message) parts.push(String(payload.message));
+        else if (payload && payload.error) parts.push(String(payload.error));
+        if (payload && payload.hint) parts.push("Hint: " + String(payload.hint));
+        if (payload && payload.status) {
+          const st = payload.status;
+          const live = st.liveReady ? "live credentials present" : "live credentials missing";
+          const mock = st.mockEnabled ? "mock ON" : "mock OFF";
+          parts.push(`Clearinghouse status: ${live}; ${mock}.`);
+          if (st.requiredLiveFields && st.requiredLiveFields.length) {
+            parts.push("Live 271 needs: " + st.requiredLiveFields.join(", ") + ".");
+          }
+        }
+        if (payload && payload.ok === false && typeof bridge.listEligibilityCache === "function") {
+          try {
+            const cache = await bridge.listEligibilityCache(4);
+            if (cache && cache.count) {
+              parts.push("Fresh local eligibility cache still available — use list_eligibility_cache or POST /api/eligibility-cache to add a redacted snapshot.");
+            } else {
+              parts.push("No fresh eligibility cache. Staff can paste a PHI-redacted snapshot via POST /api/eligibility-cache.");
+            }
+          } catch {
+            /* optional */
+          }
+        }
+        const summary = parts.join(" ") || "271 fetch complete.";
         return { ok: !!(payload && payload.ok), summary: summary.slice(0, 2500) };
       },
     },
@@ -1787,12 +2293,46 @@ const HalAgent = (function () {
     };
   }
 
+  function toolResultLooksEmpty(result) {
+    if (!result) return true;
+    if (result.ok === false) return true;
+    if (typeof result.count === "number" && result.count <= 0) return true;
+    const summary = String(result.summary || "").toLowerCase();
+    if (!summary.trim()) return true;
+    return /\b(no (?:matching|fee schedule|payer reference|fresh eligibility)|no matches|not found|requires the nr2 server)\b/i.test(
+      summary
+    );
+  }
+
+  function wantsInsuranceOpsTools(query) {
+    const q = String(query || "");
+    return (
+      /\bD\d{4}\b/i.test(q) ||
+      /\b(fee\s*schedule|allowed\s*amount|allowed\s*fee|contracted\s*fee|practice\s*amount|co-?45|underpay(?:ment)?|ucr)\b/i.test(
+        q
+      ) ||
+      /\b(payer reference|payer id|routing id|denial theme|common denial|elig(?:ibility|ible)?\s*(?:phone|tel|number|website|portal|contact)|claim\s*phone)\b/i.test(
+        q
+      ) ||
+      (/\b(delta dental|metlife|cigna|guardian|aetna|uhc|united concordia|humana|medicaid|bcbs|blue cross|careington|geha|dentemax|dentaquest)\b/i.test(
+        q
+      ) &&
+        /\b(payer|insurance|denial|narrative|eob|claim|phone|fee|allowed|elig)\b/i.test(q)) ||
+      /\b(eligibility cache|deductible remaining|annual max remaining|benefit check|270|271|coinsurance)\b/i.test(q) ||
+      /\b(denial|appeal|eob|insurance claim)\b/i.test(q) ||
+      /\b(claim preflight|preflight|packet readiness|denial risk|pre-?submit scrub|before submit)\b/i.test(q) ||
+      /\b(claims? aging|aging follow-?up|over (30|60|90) days|60\+ days|90\+ days)\b/i.test(q) ||
+      (/\bclaims?\b/i.test(q) && /\b(denied|denial|payer|carrier|readiness|scrub|submit|appeal|aging|follow-?up)\b/i.test(q))
+    );
+  }
+
   function expandGatherToolsForRound(query, route, toolResults, round, existingIds) {
     const had = new Set(existingIds || []);
     const add = [];
     const blob = Object.values(toolResults || {})
       .map((r) => (r && r.summary ? String(r.summary) : ""))
       .join(" ");
+    const results = toolResults || {};
     if (round >= 1) {
       if (!had.has("read_import_diagnostics") && /\b(import|missing|empty|stale|dataset|export)\b/i.test(query + blob)) {
         add.push("read_import_diagnostics");
@@ -1803,11 +2343,152 @@ const HalAgent = (function () {
       if (!had.has("grep_program_source") && /\b(how|why|bug|code|function|broken|error)\b/i.test(query)) {
         add.push("grep_program_source");
       }
+      // Insurance recovery: if first pass skipped or emptied payer/fee/eligibility tools, add them.
+      if (wantsInsuranceOpsTools(query)) {
+        if (!had.has("search_payer_reference")) add.push("search_payer_reference");
+        else if (toolResultLooksEmpty(results.search_payer_reference) && !had.has("search_hal_memories")) {
+          add.push("search_hal_memories");
+        }
+        if (
+          /\bD\d{4}\b/i.test(query) ||
+          /\b(fee\s*schedule|allowed|co-?45|underpay|practice\s*amount|ucr)\b/i.test(query)
+        ) {
+          if (!had.has("lookup_fee_schedule")) add.push("lookup_fee_schedule");
+          else if (toolResultLooksEmpty(results.lookup_fee_schedule) && !had.has("search_hal_memories")) {
+            add.push("search_hal_memories");
+          }
+        }
+        if (
+          /\b(deductible|annual max|benefit check|270|271|coinsurance|eligibility cache)\b/i.test(query) &&
+          !had.has("list_eligibility_cache")
+        ) {
+          add.push("list_eligibility_cache");
+        }
+        if (
+          /\b(draft|write|prepare|generate)\b.*\bnarrative\b|\bdraft with hal\b/i.test(query) &&
+          !had.has("draft_insurance_narrative")
+        ) {
+          add.push("draft_insurance_narrative");
+        }
+        // Claim scrub: readiness / preflight / denial when the ask is claim-scoped.
+        if (/\b(claims?|denied|denial|appeal|pre-?submit|packet|readiness|aging)\b/i.test(query)) {
+          if (!had.has("read_claims_summary")) add.push("read_claims_summary");
+          if (
+            /\b(preflight|before submit|ready to submit|scrub|packet)\b/i.test(query) &&
+            !had.has("stage_claim_preflight")
+          ) {
+            add.push("stage_claim_preflight");
+            if (!had.has("list_eligibility_cache")) add.push("list_eligibility_cache");
+          }
+          if (
+            /\b(denial risk|deny|predict denial|pre-?submit|scrub)\b/i.test(query) &&
+            !had.has("predict_claim_denial_risk")
+          ) {
+            add.push("predict_claim_denial_risk");
+          }
+          if (
+            /\b(appeal|appeal packet|denial packet|build (an? )?appeal)\b/i.test(query) &&
+            !had.has("build_appeal_packet")
+          ) {
+            add.push("build_appeal_packet");
+            if (!had.has("read_clinical_summary")) add.push("read_clinical_summary");
+          }
+          if (
+            /\b(payer|carrier|insurance|join)\b/i.test(query) &&
+            !had.has("join_claim_payers")
+          ) {
+            add.push("join_claim_payers");
+          }
+          if (
+            /\b(aging|over \d+ days|60\+?|90\+?|follow-?up queue|oldest claim)\b/i.test(query) &&
+            !had.has("list_claims_aging_followup")
+          ) {
+            add.push("list_claims_aging_followup");
+          }
+        }
+        if (
+          /\b(era|eob|835)\b/i.test(query) &&
+          /\b(pending|review|match|queue)\b/i.test(query) &&
+          !had.has("list_pending_era_matches")
+        ) {
+          add.push("list_pending_era_matches");
+        }
+        if (
+          /\bconfirm\b/i.test(query) &&
+          /\b(era|eob|match)\b/i.test(query) &&
+          !had.has("confirm_era_match")
+        ) {
+          add.push("confirm_era_match");
+        }
+        if (
+          /\b(collections?|who do i call|call list|past due)\b/i.test(query) &&
+          !had.has("build_collections_queue")
+        ) {
+          add.push("build_collections_queue");
+          if (!had.has("schedule_call_task")) add.push("schedule_call_task");
+          if (!had.has("click_to_dial")) add.push("click_to_dial");
+        }
+        if (
+          /\b(log (call|outcome)|call outcome|no.?answer|promised to pay)\b/i.test(query) &&
+          !had.has("log_call_outcome")
+        ) {
+          add.push("log_call_outcome");
+        }
+        if (
+          /\b(aging|over \d+ days|60\+?|90\+?).*\b(call|dial|follow)\b|\bfollow.?up claim\b/i.test(query) &&
+          !had.has("schedule_call_task")
+        ) {
+          add.push("schedule_call_task");
+          if (!had.has("list_claims_aging_followup")) add.push("list_claims_aging_followup");
+        }
+        if (
+          /\b(denial|narrative|appeal).*\b(tips?|theme|draft)\b|\bdraft.*\b(denial|narrative|appeal)\b/i.test(query) &&
+          !had.has("search_payer_reference")
+        ) {
+          add.push("search_payer_reference");
+          if (!had.has("draft_insurance_narrative")) add.push("draft_insurance_narrative");
+        }
+        if (
+          /\b(month.?end|close the month|close tasks)\b/i.test(query) &&
+          !had.has("generate_month_end_tasks")
+        ) {
+          add.push("generate_month_end_tasks");
+        }
+        if (
+          /\b(underpay|underpaid|fee vs paid|allowed vs paid|co-?45)\b/i.test(query) &&
+          !had.has("scrub_fee_vs_paid")
+        ) {
+          add.push("scrub_fee_vs_paid");
+        }
+        if (
+          /\b(posting queue|journal queue|pending postings?)\b/i.test(query) &&
+          !had.has("list_posting_queue")
+        ) {
+          add.push("list_posting_queue");
+        }
+        if (
+          /\b(softdent|odbc|named payer|carrier gap|sd_claims)\b/i.test(query) &&
+          !had.has("softdent_extract_status")
+        ) {
+          add.push("softdent_extract_status");
+        }
+      }
     }
     if (round >= 2) {
       if (!had.has("read_program_help")) add.push("read_program_help");
       if (!had.has("search_program")) add.push("search_program");
       if (!had.has("read_source_health")) add.push("read_source_health");
+      if (wantsInsuranceOpsTools(query)) {
+        if (!had.has("search_payer_reference")) add.push("search_payer_reference");
+        if (!had.has("lookup_fee_schedule") && /\bD\d{4}\b|fee|allowed|co-?45|underpay/i.test(query)) {
+          add.push("lookup_fee_schedule");
+        }
+        if (!had.has("search_hal_memories")) add.push("search_hal_memories");
+        if (/\b(claim|denied|denial|appeal)\b/i.test(query)) {
+          if (!had.has("read_claims_summary")) add.push("read_claims_summary");
+          if (!had.has("join_claim_payers")) add.push("join_claim_payers");
+        }
+      }
     }
     if (round >= 1 && /\bvalidate|validation|syntax\b/i.test(query)) {
       if (!had.has("run_hal_validation")) add.push("run_hal_validation");
@@ -1826,6 +2507,29 @@ const HalAgent = (function () {
       .map((r) => (r && r.summary ? String(r.summary) : ""))
       .join(" ");
     if (/FAILED|missing|empty|no data|error|unavailable/i.test(blob)) return true;
+    const q = String((plan && plan.originalQuery) || "");
+    if (wantsInsuranceOpsTools(q)) {
+      const results = toolResults || {};
+      if (
+        toolResultLooksEmpty(results.search_payer_reference) ||
+        toolResultLooksEmpty(results.lookup_fee_schedule) ||
+        toolResultLooksEmpty(results.list_eligibility_cache) ||
+        toolResultLooksEmpty(results.read_claims_summary)
+      ) {
+        return true;
+      }
+      // Planned insurance tools never ran
+      const planned = new Set((plan && plan.tools) || []);
+      if (
+        (planned.has("search_payer_reference") && !results.search_payer_reference) ||
+        (planned.has("lookup_fee_schedule") && !results.lookup_fee_schedule) ||
+        (planned.has("read_claims_summary") && !results.read_claims_summary) ||
+        (planned.has("stage_claim_preflight") && !results.stage_claim_preflight) ||
+        (planned.has("predict_claim_denial_risk") && !results.predict_claim_denial_risk)
+      ) {
+        return true;
+      }
+    }
     return false;
   }
 
@@ -1889,17 +2593,41 @@ const HalAgent = (function () {
       gather.push("search_hal_memories");
     }
     if (
-      /\b(payer reference|payer id|routing id|denial theme|common denial)\b/i.test(query) ||
-      (/\b(delta dental|metlife|cigna|guardian|aetna|uhc|united concordia|humana|medicaid|bcbs|blue cross)\b/i.test(query) &&
-        /\b(payer|insurance|denial|narrative|eob|claim)\b/i.test(query))
+      /\b(payer reference|payer id|routing id|denial theme|common denial|elig(?:ibility|ible)?\s*(?:phone|tel|number|website|portal|contact)|claim\s*phone)\b/i.test(
+        query
+      ) ||
+      (/\b(delta dental|metlife|cigna|guardian|aetna|uhc|united concordia|humana|medicaid|bcbs|blue cross|careington|geha|dentemax|dentaquest)\b/i.test(
+        query
+      ) &&
+        /\b(payer|insurance|denial|narrative|eob|claim|phone|fee|allowed|elig)\b/i.test(query))
     ) {
       gather.push("search_payer_reference");
+    }
+    if (
+      /\bD\d{4}\b/i.test(query) ||
+      /\b(fee\s*schedule|allowed\s*amount|allowed\s*fee|contracted\s*fee|practice\s*amount|co-?45|underpay(?:ment)?)\b/i.test(
+        query
+      )
+    ) {
+      gather.push("lookup_fee_schedule");
     }
     if (/\b(eligibility cache|deductible remaining|annual max remaining|benefit check|270|271|coinsurance)\b/i.test(query)) {
       gather.push("list_eligibility_cache");
     }
     if (/\b(fetch 271|270\/271|clearinghouse eligibility|run eligibility)\b/i.test(query)) {
       gather.push("fetch_eligibility_271");
+    }
+    if (/\b(claim|denied|denial|appeal|packet|readiness|pre-?submit)\b/i.test(query) && wantsInsuranceOpsTools(query)) {
+      gather.push("read_claims_summary");
+      if (/\b(preflight|before submit|scrub|packet readiness)\b/i.test(query)) {
+        gather.push("stage_claim_preflight");
+      }
+      if (/\b(denial risk|predict denial|pre-?submit scrub)\b/i.test(query)) {
+        gather.push("predict_claim_denial_risk");
+      }
+      if (/\b(payer|carrier|join)\b/i.test(query)) {
+        gather.push("join_claim_payers");
+      }
     }
     if (/\blearn this|save this|note that|remember this|remember that|our office always|from now on\b/i.test(query)) {
       gather.push("remember_fact");
@@ -1984,8 +2712,19 @@ const HalAgent = (function () {
     if (route.useWidgetMasterChart || /\b(widget master chart|master widget chart|widget map|widget guide|all widgets chart)\b/i.test(query)) {
       tools.push("read_widget_master_chart");
     }
-    if (route.useClaimReadiness || (/\b(claim|denied|packet)\b/i.test(query) && !route.text)) {
+    if (
+      route.useClaimReadiness ||
+      (/\b(claim|denied|packet|readiness)\b/i.test(query) && !route.text) ||
+      (wantsInsuranceOpsTools(query) && /\b(claim|denied|denial|appeal)\b/i.test(query))
+    ) {
       tools.push("read_claims_summary");
+    }
+    if (
+      /\b(claim.*(payer|insurance|insco)|payer.*(claim|join)|which payer|carrier on (the )?claim)\b/i.test(query) ||
+      (/\bclaim\b/i.test(query) && /\b(metlife|delta|cigna|guardian|aetna|payer|insurance)\b/i.test(query)) ||
+      (wantsInsuranceOpsTools(query) && /\b(claim|denied)\b/i.test(query) && /\b(payer|carrier)\b/i.test(query))
+    ) {
+      tools.push("join_claim_payers");
     }
     if (
       /\b(draft|write|prepare|generate)\b.*\b(insurance\s+)?narrative\b/i.test(query) ||
@@ -1994,8 +2733,22 @@ const HalAgent = (function () {
     ) {
       tools.push("draft_insurance_narrative");
     }
-    if (/\b(denial|narrative|eob|payer|insurance claim|appeal)\b/i.test(query)) {
+    if (
+      /\b(denial|narrative|eob|payer|insurance claim|appeal|elig(?:ibility|ible)?\s*(?:phone|tel|number|website|portal|contact)|claim\s*phone)\b/i.test(
+        query
+      ) ||
+      (/\b(delta dental|metlife|cigna|guardian|aetna|humana|bcbs|blue cross)\b/i.test(query) &&
+        /\b(phone|fee|allowed|insurance|elig)\b/i.test(query))
+    ) {
       tools.push("search_payer_reference");
+    }
+    if (
+      /\bD\d{4}\b/i.test(query) ||
+      /\b(fee\s*schedule|allowed\s*amount|allowed\s*fee|contracted\s*fee|practice\s*amount|co-?45|underpay(?:ment)?)\b/i.test(
+        query
+      )
+    ) {
+      tools.push("lookup_fee_schedule");
     }
     if (/\b(eligibility|deductible|annual max|copay|benefit remaining|270|271)\b/i.test(query)) {
       tools.push("list_eligibility_cache");
@@ -2023,23 +2776,50 @@ const HalAgent = (function () {
     if (/\b(era|835|eob match|parse era)\b/i.test(query)) {
       tools.push("parse_era_835", "match_eob_era");
     }
-    if (/\b(collections queue|collect from|past due|follow.?up queue)\b/i.test(query)) {
+    if (
+      /\b(collections queue|collect from|past due|follow.?up queue|who do i call|call list|collections call)\b/i.test(
+        query
+      ) ||
+      (/\b(collections?|a\/?r|aging)\b/i.test(query) && /\b(call|queue|today|follow)\b/i.test(query))
+    ) {
       tools.push("build_collections_queue");
     }
-    if (/\b(deposit reconc|bank deposit|variance)\b/i.test(query)) {
+    if (
+      /\b(deposit reconc|bank deposit|deposit variance|collections?\s+vs\s+deposit|why is (the )?deposit|deposit off)\b/i.test(
+        query
+      ) ||
+      (/\b(deposit|deposits)\b/i.test(query) && /\b(variance|reconcil|mismatch|off|short|over)\b/i.test(query))
+    ) {
       tools.push("draft_deposit_reconciliation");
     }
-    if (/\b(claim preflight|preflight|before submit)\b/i.test(query)) {
+    if (
+      /\b(claim preflight|preflight|before submit|scrub (the )?claim|packet readiness)\b/i.test(query) ||
+      (wantsInsuranceOpsTools(query) && /\b(pre-?submit|ready to submit)\b/i.test(query))
+    ) {
       tools.push("stage_claim_preflight");
+      if (!tools.includes("list_eligibility_cache")) tools.push("list_eligibility_cache");
     }
     if (/\b(eob|era|835|auto.?match)\b/i.test(query)) {
       tools.push("match_eob_era");
     }
+    if (
+      /\b(posting queue|journal posting queue|journal queue|list postings?|pending postings?)\b/i.test(query) ||
+      (/\bposting\b/i.test(query) && /\b(queue|pending|review|list|show)\b/i.test(query))
+    ) {
+      tools.push("list_posting_queue");
+    }
     if (/\b(batch approve|approve postings|approve queue)\b/i.test(query)) {
       tools.push("batch_approve_postings");
     }
-    if (/\b(month.?end|close tasks|month end tasks)\b/i.test(query)) {
+    if (/\b(month.?end|close tasks|month end tasks|month end close|close the month)\b/i.test(query)) {
       tools.push("generate_month_end_tasks");
+    }
+    if (
+      /\b(underpay|underpaid|fee vs paid|allowed vs paid|co-?45 scrub|scrub (the )?eob)\b/i.test(query) ||
+      (/\b(co-?45|underpay)\b/i.test(query) && /\b(D\d{4}|paid|eob|era|allowed)\b/i.test(query))
+    ) {
+      tools.push("scrub_fee_vs_paid");
+      if (!tools.includes("lookup_fee_schedule")) tools.push("lookup_fee_schedule");
     }
     if (/\b(clock out|shift handoff|end shift|handoff report)\b/i.test(query)) {
       tools.push("clock_out_shift", "get_last_handoff_report");
@@ -2060,13 +2840,61 @@ const HalAgent = (function () {
       tools.push("record_era_match_feedback");
     }
     if (/\b(morning routine|autonomous|scheduler|proactive alert)\b/i.test(query)) {
-      tools.push("run_morning_routine", "acknowledge_alert", "undo_scheduler_run");
+      tools.push("run_morning_routine", "acknowledge_alert", "undo_scheduler_run", "list_autonomous_work");
+    }
+    if (
+      /\b(autonomous work|staged appeal|work ledger|what did hal (do|stage)|hal staged)\b/i.test(query)
+    ) {
+      tools.push("list_autonomous_work");
     }
     if (/\b(undo morning|undo scheduler|undo autonomous)\b/i.test(query)) {
       tools.push("undo_scheduler_run");
     }
-    if (/\b(denial risk|deny before submit|predict denial|pre.?submit scrub)\b/i.test(query)) {
+    if (/\b(eod handoff|end of day handoff|compile handoff)\b/i.test(query)) {
+      tools.push("get_last_handoff_report");
+    }
+    if (
+      /\b(denial risk|deny before submit|predict denial|pre.?submit scrub)\b/i.test(query) ||
+      (wantsInsuranceOpsTools(query) && /\b(denial|appeal)\b/i.test(query) && /\b(risk|scrub|before submit|predict)\b/i.test(query))
+    ) {
       tools.push("predict_claim_denial_risk");
+    }
+    if (
+      /\b(appeal packet|denial packet|build (an? )?appeal|prepare (an? )?appeal)\b/i.test(query) ||
+      (/\bappeal\b/i.test(query) && /\b(denied|denial|claim)\b/i.test(query))
+    ) {
+      tools.push("build_appeal_packet");
+      if (!tools.includes("draft_insurance_narrative")) tools.push("draft_insurance_narrative");
+      if (!tools.includes("read_clinical_summary")) tools.push("read_clinical_summary");
+    }
+    if (
+      /\b(named payer|carrier gap|softdent (claims|odbc)|sd_claims|odbc status)\b/i.test(query) ||
+      (/\bsoftdent\b/i.test(query) && /\b(payer|carrier|claims export)\b/i.test(query))
+    ) {
+      if (!tools.includes("softdent_extract_status")) tools.push("softdent_extract_status");
+    }
+    if (/\b(era|eob).*(pending|review|queue)|pending (era|eob|matches)\b/i.test(query)) {
+      tools.push("list_pending_era_matches");
+    }
+    if (
+      /\b(confirm (era|eob|match)|approve (era|eob) match|era match (is )?correct)\b/i.test(query) ||
+      (/\bconfirm\b/i.test(query) && /\b(era|eob|match)\b/i.test(query) && /\bclaim\b/i.test(query))
+    ) {
+      tools.push("confirm_era_match");
+    }
+    if (
+      /\b(claims? aging|aging follow-?up|over (30|60|90) days|60\+ days|90\+ days|oldest claims?|follow-?up queue)\b/i.test(
+        query
+      )
+    ) {
+      tools.push("list_claims_aging_followup");
+      if (/\b(call|dial|phone|follow.?up)\b/i.test(query)) {
+        if (!tools.includes("schedule_call_task")) tools.push("schedule_call_task");
+        if (!tools.includes("click_to_dial")) tools.push("click_to_dial");
+      }
+    }
+    if (/\b(log (call|outcome)|call outcome|no.?answer|promised)\b/i.test(query)) {
+      if (!tools.includes("log_call_outcome")) tools.push("log_call_outcome");
     }
     if (/\b(pull qb|pull quickbooks|qb payments|qb pull)\b/i.test(query)) {
       tools.push("pull_qb_payments", "get_qb_reconciliation_status");
@@ -2726,22 +3554,32 @@ const HalAgent = (function () {
       ctx.reasoningModelReady()
     ) {
       const r = Object.assign({}, route);
-      if (reason21bAvailable(ctx)) {
+      // Hybrid: prefer on-demand coder32b for agent/programming; fall back to reason21b.
+      const preferCoder = ap.preferCoderForAgentLoop !== false;
+      const coderReady = typeof ctx.coderModelReady === "function" && ctx.coderModelReady();
+      if (preferCoder && coderReady) {
         r.useReasoning = true;
         r.useModel = false;
+        r.useCoder = true;
+        r.lane = ap.coderLane || "coder32b";
+        r.intent = "reasoning: agent-loop-coder";
+      } else if (reason21bAvailable(ctx)) {
+        r.useReasoning = true;
+        r.useModel = false;
+        r.useCoder = false;
         r.lane = "reason21b";
+        r.intent = "reasoning: agent-loop";
       } else {
         r.useReasoning = false;
         r.useModel = true;
+        r.useCoder = false;
         r.lane = "chat8b";
+        r.intent = "model: query";
       }
       r.useEscalation = false;
       r.useOss = false;
       r.text = "";
       r.prompt = r.prompt || query;
-      if (!/^reasoning:/.test(String(r.intent || ""))) {
-        r.intent = reason21bAvailable(ctx) ? "reasoning: agent-loop" : "model: query";
-      }
       return r;
     }
     if (!preferHigherReasoning(ctx)) return route;
@@ -2895,7 +3733,16 @@ const HalAgent = (function () {
       typeof ctx.reasoningModelReady === "function" &&
       ctx.reasoningModelReady();
     if (wantAgentReasoning) {
-      let rm = Object.assign({ reasoningLane: true, agentLoop: true }, ctx.reasoningModelConfig());
+      const preferCoder = agentCfg.preferCoderForAgentLoop !== false;
+      const coderReady = typeof ctx.coderModelReady === "function" && ctx.coderModelReady();
+      let rm;
+      let laneLabel = "reason21b";
+      if (preferCoder && coderReady && typeof ctx.coderModelConfig === "function") {
+        rm = Object.assign({ reasoningLane: true, agentLoop: true, coderLane: true }, ctx.coderModelConfig());
+        laneLabel = agentCfg.coderLane || "coder32b";
+      } else {
+        rm = Object.assign({ reasoningLane: true, agentLoop: true }, ctx.reasoningModelConfig());
+      }
       rm.options = Object.assign({}, rm.options || {}, { num_predict: 1800 });
       rm = attachOllamaNativeTools(rm, plan, query, agentCfg);
       const raw = await ctx.runModel(rm, combinedPrompt, userText, "Agent loop reasoning", onToken);
@@ -2903,13 +3750,35 @@ const HalAgent = (function () {
         return {
           text: String(raw.text || ""),
           toolCalls: raw.toolCalls || [],
-          lane: "reason21b",
+          lane: laneLabel,
         };
       }
       const text = typeof raw === "string" ? raw : String((raw && raw.text) || "");
-      return { text, lane: "reason21b" };
+      return { text, lane: laneLabel };
     }
     if (route.useReasoning) {
+      // Hybrid agent-loop-coder: use on-demand coder32b when route.useCoder is set.
+      if (route.useCoder && typeof ctx.coderModelReady === "function" && ctx.coderModelReady() && typeof ctx.coderModelConfig === "function") {
+        const cm = Object.assign({ reasoningLane: true, coderLane: true }, ctx.coderModelConfig());
+        const cmTools = plan && plan.agentToolLoop ? attachOllamaNativeTools(cm, plan, query, agentCfg) : cm;
+        try {
+          const raw = await ctx.runModel(cmTools, combinedPrompt, userText, "Local coder agent", onToken);
+          const text = typeof raw === "string" ? raw : String((raw && raw.text) || "");
+          const toolCalls = raw && typeof raw === "object" ? raw.toolCalls : null;
+          if (String(text || "").trim() || (toolCalls && toolCalls.length)) {
+            return {
+              text,
+              toolCalls: toolCalls || [],
+              lane: agentCfg.coderLane || "coder32b",
+            };
+          }
+        } catch (error) {
+          if (typeof RuntimeIssues !== "undefined") {
+            RuntimeIssues.record("hal-agent.coder", error, { lane: route.lane, intent: route.intent });
+          }
+        }
+        // Fall through to reason21b if coder fails.
+      }
       if (!ctx.reasoningModelReady()) {
         if (ctx.localModelReady && ctx.localModelReady()) {
           const lm = Object.assign({ fastChat: true, reasonFallback: true }, ctx.localModelConfig());
@@ -3079,12 +3948,24 @@ const HalAgent = (function () {
 
   async function rewriteShapeViaModel(ctx, query, draftText, route) {
     if (!ctx || typeof ctx.runModel !== "function") return null;
+    const useCoder =
+      route &&
+      route.useCoder &&
+      typeof ctx.coderModelReady === "function" &&
+      ctx.coderModelReady() &&
+      typeof ctx.coderModelConfig === "function";
     const useReason =
-      route && route.useReasoning && typeof ctx.reasoningModelReady === "function" && ctx.reasoningModelReady();
-    if (!useReason && (!ctx.localModelReady || !ctx.localModelReady())) return null;
-    const lm = useReason
-      ? Object.assign({ reasoningLane: true }, ctx.reasoningModelConfig())
-      : Object.assign({ fastChat: true }, ctx.localModelConfig());
+      !useCoder &&
+      route &&
+      route.useReasoning &&
+      typeof ctx.reasoningModelReady === "function" &&
+      ctx.reasoningModelReady();
+    if (!useCoder && !useReason && (!ctx.localModelReady || !ctx.localModelReady())) return null;
+    const lm = useCoder
+      ? Object.assign({ reasoningLane: true, coderLane: true }, ctx.coderModelConfig())
+      : useReason
+        ? Object.assign({ reasoningLane: true }, ctx.reasoningModelConfig())
+        : Object.assign({ fastChat: true }, ctx.localModelConfig());
     const system =
       typeof HalCursorParity !== "undefined" && HalCursorParity.rewriteShapeSystemPrompt
         ? HalCursorParity.rewriteShapeSystemPrompt()
@@ -3096,6 +3977,33 @@ const HalAgent = (function () {
     } catch {
       return null;
     }
+  }
+
+  function attachPendingConsentChips(outcome, toolResults) {
+    if (!outcome || typeof HalConsent === "undefined") return outcome;
+    let pending = null;
+    if (typeof HalConsent.getPending === "function") {
+      try {
+        pending = HalConsent.getPending();
+      } catch {
+        pending = null;
+      }
+    }
+    if (!pending && toolResults) {
+      for (const res of Object.values(toolResults)) {
+        if (res && res.pendingConsent) {
+          pending = res.pendingConsent;
+          break;
+        }
+      }
+    }
+    if (pending && typeof HalConsent.followUpChips === "function") {
+      outcome.followUpChips = HalConsent.followUpChips(pending);
+      if (typeof HalConsent.wrapReplyWithConsent === "function" && outcome.text) {
+        outcome.text = HalConsent.wrapReplyWithConsent(outcome.text, pending);
+      }
+    }
+    return outcome;
   }
 
   function finalizeOutcome(outcome, trimmed, route, plan, ctx, toolResults) {
@@ -3148,6 +4056,7 @@ const HalAgent = (function () {
         preferBrief: workingMemory.preferBrief,
       });
     }
+    attachPendingConsentChips(outcome, toolResults);
     return outcome;
   }
 
@@ -3327,7 +4236,10 @@ const HalAgent = (function () {
     let activePlan = plan;
     const agentCfg = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.agentProgramming) || {};
 
-    if (plan.useModelEnhancement && isInvestigateQuery(trimmed, route)) {
+    if (
+      plan.useModelEnhancement &&
+      (isInvestigateQuery(trimmed, route) || wantsInsuranceOpsTools(trimmed))
+    ) {
       const extra = expandGatherToolsForRound(trimmed, route, toolResults, 1, Object.keys(toolResults));
       if (extra.length) {
         const more = await runTools(extra, ctx, trimmed);
@@ -3702,6 +4614,10 @@ const HalAgent = (function () {
     extractAnalyzeTargets,
     spawnInvestigationSubtask,
     spawnParallelInvestigations,
+    wantsInsuranceOpsTools,
+    expandGatherToolsForRound,
+    toolResultLooksEmpty,
+    needsMoreGather,
   };
 })();
 

@@ -121,6 +121,7 @@ const HalCore = (function () {
     if (laneId === "helper14b" || laneId === "helper8b") return config.fastModel || null;
     if (laneId === "reason21b") return config.reasoningModel || null;
     if (laneId === "escalate30b") return config.escalationModel || null;
+    if (laneId === "coder32b" || laneId === "coder30b") return config.coderModel || null;
     return null;
   }
 
