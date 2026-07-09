@@ -835,12 +835,11 @@ const MoonshotLayoutEngine = (function () {
   const SUBPANEL_BODY = {
     claimsVolumeTrend(D, H) {
       const claims = D && D.allClaims ? D.allClaims() : [];
-      const total = Math.max(claims.length, 1);
-      const volLabels = ["Week 1", "Week 2", "Week 3", "Week 4"];
-      const volValues = volLabels.map((_, i) => Math.max(0, Math.round(total * (0.2 + i * 0.05))));
-      return H.chartContainer(
-        claims.length ? H.vBarChart(volLabels, volValues, "#a855f7") : H.canvasEmpty("Claims volume appears when SoftDent claims export is loaded."),
-      );
+      if (!claims.length) {
+        return H.canvasEmpty("Claims volume by week appears when SoftDent claims include dated submission history.");
+      }
+      // Honest open-claims count until dated weekly submission history exists — never invent Week 1–4 bars.
+      return H.canvasStat(String(claims.length), "Open claims", undefined, "claimsPipeline");
     },
     claimsPayerBreakdown(D, H) {
       const claims = D && D.allClaims ? D.allClaims() : [];

@@ -1274,8 +1274,9 @@ const ImportLoader = (function () {
     }
     return {
       total: hasAr ? formatMoney(arTotal) : "—",
-      insurance: { amount: formatMoney(0), pct: 0 },
-      patient: { amount: formatMoney(0), pct: 0 },
+      // Unknown split — never seed $0 / 0% as if a real insurance/patient breakdown exists.
+      insurance: { amount: null, pct: null },
+      patient: { amount: null, pct: null },
       collectability: "—",
       collectable: "—",
       source: null,

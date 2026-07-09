@@ -1001,10 +1001,10 @@ const Services = (function () {
       totalAmount: formatMoney(total),
       postedAmount: formatMoney(posted),
       pendingAmount: formatMoney(pending),
-      reviewedPct: count ? Math.round(((postedCount + ready) / count) * 100) : 0,
-      postedPct: count ? Math.round((postedCount / count) * 100) : 0,
-      pendingPct: count ? Math.round(((queue || []).filter((doc) => doc.status === "Pending Review").length / count) * 100) : 0,
-      readyPct: count ? Math.round((ready / count) * 100) : 0,
+      reviewedPct: count ? Math.round(((postedCount + ready) / count) * 100) : null,
+      postedPct: count ? Math.round((postedCount / count) * 100) : null,
+      pendingPct: count ? Math.round(((queue || []).filter((doc) => doc.status === "Pending Review").length / count) * 100) : null,
+      readyPct: count ? Math.round((ready / count) * 100) : null,
     };
   }
 

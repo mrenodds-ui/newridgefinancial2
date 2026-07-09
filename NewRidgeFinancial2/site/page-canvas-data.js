@@ -472,35 +472,32 @@ const PageCanvasData = (function () {
     const nar = snapshot && snapshot.narratives;
     const lanes = ["Draft", "Pending Review", "Approved", "Sent to Payer"];
     const buckets = Object.fromEntries(lanes.map((lane) => [lane, []]));
+    const laneFor = (status) => {
+      const s = String(status || "").toLowerCase();
+      if (/sent|submitted|payer/.test(s)) return "Sent to Payer";
+      if (/approv/.test(s)) return "Approved";
+      if (/pending|review/.test(s)) return "Pending Review";
+      return "Draft";
+    };
+    const pushDraft = (d, fallbackTitle) => {
+      if (!d) return;
+      const lane = laneFor(d.status || d.lane || d.stage);
+      buckets[lane].push({
+        patient: d.patient || d.title || fallbackTitle || "Draft",
+        procedureCode: d.procedureCode || d.code || "—",
+        payer: d.payer || "—",
+        amount: d.amount || "",
+        title: d.title,
+      });
+    };
     const drafts = Array.isArray(nar?.drafts) ? nar.drafts : [];
+    // Never invent progress by index — only use an explicit draft status when present.
     if (drafts.length) {
-      drafts.forEach((d, i) => {
-        const lane = lanes[Math.min(i, lanes.length - 1)];
-        buckets[lane].push({
-          patient: d.patient || d.title || `Draft ${i + 1}`,
-          procedureCode: d.procedureCode || d.code || "—",
-          payer: d.payer || "—",
-          amount: d.amount || "",
-          title: d.title,
-        });
-      });
+      drafts.forEach((d, i) => pushDraft(d, `Draft ${i + 1}`));
     } else if (nar && nar.latest) {
-      buckets.Draft.push({
-        patient: nar.latest.patient || "Latest draft",
-        procedureCode: nar.latest.procedureCode || "—",
-        payer: nar.latest.payer || "—",
-        amount: "",
-      });
+      pushDraft(nar.latest, "Latest draft");
     }
-    const claim = firstClaim();
-    if (claim && !drafts.length) {
-      buckets.Draft.push({
-        patient: claim.patient || "Claim source",
-        procedureCode: claim.procedure || "—",
-        payer: claim.payer || "—",
-        amount: claim.amount || "",
-      });
-    }
+    // Do not synthesize kanban cards from claims — claims are not narrative drafts.
     return lanes.map((lane) => ({ lane, tone: "muted", items: buckets[lane] }));
   }
 
@@ -522,7 +519,14 @@ const PageCanvasData = (function () {
       },
       {
         label: "Posted",
-        value: fmt(period.postedPct),
+        value: (() => {
+          const docsInPeriod = Number(String(period.documentsInPeriod != null ? period.documentsInPeriod : "").replace(/[^\d.-]/g, ""));
+          const postedNum = Number(String(period.postedPct != null ? period.postedPct : "").replace(/[^\d.-]/g, ""));
+          if ((!Number.isFinite(docsInPeriod) || docsInPeriod <= 0) && (!Number.isFinite(postedNum) || postedNum === 0)) {
+            return "—";
+          }
+          return fmt(period.postedPct);
+        })(),
         hint: "Period close",
         tone: "success",
         widgetKey: "periodCloseAndPosting",
@@ -1872,10 +1876,23 @@ const PageCanvasData = (function () {
     const period = metrics("periodCloseAndPosting");
     const ap = metrics("accountsPayableAutomation");
     const label = documentsPeriodLabel();
+    const docCountRaw = period.documentsInPeriod != null ? period.documentsInPeriod : docs && docs.period && docs.period.documents;
+    const docCount = Number(String(docCountRaw != null ? docCountRaw : "").replace(/[^\d.-]/g, ""));
+    const hasDocs = Number.isFinite(docCount) && docCount > 0;
+    const postedRaw = period.postedPct;
+    const postedNum = Number(String(postedRaw != null ? postedRaw : "").replace(/[^\d.-]/g, ""));
+    // 0% Posted with no documents is empty-state noise, not a real close metric.
+    if (!label && !hasDocs && (postedRaw == null || postedRaw === "" || postedRaw === "—" || postedNum === 0)) {
+      return [];
+    }
+    const postedDisplay =
+      !hasDocs && (postedRaw == null || postedRaw === "" || postedRaw === "—" || postedNum === 0)
+        ? "—"
+        : fmt(postedRaw);
     return [
       ...(label ? [{ value: label, label: "Period", tone: "info", widgetKey: "periodCloseAndPosting" }] : []),
-      { value: fmt(period.documentsInPeriod), label: "Documents in period", tone: widgetTone("periodCloseAndPosting"), widgetKey: "periodCloseAndPosting" },
-      { value: fmt(period.postedPct), label: "Posted", tone: "success", widgetKey: "periodCloseAndPosting" },
+      { value: hasDocs ? fmt(docCountRaw) : "—", label: "Documents in period", tone: widgetTone("periodCloseAndPosting"), widgetKey: "periodCloseAndPosting" },
+      { value: postedDisplay, label: "Posted", tone: postedDisplay === "—" ? "neutral" : "success", widgetKey: "periodCloseAndPosting" },
       { value: fmt(period.pendingAmount || ap.postingQueuePendingCount), label: "Pending review", tone: "warning", widgetKey: "journalPostingQueue" },
       { value: fmt(ap.expenseTotal), label: "Expense total", tone: "warning", widgetKey: "accountsPayableAutomation" },
     ];

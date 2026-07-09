@@ -3149,8 +3149,16 @@ const HalSkills = (function () {
             : "Insurance/patient A/R split and collectability from the SoftDent dashboard cache.",
         navTarget: WIDGET_NAV.softdentResponsibility,
         metrics: {
-          insuranceAmount: metricValue(sd.responsibility?.insurance?.amount),
-          patientAmount: metricValue(sd.responsibility?.patient?.amount),
+          insuranceAmount: metricValue(
+            sd.responsibility?.source && sd.responsibility?.insurance?.amount != null
+              ? sd.responsibility.insurance.amount
+              : null,
+          ),
+          patientAmount: metricValue(
+            sd.responsibility?.source && sd.responsibility?.patient?.amount != null
+              ? sd.responsibility.patient.amount
+              : null,
+          ),
           collectability: metricValue(
             sd.responsibility?.collectability && sd.responsibility.collectability !== "—"
               ? sd.responsibility.collectability
@@ -3161,7 +3169,9 @@ const HalSkills = (function () {
           collectableAmount: metricValue(
             sd.responsibility?.collectable && sd.responsibility.collectable !== "—"
               ? sd.responsibility.collectable
-              : sd.hero?.value || sd.responsibility?.total,
+              : sd.responsibility?.source
+                ? sd.hero?.value || sd.responsibility?.total
+                : null,
           ),
         },
       },

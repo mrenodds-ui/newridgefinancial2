@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10157",
-  "assetVersion": "hal-10157",
-  "schemaVersion": "hal-10157",
+  "BUILD_ID": "hal-10158",
+  "assetVersion": "hal-10158",
+  "schemaVersion": "hal-10158",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -18,5 +18,5 @@
     "office-manager"
   ],
   "builtAt": "2026-07-09T17:55:00Z",
-  "notes": "hal-10157: Rename leftover Care Delivery Summary chrome to Care Delivery Performance / Production MTD."
+  "notes": "hal-10158: Stop inventing narrative kanban progress, period-close 0% Posted, claims weekly bars, responsibility $0, and QB real-time chrome."
 }

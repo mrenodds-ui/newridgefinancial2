@@ -276,11 +276,8 @@ const PageCanvas = (function () {
       payerMap[p] = (payerMap[p] || 0) + 1;
     });
     const payerEntries = Object.entries(payerMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    const payerLabels = payerEntries.length ? payerEntries.map((e) => e[0]) : ["Delta Dental", "Cigna", "MetLife", "Self-pay", "Other"];
-    const payerValues = payerEntries.length ? payerEntries.map((e) => e[1]) : [0, 0, 0, 0, 0];
-    const total = Math.max(claims.length, 1);
-    const volLabels = ["Week 1", "Week 2", "Week 3", "Week 4"];
-    const volValues = volLabels.map((_, i) => Math.max(0, Math.round(total * (0.2 + i * 0.05))));
+    const payerLabels = payerEntries.length ? payerEntries.map((e) => e[0]) : [];
+    const payerValues = payerEntries.length ? payerEntries.map((e) => e[1]) : [];
     return `${gridCol(
       6,
       canvasPanel({
@@ -288,9 +285,9 @@ const PageCanvas = (function () {
         accent: "purple",
         halSubpanel: "claimsVolumeTrend",
         chartHost: true,
-        body: chartContainer(
-          claims.length ? vBarChart(volLabels, volValues, "#a855f7") : canvasEmpty("Claims volume appears when SoftDent claims export is loaded."),
-        ),
+        body: claims.length
+          ? canvasStat(String(claims.length), "Open claims", undefined, "claimsPipeline")
+          : canvasEmpty("Claims volume by week appears when SoftDent claims include dated submission history."),
       }),
     )}${gridCol(
       6,

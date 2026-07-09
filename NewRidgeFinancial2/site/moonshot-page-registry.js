@@ -2,7 +2,7 @@
  * Moonshot page registry — nav metadata + panel layouts from moonshot-page-layouts.js.
  */
 const MoonshotPageRegistry = (function () {
-  const SCHEMA_VERSION = "hal-10157";
+  const SCHEMA_VERSION = "hal-10158";
   const LAYOUT_EPOCH = "moonshot-mockup";
 
   const PRACTICE = {
@@ -101,7 +101,7 @@ const MoonshotPageRegistry = (function () {
     },
     quickbooks: {
       label: "QuickBooks",
-      subtitle: "Real-time financial synchronization · Ridgefield, CT",
+      subtitle: "Imported QuickBooks P&L · Ridgefield, CT",
       accent: "blue",
       filters: ["YTD", "Accrual basis", "Imported P&L"],
       commands: ["Explain YTD net income", "Review EBITDA add-backs", "Show supply spend"],
