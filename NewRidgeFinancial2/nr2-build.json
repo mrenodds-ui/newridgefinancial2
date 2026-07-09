@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10148",
-  "assetVersion": "hal-10148",
-  "schemaVersion": "hal-10148",
+  "BUILD_ID": "hal-10149",
+  "assetVersion": "hal-10149",
+  "schemaVersion": "hal-10149",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T17:25:00.000Z",
-  "notes": "hal-10148: Collection Lag uses prior complete SoftDent month when current collections export is pending."
+  "builtAt": "2026-07-09T17:30:00.000Z",
+  "notes": "hal-10149: Stop Level-3 HAL from spawning duplicate billing/claims office tasks; count Needs Review+Denied only; collapse legacy duplicates."
 }

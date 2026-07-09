@@ -11,25 +11,93 @@ const HalEmployeeRunner = (function () {
     return Boolean(db && ((db.hasRuntimeAccess && db.hasRuntimeAccess()) || (db.hasDesktopApi && db.hasDesktopApi()) || (db.hasLoopbackApi && db.hasLoopbackApi())));
   }
 
+  const CLAIMS_TASK_SOURCE_ID = "employee-level-3-claims-review";
+
+  function staffClaimsReviewCount(ctx) {
+    const snap = (ctx && ctx.halProgramSnapshot) || {};
+    const claims = snap.claims || {};
+    const byStatus = claims.byStatus || claims.laneTotals || {};
+    const needsReview =
+      Number(byStatus["Needs Review"] || byStatus.needsReview || claims.needsReviewCount || 0) || 0;
+    const denied = Number(byStatus.Denied || byStatus.denied || claims.deniedCount || 0) || 0;
+    return Math.max(0, needsReview + denied);
+  }
+
+  async function resolveLegacyLevel3ClaimTasks() {
+    if (typeof OfficeTaskStore === "undefined" || !OfficeTaskStore.list || !OfficeTaskStore.replaceAll) {
+      return { resolved: 0 };
+    }
+    const tasks = (await OfficeTaskStore.list().catch(() => [])) || [];
+    const now = new Date().toISOString();
+    let resolved = 0;
+    const next = tasks.map((task) => {
+      if (!task || task.source !== "employee-level-3") return task;
+      if (task.status === "completed" || task.status === "dismissed" || task.status === "done") return task;
+      // Keep the stable upserted task; only collapse legacy duplicates that lacked sourceId.
+      if (String(task.sourceId || "") === CLAIMS_TASK_SOURCE_ID) return task;
+      const title = String(task.title || "");
+      const isClaimsReview = /billing\/claims|claims review/i.test(title);
+      if (!isClaimsReview || task.sourceId) return task;
+      resolved += 1;
+      return Object.assign({}, task, {
+        status: "completed",
+        resolvedWhen: now,
+        updatedAt: now,
+        notes: [task.notes, "Auto-resolved: superseded by stable employee-level-3 claims review task."]
+          .filter(Boolean)
+          .join(" "),
+      });
+    });
+    if (resolved) await OfficeTaskStore.replaceAll(next).catch(() => {});
+    return { resolved };
+  }
+
   async function runLevel3Tasks(ctx, halModels) {
     const steps = [];
     if (!HalEmployee || HalEmployee.getTargetLevel(halModels) < 3) return steps;
     if (typeof HalOrchestrator === "undefined" || !HalOrchestrator.runTriage) return steps;
     const triage = HalOrchestrator.runTriage(ctx);
     steps.push({ step: "orchestrator-denied-claims", count: triage && triage.totalItems });
-    if (typeof OfficeTaskStore !== "undefined" && OfficeTaskStore.upsert && triage && Array.isArray(triage.agents)) {
-      const claims = triage.agents.find((a) => /claim|billing/i.test(a.id || a.label || ""));
-      if (claims && claims.count > 0) {
-        await OfficeTaskStore.upsert({
-          taskId: `hal-emp-claims-${new Date().toISOString().slice(0, 10)}`,
-          title: `HAL: review ${claims.count} billing/claims item(s)`,
-          status: "open",
-          priority: "high",
-          assignee: "HAL",
-          source: "employee-level-3",
-          createdAt: new Date().toISOString(),
+    const reviewCount = staffClaimsReviewCount(ctx);
+    steps.push({ step: "staff-claims-review-count", count: reviewCount });
+    if (typeof OfficeTaskStore === "undefined" || !OfficeTaskStore.upsert) return steps;
+
+    const legacy = await resolveLegacyLevel3ClaimTasks();
+    if (legacy.resolved) steps.push({ step: "hal-task-claims-legacy-resolve", resolved: legacy.resolved });
+
+    if (reviewCount > 0) {
+      await OfficeTaskStore.upsert({
+        taskId: "hal-emp-claims-review",
+        title: `HAL: review ${reviewCount} billing/claims item(s)`,
+        status: "open",
+        priority: reviewCount >= 5 ? "urgent" : "high",
+        assignee: "HAL",
+        source: "employee-level-3",
+        sourceId: CLAIMS_TASK_SOURCE_ID,
+        surface: "claims",
+        description: `${reviewCount} claim(s) in Needs Review or Denied need staff follow-up. Awaiting-insurance Ready claims are not included.`,
+        notes: `${reviewCount} claim(s) in Needs Review or Denied need staff follow-up.`,
+        halGenerated: true,
+      }).catch(() => {});
+      steps.push({ step: "hal-task-claims", ok: true, count: reviewCount });
+    } else {
+      // Clear the stable task when staff review lanes are empty (e.g. awaiting-insurance → Ready).
+      const tasks = (await OfficeTaskStore.list().catch(() => [])) || [];
+      const active = tasks.find(
+        (task) =>
+          task &&
+          String(task.sourceId || "") === CLAIMS_TASK_SOURCE_ID &&
+          (task.status === "open" || task.status === "blocked" || task.status === "in_progress"),
+      );
+      if (active && typeof OfficeTaskStore.update === "function") {
+        await OfficeTaskStore.update(active.taskId, {
+          status: "completed",
+          resolvedWhen: new Date().toISOString(),
+          notes: "Auto-resolved: no Needs Review or Denied claims remain.",
         }).catch(() => {});
-        steps.push({ step: "hal-task-claims", ok: true });
+        steps.push({ step: "hal-task-claims-clear", ok: true });
+      } else {
+        steps.push({ step: "hal-task-claims-skip", reason: "no-staff-review-claims" });
       }
     }
     return steps;
@@ -132,6 +200,9 @@ const HalEmployeeRunner = (function () {
   return {
     runShift,
     getLastReport,
+    // Test/helpers
+    staffClaimsReviewCount,
+    CLAIMS_TASK_SOURCE_ID,
   };
 })();
 

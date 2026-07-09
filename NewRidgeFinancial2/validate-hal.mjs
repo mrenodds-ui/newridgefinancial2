@@ -273,6 +273,73 @@ async function main() {
   assert(cleaned === "Visible answer", "cleanModelText must strip thinking");
   passed++;
 
+  // cleanModelText / CoT strip removes unmarked scratchpad before staff answer
+  const cotCleaned = HalCore.cleanModelText(
+    "Okay, the user is asking about deposits.\n\nCollections vs deposits gap is timing — reconcile locally first.",
+  );
+  assert(!/^Okay, the user/i.test(cotCleaned), "cleanModelText must strip CoT opener");
+  assert(/Collections vs deposits/i.test(cotCleaned), "cleanModelText must keep final answer");
+  passed++;
+
+  const midCot = HalCore.stripChainOfThoughtProse(
+    "Deposits can lag when SoftDent and QuickBooks disagree.\nHmm, the user wants a deeper look.\nNext step: reconcile the batch.",
+  );
+  assert(!/the user wants/i.test(midCot), "stripChainOfThoughtProse must remove mid-body CoT");
+  assert(/Deposits can lag/i.test(midCot), "stripChainOfThoughtProse must keep staff answer");
+  passed++;
+
+  // structured plan opener + yes/no + read-only/consent repair
+  const planIssues = HalCore.chatShapeIssues(
+    "Can you post to QuickBooks?",
+    "Here is a structured plan: I will review the ledger and then post.",
+    { intent: "model: query" },
+  );
+  assert(planIssues.includes("structured_plan_opener"), "must flag structured plan opener");
+  assert(planIssues.includes("yes_no_not_direct"), "must flag missing yes/no lead");
+  assert(planIssues.includes("missing_readonly_lead"), "must flag missing read-only lead");
+  const repaired = HalCore.repairChatShape(
+    "Can you post to QuickBooks?",
+    "Here is a structured plan: I will review the ledger and then post.",
+    { intent: "model: query" },
+    planIssues,
+  );
+  assert(!/^here is a structured plan/i.test(repaired), "repair must strip structured plan opener");
+  assert(/^no\b/i.test(repaired), "repair must lead with No for QB post capability");
+  assert(/\bread[\s-]?only\b/i.test(repaired), "repair must mention read-only for QB post");
+  passed++;
+
+  const consentIssues = HalCore.chatShapeIssues(
+    "Can you email the payer without consent?",
+    "I can prepare a draft locally and wait.",
+    { intent: "model: query" },
+  );
+  assert(consentIssues.includes("missing_consent_lead"), "must flag missing consent lead");
+  const yesNoProg = globalThis.HalAgentProgramming;
+  if (yesNoProg && typeof yesNoProg.yesNoLead === "function") {
+    assert(
+      /^no\b/i.test(yesNoProg.yesNoLead("Can you email the payer without consent?", {})),
+      "yesNoLead must prefer No for outbound/consent questions",
+    );
+  }
+  const consentRepaired = HalCore.repairChatShape(
+    "Can you email the payer without consent?",
+    "I can prepare a draft locally and wait.",
+    { intent: "model: query" },
+    consentIssues,
+  );
+  assert(/\bconsent\b/i.test(consentRepaired), "repair must mention consent for outbound");
+  passed++;
+
+  const polishedPlan = HalCore.polishChatReply(
+    "Here is a structured plan:\n\nFirst, I need to verify the numbers.\n\nReconcile deposits before month-end close.",
+    "Why might deposits disagree with collections?",
+    { intent: "model: query" },
+    {},
+  );
+  assert(!/^here is a structured plan/i.test(polishedPlan), "polish must strip structured plan opener");
+  assert(!/^First, I need to/i.test(polishedPlan), "polish must strip CoT prose");
+  passed++;
+
   // Session templates
   const sessionErrors = HalCore.validateSessionTemplates(halData);
   assert(sessionErrors.length === 0, "session templates invalid: " + sessionErrors.join("; "));
@@ -1326,6 +1393,8 @@ async function main() {
   assert(!/Say "Run readiness"/.test(spoken), "spoken script must drop depth hints");
   assert(spoken.length <= HalCore.SPOKEN_LIMITS.capabilityMax + 80, "spoken script must stay short");
   assert(/Yes|refresh/i.test(spoken), "spoken script must keep the answer");
+  assert(!spoken.includes("—"), "spoken script must soften em-dashes for TTS");
+  assert(/Yes,\s*refresh|Yes\.|refresh is local/i.test(spoken), "spoken script must keep natural phrasing");
   const recap = HalCore.buildSessionRecap([
     { role: "user", text: "Can you refresh imports?" },
     { role: "hal", text: "Yes — local refresh only." },
@@ -1873,8 +1942,8 @@ async function main() {
   } else {
     const indexHtml = readFileSync(join(siteDir, "index.html"), "utf8");
     assert(indexHtml.includes("NR2_STAFF_MOCK_ONLY"), "index must enable staff mock-only mode");
-    assert(!indexHtml.includes("nr2-tier3.js"), "mock-embed index must not load tier-3 bundle");
-    assert(!indexHtml.includes("nr2-analytics.js"), "mock-embed index must not load analytics bundle");
+    assert(!/<script[^>]+src=["']nr2-tier3\.js/i.test(indexHtml), "mock-embed index must not load tier-3 bundle");
+    assert(!/<script[^>]+src=["']nr2-analytics\.js/i.test(indexHtml), "mock-embed index must not load analytics bundle");
     assert(existsSync(join(deferredDir, "nr2-tier3.js")), "deferred-live-wire must retain tier-3 bundle for sign-off");
     assert(existsSync(join(deferredDir, "nr2-analytics.js")), "deferred-live-wire must retain analytics bundle for sign-off");
     assert(readFileSync(join(deferredDir, "nr2-qb-reports.js"), "utf8").includes("Awaiting QuickBooks sync"), "deferred QB reports must expose cold empty-state copy");
@@ -1905,6 +1974,14 @@ async function main() {
   assert(existsSync(join(__dirname, "docs", "MOONSHOT_PHASEF_ODBC_RUNBOOK.md")), "Phase F ODBC runbook must exist");
   assert(readFileSync(join(siteDir, "hal-agent.js"), "utf8").includes("softdent_extract_status"), "HAL agent must expose softdent_extract_status tool");
   assert(JSON.parse(readFileSync(halModelsPath, "utf8")).config.agentCapabilities.tools.includes("softdent_extract_status"), "hal-models must list softdent_extract_status");
+  assert(readFileSync(join(siteDir, "hal-agent.js"), "utf8").includes("lookup_fee_schedule"), "HAL agent must expose lookup_fee_schedule tool");
+  assert(JSON.parse(readFileSync(halModelsPath, "utf8")).config.agentCapabilities.tools.includes("lookup_fee_schedule"), "hal-models must list lookup_fee_schedule");
+  assert(readFileSync(join(siteDir, "desktop-bridge.js"), "utf8").includes("lookupFeeSchedule"), "desktop-bridge must expose lookupFeeSchedule");
+  assert(readFileSync(join(siteDir, "hal-agent.js"), "utf8").includes("join_claim_payers"), "HAL agent must expose join_claim_payers tool");
+  assert(JSON.parse(readFileSync(halModelsPath, "utf8")).config.agentCapabilities.tools.includes("join_claim_payers"), "hal-models must list join_claim_payers");
+  assert(readFileSync(join(siteDir, "desktop-bridge.js"), "utf8").includes("joinClaimPayers"), "desktop-bridge must expose joinClaimPayers");
+  assert(readFileSync(join(siteDir, "hal-office-manager.js"), "utf8").includes("claimsLaneSummary"), "office briefing must include claims lane summary");
+  assert(readFileSync(join(siteDir, "hal-office-manager.js"), "utf8").includes("Carrier gap"), "office briefing must call out generic Insurance carrier gap");
   assert(readFileSync(join(siteDir, "services.js"), "utf8").includes("fetchSoftdentOdbcStatus"), "services must fetch ODBC status");
   assert(completeDoc.includes("hal-10096") && completeDoc.includes("Practical ceiling"), "moonshot completion doc must exist through hal-10096");
 
@@ -2016,6 +2093,10 @@ async function main() {
   assert(upsertOne.created === true && upsertTwo.created === false && upsertTwo.tasks.length === 1, "HAL tasks must upsert by sourceId without duplicates");
   const resolved = HalSkills.autoResolveHalTasks(upsertTwo.tasks, []);
   assert(resolved[0].status === "completed", "HAL tasks must auto-resolve when source issue disappears");
+  const byTaskIdOne = HalSkills.upsertHalTask([], { taskId: "hal-emp-claims-review", title: "HAL: review 3 billing/claims item(s)", source: "employee-level-3" }, { actor: "hal-office-manager" });
+  const byTaskIdTwo = HalSkills.upsertHalTask(byTaskIdOne.tasks, { taskId: "hal-emp-claims-review", title: "HAL: review 1 billing/claims item(s)", source: "employee-level-3" }, { actor: "hal-office-manager" });
+  assert(byTaskIdOne.created === true && byTaskIdTwo.created === false && byTaskIdTwo.tasks.length === 1, "HAL tasks must upsert by taskId when sourceId is absent");
+  assert(/review 1 billing/.test(byTaskIdTwo.task.title), "taskId upsert must refresh title");
 
   const hciUrl = pathToFileURL(join(siteDir, "hal-capability-index.js")).href;
   const orchUrl = pathToFileURL(join(siteDir, "hal-orchestrator.js")).href;
@@ -2033,6 +2114,19 @@ async function main() {
   await import(chat9000Url);
   await import(empUrl);
   await import(empRunUrl);
+  assert(globalThis.HalEmployeeRunner && typeof HalEmployeeRunner.staffClaimsReviewCount === "function", "employee runner must expose staffClaimsReviewCount");
+  assert(
+    HalEmployeeRunner.staffClaimsReviewCount({
+      halProgramSnapshot: { claims: { byStatus: { Ready: 60, "Needs Review": 0, Denied: 0 } } },
+    }) === 0,
+    "awaiting-insurance Ready claims must not create L3 billing review count",
+  );
+  assert(
+    HalEmployeeRunner.staffClaimsReviewCount({
+      halProgramSnapshot: { claims: { byStatus: { Ready: 50, "Needs Review": 8, Denied: 2 } } },
+    }) === 10,
+    "L3 billing review count must use Needs Review + Denied only",
+  );
   await import(asc10000Url);
   await import(dirUrl);
   await import(chat10000Url);

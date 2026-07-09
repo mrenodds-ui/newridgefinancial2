@@ -742,7 +742,12 @@ const HalSkills = (function () {
   function upsertHalTask(tasks, req, opts) {
     const list = Array.isArray(tasks) ? tasks.slice() : [];
     const sourceId = req && (req.sourceId || req.source_id);
-    const existing = sourceId ? findTaskBySourceId(list, sourceId) : null;
+    const taskId = req && (req.taskId || req.task_id);
+    const existing =
+      (sourceId ? findTaskBySourceId(list, sourceId) : null) ||
+      (taskId
+        ? (list || []).find((task) => String(task.taskId || "") === String(taskId)) || null
+        : null);
     const now = new Date().toISOString();
     if (existing) {
       const next = applyTaskUpdate(existing, {
