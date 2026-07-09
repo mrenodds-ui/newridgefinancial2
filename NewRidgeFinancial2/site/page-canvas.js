@@ -223,7 +223,7 @@ const PageCanvas = (function () {
     const col = colSpan || 3;
     return `<div class="widget-card col-${col} kpi-large kpi-glow-card${halTone}"${attrs}>
         <div class="widget-header"><span class="widget-title">${widgetHeaderIcon(widgetKey)}${esc(String(kpi.label || ""))}</span><div class="widget-menu" aria-hidden="true">⋮</div></div>
-        <div class="kpi-value">${esc(kpi.value)}</div>
+        <div class="kpi-value kpi-mono">${esc(kpi.value)}</div>
         ${sparkHtml}
         ${trend}
       </div>`;
@@ -254,7 +254,7 @@ const PageCanvas = (function () {
     const sparkHtml = kpi.spark && kpi.spark.length ? barSparkline(kpi.spark, kpi.tone) : "";
     return `<div class="kpi-hero-tile widget-glow-border${halTone}"${attrs}>
       <div class="kpi-label">${widgetHeaderIcon(widgetKey)}${esc(String(kpi.label || ""))}</div>
-      <div class="kpi-value">${esc(kpi.value)}</div>
+      <div class="kpi-value kpi-mono">${esc(kpi.value)}</div>
       ${sparkHtml}
       ${trend}
     </div>`;
@@ -323,7 +323,7 @@ const PageCanvas = (function () {
     const arrow = kpi.tone === "warning" ? "↓" : "↑";
     const delta = kpi.hint ? `<div class="kpi-delta ${deltaClass}"><span>${arrow}</span> ${esc(kpi.hint)}</div>` : "";
     const sparkHtml = kpi.spark && kpi.spark.length ? barSparkline(kpi.spark, kpi.tone) : "";
-    return `<div class="kpi-tile"${halCmd}><div class="kpi-label">${esc(kpi.label)}</div><div class="kpi-value">${esc(kpi.value)}</div>${sparkHtml}${delta}</div>`;
+    return `<div class="kpi-tile"${halCmd}><div class="kpi-label">${esc(kpi.label)}</div><div class="kpi-value kpi-mono">${esc(kpi.value)}</div>${sparkHtml}${delta}</div>`;
   }
 
   function canvasKpiGrid(kpis) {
@@ -396,7 +396,15 @@ const PageCanvas = (function () {
   function canvasTable(headers, rows, striped) {
     const head = `<tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr>`;
     const body = rows
-      .map((row) => `<tr>${row.map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`)
+      .map((row) => {
+        if (row && typeof row === "object" && !Array.isArray(row) && Array.isArray(row.cells)) {
+          const sev = row.severity ? String(row.severity).toLowerCase() : "";
+          const sevClass =
+            sev === "high" || sev === "med" || sev === "low" ? ` severity-${sev}` : "";
+          return `<tr class="${sevClass.trim()}">${row.cells.map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`;
+        }
+        return `<tr>${(row || []).map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`;
+      })
       .join("");
     return `<div class="table-wrap"><table class="data-table${striped ? " data-table--striped" : ""}"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
   }
@@ -462,14 +470,14 @@ const PageCanvas = (function () {
           !items.length && (claimsMode || narrativeMode)
             ? `<p class="kanban-lane-empty">No items</p>`
             : "";
-        return `<div class="kanban-column">
-          <div class="column-header"><span>${esc(lane.lane)}</span><span class="column-count">${items.length}</span></div>
-          <div class="column-content">${cards}${empty}</div>
+        return `<div class="kanban-column kanban-lane-mission">
+          <div class="column-header lane-header"><span>${esc(lane.lane)}</span><span class="column-count">${items.length}</span></div>
+          <div class="column-content lane-body">${cards}${empty}</div>
         </div>`;
       })
       .join("");
     const boardClass = narrativeMode ? " kanban-board--narratives" : claimsMode ? " kanban-board--claims" : "";
-    return `<div class="kanban-board${boardClass}" data-hal-subpanel="${esc(widgetKey || "kanban")}-board">${laneHtml}</div>`;
+    return `<div class="kanban-board kanban-mission${boardClass}" data-hal-subpanel="${esc(widgetKey || "kanban")}-board">${laneHtml}</div>`;
   }
 
   function canvasTimeline(items) {
@@ -550,7 +558,7 @@ const PageCanvas = (function () {
   }
 
   function canvasEmpty(message) {
-    return `<p class="widget-empty">${esc(message || "No data yet — run Refresh imports or check export paths; HAL fills this when the source file lands in the import bundle.")}</p>`;
+    return `<p class="widget-empty empty-terminal">${esc(message || "No data yet — run Refresh imports or check export paths; HAL fills this when the source file lands in the import bundle.")}</p>`;
   }
 
   /** Empty CTA naming exact export file(s) from HalSkills DATASET_CONTRACTS. */

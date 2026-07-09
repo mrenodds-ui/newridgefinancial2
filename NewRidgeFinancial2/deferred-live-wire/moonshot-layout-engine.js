@@ -70,7 +70,7 @@ const MoonshotLayoutEngine = (function () {
       } else {
         inner += `<div class="dashboard-grid">${panels.map((p) => renderDashboardTile(p, D, H, pageId, accent)).join("")}</div>`;
       }
-      return `${H.dashboardPageOpen(`${pageId}-moonshot`)}<div class="widget-grid">${inner}</div></div>`;
+      return `${H.dashboardPageOpen(`${pageId}-moonshot ms-mission-control`)}<div class="widget-grid">${inner}</div></div>`;
     }
 
     let body = panels.map((p) => H.gridCol(p.colSpan || 12, renderWidgetGridPanel(p, D, H, pageId, accent))).join("");
@@ -79,12 +79,12 @@ const MoonshotLayoutEngine = (function () {
     }
     const pageClass =
       pageId === "claims"
-        ? "claims-moonshot"
+        ? "claims-moonshot ms-mission-control"
         : pageId === "narratives"
-          ? "narratives-moonshot"
+          ? "narratives-moonshot ms-mission-control"
           : pageId === "taxes"
-            ? "taxes-moonshot"
-            : `${pageId}-moonshot`;
+            ? "taxes-moonshot ms-mission-control"
+            : `${pageId}-moonshot ms-mission-control`;
     return `${H.stackOpen(pageClass)}${body}</div>`;
   }
 
@@ -152,7 +152,7 @@ const MoonshotLayoutEngine = (function () {
           accent,
           halSubpanel: panel.halSubpanel,
           body: kpi
-            ? `<div class="kpi-value">${H.esc(kpi.value || "—")}</div>${kpi.hint ? `<span class="trend">${H.esc(kpi.hint)}</span>` : ""}`
+            ? `<div class="kpi-value kpi-mono">${H.esc(kpi.value || "—")}</div>${kpi.hint ? `<span class="trend">${H.esc(kpi.hint)}</span>` : ""}`
             : emptyFor(H, "claimsPipeline", "Claims metrics"),
         });
       }
@@ -377,7 +377,7 @@ const MoonshotLayoutEngine = (function () {
           ? H.barSparkline(sparkValues, "success")
           : "";
       return `<div class="ms-elite-stat-tile">
-        <div class="kpi-value">${H.esc(val)}</div>
+        <div class="kpi-value kpi-mono">${H.esc(val)}</div>
         <div class="trend-indicator"><span>${H.esc(periodHint)}</span></div>
         ${spark}
       </div>`;
@@ -389,7 +389,7 @@ const MoonshotLayoutEngine = (function () {
         ? co.claims.reduce((sum, row) => sum + (H.parseAmount(row.balance || row.amount) || 0), 0)
         : 0;
       return `<div class="ms-elite-stat-tile">
-        <div class="kpi-value">${H.esc(String(count || "—"))}</div>
+        <div class="kpi-value kpi-mono">${H.esc(String(count || "—"))}</div>
         <div class="trend-indicator ms-elite-stat-hint">${total ? H.esc(`$${Math.round(total).toLocaleString()}`) : "—"}</div>
       </div>`;
     },
@@ -402,7 +402,7 @@ const MoonshotLayoutEngine = (function () {
         const period = flow.labels[0];
         const count = flow.values[0];
         return `<div class="ms-elite-stat-tile">
-          <div class="kpi-value">${H.esc(String(count))}</div>
+          <div class="kpi-value kpi-mono">${H.esc(String(count))}</div>
           <div class="trend-indicator"><span>${H.esc(period || "Latest period")}</span> · single exported period</div>
         </div>`;
       }

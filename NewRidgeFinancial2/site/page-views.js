@@ -37,7 +37,10 @@ const PageViews = (function () {
   }
 
   function pageShell(state, body) {
-    const pageClass = state && state.pageId === "hal" ? "ms-page ms-page--hal" : "ms-page";
+    const pageClass =
+      state && state.pageId === "hal"
+        ? "ms-page ms-page--hal ms-mission-control"
+        : "ms-page";
     return `<article class="${pageClass}" data-ms-page="${esc(state.pageId)}">${body}</article>`;
   }
 

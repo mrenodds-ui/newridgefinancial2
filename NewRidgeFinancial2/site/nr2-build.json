@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10164",
-  "assetVersion": "hal-10164",
-  "schemaVersion": "hal-10164",
+  "BUILD_ID": "hal-10165",
+  "assetVersion": "hal-10165",
+  "schemaVersion": "hal-10165",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -17,6 +17,6 @@
     "hal",
     "office-manager"
   ],
-  "builtAt": "2026-07-09T19:00:00Z",
-  "notes": "hal-10164: Add Print buttons on Narratives and staff page chrome; narrative draft print scope."
+  "builtAt": "2026-07-09T19:15:00Z",
+  "notes": "hal-10165: Mission-control Terminal Glass polish — CSS + ms-mission-control class injection; existing widgets only."
 }
