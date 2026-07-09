@@ -37,7 +37,11 @@ function Get-ConfiguredModels {
         }
     }
 
-    # Always-resident default: GPU-pinned chat only unless fastModel is enabled.
+    if ($config.config.gpuPinnedModels -and @($config.config.gpuPinnedModels).Count -gt 0) {
+        return (@($config.config.gpuPinnedModels) | Where-Object { $_ } | Select-Object -Unique)
+    }
+
+    # Legacy fallback: GPU-pinned chat only unless fastModel is enabled.
     $lane = @()
     if ($config.config.localModel.model -and $config.config.localModel.enabled -ne $false) {
         $lane += $config.config.localModel.model
@@ -54,6 +58,34 @@ function Get-ConfiguredModels {
     }
 
     return ($lane | Where-Object { $_ } | Select-Object -Unique)
+}
+
+function Get-ModelPinOptions {
+    param([Parameter(Mandatory = $true)][string]$Model)
+
+    if (-not (Test-Path $modelsConfigPath)) {
+        return $null
+    }
+
+    $config = Get-Content $modelsConfigPath -Raw | ConvertFrom-Json
+    $pinOptions = $config.config.gpuPinOptions
+    if (-not $pinOptions) {
+        return $null
+    }
+
+    $entry = $pinOptions.$Model
+    if (-not $entry) {
+        return $null
+    }
+
+    $options = @{}
+    if ($entry.num_ctx) {
+        $options.num_ctx = [int]$entry.num_ctx
+    }
+    if ($entry.num_predict) {
+        $options.num_predict = [int]$entry.num_predict
+    }
+    return $options
 }
 
 function Test-OllamaUp {
@@ -92,16 +124,21 @@ function Ensure-OllamaRunning {
 function Set-ModelResident {
     param([Parameter(Mandatory = $true)][string]$Model)
 
-    # An empty-prompt generate request loads the model and, with keep_alive = -1,
-    # tells Ollama to keep it resident indefinitely (no time-based eviction).
+    $options = Get-ModelPinOptions -Model $Model
     $body = @{
         model      = $Model
         keep_alive = $KeepAlive
-    } | ConvertTo-Json -Compress
+    }
+    if ($options -and $options.Count -gt 0) {
+        $body.options = $options
+    }
+
+    $jsonBody = $body | ConvertTo-Json -Compress -Depth 4
 
     try {
-        Invoke-RestMethod -Uri "$OllamaHost/api/generate" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 600 | Out-Null
-        Write-Host "Pinned resident (keep_alive=$KeepAlive): $Model"
+        Invoke-RestMethod -Uri "$OllamaHost/api/generate" -Method Post -Body $jsonBody -ContentType "application/json" -TimeoutSec 600 | Out-Null
+        $ctxNote = if ($options.num_ctx) { " num_ctx=$($options.num_ctx)" } else { "" }
+        Write-Host "Pinned resident (keep_alive=$KeepAlive)$ctxNote : $Model"
         return $true
     } catch {
         Write-Warning "Could not pin model '$Model': $($_.Exception.Message)"

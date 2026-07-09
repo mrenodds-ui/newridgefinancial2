@@ -32,10 +32,10 @@ NR2 Financial (8765) is on the Moonshot mockup epoch: staff pages render through
 
 ### Schema & chrome
 
-- **`site/page-schema.js`** — `PageSchema.PAGES[id].commands`, `.widgets`, `NAV_GROUPS`. Widget keys drive sub-nav labels and `data-hal-widget-key` scroll targets.
+- **`site/moonshot-page-registry.js`** — `PageSchema.PAGES[id].commands`, `.widgets`, `NAV_GROUPS`. Widget keys drive sub-nav labels and `data-hal-widget-key` scroll targets.
 - **`site/nr2-moonshot-mockup-chrome.js`** — Renders `nav-sublist` / `nav-subitem` with `data-nav-widget` (staff) or `data-nav-panel` (HAL). Emoji nav icons in chrome; SVG icons via `AppIcons` in page bodies.
 - **`site/page-canvas.js`** — Staff renderers (`renderFinancial`, `renderSoftdent`, `renderQuickbooks`, …). Helpers: `canvasMetricTile`, `canvasFunnel`, `chartContainer`, `canvasTreemap`, etc.
-- **`site/page-canvas-data.js`** — `PageCanvasData` snapshot binders (not in `page-schema.js`; validators require it as separate module).
+- **`site/page-canvas-data.js`** — `PageCanvasData` snapshot binders (not in `moonshot-page-registry.js`; validators require it as separate module).
 - **`site/hal-page-canvas.js`** + **`site/hal-page.js`** — HAL body + SideNotes panel, prompt chips, stress panel.
 - **`site/nr2-moonshot-ui.js`** — Phase 8 overlays. **Critical:** `enhancePage()` returns early when `PageCanvas.hasPage(pageId)` — canvas pages never get `NR2Charts` injection.
 
@@ -69,7 +69,7 @@ Staff pages use inline SVG helpers in `page-canvas.js` (`vBarChart`, `dualLineCh
 
 ### Prompts & HAL commands
 
-**Schema** (`page-schema.js` → `financial.commands`):
+**Schema** (`moonshot-page-registry.js` → `financial.commands`):
 
 - `"Summarize MTD production"`
 - `"Compare to prior month"`
@@ -78,7 +78,7 @@ Staff pages use inline SVG helpers in `page-canvas.js` (`vBarChart`, `dualLineCh
 **Proposed wiring** — map chips in page chrome to HAL drawer (mirror HAL page pattern):
 
 ```javascript
-// page-chrome.js or app.js — proposed handler
+// nr2-moonshot-mockup-chrome.js or app.js — proposed handler
 document.querySelectorAll("[data-page-command]").forEach((btn) => {
   btn.addEventListener("click", () => {
     const text = btn.getAttribute("data-page-command");
@@ -265,7 +265,7 @@ function softdentOperatoryGrid() {
 }
 ```
 
-Register widget in `page-schema.js`:
+Register widget in `moonshot-page-registry.js`:
 
 ```javascript
 { key: "softdentOperatoryGrid", title: "Operatory Schedule" },
@@ -393,7 +393,7 @@ widgets: [
 |---------|------|------|
 | HAL SideNotes panel | `hal-page.js` → `liveSideNotesHtml`, `sideNotesMonitorHtml` | Routing metadata, voice announce, station table |
 | HAL widget | `hal-page-canvas.js` → `sideNotesProgramCardHtml` | Manager widget on HAL page |
-| Office Manager | `page-schema.js` → `sidenotesProgram` widget | Staff notes on office-manager page |
+| Office Manager | `moonshot-page-registry.js` → `sidenotesProgram` widget | Staff notes on office-manager page |
 | Workstation messaging | `workstation-page.js` | Full compose + broadcast (`hp-*` UI) |
 | External | SideNotesIM + `run-sidenotes-helper.bat` | Watcher for voice; message **text** stays in IM app |
 
@@ -491,9 +491,9 @@ Extend `scripts/audit-mockup-parity.mjs` to assert:
 
 | # | Item | Files | Notes |
 |---|------|-------|-------|
-| 1 | QuickBooks mockup layout | `page-canvas.js`, `nr2-mockup-page-vocabulary.css`, `nr2-moonshot-mockup-chrome.js`, `page-schema.js` | Replace treemap-first layout; add sync badge; fix duplicate widget key |
+| 1 | QuickBooks mockup layout | `page-canvas.js`, `nr2-mockup-page-vocabulary.css`, `nr2-moonshot-mockup-chrome.js`, `moonshot-page-registry.js` | Replace treemap-first layout; add sync badge; fix duplicate widget key |
 | 2 | SoftDent 4-stage funnel | `page-canvas.js`, `page-canvas-data.js`, vocabulary CSS | Match mockup funnel-chart |
-| 3 | SoftDent operatory grid | `page-canvas.js`, `page-canvas-data.js`, `page-schema.js` | New widget + data binder |
+| 3 | SoftDent operatory grid | `page-canvas.js`, `page-canvas-data.js`, `moonshot-page-registry.js` | New widget + data binder |
 | 4 | HAL class rename cleanup | `hal-page.js`, `hal-page-canvas.js`, `nr2-moonshot-mockup-theme.css`, `app.js` | Remove stale `ms-hal-*` querySelectors; dedupe `sidenote-badge sidenote-badge--ok` |
 
 ### P1 — Wiring & charts
@@ -501,7 +501,7 @@ Extend `scripts/audit-mockup-parity.mjs` to assert:
 | # | Item | Files |
 |---|------|-------|
 | 5 | PageCanvas chart bridge | `nr2-moonshot-ui.js`, `site/charts/*.js` |
-| 6 | Page command → HAL drawer | `app.js`, `page-chrome.js` or mockup chrome |
+| 6 | Page command → HAL drawer | `app.js`, `nr2-moonshot-mockup-chrome.js` or mockup chrome |
 | 7 | SideNotes hub broadcast badge | `browser_app.py`, `hal-page.js`, `workstation-page.js` |
 | 8 | QB import timeline chart | `renderQuickbooks` + `NR2Charts.renderImportTimeline` |
 | 9 | `quickbooksPlTrend()` data binder | `page-canvas-data.js` from P&amp;L export |
@@ -537,7 +537,7 @@ Full kimi-k2.5 response (22k chars): `.local_logs/moonshot_financial_eval/MOONSH
 
 **Corrections applied in this document:**
 
-- **No TDZ failure** — `PageCanvasData` lives in `page-canvas-data.js`; validators pass at hal-10054. Do not move class to `page-schema.js` without cause.
+- **No TDZ failure** — `PageCanvasData` lives in `page-canvas-data.js`; validators pass at hal-10054. Do not move class to `moonshot-page-registry.js` without cause.
 - **No `HalPageWidgets.register()` API** — use existing `HalPageCanvas`, `hal-page.js`, and `app.js` scroll/HAL drawer patterns.
 - **No `quickbooks-page.js`** — QuickBooks renders inside `page-canvas.js` `renderQuickbooks()`.
 - **Workstation moonshot migration** — deferred P2; not required for Financial epoch sign-off.

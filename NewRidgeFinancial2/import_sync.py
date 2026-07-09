@@ -1064,6 +1064,15 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
     except Exception as exc:
         result["warnings"].append(f"QB dataset freshness guard skipped: {exc}")
 
+    try:
+        from hal_learning import remember_import_sync_observation
+
+        observation = remember_import_sync_observation(result)
+        if observation and observation.get("ok"):
+            result["learning"] = {"importObservationSaved": True, "memoryId": (observation.get("memory") or {}).get("id")}
+    except Exception as exc:
+        result["warnings"].append(f"HAL learning observation skipped: {exc}")
+
     return result
 
 

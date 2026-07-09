@@ -18,7 +18,8 @@ SOFT_STALE_WATERMARK = (
 )
 LANE_MODELS = {
     "chat8b": "hal-chat:8b",
-    "reason21b": "hal-reason:21b",
+    # R9700 32 GB: reason + escalation share GPU-pinned hal-escalate:30b (no Mistral 24B load).
+    "reason21b": "hal-escalate:30b",
     "escalate30b": "hal-escalate:30b",
 }
 LANE_HISTORY_KEY = "nr2:hal:lane-history"
@@ -33,7 +34,8 @@ FINANCIAL_OBFUSCATION = re.compile(
 )
 _AMOUNT_PATTERN = re.compile(r"\$\s*\d[\d,]*(?:\.\d{2})?|\d+\.\d{2}\s*%")
 _CLINICAL_PATTERN = re.compile(
-    r"(?i)\b(clinical|procedure|tooth|quadrant|cdt|crown|extraction|prophy|periodontal|narrative)\b"
+    r"(?i)\b(clinical|procedure|tooth|quadrant|cdt|crown|extraction|prophy|periodontal|narrative|"
+    r"denial|appeal|d2740|d4341|d6010|d3330|d1110|srp|implant|endo|payer|insurance|claim|eob|era)\b"
 )
 _ANALYTICAL_PATTERN = re.compile(
     r"(?i)\b(why|how|explain|analyze|trend|pattern|compare|summary|overview|what if|strategy|plan)\b"
@@ -41,6 +43,187 @@ _ANALYTICAL_PATTERN = re.compile(
 _COMPLEXITY_PATTERN = re.compile(
     r"(?i)\b(escalat|complex|multi-step|deep dive|root cause|reconcil|investigate)\b"
 )
+_OUTBOUND_ACTION_RE = re.compile(
+    r"(?i)\b(submit|submits|submitting|send|sends|sending|email|emails|emailing|e-?mail|fax|faxes|faxing|upload|uploads|uploading|transmit|transmits|transmitting|pay|pays|paying|approve|approves|approving|deny|denies|denying|delete|deletes|deleting|remove|removes|removing|writeback|write back|dispatch|dispatches|dispatching|mail|mailing|wire|wires|wiring)\b|\b(contact|contacts|contacting)\b.*\b(payer|insurance)\b|\b(payer|insurance)\b.*\b(contact|email|fax|call)\b"
+)
+_OUTBOUND_PHRASES_RE = re.compile(
+    r"(?i)\bpost(s|ing|ed)?\s+(?:(?:a|an|the|this|that)\s+)?(?:[a-z]+\s+){0,3}?(journal|entry|entries|payment|charge|transaction|invoice|claim|note|statement|ledger|document|documents|record|records|refund|refunds|narrative|narratives|deposit|bill|check|payer)\b|\bpost(s|ing|ed)?\s+to\s+quickbooks\b|\bquickbooks\s+post(ing|ed)?\b|\b(record|make|process)\s+((a|an|the)\s+)?(payment|charge|refund|transaction)\b|\bwrite\s+(it\s+)?back\b|\bwrite(s|ing)?\s+to\s+softdent\b|\bsoftdent\s+write(s|ing|back)?\b|\bupdate\s+softdent\b|\b(sync\s+to\s+softdent)\b"
+)
+_PAGE_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "financial": ("financial dashboard", "financial", "dashboard", "ebitda", "owner", "production"),
+    "taxes": ("taxes", "tax plan", "book to tax", "book-to-tax"),
+    "softdent": ("softdent", "soft dent", "practice management"),
+    "quickbooks": ("quickbooks", "quick books", "p&l", "profit and loss", "posting queue"),
+    "ar": ("a/r", "accounts receivable", "receivable", "collections", "aging"),
+    "claims": ("claims workbench", "claims", "claim", "workbench", "denied"),
+    "narratives": ("narratives", "narrative", "insurance narrative"),
+    "documents": ("accounting documents", "documents", "document intake"),
+    "library": ("document library", "library", "repository"),
+    "office-manager": ("office manager", "office-manager", "office attention"),
+    "hal": ("hal", "command center"),
+}
+_PAGE_LABELS = {
+    "financial": "Financial dashboard",
+    "taxes": "Taxes",
+    "softdent": "SoftDent",
+    "quickbooks": "QuickBooks",
+    "ar": "A/R",
+    "claims": "Claims workbench",
+    "narratives": "Insurance narratives",
+    "documents": "Accounting documents",
+    "library": "Document library",
+    "office-manager": "Office manager",
+    "hal": "HAL command center",
+}
+_MONOLOGUE_START_RE = re.compile(
+    r"^(?:Okay|Sure|Certainly|Hmm|Let me|Wait|Alright)[,.]?\s*(?:let me\s+)?(?:break this down|think|see|check|start|walk through)[^.!?]*[.!?]?\s*",
+    re.IGNORECASE,
+)
+_MEMORY_GUIDANCE_MARKERS = (
+    "Governed memory matches:",
+    "Durable HAL knowledge (guidance only",
+)
+_PAYER_GUIDANCE_MARKER = "Payer reference matches ("
+_ELIGIBILITY_GUIDANCE_MARKER = "Cached eligibility context ("
+_DEFAULT_MEMORY_LIMIT = 6
+_DEFAULT_PAYER_LIMIT = 4
+_DEFAULT_ELIGIBILITY_LIMIT = 2
+
+
+def is_outbound_action_phrase(query: str) -> bool:
+    q = str(query or "").strip().lower()
+    if re.search(r"\b(approve all|bulk approve)\b.*\b(journal|posting queue)\b", q):
+        return False
+    if re.search(r"\b(journal|posting queue)\b.*\b(approve all|bulk approve)\b", q):
+        return False
+    return bool(
+        _OUTBOUND_ACTION_RE.search(q)
+        or _OUTBOUND_PHRASES_RE.search(q)
+        or re.search(r"\bpush\b.*\b(live|to quickbooks)\b", q)
+        or re.search(r"\bpush\b.*\b(journal|entry|entries)\b.*\blive\b", q)
+    )
+
+
+def find_page(query: str) -> str | None:
+    q = str(query or "").lower()
+    best: str | None = None
+    best_len = 0
+    for page_id, synonyms in _PAGE_SYNONYMS.items():
+        for synonym in synonyms:
+            syn = synonym.lower()
+            if len(syn) <= 4:
+                hit = re.search(r"\b" + re.escape(syn) + r"\b", q)
+            else:
+                hit = syn in q
+            if hit and len(syn) > best_len:
+                best = page_id
+                best_len = len(syn)
+    return best
+
+
+def clean_gateway_text(text: str) -> str:
+    out = str(text or "").strip()
+    out = re.sub(r"<think>[\s\S]*?</think>", "", out, flags=re.IGNORECASE)
+    out = re.sub(r"</?think>", "", out, flags=re.IGNORECASE)
+    out = _MONOLOGUE_START_RE.sub("", out)
+    out = re.sub(
+        r"^(?:Okay|Sure|Certainly)[,.]?\s*(?:from my (?:local )?)?(?:read-?only )?(?:monitoring )?perspective[,:]?\s*",
+        "",
+        out,
+        flags=re.IGNORECASE,
+    )
+    return out.strip()
+
+
+def extract_ollama_message_text(message: dict[str, Any] | None) -> str:
+    msg = message or {}
+    content = str(msg.get("content") or "").strip()
+    thinking = str(msg.get("thinking") or "").strip()
+    combined = content or thinking
+    return clean_gateway_text(combined)
+
+
+def try_local_policy_reply(query: str) -> dict[str, str] | None:
+    """Deterministic consent/navigation answers — mirrors hal-core before model calls."""
+    raw = str(query or "").strip()
+    if not raw:
+        return None
+    q = re.sub(r"^hal[,:]\s+", "", raw, flags=re.IGNORECASE).lower().strip()
+    wants_explain = bool(
+        re.search(
+            r"\b(explain|what is|what's|whats|what does|tell me about|describe|purpose of|what happens when|what happens if|what if|what would happen)\b",
+            q,
+        )
+    )
+
+    if re.search(r"\b(open|go to|navigate to|take me to|launch)\b", q) and not wants_explain:
+        page = find_page(q)
+        if page:
+            label = _PAGE_LABELS.get(page, page.replace("-", " ").title())
+            return {
+                "text": f"Yes. I can open {label} from here — it loads the local import view for that page.",
+                "intent": f"navigate:{page}",
+            }
+
+    hyp = re.match(r"^what happens if i ask you to (.+?)\??$", q)
+    if hyp:
+        action = hyp.group(1).strip()
+        if is_outbound_action_phrase(action):
+            return {
+                "text": (
+                    f"No — I won't {action} without explicit consent. "
+                    'I can prepare a local draft and checklist; say "I consent" when staff are ready for outbound delivery.'
+                ),
+                "intent": "consent:required",
+            }
+
+    can = re.match(r"^(?:are you allowed to|can you) (.+?)(?:\s+without (?:staff approval|consent))?\??$", q)
+    if can:
+        action = can.group(1).strip()
+        without_consent = "without consent" in q or "without staff approval" in q
+        if without_consent:
+            return {
+                "text": (
+                    f"No — I won't {action} without your explicit consent. "
+                    'I can prepare a local draft; say "I consent" when you are ready.'
+                ),
+                "intent": "consent:required",
+            }
+        if is_outbound_action_phrase(action) or is_outbound_action_phrase(raw):
+            if re.search(r"\bpost\b", action) and re.search(r"\bquickbooks\b", action):
+                return {
+                    "text": (
+                        "No — I cannot click Post inside QuickBooks from NR2. "
+                        'I can draft entries locally or export IIF after you say "I consent"; staff still post inside QuickBooks.'
+                    ),
+                    "intent": "consent:qb-post-blocked",
+                }
+            return {
+                "text": (
+                    f"No — I won't {action} without explicit consent. "
+                    'I can prepare local drafts; say "I consent" when staff are ready.'
+                ),
+                "intent": "consent:required",
+            }
+
+    if re.search(r"\b(yes or no|short answer)\b", q) and re.search(r"\bsubmit\b.*\b(portal|payer|claims?)\b", q):
+        return {
+            "text": "No. HAL cannot submit claims to payer portals — staff upload after explicit consent and review.",
+            "intent": "consent:payer-submit",
+        }
+    if re.search(r"\bpayer submission allowed\b", q) or re.search(r"\bis payer submission allowed\b", q):
+        return {
+            "text": "No. Payer submission is not allowed from NR2 — HAL prepares packets locally; staff transmit outside the program after consent.",
+            "intent": "consent:payer-submit",
+        }
+    if re.search(r"\bcan hal write to softdent\b", q) or (
+        re.search(r"\bwrite to softdent\b", q) and re.search(r"\b(can|short)\b", q)
+    ):
+        return {
+            "text": "No. HAL cannot write to SoftDent — NR2 stays read-only; staff update SoftDent directly.",
+            "intent": "consent:writeback-blocked",
+        }
+    return None
 
 
 def build_import_readiness_context(readiness: dict[str, Any]) -> str:
@@ -219,19 +402,93 @@ def acknowledge_stale(store, *, actor: str = "Staff", reason: str = "") -> dict[
     return {"ok": True, "acknowledged": payload}
 
 
+def system_prompt_has_memory_guidance(system_prompt: str) -> bool:
+    text = str(system_prompt or "")
+    return any(marker in text for marker in _MEMORY_GUIDANCE_MARKERS)
+
+
+def _memory_limit_for_intent(intent: str) -> int:
+    if intent == "clinical":
+        return 10
+    if intent == "analytical":
+        return 8
+    return _DEFAULT_MEMORY_LIMIT
+
+
+def compile_memory_guidance(query: str, system_prompt: str = "", *, limit: int = _DEFAULT_MEMORY_LIMIT) -> str:
+    """MemoAI: inject governed memory hits unless caller already supplied guidance."""
+    if system_prompt_has_memory_guidance(system_prompt):
+        return ""
+    try:
+        from knowledge_memory_index import format_memory_hits, search_memories
+    except ImportError:
+        return ""
+    hits = search_memories(str(query or ""), limit=max(1, int(limit)))
+    return format_memory_hits(hits)
+
+
+def system_prompt_has_payer_guidance(system_prompt: str) -> bool:
+    return _PAYER_GUIDANCE_MARKER in str(system_prompt or "")
+
+
+def compile_payer_guidance(query: str, system_prompt: str = "", *, limit: int = _DEFAULT_PAYER_LIMIT) -> str:
+    """Inject curated payer routing/narrative hints (not member benefits)."""
+    if system_prompt_has_payer_guidance(system_prompt):
+        return ""
+    try:
+        from payer_reference_store import format_payer_hits, search_payers
+    except ImportError:
+        return ""
+    hits = search_payers(str(query or ""), limit=max(1, int(limit)))
+    return format_payer_hits(hits)
+
+
+def compile_eligibility_context(query: str, system_prompt: str = "", *, limit: int = _DEFAULT_ELIGIBILITY_LIMIT) -> str:
+    """Inject fresh PHI-redacted eligibility snapshots when available."""
+    if _ELIGIBILITY_GUIDANCE_MARKER in str(system_prompt or ""):
+        return ""
+    try:
+        from eligibility_cache_store import format_eligibility_hits, search_eligibility_cache
+    except ImportError:
+        return ""
+    hits = search_eligibility_cache(str(query or ""), limit=max(1, int(limit)))
+    return format_eligibility_hits(hits)
+
+
 def build_chat_messages(
     *,
     query: str,
     readiness: dict[str, Any],
     system_prompt: str = "",
     messages: list[dict[str, Any]] | None = None,
+    memory_limit: int = _DEFAULT_MEMORY_LIMIT,
+    payer_limit: int = _DEFAULT_PAYER_LIMIT,
+    eligibility_limit: int = _DEFAULT_ELIGIBILITY_LIMIT,
 ) -> tuple[list[dict[str, Any]], str, bool, str]:
     level = str(readiness.get("level") or "unknown")
     intent = classify_query_intent(query)
     soft_stale = is_soft_stale(readiness)
+    effective_memory_limit = memory_limit if memory_limit != _DEFAULT_MEMORY_LIMIT else _memory_limit_for_intent(intent)
     chat_messages: list[dict[str, Any]] = []
     if system_prompt:
         chat_messages.append({"role": "system", "content": system_prompt})
+    memory_guidance = compile_memory_guidance(query, system_prompt, limit=effective_memory_limit)
+    if memory_guidance:
+        chat_messages.append({"role": "system", "content": memory_guidance})
+    try:
+        from hal_learning import format_session_context_block
+
+        session_block = format_session_context_block()
+        if session_block:
+            chat_messages.append({"role": "system", "content": session_block})
+    except ImportError:
+        pass
+    payer_guidance = compile_payer_guidance(query, system_prompt, limit=payer_limit)
+    if payer_guidance:
+        chat_messages.append({"role": "system", "content": payer_guidance})
+    eligibility_guidance = compile_eligibility_context(query, system_prompt, limit=eligibility_limit)
+    if eligibility_guidance:
+        chat_messages.append({"role": "system", "content": eligibility_guidance})
     if level != "fresh":
         chat_messages.append({"role": "system", "content": build_import_readiness_context(readiness)})
         if soft_stale and intent in ("analytical", "clinical"):
@@ -254,6 +511,9 @@ def iter_ollama_sse_tokens(
     """Yield SSE frames: meta event first, then token data events."""
     yield f"event: meta\ndata: {json.dumps({'lane': lane, 'model': model, 'done': False})}\n\n"
     payload: dict[str, Any] = {"model": model, "messages": messages, "stream": True}
+    think = _ollama_think_flag(model)
+    if think is not None:
+        payload["think"] = think
     if options:
         payload["options"] = options
     req = urllib.request.Request(
@@ -279,6 +539,16 @@ def iter_ollama_sse_tokens(
         yield f"event: error\ndata: {json.dumps({'error': str(exc), 'done': True})}\n\n"
 
 
+def _ollama_think_flag(model: str) -> bool | None:
+    """Staff-facing lanes disable hidden reasoning (DeepSeek-R1 / Qwen3)."""
+    name = str(model or "").lower()
+    if name.startswith("hal-escalate") or name.startswith("qwen3:"):
+        return False
+    if name.startswith("hal-chat") or name.startswith("deepseek"):
+        return False
+    return None
+
+
 def call_ollama_chat(
     *,
     model: str,
@@ -288,6 +558,9 @@ def call_ollama_chat(
     timeout: float = 120.0,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"model": model, "messages": messages, "stream": bool(stream)}
+    think = _ollama_think_flag(model)
+    if think is not None:
+        payload["think"] = think
     if options:
         payload["options"] = options
     req = urllib.request.Request(
@@ -311,6 +584,13 @@ def call_ollama_chat(
                 full = "".join(chunks)
                 return {"ok": True, "body": {"message": {"content": full}}, "streamed": True}
             body = json.loads(resp.read().decode("utf-8"))
+            message = body.get("message") or {}
+            if not str(message.get("content") or "").strip():
+                text = extract_ollama_message_text(message)
+                if text:
+                    body = dict(body)
+                    body["message"] = dict(message)
+                    body["message"]["content"] = text
         return {"ok": True, "body": body}
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
@@ -323,7 +603,7 @@ def evaluate_query_stream(
     *,
     query: str,
     readiness: dict[str, Any],
-    model: str = "hal-chat:8b",
+    model: str | None = None,
     system_prompt: str = "",
     messages: list[dict[str, Any]] | None = None,
     options: dict[str, Any] | None = None,
@@ -354,6 +634,23 @@ def evaluate_query_stream(
                 "resolvedLane": resolved["lane"],
             }
 
+    local = try_local_policy_reply(query)
+    if local:
+        text = local["text"]
+        append_lane_history(store, lane="local", model="policy", query=query, intent=local.get("intent", "local:policy"))
+        return {
+            "ok": True,
+            "text": text,
+            "message": {"content": text},
+            "model": "local-policy",
+            "readinessLevel": level,
+            "intent": local.get("intent", "local:policy"),
+            "softStale": soft_stale,
+            "resolvedLane": "local",
+            "routingReason": "local_policy",
+            "streamed": False,
+        }
+
     chat_messages, intent, soft_stale, level = build_chat_messages(
         query=query,
         readiness=readiness,
@@ -371,7 +668,7 @@ def evaluate_query_stream(
         }
 
     body = result.get("body") or {}
-    text = str((body.get("message") or {}).get("content") or "")
+    text = extract_ollama_message_text(body.get("message") or {})
     if level != "fresh" and intent == "transactional":
         text = redact_financial_numbers(text)
     elif level != "fresh" and soft_stale and intent in ("analytical", "clinical"):
@@ -398,7 +695,7 @@ def evaluate_query_sse_frames(
     *,
     query: str,
     readiness: dict[str, Any],
-    model: str = "hal-chat:8b",
+    model: str | None = None,
     system_prompt: str = "",
     messages: list[dict[str, Any]] | None = None,
     options: dict[str, Any] | None = None,
@@ -421,6 +718,15 @@ def evaluate_query_sse_frames(
         yield f"event: error\ndata: {json.dumps({'error': 'HAL_UNAVAILABLE_STALE_DATA', 'blocked': True, 'done': True})}\n\n"
         return
 
+    local = try_local_policy_reply(query)
+    if local:
+        text = local["text"]
+        append_lane_history(store, lane="local", model="policy", query=query, intent=local.get("intent", "local:policy"))
+        yield f"event: meta\ndata: {json.dumps({'lane': 'local', 'model': 'local-policy', 'done': False})}\n\n"
+        yield f"data: {json.dumps({'token': text, 'done': False})}\n\n"
+        yield f"data: {json.dumps({'token': '', 'done': True})}\n\n"
+        return
+
     chat_messages, intent, soft_stale, level = build_chat_messages(
         query=query,
         readiness=readiness,
@@ -440,7 +746,7 @@ def evaluate_query(
     *,
     query: str,
     readiness: dict[str, Any],
-    model: str = "hal-chat:8b",
+    model: str | None = None,
     system_prompt: str = "",
     messages: list[dict[str, Any]] | None = None,
     options: dict[str, Any] | None = None,
@@ -479,6 +785,22 @@ def evaluate_query(
                 "resolvedLane": resolved["lane"],
             }
 
+    local = try_local_policy_reply(query)
+    if local:
+        text = local["text"]
+        append_lane_history(store, lane="local", model="policy", query=query, intent=local.get("intent", "local:policy"))
+        return {
+            "ok": True,
+            "text": text,
+            "message": {"content": text},
+            "model": "local-policy",
+            "readinessLevel": level,
+            "intent": local.get("intent", "local:policy"),
+            "softStale": soft_stale,
+            "resolvedLane": "local",
+            "routingReason": "local_policy",
+        }
+
     chat_messages, intent, soft_stale, level = build_chat_messages(
         query=query,
         readiness=readiness,
@@ -497,7 +819,7 @@ def evaluate_query(
 
     body = result.get("body") or {}
     message = body.get("message") or {}
-    text = str(message.get("content") or "")
+    text = extract_ollama_message_text(message)
     if level != "fresh" and intent == "transactional":
         text = redact_financial_numbers(text)
     elif level != "fresh" and soft_stale and intent in ("analytical", "clinical"):
@@ -507,10 +829,12 @@ def evaluate_query(
 
     append_lane_history(store, lane=resolved["lane"], model=model, query=query, intent=intent)
 
+    out_message = dict(message)
+    out_message["content"] = text
     return {
         "ok": True,
         "text": text,
-        "message": message,
+        "message": out_message,
         "model": model,
         "readinessLevel": level,
         "intent": intent,

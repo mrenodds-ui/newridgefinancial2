@@ -546,6 +546,29 @@ class DesktopApi:
             findings = []
         return remember_web_findings(findings, query=str(query or ""), actor="Staff")
 
+    def update_hal_session_context(
+        self,
+        claim_id: str = "",
+        narrative_id: str = "",
+        page: str = "",
+        topic: str = "",
+        payer: str = "",
+    ) -> dict:
+        from hal_learning import update_session_context
+
+        return update_session_context(
+            claim_id=str(claim_id or ""),
+            narrative_id=str(narrative_id or ""),
+            page=str(page or ""),
+            topic=str(topic or ""),
+            payer=str(payer or ""),
+        )
+
+    def hal_learning_status(self) -> dict:
+        from hal_learning import learning_status
+
+        return learning_status()
+
     def get_tax_plan(self) -> dict:
         from import_loader import load_import_bundle
         from tax_engine import build_tax_plan_from_bundle
@@ -614,6 +637,62 @@ class DesktopApi:
 
         hits = search_memories(str(query or ""), limit=int(limit or 5))
         return {"items": hits, "count": len(hits), "text": format_memory_hits(hits)}
+
+    def search_payer_reference(self, query: str, limit: int = 5) -> dict:
+        from payer_reference_store import format_payer_hits, search_payers
+
+        hits = search_payers(str(query or ""), limit=int(limit or 5))
+        return {"items": hits, "count": len(hits), "text": format_payer_hits(hits)}
+
+    def list_eligibility_cache(self, limit: int = 20) -> dict:
+        from eligibility_cache_store import eligibility_cache_summary, format_eligibility_hits, list_eligibility_entries
+
+        items = list_eligibility_entries(limit=int(limit or 20), fresh_only=True)
+        return {
+            "items": items,
+            "count": len(items),
+            "text": format_eligibility_hits(items),
+            "summary": eligibility_cache_summary(),
+        }
+
+    def upsert_eligibility_cache(self, entry_json: str) -> dict:
+        from eligibility_cache_store import upsert_eligibility_entry
+        import json as _json
+
+        try:
+            payload = _json.loads(entry_json or "{}")
+        except _json.JSONDecodeError as exc:
+            return {"ok": False, "error": f"invalid_json:{exc}"}
+        if not isinstance(payload, dict):
+            return {"ok": False, "error": "entry_must_be_object"}
+        return upsert_eligibility_entry(payload)
+
+    def search_eligibility_cache(self, query: str, limit: int = 10) -> dict:
+        from eligibility_cache_store import format_eligibility_hits, search_eligibility_cache
+
+        items = search_eligibility_cache(str(query or ""), limit=int(limit or 10))
+        return {
+            "items": items,
+            "count": len(items),
+            "text": format_eligibility_hits(items),
+        }
+
+    def fetch_eligibility_271(self, request_json: str) -> dict:
+        from clearinghouse_eligibility_adapter import fetch_eligibility_271
+        import json as _json
+
+        try:
+            payload = _json.loads(request_json or "{}")
+        except _json.JSONDecodeError as exc:
+            return {"ok": False, "error": f"invalid_json:{exc}"}
+        if not isinstance(payload, dict):
+            return {"ok": False, "error": "request_must_be_object"}
+        return fetch_eligibility_271(payload)
+
+    def clearinghouse_status(self) -> dict:
+        from clearinghouse_eligibility_adapter import clearinghouse_status
+
+        return {"ok": True, **clearinghouse_status()}
 
     def grep_program_source(self, query: str, limit: int = 24) -> dict:
         from program_source_grep import grep_program_source

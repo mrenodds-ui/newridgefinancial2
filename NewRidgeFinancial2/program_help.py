@@ -74,7 +74,7 @@ TOPICS: list[dict[str, Any]] = [
         "keywords": ["hal", "chat", "model", "ollama", "local ai"],
         "page": "hal-command-center",
         "answer": (
-            "HAL chat uses local Ollama lanes (hal-chat:8b, hal-helper:14b) on this machine only. External submit, email, "
+            "HAL chat uses local Ollama lanes (hal-chat:8b + qwen3:30b GPU-pinned) on this machine only. External submit, email, "
             "fax, upload, and QuickBooks posting are blocked — human review required."
         ),
     },

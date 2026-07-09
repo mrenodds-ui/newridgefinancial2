@@ -39,7 +39,8 @@
         "operator_playbooks",
         "deployment_notes",
         "test_results",
-        "future_tasks"
+        "future_tasks",
+        "tax_accounting"
       ]
     },
     "text": {
@@ -74,7 +75,8 @@
         "quickbooks",
         "local_ai",
         "testing",
-        "deployment"
+        "deployment",
+        "taxes"
       ]
     },
     "staleness_rule": {

@@ -1,0 +1,64 @@
+backend: ollama
+
+server:
+  ollama:
+    base_url: http://127.0.0.1:11434/v1
+    health_url: http://127.0.0.1:11434/api/version
+    models_url: http://127.0.0.1:11434/api/tags
+  vllm:
+    base_url: http://127.0.0.1:8000/v1
+    health_url: http://127.0.0.1:8000/health
+    models_url: http://127.0.0.1:8000/v1/models
+
+models:
+  fast:
+    name: llama3:8b-instruct-fp16
+    role: simple tasks (summarization, classification, short Q&A)
+    precision: fp16
+  heavy:
+    name: qwen3:30b
+    role: complex tasks (coding, logic, multi-step reasoning)
+    precision: q4
+
+routing:
+  simple_keywords:
+    - summarize
+    - summary
+    - classify
+    - classification
+    - categorize
+    - label
+    - extract
+    - bullet
+    - tl;dr
+    - shorten
+    - paraphrase
+    - sentiment
+    - yes or no
+    - true or false
+  complex_keywords:
+    - code
+    - coding
+    - implement
+    - debug
+    - refactor
+    - algorithm
+    - logic
+    - prove
+    - derive
+    - sql
+    - python
+    - javascript
+    - function
+    - api
+    - regex
+    - optimize
+    - architecture
+    - design pattern
+    - unit test
+
+benchmark:
+  warmup_prompt: "Reply with the single word: ready"
+  default_prompts:
+    simple: "Summarize in two sentences: Local LLMs run on your GPU without sending data to the cloud."
+    complex: "Write a Python function that returns the longest increasing subsequence using O(n log n) time."

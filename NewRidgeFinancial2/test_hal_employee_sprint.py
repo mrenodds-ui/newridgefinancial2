@@ -89,6 +89,59 @@ class HalGatewayTests(unittest.TestCase):
         self.assertTrue(result.get("ok"))
         self.assertIn("SOFT-STALE", result.get("text") or "")
 
+    def test_build_chat_messages_injects_memoai_guidance(self) -> None:
+        from nr2_hal_gateway import build_chat_messages
+
+        messages, _, _, _ = build_chat_messages(
+            query="Can HAL email the payer narrative without consent?",
+            readiness={"level": "fresh"},
+        )
+        guidance = [m for m in messages if m.get("role") == "system" and "Governed memory matches:" in str(m.get("content") or "")]
+        self.assertTrue(guidance, "expected MemoAI memory guidance system message")
+
+    def test_build_chat_messages_skips_duplicate_memory_guidance(self) -> None:
+        from nr2_hal_gateway import build_chat_messages
+
+        existing = "Durable HAL knowledge (guidance only; does not override runtime checks or guardrails):\n- Existing memory"
+        messages, _, _, _ = build_chat_messages(
+            query="Can HAL email the payer narrative without consent?",
+            readiness={"level": "fresh"},
+            system_prompt=existing,
+        )
+        governed = [m for m in messages if "Governed memory matches:" in str(m.get("content") or "")]
+        self.assertEqual(governed, [])
+        self.assertEqual(messages[0]["content"], existing)
+
+    def test_build_chat_messages_injects_payer_reference(self) -> None:
+        from nr2_hal_gateway import build_chat_messages
+
+        messages, _, _, _ = build_chat_messages(
+            query="MetLife denied crown D2740 code 16 narrative appeal",
+            readiness={"level": "fresh"},
+        )
+        payer_msgs = [m for m in messages if "Payer reference matches (" in str(m.get("content") or "")]
+        self.assertTrue(payer_msgs, "expected payer reference guidance system message")
+
+    def test_build_chat_messages_injects_eligibility_cache(self) -> None:
+        from eligibility_cache_store import upsert_eligibility_entry
+        from nr2_hal_gateway import build_chat_messages
+
+        upsert_eligibility_entry(
+            {
+                "payerName": "Gateway Test Payer",
+                "payerId": "GWTEST",
+                "source": "unit_test",
+                "annualMaxRemaining": 800,
+                "ttlHours": 72,
+            }
+        )
+        messages, _, _, _ = build_chat_messages(
+            query="Gateway Test Payer deductible remaining annual max",
+            readiness={"level": "fresh"},
+        )
+        elig_msgs = [m for m in messages if "Cached eligibility context (" in str(m.get("content") or "")]
+        self.assertTrue(elig_msgs, "expected eligibility cache guidance system message")
+
 
 class EmployeeWorkflowTests(unittest.TestCase):
     def test_deposit_reconciliation_draft(self) -> None:

@@ -1,0 +1,19 @@
+{
+  "payerName": "Delta Dental",
+  "payerId": "11198",
+  "source": "example_manual",
+  "planDescription": "Delta PPO Premier (example)",
+  "memberIdRedacted": "***4821",
+  "subscriberRedacted": "J.D.",
+  "deductibleIndividual": 50,
+  "deductibleRemaining": 50,
+  "annualMax": 1500,
+  "annualMaxRemaining": 1500,
+  "coinsurancePreventive": 100,
+  "coinsuranceBasic": 80,
+  "coinsuranceMajor": 50,
+  "orthoCoverage": false,
+  "waitingPeriods": "Basic 6 months; Major 12 months (example only)",
+  "limitations": "2 prophy per year; BWX frequency per plan (example only)",
+  "ttlHours": 72
+}

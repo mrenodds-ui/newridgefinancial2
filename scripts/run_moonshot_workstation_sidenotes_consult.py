@@ -29,7 +29,7 @@ CONTEXT_FILES: list[tuple[str, int]] = [
     ("NewRidgeFinancial2/sidenotes_local_store.py", 120),
     ("NewRidgeFinancial2/workstation_app.py", 150),
     ("NewRidgeFinancial2/hal_hub.py", 120),
-    ("NewRidgeFinancial2/site/hal-page-schema.js", 80),
+    ("NewRidgeFinancial2/site/hal-page.js", 80),
     ("NewRidgeFinancial2/nr2-build.json", 20),
 ]
 

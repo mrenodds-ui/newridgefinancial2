@@ -10,40 +10,48 @@ memory. It never writes to SoftDent, QuickBooks, payers, or any external service
 
 ## What stays resident
 
-The always-on default is the dual GPU lane layout for 16 GB VRAM:
+The always-on default for **32 GB VRAM** (R9700) is chat + escalation GPU-pinned:
 
 - `hal-chat:8b` (DeepSeek-R1 8B — staff chat)
-- `hal-helper:14b` (Queen3 14B — helper / triage)
+- `hal-escalate:30b` (Qwen3 30B — escalation / second opinion, ctx 4096)
 
 Install or refresh both tags:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Install-HAL-GPU-Dual-Lanes.ps1
+powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Apply-HAL-GPU-Performance.ps1
 ```
 
-Reasoning uses `mistral-small3.1:24b-fast` on demand (not dual-resident with 8B+14B):
+Or install lanes only:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Install-HAL-GPU-Chat-Escalate-Lanes.ps1
+```
+
+**16 GB VRAM** workstations: use `Install-HAL-GPU-Dual-Lanes.ps1` (8B+14B) or
+`Install-HAL-GPU-Chat-Lane.ps1 -UnpinHelper` (8B only).
+
+Reasoning and escalation both use **GPU-pinned `hal-escalate:30b`** on R9700 (no Mistral 24B load — avoids evicting pins):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Apply-HAL-GPU-Performance.ps1
+```
+
+Optional legacy 24B (16 GB workstations only — will evict pins on 32 GB):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Install-HAL-Mistral-24B-Fast.ps1
 ```
 
-Speed-first single-lane layout (8B only pinned — more VRAM headroom):
+The warmer reads `gpuPinnedModels` from `..\site\data\hal-models.json`, so pinned
+tags stay in sync with the program config.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Install-HAL-GPU-Chat-Lane.ps1 -UnpinHelper
-```
+### GPU reality (32 GB R9700)
 
-Then set `fastModel.enabled` to `false` in `site/data/hal-models.json`.
+`hal-chat:8b` + `hal-escalate:30b` co-reside on GPU (~23 GB weights, ctx 3072/4096). `reason21b` and `escalate30b` both use `hal-escalate:30b`. `hal-helper:14b` loads on demand.
 
-The model names are read live from `..\site\data\hal-models.json`, so they stay
-in sync with the program config.
-
-### GPU reality (16 GB)
-
-All configured models **cannot** co-reside on a 16 GB GPU at once. The default
-pins only `hal-chat:8b` + `hal-helper:14b` (~14 GB weights with capped context).
-The 24B reasoning lane loads on demand and may evict one of the GPU lanes
-briefly while active.
+On **16 GB** VRAM, all configured models cannot co-reside on GPU at once. Legacy dual-lane
+pins `hal-chat:8b` + `hal-helper:14b` (~14 GB). The 24B reasoning lane loads on demand
+and may evict one GPU lane briefly while active.
 
 ## Run once
 

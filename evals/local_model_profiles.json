@@ -2,11 +2,11 @@
   "judge_profile_alias": "chat_second_opinion",
   "judge_rubric_path": "evals/prompts/judge_rubric.md",
   "hardware_target": {
-    "gpu": "Gigabyte Radeon RX 9060 XT 16GB",
-    "vram_gb": 16,
+    "gpu": "AMD Radeon AI PRO R9700 32GB",
+    "vram_gb": 32,
     "backend_preference": ["vulkan", "rocm"],
-    "notes": "AMD Radeon RX 9060 XT 16GB — dual GPU lanes: hal-chat:8b (staff chat) + hal-helper:14b (helper/triage), both pinned resident. Reasoning steps up to mistral-small3.1:24b-fast on demand. Escalation: qwen3:30b.",
-    "avoid_model_sizes": ["24B-on-GPU", "30B-on-GPU", "40B+"]
+    "notes": "AMD Radeon AI PRO R9700 32GB — GPU pins hal-chat:8b (ctx 3072) + hal-escalate:30b (ctx 4096), keep_alive -1. OLLAMA_MAX_LOADED_MODELS=2. 14B helper and 24B reasoning on demand.",
+    "avoid_model_sizes": ["235B-on-GPU", "180B-on-GPU", "120B-on-GPU"]
   },
   "profiles": {
     "chat": {

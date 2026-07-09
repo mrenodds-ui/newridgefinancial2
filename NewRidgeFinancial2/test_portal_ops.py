@@ -61,3 +61,51 @@ def test_memory_index_search():
     assert index == []
     hits = search_memories("softdent import", limit=3, memories=[])
     assert hits == []
+
+
+def test_memory_index_finds_dental_narrative_playbooks():
+    hits = search_memories("crown D2740 denial appeal medical necessity fracture", limit=5)
+    assert hits
+    assert any(row.get("id") == "crown-d2740-medical-necessity" for row in hits)
+
+
+def test_memory_search_prefers_practice_learned():
+    hits = search_memories("Steve office manager", limit=3)
+    assert hits
+    assert hits[0].get("id") == "nr2-practice-office-manager-steve"
+
+    hits = search_memories("Dr Michael Reno dentist owner", limit=3)
+    assert hits
+    assert hits[0].get("id") == "nr2-practice-doctor-michael-reno"
+
+    hits = search_memories("New Ridge morning huddle Steve", limit=3)
+    assert hits
+    assert hits[0].get("id") == "nr2-practice-steve-morning-huddle"
+
+
+def test_memory_search_hygiene_and_tax_learned():
+    hits = search_memories("hygiene recall prophy six months New Ridge", limit=3)
+    assert hits
+    assert hits[0].get("id") == "nr2-practice-hygiene-recall-interval"
+
+    hits = search_memories("Kansas PTE tax election Dr Reno CPA", limit=3)
+    assert hits
+    assert hits[0].get("id") == "nr2-practice-tax-kansas-pte-annual"
+
+    hits = search_memories("UnitedHealthcare UHC crown code 16", limit=3)
+    assert hits
+    assert hits[0].get("id") == "nr2-practice-uhc-dental-narratives"
+
+
+def test_resolve_memory_citations_for_tax_plan():
+    from knowledge_memory_store import resolve_memory_citations
+    from tax_engine import build_tax_plan
+
+    cites = resolve_memory_citations(["scorp-reasonable-compensation-dental"])
+    assert cites[0]["title"]
+    assert len(cites[0]["detail"]) > 20
+
+    plan = build_tax_plan(book_net_income=250_000)
+    memo = plan.get("memoCitations") or []
+    assert len(memo) >= 4
+    assert all(isinstance(row, dict) and row.get("detail") for row in memo)

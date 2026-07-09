@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BUILTIN_MEMORIES_PATH = REPO_ROOT / "docs" / "hal_knowledge" / "memories.jsonl"
+CORPUS_MEMORIES_PATH = REPO_ROOT / "docs" / "hal_knowledge" / "memories_corpus.jsonl"
 LEARNED_MEMORIES_PATH = REPO_ROOT / "app_data" / "nr2" / "learned_memories.jsonl"
 
 APPROVED_STATUS = "approved"
@@ -136,14 +138,32 @@ def infer_memory_scope(text: str, category: str) -> str:
     return "hal"
 
 
-def load_approved_memories() -> list[dict[str, Any]]:
+def memory_source_paths() -> list[Path]:
+    paths = [BUILTIN_MEMORIES_PATH, CORPUS_MEMORIES_PATH, LEARNED_MEMORIES_PATH]
+    return [path for path in paths if path.is_file()]
+
+
+def _memory_files_signature() -> str:
+    parts: list[str] = []
+    for path in memory_source_paths():
+        stat = path.stat()
+        parts.append(f"{path}:{stat.st_mtime_ns}:{stat.st_size}")
+    return "|".join(parts)
+
+
+@lru_cache(maxsize=2)
+def _load_approved_memories_cached(signature: str) -> tuple[dict[str, Any], ...]:
     merged: dict[str, dict[str, Any]] = {}
-    for path in (BUILTIN_MEMORIES_PATH, LEARNED_MEMORIES_PATH):
+    for path in memory_source_paths():
         for row in _read_jsonl(path):
             memory_id = str(row.get("id") or "").strip()
             if memory_id:
                 merged[memory_id] = row
-    return [row for row in merged.values() if is_memory_indexable(row)]
+    return tuple(row for row in merged.values() if is_memory_indexable(row))
+
+
+def load_approved_memories() -> list[dict[str, Any]]:
+    return list(_load_approved_memories_cached(_memory_files_signature()))
 
 
 def remember_fact(
@@ -183,6 +203,8 @@ def remember_fact(
     with LEARNED_MEMORIES_PATH.open("a", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(memory, ensure_ascii=False) + "\n")
 
+    _load_approved_memories_cached.cache_clear()
+
     return {
         "ok": True,
         "memory": memory,
@@ -208,3 +230,181 @@ def remember_web_findings(results: list[dict[str, Any]], *, query: str, actor: s
     body = f"Public reference ({query}): " + " | ".join(snippets)
     source = "web_research:" + (sources[0] if sources else "duckduckgo")
     return remember_fact(body, source=source, category=infer_memory_category(query), actor=actor)
+
+
+def title_from_memory_id(memory_id: str) -> str:
+    return " ".join(part.capitalize() for part in str(memory_id or "").split("-") if part)
+
+
+def resolve_memory_citations(ids: list[str] | tuple[str, ...]) -> list[dict[str, str]]:
+    """Resolve governed memory IDs to UI citation objects (title + detail excerpt)."""
+    by_id = {str(row.get("id") or ""): row for row in load_approved_memories()}
+    citations: list[dict[str, str]] = []
+    for raw_id in ids:
+        memory_id = str(raw_id or "").strip()
+        if not memory_id:
+            continue
+        memory = by_id.get(memory_id)
+        if memory:
+            text = str(memory.get("text") or "").strip()
+            detail = text if len(text) <= 280 else text[:280].rstrip() + "…"
+            citations.append(
+                {
+                    "id": memory_id,
+                    "title": title_from_memory_id(memory_id),
+                    "detail": detail,
+                    "source": str(memory.get("source") or ""),
+                    "category": str(memory.get("category") or ""),
+                }
+            )
+        else:
+            citations.append(
+                {
+                    "id": memory_id,
+                    "title": title_from_memory_id(memory_id),
+                    "detail": "",
+                    "source": "",
+                    "category": "",
+                }
+            )
+    return citations
+
+
+def build_browser_memo_index(*, priority_only: bool = False, limit: int = 400) -> dict[str, dict[str, str]]:
+    index: dict[str, dict[str, str]] = {}
+    memories = load_approved_memories()
+    if priority_only:
+        priority_ids = {
+            "scorp-reasonable-compensation-dental",
+            "scorp-section-199a-qbi",
+            "kansas-pte-tax-election",
+            "scorp-quickbooks-readonly-prep",
+            "nr2-taxes-page-scope",
+            "scorp-1120s-deadline",
+            "nr2-practice-office-manager-steve",
+            "nr2-practice-doctor-michael-reno",
+            "insurance-narrative-local-only",
+            "no-external-submit-actions",
+        }
+        memories = [m for m in memories if str(m.get("id") or "") in priority_ids or str(m.get("id") or "").startswith("nr2-practice-")]
+        memories = memories[:limit]
+    for memory in memories:
+        memory_id = str(memory.get("id") or "").strip()
+        if not memory_id:
+            continue
+        text = str(memory.get("text") or "").strip()
+        index[memory_id] = {
+            "title": title_from_memory_id(memory_id),
+            "detail": text if len(text) <= 280 else text[:280].rstrip() + "…",
+            "source": str(memory.get("source") or ""),
+            "category": str(memory.get("category") or ""),
+        }
+    return index
+
+
+def write_browser_memo_index_json(path: Path | None = None) -> Path:
+    """Compact full citation index for optional browser fetch (large corpora)."""
+    target = path or (REPO_ROOT / "NewRidgeFinancial2" / "site" / "data" / "hal-memo-index.json")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    index = build_browser_memo_index()
+    payload = {
+        "syncedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "count": len(index),
+        "items": index,
+    }
+    target.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return target
+
+
+def write_browser_memo_index_js(path: Path | None = None) -> Path:
+    """Emit hal-memo-index.js — priority inline index + optional full JSON sidecar."""
+    target = path or (REPO_ROOT / "NewRidgeFinancial2" / "site" / "hal-memo-index.js")
+    json_path = write_browser_memo_index_json()
+    total = len(load_approved_memories())
+    priority = build_browser_memo_index(priority_only=True)
+    stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    payload = json.dumps(priority, ensure_ascii=False, indent=2)
+    json_rel = "data/hal-memo-index.json"
+    body = f"""/** Auto-synced MemoAI index — run: python scripts/sync_hal_memo_index.py */
+const HalMemoIndex = (function () {{
+  const PRIORITY_BY_ID = {payload};
+  let fullById = null;
+  let fullLoadPromise = null;
+  const syncedAt = {json.dumps(stamp)};
+  const totalCount = {total};
+  const priorityCount = Object.keys(PRIORITY_BY_ID).length;
+  const fullIndexUrl = {json.dumps(json_rel)};
+
+  function titleFromId(id) {{
+    return String(id || "")
+      .split("-")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }}
+
+  function lookup(id) {{
+    const key = String(id || "").trim();
+    if (!key) return null;
+    if (PRIORITY_BY_ID[key]) return PRIORITY_BY_ID[key];
+    if (fullById && fullById[key]) return fullById[key];
+    return null;
+  }}
+
+  function loadFullIndex() {{
+    if (fullById) return Promise.resolve(fullById);
+    if (fullLoadPromise) return fullLoadPromise;
+    fullLoadPromise = fetch(fullIndexUrl)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {{
+        fullById = (data && data.items) || {{}};
+        return fullById;
+      }})
+      .catch(() => {{
+        fullById = {{}};
+        return fullById;
+      }});
+    return fullLoadPromise;
+  }}
+
+  function resolveCitations(ids) {{
+    return (ids || []).map((id) => {{
+      const key = String(id || "").trim();
+      const row = lookup(key);
+      if (!row) {{
+        return {{ id: key, title: titleFromId(key), detail: "", source: "", category: "" }};
+      }}
+      return {{
+        id: key,
+        title: row.title || titleFromId(key),
+        detail: row.detail || "",
+        source: row.source || "",
+        category: row.category || "",
+      }};
+    }});
+  }}
+
+  return {{
+    syncedAt,
+    count: totalCount,
+    priorityCount,
+    fullIndexUrl,
+    PRIORITY_BY_ID,
+    get BY_ID() {{ return fullById || PRIORITY_BY_ID; }},
+    titleFromId,
+    lookup,
+    loadFullIndex,
+    resolveCitations,
+  }};
+}})();
+
+if (typeof module !== "undefined" && module.exports) {{
+  module.exports = HalMemoIndex;
+}}
+if (typeof globalThis !== "undefined") {{
+  globalThis.HalMemoIndex = HalMemoIndex;
+}}
+"""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body, encoding="utf-8")
+    return target

@@ -35,7 +35,7 @@ node validate-hal.mjs
 
 Or auto-increment: `node scripts/bump-nr2-build.mjs`
 
-Updates: `nr2-build.json`, `site/nr2-build.json`, `site/page-schema.js`, all `?v=` tags in `site/index.html`.
+Updates: `nr2-build.json`, `site/nr2-build.json`, `site/moonshot-page-registry.js`, all `?v=` tags in `site/index.html`.
 
 ### Validate before launch
 
@@ -74,7 +74,7 @@ StartProgram.bat
   → scripts/start_nr2_browser.ps1   (port 8765, stops prior PID, runs validators)
   → NewRidgeFinancial2/browser_app.py
       → loopback HTTP → site/index.html
-          → page-schema.js + page-chrome.js (canonical shell)
+          → moonshot-page-registry.js + nr2-moonshot-mockup-chrome.js (canonical shell)
           → desktop-boot.js (boot gate)
           → app.js
 ```

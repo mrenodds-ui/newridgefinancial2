@@ -12,7 +12,7 @@
 **PHASED BUILD REQUIRED** — The hal-10062 foundation is architecturally sound and validators are green, but closing the eight known gaps spans visual systems, database schema expansion, SDK scheduling, and subpage chrome polish. A single monolithic commit risks validator regressions and data-binding failures. A five-phase build (hal-10063 through hal-10067/68) delivers maximum visible impact in Phase 1 while safely plumbing SoftDent and QuickBooks live data in subsequent stages.
 
 ## Executive Summary
-Operator wants the program at “full capacity”: HAL must match the `page_mockups/hal.html` cyber-grid density and neon accent system; every widget in `page-schema.js` must read from live SoftDent analytics DB tables or the QuickBooks SDK rather than import-cache placeholders; and all ten staff pages must share the same high-tech token/glow language. The path below keeps the existing PageCanvas architecture intact, hardens the analytics DB as the single source of truth for SoftDent, auto-triggers the QB SDK sync lifecycle, and lands workstation chrome parity last.
+Operator wants the program at “full capacity”: HAL must match the `page_mockups/hal.html` cyber-grid density and neon accent system; every widget in `moonshot-page-registry.js` must read from live SoftDent analytics DB tables or the QuickBooks SDK rather than import-cache placeholders; and all ten staff pages must share the same high-tech token/glow language. The path below keeps the existing PageCanvas architecture intact, hardens the analytics DB as the single source of truth for SoftDent, auto-triggers the QB SDK sync lifecycle, and lands workstation chrome parity last.
 
 ## Current State vs Operator Goal (gap table)
 
@@ -37,7 +37,7 @@ Operator wants the program at “full capacity”: HAL must match the `page_mock
 ### Widget Grid & Subpage Navigation
 - **Mosaic density**: change HAL grid layout in `hal-page-canvas.js` from sparse flex rows to `grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px;` with `.widget-mosaic-tile` cards.
 - **HAL widget set**: `halAskHal`, `halImportHealth`, `practiceFinancialOverview`, `careDeliveryPerformance`, `quickbooksProfitLossDetail`, `officeManagerSurfaces`, `sidenotesProgram` must all render as dense tiles with header icons and sparkline/chart placeholders where specified by the mock.
-- **Sub-nav**: `page-schema.js` HAL entry gains a `navGroups` array (“Command”, “Health”, “Surfaces”) so `nr2-moonshot-mockup-chrome.js` renders a scrollable sub-nav rail inside the left sidebar.
+- **Sub-nav**: `moonshot-page-registry.js` HAL entry gains a `navGroups` array (“Command”, “Health”, “Surfaces”) so `nr2-moonshot-mockup-chrome.js` renders a scrollable sub-nav rail inside the left sidebar.
 
 ### HAL-Specific Wiring (prompt chips, import health, sidenotes, work surfaces)
 - **Prompt chips**: `bindHalAsk()` in `site/page-canvas-data.js` returns chip payloads; `hal-page.js` renders them as `<button class="hal-prompt-chip">` with `:hover { box-shadow: var(--neon-cyan); }`.

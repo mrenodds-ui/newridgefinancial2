@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from knowledge_memory_store import resolve_memory_citations
+
 TAX_YEAR = 2025
 ENTITY = "S corporation"
 STATE = "Kansas"
@@ -106,7 +108,7 @@ def build_tax_plan(
         {"label": "Est. owner tax", "value": total_owner_tax, "tone": "warning", "hint": "Federal + Kansas · CPA review"},
     ]
 
-    return {
+    plan = {
         "taxYear": tax_year,
         "entity": ENTITY,
         "state": STATE,
@@ -128,15 +130,19 @@ def build_tax_plan(
             {"id": "kansas", "label": "Kansas income (est.)", "amount": kansas_tax},
         ],
         "quarterlyEstimates": quarterly,
-        "memoCitations": [
+        "memoCitationIds": [
             "scorp-reasonable-compensation-dental",
             "scorp-section-199a-qbi",
             "kansas-pte-tax-election",
             "scorp-quickbooks-readonly-prep",
+            "nr2-taxes-page-scope",
+            "scorp-1120s-deadline",
         ],
         "kpis": kpis,
         "hasBookData": book > 0,
     }
+    plan["memoCitations"] = resolve_memory_citations(plan.pop("memoCitationIds", []))
+    return plan
 
 
 def build_tax_plan_from_bundle(bundle: dict[str, Any] | None) -> dict[str, Any]:

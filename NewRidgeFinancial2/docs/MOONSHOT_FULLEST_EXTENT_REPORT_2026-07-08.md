@@ -14,7 +14,7 @@ The user wants a concrete upgrade roadmap for the NewRidgeFinancial 2.0 program 
 Key facts from context:
 - hal-10068 is shipped, completed Phases 1-5 (HAL mock parity, SoftDent live data + stale resilience, QB auto-sync, staff high-tech design, workstation chrome).
 - Validators all pass.
-- Architecture: page-schema.js → nr2-moonshot-mockup-chrome.js → page-canvas.js → page-canvas-data.js → import cache / DesktopBridge / Bottle APIs.
+- Architecture: moonshot-page-registry.js → nr2-moonshot-mockup-chrome.js → page-canvas.js → page-canvas-data.js → import cache / DesktopBridge / Bottle APIs.
 - HAL: hal-page.js, hal-page-canvas.js, hal-mockup-overrides.css, app.js drawer/hub/sidenotes.
 - Python: import_sync.py, import_loader.py, softdent_practice_exports.py, quickbooks_monthly_sync.py, nr2_http_server.py, qb_connector.py.
 - Charts: site/charts/*.js + nr2-moonshot-ui.js enhanceCanvasCharts().
@@ -27,7 +27,7 @@ Prior Moonshot plan partially open:
 - Full SoftDent ODBC extract → sd_* SQLite tables (plan mentioned pyodbc, INSERT OR REPLACE keyed upserts) - NOT YET DONE.
 - React/TanStack should be IGNORED.
 
-Widget inventory in page-schema.js hal-10068:
+Widget inventory in moonshot-page-registry.js hal-10068:
 Financial: practiceFinancialOverview, financialProductionTrend, payerMixAndCollections, providerPerformance
 SoftDent: careDeliveryPerformance, softdentArAging, softdentResponsibility, newPatients, treatmentPlanSummary, caseAcceptance, hygieneRecall, softdentOperatoryGrid
 QuickBooks: quickbooksProfitLossDetail, ebitdaNormalization, quickbooksExpenseBreakdown
@@ -82,7 +82,7 @@ Let me analyze what is already at capacity:
 - Basic HAL UI overlay: mock parity achieved.
 - Auto-sync staleness detection: done.
 - Workstation chrome: done.
-- Core widget rendering pipeline: page-canvas.js, page-schema.js, page-canvas-data.js are mature.
+- Core widget rendering pipeline: page-canvas.js, moonshot-page-registry.js, page-canvas-data.js are mature.
 
 Remaining gaps with high operator value:
 1. Stubbed widgets: Many analytics widgets are stubbed. Filling the top 6-8 stubs with real data from existing SQLite tables would provide immediate value.
@@ -213,12 +213,12 @@ Test & Sign-Off Checklist:
 Recommended Next Commit Slice:
 - hal-10069: page-canvas-data.js binders for nr2ProductionReconciliation + nr2CollectionLag + quickbooksMonthlyRevenue + softdentProductionDaily + nr2KpiRibbon.
 - nr2_http_server.py: GET /api/analytics/production-reconciliation, GET /api/analytics/collection-lag, GET /api/softdent/production-daily.
-- page-schema.js: swap stub flags to live for these 5 widget keys.
+- moonshot-page-registry.js: swap stub flags to live for these 5 widget keys.
 
 I need to ensure I don't invent files that don't exist. The context mentions:
 - site/charts/*.js
 - import_sync.py, import_loader.py, softdent_practice_exports.py, quickbooks_monthly_sync.py, nr2_http_server.py, qb_connector.py
-- page-schema.js, page-canvas.js, page-canvas-data.js
+- moonshot-page-registry.js, page-canvas.js, page-canvas-data.js
 - hal-agent.js, hal-agent-loop.js, hal-skills.js, hal-proactive.js, hal-hub-client.js
 - workstation/index.html, workstation-moonshot-bridge.css
 - services.js, app.js
@@ -238,7 +238,7 @@ Post-hal-10068, the program is a high-fidelity financial cockpit with a function
 
 ## Current State Assessment (post hal-10068 — what is already at capacity)
 - **Visual / Layout Chrome**: At capacity. Cyber grid, neon tokens, glow cards, mosaic tiles, workstation theme, and chart dark grids are complete. audit-mockup-parity.mjs 10/10. Further CSS motion is decorative, not operational.
-- **Widget Rendering Pipeline**: At capacity. page-schema.js → page-canvas.js → page-canvas-data.js reliably renders 30+ widget types. The engine does not need replacement.
+- **Widget Rendering Pipeline**: At capacity. moonshot-page-registry.js → page-canvas.js → page-canvas-data.js reliably renders 30+ widget types. The engine does not need replacement.
 - **Sync & Staleness Resilience**: At capacity. QB auto-sync with stale detection, SoftDent JSON fallback, importBundleAgeMinutes badges, and cache freshness gating are production-ready.
 - **HAL UI Shell**: At capacity. Drawer, hub, sidenotes, status rings, badge-live, and navGroups (Command / Health / Surfaces) are shipped.
 - **Basic Agent Loop**: At capacity. Tool loop, grep/semantic search, patch apply, and local Ollama lanes exist and function.
@@ -283,7 +283,7 @@ Post-hal-10068, the program is a high-fidelity financial cockpit with a function
    - **Binder**: Pure frontend aggregator in `page-canvas-data.js`; consumes the four endpoints above plus existing `ebitdaNormalization`.  
    - **UI**: horizontal mosaic tile strip on Financial and HAL pages.
 
-**Acceptance**: All 5 widget keys removed from stub list in `page-schema.js`; `validate-pages.mjs` passes; stale badges propagate correctly.
+**Acceptance**: All 5 widget keys removed from stub list in `moonshot-page-registry.js`; `validate-pages.mjs` passes; stale badges propagate correctly.
 
 ## Tier 2 — Data & Integration Depth (SoftDent ODBC, analytics DB, QB SDK completeness)
 **Goal: Complete the data layer so no widget is blocked by missing extract.**
@@ -351,7 +351,7 @@ Post-hal-10068, the program is a high-fidelity financial cockpit with a function
 - **Disaster recovery**: Documented restore procedure: stop Bottle, copy backup .db over, restart.
 
 ## Widget & API Completion Matrix (stubbed keys → concrete binders/routes/tables)
-| Widget Key (page-schema.js) | Binder Function (page-canvas-data.js) | Bottle Route | Source Table / Module |
+| Widget Key (moonshot-page-registry.js) | Binder Function (page-canvas-data.js) | Bottle Route | Source Table / Module |
 |---|---|---|---|
 | `nr2ProductionReconciliation` | `bindNr2ProductionReconciliation()` | `GET /api/analytics/production-reconciliation` | `sd_procedures` + `qb_revenue` |
 | `nr2CollectionLag` | `bindCollectionLag()` | `GET /api/analytics/collection-lag` | `ar_payments` / JSON cache |
@@ -386,7 +386,7 @@ Post-hal-10068, the program is a high-fidelity financial cockpit with a function
 ## Implementation Phases (numbered hal-10069+ with acceptance criteria)
 ### hal-10069 — Tier 1 Live Binds
 - **Scope**: `nr2ProductionReconciliation`, `nr2CollectionLag`, `quickbooksMonthlyRevenue`, `softdentProductionDaily`, `nr2KpiRibbon`.
-- **Files**: `page-canvas-data.js`, `nr2_http_server.py`, `page-schema.js` (remove stub flags).
+- **Files**: `page-canvas-data.js`, `nr2_http_server.py`, `moonshot-page-registry.js` (remove stub flags).
 - **Acceptance**: 
   - 5 widgets render numeric data on Financial & HAL pages.
   - `validate-pages.mjs` PASS.
@@ -402,7 +402,7 @@ Post-hal-10068, the program is a high-fidelity financial cockpit with a function
 
 ### hal-10071 — QB Completeness + SoftDent Daily Binds
 - **Scope**: New QB routes + binds; daily SoftDent widget binds.
-- **Files**: `qb_connector.py`, `quickbooks_monthly_sync.py`, `nr2_http_server.py`, `page-canvas-data.js`, `page-schema.js`.
+- **Files**: `qb_connector.py`, `quickbooks_monthly_sync.py`, `nr2_http_server.py`, `page-canvas-data.js`, `moonshot-page-registry.js`.
 - **Acceptance**: 
   - 4+ new QB widgets render live.
   - 4+ SoftDent daily widgets render live.

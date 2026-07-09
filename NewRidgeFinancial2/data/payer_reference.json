@@ -1,0 +1,803 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-08T21:23:09Z",
+  "sourceNote": "Curated NR2 payer reference for routing and narrative hints. Not member-specific benefits. Verify copay/deductible/max via 270/271 or clearinghouse eligibility. Payer IDs are common electronic routing examples \u2014 always confirm on patient ID card and clearinghouse list.",
+  "payers": [
+    {
+      "id": "delta-dental",
+      "name": "Delta Dental",
+      "aliases": [
+        "delta",
+        "delta dental",
+        "ddpa",
+        "delta ppo",
+        "delta premier"
+      ],
+      "payerIds": [
+        "DELTA",
+        "11198",
+        "DDPFS"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Largest dental network; state affiliates use different payer IDs. Code 16 often needs narrative + radiographs. Verify state-specific Delta entity on ID card.",
+      "commonDenialCodes": [
+        "16",
+        "97",
+        "bundled"
+      ],
+      "eligibilityNotes": "270/271 via clearinghouse; member ID format varies by state."
+    },
+    {
+      "id": "metlife-dental",
+      "name": "MetLife Dental",
+      "aliases": [
+        "metlife",
+        "met life"
+      ],
+      "payerIds": [
+        "65978",
+        "METLF"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Frequent alternate-benefit downgrades on crowns/composites. Document structural loss and ADA criteria.",
+      "commonDenialCodes": [
+        "alternate benefit",
+        "downgrade"
+      ]
+    },
+    {
+      "id": "cigna-dental",
+      "name": "Cigna Dental",
+      "aliases": [
+        "cigna",
+        "cigna ppo",
+        "cigna dhmo"
+      ],
+      "payerIds": [
+        "62308",
+        "CIGNA"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "DHMO vs PPO paths differ; confirm plan type before narrative. Prior auth common on implants/ortho.",
+      "commonDenialCodes": [
+        "prior auth",
+        "missing info"
+      ]
+    },
+    {
+      "id": "aetna-dental",
+      "name": "Aetna Dental",
+      "aliases": [
+        "aetna",
+        "aetna ppo",
+        "aetna dmo"
+      ],
+      "payerIds": [
+        "60054",
+        "AETNA"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Medical/dental plan crossover on appliances; keep narratives clinical not cosmetic.",
+      "commonDenialCodes": [
+        "16",
+        "not covered"
+      ]
+    },
+    {
+      "id": "uhc-dental",
+      "name": "UnitedHealthcare Dental",
+      "aliases": [
+        "uhc",
+        "united healthcare dental",
+        "unitedhealthcare",
+        "dbp"
+      ],
+      "payerIds": [
+        "52133",
+        "87726"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Use payer ID 52133 for DBP; UMR uses separate ID. 270/271 service type 35 for dental.",
+      "commonDenialCodes": [
+        "missing info",
+        "frequency"
+      ]
+    },
+    {
+      "id": "guardian-dental",
+      "name": "Guardian Dental",
+      "aliases": [
+        "guardian",
+        "guardian life dental"
+      ],
+      "payerIds": [
+        "64246",
+        "GUARD"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Strong on frequency limits for prophy/BWX; document perio charting when billing SRP same visit.",
+      "commonDenialCodes": [
+        "frequency",
+        "bundled"
+      ]
+    },
+    {
+      "id": "humana-dental",
+      "name": "Humana Dental",
+      "aliases": [
+        "humana",
+        "humana dental"
+      ],
+      "payerIds": [
+        "73288",
+        "HUMANA"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Medicare Advantage dental riders differ from commercial; do not assume commercial rules.",
+      "commonDenialCodes": [
+        "not covered",
+        "medicare"
+      ]
+    },
+    {
+      "id": "anthem-dental",
+      "name": "Anthem Blue Cross Dental",
+      "aliases": [
+        "anthem",
+        "anthem bcbs dental",
+        "elevance dental"
+      ],
+      "payerIds": [
+        "84105",
+        "ANTHM"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "State BCBS affiliate routing; check claims address on card.",
+      "commonDenialCodes": [
+        "16",
+        "coordination"
+      ]
+    },
+    {
+      "id": "bcbs-michigan-dental",
+      "name": "Blue Cross Blue Shield of Michigan Dental",
+      "aliases": [
+        "bcbs michigan",
+        "bcbsmi dental"
+      ],
+      "payerIds": [
+        "BBMDQ",
+        "00210"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Michigan-specific fee schedules; narrative for major services.",
+      "commonDenialCodes": [
+        "missing info"
+      ]
+    },
+    {
+      "id": "bcbs-texas-dental",
+      "name": "Blue Cross Blue Shield of Texas Dental",
+      "aliases": [
+        "bcbs texas",
+        "bcbstx dental"
+      ],
+      "payerIds": [
+        "84980"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Verify HMO vs PPO on card before appeal language.",
+      "commonDenialCodes": [
+        "not covered"
+      ]
+    },
+    {
+      "id": "ameritas-dental",
+      "name": "Ameritas Dental",
+      "aliases": [
+        "ameritas"
+      ],
+      "payerIds": [
+        "47009",
+        "AMERI"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Network vs out-of-network benefits differ; cite OON rules when applicable.",
+      "commonDenialCodes": [
+        "downgrade"
+      ]
+    },
+    {
+      "id": "principal-dental",
+      "name": "Principal Dental",
+      "aliases": [
+        "principal"
+      ],
+      "payerIds": [
+        "61271"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Employer-group heavy; eligibility drives annual max remaining.",
+      "commonDenialCodes": [
+        "frequency"
+      ]
+    },
+    {
+      "id": "sunlife-dental",
+      "name": "Sun Life Dental",
+      "aliases": [
+        "sun life",
+        "sunlife"
+      ],
+      "payerIds": [
+        "70408"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Canadian/US employer plans; confirm US routing.",
+      "commonDenialCodes": [
+        "missing info"
+      ]
+    },
+    {
+      "id": "lincoln-dental",
+      "name": "Lincoln Financial Dental",
+      "aliases": [
+        "lincoln dental",
+        "lincoln financial"
+      ],
+      "payerIds": [
+        "52148"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Narrative for major services; watch waiting periods on basic/major.",
+      "commonDenialCodes": [
+        "waiting period"
+      ]
+    },
+    {
+      "id": "unum-dental",
+      "name": "Unum Dental / AlwaysCare",
+      "aliases": [
+        "unum",
+        "alwayscare",
+        "starmount"
+      ],
+      "payerIds": [
+        "STR01"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Administered benefits; card may show TPA name not Unum.",
+      "commonDenialCodes": [
+        "not covered"
+      ]
+    },
+    {
+      "id": "dentaquest",
+      "name": "DentaQuest",
+      "aliases": [
+        "dentaquest",
+        "denta quest"
+      ],
+      "payerIds": [
+        "CX007",
+        "DENTA"
+      ],
+      "type": "medicaid_dental",
+      "narrativeNotes": "Medicaid MCO in many states; prior auth and medical necessity language stricter.",
+      "commonDenialCodes": [
+        "prior auth",
+        "medical necessity"
+      ]
+    },
+    {
+      "id": "liberty-dental",
+      "name": "Liberty Dental Plan",
+      "aliases": [
+        "liberty dental"
+      ],
+      "payerIds": [
+        "52147",
+        "LIBRT"
+      ],
+      "type": "medicaid_dental",
+      "narrativeNotes": "Medicaid-focused; frequency and prior auth rules vary by state contract.",
+      "commonDenialCodes": [
+        "frequency",
+        "prior auth"
+      ]
+    },
+    {
+      "id": "mcna-dental",
+      "name": "MCNA Dental",
+      "aliases": [
+        "mcna"
+      ],
+      "payerIds": [
+        "65030"
+      ],
+      "type": "medicaid_dental",
+      "narrativeNotes": "State Medicaid dental administrator; use state portal for PA status.",
+      "commonDenialCodes": [
+        "prior auth"
+      ]
+    },
+    {
+      "id": "envolve-dental",
+      "name": "Envolve Dental / Ambetter Dental",
+      "aliases": [
+        "envolve",
+        "ambetter dental"
+      ],
+      "payerIds": [
+        "68069"
+      ],
+      "type": "medicaid_dental",
+      "narrativeNotes": "Marketplace/Medicaid mix; verify active coverage every visit.",
+      "commonDenialCodes": [
+        "inactive"
+      ]
+    },
+    {
+      "id": "careington",
+      "name": "Careington / Discount Plans",
+      "aliases": [
+        "careington",
+        "discount dental"
+      ],
+      "payerIds": [
+        "CARE"
+      ],
+      "type": "discount",
+      "narrativeNotes": "Discount plan not insurance \u2014 do not draft insurance appeal narratives; patient pays contracted fee.",
+      "commonDenialCodes": [
+        "not insurance"
+      ]
+    },
+    {
+      "id": "dentemax",
+      "name": "DenteMax Network",
+      "aliases": [
+        "dentemax"
+      ],
+      "payerIds": [
+        "DENTE"
+      ],
+      "type": "network_leasing",
+      "narrativeNotes": "Network leasing; claims go to primary payer on card, not DenteMax.",
+      "commonDenialCodes": [
+        "routing"
+      ]
+    },
+    {
+      "id": "beam-dental",
+      "name": "Beam Dental",
+      "aliases": [
+        "beam"
+      ],
+      "payerIds": [
+        "BEAM1"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Tech-forward employer plans; eligibility API often required for accurate max.",
+      "commonDenialCodes": [
+        "missing info"
+      ]
+    },
+    {
+      "id": "dominion-dental",
+      "name": "Dominion National",
+      "aliases": [
+        "dominion dental"
+      ],
+      "payerIds": [
+        "DOMIN"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Mid-Atlantic focus; Federal/FEHB common.",
+      "commonDenialCodes": [
+        "16"
+      ]
+    },
+    {
+      "id": "geha-dental",
+      "name": "GEHA Dental (Connection Dental)",
+      "aliases": [
+        "geha",
+        "connection dental"
+      ],
+      "payerIds": [
+        "39026",
+        "57254"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Federal employee plans; separate FEHB rules.",
+      "commonDenialCodes": [
+        "frequency"
+      ]
+    },
+    {
+      "id": "aarp-delta",
+      "name": "AARP Dental Insurance (Delta)",
+      "aliases": [
+        "aarp dental"
+      ],
+      "payerIds": [
+        "AARP1"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Administered by Delta; use Delta narrative standards and routing.",
+      "commonDenialCodes": [
+        "16"
+      ]
+    },
+    {
+      "id": "delta-dental-ca",
+      "name": "Delta Dental of California",
+      "aliases": [
+        "delta dental ca",
+        "delta california"
+      ],
+      "payerIds": [
+        "77777",
+        "DDICA"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Separate from national Delta; strict 270/271 member match on DOB/name.",
+      "commonDenialCodes": [
+        "16",
+        "missing info"
+      ]
+    },
+    {
+      "id": "delta-dental-ny",
+      "name": "Delta Dental of New York",
+      "aliases": [
+        "delta dental ny"
+      ],
+      "payerIds": [
+        "11198"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Northeast employer groups; narrative for major/restorative.",
+      "commonDenialCodes": [
+        "bundled"
+      ]
+    },
+    {
+      "id": "delta-dental-wa",
+      "name": "Delta Dental of Washington",
+      "aliases": [
+        "delta dental wa",
+        "delta washington"
+      ],
+      "payerIds": [
+        "52147"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Verify Premier vs PPO on eligibility response.",
+      "commonDenialCodes": [
+        "downgrade"
+      ]
+    },
+    {
+      "id": "delta-dental-mo",
+      "name": "Delta Dental of Missouri",
+      "aliases": [
+        "delta dental mo"
+      ],
+      "payerIds": [
+        "43090"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Regional fee schedule; attach perio chart for SRP.",
+      "commonDenialCodes": [
+        "frequency"
+      ]
+    },
+    {
+      "id": "delta-dental-pa",
+      "name": "Delta Dental of Pennsylvania",
+      "aliases": [
+        "delta dental pa"
+      ],
+      "payerIds": [
+        "23166"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Common in mid-Atlantic employer market.",
+      "commonDenialCodes": [
+        "16"
+      ]
+    },
+    {
+      "id": "premera-dental",
+      "name": "Premera Blue Cross Dental",
+      "aliases": [
+        "premera dental"
+      ],
+      "payerIds": [
+        "PREME"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Pacific Northwest; medical/dental plan separation important for appliances.",
+      "commonDenialCodes": [
+        "not covered"
+      ]
+    },
+    {
+      "id": "kaiser-dental",
+      "name": "Kaiser Permanente Dental",
+      "aliases": [
+        "kaiser dental"
+      ],
+      "payerIds": [
+        "KAISER"
+      ],
+      "type": "dental_hmo",
+      "narrativeNotes": "HMO capitation model in some regions; referrals may apply.",
+      "commonDenialCodes": [
+        "referral",
+        "capitation"
+      ]
+    },
+    {
+      "id": "scion-dental",
+      "name": "SKYGEN / Scion Dental",
+      "aliases": [
+        "scion",
+        "skygen"
+      ],
+      "payerIds": [
+        "SCION"
+      ],
+      "type": "tpa",
+      "narrativeNotes": "Third-party administrator; card shows underlying payer \u2014 bill correct entity.",
+      "commonDenialCodes": [
+        "routing"
+      ]
+    },
+    {
+      "id": "healthplex-dental",
+      "name": "Healthplex / EmblemHealth Dental",
+      "aliases": [
+        "healthplex",
+        "emblemhealth dental"
+      ],
+      "payerIds": [
+        "HPLEX"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "NY metro; verify Emblem vs Healthplex routing on card.",
+      "commonDenialCodes": [
+        "missing info"
+      ]
+    },
+    {
+      "id": "medicaid-generic",
+      "name": "State Medicaid Dental (generic)",
+      "aliases": [
+        "medicaid dental",
+        "medicaid"
+      ],
+      "payerIds": [
+        "MCDMD"
+      ],
+      "type": "medicaid_dental",
+      "narrativeNotes": "State-specific rules; prior auth, age limits, and CDT coverage vary. Never assume commercial rules.",
+      "commonDenialCodes": [
+        "prior auth",
+        "age limit",
+        "not covered"
+      ]
+    },
+    {
+      "id": "medicare-advantage-dental",
+      "name": "Medicare Advantage Dental Rider",
+      "aliases": [
+        "medicare advantage dental",
+        "ma dental"
+      ],
+      "payerIds": [
+        "MA001"
+      ],
+      "type": "medicare",
+      "narrativeNotes": "Supplemental dental only; low annual max common. Medical plan handles TMJ differently.",
+      "commonDenialCodes": [
+        "not covered",
+        "annual max"
+      ]
+    },
+    {
+      "id": "tricare-dental",
+      "name": "TRICARE Dental (United Concordia)",
+      "aliases": [
+        "tricare dental",
+        "united concordia"
+      ],
+      "payerIds": [
+        "UCCTR",
+        "99726"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Active duty family plans; follow TRICARE frequency tables.",
+      "commonDenialCodes": [
+        "frequency",
+        "prior auth"
+      ]
+    },
+    {
+      "id": "fep-blue-dental",
+      "name": "FEP BlueDental",
+      "aliases": [
+        "fep blue dental",
+        "blue dental fep"
+      ],
+      "payerIds": [
+        "FEPBD"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Federal employees; narrative for crowns/endo with chart docs.",
+      "commonDenialCodes": [
+        "16"
+      ]
+    },
+    {
+      "id": "teamsters-dental",
+      "name": "Teamsters / Union Dental Trusts",
+      "aliases": [
+        "teamsters dental",
+        "union dental"
+      ],
+      "payerIds": [
+        "UNION"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Trust-specific fee schedules; verify trust name on card.",
+      "commonDenialCodes": [
+        "missing info"
+      ]
+    },
+    {
+      "id": "argus-dental",
+      "name": "Argus Dental Vision",
+      "aliases": [
+        "argus dental"
+      ],
+      "payerIds": [
+        "ARGUS"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Bundled dental/vision admin; confirm dental routing.",
+      "commonDenialCodes": [
+        "routing"
+      ]
+    },
+    {
+      "id": "avesis-dental",
+      "name": "Avesis Dental",
+      "aliases": [
+        "avesis"
+      ],
+      "payerIds": [
+        "AVESIS"
+      ],
+      "type": "tpa",
+      "narrativeNotes": "Vision/dental admin; Medicaid and commercial mix.",
+      "commonDenialCodes": [
+        "prior auth"
+      ]
+    },
+    {
+      "id": "dental-select",
+      "name": "Dental Select",
+      "aliases": [
+        "dental select"
+      ],
+      "payerIds": [
+        "DSEL1"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Regional PPO; eligibility before major treatment plan.",
+      "commonDenialCodes": [
+        "waiting period"
+      ]
+    },
+    {
+      "id": "renaissance-dental",
+      "name": "Renaissance Dental",
+      "aliases": [
+        "renaissance dental"
+      ],
+      "payerIds": [
+        "RLHA1"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Humana affiliate in some markets; verify legal entity on 271.",
+      "commonDenialCodes": [
+        "missing info"
+      ]
+    },
+    {
+      "id": "solstice-dental",
+      "name": "Solstice Benefits Dental",
+      "aliases": [
+        "solstice"
+      ],
+      "payerIds": [
+        "SOLST"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "TPA; employer-specific plan docs drive coverage.",
+      "commonDenialCodes": [
+        "not covered"
+      ]
+    },
+    {
+      "id": "meritain-dental",
+      "name": "Meritain Health Dental",
+      "aliases": [
+        "meritain"
+      ],
+      "payerIds": [
+        "64157"
+      ],
+      "type": "tpa",
+      "narrativeNotes": "Aetna company TPA; use Meritain payer ID on claims.",
+      "commonDenialCodes": [
+        "routing"
+      ]
+    },
+    {
+      "id": "local-union-plans",
+      "name": "Local Union / Taft-Hartley Dental",
+      "aliases": [
+        "local union dental",
+        "taft hartley"
+      ],
+      "payerIds": [
+        "LOCAL"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Plan booklet governs; narrative should cite trust plan section when appealing.",
+      "commonDenialCodes": [
+        "not covered"
+      ]
+    },
+    {
+      "id": "bcbs-kansas-dental",
+      "name": "Blue Cross Blue Shield of Kansas Dental",
+      "aliases": [
+        "bcbs kansas",
+        "bcbs ks",
+        "blue cross kansas",
+        "bcbs of kansas"
+      ],
+      "payerIds": [
+        "BCBSK",
+        "47171"
+      ],
+      "type": "dental_ppo",
+      "narrativeNotes": "Kansas BCBS affiliate routing — verify payer ID on Kansas member card. Narrative for major services; coordinate medical/dental for appliances.",
+      "commonDenialCodes": [
+        "16",
+        "coordination",
+        "missing info"
+      ]
+    },
+    {
+      "id": "self-pay",
+      "name": "Self-Pay / No Insurance",
+      "aliases": [
+        "self pay",
+        "no insurance",
+        "uninsured"
+      ],
+      "payerIds": [
+        "SELF"
+      ],
+      "type": "self_pay",
+      "narrativeNotes": "No insurance narrative needed; use financial policy and treatment consent only.",
+      "commonDenialCodes": []
+    }
+  ]
+}

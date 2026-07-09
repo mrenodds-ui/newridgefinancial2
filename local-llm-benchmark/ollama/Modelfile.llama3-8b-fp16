@@ -1,0 +1,6 @@
+FROM hf.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF:F16
+
+PARAMETER temperature 0.2
+PARAMETER num_ctx 8192
+
+SYSTEM You are a concise assistant for summarization and classification tasks.

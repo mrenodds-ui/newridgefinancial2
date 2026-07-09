@@ -66,7 +66,7 @@
 | 1.1 | Add mockup CSS: `dashboard-grid`, `kpi-card`, `sync-badge`, `chart-large`, `chart-medium` | `nr2-mockup-page-vocabulary.css` |
 | 1.2 | Rewrite `renderQuickbooks()` to dashboard-grid layout | `page-canvas.js` |
 | 1.3 | Sync badge in page header for QuickBooks | `nr2-moonshot-mockup-chrome.js` |
-| 1.4 | Fix duplicate widget key; add `quickbooksExpenseBreakdown` | `page-schema.js` |
+| 1.4 | Fix duplicate widget key; add `quickbooksExpenseBreakdown` | `moonshot-page-registry.js` |
 | 1.5 | Add `quickbooksPlTrend()` binder (optional empty state) | `page-canvas-data.js` |
 | 1.6 | Extend audit script for QB classes | `scripts/audit-mockup-parity.mjs` |
 
@@ -91,7 +91,7 @@
 |------|------|-------|
 | 2.1 | Extend funnel to 4 stages; emit mockup class names | `page-canvas.js`, vocabulary CSS |
 | 2.2 | Add `softdentOperatoryGrid()` + export fields | `page-canvas-data.js` |
-| 2.3 | New widget `softdentOperatoryGrid` in schema | `page-schema.js` |
+| 2.3 | New widget `softdentOperatoryGrid` in schema | `moonshot-page-registry.js` |
 | 2.4 | `canvasOperatoryGrid()` helper + panel | `page-canvas.js` |
 | 2.5 | Audit assertions for funnel steps + operatory grid | `scripts/audit-mockup-parity.mjs` |
 
@@ -191,7 +191,7 @@ cd NewRidgeFinancial2
 node validate-hal.mjs
 node validate-pages.mjs
 node scripts/audit-mockup-parity.mjs
-node scripts/audit-page-schema.mjs
+node validate-pages.mjs
 ```
 
 Manual:

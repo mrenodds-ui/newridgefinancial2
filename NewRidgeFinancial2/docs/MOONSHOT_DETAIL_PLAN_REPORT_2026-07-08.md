@@ -68,7 +68,7 @@ C:\NewRidgeFamilyFinancial\
 | Layer | Technology | Notes |
 |-------|------------|-------|
 | HTTP server | `browser_app.py` / `workstation_app.py` → `nr2_http_server.py` | Same codebase; mode flag splits 8765 vs 8766 |
-| Frontend | `site/page-schema.js`, `page-canvas.js`, `app.js` | Moonshot mockup epoch; no React |
+| Frontend | `site/moonshot-page-registry.js`, `page-canvas.js`, `app.js` | Moonshot mockup epoch; no React |
 | Analytics DB | SQLite (`softdent_financial_analytics.db`) | Populated from `C:\SoftDentFinancialExports` |
 | HAL | Ollama @ `127.0.0.1:11434`, `hal-chat:8b` pinned | `hal-agent-programming.js` v13 |
 | Hub | `hal_hub.py` → `app_data/nr2/office/` | Metadata-only cross-port messaging |
@@ -551,7 +551,7 @@ Each commit must: bump `nr2-build.json`, run `validate-hal.mjs` + `validate-page
 |--------|-------|
 | SoftDent extract | `softdent_odbc_extract.py`, `softdent_operational_pipeline.py`, `import_sync.py` |
 | QB | `nr2_qb_reports.py`, `quickbooks_monthly_sync.py`, `site/nr2-qb-reports.js` |
-| Claims UI | `site/services.js`, `site/page-schema.js`, `site/page-canvas.js` |
+| Claims UI | `site/services.js`, `site/moonshot-page-registry.js`, `site/page-canvas.js` |
 | Narratives | `site/hal-narrative-library.js`, `_legacy/app/insurance_narratives/` |
 | HAL | `site/hal-agent-programming.js`, `site/data/hal-models.json`, `hal_skills.py` |
 | Hub | `hal_hub.py`, `site/hal-hub-client.js`, `docs/MOONSHOT_PHASE5_HUB_PROTOCOL.md` |
