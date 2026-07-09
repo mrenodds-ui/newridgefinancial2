@@ -228,8 +228,10 @@ assert.ok(
 );
 if (pilotMode) {
   assert.ok(
-    Array.isArray(buildManifest.liveWirePages) && buildManifest.liveWirePages.includes("financial"),
-    "live-wire-pilot must include financial in liveWirePages",
+    Array.isArray(buildManifest.liveWirePages) &&
+      buildManifest.liveWirePages.includes("financial") &&
+      buildManifest.liveWirePages.includes("softdent"),
+    "live-wire-pilot must include financial and softdent in liveWirePages",
   );
 } else {
   assert.ok(!indexHtml.includes("moonshot-page-layouts.js"), "index must not load layout manifest in mock-embed mode");
@@ -239,7 +241,13 @@ assert.ok(indexHtml.includes("NR2_STAFF_MOCK_ONLY"), "index must enable staff mo
 assert.ok(indexHtml.includes("data/mockup-elite-pages.js"), "index must load mockup elite page manifest");
 assert.ok(!indexHtml.includes("moonshot-page-layouts.json"), "index must not load external layout JSON");
 assert.ok(!indexHtml.includes("charts/"), "index must not load chart overlay scripts in mock-embed mode");
-assert.ok(!indexHtml.includes("nr2-tier3.js"), "index must not load tier-3 bundle in mock-embed mode");
+if (pilotMode) {
+  assert.ok(indexHtml.includes("nr2-analytics.js"), "live-wire pilot must load NR2Analytics");
+  assert.ok(indexHtml.includes("nr2-softdent-daily.js"), "live-wire pilot must load SoftDent daily binders");
+  assert.ok(indexHtml.includes("nr2-tier3.js"), "live-wire pilot may load tier-3 helpers");
+} else {
+  assert.ok(!indexHtml.includes("nr2-tier3.js"), "index must not load tier-3 bundle in mock-embed mode");
+}
 assert.ok(indexHtml.includes("moonshot-page-registry.js"), "index must load Moonshot page registry");
 assert.ok(indexHtml.includes("nr2-moonshot-mockup-chrome.js"), "index must load Moonshot mockup chrome");
 assert.ok(!indexHtml.includes("page-chrome.js"), "index must not load legacy page-chrome.js");

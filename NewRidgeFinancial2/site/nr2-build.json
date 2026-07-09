@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10125",
-  "assetVersion": "hal-10125",
-  "schemaVersion": "hal-10125",
+  "BUILD_ID": "hal-10126",
+  "assetVersion": "hal-10126",
+  "schemaVersion": "hal-10126",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
-  "liveWirePages": ["financial"],
-  "builtAt": "2026-07-09T16:10:00.000Z",
-  "notes": "hal-10125: Break forceHalWidgetPlacement import-complete refresh loop that blinked Financial."
+  "liveWirePages": ["financial", "softdent"],
+  "builtAt": "2026-07-09T16:15:00.000Z",
+  "notes": "hal-10126: Expand live-wire pilot to SoftDent alongside Financial."
 }
