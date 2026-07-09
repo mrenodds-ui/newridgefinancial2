@@ -83,6 +83,7 @@ const ELITE_PAGE_REQUIRED = {
   softdent: ["funnel", "data-hal-widget-key"],
   quickbooks: ["dashboard-grid", "glass-panel", "data-hal-widget-key"],
   taxes: ["widget-grid", "ms-panel", "data-hal-widget-key"],
+  hal: ["ms-panel", "data-hal-widget-key", "data-hal-cmd"],
 };
 
 let failures = 0;
@@ -119,6 +120,26 @@ for (const pageId of PageSchema.STAFF_PAGE_IDS || []) {
     if (!mockHtml.includes(cls)) {
       console.error(`FAIL ${pageId}: elite mock missing class ${cls}`);
       failures += 1;
+    }
+  }
+
+  const widgetKeyRe = /data-hal-widget-key="([^"]+)"/g;
+  const eliteKeys = [...mockHtml.matchAll(widgetKeyRe)].map((m) => m[1]);
+  const registrySrc = readFileSync(join(root, "site/moonshot-page-registry.js"), "utf8");
+  const metaBlock = registrySrc.match(new RegExp(`\\b${pageId}:\\s*\\{[\\s\\S]*?widgets:\\s*\\[([\\s\\S]*?)\\]`, "m"));
+  if (metaBlock) {
+    const expectedKeys = [...metaBlock[1].matchAll(/key:\s*"([^"]+)"/g)].map((m) => m[1]);
+    if (expectedKeys.length) {
+      const missing = expectedKeys.filter((k) => !eliteKeys.includes(k));
+      const dupes = eliteKeys.filter((k, i) => eliteKeys.indexOf(k) !== i);
+      if (missing.length) {
+        console.error(`FAIL ${pageId}: elite mock missing widget keys ${missing.join(", ")}`);
+        failures += 1;
+      }
+      if (dupes.length) {
+        console.error(`FAIL ${pageId}: duplicate widget keys ${[...new Set(dupes)].join(", ")}`);
+        failures += 1;
+      }
     }
   }
 

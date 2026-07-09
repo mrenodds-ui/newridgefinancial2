@@ -5,7 +5,7 @@
  * Moonshot stale-schema: emergencyPurgeAndReload + epoch manifest gate.
  */
 (function () {
-  const REQUIRED_BUILD = "hal-10100";
+  const REQUIRED_BUILD = "hal-10106";
   const REQUIRED_EPOCH = "moonshot-mockup";
   const errors = [];
 
@@ -335,12 +335,29 @@
   }
 
   if (typeof navigator !== "undefined" && navigator.serviceWorker && location.protocol.startsWith("http") && !isWorkstationApp()) {
-    const swTag = schemaVersion ? `sw.js?v=${schemaVersion}` : "sw.js";
-    navigator.serviceWorker.register(swTag).catch(() => {});
+    const mockEmbed =
+      (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
+      document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed";
+    if (mockEmbed || window.__NR2_PURGE_ON_LOAD) {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+        .catch(() => {});
+    } else {
+      const swTag = schemaVersion ? `sw.js?v=${schemaVersion}` : "sw.js";
+      navigator.serviceWorker.register(swTag).catch(() => {});
+    }
   }
 
   globalThis.NR2Boot = boot;
   globalThis.emergencyPurgeAndReload = emergencyPurgeAndReload;
+
+  fetch("/nr2-build.json", { cache: "no-store" })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((json) => {
+      if (json) window.NR2_BUILD = json;
+    })
+    .catch(() => {});
 
   const urlBuild = new URL(location.href).searchParams.get("v");
   if (urlBuild && urlBuild !== REQUIRED_BUILD) {

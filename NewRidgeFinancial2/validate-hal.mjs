@@ -15,7 +15,10 @@ const require = createRequire(import.meta.url);
 const halManagerPath = join(siteDir, "data", "hal-manager.json");
 const halModelsPath = join(siteDir, "data", "hal-models.json");
 const buildManifest = loadJson(join(__dirname, "nr2-build.json"));
-const staffMockEmbed = buildManifest.staffRenderMode === "mock-embed";
+const staffRenderMode = buildManifest.staffRenderMode || "mock-embed";
+const staffMockEmbed = staffRenderMode === "mock-embed";
+const staffLiveWirePilot = staffRenderMode === "live-wire-pilot";
+const staffUsesDeferredBundles = staffMockEmbed || staffLiveWirePilot;
 const deferredDir = join(__dirname, "deferred-live-wire");
 
 function loadJson(path) {
@@ -1729,7 +1732,7 @@ async function main() {
     "browser preview briefing must direct staff to Start Program",
   );
 
-  if (!staffMockEmbed) {
+  if (!staffUsesDeferredBundles) {
     require(join(siteDir, "nr2-analytics.js"));
     require(join(siteDir, "nr2-qb-reports.js"));
   } else if (existsSync(join(deferredDir, "nr2-analytics.js"))) {
@@ -1817,6 +1820,10 @@ async function main() {
     assert(pageCanvasSrc.includes("ms-mockup-preview-frame"), "mock-embed staff pages must render iframe gate");
     assert(pageCanvasSrc.includes("/mockup-elite-embed/"), "mock-embed staff pages must point at elite embed route");
     assert(!pageCanvasSrc.includes("MoonshotLayoutEngine.render"), "mock-embed staff pages must not wire layout engine");
+  } else if (staffLiveWirePilot) {
+    assert(pageCanvasSrc.includes("shouldLiveWire"), "live-wire pilot must gate per-page live render");
+    assert(pageCanvasSrc.includes("MoonshotLayoutEngine.render"), "live-wire pilot must wire layout engine");
+    assert(pageCanvasSrc.includes("mockupPreviewGate"), "live-wire pilot must keep mock-embed fallback for other pages");
   } else {
     assert(pageCanvasSrc.includes("dashboardHost"), "QB mockup must wrap dashboard-grid in dashboardHost");
     assert(pageCanvasSrc.includes("heroKpiRow"), "staff pages must use 12-col hero KPI rows");
@@ -1844,10 +1851,10 @@ async function main() {
   assert(readFileSync(join(siteDir, "nr2-page-filters.js"), "utf8").includes("data-nr2-filter-chip"), "filter chips must be wired");
   assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes("data-nr2-filter-chip"), "mockup chrome must render wired filter chips");
   assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes("period-scrubber"), "period scrubber CSS must exist");
-  assert(readFileSync(join(siteDir, "nr2-moonshot-ui.js"), "utf8").includes(staffMockEmbed ? "ms-mockup-preview" : "chartMountPolicy"), staffMockEmbed ? "moonshot UI must skip live enhancement inside mock iframe gate" : "unified chart mount policy must merge with NR2Charts");
+  assert(readFileSync(join(siteDir, "nr2-moonshot-ui.js"), "utf8").includes(staffUsesDeferredBundles ? "ms-mockup-preview" : "chartMountPolicy"), staffUsesDeferredBundles ? "moonshot UI must skip live enhancement inside mock iframe gate" : "unified chart mount policy must merge with NR2Charts");
   assert(existsSync(join(__dirname, "page_storyboard_export.py")), "page_storyboard_export module must exist");
   assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes('data-nr2-export="page-storyboard"'), "staff pages must expose storyboard export");
-  if (!staffMockEmbed) {
+  if (!staffUsesDeferredBundles) {
     assert(existsSync(join(siteDir, "nr2-tier3.js")), "nr2-tier3.js must exist for Tier S3");
     assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("semantic-zoom"), "Tier S3 semantic zoom must be wired");
     assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("hal-presence-orb"), "Tier S3 HAL presence must be wired");
@@ -1872,7 +1879,7 @@ async function main() {
   assert(readFileSync(join(__dirname, "import-manifest.json"), "utf8").includes("softdent.procedures"), "import manifest must define procedures export");
   assert(readFileSync(join(__dirname, "import-manifest.json"), "utf8").includes("softdent.claimStatus"), "import manifest must define claim status export");
   assert(readFileSync(join(__dirname, "softdent_operational_pipeline.py"), "utf8").includes("build_procedures_rows"), "operational pipeline must export procedures rows");
-  if (!staffMockEmbed) {
+  if (!staffUsesDeferredBundles) {
     assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("No operatory schedule available"), "operatory empty state must be visible");
     assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("data-narrative-draft"), "claims kanban must expose Draft with HAL per row");
   }

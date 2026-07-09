@@ -1,9 +1,9 @@
 {
-  "BUILD_ID": "hal-10100",
-  "assetVersion": "hal-10100",
-  "schemaVersion": "hal-10100",
+  "BUILD_ID": "hal-10106",
+  "assetVersion": "hal-10106",
+  "schemaVersion": "hal-10106",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "mock-embed",
-  "builtAt": "2026-07-08T17:30:00.000Z",
-  "notes": "hal-10100: Staff pages mock-embed only (elite iframe); layout engine and chart bundle deferred until live-wire sign-off."
+  "builtAt": "2026-07-09T11:15:00.000Z",
+  "notes": "hal-10106: HAL page uses elite mock iframe like other staff pages in mock-embed mode."
 }

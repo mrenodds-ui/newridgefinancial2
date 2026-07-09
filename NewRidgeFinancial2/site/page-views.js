@@ -446,7 +446,6 @@ const PageViews = (function () {
   }
 
   function hasPage(pageId) {
-    if (pageId === "hal") return false;
     if (typeof PageSchema !== "undefined" && PageSchema.isStaffPage) {
       return PageSchema.isStaffPage(pageId);
     }

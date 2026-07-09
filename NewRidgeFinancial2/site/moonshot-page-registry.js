@@ -2,7 +2,7 @@
  * Moonshot page registry — nav metadata + panel layouts from moonshot-page-layouts.js.
  */
 const MoonshotPageRegistry = (function () {
-  const SCHEMA_VERSION = "hal-10100";
+  const SCHEMA_VERSION = "hal-10106";
   const LAYOUT_EPOCH = "moonshot-mockup";
 
   const PRACTICE = {
@@ -214,26 +214,35 @@ const MoonshotPageRegistry = (function () {
   let MANIFEST = null;
 
   function staffMockOnly() {
+    if (typeof globalThis !== "undefined" && globalThis.NR2_STAFF_MOCK_ONLY) return true;
     if (typeof window === "undefined") return false;
     if (window.NR2_STAFF_MOCK_ONLY) return true;
     try {
-      return document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed";
+      if (document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed") return true;
     } catch (_e) {
-      return false;
+      /* ignore */
     }
+    // Stale cached index.html may omit head flags; elite catalog implies mock-embed staff shell.
+    if (Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES) && window.__NR2_MOCKUP_ELITE_PAGES.length > 0) {
+      return true;
+    }
+    return false;
   }
 
   function elitePageIds() {
-    if (typeof window !== "undefined" && Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES)) {
-      return window.__NR2_MOCKUP_ELITE_PAGES.filter((id) => id !== "hal");
-    }
-    return null;
+    const catalog =
+      typeof globalThis !== "undefined" && Array.isArray(globalThis.__NR2_MOCKUP_ELITE_PAGES)
+        ? globalThis.__NR2_MOCKUP_ELITE_PAGES
+        : typeof window !== "undefined" && Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES)
+          ? window.__NR2_MOCKUP_ELITE_PAGES
+          : null;
+    return catalog && catalog.length ? catalog.slice() : null;
   }
 
   function hasMockPreview(pageId) {
-    if (pageId === "hal") return false;
     const elite = elitePageIds();
     if (staffMockOnly() && elite) return elite.includes(pageId);
+    if (pageId === "hal") return false;
     return Boolean(PAGE_META[pageId]);
   }
 
@@ -278,9 +287,8 @@ const MoonshotPageRegistry = (function () {
     const elite = elitePageIds();
     let pageIds = Object.keys(pages).length ? Object.keys(pages) : Object.keys(PAGE_META);
     if (staffMockOnly() && elite && elite.length) {
-      const staffElite = elite.filter((id) => id !== "hal");
-      pageIds = navOrder.filter((id) => id === "hal" || staffElite.includes(id));
-      for (const id of staffElite) {
+      pageIds = navOrder.filter((id) => elite.includes(id));
+      for (const id of elite) {
         if (!pageIds.includes(id)) pageIds.push(id);
       }
     }
@@ -292,7 +300,7 @@ const MoonshotPageRegistry = (function () {
         subtitle: "Elite mock preview — add PAGE_META in moonshot-page-registry.js for chrome labels",
         accent: "green",
       };
-      const mockOnlyStaff = staffMockOnly() && id !== "hal";
+      const mockOnlyStaff = staffMockOnly();
       out[id] = {
         id,
         label: meta.label || id,
@@ -309,15 +317,27 @@ const MoonshotPageRegistry = (function () {
     return out;
   }
 
-  const PAGES = buildPages();
-  const STAFF_PAGE_IDS = Object.keys(PAGES).filter((id) => id !== "hal");
+  let PAGES = null;
+
+  function pagesMap() {
+    if (!PAGES) PAGES = buildPages();
+    return PAGES;
+  }
 
   function byId(pageId) {
-    return PAGES[pageId] || null;
+    return pagesMap()[pageId] || null;
   }
 
   function flatNav() {
-    return NAV_GROUPS.flatMap((group) => group.pages.map((id) => PAGES[id]).filter(Boolean));
+    return NAV_GROUPS.flatMap((group) => group.pages.map((id) => pagesMap()[id]).filter(Boolean));
+  }
+
+  function staffPageIds() {
+    if (staffMockOnly()) {
+      const elite = elitePageIds();
+      if (elite && elite.length) return elite.slice();
+    }
+    return Object.keys(pagesMap()).filter((id) => id !== "hal");
   }
 
   function navPages() {
@@ -325,9 +345,9 @@ const MoonshotPageRegistry = (function () {
   }
 
   function isStaffPage(pageId) {
-    if (pageId === "hal") return false;
     if (staffMockOnly()) return hasMockPreview(pageId);
-    return STAFF_PAGE_IDS.includes(pageId);
+    if (pageId === "hal") return false;
+    return staffPageIds().includes(pageId);
   }
 
   function commandsFor(pageId) {
@@ -349,8 +369,12 @@ const MoonshotPageRegistry = (function () {
     LAYOUT_EPOCH,
     PRACTICE,
     NAV_GROUPS,
-    PAGES,
-    STAFF_PAGE_IDS,
+    get PAGES() {
+      return pagesMap();
+    },
+    get STAFF_PAGE_IDS() {
+      return staffPageIds();
+    },
     byId,
     flatNav,
     navPages,

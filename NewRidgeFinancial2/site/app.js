@@ -184,7 +184,7 @@ function serverRequiredMessage(feature) {
 
 function enforceSingleFinancialTab() {
   const LOCK_KEY = "nr2_financial_tab_lock";
-  const LEASE_TTL_MS = 6000;
+  const LEASE_TTL_MS = 12000;
   const HEARTBEAT_MS = 2000;
 
   function nr2EpochCheckBroadcast() {
@@ -228,11 +228,23 @@ function enforceSingleFinancialTab() {
   function showTabBlockedMessage() {
     const app = document.getElementById("app") || document.body;
     app.innerHTML =
-      '<div style="font-family:system-ui;padding:2rem;text-align:center;">' +
+      '<div style="font-family:system-ui;padding:2rem;text-align:center;max-width:480px;margin:10vh auto;">' +
       "<h2>NewRidge Financial is already open</h2>" +
       "<p>This application can only run in one tab at a time to protect financial data.</p>" +
-      '<p>Please return to the other tab, or wait a few seconds and <a href="javascript:location.reload()">try again</a>.</p>' +
-      "</div>";
+      "<p>Return to the other tab, wait a few seconds, or use this tab instead.</p>" +
+      '<p style="margin-top:1.25rem;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">' +
+      '<button type="button" id="nr2-tab-retry" style="padding:0.5rem 1rem;cursor:pointer">Try again</button>' +
+      '<button type="button" id="nr2-tab-takeover" style="padding:0.5rem 1rem;cursor:pointer">Use this tab</button>' +
+      "</p></div>";
+    const retry = document.getElementById("nr2-tab-retry");
+    const takeover = document.getElementById("nr2-tab-takeover");
+    if (retry) retry.addEventListener("click", () => location.reload());
+    if (takeover) {
+      takeover.addEventListener("click", () => {
+        localStorage.removeItem(LOCK_KEY);
+        location.reload();
+      });
+    }
   }
 
   function acquireTabLock() {
@@ -260,7 +272,7 @@ function enforceSingleFinancialTab() {
     return true;
   }
 
-  acquireTabLock();
+  return acquireTabLock();
 }
 
 function saveChatHistory() {
@@ -4961,7 +4973,7 @@ function renderSidebar(activeId) {
   if (!sidebar || typeof PageSchema === "undefined") return;
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Stale schema blocked. Reload with ?v=hal-10100&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Stale schema blocked. Reload with ?v=hal-10106&__nr2_purge=1</div>';
     return;
   }
   const MC =
@@ -5779,7 +5791,7 @@ function renderWorkstationDesktopRequired(message) {
 async function boot() {
   renderRuntimeModeBanner();
   if (!NR2_WORKSTATION_ONLY && typeof DesktopBridge !== "undefined" && DesktopBridge.isLoopbackHost && DesktopBridge.isLoopbackHost()) {
-    enforceSingleFinancialTab();
+    if (!enforceSingleFinancialTab()) return;
   }
   if (NR2_WORKSTATION_ONLY) {
     document.title = "NR2 Office Workstation";
@@ -6035,6 +6047,7 @@ DesktopBridge.whenReady(() => {
     SideNotesOfficeFallback.install();
   }
   if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return;
+  if (window.__NR2_BLOCK_BOOT) return;
   boot();
 });
 

@@ -1,7 +1,8 @@
-/* Offline read-only cache — Moonshot Phase 9; SRI fail-closed at install (kimi-k2.6 eval). */
-const BUILD_ID = "hal-10100";
-const CACHE = "nr2-offline-v11";const INTEGRITY = "nr2-offline-integrity-v1";
-const SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/desktop-bridge.js", "/hal-transparency.js"];
+/* Offline read-only cache — Moonshot Phase 9; mock-embed uses network-first for versioned assets. */
+const BUILD_ID = "hal-10106";
+const CACHE = "nr2-offline-v12-mock-embed";
+const INTEGRITY = "nr2-offline-integrity-v2";
+const SHELL = ["/", "/index.html"];
 
 async function sha384Base64(buffer) {
   const hash = await crypto.subtle.digest("SHA-384", buffer);
@@ -19,12 +20,12 @@ async function putWithIntegrity(cache, request, response) {
   const buffer = await response.clone().arrayBuffer();
   const digest = await sha384Base64(buffer);
   await cache.put(request, new Response(buffer, { headers: response.headers }));
-  const integrityCache = await caches.open(INTEGITY);
+  const integrityCache = await caches.open(INTEGRITY);
   await integrityCache.put(integrityKey(request.url), new Response(digest));
 }
 
 async function precacheWithSRI(cache, url) {
-  const response = await fetch(url, { cache: "no-cache" });
+  const response = await fetch(url, { cache: "no-store" });
   if (!response || !response.ok) {
     throw new Error(`Precache fetch failed: ${url} (${response ? response.status : "no response"})`);
   }
@@ -47,6 +48,12 @@ function notifyOfflineStale() {
   self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
     clients.forEach((client) => client.postMessage({ type: "nr2-offline-stale" }));
   });
+}
+
+function isVersionedAppAsset(url) {
+  if (url.origin !== self.location.origin) return false;
+  if (url.searchParams.has("v")) return true;
+  return /\.(js|css|html|json)$/i.test(url.pathname);
 }
 
 self.addEventListener("install", (event) => {
@@ -89,10 +96,21 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(event.request, { cache: "no-store" }));
     return;
   }
-  if (url.pathname.startsWith("/api/")) return;  event.respondWith(
-    fetch(event.request)
+  if (url.pathname.startsWith("/api/")) return;
+  if (isVersionedAppAsset(url)) {
+    event.respondWith(
+      fetch(event.request, { cache: "no-store" }).catch(async () => {
+        const cached = await matchWithIntegrity(event.request);
+        if (cached) notifyOfflineStale();
+        return cached || Response.error();
+      }),
+    );
+    return;
+  }
+  event.respondWith(
+    fetch(event.request, { cache: "no-store" })
       .then((response) => {
-        if (response && response.ok && url.origin === self.location.origin) {
+        if (response && response.ok && url.origin === self.location.origin && !isVersionedAppAsset(url)) {
           const copy = response.clone();
           caches.open(CACHE).then((cache) => putWithIntegrity(cache, event.request, copy));
         }

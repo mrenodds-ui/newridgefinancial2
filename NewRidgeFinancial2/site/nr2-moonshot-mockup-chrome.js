@@ -58,8 +58,11 @@ const MoonshotMockupChrome = (function () {
     const mockOnly =
       (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
       (typeof document !== "undefined" &&
-        document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed");
-    if (mockOnly && page && page.id !== "hal") {
+        document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed") ||
+      (typeof window !== "undefined" &&
+        Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES) &&
+        window.__NR2_MOCKUP_ELITE_PAGES.length > 0);
+    if (mockOnly && page) {
       return "";
     }
     if (!page || page.id !== activeId) return "";
