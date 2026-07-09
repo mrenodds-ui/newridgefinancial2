@@ -132,7 +132,9 @@ const ImportReadinessGate = (function () {
       return;
     }
     if (isDismissed()) return;
-    const readiness = await fetchReadiness();
+    const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+    const cached = db && typeof db.getCachedImportReadiness === "function" ? db.getCachedImportReadiness() : null;
+    const readiness = cached || (await fetchReadiness());
     if (!needsGate(readiness)) {
       removeGate();
       clearDismiss();
@@ -163,8 +165,9 @@ const ImportReadinessGate = (function () {
     if (typeof window === "undefined") return;
     if (staffMockEmbedPage("financial") && !liveWirePilotActive()) return;
     window.addEventListener("nr2-import-readiness-changed", () => {
-      onReadinessChanged();
-      window.dispatchEvent(new CustomEvent("nr2:page-refresh-requested"));
+      // Do not dispatch nr2:page-refresh-requested here — that re-enters widget refresh
+      // and full-page paint in a tight loop while readiness is polled.
+      onReadinessChanged().catch(() => {});
     });
   }
 

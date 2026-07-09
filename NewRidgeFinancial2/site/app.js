@@ -1330,8 +1330,34 @@ function renderProactiveBanner() {
   if (existing) existing.remove();
 }
 
+let lastStaffPageFeedFp = "";
+let forceHalWidgetPlacementInFlight = null;
+
+function staffPageFeedFingerprint(feed, snapshot) {
+  try {
+    const widgets = (feed && feed.widgets) || {};
+    const keys = Object.keys(widgets).sort();
+    const parts = keys.map((key) => {
+      const w = widgets[key] || {};
+      const metrics = w.metrics || {};
+      const metricKeys = Object.keys(metrics).sort().slice(0, 8);
+      return `${key}:${w.status || ""}:${metricKeys.map((m) => `${m}=${metrics[m]}`).join(",")}`;
+    });
+    // Do not include loadedAt — cache reads stamp a new timestamp every call.
+    const syncAt =
+      (snapshot &&
+        snapshot.importBundle &&
+        snapshot.importBundle.syncStatus &&
+        (snapshot.importBundle.syncStatus.completedAt || snapshot.importBundle.syncStatus.startedAt)) ||
+      "";
+    return `${syncAt}|${parts.join(";")}`;
+  } catch {
+    return String(Date.now());
+  }
+}
+
 function scheduleHalWidgetRefresh(snapshot, options) {
-  const repaint = !!(options && options.repaint);
+  const forceRepaint = !!(options && options.repaint);
   if (halWidgetRefreshInFlight) return halWidgetRefreshInFlight;
   halWidgetRefreshInFlight = refreshHalWidgetFeed(snapshot)
     .then(async (feed) => {
@@ -1342,23 +1368,27 @@ function scheduleHalWidgetRefresh(snapshot, options) {
       if (PageViews && PageViews.setHalFeed) {
         PageViews.setHalFeed(halWidgetFeed, halProgramSnapshot);
       }
-      if (
+      const shouldPaint =
         currentId !== "hal" &&
         appPage &&
         !appPage.hidden &&
         PageViews &&
         PageViews.hasPage(currentId) &&
-        shouldRepaintStaffPageAfterFeed(currentId)
-      ) {
-        PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
-        if (shouldRefreshHalReadiness(currentId) && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
-          MoonshotMockupChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
-        }
-        if (typeof NR2Tier3 !== "undefined" && NR2Tier3.publishHeroMetrics && currentId === "financial") {
-          NR2Tier3.publishHeroMetrics(currentId);
-        }
-        if (currentId === "softdent") {
-          refreshSoftdentOdbcStatus().catch(() => {});
+        shouldRepaintStaffPageAfterFeed(currentId);
+      if (shouldPaint) {
+        const nextFp = staffPageFeedFingerprint(halWidgetFeed, halProgramSnapshot);
+        if (forceRepaint || nextFp !== lastStaffPageFeedFp) {
+          lastStaffPageFeedFp = nextFp;
+          PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
+          if (shouldRefreshHalReadiness(currentId) && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
+            MoonshotMockupChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
+          }
+          if (typeof NR2Tier3 !== "undefined" && NR2Tier3.publishHeroMetrics && currentId === "financial") {
+            NR2Tier3.publishHeroMetrics(currentId);
+          }
+          if (currentId === "softdent") {
+            refreshSoftdentOdbcStatus().catch(() => {});
+          }
         }
       }
       refreshOpsHealthStatus().catch(() => {
@@ -2491,17 +2521,28 @@ function showHalActionNotice(_message, _tone) {
 }
 
 async function forceHalWidgetPlacement(detail) {
+  if (forceHalWidgetPlacementInFlight) return forceHalWidgetPlacementInFlight;
   const pageId =
     (detail && detail.pageId) ||
     (window.location.hash || "").replace("#", "") ||
     (getPages()[0] && getPages()[0].id) ||
     "financial";
   let placementNote = "";
+  const reason = (detail && detail.reason) || "user-force";
+  // Never re-kick import sync from import-complete / boot-followup — that loops
+  // ImportCoordinator.onComplete → forceHalWidgetPlacement → refresh → onComplete.
+  const skipImportRefresh =
+    Boolean(detail && detail.skipImportRefresh) ||
+    reason === "import-complete" ||
+    reason === "boot" ||
+    reason === "boot-fallback" ||
+    reason === "hal-force-place";
 
+  forceHalWidgetPlacementInFlight = (async () => {
   invalidateProgramCaches("hal-force-widget-placement");
 
   const desktop = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
-  if (desktop && desktop.hasRuntimeAccess && desktop.hasRuntimeAccess()) {
+  if (!skipImportRefresh && desktop && desktop.hasRuntimeAccess && desktop.hasRuntimeAccess()) {
     try {
       if (typeof ImportCoordinator !== "undefined") {
         await ImportCoordinator.refresh({ reason: "hal-force-place" });
@@ -2512,6 +2553,8 @@ async function forceHalWidgetPlacement(detail) {
     } catch (err) {
       placementNote = `Import refresh issue: ${err && err.message ? err.message : String(err)}. Rebuilt widget feed from cached data.`;
     }
+  } else if (skipImportRefresh) {
+    placementNote = "Widget feed rebuilt from current imports.";
   } else {
     placementNote = "Browser preview: rebuilt widget feed from available preview data only.";
   }
@@ -2520,7 +2563,11 @@ async function forceHalWidgetPlacement(detail) {
   await refreshHalWidgetFeed(snapshot);
 
   if (window.HalProactive) {
-    halProactiveBriefing = await HalProactive.runCycle(buildHalAgentCtx(), { force: true, forcePlacement: true });
+    halProactiveBriefing = await HalProactive.runCycle(buildHalAgentCtx(), {
+      force: true,
+      forcePlacement: !skipImportRefresh,
+      skipPlacement: skipImportRefresh,
+    });
     if (halProactiveBriefing) {
       halData.runtime = Object.assign({}, halData.runtime || {}, {
         proactiveBriefing: halProactiveBriefing,
@@ -2528,7 +2575,7 @@ async function forceHalWidgetPlacement(detail) {
         lastWidgetPlacement: {
           at: new Date().toISOString(),
           pageId,
-          reason: (detail && detail.reason) || "user-force",
+          reason,
         },
       });
       renderProactiveBanner();
@@ -2540,6 +2587,10 @@ async function forceHalWidgetPlacement(detail) {
   showHalActionNotice(placementNote, desktop && desktop.hasRuntimeAccess && desktop.hasRuntimeAccess() ? "info" : "warn");
 
   return { placementNote, feed: halWidgetFeed, pageId };
+  })().finally(() => {
+    forceHalWidgetPlacementInFlight = null;
+  });
+  return forceHalWidgetPlacementInFlight;
 }
 
 function handleHalLiveWidgetEvent(event) {
@@ -6011,9 +6062,9 @@ async function boot() {
   }
   if (typeof ImportCoordinator !== "undefined") {
     ImportCoordinator.onComplete(() => {
-      forceHalWidgetPlacement({ reason: "import-complete" }).catch(() => {
+      forceHalWidgetPlacement({ reason: "import-complete", skipImportRefresh: true }).catch(() => {
         invalidateProgramCaches("import-refresh");
-        scheduleHalWidgetRefresh();
+        scheduleHalWidgetRefresh(undefined, { repaint: true });
       });
     });
   }
@@ -6079,8 +6130,8 @@ async function boot() {
   loadLocalSidenotesBridge().catch(() => {});
   if (typeof ImportCoordinator !== "undefined") {
     ImportCoordinator.refresh({ reason: "boot" })
-      .then(() => forceHalWidgetPlacement({ reason: "boot" }))
-      .catch(() => forceHalWidgetPlacement({ reason: "boot-fallback" }));
+      .then(() => forceHalWidgetPlacement({ reason: "boot", skipImportRefresh: true }))
+      .catch(() => forceHalWidgetPlacement({ reason: "boot-fallback", skipImportRefresh: true }));
   } else {
     refreshImportsInBackground();
     forceHalWidgetPlacement({ reason: "boot" }).catch(() => {
@@ -6153,10 +6204,7 @@ if (typeof window !== "undefined") {
     }
   });
   window.addEventListener("nr2-import-readiness-changed", () => {
-    const currentId = (window.location.hash || "").replace("#", "") || getPages()[0].id;
-    if (shouldRepaintStaffPageAfterFeed(currentId)) {
-      scheduleHalWidgetRefresh(undefined, { repaint: true });
-    }
+    // Badge/gate listeners update chrome; avoid full Financial repaint on every readiness poll.
   });
   window.addEventListener("nr2-import-sync-complete", () => {
     invalidateProgramCaches("import-sync-complete");

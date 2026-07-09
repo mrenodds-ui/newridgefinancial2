@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10123",
-  "assetVersion": "hal-10123",
-  "schemaVersion": "hal-10123",
+  "BUILD_ID": "hal-10125",
+  "assetVersion": "hal-10125",
+  "schemaVersion": "hal-10125",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial"],
-  "builtAt": "2026-07-09T15:55:00.000Z",
-  "notes": "hal-10123: Load NR2Analytics/SoftdentDaily/QbReports so Financial empty panels can populate."
+  "builtAt": "2026-07-09T16:10:00.000Z",
+  "notes": "hal-10125: Break forceHalWidgetPlacement import-complete refresh loop that blinked Financial."
 }

@@ -44,6 +44,7 @@ RATE_LIMIT_EXEMPT_PATHS = frozenset(
         "/api/import-bundle",
         "/api/import-readiness",
         "/api/import-sync-status",
+        "/api/import-sync-reset",
         "/nr2-build.json",
     }
 )

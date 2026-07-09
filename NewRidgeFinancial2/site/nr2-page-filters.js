@@ -168,7 +168,6 @@ const NR2PageFilters = (function () {
     }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("nr2:page-refresh-requested"));
-      window.dispatchEvent(new CustomEvent("nr2-import-readiness-changed"));
     }
   }
 

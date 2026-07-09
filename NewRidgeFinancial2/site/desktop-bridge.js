@@ -51,11 +51,32 @@ const DesktopBridge = (function () {
   let importReadinessCache = null;
   let cloudHalSettingsCache = null;
 
+  function readinessFingerprint(readiness) {
+    if (!readiness || typeof readiness !== "object") return "";
+    return [
+      readiness.level || "",
+      readiness.ok === true ? "1" : "0",
+      readiness.loadedAt || "",
+      readiness.error || "",
+      Array.isArray(readiness.codes) ? readiness.codes.join(",") : "",
+    ].join("|");
+  }
+
   function notifyImportReadinessChanged(readiness) {
-    if (readiness && typeof readiness === "object") importReadinessCache = readiness;
+    if (readiness && typeof readiness === "object") {
+      const nextFp = readinessFingerprint(readiness);
+      const prevFp = readinessFingerprint(importReadinessCache);
+      importReadinessCache = readiness;
+      if (nextFp && nextFp === prevFp) return false;
+    } else if (readiness == null && importReadinessCache == null) {
+      return false;
+    } else {
+      importReadinessCache = readiness;
+    }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("nr2-import-readiness-changed", { detail: importReadinessCache }));
     }
+    return true;
   }
 
   function notifyCloudHalChanged(settings) {
