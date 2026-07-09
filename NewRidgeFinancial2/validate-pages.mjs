@@ -230,8 +230,10 @@ if (pilotMode) {
   assert.ok(
     Array.isArray(buildManifest.liveWirePages) &&
       buildManifest.liveWirePages.includes("financial") &&
-      buildManifest.liveWirePages.includes("softdent"),
-    "live-wire-pilot must include financial and softdent in liveWirePages",
+      buildManifest.liveWirePages.includes("softdent") &&
+      buildManifest.liveWirePages.includes("quickbooks") &&
+      buildManifest.liveWirePages.includes("ar"),
+    "live-wire-pilot must include financial, softdent, quickbooks, and ar in liveWirePages",
   );
 } else {
   assert.ok(!indexHtml.includes("moonshot-page-layouts.js"), "index must not load layout manifest in mock-embed mode");
@@ -244,6 +246,7 @@ assert.ok(!indexHtml.includes("charts/"), "index must not load chart overlay scr
 if (pilotMode) {
   assert.ok(indexHtml.includes("nr2-analytics.js"), "live-wire pilot must load NR2Analytics");
   assert.ok(indexHtml.includes("nr2-softdent-daily.js"), "live-wire pilot must load SoftDent daily binders");
+  assert.ok(indexHtml.includes("nr2-qb-reports.js"), "live-wire pilot must load QuickBooks report binders");
   assert.ok(indexHtml.includes("nr2-tier3.js"), "live-wire pilot may load tier-3 helpers");
 } else {
   assert.ok(!indexHtml.includes("nr2-tier3.js"), "index must not load tier-3 bundle in mock-embed mode");
