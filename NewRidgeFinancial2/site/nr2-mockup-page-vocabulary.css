@@ -1990,6 +1990,14 @@
   margin-bottom: 8px;
 }
 
+.app--moonshot-mockup .ms-page .ms-page-chrome--mock-embed {
+  margin-bottom: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-page-chrome--mock-embed .page-header-tools {
+  margin-bottom: 8px;
+}
+
 .app--moonshot-mockup .ms-page .ms-mockup-preview-iframe {
   background: #0a0a0c;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2009,4 +2017,23 @@
 .app--moonshot-mockup .ms-page .ms-mockup-preview-gate__path code {
   font-size: 12px;
   word-break: break-all;
+}
+
+.app--moonshot-mockup .ms-page .ms-live-wire-pilot-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  background: rgba(34, 211, 238, 0.08);
+  color: var(--text-primary, #f0f0f2);
+  font-size: 13px;
+}
+
+.app--moonshot-mockup .ms-page .ms-live-wire-pilot-banner strong {
+  color: #22d3ee;
+  font-weight: 600;
 }

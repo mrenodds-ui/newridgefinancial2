@@ -19,6 +19,7 @@ const appJs = readFileSync(join(siteDir, "app.js"), "utf8");
 const indexHtml = readFileSync(join(siteDir, "index.html"), "utf8");
 const buildManifest = JSON.parse(readFileSync(join(__dirname, "nr2-build.json"), "utf8"));
 const expectedAssetVersion = buildManifest.assetVersion;
+const mockEmbedMode = buildManifest.staffRenderMode === "mock-embed";
 const stylesCss = readFileSync(join(siteDir, "styles.css"), "utf8");
 const themeCss = readFileSync(join(siteDir, "nr2-moonshot-mockup-theme.css"), "utf8");
 const vocabCss = readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8");
@@ -89,9 +90,16 @@ for (const page of FUNCTIONAL_PAGES) {
   const html = await PageViews.previewPageHtml(halData, page.id, previewWidgetFeed, previewSnapshot);
   assert.ok(!html.includes("pv--mock-image"), `${page.id} must NOT render a mockup image`);
   assert.ok(html.includes("ms-page"), `${page.id} must render mockup ms-page surface`);
-  assert.ok(html.includes("ms-page-chrome") || html.includes("hero"), `${page.id} must use mockup page chrome`);
-  assert.ok(html.includes("hal-insight") || html.includes("filter-bar") || page.id === "hal", `${page.id} must use mockup insight or filter bar`);
-  if (page.id !== "office-manager" && page.id !== "hal") {
+  assert.ok(
+    html.includes("ms-page-chrome--mock-embed") || html.includes("ms-page-chrome") || html.includes("hero"),
+    `${page.id} must use mockup page chrome`,
+  );
+  if (mockEmbedMode) {
+    assert.ok(html.includes("ms-page-chrome--mock-embed"), `${page.id} must use compact mock-embed chrome`);
+  } else {
+    assert.ok(html.includes("hal-insight") || html.includes("filter-bar") || page.id === "hal", `${page.id} must use mockup insight or filter bar`);
+  }
+  if (!mockEmbedMode && page.id !== "office-manager" && page.id !== "hal") {
     assert.ok(
       html.includes("hal-insight") || html.includes("filter-bar"),
       `${page.id} must use insight or filter toolbar`,
@@ -113,10 +121,12 @@ for (const page of FUNCTIONAL_PAGES) {
   assert.ok(!html.includes("data-nr2-chart-host"), `${page.id} must not mount chart overlay hosts`);
   if (page.id === "financial") {
     assert.ok(html.includes("ms-mockup-preview-frame"), "financial page must embed elite mock preview");
-    assert.ok(
-      html.includes("hal-insight") || html.includes("HAL Insight"),
-      "financial page must show HAL insight banner",
-    );
+    if (!mockEmbedMode) {
+      assert.ok(
+        html.includes("hal-insight") || html.includes("HAL Insight"),
+        "financial page must show HAL insight banner",
+      );
+    }
   }
   for (const cls of HIGH_TECH_SURFACES[page.id] || []) {
     assert.ok(html.includes(cls), `${page.id} must render high-tech HAL surface ${cls}`);
@@ -148,7 +158,6 @@ const navRailHtml =
   typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.renderNavRail
     ? MoonshotMockupChrome.renderNavRail("financial")
     : "";
-const mockEmbedMode = buildManifest.staffRenderMode === "mock-embed";
 assert.ok(navRailHtml.includes("nav-section"), "mockup nav must render grouped sections");
 assert.ok(navRailHtml.includes("nav-practice"), "mockup nav must render practice block");
 assert.ok(navRailHtml.includes('data-nav="hal"'), "mockup nav must include HAL");

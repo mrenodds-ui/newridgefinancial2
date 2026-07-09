@@ -54,14 +54,20 @@ const MoonshotMockupChrome = (function () {
     return map[widgetKey] || null;
   }
 
-  function renderNavSubitems(page, activeId) {
-    const mockOnly =
+  function staffMockEmbedMode() {
+    if (typeof globalThis !== "undefined" && globalThis.NR2_STAFF_MOCK_ONLY) return true;
+    return (
       (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
       (typeof document !== "undefined" &&
         document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed") ||
       (typeof window !== "undefined" &&
         Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES) &&
-        window.__NR2_MOCKUP_ELITE_PAGES.length > 0);
+        window.__NR2_MOCKUP_ELITE_PAGES.length > 0)
+    );
+  }
+
+  function renderNavSubitems(page, activeId) {
+    const mockOnly = staffMockEmbedMode();
     if (mockOnly && page) {
       return "";
     }
@@ -331,6 +337,13 @@ const MoonshotMockupChrome = (function () {
     </div>`;
   }
 
+  function pageChromeMockEmbed(state, schema, opts) {
+    const o = opts || {};
+    const headerTools =
+      schema && STAFF_HEADER_TOOL_PAGES.has(schema.id) ? renderPageHeaderTools(schema, o, "") : "";
+    return `<div class="ms-page-chrome ms-page-chrome--mock-embed">${headerTools}${o.halReadinessStrip || ""}</div>`;
+  }
+
   function pageChromeHal(state, schema, opts) {
     const o = opts || {};
     const toolbar = o.halToolbar || o.toolbarActions || "";
@@ -414,6 +427,14 @@ const MoonshotMockupChrome = (function () {
     const schema = typeof PageSchema !== "undefined" && state && state.pageId ? PageSchema.byId(state.pageId) : null;
     if (!schema) {
       return `<div class="ms-page-chrome ms-page-chrome--missing" role="alert"><p>Page unavailable.</p></div>`;
+    }
+    if (staffMockEmbedMode()) {
+      const HW = halWidgetsApi();
+      const halReadinessStrip =
+        HW && typeof HW.canvasPageStrip === "function" && state.halWidgetFeed
+          ? HW.canvasPageStrip(state.pageId, state.halWidgetFeed)
+          : "";
+      return pageChromeMockEmbed(state, schema, { halReadinessStrip, ...(o || {}) });
     }
     if (state.pageId === "hal") {
       return pageChromeHal(state, schema, o);

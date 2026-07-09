@@ -1,9 +1,9 @@
 {
-  "BUILD_ID": "hal-10106",
-  "assetVersion": "hal-10106",
-  "schemaVersion": "hal-10106",
+  "BUILD_ID": "hal-10107",
+  "assetVersion": "hal-10107",
+  "schemaVersion": "hal-10107",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "mock-embed",
-  "builtAt": "2026-07-09T11:15:00.000Z",
-  "notes": "hal-10106: HAL page uses elite mock iframe like other staff pages in mock-embed mode."
+  "builtAt": "2026-07-09T12:00:00.000Z",
+  "notes": "hal-10107: Compact mock-embed chrome — single shell; iframe shows widgets only."
 }

@@ -1820,7 +1820,7 @@ async function main() {
     assert(pageCanvasSrc.includes("ms-mockup-preview-frame"), "mock-embed staff pages must render iframe gate");
     assert(pageCanvasSrc.includes("/mockup-elite-embed/"), "mock-embed staff pages must point at elite embed route");
     const embedPy = readFileSync(join(__dirname, "mockup_elite_embed.py"), "utf8");
-    assert(embedPy.includes(".ms-rail"), "elite embed must strip duplicate ms-rail chrome");
+    assert(embedPy.includes("data-nr2-embed"), "elite embed must tag html for scoped chrome stripping");
     assert(embedPy.includes("body > header"), "elite embed must strip duplicate page headers");
     assert(embedPy.includes(".mission-frame"), "elite embed must flatten mission-frame layouts");
     assert(!pageCanvasSrc.includes("MoonshotLayoutEngine.render"), "mock-embed staff pages must not wire layout engine");
