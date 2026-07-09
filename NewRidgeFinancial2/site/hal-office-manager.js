@@ -144,6 +144,8 @@ const HalOfficeManager = (function () {
     const metrics = HalSkills.computeTaskMetrics(tasks);
     const attention = HalSkills.buildOfficeManagerAttention(snapshot, metrics);
     (attention.items || []).forEach((item) => {
+      // Meta rollup of open tasks — useful in attention text, not as a competing office priority.
+      if (item.itemId === "local-office-tasks-open") return;
       if (item.severity === "info" && (item.count || 0) < 3 && !item.missingDataCodes) return;
       const category =
         item.category === "claims_follow_up"
@@ -243,6 +245,32 @@ const HalOfficeManager = (function () {
     };
   }
 
+  function claimsLaneSummary(snapshot) {
+    const claims = snapshot && snapshot.claims;
+    if (!claims) return null;
+    const lanes = claims.laneTotals || claims.byStatus || {};
+    const denied = Number(lanes.Denied || lanes.denied || 0) || 0;
+    const review = Number(lanes["Needs Review"] || lanes.needsReview || 0) || 0;
+    const ready = Number(lanes.Ready || lanes.ready || 0) || 0;
+    const draft = Number(lanes.Draft || lanes.draft || 0) || 0;
+    const total = Number(claims.total != null ? claims.total : denied + review + ready + draft) || 0;
+    if (!total && !denied && !review) return null;
+    const rows = claims.claims || claims.top || [];
+    let genericPayer = 0;
+    let namedPayer = 0;
+    rows.forEach((row) => {
+      const payer = String((row && (row.payer || row.Payer || row.tag)) || "")
+        .trim()
+        .toLowerCase();
+      if (!payer || payer === "insurance" || payer === "unknown" || payer === "—" || payer === "-") {
+        genericPayer += 1;
+      } else {
+        namedPayer += 1;
+      }
+    });
+    return { total, denied, review, ready, draft, genericPayer, namedPayer, rowCount: rows.length };
+  }
+
   function formatDailyOfficeBriefing(state, snapshot) {
     const office = state || {};
     const priorities = office.priorities || [];
@@ -259,6 +287,25 @@ const HalOfficeManager = (function () {
       ...(office.humanMustApprove || EXTERNAL_BLOCKED).map((item) => `- ${item}`),
       "",
     ];
+    const claimLanes = claimsLaneSummary(snapshot);
+    if (claimLanes) {
+      lines.push(
+        "Claims from SoftDent import:",
+        `- Total ${claimLanes.total} · Denied ${claimLanes.denied} · Needs Review ${claimLanes.review} · Ready ${claimLanes.ready} · Draft ${claimLanes.draft}`,
+        claimLanes.denied || claimLanes.review
+          ? "- Focus: work Denied / Needs Review before Ready; HAL drafts locally — staff submit."
+          : "- No denied or needs-review backlog in the current import.",
+      );
+      if (claimLanes.rowCount && claimLanes.genericPayer > 0) {
+        lines.push(
+          `- Carrier gap: ${claimLanes.genericPayer} claim(s) labeled generic "Insurance" (named payers: ${claimLanes.namedPayer}). ` +
+            "Claim↔payer join needs SoftDent InsCo / claims export with real Payer labels — daysheet alone cannot supply carriers.",
+        );
+      } else if (claimLanes.namedPayer > 0) {
+        lines.push(`- Carrier labels present on ${claimLanes.namedPayer} claim(s) — use join_claim_payers for phones/IDs.`);
+      }
+      lines.push("");
+    }
     if (!priorities.length) {
       lines.push("No urgent office priorities. HAL will keep monitoring imports, widgets, and local queues.");
       return lines.join("\n");
@@ -286,6 +333,7 @@ const HalOfficeManager = (function () {
     buildOfficePriorities,
     buildOfficeManagerState,
     formatDailyOfficeBriefing,
+    claimsLaneSummary,
     postureFromPriorities,
   };
 })();

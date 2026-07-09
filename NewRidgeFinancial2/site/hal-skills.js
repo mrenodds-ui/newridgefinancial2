@@ -331,6 +331,21 @@ const HalSkills = (function () {
 
   const OPEN_CLAIM_STATUSES = new Set(["denied", "needs review", "needs-review", "draft", "submitted", "pending", "open"]);
 
+  function extractCdtFromClaim(claim) {
+    const blob = [claim.procedure, claim.code, claim.cdt, claim.Procedure, claim.id]
+      .map((v) => String(v || ""))
+      .join(" ");
+    const m = blob.match(/\b(D\d{4})\b/i);
+    return m ? m[1].toUpperCase() : "";
+  }
+
+  function isGenericClaimPayer(claim) {
+    const payer = String(claim.payer || claim.Payer || claim.tag || "")
+      .trim()
+      .toLowerCase();
+    return !payer || payer === "insurance" || payer === "unknown" || payer === "—" || payer === "-";
+  }
+
   function assessClaimReadiness(claim) {
     const status = String(claim.status || "").toLowerCase();
     const hasClaimId = !!claim.id;
@@ -338,17 +353,27 @@ const HalSkills = (function () {
     const hasAmount = !!claim.amount && claim.amount !== "$0.00";
     const hasNarrative = !!claim.narrative || !!claim.clinicalNote;
     const isDenied = status.includes("denied");
+    const genericPayer = isGenericClaimPayer(claim);
+    const cdt = extractCdtFromClaim(claim);
+    const daysheetDerived = /^DS-/i.test(String(claim.id || ""));
 
     const missing = [];
     if (!hasProcedure) missing.push("Procedure facts missing");
     if (!hasAmount) missing.push("Billed amount missing");
     if (!hasNarrative && (isDenied || status.includes("review"))) missing.push("Clinical note / narrative missing");
+    if (genericPayer) missing.push("Named payer/carrier missing (label is generic Insurance)");
+    if (!cdt && hasProcedure) missing.push("CDT code not parsed from procedure — confirm before fee lookup");
 
     let readiness;
     if (!hasClaimId) {
       readiness = "blocked";
-    } else if (hasProcedure && hasAmount && (hasNarrative || !isDenied)) {
+    } else if (genericPayer && (isDenied || status.includes("review"))) {
+      // Carrier gap blocks "ready" for denial/review work that needs payer routing
+      readiness = "needs_review";
+    } else if (hasProcedure && hasAmount && (hasNarrative || !isDenied) && !genericPayer) {
       readiness = hasNarrative ? "ready" : "needs_review";
+    } else if (hasProcedure && hasAmount && (hasNarrative || !isDenied)) {
+      readiness = "needs_review";
     } else if (hasProcedure || hasAmount) {
       readiness = "needs_review";
     } else {
@@ -359,24 +384,40 @@ const HalSkills = (function () {
       missing.push("Human review required");
     }
 
-    const priority = readiness === "blocked" ? "high" : isDenied ? "high" : readiness === "needs_review" ? "normal" : "low";
+    const priority =
+      readiness === "blocked" ? "high" : isDenied || genericPayer ? "high" : readiness === "needs_review" ? "normal" : "low";
     const canPrepareDraft = hasClaimId && readiness !== "blocked";
 
     const actions = [];
     if (missing.includes("Clinical note / narrative missing")) actions.push("Locate or draft the clinical narrative for staff review.");
     if (!hasAmount) actions.push("Confirm the billed amount before assessing readiness.");
+    if (genericPayer) {
+      actions.push(
+        daysheetDerived
+          ? "Import SoftDent claims export / ODBC with real Payer labels — daysheet rows cannot supply carriers."
+          : "Verify SoftDent InsCo / Insurance.xlsx for the carrier on this claim before payer routing.",
+      );
+    }
+    if (cdt) actions.push(`Fee check: lookup_fee_schedule for ${cdt} once carrier is known.`);
     if (canPrepareDraft) actions.push("Prepare a local draft for human review.");
     actions.push("Nothing has been submitted or sent.");
 
     let summary;
     if (readiness === "ready") summary = "Packet appears ready for human review. Nothing has been submitted or sent.";
-    else if (readiness === "needs_review") summary = canPrepareDraft ? "Local draft can be prepared. Staff must review before use." : "Needs review before use.";
+    else if (genericPayer)
+      summary = "Needs review: carrier is generic Insurance — claim↔payer join and fee schedule need a named Payer.";
+    else if (readiness === "needs_review")
+      summary = canPrepareDraft ? "Local draft can be prepared. Staff must review before use." : "Needs review before use.";
     else summary = missing.length ? `Blocked: ${missing[0]}.` : "Blocked until required local facts are available.";
 
     return {
       packetId: `cpr-${claim.id || "unknown"}`,
       claimRef: claim.id || null,
       patientLabel: claim.patient || null,
+      payerLabel: String(claim.payer || claim.Payer || claim.tag || "") || null,
+      cdtCode: cdt || null,
+      genericPayer,
+      daysheetDerived,
       status: readiness,
       priority,
       blockers: readiness === "blocked" ? missing.slice() : [],
@@ -408,14 +449,22 @@ const HalSkills = (function () {
 
   function formatClaimReadinessAnswer(resp) {
     const s = resp.summary;
+    const genericCount = (resp.items || []).filter((i) => i.genericPayer).length;
     const lines = [
       "Claim packet readiness (local only):",
       `- Ready: ${s.readyCount}`,
       `- Needs review: ${s.needsReviewCount}`,
       `- Blocked: ${s.blockedCount}`,
+    ];
+    if (genericCount) {
+      lines.push(
+        `- Carrier gap: ${genericCount} claim(s) still labeled generic Insurance — prefer SoftDent claims export / ODBC for real Payer labels.`,
+      );
+    }
+    lines.push(
       "",
       "HAL can prepare a local packet and draft. Staff must review before use. Nothing has been submitted or sent.",
-    ];
+    );
     const examples = resp.items.slice(0, 4);
     if (examples.length) {
       lines.push("", "Examples:");
@@ -497,13 +546,21 @@ const HalSkills = (function () {
     }
 
     if (taskMetrics) {
-      const openTasks =
-        (taskMetrics.openCount || 0) + (taskMetrics.inProgressCount || 0) + (taskMetrics.blockedCount || 0);
+      // Exclude the meta "Unresolved local office tasks" row so attention cannot count itself.
+      const substantive = (snap.officeTasks || []).filter((task) => {
+        const status = String(task && task.status ? task.status : "open");
+        if (!/^(open|in_progress|blocked)$/i.test(status)) return false;
+        if (String(task.sourceId || "") === "attention-local-office-tasks-open") return false;
+        if (/^HAL:\s*Unresolved local office tasks$/i.test(String(task.title || ""))) return false;
+        return true;
+      });
+      const openTasks = substantive.length;
+      const urgentOpenCount = substantive.filter((task) => /urgent|critical|high/i.test(String(task.priority || ""))).length;
       if (openTasks > 0) {
         items.push({
           itemId: "local-office-tasks-open",
           category: "local_tasks",
-          severity: (taskMetrics.urgentOpenCount || 0) > 0 ? "warning" : "info",
+          severity: urgentOpenCount > 0 ? "warning" : "info",
           title: "Unresolved local office tasks",
           detail: `${openTasks} local office task(s) remain open, in progress, or blocked.`,
           actionHint: "Work local tasks inside this app only. HAL reads SoftDent and QuickBooks only; no posting, writes, or external delivery.",
@@ -779,7 +836,11 @@ const HalSkills = (function () {
     const now = new Date().toISOString();
     return (tasks || []).map((task) => {
       if (!task.halGenerated || !task.sourceId) return task;
-      if (task.status !== "open" && task.status !== "blocked") return task;
+      if (task.status !== "open" && task.status !== "blocked" && task.status !== "in_progress") return task;
+      // Meta attention about open tasks must never remain as an open work item.
+      if (String(task.sourceId) === "attention-local-office-tasks-open") {
+        return applyTaskUpdate(task, { status: "completed", resolvedWhen: now });
+      }
       if (active.has(String(task.sourceId))) return task;
       return applyTaskUpdate(task, { status: "completed", resolvedWhen: now });
     });
@@ -3686,14 +3747,20 @@ const HalSkills = (function () {
   }
 
   function formatWidgetFeed(feed) {
-    const lines = [`Manager dashboard widgets (${feed.manager}, local only):`, ""];
-    WIDGET_ORDER.forEach((key) => {
-      const w = feed.widgets[key];
-      if (!w) return;
+    const widgets = (feed && feed.widgets) || {};
+    const present = WIDGET_ORDER.filter((key) => widgets[key]);
+    const success = present.filter((key) => String(widgets[key].status || "").toUpperCase() === "SUCCESS").length;
+    const lines = [
+      `Manager dashboard widgets (${feed.manager}, local only):`,
+      `Widgets ready: ${success}/${present.length}`,
+      "",
+    ];
+    present.forEach((key) => {
+      const w = widgets[key];
       lines.push(`[${w.status}] ${w.title} — ${w.summary}`);
       lines.push(`  ${formatWidgetMetrics(w)}`);
     });
-    lines.push("", `Publish job: ${feed.jobs.widgetPublish.status}. Local-only; A/R shown only from a verified source.`);
+    lines.push("", `Publish job: ${feed.jobs && feed.jobs.widgetPublish ? feed.jobs.widgetPublish.status : "unknown"}. Local-only; A/R shown only from a verified source.`);
     return lines.join("\n");
   }
 

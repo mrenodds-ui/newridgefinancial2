@@ -2097,6 +2097,20 @@ async function main() {
   const byTaskIdTwo = HalSkills.upsertHalTask(byTaskIdOne.tasks, { taskId: "hal-emp-claims-review", title: "HAL: review 1 billing/claims item(s)", source: "employee-level-3" }, { actor: "hal-office-manager" });
   assert(byTaskIdOne.created === true && byTaskIdTwo.created === false && byTaskIdTwo.tasks.length === 1, "HAL tasks must upsert by taskId when sourceId is absent");
   assert(/review 1 billing/.test(byTaskIdTwo.task.title), "taskId upsert must refresh title");
+  const metaTask = HalSkills.upsertHalTask([], { title: "HAL: Unresolved local office tasks", sourceId: "attention-local-office-tasks-open", source: "attention" }, { actor: "hal-office-manager" });
+  const metaResolved = HalSkills.autoResolveHalTasks(metaTask.tasks, ["attention-local-office-tasks-open"]);
+  assert(metaResolved[0].status === "completed", "meta open-tasks attention must auto-resolve even when listed active");
+  const feedText = HalSkills.formatWidgetFeed({
+    manager: "Import cache",
+    widgets: {
+      practiceFinancialOverview: { status: "SUCCESS", title: "Practice Financial Overview", summary: "ok", metrics: {} },
+      claimsPipeline: { status: "SUCCESS", title: "Claims Pipeline", summary: "ok", metrics: {} },
+    },
+    jobs: { widgetPublish: { status: "idle" } },
+  });
+  assert(/Widgets ready:\s*2\/2/i.test(feedText), "formatWidgetFeed must include Widgets ready count");
+  const synthReady = HalCore.synthesizeHandlerReply(feedText, "show widget feed", { intent: "widgets:status" });
+  assert(/50\/50|2\/2 ready|Widget feed: 2\/2 ready|Dashboard widgets — 2\/2 ready/i.test(synthReady) && !/some gaps/i.test(synthReady), "widget synthesis must report ready count, not some gaps: " + synthReady);
 
   const hciUrl = pathToFileURL(join(siteDir, "hal-capability-index.js")).href;
   const orchUrl = pathToFileURL(join(siteDir, "hal-orchestrator.js")).href;

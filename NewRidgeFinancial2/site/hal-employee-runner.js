@@ -31,13 +31,14 @@ const HalEmployeeRunner = (function () {
     const now = new Date().toISOString();
     let resolved = 0;
     const next = tasks.map((task) => {
-      if (!task || task.source !== "employee-level-3") return task;
+      if (!task) return task;
       if (task.status === "completed" || task.status === "dismissed" || task.status === "done") return task;
       // Keep the stable upserted task; only collapse legacy duplicates that lacked sourceId.
       if (String(task.sourceId || "") === CLAIMS_TASK_SOURCE_ID) return task;
       const title = String(task.title || "");
-      const isClaimsReview = /billing\/claims|claims review/i.test(title);
-      if (!isClaimsReview || task.sourceId) return task;
+      const isClaimsReview = /HAL:\s*review\s+\d+\s+billing\/claims/i.test(title);
+      const fromLevel3 = task.source === "employee-level-3" || (!task.sourceId && isClaimsReview);
+      if (!isClaimsReview || !fromLevel3 || task.sourceId) return task;
       resolved += 1;
       return Object.assign({}, task, {
         status: "completed",

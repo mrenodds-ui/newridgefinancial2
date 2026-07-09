@@ -493,6 +493,9 @@ const HalCore = (function () {
     return String(text || "").replace(STRUCTURED_PLAN_OPENER_RE, "").trim();
   }
 
+  const MID_BODY_COT_RE =
+    /(?:^|\n+)\s*(?:Okay|Hmm),?\s+the user[^\n]*|(?:^|\n+)\s*The user is asking[^\n]*|(?:^|\n+)\s*First,?\s+I need to[^\n]*|(?:^|\n+)\s*Let me (?:break|think|verify|re-evaluate|reconsider|check|start)[^\n]*|(?:^|\n+)\s*\*(?:Double-checking|Lightbulb|Verifying|Structure check|Final verification)[^\n]*/gi;
+
   function stripChainOfThoughtProse(text) {
     let out = String(text || "").trim();
     if (!out) return out;
@@ -519,7 +522,15 @@ const HalCore = (function () {
       out = trimmed.replace(COT_PARAGRAPH_RE, "").replace(/^(Okay|Hmm|Let me|Wait)[^.!?]*[.!?]?\s*/i, "").trim();
       break;
     }
-    return out.trim();
+    // Mid-body CoT lines (common after a good first sentence).
+    out = out.replace(MID_BODY_COT_RE, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim();
+    // Inline "Hmm, the user…" mid-sentence leftovers
+    out = out
+      .replace(/\s*(?:Okay|Hmm),?\s+the user[^.!?\n]*[.!?]?\s*/gi, " ")
+      .replace(/\s*The user is asking[^.!?\n]*[.!?]?\s*/gi, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    return out;
   }
 
   function needsReadOnlyLead(query) {
@@ -667,7 +678,11 @@ const HalCore = (function () {
     if (needsConsentLead(query) && !hasConsentMention(body)) {
       issues.push("missing_consent_lead");
     }
-    if (COT_PARAGRAPH_RE.test(body) || /<think>/i.test(body)) {
+    if (
+      COT_PARAGRAPH_RE.test(body) ||
+      /<think>/i.test(body) ||
+      /(?:Okay|Hmm),?\s+the user|The user is asking/i.test(body)
+    ) {
       issues.push("chain_of_thought_exposed");
     }
     if (CHATBOT_FILLER_RE.test(body) || CHATBOT_CLOSER_RE.test(body)) issues.push("chatbot_filler");
@@ -871,14 +886,16 @@ const HalCore = (function () {
       out = trimChatReply(out, query, route, { force: true, preferBrief: true });
     }
     if (issues.includes("yes_no_not_direct") && isYesNoQuestion(query)) {
-      const blocked = route && route.intent === "blocked: firewall";
+      const blocked =
+        (route && route.intent === "blocked: firewall") ||
+        /\b(without (?:staff )?consent|post to|write[\s-]?back|submit|email|fax|upload)\b/i.test(String(query || ""));
       let prefix =
         typeof HalAgentProgramming !== "undefined" && HalAgentProgramming.yesNoLead
           ? HalAgentProgramming.yesNoLead(query, route)
           : blocked
             ? "No."
-            : "Yes.";
-      if (!prefix) prefix = blocked ? "No." : "Yes.";
+            : "No.";
+      if (!prefix) prefix = "No.";
       if (!/^(yes|no)\b/i.test(out)) out = prefix + " " + out;
     }
     if (issues.includes("missing_readonly_lead") && needsReadOnlyLead(query) && !hasReadOnlyMention(out)) {
@@ -893,8 +910,12 @@ const HalCore = (function () {
       if (/^blocked: firewall/.test(route && route.intent ? route.intent : "") && !/^no\b/i.test(out)) {
         out = "No — " + out.replace(/^(yes|no)[—,\s]*/i, "");
       } else if (isYesNoQuestion(query) && !/^(yes|no)\b/i.test(out)) {
-        const blocked = /^blocked: firewall/.test(route && route.intent ? route.intent : "");
-        out = (blocked ? "No — " : "Yes — ") + out;
+        const lead =
+          typeof HalAgentProgramming !== "undefined" && HalAgentProgramming.yesNoLead
+            ? HalAgentProgramming.yesNoLead(query, route)
+            : "No.";
+        const prefix = /^no\b/i.test(lead || "") ? "No — " : /^yes\b/i.test(lead || "") ? "Yes — " : "No — ";
+        out = prefix + out;
       }
     }
     if (issues.includes("too_few_sentences")) {
@@ -1109,9 +1130,15 @@ const HalCore = (function () {
 
   function synthesizeHandlerReply(rawText, query, route) {
     const raw = String(rawText || "").trim();
-    if (!raw || raw.length < 320) return raw;
+    if (!raw) return raw;
     const intent = route && route.intent ? String(route.intent) : "";
     if (/^capability:/.test(intent) || intent === "help") return raw;
+    const isWidgetFeed =
+      /^widgets:/.test(intent) ||
+      (/\bwidget feed\b/i.test(raw) && /\[FAILED\]|\[SUCCESS\]|Widgets ready:/i.test(raw)) ||
+      (/Widgets ready:\s*\d+\/\d+/i.test(raw) && /\[SUCCESS\]|\[FAILED\]|\[DEGRADED\]/i.test(raw));
+    // Widget feeds should always compress to a ready-count line, even when short.
+    if (!isWidgetFeed && raw.length < 320) return raw;
     if (/readiness/i.test(intent) || /HAL readiness:/i.test(raw)) {
       const gate = raw.match(/Staff use gate:\s*([^\n]+)/i);
       const warn = (raw.match(/\[Warning\]/gi) || []).length;
@@ -1123,12 +1150,21 @@ const HalCore = (function () {
         `Quick read: ${status} (${pass}P/${warn}W${fail ? `/${fail}F` : ""}).${gate ? " Gate: " + gate[1].trim() + "." : ""}`,
       ]);
     }
-    if (/^widgets:/.test(intent) || (/\bwidget feed\b/i.test(raw) && /\[FAILED\]|Widgets ready:/i.test(raw))) {
-      const ready = raw.match(/(\d+\/\d+)\s*ready/i) || raw.match(/Widgets ready:\s*(\d+\/\d+)/i);
+    if (isWidgetFeed) {
+      const readyMatch = raw.match(/(\d+\/\d+)\s*ready/i) || raw.match(/Widgets ready:\s*(\d+\/\d+)/i);
       const failed = (raw.match(/\[FAILED\]/gi) || []).length;
+      const success = (raw.match(/\[SUCCESS\]/gi) || []).length;
+      const degraded = (raw.match(/\[DEGRADED\]/gi) || []).length;
+      const total = success + degraded + failed;
+      const readyLabel = readyMatch ? readyMatch[1] : total ? `${success}/${total}` : null;
+      const allReady = readyLabel && failed === 0 && (!total || success === total || /^(\d+)\/\1$/.test(readyLabel));
       return pickVariant([
-        `Widget feed: ${ready ? ready[1] + " ready" : "partial data"}${failed ? `, ${failed} need imports` : ""}.`,
-        `Dashboard widgets — ${ready ? ready[1] : "some gaps"}${failed ? "; " + failed + " still need data" : ""}.`,
+        allReady
+          ? `Widget feed: ${readyLabel} ready.`
+          : `Widget feed: ${readyLabel ? readyLabel + " ready" : "partial data"}${failed ? `, ${failed} need imports` : degraded ? `, ${degraded} degraded` : ""}.`,
+        allReady
+          ? `Dashboard widgets — ${readyLabel} ready.`
+          : `Dashboard widgets — ${readyLabel || "some gaps"}${failed ? "; " + failed + " still need data" : ""}.`,
       ]);
     }
     if (/imports:/i.test(intent)) {

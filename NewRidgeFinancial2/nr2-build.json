@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10149",
-  "assetVersion": "hal-10149",
-  "schemaVersion": "hal-10149",
+  "BUILD_ID": "hal-10150",
+  "assetVersion": "hal-10150",
+  "schemaVersion": "hal-10150",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T17:30:00.000Z",
-  "notes": "hal-10149: Stop Level-3 HAL from spawning duplicate billing/claims office tasks; count Needs Review+Denied only; collapse legacy duplicates."
+  "builtAt": "2026-07-09T17:40:00.000Z",
+  "notes": "hal-10150: Widget feed reports ready count honestly; stop self-referential unresolved-office-tasks priority/auto-task loop."
 }
