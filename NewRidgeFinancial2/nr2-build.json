@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10133",
-  "assetVersion": "hal-10133",
-  "schemaVersion": "hal-10133",
+  "BUILD_ID": "hal-10134",
+  "assetVersion": "hal-10134",
+  "schemaVersion": "hal-10134",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T16:55:00.000Z",
-  "notes": "hal-10133: Fill smoke-pass empty panels for appointments, revenue-by-service, and journal queue."
+  "builtAt": "2026-07-09T17:00:00.000Z",
+  "notes": "hal-10134: Show latest SoftDent collections when current period export is still pending."
 }

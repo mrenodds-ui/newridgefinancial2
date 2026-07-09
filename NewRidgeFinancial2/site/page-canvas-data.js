@@ -82,13 +82,33 @@ const PageCanvasData = (function () {
 
   function collectionsDisplay(fin, value, fallbackHint) {
     if (fin && fin.collectionsPending) {
+      const prior = latestReportedCollections();
+      if (prior && prior.value > 0) {
+        return {
+          value: fmtMoney(prior.value),
+          hint: `Latest SoftDent collections · ${prior.period} (current period export pending)`,
+          tone: "warning",
+          period: prior.period,
+          pendingCurrent: true,
+        };
+      }
       return {
         value: "Pending export",
         hint: "Comparable period export not loaded",
         tone: "warning",
+        pendingCurrent: true,
       };
     }
     if (fin && (fin.collectionsMissing || fin.collectionsZeroWithProduction)) {
+      const prior = latestReportedCollections();
+      if (prior && prior.value > 0) {
+        return {
+          value: fmtMoney(prior.value),
+          hint: `Latest SoftDent collections · ${prior.period}`,
+          tone: "warning",
+          period: prior.period,
+        };
+      }
       return {
         value: "—",
         hint: fin.collectionsMissing
@@ -97,11 +117,47 @@ const PageCanvasData = (function () {
         tone: "warning",
       };
     }
+    if (value != null && value !== "" && value !== "—") {
+      return {
+        value: fmt(value),
+        hint: fmt(fallbackHint),
+        tone: undefined,
+      };
+    }
+    const prior = latestReportedCollections();
+    if (prior && prior.value > 0) {
+      return {
+        value: fmtMoney(prior.value),
+        hint: `SoftDent collections · ${prior.period}`,
+        tone: undefined,
+        period: prior.period,
+      };
+    }
     return {
       value: fmt(value),
       hint: fmt(fallbackHint),
       tone: undefined,
     };
+  }
+
+  function fmtMoney(amount) {
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return "—";
+    return `$${Math.round(n).toLocaleString()}`;
+  }
+
+  function latestReportedCollections() {
+    const series = softdentCollectionsDailySeries();
+    if (!series || !series.hasData || !Array.isArray(series.labels) || !Array.isArray(series.values)) {
+      return null;
+    }
+    for (let i = series.labels.length - 1; i >= 0; i -= 1) {
+      const value = Number(series.values[i]);
+      if (Number.isFinite(value) && value > 0) {
+        return { period: String(series.labels[i] || ""), value };
+      }
+    }
+    return null;
   }
 
   function verifiedArWidgetReady(key) {
@@ -145,7 +201,7 @@ const PageCanvasData = (function () {
         widgetKey: "practiceFinancialOverview",
       },
       {
-        label: "Collections MTD",
+        label: collections.period ? `Collections (${collections.period})` : "Collections MTD",
         value: collections.value,
         hint: collections.hint,
         tone: collections.tone || widgetTone("financialProductionTrend"),
@@ -193,7 +249,7 @@ const PageCanvasData = (function () {
         widgetKey: "careDeliveryPerformance",
       },
       {
-        label: "Collections",
+        label: collections.period ? `Collections (${collections.period})` : "Collections",
         value: collections.value,
         hint: collections.hint,
         tone: collections.tone || widgetTone("payerMixAndCollections"),
@@ -1716,9 +1772,11 @@ const PageCanvasData = (function () {
   function halPracticeOverviewStats() {
     const ov = metrics("practiceFinancialOverview");
     const fin = dash("financial") || {};
+    const collections = collectionsDisplay(fin, ov.collectionsTotal);
     const hasData =
       ov.productionTotal != null ||
       ov.collectionsTotal != null ||
+      collections.value !== "—" ||
       ov.monthlyNetIncome != null ||
       (fin.productionMtd && fin.productionMtd.value != null);
     return {
@@ -1731,9 +1789,9 @@ const PageCanvasData = (function () {
           widgetKey: "practiceFinancialOverview",
         },
         {
-          label: "Collections",
-          value: collectionsDisplay(fin, ov.collectionsTotal).value,
-          tone: widgetTone("practiceFinancialOverview"),
+          label: collections.period ? `Collections (${collections.period})` : "Collections",
+          value: collections.value,
+          tone: collections.tone || widgetTone("practiceFinancialOverview"),
           widgetKey: "practiceFinancialOverview",
         },
         {
