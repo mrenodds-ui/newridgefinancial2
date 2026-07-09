@@ -38,6 +38,28 @@ def _normalize_period(raw: Any) -> str:
     return text[:7]
 
 
+def _current_month_period() -> str:
+    now = datetime.now(timezone.utc)
+    return f"{now.year:04d}-{now.month:02d}"
+
+
+def _period_incomplete(row: dict[str, Any]) -> bool:
+    if not row:
+        return False
+    if row.get("collectionsPending") is True:
+        return True
+    if row.get("collectionsReported") is False:
+        return True
+    # Current calendar month with production but no reported collections is still open.
+    if (
+        row.get("period") == _current_month_period()
+        and (row.get("production") or 0) > 0
+        and not ((row.get("collections") or 0) > 0)
+    ):
+        return True
+    return False
+
+
 def _dashboard_rows(bundle: dict[str, Any]) -> list[dict[str, Any]]:
     dashboard = ((bundle.get("softdent") or {}).get("dashboard")) or {}
     rows: list[dict[str, Any]] = []
@@ -52,11 +74,15 @@ def _dashboard_rows(bundle: dict[str, Any]) -> list[dict[str, Any]]:
         period = _normalize_period(row.get("period") or row.get("Period") or row.get("year_month"))
         if not period:
             continue
+        collections_pending = row.get("collectionsPending") is True or row.get("CollectionsPending") is True
+        collections_reported = False if collections_pending else row.get("collectionsReported") is not False
         normalized.append(
             {
                 "period": period,
                 "production": _parse_money(row.get("production") or row.get("Production")),
                 "collections": _parse_money(row.get("collections") or row.get("Collections")),
+                "collectionsPending": collections_pending,
+                "collectionsReported": collections_reported,
             }
         )
     normalized.sort(key=lambda item: item["period"])
@@ -346,24 +372,61 @@ def collection_lag(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
     if not isinstance(ar_rows, list):
         ar_rows = []
     dso = _ar_weighted_dso(ar_rows)
+    if dso is not None:
+        return {
+            "avgLagDays": dso,
+            "dsoProxy": True,
+            "priorPeriodProxy": False,
+            "period": None,
+            "incompleteCurrent": False,
+            "caption": "",
+            "source": "softdent.ar aging buckets",
+            "summary": f"Weighted collection lag (DSO proxy): {dso} days.",
+            "hasData": True,
+        }
     sd_rows = _dashboard_rows(bundle)
-    lag_proxy = None
-    if dso is None and sd_rows:
-        latest = sd_rows[-1]
-        prod = latest.get("production") or 0.0
-        coll = latest.get("collections") or 0.0
-        if prod > 0 and coll > 0:
-            lag_proxy = round(max(0.0, min(90.0, 30.0 * (1.0 - min(1.0, coll / prod)))), 1)
-    avg_days = dso if dso is not None else lag_proxy
+    latest = sd_rows[-1] if sd_rows else None
+    incomplete_current = bool(latest and _period_incomplete(latest))
+    complete = None
+    for row in reversed(sd_rows):
+        if (
+            not _period_incomplete(row)
+            and (row.get("production") or 0) > 0
+            and (row.get("collections") or 0) > 0
+        ):
+            complete = row
+            break
+    avg_days = None
+    period = None
+    if complete:
+        prod = float(complete.get("production") or 0)
+        coll = float(complete.get("collections") or 0)
+        avg_days = round(max(0.0, min(90.0, 30.0 * (1.0 - min(1.0, coll / prod)))), 1)
+        period = complete.get("period")
+    prior_period_proxy = bool(
+        incomplete_current and period and latest and period != latest.get("period")
+    )
+    caption = ""
+    summary = "Collection lag appears when SoftDent A/R aging or dashboard collections export is loaded."
+    if avg_days is not None:
+        if prior_period_proxy:
+            caption = f"Proxy from {period} · {latest.get('period')} export pending"
+            summary = (
+                f"Collection lag proxy from {period}: {avg_days} days "
+                f"(current month collections export pending)."
+            )
+        else:
+            caption = f"From {period}" if period else ""
+            summary = f"Collection lag (monthly proxy): {avg_days} days"
     return {
         "avgLagDays": avg_days,
-        "dsoProxy": dso is not None,
-        "source": "softdent.ar aging buckets" if dso is not None else "monthly production/collections proxy",
-        "summary": (
-            f"Weighted collection lag (DSO proxy): {avg_days} days."
-            if avg_days is not None
-            else "Collection lag appears when SoftDent A/R aging or dashboard collections export is loaded."
-        ),
+        "dsoProxy": False,
+        "priorPeriodProxy": prior_period_proxy,
+        "period": period,
+        "incompleteCurrent": incomplete_current,
+        "caption": caption,
+        "source": "monthly production/collections proxy",
+        "summary": summary,
         "hasData": avg_days is not None,
     }
 

@@ -230,7 +230,13 @@ const PageCanvasData = (function () {
       {
         label: "A/R Days",
         value: dsoValue,
-        hint: lag.dsoProxy ? "Weighted DSO" : "Cross-analytics",
+        hint: lag.dsoProxy
+          ? "Weighted DSO"
+          : lag.priorPeriodProxy
+            ? lag.caption || `Proxy from ${lag.period}`
+            : lag.hasData
+              ? "Monthly proxy"
+              : "Cross-analytics",
         tone: widgetTone("nr2KpiRibbon"),
         widgetKey: "nr2KpiRibbon",
       },
@@ -1470,7 +1476,12 @@ const PageCanvasData = (function () {
       { label: "31–60 Days", value: findBucket(/31-60|31\s*to\s*60/i), halSubpanel: "arKpi3160" },
       { label: "61–90 Days", value: findBucket(/61-90|61\s*to\s*90/i), halSubpanel: "arKpi6190" },
       { label: "90+ Days", value: findBucket(/90\+|^\s*90/i), halSubpanel: "arKpi90plus", tone: "warning" },
-      { label: "DSO", value: dsoValue, halSubpanel: "arKpiDso" },
+      {
+        label: "DSO",
+        value: dsoValue,
+        hint: lag.caption || (lag.dsoProxy ? "Weighted DSO" : lag.hasData ? "Monthly proxy" : null),
+        halSubpanel: "arKpiDso",
+      },
     ];
   }
 

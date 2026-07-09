@@ -190,19 +190,56 @@ const NR2Analytics = (function () {
 
   function collectionLag(snapshot) {
     const dso = arWeightedDso(snapshot);
-    let avg = dso;
-    if (avg == null) {
-      const sdRows = dashboardRows(snapshot);
-      const latest = sdRows.length ? sdRows[sdRows.length - 1] : null;
-      if (latest && latest.production > 0 && latest.collections > 0) {
-        avg = Math.round(Math.max(0, Math.min(90, 30 * (1 - Math.min(1, latest.collections / latest.production)))) * 10) / 10;
+    if (dso != null) {
+      return {
+        avgLagDays: dso,
+        dsoProxy: true,
+        priorPeriodProxy: false,
+        period: null,
+        incompleteCurrent: false,
+        hasData: true,
+        caption: "",
+        summary: `Collection lag (A/R weighted DSO): ${dso} days`,
+      };
+    }
+    const sdRows = dashboardRows(snapshot);
+    const latest = sdRows.length ? sdRows[sdRows.length - 1] : null;
+    const incompleteCurrent = Boolean(latest && periodIncomplete(latest));
+    // Open months (collections export pending) blank the latest row — use last complete month.
+    const complete =
+      [...sdRows]
+        .reverse()
+        .find((row) => !periodIncomplete(row) && row.production > 0 && row.collections > 0) || null;
+    let avg = null;
+    let period = null;
+    if (complete) {
+      avg =
+        Math.round(
+          Math.max(0, Math.min(90, 30 * (1 - Math.min(1, complete.collections / complete.production)))) * 10,
+        ) / 10;
+      period = complete.period;
+    }
+    const priorPeriodProxy = Boolean(incompleteCurrent && period && latest && period !== latest.period);
+    let summary = "";
+    let caption = "";
+    if (avg != null) {
+      if (priorPeriodProxy) {
+        summary = `Collection lag proxy from ${period}: ${avg} days (current month collections export pending).`;
+        caption = `Proxy from ${period} · ${latest.period} export pending`;
+      } else {
+        summary = `Collection lag (monthly proxy): ${avg} days`;
+        caption = period ? `From ${period}` : "";
       }
     }
     return {
       avgLagDays: avg,
-      dsoProxy: dso != null,
+      dsoProxy: false,
+      priorPeriodProxy,
+      period,
+      incompleteCurrent,
       hasData: avg != null,
-      summary: avg != null ? `Collection lag (DSO proxy): ${avg} days` : "",
+      caption,
+      summary,
     };
   }
 
@@ -300,10 +337,11 @@ const NR2Analytics = (function () {
     }
     if (lag.avgLagDays != null) {
       tiles.push({
-        label: "Collection lag (DSO)",
+        label: lag.priorPeriodProxy ? `Collection lag (${lag.period})` : "Collection lag (DSO)",
         value: `${lag.avgLagDays}d`,
         tone: lag.avgLagDays > 45 ? "warn" : "ok",
         widgetKey: "nr2CollectionLag",
+        hint: lag.caption || "",
       });
     }
     if (revenue.values && revenue.values.length) {
@@ -390,7 +428,13 @@ const NR2Analytics = (function () {
       });
     }
     const lag = collectionLag(snapshot);
-    if (lag.avgLagDays != null && lag.avgLagDays > 45) {
+    if (lag.priorPeriodProxy && lag.period) {
+      alerts.push({
+        level: "info",
+        text: `Collection lag proxy from ${lag.period} (${lag.avgLagDays}d) — current month SoftDent collections export still pending`,
+        widgetKey: "nr2CollectionLag",
+      });
+    } else if (lag.avgLagDays != null && lag.avgLagDays > 45) {
       alerts.push({
         level: "warn",
         text: `Collection lag ${lag.avgLagDays} days exceeds 45-day review threshold`,

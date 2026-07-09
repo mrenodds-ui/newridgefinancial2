@@ -317,16 +317,21 @@ const MoonshotLayoutEngine = (function () {
     nr2CollectionLag(D, H) {
       const lag = D && D.nr2CollectionLag ? D.nr2CollectionLag() : {};
       if (!lag.hasData) {
-        return H.canvasEmpty("Collection lag appears when A/R aging export is loaded.");
+        return H.canvasEmpty("Collection lag appears when A/R aging or SoftDent production/collections export is loaded.");
       }
       const days = lag.avgLagDays != null ? lag.avgLagDays : "—";
       const arcPct = typeof days === "number" ? Math.min(100, Math.round((days / 60) * 100)) : 0;
-      return `<div class="ms-elite-dso-gauge gauge-container" role="img" aria-label="Collection lag ${days} days">
+      const caption = lag.caption
+        ? `<div class="gauge-caption ms-elite-gauge-caption">${H.esc(String(lag.caption))}</div>`
+        : "";
+      const aria = lag.caption ? `Collection lag ${days} days · ${lag.caption}` : `Collection lag ${days} days`;
+      return `<div class="ms-elite-dso-gauge gauge-container" role="img" aria-label="${H.esc(aria)}">
         <svg viewBox="0 0 120 70" class="gauge-svg ms-elite-gauge-svg" aria-hidden="true">
           <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="var(--line-subtle)" stroke-width="8"/>
           <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="var(--gold)" stroke-width="8" stroke-dasharray="${(arcPct * 1.57).toFixed(1)} 157" stroke-linecap="round" class="ms-elite-gauge-arc"/>
         </svg>
         <div class="gauge-center"><strong class="gauge-value">${H.esc(String(days))}</strong><span class="gauge-label">Days</span></div>
+        ${caption}
       </div>`;
     },
     providerPerformance(D, H) {

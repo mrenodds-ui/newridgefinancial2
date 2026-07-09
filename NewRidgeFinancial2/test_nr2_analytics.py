@@ -64,6 +64,32 @@ class Nr2AnalyticsTests(unittest.TestCase):
         self.assertTrue(result["dsoProxy"])
         self.assertGreater(result["avgLagDays"], 0)
 
+    def test_collection_lag_prior_period_when_open_month_pending(self) -> None:
+        bundle = {
+            "softdent": {
+                "dashboard": [
+                    {"period": "2026-05", "production": 100000, "collections": 92000},
+                    {"period": "2026-06", "production": 110000, "collections": 95000},
+                    {
+                        "period": "2026-07",
+                        "production": 40000,
+                        "collections": 0,
+                        "collectionsPending": True,
+                    },
+                ],
+                "ar": {"rows": []},
+            }
+        }
+        result = collection_lag(bundle=bundle)
+        self.assertTrue(result["hasData"])
+        self.assertFalse(result["dsoProxy"])
+        self.assertTrue(result["priorPeriodProxy"])
+        self.assertEqual(result["period"], "2026-06")
+        # 30 * (1 - 95000/110000) = 4.1
+        self.assertAlmostEqual(result["avgLagDays"], 4.1, places=1)
+        self.assertIn("2026-06", result["caption"])
+        self.assertIn("2026-07", result["caption"])
+
     def test_quickbooks_monthly_revenue(self) -> None:
         result = quickbooks_monthly_revenue(bundle=_sample_bundle())
         self.assertTrue(result["hasData"])

@@ -2158,7 +2158,9 @@ const HalSkills = (function () {
     const lagStatus = analyticsPack.lag.hasData
       ? analyticsPack.lag.dsoProxy
         ? "SUCCESS"
-        : "DEGRADED"
+        : analyticsPack.lag.priorPeriodProxy
+          ? "SUCCESS"
+          : "DEGRADED"
       : arAvailable
         ? "DEGRADED"
         : "FAILED";
@@ -2451,11 +2453,23 @@ const HalSkills = (function () {
         status: lagStatus,
         summary: analyticsPack.lag.dsoProxy
           ? "Weighted days-sales-outstanding proxy from SoftDent A/R aging buckets."
-          : "Collection lag proxy from latest SoftDent production vs collections when A/R aging is unavailable.",
+          : analyticsPack.lag.priorPeriodProxy
+            ? analyticsPack.lag.summary ||
+              `Prior-period monthly proxy while current SoftDent collections export is pending.`
+            : "Collection lag proxy from latest SoftDent production vs collections when A/R aging is unavailable.",
         navTarget: WIDGET_NAV.nr2CollectionLag,
         metrics: {
           avgLagDays: metricValue(analyticsPack.lag.avgLagDays != null ? `${analyticsPack.lag.avgLagDays} days` : null),
-          dsoProxy: metricValue(analyticsPack.lag.dsoProxy ? "A/R weighted" : analyticsPack.lag.hasData ? "Monthly proxy" : null),
+          dsoProxy: metricValue(
+            analyticsPack.lag.dsoProxy
+              ? "A/R weighted"
+              : analyticsPack.lag.priorPeriodProxy
+                ? `Prior month ${analyticsPack.lag.period || ""}`.trim()
+                : analyticsPack.lag.hasData
+                  ? "Monthly proxy"
+                  : null,
+          ),
+          caption: metricValue(analyticsPack.lag.caption || null),
         },
       },
       nr2GoalScorecard: {
