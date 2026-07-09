@@ -6186,9 +6186,43 @@ async function boot() {
         if (window.HalHubClient && typeof HalHubClient.pushMorningBriefingToWorkstation === "function") {
           HalHubClient.pushMorningBriefingToWorkstation(card).catch(() => {});
         }
+        // Keep the card for the HAL page — do not read diagnostics aloud on boot.
         showHalActionNotice(`Morning briefing: ${card.sentence}`, "info");
       })
       .catch(() => {});
+  }
+  if (!skipAutonomousHal && !NR2_WORKSTATION_ONLY && window.HalVoice && typeof HalVoice.speakFriendlyBootGreeting === "function") {
+    try {
+      const already = sessionStorage.getItem("halFriendlyBootGreetingAt");
+      if (!already && !window.HAL_SKIP_SPEECH && !window._halRandomQaSkipSpeech) {
+        sessionStorage.setItem("halFriendlyBootGreetingAt", String(Date.now()));
+        const greet =
+          typeof HalCore !== "undefined" && HalCore.buildFriendlyGreetingReply
+            ? HalCore.buildFriendlyGreetingReply("hello")
+            : "Hey — HAL here. Good to see you. Ask me anything whenever you're ready.";
+        if (!halChatHistory.some((m) => m && m.intent === "chat: greeting")) {
+          halChatHistory.push({
+            role: "hal",
+            text: greet,
+            lane: "local",
+            intent: "chat: greeting",
+            actions: [],
+            skipChatSpeech: true,
+          });
+          if (typeof renderChatLog === "function") renderChatLog();
+          else if (typeof renderHalScreen === "function") renderHalScreen();
+        }
+        setTimeout(() => {
+          try {
+            HalVoice.speakFriendlyBootGreeting({ spokenText: greet });
+          } catch {
+            /* boot greeting optional */
+          }
+        }, 900);
+      }
+    } catch {
+      /* sessionStorage optional */
+    }
   }
   refreshOpsHealthStatus().catch(() => {
     /* ops health optional on boot */

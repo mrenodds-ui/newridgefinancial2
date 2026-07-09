@@ -651,6 +651,15 @@ const HalRouteExec = (function () {
       return outcome(HalSkills.formatClaimReadinessAnswer(resp), "claims", result.intent);
     }
 
+    if (result.useFriendlyGreeting || result.intent === "chat: greeting") {
+      const text =
+        (result.text && String(result.text).trim()) ||
+        (typeof HalCore !== "undefined" && HalCore.buildFriendlyGreetingReply
+          ? HalCore.buildFriendlyGreetingReply(trimmed)
+          : "Hey — HAL here. Ask me anything whenever you're ready.");
+      return outcome(text, "local", result.intent || "chat: greeting");
+    }
+
     if (result.useOfficeAttention) {
       const snapshot = await ctx.loadProgramSnapshot();
       const tasks = await resolveOfficeTasks(ctx);

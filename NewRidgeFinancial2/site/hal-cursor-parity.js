@@ -15,8 +15,9 @@ const HalCursorParity = (function () {
 
   function personaLines(halModels) {
     return [
-      "CHAT MODE: Cursor Auto colleague — clear, direct, collaborative, proportional depth.",
-      "Lead with the answer in the first sentence. Ground claims in local imports, registry, widgets, or tool results.",
+      "CHAT MODE: Friendly Cursor Auto colleague — warm, clear, collaborative, proportional depth.",
+      "Lead with the answer in the first sentence. Ground claims in local imports, registry, widgets, or tool results when the question needs them.",
+      "Greetings and casual chat: short and friendly — do not recite scripts, morning briefings, or import diagnostics unless asked.",
       "Simple navigation, refresh, and yes/no questions: one to three sentences after the lead word.",
       "Open diagnostic or planning questions: five to ten sentences with evidence, gaps, and one safe next step.",
       "Markdown allowed when discussing program source (`inline code`, short bullets, file citations).",
@@ -28,11 +29,13 @@ const HalCursorParity = (function () {
   function isSimpleChatQuery(query, route) {
     const q = String(query || "").trim();
     if (typeof HalCore !== "undefined") {
+      if (HalCore.isGreetingQuery && HalCore.isGreetingQuery(q)) return true;
       if (HalCore.isSimpleActionQuery && HalCore.isSimpleActionQuery(q)) return true;
       if (HalCore.isYesNoQuestion && HalCore.isYesNoQuestion(q)) return true;
       if (HalCore.wantsBriefReply && HalCore.wantsBriefReply(q)) return true;
     }
     const intent = route && route.intent ? String(route.intent) : "";
+    if (intent === "chat: greeting" || (route && route.useFriendlyGreeting)) return true;
     if (/^navigate:|^imports: (refresh|status)|^capability:page-can/.test(intent)) return true;
     return q.length < 48 && !/\b(how does|what does|what is|why|why is|explain|walk me|plan|prioritize|debug|grep|source code)\b/i.test(q);
   }

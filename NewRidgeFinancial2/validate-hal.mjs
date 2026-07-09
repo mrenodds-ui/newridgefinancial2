@@ -101,11 +101,11 @@ function buildRoutingRegressionCases() {
       "What needs attention today?",
       "what should I do today",
       "Show what needs attention today",
-      "Good morning",
       "priorities today",
     ],
     "office: attention",
   );
+  addMany(["Good morning", "hello", "hi", "Hey HAL"], "chat: greeting");
   addMany(["What is ready to work on", "ready pages"], "registry: ready");
   addMany(["What is blocked", "show blockers", "what is waiting"], "registry: blocked");
   addMany(["consent policy", "what are the guardrails?"], "consent");
@@ -473,6 +473,8 @@ async function main() {
     const ok =
       got === expectedIntent ||
       got.startsWith(expectedIntent) ||
+      (expectedIntent === "chat: greeting" &&
+        (got === "chat: greeting" || got.endsWith("chat: greeting") || result.useFriendlyGreeting === true)) ||
       (expectedIntent === "reasoning" &&
         (got === "priorities" || got === "office: attention") &&
         /\bcan you\b/i.test(question) &&
@@ -2076,7 +2078,15 @@ async function main() {
   const attentionRoute = HalCore.routeHalCommand(halData, halModels, pages, "What should I do today?");
   assert(attentionRoute.useOfficeAttention === true, "what should I do today must route to office attention");
   const morningRoute = HalCore.routeHalCommand(halData, halModels, pages, "Good morning");
-  assert(morningRoute.useOfficeAttention === true, "good morning must route to office attention");
+  assert(
+    morningRoute.intent === "chat: greeting" && morningRoute.useFriendlyGreeting === true,
+    "good morning must route to friendly greeting (not diagnostics)",
+  );
+  assert(String(morningRoute.text || "").length > 10, "good morning must include a friendly reply");
+  const helloRoute = HalCore.routeHalCommand(halData, halModels, pages, "hello");
+  assert(helloRoute.intent === "chat: greeting" && helloRoute.useFriendlyGreeting === true, "hello must route to friendly greeting");
+  assert(typeof HalCore.isGreetingQuery === "function" && HalCore.isGreetingQuery("Hi HAL"), "isGreetingQuery must detect Hi HAL");
+  assert(!HalCore.isGreetingQuery("What needs attention today?"), "attention questions must not be greetings");
   const attentionFmt = HalSkills.formatOfficeManagerAttention(
     HalSkills.buildOfficeManagerAttention({ claims: null }, { open: 0, blocked: 0, inProgress: 0, completed: 0 }),
   );

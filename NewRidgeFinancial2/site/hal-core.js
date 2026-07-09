@@ -936,8 +936,58 @@ const HalCore = (function () {
     /\b(agent loop|model lane|chat8b|reason21b|escalate30b|oss120b|self-check|tool results|num_predict|fastChat|GPU lane|Ollama endpoint|local tool check|synthesize tool|markdown dumps)\b/gi;
   const QUESTION_ECHO_RE = /^(regarding your question|as for your question|you asked (?:if|whether)|to answer your question)/i;
 
+  function isGreetingQuery(query) {
+    let q = String(query || "").trim().toLowerCase();
+    if (!q || q.length > 100) return false;
+    if (/\bwhat (needs|requires) attention\b|\bwhat should i (do|work on|focus on)\b|\bshow what needs attention\b/.test(q)) {
+      return false;
+    }
+    if (/\b(start of day|start my day|morning (brief|check|routine)|briefing|diagnostics?|import status|readiness)\b/.test(q)) {
+      return false;
+    }
+    // Bare address to HAL counts as a hello.
+    if (/^(hey|hi|hello)\s+hal\b[!.,\s]*$/.test(q) || /^hal[!.,\s]*$/.test(q)) return true;
+    q = q
+      .replace(/^(please|can you|could you|would you|hal[,:]?\s*|hey hal[,:]?\s*|for staff review[,:]?\s*|locally\s+)/i, "")
+      .replace(/\b(please|now|locally|thanks|thank you|for review)\b[!.,\s]*$/gi, "")
+      .replace(/[!?.,]+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!q) return true; // stripped down to an empty address ("Hey HAL", "HAL,")
+    return (
+      /^(good\s+)?(morning|afternoon|evening)$/.test(q) ||
+      /^(hello|hi|hey|howdy|yo)(\s+hal)?$/.test(q) ||
+      /^hal$/.test(q)
+    );
+  }
+
+  function buildFriendlyGreetingReply(query) {
+    const q = String(query || "").trim().toLowerCase();
+    if (/good\s+morning/.test(q)) {
+      return pickVariant([
+        "Good morning — glad you're here. I'm HAL. Ask me anything about the practice whenever you're ready.",
+        "Morning! I'm with you. What would you like to look at, or just ask me a question.",
+      ]);
+    }
+    if (/good\s+afternoon/.test(q)) {
+      return pickVariant([
+        "Good afternoon — HAL here. Happy to help with whatever you're working on.",
+        "Afternoon! I'm ready. Ask me anything about the office or the program.",
+      ]);
+    }
+    if (/good\s+evening/.test(q)) {
+      return "Good evening — HAL here. I'm around if you want to check something or just ask a question.";
+    }
+    return pickVariant([
+      "Hey — HAL here. Good to see you. Ask me anything whenever you're ready.",
+      "Hi! I'm HAL. Happy to help — what are you curious about?",
+      "Hello! I'm with you. Fire away with a question, or tell me what you're working on.",
+    ]);
+  }
+
   function detectUserTone(query) {
     const q = String(query || "").trim().toLowerCase();
+    if (isGreetingQuery(q)) return "casual";
     if (/^(quick question|hey hal|hal,|just wondering|real quick)/.test(q)) return "casual";
     if (/\b(explain|step-by-step|numbered|list all|full detail|walk me through|break down)\b/.test(q)) return "detailed";
     return "neutral";
@@ -1318,8 +1368,8 @@ const HalCore = (function () {
       if (wantsBriefReply(query) || intent === "capability:brief-followup") {
         meta = Object.assign({}, meta, { skipMinSentences: true });
       }
-    } else if (intent === "help") {
-      meta = Object.assign({}, meta, { skipMinSentences: true, synthesize: false });
+    } else if (intent === "help" || intent === "chat: greeting" || (route && route.useFriendlyGreeting)) {
+      meta = Object.assign({}, meta, { skipMinSentences: true, synthesize: false, preferBrief: true });
     }
     if (/^blocked: firewall/.test(intent) && meta.firewallBriefCount >= 1) {
       out = compressedBlockedReply(null, query, meta.firewallBriefCount, meta.halData);
@@ -2094,8 +2144,10 @@ const HalCore = (function () {
       return buildPageCapabilityReply(halData, pages, parsed.pageHint, true);
     }
 
+    const action = parsed.action || "";
+
     if (parsed.kind === "can") {
-      const planAction = String(parsed.action || "")
+      const planAction = String(action)
         .replace(/\s+without staff approval$/i, "")
         .trim()
         .toLowerCase();
@@ -2103,9 +2155,16 @@ const HalCore = (function () {
         // "Can you make a plan…" stays local — show today's attention board (no reasoning lane).
         return { intent: "office: attention", lane: "local", useOfficeAttention: true, text: "", actions: [] };
       }
+      if (isGreetingQuery(planAction) || isGreetingQuery(action)) {
+        return {
+          intent: "chat: greeting",
+          lane: "local",
+          useFriendlyGreeting: true,
+          text: buildFriendlyGreetingReply(planAction || action),
+          actions: [],
+        };
+      }
     }
-
-    const action = parsed.action || "";
     const actionNeedsConsent = isOutboundActionPhrase(action) || isOutboundActionPhrase(rawQuery);
 
     if (parsed.kind === "hypothetical" || (parsed.kind === "can" && actionNeedsConsent)) {
@@ -2397,6 +2456,17 @@ const HalCore = (function () {
       return { intent: "claims: readiness", lane: "local", useClaimReadiness: true, text: "", actions: [] };
     }
 
+    // Friendly hello — warm reply, no diagnostics dump.
+    if (isGreetingQuery(rawQuery) || isGreetingQuery(query)) {
+      return {
+        intent: "chat: greeting",
+        lane: "local",
+        useFriendlyGreeting: true,
+        text: buildFriendlyGreetingReply(rawQuery || query),
+        actions: [],
+      };
+    }
+
     // Office-manager attention / "what should I do today"
     // Keep "prioritize my work" / "make a plan" on the reasoning lane below.
     if (
@@ -2406,9 +2476,7 @@ const HalCore = (function () {
       /\bwhat should i (do|work on|focus on)\b/.test(query) ||
       /\bwhat should (i|we) do (today|now|next)\b/.test(query) ||
       /\b(start of day|start my day|morning (brief|check|routine))\b/.test(query) ||
-      /\bwhat do you (need|want) me to (do|work)\b/.test(query) ||
-      /\b(good\s+)?(morning|afternoon)\b/.test(query) ||
-      /(?:^|\b)(hello|hi|hey)\s*[!.]?$/.test(query)
+      /\bwhat do you (need|want) me to (do|work)\b/.test(query)
     ) {
       return { intent: "office: attention", lane: "local", useOfficeAttention: true, text: "", actions: [] };
     }
@@ -2674,7 +2742,8 @@ const HalCore = (function () {
 
   function humanVoicePromptLines() {
     return [
-      "Voice: sound like a steady, capable office teammate — not a generic chatbot, dashboard narrator, or distant outside evaluator.",
+      "Voice: warm, friendly office teammate — helpful and approachable, not a stiff ship computer, dashboard narrator, or distant evaluator.",
+      "Greetings and casual questions: keep it short and friendly. Do not dump import diagnostics, readiness reports, or scripted briefings unless they asked for that.",
       "Structure answers as: direct practical answer first; reason or verified source basis second; next safe staff action third.",
       "Use short plain paragraphs. Do not use bullet lists or numbered steps unless the user asks for a list.",
       "Do not end with filler closings such as \"let me know\", \"if you want\", \"Would you like me to\", or open-ended helper questions.",
@@ -3604,6 +3673,17 @@ const HalCore = (function () {
       return { intent: "imports: status", lane: "local", useImportStatus: true, text: "", actions: [] };
     }
 
+    // Friendly hello before capability wrapping — no diagnostics / script dump.
+    if (isGreetingQuery(rawQuery) || isGreetingQuery(query)) {
+      return {
+        intent: "chat: greeting",
+        lane: "local",
+        useFriendlyGreeting: true,
+        text: buildFriendlyGreetingReply(rawQuery || query),
+        actions: [],
+      };
+    }
+
     if (!opts.capabilityInner) {
       if (
         /\b(recap|summarize (?:what we|our (?:chat|conversation))|what did we (?:just )?(?:talk|discuss) about|conversation so far)\b/i.test(
@@ -4215,6 +4295,8 @@ const HalCore = (function () {
     hasReadOnlyMention,
     hasConsentMention,
     detectUserTone,
+    isGreetingQuery,
+    buildFriendlyGreetingReply,
     isFollowUpQuery,
     isCorrectionQuery,
     wantsBriefReply,

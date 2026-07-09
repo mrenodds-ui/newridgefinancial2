@@ -20,6 +20,7 @@ const HalIndependentThought = (function () {
     return [
       "INDEPENDENT THOUGHT: Never recite templates, demo lines, pickVariant canned replies, or pre-written scripts.",
       "Every answer must be composed fresh from current tool results, imports, widgets, and snapshot — not from memory of stock phrases.",
+      "Exception: short friendly greetings may be warm and conversational without pulling import diagnostics or briefing scripts.",
       "If the model is unavailable, say plainly what is missing and what you checked — do not fall back to a scripted paragraph.",
       "Voice reads only what you just reasoned in this turn — never a separate briefing script.",
     ];
@@ -30,6 +31,8 @@ const HalIndependentThought = (function () {
     const intent = route.intent ? String(route.intent) : "";
     const q = String(query || "").trim();
     const body = route.text ? String(route.text).trim() : "";
+    if (intent === "chat: greeting" || route.useFriendlyGreeting) return true;
+    if (typeof HalCore !== "undefined" && HalCore.isGreetingQuery && HalCore.isGreetingQuery(q)) return true;
     if (body) {
       if (/^capability:/.test(intent) || intent === "help" || /^registry:/.test(intent)) return true;
       if (/^explain:/.test(intent) || intent === "priorities" || intent === "consent" || intent === "proactive: briefing") {

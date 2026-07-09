@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10165",
-  "assetVersion": "hal-10165",
-  "schemaVersion": "hal-10165",
+  "BUILD_ID": "hal-10166",
+  "assetVersion": "hal-10166",
+  "schemaVersion": "hal-10166",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -17,6 +17,6 @@
     "hal",
     "office-manager"
   ],
-  "builtAt": "2026-07-09T19:15:00Z",
-  "notes": "hal-10165: Mission-control Terminal Glass polish — CSS + ms-mission-control class injection; existing widgets only."
+  "builtAt": "2026-07-09T19:40:39Z",
+  "notes": "hal-10166: Friendly HAL boot greeting + casual chat without diagnostics dump."
 }

@@ -408,6 +408,38 @@
     };
   }
 
+  const BOOT_GREETINGS = [
+    "Hey — HAL here. Good to see you. Ask me anything whenever you're ready.",
+    "Hi! I'm HAL. Happy to help — what are you curious about?",
+    "Hello! I'm with you. Fire away with a question whenever you like.",
+  ];
+
+  function speakFriendlyBootGreeting(options) {
+    options = options || {};
+    if (qaSkipSpeech() || options.skipSpeech) {
+      return { started: false, durationMs: 0, skipped: true, reason: "qa-skip-speech" };
+    }
+    const line = String(
+      options.spokenText ||
+        (typeof HalCore !== "undefined" && HalCore.buildFriendlyGreetingReply
+          ? HalCore.buildFriendlyGreetingReply("hello")
+          : BOOT_GREETINGS[Math.floor(Math.random() * BOOT_GREETINGS.length)]) ||
+        "",
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!line) return { started: false, durationMs: 0 };
+    const gen = beginSpeechGeneration();
+    void speakConversationalAsync(line, HAL_CHAT, { _speechGen: gen, interrupt: true });
+    return {
+      started: true,
+      durationMs: estimateConversationalDurationMs(line, HAL_CHAT),
+      spokenText: line,
+      profile: voiceProfile,
+      engine: "pending",
+    };
+  }
+
   function resolveSpokenText(displayText, options) {
     options = options || {};
     if (independentThoughtActive(options)) {
@@ -535,6 +567,7 @@
     speakHal9000Briefing: speakHalBriefing,
     announceSidenote,
     speakOfficeAnnounce,
+    speakFriendlyBootGreeting,
     speakHalReply,
     cancelSpeech,
     estimateDurationMs,
