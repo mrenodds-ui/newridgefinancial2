@@ -265,6 +265,7 @@ FINANCIAL_READ_EXEMPT = frozenset(
         "/api/app-info",
         "/api/import-readiness",
         "/api/import-sync-status",
+        "/api/import-bundle",
         "/api/hal/import-guard",
         "/api/hal/evaluate-query",
         "/api/settings/cloud-hal",

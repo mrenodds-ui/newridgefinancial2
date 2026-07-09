@@ -561,7 +561,7 @@ class NR2BottleServer(BottleServer):
             import json as _json
 
             from nr2_browser_security import abort_browser_auth, financial_read_path, host_allowed, register_browser_session, token_fingerprint
-            from nr2_rate_limit import classify_route, is_allowed
+            from nr2_rate_limit import classify_route, is_allowed, is_rate_limit_exempt
 
             if not _desktop_access_ok():
                 bottle.abort(403, _desktop_only_html())
@@ -571,13 +571,15 @@ class NR2BottleServer(BottleServer):
             if _loopback_secured() and active_token:
                 register_browser_session(active_token)
             if _loopback_secured() and _browser_api_request():
-                token = _request_browser_session_token() or active_token or ""
-                route_class = classify_route(bottle.request.path or "", bottle.request.method or "GET")
-                ok, retry = is_allowed(token_fingerprint(token), route_class)
-                if not ok:
-                    bottle.response.content_type = "application/json"
-                    bottle.response.headers["Retry-After"] = str(retry)
-                    bottle.abort(429, _json.dumps({"ok": False, "error": "rate_limited", "retryAfter": retry}))
+                path = bottle.request.path or ""
+                if not is_rate_limit_exempt(path):
+                    token = _request_browser_session_token() or active_token or ""
+                    route_class = classify_route(path, bottle.request.method or "GET")
+                    ok, retry = is_allowed(token_fingerprint(token), route_class)
+                    if not ok:
+                        bottle.response.content_type = "application/json"
+                        bottle.response.headers["Retry-After"] = str(retry)
+                        bottle.abort(429, _json.dumps({"ok": False, "error": "rate_limited", "retryAfter": retry}))
             if _browser_app() and _state_changing_request() and not _browser_mutation_auth_ok():
                 abort_browser_auth(_browser_mutation_auth_reason(), "Loopback mutation auth failed.")
             if (

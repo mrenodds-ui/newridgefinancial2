@@ -18,7 +18,7 @@ def _limit_for_class(route_class: str) -> int:
         "mutation": "NR2_RATE_MUTATION_PER_MIN",
         "hal": "NR2_RATE_HAL_PER_MIN",
     }
-    defaults = {"read": 100, "mutation": 20, "hal": 5}
+    defaults = {"read": 300, "mutation": 20, "hal": 5}
     raw = os.environ.get(env_map.get(route_class, "NR2_RATE_READ_PER_MIN"), str(defaults.get(route_class, 100)))
     try:
         return max(1, int(raw))
@@ -34,6 +34,24 @@ def classify_route(path: str, method: str) -> str:
     if m in ("POST", "PUT", "DELETE", "PATCH"):
         return "mutation"
     return "read"
+
+
+# Boot / import hot path — must not 429 during Financial page paint.
+RATE_LIMIT_EXEMPT_PATHS = frozenset(
+    {
+        "/api/app-info",
+        "/api/health",
+        "/api/import-bundle",
+        "/api/import-readiness",
+        "/api/import-sync-status",
+        "/nr2-build.json",
+    }
+)
+
+
+def is_rate_limit_exempt(path: str) -> bool:
+    p = str(path or "").split("?", 1)[0]
+    return p in RATE_LIMIT_EXEMPT_PATHS
 
 
 def is_allowed(token_fingerprint: str, route_class: str, *, window_sec: int = 60) -> tuple[bool, int]:
