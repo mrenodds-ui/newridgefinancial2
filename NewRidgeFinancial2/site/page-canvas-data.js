@@ -203,7 +203,6 @@ const PageCanvasData = (function () {
     );
     const dsoTile = (ribbon.tiles || []).find((t) => /dso|days|ar/i.test(String(t.label || "")));
     const dsoValue = lag.hasData && lag.avgLagDays != null ? String(lag.avgLagDays) : dsoTile ? dsoTile.value : "—";
-    const goalPct = goal.hasData && goal.pctOfGoal != null ? `${goal.pctOfGoal}%` : "—";
     return [
       {
         label: "Production MTD",
@@ -222,9 +221,22 @@ const PageCanvasData = (function () {
         widgetKey: "softdentCollectionsDaily",
       },
       {
-        label: "Net Income YTD",
-        value: fmt(ov.monthlyNetIncome),
-        hint: fmt(ov.monthlyRevenue ? `Revenue ${ov.monthlyRevenue}` : null),
+        label: (() => {
+          const net = quickbooksNetIncomeSummary();
+          if (net && net.hasData && net.ytdNetIncome != null) return "Net Income YTD";
+          if (net && net.latestMonth) return `Net Income (${net.latestMonth})`;
+          return "Net Income YTD";
+        })(),
+        value: (() => {
+          const net = quickbooksNetIncomeSummary();
+          if (net && net.hasData && net.ytdNetIncome != null) return fmt(net.ytdNetIncome);
+          return fmt(ov.monthlyNetIncome);
+        })(),
+        hint: (() => {
+          const net = quickbooksNetIncomeSummary();
+          if (net && net.hasData && net.monthCount != null) return `${net.monthCount} QB month${net.monthCount === 1 ? "" : "s"}`;
+          return fmt(ov.monthlyRevenue ? `Revenue ${ov.monthlyRevenue}` : null);
+        })(),
         tone: widgetTone("quickbooksNetIncomeSummary"),
         // QuickBooks net income — not payer-mix.
         widgetKey: "quickbooksNetIncomeSummary",
@@ -245,8 +257,12 @@ const PageCanvasData = (function () {
       },
       {
         label: "Goal Attainment",
-        value: goalPct,
-        hint: goal.hasData ? "YTD production vs goal" : "—",
+        value: goal.hasData && goal.pctOfGoal != null ? `${goal.pctOfGoal}%` : goal.hasData && goal.needsGoal ? "Set goal" : "—",
+        hint: goal.hasData && goal.pctOfGoal != null
+          ? "YTD production vs goal"
+          : goal.needsGoal
+            ? "Set NR2_GOAL_PRODUCTION_YTD"
+            : "—",
         tone: goal.tone || widgetTone("nr2GoalScorecard"),
         widgetKey: "nr2GoalScorecard",
       },
@@ -286,7 +302,11 @@ const PageCanvasData = (function () {
       },
       {
         label: "Case acceptance",
-        value: fmt(ca.acceptanceRate || practice.caseRate),
+        value: (() => {
+          const rate = ca.acceptanceRate != null ? ca.acceptanceRate : practice.caseRate;
+          if (rate == null || rate === "" || rate === "—" || /not\s*configured/i.test(String(rate))) return "—";
+          return fmt(rate);
+        })(),
         hint: practice.treatmentPresented ? `${practice.treatmentPresented} presented` : fmt(ca.plansPresented),
         tone: widgetTone("caseAcceptance"),
         widgetKey: "caseAcceptance",
@@ -296,23 +316,32 @@ const PageCanvasData = (function () {
 
   function softdentHeroKpis() {
     const care = metrics("careDeliveryPerformance");
+    const ov = metrics("practiceFinancialOverview");
+    const trend = metrics("financialProductionTrend");
+    const fin = dash("financial") || {};
     const np = softdentNewPatientsMtdData();
     const coll = softdentCollectionsDailySeries();
     const co = softdentClaimsOutstandingData();
     const collTotal =
       coll.hasData && coll.values.length ? coll.values.reduce((s, v) => s + (Number(v) || 0), 0) : null;
+    const production =
+      care.productionTotal ||
+      care.productionMtd ||
+      ov.productionTotal ||
+      trend.productionMtd ||
+      (fin.productionMtd && fin.productionMtd.value);
     return [
       {
-        label: "Care Delivery Summary",
-        value: fmt(care.productionTotal || care.productionMtd || "—"),
-        hint: care.vsPrior || "MTD",
+        label: "Production MTD",
+        value: fmt(production || "—"),
+        hint: (fin.productionMtd && fin.productionMtd.vs) || care.vsPrior || "SoftDent dashboard",
         widgetKey: "careDeliveryPerformance",
         tone: widgetTone("careDeliveryPerformance"),
       },
       {
         label: "New Patients (MTD)",
         value: np.hasData ? fmt(np.count) : "—",
-        hint: "MTD",
+        hint: np.period ? String(np.period) : "MTD",
         widgetKey: "softdentNewPatientsMTD",
         tone: widgetTone("softdentNewPatientsMTD"),
       },
@@ -1680,6 +1709,32 @@ const PageCanvasData = (function () {
     return "";
   }
 
+  function narrativeCdtCodes() {
+    const claim = firstClaim();
+    const codes = [];
+    const seen = new Set();
+    const push = (code, desc) => {
+      const cdt = String(code || "").trim().toUpperCase();
+      if (!cdt || seen.has(cdt)) return;
+      seen.add(cdt);
+      codes.push(desc ? `${cdt} ${desc}` : cdt);
+    };
+    if (claim) {
+      if (claim.procedure) push(String(claim.procedure).split(/\s+/)[0], String(claim.procedure).replace(/^\S+\s*/, ""));
+      const procs = claim.procedures || claim.procedureCodes || claim.cdtCodes || [];
+      (Array.isArray(procs) ? procs : []).forEach((p) => {
+        if (typeof p === "string") push(p.split(/\s+/)[0], p.replace(/^\S+\s*/, ""));
+        else if (p && typeof p === "object") push(p.code || p.cdt || p.procedure, p.desc || p.description || p.label);
+      });
+    }
+    const fee = snapshot && (snapshot.feeSchedule || snapshot.fee_schedule);
+    const feeRows = (fee && (fee.rows || fee.codes || fee.items)) || [];
+    (Array.isArray(feeRows) ? feeRows : []).slice(0, 12).forEach((row) => {
+      push(row.code || row.cdt || row.CdtCode || row.procedure, row.desc || row.description || row.label);
+    });
+    return codes.slice(0, 20);
+  }
+
   function narrativeHistoryRows() {
     const nar = snapshot && snapshot.narratives;
     const latest = nar && nar.latest;
@@ -2537,6 +2592,7 @@ const PageCanvasData = (function () {
     selectedClaim,
     firstClaim,
     narrativeDraft,
+    narrativeCdtCodes,
     narrativeComposerOptions,
     narrativeCitationWidgets,
     narrativeHistoryRows,

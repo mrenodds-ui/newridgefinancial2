@@ -724,7 +724,7 @@ const PageCanvas = (function () {
 
   function canvasHeatmap(rowLabels, colLabels, matrix) {
     if (!matrix || !matrix.length) return canvasEmpty("Aging heatmap will appear when A/R dashboard data is loaded.");
-    const head = `<div class="heatmap-cell heatmap-header">Payer Type</div>${colLabels
+    const head = `<div class="heatmap-cell heatmap-header">Aging</div>${colLabels
       .map((c) => `<div class="heatmap-cell heatmap-header">${esc(c)}</div>`)
       .join("")}`;
     const body = matrix
@@ -840,14 +840,9 @@ const PageCanvas = (function () {
   }
 
   function canvasRecallCalendar(practice) {
-    const due = parseAmount(practice && practice.recallDue);
-    const days = Array.from({ length: 14 }, (_, i) => {
-      const hot = due > 0 && i % 5 === 0;
-      const warm = due > 0 && i % 3 === 1;
-      const cls = hot ? "hot" : warm ? "warm" : "";
-      return `<div class="recall-day recall-day--${cls}">${i + 1}</div>`;
-    }).join("");
-    return `<div class="recall-calendar">${days}</div>${practice && practice.recallDue ? `<p class="widget-note">${esc(practice.recallDue)} over next 14 days</p>` : ""}`;
+    // Decorative day-heat calendar removed — it fabricated a 14-day schedule from a single due count.
+    if (!practice || !practice.recallDue) return "";
+    return `<p class="widget-note">${esc(practice.recallDue)}</p>`;
   }
 
   function canvasFocusCards(stats) {
@@ -902,8 +897,15 @@ const PageCanvas = (function () {
     if (!goal || !goal.hasData) {
       return canvasEmpty("Production goal scorecard appears when SoftDent dashboard production rows are loaded.");
     }
-    const pct = goal.pctOfGoal != null ? `${goal.pctOfGoal}%` : "—";
-    const pctNum = goal.pctOfGoal != null ? Number(goal.pctOfGoal) : 0;
+    if (goal.needsGoal || goal.targetProduction == null || goal.pctOfGoal == null) {
+      return `${canvasStatGrid([
+        { value: fmtClaim(goal.ytdProduction), label: "YTD production", widgetKey: "nr2GoalScorecard" },
+        { value: "—", label: "Goal target", widgetKey: "nr2GoalScorecard" },
+        { value: "—", label: "Progress", tone: "neutral", widgetKey: "nr2GoalScorecard" },
+      ])}<p class="widget-note">Set NR2_GOAL_PRODUCTION_YTD to compare YTD production against an operator goal.</p>`;
+    }
+    const pct = `${goal.pctOfGoal}%`;
+    const pctNum = Number(goal.pctOfGoal);
     return `${canvasGauge(pctNum, "Of YTD goal", goal.tone === "ok" ? "var(--sage)" : "var(--accent-amber)")}${canvasStatGrid([
       { value: fmtClaim(goal.ytdProduction), label: "YTD production", widgetKey: "nr2GoalScorecard" },
       { value: fmtClaim(goal.targetProduction), label: "Goal target", widgetKey: "nr2GoalScorecard" },
@@ -1003,8 +1005,7 @@ const PageCanvas = (function () {
     const composerOpts = D && D.narrativeComposerOptions ? D.narrativeComposerOptions() : {};
     const claim = D ? D.firstClaim() : null;
     const citationWidgets = D && D.narrativeCitationWidgets ? D.narrativeCitationWidgets() : [];
-    const confidencePct = draft ? Math.min(95, 40 + Math.floor(draft.length / 20)) : 0;
-    const cdtCodes = ["D2740 Crown", "D2950 Core buildup", "D4341 Perio scaling", "D7210 Extraction", "D6010 Implant"];
+    const cdtCodes = D && D.narrativeCdtCodes ? D.narrativeCdtCodes() : [];
     const hero =
       kpis.length > 0
         ? H.heroKpiRow(
@@ -1012,20 +1013,27 @@ const PageCanvas = (function () {
             4,
           )
         : H.heroKpiRow([{ label: "Narrative Composer", value: "Ready" }], 1);
+    const cdtList =
+      cdtCodes.length > 0
+        ? cdtCodes
+            .map((code, i) => {
+              const raw = typeof code === "string" ? code : `${code.code || ""} ${code.desc || code.description || ""}`.trim();
+              const parts = raw.split(/\s+/);
+              const cdt = parts[0] || raw;
+              const desc = parts.slice(1).join(" ") || raw;
+              return `<div class="cdt-item${i === 0 ? " active" : ""}" role="listitem"><div class="cdt-code">${esc(cdt)}</div><div class="cdt-desc">${esc(desc)}</div></div>`;
+            })
+            .join("")
+        : `<div class="widget-note">CDT codes appear when a claim procedure or fee-schedule export is loaded.</div>`;
     return `${H.stackOpen("narratives-moonshot")}
       ${hero}
       ${canvasNarrativeSelectors(composerOpts, claim)}
       <div class="composer-grid">
         <div class="composer-panel panel" data-hal-subpanel="narrativeProcedureCodes">
-          <div class="panel-header"><span>Procedure Codes</span><span style="font-size:12px;color:var(--text-secondary)">CDT 2024</span></div>
+          <div class="panel-header"><span>Procedure Codes</span><span style="font-size:12px;color:var(--text-secondary)">From claim / fee data</span></div>
           <div class="panel-content">
             <input class="search-box" type="search" placeholder="Search codes…" aria-label="Search CDT codes" />
-            <div class="cdt-list">${cdtCodes
-              .map(
-                (code, i) =>
-                  `<div class="cdt-item${i === 0 ? " active" : ""}" role="listitem"><div class="cdt-code">${esc(code.split(" ")[0])}</div><div class="cdt-desc">${esc(code.slice(code.indexOf(" ") + 1))}</div></div>`,
-              )
-              .join("")}</div>
+            <div class="cdt-list">${cdtList}</div>
           </div>
         </div>
         <div class="composer-panel panel">
@@ -1036,7 +1044,7 @@ const PageCanvas = (function () {
           </div>
           <div class="composer-panel" data-hal-widget-key="narrativeWorkflow" data-narrative-claim-id="${esc(claim && claim.id ? claim.id : "")}">
             ${canvasTextArea(draft || "", 12, true)}
-            ${draft ? `<div class="confidence-bar"><span style="color:var(--text-secondary)">AI Confidence:</span><div class="confidence-meter"><span class="confidence-fill" style="width:${confidencePct}%"></span></div><span>${confidencePct}%</span></div>${canvasNarrativeCitations(citationWidgets)}` : canvasEmpty("Start typing or ask HAL to draft a narrative for staff review.")}
+            ${draft ? `${canvasNarrativeCitations(citationWidgets)}` : canvasEmpty("Start typing or ask HAL to draft a narrative for staff review.")}
           </div>
         </div>
         <div class="composer-panel panel" data-hal-subpanel="narrativeDraftHistory">

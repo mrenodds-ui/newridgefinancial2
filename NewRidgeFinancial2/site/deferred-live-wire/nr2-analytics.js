@@ -396,10 +396,20 @@ const NR2Analytics = (function () {
     if (typeof window !== "undefined" && window.NR2_GOAL_PRODUCTION_YTD) {
       target = parseMoney(window.NR2_GOAL_PRODUCTION_YTD);
     }
-    if (target <= 0 && ytdProd > 0) target = Math.round(ytdProd * 1.05);
-    const pct = target > 0 ? Math.round((ytdProd / target) * 1000) / 10 : null;
-    const tone = pct == null ? "neutral" : pct >= 95 ? "ok" : pct >= 80 ? "warn" : "alert";
-    return { ytdProduction: ytdProd, targetProduction: target || null, pctOfGoal: pct, tone, hasData: ytdProd > 0 };
+    // Never invent a synthetic target (e.g. 105% of YTD) — require an explicit goal.
+    if (target <= 0) {
+      return {
+        ytdProduction: ytdProd,
+        targetProduction: null,
+        pctOfGoal: null,
+        tone: "neutral",
+        hasData: ytdProd > 0,
+        needsGoal: ytdProd > 0,
+      };
+    }
+    const pct = Math.round((ytdProd / target) * 1000) / 10;
+    const tone = pct >= 95 ? "ok" : pct >= 80 ? "warn" : "alert";
+    return { ytdProduction: ytdProd, targetProduction: target, pctOfGoal: pct, tone, hasData: true, needsGoal: false };
   }
 
   function alertTicker(snapshot) {

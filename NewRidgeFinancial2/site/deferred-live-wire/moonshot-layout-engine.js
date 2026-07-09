@@ -215,7 +215,8 @@ const MoonshotLayoutEngine = (function () {
         const byKey = Object.fromEntries(built.map((k) => [k.widgetKey, k]));
         return panel.kpis.map((spec) => {
           const base = byKey[spec.widgetKey] || { label: spec.label || spec.widgetKey, value: "—", widgetKey: spec.widgetKey };
-          return { ...base, label: spec.label || base.label, widgetKey: spec.widgetKey };
+          // Prefer live period-aware labels (e.g. Collections (2026-06)) over static layout MTD titles.
+          return { ...base, label: base.label || spec.label || spec.widgetKey, widgetKey: spec.widgetKey };
         });
       }
       return built;
@@ -225,7 +226,7 @@ const MoonshotLayoutEngine = (function () {
       const byKey = Object.fromEntries(built.map((k) => [k.widgetKey, k]));
       return panel.kpis.map((spec) => {
         const base = byKey[spec.widgetKey] || { label: spec.label || spec.widgetKey, value: "—", widgetKey: spec.widgetKey };
-        return { ...base, label: spec.label || base.label, widgetKey: spec.widgetKey };
+        return { ...base, label: base.label || spec.label || spec.widgetKey, widgetKey: spec.widgetKey };
       });
     }
     if (pageId === "softdent" && panel.widgetKey) {
@@ -491,8 +492,20 @@ const MoonshotLayoutEngine = (function () {
     caseAcceptance(D, H, panel) {
       const ca = H.metricsFromWidget("caseAcceptance");
       const practice = D && D.practiceStats ? D.practiceStats() : {};
-      const raw = ca.acceptanceRate || ca.rate || practice.caseRate || 0;
+      const raw = ca.acceptanceRate != null && ca.acceptanceRate !== "" && ca.acceptanceRate !== "—"
+        ? ca.acceptanceRate
+        : ca.rate != null && ca.rate !== "" && ca.rate !== "—"
+          ? ca.rate
+          : practice.caseRate != null && practice.caseRate !== "" && practice.caseRate !== "—"
+            ? practice.caseRate
+            : null;
+      if (raw == null || /not\s*configured/i.test(String(raw))) {
+        return H.canvasEmpty("Case acceptance appears when SoftDent case-acceptance or treatment-plan export is loaded.");
+      }
       const pct = typeof raw === "number" ? raw : H.parsePct(raw);
+      if (!Number.isFinite(pct)) {
+        return H.canvasEmpty("Case acceptance appears when SoftDent case-acceptance or treatment-plan export is loaded.");
+      }
       return H.canvasGauge(Math.min(100, Math.max(0, pct)), "Acceptance", "var(--accent-cyan, #22d3ee)");
     },
     hygieneRecall(D, H, panel) {
@@ -505,7 +518,9 @@ const MoonshotLayoutEngine = (function () {
         return H.canvasGauge(Math.min(100, Math.max(0, pct)), "Recall", "var(--accent-cyan, #22d3ee)");
       }
       const practice = D && D.practiceStats ? D.practiceStats() : {};
-      return `${H.canvasRecallCalendar(practice)}${H.canvasStat(practice.hygieneCompleted || "—", "Hygiene completed", undefined, "hygieneRecall")}`;
+      const completed = practice.hygieneCompleted && practice.hygieneCompleted !== "—" ? practice.hygieneCompleted : "—";
+      const dueNote = practice.recallDue ? `<p class="widget-note">${H.esc(practice.recallDue)}</p>` : "";
+      return `${H.canvasStat(completed, "Hygiene completed", undefined, "hygieneRecall")}${dueNote}`;
     },
     softdentResponsibility(D, H) {
       const resp = D && D.softdentResponsibilityDonut ? D.softdentResponsibilityDonut() : null;
@@ -517,12 +532,17 @@ const MoonshotLayoutEngine = (function () {
       const practice = D && D.practiceStats ? D.practiceStats() : {};
       const ca = H.metricsFromWidget("caseAcceptance");
       if (panel && panel.type === "funnel") {
-        return H.canvasFunnel([
-          { label: "Presented", value: H.fmtClaim(ca.plansPresented || practice.treatmentPresented || "0") },
-          { label: "Accepted", value: H.fmtClaim(ca.plansAccepted || practice.caseAccepted || "0") },
-          { label: "Scheduled", value: H.fmtClaim(ca.plansScheduled || practice.treatmentScheduled || "0") },
-          { label: "Completed", value: H.fmtClaim(ca.plansCompleted || practice.treatmentCompleted || "0") },
-        ]);
+        const steps = [
+          { label: "Presented", value: ca.plansPresented || practice.treatmentPresented },
+          { label: "Accepted", value: ca.plansAccepted || practice.caseAccepted },
+          { label: "Scheduled", value: ca.plansScheduled || practice.treatmentScheduled },
+          { label: "Completed", value: ca.plansCompleted || practice.treatmentCompleted },
+        ];
+        const hasAny = steps.some((s) => s.value != null && s.value !== "" && s.value !== "—" && !/not\s*configured/i.test(String(s.value)));
+        if (!hasAny) {
+          return H.canvasEmpty("Treatment-plan funnel appears when SoftDent treatment-plan or case-acceptance export is loaded.");
+        }
+        return H.canvasFunnel(steps.map((s) => ({ label: s.label, value: H.fmtClaim(s.value != null && s.value !== "" ? s.value : "—") })));
       }
       return H.canvasStat(practice.treatmentPresented || "—", "Treatment presented", undefined, "treatmentPlanSummary");
     },
@@ -680,11 +700,19 @@ const MoonshotLayoutEngine = (function () {
         return H.canvasTable(["Vendor", "Amount", "Due", "Status"], apRows, true);
       }
       const ap = H.metricsFromWidget("accountsPayableAutomation");
+      const postedRaw = ap.postedPct;
+      const posted =
+        postedRaw == null || postedRaw === "" || postedRaw === "—" || /not\s*configured/i.test(String(postedRaw))
+          ? "—"
+          : `${H.parsePct(postedRaw)}%`;
+      if ((ap.expenseTotal == null || ap.expenseTotal === "" || ap.expenseTotal === "—") && posted === "—") {
+        return H.canvasEmpty("Accounts payable appears when QuickBooks expense or AP exports are loaded.");
+      }
       return H.canvasTable(
         ["Metric", "Value"],
         [
           ["Expense total", H.fmtClaim(ap.expenseTotal)],
-          ["Posted", `${H.parsePct(ap.postedPct)}%`],
+          ["Posted", posted],
         ],
         true,
       );
@@ -847,12 +875,16 @@ const MoonshotLayoutEngine = (function () {
       const practice = D && D.practiceStats ? D.practiceStats() : {};
       const ca = H.metricsFromWidget("caseAcceptance");
       const funnelSteps = [
-        { label: "Presented", value: H.fmtClaim(ca.plansPresented || practice.treatmentPresented || "0") },
-        { label: "Accepted", value: H.fmtClaim(ca.plansAccepted || practice.caseAccepted || "0") },
-        { label: "Scheduled", value: H.fmtClaim(ca.plansScheduled || practice.treatmentScheduled || "0") },
-        { label: "Completed", value: H.fmtClaim(ca.plansCompleted || practice.treatmentCompleted || "0") },
+        { label: "Presented", value: ca.plansPresented || practice.treatmentPresented },
+        { label: "Accepted", value: ca.plansAccepted || practice.caseAccepted },
+        { label: "Scheduled", value: ca.plansScheduled || practice.treatmentScheduled },
+        { label: "Completed", value: ca.plansCompleted || practice.treatmentCompleted },
       ];
-      return H.canvasFunnel(funnelSteps);
+      const hasAny = funnelSteps.some((s) => s.value != null && s.value !== "" && s.value !== "—" && !/not\s*configured/i.test(String(s.value)));
+      if (!hasAny) {
+        return H.canvasEmpty("Treatment-plan funnel appears when SoftDent treatment-plan or case-acceptance export is loaded.");
+      }
+      return H.canvasFunnel(funnelSteps.map((s) => ({ label: s.label, value: H.fmtClaim(s.value != null && s.value !== "" ? s.value : "—") })));
     },
     ebitdaFunnel(D, H) {
       const rows = D && D.ebitdaRows ? D.ebitdaRows() : [];

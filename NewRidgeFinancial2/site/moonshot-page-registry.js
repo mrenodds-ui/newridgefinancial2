@@ -2,7 +2,7 @@
  * Moonshot page registry — nav metadata + panel layouts from moonshot-page-layouts.js.
  */
 const MoonshotPageRegistry = (function () {
-  const SCHEMA_VERSION = "hal-10155";
+  const SCHEMA_VERSION = "hal-10156";
   const LAYOUT_EPOCH = "moonshot-mockup";
 
   const PRACTICE = {
@@ -54,7 +54,7 @@ const MoonshotPageRegistry = (function () {
       label: "Taxes",
       subtitle: "Book-to-tax bridge, reasonable compensation analysis, and quarterly compliance",
       accent: "blue",
-      filters: ["Tax year 2025", "S corporation", "Kansas", "Q3 estimates"],
+      filters: ["Tax year", "S corporation", "Kansas", "Q3 estimates"],
       commands: [
         "Show book-to-tax bridge",
         "Model reasonable comp at $220K",
@@ -85,7 +85,7 @@ const MoonshotPageRegistry = (function () {
       commands: ["Review A/R aging", "Open new patient summary", "Explain case acceptance"],
       safety: "Read-only · HAL reads SoftDent only",
       widgets: [
-        { key: "careDeliveryPerformance", title: "Care Delivery Summary" },
+        { key: "careDeliveryPerformance", title: "Production MTD" },
         { key: "softdentCollectionsDaily", title: "Collections Trend" },
         { key: "softdentNewPatientsMTD", title: "New Patients (MTD)" },
         { key: "softdentClaimsOutstanding", title: "Outstanding Claims" },
@@ -103,7 +103,7 @@ const MoonshotPageRegistry = (function () {
       label: "QuickBooks",
       subtitle: "Real-time financial synchronization · Ridgefield, CT",
       accent: "blue",
-      filters: ["YTD 2025", "Accrual basis", "Live connection"],
+      filters: ["YTD", "Accrual basis", "Imported P&L"],
       commands: ["Explain YTD net income", "Review EBITDA add-backs", "Show supply spend"],
       safety: "Read-only · HAL reads QuickBooks only",
       widgets: [

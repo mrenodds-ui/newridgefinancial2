@@ -567,16 +567,25 @@ def goal_scorecard(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
     ytd_prod = sum(row["production"] for row in sd_rows)
     env_target = os.environ.get("NR2_GOAL_PRODUCTION_YTD", "").strip()
     target = _parse_money(env_target) if env_target else 0.0
-    if target <= 0 and ytd_prod > 0:
-        target = round(ytd_prod * 1.05, 2)
-    pct = round((ytd_prod / target) * 100, 1) if target > 0 else None
-    tone = "ok" if pct is not None and pct >= 95 else "warn" if pct is not None and pct >= 80 else "alert"
+    # Never invent a synthetic target (e.g. 105% of YTD) — require an explicit goal.
+    if target <= 0:
+        return {
+            "ytdProduction": round(ytd_prod, 2),
+            "targetProduction": None,
+            "pctOfGoal": None,
+            "tone": "neutral",
+            "hasData": ytd_prod > 0,
+            "needsGoal": ytd_prod > 0,
+        }
+    pct = round((ytd_prod / target) * 100, 1)
+    tone = "ok" if pct >= 95 else "warn" if pct >= 80 else "alert"
     return {
         "ytdProduction": round(ytd_prod, 2),
-        "targetProduction": round(target, 2) if target > 0 else None,
+        "targetProduction": round(target, 2),
         "pctOfGoal": pct,
         "tone": tone,
-        "hasData": ytd_prod > 0,
+        "hasData": True,
+        "needsGoal": False,
     }
 
 

@@ -100,18 +100,20 @@ const NR2QbReports = (function () {
 
   function revenueByService(snapshot) {
     const qb = qbSection(snapshot);
+    // Only use true income/service category exports — never expense categories or a single "Clinical Production (proxy)" slice.
+    const categories = qb.revenueByService || qb.incomeCategories || qb.serviceCategories || null;
+    const categoryRows = Array.isArray(categories)
+      ? categories
+      : categories && Array.isArray(categories.rows)
+        ? categories.rows
+        : categories && Array.isArray(categories.slices)
+          ? categories.slices
+          : [];
     const slices = [];
-    const categories = qb.expenseCategories;
-    if (categories && Array.isArray(categories.slices)) {
-      categories.slices.forEach((row) => {
-        const amount = parseMoney(row.amount || row.Amount || row.pct);
-        if (amount > 0) slices.push({ label: row.label || row.Category || "Category", amount });
-      });
-    }
-    const income = parseMoney(qb.revenue);
-    if (!slices.length && income > 0) {
-      slices.push({ label: "Clinical Production (proxy)", amount: income });
-    }
+    categoryRows.forEach((row) => {
+      const amount = parseMoney(row.amount || row.Amount || row.pct);
+      if (amount > 0) slices.push({ label: row.label || row.Category || row.category || "Category", amount });
+    });
     const total = slices.reduce((acc, row) => acc + row.amount, 0);
     slices.forEach((row) => {
       row.pct = total > 0 ? Math.round((row.amount / total) * 1000) / 10 : 0;

@@ -346,6 +346,17 @@ const HalSkills = (function () {
     return !payer || payer === "insurance" || payer === "unknown" || payer === "—" || payer === "-";
   }
 
+  function claimAgeDaysFromClaim(claim) {
+    if (claim == null) return null;
+    const direct = Number(claim.ageDays != null ? claim.ageDays : claim.days != null ? claim.days : claim.Days);
+    if (Number.isFinite(direct) && direct >= 0) return Math.floor(direct);
+    const dos = String(claim.serviceDate || claim.ServiceDate || claim.dos || claim.age || "").trim();
+    if (!dos || dos === "—" || /^imported$/i.test(dos)) return null;
+    const parsed = Date.parse(dos.length >= 10 ? dos.slice(0, 10) : dos);
+    if (!Number.isFinite(parsed)) return null;
+    return Math.max(0, Math.floor((Date.now() - parsed) / 86400000));
+  }
+
   function assessClaimReadiness(claim) {
     const status = String(claim.status || "").toLowerCase();
     const hasClaimId = !!claim.id;
@@ -356,6 +367,9 @@ const HalSkills = (function () {
     const genericPayer = isGenericClaimPayer(claim);
     const cdt = extractCdtFromClaim(claim);
     const daysheetDerived = /^DS-/i.test(String(claim.id || ""));
+    const ageDays = claimAgeDaysFromClaim(claim);
+    const agingOver60 = ageDays != null && ageDays >= 60;
+    const agingOver30 = ageDays != null && ageDays >= 30;
 
     const missing = [];
     if (!hasProcedure) missing.push("Procedure facts missing");
@@ -363,6 +377,9 @@ const HalSkills = (function () {
     if (!hasNarrative && (isDenied || status.includes("review"))) missing.push("Clinical note / narrative missing");
     if (genericPayer) missing.push("Named payer/carrier missing (label is generic Insurance)");
     if (!cdt && hasProcedure) missing.push("CDT code not parsed from procedure — confirm before fee lookup");
+    if (agingOver60 && (isDenied || status.includes("review") || status.includes("pending") || status.includes("submitted"))) {
+      missing.push(`Aging ${ageDays} days — prioritize follow-up / appeal`);
+    }
 
     let readiness;
     if (!hasClaimId) {
@@ -385,7 +402,11 @@ const HalSkills = (function () {
     }
 
     const priority =
-      readiness === "blocked" ? "high" : isDenied || genericPayer ? "high" : readiness === "needs_review" ? "normal" : "low";
+      readiness === "blocked" || agingOver60 || isDenied || genericPayer
+        ? "high"
+        : agingOver30 || readiness === "needs_review"
+          ? "normal"
+          : "low";
     const canPrepareDraft = hasClaimId && readiness !== "blocked";
 
     const actions = [];
@@ -398,12 +419,19 @@ const HalSkills = (function () {
           : "Verify SoftDent InsCo / Insurance.xlsx for the carrier on this claim before payer routing.",
       );
     }
+    if (isDenied || agingOver60) {
+      actions.push("Build local appeal packet (preflight + denial risk + payer join) — staff consent before portal zip.");
+    }
     if (cdt) actions.push(`Fee check: lookup_fee_schedule for ${cdt} once carrier is known.`);
     if (canPrepareDraft) actions.push("Prepare a local draft for human review.");
     actions.push("Nothing has been submitted or sent.");
 
     let summary;
     if (readiness === "ready") summary = "Packet appears ready for human review. Nothing has been submitted or sent.";
+    else if (agingOver60 && isDenied)
+      summary = `Denied and aging ${ageDays} days — prioritize appeal packet and payer follow-up.`;
+    else if (agingOver60)
+      summary = `Open ${ageDays} days — prioritize status check / follow-up before write-off risk.`;
     else if (genericPayer)
       summary = "Needs review: carrier is generic Insurance — claim↔payer join and fee schedule need a named Payer.";
     else if (readiness === "needs_review")
@@ -416,6 +444,9 @@ const HalSkills = (function () {
       patientLabel: claim.patient || null,
       payerLabel: String(claim.payer || claim.Payer || claim.tag || "") || null,
       cdtCode: cdt || null,
+      ageDays,
+      agingOver60,
+      agingOver30,
       genericPayer,
       daysheetDerived,
       status: readiness,
@@ -430,8 +461,92 @@ const HalSkills = (function () {
     };
   }
 
+  function enrichAgingItemWithPayer(item, claim) {
+    const match =
+      (claim && claim.payerMatch) ||
+      (item && item.payerMatch) ||
+      null;
+    const contacts = match && match.eligibilityNotes ? String(match.eligibilityNotes) : "";
+    const phoneMatch = contacts.match(/(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}/);
+    return Object.assign({}, item, {
+      payerContacts: contacts || "",
+      payerPhone: phoneMatch ? phoneMatch[0] : "",
+      narrativeNotes: (match && match.narrativeNotes) || "",
+      commonDenialCodes: (match && match.commonDenialCodes) || [],
+      scriptScenario: "claims_aging",
+    });
+  }
+
+  function buildClaimsAgingFollowUp(claimsList, options) {
+    const minDays = options && options.minDays != null ? Number(options.minDays) : 60;
+    const items = (claimsList || [])
+      .map((claim) => {
+        const readiness = assessClaimReadiness(claim);
+        const base = {
+          claimRef: readiness.claimRef,
+          patientLabel: readiness.patientLabel,
+          payerLabel: readiness.payerLabel,
+          status: String(claim.status || ""),
+          ageDays: readiness.ageDays,
+          amount: claim.amount || null,
+          priority: readiness.priority,
+          staffSummary: readiness.staffSummary,
+          genericPayer: readiness.genericPayer,
+          recommendedNextActions: readiness.recommendedNextActions.slice(0, 3),
+          payerMatch: claim.payerMatch || null,
+        };
+        return enrichAgingItemWithPayer(base, claim);
+      })
+      .filter((row) => row.ageDays != null && row.ageDays >= minDays)
+      .sort((a, b) => {
+        const pri = (x) => (x.priority === "high" ? 0 : x.priority === "normal" ? 1 : 2);
+        if (pri(a) !== pri(b)) return pri(a) - pri(b);
+        return (b.ageDays || 0) - (a.ageDays || 0);
+      });
+    return {
+      meta: skillMeta("claims.agingFollowUp", "claims"),
+      minDays,
+      count: items.length,
+      items,
+      summary: {
+        over60: items.filter((i) => (i.ageDays || 0) >= 60).length,
+        over90: items.filter((i) => (i.ageDays || 0) >= 90).length,
+        denied: items.filter((i) => /denied/i.test(i.status)).length,
+        withContacts: items.filter((i) => i.payerContacts).length,
+      },
+      safetyDisclaimer: SAFETY_DISCLAIMER,
+      localOnly: true,
+    };
+  }
+
+  function formatClaimsAgingFollowUp(resp) {
+    if (!resp || !resp.count) {
+      return `No open claims at or over ${resp && resp.minDays != null ? resp.minDays : 60} days in the current import.`;
+    }
+    const s = resp.summary || {};
+    const lines = [
+      `Claims aging follow-up (≥${resp.minDays} days, local only):`,
+      `- ${resp.count} claim(s) · 60+ ${s.over60 || 0} · 90+ ${s.over90 || 0} · Denied ${s.denied || 0}` +
+        (s.withContacts ? ` · payer contacts ${s.withContacts}` : ""),
+      "",
+      "Prioritized call / appeal list:",
+    ];
+    (resp.items || []).slice(0, 8).forEach((item, idx) => {
+      let line = `${idx + 1}. ${item.claimRef || "?"} · ${item.ageDays}d · ${item.status || "?"} · ${item.payerLabel || "Insurance"} — ${item.staffSummary}`;
+      if (item.payerContacts) line += `\n   Carrier: ${item.payerContacts}`;
+      lines.push(line);
+    });
+    lines.push(
+      "",
+      "Ask HAL: schedule call task claims_aging for <claim> / click-to-dial with claimsAging script / build appeal packet for a denied claim.",
+      "Nothing has been submitted or sent. Staff owns payer contact.",
+    );
+    return lines.join("\n");
+  }
+
   function buildClaimReadinessResponse(claimsList) {
     const items = (claimsList || []).map(assessClaimReadiness);
+    const aging = buildClaimsAgingFollowUp(claimsList, { minDays: 60 });
     return {
       meta: skillMeta("claims.readiness", "claims"),
       summary: {
@@ -439,8 +554,11 @@ const HalSkills = (function () {
         needsReviewCount: items.filter((i) => i.status === "needs_review").length,
         blockedCount: items.filter((i) => i.status === "blocked").length,
         totalCount: items.length,
+        agingOver60Count: aging.count,
+        agingOver90Count: (aging.summary && aging.summary.over90) || 0,
       },
       items,
+      agingFollowUp: aging,
       safetyDisclaimer: SAFETY_DISCLAIMER,
       localOnly: true,
       submissionStatus: "notSubmitted",
@@ -461,6 +579,13 @@ const HalSkills = (function () {
         `- Carrier gap: ${genericCount} claim(s) still labeled generic Insurance — prefer SoftDent claims export / ODBC for real Payer labels.`,
       );
     }
+    if ((s.agingOver60Count || 0) > 0) {
+      lines.push(
+        `- Aging follow-up: ${s.agingOver60Count} claim(s) ≥60 days` +
+          ((s.agingOver90Count || 0) > 0 ? ` (${s.agingOver90Count} ≥90 days)` : "") +
+          ".",
+      );
+    }
     lines.push(
       "",
       "HAL can prepare a local packet and draft. Staff must review before use. Nothing has been submitted or sent.",
@@ -469,9 +594,13 @@ const HalSkills = (function () {
     if (examples.length) {
       lines.push("", "Examples:");
       examples.forEach((item) => {
-        const headline = item.claimRef ? `${item.claimRef}: ${item.staffSummary}` : item.staffSummary;
+        const age = item.ageDays != null ? ` · ${item.ageDays}d` : "";
+        const headline = item.claimRef ? `${item.claimRef}${age}: ${item.staffSummary}` : item.staffSummary;
         lines.push(`- ${headline}`);
       });
+    }
+    if (resp.agingFollowUp && resp.agingFollowUp.count) {
+      lines.push("", formatClaimsAgingFollowUp(resp.agingFollowUp));
     }
     return lines.join("\n");
   }
@@ -2541,8 +2670,14 @@ const HalSkills = (function () {
       nr2GoalScorecard: {
         key: "nr2GoalScorecard",
         title: "Production Goal Scorecard",
-        status: analyticsPack.goal.hasData ? (analyticsPack.goal.pctOfGoal != null && analyticsPack.goal.pctOfGoal >= 95 ? "SUCCESS" : "DEGRADED") : "FAILED",
-        summary: "YTD SoftDent production compared to operator goal (env NR2_GOAL_PRODUCTION_YTD or 105% of imported YTD).",
+      status: analyticsPack.goal.hasData
+        ? analyticsPack.goal.pctOfGoal != null
+          ? analyticsPack.goal.pctOfGoal >= 95
+            ? "SUCCESS"
+            : "DEGRADED"
+          : "DEGRADED"
+        : "FAILED",
+        summary: "YTD SoftDent production compared to operator goal (set NR2_GOAL_PRODUCTION_YTD; no synthetic target).",
         navTarget: WIDGET_NAV.nr2GoalScorecard,
         metrics: {
           ytdProduction: metricValue(
@@ -2982,6 +3117,7 @@ const HalSkills = (function () {
           : "Practice-wide SoftDent operational activity from the import cache; patient A/R balances are unavailable until an explicit SoftDent A/R export is present.",
         navTarget: WIDGET_NAV.careDeliveryPerformance,
         metrics: {
+          productionTotal: metricValue(sd.production || glanceValue(sd, "Production MTD") || fin.productionMtd?.value),
           patientBalanceTotal,
           providerCount: metricValue((fin.providers?.rows || []).length || null),
           patientCount: metricValue(glanceValue(sd, "Total Patients")),
@@ -4001,6 +4137,22 @@ const HalSkills = (function () {
     if (factLines) bodyParts.push(`Supporting chart notes: ${factLines}`);
     else bodyParts.push("No imported clinical note text was available — staff must add findings manually.");
     if (denialReason) bodyParts.push(`Payer denial context (from claim export): ${denialReason}`);
+    const payerMatch = claim.payerMatch || p.payerMatch || null;
+    const payerThemes = [];
+    if (payerMatch && payerMatch.narrativeNotes) {
+      payerThemes.push(`Payer narrative themes (${payerMatch.matchedName || payerMatch.claimPayer || "carrier"}): ${payerMatch.narrativeNotes}`);
+    }
+    if (payerMatch && payerMatch.commonDenialCodes && payerMatch.commonDenialCodes.length) {
+      payerThemes.push(`Common denial themes: ${payerMatch.commonDenialCodes.slice(0, 6).join(", ")}`);
+    }
+    if (!payerThemes.length && p.payerNarrativeNotes) {
+      payerThemes.push(`Payer narrative themes: ${p.payerNarrativeNotes}`);
+    }
+    if (!payerThemes.length && p.commonDenialCodes) {
+      const codes = Array.isArray(p.commonDenialCodes) ? p.commonDenialCodes : String(p.commonDenialCodes).split(",");
+      if (codes.length) payerThemes.push(`Common denial themes: ${codes.slice(0, 6).join(", ")}`);
+    }
+    payerThemes.forEach((t) => bodyParts.push(t));
     bodyParts.push(
       length === "Brief"
         ? "Staff review required before any payer submission. Local draft only — not submitted."
@@ -4010,10 +4162,12 @@ const HalSkills = (function () {
     const validation = nr.validateDraftPayload({ text, claim, packet, snapshot, focus, tone, length });
     const citationWidgets = ["narrativeWorkflow", "claimsPipeline"];
     if (facts.length) citationWidgets.push("softdent.clinicalNotes");
+    if (payerThemes.length) citationWidgets.push("payerReference");
     return {
       ok: validation.ok,
       summary: validation.ok
-        ? `Draft ready for human review · ${claim.id || "claim"} · ${focus} · ${tone}`
+        ? `Draft ready for human review · ${claim.id || "claim"} · ${focus} · ${tone}` +
+          (payerThemes.length ? " · payer themes included" : "")
         : `Draft blocked: ${(validation.issues || []).slice(0, 3).join("; ")}`,
       text,
       focus,
@@ -4021,6 +4175,7 @@ const HalSkills = (function () {
       length,
       claimId: claim.id || p.claimId,
       patient: claim.patient,
+      payerThemes,
       missingFields: validation.missingFields || [],
       citationWidgets: Array.from(new Set(citationWidgets)),
       citations: facts.map((f) => ({ fact_id: f.fact_id, excerpt: f.text })),
@@ -4627,6 +4782,9 @@ const HalSkills = (function () {
     formatJournalDraft,
     // claim packet readiness
     assessClaimReadiness,
+    claimAgeDaysFromClaim,
+    buildClaimsAgingFollowUp,
+    formatClaimsAgingFollowUp,
     buildClaimReadinessResponse,
     formatClaimReadinessAnswer,
     // office-manager attention

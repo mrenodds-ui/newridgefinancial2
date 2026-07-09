@@ -137,7 +137,27 @@ class Nr2AnalyticsTests(unittest.TestCase):
         result = goal_scorecard(bundle=_sample_bundle())
         self.assertTrue(result["hasData"])
         self.assertGreater(result["ytdProduction"], 0)
-        self.assertIsNotNone(result["pctOfGoal"])
+        # Without NR2_GOAL_PRODUCTION_YTD, do not invent a synthetic target/%.
+        self.assertIsNone(result["pctOfGoal"])
+        self.assertIsNone(result["targetProduction"])
+        self.assertTrue(result.get("needsGoal"))
+
+    def test_goal_scorecard_with_env_target(self) -> None:
+        import os
+
+        prev = os.environ.get("NR2_GOAL_PRODUCTION_YTD")
+        os.environ["NR2_GOAL_PRODUCTION_YTD"] = "1000000"
+        try:
+            result = goal_scorecard(bundle=_sample_bundle())
+            self.assertTrue(result["hasData"])
+            self.assertIsNotNone(result["pctOfGoal"])
+            self.assertEqual(result["targetProduction"], 1000000.0)
+            self.assertFalse(result.get("needsGoal"))
+        finally:
+            if prev is None:
+                os.environ.pop("NR2_GOAL_PRODUCTION_YTD", None)
+            else:
+                os.environ["NR2_GOAL_PRODUCTION_YTD"] = prev
 
     def test_alert_ticker(self) -> None:
         result = alert_ticker(bundle=_sample_bundle())

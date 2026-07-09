@@ -300,7 +300,7 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "colSpan": 12,
           "dataBind": "PageCanvasData.softdentHeroKpis()",
           "kpis": [
-            { "widgetKey": "careDeliveryPerformance", "label": "Care Delivery Summary" },
+            { "widgetKey": "careDeliveryPerformance", "label": "Production MTD" },
             { "widgetKey": "softdentNewPatientsMTD", "label": "New Patients (MTD)" },
             { "widgetKey": "softdentCollectionsDaily", "label": "Collections Trend" },
             { "widgetKey": "softdentClaimsOutstanding", "label": "Outstanding Claims" }

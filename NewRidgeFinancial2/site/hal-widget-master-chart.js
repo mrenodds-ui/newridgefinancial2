@@ -51,7 +51,7 @@ const HalWidgetMasterChart = (function () {
       title: "Production Goal Scorecard",
       purpose: "Compare YTD SoftDent production against operator goal for executive pacing.",
       expectedData: ["SoftDent dashboard production rows", "Optional NR2_GOAL_PRODUCTION_YTD override"],
-      readyWhen: "YTD production sum is available from imported SoftDent dashboard rows.",
+      readyWhen: "YTD production is available and NR2_GOAL_PRODUCTION_YTD is set for attainment %.",
       primarySystem: "SoftDent",
     },
     nr2AlertTicker: {
