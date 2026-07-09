@@ -1944,9 +1944,14 @@ const ImportLoader = (function () {
             completed: hrCompleted,
             due: hrDue,
             period: hrPeriod,
+            // Honest completion share from export counts — never invent a default %.
+            recallRate:
+              hrCompleted != null && hrDue != null && hrCompleted + hrDue > 0
+                ? Math.round((hrCompleted / (hrCompleted + hrDue)) * 1000) / 10
+                : null,
             status: "Connected",
           }
-        : { completed: null, due: null, period: null, status: "Not Configured" },
+        : { completed: null, due: null, period: null, recallRate: null, status: "Not Configured" },
     });
   }
 

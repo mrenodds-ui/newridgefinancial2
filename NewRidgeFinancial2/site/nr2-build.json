@@ -1,10 +1,22 @@
 {
-  "BUILD_ID": "hal-10153",
-  "assetVersion": "hal-10153",
-  "schemaVersion": "hal-10153",
+  "BUILD_ID": "hal-10154",
+  "assetVersion": "hal-10154",
+  "schemaVersion": "hal-10154",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
-  "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T17:55:00.000Z",
-  "notes": "hal-10153: Practice chrome header uses live SoftDent/docs period (July 2026) instead of hardcoded June 2025."
+  "liveWirePages": [
+    "financial",
+    "softdent",
+    "quickbooks",
+    "ar",
+    "taxes",
+    "claims",
+    "narratives",
+    "documents",
+    "library",
+    "hal",
+    "office-manager"
+  ],
+  "builtAt": "2026-07-09T17:55:00Z",
+  "notes": "hal-10154: Stop fabricating 72% hygiene recall gauge; derive rate from SoftDent completed/(completed+due) or show empty."
 }

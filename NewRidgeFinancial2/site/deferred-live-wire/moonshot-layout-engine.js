@@ -497,10 +497,11 @@ const MoonshotLayoutEngine = (function () {
     },
     hygieneRecall(D, H, panel) {
       if (panel && panel.type === "gauge") {
-        const practice = D && D.practiceStats ? D.practiceStats() : {};
-        const hr = H.metricsFromWidget("hygieneRecall");
-        const raw = hr.recallRate || hr.rate || practice.recallRate || 72;
-        const pct = typeof raw === "number" ? raw : H.parsePct(raw);
+        const gauge = D && D.hygieneRecallGauge ? D.hygieneRecallGauge() : { hasData: false };
+        if (!gauge || !gauge.hasData || gauge.rate == null) {
+          return H.canvasEmpty("Hygiene recall rate appears when SoftDent hygiene_recall_summary export is loaded.");
+        }
+        const pct = typeof gauge.rate === "number" ? gauge.rate : H.parsePct(gauge.rate);
         return H.canvasGauge(Math.min(100, Math.max(0, pct)), "Recall", "var(--accent-cyan, #22d3ee)");
       }
       const practice = D && D.practiceStats ? D.practiceStats() : {};

@@ -119,6 +119,7 @@ const WidgetContract = (function () {
       metrics: {
         hygieneCompleted: { dataset: "softdent.hygieneRecall", dashboard: "practice", path: "hygieneRecall.completed" },
         recallDue: { dataset: "softdent.hygieneRecall", dashboard: "practice", path: "hygieneRecall.due" },
+        recallRate: { dataset: "softdent.hygieneRecall", dashboard: "practice", path: "hygieneRecall.recallRate" },
         period: { dataset: "softdent.hygieneRecall", dashboard: "practice", path: "hygieneRecall.period" },
       },
     },

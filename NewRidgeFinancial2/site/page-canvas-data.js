@@ -378,7 +378,29 @@ const PageCanvasData = (function () {
   function hygieneRecallGauge() {
     const practice = practiceStats();
     const hr = metrics("hygieneRecall");
-    return { rate: hr.recallRate || practice.recallRate || 72 };
+    let rate = hr.recallRate != null && hr.recallRate !== "" && hr.recallRate !== "—" ? hr.recallRate : null;
+    if (rate == null) {
+      const completed = Number(
+        hr.hygieneCompleted != null
+          ? hr.hygieneCompleted
+          : practice.hygieneCompleted != null && practice.hygieneCompleted !== "—"
+            ? practice.hygieneCompleted
+            : NaN,
+      );
+      const dueRaw = hr.recallDue != null ? hr.recallDue : practice.recallDueCount;
+      const due = Number(dueRaw);
+      if (Number.isFinite(completed) && Number.isFinite(due) && completed + due > 0) {
+        rate = Math.round((completed / (completed + due)) * 1000) / 10;
+      }
+    }
+    if (typeof rate === "string" && rate.trim()) {
+      const parsed = Number(String(rate).replace(/%/g, "").trim());
+      rate = Number.isFinite(parsed) ? parsed : null;
+    }
+    if (rate == null || !Number.isFinite(Number(rate))) {
+      return { rate: null, hasData: false };
+    }
+    return { rate: Number(rate), hasData: true };
   }
 
   function claimsPipelineSummary() {
@@ -753,6 +775,8 @@ const PageCanvasData = (function () {
       treatmentCompleted: fmt(ca.completedCount || tp.completedCount || pr.treatmentPlans?.completed),
       hygieneCompleted: fmt(hr.hygieneCompleted || pr.hygieneRecall?.completed),
       recallDue: hr.recallDue != null ? `${fmt(hr.recallDue)} recall due` : pr.hygieneRecall?.due != null ? `${fmt(pr.hygieneRecall.due)} recall due` : null,
+      recallDueCount: hr.recallDue != null ? hr.recallDue : pr.hygieneRecall?.due != null ? pr.hygieneRecall.due : null,
+      recallRate: hr.recallRate != null ? hr.recallRate : pr.hygieneRecall?.recallRate != null ? pr.hygieneRecall.recallRate : null,
       hygienePeriod: fmt(hr.period || pr.hygieneRecall?.period),
     };
   }
