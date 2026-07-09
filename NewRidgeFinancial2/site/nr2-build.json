@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10167",
-  "assetVersion": "hal-10167",
-  "schemaVersion": "hal-10167",
+  "BUILD_ID": "hal-10168",
+  "assetVersion": "hal-10168",
+  "schemaVersion": "hal-10168",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -17,6 +17,6 @@
     "hal",
     "office-manager"
   ],
-  "builtAt": "2026-07-09T20:35:00Z",
-  "notes": "hal-10167: Moonshot no-overlay — kill mock-embed boot flags/critical CSS; live-wire never iframe."
+  "builtAt": "2026-07-09T20:50:00Z",
+  "notes": "hal-10168: Moonshot full-program audit — REG/CHROME/LAY/VAL fixes for live-wire elite parity."
 }

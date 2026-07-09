@@ -59,6 +59,28 @@ const MoonshotLayoutEngine = (function () {
     const panels = spec.panels || [];
     const shell = spec.shell || "widget-grid";
 
+    // CRITICAL FIX (LAY-001): Generate page header to match elite mockup structure
+    let headerHtml = "";
+    if (spec.title) {
+      const subtitle = spec.subtitle || "";
+      // Generate filter chips if page has date filters (common to all elite mocks)
+      const filtersHtml = `
+        <div class="ms-page-filters">
+          <button class="ms-filter-chip active">30 Days</button>
+          <button class="ms-filter-chip">90 Days</button>
+          <button class="ms-filter-chip">YTD</button>
+          <button class="ms-filter-chip">All</button>
+        </div>
+      `;
+      headerHtml = `
+        <header class="ms-page-header">
+          <h1 class="ms-page-title">${H.esc(spec.title)}</h1>
+          ${subtitle ? `<p class="ms-page-sub">${H.esc(subtitle)}</p>` : ""}
+          ${filtersHtml}
+        </header>
+      `;
+    }
+
     if (shell === "dashboard-grid") {
       let inner = "";
       if (pageId === "office-manager") {
@@ -70,7 +92,7 @@ const MoonshotLayoutEngine = (function () {
       } else {
         inner += `<div class="dashboard-grid">${panels.map((p) => renderDashboardTile(p, D, H, pageId, accent)).join("")}</div>`;
       }
-      return `${H.dashboardPageOpen(`${pageId}-moonshot ms-mission-control`)}<div class="widget-grid">${inner}</div></div>`;
+      return `${H.dashboardPageOpen(`${pageId}-moonshot ms-mission-control`)}${headerHtml}<div class="widget-grid">${inner}</div></div>`;
     }
 
     let body = panels.map((p) => H.gridCol(p.colSpan || 12, renderWidgetGridPanel(p, D, H, pageId, accent))).join("");
@@ -85,7 +107,7 @@ const MoonshotLayoutEngine = (function () {
           : pageId === "taxes"
             ? "taxes-moonshot ms-mission-control"
             : `${pageId}-moonshot ms-mission-control`;
-    return `${H.stackOpen(pageClass)}${body}</div>`;
+    return `${H.stackOpen(pageClass)}${headerHtml}${body}</div>`;
   }
 
   function monthNameFromPeriod(label) {

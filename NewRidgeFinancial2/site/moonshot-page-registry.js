@@ -2,7 +2,7 @@
  * Moonshot page registry — nav metadata + panel layouts from moonshot-page-layouts.js.
  */
 const MoonshotPageRegistry = (function () {
-  const SCHEMA_VERSION = "hal-10167";
+  const SCHEMA_VERSION = "hal-10168";
   const LAYOUT_EPOCH = "moonshot-mockup";
 
   const PRACTICE = {
@@ -222,10 +222,11 @@ const MoonshotPageRegistry = (function () {
     } catch (_e) {
       /* ignore */
     }
-    // Stale cached index.html may omit head flags; elite catalog implies mock-embed staff shell.
-    if (Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES) && window.__NR2_MOCKUP_ELITE_PAGES.length > 0) {
-      return true;
-    }
+    // CRITICAL FIX (REG-001): Remove stale heuristic. Elite catalog presence does NOT imply mock-embed mode.
+    // The __NR2_MOCKUP_ELITE_PAGES array is used for layout lookups, not mode detection.
+    // if (Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES) && window.__NR2_MOCKUP_ELITE_PAGES.length > 0) {
+    //   return true;
+    // }
     return false;
   }
 
@@ -357,7 +358,8 @@ const MoonshotPageRegistry = (function () {
 
   function isStaffPage(pageId) {
     if (staffMockOnly()) return hasMockPreview(pageId);
-    if (pageId === "hal") return false;
+    // Live-wire pilot includes HAL on NR2_LIVE_WIRE_PAGES / PAGE_META (Moonshot VAL-001).
+    if (pageId === "hal") return Boolean(PAGE_META.hal);
     return staffPageIds().includes(pageId);
   }
 

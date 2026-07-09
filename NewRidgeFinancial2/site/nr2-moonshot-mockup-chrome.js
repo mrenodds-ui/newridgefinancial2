@@ -71,11 +71,15 @@ const MoonshotMockupChrome = (function () {
         window.NR2_BUILD.staffRenderMode) ||
       "";
     if (mode === "live-wire-pilot" || mode === "live-wire") return false;
-    return (
-      typeof window !== "undefined" &&
-      Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES) &&
-      window.__NR2_MOCKUP_ELITE_PAGES.length > 0
-    );
+
+    // HIGH FIX (CHROME-001): Do not infer mode from elite pages catalog.
+    // This check was causing live-wire pages to be treated as mock-embed.
+    // return (
+    //   typeof window !== "undefined" &&
+    //   Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES) &&
+    //   window.__NR2_MOCKUP_ELITE_PAGES.length > 0
+    // );
+    return false;
   }
 
   function liveWirePages() {

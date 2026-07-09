@@ -26,7 +26,29 @@ const stylesCss = readFileSync(join(siteDir, "styles.css"), "utf8");
 const themeCss = readFileSync(join(siteDir, "nr2-moonshot-mockup-theme.css"), "utf8");
 const vocabCss = readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8");
 
-globalThis.NR2_STAFF_MOCK_ONLY = true;
+globalThis.NR2_STAFF_MOCK_ONLY = mockEmbedMode;
+globalThis.NR2_STAFF_RENDER_MODE = buildManifest.staffRenderMode || (mockEmbedMode ? "mock-embed" : "live-wire-pilot");
+if (typeof document === "undefined") {
+  globalThis.document = {
+    documentElement: {
+      _attrs: Object.create(null),
+      setAttribute(k, v) {
+        this._attrs[k] = String(v);
+      },
+      getAttribute(k) {
+        return Object.prototype.hasOwnProperty.call(this._attrs, k) ? this._attrs[k] : null;
+      },
+    },
+  };
+}
+try {
+  document.documentElement.setAttribute(
+    "data-nr2-staff-render",
+    mockEmbedMode ? "mock-embed" : "live-wire-pilot",
+  );
+} catch (_e) {
+  /* ignore */
+}
 require(join(siteDir, "empty-states.js"));
 require(join(siteDir, "import-diagnostics.js"));
 require(join(siteDir, "import-loader.js"));
@@ -116,16 +138,27 @@ for (const page of FUNCTIONAL_PAGES) {
     assert.ok(!html.includes('class="hero"'), `${page.id} mock-embed must not show page hero`);
     assert.ok(!html.includes("ms-mockup-preview-banner"), `${page.id} mock-embed must not show elite preview banner`);
   } else if (pilotMode && liveWirePages.includes(page.id)) {
+    // CRITICAL FIX (VAL-001): Live-wire pilot assertions corrected
     assert.ok(html.includes("ms-live-wire-pilot-banner"), `${page.id} live-wire pilot must show pilot banner`);
-    assert.ok(html.includes("mock-embed-nav"), `${page.id} live-wire pilot must render staff page nav`);
+    assert.ok(!html.includes("mock-embed-nav"), `${page.id} live-wire pilot must NOT use mock-embed nav (uses sidebar)`);
+    assert.ok(!html.includes("ms-page-chrome--mock-embed"), `${page.id} live-wire pilot must NOT use mock-embed chrome`);
     assert.ok(!html.includes("ms-mockup-preview-iframe"), `${page.id} live-wire pilot must not use mock iframe`);
-    assert.ok(html.includes(`${page.id}-moonshot`) || html.includes("widget-grid"), `${page.id} live-wire pilot must render layout engine body`);
+    // NEW: Assert presence of live-wire structure (header or mission control)
+    assert.ok(
+      html.includes("ms-mission-control") || html.includes(`${page.id}-moonshot`),
+      `${page.id} live-wire pilot must render layout engine shell`,
+    );
+    // NEW: Assert page header present (from LAY-001 fix)
+    assert.ok(
+      html.includes("ms-page-header") || html.includes("ms-page-title"),
+      `${page.id} live-wire pilot must render page header from spec`,
+    );
   } else {
     assert.ok(html.includes("hal-insight") || html.includes("filter-bar") || page.id === "hal", `${page.id} must use mockup insight or filter bar`);
   }
   const pilotLivePage = pilotMode && liveWirePages.includes(page.id);
   const pilotMockPage = pilotMode && !liveWirePages.includes(page.id);
-  if ((!mockEmbedMode && !pilotMode) || pilotLivePage) {
+  if ((!mockEmbedMode && !pilotMode) || pilotMockPage) {
     if (page.id !== "office-manager" && page.id !== "hal") {
       assert.ok(
         html.includes("hal-insight") || html.includes("filter-bar"),
@@ -133,6 +166,7 @@ for (const page of FUNCTIONAL_PAGES) {
       );
     }
   }
+  // VAL-001: live-wire pilot pages use Layout Engine ms-page-header / ms-page-filters (not legacy filter-bar)
   for (const check of page.checks) {
     if (pilotMode && liveWirePages.includes(page.id)) continue;
     assert.ok(html.includes(check), `${page.id} must include ${check}`);
@@ -194,7 +228,7 @@ const navRailHtml =
 assert.ok(navRailHtml.includes("nav-section"), "mockup nav must render grouped sections");
 assert.ok(navRailHtml.includes("nav-practice"), "mockup nav must render practice block");
 assert.ok(navRailHtml.includes('data-nav="hal"'), "mockup nav must include HAL");
-if (mockEmbedMode || pilotMode) {
+if (mockEmbedMode) {
   assert.ok(!navRailHtml.includes("nav-sublist"), "mock-embed nav must hide widget subpages");
   assert.ok(
     indexHtml.includes('data-nr2-staff-render="mock-embed"') ||
@@ -208,6 +242,23 @@ if (pilotMode) {
   assert.ok(indexHtml.includes("deferred-live-wire/moonshot-page-layouts.js"), "pilot must load layout manifest");
   assert.ok(indexHtml.includes("deferred-live-wire/moonshot-layout-engine.js"), "pilot must load layout engine");
   assert.ok(indexHtml.includes("NR2_LIVE_WIRE_PAGES"), "pilot index must declare live-wire pages");
+
+  // CRITICAL FIX (VAL-001): Remove assertions that enforce mock-embed patterns for pilot
+  // DELETED: assert.ok(indexHtml.includes('data-nr2-staff-render="mock-embed"') ...);
+  // DELETED: assert.ok(indexHtml.includes("app--mock-embed-solo"), ...);
+  // DELETED: assert.ok(!indexHtml.includes('id="sidebar"'), ...);
+
+  // ADDED: Correct live-wire assertions
+  assert.ok(
+    indexHtml.includes('data-nr2-staff-render="live-wire-pilot"') ||
+      indexHtml.includes("setAttribute('data-nr2-staff-render','live-wire-pilot'"),
+    "pilot index must declare live-wire-pilot render mode",
+  );
+  assert.ok(
+    !indexHtml.includes("app--mock-embed-solo"),
+    "pilot index must NOT use mock-embed-solo class (sidebar should be visible)",
+  );
+  assert.ok(indexHtml.includes('id="sidebar"'), "pilot index must include sidebar element for live-wire navigation");
 } else if (!mockEmbedMode) {
   assert.ok(indexHtml.includes('class="nav-rail"'), "financial index must use mockup nav-rail");
   assert.ok(navRailHtml.includes("nav-sublist"), "active page nav must render widget subpages");
