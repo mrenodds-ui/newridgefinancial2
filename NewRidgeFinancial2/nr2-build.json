@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10129",
-  "assetVersion": "hal-10129",
-  "schemaVersion": "hal-10129",
+  "BUILD_ID": "hal-10130",
+  "assetVersion": "hal-10130",
+  "schemaVersion": "hal-10130",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
-  "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library"],
-  "builtAt": "2026-07-09T16:30:00.000Z",
-  "notes": "hal-10129: Expand live-wire pilot to Narratives, Documents, and Library."
+  "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
+  "builtAt": "2026-07-09T16:35:00.000Z",
+  "notes": "hal-10130: Complete live-wire pilot for all staff pages including HAL and Office Manager."
 }

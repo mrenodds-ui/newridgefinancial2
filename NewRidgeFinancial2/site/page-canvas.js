@@ -1197,7 +1197,12 @@ const PageCanvas = (function () {
 
   function liveWirePilotBanner(pageId) {
     if (!shouldLiveWire(pageId)) return "";
-    return `<div class="ms-live-wire-pilot-banner" role="status"><strong>Live-wire pilot</strong> — ${pageId} uses MoonshotLayoutEngine; other staff pages stay mock-embed.</div>`;
+    const live = liveWirePages();
+    const note =
+      live.length >= 11
+        ? `${pageId} uses MoonshotLayoutEngine (full staff live-wire pilot).`
+        : `${pageId} uses MoonshotLayoutEngine; other staff pages stay mock-embed.`;
+    return `<div class="ms-live-wire-pilot-banner" role="status"><strong>Live-wire pilot</strong> — ${note}</div>`;
   }
 
   function mockupPreviewGate(pageId) {

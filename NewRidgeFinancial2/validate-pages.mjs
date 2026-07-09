@@ -237,8 +237,10 @@ if (pilotMode) {
       buildManifest.liveWirePages.includes("claims") &&
       buildManifest.liveWirePages.includes("narratives") &&
       buildManifest.liveWirePages.includes("documents") &&
-      buildManifest.liveWirePages.includes("library"),
-    "live-wire-pilot must include financial through library staff pages in liveWirePages",
+      buildManifest.liveWirePages.includes("library") &&
+      buildManifest.liveWirePages.includes("hal") &&
+      buildManifest.liveWirePages.includes("office-manager"),
+    "live-wire-pilot must include all staff pages in liveWirePages",
   );
 } else {
   assert.ok(!indexHtml.includes("moonshot-page-layouts.js"), "index must not load layout manifest in mock-embed mode");

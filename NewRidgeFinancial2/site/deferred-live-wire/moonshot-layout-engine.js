@@ -28,7 +28,6 @@ const MoonshotLayoutEngine = (function () {
   }
 
   function hasPage(pageId) {
-    if (pageId === "hal") return false;
     return Boolean(pageSpec(pageId));
   }
 

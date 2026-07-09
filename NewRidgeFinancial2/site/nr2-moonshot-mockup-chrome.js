@@ -381,7 +381,9 @@ const MoonshotMockupChrome = (function () {
   function pageChromeHal(state, schema, opts) {
     const o = opts || {};
     const toolbar = o.halToolbar || o.toolbarActions || "";
+    const soloNav = staffMockEmbedMode() ? renderMockEmbedPageNav(state && state.pageId) : "";
     return `<div class="ms-page-chrome ms-page-chrome--hal">
+      ${soloNav}
       ${renderAlertStrip(state, o)}
       <header class="header">
         <div class="header-title">
