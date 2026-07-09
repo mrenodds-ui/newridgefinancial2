@@ -37,6 +37,20 @@ const MoonshotLayoutEngine = (function () {
     return (p && p.accent) || "green";
   }
 
+  /** Empty CTA naming exact export file(s) via HalSkills.widgetImportCta. */
+  function emptyFor(H, widgetKey, subject) {
+    if (H && typeof H.canvasEmptyFor === "function") return H.canvasEmptyFor(widgetKey, subject);
+    const Skills = typeof HalSkills !== "undefined" ? HalSkills : null;
+    if (Skills && typeof Skills.widgetImportCta === "function" && H && H.canvasEmpty) {
+      return H.canvasEmpty(Skills.widgetImportCta(widgetKey, subject));
+    }
+    return H.canvasEmpty(
+      subject
+        ? `${subject} appears when the required import is loaded — then run refresh imports.`
+        : "Add the required export into the import inbox, then run refresh imports.",
+    );
+  }
+
   function render(pageId, H) {
     const spec = pageSpec(pageId);
     if (!spec || !H) return "";
@@ -131,7 +145,7 @@ const MoonshotLayoutEngine = (function () {
           halSubpanel: panel.halSubpanel,
           body: kpi
             ? `<div class="kpi-value">${H.esc(kpi.value || "—")}</div>${kpi.hint ? `<span class="trend">${H.esc(kpi.hint)}</span>` : ""}`
-            : H.canvasEmpty("Claims metrics appear when SoftDent claims export is loaded."),
+            : emptyFor(H, "claimsPipeline", "Claims metrics"),
         });
       }
       if (kpi && H.canvasMetricTile) {
@@ -279,7 +293,7 @@ const MoonshotLayoutEngine = (function () {
     if (panel.halSubpanel && SUBPANEL_BODY[panel.halSubpanel]) {
       return SUBPANEL_BODY[panel.halSubpanel](D, H, panel, pageId, accent);
     }
-    return H.canvasEmpty(`${panel.title || "Widget"} data appears when imports are loaded.`);
+    return emptyFor(H, wk || null, panel.title || "Widget");
   }
 
   const WIDGET_BODY = {
@@ -313,13 +327,13 @@ const MoonshotLayoutEngine = (function () {
               prodDaily.points.map((p) => p.production),
               "#60a5fa",
             )
-          : H.canvasEmpty("Production trend appears when SoftDent dashboard or daysheet export is loaded."),
+          : emptyFor(H, "softdentProductionDaily", "Production trend"),
       );
     },
     nr2CollectionLag(D, H) {
       const lag = D && D.nr2CollectionLag ? D.nr2CollectionLag() : {};
       if (!lag.hasData) {
-        return H.canvasEmpty("Collection lag appears when A/R aging or SoftDent production/collections export is loaded.");
+        return emptyFor(H, "nr2CollectionLag", "Collection lag");
       }
       const days = lag.avgLagDays != null ? lag.avgLagDays : "—";
       const arcPct = typeof days === "number" ? Math.min(100, Math.round((days / 60) * 100)) : 0;
@@ -339,7 +353,7 @@ const MoonshotLayoutEngine = (function () {
     providerPerformance(D, H) {
       const providers = D && D.providerBars ? D.providerBars() : null;
       if (!providers || !providers.items.length) {
-        return H.canvasEmpty("Provider performance appears when SoftDent dashboard export is loaded.");
+        return emptyFor(H, "providerPerformance", "Provider performance");
       }
       return H.hBarChart(
         providers.items.map((item) => ({ name: item.name, amount: item.amount, pct: item.pct })),
@@ -383,7 +397,7 @@ const MoonshotLayoutEngine = (function () {
     newPatients(D, H) {
       const flow = D && D.newPatientsFlowSeries ? D.newPatientsFlowSeries() : { hasData: false };
       if (!flow.hasData || !flow.labels || !flow.labels.length) {
-        return H.canvasEmpty("New patient flow appears when SoftDent new-patient export periods are loaded.");
+        return emptyFor(H, "newPatients", "New patient flow");
       }
       if (flow.singlePeriod && flow.values.length === 1) {
         const period = flow.labels[0];
@@ -402,7 +416,7 @@ const MoonshotLayoutEngine = (function () {
       }
       const providers = D && D.providerBars ? D.providerBars() : null;
       if (!providers || !providers.items || !providers.items.length) {
-        return H.canvasEmpty("Provider production share appears when SoftDent dashboard provider rows are loaded.");
+        return emptyFor(H, "nr2ProviderCompensationWidget", "Provider production share");
       }
       const payload = {
         providers: providers.items.map((item) => ({
@@ -419,25 +433,25 @@ const MoonshotLayoutEngine = (function () {
       const rows = D && D.quickbooksPlRows ? D.quickbooksPlRows() : [];
       return rows.length
         ? H.canvasTable(["Account", "Amount", "Notes"], rows.slice(0, 12), true)
-        : H.canvasEmpty("QuickBooks P&amp;L rows appear when export is loaded.");
+        : emptyFor(H, "quickbooksProfitLossDetail", "QuickBooks P&L rows");
     },
     ebitdaNormalization(D, H) {
       const rows = D && D.ebitdaRows ? D.ebitdaRows() : [];
       return rows.length
         ? H.canvasTable(["Adjustment", "Amount", "Reviewer", "Notes"], rows, true)
-        : H.canvasEmpty("EBITDA normalization appears when QuickBooks P&amp;L is loaded.");
+        : emptyFor(H, "ebitdaNormalization", "EBITDA normalization");
     },
     taxBookToTaxBridge(D, H) {
       const bridge = D && D.taxBridgeRows ? D.taxBridgeRows() : [];
       return bridge.length
         ? H.canvasTable(["Line item", "Amount"], bridge, true)
-        : H.canvasEmpty("Book-to-tax bridge appears when QuickBooks export is loaded.");
+        : emptyFor(H, "quickbooksProfitLossDetail", "Book-to-tax bridge");
     },
     taxReasonableComp(D, H) {
       const scenarios = D && D.taxCompScenarioRows ? D.taxCompScenarioRows() : [];
       return scenarios.length
         ? H.canvasTable(["W-2 salary", "Est. K-1", "Employer FICA", "Note"], scenarios, true)
-        : H.canvasEmpty("Load QuickBooks P&amp;L to model compensation scenarios.");
+        : emptyFor(H, "quickbooksProfitLossDetail", "Compensation scenarios");
     },
     taxQuarterlyEstimates(D, H) {
       const quarterly = D && D.taxQuarterlyRows ? D.taxQuarterlyRows() : [];
@@ -459,7 +473,7 @@ const MoonshotLayoutEngine = (function () {
     softdentCollectionsDaily(D, H) {
       const coll = D && D.softdentCollectionsDailySeries ? D.softdentCollectionsDailySeries() : { labels: [], values: [] };
       return H.chartContainer(
-        coll.hasData ? H.vBarChart(coll.labels, coll.values, "#34d399") : H.canvasEmpty("Collections trend appears when SoftDent dashboard collections or sd_payments export is loaded."),
+        coll.hasData ? H.vBarChart(coll.labels, coll.values, "#34d399") : emptyFor(H, "softdentCollectionsDaily", "Collections trend"),
       );
     },
     softdentProviderProduction(D, H) {
@@ -476,7 +490,7 @@ const MoonshotLayoutEngine = (function () {
               "name",
               "pct",
             )
-          : H.canvasEmpty("Provider production appears when SoftDent dashboard provider rows or sd_procedures export is loaded."),
+          : emptyFor(H, "softdentProviderProduction", "Provider production"),
       );
     },
     softdentArAging(D, H, panel) {
@@ -487,11 +501,11 @@ const MoonshotLayoutEngine = (function () {
         const fallback = H.arHeatmapFromAging ? H.arHeatmapFromAging(aging) : null;
         return fallback
           ? H.canvasHeatmap(fallback.rowLabels, fallback.colLabels, fallback.matrix)
-          : H.canvasEmpty("A/R aging heatmap appears when SoftDent A/R export (daysheet aging buckets) is loaded.");
+          : emptyFor(H, "softdentArAging", "A/R aging heatmap");
       }
       const aging = D && D.softdentAgingBars ? D.softdentAgingBars() : null;
       return H.chartContainer(
-        aging ? H.vBarChart(aging.labels, aging.values, "#60a5fa") : H.canvasEmpty("A/R aging appears when SoftDent A/R export is loaded."),
+        aging ? H.vBarChart(aging.labels, aging.values, "#60a5fa") : emptyFor(H, "softdentArAging", "A/R aging"),
       );
     },
     caseAcceptance(D, H, panel) {
@@ -505,11 +519,11 @@ const MoonshotLayoutEngine = (function () {
             ? practice.caseRate
             : null;
       if (raw == null || /not\s*configured/i.test(String(raw))) {
-        return H.canvasEmpty("Case acceptance appears when SoftDent case-acceptance or treatment-plan export is loaded.");
+        return emptyFor(H, "caseAcceptance", "Case acceptance");
       }
       const pct = typeof raw === "number" ? raw : H.parsePct(raw);
       if (!Number.isFinite(pct)) {
-        return H.canvasEmpty("Case acceptance appears when SoftDent case-acceptance or treatment-plan export is loaded.");
+        return emptyFor(H, "caseAcceptance", "Case acceptance");
       }
       return H.canvasGauge(Math.min(100, Math.max(0, pct)), "Acceptance", "var(--accent-cyan, #22d3ee)");
     },
@@ -517,7 +531,7 @@ const MoonshotLayoutEngine = (function () {
       if (panel && panel.type === "gauge") {
         const gauge = D && D.hygieneRecallGauge ? D.hygieneRecallGauge() : { hasData: false };
         if (!gauge || !gauge.hasData || gauge.rate == null) {
-          return H.canvasEmpty("Hygiene recall rate appears when SoftDent hygiene_recall_summary export is loaded.");
+          return emptyFor(H, "hygieneRecall", "Hygiene recall");
         }
         const pct = typeof gauge.rate === "number" ? gauge.rate : H.parsePct(gauge.rate);
         return H.canvasGauge(Math.min(100, Math.max(0, pct)), "Recall", "var(--accent-cyan, #22d3ee)");
@@ -529,7 +543,7 @@ const MoonshotLayoutEngine = (function () {
     },
     softdentResponsibility(D, H) {
       const resp = D && D.softdentResponsibilityDonut ? D.softdentResponsibilityDonut() : null;
-      if (!resp) return H.canvasEmpty("Insurance vs patient split unavailable.");
+      if (!resp) return emptyFor(H, "softdentResponsibility", "Insurance vs patient split");
       const center = resp.hint ? `<span class="donut-hint">${H.esc(resp.hint)}</span>` : "";
       return H.conicDonut(resp.slices, center);
     },
@@ -545,7 +559,7 @@ const MoonshotLayoutEngine = (function () {
         ];
         const hasAny = steps.some((s) => s.value != null && s.value !== "" && s.value !== "—" && !/not\s*configured/i.test(String(s.value)));
         if (!hasAny) {
-          return H.canvasEmpty("Treatment-plan funnel appears when SoftDent treatment-plan or case-acceptance export is loaded.");
+          return emptyFor(H, "treatmentPlanSummary", "Treatment-plan funnel");
         }
         return H.canvasFunnel(steps.map((s) => ({ label: s.label, value: H.fmtClaim(s.value != null && s.value !== "" ? s.value : "—") })));
       }
@@ -566,7 +580,7 @@ const MoonshotLayoutEngine = (function () {
           true,
         );
       }
-      return H.canvasEmpty("Appointment snapshot appears when operatory schedule or sd_appointments is loaded.");
+      return emptyFor(H, "softdentAppointmentsSnapshot", "Appointment snapshot");
     },
     softdentOperatoryGrid(D, H) {
       return H.canvasOperatoryGrid(D && D.softdentOperatoryGrid ? D.softdentOperatoryGrid() : null);
@@ -574,7 +588,7 @@ const MoonshotLayoutEngine = (function () {
     claimsPipeline(D, H) {
       const lanes = D && D.claimsKanban ? D.claimsKanban() : [];
       if (!lanes.length) {
-        return H.canvasEmpty("Claims pipeline lanes appear when SoftDent claims export is loaded.");
+        return emptyFor(H, "claimsPipeline", "Claims pipeline");
       }
       return H.canvasKanbanLanes(lanes, "claimsPipeline", { claims: true });
     },
@@ -582,7 +596,7 @@ const MoonshotLayoutEngine = (function () {
       const aging = D && D.arAgingBars ? D.arAgingBars() : D && D.softdentAgingBars ? D.softdentAgingBars() : null;
       const heat = H.arHeatmapFromAging ? H.arHeatmapFromAging(aging) : null;
       if (!aging || !aging.labels || !aging.values) {
-        return H.canvasEmpty("A/R aging appears when SoftDent A/R export (daysheet aging buckets) is loaded.");
+        return emptyFor(H, "arAgingAndCollections", "A/R aging");
       }
       const waterfall = `<div class="ms-elite-waterfall">${aging.labels
         .map((label, i) => {
@@ -593,7 +607,7 @@ const MoonshotLayoutEngine = (function () {
         .join("")}</div>`;
       const heatHtml = heat
         ? H.canvasHeatmap(heat.rowLabels, heat.colLabels, heat.matrix)
-        : H.canvasEmpty("A/R aging heatmap appears when SoftDent A/R export is loaded.");
+        : emptyFor(H, "arAgingAndCollections", "A/R aging heatmap");
       return `${waterfall}${heatHtml}`;
     },
     smartClaimsAndReceivables(D, H) {
@@ -612,7 +626,7 @@ const MoonshotLayoutEngine = (function () {
       const claims = D && D.arTopClaimsTable ? D.arTopClaimsTable() : [];
       return claims.length
         ? H.canvasTable(["Patient", "Procedure", "Payer", "Balance", "Age"], claims, true)
-        : H.canvasEmpty("Outstanding claim detail will appear when SoftDent claims export is loaded.");
+        : emptyFor(H, "arOutstandingClaims", "Outstanding claim detail");
     },
     quickbooksMonthlyRevenue(D, H) {
       const moRev = D && D.quickbooksMonthlyRevenueSeries ? D.quickbooksMonthlyRevenueSeries() : { labels: [], values: [] };
@@ -622,11 +636,11 @@ const MoonshotLayoutEngine = (function () {
       }
       return moRev.hasData
         ? H.chartContainer(H.vBarChart(moRev.labels, moRev.values, "#00d4ff"))
-        : H.canvasEmpty("Monthly revenue trend appears when QuickBooks P&amp;L is loaded.");
+        : emptyFor(H, "quickbooksMonthlyRevenue", "Monthly revenue trend");
     },
     quickbooksRevenueByService(D, H) {
       const revSvc = D && D.quickbooksRevenueByService ? D.quickbooksRevenueByService() : { slices: [] };
-      if (!revSvc.hasData) return H.canvasEmpty("Revenue-by-service appears when QuickBooks category exports are loaded.");
+      if (!revSvc.hasData) return emptyFor(H, "quickbooksRevenueByService", "Revenue-by-service");
       const slices = revSvc.slices.map((s, i) => ({
         label: s.label,
         pct: s.pct || Math.round((s.amount / (revSvc.total || 1)) * 100),
@@ -653,18 +667,18 @@ const MoonshotLayoutEngine = (function () {
             (bs.assets || []).map((row) => [row.label, `$${Math.round(row.amount).toLocaleString()}`]),
             true,
           )
-        : H.canvasEmpty("Balance sheet summary appears when QuickBooks A/R or balance-sheet export is loaded — P&L alone is not used as cash.");
+        : emptyFor(H, "quickbooksBalanceSheetSummary", "Balance sheet summary");
     },
     quickbooksCashFlowTrend(D, H) {
       const cf = D && D.quickbooksCashFlowTrend ? D.quickbooksCashFlowTrend() : { labels: [], net: [] };
       return cf.hasData
         ? H.chartContainer(H.dualLineChart(cf.labels, [{ label: "Net", tone: "success", data: cf.net }]), true)
-        : H.canvasEmpty("Cash flow trend appears when QuickBooks monthly P&amp;L is loaded.");
+        : emptyFor(H, "quickbooksCashFlowTrend", "Cash flow trend");
     },
     quickbooksExpenseBreakdown(D, H) {
       const expenseBars = D && D.quickbooksExpenseBars ? D.quickbooksExpenseBars() : null;
       if (!expenseBars || !expenseBars.labels.length) {
-        return H.canvasEmpty("Expense breakdown appears when QuickBooks export is loaded.");
+        return emptyFor(H, "quickbooksExpenseBreakdown", "Expense breakdown");
       }
       const max = Math.max(...expenseBars.values, 1);
       return `<div class="ms-elite-stat-grid">${expenseBars.labels
@@ -683,17 +697,17 @@ const MoonshotLayoutEngine = (function () {
             qbAr.buckets.map((b) => [b.bucket, `$${Math.round(b.balance).toLocaleString()}`]),
             true,
           )
-        : H.canvasEmpty("QuickBooks A/R aging appears when quickbooks_ar.csv is loaded.");
+        : emptyFor(H, "quickbooksArAging", "QuickBooks A/R aging");
     },
     documentIntakeQueue(D, H) {
       const queue = D && D.documentsQueueRows ? D.documentsQueueRows() : [];
       return queue.length
         ? H.canvasTable(["Document", "Category", "Amount", "Date"], queue, true)
-        : H.canvasEmpty("Accounting documents will appear when the local document queue is populated.");
+        : emptyFor(H, "documentIntakeQueue", "Accounting documents");
     },
     documentPreview(D, H) {
       const doc = D && D.firstDocument ? D.firstDocument() : null;
-      return `${H.canvasDocPreview(doc ? doc.vendor || doc.id || "Document" : "Document preview", doc && doc.pages ? doc.pages : 1)}${doc ? "" : H.canvasEmpty("Document preview will appear when a document is selected.")}`;
+      return `${H.canvasDocPreview(doc ? doc.vendor || doc.id || "Document" : "Document preview", doc && doc.pages ? doc.pages : 1)}${doc ? "" : emptyFor(H, "documentPreview", "Document preview")}`;
     },
     accountsPayableAutomation(D, H) {
       const apRows = D && D.accountsPayableRows ? D.accountsPayableRows() : [];
@@ -707,7 +721,7 @@ const MoonshotLayoutEngine = (function () {
           ? "—"
           : `${H.parsePct(postedRaw)}%`;
       if ((ap.expenseTotal == null || ap.expenseTotal === "" || ap.expenseTotal === "—") && posted === "—") {
-        return H.canvasEmpty("Accounts payable appears when QuickBooks expense or AP exports are loaded.");
+        return emptyFor(H, "accountsPayableAutomation", "Accounts payable");
       }
       return H.canvasTable(
         ["Metric", "Value"],
@@ -723,7 +737,7 @@ const MoonshotLayoutEngine = (function () {
       if (periodStats.length) {
         return H.canvasStatGrid(periodStats.map((s) => ({ ...s, widgetKey: "periodCloseAndPosting" })));
       }
-      return H.canvasEmpty("Period close metrics will appear when documents are assigned to a period.");
+      return emptyFor(H, "periodCloseAndPosting", "Period close metrics");
     },
     journalPostingQueue(D, H) {
       const journalItems = D && D.journalQueueItems ? D.journalQueueItems() : [];
@@ -737,7 +751,7 @@ const MoonshotLayoutEngine = (function () {
     documentLibrary(D, H) {
       const rows = D && D.libraryRows ? D.libraryRows() : [];
       const doc = D && D.firstLibraryDoc ? D.firstLibraryDoc() : null;
-      return `${rows.length ? H.canvasTable(["Document", "Category", "Updated", "Expires"], rows, true) : H.canvasEmpty("Library documents appear when contract and compliance files are indexed.")}${doc ? H.canvasDocPreview(doc.title || "Preview", doc.pages || 1) : ""}`;
+      return `${rows.length ? H.canvasTable(["Document", "Category", "Updated", "Expires"], rows, true) : emptyFor(H, "documentLibrary", "Library documents")}${doc ? H.canvasDocPreview(doc.title || "Preview", doc.pages || 1) : ""}`;
     },
     officeManagerPriorities(D, H) {
       const kanban = D && D.officeKanban ? D.officeKanban() : [];
@@ -798,7 +812,7 @@ const MoonshotLayoutEngine = (function () {
     halImportHealth(D, H) {
       const health = D && D.halImportHealthStats ? D.halImportHealthStats() : { hasData: false, stats: [] };
       if (!health.hasData) {
-        return H.canvasEmpty("Import & Source Health data appears when imports are loaded.");
+        return emptyFor(H, "halImportHealth", "Import & Source Health");
       }
       const mode = health.importMode
         ? `<p class="widget-footer">Mode: ${H.esc(String(health.importMode))} · ${H.esc(String(health.status || ""))}</p>`
@@ -808,14 +822,14 @@ const MoonshotLayoutEngine = (function () {
     practiceFinancialOverview(D, H) {
       const pack = D && D.halPracticeOverviewStats ? D.halPracticeOverviewStats() : { hasData: false, stats: [] };
       if (!pack.hasData) {
-        return H.canvasEmpty("Practice Financial Overview data appears when imports are loaded.");
+        return emptyFor(H, "practiceFinancialOverview", "Practice Financial Overview");
       }
       return H.canvasStatGrid(pack.stats || []);
     },
     careDeliveryPerformance(D, H) {
       const pack = D && D.halCareDeliveryStats ? D.halCareDeliveryStats() : { hasData: false, stats: [] };
       if (!pack.hasData) {
-        return H.canvasEmpty("Care Delivery Performance data appears when SoftDent imports are loaded.");
+        return emptyFor(H, "careDeliveryPerformance", "Care Delivery Performance");
       }
       return H.canvasStatGrid(pack.stats || []);
     },
@@ -824,7 +838,7 @@ const MoonshotLayoutEngine = (function () {
         const lanes = D && D.narrativeKanban ? D.narrativeKanban() : [];
         return H.canvasKanbanLanes(lanes, "narrativeWorkflow", { narratives: true });
       }
-      return H.canvasEmpty("Narrative drafts appear when local drafts or claim sources are loaded.");
+      return emptyFor(H, "narrativeWorkflow", "Narrative drafts");
     },
   };
 
@@ -832,7 +846,7 @@ const MoonshotLayoutEngine = (function () {
     claimsVolumeTrend(D, H) {
       const claims = D && D.allClaims ? D.allClaims() : [];
       if (!claims.length) {
-        return H.canvasEmpty("Claims volume by week appears when SoftDent claims include dated submission history.");
+        return emptyFor(H, "claimsVolumeTrend", "Claims volume");
       }
       // Honest open-claims count until dated weekly submission history exists — never invent Week 1–4 bars.
       return H.canvasStat(String(claims.length), "Open claims", undefined, "claimsPipeline");
@@ -845,12 +859,12 @@ const MoonshotLayoutEngine = (function () {
         payerMap[p] = (payerMap[p] || 0) + 1;
       });
       const entries = Object.entries(payerMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-      if (!entries.length) return H.canvasEmpty("Payer breakdown appears when claims export is loaded.");
+      if (!entries.length) return emptyFor(H, "claimsPayerBreakdown", "Payer breakdown");
       return H.chartContainer(H.vBarChart(entries.map((e) => e[0]), entries.map((e) => e[1]), "#f59e0b"));
     },
     arDistribution(D, H) {
       const payer = D && D.payerDonut ? D.payerDonut() : null;
-      return payer ? H.conicDonut(payer.slices, payer.center, 96) : H.canvasEmpty("Payer mix will appear when collections data is loaded.");
+      return payer ? H.conicDonut(payer.slices, payer.center, 96) : emptyFor(H, "arDistribution", "Payer mix");
     },
     categoryFacets(D, H) {
       return `<input class="search-box" type="search" placeholder="Search library…" aria-label="Search library" /><div class="document-grid"><span class="text-muted">Contracts · Compliance · Insurance</span></div>`;
@@ -877,7 +891,7 @@ const MoonshotLayoutEngine = (function () {
       ];
       const hasAny = funnelSteps.some((s) => s.value != null && s.value !== "" && s.value !== "—" && !/not\s*configured/i.test(String(s.value)));
       if (!hasAny) {
-        return H.canvasEmpty("Treatment-plan funnel appears when SoftDent treatment-plan or case-acceptance export is loaded.");
+        return emptyFor(H, "treatmentPlanSummary", "Treatment-plan funnel");
       }
       return H.canvasFunnel(funnelSteps.map((s) => ({ label: s.label, value: H.fmtClaim(s.value != null && s.value !== "" ? s.value : "—") })));
     },
@@ -885,7 +899,7 @@ const MoonshotLayoutEngine = (function () {
       const rows = D && D.ebitdaRows ? D.ebitdaRows() : [];
       return rows.length
         ? H.canvasTable(["Adjustment", "Amount", "Reviewer", "Notes"], rows, true)
-        : H.canvasEmpty("EBITDA normalization appears when QuickBooks P&amp;L is loaded.");
+        : emptyFor(H, "ebitdaNormalization", "EBITDA normalization");
     },
     claimsSidebar(D, H) {
       const claim = D && D.firstClaim ? D.firstClaim() : null;
@@ -895,7 +909,7 @@ const MoonshotLayoutEngine = (function () {
       const stats = D && D.documentsSourceBreakdown ? D.documentsSourceBreakdown() : [];
       return stats.length
         ? H.canvasStatGrid(stats.map((s) => ({ ...s, widgetKey: undefined })))
-        : H.canvasEmpty("Source breakdown appears when document queue is populated.");
+        : emptyFor(H, "documentsSourceBreakdown", "Source breakdown");
     },
     officeTaskQueue(D, H) {
       const tasks = D && D.officeTaskRows ? D.officeTaskRows() : [];

@@ -548,6 +548,18 @@ const PageCanvas = (function () {
     return `<p class="widget-empty">${esc(message || "No data yet — run Refresh imports or check export paths; HAL fills this when the source file lands in the import bundle.")}</p>`;
   }
 
+  /** Empty CTA naming exact export file(s) from HalSkills DATASET_CONTRACTS. */
+  function canvasEmptyFor(widgetKey, subject) {
+    const Skills = typeof HalSkills !== "undefined" ? HalSkills : null;
+    const msg =
+      Skills && typeof Skills.widgetImportCta === "function"
+        ? Skills.widgetImportCta(widgetKey, subject)
+        : subject
+          ? `${subject} appears when the required import is loaded — then run refresh imports.`
+          : "Add the required export into the import inbox, then run refresh imports.";
+    return canvasEmpty(msg);
+  }
+
   function canvasImportNotice(notice) {
     if (!notice) return "";
     const staleBadge = notice.stale
@@ -1125,6 +1137,7 @@ const PageCanvas = (function () {
       canvasMetricTile,
       canvasPanel,
       canvasEmpty,
+      canvasEmptyFor,
       chartContainer,
       vBarChart,
       dualLineChart,

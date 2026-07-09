@@ -3732,7 +3732,63 @@ const HalSkills = (function () {
     softdentOperatoryGrid: ["softdent.operatory"],
     narrativeWorkflow: ["local:narratives", "softdent.claims"],
     documentLibrary: ["local:library"],
+    // Layout-engine aliases (same contracts; concrete empty-state CTAs)
+    softdentProductionDaily: ["softdent.dashboard"],
+    softdentCollectionsDaily: ["softdent.dashboard"],
+    softdentProviderProduction: ["softdent.dashboard"],
+    softdentAppointmentsSnapshot: ["softdent.operatory"],
+    nr2CollectionLag: ["softdent.ar", "softdent.dashboard"],
+    quickbooksMonthlyRevenue: ["quickbooks.revenue"],
+    quickbooksRevenueByService: ["quickbooks.expenseCategories", "quickbooks.revenue"],
+    quickbooksBalanceSheetSummary: ["quickbooks.ar"],
+    quickbooksCashFlow: ["quickbooks.revenue", "quickbooks.expenses"],
+    quickbooksCashFlowTrend: ["quickbooks.revenue", "quickbooks.expenses"],
+    quickbooksArAging: ["quickbooks.ar"],
+    claimsVolumeByWeek: ["softdent.claims"],
+    claimsVolumeTrend: ["softdent.claims"],
+    claimsPayerBreakdown: ["softdent.claims"],
+    payerBreakdown: ["softdent.claims"],
+    arDistribution: ["softdent.dashboard"],
+    caseAcceptanceFunnel: ["softdent.treatmentPlans", "softdent.caseAcceptance"],
+    ebitdaFunnel: ["quickbooks.expenses", "quickbooks.expenseCategories"],
+    documentsSourceBreakdown: ["local:documents"],
+    importSourceHealth: ["softdent.dashboard", "quickbooks.revenue"],
+    halImportHealth: ["softdent.dashboard", "quickbooks.revenue"],
+    nr2ProviderCompensationWidget: ["softdent.dashboard"],
   };
+
+  /**
+   * Empty-state CTA that names the exact export file(s) from DATASET_CONTRACTS.
+   * subject: short label, e.g. "Hygiene recall" → "Hygiene recall appears when hygiene_recall_summary.csv is in …"
+   */
+  function widgetImportCta(widgetKey, subject) {
+    const keys = WIDGET_DATASETS[widgetKey] || [];
+    const contracts = keys.map((k) => DATASET_CONTRACTS[k]).filter(Boolean);
+    if (!contracts.length) {
+      return subject
+        ? `${subject} appears when the required import is loaded — then run refresh imports.`
+        : "Add the required export into the import inbox, then run refresh imports.";
+    }
+    const localOnly = contracts.every((c) => c.local);
+    if (localOnly) {
+      return datasetNextAction(contracts[0], null, null);
+    }
+    const files = [];
+    const dirs = [];
+    contracts.forEach((c) => {
+      if (c.local) return;
+      (c.files || []).forEach((f) => {
+        if (f && !files.includes(f)) files.push(f);
+      });
+      if (c.importDir && !dirs.includes(c.importDir)) dirs.push(c.importDir);
+    });
+    const fileText = files.length ? files.join(" or ") : "the required export";
+    const dirText = dirs.length === 1 ? dirs[0] : dirs.length ? dirs.join(" or ") : "app_data/nr2/document_inbox";
+    if (subject) {
+      return `${subject} appears when ${fileText} is in ${dirText} — then run refresh imports.`;
+    }
+    return `Add ${fileText} into ${dirText}, then run refresh imports.`;
+  }
 
   function diagnosticsByDatasetKey(snapshot) {
     const bundle = snapshot && snapshot.importBundle;
@@ -4867,6 +4923,9 @@ const HalSkills = (function () {
     formatPracticeSourceFetch,
     formatDataQualityCheck,
     formatEmptyWidgetExplanation,
+    DATASET_CONTRACTS,
+    WIDGET_DATASETS,
+    widgetImportCta,
     formatDailyOwnerBriefing,
     formatAccountingReviewQueue,
     formatAccountingReconciliationChecklist,

@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10161",
-  "assetVersion": "hal-10161",
-  "schemaVersion": "hal-10161",
+  "BUILD_ID": "hal-10162",
+  "assetVersion": "hal-10162",
+  "schemaVersion": "hal-10162",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -17,6 +17,6 @@
     "hal",
     "office-manager"
   ],
-  "builtAt": "2026-07-09T17:55:00Z",
-  "notes": "hal-10161: Stop seeding fake Dr. Michael Reno 100% provider row in empty financial shell; gate provider widgets on real amounts."
+  "builtAt": "2026-07-09T18:30:00Z",
+  "notes": "hal-10162: Empty-state CTAs name exact export files from DATASET_CONTRACTS (e.g. hygiene_recall_summary.csv, softdent_ar_aging.csv)."
 }
