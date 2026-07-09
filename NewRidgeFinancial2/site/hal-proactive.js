@@ -309,6 +309,90 @@ const HalProactive = (function () {
     }
   }
 
+  function analyzeArCollections(snapshot, recommendations, seen) {
+    const ar =
+      (snapshot && snapshot.ar) ||
+      (snapshot && snapshot.softdent && snapshot.softdent.ar) ||
+      null;
+    const rows = (ar && (ar.rows || ar.top || ar.accounts)) || [];
+    let highBucket = 0;
+    let total = 0;
+    rows.forEach((row) => {
+      const bucket = String((row && (row.Aging || row.Bucket || row.bucket || row.label)) || "");
+      const bal = Number(
+        String((row && (row.Balance || row.Outstanding || row.amount || row.Amount)) || "0")
+          .replace(/[$,]/g, "")
+      );
+      if (!Number.isFinite(bal) || bal <= 0) return;
+      total += 1;
+      if (/90|120|\+/.test(bucket)) highBucket += 1;
+    });
+    // Also use A/R KPI tiles when row-level data is thin
+    const kpis = (ar && ar.kpis) || [];
+    const kpi90 = kpis.find((k) => /90/i.test(String((k && k.label) || "")));
+    if (!total && kpi90 && /[1-9]/.test(String(kpi90.value || ""))) {
+      highBucket = 1;
+      total = 1;
+    }
+    if (!total && !highBucket) return;
+    pushRecommendation(recommendations, seen, {
+      id: "ar-collections-call-list",
+      severity: highBucket > 0 ? "warning" : "info",
+      title: "Collections call list ready",
+      rationale:
+        highBucket > 0
+          ? `${highBucket} A/R line(s) in 90+ aging — work the seeded collections queue before write-off risk.`
+          : `${total} A/R balance(s) available — work seeded collections queue for staff follow-up.`,
+      action: { type: "command", command: "Who do I call today for collections?" },
+      // Prefer seeded-queue wording; morning tick already writes collections_seed work rows.
+      autoTaskTitle: `${TASK_PREFIX}Work seeded collections queue`,
+      sourceId: "collections-queue-open",
+    });
+  }
+
+  async function fetchAutonomousWork() {
+    try {
+      const bridge =
+        typeof DesktopBridge !== "undefined"
+          ? DesktopBridge
+          : typeof window !== "undefined"
+            ? window.DesktopBridge
+            : null;
+      if (!bridge || typeof bridge.loopbackJson !== "function") return null;
+      const data = await bridge.loopbackJson("/api/scheduler/work?openOnly=1&limit=50", { method: "GET" });
+      if (!data || !data.ok) return null;
+      return data.items || [];
+    } catch {
+      return null;
+    }
+  }
+
+  function analyzeClaimsAging(snapshot, recommendations, seen) {
+    const claims = snapshot && snapshot.claims;
+    const rows = (claims && (claims.claims || claims.top)) || [];
+    if (
+      !rows.length ||
+      typeof HalSkills === "undefined" ||
+      typeof HalSkills.buildClaimsAgingFollowUp !== "function"
+    ) {
+      return;
+    }
+    const aging = HalSkills.buildClaimsAgingFollowUp(rows, { minDays: 60 });
+    if (!aging || !aging.count) return;
+    const over90 = (aging.summary && aging.summary.over90) || 0;
+    pushRecommendation(recommendations, seen, {
+      id: "claims-aging-followup",
+      severity: over90 > 0 || (aging.summary && aging.summary.denied) ? "critical" : "warning",
+      title: "Claims aging follow-up",
+      rationale:
+        `${aging.count} claim(s) ≥60 days` +
+        (over90 ? ` (${over90} ≥90)` : "") +
+        " — schedule claims_aging call / appeal packet; staff owns dial.",
+      action: { type: "command", command: "List claims aging follow-up over 60 days" },
+      autoTaskTitle: `${TASK_PREFIX}Work claims aging ≥60 days (${aging.count})`,
+    });
+  }
+
   function analyzeCollectionDepositVariance(snapshot, recommendations, seen) {
     const api =
       typeof NR2Analytics !== "undefined"
@@ -326,8 +410,14 @@ const HalProactive = (function () {
       severity: Math.abs(depVar.variancePct) > threshold * 1.5 ? "critical" : "warning",
       title: "Collections vs QuickBooks deposits variance",
       rationale: depVar.summary || `Variance ${depVar.variancePct}% exceeds ${threshold}% review threshold.`,
-      action: { type: "navigate", target: "financial" },
+      action: { type: "command", command: "Draft deposit reconciliation from collections vs deposits" },
       autoTaskTitle: `${TASK_PREFIX}Review collections vs QB deposits (${depVar.period || "latest"})`,
+      depositVariance: {
+        period: depVar.period,
+        softdentCollections: depVar.softdentCollections,
+        quickbooksDeposits: depVar.quickbooksDeposits,
+        variancePct: depVar.variancePct,
+      },
     });
   }
 
@@ -373,6 +463,76 @@ const HalProactive = (function () {
               .slice(0, 4)
               .map((key) => ({ label: key, value: ribbonWidget.metrics[key], tone: "neutral" }))
           : [];
+    const claims = snapshot && snapshot.claims;
+    const lanes = (claims && (claims.laneTotals || claims.byStatus)) || {};
+    const claimRows = (claims && (claims.claims || claims.top)) || [];
+    let genericPayer = 0;
+    let namedPayer = 0;
+    claimRows.forEach((row) => {
+      const payer = String((row && (row.payer || row.Payer || row.tag)) || "")
+        .trim()
+        .toLowerCase();
+      if (!payer || payer === "insurance" || payer === "unknown" || payer === "—" || payer === "-") {
+        genericPayer += 1;
+      } else {
+        namedPayer += 1;
+      }
+    });
+    let readiness = null;
+    if (
+      claimRows.length &&
+      typeof HalSkills !== "undefined" &&
+      typeof HalSkills.buildClaimReadinessResponse === "function"
+    ) {
+      const resp = HalSkills.buildClaimReadinessResponse(claimRows);
+      const s = (resp && resp.summary) || {};
+      const items = (resp && resp.items) || [];
+      readiness = {
+        readyCount: Number(s.readyCount || 0) || 0,
+        needsReviewCount: Number(s.needsReviewCount || 0) || 0,
+        blockedCount: Number(s.blockedCount || 0) || 0,
+        daysheetDerived: items.filter((i) => i.daysheetDerived).length,
+        highPriority: items.filter((i) => i.priority === "high").length,
+        topGaps: [],
+      };
+      items.slice(0, 8).forEach((item) => {
+        (item.missingItems || []).forEach((m) => {
+          if (/Human review/i.test(m)) return;
+          if (!readiness.topGaps.includes(m) && readiness.topGaps.length < 3) readiness.topGaps.push(m);
+        });
+      });
+    }
+    let aging = null;
+    if (
+      claimRows.length &&
+      typeof HalSkills !== "undefined" &&
+      typeof HalSkills.buildClaimsAgingFollowUp === "function"
+    ) {
+      const agingResp = HalSkills.buildClaimsAgingFollowUp(claimRows, { minDays: 60 });
+      aging = {
+        count: agingResp.count || 0,
+        over90: (agingResp.summary && agingResp.summary.over90) || 0,
+        denied: (agingResp.summary && agingResp.summary.denied) || 0,
+        top: (agingResp.items || []).slice(0, 3).map((i) => ({
+          claimRef: i.claimRef,
+          ageDays: i.ageDays,
+          status: i.status,
+          payerLabel: i.payerLabel,
+        })),
+      };
+    }
+    const claimsSummary = claims
+      ? {
+          total: Number(claims.total || 0) || 0,
+          denied: Number(lanes.Denied || lanes.denied || 0) || 0,
+          needsReview: Number(lanes["Needs Review"] || lanes.needsReview || 0) || 0,
+          ready: Number(lanes.Ready || lanes.ready || 0) || 0,
+          genericPayer,
+          namedPayer,
+          readiness,
+          aging,
+        }
+      : null;
     return {
       generatedAt: new Date().toISOString(),
       kind: "morning",
@@ -382,11 +542,166 @@ const HalProactive = (function () {
       opportunity: cross.opportunity || null,
       importHealthStatus: cross.importHealthStatus || (importHealth && importHealth.status) || "UNKNOWN",
       importHealthSummary: cross.importHealthSummary || (importHealth && importHealth.summary) || "",
+      claimsSummary,
+      eraPending: null,
+      postingPending: null,
+      softdentOdbc: null,
       kpiTiles,
       actuators: cross.actuators || [],
       reconSummary: cross.reconSummary || "",
       netIncomeLatest: cross.netIncomeLatest != null ? cross.netIncomeLatest : null,
     };
+  }
+
+  async function fetchPostingPendingSummary() {
+    try {
+      const bridge =
+        typeof DesktopBridge !== "undefined"
+          ? DesktopBridge
+          : typeof window !== "undefined"
+            ? window.DesktopBridge
+            : null;
+      if (!bridge || typeof bridge.loopbackJson !== "function") return null;
+      const data = await bridge.loopbackJson("/api/posting-queue?limit=25&status=pending_review", {
+        method: "GET",
+      });
+      const items = (data && data.items) || [];
+      return {
+        count: items.length,
+        top: items.slice(0, 3).map((i) => ({
+          queueId: i.queue_id || i.queueId || i.id,
+          amount: i.amount,
+          description: i.description,
+        })),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async function fetchSoftdentOdbcBrief() {
+    try {
+      const bridge =
+        typeof DesktopBridge !== "undefined"
+          ? DesktopBridge
+          : typeof window !== "undefined"
+            ? window.DesktopBridge
+            : null;
+      if (!bridge || typeof bridge.loopbackJson !== "function") return null;
+      const data = await bridge.loopbackJson("/api/softdent/odbc-status", { method: "GET" });
+      if (!data) return null;
+      const counts = data.tableCounts || {};
+      const sdClaims = Number(counts.sd_claims || 0) || 0;
+      const hasClaimsQuery = Array.isArray(data.configuredQueryTables)
+        ? data.configuredQueryTables.includes("sd_claims")
+        : false;
+      return {
+        odbcConfigured: !!data.odbcConfigured,
+        stale: !!data.stale,
+        sdClaimsRows: sdClaims,
+        hasClaimsQuery,
+        lastMode: data.lastMode || null,
+        nextSteps: (data.nextSteps || []).slice(0, 2),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async function fetchEraPendingSummary() {
+    try {
+      const bridge =
+        typeof DesktopBridge !== "undefined"
+          ? DesktopBridge
+          : typeof window !== "undefined"
+            ? window.DesktopBridge
+            : null;
+      if (!bridge || typeof bridge.loopbackJson !== "function") return null;
+      const data = await bridge.loopbackJson("/api/era/pending-matches?limit=25", { method: "GET" });
+      if (!data || !data.ok) return null;
+      const items = data.items || [];
+      return {
+        count: items.length,
+        lowConfidence: items.filter((i) => i.confidenceBadge === "low" || Number(i.confidence || 0) < 0.6).length,
+        top: items.slice(0, 3).map((i) => ({
+          referenceId: i.referenceId || i.id,
+          predictedClaimId: i.predictedClaimId,
+          confidenceBadge: i.confidenceBadge,
+          paidAmount: i.paidAmount,
+        })),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async function analyzeEraPending(recommendations, seen) {
+    const era = await fetchEraPendingSummary();
+    if (!era || !era.count) return;
+    pushRecommendation(recommendations, seen, {
+      id: "era-pending-matches",
+      severity: era.lowConfidence > 0 ? "warning" : "info",
+      title: "ERA/EOB matches need review",
+      rationale: `${era.count} pending match(es)` + (era.lowConfidence ? ` · ${era.lowConfidence} low confidence` : "") + " — confirm before posting.",
+      action: { type: "command", command: "List pending ERA matches" },
+      autoTaskTitle: `${TASK_PREFIX}Review ERA/EOB pending matches (${era.count})`,
+    });
+  }
+
+  async function analyzePostingPending(recommendations, seen) {
+    const posting = await fetchPostingPendingSummary();
+    if (!posting || !posting.count) return;
+    pushRecommendation(recommendations, seen, {
+      id: "posting-queue-pending",
+      severity: posting.count >= 5 ? "warning" : "info",
+      title: "Accounting posting queue needs review",
+      rationale: `${posting.count} journal(s) awaiting staff approve/export — not posted live.`,
+      action: { type: "command", command: "List posting queue" },
+      autoTaskTitle: `${TASK_PREFIX}Review posting queue (${posting.count})`,
+    });
+  }
+
+  async function analyzeSoftdentOdbcGap(recommendations, seen, snapshot) {
+    const odbc = await fetchSoftdentOdbcBrief();
+    const claims = snapshot && snapshot.claims;
+    const claimRows = (claims && (claims.claims || claims.top)) || [];
+    let generic = 0;
+    claimRows.forEach((row) => {
+      const payer = String((row && (row.payer || row.Payer || row.tag)) || "")
+        .trim()
+        .toLowerCase();
+      if (!payer || payer === "insurance" || payer === "unknown" || payer === "—" || payer === "-") {
+        generic += 1;
+      }
+    });
+    if (!odbc && !generic) return;
+    if (generic > 0 || (odbc && odbc.odbcConfigured && !odbc.hasClaimsQuery && (odbc.sdClaimsRows || 0) === 0)) {
+      pushRecommendation(recommendations, seen, {
+        id: "softdent-named-payer-gap",
+        severity: generic > 0 ? "warning" : "info",
+        title: "SoftDent named-payer / ODBC gap",
+        rationale:
+          (generic > 0 ? `${generic} claim(s) still say generic Insurance. ` : "") +
+          (odbc
+            ? `ODBC ${odbc.odbcConfigured ? "on" : "off"} · claims query ${odbc.hasClaimsQuery ? "ready" : "missing"} · sd_claims ${odbc.sdClaimsRows || 0}.`
+            : "Ask HAL for SoftDent extract status."),
+        action: { type: "command", command: "SoftDent extract status" },
+        autoTaskTitle: `${TASK_PREFIX}Close SoftDent named-payer gap`,
+      });
+    }
+  }
+
+  async function enrichMorningBriefingCard(card) {
+    if (!card) return card;
+    const [era, posting, odbc] = await Promise.all([
+      fetchEraPendingSummary(),
+      fetchPostingPendingSummary(),
+      fetchSoftdentOdbcBrief(),
+    ]);
+    if (era) card.eraPending = era;
+    if (posting) card.postingPending = posting;
+    if (odbc) card.softdentOdbc = odbc;
+    return card;
   }
 
   function isMorningBriefingStale(lastAt, nowMs) {
@@ -448,11 +763,96 @@ const HalProactive = (function () {
     if (card.importHealthSummary) {
       lines.push(`Import health: ${card.importHealthStatus || "—"} — ${card.importHealthSummary}`);
     }
+    if (card.claimsSummary) {
+      const c = card.claimsSummary;
+      lines.push(
+        `Claims import: ${c.total || 0} total · Denied ${c.denied || 0} · Needs Review ${c.needsReview || 0} · Ready ${c.ready || 0}.`,
+      );
+      if ((c.denied || 0) + (c.needsReview || 0) > 0) {
+        lines.push("Billing focus: clear Denied / Needs Review lanes; HAL can draft narratives locally.");
+      }
+      if ((c.genericPayer || 0) > 0) {
+        lines.push(
+          `Carrier gap: ${c.genericPayer} claim(s) still say "Insurance" (named: ${c.namedPayer || 0}). Prefer SoftDent claims export / ODBC for real Payer labels.`,
+        );
+      }
+      if (c.readiness) {
+        const r = c.readiness;
+        lines.push(
+          `Packet readiness: Ready ${r.readyCount} · Needs review ${r.needsReviewCount} · Blocked ${r.blockedCount}` +
+            (r.highPriority ? ` · High priority ${r.highPriority}` : "") +
+            (r.daysheetDerived ? ` · Daysheet-derived ${r.daysheetDerived}` : "") +
+            ".",
+        );
+        if (r.topGaps && r.topGaps.length) {
+          lines.push(`Common claim gaps: ${r.topGaps.join("; ")}.`);
+        }
+      }
+      if (c.aging && c.aging.count > 0) {
+        lines.push(
+          `Aging follow-up: ${c.aging.count} claim(s) ≥60 days` +
+            (c.aging.over90 ? ` (${c.aging.over90} ≥90)` : "") +
+            (c.aging.denied ? ` · ${c.aging.denied} denied` : "") +
+            ".",
+        );
+        (c.aging.top || []).forEach((row) => {
+          lines.push(
+            `- ${row.claimRef || "?"} · ${row.ageDays}d · ${row.status || "?"} · ${row.payerLabel || "Insurance"}`,
+          );
+        });
+        lines.push("Ask HAL: list claims aging follow-up / build appeal packet for a denied claim.");
+      }
+    }
+    if (card.eraPending && card.eraPending.count > 0) {
+      lines.push(
+        `ERA/EOB pending review: ${card.eraPending.count}` +
+          (card.eraPending.lowConfidence ? ` (${card.eraPending.lowConfidence} low confidence)` : "") +
+          ".",
+      );
+      (card.eraPending.top || []).forEach((row) => {
+        lines.push(
+          `- ${row.referenceId || "?"} → claim ${row.predictedClaimId || "?"} · ${row.confidenceBadge || "?"}` +
+            (row.paidAmount != null ? ` · $${row.paidAmount}` : ""),
+        );
+      });
+      lines.push("Ask HAL: list pending ERA matches — staff confirms before posting.");
+    }
+    if (card.postingPending && card.postingPending.count > 0) {
+      lines.push(`Posting queue pending review: ${card.postingPending.count}.`);
+      (card.postingPending.top || []).forEach((row) => {
+        lines.push(
+          `- ${row.queueId || "?"} · $${row.amount ?? "?"} · ${String(row.description || "journal").slice(0, 80)}`,
+        );
+      });
+      lines.push("Ask HAL: list posting queue / batch approve postings (consent-gated).");
+    }
+    if (card.softdentOdbc) {
+      const o = card.softdentOdbc;
+      const named = card.claimsSummary && card.claimsSummary.namedPayer;
+      const generic = card.claimsSummary && card.claimsSummary.genericPayer;
+      lines.push(
+        `SoftDent ODBC/extract: ${o.odbcConfigured ? "DSN configured" : "DSN not set"}` +
+          (o.hasClaimsQuery ? " · claims query ready" : " · claims query missing") +
+          ` · sd_claims ${o.sdClaimsRows || 0}` +
+          (o.stale ? " · stale" : "") +
+          (named != null ? ` · named payers ${named}` : "") +
+          (generic ? ` · generic Insurance ${generic}` : "") +
+          ".",
+      );
+      (o.nextSteps || []).slice(0, 1).forEach((step) => lines.push(`- Next: ${step}`));
+      if (generic > 0 || (!named && (card.claimsSummary || {}).total > 0)) {
+        lines.push("Ask HAL: SoftDent extract status — named Payer labels need claims CSV/ODBC.");
+      }
+    }
     if (card.kpiTiles && card.kpiTiles.length) {
       lines.push(
         "KPI ribbon:",
         ...card.kpiTiles.map((tile) => `- ${tile.label}: ${tile.value}`),
       );
+    }
+    if (card.reconSummary) {
+      lines.push(`Deposit / recon note: ${card.reconSummary}`);
+      lines.push("Ask HAL: draft deposit reconciliation from collections vs deposits.");
     }
     return lines.join("\n");
   }
@@ -471,7 +871,8 @@ const HalProactive = (function () {
       const feed = await ctx.refreshHalWidgetFeed(snapshot);
       if (feed) snapshot = Object.assign({}, snapshot, { widgets: feed });
     }
-    const card = buildMorningBriefingCard(snapshot);
+    let card = buildMorningBriefingCard(snapshot);
+    card = (await enrichMorningBriefingCard(card)) || card;
     lastMorningBriefing = card;
     await writeLastMorningBriefingAt(Date.now());
     if (typeof window !== "undefined") {
@@ -491,6 +892,8 @@ const HalProactive = (function () {
     const diagnostics = analyzeImportDiagnostics(snapshot, recommendations, seen);
     analyzeDataQuality(snapshot, recommendations, seen);
     analyzeCollectionDepositVariance(snapshot, recommendations, seen);
+    analyzeArCollections(snapshot, recommendations, seen);
+    analyzeClaimsAging(snapshot, recommendations, seen);
     analyzeWidgets(snapshot, recommendations, seen);
     analyzeAttention(snapshot, recommendations, seen);
     analyzeRuntimeIssues(snapshot, recommendations, seen);
@@ -527,6 +930,33 @@ const HalProactive = (function () {
       crossDomain,
       morningBriefing: buildMorningBriefingCard(snapshot),
     };
+  }
+
+  async function buildProactiveBriefingAsync(snapshot, ctx) {
+    const briefing = buildProactiveBriefing(snapshot, ctx);
+    const seen = new Set((briefing.recommendations || []).map((r) => r.id));
+    await Promise.all([
+      analyzeEraPending(briefing.recommendations, seen),
+      analyzePostingPending(briefing.recommendations, seen),
+      analyzeSoftdentOdbcGap(briefing.recommendations, seen, snapshot),
+    ]);
+    briefing.recommendations.sort((a, b) => {
+      const rank = severityRank(a.severity) - severityRank(b.severity);
+      if (rank !== 0) return rank;
+      return String(a.title).localeCompare(String(b.title));
+    });
+    briefing.recommendations = briefing.recommendations.slice(0, MAX_RECOMMENDATIONS);
+    briefing.recommendationCount = briefing.recommendations.length;
+    briefing.topAction = briefing.recommendations[0] || null;
+    if (briefing.topAction) {
+      briefing.headline = `HAL is acting: ${briefing.topAction.title}`;
+      briefing.programPosture =
+        briefing.topAction.severity === "critical" ? "needs_attention" : "monitor";
+    }
+    if (briefing.morningBriefing) {
+      briefing.morningBriefing = await enrichMorningBriefingCard(briefing.morningBriefing);
+    }
+    return briefing;
   }
 
   function applyPlacementToBriefing(briefing, placement) {
@@ -752,9 +1182,42 @@ const HalProactive = (function () {
       }
     }
 
+    // Sync headless scheduler work ledger → office tasks (survives UI-closed morning ticks)
+    const ledger = (await fetchAutonomousWork()) || [];
+    if (ledger.length) {
+      briefing.autonomousWork = ledger;
+      for (const row of ledger) {
+        const sourceId = row.sourceId || row.id;
+        if (sourceId) activeSourceIds.push(sourceId);
+        const pri = row.priority === "urgent" ? "urgent" : "normal";
+        try {
+          const result = HalSkills.upsertHalTask(
+            tasks,
+            {
+              title: row.title && String(row.title).startsWith(TASK_PREFIX) ? row.title : `${TASK_PREFIX}${row.title}`,
+              priority: pri,
+              notes: row.detail,
+              description: row.detail,
+              source: "hal-autonomous-work",
+              sourceId,
+              dueHint: row.kind,
+              blockingReason: row.detail,
+              sourceRefs: row.meta ? [row.meta] : [],
+            },
+            { actor: "hal-scheduler" },
+          );
+          tasks = result.tasks;
+          if (result.created) created.push(result.task);
+          else updated.push(result.task);
+        } catch {
+          skipped += 1;
+        }
+      }
+    }
+
     tasks = HalSkills.autoResolveHalTasks(tasks, activeSourceIds);
     await persistTasks(tasks);
-    return { created, updated, skipped };
+    return { created, updated, skipped, autonomousWorkCount: ledger.length };
   }
 
   async function runCycle(ctx, options) {
@@ -793,7 +1256,7 @@ const HalProactive = (function () {
       }
     }
 
-    const briefing = buildProactiveBriefing(snapshot, ctx);
+    const briefing = await buildProactiveBriefingAsync(snapshot, ctx);
     applyPlacementToBriefing(briefing, placement);
     briefing.autoTasks = await applyAutoTasks(briefing, ctx);
     const officeApi = officeManagerApi();
@@ -897,6 +1360,8 @@ const HalProactive = (function () {
     MORNING_BRIEFING_STALE_MS,
     MORNING_BRIEFING_KEY,
     buildProactiveBriefing,
+    buildProactiveBriefingAsync,
+    enrichMorningBriefingCard,
     buildMorningBriefingCard,
     formatMorningBriefingCard,
     formatProactiveBriefing,
@@ -906,6 +1371,7 @@ const HalProactive = (function () {
     maybeFireMorningBriefingOnBoot,
     getLastMorningBriefing,
     applyAutoTasks,
+    fetchAutonomousWork,
     runAutonomousPlacement,
     runCycle,
     getLastBriefing,

@@ -15,6 +15,22 @@ INDEX_PATH = CACHE_DIR / "index.jsonl"
 DEFAULT_TTL_HOURS = 72
 
 TOKEN_RE = re.compile(r"[a-z0-9]{2,}")
+ELIGIBILITY_QUERY_RE = re.compile(
+    r"\b("
+    r"eligibility|elig(?:ible)?|"
+    r"deductible|annual\s*max|benefit(?:s)?\s*(?:check|remaining)|"
+    r"coinsurance|copay|waiting\s*period|"
+    r"270|271|member\s*id|subscriber|"
+    r"coverage\s*(?:left|remaining)|max\s*remaining"
+    r")\b",
+    re.IGNORECASE,
+)
+# "eligibility phone / website / contact" is payer routing, not member-benefit cache
+ELIGIBILITY_CONTACT_ONLY_RE = re.compile(
+    r"\belig(?:ibility|ible)?\s*(?:phone|tel|number|website|portal|url|fax|contact|address)\b|"
+    r"\b(?:phone|tel|website|portal|fax|contact)\s*(?:for\s+)?elig(?:ibility|ible)?\b",
+    re.IGNORECASE,
+)
 FORBIDDEN_PATTERNS = (
     "patientname,mrn",
     "ssn",
@@ -142,10 +158,23 @@ def list_eligibility_entries(*, limit: int = 20, fresh_only: bool = True) -> lis
     return rows[:cap]
 
 
+def query_wants_eligibility(query: str) -> bool:
+    """True when the user is asking about member benefits / eligibility cache."""
+    q = str(query or "")
+    if ELIGIBILITY_CONTACT_ONLY_RE.search(q) and not re.search(
+        r"\b(deductible|annual\s*max|coinsurance|copay|270|271|remaining|benefit(?:s)?\s*check)\b",
+        q,
+        re.I,
+    ):
+        return False
+    return bool(ELIGIBILITY_QUERY_RE.search(q))
+
+
 def search_eligibility_cache(query: str, *, limit: int = 2) -> list[dict[str, Any]]:
+    """Search fresh cache rows. Never fall back to unrelated payers on zero overlap."""
     q_tokens = _tokenize(query)
     if not q_tokens:
-        return list_eligibility_entries(limit=limit, fresh_only=True)
+        return []
     scored: list[tuple[int, dict[str, Any]]] = []
     for entry in _read_index():
         if not _is_fresh(entry):
@@ -161,9 +190,7 @@ def search_eligibility_cache(query: str, *, limit: int = 2) -> list[dict[str, An
         if overlap > 0:
             scored.append((overlap, entry))
     scored.sort(key=lambda pair: pair[0], reverse=True)
-    if scored:
-        return [entry for _, entry in scored[: max(1, int(limit))]]
-    return list_eligibility_entries(limit=limit, fresh_only=True)
+    return [entry for _, entry in scored[: max(1, int(limit))]]
 
 
 def format_eligibility_hits(entries: list[dict[str, Any]]) -> str:

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -230,6 +232,64 @@ def _claim_status_for_patient_day(
     return "Pending Review"
 
 
+@lru_cache(maxsize=1)
+def _sd_claims_payer_index() -> dict[str, str]:
+    """Best-effort patient/date → real Payer from sd_claims when ODBC/CSV populated it."""
+    try:
+        from softdent_odbc_extract import resolve_sd_sqlite_db
+    except ImportError:
+        return {}
+    db_path = resolve_sd_sqlite_db()
+    if not db_path or not Path(db_path).is_file():
+        return {}
+    out: dict[str, str] = {}
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            cur = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='sd_claims'"
+            )
+            if not cur.fetchone():
+                return {}
+            rows = conn.execute(
+                "SELECT patient_name, service_date, payer FROM sd_claims "
+                "WHERE payer IS NOT NULL AND TRIM(payer) != ''"
+            ).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return {}
+    for patient_name, service_date, payer in rows:
+        label = str(payer or "").strip()
+        if not label or label.lower() in {"insurance", "unknown", "n/a", "-"}:
+            continue
+        name_key = _normalize_patient_name(str(patient_name or "")).casefold()
+        date_key = str(service_date or "").strip()[:10]
+        if name_key:
+            out.setdefault(f"name|{name_key}", label)
+        if name_key and date_key:
+            out[f"name_date|{name_key}|{date_key}"] = label
+    return out
+
+
+def _resolve_claim_payer(patient_name: str, report_date: str) -> str:
+    """Prefer a named payer from sd_claims; daysheet alone has no carrier column."""
+    index = _sd_claims_payer_index()
+    if not index:
+        return "Insurance"
+    name_key = _normalize_patient_name(patient_name).casefold()
+    date_key = str(report_date or "").strip()[:10]
+    if name_key and date_key:
+        hit = index.get(f"name_date|{name_key}|{date_key}")
+        if hit:
+            return hit
+    if name_key:
+        hit = index.get(f"name|{name_key}")
+        if hit:
+            return hit
+    return "Insurance"
+
+
 def build_claims_rows(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     claims: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -261,7 +321,7 @@ def build_claims_rows(transactions: list[dict[str, Any]]) -> list[dict[str, Any]
                 "MRN": patient_id,
                 "ClaimId": claim_id,
                 "ClaimStatus": status,
-                "Payer": "Insurance",
+                "Payer": _resolve_claim_payer(patient, report_date),
                 "Procedure": str(row.get("description") or code),
                 "ServiceDate": report_date,
                 "DenialReason": "Derived from daysheet insurance activity."

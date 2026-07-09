@@ -52,6 +52,31 @@ class SoftDentOperationalPipelineTests(unittest.TestCase):
         self.assertEqual(len(claims), 1)
         self.assertEqual(claims[0]["ClaimStatus"], "Paid")
 
+    def test_build_claims_prefers_sd_claims_payer_when_available(self) -> None:
+        from softdent_operational_pipeline import _sd_claims_payer_index
+
+        _sd_claims_payer_index.cache_clear()
+        transactions = [
+            {
+                "patientId": "9",
+                "patientName": "Kelley, Reese",
+                "code": "1110",
+                "description": "Prophylaxis - Adult",
+                "production": 137.0,
+                "reportDate": "2026-05-28",
+            },
+        ]
+        with patch(
+            "softdent_operational_pipeline._sd_claims_payer_index",
+            return_value={"name_date|kelley, reese|2026-05-28": "METLIFE DENTAL"},
+        ):
+            claims = build_claims_rows(transactions)
+        self.assertEqual(claims[0]["Payer"], "METLIFE DENTAL")
+        _sd_claims_payer_index.cache_clear()
+        with patch("softdent_operational_pipeline._sd_claims_payer_index", return_value={}):
+            claims2 = build_claims_rows(transactions)
+        self.assertEqual(claims2[0]["Payer"], "Insurance")
+
     def test_daysheet_pipeline_beats_sample_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             daysheet = Path(tmp) / "daysheet.jsonl"

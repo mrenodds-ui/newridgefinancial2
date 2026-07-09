@@ -2,6 +2,8 @@
   "employeePhoneScripts": {
     "arVerification": "Hello, this is the billing office at New Ridge Family Dental. May I speak with {patientName}? I need to verify your identity before discussing account details.",
     "arBalance": "Our records show a balance of {balance}. Would you like to pay today, or discuss a payment plan?",
+    "feeUnderpay": "Hello, may I speak with {patientName}? This is billing at New Ridge Family Dental. Your insurance paid less than the contracted allowed amount — about {shortfall} still needs review. Can we discuss payment options or a secondary claim?",
+    "claimsAging": "Hello, may I speak with {patientName}? This is the billing office at New Ridge Family Dental following up on an outstanding insurance claim. We may need updated insurance info or a patient portion — do you have a moment?",
     "appointmentConfirm": "This is a reminder call from New Ridge Family Dental regarding your upcoming appointment.",
     "hipaaClose": "For your privacy, I cannot leave detailed financial information on voicemail. Please call us back at the office number."
   },

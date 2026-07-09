@@ -31,13 +31,22 @@ def get_voice_script(scenario: str, *, patient_name: str = "", balance: str = ""
     key_map = {
         "collections": "arBalance",
         "ar": "arBalance",
+        "ar_balance": "arBalance",
         "insurance_verify": "arVerification",
+        "ar_verification": "arVerification",
         "appointment": "appointmentConfirm",
+        "underpay": "feeUnderpay",
+        "fee_underpay": "feeUnderpay",
+        "claims_aging": "claimsAging",
+        "aging": "claimsAging",
+        "insurance_followup": "claimsAging",
     }
     script_key = key_map.get(str(scenario or "").lower(), str(scenario or "arBalance"))
     template = str(scripts.get(script_key) or scripts.get("arBalance") or "")
-    rendered = template.replace("{patientName}", patient_name or "the patient").replace(
-        "{balance}", balance or "your balance"
+    rendered = (
+        template.replace("{patientName}", patient_name or "the patient")
+        .replace("{balance}", balance or "your balance")
+        .replace("{shortfall}", balance or "the underpayment")
     )
     return {"ok": True, "scenario": scenario, "scriptKey": script_key, "script": rendered, "policy": data.get("policy")}
 
@@ -70,22 +79,65 @@ def initiate_call(
     patient_id: str = "",
     reason: str = "collections",
     call_id: str | None = None,
+    queue_id: str = "",
+    meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     ensure_call_log_schema(conn)
     cid = str(call_id or f"call-{uuid.uuid4().hex[:12]}")
     number = str(phone_number or "").strip()
     if not number:
         return {"ok": False, "error": "missing_phone_number"}
+    meta_payload = dict(meta) if isinstance(meta, dict) else {}
+    if queue_id:
+        meta_payload["queueId"] = str(queue_id)
     conn.execute(
         """
-        INSERT INTO voip_call_log (id, created_at_utc, patient_id, phone_number, direction, reason, status)
-        VALUES (?, ?, ?, ?, 'outbound', ?, 'initiated')
+        INSERT INTO voip_call_log
+        (id, created_at_utc, patient_id, phone_number, direction, reason, status, meta_json)
+        VALUES (?, ?, ?, ?, 'outbound', ?, 'initiated', ?)
         """,
-        (cid, _utc_now(), str(patient_id or ""), number, str(reason or "collections")),
+        (
+            cid,
+            _utc_now(),
+            str(patient_id or ""),
+            number,
+            str(reason or "collections"),
+            json.dumps(meta_payload),
+        ),
     )
     conn.commit()
     tel_uri = number if number.startswith("tel:") else f"tel:{number}"
-    return {"ok": True, "callId": cid, "telUri": tel_uri, "phoneNumber": number}
+    return {
+        "ok": True,
+        "callId": cid,
+        "telUri": tel_uri,
+        "phoneNumber": number,
+        "queueId": meta_payload.get("queueId") or "",
+    }
+
+
+def _outcome_to_queue_status(outcome: str) -> str:
+    o = str(outcome or "").strip().lower().replace(" ", "_").replace("-", "_")
+    mapping = {
+        "no_answer": "no_answer",
+        "noanswer": "no_answer",
+        "voicemail": "no_answer",
+        "busy": "no_answer",
+        "promised": "promised",
+        "promise_to_pay": "promised",
+        "ptp": "promised",
+        "paid": "closed",
+        "resolved": "closed",
+        "closed": "closed",
+        "wrong_number": "closed",
+        "do_not_call": "closed",
+        "spoke": "called",
+        "connected": "called",
+        "called": "called",
+        "left_message": "called",
+        "callback": "called",
+    }
+    return mapping.get(o, "called")
 
 
 def log_call_outcome(
@@ -95,18 +147,59 @@ def log_call_outcome(
     outcome: str,
     notes: str = "",
     duration_sec: int | None = None,
+    queue_id: str = "",
+    store=None,
 ) -> dict[str, Any]:
     ensure_call_log_schema(conn)
+    cid = str(call_id or "")
+    row = conn.execute(
+        "SELECT patient_id, meta_json FROM voip_call_log WHERE id = ?",
+        (cid,),
+    ).fetchone()
+    meta: dict[str, Any] = {}
+    patient_id = ""
+    if row:
+        patient_id = str(row[0] or "")
+        try:
+            meta = json.loads(row[1] or "{}")
+        except json.JSONDecodeError:
+            meta = {}
     conn.execute(
         """
         UPDATE voip_call_log
         SET status = 'completed', outcome = ?, notes = ?, duration_sec = ?
         WHERE id = ?
         """,
-        (str(outcome or "unknown"), str(notes or "")[:2000], duration_sec, str(call_id or "")),
+        (str(outcome or "unknown"), str(notes or "")[:2000], duration_sec, cid),
     )
     conn.commit()
-    return {"ok": True, "callId": call_id, "outcome": outcome}
+    qid = str(queue_id or meta.get("queueId") or meta.get("queue_id") or "").strip()
+    queue_update = None
+    if store or qid or patient_id:
+        try:
+            from hal_employee_workflows import update_collections_queue_status
+
+            payload = {
+                "queueId": qid,
+                "patientId": patient_id,
+                "status": _outcome_to_queue_status(outcome),
+                "outcome": outcome,
+                "notes": notes,
+                "callId": cid,
+            }
+            if store is not None:
+                queue_update = update_collections_queue_status(store, payload)
+            else:
+                queue_update = update_collections_queue_status(None, payload, conn=conn)
+        except Exception as exc:
+            queue_update = {"ok": False, "error": str(exc)}
+    return {
+        "ok": True,
+        "callId": call_id,
+        "outcome": outcome,
+        "queueStatus": (queue_update or {}).get("status"),
+        "queueUpdate": queue_update,
+    }
 
 
 def list_call_log(conn: sqlite3.Connection, *, patient_id: str = "", limit: int = 50) -> dict[str, Any]:

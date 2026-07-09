@@ -322,6 +322,7 @@ const HalOfficeManager = (function () {
         if (!topGaps.includes(m) && topGaps.length < 4) topGaps.push(m);
       });
     });
+    const aging = resp.agingFollowUp || null;
     return {
       readyCount: Number(s.readyCount || 0) || 0,
       needsReviewCount: Number(s.needsReviewCount || 0) || 0,
@@ -329,15 +330,18 @@ const HalOfficeManager = (function () {
       genericPayer: items.filter((i) => i.genericPayer).length,
       daysheetDerived: daysheet,
       highPriority,
+      agingOver60: Number(s.agingOver60Count || (aging && aging.count) || 0) || 0,
+      agingOver90: Number(s.agingOver90Count || (aging && aging.summary && aging.summary.over90) || 0) || 0,
       topGaps,
       examples: items
-        .filter((i) => i.status !== "ready" || i.genericPayer)
+        .filter((i) => i.status !== "ready" || i.genericPayer || i.agingOver60)
         .slice(0, 3)
         .map((i) => ({
           claimRef: i.claimRef,
           status: i.status,
           summary: i.staffSummary,
           genericPayer: !!i.genericPayer,
+          ageDays: i.ageDays,
         })),
     };
   }
@@ -370,7 +374,7 @@ const HalOfficeManager = (function () {
       if (claimLanes.rowCount && claimLanes.genericPayer > 0) {
         lines.push(
           `- Carrier gap: ${claimLanes.genericPayer} claim(s) labeled generic "Insurance" (named payers: ${claimLanes.namedPayer}). ` +
-            "Claim↔payer join needs SoftDent InsCo / claims export with real Payer labels — daysheet alone cannot supply carriers.",
+            "Claim↔payer join needs SoftDent InsCo / claims export or ODBC sd_claims — daysheet alone cannot supply carriers. Ask HAL: SoftDent extract status.",
         );
       } else if (claimLanes.namedPayer > 0) {
         lines.push(`- Carrier labels present on ${claimLanes.namedPayer} claim(s) — use join_claim_payers for phones/IDs.`);
@@ -383,14 +387,30 @@ const HalOfficeManager = (function () {
             (readiness.daysheetDerived ? ` · Daysheet-derived ${readiness.daysheetDerived}` : "") +
             ".",
         );
+        if (readiness.agingOver60 > 0) {
+          lines.push(
+            `- Aging follow-up: ${readiness.agingOver60} claim(s) ≥60 days` +
+              (readiness.agingOver90 ? ` (${readiness.agingOver90} ≥90)` : "") +
+              " — ask HAL for aging list or appeal packet.",
+          );
+        }
         if (readiness.topGaps.length) {
           lines.push(`- Common gaps: ${readiness.topGaps.join("; ")}.`);
         }
         readiness.examples.forEach((ex) => {
-          lines.push(`- Example ${ex.claimRef || "?"}: ${ex.summary}`);
+          const age = ex.ageDays != null ? ` · ${ex.ageDays}d` : "";
+          lines.push(`- Example ${ex.claimRef || "?"}${age}: ${ex.summary}`);
         });
       }
       lines.push("");
+    }
+    const ar = snapshot && (snapshot.ar || (snapshot.softdent && snapshot.softdent.ar));
+    if (ar) {
+      lines.push(
+        "A/R collections:",
+        "- Ask HAL: who do I call today / build collections queue — staff owns patient contact.",
+        "",
+      );
     }
     if (!priorities.length) {
       lines.push("No urgent office priorities. HAL will keep monitoring imports, widgets, and local queues.");

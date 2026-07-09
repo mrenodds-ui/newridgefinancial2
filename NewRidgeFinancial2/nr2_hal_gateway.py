@@ -33,9 +33,28 @@ FINANCIAL_OBFUSCATION = re.compile(
     r"(?i)\b(owe|balance|paid|bill|money|amount\s*due|outstanding|insurance|eob|era|adjustment|write[\s-]?off)\b"
 )
 _AMOUNT_PATTERN = re.compile(r"\$\s*\d[\d,]*(?:\.\d{2})?|\d+\.\d{2}\s*%")
+# True clinical / chart / treatment narrative work (heavy lane).
 _CLINICAL_PATTERN = re.compile(
-    r"(?i)\b(clinical|procedure|tooth|quadrant|cdt|crown|extraction|prophy|periodontal|narrative|"
-    r"denial|appeal|d2740|d4341|d6010|d3330|d1110|srp|implant|endo|payer|insurance|claim|eob|era)\b"
+    r"(?i)\b(clinical|procedure|tooth|quadrant|periodontal|perio\b|extraction|prophy|"
+    r"srp|implant|endo(?:dontic)?|radiograph|periapical|bitewing|"
+    r"chart(?:ing)?|probing|bop\b|treatment\s*plan)\b|"
+    r"\b(draft|write|prepare)\b.*\b(narrative|clinical\s*note)\b|"
+    r"\bnarrative\b.*\b(claim|crown|tooth)\b|"
+    r"\bcrown\b.*\btooth\b|\btooth\b.*\bcrown\b"
+)
+# Payer routing, fee schedule, phones, CO-45 — tool-first, not 30B clinical.
+_INSURANCE_OPS_PATTERN = re.compile(
+    r"(?i)\b("
+    r"payer|insurance|eob|era|claim(?:s)?|denial|appeal|"
+    r"fee\s*schedule|allowed\s*amount|allowed\s*fee|contracted\s*fee|practice\s*amount|"
+    r"co-?45|underpay(?:ment)?|ucr|"
+    r"elig(?:ibility|ible)?\s*(?:phone|tel|number|website|portal|contact)|"
+    r"(?:phone|tel|website|portal|fax|contact)\s*(?:for\s+)?elig(?:ibility|ible)?|"
+    r"claim\s*phone|payer\s*id|routing\s*id|vyne|clearinghouse|"
+    r"delta\s*dental|metlife|cigna|guardian|aetna|humana|bcbs|blue\s*cross|"
+    r"united\s*concordia|careington|geha|dentemax|dentaquest"
+    r")\b|"
+    r"\bD\d{4}\b"
 )
 _ANALYTICAL_PATTERN = re.compile(
     r"(?i)\b(why|how|explain|analyze|trend|pattern|compare|summary|overview|what if|strategy|plan)\b"
@@ -79,15 +98,45 @@ _MONOLOGUE_START_RE = re.compile(
     r"^(?:Okay|Sure|Certainly|Hmm|Let me|Wait|Alright)[,.]?\s*(?:let me\s+)?(?:break this down|think|see|check|start|walk through)[^.!?]*[.!?]?\s*",
     re.IGNORECASE,
 )
+_STRUCTURED_PLAN_OPENER_RE = re.compile(
+    r"^(?:here(?:'s| is) a structured plan|here is a (?:brief )?(?:numbered )?plan|structured plan:)\s*[:.\u2014-]?\s*",
+    re.IGNORECASE,
+)
+_COT_PARAGRAPH_RE = re.compile(
+    r"^(?:First,?\s+I need to|Let me (?:break|think|verify|re-evaluate|reconsider|check|start)|"
+    r"We are given|Okay,?\s+the user|Hmm,?\s+the user|The user is asking|"
+    r"\*Double-checking|\*Lightbulb|\*Verifying|\*Structure check|"
+    r"\*Final verification|\*Why Friday|\*Critical constraint|\*Ordered steps)",
+    re.IGNORECASE,
+)
+_DIRECT_ANSWER_MARKER_RE = re.compile(
+    r"\*\*Direct Answer:\*\*\s*|^Direct answer:\s*|\*\*Here's (?:the|a) (?:direct )?answer:\*\*\s*",
+    re.IGNORECASE | re.MULTILINE,
+)
+_WANTS_PLAN_RE = re.compile(
+    r"prioriti[sz]e|make a plan|draft a plan|\bplan (my|for|the)\b|"
+    r"analy[sz]e (?:this|the|my|our|it)|reason through|think through|\bstrategy\b|"
+    r"focus first|where (do|should) (i|we) start|"
+    r"\b(step[\s-]?by[\s-]?step plan|numbered plan|work plan|action plan)\b",
+    re.IGNORECASE,
+)
 _MEMORY_GUIDANCE_MARKERS = (
     "Governed memory matches:",
     "Durable HAL knowledge (guidance only",
 )
 _PAYER_GUIDANCE_MARKER = "Payer reference matches ("
+_FEE_GUIDANCE_MARKER = "Fee schedule matches ("
 _ELIGIBILITY_GUIDANCE_MARKER = "Cached eligibility context ("
+_CLAIM_PAYER_GUIDANCE_MARKER = "Claim ↔ payer reference joins"
 _DEFAULT_MEMORY_LIMIT = 6
 _DEFAULT_PAYER_LIMIT = 4
+_DEFAULT_FEE_LIMIT = 3
 _DEFAULT_ELIGIBILITY_LIMIT = 2
+_DEFAULT_CLAIM_JOIN_LIMIT = 8
+_CLAIM_SCOPED_RE = re.compile(
+    r"\b(claim|claims|denied|denial|appeal|pre-?submit|packet readiness|carrier on)\b",
+    re.IGNORECASE,
+)
 
 
 def is_outbound_action_phrase(query: str) -> bool:
@@ -121,10 +170,64 @@ def find_page(query: str) -> str | None:
     return best
 
 
-def clean_gateway_text(text: str) -> str:
+_MID_BODY_COT_RE = re.compile(
+    r"(?:^|\n+)\s*(?:Okay|Hmm),?\s+the user[^\n]*|"
+    r"(?:^|\n+)\s*The user is asking[^\n]*|"
+    r"(?:^|\n+)\s*First,?\s+I need to[^\n]*|"
+    r"(?:^|\n+)\s*Let me (?:break|think|verify|re-evaluate|reconsider|check|start)[^\n]*|"
+    r"(?:^|\n+)\s*\*(?:Double-checking|Lightbulb|Verifying|Structure check|Final verification)[^\n]*",
+    re.IGNORECASE,
+)
+
+
+def strip_chain_of_thought_prose(text: str) -> str:
+    out = str(text or "").strip()
+    if not out:
+        return out
+    marker = _DIRECT_ANSWER_MARKER_RE.search(out)
+    if marker:
+        out = out[marker.end() :].strip()
+    for _ in range(8):
+        trimmed = out.strip()
+        if not _COT_PARAGRAPH_RE.match(trimmed) and not re.match(
+            r"^(?:Okay|Hmm|Let me|Wait|Pauses|Nods|Double-checks|Starts structuring)\b",
+            trimmed,
+            flags=re.IGNORECASE,
+        ):
+            break
+        parts = re.split(r"\n\n+", trimmed, maxsplit=1)
+        if len(parts) == 2 and len(parts[1]) > 40:
+            out = parts[1].strip()
+            continue
+        sentence = re.search(r"[.!?]+\s+(?=[A-Z*\"])", trimmed)
+        if sentence and 0 < sentence.start() < min(480, len(trimmed) - 60):
+            out = trimmed[sentence.end() :].strip()
+            continue
+        out = _COT_PARAGRAPH_RE.sub("", trimmed, count=1).strip()
+        out = re.sub(
+            r"^(?:Okay|Hmm|Let me|Wait)[^.!?]*[.!?]?\s*",
+            "",
+            out,
+            count=1,
+            flags=re.IGNORECASE,
+        ).strip()
+        break
+    # Drop mid-body scratchpad lines that survive leading-strip.
+    out = _MID_BODY_COT_RE.sub("\n", out)
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    return out.strip()
+
+
+def clean_gateway_text(text: str, *, query: str | None = None) -> str:
     out = str(text or "").strip()
     out = re.sub(r"<think>[\s\S]*?</think>", "", out, flags=re.IGNORECASE)
     out = re.sub(r"</?think>", "", out, flags=re.IGNORECASE)
+    out = re.sub(r"<reasoning>[\s\S]*?</reasoning>", "", out, flags=re.IGNORECASE)
+    out = re.sub(r"</?reasoning>", "", out, flags=re.IGNORECASE)
+    if not (query and _WANTS_PLAN_RE.search(str(query))):
+        out = _STRUCTURED_PLAN_OPENER_RE.sub("", out)
+    out = strip_chain_of_thought_prose(out)
     out = _MONOLOGUE_START_RE.sub("", out)
     out = re.sub(
         r"^(?:Okay|Sure|Certainly)[,.]?\s*(?:from my (?:local )?)?(?:read-?only )?(?:monitoring )?perspective[,:]?\s*",
@@ -138,9 +241,11 @@ def clean_gateway_text(text: str) -> str:
 def extract_ollama_message_text(message: dict[str, Any] | None) -> str:
     msg = message or {}
     content = str(msg.get("content") or "").strip()
+    # Prefer visible content only — never surface raw thinking as the staff reply.
+    if content:
+        return clean_gateway_text(content)
     thinking = str(msg.get("thinking") or "").strip()
-    combined = content or thinking
-    return clean_gateway_text(combined)
+    return clean_gateway_text(thinking)
 
 
 def try_local_policy_reply(query: str) -> dict[str, str] | None:
@@ -248,7 +353,19 @@ def is_financial_query(query: str) -> bool:
 
 def classify_query_intent(query: str) -> str:
     q = str(query or "")
-    if _CLINICAL_PATTERN.search(q):
+    clinical = bool(_CLINICAL_PATTERN.search(q))
+    insurance_ops = bool(_INSURANCE_OPS_PATTERN.search(q))
+    # Prefer insurance_ops when the ask is payer/fee/phone/claim ops without chart work.
+    if insurance_ops and not clinical:
+        return "insurance_ops"
+    if clinical and insurance_ops and not re.search(
+        r"(?i)\b(tooth|quadrant|chart(?:ing)?|probing|radiograph|periapical|bitewing|"
+        r"draft|write|prepare|clinical\s*note|treatment\s*plan)\b",
+        q,
+    ):
+        # e.g. "Delta denial code 16 on D2740" — ops/tools, not clinical charting
+        return "insurance_ops"
+    if clinical:
         return "clinical"
     if is_financial_query(q) and not _ANALYTICAL_PATTERN.search(q):
         return "transactional"
@@ -335,6 +452,14 @@ def route_by_complexity(
             reason="financial_math_policy",
         )
         return "reason21b"
+    # Insurance ops: tool-first on reason21b (or chat8b for short phone/fee lookups).
+    if intent == "insurance_ops":
+        if len(q) < 100 and re.search(
+            r"(?i)\b(phone|tel|allowed|fee\s*schedule|D\d{4}|payer\s*id|routing)\b",
+            q,
+        ):
+            return "chat8b"
+        return "reason21b"
     if len(q) < 80 and not _ANALYTICAL_PATTERN.search(q) and not _COMPLEXITY_PATTERN.search(q):
         return "chat8b"
     if tier >= 3 or intent == "analytical" or bool(re.search(r"(?i)\b(reason|plan|prioriti|compare)\b", q)):
@@ -410,7 +535,7 @@ def system_prompt_has_memory_guidance(system_prompt: str) -> bool:
 def _memory_limit_for_intent(intent: str) -> int:
     if intent == "clinical":
         return 10
-    if intent == "analytical":
+    if intent in ("analytical", "insurance_ops"):
         return 8
     return _DEFAULT_MEMORY_LIMIT
 
@@ -443,16 +568,120 @@ def compile_payer_guidance(query: str, system_prompt: str = "", *, limit: int = 
     return format_payer_hits(hits)
 
 
+def system_prompt_has_fee_guidance(system_prompt: str) -> bool:
+    return _FEE_GUIDANCE_MARKER in str(system_prompt or "")
+
+
+def compile_fee_guidance(query: str, system_prompt: str = "", *, limit: int = _DEFAULT_FEE_LIMIT) -> str:
+    """Inject office fee-schedule CDT amounts when the query asks for fees/allowed."""
+    if system_prompt_has_fee_guidance(system_prompt):
+        return ""
+    try:
+        from fee_schedule_store import format_fee_hits, lookup_fees, query_wants_fee_lookup
+    except ImportError:
+        return ""
+    if not query_wants_fee_lookup(str(query or "")):
+        return ""
+    hits = lookup_fees(str(query or ""), limit=max(1, int(limit)))
+    return format_fee_hits(hits)
+
+
 def compile_eligibility_context(query: str, system_prompt: str = "", *, limit: int = _DEFAULT_ELIGIBILITY_LIMIT) -> str:
-    """Inject fresh PHI-redacted eligibility snapshots when available."""
+    """Inject fresh PHI-redacted eligibility snapshots only when the query asks for benefits."""
     if _ELIGIBILITY_GUIDANCE_MARKER in str(system_prompt or ""):
         return ""
     try:
-        from eligibility_cache_store import format_eligibility_hits, search_eligibility_cache
+        from eligibility_cache_store import (
+            format_eligibility_hits,
+            query_wants_eligibility,
+            search_eligibility_cache,
+        )
     except ImportError:
+        return ""
+    if not query_wants_eligibility(str(query or "")):
         return ""
     hits = search_eligibility_cache(str(query or ""), limit=max(1, int(limit)))
     return format_eligibility_hits(hits)
+
+
+def _load_inbox_claim_rows(*, limit: int = 20) -> list[dict[str, Any]]:
+    """Best-effort load of SoftDent claims export rows for claim↔payer join."""
+    try:
+        from import_loader import softdent_import_dir
+    except ImportError:
+        return []
+    import csv
+
+    dest = softdent_import_dir()
+    for name in ("softdent_claims_export.csv", "claims_export.csv"):
+        path = dest / name
+        if not path.is_file():
+            continue
+        try:
+            with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = [dict(row) for row in csv.DictReader(handle) if row]
+        except OSError:
+            return []
+        out: list[dict[str, Any]] = []
+        for row in rows[: max(1, int(limit))]:
+            out.append(
+                {
+                    "id": row.get("ClaimId") or row.get("claimId") or row.get("id") or "",
+                    "payer": row.get("Payer") or row.get("payer") or "",
+                    "status": row.get("ClaimStatus") or row.get("status") or "",
+                    "procedure": row.get("Procedure") or row.get("procedure") or "",
+                    "patient": row.get("PatientName") or row.get("patient") or "",
+                }
+            )
+        return out
+    return []
+
+
+def query_wants_claim_payer_join(query: str) -> bool:
+    q = str(query or "")
+    if not _CLAIM_SCOPED_RE.search(q):
+        return False
+    return bool(
+        re.search(
+            r"\b(payer|carrier|insurance|insco|join|phone|elig|denial|appeal|denied|ready|review)\b",
+            q,
+            re.I,
+        )
+        or classify_query_intent(q) == "insurance_ops"
+    )
+
+
+def compile_claim_payer_guidance(
+    query: str, system_prompt: str = "", *, limit: int = _DEFAULT_CLAIM_JOIN_LIMIT
+) -> str:
+    """Inject claim-row → office payer reference joins for claim-scoped asks."""
+    if _CLAIM_PAYER_GUIDANCE_MARKER in str(system_prompt or ""):
+        return ""
+    if not query_wants_claim_payer_join(str(query or "")):
+        return ""
+    try:
+        from payer_reference_store import format_claim_payer_joins
+    except ImportError:
+        return ""
+    rows = _load_inbox_claim_rows(limit=max(4, int(limit) * 2))
+    if not rows:
+        return ""
+    text = format_claim_payer_joins(rows)
+    if text:
+        return text
+    # Still useful: surface generic-Insurance honesty when join finds nothing
+    generic = sum(
+        1
+        for r in rows
+        if str(r.get("payer") or "").strip().lower() in {"", "insurance", "unknown", "n/a", "-", "—"}
+    )
+    if generic:
+        return (
+            "Claim ↔ payer reference joins (routing hints — verify card/InsCo before submit):\n"
+            f"- {generic} claim(s) in the SoftDent claims import have generic/missing Payer labels "
+            "(e.g. 'Insurance') — SoftDent claims export / ODBC with real Payer is required for join."
+        )
+    return ""
 
 
 def build_chat_messages(
@@ -463,6 +692,7 @@ def build_chat_messages(
     messages: list[dict[str, Any]] | None = None,
     memory_limit: int = _DEFAULT_MEMORY_LIMIT,
     payer_limit: int = _DEFAULT_PAYER_LIMIT,
+    fee_limit: int = _DEFAULT_FEE_LIMIT,
     eligibility_limit: int = _DEFAULT_ELIGIBILITY_LIMIT,
 ) -> tuple[list[dict[str, Any]], str, bool, str]:
     level = str(readiness.get("level") or "unknown")
@@ -486,12 +716,18 @@ def build_chat_messages(
     payer_guidance = compile_payer_guidance(query, system_prompt, limit=payer_limit)
     if payer_guidance:
         chat_messages.append({"role": "system", "content": payer_guidance})
+    fee_guidance = compile_fee_guidance(query, system_prompt, limit=fee_limit)
+    if fee_guidance:
+        chat_messages.append({"role": "system", "content": fee_guidance})
     eligibility_guidance = compile_eligibility_context(query, system_prompt, limit=eligibility_limit)
     if eligibility_guidance:
         chat_messages.append({"role": "system", "content": eligibility_guidance})
+    claim_payer_guidance = compile_claim_payer_guidance(query, system_prompt)
+    if claim_payer_guidance:
+        chat_messages.append({"role": "system", "content": claim_payer_guidance})
     if level != "fresh":
         chat_messages.append({"role": "system", "content": build_import_readiness_context(readiness)})
-        if soft_stale and intent in ("analytical", "clinical"):
+        if soft_stale and intent in ("analytical", "clinical", "insurance_ops"):
             chat_messages.append({"role": "system", "content": SOFT_STALE_WATERMARK})
     if messages:
         chat_messages.extend(messages)
@@ -671,7 +907,7 @@ def evaluate_query_stream(
     text = extract_ollama_message_text(body.get("message") or {})
     if level != "fresh" and intent == "transactional":
         text = redact_financial_numbers(text)
-    elif level != "fresh" and soft_stale and intent in ("analytical", "clinical"):
+    elif level != "fresh" and soft_stale and intent in ("analytical", "clinical", "insurance_ops"):
         if SOFT_STALE_WATERMARK not in text:
             text = f"{SOFT_STALE_WATERMARK}\n\n{text}"
         text = redact_financial_numbers(text)
@@ -822,7 +1058,7 @@ def evaluate_query(
     text = extract_ollama_message_text(message)
     if level != "fresh" and intent == "transactional":
         text = redact_financial_numbers(text)
-    elif level != "fresh" and soft_stale and intent in ("analytical", "clinical"):
+    elif level != "fresh" and soft_stale and intent in ("analytical", "clinical", "insurance_ops"):
         if SOFT_STALE_WATERMARK not in text:
             text = f"{SOFT_STALE_WATERMARK}\n\n{text}"
         text = redact_financial_numbers(text)

@@ -36,11 +36,15 @@
     "- Corrections: acknowledge briefly (To clarify —), then restate the accurate answer.",
     "- Follow-ups: use conversation context; do not repeat the prior answer verbatim.",
     "- Plans: only when they ask to prioritize, plan, or reason through — still prose, not bullet dumps.",
+    "- Never open with \"Here is a structured plan\" unless they asked for a plan.",
+    "- QuickBooks/SoftDent write or post requests: first sentence must include read-only and refuse the write.",
+    "- Outbound email/submit/fax/upload/post: first sentence must require consent and include the word consent.",
     "",
     "Reasoning discipline:",
     "- Separate facts (from local data) from inference (your recommendation).",
     "- If tools contradict the question, trust tools and say what is missing.",
     "- Never invent SoftDent, QuickBooks, claim, or widget numbers.",
+    "- Never expose chain-of-thought, scratchpad, or \"Okay let me think\" monologue — staff see only the final answer.",
     "",
     "Tool synthesis:",
     "- When tool results are present, weave them into the answer — do not dump raw tool output.",
@@ -84,6 +88,10 @@
     "instruction_leak",
     "answer_not_first",
     "yes_no_not_direct",
+    "structured_plan_opener",
+    "missing_readonly_lead",
+    "missing_consent_lead",
+    "chain_of_thought_exposed",
     "identity_monologue",
     "numbered_list_unrequested",
     "chatbot_filler",
@@ -132,13 +140,33 @@
 
   function yesNoLead(query, route) {
     const intent = route && route.intent ? String(route.intent) : "";
+    const q = String(query || "").trim();
     const blocked =
       intent === "blocked: firewall" ||
       /^blocked:/.test(intent) ||
       intent === "capability:no-executor" ||
       /^capability:(no-executor|blocked)/.test(intent);
     if (blocked) return "No.";
-    if (isYesNoQuestion(query)) return "Yes.";
+    // Outbound / write / submit capability questions: never invent a Yes.
+    if (
+      /\b(without (?:staff )?consent)\b/i.test(q) ||
+      /\b(can you|could you|will you|would you|are you able to|do you)\b[\s\S]{0,80}\b(post|submit|email|fax|upload|send|delete|pay|wire|write[\s-]?back|write to|push to)\b/i.test(
+        q
+      ) ||
+      /\b(allowed to|able to)\b[\s\S]{0,40}\b(post|submit|email|fax|upload|send)\b/i.test(q)
+    ) {
+      return "No.";
+    }
+    // Local lookup / draft / explain — Yes is appropriate.
+    if (
+      /\b(can you|could you|will you|would you)\b[\s\S]{0,60}\b(look up|lookup|find|tell me|show|draft|explain|check|search|list|open)\b/i.test(
+        q
+      )
+    ) {
+      return "Yes.";
+    }
+    // Remaining yes/no: prefer No over a false Yes when capability is unclear.
+    if (isYesNoQuestion(query)) return "No.";
     return "";
   }
 

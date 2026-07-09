@@ -1248,6 +1248,25 @@ const DesktopBridge = (function () {
     return { items: [], count: 0, text: "" };
   }
 
+  async function joinClaimPayers(claims) {
+    const list = Array.isArray(claims) ? claims : [];
+    if (hasDesktopApi() && window.pywebview.api.join_claim_payers) {
+      return window.pywebview.api.join_claim_payers(JSON.stringify(list));
+    }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/claim-payer-join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ claims: list }),
+        });
+      } catch {
+        return { items: [], count: 0, text: "" };
+      }
+    }
+    return { items: [], count: 0, text: "" };
+  }
+
   async function lookupFeeSchedule(query, limit) {
     if (hasDesktopApi() && window.pywebview.api.lookup_fee_schedule) {
       return window.pywebview.api.lookup_fee_schedule(String(query || ""), Number(limit || 3));
@@ -1527,6 +1546,7 @@ const DesktopBridge = (function () {
     showWorkstationMainWindow,
     searchHalMemories,
     searchPayerReference,
+    joinClaimPayers,
     lookupFeeSchedule,
     listEligibilityCache,
     upsertEligibilityCache,

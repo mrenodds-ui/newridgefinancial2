@@ -5,8 +5,8 @@
   "use strict";
 
   const HAL_CHAT = {
-    rate: 1.0,
-    pitch: 0.95,
+    rate: 1.12,
+    pitch: 1.0,
     volume: 1,
     voiceHints: [
       "microsoft guy",
@@ -18,40 +18,35 @@
       "en-us",
       "english united states",
     ],
-    charsPerSecondAtRate1: 14,
+    charsPerSecondAtRate1: 15,
     maxReplyChars: 480,
     chatSpeechChars: 320,
-    chunkPauseMs: 80,
+    chunkPauseMs: 55,
     voiceMaxSentences: 3,
   };
 
   const HAL9000_TEMPLATES = {
-    direct: "Good afternoon. I have a message for you from {sender}.",
-    broadcast: "I should inform you. A broadcast message has arrived from {sender}.",
+    direct: "Message from {sender}.",
+    broadcast: "Broadcast from {sender}.",
   };
 
   const HAL9000_VARIANTS = {
     direct: [
-      "Good afternoon. I have a message for you from {sender}.",
-      "Pardon the interruption. There is a new message from {sender}.",
-      "I thought you should know. {sender} has sent you a message.",
-      "A new message has arrived. It is from {sender}.",
-      "Excuse me. {sender} would like your attention.",
-      "You have a message waiting from {sender}.",
-      "If I may. {sender} has just messaged you.",
-      "I am detecting a new message from {sender}.",
+      "Message from {sender}.",
+      "New note from {sender}.",
+      "{sender} messaged you.",
+      "You've got a message from {sender}.",
+      "Quick note — {sender} just messaged you.",
     ],
     broadcast: [
-      "I should inform you. A broadcast message has arrived from {sender}.",
-      "Attention, please. {sender} has sent a message to everyone.",
-      "{sender} has broadcast a message to the office.",
-      "A message for everyone has arrived from {sender}.",
-      "If I may. There is a broadcast from {sender}.",
-      "I am relaying a broadcast. It is from {sender}.",
+      "Broadcast from {sender}.",
+      "{sender} sent a message to everyone.",
+      "Office broadcast from {sender}.",
+      "Everyone message from {sender}.",
     ],
   };
 
-  const TEST_LINE = "Good afternoon. HAL is online and ready.";
+  const TEST_LINE = "HAL is online and ready.";
 
   let voicesReady = false;
   let neuralReady = null;
@@ -213,11 +208,12 @@
   function tuneForVoice(profile, voice) {
     if (!voice) return profile;
     const name = String(voice.name || "").toLowerCase();
+    // Keep David/Mark near the conversational profile — do not slow them down.
     if (/david|mark/.test(name)) {
       return {
         ...profile,
-        pitch: Math.max(profile.pitch || 0.95, 0.9),
-        rate: Math.min(profile.rate || 1.0, 0.98),
+        pitch: Math.max(profile.pitch || 1.0, 0.98),
+        rate: Math.max(profile.rate || 1.12, 1.08),
       };
     }
     return profile;

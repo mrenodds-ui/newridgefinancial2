@@ -333,8 +333,8 @@ def _get_announcer():
             voice_style=style,
             music_ducker=ducker,
             processed_audio=True,
-            rate=int(os.environ.get("NR2_HAL_HUB_VOICE_RATE", "-6")),
-            volume=int(os.environ.get("NR2_HAL_HUB_VOICE_VOLUME", "90")),
+            rate=int(os.environ.get("NR2_HAL_HUB_VOICE_RATE", "3")),
+            volume=int(os.environ.get("NR2_HAL_HUB_VOICE_VOLUME", "100")),
             voice_hint=os.environ.get("NR2_HAL_HUB_VOICE_HINT", "David"),
         )
         return _announcer

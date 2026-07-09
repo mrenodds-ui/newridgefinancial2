@@ -59,6 +59,7 @@ def _pick_vendor(requested: str) -> str:
 
 
 def _stub_not_configured(vendor: str) -> dict[str, Any]:
+    status = clearinghouse_status()
     return {
         "ok": False,
         "configured": False,
@@ -68,7 +69,12 @@ def _stub_not_configured(vendor: str) -> dict[str, Any]:
             "Live 271 fetch is not configured. Set DENTALXCHANGE_API_KEY or "
             "CHANGE_HEALTHCARE_CLIENT_ID, or CLEARINGHOUSE_MOCK=1 for local testing."
         ),
-        "hint": "Import a PHI-redacted snapshot manually via the narrative panel or POST /api/eligibility-cache.",
+        "hint": (
+            "Staff can still use cached eligibility (list_eligibility_cache) or POST a "
+            "PHI-redacted snapshot to /api/eligibility-cache. Live 271 needs memberId, "
+            "payerId, and providerNpi once credentials are set."
+        ),
+        "status": status,
     }
 
 

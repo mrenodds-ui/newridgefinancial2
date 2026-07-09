@@ -111,12 +111,53 @@ def discovery_output_path() -> Path:
     return (REPO_ROOT / "app_data" / "nr2" / "softdent_schema_discovery.json").resolve()
 
 
-def configured_odbc_query_tables() -> list[str]:
-    tables: list[str] = []
+def load_discovery_suggested_env() -> dict[str, str]:
+    """Load suggestedEnv from softdent_schema_discovery.json when present."""
+    path = discovery_output_path()
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    suggested = data.get("suggestedEnv") if isinstance(data, dict) else None
+    if not isinstance(suggested, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, value in suggested.items():
+        sql = str(value or "").strip()
+        if sql:
+            out[str(key)] = sql
+    return out
+
+
+def use_discovery_queries() -> bool:
+    """When env SQL is empty, allow extract to use discovery suggestedEnv (default on)."""
+    raw = os.environ.get("NR2_SOFTDENT_USE_DISCOVERY_QUERIES", "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
+def resolve_odbc_query_map() -> dict[str, str]:
+    """Env SQL wins; optionally fill gaps from discovery suggestedEnv."""
+    query_map = {
+        table: os.environ.get(env_key, "").strip()
+        for table, env_key in ODBC_QUERY_ENV_BY_TABLE.items()
+    }
+    if not use_discovery_queries():
+        return query_map
+    if all(query_map.values()):
+        return query_map
+    suggested = load_discovery_suggested_env()
+    if not suggested:
+        return query_map
     for table, env_key in ODBC_QUERY_ENV_BY_TABLE.items():
-        if os.environ.get(env_key, "").strip():
-            tables.append(table)
-    return tables
+        if not query_map.get(table) and suggested.get(env_key):
+            query_map[table] = suggested[env_key]
+    return query_map
+
+
+def configured_odbc_query_tables() -> list[str]:
+    return [table for table, sql in resolve_odbc_query_map().items() if sql]
 
 
 def pyodbc_available() -> bool:
@@ -296,7 +337,14 @@ def _extract_status_next_steps(
         else:
             steps.append("Set SOFTDENT_ODBC_DSN (or NR2_SOFTDENT_ODBC_DSN) to a read-only System DSN.")
     elif not query_tables:
-        steps.append("Run scripts/discover_softdent_odbc_schema.py --out app_data/nr2/softdent_schema_discovery.json and copy suggestedEnv queries into .env.")
+        steps.append(
+            "Run scripts/discover_softdent_odbc_schema.py --out app_data/nr2/softdent_schema_discovery.json "
+            "(extract can use suggestedEnv when NR2_SOFTDENT_USE_DISCOVERY_QUERIES=1) or copy SOFTDENT_ODBC_*_QUERY into .env."
+        )
+    if "sd_claims" not in query_tables and odbc_configured:
+        steps.append(
+            "SOFTDENT_ODBC_CLAIMS_QUERY is not configured — named Payer labels for claim readiness need claims ODBC or SoftDent claims CSV."
+        )
     if not discovery_present and odbc_configured:
         steps.append("Save schema discovery output to app_data/nr2/softdent_schema_discovery.json for operator reference.")
     if not consent_executor_enabled():
@@ -564,19 +612,20 @@ def _populate_from_odbc(conn: sqlite3.Connection, *, extracted_at: str) -> dict[
     if password:
         conn_str += f";PWD={password}"
 
-    query_map = {
-        "sd_procedures": os.environ.get("SOFTDENT_ODBC_PROCEDURES_QUERY", "").strip(),
-        "sd_patients": os.environ.get("SOFTDENT_ODBC_PATIENTS_QUERY", "").strip(),
-        "sd_claims": os.environ.get("SOFTDENT_ODBC_CLAIMS_QUERY", "").strip(),
-        "sd_payments": os.environ.get("SOFTDENT_ODBC_PAYMENTS_QUERY", "").strip(),
-        "sd_providers": os.environ.get("SOFTDENT_ODBC_PROVIDERS_QUERY", "").strip(),
-        "sd_appointments": os.environ.get("SOFTDENT_ODBC_APPOINTMENTS_QUERY", "").strip(),
-        "sd_adjustments": os.environ.get("SOFTDENT_ODBC_ADJUSTMENTS_QUERY", "").strip(),
-    }
+    query_map = resolve_odbc_query_map()
     configured = [name for name, sql in query_map.items() if sql]
     if not configured:
         result["error"] = "odbc_queries_not_configured"
         return result
+    result["querySources"] = {
+        table: (
+            "env"
+            if os.environ.get(ODBC_QUERY_ENV_BY_TABLE[table], "").strip()
+            else ("discovery" if sql else None)
+        )
+        for table, sql in query_map.items()
+        if sql
+    }
 
     try:
         odbc_conn = pyodbc.connect(conn_str, timeout=int(os.environ.get("SOFTDENT_ODBC_TIMEOUT", "30")))
@@ -846,6 +895,79 @@ def _resolve_claims_path() -> Path | None:
         if candidate.is_file():
             return candidate
     return None
+
+
+def _is_generic_payer_label(value: str) -> bool:
+    return str(value or "").strip().lower() in {"", "insurance", "unknown", "n/a", "-", "—"}
+
+
+def export_sd_claims_to_inbox_csv(
+    conn: sqlite3.Connection,
+    *,
+    destination: Path | None = None,
+    limit: int = 5000,
+) -> dict[str, Any]:
+    """Write named-payer sd_claims rows to softdent_claims_export.csv for HAL join/readiness.
+
+    Skips overwrite when the existing CSV already has named Payers and sd_claims
+    has no named payers (avoids clobbering a better SoftDent export).
+    """
+    dest_dir = destination or softdent_import_dir()
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out_path = dest_dir / "softdent_claims_export.csv"
+    result: dict[str, Any] = {"ok": False, "path": str(out_path), "written": 0, "skipped": False}
+    if not _table_exists(conn, "sd_claims"):
+        result["error"] = "sd_claims_missing"
+        return result
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT claim_id, patient_name, payer, service_date, claim_amount, claim_status
+        FROM sd_claims
+        ORDER BY service_date DESC, claim_id DESC
+        LIMIT ?
+        """,
+        (max(1, int(limit)),),
+    )
+    rows = cur.fetchall()
+    named_rows = [r for r in rows if not _is_generic_payer_label(str(r[2] or ""))]
+    if not named_rows:
+        result["skipped"] = True
+        result["error"] = "no_named_payers_in_sd_claims"
+        return result
+
+    existing_named = False
+    if out_path.is_file():
+        try:
+            with out_path.open("r", encoding="utf-8-sig", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    if not _is_generic_payer_label(str(row.get("Payer") or row.get("payer") or "")):
+                        existing_named = True
+                        break
+        except OSError:
+            existing_named = False
+        # Prefer keeping an existing SoftDent CSV if sd_claims named set is empty-ish
+        # (already handled) — if both have named payers, refresh from sd_claims (ODBC wins).
+
+    fieldnames = ["ClaimId", "PatientName", "Payer", "ServiceDate", "ClaimAmount", "ClaimStatus"]
+    with out_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for claim_id, patient_name, payer, service_date, claim_amount, claim_status in named_rows:
+            writer.writerow(
+                {
+                    "ClaimId": claim_id or "",
+                    "PatientName": patient_name or "",
+                    "Payer": payer or "",
+                    "ServiceDate": service_date or "",
+                    "ClaimAmount": claim_amount if claim_amount is not None else "",
+                    "ClaimStatus": claim_status or "",
+                }
+            )
+    result["ok"] = True
+    result["written"] = len(named_rows)
+    result["replacedExistingNamed"] = existing_named
+    return result
 
 
 def _sensei_include_reference() -> bool:
@@ -1118,6 +1240,16 @@ def extract_softdent_odbc(*, db_path: Path | None = None, force: bool = False) -
         claims_count = _populate_from_claims_csv(conn, _resolve_claims_path() or Path(""), extracted_at=extracted_at)
         fallback_counts["sd_claims"] = fallback_counts.get("sd_claims", 0) + claims_count
         result["fallback"] = fallback_counts
+
+        # After ODBC/Sensei populate named payers, refresh inbox CSV for HAL join/readiness.
+        try:
+            export_result = export_sd_claims_to_inbox_csv(conn)
+            result["claimsExport"] = export_result
+            if export_result.get("ok") and export_result.get("written"):
+                _set_meta(conn, "last_claims_export_at", extracted_at)
+                _set_meta(conn, "last_claims_export_count", str(export_result.get("written") or 0))
+        except Exception as exc:
+            result["claimsExport"] = {"ok": False, "error": str(exc)}
 
         counts = table_row_counts(db_path)
         result["tableCounts"] = counts

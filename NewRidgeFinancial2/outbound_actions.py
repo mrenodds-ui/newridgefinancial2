@@ -173,14 +173,16 @@ def _load_claim_row(claim_id: str) -> dict[str, Any] | None:
             reader = csv.DictReader(handle)
             for row in reader:
                 ref = str(
-                    row.get("ClaimRef")
+                    row.get("ClaimId")
+                    or row.get("ClaimRef")
                     or row.get("claim_ref")
                     or row.get("ClaimID")
                     or row.get("claim_id")
+                    or row.get("id")
                     or row.get("Reference")
                     or ""
                 ).strip()
-                if ref and needle in ref.lower():
+                if ref and (needle == ref.lower() or needle in ref.lower()):
                     return dict(row)
     except OSError:
         return None
@@ -195,6 +197,7 @@ def build_claim_submission_packet(
     consent_text: str = "",
     actor: str = "Staff",
     store=None,
+    appeal_packet: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not consent_text or not str(consent_text).strip():
         return {"ok": False, "error": "missing_consent", "message": "Staff consent is required before building a claim packet."}
@@ -203,7 +206,26 @@ def build_claim_submission_packet(
     folder = _exports_subdir("claim_packets") / f"{claim}_{stamp}"
     folder.mkdir(parents=True, exist_ok=True)
     claim_row = _load_claim_row(claim_id) if claim_id else None
-    enriched_narrative = str(narrative or notes or "").strip()
+    appeal = appeal_packet if isinstance(appeal_packet, dict) else None
+    # When consent zip is built without an appeal body, assemble one for artifacts.
+    if not appeal and store and claim_id:
+        try:
+            from hal_employee_workflows import build_appeal_packet
+
+            appeal = build_appeal_packet(
+                store,
+                {
+                    "claimId": claim_id,
+                    "narrative": narrative,
+                    "payer": (claim_row or {}).get("Payer") or (claim_row or {}).get("payer") or "",
+                    "procedure": (claim_row or {}).get("Procedure") or (claim_row or {}).get("procedure") or "",
+                },
+            )
+        except Exception:
+            appeal = None
+    enriched_narrative = str(
+        narrative or (appeal or {}).get("narrative") or notes or ""
+    ).strip()
     if not enriched_narrative and claim_row:
         parts = []
         for key in ("Patient", "patient", "Payer", "payer", "Status", "status", "Procedure", "procedure", "Amount", "amount"):
@@ -220,7 +242,7 @@ def build_claim_submission_packet(
         f"Claim: {claim}\n"
         f"Built: {_utc_now()}\n\n"
         "Staff steps:\n"
-        "1. Review narrative.txt, claim_context.json, and attachment_manifest.json\n"
+        "1. Review narrative.txt, claim_context.json, appeal_packet.json, and attachment_manifest.json\n"
         "2. Attach any required clinical notes or imaging from SoftDent\n"
         "3. Upload this zip to the payer portal manually\n"
         "HAL does not submit to payer portals directly.\n"
@@ -229,6 +251,32 @@ def build_claim_submission_packet(
     (folder / "narrative.txt").write_text(enriched_narrative, encoding="utf-8")
     if claim_row:
         (folder / "claim_context.json").write_text(json.dumps(claim_row, indent=2), encoding="utf-8")
+    if appeal and appeal.get("ok"):
+        slim_appeal = {
+            "claimId": appeal.get("claimId"),
+            "claim": appeal.get("claim"),
+            "preflight": appeal.get("preflight"),
+            "denialRisk": appeal.get("denialRisk"),
+            "payerJoin": appeal.get("payerJoin"),
+            "gaps": appeal.get("gaps"),
+            "staffSteps": appeal.get("staffSteps"),
+            "summary": appeal.get("summary"),
+            "clinicalNotesAttached": appeal.get("clinicalNotesAttached"),
+            "clinicalNotes": appeal.get("clinicalNotes") or [],
+        }
+        (folder / "appeal_packet.json").write_text(json.dumps(slim_appeal, indent=2), encoding="utf-8")
+        clinical_notes = appeal.get("clinicalNotes") if isinstance(appeal.get("clinicalNotes"), list) else []
+        if clinical_notes:
+            note_lines = []
+            for note in clinical_notes:
+                if not isinstance(note, dict):
+                    continue
+                note_lines.append(
+                    f"[{note.get('noteDate') or 'note'}] {note.get('patientName') or ''} "
+                    f"· {note.get('provider') or ''}\n{note.get('clinicalNote') or ''}\n"
+                )
+            if note_lines:
+                (folder / "clinical_notes.txt").write_text("\n".join(note_lines), encoding="utf-8")
     manifest = {
         "claimId": claim,
         "builtAt": _utc_now(),
@@ -245,11 +293,31 @@ def build_claim_submission_packet(
     }
     if claim_row:
         manifest["files"].append({"name": "claim_context.json", "purpose": "Local claim row from SoftDent export", "required": False})
+    if appeal and appeal.get("ok"):
+        manifest["files"].append(
+            {"name": "appeal_packet.json", "purpose": "HAL appeal preflight + denial risk + payer join", "required": False}
+        )
+        if (folder / "clinical_notes.txt").is_file():
+            manifest["files"].append(
+                {
+                    "name": "clinical_notes.txt",
+                    "purpose": "SoftDent clinical notes matched to claim (staff verify)",
+                    "required": False,
+                }
+            )
     (folder / "attachment_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    (folder / "checklist.txt").write_text(
-        "- Verify patient and subscriber IDs\n- Confirm procedure codes and dates\n- Attach perio charting if required\n- Review attachment_manifest.json\n- Upload via payer portal\n",
-        encoding="utf-8",
-    )
+    checklist_lines = [
+        "- Verify patient and subscriber IDs",
+        "- Confirm procedure codes and dates",
+        "- Attach perio charting / radiographs if required",
+        "- Review narrative.txt clinical specifics",
+        "- Review appeal_packet.json gaps before upload",
+        "- Review attachment_manifest.json",
+        "- Upload via payer portal (HAL does not submit)",
+    ]
+    for gap in list((appeal or {}).get("gaps") or [])[:6]:
+        checklist_lines.append(f"- Gap: {gap}")
+    (folder / "checklist.txt").write_text("\n".join(checklist_lines) + "\n", encoding="utf-8")
     zip_path = folder.with_suffix(".zip")
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for item in folder.iterdir():

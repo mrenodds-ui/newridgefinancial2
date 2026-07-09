@@ -9,10 +9,10 @@ from typing import Any
 
 VOICE = "en-US-GuyNeural"
 VOICE_FALLBACK = "en-US-AriaNeural"
-PROFILE = "hal-conversational-v1"
-SENTENCE_BREAK_MS = 220
+PROFILE = "hal-conversational-v2"
+SENTENCE_BREAK_MS = 140
 
-TEST_LINE = "Good afternoon. HAL is online and ready."
+TEST_LINE = "HAL is online and ready."
 
 
 def neural_tts_available() -> bool:
@@ -60,7 +60,7 @@ def segments_to_ssml(segments: list[dict[str, Any]], *, voice: str | None = None
         text = _escape_ssml(str(seg["text"]).strip())
         if not text:
             continue
-        body.append(f'<prosody rate="+2%" pitch="+0%" volume="medium">{text}</prosody>')
+        body.append(f'<prosody rate="+12%" pitch="+0%" volume="medium">{text}</prosody>')
         body.append(f'<break time="{SENTENCE_BREAK_MS}ms"/>')
     if body and body[-1].startswith("<break"):
         body.pop()

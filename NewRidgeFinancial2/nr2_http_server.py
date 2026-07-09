@@ -1496,6 +1496,49 @@ class NR2BottleServer(BottleServer):
             except Exception as exc:
                 return _json_response({"ok": False, "error": str(exc), "items": [], "count": 0}, status=500)
 
+        @app.post("/api/claim-payer-join")
+        def claim_payer_join_api():
+            try:
+                from payer_reference_store import enrich_claims, format_claim_payer_joins
+
+                body = bottle.request.json or {}
+                claims = body.get("claims") if isinstance(body, dict) else None
+                if not isinstance(claims, list):
+                    claims = []
+                items = enrich_claims(claims, limit=20)
+                joined = [c for c in items if c.get("payerMatch")]
+                return _json_response(
+                    {
+                        "ok": True,
+                        "items": items,
+                        "count": len(joined),
+                        "text": format_claim_payer_joins(claims),
+                    }
+                )
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc), "items": [], "count": 0}, status=500)
+
+        @app.get("/api/fee-schedule")
+        def fee_schedule_api():
+            try:
+                from fee_schedule_store import fee_schedule_summary, format_fee_hits, lookup_fees
+
+                query = str(bottle.request.params.get("q") or bottle.request.params.get("query") or "")
+                limit = int(bottle.request.params.get("limit") or 3)
+                if query.strip():
+                    items = lookup_fees(query, limit=limit)
+                    return _json_response(
+                        {
+                            "ok": True,
+                            "items": items,
+                            "count": len(items),
+                            "text": format_fee_hits(items),
+                        }
+                    )
+                return _json_response(fee_schedule_summary())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc), "items": [], "count": 0}, status=500)
+
         @app.get("/api/eligibility-cache")
         def eligibility_cache_list_api():
             try:
@@ -1659,6 +1702,7 @@ class NR2BottleServer(BottleServer):
                 body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
                 payload = json.loads(body or "{}")
                 store = _local_store()
+                appeal_payload = payload.get("appealPacket") if isinstance(payload.get("appealPacket"), dict) else None
                 result = build_claim_submission_packet(
                     claim_id=str(payload.get("claimId") or payload.get("claim_id") or ""),
                     narrative=str(payload.get("narrative") or payload.get("body") or ""),
@@ -1666,6 +1710,7 @@ class NR2BottleServer(BottleServer):
                     consent_text=str(payload.get("consentText") or ""),
                     actor=str(payload.get("actor") or "Staff"),
                     store=store,
+                    appeal_packet=appeal_payload,
                 )
                 return _json_response(result)
             except Exception as exc:
@@ -1875,6 +1920,13 @@ class NR2BottleServer(BottleServer):
             payload = bottle.request.json or {}
             return _json_response(schedule_call_task(_local_store(), payload))
 
+        @app.post("/api/collections/queue-status")
+        def collections_queue_status_api():
+            from hal_employee_workflows import update_collections_queue_status
+
+            payload = bottle.request.json or {}
+            return _json_response(update_collections_queue_status(_local_store(), payload))
+
         @app.post("/api/import/heal")
         def import_heal_api():
             from import_healing import heal_import_pipeline
@@ -1912,6 +1964,20 @@ class NR2BottleServer(BottleServer):
 
             payload = bottle.request.json or {}
             return _json_response(stage_claim_preflight(_local_store(), payload))
+
+        @app.post("/api/claims/appeal-packet")
+        def claims_appeal_packet_api():
+            from hal_employee_workflows import build_appeal_packet
+
+            payload = bottle.request.json or {}
+            return _json_response(build_appeal_packet(_local_store(), payload))
+
+        @app.post("/api/fee/scrub-paid")
+        def fee_scrub_paid_api():
+            from hal_employee_workflows import scrub_fee_vs_paid
+
+            payload = bottle.request.json or {}
+            return _json_response(scrub_fee_vs_paid(payload, store=_local_store()))
 
         @app.post("/api/eob/match")
         def eob_match_api():
@@ -2023,6 +2089,15 @@ class NR2BottleServer(BottleServer):
             limit = int(bottle.request.query.get("limit") or 25)
             return _json_response(list_pending_era_matches(_local_store(), limit=limit))
 
+        @app.post("/api/era/confirm-match")
+        def era_confirm_match_api():
+            from hal_employee_workflows import confirm_era_match
+
+            payload = bottle.request.json or {}
+            result = confirm_era_match(_local_store(), payload)
+            _audit_mutation("era_confirm_match", detail=result if isinstance(result, dict) else {"result": result})
+            return _json_response(result)
+
         @app.post("/api/era/train-predictor")
         def era_train_predictor_api():
             from era_ml_trainer import train_era_model
@@ -2050,8 +2125,14 @@ class NR2BottleServer(BottleServer):
                 patient_id=str(payload.get("patientId") or ""),
                 reason=scenario,
                 call_id=str(payload.get("callId") or "") or None,
+                queue_id=str(payload.get("queueId") or payload.get("queue_id") or ""),
+                meta={
+                    "patientName": payload.get("patientName") or "",
+                    "claimId": payload.get("claimId") or "",
+                },
             )
             dial["script"] = script.get("script")
+            dial["scenario"] = scenario
             return _json_response(dial)
 
         @app.post("/api/voip/log")
@@ -2059,7 +2140,8 @@ class NR2BottleServer(BottleServer):
             from voip_actions import log_call_outcome
 
             payload = bottle.request.json or {}
-            conn = _local_store()._connect()
+            store = _local_store()
+            conn = store._connect()
             return _json_response(
                 log_call_outcome(
                     conn,
@@ -2067,6 +2149,8 @@ class NR2BottleServer(BottleServer):
                     outcome=str(payload.get("outcome") or "unknown"),
                     notes=str(payload.get("notes") or ""),
                     duration_sec=int(payload.get("durationSec") or payload.get("duration_sec") or 0) or None,
+                    queue_id=str(payload.get("queueId") or payload.get("queue_id") or ""),
+                    store=store,
                 )
             )
 
@@ -2148,6 +2232,36 @@ class NR2BottleServer(BottleServer):
             payload = bottle.request.json or {}
             run_id = str(payload.get("runId") or payload.get("run_id") or "").strip()
             return _json_response(undo_autonomous_run(_local_store(), run_id=run_id))
+
+        @app.get("/api/scheduler/work")
+        def scheduler_work_list_api():
+            from nr2_scheduler import list_autonomous_work
+
+            open_only = str(bottle.request.params.get("openOnly") or "1").lower() not in {
+                "0",
+                "false",
+                "no",
+            }
+            limit = int(bottle.request.params.get("limit") or 50)
+            kind = str(bottle.request.params.get("kind") or "").strip()
+            return _json_response(
+                list_autonomous_work(_local_store(), open_only=open_only, limit=limit, kind=kind)
+            )
+
+        @app.post("/api/scheduler/work/ack")
+        def scheduler_work_ack_api():
+            from nr2_scheduler import ack_autonomous_work
+
+            payload = bottle.request.json or {}
+            return _json_response(ack_autonomous_work(_local_store(), payload))
+
+        @app.post("/api/scheduler/eod-run")
+        def scheduler_eod_run_api():
+            from nr2_scheduler import eod_handoff_tick
+
+            payload = bottle.request.json or {}
+            force = bool((payload or {}).get("force"))
+            return _json_response(eod_handoff_tick(_local_store(), force=force))
 
         @app.get("/api/qb/auth-url")
         def qb_auth_url_api():
@@ -2444,6 +2558,7 @@ class NR2BottleServer(BottleServer):
                     payer_id=str(payload.get("payerId") or payload.get("payer_id") or ""),
                     has_narrative=bool(payload.get("hasNarrative", True)),
                     prior_denials=int(payload.get("priorDenials") or payload.get("prior_denials") or 0),
+                    claim=payload.get("claim") if isinstance(payload.get("claim"), dict) else payload,
                 )
             )
 

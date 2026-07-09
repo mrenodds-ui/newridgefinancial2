@@ -121,11 +121,23 @@ def main() -> int:
                 except Exception as exc:
                     print(f"Morning routine tick failed: {exc}", file=sys.stderr)
 
+            def _eod_tick() -> None:
+                try:
+                    from nr2_scheduler import eod_handoff_tick
+
+                    eod_handoff_tick(store)
+                except Exception as exc:
+                    print(f"EOD handoff tick failed: {exc}", file=sys.stderr)
+
             sched = BackgroundScheduler(daemon=True)
             sched.add_job(_alert_tick, IntervalTrigger(minutes=15), id="nr2-alerts")
             sched.add_job(_morning_tick, CronTrigger(hour=6, minute=30), id="nr2-morning")
+            sched.add_job(_eod_tick, CronTrigger(hour=22, minute=0), id="nr2-eod")
             sched.start()
-            print("NR2 background scheduler: alerts every 15m, morning routine 06:30 UTC", file=sys.stderr)
+            print(
+                "NR2 background scheduler: alerts every 15m, morning 06:30 UTC, EOD handoff 22:00 UTC",
+                file=sys.stderr,
+            )
         except ImportError:
             print("APScheduler not installed — background alert/morning ticks disabled.", file=sys.stderr)
         except Exception as exc:

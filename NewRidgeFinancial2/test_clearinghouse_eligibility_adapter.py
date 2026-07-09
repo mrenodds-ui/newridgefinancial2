@@ -74,6 +74,9 @@ class ClearinghouseAdapterTests(unittest.TestCase):
             result = fetch_eligibility_271({"payerName": "Delta Dental"})
         self.assertFalse(result.get("ok"))
         self.assertEqual(result.get("error"), "clearinghouse_not_configured")
+        self.assertIn("status", result)
+        self.assertFalse((result.get("status") or {}).get("liveReady"))
+        self.assertIn("eligibility-cache", str(result.get("hint") or "").lower())
 
     def test_mock_271_caches_entry(self) -> None:
         with patch.dict(os.environ, {"CLEARINGHOUSE_MOCK": "1"}, clear=False):

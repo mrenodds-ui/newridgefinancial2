@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -23,6 +24,69 @@ KEYWORD_TABLES = {
     "appointment": "sd_appointments",
     "provider": "sd_providers",
     "adjust": "sd_adjustments",
+}
+
+# Preferred SoftDent table names when keyword match is ambiguous.
+PREFERRED_TABLE_NAMES = {
+    "sd_claims": ("claims", "claim", "insclaim", "insuranceclaim"),
+    "sd_patients": ("patient", "patients"),
+    "sd_procedures": ("procedures", "procedure", "proclog"),
+    "sd_payments": ("payments", "payment"),
+    "sd_appointments": ("appointments", "appointment", "appts"),
+    "sd_providers": ("providers", "provider", "dentist"),
+    "sd_adjustments": ("adjustments", "adjustment", "adjust"),
+}
+
+# Logical alias → candidate physical column names (case-insensitive).
+COLUMN_CANDIDATES: dict[str, dict[str, tuple[str, ...]]] = {
+    "sd_claims": {
+        "claim_id": ("claimid", "claim_id", "claimno", "claim_number", "claimnumber", "id"),
+        "patient_name": ("patientname", "patient_name", "patname", "fullname", "name"),
+        "payer": ("payer", "insco", "insurance", "carrier", "inscompany", "ins_co", "planname"),
+        "service_date": ("servicedate", "service_date", "procdate", "dateofservice", "dos", "claimdate"),
+        "claim_amount": ("claimamount", "claim_amount", "amount", "billed", "total", "fee"),
+        "claim_status": ("claimstatus", "claim_status", "status", "claimstate"),
+    },
+    "sd_patients": {
+        "patient_id": ("patientid", "patient_id", "patid", "id"),
+        "patient_name": ("patientname", "patient_name", "fullname", "name"),
+        "first_visit_date": ("firstvisitdate", "first_visit_date", "firstvisit"),
+        "last_visit_date": ("lastvisitdate", "last_visit_date", "lastvisit"),
+    },
+    "sd_procedures": {
+        "patient_id": ("patientid", "patient_id", "patid"),
+        "proc_date": ("procdate", "proc_date", "date"),
+        "ada_code": ("adacode", "ada_code", "code", "proccode"),
+        "tooth": ("tooth",),
+        "surface": ("surface",),
+        "provider_code": ("providerid", "providercode", "provider_code", "provider"),
+        "description": ("description", "desc"),
+        "production": ("production", "amount", "fee"),
+    },
+    "sd_payments": {
+        "patient_id": ("patientid", "patient_id", "patid"),
+        "payment_date": ("paymentdate", "payment_date", "date"),
+        "amount": ("amount", "payment"),
+        "payer": ("payer", "insco", "insurance"),
+        "method": ("method", "paymethod", "type"),
+    },
+    "sd_appointments": {
+        "patient_id": ("patientid", "patient_id", "patid"),
+        "appt_date": ("apptdate", "appt_date", "appointmentdate", "date"),
+        "provider_code": ("providercode", "provider_code", "providerid"),
+        "status": ("status",),
+    },
+    "sd_providers": {
+        "provider_code": ("providercode", "provider_code", "providerid", "code", "id"),
+        "provider_name": ("providername", "provider_name", "name"),
+    },
+    "sd_adjustments": {
+        "patient_id": ("patientid", "patient_id", "patid"),
+        "adj_date": ("adjdate", "adj_date", "date"),
+        "ada_code": ("adacode", "ada_code", "code"),
+        "amount": ("amount",),
+        "description": ("description", "desc"),
+    },
 }
 
 SUGGESTED_QUERIES = {
@@ -73,6 +137,14 @@ ENV_KEY_BY_TABLE = {
     "sd_adjustments": "SOFTDENT_ODBC_ADJUSTMENTS_QUERY",
 }
 
+DATE_FILTER_COLUMNS = {
+    "sd_claims": "service_date",
+    "sd_procedures": "proc_date",
+    "sd_payments": "payment_date",
+    "sd_adjustments": "adj_date",
+    "sd_appointments": "appt_date",
+}
+
 
 def _connect():
     import pyodbc
@@ -108,13 +180,127 @@ def _list_columns(cursor, table: str) -> list[str]:
 
 
 def _match_tables(tables: list[str]) -> dict[str, list[str]]:
-    matches: dict[str, list[str]] = {key: [] for key in KEYWORD_TABLES}
+    matches: dict[str, list[str]] = {key: [] for key in KEYWORD_TABLES.values()}
+    for key in matches:
+        matches[key] = []
     for table in tables:
         lowered = table.lower()
         for keyword, slot in KEYWORD_TABLES.items():
             if keyword in lowered:
                 matches[slot].append(table)
+    for slot, names in matches.items():
+        matches[slot] = sorted(set(names))
     return matches
+
+
+def _pick_best_table(slot: str, candidates: list[str]) -> str | None:
+    if not candidates:
+        return None
+    preferred = PREFERRED_TABLE_NAMES.get(slot) or ()
+    lowered = {c.lower(): c for c in candidates}
+    for pref in preferred:
+        if pref in lowered:
+            return lowered[pref]
+    # Prefer shortest exact-ish name
+    return sorted(candidates, key=lambda t: (len(t), t.lower()))[0]
+
+
+def _norm_col(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(name or "").lower())
+
+
+def _resolve_column(columns: list[str], candidates: tuple[str, ...]) -> str | None:
+    by_norm = {_norm_col(c): c for c in columns}
+    for cand in candidates:
+        hit = by_norm.get(_norm_col(cand))
+        if hit:
+            return hit
+    # substring fallback for compound names
+    for cand in candidates:
+        needle = _norm_col(cand)
+        if len(needle) < 3:
+            continue
+        for col in columns:
+            if needle in _norm_col(col):
+                return col
+    return None
+
+
+def _patient_name_expr(columns: list[str]) -> str | None:
+    """Build patient_name expression from PatientName or LastName/FirstName."""
+    last = _resolve_column(columns, ("lastname", "last_name", "lname"))
+    first = _resolve_column(columns, ("firstname", "first_name", "fname"))
+    if last and first:
+        return f"[{last}] + ', ' + [{first}] AS patient_name"
+    direct = _resolve_column(columns, ("patientname", "patient_name", "patname", "fullname", "name"))
+    if direct:
+        return f"[{direct}] AS patient_name"
+    return None
+
+
+def build_query_from_columns(slot: str, table: str, columns: list[str]) -> str | None:
+    """Build a SELECT … AS alias query from discovered columns; None if required fields missing."""
+    mapping = COLUMN_CANDIDATES.get(slot) or {}
+    if not mapping or not table or not columns:
+        return None
+    select_parts: list[str] = []
+    resolved_physical: dict[str, str] = {}
+    for alias, candidates in mapping.items():
+        if alias == "patient_name" and slot in {"sd_claims", "sd_patients"}:
+            expr = _patient_name_expr(columns)
+            if expr:
+                select_parts.append(expr)
+                resolved_physical[alias] = expr
+            continue
+        physical = _resolve_column(columns, candidates)
+        if physical:
+            select_parts.append(f"[{physical}] AS {alias}")
+            resolved_physical[alias] = physical
+    required = {
+        "sd_claims": ("claim_id", "payer"),
+        "sd_patients": ("patient_id",),
+        "sd_procedures": ("patient_id", "proc_date"),
+        "sd_payments": ("patient_id", "payment_date"),
+        "sd_appointments": ("patient_id", "appt_date"),
+        "sd_providers": ("provider_code",),
+        "sd_adjustments": ("patient_id", "adj_date"),
+    }.get(slot, ())
+    for req in required:
+        if req not in resolved_physical:
+            return None
+    if not select_parts:
+        return None
+    sql = f"SELECT {', '.join(select_parts)} FROM [{table}]"
+    date_alias = DATE_FILTER_COLUMNS.get(slot)
+    if date_alias and date_alias in resolved_physical:
+        physical = resolved_physical[date_alias]
+        if slot == "sd_appointments":
+            sql += f" WHERE [{physical}] >= CAST(GETDATE() AS DATE)"
+        else:
+            sql += f" WHERE [{physical}] >= DATEADD(month, -24, GETDATE())"
+    return sql
+
+
+def suggest_queries_from_discovery(
+    table_matches: dict[str, list[str]],
+    column_samples: dict[str, list[str]],
+) -> tuple[dict[str, str], dict[str, Any]]:
+    """Return suggestedEnv + metadata about which queries were column-built vs template."""
+    suggested: dict[str, str] = {}
+    meta: dict[str, Any] = {}
+    for slot, env_key in ENV_KEY_BY_TABLE.items():
+        candidates = table_matches.get(slot) or []
+        best = _pick_best_table(slot, candidates)
+        built = None
+        if best and best in column_samples:
+            built = build_query_from_columns(slot, best, column_samples[best])
+        if built:
+            suggested[env_key] = built
+            meta[slot] = {"source": "columns", "table": best}
+        else:
+            suggested[env_key] = SUGGESTED_QUERIES[slot]
+            meta[slot] = {"source": "template", "table": best}
+    return suggested, meta
 
 
 def discover() -> dict:
@@ -135,11 +321,10 @@ def discover() -> dict:
         table_matches = _match_tables(tables)
         column_samples: dict[str, list[str]] = {}
         for candidates in table_matches.values():
-            for table in candidates[:2]:
+            for table in candidates[:3]:
                 column_samples[table] = _list_columns(cursor, table)
-        suggested_env: dict[str, str] = {}
-        for table, env_key in ENV_KEY_BY_TABLE.items():
-            suggested_env[env_key] = SUGGESTED_QUERIES[table]
+        suggested_env, query_meta = suggest_queries_from_discovery(table_matches, column_samples)
+        claims_meta = query_meta.get("sd_claims") or {}
         return {
             "ok": True,
             "dsn": odbc_dsn(),
@@ -148,8 +333,12 @@ def discover() -> dict:
             "tableMatches": table_matches,
             "columnSamples": column_samples,
             "suggestedEnv": suggested_env,
+            "queryMeta": query_meta,
+            "claimsQueryReady": claims_meta.get("source") == "columns",
             "nextSteps": [
-                "Copy suggestedEnv lines into repo .env (adjust table/column names from columnSamples).",
+                "Copy suggestedEnv lines into repo .env (column-built queries preferred when discovery matched).",
+                "Or set NR2_SOFTDENT_USE_DISCOVERY_QUERIES=1 so extract reads suggestedEnv from this JSON when env SQL is empty.",
+                "SOFTDENT_ODBC_CLAIMS_QUERY is the highest-value query for named Payer labels (claim readiness / join).",
                 "Set NR2_CONSENT_EXECUTOR=1 to allow POST /api/admin/extract-softdent-odbc.",
                 "Run import_sync.py or sync from the SoftDent page to populate sd_* tables.",
             ],

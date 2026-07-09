@@ -35,7 +35,12 @@ const HalConsent = (function () {
     if (/\b(upload|portal)\b.*\bnarrative\b|\bnarrative\b.*\b(upload|portal)\b/.test(q)) return "narrative-portal";
     if (/\b(payer portal rpa|portal rpa|rpa prep)\b/.test(q)) return "payer-portal-rpa";
     if (/\bwrite\s*(back|back)\s*to\s*softdent\b|\bsoftdent\s*write\b/.test(q)) return "softdent-writeback";
-    if (/\bsubmit\b.*\b(claim|payer|portal)\b|\b(claim|payer)\b.*\bsubmit\b/.test(q)) return "claim-submit";
+    if (
+      /\bsubmit\b.*\b(claim|payer|portal)\b|\b(claim|payer)\b.*\bsubmit\b/.test(q) ||
+      /\b(claim packet|claim-packet|build claim.*zip|zip.*claim)\b/.test(q)
+    ) {
+      return "claim-submit";
+    }
     if (/\b(fax|upload|transmit)\b/.test(q)) return "delivery";
     return null;
   }
@@ -48,8 +53,46 @@ const HalConsent = (function () {
     if (/\b(upload|portal)\b.*\bnarrative\b|\bnarrative\b.*\b(upload|portal)\b/.test(q)) return "narrative-portal";
     if (/\b(payer portal rpa|portal rpa|rpa prep)\b/.test(q)) return "payer-portal-rpa";
     if (/\bwrite\s*(back|back)\s*to\s*softdent\b|\bsoftdent\s*write\b/.test(q)) return "softdent-writeback";
-    if (/\bsubmit\b.*\bclaim\b|\bclaim\b.*\bsubmit\b/.test(q)) return "claim-submit";
+    if (
+      /\bsubmit\b.*\bclaim\b|\bclaim\b.*\bsubmit\b/.test(q) ||
+      /\b(claim packet|claim-packet|build claim.*zip|zip.*claim)\b/.test(q)
+    ) {
+      return "claim-submit";
+    }
     return "delivery";
+  }
+
+  function parseClaimPacketDraft(query, extra) {
+    const q = String(query || "");
+    const fromExtra = extra && typeof extra === "object" ? extra : {};
+    const claimMatch = q.match(/\b(DS-[\w-]+|CLM[-\w]+|[A-Z]{2,}-\d[\w-]*)\b/i) || q.match(/\bclaim\s+([A-Z0-9-]{4,})\b/i);
+    return {
+      claimId: fromExtra.claimId || (claimMatch ? claimMatch[1] : "") || "",
+      body: fromExtra.narrative || fromExtra.body || "",
+      payer: fromExtra.payer || "",
+      gaps: Array.isArray(fromExtra.gaps) ? fromExtra.gaps : [],
+    };
+  }
+
+  function createPendingClaimPacket(draft) {
+    const d = draft && typeof draft === "object" ? draft : {};
+    const claimId = String(d.claimId || "").trim();
+    const action = {
+      kind: "claim-submit",
+      query: d.query || (claimId ? `Build claim packet zip for ${claimId} with consent` : "Build claim packet zip with consent"),
+      intent: "claim-submit",
+      draft: {
+        claimId,
+        body: d.narrative || d.body || "",
+        payer: d.payer || "",
+        gaps: Array.isArray(d.gaps) ? d.gaps : [],
+      },
+      summary: claimId
+        ? `Build claim submission packet for ${claimId} (local zip — staff uploads to payer portal)`
+        : "Build claim submission packet for payer portal upload",
+    };
+    setPending(action);
+    return action;
   }
 
   function parseEmailDraft(query, context) {
@@ -110,7 +153,13 @@ const HalConsent = (function () {
 
   function createPendingFromQuery(query, intent, extra) {
     const kind = outboundKind(query, intent) || "delivery";
-    const draft = kind === "email" ? parseEmailDraft(query, extra) : null;
+    const draft =
+      kind === "email"
+        ? parseEmailDraft(query, extra)
+        : kind === "claim-submit" || kind === "narrative-portal" || kind === "payer-portal-rpa"
+          ? parseClaimPacketDraft(query, extra)
+          : null;
+    const claimLabel = draft && draft.claimId ? ` for ${draft.claimId}` : "";
     const action = {
       kind,
       query: String(query || ""),
@@ -124,9 +173,9 @@ const HalConsent = (function () {
             : kind === "qbo-post"
               ? "Post approved journal entries to QuickBooks Online API"
               : kind === "claim-submit"
-              ? "Build claim submission packet for payer portal upload"
+              ? `Build claim submission packet${claimLabel} (local zip — staff uploads to payer portal)`
               : kind === "narrative-portal"
-                ? "Prepare narrative text for payer portal upload"
+                ? `Prepare narrative text${claimLabel} for payer portal upload`
                 : kind === "payer-portal-rpa"
                   ? "Build payer portal RPA prep bundle (staff confirms submit)"
                   : kind === "softdent-writeback"
@@ -167,6 +216,7 @@ const HalConsent = (function () {
     isConsentPhrase,
     isCancelPhrase,
     createPendingFromQuery,
+    createPendingClaimPacket,
     setPending,
     loadPending,
     clearPending,
@@ -174,6 +224,7 @@ const HalConsent = (function () {
     followUpChips,
     wrapReplyWithConsent,
     parseEmailDraft,
+    parseClaimPacketDraft,
   };
 })();
 

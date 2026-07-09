@@ -644,6 +644,31 @@ class DesktopApi:
         hits = search_payers(str(query or ""), limit=int(limit or 5))
         return {"items": hits, "count": len(hits), "text": format_payer_hits(hits)}
 
+    def join_claim_payers(self, claims_json: str) -> dict:
+        import json
+
+        from payer_reference_store import enrich_claims, format_claim_payer_joins
+
+        try:
+            claims = json.loads(claims_json) if claims_json else []
+        except json.JSONDecodeError:
+            claims = []
+        if not isinstance(claims, list):
+            claims = []
+        items = enrich_claims(claims, limit=20)
+        joined = [c for c in items if c.get("payerMatch")]
+        return {
+            "items": items,
+            "count": len(joined),
+            "text": format_claim_payer_joins(claims),
+        }
+
+    def lookup_fee_schedule(self, query: str, limit: int = 3) -> dict:
+        from fee_schedule_store import format_fee_hits, lookup_fees
+
+        hits = lookup_fees(str(query or ""), limit=int(limit or 3))
+        return {"items": hits, "count": len(hits), "text": format_fee_hits(hits)}
+
     def list_eligibility_cache(self, limit: int = 20) -> dict:
         from eligibility_cache_store import eligibility_cache_summary, format_eligibility_hits, list_eligibility_entries
 
