@@ -585,8 +585,12 @@ const PageCanvasData = (function () {
       color: s.color || COLORS[i % COLORS.length],
     }));
     if (!slices.length) return null;
-    const center = mix.rate ? `<strong>${escHtml(mix.rate)}</strong><span>Collections</span>` : "";
-    return { slices, center };
+    const center = mix.rate
+      ? `<strong>${escHtml(mix.rate)}</strong><span>Collections</span>${mix.hint ? `<span class="donut-hint">${escHtml(mix.hint)}</span>` : ""}`
+      : mix.hint
+        ? `<span class="donut-hint">${escHtml(mix.hint)}</span>`
+        : "";
+    return { slices, center, hint: mix.hint || null };
   }
 
   function providerBars() {

@@ -996,16 +996,11 @@ const ImportLoader = (function () {
     };
   }
 
-  function buildPayerMixFromAggregate(aggregate, collectionRateMetrics) {
-    const insurance = aggregate.totals.insurance || 0;
-    const patient = aggregate.totals.patient || 0;
-    const total = insurance + patient;
-    if (total <= 0) return null;
-    const production = aggregate.totals.production || 0;
-    const collections = aggregate.totals.collections || 0;
-    const fallbackRate = production > 0 ? `${((collections / production) * 100).toFixed(1)}%` : "—";
-    return {
-      total: formatMoney(total),
+  function buildPayerMixFromAggregate(aggregate, collectionRateMetrics, bundle) {
+    const production = (aggregate && aggregate.totals && aggregate.totals.production) || 0;
+    const collections = (aggregate && aggregate.totals && aggregate.totals.collections) || 0;
+    const fallbackRate = production > 0 && collections != null ? `${((collections / production) * 100).toFixed(1)}%` : "—";
+    const rateFields = {
       rate: collectionRateMetrics?.displayRate || fallbackRate,
       rateLabel: collectionRateMetrics?.displayLabel || "Collection rate",
       latestMonthRate: collectionRateMetrics?.latestMonthRate || null,
@@ -1018,6 +1013,40 @@ const ImportLoader = (function () {
           ? "Latest month incomplete"
           : "Imported",
       rateTrendDir: "flat",
+    };
+
+    let insurance = (aggregate && aggregate.totals && aggregate.totals.insurance) || 0;
+    let patient = (aggregate && aggregate.totals && aggregate.totals.patient) || 0;
+    let source = "dashboard";
+    let hint = null;
+
+    // SoftDent dashboard often dumps collections into "patient" with insurance=0.
+    // That is not a payer mix — require a real two-sided split or fall back.
+    if (!(insurance > 0 && patient > 0)) {
+      const arTotal = softdentArTotal(bundle);
+      const claimRows = ((bundle && bundle.softdent && bundle.softdent.claims && bundle.softdent.claims.rows) || []);
+      const claimTotal = claimRows.reduce((sum, row) => {
+        const amount =
+          coerceFloat(pickField(row, ["ClaimAmount", "Outstanding", "Balance", "amount", "Billed"])) || 0;
+        return sum + amount;
+      }, 0);
+      if (arTotal > 0 && claimTotal > 0) {
+        insurance = Math.min(claimTotal, arTotal);
+        patient = Math.max(0, arTotal - insurance);
+        source = "claims-vs-ar";
+        hint = "Open SoftDent claims vs daysheet A/R";
+      } else {
+        return null;
+      }
+    }
+
+    const total = insurance + patient;
+    if (total <= 0) return null;
+    return {
+      total: formatMoney(total),
+      ...rateFields,
+      source,
+      hint,
       slices: [
         { label: "Insurance", pct: Math.round((insurance / total) * 1000) / 10 },
         { label: "Patient", pct: Math.round((patient / total) * 1000) / 10 },
@@ -1513,7 +1542,7 @@ const ImportLoader = (function () {
     const collectionRateMetrics = buildCollectionRateMetrics(dashboardRows, collectionHealth);
     const collectionRate = collectionRateMetrics.displayRate;
     const productionTrend = buildProductionTrendFromRows(dashboardRows, collectionRateMetrics);
-    const payerMix = buildPayerMixFromAggregate(aggregate, collectionRateMetrics);
+    const payerMix = buildPayerMixFromAggregate(aggregate, collectionRateMetrics, bundle);
     const quality = buildFinancialDataQuality(bundle, aggregate, qb, periodAlignment, collectionHealth);
     const arCrossCheck = compareArCrossSource(softdentArTotal(bundle), quickbooksArTotal(bundle));
     const periodLabel = periodAlignment.comparablePeriod || periodAlignment.softdentPeriod || aggregate.period || "";

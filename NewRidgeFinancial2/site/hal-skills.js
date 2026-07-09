@@ -2456,7 +2456,9 @@ const HalSkills = (function () {
         title: "Payer Mix & Collections",
         status: financialStatus,
         summary:
-          "Payer mix and trailing collection rate from imported SoftDent months. Latest incomplete month is shown separately — do not use it for period close.",
+          fin.payerMix?.source === "claims-vs-ar"
+            ? "Insurance vs patient portion estimated from open SoftDent claims against daysheet A/R; trailing collection rate from imported SoftDent months."
+            : "Payer mix and trailing collection rate from imported SoftDent months. Latest incomplete month is shown separately — do not use it for period close.",
         navTarget: WIDGET_NAV.payerMixAndCollections,
         metricLabels: WIDGET_METRIC_LABELS.payerMixAndCollections,
         metrics: {
