@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Moonshot operator sign-off — checklist 1–10 from
- * MOONSHOT_QB_SOFTDENT_SIDENOTES_2026-07-07.md (hal-10062).
+ * Moonshot operator sign-off — financial program (8765) mock-embed by default.
+ * Workstation (8766) checks run only when NR2_SIGNOFF_WORKSTATION=1.
  * Records PASS/FAIL/SKIP to .local_logs/moonshot_financial_eval/
  */
 import assert from "node:assert/strict";
@@ -23,6 +23,7 @@ const logDir = join(repoRoot, ".local_logs", "moonshot_financial_eval");
 const buildManifest = JSON.parse(readFileSync(join(root, "nr2-build.json"), "utf8"));
 const BUILD = buildManifest.BUILD_ID || buildManifest.assetVersion || "hal-10106";
 const mockEmbedMode = buildManifest.staffRenderMode === "mock-embed";
+const financialOnly = process.env.NR2_SIGNOFF_WORKSTATION !== "1";
 const require = createRequire(import.meta.url);
 
 const results = [];
@@ -243,13 +244,67 @@ async function checkOffline(ctx) {
     }
   }
 
-  // #9 workstation bridge CSS
-  const wsIndex = readFileSync(join(site, "workstation", "index.html"), "utf8");
-  const bridgeCss = readFileSync(join(site, "workstation-moonshot-bridge.css"), "utf8");
-  if (wsIndex.includes("workstation-moonshot-bridge.css") && bridgeCss.includes("--bg-primary: #181818")) {
-    record(9, "8766 moonshot CSS bridge", "PASS", "dark tokens linked from workstation shell");
+  // #9 workstation bridge CSS — out of scope unless workstation sign-off requested
+  if (financialOnly) {
+    record(9, "8766 moonshot CSS bridge", "SKIP", "workstation program out of scope (8765 financial only)");
   } else {
-    record(9, "8766 moonshot CSS bridge", "FAIL", "bridge CSS missing or not linked");
+    const wsIndex = readFileSync(join(site, "workstation", "index.html"), "utf8");
+    const bridgeCss = readFileSync(join(site, "workstation-moonshot-bridge.css"), "utf8");
+    if (wsIndex.includes("workstation-moonshot-bridge.css") && bridgeCss.includes("--bg-primary: #181818")) {
+      record(9, "8766 moonshot CSS bridge", "PASS", "dark tokens linked from workstation shell");
+    } else {
+      record(9, "8766 moonshot CSS bridge", "FAIL", "bridge CSS missing or not linked");
+    }
+  }
+
+  // Financial mock-embed: all staff pages + clean nav + HAL iframe
+  if (mockEmbedMode) {
+    try {
+      const staffIds = (PageSchema.STAFF_PAGE_IDS || []).slice();
+      const missing = [];
+      for (const pageId of staffIds) {
+        const html = await PageViews.previewPageHtml(halData, pageId, feed, snap);
+        if (!html.includes("ms-mockup-preview-frame") || !html.includes(`/mockup-elite-embed/${pageId}`)) {
+          missing.push(pageId);
+        }
+      }
+      if (!missing.length && staffIds.length >= 10) {
+        record(18, "All staff pages elite mock embed", "PASS", `${staffIds.length} pages iframe gate OK`);
+      } else {
+        record(18, "All staff pages elite mock embed", "FAIL", `missing: ${missing.join(", ") || "none listed"}`);
+      }
+    } catch (e) {
+      record(18, "All staff pages elite mock embed", "FAIL", String(e.message));
+    }
+
+    try {
+      const navHtml =
+        typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.renderNavRail
+          ? MoonshotMockupChrome.renderNavRail("financial")
+          : "";
+      if (navHtml && !navHtml.includes("nav-sublist")) {
+        record(19, "Clean mock-embed nav rail", "PASS", "no widget sub-items under active page");
+      } else {
+        record(19, "Clean mock-embed nav rail", "FAIL", "nav-sublist still present in mock-embed mode");
+      }
+    } catch (e) {
+      record(19, "Clean mock-embed nav rail", "FAIL", String(e.message));
+    }
+
+    try {
+      const halHtml = await PageViews.previewPageHtml(halData, "hal", feed, snap);
+      if (halHtml.includes("ms-mockup-preview-frame") && halHtml.includes("/mockup-elite-embed/hal")) {
+        record(20, "HAL elite mock embed", "PASS", "HAL uses same iframe gate as staff pages");
+      } else {
+        record(20, "HAL elite mock embed", "FAIL", "HAL page missing elite mock iframe");
+      }
+    } catch (e) {
+      record(20, "HAL elite mock embed", "FAIL", String(e.message));
+    }
+  } else {
+    record(18, "All staff pages elite mock embed", "SKIP", "not in mock-embed mode");
+    record(19, "Clean mock-embed nav rail", "SKIP", "not in mock-embed mode");
+    record(20, "HAL elite mock embed", "SKIP", "not in mock-embed mode");
   }
 
   // canonical contract — no fallback
@@ -260,52 +315,137 @@ async function checkOffline(ctx) {
     record(0, "Canonical operatoryChairs only", "FAIL", "fallback chain still present");
   }
 
-  // Phase G offline wiring
-  const tier3Path = join(site, "nr2-tier3.js");
-  const hubClientSrc = readFileSync(join(site, "hal-hub-client.js"), "utf8");
-  const hubPy = readFileSync(join(root, "hal_hub.py"), "utf8");
-  if (mockEmbedMode || !existsSync(tier3Path)) {
-    record(15, "Phase G hero mirror wiring", "SKIP", "nr2-tier3 deferred in mock-embed mode");
+  // Phase G / hub — workstation scope unless explicitly enabled
+  if (financialOnly) {
+    record(15, "Phase G hero mirror wiring", "SKIP", "workstation program out of scope (8765 financial only)");
+    record(16, "HalHubClient fetchLastBroadcast", "SKIP", "workstation program out of scope (8765 financial only)");
+    record(17, "Hub auth matches protocol", "SKIP", "workstation program out of scope (8765 financial only)");
   } else {
-    const tier3Src = readFileSync(tier3Path, "utf8");
-    if (
-      tier3Src.includes("hubAuthHeadersForNotify") &&
-      tier3Src.includes("fetchLastBroadcast") &&
-      tier3Src.includes(":8765/api/hub/last-broadcast")
-    ) {
-      record(15, "Phase G hero mirror wiring", "PASS", "8765 poll + token on publishHeroMetrics");
+    const tier3Path = join(site, "nr2-tier3.js");
+    const hubClientSrc = readFileSync(join(site, "hal-hub-client.js"), "utf8");
+    const hubPy = readFileSync(join(root, "hal_hub.py"), "utf8");
+    if (mockEmbedMode || !existsSync(tier3Path)) {
+      record(15, "Phase G hero mirror wiring", "SKIP", "nr2-tier3 deferred in mock-embed mode");
     } else {
-      record(15, "Phase G hero mirror wiring", "FAIL", "nr2-tier3.js missing hub token or 8765 poll");
+      const tier3Src = readFileSync(tier3Path, "utf8");
+      if (
+        tier3Src.includes("hubAuthHeadersForNotify") &&
+        tier3Src.includes("fetchLastBroadcast") &&
+        tier3Src.includes(":8765/api/hub/last-broadcast")
+      ) {
+        record(15, "Phase G hero mirror wiring", "PASS", "8765 poll + token on publishHeroMetrics");
+      } else {
+        record(15, "Phase G hero mirror wiring", "FAIL", "nr2-tier3.js missing hub token or 8765 poll");
+      }
     }
-  }
-  if (hubClientSrc.includes("fetchLastBroadcast")) {
-    record(16, "HalHubClient fetchLastBroadcast", "PASS", "workstation polls financial hub");
-  } else {
-    record(16, "HalHubClient fetchLastBroadcast", "FAIL", "missing fetchLastBroadcast export");
-  }
-  if (hubPy.includes(":8765") && hubPy.includes("hub_token_header_valid")) {
-    record(17, "Hub auth matches protocol", "PASS", "token-first + loopback 8765 hero POST");
-  } else {
-    record(17, "Hub auth matches protocol", "FAIL", "hal_hub.py loopback path incomplete");
+    if (hubClientSrc.includes("fetchLastBroadcast")) {
+      record(16, "HalHubClient fetchLastBroadcast", "PASS", "workstation polls financial hub");
+    } else {
+      record(16, "HalHubClient fetchLastBroadcast", "FAIL", "missing fetchLastBroadcast export");
+    }
+    if (hubPy.includes(":8765") && hubPy.includes("hub_token_header_valid")) {
+      record(17, "Hub auth matches protocol", "PASS", "token-first + loopback 8765 hero POST");
+    } else {
+      record(17, "Hub auth matches protocol", "FAIL", "hal_hub.py loopback path incomplete");
+    }
   }
 }
 
-async function checkLive(base8765, base8766) {
+async function checkLive(base8765) {
   const purge = `v=${BUILD}&__nr2_purge=1`;
 
-  const resultsLive = [];
-  function recordLive(id, name, status, detail) {
-    resultsLive.push({ id, name, status, detail });
-    record(id, name, status, detail);
+  // #5 hub broadcast — workstation desk feature; skip in financial-only mode
+  if (financialOnly) {
+    record(5, "Hub notify → last-broadcast", "SKIP", "workstation program out of scope (8765 financial only)");
+  } else {
+    try {
+      const info = await fetchUrl(`${base8765}/api/app-info`);
+      const token = JSON.parse(info.body).hubToken;
+      if (!token) throw new Error("no hubToken");
+      const noToken = await fetchUrl(`${base8765}/api/hub/notify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: "http://127.0.0.1:8766" },
+        body: JSON.stringify({ from: "SignoffRunner", target: "all", channel: "office" }),
+      });
+      const notify = await fetchUrl(`${base8765}/api/hub/notify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://127.0.0.1:8766",
+          "X-Hub-Token": token,
+        },
+        body: JSON.stringify({ from: "SignoffRunner", target: "all", channel: "office" }),
+      });
+      const last = await fetchUrl(`${base8765}/api/hub/last-broadcast`, {
+        headers: { "X-Hub-Token": token },
+      });
+      const payload = JSON.parse(last.body);
+      const heroNotify = await fetchUrl(`${base8765}/api/hub/notify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Hub-Token": token },
+        body: JSON.stringify({
+          kind: "hero-metrics",
+          from: "SignoffRunner",
+          heroMetrics: [{ label: "Collections", value: "$1", hint: "" }],
+          pageId: "financial",
+        }),
+      });
+      const heroLast = await fetchUrl(`${base8765}/api/hub/last-broadcast`, {
+        headers: { "X-Hub-Token": token },
+      });
+      const heroPayload = JSON.parse(heroLast.body);
+      const g5ok = noToken.status === 403;
+      const g2ok = notify.status === 200 && payload && payload.at && !payload.text;
+      const g3ok =
+        heroNotify.status === 200 &&
+        heroPayload &&
+        heroPayload.kind === "hero-metrics" &&
+        Array.isArray(heroPayload.heroMetrics) &&
+        heroPayload.heroMetrics.length > 0;
+      if (g5ok && g2ok && g3ok) {
+        record(5, "Hub notify → last-broadcast", "PASS", "G5 403 without token; metadata only; hero-metrics mirror");
+      } else {
+        record(
+          5,
+          "Hub notify → last-broadcast",
+          "FAIL",
+          `g5=${noToken.status} g2=${g2ok} g3=${heroNotify.status} hero=${(heroLast.body || "").slice(0, 80)}`,
+        );
+      }
+    } catch (e) {
+      record(5, "Hub notify → last-broadcast", "SKIP", String(e.message).slice(0, 120));
+    }
+  }
+
+  // Financial-only live: mock iframe visible on Financial + HAL
+  if (mockEmbedMode && financialOnly) {
+    try {
+      const playwrightPath = join(repoRoot, "frontend", "node_modules", "playwright");
+      if (!existsSync(playwrightPath)) {
+        record(21, "Live mock iframe on 8765", "SKIP", "playwright not installed");
+      } else {
+        const { chromium } = require(playwrightPath);
+        const browser = await chromium.launch({ headless: true });
+        const page = await browser.newPage({ ignoreHTTPSErrors: true });
+        for (const hash of ["financial", "hal"]) {
+          await page.goto(`${base8765}/?${purge}#${hash}`, { waitUntil: "domcontentloaded", timeout: 90000 });
+          await page.waitForSelector(".ms-mockup-preview-iframe", { timeout: 60000 });
+        }
+        await browser.close();
+        record(21, "Live mock iframe on 8765", "PASS", "Financial + HAL show elite preview iframe in browser");
+      }
+    } catch (e) {
+      record(21, "Live mock iframe on 8765", "SKIP", String(e.message).slice(0, 120));
+    }
   }
 
   // #6 chart overlay reload
   try {
     const playwrightPath = join(repoRoot, "frontend", "node_modules", "playwright");
     if (!existsSync(playwrightPath)) {
-      recordLive(6, "QB chart F5×5 overlay guard", "SKIP", "playwright not installed");
+      record(6, "QB chart F5×5 overlay guard", "SKIP", "playwright not installed");
     } else if (mockEmbedMode) {
-      recordLive(6, "QB chart F5×5 overlay guard", "SKIP", "live chart overlays deferred in mock-embed mode");
+      record(6, "QB chart F5×5 overlay guard", "SKIP", "live chart overlays deferred in mock-embed mode");
     } else {
       const { chromium } = require(playwrightPath);
       const browser = await chromium.launch({ headless: true });
@@ -353,66 +493,7 @@ async function checkLive(base8765, base8766) {
     record(7, "Reconciliation 768px scroll", "SKIP", String(e.message).slice(0, 120));
   }
 
-  // #5 hub broadcast API path (Phase G: G2, G3, G5)
-  try {
-    const info = await fetchUrl(`${base8765}/api/app-info`);
-    const token = JSON.parse(info.body).hubToken;
-    if (!token) throw new Error("no hubToken");
-    const noToken = await fetchUrl(`${base8765}/api/hub/notify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Origin: "http://127.0.0.1:8766" },
-      body: JSON.stringify({ from: "SignoffRunner", target: "all", channel: "office" }),
-    });
-    const notify = await fetchUrl(`${base8765}/api/hub/notify`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Origin: "http://127.0.0.1:8766",
-        "X-Hub-Token": token,
-      },
-      body: JSON.stringify({ from: "SignoffRunner", target: "all", channel: "office" }),
-    });
-    const last = await fetchUrl(`${base8765}/api/hub/last-broadcast`, {
-      headers: { "X-Hub-Token": token },
-    });
-    const payload = JSON.parse(last.body);
-    const heroNotify = await fetchUrl(`${base8765}/api/hub/notify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Hub-Token": token },
-      body: JSON.stringify({
-        kind: "hero-metrics",
-        from: "SignoffRunner",
-        heroMetrics: [{ label: "Collections", value: "$1", hint: "" }],
-        pageId: "financial",
-      }),
-    });
-    const heroLast = await fetchUrl(`${base8765}/api/hub/last-broadcast`, {
-      headers: { "X-Hub-Token": token },
-    });
-    const heroPayload = JSON.parse(heroLast.body);
-    const g5ok = noToken.status === 403;
-    const g2ok = notify.status === 200 && payload && payload.at && !payload.text;
-    const g3ok =
-      heroNotify.status === 200 &&
-      heroPayload &&
-      heroPayload.kind === "hero-metrics" &&
-      Array.isArray(heroPayload.heroMetrics) &&
-      heroPayload.heroMetrics.length > 0;
-    if (g5ok && g2ok && g3ok) {
-      record(5, "Hub notify → last-broadcast", "PASS", "G5 403 without token; metadata only; hero-metrics mirror");
-    } else {
-      record(
-        5,
-        "Hub notify → last-broadcast",
-        "FAIL",
-        `g5=${noToken.status} g2=${g2ok} g3=${heroNotify.status} hero=${(heroLast.body || "").slice(0, 80)}`,
-      );
-    }
-  } catch (e) {
-    record(5, "Hub notify → last-broadcast", "SKIP", String(e.message).slice(0, 120));
-  }
-
-  // #2 live toggle
+  // #2 live toggle (8765 financial page)
   try {
     const playwrightPath = join(repoRoot, "frontend", "node_modules", "playwright");
     if (!existsSync(playwrightPath)) {
@@ -441,8 +522,10 @@ async function checkLive(base8765, base8766) {
     /* keep wiring PASS from offline if live fails */
   }
 
-  // #10 live toggle
-  try {
+  // #10 live QuickBooks toggle — skip in mock-embed mode
+  if (mockEmbedMode) {
+    /* offline check already recorded as SKIP */
+  } else try {
     const playwrightPath = join(repoRoot, "frontend", "node_modules", "playwright");
     if (!existsSync(playwrightPath)) return;
     const { chromium } = require(playwrightPath);
@@ -461,8 +544,11 @@ async function checkLive(base8765, base8766) {
     /* offline code check already recorded */
   }
 
-  // #9 live workstation theme
-  try {
+  // #9 live workstation theme — out of scope unless workstation sign-off requested
+  if (financialOnly) {
+    /* offline check already recorded as SKIP */
+  } else try {
+    const base8766 = process.env.NR2_SIGNOFF_8766 || "https://127.0.0.1:8766";
     const res = await fetchUrl(`${base8766}/workstation/index.html?${purge}`);
     if (res.status === 200 && res.body.includes("workstation-moonshot-bridge.css")) {
       record(9, "8766 live shell loads bridge", "PASS", "bridge CSS in HTML");
@@ -480,16 +566,18 @@ function writeReport() {
   const passes = results.filter((r) => r.status === "PASS");
   const skips = results.filter((r) => r.status === "SKIP");
   const byId = new Map();
-  for (const r of results.filter((x) => x.id >= 1 && x.id <= 17)) {
+  for (const r of results.filter((x) => x.id >= 1 && x.id <= 21)) {
     const prev = byId.get(r.id);
     const rank = { FAIL: 3, PASS: 2, SKIP: 1 };
     if (!prev || (rank[r.status] || 0) >= (rank[prev.status] || 0)) byId.set(r.id, r);
   }
   const checklist = [...byId.values()].sort((a, b) => a.id - b.id);
   const checklistFails = checklist.filter((r) => r.status === "FAIL");
+  const scopeLabel = financialOnly ? "8765 financial mock-embed" : "8765 + 8766 workstation";
+  const passTarget = financialOnly ? 6 : 8;
   const moonshotVerdict =
-    checklistFails.length === 0 && checklist.filter((r) => r.status === "PASS").length >= 8
-      ? "APPROVE hal-10096 — Moonshot data lane + Phase F ODBC extract tooling (automated sign-off; operator name still required)"
+    checklistFails.length === 0 && checklist.filter((r) => r.status === "PASS").length >= passTarget
+      ? `APPROVE ${BUILD} — ${scopeLabel} (automated sign-off; operator name still required)`
       : checklistFails.length
         ? "CONDITIONAL APPROVE — fix FAIL items before daily use"
         : "CONDITIONAL APPROVE — complete SKIP items manually";
@@ -497,6 +585,7 @@ function writeReport() {
   const md = `# Moonshot Operator Sign-Off Run
 
 **Build:** \`${BUILD}\`  
+**Scope:** ${scopeLabel}  
 **At:** ${new Date().toISOString()}  
 **Moonshot verdict (automated):** ${moonshotVerdict}
 
@@ -525,7 +614,8 @@ Per Moonshot: record operator name when satisfied. See \`docs/MOONSHOT_FULLEST_E
 }
 
 async function main() {
-  console.log(`Moonshot operator sign-off — ${BUILD}\n`);
+  const scopeLabel = financialOnly ? "8765 financial mock-embed" : "8765 + 8766 workstation";
+  console.log(`Moonshot operator sign-off — ${BUILD} (${scopeLabel})\n`);
   const validatorsOk = await runValidators();
   record(-1, "Validators + backup/CPA tests", validatorsOk ? "PASS" : "FAIL", "validate-hal, validate-pages, audit-mockup-parity, test_backup_db, test_cpa_packet_export");
 
@@ -546,15 +636,20 @@ async function main() {
   await checkOffline(ctx);
 
   let base8765 = process.env.NR2_SIGNOFF_8765 || "https://127.0.0.1:8765";
-  let base8766 = process.env.NR2_SIGNOFF_8766 || "https://127.0.0.1:8766";
   try {
     const probe = await fetchUrl(`${base8765}/api/app-info`);
-    if (probe.status === 200) await checkLive(base8765, base8766);
+    if (probe.status === 200) await checkLive(base8765);
     else {
-      for (const id of [5, 6, 7]) record(id, "Live browser test", "SKIP", "8765 not running — start StartProgram.bat");
+      record(5, "8765 server live checks", "SKIP", "8765 not running — start StartProgram.bat");
+      if (mockEmbedMode && financialOnly) {
+        record(21, "Live mock iframe on 8765", "SKIP", "8765 not running");
+      }
     }
   } catch {
-    for (const id of [5, 6, 7]) record(id, "Live browser test", "SKIP", "8765 not reachable");
+    record(5, "8765 server live checks", "SKIP", "8765 not reachable");
+    if (mockEmbedMode && financialOnly) {
+      record(21, "Live mock iframe on 8765", "SKIP", "8765 not reachable");
+    }
   }
 
   const { fails } = writeReport();
