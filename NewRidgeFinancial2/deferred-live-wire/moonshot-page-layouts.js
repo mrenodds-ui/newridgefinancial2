@@ -1,21 +1,13 @@
-/** Moonshot page panel layouts — inlined manifest (no external JSON). */
+/** Moonshot page panel layouts — EXTREME TERMINAL EDITION (hal-10168-consult) */
 const MOONSHOT_PAGE_LAYOUTS = {
-  "version": 1,
-  "source": "moonshot-kimi-k2.6-elite",
-  "generated": "2026-07-08",
+  "version": 2,
+  "source": "moonshot-kimi-k2.6-elite-extreme",
+  "generated": "2026-07-09",
   "pages": {
     "financial": {
       "title": "Owner Financial Dashboard",
       "shell": "widget-grid",
       "panels": [
-        {
-          "id": "fin-alert-ticker",
-          "type": "custom",
-          "widgetKey": "nr2AlertTicker",
-          "colSpan": 12,
-          "title": "Exception Alert Ticker",
-          "dataBind": "PageCanvasData.nr2AlertTicker()"
-        },
         {
           "id": "fin-hero-kpis",
           "type": "hero-kpi",
@@ -28,6 +20,14 @@ const MOONSHOT_PAGE_LAYOUTS = {
             { "widgetKey": "nr2CollectionLag", "label": "A/R Days" },
             { "widgetKey": "nr2GoalScorecard", "label": "Goal Attainment" }
           ]
+        },
+        {
+          "id": "fin-alert-ticker",
+          "type": "custom",
+          "widgetKey": "nr2AlertTicker",
+          "colSpan": 12,
+          "title": "Exception Alert Ticker",
+          "dataBind": "PageCanvasData.nr2AlertTicker()"
         },
         {
           "id": "fin-monthly-trend",
@@ -55,6 +55,14 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "dataBind": "PageCanvasData.nr2ProductionReconciliation()"
         },
         {
+          "id": "fin-provider-performance",
+          "type": "stat-grid",
+          "widgetKey": "providerPerformance",
+          "colSpan": 6,
+          "title": "Provider Performance",
+          "dataBind": "PageCanvasData.providerBars()"
+        },
+        {
           "id": "fin-daily-production",
           "type": "chart",
           "widgetKey": "softdentProductionDaily",
@@ -64,12 +72,13 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "chartType": "bar"
         },
         {
-          "id": "fin-provider-performance",
-          "type": "stat-grid",
-          "widgetKey": "providerPerformance",
+          "id": "fin-collections-daily",
+          "type": "chart",
+          "widgetKey": "softdentCollectionsDaily",
           "colSpan": 6,
-          "title": "Provider Performance",
-          "dataBind": "PageCanvasData.providerBars()"
+          "title": "Collections Trend",
+          "dataBind": "PageCanvasData.softdentCollectionsDailySeries()",
+          "chartType": "bar"
         },
         {
           "id": "fin-provider-production",
@@ -86,15 +95,6 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "colSpan": 6,
           "title": "Provider Production Share",
           "dataBind": "PageCanvasData.nr2ProviderCompensation()"
-        },
-        {
-          "id": "fin-collections-daily",
-          "type": "chart",
-          "widgetKey": "softdentCollectionsDaily",
-          "colSpan": 6,
-          "title": "Collections Trend",
-          "dataBind": "PageCanvasData.softdentCollectionsDailySeries()",
-          "chartType": "bar"
         },
         {
           "id": "fin-new-patients-mtd",
@@ -136,6 +136,23 @@ const MOONSHOT_PAGE_LAYOUTS = {
       "shell": "widget-grid",
       "panels": [
         {
+          "id": "tax-cash-flow",
+          "type": "chart",
+          "widgetKey": "quickbooksCashFlowTrend",
+          "colSpan": 8,
+          "title": "Cash Flow Trend",
+          "dataBind": "PageCanvasData.quickbooksCashFlowTrend()",
+          "chartType": "dual"
+        },
+        {
+          "id": "tax-net-income",
+          "type": "stat-grid",
+          "widgetKey": "quickbooksNetIncomeSummary",
+          "colSpan": 4,
+          "title": "Net Income Summary",
+          "dataBind": "PageCanvasData.quickbooksNetIncomeSummary()"
+        },
+        {
           "id": "tax-qb-pl",
           "type": "table",
           "widgetKey": "quickbooksProfitLossDetail",
@@ -161,12 +178,13 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "chartType": "bar"
         },
         {
-          "id": "tax-net-income",
-          "type": "stat-grid",
-          "widgetKey": "quickbooksNetIncomeSummary",
+          "id": "tax-revenue-service",
+          "type": "donut",
+          "widgetKey": "quickbooksRevenueByService",
           "colSpan": 6,
-          "title": "Net Income Summary",
-          "dataBind": "PageCanvasData.quickbooksNetIncomeSummary()"
+          "title": "Revenue by Service",
+          "dataBind": "PageCanvasData.quickbooksRevenueByService()",
+          "chartType": "donut"
         },
         {
           "id": "tax-balance-sheet",
@@ -177,22 +195,12 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "dataBind": "PageCanvasData.quickbooksBalanceSheetSummary()"
         },
         {
-          "id": "tax-cash-flow",
-          "type": "chart",
-          "widgetKey": "quickbooksCashFlowTrend",
+          "id": "tax-expense-breakdown",
+          "type": "stat-grid",
+          "widgetKey": "quickbooksExpenseBreakdown",
           "colSpan": 6,
-          "title": "Cash Flow Trend",
-          "dataBind": "PageCanvasData.quickbooksCashFlowTrend()",
-          "chartType": "dual"
-        },
-        {
-          "id": "tax-revenue-service",
-          "type": "donut",
-          "widgetKey": "quickbooksRevenueByService",
-          "colSpan": 4,
-          "title": "Revenue by Service",
-          "dataBind": "PageCanvasData.quickbooksRevenueByService()",
-          "chartType": "donut"
+          "title": "Operating Expenses",
+          "dataBind": "PageCanvasData.quickbooksExpenseBars()"
         },
         {
           "id": "tax-ar-aging",
@@ -203,12 +211,12 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "dataBind": "PageCanvasData.quickbooksQbArAging()"
         },
         {
-          "id": "tax-expense-breakdown",
-          "type": "stat-grid",
-          "widgetKey": "quickbooksExpenseBreakdown",
-          "colSpan": 6,
-          "title": "Operating Expenses",
-          "dataBind": "PageCanvasData.quickbooksExpenseBars()"
+          "id": "tax-period-close",
+          "type": "gauge",
+          "widgetKey": "periodCloseAndPosting",
+          "colSpan": 4,
+          "title": "Period Close",
+          "dataBind": "PageCanvasData.documentsPeriodStats()"
         },
         {
           "id": "tax-ap",
@@ -217,14 +225,6 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "colSpan": 6,
           "title": "Accounts Payable",
           "dataBind": "PageCanvasData.metrics('accountsPayableAutomation')"
-        },
-        {
-          "id": "tax-period-close",
-          "type": "stat-grid",
-          "widgetKey": "periodCloseAndPosting",
-          "colSpan": 6,
-          "title": "Period Close",
-          "dataBind": "PageCanvasData.documentsPeriodStats()"
         },
         {
           "id": "tax-journal-queue",
@@ -326,7 +326,7 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "id": "sd-ar-aging",
           "type": "heatmap",
           "widgetKey": "softdentArAging",
-          "colSpan": 6,
+          "colSpan": 8,
           "title": "Accounts Receivable Aging",
           "dataBind": "PageCanvasData.softdentArAgingHeatmap()"
         },
@@ -334,17 +334,9 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "id": "sd-resp-donut",
           "type": "donut",
           "widgetKey": "softdentResponsibility",
-          "colSpan": 3,
+          "colSpan": 4,
           "title": "Insurance vs Patient Balance",
           "dataBind": "PageCanvasData.softdentResponsibilityDonut()"
-        },
-        {
-          "id": "sd-case-gauge",
-          "type": "gauge",
-          "widgetKey": "caseAcceptance",
-          "colSpan": 3,
-          "title": "Case Acceptance Rate",
-          "dataBind": "PageCanvasData.metrics('caseAcceptance')"
         },
         {
           "id": "sd-tx-funnel",
@@ -353,6 +345,14 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "colSpan": 6,
           "title": "Treatment Plans Presented",
           "dataBind": "PageCanvasData.treatmentPlanFunnel()"
+        },
+        {
+          "id": "sd-case-gauge",
+          "type": "gauge",
+          "widgetKey": "caseAcceptance",
+          "colSpan": 3,
+          "title": "Case Acceptance Rate",
+          "dataBind": "PageCanvasData.metrics('caseAcceptance')"
         },
         {
           "id": "sd-hyg-gauge",
@@ -366,8 +366,8 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "id": "sd-prov-bar",
           "type": "chart",
           "widgetKey": "softdentProviderProduction",
-          "colSpan": 3,
-          "title": "Provider Production",
+          "colSpan": 12,
+          "title": "Provider Production Velocity",
           "dataBind": "PageCanvasData.softdentProviderProductionData()",
           "chartType": "bar"
         }
@@ -461,6 +461,23 @@ const MOONSHOT_PAGE_LAYOUTS = {
       "shell": "dashboard-grid",
       "panels": [
         {
+          "id": "qb-cash-flow",
+          "type": "chart",
+          "widgetKey": "quickbooksCashFlowTrend",
+          "colSpan": 8,
+          "title": "Cash Flow Trend",
+          "dataBind": "PageCanvasData.quickbooksCashFlowTrend()",
+          "chartType": "dual"
+        },
+        {
+          "id": "qb-net-income",
+          "type": "stat-grid",
+          "widgetKey": "quickbooksNetIncomeSummary",
+          "colSpan": 4,
+          "title": "Net Income Summary",
+          "dataBind": "PageCanvasData.quickbooksNetIncomeSummary()"
+        },
+        {
           "id": "qb-pl-summary",
           "type": "table",
           "widgetKey": "quickbooksProfitLossDetail",
@@ -477,23 +494,6 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "dataBind": "PageCanvasData.ebitdaRows()"
         },
         {
-          "id": "qb-cash-flow",
-          "type": "chart",
-          "widgetKey": "quickbooksCashFlowTrend",
-          "colSpan": 8,
-          "title": "Cash Flow Trend",
-          "dataBind": "PageCanvasData.quickbooksCashFlowTrend()",
-          "chartType": "dual"
-        },
-        {
-          "id": "qb-expense-breakdown",
-          "type": "stat-grid",
-          "widgetKey": "quickbooksExpenseBreakdown",
-          "colSpan": 4,
-          "title": "Operating Expenses",
-          "dataBind": "PageCanvasData.quickbooksExpenseBars()"
-        },
-        {
           "id": "qb-monthly-revenue",
           "type": "chart",
           "widgetKey": "quickbooksMonthlyRevenue",
@@ -503,12 +503,13 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "chartType": "bar"
         },
         {
-          "id": "qb-net-income",
-          "type": "stat-grid",
-          "widgetKey": "quickbooksNetIncomeSummary",
+          "id": "qb-revenue-service",
+          "type": "donut",
+          "widgetKey": "quickbooksRevenueByService",
           "colSpan": 6,
-          "title": "Net Income Summary",
-          "dataBind": "PageCanvasData.quickbooksNetIncomeSummary()"
+          "title": "Revenue by Service",
+          "dataBind": "PageCanvasData.quickbooksRevenueByService()",
+          "chartType": "donut"
         },
         {
           "id": "qb-balance-sheet",
@@ -519,19 +520,18 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "dataBind": "PageCanvasData.quickbooksBalanceSheetSummary()"
         },
         {
-          "id": "qb-revenue-service",
-          "type": "donut",
-          "widgetKey": "quickbooksRevenueByService",
-          "colSpan": 3,
-          "title": "Revenue by Service",
-          "dataBind": "PageCanvasData.quickbooksRevenueByService()",
-          "chartType": "donut"
+          "id": "qb-expense-breakdown",
+          "type": "stat-grid",
+          "widgetKey": "quickbooksExpenseBreakdown",
+          "colSpan": 6,
+          "title": "Operating Expenses",
+          "dataBind": "PageCanvasData.quickbooksExpenseBars()"
         },
         {
           "id": "qb-ar-aging",
           "type": "table",
           "widgetKey": "quickbooksArAging",
-          "colSpan": 3,
+          "colSpan": 12,
           "title": "QuickBooks A/R Aging",
           "dataBind": "PageCanvasData.quickbooksQbArAging()"
         }
@@ -558,6 +558,14 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "dataBind": "PageCanvasData.metrics('documentPreview')"
         },
         {
+          "id": "doc-sources",
+          "type": "stat-grid",
+          "halSubpanel": "documentsSourceBreakdown",
+          "colSpan": 12,
+          "title": "Source Breakdown",
+          "dataBind": "PageCanvasData.documentsSourceBreakdown()"
+        },
+        {
           "id": "period-close",
           "type": "gauge",
           "widgetKey": "periodCloseAndPosting",
@@ -580,14 +588,6 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "colSpan": 12,
           "title": "Journal Entries",
           "dataBind": "PageCanvasData.metrics('journalPostingQueue')"
-        },
-        {
-          "id": "doc-sources",
-          "type": "stat-grid",
-          "halSubpanel": "documentsSourceBreakdown",
-          "colSpan": 12,
-          "title": "Source breakdown",
-          "dataBind": "PageCanvasData.documentsSourceBreakdown()"
         }
       ]
     },
@@ -626,20 +626,20 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "dataBind": "PageCanvasData.metrics('officeManagerPriorities')"
         },
         {
-          "id": "om-tasks",
-          "type": "table",
-          "halSubpanel": "officeTaskQueue",
-          "colSpan": 12,
-          "title": "Office task queue",
-          "dataBind": "PageCanvasData.officeTaskRows()"
-        },
-        {
           "id": "om-surfaces",
           "type": "stat-grid",
           "widgetKey": "officeManagerSurfaces",
           "colSpan": 4,
           "title": "Staff Work Surfaces",
           "dataBind": "PageCanvasData.metrics('officeManagerSurfaces')"
+        },
+        {
+          "id": "om-tasks",
+          "type": "table",
+          "halSubpanel": "officeTaskQueue",
+          "colSpan": 12,
+          "title": "Office Task Queue",
+          "dataBind": "PageCanvasData.officeTaskRows()"
         }
       ]
     }

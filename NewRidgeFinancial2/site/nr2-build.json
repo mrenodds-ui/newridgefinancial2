@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10168",
-  "assetVersion": "hal-10168",
-  "schemaVersion": "hal-10168",
+  "BUILD_ID": "hal-10169",
+  "assetVersion": "hal-10169",
+  "schemaVersion": "hal-10169",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -17,6 +17,6 @@
     "hal",
     "office-manager"
   ],
-  "builtAt": "2026-07-09T20:50:00Z",
-  "notes": "hal-10168: Moonshot full-program audit — REG/CHROME/LAY/VAL fixes for live-wire elite parity."
+  "builtAt": "2026-07-09T21:05:00Z",
+  "notes": "hal-10169: Moonshot extreme high-tech density + panel relayout (consult apply)."
 }

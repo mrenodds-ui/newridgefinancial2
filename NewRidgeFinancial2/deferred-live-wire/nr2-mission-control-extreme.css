@@ -1,0 +1,238 @@
+/**
+ * Moonshot Mission Control — EXTREME Terminal Density
+ * Scope: .app--moonshot-mockup .ms-mission-control
+ * P0: Link after nr2-mission-control-glass.css
+ */
+
+/* 1. Density Reset — Terminal Compression */
+.app--moonshot-mockup .ms-mission-control .widget-grid,
+.app--moonshot-mockup .ms-mission-control .dashboard-grid {
+  gap: 10px;
+  padding: 10px;
+}
+
+.app--moonshot-mockup .ms-mission-control .canvas-panel,
+.app--moonshot-mockup .ms-mission-control .kpi-tile,
+.app--moonshot-mockup .ms-mission-control .kanban-column,
+.app--moonshot-mockup .ms-mission-control .ms-panel-obsidian {
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.app--moonshot-mockup .ms-mission-control .panel-header,
+.app--moonshot-mockup .ms-mission-control .card-header {
+  padding: 8px 10px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #71717a;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+/* 2. Monospace Enforcement — Tabular Figures */
+.app--moonshot-mockup .ms-mission-control .kpi-value,
+.app--moonshot-mockup .ms-mission-control .figure,
+.app--moonshot-mockup .ms-mission-control td.numeric,
+.app--moonshot-mockup .ms-mission-control .data-table td,
+.app--moonshot-mockup .ms-mission-control .claim-amount,
+.app--moonshot-mockup .ms-mission-control .chart-value,
+.app--moonshot-mockup .ms-mission-control .kanban-card-mission .meta {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* 3. Severity System — A/R & Claims Heat */
+.app--moonshot-mockup .ms-mission-control .mc-severity-high {
+  border-left: 3px solid #dc2626;
+  background: linear-gradient(90deg, rgba(220,38,38,0.06), transparent);
+}
+.app--moonshot-mockup .ms-mission-control .mc-severity-high::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #dc2626;
+  border-radius: 50%;
+  margin-right: 8px;
+  box-shadow: 0 0 8px #dc2626;
+  animation: mc-blink 1.5s infinite;
+}
+
+.app--moonshot-mockup .ms-mission-control .mc-severity-med {
+  border-left: 3px solid #f59e0b;
+  background: linear-gradient(90deg, rgba(245,158,11,0.06), transparent);
+}
+
+.app--moonshot-mockup .ms-mission-control .mc-severity-low {
+  border-left: 3px solid #10b981;
+}
+
+@keyframes mc-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* 4. Scanline Animation — Charts Only */
+.app--moonshot-mockup .ms-mission-control .chart-container {
+  position: relative;
+  overflow: hidden;
+}
+.app--moonshot-mockup .ms-mission-control .chart-container::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(6,182,212,0.04), transparent);
+  animation: mc-scan 6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes mc-scan {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* 5. Live Pulse — HAL & Office Manager */
+.app--moonshot-mockup .ms-mission-control .mc-live-indicator::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  margin-right: 6px;
+  box-shadow: 0 0 8px #10b981;
+  animation: mc-pulse 2s infinite;
+}
+
+@keyframes mc-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.9); }
+}
+
+/* 6. Page-Specific Accents */
+.app--moonshot-mockup .ms-mission-control.taxes-moonshot {
+  --mc-accent: #f59e0b;
+  --mc-accent-glow: 0 0 10px rgba(245,158,11,0.35);
+}
+.app--moonshot-mockup .ms-mission-control.quickbooks-moonshot {
+  --mc-accent: #60a5fa;
+  --mc-accent-glow: 0 0 10px rgba(96,165,250,0.35);
+}
+.app--moonshot-mockup .ms-mission-control.hal-moonshot {
+  --mc-accent: #dc2626;
+  --mc-accent-glow: 0 0 10px rgba(220,38,38,0.4);
+}
+
+/* 7. Kanban Lane Headers — Mission Dots */
+.app--moonshot-mockup .ms-mission-control .kanban-column .column-header::before,
+.app--moonshot-mockup .ms-mission-control .kanban-lane-mission .lane-header::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mc-accent);
+  box-shadow: 0 0 6px var(--mc-accent);
+  margin-right: 8px;
+  display: inline-block;
+}
+
+/* 8. Empty State Honesty — Terminal Style */
+.app--moonshot-mockup .ms-mission-control .mc-empty-state {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #52525b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+  padding: 24px;
+  border: 1px dashed rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.2);
+}
+
+/* Bridge existing canvas severity + empty CTAs to extreme tokens */
+.app--moonshot-mockup .ms-mission-control tr.severity-high,
+.app--moonshot-mockup .ms-mission-control .severity-high {
+  border-left: 3px solid #dc2626;
+  background: linear-gradient(90deg, rgba(220,38,38,0.06), transparent);
+}
+.app--moonshot-mockup .ms-mission-control tr.severity-med,
+.app--moonshot-mockup .ms-mission-control .severity-med {
+  border-left: 3px solid #f59e0b;
+  background: linear-gradient(90deg, rgba(245,158,11,0.06), transparent);
+}
+.app--moonshot-mockup .ms-mission-control tr.severity-low,
+.app--moonshot-mockup .ms-mission-control .severity-low {
+  border-left: 3px solid #10b981;
+}
+.app--moonshot-mockup .ms-mission-control [data-hal-widget-key="quickbooksArAging"],
+.app--moonshot-mockup .ms-mission-control [data-hal-widget-key="arOutstandingClaims"] {
+  border-left: 2px solid rgba(220, 38, 38, 0.35);
+}
+.app--moonshot-mockup .ms-mission-control [data-hal-widget-key="documentIntakeQueue"] {
+  border-left: 2px solid #d4af37;
+}
+.app--moonshot-mockup .ms-mission-control .canvas-empty,
+.app--moonshot-mockup .ms-mission-control .empty-state,
+.app--moonshot-mockup .ms-mission-control .widget-empty {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.app--moonshot-mockup .ms-mission-control.mc-terminal-density .widget-grid,
+.app--moonshot-mockup .ms-mission-control.mc-terminal-density .dashboard-grid {
+  gap: 10px;
+}
+
+/* Panel chrome hooks from layout-engine severityKeys */
+.app--moonshot-mockup .ms-mission-control .widget-card.mc-severity-panel {
+  border-left: 3px solid rgba(220, 38, 38, 0.55);
+}
+.app--moonshot-mockup .ms-mission-control .widget-card.mc-vault-panel {
+  border-left: 3px solid #d4af37;
+}
+.app--moonshot-mockup .ms-mission-control .widget-card.mc-alert-ticker {
+  border-top: 2px solid #06b6d4;
+  min-height: 48px;
+}
+.app--moonshot-mockup .ms-mission-control .widget-card.mc-hal-command {
+  border: 1px solid rgba(220, 38, 38, 0.45);
+  box-shadow: 0 0 12px rgba(220, 38, 38, 0.25);
+}
+.app--moonshot-mockup .ms-mission-control .widget-card.mc-live-indicator .widget-title::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  margin-right: 6px;
+  box-shadow: 0 0 8px #10b981;
+  animation: mc-pulse 2s infinite;
+}
+
+/* Scanline also targets common chart hosts */
+.app--moonshot-mockup .ms-mission-control .chart-host,
+.app--moonshot-mockup .ms-mission-control .canvas-chart,
+.app--moonshot-mockup .ms-mission-control .dual-line-chart,
+.app--moonshot-mockup .ms-mission-control .vbar-chart {
+  position: relative;
+  overflow: hidden;
+}
+.app--moonshot-mockup .ms-mission-control .chart-host::after,
+.app--moonshot-mockup .ms-mission-control .canvas-chart::after,
+.app--moonshot-mockup .ms-mission-control .dual-line-chart::after,
+.app--moonshot-mockup .ms-mission-control .vbar-chart::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.04), transparent);
+  animation: mc-scan 6s linear infinite;
+  pointer-events: none;
+}

@@ -81,6 +81,22 @@ const MoonshotLayoutEngine = (function () {
       `;
     }
 
+    // TERMINAL DENSITY — Moonshot extreme relayout P1
+    const terminalDensityPages = [
+      "financial",
+      "taxes",
+      "quickbooks",
+      "ar",
+      "claims",
+      "softdent",
+      "documents",
+      "hal",
+      "office-manager",
+      "narratives",
+      "library",
+    ];
+    const densityClass = terminalDensityPages.includes(pageId) ? " mc-terminal-density" : "";
+
     if (shell === "dashboard-grid") {
       let inner = "";
       if (pageId === "office-manager") {
@@ -92,7 +108,7 @@ const MoonshotLayoutEngine = (function () {
       } else {
         inner += `<div class="dashboard-grid">${panels.map((p) => renderDashboardTile(p, D, H, pageId, accent)).join("")}</div>`;
       }
-      return `${H.dashboardPageOpen(`${pageId}-moonshot ms-mission-control`)}${headerHtml}<div class="widget-grid">${inner}</div></div>`;
+      return `${H.dashboardPageOpen(`${pageId}-moonshot ms-mission-control${densityClass}`)}${headerHtml}<div class="widget-grid">${inner}</div></div>`;
     }
 
     let body = panels.map((p) => H.gridCol(p.colSpan || 12, renderWidgetGridPanel(p, D, H, pageId, accent))).join("");
@@ -107,7 +123,7 @@ const MoonshotLayoutEngine = (function () {
           : pageId === "taxes"
             ? "taxes-moonshot ms-mission-control"
             : `${pageId}-moonshot ms-mission-control`;
-    return `${H.stackOpen(pageClass)}${headerHtml}${body}</div>`;
+    return `${H.stackOpen(`${pageClass}${densityClass}`)}${headerHtml}${body}</div>`;
   }
 
   function monthNameFromPeriod(label) {
@@ -191,7 +207,7 @@ const MoonshotLayoutEngine = (function () {
       const maxKpis = pageId === "financial" ? 5 : pageId === "ar" ? 6 : pageId === "claims" ? 4 : 4;
       return kpis && kpis.length ? H.heroKpiRow(kpis, maxKpis) : "";
     }
-    return H.canvasPanel({
+    const panelHtml = H.canvasPanel({
       title: panelTitle || "",
       accent,
       widgetKey: panel.widgetKey,
@@ -200,6 +216,20 @@ const MoonshotLayoutEngine = (function () {
       colSpan: panel.colSpan,
       body: renderPanelBody(panel, D, H, pageId, accent),
     });
+    // SEVERITY / LIVE chrome hooks — CSS-driven; no binder changes
+    const severityKeys = {
+      arOutstandingClaims: "mc-severity-panel",
+      quickbooksArAging: "mc-severity-panel",
+      documentIntakeQueue: "mc-vault-panel",
+      officeManagerSurfaces: "mc-live-indicator",
+      nr2AlertTicker: "mc-alert-ticker",
+      halAskHal: "mc-hal-command",
+    };
+    const extra = severityKeys[panel.widgetKey];
+    if (extra && typeof panelHtml === "string" && panelHtml.includes('class="widget-card')) {
+      return panelHtml.replace('class="widget-card', `class="widget-card ${extra}`);
+    }
+    return panelHtml;
   }
 
   function renderDashboardTile(panel, D, H, pageId, accent) {
