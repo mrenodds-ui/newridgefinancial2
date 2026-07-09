@@ -393,11 +393,12 @@ def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, An
         except Exception as exc:
             sync_status["ok"] = False
             sync_status["error"] = str(exc)
+    read_only = not sync
     softdent_dir = softdent_import_dir()
     quickbooks_dir = quickbooks_import_dir()
     direct_sections: dict[str, Any] | None = None
     direct_pipeline_error: str | None = None
-    if direct_first:
+    if direct_first and sync:
         try:
             direct_sections = _load_direct_sections()
             if isinstance(direct_sections, dict):
@@ -477,17 +478,18 @@ def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, An
         sync_status.setdefault("warnings", [])
         if isinstance(sync_status["warnings"], list):
             sync_status["warnings"].append(f"Import diagnostics unavailable: {exc}")
-    try:
-        from import_cache_ttl import collect_dataset_checksums, relevant_period_labels, write_manifest
+    if not read_only:
+        try:
+            from import_cache_ttl import collect_dataset_checksums, relevant_period_labels, write_manifest
 
-        periods = relevant_period_labels()
-        write_manifest(
-            synced_at=str(bundle.get("loadedAt") or datetime.now(timezone.utc).isoformat()),
-            periods={"softdent": periods, "quickbooks": periods},
-            dataset_checksums=collect_dataset_checksums(softdent_dir, quickbooks_dir),
-        )
-    except Exception as exc:
-        sync_status.setdefault("warnings", [])
-        if isinstance(sync_status["warnings"], list):
-            sync_status["warnings"].append(f"Import manifest update failed: {exc}")
+            periods = relevant_period_labels()
+            write_manifest(
+                synced_at=str(bundle.get("loadedAt") or datetime.now(timezone.utc).isoformat()),
+                periods={"softdent": periods, "quickbooks": periods},
+                dataset_checksums=collect_dataset_checksums(softdent_dir, quickbooks_dir),
+            )
+        except Exception as exc:
+            sync_status.setdefault("warnings", [])
+            if isinstance(sync_status["warnings"], list):
+                sync_status["warnings"].append(f"Import manifest update failed: {exc}")
     return bundle

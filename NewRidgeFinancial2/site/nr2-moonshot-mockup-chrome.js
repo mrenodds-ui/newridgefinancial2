@@ -396,6 +396,7 @@ const MoonshotMockupChrome = (function () {
   function pageChrome(state, schema, insight, opts) {
     if (schema && staffMockEmbedPage(schema.id)) return pageChromeMockEmbed(state, schema, opts);
     const o = opts || {};
+    const soloNav = staffMockEmbedMode() ? renderMockEmbedPageNav(state && state.pageId) : "";
     const commands =
       typeof PageSchema !== "undefined" && PageSchema.commandsFor && schema && schema.id
         ? PageSchema.commandsFor(schema.id)
@@ -408,6 +409,7 @@ const MoonshotMockupChrome = (function () {
         : renderPageCommandChips(commands);
     const headerTools = renderPageHeaderTools(schema, o, commandChips);
     return `<div class="ms-page-chrome">
+      ${soloNav}
       ${renderTopHeader(state)}
       ${renderHero(schema)}
       ${headerTools}

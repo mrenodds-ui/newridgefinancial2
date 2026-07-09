@@ -354,9 +354,22 @@ const PageViews = (function () {
     const db = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
     if (db && typeof db.getCachedImportReadiness === "function") {
       const readiness = db.getCachedImportReadiness();
-      if (readiness && readiness.level) syncStatus = readiness;
+      if (readiness && readiness.level) {
+        opts.importReadiness = readiness;
+      }
     }
-    opts.importReadiness = syncStatus;
+    if (!opts.importReadiness && bundle && bundle.diagnostics && bundle.diagnostics.summary) {
+      const summary = bundle.diagnostics.summary;
+      const missing = Number(summary.missing || 0) > 0;
+      const stale = Number(summary.stale || 0) > 0;
+      opts.importReadiness = {
+        level: missing || stale ? "stale" : "fresh",
+        ok: !missing,
+      };
+    }
+    if (!opts.importReadiness && syncStatus && syncStatus.level) {
+      opts.importReadiness = syncStatus;
+    }
     if (typeof PageSchema !== "undefined" && PageSchema.LAYOUT_EPOCH === "moonshot-mockup") {
       return opts;
     }

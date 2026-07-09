@@ -118,6 +118,16 @@ const Services = (function () {
             }
           } else {
             const bundle = await loadImportBundle(false);
+            void waitForImportSync(br, opts.maxWaitMs || 180000)
+              .then((finalStatus) => {
+                if (!finalStatus || finalStatus.status !== "success") return;
+                importBundleCache = null;
+                importBundleAt = 0;
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("nr2-import-sync-complete", { detail: finalStatus }));
+                }
+              })
+              .catch(() => {});
             if (bundle) {
               return Object.assign({}, bundle, {
                 syncStatus: Object.assign({}, bundle.syncStatus || {}, { status: "running", attempted: true }),

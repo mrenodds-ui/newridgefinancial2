@@ -117,6 +117,7 @@ for (const page of FUNCTIONAL_PAGES) {
     assert.ok(!html.includes("ms-mockup-preview-banner"), `${page.id} mock-embed must not show elite preview banner`);
   } else if (pilotMode && liveWirePages.includes(page.id)) {
     assert.ok(html.includes("ms-live-wire-pilot-banner"), `${page.id} live-wire pilot must show pilot banner`);
+    assert.ok(html.includes("mock-embed-nav"), `${page.id} live-wire pilot must render staff page nav`);
     assert.ok(!html.includes("ms-mockup-preview-iframe"), `${page.id} live-wire pilot must not use mock iframe`);
     assert.ok(html.includes(`${page.id}-moonshot`) || html.includes("widget-grid"), `${page.id} live-wire pilot must render layout engine body`);
   } else {

@@ -96,14 +96,14 @@ const DesktopBridge = (function () {
 
   async function loopbackJson(path, options, _retried) {
     const opts = Object.assign({ cache: "no-store" }, options || {});
-    const method = String(opts.method || "GET").toUpperCase();
-    if (method !== "GET" && method !== "HEAD" && hasLoopbackApi()) {
+    if (hasLoopbackApi()) {
       const token = await ensureLoopbackSession();
       opts.headers = Object.assign({}, opts.headers || {});
       if (token) opts.headers["X-NR2-Session-Token"] = token;
       const tabId = sessionStorage.getItem("nr2TabId");
       if (tabId) opts.headers["X-NR2-Tab-ID"] = tabId;
     }
+    const method = String(opts.method || "GET").toUpperCase();
     const resp = await fetch(loopbackUrl(path), opts);
     const refresh = resp.headers.get("X-NR2-Refresh-Token");
     if (refresh) loopbackSessionToken = refresh;

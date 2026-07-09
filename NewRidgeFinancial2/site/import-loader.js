@@ -417,7 +417,16 @@ const ImportLoader = (function () {
 
   // Browser file:// without pywebview returns null — use the desktop bridge, loopback API, or Node (NR2_LOAD_IMPORTS=1).
   async function loadBundleFromHttpApi() {
-    if (typeof window === "undefined" || typeof fetch !== "function") return null;
+    if (typeof window === "undefined") return null;
+    const br = bridge();
+    if (br && typeof br.getImportBundle === "function") {
+      try {
+        return await br.getImportBundle();
+      } catch {
+        /* fall through */
+      }
+    }
+    if (typeof fetch !== "function") return null;
     const host = String(window.location.hostname || "").toLowerCase();
     if (host !== "127.0.0.1" && host !== "localhost") return null;
     try {
@@ -434,11 +443,15 @@ const ImportLoader = (function () {
     const br = bridge();
     let bundle = null;
     if (br) {
-      if (force && br.refreshImports) bundle = await br.refreshImports();
-      else if (br.getImportBundle) bundle = await br.getImportBundle();
+      if (force && br.refreshImports) {
+        await br.refreshImports();
+      }
+      if (br.getImportBundle) bundle = await br.getImportBundle();
     }
-    if (!bundle) bundle = await loadBundleFromHttpApi();
-    if (!bundle && isNode && process.env.NR2_LOAD_IMPORTS === "1") bundle = await loadBundleNode();
+    if (!bundle || !hasImportData(bundle)) bundle = await loadBundleFromHttpApi();
+    if ((!bundle || !hasImportData(bundle)) && isNode && process.env.NR2_LOAD_IMPORTS === "1") {
+      bundle = await loadBundleNode();
+    }
     return bundle ? attachBundleDiagnostics(bundle) : null;
   }
 

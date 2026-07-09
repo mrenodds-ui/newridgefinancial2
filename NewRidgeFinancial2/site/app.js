@@ -184,8 +184,12 @@ function serverRequiredMessage(feature) {
 
 function enforceSingleFinancialTab() {
   const LOCK_KEY = "nr2_financial_tab_lock";
+  const TAKEOVER_KEY = "nr2:tab-takeover";
   const LEASE_TTL_MS = 12000;
   const HEARTBEAT_MS = 2000;
+  let heartbeatId = null;
+  let myLockId = null;
+  const tabChannel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("nr2_tab") : null;
 
   function nr2EpochCheckBroadcast() {
     if (NR2_WORKSTATION_ONLY) return;
@@ -193,9 +197,8 @@ function enforceSingleFinancialTab() {
       if (navigator.serviceWorker && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: "NR2_KILL_LEGACY" });
       }
-      if (window.BroadcastChannel) {
-        const bc = new BroadcastChannel("nr2_tab");
-        bc.postMessage({ action: "KILL_LEGACY", build: "hal-10082" });
+      if (tabChannel) {
+        tabChannel.postMessage({ action: "KILL_LEGACY", build: "hal-10082" });
       }
     }
   }
@@ -217,7 +220,19 @@ function enforceSingleFinancialTab() {
     if (cur && cur.id === id) localStorage.removeItem(LOCK_KEY);
   }
 
+  function stopHeartbeat() {
+    if (heartbeatId != null) {
+      clearInterval(heartbeatId);
+      heartbeatId = null;
+    }
+  }
+
   function canAcquire(myId) {
+    try {
+      if (sessionStorage.getItem(TAKEOVER_KEY)) return true;
+    } catch {
+      /* sessionStorage optional */
+    }
     const cur = readLock();
     if (!cur) return true;
     if (cur.id === myId) return true;
@@ -226,21 +241,36 @@ function enforceSingleFinancialTab() {
   }
 
   function showTabBlockedMessage() {
-    const app = document.getElementById("app") || document.body;
-    app.innerHTML =
-      '<div style="font-family:system-ui;padding:2rem;text-align:center;max-width:480px;margin:10vh auto;">' +
-      "<h2>NewRidge Financial is already open</h2>" +
-      "<p>This application can only run in one tab at a time to protect financial data.</p>" +
-      "<p>Return to the other tab, wait a few seconds, or use this tab instead.</p>" +
+    let layer = document.getElementById("nr2-tab-block");
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.id = "nr2-tab-block";
+      layer.setAttribute("role", "alertdialog");
+      layer.setAttribute("aria-modal", "true");
+      layer.style.cssText =
+        "position:fixed;inset:0;z-index:99999;background:#0a0a0c;color:#f0f0f2;display:flex;align-items:center;justify-content:center;padding:2rem;text-align:center";
+      document.body.appendChild(layer);
+    }
+    layer.innerHTML =
+      '<div style="font-family:system-ui;max-width:480px">' +
+      "<h2 style=\"margin:0 0 12px\">NewRidge Financial is already open</h2>" +
+      "<p style=\"margin:0 0 8px;color:#a3a3a3\">This application can only run in one tab at a time to protect financial data.</p>" +
+      "<p style=\"margin:0 0 8px;color:#a3a3a3\">Close other NR2 tabs, wait a few seconds, or use this tab instead.</p>" +
       '<p style="margin-top:1.25rem;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">' +
-      '<button type="button" id="nr2-tab-retry" style="padding:0.5rem 1rem;cursor:pointer">Try again</button>' +
-      '<button type="button" id="nr2-tab-takeover" style="padding:0.5rem 1rem;cursor:pointer">Use this tab</button>' +
+      '<button type="button" id="nr2-tab-retry" style="padding:0.5rem 1rem;cursor:pointer;background:#1f2937;color:#f0f0f2;border:1px solid #374151;border-radius:8px">Try again</button>' +
+      '<button type="button" id="nr2-tab-takeover" style="padding:0.5rem 1rem;cursor:pointer;background:#0891b2;color:#fff;border:none;border-radius:8px">Use this tab</button>' +
       "</p></div>";
     const retry = document.getElementById("nr2-tab-retry");
     const takeover = document.getElementById("nr2-tab-takeover");
     if (retry) retry.addEventListener("click", () => location.reload());
     if (takeover) {
       takeover.addEventListener("click", () => {
+        try {
+          sessionStorage.setItem(TAKEOVER_KEY, String(Date.now()));
+        } catch {
+          /* sessionStorage optional */
+        }
+        if (tabChannel) tabChannel.postMessage({ action: "TAB_RELEASE" });
         localStorage.removeItem(LOCK_KEY);
         location.reload();
       });
@@ -249,26 +279,46 @@ function enforceSingleFinancialTab() {
 
   function acquireTabLock() {
     const myId = `${performance.now().toFixed(0)}-${Math.random().toString(36).slice(2, 7)}`;
+    myLockId = myId;
+    let forcedTakeover = false;
+    try {
+      forcedTakeover = Boolean(sessionStorage.getItem(TAKEOVER_KEY));
+      if (forcedTakeover) sessionStorage.removeItem(TAKEOVER_KEY);
+    } catch {
+      forcedTakeover = false;
+    }
 
-    if (!canAcquire(myId)) {
+    if (!forcedTakeover && !canAcquire(myId)) {
       showTabBlockedMessage();
       return false;
     }
 
     writeLock(myId);
-    const heartbeat = window.setInterval(() => {
+    stopHeartbeat();
+    heartbeatId = window.setInterval(() => {
       writeLock(myId);
       nr2EpochCheckBroadcast();
     }, HEARTBEAT_MS);
     setInterval(nr2EpochCheckBroadcast, 6000);
     window.addEventListener("beforeunload", () => {
-      clearInterval(heartbeat);
+      stopHeartbeat();
       clearMyLock(myId);
     });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) return;
       writeLock(myId);
     });
+    if (tabChannel) {
+      tabChannel.onmessage = (event) => {
+        const action = event && event.data && event.data.action;
+        if (action !== "TAB_RELEASE" && action !== "KILL_LEGACY") return;
+        const cur = readLock();
+        if (cur && cur.id === myId) {
+          stopHeartbeat();
+          clearMyLock(myId);
+        }
+      };
+    }
     return true;
   }
 
@@ -1298,11 +1348,7 @@ function scheduleHalWidgetRefresh(snapshot, options) {
         !appPage.hidden &&
         PageViews &&
         PageViews.hasPage(currentId) &&
-        !(
-          (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
-          (typeof document !== "undefined" &&
-            document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed")
-        )
+        shouldRepaintStaffPageAfterFeed(currentId)
       ) {
         PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
         if (shouldRefreshHalReadiness(currentId) && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
@@ -4979,6 +5025,17 @@ function shouldRefreshHalReadiness(pageId) {
   return !staffMockEmbedNavHidden();
 }
 
+function shouldRepaintStaffPageAfterFeed(pageId) {
+  const MC =
+    (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome) ||
+    (typeof globalThis !== "undefined" && globalThis.MoonshotMockupChrome) ||
+    null;
+  if (MC && typeof MC.staffMockEmbedPage === "function") {
+    return !MC.staffMockEmbedPage(pageId);
+  }
+  return !staffMockEmbedNavHidden();
+}
+
 function staffMockEmbedNavHidden() {
   return (
     (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
@@ -5019,7 +5076,7 @@ function renderSidebar(activeId) {
   sidebar.removeAttribute("aria-hidden");
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Stale schema blocked. Reload with ?v=hal-10113&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Stale schema blocked. Reload with ?v=hal-10117&__nr2_purge=1</div>';
     return;
   }
   const MC =
@@ -5095,7 +5152,7 @@ function select(id, options) {
       appPage.hidden = false;
       if (PageViews && PageViews.hasPage(page.id)) {
         PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed, halProgramSnapshot);
-        if (shouldRefreshHalReadiness(currentId) && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
+        if (shouldRefreshHalReadiness(page.id) && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
           MoonshotMockupChrome.refreshHalReadinessStrip(page.id, halWidgetFeed);
         }
       } else if (window.UI && window.UI.ErrorState) {
@@ -5862,6 +5919,7 @@ async function boot() {
     return;
   }
   if (!NR2_WORKSTATION_ONLY) {
+    renderSidebar(resolvePageId(window.location.hash));
     openInitialStaffPage();
   }
   await loadPersistedState();
@@ -5910,14 +5968,19 @@ async function boot() {
         renderSchemaVersionMismatch(info.designSchemaVersion, expectedSchemaVersion);
         if (!NR2_WORKSTATION_ONLY) return;
       }
-      if (!NR2_WORKSTATION_ONLY) {
-        renderSidebar(window.location.hash.replace("#", "") || getPages()[0].id);
-      }
+    }
+    if (!NR2_WORKSTATION_ONLY) {
+      renderSidebar(window.location.hash.replace("#", "") || getPages()[0].id);
+      if (appPage && appPage.hidden) openInitialStaffPage();
     }
   } catch {
     if (NR2_WORKSTATION_ONLY) {
       renderWorkstationDesktopRequired("Could not connect to the NR2 Workstation desktop shell.");
       return;
+    }
+    if (!NR2_WORKSTATION_ONLY && appPage && appPage.hidden) {
+      renderSidebar(resolvePageId(window.location.hash));
+      openInitialStaffPage();
     }
   }
   try {
@@ -5934,7 +5997,6 @@ async function boot() {
   if (window.HalEmployee && typeof HalEmployee.ensureTargetLevel === "function") {
     HalEmployee.ensureTargetLevel(halModels, 7);
   }
-  openInitialStaffPage();
   const bootInitialPage = resolvePageId(window.location.hash);
   if (bootInitialPage === "hal" && appPage && typeof select === "function") {
     select("hal");
@@ -5976,6 +6038,9 @@ async function boot() {
   await refreshHalWidgetFeed().catch(() => {
     /* widget feed optional on boot */
   });
+  if (!NR2_WORKSTATION_ONLY) {
+    scheduleHalWidgetRefresh(undefined, { repaint: true });
+  }
   if (!skipAutonomousHal && window.HalProactive && typeof HalProactive.maybeFireMorningBriefingOnBoot === "function") {
     HalProactive.maybeFireMorningBriefingOnBoot(buildHalAgentCtx())
       .then((card) => {
@@ -6004,8 +6069,6 @@ async function boot() {
       /* boot self-heal optional */
     });
   }
-  const initial = NR2_WORKSTATION_ONLY ? "workstation" : resolvePageId(window.location.hash);
-  select(initial);
   if (typeof NR2Tier3 !== "undefined" && NR2Tier3.install) NR2Tier3.install();
   if (!NR2_WORKSTATION_ONLY) startHalHubDispatcher();
   if (NR2_WORKSTATION_ONLY) {
@@ -6025,6 +6088,9 @@ async function boot() {
         /* proactive cycle optional on boot */
       });
     });
+  }
+  if (!NR2_WORKSTATION_ONLY && appPage && appPage.hidden && !document.getElementById("nr2-tab-block")) {
+    openInitialStaffPage();
   }
   if (window.HalConsent && HalConsent.loadPending) {
     HalConsent.loadPending().catch(() => {});
@@ -6074,14 +6140,30 @@ if (typeof window !== "undefined") {
     invalidateProgramCaches("journal-queue-updated");
     scheduleHalWidgetRefresh();
   });
-  window.addEventListener("nr2:page-refresh-requested", () => {
+  window.addEventListener("nr2:page-refresh-requested", async () => {
     const currentId = (window.location.hash || "").replace("#", "") || getPages()[0].id;
+    if (!halProgramSnapshot || !halWidgetFeed) {
+      await refreshHalWidgetFeed().catch(() => {});
+    }
     if (currentId !== "hal" && appPage && !appPage.hidden && PageViews && PageViews.hasPage(currentId)) {
       PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
       if (shouldRefreshHalReadiness(currentId) && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
         MoonshotMockupChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
       }
     }
+  });
+  window.addEventListener("nr2-import-readiness-changed", () => {
+    const currentId = (window.location.hash || "").replace("#", "") || getPages()[0].id;
+    if (shouldRepaintStaffPageAfterFeed(currentId)) {
+      scheduleHalWidgetRefresh(undefined, { repaint: true });
+    }
+  });
+  window.addEventListener("nr2-import-sync-complete", () => {
+    invalidateProgramCaches("import-sync-complete");
+    if (typeof DesktopBridge !== "undefined" && DesktopBridge.getImportReadiness) {
+      DesktopBridge.getImportReadiness().catch(() => {});
+    }
+    scheduleHalWidgetRefresh(undefined, { repaint: true });
   });
   window.addEventListener("nr2:narratives-updated", () => {
     invalidateProgramCaches("narratives-updated");
@@ -6100,6 +6182,13 @@ DesktopBridge.whenReady(() => {
   if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return;
   if (window.__NR2_BLOCK_BOOT) return;
   boot();
+  if (!NR2_WORKSTATION_ONLY) {
+    window.setTimeout(() => {
+      if (appPage && appPage.hidden && !document.getElementById("nr2-tab-block")) {
+        openInitialStaffPage();
+      }
+    }, 3000);
+  }
 });
 
 // app.js — renderPageView tail hook (Moonshot: renderBody only; legacy DOM stubs retired)

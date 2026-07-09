@@ -144,14 +144,34 @@ def _request_browser_session_token() -> str | None:
 
 
 _import_overrides: dict[str, dict] = {}
+_readiness_cache: dict[str, Any] = {"payload": None, "syncCompletedAt": None, "cachedAt": 0.0}
+_READINESS_CACHE_TTL_SEC = 45.0
 
 
 def _get_import_readiness(*, operation: str | None = None) -> dict:
     from import_diagnostics import assess_import_readiness
+    import time
 
     with _sync_lock:
         sync_state = dict(_sync_state)
-    readiness = assess_import_readiness(sync_state=sync_state, operation=operation)
+    sync_completed_at = sync_state.get("completedAt")
+    now = time.time()
+    cached = _readiness_cache.get("payload")
+    cached_at = float(_readiness_cache.get("cachedAt") or 0.0)
+    cached_sync = _readiness_cache.get("syncCompletedAt")
+    if (
+        cached
+        and not operation
+        and cached_sync == sync_completed_at
+        and (now - cached_at) < _READINESS_CACHE_TTL_SEC
+    ):
+        readiness = dict(cached)
+    else:
+        readiness = assess_import_readiness(sync_state=sync_state, operation=operation)
+        if not operation:
+            _readiness_cache["payload"] = dict(readiness)
+            _readiness_cache["syncCompletedAt"] = sync_completed_at
+            _readiness_cache["cachedAt"] = now
     token = _request_browser_session_token() or _browser_session_token or ""
     override = _import_overrides.get(str(token))
     if override and float(override.get("expires") or 0) > datetime.now(timezone.utc).timestamp():

@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10113",
-  "assetVersion": "hal-10113",
-  "schemaVersion": "hal-10113",
+  "BUILD_ID": "hal-10122",
+  "assetVersion": "hal-10122",
+  "schemaVersion": "hal-10122",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial"],
-  "builtAt": "2026-07-09T13:45:00.000Z",
-  "notes": "hal-10113: Live-wire pilot — Financial uses MoonshotLayoutEngine; other staff pages stay mock-embed."
+  "builtAt": "2026-07-09T15:45:00.000Z",
+  "notes": "hal-10122: Fast cache-only import reads (~0.2s); KPI repaint after background sync completes."
 }
