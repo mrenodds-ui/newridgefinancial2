@@ -232,8 +232,10 @@ if (pilotMode) {
       buildManifest.liveWirePages.includes("financial") &&
       buildManifest.liveWirePages.includes("softdent") &&
       buildManifest.liveWirePages.includes("quickbooks") &&
-      buildManifest.liveWirePages.includes("ar"),
-    "live-wire-pilot must include financial, softdent, quickbooks, and ar in liveWirePages",
+      buildManifest.liveWirePages.includes("ar") &&
+      buildManifest.liveWirePages.includes("taxes") &&
+      buildManifest.liveWirePages.includes("claims"),
+    "live-wire-pilot must include financial, softdent, quickbooks, ar, taxes, and claims in liveWirePages",
   );
 } else {
   assert.ok(!indexHtml.includes("moonshot-page-layouts.js"), "index must not load layout manifest in mock-embed mode");

@@ -5,7 +5,7 @@
  * Moonshot stale-schema: emergencyPurgeAndReload + epoch manifest gate.
  */
 (function () {
-  const REQUIRED_BUILD = "hal-10127";
+  const REQUIRED_BUILD = "hal-10128";
   const REQUIRED_EPOCH = "moonshot-mockup";
   const errors = [];
 

@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10127",
-  "assetVersion": "hal-10127",
-  "schemaVersion": "hal-10127",
+  "BUILD_ID": "hal-10128",
+  "assetVersion": "hal-10128",
+  "schemaVersion": "hal-10128",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
-  "liveWirePages": ["financial", "softdent", "quickbooks", "ar"],
-  "builtAt": "2026-07-09T16:20:00.000Z",
-  "notes": "hal-10127: Expand live-wire pilot to QuickBooks and A/R."
+  "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims"],
+  "builtAt": "2026-07-09T16:25:00.000Z",
+  "notes": "hal-10128: Expand live-wire pilot to Taxes and Claims."
 }
