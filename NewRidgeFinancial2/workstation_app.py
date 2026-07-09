@@ -362,7 +362,8 @@ def main() -> int:
     WORKSTATION_WEBVIEW_DIR.mkdir(parents=True, exist_ok=True)
     default_port = 8766
     http_port = int(os.environ.get("NR2_WORKSTATION_PORT", str(default_port)))
-    hal_hub_url = os.environ.get("NR2_HAL_HUB_URL", "http://127.0.0.1:8765").strip()
+    # Financial HAL is TLS-by-default; workstation still serves plain HTTP on 8766 for pywebview.
+    hal_hub_url = os.environ.get("NR2_HAL_HUB_URL", "https://127.0.0.1:8765").strip()
     _start_background_services(api, hal_hub_url)
     print(
         f"NR2 workstation: schema={DESIGN_SCHEMA_VERSION} entry={INDEX_HTML} port={http_port}",

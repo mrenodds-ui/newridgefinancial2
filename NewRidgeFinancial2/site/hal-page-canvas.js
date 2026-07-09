@@ -305,11 +305,14 @@ const HalPageCanvas = (function () {
         <div class="session-col" data-panel="consent">
           ${H.cardHead("TRUST & CONSENT", "consent", "Staff consent policy", H.cardIconRaw("ui", "shield"))}
           <button type="button" class="checklist-active--btn" data-hal-cmd="Explain staff consent policy">${H.uiIcon("check")} CONSENT</button>
-          <ul class="checklist-list">${consentList}</ul>
-          <p class="session-note"><b>Executors (consent):</b></p>
-          <ul class="checklist-list">${outboundList}</ul>
           <p class="session-note session-note--compact"><b>Always local:</b> ${localAlways.length ? localAlways.map(H.esc).join(" · ") : "Open pages · Explain status"}</p>
           ${halInlineFirewallResult ? `<p class="session-note session-note--compact">${H.esc(halInlineFirewallResult.text || "")}</p>` : ""}
+          <details class="details-panel details-panel--compact">
+            <summary>Consent categories &amp; executors</summary>
+            <ul class="checklist-list">${consentList}</ul>
+            <p class="session-note"><b>Executors (consent):</b></p>
+            <ul class="checklist-list">${outboundList}</ul>
+          </details>
         </div>
         <div class="session-col" data-panel="status">
           ${H.cardHead("RECENT ACTIVITY", "status", "Session audit log", H.cardIconRaw("ui", "activity"))}
@@ -325,7 +328,7 @@ const HalPageCanvas = (function () {
             <button type="button" class="control-btn" data-hal-drawer="status"><span class="control-icon">${H.uiIcon("audit")}</span><strong>Audit</strong></button>
           </div>
           <p class="widget-footer widget-footer--compact">Registry: ${H.esc(stats.readyCount)} ready · ${H.esc(stats.blockedCount)} blocked · Last receipt: ${H.esc(lastReceiptText)}</p>
-          <details class="details-panel">
+          <details class="details-panel details-panel--compact">
             <summary>Runtime diagnostics</summary>
             ${hciHtml}
             ${aoHtml}

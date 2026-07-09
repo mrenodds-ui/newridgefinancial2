@@ -532,3 +532,90 @@
     animation: none !important;
   }
 }
+
+/* Moonshot denser HAL: wider right chat rail + smaller mosaic tiles */
+.app--moonshot-mockup .ms-page--hal .content-wrapper {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .content-wrapper > .dashboard-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .chat-rail {
+  width: 380px;
+  max-width: 40vw;
+  position: sticky;
+  top: 0;
+  align-self: stretch;
+  height: calc(100vh - 120px);
+  max-height: calc(100vh - 120px);
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .dashboard-grid {
+  gap: 8px;
+  padding: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-panel--widgets {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-mosaic-tile {
+  padding: 8px;
+  min-height: 84px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .metric-large {
+  font-size: 13px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .details-panel--compact {
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .details-panel--compact summary {
+  cursor: pointer;
+  color: var(--accent-cyan, #22d3ee);
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .checklist-list {
+  max-height: 64px;
+}
+
+/* Staff pages: compact widget density (Moonshot) */
+.app--moonshot-mockup .ms-page:not(.ms-page--hal) .widget-grid {
+  gap: 12px;
+}
+
+.app--moonshot-mockup .ms-page:not(.ms-page--hal) .widget-card {
+  padding: 12px 14px;
+}
+
+.app--moonshot-mockup .ms-page:not(.ms-page--hal) .kpi-large .kpi-value {
+  font-size: 28px;
+  margin: 4px 0;
+}
+
+.app--moonshot-mockup .ms-page:not(.ms-page--hal) .widget-header {
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+  .app--moonshot-mockup .ms-page--hal .content-wrapper {
+    flex-direction: column;
+  }
+
+  .app--moonshot-mockup .ms-page--hal .chat-rail {
+    width: 100%;
+    max-width: none;
+    height: 420px;
+    position: relative;
+  }
+}

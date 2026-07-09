@@ -1,5 +1,5 @@
 @echo off
-REM Start Program — NewRidgeFinancial 2.0 browser app (financial pages + HAL at http://127.0.0.1:8765/).
+REM Start Program — NewRidgeFinancial 2.0 browser app (financial pages + HAL at https://127.0.0.1:8765/).
 setlocal
 set "ROOT_DIR=%~dp0"
 cd /d "%ROOT_DIR%"

@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10169",
-  "assetVersion": "hal-10169",
-  "schemaVersion": "hal-10169",
+  "BUILD_ID": "hal-10170",
+  "assetVersion": "hal-10170",
+  "schemaVersion": "hal-10170",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -17,6 +17,6 @@
     "hal",
     "office-manager"
   ],
-  "builtAt": "2026-07-09T21:05:00Z",
-  "notes": "hal-10169: Moonshot extreme high-tech density + panel relayout (consult apply)."
+  "builtAt": "2026-07-09T22:10:00Z",
+  "notes": "hal-10170: Moonshot system/HAL redesign apply — denser HAL chat-right, demoted diagnostics, elite HAL widget trim, HTTPS docs."
 }
