@@ -222,32 +222,48 @@ def evaluate_dataset(
             "detail": detail,
         }
 
-    rows = dataset_payload.get("rows") or []
-    row_count = len(rows) if isinstance(rows, list) else 0
     modified_at = dataset_payload.get("modifiedAt")
     age_minutes = _age_minutes(str(modified_at) if modified_at else None)
-    validation = validate_rows_for_contract(contract, rows if isinstance(rows, list) else [])
-    required_failures = validation.get("requiredFieldFailures") or []
 
     upstream_file = None
     if upstream_roots is not None:
         filenames = tuple(contract.get("filenames") or ())
         upstream_file = _find_newest_upstream(upstream_roots, filenames)
 
-    status = STATUS_CONNECTED
-    detail = "Dataset loaded and required fields pass."
-    if age_minutes is not None and age_minutes > freshness_max:
-        status = STATUS_STALE
-        detail = f"Dataset is stale ({age_minutes} min old; max {freshness_max} min)."
-    elif required_failures:
-        status = STATUS_PARTIAL
-        detail = f"Dataset loaded but required fields missing: {', '.join(required_failures)}."
-    elif row_count == 0:
-        status = STATUS_PARTIAL
-        detail = "Dataset file present but contains no rows."
-    elif dataset_key == "softdent.dashboard" and row_count == 1 and status == STATUS_CONNECTED:
-        status = STATUS_PARTIAL
-        detail = "Current month only; prior month export missing for trend/YTD widgets."
+    # Operatory schedule is chair-shaped (operatoryChairs[]), not row-shaped.
+    # Match site/import-diagnostics.js so a loaded chair grid is CONNECTED.
+    if dataset_key == "softdent.operatory" or str(contract.get("bundleKey") or "") == "operatory":
+        chairs = dataset_payload.get("operatoryChairs")
+        row_count = len(chairs) if isinstance(chairs, list) else 0
+        required_failures: list[str] = [] if row_count else ["operatoryChairs"]
+        status = STATUS_CONNECTED
+        detail = "Operatory schedule export loaded."
+        if age_minutes is not None and age_minutes > freshness_max:
+            status = STATUS_STALE
+            detail = f"Operatory export is stale ({age_minutes} min old; max {freshness_max} min)."
+        elif not row_count:
+            status = STATUS_MISSING
+            detail = "operatory_schedule.json missing operatoryChairs array."
+    else:
+        rows = dataset_payload.get("rows") or []
+        row_count = len(rows) if isinstance(rows, list) else 0
+        validation = validate_rows_for_contract(contract, rows if isinstance(rows, list) else [])
+        required_failures = validation.get("requiredFieldFailures") or []
+
+        status = STATUS_CONNECTED
+        detail = "Dataset loaded and required fields pass."
+        if age_minutes is not None and age_minutes > freshness_max:
+            status = STATUS_STALE
+            detail = f"Dataset is stale ({age_minutes} min old; max {freshness_max} min)."
+        elif required_failures:
+            status = STATUS_PARTIAL
+            detail = f"Dataset loaded but required fields missing: {', '.join(required_failures)}."
+        elif row_count == 0:
+            status = STATUS_PARTIAL
+            detail = "Dataset file present but contains no rows."
+        elif dataset_key == "softdent.dashboard" and row_count == 1 and status == STATUS_CONNECTED:
+            status = STATUS_PARTIAL
+            detail = "Current month only; prior month export missing for trend/YTD widgets."
 
     if upstream_file and upstream_file.get("ageMinutes") is not None:
         upstream_age = int(upstream_file["ageMinutes"])

@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10142",
-  "assetVersion": "hal-10142",
-  "schemaVersion": "hal-10142",
+  "BUILD_ID": "hal-10143",
+  "assetVersion": "hal-10143",
+  "schemaVersion": "hal-10143",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T18:35:00.000Z",
-  "notes": "hal-10142: Fill remaining nullish SUCCESS-widget metrics with honest zeros and trailing-collections fallbacks."
+  "builtAt": "2026-07-09T16:32:33.000Z",
+  "notes": "hal-10143: Treat SoftDent operatory chair payloads as connected in import diagnostics."
 }

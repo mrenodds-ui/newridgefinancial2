@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 
-from import_diagnostics import STATUS_CONNECTED, STATUS_PARTIAL, evaluate_dataset
+from import_diagnostics import STATUS_CONNECTED, STATUS_MISSING, STATUS_PARTIAL, evaluate_dataset
 
 
 class ImportDiagnosticsChecksumTests(unittest.TestCase):
@@ -98,6 +98,49 @@ class ImportDiagnosticsChecksumTests(unittest.TestCase):
         item = evaluate_dataset("softdent.dashboard", contract, payload)
         self.assertEqual(item["status"], STATUS_PARTIAL)
         self.assertIn("bridge fallback", item["detail"].lower())
+
+    def test_operatory_chairs_payload_is_connected(self) -> None:
+        contract = {
+            "system": "softdent",
+            "bundleKey": "operatory",
+            "automated": True,
+            "severity": "optional",
+            "freshnessMaxMinutes": 1440,
+            "requiredFields": ["operatoryChairs"],
+        }
+        payload = {
+            "sourceFile": "operatory_schedule.json",
+            "modifiedAt": datetime.now(timezone.utc).isoformat(),
+            "sha256": "op-hash",
+            "operatoryChairs": [
+                {"name": "Room 1", "slots": [{"time": "07:00", "patient": "A", "procedure": "111000"}]},
+                {"name": "Room 2", "slots": []},
+            ],
+            "rows": [],
+        }
+        item = evaluate_dataset("softdent.operatory", contract, payload)
+        self.assertEqual(item["status"], STATUS_CONNECTED)
+        self.assertEqual(item["rowCount"], 2)
+        self.assertEqual(item["requiredFieldFailures"], [])
+
+    def test_operatory_missing_chairs_is_missing(self) -> None:
+        contract = {
+            "system": "softdent",
+            "bundleKey": "operatory",
+            "automated": True,
+            "severity": "optional",
+            "freshnessMaxMinutes": 1440,
+            "requiredFields": ["operatoryChairs"],
+        }
+        payload = {
+            "sourceFile": "operatory_schedule.json",
+            "modifiedAt": datetime.now(timezone.utc).isoformat(),
+            "operatoryChairs": [],
+            "rows": [],
+        }
+        item = evaluate_dataset("softdent.operatory", contract, payload)
+        self.assertEqual(item["status"], STATUS_MISSING)
+        self.assertEqual(item["requiredFieldFailures"], ["operatoryChairs"])
 
 
 if __name__ == "__main__":
