@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10159",
-  "assetVersion": "hal-10159",
-  "schemaVersion": "hal-10159",
+  "BUILD_ID": "hal-10160",
+  "assetVersion": "hal-10160",
+  "schemaVersion": "hal-10160",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -18,5 +18,5 @@
     "office-manager"
   ],
   "builtAt": "2026-07-09T17:55:00Z",
-  "notes": "hal-10159: Honest Provider Production / New Patients titles; empty A/R heatmap and empty claims/office kanban instead of fake boards."
+  "notes": "hal-10160: Stop inventing QB Balance Sheet cash from P&L and fake green all-clear alert ticker; trim decorative SoftDent filter chips."
 }

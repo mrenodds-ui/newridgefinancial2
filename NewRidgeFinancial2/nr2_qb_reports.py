@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -111,7 +112,18 @@ def _cached_report(report_type: str) -> dict[str, Any] | None:
 def balance_sheet_summary(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
     cached = _cached_report("balance_sheet")
     if cached:
-        return cached
+        # Scrub legacy P&L-derived cash/equity proxies from older cache payloads.
+        assets = [
+            row
+            for row in (cached.get("assets") or [])
+            if isinstance(row, dict) and "proxy" not in str(row.get("label") or "").lower()
+        ]
+        return {
+            **cached,
+            "assets": assets,
+            "equity": None,
+            "hasData": bool(assets),
+        }
     probe = load_probe_summary()
     qb = _bundle_qb(bundle)
     ar_rows = (qb.get("ar") or {}).get("rows") if isinstance(qb.get("ar"), dict) else qb.get("ar")
@@ -122,21 +134,35 @@ def balance_sheet_summary(*, bundle: dict[str, Any] | None = None) -> dict[str, 
                 ar_total += _parse_money(row.get("Balance") or row.get("balance") or row.get("Amount"))
     if ar_total <= 0:
         ar_total = _parse_money(probe.get("accounts_receivable"))
-    income = _parse_money(probe.get("total_income"))
-    expenses = _parse_money(probe.get("total_expenses"))
-    cash_proxy = max(0.0, income - expenses) if income and expenses else 0.0
-    assets = []
+    # Only verified A/R / balance-sheet lines — never invent cash from P&L income−expenses.
+    assets: list[dict[str, Any]] = []
     if ar_total > 0:
         assets.append({"label": "Accounts Receivable", "amount": round(ar_total, 2)})
-    if cash_proxy > 0:
-        assets.append({"label": "Cash & Deposits (proxy)", "amount": round(cash_proxy, 2)})
-    equity = round(income - expenses, 2) if income or expenses else None
+    bs = qb.get("balanceSheet") if isinstance(qb.get("balanceSheet"), dict) else None
+    bs_rows = []
+    if bs:
+        if isinstance(bs.get("rows"), list):
+            bs_rows = bs["rows"]
+        elif isinstance(bs.get("assets"), list):
+            bs_rows = bs["assets"]
+    elif isinstance(qb.get("balanceSheetAssets"), list):
+        bs_rows = qb["balanceSheetAssets"]
+    for row in bs_rows:
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get("label") or row.get("Account") or row.get("account") or row.get("Category") or "").strip()
+        amount = _parse_money(row.get("amount") or row.get("Amount") or row.get("Balance") or row.get("balance"))
+        if not label or amount <= 0:
+            continue
+        if re.search(r"accounts?\s*receivable|^a/?r$", label, re.I) and ar_total > 0:
+            continue
+        assets.append({"label": label, "amount": round(amount, 2)})
     return {
-        "hasData": bool(assets or equity is not None),
+        "hasData": bool(assets),
         "period": probe.get("period"),
         "assets": assets,
         "liabilities": [],
-        "equity": equity,
+        "equity": None,
         "source": "probe+import",
     }
 

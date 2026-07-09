@@ -460,11 +460,7 @@ const NR2Analytics = (function () {
       });
     }
     if (!alerts.length) {
-      alerts.push({
-        level: "ok",
-        text: "Cross-analytics within normal review thresholds for imported snapshot",
-        widgetKey: "nr2KpiRibbon",
-      });
+      return { items: [], hasData: false };
     }
     return { items: alerts.slice(0, 8), hasData: true };
   }

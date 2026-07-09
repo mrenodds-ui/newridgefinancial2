@@ -50,9 +50,27 @@ class Nr2QbReportsTests(unittest.TestCase):
         self.assertEqual(len(result["labels"]), 2)
 
     def test_balance_sheet_summary(self) -> None:
-        result = balance_sheet_summary(bundle=_sample_bundle())
+        with mock.patch("nr2_qb_reports._cached_report", return_value=None), mock.patch(
+            "nr2_qb_reports.load_probe_summary", return_value={}
+        ):
+            result = balance_sheet_summary(bundle=_sample_bundle())
         self.assertTrue(result["hasData"])
         self.assertGreater(len(result["assets"]), 0)
+        labels = [row["label"] for row in result["assets"]]
+        self.assertIn("Accounts Receivable", labels)
+        self.assertTrue(all("proxy" not in str(label).lower() for label in labels))
+        self.assertIsNone(result.get("equity"))
+
+    def test_balance_sheet_summary_no_ar_is_empty(self) -> None:
+        bundle = {"quickbooks": {"profitAndLoss": {"rows": [{"Period": "2026-06", "TotalIncome": 100, "TotalExpense": 40, "NetIncome": 60}]}}}
+        with mock.patch("nr2_qb_reports._cached_report", return_value=None), mock.patch(
+            "nr2_qb_reports.load_probe_summary", return_value={}
+        ):
+            result = balance_sheet_summary(bundle=bundle)
+        self.assertFalse(result["hasData"])
+        self.assertEqual(result["assets"], [])
+        self.assertIsNone(result.get("equity"))
+        self.assertTrue(all("Cash" not in str(row.get("label") or "") for row in result["assets"]))
 
     def test_ar_aging_from_import(self) -> None:
         result = ar_aging(bundle=_sample_bundle())

@@ -360,9 +360,7 @@ const HalPageCanvas = (function () {
     if (recon && String(recon.status || "").toUpperCase() === "DEGRADED") {
       alertItems.push({ text: recon.summary || "Production vs QuickBooks variance elevated", level: "warn" });
     }
-    while (alertItems.length < 3) {
-      alertItems.push({ text: "Cross-analytics within review thresholds", level: "ok" });
-    }
+    // Do not invent green "all clear" filler — only show real exceptions.
     const alertsHtml = alertItems
       .slice(0, 2)
       .map(

@@ -53,24 +53,33 @@ const NR2QbReports = (function () {
   }
 
   function balanceSheetSummary(snapshot) {
-    const monthly = monthlyRows(snapshot);
     const qb = qbSection(snapshot);
+    // Only verified balance-sheet / A/R lines — never invent cash from P&L income−expenses.
+    const assets = [];
     let arTotal = 0;
     const arRows = (qb.ar && qb.ar.rows) || [];
     arRows.forEach((row) => {
       arTotal += parseMoney(row.Balance || row.balance || row.Amount);
     });
-    const income = monthly.length ? monthly[monthly.length - 1].TotalIncome : parseMoney(qb.revenue);
-    const expenses = monthly.length ? monthly[monthly.length - 1].TotalExpense : parseMoney(qb.expenses);
-    const assets = [];
     if (arTotal > 0) assets.push({ label: "Accounts Receivable", amount: Math.round(arTotal) });
-    const cashProxy = Math.max(0, income - expenses);
-    if (cashProxy > 0) assets.push({ label: "Cash & Deposits (proxy)", amount: Math.round(cashProxy) });
+
+    const bsRows =
+      (qb.balanceSheet && (qb.balanceSheet.rows || qb.balanceSheet.assets)) ||
+      qb.balanceSheetAssets ||
+      [];
+    (Array.isArray(bsRows) ? bsRows : []).forEach((row) => {
+      const label = String(row.label || row.Account || row.account || row.Category || "").trim();
+      const amount = parseMoney(row.amount || row.Amount || row.Balance || row.balance);
+      if (!label || !(amount > 0)) return;
+      if (/accounts?\s*receivable|^a\/?r$/i.test(label) && arTotal > 0) return;
+      assets.push({ label, amount: Math.round(amount) });
+    });
+
     return {
       hasData: assets.length > 0,
       assets,
       liabilities: [],
-      equity: income || expenses ? Math.round(income - expenses) : null,
+      equity: null,
     };
   }
 

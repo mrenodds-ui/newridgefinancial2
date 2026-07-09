@@ -236,8 +236,10 @@ const MoonshotLayoutEngine = (function () {
         return [{ ...base, label: panel.title || "Production MTD", widgetKey: "careDeliveryPerformance" }];
       }
       if (panel.widgetKey === "softdentNewPatientsMTD") {
-        const np = D.softdentNewPatientsMtdData ? D.softdentNewPatientsMtdData() : { count: 0 };
-        return [{ label: panel.title || "New Patients", value: String(np.count ?? "—"), widgetKey: "softdentNewPatientsMTD" }];
+        const np = D.softdentNewPatientsMtdData ? D.softdentNewPatientsMtdData() : { count: 0, hasData: false };
+        const value = np.hasData ? String(np.count ?? "—") : "—";
+        const label = np.hasData && np.period ? `New Patients (${np.period})` : panel.title || "New Patients";
+        return [{ label, value, widgetKey: "softdentNewPatientsMTD" }];
       }
       if (panel.widgetKey === "caseAcceptance") {
         const base = all.find((k) => k.widgetKey === "caseAcceptance") || { value: "—", widgetKey: "caseAcceptance" };
@@ -283,11 +285,10 @@ const MoonshotLayoutEngine = (function () {
   const WIDGET_BODY = {
     nr2AlertTicker(D, H) {
       const alerts = D && D.nr2AlertTicker ? D.nr2AlertTicker() : { items: [] };
-      const items =
-        alerts.items && alerts.items.length
-          ? alerts.items
-          : [{ level: "ok", text: "Load imports to evaluate cross-analytics exception thresholds.", widgetKey: "nr2AlertTicker" }];
-      return H.canvasAlertTicker(items);
+      if (alerts.items && alerts.items.length) {
+        return H.canvasAlertTicker(alerts.items);
+      }
+      return H.canvasEmpty("No cross-analytics exceptions for the imported snapshot — thresholds evaluate SoftDent vs QuickBooks variance, collection lag, and A/R 90+.");
     },
     nr2MonthlyTrendCombo(D, H) {
       const combo = D && D.nr2MonthlyTrendCombo ? D.nr2MonthlyTrendCombo() : {};
@@ -650,7 +651,7 @@ const MoonshotLayoutEngine = (function () {
             (bs.assets || []).map((row) => [row.label, `$${Math.round(row.amount).toLocaleString()}`]),
             true,
           )
-        : H.canvasEmpty("Balance sheet summary appears when QuickBooks imports are loaded.");
+        : H.canvasEmpty("Balance sheet summary appears when QuickBooks A/R or balance-sheet export is loaded — P&L alone is not used as cash.");
     },
     quickbooksCashFlowTrend(D, H) {
       const cf = D && D.quickbooksCashFlowTrend ? D.quickbooksCashFlowTrend() : { labels: [], net: [] };

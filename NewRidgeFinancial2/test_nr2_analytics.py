@@ -161,8 +161,14 @@ class Nr2AnalyticsTests(unittest.TestCase):
 
     def test_alert_ticker(self) -> None:
         result = alert_ticker(bundle=_sample_bundle())
-        self.assertTrue(result["hasData"])
-        self.assertGreaterEqual(len(result["items"]), 1)
+        self.assertIn("items", result)
+        self.assertIn("hasData", result)
+        # Never invent a green "all clear" filler when no thresholds fire.
+        self.assertTrue(all("within normal review" not in str(item.get("text") or "").lower() for item in result["items"]))
+        if result["items"]:
+            self.assertTrue(result["hasData"])
+        else:
+            self.assertFalse(result["hasData"])
 
     def test_provider_compensation(self) -> None:
         result = provider_compensation(bundle=_sample_bundle())

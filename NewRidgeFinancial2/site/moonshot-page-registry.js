@@ -2,7 +2,7 @@
  * Moonshot page registry — nav metadata + panel layouts from moonshot-page-layouts.js.
  */
 const MoonshotPageRegistry = (function () {
-  const SCHEMA_VERSION = "hal-10159";
+  const SCHEMA_VERSION = "hal-10160";
   const LAYOUT_EPOCH = "moonshot-mockup";
 
   const PRACTICE = {
@@ -81,7 +81,7 @@ const MoonshotPageRegistry = (function () {
       label: "SoftDent",
       subtitle: "Care Delivery & Practice Velocity · New Ridge Family Dental",
       accent: "green",
-      filters: ["Today", "This Week", "MTD", "QTD", "All Providers"],
+      filters: ["All Providers"],
       commands: ["Review A/R aging", "Open new patient summary", "Explain case acceptance"],
       safety: "Read-only · HAL reads SoftDent only",
       widgets: [

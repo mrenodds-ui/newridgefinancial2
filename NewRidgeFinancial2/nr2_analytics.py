@@ -645,13 +645,7 @@ def alert_ticker(*, bundle: dict[str, Any] | None = None) -> dict[str, Any]:
                 }
             )
     if not alerts:
-        alerts.append(
-            {
-                "level": "ok",
-                "text": "Cross-analytics within normal review thresholds for imported snapshot",
-                "widgetKey": "nr2KpiRibbon",
-            }
-        )
+        return {"items": [], "hasData": False}
     return {"items": alerts[:8], "hasData": True}
 
 
