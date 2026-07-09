@@ -163,9 +163,19 @@ const PageCanvasData = (function () {
   function verifiedArWidgetReady(key) {
     const w = widget(key);
     const status = String((w && w.status) || "").toUpperCase();
-    // SoftDent A/R widgets stay DEGRADED when collections export is pending, but
-    // aging/responsibility panels still have verified A/R rows to render.
-    return status === "SUCCESS" || status === "DEGRADED";
+    if (status === "SUCCESS") return true;
+    if (status !== "DEGRADED") return false;
+    // SoftDent can stay DEGRADED while collections are pending, but still have
+    // verified A/R metrics. Policy-nullified metrics mean the source is withheld.
+    const m = (w && w.metrics) || {};
+    const present = (value) => value != null && value !== "" && value !== "—";
+    if (key === "softdentArAging") return present(m.totalAr) || present(m.currentBucket);
+    if (key === "softdentResponsibility") {
+      return present(m.insuranceAmount) || present(m.patientAmount);
+    }
+    if (key === "arAgingAndCollections") return present(m.totalOutstanding);
+    if (key === "arOutstandingClaims") return present(m.topClaimOutstanding) || present(m.openClaimCount);
+    return true;
   }
 
   function periodSubtitle() {
@@ -1767,13 +1777,12 @@ const PageCanvasData = (function () {
 
   function journalRows() {
     const m = metrics("journalPostingQueue");
-    if (m.queueCount && m.queueCount !== "—") {
-      return [
-        ["Pending review", fmt(m.pendingReview), "Journal queue", "Local"],
-        ["Ready to export", fmt(m.readyToExport), "Journal queue", "Local"],
-      ];
-    }
-    return [];
+    const count = Number(String(m.queueCount || "").replace(/[^\d.-]/g, ""));
+    if (!Number.isFinite(count) || count <= 0) return [];
+    return [
+      ["Pending review", fmt(m.pendingReview), "Journal queue", "Local"],
+      ["Ready to export", fmt(m.readyToExport), "Journal queue", "Local"],
+    ];
   }
 
   function journalQueueItems() {

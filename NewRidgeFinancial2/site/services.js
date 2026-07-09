@@ -214,8 +214,25 @@ const Services = (function () {
 
   async function fetchLoopbackJson(path) {
     if (typeof fetch !== "function" || !isLoopbackHost()) return null;
+    const br = bridge();
+    if (br && typeof br.loopbackJson === "function") {
+      try {
+        return await br.loopbackJson(path);
+      } catch {
+        /* fall through to plain fetch */
+      }
+    }
     try {
-      const response = await fetch(path, { cache: "no-store" });
+      const headers = {};
+      try {
+        const token = sessionStorage.getItem("nr2SessionToken") || sessionStorage.getItem("nr2-loopback-token");
+        if (token) headers["X-NR2-Session-Token"] = token;
+        const tabId = sessionStorage.getItem("nr2TabId");
+        if (tabId) headers["X-NR2-Tab-ID"] = tabId;
+      } catch {
+        /* ignore storage */
+      }
+      const response = await fetch(path, { cache: "no-store", headers });
       if (!response.ok) return null;
       return await response.json();
     } catch {
@@ -342,11 +359,29 @@ const Services = (function () {
   }
 
   async function readJournalPostingQueue() {
+    const emptyAvailable = () => ({
+      items: [],
+      metrics: { pendingReview: 0, approved: 0, rejected: 0, total: 0 },
+      unavailable: false,
+    });
     const br = bridge();
     if (br && typeof br.listPostingQueue === "function") {
       try {
         const result = await br.listPostingQueue({ limit: 20 });
-        if (result && (result.items || []).length) return result;
+        if (result && result.unavailable !== true) {
+          const items = Array.isArray(result.items) ? result.items : [];
+          const metrics = result.metrics || {};
+          return {
+            items,
+            metrics: {
+              pendingReview: Number(metrics.pendingReview || 0),
+              approved: Number(metrics.approved || 0),
+              rejected: Number(metrics.rejected || 0),
+              total: Number(metrics.total != null ? metrics.total : items.length),
+            },
+            unavailable: false,
+          };
+        }
       } catch {
         /* fall through */
       }
@@ -354,12 +389,34 @@ const Services = (function () {
     const apiResult =
       (await fetchLoopbackJson("/api/financial/post-queue")) ||
       (await fetchLoopbackJson("/api/posting-queue"));
-    if (apiResult && (apiResult.items || []).length) return apiResult;
+    if (apiResult && apiResult.unavailable !== true) {
+      const items = Array.isArray(apiResult.items) ? apiResult.items : [];
+      const metrics = apiResult.metrics || {};
+      return {
+        items,
+        metrics: {
+          pendingReview: Number(metrics.pendingReview || 0),
+          approved: Number(metrics.approved || 0),
+          rejected: Number(metrics.rejected || 0),
+          total: Number(metrics.total != null ? metrics.total : items.length),
+        },
+        unavailable: false,
+      };
+    }
     if (isNode) {
       const sqliteResult = readJournalPostingQueueFromSqlite();
-      if (sqliteResult && (sqliteResult.items || []).length) return sqliteResult;
+      if (sqliteResult && sqliteResult.unavailable !== true) {
+        const items = Array.isArray(sqliteResult.items) ? sqliteResult.items : [];
+        if (items.length || sqliteResult.metrics) {
+          return {
+            items,
+            metrics: sqliteResult.metrics || emptyAvailable().metrics,
+            unavailable: false,
+          };
+        }
+      }
     }
-    return { items: [], metrics: { pendingReview: 0, approved: 0, rejected: 0, total: 0 }, unavailable: true };
+    return { ...emptyAvailable(), unavailable: true };
   }
 
   function readJournalPostingQueueFromSqlite() {

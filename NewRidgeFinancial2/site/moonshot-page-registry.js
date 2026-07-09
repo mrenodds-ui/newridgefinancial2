@@ -2,7 +2,7 @@
  * Moonshot page registry — nav metadata + panel layouts from moonshot-page-layouts.js.
  */
 const MoonshotPageRegistry = (function () {
-  const SCHEMA_VERSION = "hal-10138";
+  const SCHEMA_VERSION = "hal-10139";
   const LAYOUT_EPOCH = "moonshot-mockup";
 
   const PRACTICE = {
@@ -417,6 +417,7 @@ if (typeof window !== "undefined") {
   delete window.PageSchemaLegacy;
   delete window.HalPageSchema;
 }
+
 
 
 

@@ -1077,9 +1077,16 @@ const PageCanvas = (function () {
     }
     const body = items
       .map((entry) => {
-        const id = esc(entry.id || entry.entryId || "");
+        const id = esc(entry.queueId || entry.id || entry.entryId || "");
         const status = String(entry.status || "unknown");
         const pending = /pending/i.test(status);
+        const amount =
+          entry.amount != null && entry.amount !== ""
+            ? typeof entry.amount === "number"
+              ? `$${Number(entry.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              : entry.amount
+            : "—";
+        const period = entry.accountingPeriod || entry.period || entry.transactionDate || entry.createdAt || "—";
         const actions = pending
           ? `<div class="journal-actions">
               <button type="button" class="action-btn action-btn--sm" data-journal-review="${id}" data-journal-action="approve">Approve</button>
@@ -1087,10 +1094,10 @@ const PageCanvas = (function () {
             </div>`
           : `<span class="text-muted">${esc(status)}</span>`;
         return `<tr>
-          <td>${esc(entry.title || entry.description || entry.memo || entry.id || "Entry")}</td>
-          <td>${esc(entry.amount != null ? entry.amount : "—")}</td>
-          <td>${esc(entry.category || entry.account || "Journal")}</td>
-          <td>${esc(entry.period || entry.createdAt || "—")}</td>
+          <td>${esc(entry.title || entry.description || entry.memo || entry.queueId || entry.id || "Entry")}</td>
+          <td>${esc(amount)}</td>
+          <td>${esc(entry.category || entry.transactionType || entry.account || "Journal")}</td>
+          <td>${esc(period)}</td>
           <td>${actions}</td>
         </tr>`;
       })

@@ -271,6 +271,9 @@ FINANCIAL_READ_EXEMPT = frozenset(
         "/api/settings/cloud-hal",
         "/api/health",
         "/api/ocr-exceptions",
+        # Local SQLite posting queue is readable during import sync; writes stay gated.
+        "/api/posting-queue",
+        "/api/financial/post-queue",
     }
 )
 
@@ -279,11 +282,7 @@ def financial_read_path(path: str) -> bool:
     p = path or ""
     if p in FINANCIAL_READ_EXEMPT:
         return False
-    if p == "/api/posting-queue" and bottle.request.method == "GET":
-        return True
-    if p == "/api/financial/post-queue" and bottle.request.method == "GET":
-        return True
-    return any(p == prefix or p.startswith(prefix + "/") for prefix in FINANCIAL_READ_PREFIXES if prefix not in ("/api/posting-queue", "/api/financial/post-queue"))
+    return any(p == prefix or p.startswith(prefix + "/") for prefix in FINANCIAL_READ_PREFIXES)
 
 
 def classify_financial_query(query: str) -> bool:

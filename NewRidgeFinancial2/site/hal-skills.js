@@ -2269,7 +2269,20 @@ const HalSkills = (function () {
     const libraryStatus = libraryDocCount > 0 ? "SUCCESS" : docsQueueCount > 0 ? "DEGRADED" : "FAILED";
     const journalQueue = snap.journalPostingQueue || {};
     const journalItems = Array.isArray(journalQueue.items) ? journalQueue.items : [];
-    const journalStatus = journalItems.length > 0 ? "SUCCESS" : docsDataReady ? "DEGRADED" : journalQueue.unavailable ? "DEGRADED" : "FAILED";
+    const journalMetrics = journalQueue.metrics || {};
+    const journalAvailable = journalQueue.unavailable !== true;
+    const journalStatus = journalItems.length > 0
+      ? "SUCCESS"
+      : journalAvailable
+        ? "SUCCESS"
+        : docsDataReady
+          ? "DEGRADED"
+          : "FAILED";
+    const journalSummary = !journalAvailable
+      ? "Local SQLite journal posting queue for reviewed accruals. Requires NR2 server on loopback (Start Program)."
+      : journalItems.length
+        ? `${journalItems.length} local posting-queue entr${journalItems.length === 1 ? "y" : "ies"} ready for staff review or export.`
+        : "Journal posting queue is online and empty — reviewed accruals appear here when staff stages them for export.";
 
     const widgets = {
       practiceFinancialOverview: overviewWidget || {
@@ -2667,12 +2680,20 @@ const HalSkills = (function () {
         key: "journalPostingQueue",
         title: "Journal Posting Queue",
         status: journalStatus,
-        summary: "Local SQLite journal posting queue for reviewed accruals. Requires NR2 server on loopback (Start Program).",
+        summary: journalSummary,
         navTarget: WIDGET_NAV.journalPostingQueue,
         metrics: {
-          queueCount: metricValue(journalItems.length || journalQueue.metrics?.pending || null),
-          pendingReview: metricValue(journalQueue.metrics?.pending),
-          readyToExport: metricValue(journalQueue.metrics?.ready),
+          queueCount: metricValue(
+            journalItems.length ||
+              journalMetrics.total ||
+              (journalAvailable ? 0 : null),
+          ),
+          pendingReview: metricValue(
+            journalMetrics.pendingReview != null ? journalMetrics.pendingReview : journalAvailable ? 0 : null,
+          ),
+          readyToExport: metricValue(
+            journalMetrics.approved != null ? journalMetrics.approved : journalAvailable ? 0 : null,
+          ),
         },
       },
       smartClaimsAndReceivables: {

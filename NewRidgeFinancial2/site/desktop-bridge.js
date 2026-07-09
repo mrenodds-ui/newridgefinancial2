@@ -609,10 +609,22 @@ const DesktopBridge = (function () {
     if (hasLoopbackApi()) {
       try {
         return await loopbackJson("/api/financial/post-queue");
-      } catch {
+      } catch (err) {
         try {
           return await loopbackJson("/api/posting-queue");
-        } catch {
+        } catch (err2) {
+          const status = Number((err2 && err2.status) || (err && err.status) || 0);
+          // Import-readiness 403 means the server is up but temporarily gated —
+          // treat as an available empty queue so live-wire does not say "unavailable".
+          if (status === 403 || status === 409) {
+            return {
+              items: [],
+              metrics: { pendingReview: 0, approved: 0, rejected: 0, total: 0 },
+              unavailable: false,
+              gated: true,
+              gateStatus: status,
+            };
+          }
           return { items: [], metrics: { pendingReview: 0, approved: 0, rejected: 0, total: 0 }, unavailable: true };
         }
       }
@@ -1236,6 +1248,22 @@ const DesktopBridge = (function () {
     return { items: [], count: 0, text: "" };
   }
 
+  async function lookupFeeSchedule(query, limit) {
+    if (hasDesktopApi() && window.pywebview.api.lookup_fee_schedule) {
+      return window.pywebview.api.lookup_fee_schedule(String(query || ""), Number(limit || 3));
+    }
+    if (hasLoopbackApi()) {
+      try {
+        const q = encodeURIComponent(String(query || ""));
+        const lim = Number(limit || 3);
+        return await loopbackJson(`/api/fee-schedule?q=${q}&limit=${lim}`);
+      } catch {
+        return { items: [], count: 0, text: "" };
+      }
+    }
+    return { items: [], count: 0, text: "" };
+  }
+
   async function listEligibilityCache(limit) {
     if (hasDesktopApi() && window.pywebview.api.list_eligibility_cache) {
       return window.pywebview.api.list_eligibility_cache(Number(limit || 20));
@@ -1499,6 +1527,7 @@ const DesktopBridge = (function () {
     showWorkstationMainWindow,
     searchHalMemories,
     searchPayerReference,
+    lookupFeeSchedule,
     listEligibilityCache,
     upsertEligibilityCache,
     searchEligibilityCache,
