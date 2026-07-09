@@ -1739,6 +1739,30 @@ const HalAgent = (function () {
         };
       },
     },
+    search_dental_carrier_catalog: {
+      label: "Search US dental carrier catalog (carriers + plan families)",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.searchDentalCarrierCatalog !== "function") {
+          return { ok: false, summary: "Dental carrier catalog search requires the NR2 server." };
+        }
+        const payload = await bridge.searchDentalCarrierCatalog(
+          String(args.query || args.carrier || args.payer || ""),
+          8
+        );
+        const text = payload && payload.text ? String(payload.text) : "No carrier catalog matches.";
+        return {
+          ok: !!(payload && payload.count),
+          summary: text.slice(0, 3000) || "No carrier catalog matches.",
+          count: payload && payload.count ? payload.count : 0,
+        };
+      },
+    },
     lookup_fee_schedule: {
       label: "Look up office fee schedule amounts by CDT / carrier",
       run: async (ctx, args) => {
@@ -2350,6 +2374,14 @@ const HalAgent = (function () {
           add.push("search_hal_memories");
         }
         if (
+          /\b(dental\s*carrier\s*catalog|us\s*dental\s*(carriers?|insurers?)|plan\s*families|carriers?\s*offered)\b/i.test(
+            query
+          ) &&
+          !had.has("search_dental_carrier_catalog")
+        ) {
+          add.push("search_dental_carrier_catalog");
+        }
+        if (
           /\bD\d{4}\b/i.test(query) ||
           /\b(fee\s*schedule|allowed|co-?45|underpay|practice\s*amount|ucr)\b/i.test(query)
         ) {
@@ -2604,6 +2636,15 @@ const HalAgent = (function () {
       gather.push("search_payer_reference");
     }
     if (
+      /\b(dental\s*carrier\s*catalog|us\s*dental\s*(carriers?|insurers?)|plan\s*families|what\s*plans\s*(does|do)|carriers?\s*offered|insurance\s*companies\s*list)\b/i.test(
+        query
+      ) ||
+      (/\b(carrier|insurer|insurance\s*compan(?:y|ies))\b/i.test(query) &&
+        /\b(plan|policy|policies|ppo|dhmo|marketplace|individual)\b/i.test(query))
+    ) {
+      gather.push("search_dental_carrier_catalog");
+    }
+    if (
       /\bD\d{4}\b/i.test(query) ||
       /\b(fee\s*schedule|allowed\s*amount|allowed\s*fee|contracted\s*fee|practice\s*amount|co-?45|underpay(?:ment)?)\b/i.test(
         query
@@ -2741,6 +2782,15 @@ const HalAgent = (function () {
         /\b(phone|fee|allowed|insurance|elig)\b/i.test(query))
     ) {
       tools.push("search_payer_reference");
+    }
+    if (
+      /\b(dental\s*carrier\s*catalog|us\s*dental\s*(carriers?|insurers?)|plan\s*families|carriers?\s*offered)\b/i.test(
+        query
+      ) ||
+      (/\b(carrier|insurer|insurance\s*compan(?:y|ies))\b/i.test(query) &&
+        /\b(plan|policy|policies|ppo|dhmo|marketplace)\b/i.test(query))
+    ) {
+      tools.push("search_dental_carrier_catalog");
     }
     if (
       /\bD\d{4}\b/i.test(query) ||

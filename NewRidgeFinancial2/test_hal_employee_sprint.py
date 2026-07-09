@@ -795,5 +795,25 @@ class CollectionLetterTests(unittest.TestCase):
         self.assertIn("Dear Jane Doe", result["letter"])
 
 
+class UsDentalCarrierCatalogTests(unittest.TestCase):
+    def test_catalog_summary_and_search(self) -> None:
+        from us_dental_carrier_catalog import catalog_summary, format_carrier_hits, search_carriers
+
+        summary = catalog_summary()
+        self.assertTrue(summary["ok"])
+        self.assertGreaterEqual(summary["carrierCount"], 30)
+        self.assertGreaterEqual(summary["planFamilyCount"], 80)
+
+        hits = search_carriers("Guardian Advantage Premier", limit=3)
+        self.assertTrue(hits)
+        self.assertTrue(any("guardian" in str(h.get("id") or "").lower() for h in hits))
+        text = format_carrier_hits(hits)
+        self.assertIn("plan families", text.lower())
+
+        ks = search_carriers("Kansas Delta Dental", limit=3)
+        self.assertTrue(ks)
+        self.assertTrue(any(h.get("id") == "delta-dental" for h in ks))
+
+
 if __name__ == "__main__":
     unittest.main()

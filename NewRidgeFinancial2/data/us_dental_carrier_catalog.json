@@ -1,0 +1,603 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-09T18:30:00Z",
+  "sourceNote": "Curated US dental carrier + plan-family catalog from public industry sources (Mark Farrah/NAIC YE2023, GAO dental market notes, Delta Dental member-company list, carrier product pages, dentalinsurance.com marketplace). Not member-specific benefits. Not a complete NAIC filing dump (~143 fully insured dental carriers YE2023). Verify eligibility via 270/271 or clearinghouse; confirm payer ID on card. Prefer SoftDent InsCo / payer_reference for office routing.",
+  "marketNotes": {
+    "fullyInsuredLivesYe2023": 97600000,
+    "fullyInsuredCarrierCountYe2023": 143,
+    "topFiveNationalSharePct": "<45",
+    "specialtyVsMedicalMix": "Specialty dental carriers ~67%; medical carriers with dental ~33% (MFA YE2023)",
+    "stateConcentration": "Top-3 dental insurers per state often 38–98% of group enrollment (GAO/NAIC 2024)"
+  },
+  "carriers": [
+    {
+      "id": "delta-dental",
+      "name": "Delta Dental Plans Association",
+      "aliases": ["delta", "delta dental", "ddpa", "dentegra"],
+      "tier": "national_system",
+      "channels": ["group", "individual", "medicare_advantage", "medicaid_admin"],
+      "planTypes": ["ppo", "premier", "dhmo", "discount"],
+      "planFamilies": [
+        "Delta Dental PPO",
+        "Delta Dental Premier",
+        "Delta Dental PPO Plus Premier",
+        "DeltaCare USA",
+        "Delta Dental Patient Direct",
+        "Dental for Everyone Immediate Coverage",
+        "Dental for Everyone No Wait",
+        "Dental for Everyone Gold",
+        "Dental for Everyone Platinum",
+        "Medicare Advantage dental (state/entity specific)"
+      ],
+      "notes": "39 independent member companies; largest US dental network. State entity on ID card drives payer ID.",
+      "memberCompanies": [
+        {"name": "Delta Dental Insurance Company", "states": ["AL", "FL", "GA", "LA", "MS", "MT", "NV", "TX", "UT"]},
+        {"name": "Delta Dental of Arizona, Inc.", "states": ["AZ"]},
+        {"name": "Delta Dental of Arkansas, Inc.", "states": ["AR"]},
+        {"name": "Delta Dental of California", "states": ["CA"]},
+        {"name": "Delta Dental of Colorado", "states": ["CO"]},
+        {"name": "Delta Dental of Delaware", "states": ["DE"]},
+        {"name": "Delta Dental of Idaho", "states": ["ID"]},
+        {"name": "Delta Dental of Illinois", "states": ["IL"]},
+        {"name": "Delta Dental of Indiana, Inc.", "states": ["IN"]},
+        {"name": "Delta Dental of Iowa", "states": ["IA"]},
+        {"name": "Delta Dental of Kansas, Inc.", "states": ["KS"]},
+        {"name": "Delta Dental of Kentucky, Inc.", "states": ["KY"]},
+        {"name": "Delta Dental of Massachusetts, Inc.", "states": ["MA"]},
+        {"name": "Delta Dental of Michigan, Inc.", "states": ["MI"]},
+        {"name": "Delta Dental of Minnesota", "states": ["MN", "ND"]},
+        {"name": "Delta Dental of Missouri", "states": ["MO"]},
+        {"name": "Delta Dental of Nebraska", "states": ["NE"]},
+        {"name": "Delta Dental of New Jersey", "states": ["NJ", "CT"]},
+        {"name": "Delta Dental of New Mexico, Inc.", "states": ["NM"]},
+        {"name": "Delta Dental of New York", "states": ["NY"]},
+        {"name": "Delta Dental of North Carolina", "states": ["NC"]},
+        {"name": "Delta Dental of Ohio", "states": ["OH"]},
+        {"name": "Delta Dental of Oklahoma", "states": ["OK"]},
+        {"name": "Delta Dental of Oregon", "states": ["OR", "AK"]},
+        {"name": "Delta Dental of Pennsylvania", "states": ["PA", "MD"]},
+        {"name": "Delta Dental of Puerto Rico", "states": ["PR"]},
+        {"name": "Delta Dental of Rhode Island", "states": ["RI"]},
+        {"name": "Delta Dental of South Dakota", "states": ["SD"]},
+        {"name": "Delta Dental of Tennessee, Inc.", "states": ["TN"]},
+        {"name": "Delta Dental of the District of Columbia", "states": ["DC"]},
+        {"name": "Delta Dental of Virginia", "states": ["VA"]},
+        {"name": "Delta Dental of Washington", "states": ["WA"]},
+        {"name": "Delta Dental of West Virginia", "states": ["WV"]},
+        {"name": "Delta Dental of Wisconsin", "states": ["WI"]},
+        {"name": "Delta Dental of Wyoming", "states": ["WY"]},
+        {"name": "Delta Dental Plan of Maine", "states": ["ME"]},
+        {"name": "Delta Dental Plan of New Hampshire", "states": ["NH"]},
+        {"name": "Delta Dental Plan of Vermont", "states": ["VT"]},
+        {"name": "Hawaii Dental Service", "states": ["HI"]}
+      ],
+      "website": "https://www.deltadental.com/"
+    },
+    {
+      "id": "dentegra",
+      "name": "Dentegra Insurance Company",
+      "aliases": ["dentegra"],
+      "tier": "national",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo", "indemnity"],
+      "planFamilies": ["Dentegra underwritten Delta individual/group products (state-specific forms)"],
+      "notes": "Leading fully insured dental parent by MFA YE2023 (~10.9M lives); affiliated with Delta system.",
+      "website": "https://www.deltadental.com/"
+    },
+    {
+      "id": "metlife",
+      "name": "MetLife Dental",
+      "aliases": ["metlife", "met life", "metropolitan life", "safeguard"],
+      "tier": "national",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo", "hmo", "indemnity"],
+      "planFamilies": [
+        "Preferred Dentist Program (PDP)",
+        "TakeAlong Dental High",
+        "TakeAlong Dental Medium",
+        "TakeAlong Dental Low",
+        "TakeAlong Dental HMO-Managed Care 245",
+        "TakeAlong Dental HMO-Managed Care 350",
+        "NCD Essentials by MetLife",
+        "NCD Complete by MetLife",
+        "NCD Elite 3000 by MetLife",
+        "NCD Elite 5000 by MetLife",
+        "Safeguard Health Plans (subsidiary)"
+      ],
+      "notes": "~9.5M fully insured dental members YE2023 (MFA); subsidiaries include Metropolitan Life, Delaware American Life, Safeguard.",
+      "website": "https://www.metlife.com/dental-insurance/"
+    },
+    {
+      "id": "unitedhealthcare",
+      "name": "UnitedHealthcare Dental",
+      "aliases": ["uhc", "united healthcare", "unitedhealthcare", "dbp", "golden rule", "all savers", "mcna"],
+      "tier": "national",
+      "channels": ["group", "individual", "medicare_advantage", "medicaid"],
+      "planTypes": ["ppo", "dhmo"],
+      "planFamilies": [
+        "UnitedHealthcare Options PPO (500 / 1000 / 2000 / 3000 and Plus variants)",
+        "UnitedHealthcare Dental DHMO",
+        "Golden Rule individual dental",
+        "All Savers dental",
+        "MCNA Dental (acquired book)",
+        "Medicare Advantage dental riders"
+      ],
+      "notes": "Grew via MCNA and other dental acquisitions; Dental Benefit Providers (DBP) often administers.",
+      "website": "https://www.uhc.com/"
+    },
+    {
+      "id": "aetna",
+      "name": "Aetna Dental",
+      "aliases": ["aetna", "aetna dental direct", "cvs aetna"],
+      "tier": "national",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo", "dmo"],
+      "planFamilies": [
+        "Aetna Dental Direct Preferred PPO",
+        "Aetna Dental Direct Preferred 2000 PPO",
+        "Aetna Dental Direct Core PPO",
+        "Aetna Dental Direct Preventive PPO",
+        "Aetna Dental Direct DMO",
+        "Aetna group PPO / DMO"
+      ],
+      "website": "https://www.aetna.com/dental.html"
+    },
+    {
+      "id": "cigna",
+      "name": "Cigna Dental",
+      "aliases": ["cigna", "cigna healthcare", "dp po"],
+      "tier": "national",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo", "dhmo", "bundle"],
+      "planFamilies": [
+        "Cigna Dental 1500",
+        "Cigna Dental Vision Hearing 3500",
+        "Cigna DPPO Advantage",
+        "Cigna DPPO Total",
+        "Cigna Dental HMO / DHMO",
+        "Cigna Dental Choice (TX naming)"
+      ],
+      "website": "https://www.cigna.com/dental-insurance/"
+    },
+    {
+      "id": "guardian",
+      "name": "Guardian Dental",
+      "aliases": ["guardian", "dentalguard", "guardian life"],
+      "tier": "national",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo", "dhmo", "bundle"],
+      "planFamilies": [
+        "Advantage Starter 2.0",
+        "Advantage Core 2.0",
+        "Advantage Achiever 2.0",
+        "Advantage Premier 2.0",
+        "Advantage Diamond 2.0",
+        "Guardian + VSP Dental Vision 2.0",
+        "DentalGuard (group)",
+        "Managed DentalGuard (DHMO, markets vary)"
+      ],
+      "website": "https://www.guardianlife.com/"
+    },
+    {
+      "id": "humana",
+      "name": "Humana Dental",
+      "aliases": ["humana"],
+      "tier": "national",
+      "channels": ["group", "individual", "medicare_advantage"],
+      "planTypes": ["ppo", "hmo", "bundle"],
+      "planFamilies": [
+        "Bright Plus",
+        "Loyalty Plus",
+        "Preventive Plus",
+        "Humana Extend 2500",
+        "Humana Extend 5000",
+        "Dental Value Plan HI215",
+        "Dental Value Plan C550",
+        "Medicare Advantage dental"
+      ],
+      "website": "https://www.humana.com/dental-insurance/"
+    },
+    {
+      "id": "ameritas",
+      "name": "Ameritas Dental",
+      "aliases": ["ameritas"],
+      "tier": "national",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo", "indemnity", "vision"],
+      "planFamilies": [
+        "Hollywood Smile Advantage",
+        "Hollywood Smile Elite",
+        "Hollywood Smile Premier / Premier Plus (state variants 1500/2000/2500)",
+        "Dallas Smile Plus",
+        "Clear View Vision",
+        "Clear View Vision Plus",
+        "Ameritas group dental / vision"
+      ],
+      "website": "https://www.ameritas.com/"
+    },
+    {
+      "id": "sun-life-dentaquest",
+      "name": "Sun Life Dental / DentaQuest",
+      "aliases": ["sun life", "dentaquest", "sloc"],
+      "tier": "national",
+      "channels": ["group", "medicaid", "medicare", "aso"],
+      "planTypes": ["ppo", "dhmo", "aso"],
+      "planFamilies": [
+        "Sun Life PPO",
+        "Sun Life prepaid / DHMO",
+        "Sun Life ASO (50+)",
+        "DentaQuest Medicaid / Medicare dental admin",
+        "Kid Smile Complete (feature)"
+      ],
+      "notes": "Sun Life acquired DentaQuest (2022); major Medicaid dental administrator.",
+      "website": "https://www.sunlife.com/"
+    },
+    {
+      "id": "united-concordia",
+      "name": "United Concordia Dental",
+      "aliases": ["united concordia", "ucci", "highmark dental"],
+      "tier": "national",
+      "channels": ["group", "federal", "individual"],
+      "planTypes": ["ppo", "dhmo"],
+      "planFamilies": [
+        "United Concordia PPO",
+        "United Concordia DHMO",
+        "Federal / military-adjacent dental products"
+      ],
+      "notes": "Highmark affiliate; historically large participant counts.",
+      "website": "https://www.unitedconcordia.com/"
+    },
+    {
+      "id": "anthem-elevance",
+      "name": "Anthem / Elevance Health Dental",
+      "aliases": ["anthem", "elevance", "anthem bcbs", "wellpoint"],
+      "tier": "multi_state",
+      "channels": ["group", "individual", "medicare_advantage"],
+      "planTypes": ["ppo"],
+      "planFamilies": [
+        "Essential Choice Incentive",
+        "Essential Choice Bronze",
+        "Essential Choice Silver",
+        "Essential Choice Gold",
+        "Essential Choice Platinum",
+        "Anthem group dental PPO"
+      ],
+      "notes": "Availability limited to Anthem BCBS states (~12 for some individual Essential Choice lines).",
+      "website": "https://www.anthem.com/"
+    },
+    {
+      "id": "renaissance",
+      "name": "Renaissance Dental",
+      "aliases": ["renaissance", "renmember"],
+      "tier": "national",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo"],
+      "planFamilies": [
+        "Max Choice",
+        "Max Choice Plus",
+        "Plan II",
+        "Plan III"
+      ],
+      "notes": "Renaissance Life & Health Insurance Company of America / of New York; Renaissance Health Services linked to Delta ecosystem in MFA analyses.",
+      "website": "https://www.renaissancedental.com/"
+    },
+    {
+      "id": "principal",
+      "name": "Principal Dental",
+      "aliases": ["principal", "principal financial"],
+      "tier": "national",
+      "channels": ["group"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["Principal Dental PPO (group form families vary by state)"],
+      "website": "https://www.principal.com/"
+    },
+    {
+      "id": "lincoln",
+      "name": "Lincoln Financial Dental",
+      "aliases": ["lincoln", "lincoln national", "lfg", "ardis", "converge"],
+      "tier": "national",
+      "channels": ["group"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["ARDIS PPO", "Converge PPO"],
+      "website": "https://www.lfg.com/"
+    },
+    {
+      "id": "physicians-mutual",
+      "name": "Physicians Mutual Dental",
+      "aliases": ["physicians mutual"],
+      "tier": "national",
+      "channels": ["individual"],
+      "planTypes": ["ppo", "indemnity"],
+      "planFamilies": ["Physicians Mutual individual dental (high/no annual max marketing variants by state)"],
+      "website": "https://www.physiciansmutual.com/"
+    },
+    {
+      "id": "spirit-starmount",
+      "name": "Spirit Dental / Starmount",
+      "aliases": ["spirit", "spirit dental", "starmount", "alwayscare"],
+      "tier": "national",
+      "channels": ["individual", "group"],
+      "planTypes": ["ppo"],
+      "planFamilies": [
+        "Spirit Dental PPO lines (state-filed)",
+        "Starmount Life dental",
+        "AlwaysCare Benefits dental"
+      ],
+      "website": "https://www.spiritdental.com/"
+    },
+    {
+      "id": "mutual-of-omaha",
+      "name": "Mutual of Omaha Dental",
+      "aliases": ["mutual of omaha"],
+      "tier": "national",
+      "channels": ["individual", "group"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["Mutual of Omaha individual/group dental"],
+      "website": "https://www.mutualofomaha.com/"
+    },
+    {
+      "id": "dominion-national",
+      "name": "Dominion National",
+      "aliases": ["dominion", "dominion dental"],
+      "tier": "regional",
+      "channels": ["group", "individual", "aca_sadp"],
+      "planTypes": ["ppo", "dhmo"],
+      "planFamilies": ["Dominion Select", "Dominion DHMO / PPO (mid-Atlantic)"],
+      "notes": "Strong mid-Atlantic footprint.",
+      "website": "https://www.dominionnational.com/"
+    },
+    {
+      "id": "solstice",
+      "name": "Solstice Benefits",
+      "aliases": ["solstice"],
+      "tier": "regional",
+      "channels": ["group", "individual"],
+      "planTypes": ["dhmo", "ppo"],
+      "planFamilies": ["Solstice DHMO", "Solstice PPO"],
+      "notes": "FL/NY-heavy.",
+      "website": "https://www.solsticebenefits.com/"
+    },
+    {
+      "id": "premier-access",
+      "name": "Premier Access Dental",
+      "aliases": ["premier access", "premier life"],
+      "tier": "regional",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo", "dhmo"],
+      "planFamilies": ["Premier Access PPO / DHMO"],
+      "website": "https://www.premierlife.com/"
+    },
+    {
+      "id": "healthplex",
+      "name": "Healthplex",
+      "aliases": ["healthplex"],
+      "tier": "regional",
+      "channels": ["group", "medicaid"],
+      "planTypes": ["ppo", "dhmo"],
+      "planFamilies": ["Healthplex dental admin / plan products (NY area)"],
+      "website": "https://www.healthplex.com/"
+    },
+    {
+      "id": "altus-dental",
+      "name": "Altus Dental",
+      "aliases": ["altus"],
+      "tier": "regional",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["Altus Dental PPO"],
+      "notes": "New England.",
+      "website": "https://www.altusdental.com/"
+    },
+    {
+      "id": "bcbs-state-plans",
+      "name": "Blue Cross Blue Shield Dental (state plans)",
+      "aliases": ["bcbs", "blue cross", "blue shield", "carefirst", "highmark", "horizon", "hmsa"],
+      "tier": "multi_state",
+      "channels": ["group", "individual", "federal"],
+      "planTypes": ["ppo", "dhmo"],
+      "planFamilies": [
+        "State BCBS dental PPO/DHMO (entity-specific)",
+        "CareFirst dental",
+        "Highmark dental",
+        "Horizon BCBS dental",
+        "Blue Shield of California dental",
+        "Arkansas BCBS dental",
+        "HMSA dental (HI)",
+        "BCBS FEP Dental"
+      ],
+      "notes": "Independent Blues licensees; each state entity files its own dental products.",
+      "website": "https://www.bcbs.com/"
+    },
+    {
+      "id": "geha",
+      "name": "GEHA Dental",
+      "aliases": ["geha"],
+      "tier": "federal",
+      "channels": ["federal"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["GEHA Connection Dental Federal / Connection Dental Plus"],
+      "website": "https://www.geha.com/"
+    },
+    {
+      "id": "tricare-dental",
+      "name": "TRICARE Dental Program",
+      "aliases": ["tricare", "tdp", "uniformed services dental"],
+      "tier": "federal",
+      "channels": ["military"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["TRICARE Dental Program (TDP)", "TRICARE Active Duty Dental Program (ADDP)"],
+      "website": "https://tricare.mil/CoveredServices/Dental"
+    },
+    {
+      "id": "companion-life",
+      "name": "Companion Life",
+      "aliases": ["companion life"],
+      "tier": "national",
+      "channels": ["group"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["Companion Life group dental"],
+      "website": "https://www.companionlife.com/"
+    },
+    {
+      "id": "reliance-standard",
+      "name": "Reliance Standard Life",
+      "aliases": ["reliance standard"],
+      "tier": "national",
+      "channels": ["group"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["Reliance Standard group dental"],
+      "website": "https://www.reliancestandard.com/"
+    },
+    {
+      "id": "standard-insurance",
+      "name": "Standard Insurance Company",
+      "aliases": ["the standard", "standard insurance"],
+      "tier": "national",
+      "channels": ["group"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["The Standard group dental"],
+      "website": "https://www.standard.com/"
+    },
+    {
+      "id": "security-life",
+      "name": "Security Life",
+      "aliases": ["security life"],
+      "tier": "national",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["Security Life dental"],
+      "website": "https://www.securitylife.com/"
+    },
+    {
+      "id": "dental-select",
+      "name": "Dental Select",
+      "aliases": ["dental select"],
+      "tier": "regional",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["Dental Select PPO"],
+      "website": "https://www.dentalselect.com/"
+    },
+    {
+      "id": "argus-dental",
+      "name": "Argus Dental & Vision",
+      "aliases": ["argus"],
+      "tier": "regional",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo", "dhmo"],
+      "planFamilies": ["Argus dental / vision"],
+      "website": "https://www.argusdentalvision.com/"
+    },
+    {
+      "id": "emblemhealth",
+      "name": "EmblemHealth Dental",
+      "aliases": ["emblem", "emblemhealth"],
+      "tier": "regional",
+      "channels": ["group", "individual", "medicaid"],
+      "planTypes": ["ppo", "dhmo"],
+      "planFamilies": ["EmblemHealth dental"],
+      "notes": "NY metro.",
+      "website": "https://www.emblemhealth.com/"
+    },
+    {
+      "id": "denali-dental",
+      "name": "Denali Dental",
+      "aliases": ["denali"],
+      "tier": "niche",
+      "channels": ["individual"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["Denali Dental individual PPO lines (state-filed)"],
+      "website": "https://www.denalidental.com/"
+    },
+    {
+      "id": "best-life",
+      "name": "BEST Life and Health",
+      "aliases": ["best life"],
+      "tier": "niche",
+      "channels": ["individual", "aca_sadp"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["BEST Life stand-alone dental (state/ACA SADP filings)"],
+      "website": "https://www.bestlife.com/"
+    },
+    {
+      "id": "aflac",
+      "name": "Aflac Dental",
+      "aliases": ["aflac", "american family life"],
+      "tier": "national",
+      "channels": ["group", "individual"],
+      "planTypes": ["indemnity", "ppo"],
+      "planFamilies": ["Aflac dental (group/individual; often indemnity-style)"],
+      "website": "https://www.aflac.com/"
+    },
+    {
+      "id": "careington",
+      "name": "Careington (discount)",
+      "aliases": ["careington", "500 series"],
+      "tier": "discount",
+      "channels": ["individual"],
+      "planTypes": ["discount"],
+      "planFamilies": ["500 Series Dental Savings"],
+      "notes": "NOT insurance — annual membership discount card.",
+      "website": "https://www.careington.com/"
+    },
+    {
+      "id": "dentemax",
+      "name": "DenteMax (network/discount)",
+      "aliases": ["dentemax"],
+      "tier": "discount",
+      "channels": ["network"],
+      "planTypes": ["discount", "ppo_network"],
+      "planFamilies": ["DenteMax PPO network / discount access"],
+      "notes": "Network/discount access; often leased by carriers — not a stand-alone indemnity policy.",
+      "website": "https://www.dentemax.com/"
+    },
+    {
+      "id": "connection-dental",
+      "name": "Connection Dental Network",
+      "aliases": ["connection dental"],
+      "tier": "discount",
+      "channels": ["network"],
+      "planTypes": ["ppo_network"],
+      "planFamilies": ["Connection Dental PPO network"],
+      "notes": "Network access used by multiple plan sponsors.",
+      "website": "https://www.connectiondental.com/"
+    },
+    {
+      "id": "first-dental-health",
+      "name": "First Dental Health",
+      "aliases": ["first dental health", "fdh"],
+      "tier": "regional",
+      "channels": ["network", "group"],
+      "planTypes": ["ppo"],
+      "planFamilies": ["First Dental Health PPO"],
+      "website": "https://www.firstdentalhealth.com/"
+    },
+    {
+      "id": "kansas-medicaid-kancare",
+      "name": "Kansas Medicaid / KanCare Dental",
+      "aliases": ["kancare", "kansas medicaid", "sunflower", "aetna better health ks", "unitedhealthcare community plan ks"],
+      "tier": "medicaid",
+      "channels": ["medicaid"],
+      "planTypes": ["medicaid"],
+      "planFamilies": [
+        "KanCare MCO dental benefits (plan year specific)",
+        "Sunflower Health Plan dental",
+        "Aetna Better Health of Kansas dental",
+        "UnitedHealthcare Community Plan of Kansas dental"
+      ],
+      "notes": "Kansas practice-relevant; MCO dental benefits change by contract year.",
+      "website": "https://www.kancare.ks.gov/"
+    },
+    {
+      "id": "vsp-vision-bundle",
+      "name": "VSP (vision; dental bundles)",
+      "aliases": ["vsp"],
+      "tier": "vision_partner",
+      "channels": ["individual", "group"],
+      "planTypes": ["vision", "bundle"],
+      "planFamilies": ["VSP Individual Vision", "Guardian + VSP Dental Vision bundles"],
+      "notes": "Vision carrier; appears on dental marketplaces in dental+vision bundles.",
+      "website": "https://www.vsp.com/"
+    }
+  ]
+}

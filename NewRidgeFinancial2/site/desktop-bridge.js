@@ -1248,6 +1248,22 @@ const DesktopBridge = (function () {
     return { items: [], count: 0, text: "" };
   }
 
+  async function searchDentalCarrierCatalog(query, limit) {
+    if (hasDesktopApi() && window.pywebview.api.search_dental_carrier_catalog) {
+      return window.pywebview.api.search_dental_carrier_catalog(String(query || ""), Number(limit || 8));
+    }
+    if (hasLoopbackApi()) {
+      try {
+        const q = encodeURIComponent(String(query || ""));
+        const lim = Number(limit || 8);
+        return await loopbackJson(`/api/dental-carrier-catalog?q=${q}&limit=${lim}`);
+      } catch {
+        return { items: [], count: 0, text: "" };
+      }
+    }
+    return { items: [], count: 0, text: "" };
+  }
+
   async function joinClaimPayers(claims) {
     const list = Array.isArray(claims) ? claims : [];
     if (hasDesktopApi() && window.pywebview.api.join_claim_payers) {
@@ -1546,6 +1562,7 @@ const DesktopBridge = (function () {
     showWorkstationMainWindow,
     searchHalMemories,
     searchPayerReference,
+    searchDentalCarrierCatalog,
     joinClaimPayers,
     lookupFeeSchedule,
     listEligibilityCache,

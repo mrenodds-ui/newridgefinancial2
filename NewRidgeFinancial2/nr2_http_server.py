@@ -1496,6 +1496,27 @@ class NR2BottleServer(BottleServer):
             except Exception as exc:
                 return _json_response({"ok": False, "error": str(exc), "items": [], "count": 0}, status=500)
 
+        @app.get("/api/dental-carrier-catalog")
+        def dental_carrier_catalog_api():
+            try:
+                from us_dental_carrier_catalog import catalog_summary, format_carrier_hits, search_carriers
+
+                query = str(bottle.request.params.get("q") or bottle.request.params.get("query") or "")
+                limit = int(bottle.request.params.get("limit") or 8)
+                if query.strip():
+                    items = search_carriers(query, limit=limit)
+                    return _json_response(
+                        {
+                            "ok": True,
+                            "items": items,
+                            "count": len(items),
+                            "text": format_carrier_hits(items),
+                        }
+                    )
+                return _json_response(catalog_summary())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc), "items": [], "count": 0}, status=500)
+
         @app.post("/api/claim-payer-join")
         def claim_payer_join_api():
             try:

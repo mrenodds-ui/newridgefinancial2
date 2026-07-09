@@ -644,6 +644,12 @@ class DesktopApi:
         hits = search_payers(str(query or ""), limit=int(limit or 5))
         return {"items": hits, "count": len(hits), "text": format_payer_hits(hits)}
 
+    def search_dental_carrier_catalog(self, query: str, limit: int = 8) -> dict:
+        from us_dental_carrier_catalog import format_carrier_hits, search_carriers
+
+        hits = search_carriers(str(query or ""), limit=int(limit or 8))
+        return {"items": hits, "count": len(hits), "text": format_carrier_hits(hits)}
+
     def join_claim_payers(self, claims_json: str) -> dict:
         import json
 
