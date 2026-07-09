@@ -25,6 +25,7 @@
     "nr2-moonshot-ui.js",
     "daily-closeout.js",
     "portal-ops.js",
+    "data/mockup-elite-pages.js",
     "moonshot-page-registry.js",
     "nr2-moonshot-mockup-chrome.js",
     "runtime-issues.js",

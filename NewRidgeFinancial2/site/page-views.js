@@ -295,6 +295,30 @@ const PageViews = (function () {
     if (pilot && typeof pilot.init === "function") pilot.init(container);
   }
 
+  function wireMockupPreviewFrames(container) {
+    if (!container) return;
+    const mockOnly =
+      (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
+      (typeof document !== "undefined" &&
+        document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed");
+    if (!mockOnly) return;
+    container.querySelectorAll(".ms-mockup-preview-iframe").forEach((iframe) => {
+      iframe.loading = "eager";
+      const resize = () => {
+        try {
+          const doc = iframe.contentDocument;
+          if (doc && doc.body) {
+            iframe.style.height = `${Math.max(680, doc.body.scrollHeight + 32)}px`;
+          }
+        } catch (_err) {
+          /* cross-origin guard */
+        }
+      };
+      iframe.addEventListener("load", resize);
+      if (iframe.contentDocument && iframe.contentDocument.readyState === "complete") resize();
+    });
+  }
+
   function chromeOptsFromState(state) {
     const snap = state && state.programSnapshot;
     const opts = {};
@@ -396,6 +420,7 @@ const PageViews = (function () {
       }
       canvas.innerHTML = Canvas.renderBody(pageId, halWidgetFeed, programSnapshot);
     }
+    wireMockupPreviewFrames(container);
     refreshLiveIntegrationHealth().catch(() => {
       /* integration health optional; skip second full repaint to avoid page flash */
     });

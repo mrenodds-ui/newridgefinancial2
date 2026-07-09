@@ -1181,13 +1181,27 @@ const PageCanvas = (function () {
   function mockupPreviewGate(pageId) {
     const H = buildMoonshotHelpers();
     const noticeHtml = canvasImportNotice(pageImportNotice(pageId));
+    const hasMock =
+      typeof PageSchema !== "undefined" &&
+      typeof PageSchema.hasMockPreview === "function" &&
+      PageSchema.hasMockPreview(pageId);
+    if (!hasMock) {
+      return (
+        noticeHtml +
+        `<div class="ms-mockup-preview-missing col-12" data-ms-page-gate="${H.esc(pageId)}">
+          <strong>No elite mock HTML yet</strong>
+          <p>Add <code>.local_logs/moonshot_financial_eval/page_mockups_elite/${H.esc(pageId)}.html</code>, then run <code>node scripts/sync-mockup-elite-pages.mjs</code> and restart Start Program.</p>
+        </div>`
+      );
+    }
     const embedSrc = `/mockup-elite-embed/${encodeURIComponent(pageId)}`;
     const frame = `<div class="ms-mockup-preview-frame col-12" data-ms-page-gate="${H.esc(pageId)}">
       <div class="ms-mockup-preview-banner">
         <span class="ms-mockup-preview-banner__title">Elite mock preview</span>
         <span class="ms-muted">Static HTML for UI evaluation — not wired to live imports</span>
+        <a class="ms-mockup-preview-open" href="${embedSrc}" target="_blank" rel="noopener">Open mock</a>
       </div>
-      <iframe class="ms-mockup-preview-iframe" src="${embedSrc}" title="Elite mockup: ${H.esc(pageId)}" loading="lazy"></iframe>
+      <iframe class="ms-mockup-preview-iframe" src="${embedSrc}" title="Elite mockup: ${H.esc(pageId)}" loading="eager"></iframe>
     </div>`;
     return noticeHtml + frame;
   }

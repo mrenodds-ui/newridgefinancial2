@@ -14,6 +14,17 @@ scripts\start_nr2_browser.ps1
 
 The launcher starts the NR2 server on **http://127.0.0.1:8765/** and opens your default browser to that address.
 
+### Staff pages (mock-only)
+
+Staff pages render **elite mock HTML** inside the live app chrome (`NR2_STAFF_MOCK_ONLY`). To add or replace a page:
+
+1. Create or edit `.local_logs/moonshot_financial_eval/page_mockups_elite/{page-id}.html`
+2. Run `node NewRidgeFinancial2/scripts/sync-mockup-elite-pages.mjs`
+3. Optionally add nav labels in `site/moonshot-page-registry.js` (`PAGE_META`)
+4. Restart Start Program and open `#page-id`
+
+Legacy wired widgets, layout engine, and chart bundles are **not** loaded on the 8765 app until live-wire sign-off. HAL (`#hal`) stays live.
+
 The server binds to **127.0.0.1 only** (not LAN). API write routes (posting queue, outbound) require a per-session loopback token issued at `/api/app-info` and reject cross-origin mutation requests in browser mode.
 
 ### Operator security checklist

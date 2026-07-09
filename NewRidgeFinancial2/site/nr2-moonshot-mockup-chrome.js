@@ -55,6 +55,13 @@ const MoonshotMockupChrome = (function () {
   }
 
   function renderNavSubitems(page, activeId) {
+    const mockOnly =
+      (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
+      (typeof document !== "undefined" &&
+        document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed");
+    if (mockOnly && page && page.id !== "hal") {
+      return "";
+    }
     if (!page || page.id !== activeId) return "";
     if (Array.isArray(page.navGroups) && page.navGroups.length) {
       const widgets = pageWidgets(page);

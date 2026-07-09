@@ -2969,6 +2969,16 @@ class NR2BottleServer(BottleServer):
             bottle.response.set_header("Pragma", "no-cache")
             return html
 
+        @app.get("/api/mockup-elite-pages")
+        def mockup_elite_pages_api():
+            if not _desktop_access_ok():
+                bottle.abort(403, _desktop_only_html())
+            from mockup_elite_embed import list_mockup_page_ids
+
+            bottle.response.content_type = "application/json; charset=UTF-8"
+            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            return json.dumps({"pages": list_mockup_page_ids()}, ensure_ascii=False)
+
         @app.route("/<file:path>")
         def asset(file):
             if not _desktop_access_ok():

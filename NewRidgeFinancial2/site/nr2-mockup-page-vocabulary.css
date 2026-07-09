@@ -1955,6 +1955,41 @@
   text-transform: uppercase;
 }
 
+.app--moonshot-mockup .ms-page .ms-mockup-preview-banner {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-open {
+  color: var(--cyan, #22d3ee);
+  font-size: 12px;
+  margin-left: auto;
+  text-decoration: none;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-open:hover {
+  text-decoration: underline;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-missing {
+  background: rgba(20, 20, 24, 0.72);
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  color: var(--text-secondary, #8b8b96);
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 20px 24px;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-missing strong {
+  color: var(--text, #f0f0f2);
+  display: block;
+  margin-bottom: 8px;
+}
+
 .app--moonshot-mockup .ms-page .ms-mockup-preview-iframe {
   background: #0a0a0c;
   border: 1px solid rgba(255, 255, 255, 0.08);

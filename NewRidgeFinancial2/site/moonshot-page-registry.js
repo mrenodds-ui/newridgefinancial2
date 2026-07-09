@@ -213,6 +213,30 @@ const MoonshotPageRegistry = (function () {
 
   let MANIFEST = null;
 
+  function staffMockOnly() {
+    if (typeof window === "undefined") return false;
+    if (window.NR2_STAFF_MOCK_ONLY) return true;
+    try {
+      return document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed";
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function elitePageIds() {
+    if (typeof window !== "undefined" && Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES)) {
+      return window.__NR2_MOCKUP_ELITE_PAGES.filter((id) => id !== "hal");
+    }
+    return null;
+  }
+
+  function hasMockPreview(pageId) {
+    if (pageId === "hal") return false;
+    const elite = elitePageIds();
+    if (staffMockOnly() && elite) return elite.includes(pageId);
+    return Boolean(PAGE_META[pageId]);
+  }
+
   function loadManifest() {
     if (MANIFEST) return MANIFEST;
     if (typeof MOONSHOT_PAGE_LAYOUTS !== "undefined") {
@@ -250,11 +274,25 @@ const MoonshotPageRegistry = (function () {
   function buildPages() {
     const m = loadManifest();
     const pages = (m && m.pages) || {};
-    const pageIds = Object.keys(pages).length ? Object.keys(pages) : Object.keys(PAGE_META);
+    const navOrder = NAV_GROUPS.flatMap((group) => group.pages);
+    const elite = elitePageIds();
+    let pageIds = Object.keys(pages).length ? Object.keys(pages) : Object.keys(PAGE_META);
+    if (staffMockOnly() && elite && elite.length) {
+      const staffElite = elite.filter((id) => id !== "hal");
+      pageIds = navOrder.filter((id) => id === "hal" || staffElite.includes(id));
+      for (const id of staffElite) {
+        if (!pageIds.includes(id)) pageIds.push(id);
+      }
+    }
     const out = {};
     for (const id of pageIds) {
       const spec = pages[id] || {};
-      const meta = PAGE_META[id] || {};
+      const meta = PAGE_META[id] || {
+        label: id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        subtitle: "Elite mock preview — add PAGE_META in moonshot-page-registry.js for chrome labels",
+        accent: "green",
+      };
+      const mockOnlyStaff = staffMockOnly() && id !== "hal";
       out[id] = {
         id,
         label: meta.label || id,
@@ -264,15 +302,15 @@ const MoonshotPageRegistry = (function () {
         filters: meta.filters || [],
         commands: meta.commands || [],
         safety: meta.safety || "",
-        navGroups: meta.navGroups,
-        widgets: meta.widgets || widgetsFromPanels(spec.panels),
+        navGroups: mockOnlyStaff ? undefined : meta.navGroups,
+        widgets: mockOnlyStaff ? [] : meta.widgets || widgetsFromPanels(spec.panels),
       };
     }
     return out;
   }
 
   const PAGES = buildPages();
-  const STAFF_PAGE_IDS = NAV_GROUPS.flatMap((group) => group.pages).filter((id) => id !== "hal");
+  const STAFF_PAGE_IDS = Object.keys(PAGES).filter((id) => id !== "hal");
 
   function byId(pageId) {
     return PAGES[pageId] || null;
@@ -287,6 +325,8 @@ const MoonshotPageRegistry = (function () {
   }
 
   function isStaffPage(pageId) {
+    if (pageId === "hal") return false;
+    if (staffMockOnly()) return hasMockPreview(pageId);
     return STAFF_PAGE_IDS.includes(pageId);
   }
 
@@ -315,6 +355,7 @@ const MoonshotPageRegistry = (function () {
     flatNav,
     navPages,
     isStaffPage,
+    hasMockPreview,
     commandsFor,
     insightFor,
     widgetsFor,

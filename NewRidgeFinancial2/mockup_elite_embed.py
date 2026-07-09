@@ -16,6 +16,16 @@ body { min-height: auto !important; background: transparent !important; }
 """
 
 
+def list_mockup_page_ids() -> list[str]:
+    if not MOCKUP_ELITE_DIR.is_dir():
+        return []
+    return sorted(
+        path.stem
+        for path in MOCKUP_ELITE_DIR.glob("*.html")
+        if path.name != "index.html" and PAGE_ID_RE.fullmatch(path.stem)
+    )
+
+
 def mockup_elite_path(page_id: str) -> Path | None:
     if not page_id or not PAGE_ID_RE.fullmatch(page_id):
         return None

@@ -15,6 +15,7 @@ const mockupsElite = join(root, "..", ".local_logs", "moonshot_financial_eval", 
 const require = createRequire(import.meta.url);
 
 process.env.NR2_LOAD_IMPORTS = "1";
+globalThis.NR2_STAFF_MOCK_ONLY = true;
 for (const f of [
   "empty-states.js",
   "import-diagnostics.js",
@@ -30,6 +31,7 @@ for (const f of [
   "hal-widget-master-chart.js",
   "hal-page-widgets.js",
   "hal-live-widget-bridge.js",
+  "data/mockup-elite-pages.js",
   "moonshot-page-registry.js",
   "nr2-moonshot-mockup-chrome.js",
   "tax-engine.js",

@@ -1285,7 +1285,12 @@ function scheduleHalWidgetRefresh(snapshot, options) {
         appPage &&
         !appPage.hidden &&
         PageViews &&
-        PageViews.hasPage(currentId)
+        PageViews.hasPage(currentId) &&
+        !(
+          (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
+          (typeof document !== "undefined" &&
+            document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed")
+        )
       ) {
         PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
         if (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
@@ -4944,6 +4949,13 @@ function renderHalScreen() {
   typewriteLastHalMessage();
 }
 
+function openInitialStaffPage() {
+  if (NR2_WORKSTATION_ONLY) return;
+  const initial = resolvePageId(window.location.hash);
+  renderSidebar(initial);
+  select(initial);
+}
+
 function renderSidebar(activeId) {
   if (NR2_WORKSTATION_ONLY) return;
   if (!sidebar || typeof PageSchema === "undefined") return;
@@ -5786,6 +5798,9 @@ async function boot() {
     if (NR2_WORKSTATION_ONLY) select("workstation");
     return;
   }
+  if (!NR2_WORKSTATION_ONLY) {
+    openInitialStaffPage();
+  }
   await loadPersistedState();
   try {
     if (typeof NR2Boot !== "undefined" && NR2Boot.verifyDesktopManifest) {
@@ -5856,6 +5871,7 @@ async function boot() {
   if (window.HalEmployee && typeof HalEmployee.ensureTargetLevel === "function") {
     HalEmployee.ensureTargetLevel(halModels, 7);
   }
+  openInitialStaffPage();
   const bootInitialPage = resolvePageId(window.location.hash);
   if (bootInitialPage === "hal" && appPage && typeof select === "function") {
     select("hal");

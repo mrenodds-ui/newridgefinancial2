@@ -23,6 +23,7 @@ const stylesCss = readFileSync(join(siteDir, "styles.css"), "utf8");
 const themeCss = readFileSync(join(siteDir, "nr2-moonshot-mockup-theme.css"), "utf8");
 const vocabCss = readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8");
 
+globalThis.NR2_STAFF_MOCK_ONLY = true;
 require(join(siteDir, "empty-states.js"));
 require(join(siteDir, "import-diagnostics.js"));
 require(join(siteDir, "import-loader.js"));
@@ -41,6 +42,8 @@ require(join(siteDir, "hal-widget-master-chart.js"));
 require(join(siteDir, "hal-page-widgets.js"));
 require(join(siteDir, "hal-live-widget-bridge.js"));
 const HalPilotWidgets = require(join(siteDir, "hal-pilot-widgets.js"));
+globalThis.__NR2_MOCKUP_ELITE_PAGES = undefined;
+require(join(siteDir, "data/mockup-elite-pages.js"));
 require(join(siteDir, "moonshot-page-registry.js"));
 require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
 require(join(siteDir, "tax-engine.js"));
@@ -160,6 +163,7 @@ assert.equal(
 assert.equal(buildManifest.REQUIRED_EPOCH, "moonshot-mockup", "nr2-build.json must require moonshot-mockup epoch");
 assert.equal(buildManifest.staffRenderMode, "mock-embed", "nr2-build.json must use mock-embed staff render mode");
 assert.ok(indexHtml.includes("NR2_STAFF_MOCK_ONLY"), "index must enable staff mock-only mode");
+assert.ok(indexHtml.includes("data/mockup-elite-pages.js"), "index must load mockup elite page manifest");
 assert.ok(!indexHtml.includes("moonshot-page-layouts.js"), "index must not load layout manifest in mock-embed mode");
 assert.ok(!indexHtml.includes("moonshot-page-layouts.json"), "index must not load external layout JSON");
 assert.ok(!indexHtml.includes("charts/"), "index must not load chart overlay scripts in mock-embed mode");
