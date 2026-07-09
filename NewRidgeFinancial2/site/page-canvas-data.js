@@ -9,7 +9,33 @@ const PageCanvasData = (function () {
   let selectedClaimId = null;
 
   const COLORS = ["#78a86b", "#60a5fa", "#c084fc", "#d6b15e", "#fb923c", "#f472b6"];
-  const CLAIM_LANES = ["Draft", "Needs Review", "Ready", "Denied"];
+  // Elite Jul 8 claims mockup — six pipeline lanes (always render, even when empty).
+  const CLAIM_LANES = [
+    "Unmatched",
+    "Pending Attachment",
+    "Submitted",
+    "In Review",
+    "Denied",
+    "Paid",
+  ];
+
+  function claimEliteLane(status) {
+    const raw = String(status || "").trim();
+    // Exact SoftDent / import lane names first
+    if (raw === "Denied") return "Denied";
+    if (raw === "Ready") return "Submitted";
+    if (raw === "Needs Review") return "In Review";
+    if (raw === "Draft") return "Unmatched";
+    if (raw === "Paid" || raw === "Closed") return "Paid";
+    const s = raw.toLowerCase();
+    if (/denied|reject/.test(s)) return "Denied";
+    if (/paid|closed|complete|posted/.test(s)) return "Paid";
+    if (/attach|missing.?doc|pending.?attach/.test(s)) return "Pending Attachment";
+    if (/unmatch|no.?payer|orphan|^draft$/.test(s)) return "Unmatched";
+    if (/needs.?review|in.?review|\breview\b|hold/.test(s)) return "In Review";
+    if (/submit|sent|ready|\bopen\b/.test(s)) return "Submitted";
+    return "In Review";
+  }
   const TASK_LANE_MAP = {
     billing: "Billing",
     claims: "Billing",
@@ -498,6 +524,7 @@ const PageCanvasData = (function () {
       pushDraft(nar.latest, "Latest draft");
     }
     // Do not synthesize kanban cards from claims — claims are not narrative drafts.
+    // Always return all four elite lanes (Jul 8 mockup silhouette), even when empty.
     return lanes.map((lane) => ({ lane, tone: "muted", items: buckets[lane] }));
   }
 
@@ -1648,23 +1675,31 @@ const PageCanvasData = (function () {
 
   function claimsKanban() {
     const claims = snapshot && snapshot.claims;
-    if (!claims) return [];
-    const byLane = claims.byStatus || claims.laneTotals || {};
-    if (claims.claims && claims.claims.length) {
-      const lanes = {};
-      CLAIM_LANES.forEach((lane) => {
-        lanes[lane] = claims.claims.filter((c) => c.status === lane).slice(0, 6);
+    const buckets = Object.fromEntries(CLAIM_LANES.map((lane) => [lane, []]));
+    const toneFor = (lane) => {
+      if (lane === "Denied" || lane === "Unmatched") return "orange";
+      if (lane === "Paid") return "green";
+      if (lane === "Pending Attachment") return "orange";
+      return "muted";
+    };
+    if (claims && Array.isArray(claims.claims) && claims.claims.length) {
+      claims.claims.forEach((c) => {
+        const lane = claimEliteLane(c.status || c.lane || c.stage);
+        if (buckets[lane] && buckets[lane].length < 8) buckets[lane].push(c);
       });
-      return CLAIM_LANES.filter((lane) => lanes[lane].length).map((lane) => ({
-        lane,
-        tone: lane === "Ready" ? "green" : lane === "Denied" ? "orange" : "muted",
-        items: lanes[lane],
-      }));
+    } else if (claims) {
+      const byLane = claims.byStatus || claims.laneTotals || {};
+      Object.entries(byLane).forEach(([raw, count]) => {
+        const lane = claimEliteLane(raw);
+        const n = Number(count) || 0;
+        if (n > 0 && buckets[lane]) buckets[lane].push(`${n} claim(s)`);
+      });
     }
-    return CLAIM_LANES.filter((lane) => byLane[lane]).map((lane) => ({
+    // Always return all elite lanes so the board matches the Jul 8 mockup silhouette.
+    return CLAIM_LANES.map((lane) => ({
       lane,
-      tone: "muted",
-      items: [`${byLane[lane]} claim(s)`],
+      tone: toneFor(lane),
+      items: buckets[lane],
     }));
   }
 

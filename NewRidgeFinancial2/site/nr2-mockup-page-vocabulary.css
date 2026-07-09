@@ -1886,6 +1886,53 @@
   min-height: 360px;
 }
 
+.app--moonshot-mockup .ms-page .kanban-board--claims {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  min-height: calc(100vh - 320px);
+}
+
+.app--moonshot-mockup .ms-page .kanban-lane-empty {
+  color: var(--muted, #71717a);
+  font-size: 11px;
+  margin: 8px 0 0;
+  opacity: 0.75;
+}
+
+.app--moonshot-mockup .ms-page .claims-moonshot .kpi-hero-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.app--moonshot-mockup .ms-page .qb-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.app--moonshot-mockup .ms-page .qb-dashboard-grid > .qb-span {
+  min-width: 0;
+}
+
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .qb-span-3 { grid-column: span 3; }
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .qb-span-4 { grid-column: span 4; }
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .qb-span-6 { grid-column: span 6; }
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .qb-span-8 { grid-column: span 8; }
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .qb-span-12 { grid-column: span 12; }
+
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .card {
+  height: 100%;
+  min-height: 180px;
+}
+
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .chart-large,
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .chart-medium,
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .kpi-card {
+  grid-column: auto;
+}
+
 .app--moonshot-mockup .ms-page .narrative-card {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1905,7 +1952,7 @@
 }
 
 .app--moonshot-mockup .ms-page .claims-moonshot .kanban-board {
-  min-height: 420px;
+  min-height: calc(100vh - 320px);
 }
 
 /* Boot / fatal errors — mockup vocabulary (replaces legacy pv-state) */

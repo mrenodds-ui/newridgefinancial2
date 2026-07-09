@@ -456,10 +456,15 @@ const PageCanvas = (function () {
     const narrativeMode = (options && options.narratives) || pageId === "narratives";
     const laneHtml = lanes
       .map((lane) => {
-        const cards = (lane.items || []).map((item) => renderKanbanCard(item, widgetKey, pageId, options)).join("");
+        const items = lane.items || [];
+        const cards = items.map((item) => renderKanbanCard(item, widgetKey, pageId, options)).join("");
+        const empty =
+          !items.length && (claimsMode || narrativeMode)
+            ? `<p class="kanban-lane-empty">No items</p>`
+            : "";
         return `<div class="kanban-column">
-          <div class="column-header"><span>${esc(lane.lane)}</span><span class="column-count">${(lane.items || []).length}</span></div>
-          <div class="column-content">${cards}</div>
+          <div class="column-header"><span>${esc(lane.lane)}</span><span class="column-count">${items.length}</span></div>
+          <div class="column-content">${cards}${empty}</div>
         </div>`;
       })
       .join("");

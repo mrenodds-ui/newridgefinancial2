@@ -458,7 +458,7 @@ const MOONSHOT_PAGE_LAYOUTS = {
     },
     "quickbooks": {
       "title": "QuickBooks Integration",
-      "shell": "widget-grid",
+      "shell": "dashboard-grid",
       "panels": [
         {
           "id": "qb-pl-summary",

@@ -77,7 +77,15 @@ const MoonshotLayoutEngine = (function () {
     if (pageId === "softdent" && H.renderSoftdentOdbcStrip && D && D.softdentOdbcStatus) {
       body += H.renderSoftdentOdbcStrip(D.softdentOdbcStatus());
     }
-    return `${H.stackOpen(`${pageId}-moonshot`)}${body}</div>`;
+    const pageClass =
+      pageId === "claims"
+        ? "claims-moonshot"
+        : pageId === "narratives"
+          ? "narratives-moonshot"
+          : pageId === "taxes"
+            ? "taxes-moonshot"
+            : `${pageId}-moonshot`;
+    return `${H.stackOpen(pageClass)}${body}</div>`;
   }
 
   function monthNameFromPeriod(label) {
@@ -158,7 +166,7 @@ const MoonshotLayoutEngine = (function () {
       if (pageId === "ar" && kpis && kpis.length) {
         return kpis.length >= 5 ? H.heroKpiRow(kpis, 6) : H.canvasKpiGrid(kpis);
       }
-      const maxKpis = pageId === "financial" ? 5 : pageId === "ar" ? 6 : 4;
+      const maxKpis = pageId === "financial" ? 5 : pageId === "ar" ? 6 : pageId === "claims" ? 4 : 4;
       return kpis && kpis.length ? H.heroKpiRow(kpis, maxKpis) : "";
     }
     return H.canvasPanel({
@@ -201,24 +209,15 @@ const MoonshotLayoutEngine = (function () {
     </div>`;
   }
 
+  /** Elite Jul 8 QB mockup — single 12-col dashboard-grid with colSpan spans. */
   function renderQuickbooksDashboard(panels, D, H, accent) {
-    const chunks = [];
-    let row = [];
-    panels.forEach((p) => {
-      if (p.type === "hero-kpi") {
-        if (row.length) chunks.push(`<div class="dashboard-grid">${row.join("")}</div>`);
-        row = [];
-        chunks.push(`<div class="dashboard-grid">${renderDashboardTile(p, D, H, "quickbooks", accent)}</div>`);
-        return;
-      }
-      row.push(renderDashboardTile(p, D, H, "quickbooks", accent));
-      if (row.length >= 3 || p.colSpan >= 12) {
-        chunks.push(`<div class="dashboard-grid">${row.join("")}</div>`);
-        row = [];
-      }
-    });
-    if (row.length) chunks.push(`<div class="dashboard-grid">${row.join("")}</div>`);
-    return chunks.join("");
+    const tiles = panels
+      .map((p) => {
+        const span = Math.min(12, Math.max(1, Number(p.colSpan) || 6));
+        return `<div class="qb-span qb-span-${span}">${renderDashboardTile(p, D, H, "quickbooks", accent)}</div>`;
+      })
+      .join("");
+    return `<div class="dashboard-grid qb-dashboard-grid">${tiles}</div>`;
   }
 
   function resolveHeroKpis(panel, D, H, pageId) {
@@ -587,10 +586,13 @@ const MoonshotLayoutEngine = (function () {
     },
     claimsPipeline(D, H) {
       const lanes = D && D.claimsKanban ? D.claimsKanban() : [];
+      const hasCards = lanes.some((lane) => lane.items && lane.items.length);
       if (!lanes.length) {
         return emptyFor(H, "claimsPipeline", "Claims pipeline");
       }
-      return H.canvasKanbanLanes(lanes, "claimsPipeline", { claims: true });
+      const board = H.canvasKanbanLanes(lanes, "claimsPipeline", { claims: true });
+      if (hasCards) return board;
+      return `${board}${emptyFor(H, "claimsPipeline", "Claim cards")}`;
     },
     arAgingAndCollections(D, H, panel) {
       const aging = D && D.arAgingBars ? D.arAgingBars() : D && D.softdentAgingBars ? D.softdentAgingBars() : null;
@@ -836,7 +838,10 @@ const MoonshotLayoutEngine = (function () {
     narrativeWorkflow(D, H, panel) {
       if (panel && panel.type === "kanban") {
         const lanes = D && D.narrativeKanban ? D.narrativeKanban() : [];
-        return H.canvasKanbanLanes(lanes, "narrativeWorkflow", { narratives: true });
+        const board = H.canvasKanbanLanes(lanes, "narrativeWorkflow", { narratives: true });
+        const hasCards = lanes.some((lane) => lane.items && lane.items.length);
+        if (hasCards) return board;
+        return `${board}${emptyFor(H, "narrativeWorkflow", "Narrative drafts")}`;
       }
       return emptyFor(H, "narrativeWorkflow", "Narrative drafts");
     },
