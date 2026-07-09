@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "updatedAt": "2026-07-09T15:46:12Z",
-  "sourceNote": "Curated NR2 payer reference plus New Ridge SoftDent InsCo (Sensei) and office Insurance.xlsx contacts. Not member-specific benefits. Verify eligibility via 270/271 or clearinghouse; confirm payer ID on card.",
+  "updatedAt": "2026-07-09T18:42:56Z",
+  "sourceNote": "Curated NR2 payer reference plus New Ridge SoftDent InsCo (Sensei) and office Insurance.xlsx contacts. Not member-specific benefits. Verify eligibility via 270/271 or clearinghouse; confirm payer ID on card. SoftDent\u2194Tesia join applied (exact ECS/Vyne IDs). SoftDent\u2194Tesia join applied (exact ECS/Vyne IDs). SoftDent\u2194Tesia join applied (exact ECS/Vyne IDs). SoftDent\u2194Tesia join applied (exact ECS/Vyne IDs).",
   "payers": [
     {
       "id": "delta-dental",
@@ -19,13 +19,14 @@
         "DDPFS"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Largest dental network; state affiliates use different payer IDs. Code 16 often needs narrative + radiographs. Verify state-specific Delta entity on ID card.",
+      "narrativeNotes": "Largest dental network; state affiliates use different payer IDs. Code 16 often needs narrative + radiographs. Verify state-specific Delta entity on ID card. Tesia/Vyne ID 11198. Tesia/Vyne ID DELTA.",
       "commonDenialCodes": [
         "16",
         "97",
         "bundled"
       ],
-      "eligibilityNotes": "270/271 via clearinghouse; member ID format varies by state."
+      "eligibilityNotes": "270/271 via clearinghouse; member ID format varies by state.",
+      "tesiaPayerId": "DELTA"
     },
     {
       "id": "metlife-dental",
@@ -37,6 +38,7 @@
         "Metropolitan Life Insurance Company (MetLife)"
       ],
       "payerIds": [
+        "0000E",
         "65978",
         "METLF",
         "METLIFE DENTAL",
@@ -44,13 +46,14 @@
         "Metropolitan Life Insurance Company (MetLife)"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Metropolitan Life Insurance Company (MetLife). Eligibility (800) 638-5433; claim phone (800) 638-5433. Vyne/e-claim 65978 OR 0000E. SoftDent carrier label: METLIFE DENTAL.",
+      "narrativeNotes": "Office Insurance.xlsx: Metropolitan Life Insurance Company (MetLife). Eligibility (800) 638-5433; claim phone (800) 638-5433. Vyne/e-claim 65978 OR 0000E. SoftDent carrier label: METLIFE DENTAL. Tesia/Vyne ID 65978. Tesia/Vyne ID 0000E.",
       "commonDenialCodes": [
         "alternate benefit",
         "downgrade"
       ],
       "source": "softdent-insco-sensei",
-      "eligibilityNotes": "Eligibility phone (800) 638-5433; claim phone (800) 638-5433."
+      "eligibilityNotes": "Eligibility phone (800) 638-5433; claim phone (800) 638-5433.",
+      "tesiaPayerId": "0000E"
     },
     {
       "id": "cigna-dental",
@@ -68,13 +71,14 @@
         "Cigna PPO"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Cigna PPO. Eligibility (800) 244-6224; claim phone (800)244-6224. Vyne/e-claim 62308. SoftDent carrier label: CIGNA DENTAL.",
+      "narrativeNotes": "Office Insurance.xlsx: Cigna PPO. Eligibility (800) 244-6224; claim phone (800)244-6224. Vyne/e-claim 62308. SoftDent carrier label: CIGNA DENTAL. Tesia/Vyne ID 62308.",
       "commonDenialCodes": [
         "prior auth",
         "missing info"
       ],
       "source": "softdent-insco-sensei",
-      "eligibilityNotes": "Eligibility phone (800) 244-6224; claim phone (800)244-6224."
+      "eligibilityNotes": "Eligibility phone (800) 244-6224; claim phone (800)244-6224.",
+      "tesiaPayerId": "62308"
     },
     {
       "id": "aetna-dental",
@@ -89,11 +93,12 @@
         "AETNA"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Medical/dental plan crossover on appliances; keep narratives clinical not cosmetic.",
+      "narrativeNotes": "Medical/dental plan crossover on appliances; keep narratives clinical not cosmetic. Tesia/Vyne ID 60054.",
       "commonDenialCodes": [
         "16",
         "not covered"
-      ]
+      ],
+      "tesiaPayerId": "60054"
     },
     {
       "id": "uhc-dental",
@@ -109,11 +114,12 @@
         "87726"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Use payer ID 52133 for DBP; UMR uses separate ID. 270/271 service type 35 for dental.",
+      "narrativeNotes": "Use payer ID 52133 for DBP; UMR uses separate ID. 270/271 service type 35 for dental. Tesia/Vyne ID 52133.",
       "commonDenialCodes": [
         "missing info",
         "frequency"
-      ]
+      ],
+      "tesiaPayerId": "52133"
     },
     {
       "id": "guardian-dental",
@@ -127,11 +133,12 @@
         "GUARD"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Strong on frequency limits for prophy/BWX; document perio charting when billing SRP same visit.",
+      "narrativeNotes": "Strong on frequency limits for prophy/BWX; document perio charting when billing SRP same visit. Tesia/Vyne ID 64246.",
       "commonDenialCodes": [
         "frequency",
         "bundled"
-      ]
+      ],
+      "tesiaPayerId": "64246"
     },
     {
       "id": "humana-dental",
@@ -148,13 +155,14 @@
         "Humana"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Humana. Eligibility (800) 833-2223; claim phone (800) 833-2223. Vyne/e-claim 73288. SoftDent carrier label: HUMANA DENTAL.",
+      "narrativeNotes": "Office Insurance.xlsx: Humana. Eligibility (800) 833-2223; claim phone (800) 833-2223. Vyne/e-claim 73288. SoftDent carrier label: HUMANA DENTAL. Tesia/Vyne ID 73288.",
       "commonDenialCodes": [
         "not covered",
         "medicare"
       ],
       "source": "softdent-insco-sensei",
-      "eligibilityNotes": "Eligibility phone (800) 833-2223; claim phone (800) 833-2223."
+      "eligibilityNotes": "Eligibility phone (800) 833-2223; claim phone (800) 833-2223.",
+      "tesiaPayerId": "73288"
     },
     {
       "id": "anthem-dental",
@@ -169,11 +177,12 @@
         "ANTHM"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "State BCBS affiliate routing; check claims address on card.",
+      "narrativeNotes": "State BCBS affiliate routing; check claims address on card. Tesia/Vyne ID 84105.",
       "commonDenialCodes": [
         "16",
         "coordination"
-      ]
+      ],
+      "tesiaPayerId": "84105"
     },
     {
       "id": "bcbs-michigan-dental",
@@ -187,10 +196,11 @@
         "00210"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Michigan-specific fee schedules; narrative for major services.",
+      "narrativeNotes": "Michigan-specific fee schedules; narrative for major services. Tesia/Vyne ID 00210. Tesia/Vyne ID BBMDQ.",
       "commonDenialCodes": [
         "missing info"
-      ]
+      ],
+      "tesiaPayerId": "BBMDQ"
     },
     {
       "id": "bcbs-texas-dental",
@@ -203,10 +213,11 @@
         "84980"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Verify HMO vs PPO on card before appeal language.",
+      "narrativeNotes": "Verify HMO vs PPO on card before appeal language. Tesia/Vyne ID 84980.",
       "commonDenialCodes": [
         "not covered"
-      ]
+      ],
+      "tesiaPayerId": "84980"
     },
     {
       "id": "ameritas-dental",
@@ -219,10 +230,11 @@
         "AMERI"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Network vs out-of-network benefits differ; cite OON rules when applicable.",
+      "narrativeNotes": "Network vs out-of-network benefits differ; cite OON rules when applicable. Tesia/Vyne ID 47009.",
       "commonDenialCodes": [
         "downgrade"
-      ]
+      ],
+      "tesiaPayerId": "47009"
     },
     {
       "id": "principal-dental",
@@ -234,10 +246,11 @@
         "61271"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Employer-group heavy; eligibility drives annual max remaining.",
+      "narrativeNotes": "Employer-group heavy; eligibility drives annual max remaining. Tesia/Vyne ID 61271.",
       "commonDenialCodes": [
         "frequency"
-      ]
+      ],
+      "tesiaPayerId": "61271"
     },
     {
       "id": "sunlife-dental",
@@ -250,10 +263,11 @@
         "70408"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Canadian/US employer plans; confirm US routing.",
+      "narrativeNotes": "Canadian/US employer plans; confirm US routing. Tesia/Vyne ID 70408.",
       "commonDenialCodes": [
         "missing info"
-      ]
+      ],
+      "tesiaPayerId": "70408"
     },
     {
       "id": "lincoln-dental",
@@ -266,10 +280,11 @@
         "52148"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Narrative for major services; watch waiting periods on basic/major.",
+      "narrativeNotes": "Narrative for major services; watch waiting periods on basic/major. Tesia/Vyne ID 52148.",
       "commonDenialCodes": [
         "waiting period"
-      ]
+      ],
+      "tesiaPayerId": "52148"
     },
     {
       "id": "unum-dental",
@@ -283,10 +298,11 @@
         "STR01"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Administered benefits; card may show TPA name not Unum.",
+      "narrativeNotes": "Administered benefits; card may show TPA name not Unum. Tesia/Vyne ID STR01.",
       "commonDenialCodes": [
         "not covered"
-      ]
+      ],
+      "tesiaPayerId": "STR01"
     },
     {
       "id": "dentaquest",
@@ -305,13 +321,14 @@
         "Dentaquest - Commercial"
       ],
       "type": "medicaid_dental",
-      "narrativeNotes": "Office Insurance.xlsx: Dentaquest - Commercial. Eligibility (844) 870-3977; claim phone (844) 870-3977. Vyne/e-claim 04356. SoftDent carrier label: DENTAQUEST.",
+      "narrativeNotes": "Office Insurance.xlsx: Dentaquest - Commercial. Eligibility (844) 870-3977; claim phone (844) 870-3977. Vyne/e-claim 04356. SoftDent carrier label: DENTAQUEST. Tesia/Vyne ID 04356.",
       "commonDenialCodes": [
         "prior auth",
         "medical necessity"
       ],
       "source": "softdent-insco-sensei",
-      "eligibilityNotes": "Eligibility phone (844) 870-3977; claim phone (844) 870-3977."
+      "eligibilityNotes": "Eligibility phone (844) 870-3977; claim phone (844) 870-3977.",
+      "tesiaPayerId": "04356"
     },
     {
       "id": "liberty-dental",
@@ -324,11 +341,12 @@
         "LIBRT"
       ],
       "type": "medicaid_dental",
-      "narrativeNotes": "Medicaid-focused; frequency and prior auth rules vary by state contract.",
+      "narrativeNotes": "Medicaid-focused; frequency and prior auth rules vary by state contract. Tesia/Vyne ID 52147.",
       "commonDenialCodes": [
         "frequency",
         "prior auth"
-      ]
+      ],
+      "tesiaPayerId": "52147"
     },
     {
       "id": "mcna-dental",
@@ -340,10 +358,11 @@
         "65030"
       ],
       "type": "medicaid_dental",
-      "narrativeNotes": "State Medicaid dental administrator; use state portal for PA status.",
+      "narrativeNotes": "State Medicaid dental administrator; use state portal for PA status. Tesia/Vyne ID 65030.",
       "commonDenialCodes": [
         "prior auth"
-      ]
+      ],
+      "tesiaPayerId": "65030"
     },
     {
       "id": "envolve-dental",
@@ -356,10 +375,11 @@
         "68069"
       ],
       "type": "medicaid_dental",
-      "narrativeNotes": "Marketplace/Medicaid mix; verify active coverage every visit.",
+      "narrativeNotes": "Marketplace/Medicaid mix; verify active coverage every visit. Tesia/Vyne ID 68069.",
       "commonDenialCodes": [
         "inactive"
-      ]
+      ],
+      "tesiaPayerId": "68069"
     },
     {
       "id": "careington",
@@ -372,7 +392,7 @@
         "CARE"
       ],
       "type": "discount",
-      "narrativeNotes": "Discount plan not insurance — do not draft insurance appeal narratives; patient pays contracted fee.",
+      "narrativeNotes": "Discount plan not insurance \u2014 do not draft insurance appeal narratives; patient pays contracted fee.",
       "commonDenialCodes": [
         "not insurance"
       ]
@@ -404,12 +424,13 @@
         "BEAM DENTAL"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Beam Dental. Eligibility (800) 648-1179; claim phone (800) 648-1179. Vyne/e-claim BEAM1. SoftDent carrier label: BEAM DENTAL.",
+      "narrativeNotes": "Office Insurance.xlsx: Beam Dental. Eligibility (800) 648-1179; claim phone (800) 648-1179. Vyne/e-claim BEAM1. SoftDent carrier label: BEAM DENTAL. Tesia/Vyne ID BEAM1.",
       "commonDenialCodes": [
         "missing info"
       ],
       "source": "softdent-insco-sensei",
-      "eligibilityNotes": "Eligibility phone (800) 648-1179; claim phone (800) 648-1179."
+      "eligibilityNotes": "Eligibility phone (800) 648-1179; claim phone (800) 648-1179.",
+      "tesiaPayerId": "BEAM1"
     },
     {
       "id": "dominion-dental",
@@ -419,17 +440,19 @@
         "softdent 771"
       ],
       "payerIds": [
+        "DOM01",
         "DOMIN",
         "DOMINION NATIONAL",
         "DOM01 OR 0000W"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Dominion National. Eligibility (888) 471-3631; claim phone (888) 471-3631. Vyne/e-claim DOM01 OR 0000W. SoftDent carrier label: DOMINION NATIONAL.",
+      "narrativeNotes": "Office Insurance.xlsx: Dominion National. Eligibility (888) 471-3631; claim phone (888) 471-3631. Vyne/e-claim DOM01 OR 0000W. SoftDent carrier label: DOMINION NATIONAL. Tesia/Vyne ID DOM01.",
       "commonDenialCodes": [
         "16"
       ],
       "source": "softdent-insco-sensei",
-      "eligibilityNotes": "Eligibility phone (888) 471-3631; claim phone (888) 471-3631."
+      "eligibilityNotes": "Eligibility phone (888) 471-3631; claim phone (888) 471-3631.",
+      "tesiaPayerId": "DOM01"
     },
     {
       "id": "geha-dental",
@@ -443,10 +466,11 @@
         "57254"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Federal employee plans; separate FEHB rules.",
+      "narrativeNotes": "Federal employee plans; separate FEHB rules. Tesia/Vyne ID 39026.",
       "commonDenialCodes": [
         "frequency"
-      ]
+      ],
+      "tesiaPayerId": "39026"
     },
     {
       "id": "aarp-delta",
@@ -458,10 +482,11 @@
         "AARP1"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Administered by Delta; use Delta narrative standards and routing.",
+      "narrativeNotes": "Administered by Delta; use Delta narrative standards and routing. Tesia/Vyne ID AARP1.",
       "commonDenialCodes": [
         "16"
-      ]
+      ],
+      "tesiaPayerId": "AARP1"
     },
     {
       "id": "delta-dental-ca",
@@ -475,11 +500,12 @@
         "DDICA"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Separate from national Delta; strict 270/271 member match on DOB/name.",
+      "narrativeNotes": "Separate from national Delta; strict 270/271 member match on DOB/name. Tesia/Vyne ID 77777.",
       "commonDenialCodes": [
         "16",
         "missing info"
-      ]
+      ],
+      "tesiaPayerId": "77777"
     },
     {
       "id": "delta-dental-ny",
@@ -491,10 +517,11 @@
         "11198"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Northeast employer groups; narrative for major/restorative.",
+      "narrativeNotes": "Northeast employer groups; narrative for major/restorative. Tesia/Vyne ID 11198.",
       "commonDenialCodes": [
         "bundled"
-      ]
+      ],
+      "tesiaPayerId": "11198"
     },
     {
       "id": "delta-dental-wa",
@@ -507,10 +534,11 @@
         "52147"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Verify Premier vs PPO on eligibility response.",
+      "narrativeNotes": "Verify Premier vs PPO on eligibility response. Tesia/Vyne ID 52147.",
       "commonDenialCodes": [
         "downgrade"
-      ]
+      ],
+      "tesiaPayerId": "52147"
     },
     {
       "id": "delta-dental-mo",
@@ -522,10 +550,11 @@
         "43090"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Regional fee schedule; attach perio chart for SRP.",
+      "narrativeNotes": "Regional fee schedule; attach perio chart for SRP. Tesia/Vyne ID 43090.",
       "commonDenialCodes": [
         "frequency"
-      ]
+      ],
+      "tesiaPayerId": "43090"
     },
     {
       "id": "delta-dental-pa",
@@ -537,10 +566,11 @@
         "23166"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Common in mid-Atlantic employer market.",
+      "narrativeNotes": "Common in mid-Atlantic employer market. Tesia/Vyne ID 23166.",
       "commonDenialCodes": [
         "16"
-      ]
+      ],
+      "tesiaPayerId": "23166"
     },
     {
       "id": "premera-dental",
@@ -584,10 +614,11 @@
         "SCION"
       ],
       "type": "tpa",
-      "narrativeNotes": "Third-party administrator; card shows underlying payer — bill correct entity.",
+      "narrativeNotes": "Third-party administrator; card shows underlying payer \u2014 bill correct entity. Tesia/Vyne ID SCION.",
       "commonDenialCodes": [
         "routing"
-      ]
+      ],
+      "tesiaPayerId": "SCION"
     },
     {
       "id": "healthplex-dental",
@@ -634,11 +665,12 @@
         "MA001"
       ],
       "type": "medicare",
-      "narrativeNotes": "Supplemental dental only; low annual max common. Medical plan handles TMJ differently.",
+      "narrativeNotes": "Supplemental dental only; low annual max common. Medical plan handles TMJ differently. Tesia/Vyne ID MA001.",
       "commonDenialCodes": [
         "not covered",
         "annual max"
-      ]
+      ],
+      "tesiaPayerId": "MA001"
     },
     {
       "id": "tricare-dental",
@@ -648,15 +680,17 @@
         "united concordia"
       ],
       "payerIds": [
+        "0000D",
         "UCCTR",
         "99726"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Active duty family plans; follow TRICARE frequency tables.",
+      "narrativeNotes": "Active duty family plans; follow TRICARE frequency tables. Tesia/Vyne ID 99726. Tesia/Vyne ID 0000D.",
       "commonDenialCodes": [
         "frequency",
         "prior auth"
-      ]
+      ],
+      "tesiaPayerId": "0000D"
     },
     {
       "id": "fep-blue-dental",
@@ -730,10 +764,11 @@
         "DSEL1"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Regional PPO; eligibility before major treatment plan.",
+      "narrativeNotes": "Regional PPO; eligibility before major treatment plan. Tesia/Vyne ID DSEL1.",
       "commonDenialCodes": [
         "waiting period"
-      ]
+      ],
+      "tesiaPayerId": "DSEL1"
     },
     {
       "id": "renaissance-dental",
@@ -745,10 +780,11 @@
         "RLHA1"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Humana affiliate in some markets; verify legal entity on 271.",
+      "narrativeNotes": "Humana affiliate in some markets; verify legal entity on 271. Tesia/Vyne ID RLHA1.",
       "commonDenialCodes": [
         "missing info"
-      ]
+      ],
+      "tesiaPayerId": "RLHA1"
     },
     {
       "id": "solstice-dental",
@@ -775,10 +811,11 @@
         "64157"
       ],
       "type": "tpa",
-      "narrativeNotes": "Aetna company TPA; use Meritain payer ID on claims.",
+      "narrativeNotes": "Aetna company TPA; use Meritain payer ID on claims. Tesia/Vyne ID 64157.",
       "commonDenialCodes": [
         "routing"
-      ]
+      ],
+      "tesiaPayerId": "64157"
     },
     {
       "id": "local-union-plans",
@@ -806,16 +843,17 @@
         "bcbs of kansas"
       ],
       "payerIds": [
-        "BCBSK",
-        "47171"
+        "47163",
+        "BCBSK"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Kansas BCBS affiliate routing — verify payer ID on Kansas member card. Narrative for major services; coordinate medical/dental for appliances.",
+      "narrativeNotes": "BCBSKS (Topeka) \u2014 Tesia/Vyne ID 47163. Do not confuse with Blue KC 47171. Verify payer ID on Kansas member card. Narrative for major services; coordinate medical/dental for appliances.",
       "commonDenialCodes": [
         "16",
         "coordination",
         "missing info"
-      ]
+      ],
+      "tesiaPayerId": "47163"
     },
     {
       "id": "self-pay",
@@ -845,10 +883,11 @@
         "Delta Dental of Pennsylvania - DDP"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Pennsylvania - DDP. Eligibility (800) 932-0783; claim phone (800) 932-0783. Vyne/e-claim 23166. SoftDent carrier label: DELTA DENTAL OF PA.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Pennsylvania - DDP. Eligibility (800) 932-0783; claim phone (800) 932-0783. Vyne/e-claim 23166. SoftDent carrier label: DELTA DENTAL OF PA. Tesia/Vyne ID 23166.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 932-0783; claim phone (800) 932-0783.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "23166"
     },
     {
       "id": "nr2-principal-life-insurance-co",
@@ -863,10 +902,11 @@
         "Principal Life Insurance Company"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Principal Life Insurance Company. Eligibility (800) 274-4695; claim phone (800) 274-4695. Vyne/e-claim 61271. SoftDent carrier label: PRINCIPAL LIFE INSURANCE CO.",
+      "narrativeNotes": "Office Insurance.xlsx: Principal Life Insurance Company. Eligibility (800) 274-4695; claim phone (800) 274-4695. Vyne/e-claim 61271. SoftDent carrier label: PRINCIPAL LIFE INSURANCE CO. Tesia/Vyne ID 61271.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 274-4695; claim phone (800) 274-4695.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "61271"
     },
     {
       "id": "nr2-delta-dental-of-mi",
@@ -875,14 +915,16 @@
         "softdent 255"
       ],
       "payerIds": [
+        "DELTA",
         "10004",
         "DELTA DENTAL OF MI"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 255. ECS payer id 10004. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 255. ECS payer id 10004. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 10004. Tesia/Vyne ID DELTA.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELTA"
     },
     {
       "id": "nr2-delta-dental-of-ar",
@@ -898,10 +940,11 @@
         "Delta Dental of Arkansas"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Arkansas. Eligibility (800) 462-5410; claim phone (800) 462-5410. Vyne/e-claim DELAR. SoftDent carrier label: DELTA DENTAL OF AR.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Arkansas. Eligibility (800) 462-5410; claim phone (800) 462-5410. Vyne/e-claim DELAR. SoftDent carrier label: DELTA DENTAL OF AR. Tesia/Vyne ID DELAR.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 462-5410; claim phone (800) 462-5410.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELAR"
     },
     {
       "id": "nr2-ameritas",
@@ -916,10 +959,11 @@
         "Ameritas Life Insurance Company"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Ameritas Life Insurance Company. Eligibility (800) 487-5553; claim phone (800) 487-5553. Vyne/e-claim 47009. SoftDent carrier label: AMERITAS.",
+      "narrativeNotes": "Office Insurance.xlsx: Ameritas Life Insurance Company. Eligibility (800) 487-5553; claim phone (800) 487-5553. Vyne/e-claim 47009. SoftDent carrier label: AMERITAS. Tesia/Vyne ID 47009.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 487-5553; claim phone (800) 487-5553.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "47009"
     },
     {
       "id": "nr2-delta-dental-of-ky",
@@ -935,10 +979,11 @@
         "Delta Dental of Kentucky"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Kentucky. Eligibility (800) 955-2030; claim phone (800) 955-2030. Vyne/e-claim CDKY1. SoftDent carrier label: DELTA DENTAL OF KY.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Kentucky. Eligibility (800) 955-2030; claim phone (800) 955-2030. Vyne/e-claim CDKY1. SoftDent carrier label: DELTA DENTAL OF KY. Tesia/Vyne ID 17004. Tesia/Vyne ID CDKY1.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 955-2030; claim phone (800) 955-2030.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDKY1"
     },
     {
       "id": "nr2-delta-dental-of-il-5402",
@@ -954,10 +999,11 @@
         "Delta Dental of Illinois"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Illinois. Eligibility (800) 323-1743; claim phone (800) 323-1743. Vyne/e-claim 47598. SoftDent carrier label: DELTA DENTAL OF IL - 5402.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Illinois. Eligibility (800) 323-1743; claim phone (800) 323-1743. Vyne/e-claim 47598. SoftDent carrier label: DELTA DENTAL OF IL - 5402. Tesia/Vyne ID 05030. Tesia/Vyne ID 47598.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 323-1743; claim phone (800) 323-1743.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "47598"
     },
     {
       "id": "nr2-delta-dental-of-co",
@@ -972,10 +1018,11 @@
         "Delta Dental of Colorado"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Colorado. Eligibility (800) 610-0201; claim phone (800) 610-0201. Vyne/e-claim 84056. SoftDent carrier label: DELTA DENTAL OF CO.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Colorado. Eligibility (800) 610-0201; claim phone (800) 610-0201. Vyne/e-claim 84056. SoftDent carrier label: DELTA DENTAL OF CO. Tesia/Vyne ID 84056.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 610-0201; claim phone (800) 610-0201.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "84056"
     },
     {
       "id": "nr2-delta-dental-of-va",
@@ -991,10 +1038,11 @@
         "Delta Dental of Virginia"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Virginia. Eligibility (800) 237-6060; claim phone (800) 237-6060. Vyne/e-claim CDVA1. SoftDent carrier label: DELTA DENTAL OF VA.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Virginia. Eligibility (800) 237-6060; claim phone (800) 237-6060. Vyne/e-claim CDVA1. SoftDent carrier label: DELTA DENTAL OF VA. Tesia/Vyne ID 54084. Tesia/Vyne ID CDVA1.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 237-6060; claim phone (800) 237-6060.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDVA1"
     },
     {
       "id": "nr2-delta-dental-of-ok",
@@ -1010,10 +1058,11 @@
         "Delta Dental of Oklahoma"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Oklahoma. Eligibility (800) 990-7337; claim phone (800) 990-7337. Vyne/e-claim DELOK. SoftDent carrier label: DELTA DENTAL OF OK.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Oklahoma. Eligibility (800) 990-7337; claim phone (800) 990-7337. Vyne/e-claim DELOK. SoftDent carrier label: DELTA DENTAL OF OK. Tesia/Vyne ID 10001. Tesia/Vyne ID DELOK.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 990-7337; claim phone (800) 990-7337.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELOK"
     },
     {
       "id": "nr2-aflac-of-ga",
@@ -1026,10 +1075,11 @@
         "AFLAC OF GA"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 416. ECS payer id 58066. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 416. ECS payer id 58066. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 58066.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "58066"
     },
     {
       "id": "nr2-united-concordia-tdp",
@@ -1059,10 +1109,11 @@
         "Cigna Medical"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Cigna Medical. Eligibility (800) 244-6224; claim phone (800)244-6224. Vyne/e-claim 62308. SoftDent carrier label: CIGNA DENTAL - 182223.",
+      "narrativeNotes": "Office Insurance.xlsx: Cigna Medical. Eligibility (800) 244-6224; claim phone (800)244-6224. Vyne/e-claim 62308. SoftDent carrier label: CIGNA DENTAL - 182223. Tesia/Vyne ID 62308.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 244-6224; claim phone (800)244-6224.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "62308"
     },
     {
       "id": "nr2-guardian-life-insurance-co",
@@ -1077,10 +1128,11 @@
         "Guardian Life Insurance Co"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Guardian Life Insurance Co. Eligibility (800) 541-7846; claim phone (800) 541-7846. Vyne/e-claim 64246. SoftDent carrier label: GUARDIAN LIFE INSURANCE CO..",
+      "narrativeNotes": "Office Insurance.xlsx: Guardian Life Insurance Co. Eligibility (800) 541-7846; claim phone (800) 541-7846. Vyne/e-claim 64246. SoftDent carrier label: GUARDIAN LIFE INSURANCE CO.. Tesia/Vyne ID 64246.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 541-7846; claim phone (800) 541-7846.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "64246"
     },
     {
       "id": "nr2-delta-dental-of-ca",
@@ -1095,10 +1147,11 @@
         "Delta Dental of California (DDC)"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of California (DDC). Eligibility (888) 335-8227; claim phone (888) 335-8227. Vyne/e-claim 77777. SoftDent carrier label: DELTA DENTAL OF CA.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of California (DDC). Eligibility (888) 335-8227; claim phone (888) 335-8227. Vyne/e-claim 77777. SoftDent carrier label: DELTA DENTAL OF CA. Tesia/Vyne ID 77777.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (888) 335-8227; claim phone (888) 335-8227.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "77777"
     },
     {
       "id": "nr2-delta-dental-of-wa",
@@ -1113,10 +1166,11 @@
         "Delta Dental of Washington"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Washington. Eligibility (800) 554-1907; claim phone (800) 554-1907. Vyne/e-claim 91062. SoftDent carrier label: DELTA DENTAL OF WA.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Washington. Eligibility (800) 554-1907; claim phone (800) 554-1907. Vyne/e-claim 91062. SoftDent carrier label: DELTA DENTAL OF WA. Tesia/Vyne ID 91062.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 554-1907; claim phone (800) 554-1907.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "91062"
     },
     {
       "id": "nr2-bcbs-of-kansas-city",
@@ -1132,10 +1186,11 @@
         "Blue Cross Blue Shield of Kansas City"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Blue Cross Blue Shield of Kansas City. Eligibility (816) 395-3929; claim phone (816) 395-3929. Vyne/e-claim 47171. SoftDent carrier label: BCBS OF KANSAS CITY.",
+      "narrativeNotes": "Office Insurance.xlsx: Blue Cross Blue Shield of Kansas City. Eligibility (816) 395-3929; claim phone (816) 395-3929. Vyne/e-claim 47171. SoftDent carrier label: BCBS OF KANSAS CITY. Tesia/Vyne ID 47171.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (816) 395-3929; claim phone (816) 395-3929.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "47171"
     },
     {
       "id": "nr2-delta-dental-of-mn",
@@ -1151,10 +1206,11 @@
         "Delta Dental of Minnesota"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Minnesota. Eligibility (800) 448-3815; claim phone (800) 448-3815. Vyne/e-claim CDMN1. SoftDent carrier label: DELTA DENTAL OF MN.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Minnesota. Eligibility (800) 448-3815; claim phone (800) 448-3815. Vyne/e-claim CDMN1. SoftDent carrier label: DELTA DENTAL OF MN. Tesia/Vyne ID 10004. Tesia/Vyne ID CDMN1.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 448-3815; claim phone (800) 448-3815.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDMN1"
     },
     {
       "id": "nr2-geha-employee-program",
@@ -1168,10 +1224,11 @@
         "39026"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: GEHA Employee Program. Eligibility (877) 434-2336; claim phone (877) 434-2336. Vyne/e-claim 39026. SoftDent carrier label: GEHA EMPLOYEE PROGRAM.",
+      "narrativeNotes": "Office Insurance.xlsx: GEHA Employee Program. Eligibility (877) 434-2336; claim phone (877) 434-2336. Vyne/e-claim 39026. SoftDent carrier label: GEHA EMPLOYEE PROGRAM. Tesia/Vyne ID 39026.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (877) 434-2336; claim phone (877) 434-2336.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "39026"
     },
     {
       "id": "nr2-umr",
@@ -1186,10 +1243,11 @@
         "UMR - Midwest"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: UMR - Midwest. Eligibility (800) 826-9781; claim phone (800) 826-9781. Vyne/e-claim 79480. SoftDent carrier label: UMR.",
+      "narrativeNotes": "Office Insurance.xlsx: UMR - Midwest. Eligibility (800) 826-9781; claim phone (800) 826-9781. Vyne/e-claim 79480. SoftDent carrier label: UMR. Tesia/Vyne ID 79480.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 826-9781; claim phone (800) 826-9781.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "79480"
     },
     {
       "id": "nr2-sun-life-financial",
@@ -1202,10 +1260,11 @@
         "70408"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Sun Life Financial. Eligibility (800) 434-2638; claim phone (800) 434-2638. Vyne/e-claim 70408. SoftDent carrier label: SUN LIFE FINANCIAL.",
+      "narrativeNotes": "Office Insurance.xlsx: Sun Life Financial. Eligibility (800) 434-2638; claim phone (800) 434-2638. Vyne/e-claim 70408. SoftDent carrier label: SUN LIFE FINANCIAL. Tesia/Vyne ID 70408.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 434-2638; claim phone (800) 434-2638.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "70408"
     },
     {
       "id": "nr2-best-life-and-health-insurance-company",
@@ -1218,10 +1277,11 @@
         "95604"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Best Life and Health Insurance Company. Eligibility (877) 205-8767; claim phone (877) 205-8767. Vyne/e-claim 95604. SoftDent carrier label: BEST LIFE AND HEALTH INSURANCE COMPANY.",
+      "narrativeNotes": "Office Insurance.xlsx: Best Life and Health Insurance Company. Eligibility (877) 205-8767; claim phone (877) 205-8767. Vyne/e-claim 95604. SoftDent carrier label: BEST LIFE AND HEALTH INSURANCE COMPANY. Tesia/Vyne ID 95604.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (877) 205-8767; claim phone (877) 205-8767.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "95604"
     },
     {
       "id": "nr2-bcbs-of-il",
@@ -1234,10 +1294,11 @@
         "BCBS OF IL"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 563. ECS payer id 31004. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 563. ECS payer id 31004. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 31004.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "31004"
     },
     {
       "id": "nr2-delta-dental-of-nc",
@@ -1253,10 +1314,11 @@
         "Delta Dental of North Carolina"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of North Carolina. Eligibility (800) 622-8856; claim phone (800) 622-8856. Vyne/e-claim 56101. SoftDent carrier label: DELTA DENTAL OF NC.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of North Carolina. Eligibility (800) 622-8856; claim phone (800) 622-8856. Vyne/e-claim 56101. SoftDent carrier label: DELTA DENTAL OF NC. Tesia/Vyne ID 10004. Tesia/Vyne ID 56101.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 622-8856; claim phone (800) 622-8856.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "56101"
     },
     {
       "id": "nr2-cigna-dental-hmo",
@@ -1271,10 +1333,11 @@
         "Cigna DHMO"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Cigna DHMO. Eligibility (800) 288-4462; claim phone (800)288-4462. Vyne/e-claim 62308. SoftDent carrier label: CIGNA DENTAL - HMO.",
+      "narrativeNotes": "Office Insurance.xlsx: Cigna DHMO. Eligibility (800) 288-4462; claim phone (800)288-4462. Vyne/e-claim 62308. SoftDent carrier label: CIGNA DENTAL - HMO. Tesia/Vyne ID 62308.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 288-4462; claim phone (800)288-4462.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "62308"
     },
     {
       "id": "nr2-delta-dental-of-ia",
@@ -1287,10 +1350,11 @@
         "DELTA DENTAL OF IA"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 584. ECS payer id 30004. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 584. ECS payer id 30004. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 30004.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "30004"
     },
     {
       "id": "nr2-delta-dental-of-mo",
@@ -1305,10 +1369,11 @@
         "Delta Dental of Missouri"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Missouri. Eligibility (800) 335-8266; claim phone (800) 335-8266. Vyne/e-claim 43090. SoftDent carrier label: DELTA DENTAL OF MO.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Missouri. Eligibility (800) 335-8266; claim phone (800) 335-8266. Vyne/e-claim 43090. SoftDent carrier label: DELTA DENTAL OF MO. Tesia/Vyne ID 43090.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 335-8266; claim phone (800) 335-8266.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "43090"
     },
     {
       "id": "nr2-compbenefits-14283",
@@ -1323,10 +1388,11 @@
         "CompBenefits"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: CompBenefits. Eligibility (800) 833-2223; claim phone (800) 833-2023. Vyne/e-claim CX021. SoftDent carrier label: COMPBENEFITS - 14283.",
+      "narrativeNotes": "Office Insurance.xlsx: CompBenefits. Eligibility (800) 833-2223; claim phone (800) 833-2023. Vyne/e-claim CX021. SoftDent carrier label: COMPBENEFITS - 14283. Tesia/Vyne ID CX021.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 833-2223; claim phone (800) 833-2023.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CX021"
     },
     {
       "id": "nr2-bcbs-of-ks",
@@ -1344,10 +1410,11 @@
         "Blue Cross Blue Shield of Kansas (Federal Program)"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Blue Cross Blue Shield of Kansas (Federal Program). Eligibility (800) 432-0379; claim phone (800) 432-0379. Vyne/e-claim 47163. SoftDent carrier label: BCBS OF KS.",
+      "narrativeNotes": "Office Insurance.xlsx: Blue Cross Blue Shield of Kansas (Federal Program). Eligibility (800) 432-0379; claim phone (800) 432-0379. Vyne/e-claim 47163. SoftDent carrier label: BCBS OF KS. Tesia/Vyne ID 47163.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 432-0379; claim phone (800) 432-0379.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "47163"
     },
     {
       "id": "nr2-aetna",
@@ -1362,10 +1429,11 @@
         "Aetna (Commercial)"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Aetna (Commercial). Eligibility (800) 451-7715; claim phone (800) 451-7715. Vyne/e-claim 60054. SoftDent carrier label: AETNA.",
+      "narrativeNotes": "Office Insurance.xlsx: Aetna (Commercial). Eligibility (800) 451-7715; claim phone (800) 451-7715. Vyne/e-claim 60054. SoftDent carrier label: AETNA. Tesia/Vyne ID 60054.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 451-7715; claim phone (800) 451-7715.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "60054"
     },
     {
       "id": "nr2-delta-dental-ca-fed-govt-prgm",
@@ -1379,10 +1447,11 @@
         "CDCA1"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental CA FED Govt Prgm. Eligibility (800) 521-2651; claim phone (800) 538-9552. Vyne/e-claim CDCA1. SoftDent carrier label: DELTA DENTAL CA FED GOVT PRGM.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental CA FED Govt Prgm. Eligibility (800) 521-2651; claim phone (800) 538-9552. Vyne/e-claim CDCA1. SoftDent carrier label: DELTA DENTAL CA FED GOVT PRGM. Tesia/Vyne ID 37004. Tesia/Vyne ID CDCA1.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 521-2651; claim phone (800) 538-9552.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDCA1"
     },
     {
       "id": "nr2-central-states",
@@ -1397,10 +1466,11 @@
         "Central States Health and Welfare Fund"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Central States Health and Welfare Fund. Eligibility (800) 323-2190; claim phone (800) 323-2190. Vyne/e-claim 36215. SoftDent carrier label: CENTRAL STATES.",
+      "narrativeNotes": "Office Insurance.xlsx: Central States Health and Welfare Fund. Eligibility (800) 323-2190; claim phone (800) 323-2190. Vyne/e-claim 36215. SoftDent carrier label: CENTRAL STATES. Tesia/Vyne ID 36215.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 323-2190; claim phone (800) 323-2190.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "36215"
     },
     {
       "id": "nr2-physicians-mutual",
@@ -1413,10 +1483,11 @@
         "PHYSICIANS MUTUAL"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 649. ECS payer id 00978. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 649. ECS payer id 00978. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 00978.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "00978"
     },
     {
       "id": "nr2-delta-dental-of-ma",
@@ -1429,10 +1500,11 @@
         "DELTA DENTAL OF MA"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 650. ECS payer id 39069. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 650. ECS payer id 39069. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 39069.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "39069"
     },
     {
       "id": "nr2-careington-benefit-solutions",
@@ -1447,10 +1519,11 @@
         "Careington Corporation"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Careington Corporation. Eligibility (866) 636-9188; claim phone (866) 636-9188. Vyne/e-claim TLY44. SoftDent carrier label: CAREINGTON BENEFIT SOLUTIONS.",
+      "narrativeNotes": "Office Insurance.xlsx: Careington Corporation. Eligibility (866) 636-9188; claim phone (866) 636-9188. Vyne/e-claim TLY44. SoftDent carrier label: CAREINGTON BENEFIT SOLUTIONS. Tesia/Vyne ID TLY44.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (866) 636-9188; claim phone (866) 636-9188.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "TLY44"
     },
     {
       "id": "nr2-ebms",
@@ -1463,10 +1536,11 @@
         "EBMS"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: EBMS. Eligibility (406) 869-5555; claim phone (406) 869-5555. Vyne/e-claim 81039. SoftDent carrier label: EBMS.",
+      "narrativeNotes": "Office Insurance.xlsx: EBMS. Eligibility (406) 869-5555; claim phone (406) 869-5555. Vyne/e-claim 81039. SoftDent carrier label: EBMS. Tesia/Vyne ID 81039.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (406) 869-5555; claim phone (406) 869-5555.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "81039"
     },
     {
       "id": "nr2-renaissance-life-and-health",
@@ -1482,10 +1556,11 @@
         "Renaissance Life & Health"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Renaissance Life & Health. Eligibility (888) 358-9484; claim phone (888) 358-9484. Vyne/e-claim RLHA2. SoftDent carrier label: RENAISSANCE LIFE AND HEALTH.",
+      "narrativeNotes": "Office Insurance.xlsx: Renaissance Life & Health. Eligibility (888) 358-9484; claim phone (888) 358-9484. Vyne/e-claim RLHA2. SoftDent carrier label: RENAISSANCE LIFE AND HEALTH. Tesia/Vyne ID 01060.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (888) 358-9484; claim phone (888) 358-9484.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "01060"
     },
     {
       "id": "nr2-delta-dental-of-sd",
@@ -1500,10 +1575,11 @@
         "Delta Dental of South Dakota"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of South Dakota. Eligibility (877) 841-1478; claim phone (877) 841-1478. Vyne/e-claim 54097. SoftDent carrier label: DELTA DENTAL OF SD.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of South Dakota. Eligibility (877) 841-1478; claim phone (877) 841-1478. Vyne/e-claim 54097. SoftDent carrier label: DELTA DENTAL OF SD. Tesia/Vyne ID 54097.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (877) 841-1478; claim phone (877) 841-1478.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "54097"
     },
     {
       "id": "nr2-anthem-1115",
@@ -1535,10 +1611,11 @@
         "Blue Cross Blue Shield FEP Dental"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Blue Cross Blue Shield FEP Dental. Eligibility (855) 504-2583; claim phone (855) 504-2583. Vyne/e-claim BCAFD. SoftDent carrier label: FEP BLUE DENTAL.",
+      "narrativeNotes": "Office Insurance.xlsx: Blue Cross Blue Shield FEP Dental. Eligibility (855) 504-2583; claim phone (855) 504-2583. Vyne/e-claim BCAFD. SoftDent carrier label: FEP BLUE DENTAL. Tesia/Vyne ID BCAFD.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (855) 504-2583; claim phone (855) 504-2583.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "BCAFD"
     },
     {
       "id": "nr2-delta-dental-of-ny",
@@ -1554,10 +1631,11 @@
         "Delta Dental of New York"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of New York. Eligibility (888) 335-8227; claim phone (888) 335-8227. Vyne/e-claim 11198. SoftDent carrier label: DELTA DENTAL OF NY.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of New York. Eligibility (888) 335-8227; claim phone (888) 335-8227. Vyne/e-claim 11198. SoftDent carrier label: DELTA DENTAL OF NY. Tesia/Vyne ID 23166. Tesia/Vyne ID 11198.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (888) 335-8227; claim phone (888) 335-8227.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "11198"
     },
     {
       "id": "nr2-delta-dental-of-tn",
@@ -1573,10 +1651,11 @@
         "Delta Dental of Tennessee"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Tennessee. Eligibility (800) 223-3104; claim phone (800) 223-3104. Vyne/e-claim DELTN. SoftDent carrier label: DELTA DENTAL OF TN.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Tennessee. Eligibility (800) 223-3104; claim phone (800) 223-3104. Vyne/e-claim DELTN. SoftDent carrier label: DELTA DENTAL OF TN. Tesia/Vyne ID 22004. Tesia/Vyne ID DELTN.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 223-3104; claim phone (800) 223-3104.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELTN"
     },
     {
       "id": "nr2-delta-dental-ddic",
@@ -1585,14 +1664,16 @@
         "softdent 687"
       ],
       "payerIds": [
+        "94276",
         "01033",
         "DELTA DENTAL - DDIC"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 687. ECS payer id 01033. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 687. ECS payer id 01033. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 01033. Tesia/Vyne ID 94276.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "94276"
     },
     {
       "id": "nr2-medico",
@@ -1607,10 +1688,11 @@
         "Medico Insurance Company"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Medico Insurance Company. Eligibility (800) 228-6080; claim phone (800) 228-6080. Vyne/e-claim 23160. SoftDent carrier label: MEDICO.",
+      "narrativeNotes": "Office Insurance.xlsx: Medico Insurance Company. Eligibility (800) 228-6080; claim phone (800) 228-6080. Vyne/e-claim 23160. SoftDent carrier label: MEDICO. Tesia/Vyne ID 23160.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 228-6080; claim phone (800) 228-6080.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "23160"
     },
     {
       "id": "nr2-manhattan-life-insurance-company-of-amer",
@@ -1641,10 +1723,11 @@
         "Delta Dental of Ohio"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Ohio. Eligibility (800) 524-0149; claim phone (800) 524-0149. Vyne/e-claim DELTO. SoftDent carrier label: DELTA DENTAL OF OH.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Ohio. Eligibility (800) 524-0149; claim phone (800) 524-0149. Vyne/e-claim DELTO. SoftDent carrier label: DELTA DENTAL OF OH. Tesia/Vyne ID 10004. Tesia/Vyne ID DELTO.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 524-0149; claim phone (800) 524-0149.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELTO"
     },
     {
       "id": "nr2-ucci-fed-vip",
@@ -1653,14 +1736,16 @@
         "softdent 711"
       ],
       "payerIds": [
+        "0000D",
         "18004",
         "UCCI - FED VIP"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 711. ECS payer id 18004. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 711. ECS payer id 18004. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 18004. Tesia/Vyne ID 0000D.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "0000D"
     },
     {
       "id": "nr2-native-care-health",
@@ -1669,14 +1754,16 @@
         "softdent 713"
       ],
       "payerIds": [
+        "06126",
         "NATIVE CARE HEALTH",
         "06126 Paper Submitter"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Native Care Health. Eligibility (620) 856-2268; claim phone (620) 856-2268. Vyne/e-claim 06126 Paper Submitter. SoftDent carrier label: NATIVE CARE HEALTH.",
+      "narrativeNotes": "Office Insurance.xlsx: Native Care Health. Eligibility (620) 856-2268; claim phone (620) 856-2268. Vyne/e-claim 06126 Paper Submitter. SoftDent carrier label: NATIVE CARE HEALTH. Tesia/Vyne ID 06126.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (620) 856-2268; claim phone (620) 856-2268.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "06126"
     },
     {
       "id": "nr2-united-healthcare-30555",
@@ -1708,10 +1795,11 @@
         "Standard Insurance Company of New York"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Standard Insurance Company of New York. Eligibility (800) 547-9515; claim phone (800) 547-9515. Vyne/e-claim 69019. SoftDent carrier label: STANDARD INSURANCE COMPANY.",
+      "narrativeNotes": "Office Insurance.xlsx: Standard Insurance Company of New York. Eligibility (800) 547-9515; claim phone (800) 547-9515. Vyne/e-claim 69019. SoftDent carrier label: STANDARD INSURANCE COMPANY. Tesia/Vyne ID 69019.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 547-9515; claim phone (800) 547-9515.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "69019"
     },
     {
       "id": "nr2-delta-dental-of-or",
@@ -1720,14 +1808,16 @@
         "softdent 736"
       ],
       "payerIds": [
+        "CDOR1",
         "25004",
         "DELTA DENTAL OF OR"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 736. ECS payer id 25004. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 736. ECS payer id 25004. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 25004. Tesia/Vyne ID CDOR1.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDOR1"
     },
     {
       "id": "nr2-aetna-medicare-advantage",
@@ -1742,10 +1832,11 @@
         "Aetna (Medicare Advantage)"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Aetna (Medicare Advantage). Eligibility (800) 624-0756; claim phone (800) 624-0756. Vyne/e-claim n/a. SoftDent carrier label: AETNA MEDICARE ADVANTAGE.",
+      "narrativeNotes": "Office Insurance.xlsx: Aetna (Medicare Advantage). Eligibility (800) 624-0756; claim phone (800) 624-0756. Vyne/e-claim n/a. SoftDent carrier label: AETNA MEDICARE ADVANTAGE. Tesia/Vyne ID 60054.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 624-0756; claim phone (800) 624-0756.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "60054"
     },
     {
       "id": "nr2-united-healthcare-30567",
@@ -1758,10 +1849,11 @@
         "UNITED HEALTHCARE - 30567"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 741. ECS payer id 52133. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 741. ECS payer id 52133. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 52133.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "52133"
     },
     {
       "id": "nr2-premera-blue-cross",
@@ -1774,10 +1866,11 @@
         "PREMERA BLUE CROSS"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 744. ECS payer id 47570. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 744. ECS payer id 47570. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID 47570.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "47570"
     },
     {
       "id": "nr2-united-concordia-cx007",
@@ -1787,15 +1880,17 @@
         "United Concordia"
       ],
       "payerIds": [
+        "0000D",
         "00864",
         "UNITED CONCORDIA - CX007",
         "United Concordia"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: United Concordia. Eligibility (800) 332-0366; claim phone (800) 332-0366. Vyne/e-claim n/a. SoftDent carrier label: UNITED CONCORDIA - CX007.",
+      "narrativeNotes": "Office Insurance.xlsx: United Concordia. Eligibility (800) 332-0366; claim phone (800) 332-0366. Vyne/e-claim n/a. SoftDent carrier label: UNITED CONCORDIA - CX007. Tesia/Vyne ID 00864. Tesia/Vyne ID 0000D.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 332-0366; claim phone (800) 332-0366.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "0000D"
     },
     {
       "id": "nr2-meritain-health",
@@ -1804,14 +1899,16 @@
         "softdent 757"
       ],
       "payerIds": [
+        "06126",
         "MERITAIN HEALTH",
         "06126 Paper Submitter"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Meritain Health. Eligibility (800) 566-9311; claim phone (800) 566-9311. Vyne/e-claim 06126 Paper Submitter. SoftDent carrier label: MERITAIN HEALTH.",
+      "narrativeNotes": "Office Insurance.xlsx: Meritain Health. Eligibility (800) 566-9311; claim phone (800) 566-9311. Vyne/e-claim 06126 Paper Submitter. SoftDent carrier label: MERITAIN HEALTH. Tesia/Vyne ID 06126.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 566-9311; claim phone (800) 566-9311.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "06126"
     },
     {
       "id": "nr2-starmount",
@@ -1826,10 +1923,11 @@
         "Starmount Life Insurance Co"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Starmount Life Insurance Co. Eligibility (888) 400-9304; claim phone (888) 400-9304. Vyne/e-claim STR01. SoftDent carrier label: STARMOUNT.",
+      "narrativeNotes": "Office Insurance.xlsx: Starmount Life Insurance Co. Eligibility (888) 400-9304; claim phone (888) 400-9304. Vyne/e-claim STR01. SoftDent carrier label: STARMOUNT. Tesia/Vyne ID STR01.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (888) 400-9304; claim phone (888) 400-9304.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "STR01"
     },
     {
       "id": "nr2-centene-envolve-ks-wa",
@@ -1844,10 +1942,11 @@
         "Centene Dental (Ambetter)"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Centene Dental (Ambetter). Eligibility (855) 434-9245; claim phone (855) 434-9245. Vyne/e-claim 46278. SoftDent carrier label: CENTENE ENVOLVE KS WA.",
+      "narrativeNotes": "Office Insurance.xlsx: Centene Dental (Ambetter). Eligibility (855) 434-9245; claim phone (855) 434-9245. Vyne/e-claim 46278. SoftDent carrier label: CENTENE ENVOLVE KS WA. Tesia/Vyne ID 46278.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (855) 434-9245; claim phone (855) 434-9245.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "46278"
     },
     {
       "id": "nr2-truassure",
@@ -1862,10 +1961,11 @@
         "Truassure Insurance Co"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Truassure Insurance Co. Eligibility (888) 559-0779; claim phone (888) 559-0779. Vyne/e-claim ILDTA. SoftDent carrier label: TRUASSURE.",
+      "narrativeNotes": "Office Insurance.xlsx: Truassure Insurance Co. Eligibility (888) 559-0779; claim phone (888) 559-0779. Vyne/e-claim ILDTA. SoftDent carrier label: TRUASSURE. Tesia/Vyne ID ILDTA.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (888) 559-0779; claim phone (888) 559-0779.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "ILDTA"
     },
     {
       "id": "nr2-mutual-of-omaha",
@@ -1879,10 +1979,11 @@
         "CX087"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Mutual of Omaha. Eligibility (800) 927-9197; claim phone (800) 927-9197. Vyne/e-claim CX087. SoftDent carrier label: MUTUAL OF OMAHA.",
+      "narrativeNotes": "Office Insurance.xlsx: Mutual of Omaha. Eligibility (800) 927-9197; claim phone (800) 927-9197. Vyne/e-claim CX087. SoftDent carrier label: MUTUAL OF OMAHA. Tesia/Vyne ID 71412. Tesia/Vyne ID CX087.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 927-9197; claim phone (800) 927-9197.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CX087"
     },
     {
       "id": "nr2-bcbs-of-sc",
@@ -1897,10 +1998,11 @@
         "Blue Cross Blue Shield of South Carolina"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Blue Cross Blue Shield of South Carolina. Eligibility (800) 222-7156; claim phone (855) 404-6752. Vyne/e-claim 38520. SoftDent carrier label: BCBS OF SC.",
+      "narrativeNotes": "Office Insurance.xlsx: Blue Cross Blue Shield of South Carolina. Eligibility (800) 222-7156; claim phone (855) 404-6752. Vyne/e-claim 38520. SoftDent carrier label: BCBS OF SC. Tesia/Vyne ID 38520.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 222-7156; claim phone (855) 404-6752.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "38520"
     },
     {
       "id": "nr2-pequot-plus-health-3620",
@@ -1915,10 +2017,11 @@
         "Pequot Plus Health Benefit Administrators"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Pequot Plus Health Benefit Administrators. Eligibility (888) 779-6872; claim phone (888) 779-6872. Vyne/e-claim 37121. SoftDent carrier label: PEQUOT PLUS HEALTH - 3620.",
+      "narrativeNotes": "Office Insurance.xlsx: Pequot Plus Health Benefit Administrators. Eligibility (888) 779-6872; claim phone (888) 779-6872. Vyne/e-claim 37121. SoftDent carrier label: PEQUOT PLUS HEALTH - 3620. Tesia/Vyne ID 37121.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (888) 779-6872; claim phone (888) 779-6872.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "37121"
     },
     {
       "id": "nr2-uhc-universal-medicare-claims",
@@ -1951,10 +2054,11 @@
         "Delta Dental of Indiana"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Indiana. Eligibility (800) 524-0149; claim phone (800) 524-0149. Vyne/e-claim DELTI. SoftDent carrier label: DELTA DENTAL OF IN.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Indiana. Eligibility (800) 524-0149; claim phone (800) 524-0149. Vyne/e-claim DELTI. SoftDent carrier label: DELTA DENTAL OF IN. Tesia/Vyne ID 10004. Tesia/Vyne ID DELTI.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 524-0149; claim phone (800) 524-0149.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELTI"
     },
     {
       "id": "nr2-first-continental-life-accident",
@@ -1970,10 +2074,11 @@
         "First Continental Life and Accident"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: First Continental Life and Accident. Eligibility (877) 493-6282; claim phone (877) 493-6282. Vyne/e-claim CX090. SoftDent carrier label: FIRST CONTINENTAL LIFE & ACCIDENT.",
+      "narrativeNotes": "Office Insurance.xlsx: First Continental Life and Accident. Eligibility (877) 493-6282; claim phone (877) 493-6282. Vyne/e-claim CX090. SoftDent carrier label: FIRST CONTINENTAL LIFE & ACCIDENT. Tesia/Vyne ID 01074.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (877) 493-6282; claim phone (877) 493-6282.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "01074"
     },
     {
       "id": "nr2-bcbs-of-tx",
@@ -1989,10 +2094,11 @@
         "Blue Cross Blue Shield of Texas"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Blue Cross Blue Shield of Texas. Eligibility (800) 451-0287; claim phone (800) 451-0287. Vyne/e-claim 84980. SoftDent carrier label: BCBS OF TX.",
+      "narrativeNotes": "Office Insurance.xlsx: Blue Cross Blue Shield of Texas. Eligibility (800) 451-0287; claim phone (800) 451-0287. Vyne/e-claim 84980. SoftDent carrier label: BCBS OF TX. Tesia/Vyne ID 31004. Tesia/Vyne ID 84980.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 451-0287; claim phone (800) 451-0287.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "84980"
     },
     {
       "id": "nr2-delta-dental-of-wi",
@@ -2007,10 +2113,11 @@
         "Delta Dental of Wisconsin"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Wisconsin. Eligibility (800) 236-3712; claim phone (800) 236-3712. Vyne/e-claim 39069. SoftDent carrier label: DELTA DENTAL OF WI.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Wisconsin. Eligibility (800) 236-3712; claim phone (800) 236-3712. Vyne/e-claim 39069. SoftDent carrier label: DELTA DENTAL OF WI. Tesia/Vyne ID 39069.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 236-3712; claim phone (800) 236-3712.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "39069"
     },
     {
       "id": "nr2-guarantee-trust-life",
@@ -2026,10 +2133,11 @@
         "Guarantee Trust Life"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Guarantee Trust Life. Eligibility (800) 338-7452; claim phone (800) 338-7452. Vyne/e-claim TLW81. SoftDent carrier label: UNITED NATIONAL LIFE INSURANCE.",
+      "narrativeNotes": "Office Insurance.xlsx: Guarantee Trust Life. Eligibility (800) 338-7452; claim phone (800) 338-7452. Vyne/e-claim TLW81. SoftDent carrier label: UNITED NATIONAL LIFE INSURANCE. Tesia/Vyne ID TLW81.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 338-7452; claim phone (800) 338-7452.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "TLW81"
     },
     {
       "id": "nr2-aflac",
@@ -2041,10 +2149,11 @@
         "Aflac"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "SoftDent InsCo id 796. ECS payer id n/a. New Ridge accepted/on-file carrier from Sensei DataSync.",
+      "narrativeNotes": "SoftDent InsCo id 796. ECS payer id n/a. New Ridge accepted/on-file carrier from Sensei DataSync. Tesia/Vyne ID Aflac. Tesia/Vyne ID AFLAC.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "AFLAC"
     },
     {
       "id": "nr2-delta-dental-of-ks",
@@ -2060,10 +2169,11 @@
         "Delta Dental of Kansas"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Kansas. Eligibility (800) 234-3375; claim phone (800) 234-3375. Vyne/e-claim CDKS1. SoftDent carrier label: DELTA DENTAL OF KS.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Kansas. Eligibility (800) 234-3375; claim phone (800) 234-3375. Vyne/e-claim CDKS1. SoftDent carrier label: DELTA DENTAL OF KS. Tesia/Vyne ID CDKS1.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800) 234-3375; claim phone (800) 234-3375.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDKS1"
     },
     {
       "id": "nr2-cigna-dental-specialty",
@@ -2078,10 +2188,11 @@
         "Cigna DHMO"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Cigna DHMO. Eligibility (800)288-4462; claim phone (800)288-4462. Vyne/e-claim 62308. SoftDent carrier label: CIGNA DENTAL - SPECIALTY.",
+      "narrativeNotes": "Office Insurance.xlsx: Cigna DHMO. Eligibility (800)288-4462; claim phone (800)288-4462. Vyne/e-claim 62308. SoftDent carrier label: CIGNA DENTAL - SPECIALTY. Tesia/Vyne ID 62308.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Eligibility phone (800)288-4462; claim phone (800)288-4462.",
-      "source": "softdent-insco-sensei"
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "62308"
     },
     {
       "id": "nr2-anthem-188",
@@ -2111,10 +2222,11 @@
         "Centene Dental (Wellcare)"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Centene Dental (Wellcare). Eligibility (833) 206-6291; claim phone (833) 206-6291. Vyne/e-claim CX014. SoftDent carrier label: DENTAQUEST-GOVERNMENT.",
+      "narrativeNotes": "Office Insurance.xlsx: Centene Dental (Wellcare). Eligibility (833) 206-6291; claim phone (833) 206-6291. Vyne/e-claim CX014. SoftDent carrier label: DENTAQUEST-GOVERNMENT. Tesia/Vyne ID CX014.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "office-insurance-xlsx"
+      "source": "office-insurance-xlsx",
+      "tesiaPayerId": "CX014"
     },
     {
       "id": "nr2-colonia-life",
@@ -2128,10 +2240,11 @@
         "Starmount Life Insurance Co"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Starmount Life Insurance Co. Eligibility (588) 400-9330; claim phone (588) 400-9330. Vyne/e-claim STR01. SoftDent carrier label: COLONIA LIFE.",
+      "narrativeNotes": "Office Insurance.xlsx: Starmount Life Insurance Co. Eligibility (588) 400-9330; claim phone (588) 400-9330. Vyne/e-claim STR01. SoftDent carrier label: COLONIA LIFE. Tesia/Vyne ID STR01.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "office-insurance-xlsx"
+      "source": "office-insurance-xlsx",
+      "tesiaPayerId": "STR01"
     },
     {
       "id": "nr2-delta-dental-of-ga",
@@ -2145,10 +2258,11 @@
         "Delta Dental of Georgia - DDIC"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Georgia - DDIC. Eligibility (800) 521-2651; claim phone (800) 521-2651. Vyne/e-claim 94276. SoftDent carrier label: DELTA DENTAL OF GA.",
+      "narrativeNotes": "Office Insurance.xlsx: Delta Dental of Georgia - DDIC. Eligibility (800) 521-2651; claim phone (800) 521-2651. Vyne/e-claim 94276. SoftDent carrier label: DELTA DENTAL OF GA. Tesia/Vyne ID 94276.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "office-insurance-xlsx"
+      "source": "office-insurance-xlsx",
+      "tesiaPayerId": "94276"
     },
     {
       "id": "nr2-manhattan-life-assurance-company-of-america",
@@ -2159,10 +2273,11 @@
         "MANHATTAN LIFE ASSURANCE COMPANY OF AMERICA"
       ],
       "type": "dental_ppo",
-      "narrativeNotes": "Office Insurance.xlsx: Manhattan Life Assurance Company of America. Eligibility (800) 669-9030; claim phone (800) 669-9030. Vyne/e-claim 86253. SoftDent carrier label: MANHATTAN LIFE ASSURANCE COMPANY OF AMERICA.",
+      "narrativeNotes": "Office Insurance.xlsx: Manhattan Life Assurance Company of America. Eligibility (800) 669-9030; claim phone (800) 669-9030. Vyne/e-claim 86253. SoftDent carrier label: MANHATTAN LIFE ASSURANCE COMPANY OF AMERICA. Tesia/Vyne ID 86253.",
       "commonDenialCodes": [],
       "eligibilityNotes": "Verify on ID card and clearinghouse; office contacts in Insurance.xlsx / SoftDent InsCo.",
-      "source": "office-insurance-xlsx"
+      "source": "office-insurance-xlsx",
+      "tesiaPayerId": "86253"
     },
     {
       "id": "nr2-united-concordia-fep-vip",

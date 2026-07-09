@@ -102,8 +102,15 @@ def _score_carrier(query: str, query_tokens: set[str], carrier: dict[str, Any]) 
             if isinstance(member, dict) and "KS" in (member.get("states") or []):
                 score += 4
                 break
-        if carrier.get("id") in {"kansas-medicaid-kancare", "delta-dental", "bcbs-state-plans"}:
-            score += 2
+        if carrier.get("id") in {
+            "kansas-medicaid-kancare",
+            "delta-dental",
+            "delta-dental-of-kansas",
+            "bcbs-kansas-dental",
+            "blue-kc-dental",
+            "bcbs-state-plans",
+        }:
+            score += 3
     return score
 
 

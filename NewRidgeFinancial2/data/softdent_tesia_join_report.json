@@ -1,0 +1,1414 @@
+{
+  "ok": true,
+  "builtAt": "2026-07-09T18:42:56Z",
+  "exactMatches": [
+    {
+      "payerReferenceId": "delta-dental",
+      "name": "Delta Dental",
+      "source": null,
+      "tesiaPayerId": "DELTA",
+      "matchedSoftDentId": "DELTA",
+      "allMatchingIds": [
+        "DELTA",
+        "11198",
+        "DDPFS"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "metlife-dental",
+      "name": "MetLife Dental",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "0000E",
+      "matchedSoftDentId": "65978",
+      "allMatchingIds": [
+        "65978"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "cigna-dental",
+      "name": "Cigna Dental",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "62308",
+      "matchedSoftDentId": "62308",
+      "allMatchingIds": [
+        "62308",
+        "CIGNA"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "aetna-dental",
+      "name": "Aetna Dental",
+      "source": null,
+      "tesiaPayerId": "60054",
+      "matchedSoftDentId": "60054",
+      "allMatchingIds": [
+        "60054"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "uhc-dental",
+      "name": "UnitedHealthcare Dental",
+      "source": null,
+      "tesiaPayerId": "52133",
+      "matchedSoftDentId": "52133",
+      "allMatchingIds": [
+        "52133",
+        "87726"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "guardian-dental",
+      "name": "Guardian Dental",
+      "source": null,
+      "tesiaPayerId": "64246",
+      "matchedSoftDentId": "64246",
+      "allMatchingIds": [
+        "64246"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "humana-dental",
+      "name": "Humana Dental",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "73288",
+      "matchedSoftDentId": "73288",
+      "allMatchingIds": [
+        "73288",
+        "HUMANA"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "anthem-dental",
+      "name": "Anthem Blue Cross Dental",
+      "source": null,
+      "tesiaPayerId": "84105",
+      "matchedSoftDentId": "84105",
+      "allMatchingIds": [
+        "84105"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "bcbs-michigan-dental",
+      "name": "Blue Cross Blue Shield of Michigan Dental",
+      "source": null,
+      "tesiaPayerId": "BBMDQ",
+      "matchedSoftDentId": "BBMDQ",
+      "allMatchingIds": [
+        "BBMDQ",
+        "00210"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "bcbs-texas-dental",
+      "name": "Blue Cross Blue Shield of Texas Dental",
+      "source": null,
+      "tesiaPayerId": "84980",
+      "matchedSoftDentId": "84980",
+      "allMatchingIds": [
+        "84980"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "ameritas-dental",
+      "name": "Ameritas Dental",
+      "source": null,
+      "tesiaPayerId": "47009",
+      "matchedSoftDentId": "47009",
+      "allMatchingIds": [
+        "47009"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "principal-dental",
+      "name": "Principal Dental",
+      "source": null,
+      "tesiaPayerId": "61271",
+      "matchedSoftDentId": "61271",
+      "allMatchingIds": [
+        "61271"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "sunlife-dental",
+      "name": "Sun Life Dental",
+      "source": null,
+      "tesiaPayerId": "70408",
+      "matchedSoftDentId": "70408",
+      "allMatchingIds": [
+        "70408"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "lincoln-dental",
+      "name": "Lincoln Financial Dental",
+      "source": null,
+      "tesiaPayerId": "52148",
+      "matchedSoftDentId": "52148",
+      "allMatchingIds": [
+        "52148"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "unum-dental",
+      "name": "Unum Dental / AlwaysCare",
+      "source": null,
+      "tesiaPayerId": "STR01",
+      "matchedSoftDentId": "STR01",
+      "allMatchingIds": [
+        "STR01"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "dentaquest",
+      "name": "DentaQuest",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "04356",
+      "matchedSoftDentId": "04356",
+      "allMatchingIds": [
+        "04356",
+        "CX007"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "liberty-dental",
+      "name": "Liberty Dental Plan",
+      "source": null,
+      "tesiaPayerId": "52147",
+      "matchedSoftDentId": "52147",
+      "allMatchingIds": [
+        "52147"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "mcna-dental",
+      "name": "MCNA Dental",
+      "source": null,
+      "tesiaPayerId": "65030",
+      "matchedSoftDentId": "65030",
+      "allMatchingIds": [
+        "65030"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "envolve-dental",
+      "name": "Envolve Dental / Ambetter Dental",
+      "source": null,
+      "tesiaPayerId": "68069",
+      "matchedSoftDentId": "68069",
+      "allMatchingIds": [
+        "68069"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "beam-dental",
+      "name": "Beam Dental",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "BEAM1",
+      "matchedSoftDentId": "BEAM1",
+      "allMatchingIds": [
+        "BEAM1"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "dominion-dental",
+      "name": "Dominion National",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DOM01",
+      "matchedSoftDentId": "DOM01",
+      "allMatchingIds": [
+        "DOM01"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "geha-dental",
+      "name": "GEHA Dental (Connection Dental)",
+      "source": null,
+      "tesiaPayerId": "39026",
+      "matchedSoftDentId": "39026",
+      "allMatchingIds": [
+        "39026"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "aarp-delta",
+      "name": "AARP Dental Insurance (Delta)",
+      "source": null,
+      "tesiaPayerId": "AARP1",
+      "matchedSoftDentId": "AARP1",
+      "allMatchingIds": [
+        "AARP1"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "delta-dental-ca",
+      "name": "Delta Dental of California",
+      "source": null,
+      "tesiaPayerId": "77777",
+      "matchedSoftDentId": "77777",
+      "allMatchingIds": [
+        "77777"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "delta-dental-ny",
+      "name": "Delta Dental of New York",
+      "source": null,
+      "tesiaPayerId": "11198",
+      "matchedSoftDentId": "11198",
+      "allMatchingIds": [
+        "11198"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "delta-dental-wa",
+      "name": "Delta Dental of Washington",
+      "source": null,
+      "tesiaPayerId": "52147",
+      "matchedSoftDentId": "52147",
+      "allMatchingIds": [
+        "52147"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "delta-dental-mo",
+      "name": "Delta Dental of Missouri",
+      "source": null,
+      "tesiaPayerId": "43090",
+      "matchedSoftDentId": "43090",
+      "allMatchingIds": [
+        "43090"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "delta-dental-pa",
+      "name": "Delta Dental of Pennsylvania",
+      "source": null,
+      "tesiaPayerId": "23166",
+      "matchedSoftDentId": "23166",
+      "allMatchingIds": [
+        "23166"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "scion-dental",
+      "name": "SKYGEN / Scion Dental",
+      "source": null,
+      "tesiaPayerId": "SCION",
+      "matchedSoftDentId": "SCION",
+      "allMatchingIds": [
+        "SCION"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "medicare-advantage-dental",
+      "name": "Medicare Advantage Dental Rider",
+      "source": null,
+      "tesiaPayerId": "MA001",
+      "matchedSoftDentId": "MA001",
+      "allMatchingIds": [
+        "MA001"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "tricare-dental",
+      "name": "TRICARE Dental (United Concordia)",
+      "source": null,
+      "tesiaPayerId": "0000D",
+      "matchedSoftDentId": "UCCTR",
+      "allMatchingIds": [
+        "UCCTR",
+        "99726"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "dental-select",
+      "name": "Dental Select",
+      "source": null,
+      "tesiaPayerId": "DSEL1",
+      "matchedSoftDentId": "DSEL1",
+      "allMatchingIds": [
+        "DSEL1"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "renaissance-dental",
+      "name": "Renaissance Dental",
+      "source": null,
+      "tesiaPayerId": "RLHA1",
+      "matchedSoftDentId": "RLHA1",
+      "allMatchingIds": [
+        "RLHA1"
+      ],
+      "kansasRelevant": true
+    },
+    {
+      "payerReferenceId": "meritain-dental",
+      "name": "Meritain Health Dental",
+      "source": null,
+      "tesiaPayerId": "64157",
+      "matchedSoftDentId": "64157",
+      "allMatchingIds": [
+        "64157"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "bcbs-kansas-dental",
+      "name": "Blue Cross Blue Shield of Kansas Dental",
+      "source": null,
+      "tesiaPayerId": "47163",
+      "matchedSoftDentId": "47163",
+      "allMatchingIds": [
+        "47163"
+      ],
+      "kansasRelevant": true
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-pa",
+      "name": "DELTA DENTAL OF PA",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "23166",
+      "matchedSoftDentId": "23166",
+      "allMatchingIds": [
+        "23166"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-principal-life-insurance-co",
+      "name": "PRINCIPAL LIFE INSURANCE CO",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "61271",
+      "matchedSoftDentId": "61271",
+      "allMatchingIds": [
+        "61271"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-mi",
+      "name": "DELTA DENTAL OF MI",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELTA",
+      "matchedSoftDentId": "10004",
+      "allMatchingIds": [
+        "10004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-ar",
+      "name": "DELTA DENTAL OF AR",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELAR",
+      "matchedSoftDentId": "DELAR",
+      "allMatchingIds": [
+        "DELAR"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-ameritas",
+      "name": "AMERITAS",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "47009",
+      "matchedSoftDentId": "47009",
+      "allMatchingIds": [
+        "47009"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-ky",
+      "name": "DELTA DENTAL OF KY",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDKY1",
+      "matchedSoftDentId": "CDKY1",
+      "allMatchingIds": [
+        "CDKY1",
+        "17004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-il-5402",
+      "name": "DELTA DENTAL OF IL - 5402",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "47598",
+      "matchedSoftDentId": "47598",
+      "allMatchingIds": [
+        "47598",
+        "05030"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-co",
+      "name": "DELTA DENTAL OF CO",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "84056",
+      "matchedSoftDentId": "84056",
+      "allMatchingIds": [
+        "84056"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-va",
+      "name": "DELTA DENTAL OF VA",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDVA1",
+      "matchedSoftDentId": "CDVA1",
+      "allMatchingIds": [
+        "CDVA1",
+        "54084"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-ok",
+      "name": "DELTA DENTAL OF OK",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELOK",
+      "matchedSoftDentId": "DELOK",
+      "allMatchingIds": [
+        "DELOK",
+        "10001"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-aflac-of-ga",
+      "name": "AFLAC OF GA",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "58066",
+      "matchedSoftDentId": "58066",
+      "allMatchingIds": [
+        "58066"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-cigna-dental-182223",
+      "name": "CIGNA DENTAL - 182223",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "62308",
+      "matchedSoftDentId": "62308",
+      "allMatchingIds": [
+        "62308"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-guardian-life-insurance-co",
+      "name": "GUARDIAN LIFE INSURANCE CO.",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "64246",
+      "matchedSoftDentId": "64246",
+      "allMatchingIds": [
+        "64246"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-ca",
+      "name": "DELTA DENTAL OF CA",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "77777",
+      "matchedSoftDentId": "77777",
+      "allMatchingIds": [
+        "77777"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-wa",
+      "name": "DELTA DENTAL OF WA",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "91062",
+      "matchedSoftDentId": "91062",
+      "allMatchingIds": [
+        "91062"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-bcbs-of-kansas-city",
+      "name": "BCBS OF KANSAS CITY",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "47171",
+      "matchedSoftDentId": "47171",
+      "allMatchingIds": [
+        "47171"
+      ],
+      "kansasRelevant": true
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-mn",
+      "name": "DELTA DENTAL OF MN",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDMN1",
+      "matchedSoftDentId": "CDMN1",
+      "allMatchingIds": [
+        "CDMN1",
+        "10004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-geha-employee-program",
+      "name": "GEHA EMPLOYEE PROGRAM",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "39026",
+      "matchedSoftDentId": "39026",
+      "allMatchingIds": [
+        "39026",
+        "44054"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-umr",
+      "name": "UMR",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "79480",
+      "matchedSoftDentId": "79480",
+      "allMatchingIds": [
+        "79480"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-sun-life-financial",
+      "name": "SUN LIFE FINANCIAL",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "70408",
+      "matchedSoftDentId": "70408",
+      "allMatchingIds": [
+        "70408"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-best-life-and-health-insurance-company",
+      "name": "BEST LIFE AND HEALTH INSURANCE COMPANY",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "95604",
+      "matchedSoftDentId": "95604",
+      "allMatchingIds": [
+        "95604"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-bcbs-of-il",
+      "name": "BCBS OF IL",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "31004",
+      "matchedSoftDentId": "31004",
+      "allMatchingIds": [
+        "31004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-nc",
+      "name": "DELTA DENTAL OF NC",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "56101",
+      "matchedSoftDentId": "56101",
+      "allMatchingIds": [
+        "56101",
+        "10004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-cigna-dental-hmo",
+      "name": "CIGNA DENTAL - HMO",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "62308",
+      "matchedSoftDentId": "62308",
+      "allMatchingIds": [
+        "62308"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-ia",
+      "name": "DELTA DENTAL OF IA",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "30004",
+      "matchedSoftDentId": "30004",
+      "allMatchingIds": [
+        "30004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-mo",
+      "name": "DELTA DENTAL OF MO",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "43090",
+      "matchedSoftDentId": "43090",
+      "allMatchingIds": [
+        "43090"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-compbenefits-14283",
+      "name": "COMPBENEFITS - 14283",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CX021",
+      "matchedSoftDentId": "CX021",
+      "allMatchingIds": [
+        "CX021"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-bcbs-of-ks",
+      "name": "BCBS OF KS",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "47163",
+      "matchedSoftDentId": "47163",
+      "allMatchingIds": [
+        "47163"
+      ],
+      "kansasRelevant": true
+    },
+    {
+      "payerReferenceId": "nr2-aetna",
+      "name": "AETNA",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "60054",
+      "matchedSoftDentId": "60054",
+      "allMatchingIds": [
+        "60054"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-ca-fed-govt-prgm",
+      "name": "DELTA DENTAL CA FED GOVT PRGM",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDCA1",
+      "matchedSoftDentId": "CDCA1",
+      "allMatchingIds": [
+        "CDCA1",
+        "37004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-central-states",
+      "name": "CENTRAL STATES",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "36215",
+      "matchedSoftDentId": "36215",
+      "allMatchingIds": [
+        "36215"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-physicians-mutual",
+      "name": "PHYSICIANS MUTUAL",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "00978",
+      "matchedSoftDentId": "00978",
+      "allMatchingIds": [
+        "00978"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-ma",
+      "name": "DELTA DENTAL OF MA",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "39069",
+      "matchedSoftDentId": "39069",
+      "allMatchingIds": [
+        "39069"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-careington-benefit-solutions",
+      "name": "CAREINGTON BENEFIT SOLUTIONS",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "TLY44",
+      "matchedSoftDentId": "TLY44",
+      "allMatchingIds": [
+        "TLY44"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-ebms",
+      "name": "EBMS",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "81039",
+      "matchedSoftDentId": "81039",
+      "allMatchingIds": [
+        "81039"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-renaissance-life-and-health",
+      "name": "RENAISSANCE LIFE AND HEALTH",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "01060",
+      "matchedSoftDentId": "01060",
+      "allMatchingIds": [
+        "01060"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-sd",
+      "name": "DELTA DENTAL OF SD",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "54097",
+      "matchedSoftDentId": "54097",
+      "allMatchingIds": [
+        "54097"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-fep-blue-dental",
+      "name": "FEP BLUE DENTAL",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "BCAFD",
+      "matchedSoftDentId": "BCAFD",
+      "allMatchingIds": [
+        "BCAFD"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-ny",
+      "name": "DELTA DENTAL OF NY",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "11198",
+      "matchedSoftDentId": "11198",
+      "allMatchingIds": [
+        "11198",
+        "23166"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-tn",
+      "name": "DELTA DENTAL OF TN",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELTN",
+      "matchedSoftDentId": "DELTN",
+      "allMatchingIds": [
+        "DELTN",
+        "22004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-ddic",
+      "name": "DELTA DENTAL - DDIC",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "94276",
+      "matchedSoftDentId": "01033",
+      "allMatchingIds": [
+        "01033"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-medico",
+      "name": "MEDICO",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "23160",
+      "matchedSoftDentId": "23160",
+      "allMatchingIds": [
+        "23160"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-oh",
+      "name": "DELTA DENTAL OF OH",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELTO",
+      "matchedSoftDentId": "DELTO",
+      "allMatchingIds": [
+        "DELTO",
+        "10004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-ucci-fed-vip",
+      "name": "UCCI - FED VIP",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "0000D",
+      "matchedSoftDentId": "18004",
+      "allMatchingIds": [
+        "18004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-native-care-health",
+      "name": "NATIVE CARE HEALTH",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "06126",
+      "matchedSoftDentId": "06126",
+      "allMatchingIds": [
+        "06126"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-standard-insurance-company",
+      "name": "STANDARD INSURANCE COMPANY",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "69019",
+      "matchedSoftDentId": "69019",
+      "allMatchingIds": [
+        "69019"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-or",
+      "name": "DELTA DENTAL OF OR",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDOR1",
+      "matchedSoftDentId": "25004",
+      "allMatchingIds": [
+        "25004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-aetna-medicare-advantage",
+      "name": "AETNA MEDICARE ADVANTAGE",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "60054",
+      "matchedSoftDentId": "60054",
+      "allMatchingIds": [
+        "60054"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-united-healthcare-30567",
+      "name": "UNITED HEALTHCARE - 30567",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "52133",
+      "matchedSoftDentId": "52133",
+      "allMatchingIds": [
+        "52133"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-premera-blue-cross",
+      "name": "PREMERA BLUE CROSS",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "47570",
+      "matchedSoftDentId": "47570",
+      "allMatchingIds": [
+        "47570"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-united-concordia-cx007",
+      "name": "UNITED CONCORDIA - CX007",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "0000D",
+      "matchedSoftDentId": "00864",
+      "allMatchingIds": [
+        "00864"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-meritain-health",
+      "name": "MERITAIN HEALTH",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "06126",
+      "matchedSoftDentId": "06126",
+      "allMatchingIds": [
+        "06126"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-starmount",
+      "name": "STARMOUNT",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "STR01",
+      "matchedSoftDentId": "STR01",
+      "allMatchingIds": [
+        "STR01"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-centene-envolve-ks-wa",
+      "name": "CENTENE ENVOLVE KS WA",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "46278",
+      "matchedSoftDentId": "46278",
+      "allMatchingIds": [
+        "46278"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-truassure",
+      "name": "TRUASSURE",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "ILDTA",
+      "matchedSoftDentId": "ILDTA",
+      "allMatchingIds": [
+        "ILDTA"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-mutual-of-omaha",
+      "name": "MUTUAL OF OMAHA",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CX087",
+      "matchedSoftDentId": "CX087",
+      "allMatchingIds": [
+        "CX087",
+        "71412"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-bcbs-of-sc",
+      "name": "BCBS OF SC",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "38520",
+      "matchedSoftDentId": "38520",
+      "allMatchingIds": [
+        "38520"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-pequot-plus-health-3620",
+      "name": "PEQUOT PLUS HEALTH - 3620",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "37121",
+      "matchedSoftDentId": "37121",
+      "allMatchingIds": [
+        "37121"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-in",
+      "name": "DELTA DENTAL OF IN",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "DELTI",
+      "matchedSoftDentId": "DELTI",
+      "allMatchingIds": [
+        "DELTI",
+        "10004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-first-continental-life-accident",
+      "name": "FIRST CONTINENTAL LIFE & ACCIDENT",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "01074",
+      "matchedSoftDentId": "01074",
+      "allMatchingIds": [
+        "01074"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-bcbs-of-tx",
+      "name": "BCBS OF TX",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "84980",
+      "matchedSoftDentId": "84980",
+      "allMatchingIds": [
+        "84980",
+        "31004"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-wi",
+      "name": "DELTA DENTAL OF WI",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "39069",
+      "matchedSoftDentId": "39069",
+      "allMatchingIds": [
+        "39069"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-guarantee-trust-life",
+      "name": "GUARANTEE TRUST LIFE",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "TLW81",
+      "matchedSoftDentId": "TLW81",
+      "allMatchingIds": [
+        "TLW81"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-aflac",
+      "name": "Aflac",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "AFLAC",
+      "matchedSoftDentId": "Aflac",
+      "allMatchingIds": [
+        "Aflac"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-ks",
+      "name": "DELTA DENTAL OF KS",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "CDKS1",
+      "matchedSoftDentId": "CDKS1",
+      "allMatchingIds": [
+        "CDKS1"
+      ],
+      "kansasRelevant": true
+    },
+    {
+      "payerReferenceId": "nr2-cigna-dental-specialty",
+      "name": "CIGNA DENTAL - SPECIALTY",
+      "source": "softdent-insco-sensei",
+      "tesiaPayerId": "62308",
+      "matchedSoftDentId": "62308",
+      "allMatchingIds": [
+        "62308"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-dentaquest-government",
+      "name": "DENTAQUEST-GOVERNMENT",
+      "source": "office-insurance-xlsx",
+      "tesiaPayerId": "CX014",
+      "matchedSoftDentId": "CX014",
+      "allMatchingIds": [
+        "CX014"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-colonia-life",
+      "name": "COLONIA LIFE",
+      "source": "office-insurance-xlsx",
+      "tesiaPayerId": "STR01",
+      "matchedSoftDentId": "STR01",
+      "allMatchingIds": [
+        "STR01"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-delta-dental-of-ga",
+      "name": "DELTA DENTAL OF GA",
+      "source": "office-insurance-xlsx",
+      "tesiaPayerId": "94276",
+      "matchedSoftDentId": "94276",
+      "allMatchingIds": [
+        "94276"
+      ],
+      "kansasRelevant": false
+    },
+    {
+      "payerReferenceId": "nr2-manhattan-life-assurance-company-of-america",
+      "name": "MANHATTAN LIFE ASSURANCE COMPANY OF AMERICA",
+      "source": "office-insurance-xlsx",
+      "tesiaPayerId": "86253",
+      "matchedSoftDentId": "86253",
+      "allMatchingIds": [
+        "86253"
+      ],
+      "kansasRelevant": false
+    }
+  ],
+  "expandFromSoftDent": [],
+  "unmatched": [
+    {
+      "payerReferenceId": "careington",
+      "name": "Careington / Discount Plans",
+      "source": null,
+      "candidateIds": [
+        "CARE"
+      ]
+    },
+    {
+      "payerReferenceId": "dentemax",
+      "name": "DenteMax Network",
+      "source": null,
+      "candidateIds": [
+        "DENTE"
+      ]
+    },
+    {
+      "payerReferenceId": "premera-dental",
+      "name": "Premera Blue Cross Dental",
+      "source": null,
+      "candidateIds": [
+        "PREME"
+      ]
+    },
+    {
+      "payerReferenceId": "kaiser-dental",
+      "name": "Kaiser Permanente Dental",
+      "source": null,
+      "candidateIds": [
+        "KAISER"
+      ]
+    },
+    {
+      "payerReferenceId": "healthplex-dental",
+      "name": "Healthplex / EmblemHealth Dental",
+      "source": null,
+      "candidateIds": [
+        "HPLEX"
+      ]
+    },
+    {
+      "payerReferenceId": "medicaid-generic",
+      "name": "State Medicaid Dental (generic)",
+      "source": null,
+      "candidateIds": [
+        "MCDMD"
+      ]
+    },
+    {
+      "payerReferenceId": "fep-blue-dental",
+      "name": "FEP BlueDental",
+      "source": null,
+      "candidateIds": [
+        "FEPBD"
+      ]
+    },
+    {
+      "payerReferenceId": "teamsters-dental",
+      "name": "Teamsters / Union Dental Trusts",
+      "source": null,
+      "candidateIds": [
+        "UNION"
+      ]
+    },
+    {
+      "payerReferenceId": "argus-dental",
+      "name": "Argus Dental Vision",
+      "source": null,
+      "candidateIds": [
+        "ARGUS"
+      ]
+    },
+    {
+      "payerReferenceId": "avesis-dental",
+      "name": "Avesis Dental",
+      "source": null,
+      "candidateIds": [
+        "AVESIS"
+      ]
+    },
+    {
+      "payerReferenceId": "solstice-dental",
+      "name": "Solstice Benefits Dental",
+      "source": null,
+      "candidateIds": [
+        "SOLST"
+      ]
+    },
+    {
+      "payerReferenceId": "local-union-plans",
+      "name": "Local Union / Taft-Hartley Dental",
+      "source": null,
+      "candidateIds": [
+        "LOCAL"
+      ]
+    },
+    {
+      "payerReferenceId": "self-pay",
+      "name": "Self-Pay / No Insurance",
+      "source": null,
+      "candidateIds": [
+        "SELF"
+      ]
+    },
+    {
+      "payerReferenceId": "nr2-united-concordia-tdp",
+      "name": "UNITED CONCORDIA - TDP",
+      "source": "softdent-insco-sensei",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-anthem-1115",
+      "name": "ANTHEM - 1115",
+      "source": "softdent-insco-sensei",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-manhattan-life-insurance-company-of-amer",
+      "name": "MANHATTAN LIFE INSURANCE COMPANY OF AMER",
+      "source": "softdent-insco-sensei",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-united-healthcare-30555",
+      "name": "UNITED HEALTHCARE - 30555",
+      "source": "softdent-insco-sensei",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-uhc-universal-medicare-claims",
+      "name": "UHC UNIVERSAL MEDICARE CLAIMS",
+      "source": "softdent-insco-sensei",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-anthem-188",
+      "name": "ANTHEM - 188",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-united-concordia-fep-vip",
+      "name": "UNITED CONCORDIA - FEP VIP",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-united-healthcare",
+      "name": "UNITED HEALTHCARE",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-united-healthcare-community-plan",
+      "name": "UNITED HEALTHCARE COMMUNITY PLAN",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-office-316-722-6060",
+      "name": "OFFICE #: 316-722-6060",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-fax-316-721-3277",
+      "name": "FAX #: 316-721-3277",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-npi-1568431971",
+      "name": "NPI#: 1568431971",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-tax-id-481203068",
+      "name": "TAX ID #: 481203068",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-lic-6973",
+      "name": "LIC #: 6973",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-glidewell-800-854-7256",
+      "name": "Glidewell: (800) 854-7256",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-zelius-877-828-8770",
+      "name": "Zelius: (877) 828-8770",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-v-pay-888-704-0096",
+      "name": "V-pay: (888) 704-0096",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-optimun-pay-877-620-6194",
+      "name": "Optimun Pay: (877) 620-6194",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    },
+    {
+      "payerReferenceId": "nr2-echo-888-834-3511",
+      "name": "Echo: (888) 834-3511",
+      "source": "office-insurance-xlsx",
+      "candidateIds": []
+    }
+  ],
+  "counts": {
+    "exact": 105,
+    "expand": 0,
+    "unmatched": 32,
+    "payerReference": 137,
+    "tesiaSeed": 226
+  },
+  "appliedAt": "2026-07-09T18:42:56Z",
+  "expandedTesiaRows": 0,
+  "stampedPayerReference": 8
+}

@@ -1264,6 +1264,71 @@ const DesktopBridge = (function () {
     return { items: [], count: 0, text: "" };
   }
 
+  async function searchTesiaPayers(query, limit, kansasOnly) {
+    if (hasDesktopApi() && window.pywebview.api.search_tesia_payers) {
+      return window.pywebview.api.search_tesia_payers(
+        String(query || ""),
+        Number(limit || 8),
+        !!kansasOnly
+      );
+    }
+    if (hasLoopbackApi()) {
+      try {
+        const q = encodeURIComponent(String(query || ""));
+        const lim = Number(limit || 8);
+        const ks = kansasOnly ? "&kansas=1" : "";
+        return await loopbackJson(`/api/tesia-payers?q=${q}&limit=${lim}${ks}`);
+      } catch {
+        return { items: [], count: 0, text: "" };
+      }
+    }
+    return { items: [], count: 0, text: "" };
+  }
+
+  async function importTesiaPayers(pathOrPayload, merge) {
+    if (hasDesktopApi() && window.pywebview.api.import_tesia_payers) {
+      const arg =
+        typeof pathOrPayload === "string"
+          ? pathOrPayload
+          : JSON.stringify(pathOrPayload || {});
+      return window.pywebview.api.import_tesia_payers(arg, merge !== false);
+    }
+    if (hasLoopbackApi()) {
+      try {
+        const body =
+          typeof pathOrPayload === "string"
+            ? { path: pathOrPayload, merge: merge !== false }
+            : { ...(pathOrPayload || {}), merge: merge !== false };
+        return await loopbackJson("/api/tesia-payers/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch {
+        return { ok: false, error: "import_failed" };
+      }
+    }
+    return { ok: false, error: "server_required" };
+  }
+
+  async function joinSoftDentTesia(dryRun) {
+    if (hasDesktopApi() && window.pywebview.api.join_softdent_tesia) {
+      return window.pywebview.api.join_softdent_tesia(!!dryRun);
+    }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/tesia-payers/join-softdent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dryRun: !!dryRun }),
+        });
+      } catch {
+        return { ok: false, error: "join_failed" };
+      }
+    }
+    return { ok: false, error: "server_required" };
+  }
+
   async function joinClaimPayers(claims) {
     const list = Array.isArray(claims) ? claims : [];
     if (hasDesktopApi() && window.pywebview.api.join_claim_payers) {
@@ -1563,6 +1628,9 @@ const DesktopBridge = (function () {
     searchHalMemories,
     searchPayerReference,
     searchDentalCarrierCatalog,
+    searchTesiaPayers,
+    importTesiaPayers,
+    joinSoftDentTesia,
     joinClaimPayers,
     lookupFeeSchedule,
     listEligibilityCache,

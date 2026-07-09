@@ -120,6 +120,16 @@ def map_optum_eligibility_response(data: dict[str, Any], req: dict[str, Any]) ->
     }
 
 
+def map_vyne_eligibility_response(data: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+    """Map Vyne / Desktop Tesia-style eligibility JSON into cache entry shape."""
+    # Reuse DXC field walkers; Vyne payloads vary by product (Trellis / ClearCoverage / API).
+    entry = map_dentalxchange_eligibility_response(data, req)
+    entry["source"] = "vyne_tesia_271"
+    if not entry.get("payerId"):
+        entry["payerId"] = str(req.get("payerId") or data.get("payorId") or data.get("tradingPartnerId") or "").strip()
+    return entry
+
+
 def map_dentalxchange_eligibility_response(data: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
     benefits = data.get("benefits") or data.get("benefitDetails") or data.get("benefitsInformation")
     if not isinstance(benefits, list):

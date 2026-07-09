@@ -7,7 +7,11 @@ import random
 import time
 from typing import Any
 
-from clearinghouse_271_mapper import map_dentalxchange_eligibility_response, map_optum_eligibility_response
+from clearinghouse_271_mapper import (
+    map_dentalxchange_eligibility_response,
+    map_optum_eligibility_response,
+    map_vyne_eligibility_response,
+)
 from clearinghouse_http import env_bool, http_json, redact_member_id
 from eligibility_cache_store import upsert_eligibility_entry
 
@@ -26,6 +30,20 @@ def _optum_base_url() -> str:
 
 def _dxc_base_url() -> str:
     return _env("DENTALXCHANGE_BASE_URL", "https://api.dentalxchange.com").rstrip("/")
+
+
+def _vyne_base_url() -> str:
+    return _env("VYNE_BASE_URL", _env("TESIA_BASE_URL", "https://api.vynedental.com")).rstrip("/")
+
+
+def _vyne_eligibility_url() -> str:
+    explicit = _env("VYNE_ELIGIBILITY_URL") or _env("TESIA_ELIGIBILITY_URL")
+    if explicit:
+        return explicit
+    path = _env("VYNE_ELIGIBILITY_PATH", "/eligibility/v1")
+    if not path.startswith("/"):
+        path = f"/{path}"
+    return f"{_vyne_base_url()}{path}"
 
 
 def _dxc_eligibility_url() -> str:
@@ -276,6 +294,122 @@ def fetch_dentalxchange_271(req: dict[str, Any]) -> dict[str, Any]:
     return _cache_mapped_entry(entry, vendor="dentalxchange", raw=payload)
 
 
+def _build_vyne_request(req: dict[str, Any]) -> dict[str, Any]:
+    member_id = _require_live_member_id(req)
+    payer_id = _require_payer_id(req)
+    npi = _require_provider_npi(req)
+    service_date = str(req.get("serviceDate") or "").strip() or time.strftime("%Y-%m-%d")
+    body: dict[str, Any] = {
+        "payerId": payer_id,
+        "payorId": payer_id,
+        "payerName": req.get("payerName"),
+        "providerNpi": npi,
+        "npi": npi,
+        "memberId": member_id,
+        "subscriberId": member_id,
+        "dateOfService": service_date,
+        "serviceDate": service_date,
+    }
+    if req.get("subscriberFirstName"):
+        body["subscriberFirstName"] = req["subscriberFirstName"]
+        body["firstName"] = req["subscriberFirstName"]
+    if req.get("subscriberLastName"):
+        body["subscriberLastName"] = req["subscriberLastName"]
+        body["lastName"] = req["subscriberLastName"]
+    if req.get("subscriberDob"):
+        body["subscriberDateOfBirth"] = req["subscriberDob"]
+        body["dateOfBirth"] = req["subscriberDob"]
+    return body
+
+
+def fetch_vyne_tesia_271(req: dict[str, Any]) -> dict[str, Any]:
+    """Live eligibility via Vyne Dental / Desktop Tesia API credentials when configured."""
+    api_key = _env("VYNE_API_KEY") or _env("TESIA_API_KEY")
+    api_secret = _env("VYNE_API_SECRET") or _env("TESIA_API_SECRET")
+    bearer = _env("VYNE_BEARER_TOKEN") or _env("TESIA_BEARER_TOKEN")
+    if not api_key and not bearer:
+        return {
+            "ok": False,
+            "configured": False,
+            "vendor": "vyne_tesia",
+            "error": "missing_vyne_tesia_credentials",
+            "message": (
+                "Set VYNE_API_KEY (or TESIA_API_KEY) and optional VYNE_API_SECRET, "
+                "or VYNE_BEARER_TOKEN. Desktop Tesia UI can still be used manually; "
+                "import payer list via /api/tesia-payers/import."
+            ),
+        }
+
+    try:
+        body = _build_vyne_request(req)
+    except ValueError as exc:
+        return {
+            "ok": False,
+            "configured": True,
+            "vendor": "vyne_tesia",
+            "error": str(exc),
+            "message": "Missing required fields for live 271 (memberId, payerId, providerNpi).",
+        }
+
+    # Resolve Tesia payer ID from local list when name-only
+    if not str(req.get("payerId") or "").strip():
+        try:
+            from tesia_payer_list_store import lookup_payer_id
+
+            hit = lookup_payer_id(str(req.get("payerName") or ""))
+            if hit and hit.get("payerId"):
+                body["payerId"] = hit["payerId"]
+                body["payorId"] = hit["payerId"]
+        except Exception:
+            pass
+
+    headers = {"Accept": "application/json"}
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
+    if api_key:
+        headers["apiKey"] = api_key
+        headers["X-Api-Key"] = api_key
+    if api_secret:
+        headers["apiSecret"] = api_secret
+        headers["X-Api-Secret"] = api_secret
+
+    status, payload, err = http_json(
+        method="POST",
+        url=_vyne_eligibility_url(),
+        headers=headers,
+        body=body,
+        timeout=60.0,
+    )
+    if err:
+        return {"ok": False, "configured": True, "vendor": "vyne_tesia", "error": err, "message": "271 HTTP error."}
+    if status >= 400:
+        detail = payload if isinstance(payload, dict) else {"body": str(payload)[:500]}
+        return {
+            "ok": False,
+            "configured": True,
+            "vendor": "vyne_tesia",
+            "error": f"eligibility_http_{status}",
+            "message": (
+                "Vyne/Tesia eligibility request rejected. Verify VYNE_ELIGIBILITY_URL / "
+                "VYNE_ELIGIBILITY_PATH for your Desktop Tesia / Trellis API contract, "
+                "or continue using Desktop Tesia UI + eligibility cache."
+            ),
+            "raw271": detail,
+        }
+    if not isinstance(payload, dict):
+        return {
+            "ok": False,
+            "configured": True,
+            "vendor": "vyne_tesia",
+            "error": "invalid_json_response",
+            "message": "Unexpected Vyne/Tesia response format.",
+        }
+
+    entry = map_vyne_eligibility_response(payload, req)
+    entry["memberIdRedacted"] = redact_member_id(str(req.get("memberId") or ""))
+    return _cache_mapped_entry(entry, vendor="vyne_tesia", raw=payload)
+
+
 def vendor_endpoints() -> dict[str, Any]:
     return {
         "dentalxchange": {
@@ -287,5 +421,10 @@ def vendor_endpoints() -> dict[str, Any]:
             "eligibilityUrl": _env("CHANGE_HEALTHCARE_ELIGIBILITY_URL")
             or f"{_optum_base_url()}/medicalnetwork/eligibility/v3/",
             "sandbox": env_bool("CHANGE_HEALTHCARE_USE_SANDBOX", default=True),
+        },
+        "vyne_tesia": {
+            "eligibilityUrl": _vyne_eligibility_url(),
+            "baseUrl": _vyne_base_url(),
+            "desktopNote": "Desktop Tesia (Vyne) remains the staff UI; API path is optional when credentials exist.",
         },
     }

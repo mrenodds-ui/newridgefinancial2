@@ -1,0 +1,1276 @@
+[
+  {
+    "payer_id": "0000D",
+    "vyne_payer_id": "UNITED_CONCORDIA",
+    "insurance_name": "United Concordia",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "UNITED_CONCORDIA_FEDERAL_EMPLOYEES_PROGRAM\nPERSONAL_CHOICE\nHERSHEY_HEALTHSMILE\nBLUE_SHIELD_PENNSYLVANNIA\nUCCDP\n54771\nCX013\n89070\nCX007\nCBPA2\nCB865\nCX002\nDXTAS\n18004\nUCCTR\nUCCMB\nUCCEN\nUCCDE\nUCCAP\n00864\nTLW33\nCXOO7\nTLX74\nCX008\nTFQ25\nCBMNU\nCBAR2\nTEMU1\n99998\n99994\nTES03\n99997\nZ9901\n99995\nBCBS_LOUISIANA\nMINNESOTA_BLUE_CROSS_DENTAL_(UCCI)\n53287\nBXMN1\nTLU22\n00720\nCX004\n00301\n00800\nTLX78\nTLX12\nCBNYW\nCBNYE\n55204\n0000D"
+  },
+  {
+    "payer_id": "0000E",
+    "vyne_payer_id": "METLIFE",
+    "insurance_name": "Metropolitan Life Insurance Company",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "65978\nTLZ16\nTES01\n0000E"
+  },
+  {
+    "payer_id": "00580",
+    "vyne_payer_id": "BCBS_MARYLAND",
+    "insurance_name": "Blue Cross Blue Shield of Maryland / CAREFIRST",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CX034\nTDN02\nTLY47\nFX136\nTLX87\nTLZ09\nTLX86\nTLX85\nTLU18\nTLX88\nTDN01"
+  },
+  {
+    "payer_id": "00611",
+    "vyne_payer_id": "BLUE_SHIELD_IDAHO",
+    "insurance_name": "Regence Blue Shield of Idaho",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "CBID2"
+  },
+  {
+    "payer_id": "00700",
+    "vyne_payer_id": "ANTHEM_BCBS_CONNECTICUT",
+    "insurance_name": "Blue Cross Blue Shield of Connecticut- Family Plan",
+    "features": "ELIGIBILITY",
+    "alt_ids": "AD060\n700"
+  },
+  {
+    "payer_id": "00851",
+    "vyne_payer_id": "BCBS_OREGON",
+    "insurance_name": "Blue Cross Blue Shield of Oregon (Regence)",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "00850\n85100\nTLW13\nCB850\nREGENCE_BCBS_OREGON_OUT"
+  },
+  {
+    "payer_id": "00932",
+    "vyne_payer_id": "BLUE_SHIELD_WASHINGTON",
+    "insurance_name": "Blue Cross Blue Shield of Washington (Regence)",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "93200"
+  },
+  {
+    "payer_id": "02027",
+    "vyne_payer_id": "DD_NORTHEAST",
+    "insurance_name": "Delta Dental of Northeast (ME NH VT)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "2027\n02027T3\n02027T2\n02027T1"
+  },
+  {
+    "payer_id": "04356",
+    "vyne_payer_id": "04356",
+    "insurance_name": "Dentaquest - Commercial",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "04614",
+    "vyne_payer_id": "DD_MA",
+    "insurance_name": "Delta Dental of Massachusetts",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "4614"
+  },
+  {
+    "payer_id": "05029",
+    "vyne_payer_id": "DD_RHODE_ISLAND",
+    "insurance_name": "Delta Dental of Rhode Island",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "5029"
+  },
+  {
+    "payer_id": "07025",
+    "vyne_payer_id": "07025",
+    "insurance_name": "Delta Dental of Wyoming",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CDWY1\nDDWY1"
+  },
+  {
+    "payer_id": "07027",
+    "vyne_payer_id": "DD_NEBRASKA",
+    "insurance_name": "Delta Dental of Nebraska",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "11198",
+    "vyne_payer_id": "DD_NEW_YORK",
+    "insurance_name": "Delta Dental of New York",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "32_BJ"
+  },
+  {
+    "payer_id": "22099",
+    "vyne_payer_id": "HORIZON",
+    "insurance_name": "Blue Cross Blue Shield of NJ (Horizon)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "22099T1"
+  },
+  {
+    "payer_id": "22189",
+    "vyne_payer_id": "DD_NEW_JERSEY",
+    "insurance_name": "Delta Dental of New Jersey",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DD_CONNECTICUT\n37307\nDDNJ1\n22189T1\nTLU56"
+  },
+  {
+    "payer_id": "23166",
+    "vyne_payer_id": "DD_PENNSYLVANIA",
+    "insurance_name": "Delta Dental of Pennsylvania",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DDPA1\n23166T1\nTLU51\nTLX23\n00008"
+  },
+  {
+    "payer_id": "29076",
+    "vyne_payer_id": "MMO",
+    "insurance_name": "Medical Mutual of Ohio (MMO)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CB833\nTLU03"
+  },
+  {
+    "payer_id": "31096",
+    "vyne_payer_id": "DD_WEST_VIRGINIA",
+    "insurance_name": "Delta Dental of West Virginia",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "34192",
+    "vyne_payer_id": "MUTUAL_HEALTH_SERVICES",
+    "insurance_name": "Mutual Health Services",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "36088",
+    "vyne_payer_id": "RELIANCE_STANDARD_LIFE",
+    "insurance_name": "Reliance Standard Life",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "37242",
+    "vyne_payer_id": "37242",
+    "insurance_name": "Aultra Administrative Group",
+    "features": "ELIGIBILITY",
+    "alt_ids": "DX231"
+  },
+  {
+    "payer_id": "38520",
+    "vyne_payer_id": "BCBS_SOUTH_CAROLINA",
+    "insurance_name": "Blue Cross Blue Shield of South Carolina",
+    "features": "ELIGIBILITY",
+    "alt_ids": "BSC01\nTLW74\nBCSSC\nDXSCF\nBCBS_SOUTH_CAROLINA_FEP"
+  },
+  {
+    "payer_id": "39026",
+    "vyne_payer_id": "UMR_WAUSAU",
+    "insurance_name": "UMR_GEHA",
+    "features": "ELIGIBILITY",
+    "alt_ids": "UNITED_MEDICAL_RESOURCES\nUMR_SAN_ANTONIO\nUMR_HARRINGTON\n33108\n74223\n95266\n75196\n75245\n87265\n52132"
+  },
+  {
+    "payer_id": "39069",
+    "vyne_payer_id": "DD_WI",
+    "insurance_name": "Delta Dental of Wisconsin",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "39033"
+  },
+  {
+    "payer_id": "39141",
+    "vyne_payer_id": "BCBS_WISCONSIN",
+    "insurance_name": "Blue Cross Blue Shield of Wisconsin",
+    "features": "ELIGIBILITY",
+    "alt_ids": "ANTHEM_BCBS_WISCONSIN_FEP\nP-DBC\nBWI01\n00950\nTCX01\nCB950\nAD450\n00450"
+  },
+  {
+    "payer_id": "43090",
+    "vyne_payer_id": "DD_MISSOURI",
+    "insurance_name": "Delta Dental of Missouri",
+    "features": "ELIGIBILITY",
+    "alt_ids": "25125\nTFQ69\nTLW06"
+  },
+  {
+    "payer_id": "43091",
+    "vyne_payer_id": "DELTA_DENTAL_SOUTH_CAROLINA",
+    "insurance_name": "Delta Dental of South Carolina",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "43471",
+    "vyne_payer_id": "43471",
+    "insurance_name": "Benefit Management / Inetico",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "44054",
+    "vyne_payer_id": "GEHA",
+    "insurance_name": "GEHA Employee Program",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "46278",
+    "vyne_payer_id": "46278",
+    "insurance_name": "Centene Dental / Envolve",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "47009",
+    "vyne_payer_id": "AMERITAS",
+    "insurance_name": "Ameritas Life Insurance Company",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "CX032\nCX047\n61492\n61301"
+  },
+  {
+    "payer_id": "47163",
+    "vyne_payer_id": "BCBS_KANSAS",
+    "insurance_name": "Blue Cross Blue Shield of Kansas",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CBKS1"
+  },
+  {
+    "payer_id": "47171",
+    "vyne_payer_id": "BCBS_KANSAS_CITY_MO",
+    "insurance_name": "Blue Cross Blue Shield of Kansas City",
+    "features": "ELIGIBILITY",
+    "alt_ids": "DX067"
+  },
+  {
+    "payer_id": "47198",
+    "vyne_payer_id": "ANTHEM_BCBS_CALIFORNIA",
+    "insurance_name": "Blue Cross of California (Wellpoint)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "TRIGON_BCBS_VIRGINIA\nTRIGON_BCBS_COLORADO\n84103"
+  },
+  {
+    "payer_id": "47570",
+    "vyne_payer_id": "BCBS_ALASKA",
+    "insurance_name": "Blue Cross Blue Shield of Alaska (Premera)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "BCBS_WASHINGTON\n47570T3\n47570T2\n47570T1\n00430\nDX102"
+  },
+  {
+    "payer_id": "47598",
+    "vyne_payer_id": "DD_ILLINOIS_GROUP_PLANS",
+    "insurance_name": "Delta Dental of Illinois Group Plans",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "05030\nMW150\nP-MOE\nTLY40\nPIP02\nPIP01"
+  },
+  {
+    "payer_id": "50503",
+    "vyne_payer_id": "ALTUS",
+    "insurance_name": "Altus Dental",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "51022",
+    "vyne_payer_id": "DD_DELAWARE",
+    "insurance_name": "Delta Dental of Delaware",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "52133",
+    "vyne_payer_id": "UNITED_HEALTHCARE",
+    "insurance_name": "United Healthcare Dental",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "PACIFICARE\nBLUE_SHIELD_CALIFORNIA\nCX060\nCX053\nBSCA1\n5213\nCX056\nCX057\n37060\n94036\nCX001\nUHC01\n52133T1\n52133T3\n52133T2\nTPC06\nTLW58\nTLX81\nTLW59\nTLW68\nTLX06\nTBS03\nTLW57\n87726\nTLU44"
+  },
+  {
+    "payer_id": "52147",
+    "vyne_payer_id": "DD_WASHINGTON_DC",
+    "insurance_name": "Delta Dental of District of Columbia (DC)",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "54097",
+    "vyne_payer_id": "54097",
+    "insurance_name": "Delta Dental of South Dakota",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CKSD1\nTLZ29"
+  },
+  {
+    "payer_id": "55093",
+    "vyne_payer_id": "55093",
+    "insurance_name": "Blue Cross Blue Shield of New York (Empire)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CBNY1"
+  },
+  {
+    "payer_id": "56101",
+    "vyne_payer_id": "DD_NORTH_CAROLINA",
+    "insurance_name": "Delta Dental of North Carolina",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "56010\nDDPNC\nDDNC\nDDNC1"
+  },
+  {
+    "payer_id": "58066",
+    "vyne_payer_id": "AFLAC_GA",
+    "insurance_name": "AFLAC of Georgia",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "60033",
+    "vyne_payer_id": "AMERITAS_NEW_YORK",
+    "insurance_name": "FIRST AMERITAS LIFE INSURANCE CORPORATION OF NY",
+    "features": "ELIGIBILITY",
+    "alt_ids": "72630"
+  },
+  {
+    "payer_id": "60054",
+    "vyne_payer_id": "AETNA_DENTAL_PLANS",
+    "insurance_name": "AETNA",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "68246\n6005\n68241\n57604\n6824\n60054T2\n60054T1\n60054T17\n60054T10\n60054T9\n60054T8\n60054T7\n60054T6\n60054T5\n60054T4\n60054T3\n60054T16\n60054T15\n60054T14\n60054T13\n60054T12\n60054T11\n953402799\n18014"
+  },
+  {
+    "payer_id": "61271",
+    "vyne_payer_id": "PRINCIPAL",
+    "insurance_name": "Principal Financial Group",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "61271T1"
+  },
+  {
+    "payer_id": "62308",
+    "vyne_payer_id": "CIGNA",
+    "insurance_name": "Cigna",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "UFT_WELFARE_FUND\nHEALTHSOURCE_PROVIDENT\nCONNECTICUT_GENERAL_CIGNA\n80840\nTLX70\n62308T2\n62308T1\n10050\nCIGN1\nTLX24\nTLU64\n71056\n68195\nCHLIC\nCGHMO"
+  },
+  {
+    "payer_id": "64246",
+    "vyne_payer_id": "GUARDIAN",
+    "insurance_name": "Guardian Life Insurance Co",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DENTAL_GUARD_PREFERRED\nTLZ41"
+  },
+  {
+    "payer_id": "65030",
+    "vyne_payer_id": "MCNA",
+    "insurance_name": "Managed Care of North America (MCNA)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "MCNA2\nCKLA1\nCKLA2"
+  },
+  {
+    "payer_id": "65358",
+    "vyne_payer_id": "65358",
+    "insurance_name": "Blue Cross Blue Shield of Connecticut",
+    "features": "ELIGIBILITY",
+    "alt_ids": "AD060"
+  },
+  {
+    "payer_id": "66043",
+    "vyne_payer_id": "DD_PUERTO_RICO",
+    "insurance_name": "Delta Dental of Puerto Rico",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "67814",
+    "vyne_payer_id": "67814",
+    "insurance_name": "Sun Life & Health Ins Co",
+    "features": "ELIGIBILITY",
+    "alt_ids": "67814T2\n67814T1\n75238"
+  },
+  {
+    "payer_id": "69019",
+    "vyne_payer_id": "STANDARD_INSURANCE",
+    "insurance_name": "Standard Insurance Company of New York",
+    "features": "ELIGIBILITY",
+    "alt_ids": "93024"
+  },
+  {
+    "payer_id": "70123",
+    "vyne_payer_id": "70123",
+    "insurance_name": "WV PEIA",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "70408",
+    "vyne_payer_id": "SUN_LIFE_FINANCIAL",
+    "insurance_name": "Sun Life Financial",
+    "features": "ELIGIBILITY",
+    "alt_ids": "70408T1"
+  },
+  {
+    "payer_id": "71005",
+    "vyne_payer_id": "FIRST_RELIANCE_STANDARD",
+    "insurance_name": "First Reliance Standard Life - New York",
+    "features": "ELIGIBILITY",
+    "alt_ids": "13317"
+  },
+  {
+    "payer_id": "73288",
+    "vyne_payer_id": "HUMANA",
+    "insurance_name": "Humana Dental",
+    "features": "ELIGIBILITY",
+    "alt_ids": "61101\n10841\n73288T2\n73288T1\n73288T6\n73288T5\n73288T4\n73288T3"
+  },
+  {
+    "payer_id": "76031",
+    "vyne_payer_id": "FLORIDA_COMBINED_LIFE",
+    "insurance_name": "Florida Combined Life (BCBS OF FL)",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "BFL01\nCBFLU\nTLZ31"
+  },
+  {
+    "payer_id": "77045",
+    "vyne_payer_id": "MEDICAID_WASHINGTON",
+    "insurance_name": "Medicaid of Washington",
+    "features": "ELIGIBILITY",
+    "alt_ids": "MDWA1\nCKWA1"
+  },
+  {
+    "payer_id": "77777",
+    "vyne_payer_id": "DD_CALIFORNIA",
+    "insurance_name": "Delta Dental of California",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "TLW42\nCX099\nDD_CALIFORNIA"
+  },
+  {
+    "payer_id": "78077",
+    "vyne_payer_id": "78077",
+    "insurance_name": "Equitable",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "80314",
+    "vyne_payer_id": "UNICARE",
+    "insurance_name": "UNICARE",
+    "features": "ELIGIBILITY",
+    "alt_ids": "80314D\n80314T2\n80314T1"
+  },
+  {
+    "payer_id": "80705",
+    "vyne_payer_id": "CIGNA_SELECT",
+    "insurance_name": "Great West Healthcare",
+    "features": "ELIGIBILITY",
+    "alt_ids": "63665\n66893"
+  },
+  {
+    "payer_id": "81039",
+    "vyne_payer_id": "81039",
+    "insurance_name": "EBMS",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "82029",
+    "vyne_payer_id": "DD_ID",
+    "insurance_name": "Delta Dental of Idaho",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "83470",
+    "vyne_payer_id": "BCBS_ARKANSAS",
+    "insurance_name": "Blue Cross Blue Shield of Arkansas",
+    "features": "ELIGIBILITY",
+    "alt_ids": "BLUE_ADVANTAGE\nCBAR1\nCBAR5\nP-US\nTLY26"
+  },
+  {
+    "payer_id": "84056",
+    "vyne_payer_id": "DD_COLORADO",
+    "insurance_name": "Delta Dental of Colorado",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DDPCO"
+  },
+  {
+    "payer_id": "84099",
+    "vyne_payer_id": "ANTHEM_BCBS_COLORADO",
+    "insurance_name": "Blue Cross Blue Shield of Colorado",
+    "features": "ELIGIBILITY",
+    "alt_ids": "AD050"
+  },
+  {
+    "payer_id": "84101",
+    "vyne_payer_id": "ANTHEM_BCBS_NEVADA",
+    "insurance_name": "Blue Cross Blue Shield of Nevada",
+    "features": "ELIGIBILITY",
+    "alt_ids": "AD265"
+  },
+  {
+    "payer_id": "84103",
+    "vyne_payer_id": "ANTHEM_BCBS_VIRGINIA",
+    "insurance_name": "Blue Cross Blue Shield of Virginia (Trigon)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CB923\nAD423"
+  },
+  {
+    "payer_id": "84105",
+    "vyne_payer_id": "ANTHEM",
+    "insurance_name": "Blue Cross Blue Shield (Anthem)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "ANTHEM_BCBS_OHIO\nANTHEM_BCBS_KENTUCKY\nANTHEM_BCBS_INDIANA\nAD332\nAD160\nAD130\n84105T3\n84105T2\n84105T1\nTLU91\nTLU89\nTLU90\nP-NYF"
+  },
+  {
+    "payer_id": "86027",
+    "vyne_payer_id": "DD_AZ",
+    "insurance_name": "Delta Dental of Arizona",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DDAZ1\n86207"
+  },
+  {
+    "payer_id": "86098",
+    "vyne_payer_id": "86098",
+    "insurance_name": "AVESIS",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CX091\nTFQ19"
+  },
+  {
+    "payer_id": "89009",
+    "vyne_payer_id": "STANDARD_INSURANCE_NEW_YORK",
+    "insurance_name": "Standard Insurance Company of New York",
+    "features": "ELIGIBILITY",
+    "alt_ids": "13411"
+  },
+  {
+    "payer_id": "91062",
+    "vyne_payer_id": "DD_WASHINGTON",
+    "insurance_name": "Delta Dental of Washington",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "90162\n06120"
+  },
+  {
+    "payer_id": "93221",
+    "vyne_payer_id": "ASURIS",
+    "insurance_name": "Asuris Northwest Health",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "93524",
+    "vyne_payer_id": "93524",
+    "insurance_name": "Advantage Dental",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "93525",
+    "vyne_payer_id": "93525",
+    "insurance_name": "Northwest Dental Services",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "94276",
+    "vyne_payer_id": "DDIC",
+    "insurance_name": "Delta Dental - DDIC",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "01901\n01033\nDDIC\nDDGA1"
+  },
+  {
+    "payer_id": "96938",
+    "vyne_payer_id": "96938",
+    "insurance_name": "Gateway Healthy Plan",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "AARP1",
+    "vyne_payer_id": "AARP",
+    "insurance_name": "AARP Dental Insurance Plan",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "AFLAC",
+    "vyne_payer_id": "AFLAC",
+    "insurance_name": "Aflac Claims",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "ARCMS",
+    "vyne_payer_id": "ARCMS",
+    "insurance_name": "AR Medicare Advantage",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "AULTC",
+    "vyne_payer_id": "AULTC",
+    "insurance_name": "Aultcare",
+    "features": "ELIGIBILITY",
+    "alt_ids": "DX052"
+  },
+  {
+    "payer_id": "BBMDQ",
+    "vyne_payer_id": "BCBS_MICHIGAN",
+    "insurance_name": "Blue Cross Blue Shield of Michigan/ Medicare Advantage",
+    "features": "ELIGIBILITY",
+    "alt_ids": "BCBSM"
+  },
+  {
+    "payer_id": "BCAFD",
+    "vyne_payer_id": "BCAFD",
+    "insurance_name": "Blue Cross Blue Shield FEP Dental",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "BME01",
+    "vyne_payer_id": "ANTHEM_BCBS_MAINE",
+    "insurance_name": "Blue Cross Blue Shield of Maine",
+    "features": "ELIGIBILITY",
+    "alt_ids": "AD180"
+  },
+  {
+    "payer_id": "BNH01",
+    "vyne_payer_id": "ANTHEM_BCBS_NEW_HAMPSHIRE",
+    "insurance_name": "Blue Cross Blue Shield of New Hampshire",
+    "features": "ELIGIBILITY",
+    "alt_ids": "AD270"
+  },
+  {
+    "payer_id": "BSCA2",
+    "vyne_payer_id": "BLUE_SHIELD_CALIFORNIA_FEDERAL",
+    "insurance_name": "Blue Shield of California - Federal",
+    "features": "ELIGIBILITY",
+    "alt_ids": "WT002"
+  },
+  {
+    "payer_id": "CB870",
+    "vyne_payer_id": "BCBS_RHODE_ISLAND",
+    "insurance_name": "Blue Cross Blue Shield of Rhode Island",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "53473"
+  },
+  {
+    "payer_id": "CBAL1",
+    "vyne_payer_id": "BCBS_ALABAMA",
+    "insurance_name": "Blue Cross Blue Shield of Alabama",
+    "features": "ELIGIBILITY",
+    "alt_ids": "ALBLS\n07600"
+  },
+  {
+    "payer_id": "CBIA2",
+    "vyne_payer_id": "CBIA2",
+    "insurance_name": "Blue Cross Blue Shield of Iowa",
+    "features": "ELIGIBILITY",
+    "alt_ids": "88848"
+  },
+  {
+    "payer_id": "CBMA1",
+    "vyne_payer_id": "BCBS_MASSACHUSETTS",
+    "insurance_name": "Blue Cross Blue Shield of Massachusetts",
+    "features": "ELIGIBILITY",
+    "alt_ids": "38004\n04210"
+  },
+  {
+    "payer_id": "CBTN1",
+    "vyne_payer_id": "BCBS_TENNESSEE",
+    "insurance_name": "Blue Cross Blue Shield of Tennessee",
+    "features": "ELIGIBILITY",
+    "alt_ids": "00390\n00890\n67004"
+  },
+  {
+    "payer_id": "CDCA1",
+    "vyne_payer_id": "TRICARE_RETIREE_DENTAL_PROGRAM",
+    "insurance_name": "Delta Dental CA FED Govt Prgm",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DD_TRICARE\n37004\nDDPFS\nDDCA1"
+  },
+  {
+    "payer_id": "CDCA2",
+    "vyne_payer_id": "DELTACARE_CLAIMS",
+    "insurance_name": "DeltaCare USA / PMI - Claim",
+    "features": "ELIGIBILITY",
+    "alt_ids": "DDCA2\nDDCA3"
+  },
+  {
+    "payer_id": "CDCAP",
+    "vyne_payer_id": "DELTACARE_USA_ENCOUNTERS",
+    "insurance_name": "DeltaCare USA / PMI - Encounters",
+    "features": "ELIGIBILITY",
+    "alt_ids": "DDCA3"
+  },
+  {
+    "payer_id": "CDIA1",
+    "vyne_payer_id": "DD_IOWA",
+    "insurance_name": "Delta Dental of Iowa",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CDIAM",
+    "vyne_payer_id": "DD_IOWA_GOVERNMENT",
+    "insurance_name": "Delta Dental of Iowa - DWP",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CDKS1",
+    "vyne_payer_id": "DD_KS",
+    "insurance_name": "Delta Dental of Kansas",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DDPKS\nE3960"
+  },
+  {
+    "payer_id": "CDKY1",
+    "vyne_payer_id": "DD_KY",
+    "insurance_name": "Delta Dental of Kentucky",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DDKY\n17004"
+  },
+  {
+    "payer_id": "CDMN1",
+    "vyne_payer_id": "DD_MINNESOTA",
+    "insurance_name": "Delta Dental of Minnesota",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DD_NORTH_DAKOTA\n3M\n07000\n07029\nCDND1\n0700\nDDMN\nDDND\n7000\nTFZ37\nTFZ08\n07000D\nR7005\n26004\nMHP01\nTLZ37\nDDMN1"
+  },
+  {
+    "payer_id": "CDOR1",
+    "vyne_payer_id": "CDOR1",
+    "insurance_name": "Delta Dental of Oregon",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DDAK1\n13350\n25004\nCD0R1"
+  },
+  {
+    "payer_id": "CDVA1",
+    "vyne_payer_id": "DD_VIRGINIA",
+    "insurance_name": "Delta Dental of Virginia",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "54084"
+  },
+  {
+    "payer_id": "CKAL1",
+    "vyne_payer_id": "MEDICAID_ALABAMA",
+    "insurance_name": "Medicaid of Alabama",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CXAL1"
+  },
+  {
+    "payer_id": "CKCT1",
+    "vyne_payer_id": "MEDICAID_CONNECTICUT",
+    "insurance_name": "Medicaid of Connecticut",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CKIN1",
+    "vyne_payer_id": "MEDICAID_INDIANA",
+    "insurance_name": "Medicaid of Indiana",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CKMA1",
+    "vyne_payer_id": "MEDICAID_MA",
+    "insurance_name": "Medicaid of Massachusetts (Mass Health)",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CKMI1",
+    "vyne_payer_id": "MEDICAID_MICHIGAN",
+    "insurance_name": "Medicaid of Michigan",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CKMN1",
+    "vyne_payer_id": "MEDICAID_MINNESOTA",
+    "insurance_name": "Medicaid of Minnesota",
+    "features": "ELIGIBILITY",
+    "alt_ids": "DHS01\nMNMA1"
+  },
+  {
+    "payer_id": "CKMS1",
+    "vyne_payer_id": "MEDICAID_MS",
+    "insurance_name": "Medicaid of Mississippi",
+    "features": "ELIGIBILITY",
+    "alt_ids": "E3240"
+  },
+  {
+    "payer_id": "CKNC1",
+    "vyne_payer_id": "MEDICAID_NC",
+    "insurance_name": "Medicaid of North Carolina",
+    "features": "ELIGIBILITY",
+    "alt_ids": "TLY55\nDNC00"
+  },
+  {
+    "payer_id": "CKNY1",
+    "vyne_payer_id": "MEDICAID_NEW_YORK",
+    "insurance_name": "Medicaid of New York",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CKOH1",
+    "vyne_payer_id": "MEDICAID_OH",
+    "insurance_name": "Medicaid of Ohio",
+    "features": "ELIGIBILITY",
+    "alt_ids": "MMISODJFS"
+  },
+  {
+    "payer_id": "CKPA1",
+    "vyne_payer_id": "MEDICAID_PA",
+    "insurance_name": "Medicaid of Pennsylvania",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CKUT1",
+    "vyne_payer_id": "MEDICAID_UTAH",
+    "insurance_name": "Medicaid of Utah",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CX014",
+    "vyne_payer_id": "MEDICAID_DENTAQUEST",
+    "insurance_name": "DentaQuest - Government",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "PRIMECARE_WISCONSIN\nPHOENIX_HEALTH_DENTAQUEST\nMERCY_CARE\nMEDICAID_WISCONSIN_PRIMECARE\nMEDICAID_WISCONSIN_HUMANA_TDC\nMEDICAID_WISCONSIN_DENTAQUEST\nMEDICAID_VIRGINIA_HEALTHKEEPERS\nMEDICAID_VIRGINIA\nMEDICAID_TEXAS_DENTAQUEST\nMEDICAID_TENNESSEE_BLUECARE\nMEDICAID_SOUTH_CAROLINA\nMEDICAID_MARYLAND\nMEDICAID_KENTUKY_DORAL_DENTAL\nMEDICAID_ILLINOIS\nMEDICAID_IDAHO\nMEDICAID_COLORADO\nDENTAQUEST_GOVERNMENT\nAMERIGROUP_WA_MEDICARE\nAMERIGROUP_GA\nAFFINITY_HEALTH\nTPC14\n13357\n11315\n25143\n23284\n13265\nCKO14\n09824\n31114\nCXO14\nCIMSA\nCKSC1\nCKKY3\nCKIL1\nCKID1\nCKCO1\n86052\nCKVA1\nCKMD1\nCX014T1\n22348\n77016\nSCXIX\nWT001\nTPC11\nTLW15\nCOMED\nAIDID\nMCMD1\nADN01"
+  },
+  {
+    "payer_id": "CX021",
+    "vyne_payer_id": "COMPBENEFITS_AND_HUMANA_SPECIALTY_BENEFITS",
+    "insurance_name": "Humana-CompBenefits",
+    "features": "ELIGIBILITY",
+    "alt_ids": "HUMANA_SPECIALTY_BENEFITS_STATE_FLORIDA_DENTAL\nHUMANA_SPECIALTY_BENEFITS_FLORIDA_HEALTHY_KIDS_DENTAL\nHUMANA_COMPBENEFITS_FEDERAL_PLAN_DENTAL"
+  },
+  {
+    "payer_id": "CX026",
+    "vyne_payer_id": "MEDICA",
+    "insurance_name": "MEDICA of Minnesota",
+    "features": "ELIGIBILITY",
+    "alt_ids": "07031\nMEDIC\nMEPUB\nMEDICA"
+  },
+  {
+    "payer_id": "CX068",
+    "vyne_payer_id": "PHYSICIANS_MUTUAL",
+    "insurance_name": "Physicians Mutual",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CX076",
+    "vyne_payer_id": "ADMINISTRATIVE_SERVICES_ONLY",
+    "insurance_name": "Administrative Services (ASO)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "P-SID\nTPC16\nTPC18\nTPC19 - TCP100\nTPC68\nTPC67\nTPC69\nTPC66\nTPC64\nTPC63\nTPC62\nTPC61\nTPC60\nTPC59\nTPC58\nTPC57\nTPC56\nTPC55\nTPC54\nTPC53\nTPC52\nTPC51\nTPC50\nTPC49\nTPC48\nTPC47\nTPC46\nTPC45\nTPC44\nTPC43\nTPC42\nTPC41\nTPC40\nTPC39\nTPC38\nTPC37\nTPC36\nTPC35\nTPC34\nTPC33\nTPC32\nTPC31\nTPC30\nTPC29\nTPC28\nTPC27\nTPC26\nTPC25\nTPC24\nTPC23\nTPC22\nTPC21\nTPC20\nTPC19\nTPC100\nTPC99\nTPC98\nTPC97\nTPC96\nTPC95\nTPC94\nTPC93\nTPC92\nTPC91\nTPC90\nTPC89\nTPC88\nTPC87\nTPC86\nTPC85\nTPC84\nTPC83\nTPC82\nTPC81\nTPC80\nTPC79\nTPC78\nTPC77\nTPC76\nTPC75\nTPC74\nTPC73\nTPC72\nTPC71\nTPC70\nTPC65"
+  },
+  {
+    "payer_id": "CX083",
+    "vyne_payer_id": "CX083",
+    "insurance_name": "Liberty Dental Plan",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CX08\nWT066\nWT065\nWT067\nWT064\nWT063\nWT062\nWT019\nWT061\nWT060\nWT059\nWT058\nWT057\nWT056\nWT055\nWT054\nWT035\nWT049\nWT048\nWT047\nWT046\nWT045\nWT034\nWT033\nWT044\nWT032\nWT031\nWT043\nWT038\nWT037\nWT029\nWT030\nWT020\nWT028\nWT027\nWT036\nWT026\nWT022\nWT024\nWT023\nWT021\nWT025\nWT018\nTPC12\nLDP02\nLDP01"
+  },
+  {
+    "payer_id": "CX087",
+    "vyne_payer_id": "CX087",
+    "insurance_name": "Mutual of Omaha",
+    "features": "ELIGIBILITY",
+    "alt_ids": "P-087"
+  },
+  {
+    "payer_id": "CX095",
+    "vyne_payer_id": "CX095",
+    "insurance_name": "Capitol Dental",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "CXALC",
+    "vyne_payer_id": "CXALC",
+    "insurance_name": "Allcare CCO Dental",
+    "features": "ELIGIBILITY",
+    "alt_ids": "ALLCD"
+  },
+  {
+    "payer_id": "DDAL1",
+    "vyne_payer_id": "DD_ALABAMA",
+    "insurance_name": "Delta Dental of Alabama",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DD_ALABAMA"
+  },
+  {
+    "payer_id": "DDFL1",
+    "vyne_payer_id": "DD_FLORIDA",
+    "insurance_name": "Delta Dental of Florida",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DD_FLORIDA"
+  },
+  {
+    "payer_id": "DDLA1",
+    "vyne_payer_id": "DD_LOUISIANA",
+    "insurance_name": "Delta Dental of Louisiana",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DD_LOUISIANA"
+  },
+  {
+    "payer_id": "DDMD1",
+    "vyne_payer_id": "DD_MARYLAND",
+    "insurance_name": "Delta Dental of Maryland",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DD_MARYLAND"
+  },
+  {
+    "payer_id": "DDMS1",
+    "vyne_payer_id": "DD_MISSISSIPPI",
+    "insurance_name": "Delta Dental of Mississippi",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "DDMT1",
+    "vyne_payer_id": "DD_MONTANA",
+    "insurance_name": "Delta Dental of Montana",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DD_MONTANA"
+  },
+  {
+    "payer_id": "DDNV1",
+    "vyne_payer_id": "DD_NEVADA",
+    "insurance_name": "Delta Dental of Nevada",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DD_NEVADA"
+  },
+  {
+    "payer_id": "DDTX1",
+    "vyne_payer_id": "DD_TEXAS",
+    "insurance_name": "Delta Dental of Texas",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DD_TEXAS"
+  },
+  {
+    "payer_id": "DDUT1",
+    "vyne_payer_id": "DD_UTAH",
+    "insurance_name": "Delta Dental of Utah",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DDUTO\nDD_UTAH"
+  },
+  {
+    "payer_id": "DEHI1",
+    "vyne_payer_id": "HAWAII_DENTAL_SERVICE",
+    "insurance_name": "Hawaii Dental Services (Delta Dental of HI)",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "10002\n99010"
+  },
+  {
+    "payer_id": "DELAR",
+    "vyne_payer_id": "DD_AR",
+    "insurance_name": "Delta Dental of Arkansas",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DDPAR\nCDAR1\nDEPAR\n00001\n81883"
+  },
+  {
+    "payer_id": "DELOK",
+    "vyne_payer_id": "DD_OKLAHOMA",
+    "insurance_name": "Delta Dental of Oklahoma",
+    "features": "ELIGIBILITY",
+    "alt_ids": "DDPOK\nCDOK1\n22229"
+  },
+  {
+    "payer_id": "DELTA",
+    "vyne_payer_id": "DD_MICHIGAN",
+    "insurance_name": "Delta Dental of Michigan",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DELTU\nCDMI0\nDDPM\nDDPMI\nCBMIO\nDTPMI\nCDMIO\n97276\nA1432\n10004\nUFC01"
+  },
+  {
+    "payer_id": "DELTI",
+    "vyne_payer_id": "DD_INDIANA",
+    "insurance_name": "Delta Dental of Indiana / MDWISE (Medicaid IN)",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "COUNCIL_CARPENTERS_WELFARE_FUND\nICW01\nCDIN1\nDDPIN\nDDPI"
+  },
+  {
+    "payer_id": "DELTM",
+    "vyne_payer_id": "DD_NEW_MEXICO",
+    "insurance_name": "Delta Dental of New Mexico",
+    "features": "ELIGIBILITY",
+    "alt_ids": "85022\nDDPNM"
+  },
+  {
+    "payer_id": "DELTN",
+    "vyne_payer_id": "DD_TENNESSEE",
+    "insurance_name": "Delta Dental of Tennessee",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "DDPTN\nCDTN1\nDDPT\n22004"
+  },
+  {
+    "payer_id": "DELTO",
+    "vyne_payer_id": "DD_OHIO",
+    "insurance_name": "Delta Dental of Ohio",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "INTERNATIONAL_BROTHERHOOD_ELECTRICAL_WORKERS\nDDPOH\nCDOH1\nDDPO\n15004\nA1317"
+  },
+  {
+    "payer_id": "DENT3",
+    "vyne_payer_id": "DENT3",
+    "insurance_name": "All Smiles Community Oral Health",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "GHP22",
+    "vyne_payer_id": "GHP22",
+    "insurance_name": "Geisinger Health Plan",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "GI813",
+    "vyne_payer_id": "MANAGED_DENTALGUARD",
+    "insurance_name": "Guardian Managed DentalGuard (Individual Market)",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "GP133",
+    "vyne_payer_id": "COMMUNITY_UNITED_HEALTHCARE",
+    "insurance_name": "UHC Dental Government Programs",
+    "features": "ELIGIBILITY",
+    "alt_ids": "86001 - 86003\n86047 - 86049\nWT004 - WT006\nWT006\nWT005\nWT004\n86049\n86048\n86047\n86003\n86002\n86001\nGP133"
+  },
+  {
+    "payer_id": "GWD01",
+    "vyne_payer_id": "GOLDEN_WEST",
+    "insurance_name": "Golden West Dental",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "HMSA1",
+    "vyne_payer_id": "HMSA",
+    "insurance_name": "HMSA (Hawaii Medical Services) - Commercial",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "99004\nTLZ27\n10001"
+  },
+  {
+    "payer_id": "IDIND",
+    "vyne_payer_id": "IDIND",
+    "insurance_name": "Delta Dental of Illinois (Individual)",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "INCS1",
+    "vyne_payer_id": "INCS1",
+    "insurance_name": "Caresource - IN",
+    "features": "ELIGIBILITY",
+    "alt_ids": "SCION"
+  },
+  {
+    "payer_id": "LX049",
+    "vyne_payer_id": "PRIMEWEST",
+    "insurance_name": "Primewest Health",
+    "features": "ELIGIBILITY",
+    "alt_ids": "61603\n61604"
+  },
+  {
+    "payer_id": "PACLF",
+    "vyne_payer_id": "PACLF",
+    "insurance_name": "Pacific Life",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "R7002",
+    "vyne_payer_id": "WILSON_MCSHANE_CORP",
+    "insurance_name": "Wilson Mcshane Corporation",
+    "features": "ELIGIBILITY",
+    "alt_ids": "01066"
+  },
+  {
+    "payer_id": "R7003",
+    "vyne_payer_id": "BENEFIT_INC",
+    "insurance_name": "Benefit Inc",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "R7004",
+    "vyne_payer_id": "FLEX_COMPENSATION",
+    "insurance_name": "FLEX Compensation",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "RLH01",
+    "vyne_payer_id": "RLH01",
+    "insurance_name": "Lifemap Dental Claims",
+    "features": "ELIGIBILITY",
+    "alt_ids": "TLU30"
+  },
+  {
+    "payer_id": "SB601",
+    "vyne_payer_id": "ANTHEM_BCBS_GEORGIA",
+    "insurance_name": "Blue Cross Blue Shield of Georgia",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CBGA1\n54000"
+  },
+  {
+    "payer_id": "SCION",
+    "vyne_payer_id": "SCION",
+    "insurance_name": "SKYGEN USA, LLC",
+    "features": "ELIGIBILITY",
+    "alt_ids": "GACS1"
+  },
+  {
+    "payer_id": "SDCMS",
+    "vyne_payer_id": "SDCMS",
+    "insurance_name": "Medicare Advantage SD",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "SDCOM",
+    "vyne_payer_id": "DIRECT_DENTAL",
+    "insurance_name": "SKYGEN USA, LLC Commercial",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "SKYGN",
+    "vyne_payer_id": "MOLINA",
+    "insurance_name": "Molina Healthcare",
+    "features": "ELIGIBILITY",
+    "alt_ids": "SKYGEN"
+  },
+  {
+    "payer_id": "STR01",
+    "vyne_payer_id": "STR01",
+    "insurance_name": "Starmount Life Insurance Co",
+    "features": "ELIGIBILITY",
+    "alt_ids": "STR01T1"
+  },
+  {
+    "payer_id": "STRDH",
+    "vyne_payer_id": "STRDH",
+    "insurance_name": "Unum Dental - CA DHMO",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "TBX01",
+    "vyne_payer_id": "BCBS_ARIZONA",
+    "insurance_name": "Blue Cross Blue Shield of Arizona",
+    "features": "ELIGIBILITY",
+    "alt_ids": "53589\nTLZ14"
+  },
+  {
+    "payer_id": "TFQ56",
+    "vyne_payer_id": "DESERET_MUTUAL_BENEFIT_ADMINISTRATORS",
+    "insurance_name": "Deseret Mutual Benefit Administrators",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CX089\nDX214"
+  },
+  {
+    "payer_id": "TKC01",
+    "vyne_payer_id": "TKC01",
+    "insurance_name": "KANSAS CITY LIFE INSURANCE CO / KCL GROUP BENEFITS",
+    "features": "ELIGIBILITY",
+    "alt_ids": "28777\nCX058\nP-KCL"
+  },
+  {
+    "payer_id": "TLU11",
+    "vyne_payer_id": "ALLEGIANCE",
+    "insurance_name": "Allegiance Benefit Plan Management",
+    "features": "ELIGIBILITY",
+    "alt_ids": "81040"
+  },
+  {
+    "payer_id": "TLU43",
+    "vyne_payer_id": "TLU43",
+    "insurance_name": "Blue Cross Blue Shield of Utah (Regence)",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "CBUT1\n00091\n91000\nTLU95\nDX088"
+  },
+  {
+    "payer_id": "TLX30",
+    "vyne_payer_id": "MVP_SELECT_CARE",
+    "insurance_name": "MVP Select Care",
+    "features": "ELIGIBILITY",
+    "alt_ids": "14165\nP-MVP"
+  },
+  {
+    "payer_id": "TLX52",
+    "vyne_payer_id": "BCBS_MO",
+    "insurance_name": "Blue Cross Blue Shield of Missouri",
+    "features": "ELIGIBILITY",
+    "alt_ids": "Z0001\nAD241"
+  },
+  {
+    "payer_id": "TLX77",
+    "vyne_payer_id": "TLX77",
+    "insurance_name": "Security Life Insurance Co of America",
+    "features": "ELIGIBILITY",
+    "alt_ids": "47009\nCX092\nTLZ28"
+  },
+  {
+    "payer_id": "TLY21",
+    "vyne_payer_id": "ZENITH",
+    "insurance_name": "Zenith Administrators (MN)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "R7001"
+  },
+  {
+    "payer_id": "TMCHI",
+    "vyne_payer_id": "HDS_MEDICAID",
+    "insurance_name": "Medicaid of Hawaii (Hawaii Dental Services)",
+    "features": "ELIGIBILITY",
+    "alt_ids": "HDSMH"
+  },
+  {
+    "payer_id": "TNC02",
+    "vyne_payer_id": "TNC02",
+    "insurance_name": "Renaissance Gov Prog Claims",
+    "features": "ELIGIBILITY",
+    "alt_ids": "TNCO2"
+  },
+  {
+    "payer_id": "TNCMS",
+    "vyne_payer_id": "TNCMS",
+    "insurance_name": "Medicare Advantage of Tennessee",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "TPC17",
+    "vyne_payer_id": "SELECTHEALTH",
+    "insurance_name": "Select Health",
+    "features": "ELIGIBILITY",
+    "alt_ids": "CX107\nSX107\n30192"
+  },
+  {
+    "payer_id": "UHC_API",
+    "vyne_payer_id": "UHC_API",
+    "insurance_name": "United Healthcare Dental (Integration)",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "VYNE1",
+    "vyne_payer_id": "VYNE1",
+    "insurance_name": "Vyne Sample Responses",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": ""
+  },
+  {
+    "payer_id": "WT016",
+    "vyne_payer_id": "WT016",
+    "insurance_name": "Delta Dental - Individual",
+    "features": "ELIGIBILITY\nCLEARCOVERAGE",
+    "alt_ids": "WDENC\n01130\nWT016"
+  },
+  {
+    "payer_id": "WVCS1",
+    "vyne_payer_id": "WVCS1",
+    "insurance_name": "Caresource - West Virginia",
+    "features": "ELIGIBILITY",
+    "alt_ids": ""
+  }
+]

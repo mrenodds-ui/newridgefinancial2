@@ -1,13 +1,55 @@
 {
-  "version": 1,
-  "updatedAt": "2026-07-09T18:30:00Z",
-  "sourceNote": "Curated US dental carrier + plan-family catalog from public industry sources (Mark Farrah/NAIC YE2023, GAO dental market notes, Delta Dental member-company list, carrier product pages, dentalinsurance.com marketplace). Not member-specific benefits. Not a complete NAIC filing dump (~143 fully insured dental carriers YE2023). Verify eligibility via 270/271 or clearinghouse; confirm payer ID on card. Prefer SoftDent InsCo / payer_reference for office routing.",
+  "version": 2,
+  "updatedAt": "2026-07-09T18:45:00Z",
+  "sourceNote": "Curated US dental carrier + plan-family catalog from public industry sources (Mark Farrah/NAIC YE2023, GAO dental market notes, Delta Dental member-company list, carrier product pages, dentalinsurance.com marketplace) plus 2026-07-09 Kansas UI scan (deltadentalks.com, BCBSKS, Blue KC, KanCare/Sunflower/UHC, dentalinsurance.com KS quote). Not member-specific benefits. Not a complete NAIC filing dump (~143 fully insured dental carriers YE2023). Verify eligibility via 270/271 or clearinghouse; confirm payer ID on card. Prefer SoftDent InsCo / payer_reference for office routing.",
   "marketNotes": {
     "fullyInsuredLivesYe2023": 97600000,
     "fullyInsuredCarrierCountYe2023": 143,
     "topFiveNationalSharePct": "<45",
     "specialtyVsMedicalMix": "Specialty dental carriers ~67%; medical carriers with dental ~33% (MFA YE2023)",
     "stateConcentration": "Top-3 dental insurers per state often 38–98% of group enrollment (GAO/NAIC 2024)"
+  },
+  "kansasNotes": {
+    "scannedAt": "2026-07-09",
+    "sources": [
+      "https://deltadentalks.com/",
+      "https://www.deltadental.com/product/state/kansas-dental-insurance/",
+      "https://insurance.ks.gov/documents/other-services/financial-exams/Delta-Dental-2025.pdf",
+      "https://www.bcbsks.com/dental-insurance-individual-family",
+      "https://www.bluekc.com/",
+      "https://www.sunflowerhealthplan.com/",
+      "https://www.uhc.com/communityplan/kansas/",
+      "https://www.dentalinsurance.com/dental-insurance-kansas/ (66213 quote: 24 plans)"
+    ],
+    "geographySplit": "BCBS of Kansas (Topeka) covers most of KS; Blue Cross Blue Shield of Kansas City covers Johnson & Wyandotte counties (KS) plus KC MO metro — separate companies.",
+    "practiceRouting": {
+      "deltaDentalOfKansas": {
+        "softDentLabel": "DELTA DENTAL OF KS",
+        "eligibilityPhone": "(800) 234-3375",
+        "memberServices": "(866) 234-3375",
+        "vynePayerId": "CDKS1",
+        "naic": "54615",
+        "hq": "1619 N Waterfront Parkway, Wichita, KS 67206",
+        "subsidiary": "Surency Life & Health Insurance Company (NAIC 13175)"
+      },
+      "bcbsOfKansas": {
+        "softDentLabel": "BCBS OF KS",
+        "eligibilityPhone": "(800) 432-0379",
+        "vynePayerId": "47163",
+        "shopPhone": "1-800-432-3990"
+      },
+      "bcbsOfKansasCity": {
+        "softDentLabel": "BCBS OF KANSAS CITY",
+        "eligibilityPhone": "(816) 395-3929",
+        "vynePayerId": "47171",
+        "shopPhone": "816-395-2583"
+      }
+    },
+    "individualMarketplace66213": {
+      "carriersInQuote": ["Ameritas", "Careington", "Cigna", "Guardian", "Humana", "MetLife", "NCD", "Renaissance"],
+      "planCount": 24,
+      "note": "National DTC marketplace; Delta Dental of KS and BCBSKS individual plans are sold on their own sites, not always on dentalinsurance.com."
+    }
   },
   "carriers": [
     {
@@ -27,9 +69,10 @@
         "Dental for Everyone No Wait",
         "Dental for Everyone Gold",
         "Dental for Everyone Platinum",
-        "Medicare Advantage dental (state/entity specific)"
+        "Medicare Advantage dental (state/entity specific)",
+        "Kansas Individual & Family Platinum / Gold / Silver / Bronze (DDKS)"
       ],
-      "notes": "39 independent member companies; largest US dental network. State entity on ID card drives payer ID.",
+      "notes": "39 independent member companies; largest US dental network. State entity on ID card drives payer ID. Kansas: Delta Dental of Kansas, Inc. (Wichita) — largest KS dental carrier; licensed KS+MO; writes dental only + ASO; subsidiary Surency Life & Health.",
       "memberCompanies": [
         {"name": "Delta Dental Insurance Company", "states": ["AL", "FL", "GA", "LA", "MS", "MT", "NV", "TX", "UT"]},
         {"name": "Delta Dental of Arizona, Inc.", "states": ["AZ"]},
@@ -403,9 +446,11 @@
         "Blue Shield of California dental",
         "Arkansas BCBS dental",
         "HMSA dental (HI)",
-        "BCBS FEP Dental"
+        "BCBS FEP Dental",
+        "BCBSKS DentalPlus / Preventive DentalPlus PPO / DentalPlus PPO",
+        "Blue KC BlueDental Preventive 1000 / 1000 / Plus 1000 / Plus 1200 / Plus 1500"
       ],
-      "notes": "Independent Blues licensees; each state entity files its own dental products.",
+      "notes": "Independent Blues licensees; each state entity files its own dental products. Kansas has TWO Blues: BCBSKS (statewide except JO/WY) and Blue KC (Johnson & Wyandotte KS + KC MO).",
       "website": "https://www.bcbs.com/"
     },
     {
@@ -575,18 +620,67 @@
     {
       "id": "kansas-medicaid-kancare",
       "name": "Kansas Medicaid / KanCare Dental",
-      "aliases": ["kancare", "kansas medicaid", "sunflower", "aetna better health ks", "unitedhealthcare community plan ks"],
+      "aliases": ["kancare", "kansas medicaid", "sunflower", "aetna better health ks", "unitedhealthcare community plan ks", "skygen"],
       "tier": "medicaid",
       "channels": ["medicaid"],
       "planTypes": ["medicaid"],
       "planFamilies": [
-        "KanCare MCO dental benefits (plan year specific)",
-        "Sunflower Health Plan dental",
-        "Aetna Better Health of Kansas dental",
-        "UnitedHealthcare Community Plan of Kansas dental"
+        "KanCare core dental (children + limited adult restorative/periodontal/SDF)",
+        "Sunflower Health Plan dental (fillings, crowns, fluoride, dentures — age rules apply)",
+        "UnitedHealthcare Community Plan of Kansas dental (SkyGen admin)",
+        "UHC 2026 value-add: +$500 specialty dental for ages 21+ (not in core KanCare)"
       ],
-      "notes": "Kansas practice-relevant; MCO dental benefits change by contract year.",
+      "notes": "2025+: active KanCare MCOs are Sunflower and UnitedHealthcare Community Plan. Aetna Better Health of Kansas exited 2025-01-01 (runout only). UHC dental often via SkyGen/UHCdental.com/medicaid.",
       "website": "https://www.kancare.ks.gov/"
+    },
+    {
+      "id": "delta-dental-of-kansas",
+      "name": "Delta Dental of Kansas",
+      "aliases": ["ddks", "delta dental ks", "delta dental of ks", "surency"],
+      "tier": "regional",
+      "channels": ["group", "individual", "aso"],
+      "planTypes": ["ppo", "premier"],
+      "planFamilies": [
+        "Individual & Family Platinum (max $2500; Basic 80%; Major 70%; implants 70%)",
+        "Individual & Family Gold (max $1500; Basic 80%; Major 50%)",
+        "Individual & Family Silver (max $1000; Basic 50%; Major 50%)",
+        "Individual & Family Bronze (max $1000; Basic 80%; no Major)",
+        "Group Delta Dental PPO / Premier (fully insured or ASO)"
+      ],
+      "notes": "State's largest dental carrier (self-described). Formed 1972; HQ Wichita; sales office Leawood. Licensed KS+MO. 2026 individual rates (monthly individual): Platinum $79.36, Gold $49.97, Silver $41.68, Bronze $35.95. Waiting: Basic 6 mo, Major 12 mo. Deductible $50/$150 family. Right Start 4 Kids. Member Svcs 1-866-234-3375; main 1-800-234-3375. Hours Mon–Thu 7–6, Fri 7–5. SoftDent/Vyne: CDKS1.",
+      "website": "https://deltadentalks.com/"
+    },
+    {
+      "id": "bcbs-kansas-dental",
+      "name": "Blue Cross and Blue Shield of Kansas Dental",
+      "aliases": ["bcbsks", "bcbs of kansas", "dentalplus", "blue cross kansas"],
+      "tier": "regional",
+      "channels": ["group", "individual", "medicare_supplement_add_on"],
+      "planTypes": ["ppo"],
+      "planFamilies": [
+        "DentalPlus (max $1500; Prev 100%; Primary 80%; Major 50%; whitening to $200)",
+        "Preventive DentalPlus PPO (no annual max; Prev 100%; Primary/Major 20%)",
+        "DentalPlus PPO (max $1500; Prev 100%; Primary 80%; Major 50%; whitening to $200)"
+      ],
+      "notes": "Claims ~90% of KS dentists in network. 2026 individual under-65 monthly: DentalPlus $48.77, Preventive DentalPlus PPO $26.37, DentalPlus PPO $40.82. Age 65+: $54.57 / $29.51 / $45.68. 12-month wait on major (crowns/bridges/dentures/implants/oral-perio surgery); credit with prior major coverage. Shop 1-800-432-3990. SoftDent/Vyne often 47163.",
+      "website": "https://www.bcbsks.com/dental"
+    },
+    {
+      "id": "blue-kc-dental",
+      "name": "Blue Cross and Blue Shield of Kansas City Dental",
+      "aliases": ["blue kc", "bcbskc", "bluedental", "bcbs of kansas city"],
+      "tier": "regional",
+      "channels": ["group", "individual"],
+      "planTypes": ["ppo"],
+      "planFamilies": [
+        "BlueDental Preventive 1000",
+        "BlueDental 1000",
+        "BlueDental Plus 1000",
+        "BlueDental Plus 1200",
+        "BlueDental Plus 1500"
+      ],
+      "notes": "Separate from BCBSKS. KS counties: Johnson & Wyandotte (+ KC MO metro). Networks: BlueDental PPO (~1200 local) and BlueDental Choice (~1500). 2026 adult under-65 monthly from ~$18.13 (Preventive 1000) to ~$47.03 (Plus 1500). Basic 6-mo wait; Major 12-mo wait (waivable with prior coverage). Shop 816-395-2583. SoftDent/Vyne often 47171.",
+      "website": "https://www.bluekc.com/"
     },
     {
       "id": "vsp-vision-bundle",

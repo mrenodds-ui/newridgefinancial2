@@ -1,0 +1,3333 @@
+{
+  "version": 5,
+  "updatedAt": "2026-07-09T18:42:44Z",
+  "sourceNote": "Seeded from Vyne/Tesia Dental Payer Listing (public vendor list v05.14.25) plus New Ridge Kansas focus. Import office Desktop Tesia/Vyne export to expand. Catch-all unlisted payers: 06126 with full payer name+address. Office Desktop Tesia/Vyne import merged. Office Desktop Tesia/Vyne import merged. Office Desktop Tesia/Vyne import merged. Office Desktop Tesia/Vyne import merged.",
+  "catchAllPayerId": "06126",
+  "payers": [
+    {
+      "payerId": "AARP1",
+      "name": "AARP Dental Insurance Plan",
+      "aliases": [
+        "AARP"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: AARP",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CX076",
+      "name": "Administrative Services (ASO)",
+      "aliases": [
+        "P-SID",
+        "TPC16",
+        "TPC18",
+        "TPC19 - TCP100",
+        "TPC68",
+        "TPC67",
+        "TPC69",
+        "TPC66",
+        "TPC64",
+        "TPC63",
+        "TPC62",
+        "TPC61",
+        "TPC60",
+        "TPC59",
+        "TPC58",
+        "TPC57",
+        "TPC56",
+        "TPC55",
+        "TPC54",
+        "TPC53",
+        "TPC52",
+        "TPC51",
+        "TPC50",
+        "TPC49",
+        "TPC48",
+        "TPC47",
+        "TPC46",
+        "TPC45",
+        "TPC44",
+        "TPC43",
+        "TPC42",
+        "TPC41",
+        "TPC40",
+        "TPC39",
+        "TPC38",
+        "TPC37",
+        "TPC36",
+        "TPC35",
+        "TPC34",
+        "TPC33"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ADMINISTRATIVE_SERVICES_ONLY",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "93524",
+      "name": "Advantage Dental",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 93524",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "60054",
+      "name": "AETNA",
+      "aliases": [
+        "68246",
+        "6005",
+        "68241",
+        "57604",
+        "6824",
+        "60054T2",
+        "60054T1",
+        "60054T17",
+        "60054T10",
+        "60054T9",
+        "60054T8",
+        "60054T7",
+        "60054T6",
+        "60054T5",
+        "60054T4",
+        "60054T3",
+        "60054T16",
+        "60054T15",
+        "60054T14",
+        "60054T13",
+        "60054T12",
+        "60054T11",
+        "953402799",
+        "18014",
+        "AETNA_DENTAL_PLANS"
+      ],
+      "claimsStatus": "Par",
+      "eligibility270": true,
+      "era835": true,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: AETNA_DENTAL_PLANS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "AFLAC",
+      "name": "Aflac Claims",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: AFLAC",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "58066",
+      "name": "AFLAC of Georgia",
+      "aliases": [
+        "AFLAC_GA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: AFLAC_GA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DENT3",
+      "name": "All Smiles Community Oral Health",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DENT3",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CXALC",
+      "name": "Allcare CCO Dental",
+      "aliases": [
+        "ALLCD"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: CXALC",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TLU11",
+      "name": "Allegiance Benefit Plan Management",
+      "aliases": [
+        "81040",
+        "ALLEGIANCE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ALLEGIANCE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "50503",
+      "name": "Altus Dental",
+      "aliases": [
+        "ALTUS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ALTUS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "47009",
+      "name": "Ameritas Life Insurance Company",
+      "aliases": [
+        "CX032",
+        "CX047",
+        "61492",
+        "61301",
+        "AMERITAS"
+      ],
+      "claimsStatus": "Par",
+      "eligibility270": true,
+      "era835": true,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: AMERITAS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "ARCMS",
+      "name": "AR Medicare Advantage",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ARCMS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "93221",
+      "name": "Asuris Northwest Health",
+      "aliases": [
+        "ASURIS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ASURIS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "AULTC",
+      "name": "Aultcare",
+      "aliases": [
+        "DX052"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: AULTC",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "37242",
+      "name": "Aultra Administrative Group",
+      "aliases": [
+        "DX231"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 37242",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "86098",
+      "name": "AVESIS",
+      "aliases": [
+        "CX091",
+        "TFQ19"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 86098",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "31004",
+      "name": "BCBS OF TX",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "BEAM1",
+      "name": "Beam Dental",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "R7003",
+      "name": "Benefit Inc",
+      "aliases": [
+        "BENEFIT_INC"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BENEFIT_INC",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "43471",
+      "name": "Benefit Management / Inetico",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 43471",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "95604",
+      "name": "BEST LIFE AND HEALTH INSURANCE COMPANY",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "84105",
+      "name": "Blue Cross Blue Shield (Anthem)",
+      "aliases": [
+        "ANTHEM_BCBS_OHIO",
+        "ANTHEM_BCBS_KENTUCKY",
+        "ANTHEM_BCBS_INDIANA",
+        "AD332",
+        "AD160",
+        "AD130",
+        "84105T3",
+        "84105T2",
+        "84105T1",
+        "TLU91",
+        "TLU89",
+        "TLU90",
+        "P-NYF",
+        "ANTHEM"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ANTHEM",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "BCAFD",
+      "name": "Blue Cross Blue Shield FEP Dental",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCAFD",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CBAL1",
+      "name": "Blue Cross Blue Shield of Alabama",
+      "aliases": [
+        "ALBLS",
+        "07600",
+        "BCBS_ALABAMA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_ALABAMA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "47570",
+      "name": "Blue Cross Blue Shield of Alaska (Premera)",
+      "aliases": [
+        "BCBS_WASHINGTON",
+        "47570T3",
+        "47570T2",
+        "47570T1",
+        "00430",
+        "DX102",
+        "BCBS_ALASKA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_ALASKA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TBX01",
+      "name": "Blue Cross Blue Shield of Arizona",
+      "aliases": [
+        "53589",
+        "TLZ14",
+        "BCBS_ARIZONA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_ARIZONA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "83470",
+      "name": "Blue Cross Blue Shield of Arkansas",
+      "aliases": [
+        "BLUE_ADVANTAGE",
+        "CBAR1",
+        "CBAR5",
+        "P-US",
+        "TLY26",
+        "BCBS_ARKANSAS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_ARKANSAS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "84099",
+      "name": "Blue Cross Blue Shield of Colorado",
+      "aliases": [
+        "AD050",
+        "ANTHEM_BCBS_COLORADO"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ANTHEM_BCBS_COLORADO",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "65358",
+      "name": "Blue Cross Blue Shield of Connecticut",
+      "aliases": [
+        "AD060"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 65358",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "00700",
+      "name": "Blue Cross Blue Shield of Connecticut- Family Plan",
+      "aliases": [
+        "AD060",
+        "700",
+        "ANTHEM_BCBS_CONNECTICUT"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ANTHEM_BCBS_CONNECTICUT",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "SB601",
+      "name": "Blue Cross Blue Shield of Georgia",
+      "aliases": [
+        "CBGA1",
+        "54000",
+        "ANTHEM_BCBS_GEORGIA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ANTHEM_BCBS_GEORGIA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CBIA2",
+      "name": "Blue Cross Blue Shield of Iowa",
+      "aliases": [
+        "88848"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: CBIA2",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "47163",
+      "name": "Blue Cross Blue Shield of Kansas",
+      "aliases": [
+        "CBKS1",
+        "BCBS_KANSAS"
+      ],
+      "claimsStatus": "Non Par",
+      "eligibility270": true,
+      "era835": false,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_KANSAS",
+      "kansasRelevant": true,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "47171",
+      "name": "Blue Cross Blue Shield of Kansas City",
+      "aliases": [
+        "DX067",
+        "BCBS_KANSAS_CITY_MO"
+      ],
+      "claimsStatus": "Non Par",
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_KANSAS_CITY_MO",
+      "kansasRelevant": true,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "BKC01",
+      "name": "Blue Cross Blue Shield of Kansas City - Medicare (Dominion)",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "",
+      "kansasRelevant": true,
+      "source": "tesia-vyne-public-list-2025-05-14"
+    },
+    {
+      "payerId": "BME01",
+      "name": "Blue Cross Blue Shield of Maine",
+      "aliases": [
+        "AD180",
+        "ANTHEM_BCBS_MAINE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ANTHEM_BCBS_MAINE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "00580",
+      "name": "Blue Cross Blue Shield of Maryland / CAREFIRST",
+      "aliases": [
+        "CX034",
+        "TDN02",
+        "TLY47",
+        "FX136",
+        "TLX87",
+        "TLZ09",
+        "TLX86",
+        "TLX85",
+        "TLU18",
+        "TLX88",
+        "TDN01",
+        "BCBS_MARYLAND"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_MARYLAND",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CBMA1",
+      "name": "Blue Cross Blue Shield of Massachusetts",
+      "aliases": [
+        "38004",
+        "04210",
+        "BCBS_MASSACHUSETTS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_MASSACHUSETTS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "00210",
+      "name": "Blue Cross Blue Shield of Michigan Dental",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (payer-reference)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "BBMDQ",
+      "name": "Blue Cross Blue Shield of Michigan/ Medicare Advantage",
+      "aliases": [
+        "BCBSM",
+        "BCBS_MICHIGAN"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_MICHIGAN",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TLX52",
+      "name": "Blue Cross Blue Shield of Missouri",
+      "aliases": [
+        "Z0001",
+        "AD241",
+        "BCBS_MO"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_MO",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "84101",
+      "name": "Blue Cross Blue Shield of Nevada",
+      "aliases": [
+        "AD265",
+        "ANTHEM_BCBS_NEVADA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ANTHEM_BCBS_NEVADA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "BNH01",
+      "name": "Blue Cross Blue Shield of New Hampshire",
+      "aliases": [
+        "AD270",
+        "ANTHEM_BCBS_NEW_HAMPSHIRE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ANTHEM_BCBS_NEW_HAMPSHIRE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "55093",
+      "name": "Blue Cross Blue Shield of New York (Empire)",
+      "aliases": [
+        "CBNY1"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 55093",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "22099",
+      "name": "Blue Cross Blue Shield of NJ (Horizon)",
+      "aliases": [
+        "22099T1",
+        "HORIZON"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: HORIZON",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "00851",
+      "name": "Blue Cross Blue Shield of Oregon (Regence)",
+      "aliases": [
+        "00850",
+        "85100",
+        "TLW13",
+        "CB850",
+        "REGENCE_BCBS_OREGON_OUT",
+        "BCBS_OREGON"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: BCBS_OREGON",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CB870",
+      "name": "Blue Cross Blue Shield of Rhode Island",
+      "aliases": [
+        "53473",
+        "BCBS_RHODE_ISLAND"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: BCBS_RHODE_ISLAND",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "38520",
+      "name": "Blue Cross Blue Shield of South Carolina",
+      "aliases": [
+        "BSC01",
+        "TLW74",
+        "BCSSC",
+        "DXSCF",
+        "BCBS_SOUTH_CAROLINA_FEP",
+        "BCBS_SOUTH_CAROLINA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_SOUTH_CAROLINA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CBTN1",
+      "name": "Blue Cross Blue Shield of Tennessee",
+      "aliases": [
+        "00390",
+        "00890",
+        "67004",
+        "BCBS_TENNESSEE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_TENNESSEE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "84980",
+      "name": "Blue Cross Blue Shield of Texas Dental",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (payer-reference)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "TLU43",
+      "name": "Blue Cross Blue Shield of Utah (Regence)",
+      "aliases": [
+        "CBUT1",
+        "00091",
+        "91000",
+        "TLU95",
+        "DX088"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: TLU43",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "84103",
+      "name": "Blue Cross Blue Shield of Virginia (Trigon)",
+      "aliases": [
+        "CB923",
+        "AD423",
+        "ANTHEM_BCBS_VIRGINIA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ANTHEM_BCBS_VIRGINIA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "00932",
+      "name": "Blue Cross Blue Shield of Washington (Regence)",
+      "aliases": [
+        "93200",
+        "BLUE_SHIELD_WASHINGTON"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: BLUE_SHIELD_WASHINGTON",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "39141",
+      "name": "Blue Cross Blue Shield of Wisconsin",
+      "aliases": [
+        "ANTHEM_BCBS_WISCONSIN_FEP",
+        "P-DBC",
+        "BWI01",
+        "00950",
+        "TCX01",
+        "CB950",
+        "AD450",
+        "00450",
+        "BCBS_WISCONSIN"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BCBS_WISCONSIN",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "47198",
+      "name": "Blue Cross of California (Wellpoint)",
+      "aliases": [
+        "TRIGON_BCBS_VIRGINIA",
+        "TRIGON_BCBS_COLORADO",
+        "84103",
+        "ANTHEM_BCBS_CALIFORNIA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ANTHEM_BCBS_CALIFORNIA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "BSCA2",
+      "name": "Blue Shield of California - Federal",
+      "aliases": [
+        "WT002",
+        "BLUE_SHIELD_CALIFORNIA_FEDERAL"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: BLUE_SHIELD_CALIFORNIA_FEDERAL",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CX095",
+      "name": "Capitol Dental",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: CX095",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TLY44",
+      "name": "CAREINGTON BENEFIT SOLUTIONS",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "INCS1",
+      "name": "Caresource - IN",
+      "aliases": [
+        "SCION"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: INCS1",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "WVCS1",
+      "name": "Caresource - West Virginia",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: WVCS1",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "46278",
+      "name": "Centene Dental / Envolve",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 46278",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "36215",
+      "name": "CENTRAL STATES",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "62308",
+      "name": "Cigna",
+      "aliases": [
+        "UFT_WELFARE_FUND",
+        "HEALTHSOURCE_PROVIDENT",
+        "CONNECTICUT_GENERAL_CIGNA",
+        "80840",
+        "TLX70",
+        "62308T2",
+        "62308T1",
+        "10050",
+        "CIGN1",
+        "TLX24",
+        "TLU64",
+        "71056",
+        "68195",
+        "CHLIC",
+        "CGHMO",
+        "CIGNA"
+      ],
+      "claimsStatus": "Par",
+      "eligibility270": true,
+      "era835": true,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: CIGNA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "10050",
+      "name": "Cigna (DHMO)",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "",
+      "kansasRelevant": false,
+      "source": "tesia-vyne-public-list-2025-05-14"
+    },
+    {
+      "payerId": "CGHMO",
+      "name": "Cigna Dental (HMO)",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "",
+      "kansasRelevant": false,
+      "source": "tesia-vyne-public-list-2025-05-14"
+    },
+    {
+      "payerId": "01033",
+      "name": "DELTA DENTAL - DDIC",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "94276",
+      "name": "Delta Dental - DDIC",
+      "aliases": [
+        "01901",
+        "01033",
+        "DDIC",
+        "DDGA1"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DDIC",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "WT016",
+      "name": "Delta Dental - Individual",
+      "aliases": [
+        "WDENC",
+        "01130"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: WT016",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "37004",
+      "name": "DELTA DENTAL CA FED GOVT PRGM",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "CDCA1",
+      "name": "Delta Dental CA FED Govt Prgm",
+      "aliases": [
+        "DD_TRICARE",
+        "37004",
+        "DDPFS",
+        "DDCA1",
+        "TRICARE_RETIREE_DENTAL_PROGRAM"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: TRICARE_RETIREE_DENTAL_PROGRAM",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DDAL1",
+      "name": "Delta Dental of Alabama",
+      "aliases": [
+        "DD_ALABAMA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_ALABAMA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "86027",
+      "name": "Delta Dental of Arizona",
+      "aliases": [
+        "DDAZ1",
+        "86207",
+        "DD_AZ"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_AZ",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DELAR",
+      "name": "Delta Dental of Arkansas",
+      "aliases": [
+        "DDPAR",
+        "CDAR1",
+        "DEPAR",
+        "00001",
+        "81883",
+        "DD_AR"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_AR",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "77777",
+      "name": "Delta Dental of California",
+      "aliases": [
+        "TLW42",
+        "CX099",
+        "DD_CALIFORNIA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_CALIFORNIA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "84056",
+      "name": "Delta Dental of Colorado",
+      "aliases": [
+        "DDPCO",
+        "DD_COLORADO"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_COLORADO",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "51022",
+      "name": "Delta Dental of Delaware",
+      "aliases": [
+        "DD_DELAWARE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_DELAWARE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "52147",
+      "name": "Delta Dental of District of Columbia (DC)",
+      "aliases": [
+        "DD_WASHINGTON_DC"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_WASHINGTON_DC",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DDFL1",
+      "name": "Delta Dental of Florida",
+      "aliases": [
+        "DD_FLORIDA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_FLORIDA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "30004",
+      "name": "DELTA DENTAL OF IA",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "82029",
+      "name": "Delta Dental of Idaho",
+      "aliases": [
+        "DD_ID"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DD_ID",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "05030",
+      "name": "DELTA DENTAL OF IL - 5402",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "IDIND",
+      "name": "Delta Dental of Illinois (Individual)",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: IDIND",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "47598",
+      "name": "Delta Dental of Illinois Group Plans",
+      "aliases": [
+        "05030",
+        "MW150",
+        "P-MOE",
+        "TLY40",
+        "PIP02",
+        "PIP01",
+        "DD_ILLINOIS_GROUP_PLANS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_ILLINOIS_GROUP_PLANS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "10004",
+      "name": "DELTA DENTAL OF IN",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "DELTI",
+      "name": "Delta Dental of Indiana / MDWISE (Medicaid IN)",
+      "aliases": [
+        "COUNCIL_CARPENTERS_WELFARE_FUND",
+        "ICW01",
+        "CDIN1",
+        "DDPIN",
+        "DDPI",
+        "DD_INDIANA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_INDIANA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CDIA1",
+      "name": "Delta Dental of Iowa",
+      "aliases": [
+        "DD_IOWA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DD_IOWA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CDIAM",
+      "name": "Delta Dental of Iowa - DWP",
+      "aliases": [
+        "DD_IOWA_GOVERNMENT"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DD_IOWA_GOVERNMENT",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CDKS1",
+      "name": "Delta Dental of Kansas",
+      "aliases": [
+        "DDPKS",
+        "E3960",
+        "DD_KS"
+      ],
+      "claimsStatus": "Par",
+      "eligibility270": true,
+      "era835": true,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_KS",
+      "kansasRelevant": true,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CDKY1",
+      "name": "Delta Dental of Kentucky",
+      "aliases": [
+        "DDKY",
+        "17004",
+        "DD_KY"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_KY",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "17004",
+      "name": "DELTA DENTAL OF KY",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "DDLA1",
+      "name": "Delta Dental of Louisiana",
+      "aliases": [
+        "DD_LOUISIANA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_LOUISIANA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DDMD1",
+      "name": "Delta Dental of Maryland",
+      "aliases": [
+        "DD_MARYLAND"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_MARYLAND",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "04614",
+      "name": "Delta Dental of Massachusetts",
+      "aliases": [
+        "4614",
+        "DD_MA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_MA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DELTA",
+      "name": "Delta Dental of Michigan",
+      "aliases": [
+        "DELTU",
+        "CDMI0",
+        "DDPM",
+        "DDPMI",
+        "CBMIO",
+        "DTPMI",
+        "CDMIO",
+        "97276",
+        "A1432",
+        "10004",
+        "UFC01",
+        "DD_MICHIGAN"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_MICHIGAN",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CDMN1",
+      "name": "Delta Dental of Minnesota",
+      "aliases": [
+        "DD_NORTH_DAKOTA",
+        "3M",
+        "07000",
+        "07029",
+        "CDND1",
+        "0700",
+        "DDMN",
+        "DDND",
+        "7000",
+        "TFZ37",
+        "TFZ08",
+        "07000D",
+        "R7005",
+        "26004",
+        "MHP01",
+        "TLZ37",
+        "DDMN1",
+        "DD_MINNESOTA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_MINNESOTA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DDMS1",
+      "name": "Delta Dental of Mississippi",
+      "aliases": [
+        "DD_MISSISSIPPI"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_MISSISSIPPI",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "43090",
+      "name": "Delta Dental of Missouri",
+      "aliases": [
+        "25125",
+        "TFQ69",
+        "TLW06",
+        "DD_MISSOURI"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DD_MISSOURI",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DDMT1",
+      "name": "Delta Dental of Montana",
+      "aliases": [
+        "DD_MONTANA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_MONTANA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "07027",
+      "name": "Delta Dental of Nebraska",
+      "aliases": [
+        "DD_NEBRASKA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_NEBRASKA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DDNV1",
+      "name": "Delta Dental of Nevada",
+      "aliases": [
+        "DD_NEVADA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_NEVADA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "22189",
+      "name": "Delta Dental of New Jersey",
+      "aliases": [
+        "DD_CONNECTICUT",
+        "37307",
+        "DDNJ1",
+        "22189T1",
+        "TLU56",
+        "DD_NEW_JERSEY"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_NEW_JERSEY",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DELTM",
+      "name": "Delta Dental of New Mexico",
+      "aliases": [
+        "85022",
+        "DDPNM",
+        "DD_NEW_MEXICO"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DD_NEW_MEXICO",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "11198",
+      "name": "Delta Dental of New York",
+      "aliases": [
+        "32_BJ",
+        "DD_NEW_YORK"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_NEW_YORK",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "56101",
+      "name": "Delta Dental of North Carolina",
+      "aliases": [
+        "56010",
+        "DDPNC",
+        "DDNC",
+        "DDNC1",
+        "DD_NORTH_CAROLINA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_NORTH_CAROLINA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "02027",
+      "name": "Delta Dental of Northeast (ME NH VT)",
+      "aliases": [
+        "2027",
+        "02027T3",
+        "02027T2",
+        "02027T1",
+        "DD_NORTHEAST"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DD_NORTHEAST",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DELTO",
+      "name": "Delta Dental of Ohio",
+      "aliases": [
+        "INTERNATIONAL_BROTHERHOOD_ELECTRICAL_WORKERS",
+        "DDPOH",
+        "CDOH1",
+        "DDPO",
+        "15004",
+        "A1317",
+        "DD_OHIO"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_OHIO",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "10001",
+      "name": "DELTA DENTAL OF OK",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "DELOK",
+      "name": "Delta Dental of Oklahoma",
+      "aliases": [
+        "DDPOK",
+        "CDOK1",
+        "22229",
+        "DD_OKLAHOMA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DD_OKLAHOMA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "25004",
+      "name": "DELTA DENTAL OF OR",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "CDOR1",
+      "name": "Delta Dental of Oregon",
+      "aliases": [
+        "DDAK1",
+        "13350",
+        "25004",
+        "CD0R1"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: CDOR1",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "23166",
+      "name": "Delta Dental of Pennsylvania",
+      "aliases": [
+        "DDPA1",
+        "23166T1",
+        "TLU51",
+        "TLX23",
+        "00008",
+        "DD_PENNSYLVANIA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_PENNSYLVANIA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "66043",
+      "name": "Delta Dental of Puerto Rico",
+      "aliases": [
+        "DD_PUERTO_RICO"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_PUERTO_RICO",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "05029",
+      "name": "Delta Dental of Rhode Island",
+      "aliases": [
+        "5029",
+        "DD_RHODE_ISLAND"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_RHODE_ISLAND",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "43091",
+      "name": "Delta Dental of South Carolina",
+      "aliases": [
+        "DELTA_DENTAL_SOUTH_CAROLINA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DELTA_DENTAL_SOUTH_CAROLINA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "54097",
+      "name": "Delta Dental of South Dakota",
+      "aliases": [
+        "CKSD1",
+        "TLZ29"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 54097",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DELTN",
+      "name": "Delta Dental of Tennessee",
+      "aliases": [
+        "DDPTN",
+        "CDTN1",
+        "DDPT",
+        "22004",
+        "DD_TENNESSEE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_TENNESSEE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DDTX1",
+      "name": "Delta Dental of Texas",
+      "aliases": [
+        "DD_TEXAS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_TEXAS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "22004",
+      "name": "DELTA DENTAL OF TN",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "DDUT1",
+      "name": "Delta Dental of Utah",
+      "aliases": [
+        "DDUTO",
+        "DD_UTAH"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_UTAH",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "54084",
+      "name": "DELTA DENTAL OF VA",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "CDVA1",
+      "name": "Delta Dental of Virginia",
+      "aliases": [
+        "54084",
+        "DD_VIRGINIA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_VIRGINIA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "91062",
+      "name": "Delta Dental of Washington",
+      "aliases": [
+        "90162",
+        "06120",
+        "DD_WASHINGTON"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_WASHINGTON",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "31096",
+      "name": "Delta Dental of West Virginia",
+      "aliases": [
+        "DD_WEST_VIRGINIA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_WEST_VIRGINIA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "39069",
+      "name": "Delta Dental of Wisconsin",
+      "aliases": [
+        "39033",
+        "DD_WI"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: DD_WI",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "07025",
+      "name": "Delta Dental of Wyoming",
+      "aliases": [
+        "CDWY1",
+        "DDWY1"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 07025",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CDCA2",
+      "name": "DeltaCare USA / PMI - Claim",
+      "aliases": [
+        "DDCA2",
+        "DDCA3",
+        "DELTACARE_CLAIMS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DELTACARE_CLAIMS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CDCAP",
+      "name": "DeltaCare USA / PMI - Encounters",
+      "aliases": [
+        "DDCA3",
+        "DELTACARE_USA_ENCOUNTERS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DELTACARE_USA_ENCOUNTERS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DSEL1",
+      "name": "Dental Select",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (payer-reference)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "04356",
+      "name": "Dentaquest - Commercial",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 04356",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CX014",
+      "name": "DentaQuest - Government",
+      "aliases": [
+        "PRIMECARE_WISCONSIN",
+        "PHOENIX_HEALTH_DENTAQUEST",
+        "MERCY_CARE",
+        "MEDICAID_WISCONSIN_PRIMECARE",
+        "MEDICAID_WISCONSIN_HUMANA_TDC",
+        "MEDICAID_WISCONSIN_DENTAQUEST",
+        "MEDICAID_VIRGINIA_HEALTHKEEPERS",
+        "MEDICAID_VIRGINIA",
+        "MEDICAID_TEXAS_DENTAQUEST",
+        "MEDICAID_TENNESSEE_BLUECARE",
+        "MEDICAID_SOUTH_CAROLINA",
+        "MEDICAID_MARYLAND",
+        "MEDICAID_KENTUKY_DORAL_DENTAL",
+        "MEDICAID_ILLINOIS",
+        "MEDICAID_IDAHO",
+        "MEDICAID_COLORADO",
+        "DENTAQUEST_GOVERNMENT",
+        "AMERIGROUP_WA_MEDICARE",
+        "AMERIGROUP_GA",
+        "AFFINITY_HEALTH",
+        "TPC14",
+        "13357",
+        "11315",
+        "25143",
+        "23284",
+        "13265",
+        "CKO14",
+        "09824",
+        "31114",
+        "CXO14",
+        "CIMSA",
+        "CKSC1",
+        "CKKY3",
+        "CKIL1",
+        "CKID1",
+        "CKCO1",
+        "86052",
+        "CKVA1",
+        "CKMD1",
+        "CX014T1"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: MEDICAID_DENTAQUEST",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TFQ56",
+      "name": "Deseret Mutual Benefit Administrators",
+      "aliases": [
+        "CX089",
+        "DX214",
+        "DESERET_MUTUAL_BENEFIT_ADMINISTRATORS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DESERET_MUTUAL_BENEFIT_ADMINISTRATORS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DOM01",
+      "name": "Dominion National",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "81039",
+      "name": "EBMS",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 81039",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "68069",
+      "name": "Envolve Dental / Ambetter Dental",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (payer-reference)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "78077",
+      "name": "Equitable",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: 78077",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "60033",
+      "name": "FIRST AMERITAS LIFE INSURANCE CORPORATION OF NY",
+      "aliases": [
+        "72630",
+        "AMERITAS_NEW_YORK"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: AMERITAS_NEW_YORK",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "01074",
+      "name": "FIRST CONTINENTAL LIFE & ACCIDENT",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "71005",
+      "name": "First Reliance Standard Life - New York",
+      "aliases": [
+        "13317",
+        "FIRST_RELIANCE_STANDARD"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: FIRST_RELIANCE_STANDARD",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "R7004",
+      "name": "FLEX Compensation",
+      "aliases": [
+        "FLEX_COMPENSATION"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: FLEX_COMPENSATION",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "76031",
+      "name": "Florida Combined Life (BCBS OF FL)",
+      "aliases": [
+        "BFL01",
+        "CBFLU",
+        "TLZ31",
+        "FLORIDA_COMBINED_LIFE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: FLORIDA_COMBINED_LIFE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "96938",
+      "name": "Gateway Healthy Plan",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 96938",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "44054",
+      "name": "GEHA Employee Program",
+      "aliases": [
+        "GEHA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: GEHA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "GHP22",
+      "name": "Geisinger Health Plan",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: GHP22",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "GWD01",
+      "name": "Golden West Dental",
+      "aliases": [
+        "GOLDEN_WEST"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: GOLDEN_WEST",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "80705",
+      "name": "Great West Healthcare",
+      "aliases": [
+        "63665",
+        "66893",
+        "CIGNA_SELECT"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: CIGNA_SELECT",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TLW81",
+      "name": "GUARANTEE TRUST LIFE",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "64246",
+      "name": "Guardian Life Insurance Co",
+      "aliases": [
+        "DENTAL_GUARD_PREFERRED",
+        "TLZ41",
+        "GUARDIAN"
+      ],
+      "claimsStatus": "Par",
+      "eligibility270": true,
+      "era835": true,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: GUARDIAN",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "GI813",
+      "name": "Guardian Managed DentalGuard (Individual Market)",
+      "aliases": [
+        "MANAGED_DENTALGUARD"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MANAGED_DENTALGUARD",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "DEHI1",
+      "name": "Hawaii Dental Services (Delta Dental of HI)",
+      "aliases": [
+        "10002",
+        "99010",
+        "HAWAII_DENTAL_SERVICE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: HAWAII_DENTAL_SERVICE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "HMSA1",
+      "name": "HMSA (Hawaii Medical Services) - Commercial",
+      "aliases": [
+        "99004",
+        "TLZ27",
+        "10001",
+        "HMSA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: HMSA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "73288",
+      "name": "Humana Dental",
+      "aliases": [
+        "61101",
+        "10841",
+        "73288T2",
+        "73288T1",
+        "73288T6",
+        "73288T5",
+        "73288T4",
+        "73288T3",
+        "HUMANA"
+      ],
+      "claimsStatus": "Non Par",
+      "eligibility270": true,
+      "era835": true,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: HUMANA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CX021",
+      "name": "Humana-CompBenefits",
+      "aliases": [
+        "HUMANA_SPECIALTY_BENEFITS_STATE_FLORIDA_DENTAL",
+        "HUMANA_SPECIALTY_BENEFITS_FLORIDA_HEALTHY_KIDS_DENTAL",
+        "HUMANA_COMPBENEFITS_FEDERAL_PLAN_DENTAL",
+        "COMPBENEFITS_AND_HUMANA_SPECIALTY_BENEFITS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: COMPBENEFITS_AND_HUMANA_SPECIALTY_BENEFITS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TKC01",
+      "name": "KANSAS CITY LIFE INSURANCE CO / KCL GROUP BENEFITS",
+      "aliases": [
+        "28777",
+        "CX058",
+        "P-KCL"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: TKC01",
+      "kansasRelevant": true,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CX083",
+      "name": "Liberty Dental Plan",
+      "aliases": [
+        "CX08",
+        "WT066",
+        "WT065",
+        "WT067",
+        "WT064",
+        "WT063",
+        "WT062",
+        "WT019",
+        "WT061",
+        "WT060",
+        "WT059",
+        "WT058",
+        "WT057",
+        "WT056",
+        "WT055",
+        "WT054",
+        "WT035",
+        "WT049",
+        "WT048",
+        "WT047",
+        "WT046",
+        "WT045",
+        "WT034",
+        "WT033",
+        "WT044",
+        "WT032",
+        "WT031",
+        "WT043",
+        "WT038",
+        "WT037",
+        "WT029",
+        "WT030",
+        "WT020",
+        "WT028",
+        "WT027",
+        "WT036",
+        "WT026",
+        "WT022",
+        "WT024",
+        "WT023"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: CX083",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "RLH01",
+      "name": "Lifemap Dental Claims",
+      "aliases": [
+        "TLU30"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: RLH01",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "52148",
+      "name": "Lincoln Financial Dental",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (payer-reference)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "65030",
+      "name": "Managed Care of North America (MCNA)",
+      "aliases": [
+        "MCNA2",
+        "CKLA1",
+        "CKLA2",
+        "MCNA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MCNA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "86253",
+      "name": "MANHATTAN LIFE ASSURANCE COMPANY OF AMERICA",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (office-insurance-xlsx)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "CX026",
+      "name": "MEDICA of Minnesota",
+      "aliases": [
+        "07031",
+        "MEDIC",
+        "MEPUB",
+        "MEDICA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKAL1",
+      "name": "Medicaid of Alabama",
+      "aliases": [
+        "CXAL1",
+        "MEDICAID_ALABAMA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_ALABAMA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKCT1",
+      "name": "Medicaid of Connecticut",
+      "aliases": [
+        "MEDICAID_CONNECTICUT"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_CONNECTICUT",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TMCHI",
+      "name": "Medicaid of Hawaii (Hawaii Dental Services)",
+      "aliases": [
+        "HDSMH",
+        "HDS_MEDICAID"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: HDS_MEDICAID",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKIN1",
+      "name": "Medicaid of Indiana",
+      "aliases": [
+        "MEDICAID_INDIANA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_INDIANA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKMA1",
+      "name": "Medicaid of Massachusetts (Mass Health)",
+      "aliases": [
+        "MEDICAID_MA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_MA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKMI1",
+      "name": "Medicaid of Michigan",
+      "aliases": [
+        "MEDICAID_MICHIGAN"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_MICHIGAN",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKMN1",
+      "name": "Medicaid of Minnesota",
+      "aliases": [
+        "DHS01",
+        "MNMA1",
+        "MEDICAID_MINNESOTA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_MINNESOTA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKMS1",
+      "name": "Medicaid of Mississippi",
+      "aliases": [
+        "E3240",
+        "MEDICAID_MS"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_MS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKNY1",
+      "name": "Medicaid of New York",
+      "aliases": [
+        "MEDICAID_NEW_YORK"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_NEW_YORK",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKNC1",
+      "name": "Medicaid of North Carolina",
+      "aliases": [
+        "TLY55",
+        "DNC00",
+        "MEDICAID_NC"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_NC",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKOH1",
+      "name": "Medicaid of Ohio",
+      "aliases": [
+        "MMISODJFS",
+        "MEDICAID_OH"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_OH",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKPA1",
+      "name": "Medicaid of Pennsylvania",
+      "aliases": [
+        "MEDICAID_PA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_PA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "CKUT1",
+      "name": "Medicaid of Utah",
+      "aliases": [
+        "MEDICAID_UTAH"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_UTAH",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "77045",
+      "name": "Medicaid of Washington",
+      "aliases": [
+        "MDWA1",
+        "CKWA1",
+        "MEDICAID_WASHINGTON"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MEDICAID_WASHINGTON",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "29076",
+      "name": "Medical Mutual of Ohio (MMO)",
+      "aliases": [
+        "CB833",
+        "TLU03",
+        "MMO"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MMO",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "MA001",
+      "name": "Medicare Advantage Dental Rider",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (payer-reference)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "TNCMS",
+      "name": "Medicare Advantage of Tennessee",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: TNCMS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "SDCMS",
+      "name": "Medicare Advantage SD",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: SDCMS",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "23160",
+      "name": "MEDICO",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "64157",
+      "name": "Meritain Health Dental",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (payer-reference)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "65978",
+      "name": "MetLife",
+      "aliases": [],
+      "claimsStatus": "Par",
+      "eligibility270": true,
+      "era835": true,
+      "notes": "RT Detailed",
+      "kansasRelevant": true,
+      "source": "tesia-vyne-public-list-2025-05-14"
+    },
+    {
+      "payerId": "0000E",
+      "name": "Metropolitan Life Insurance Company",
+      "aliases": [
+        "65978",
+        "TLZ16",
+        "TES01",
+        "METLIFE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: METLIFE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "SKYGN",
+      "name": "Molina Healthcare",
+      "aliases": [
+        "SKYGEN",
+        "MOLINA"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MOLINA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "34192",
+      "name": "Mutual Health Services",
+      "aliases": [
+        "MUTUAL_HEALTH_SERVICES"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MUTUAL_HEALTH_SERVICES",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "71412",
+      "name": "MUTUAL OF OMAHA",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "CX087",
+      "name": "Mutual of Omaha",
+      "aliases": [
+        "P-087"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: CX087",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TLX30",
+      "name": "MVP Select Care",
+      "aliases": [
+        "14165",
+        "P-MVP",
+        "MVP_SELECT_CARE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: MVP_SELECT_CARE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "93525",
+      "name": "Northwest Dental Services",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 93525",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "PACLF",
+      "name": "Pacific Life",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: PACLF",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "37121",
+      "name": "PEQUOT PLUS HEALTH - 3620",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "00978",
+      "name": "PHYSICIANS MUTUAL",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "CX068",
+      "name": "Physicians Mutual",
+      "aliases": [
+        "PHYSICIANS_MUTUAL"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: PHYSICIANS_MUTUAL",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "LX049",
+      "name": "Primewest Health",
+      "aliases": [
+        "61603",
+        "61604",
+        "PRIMEWEST"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: PRIMEWEST",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "61271",
+      "name": "Principal Financial Group",
+      "aliases": [
+        "61271T1",
+        "PRINCIPAL"
+      ],
+      "claimsStatus": "Par",
+      "eligibility270": true,
+      "era835": true,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: PRINCIPAL",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "00611",
+      "name": "Regence Blue Shield of Idaho",
+      "aliases": [
+        "CBID2",
+        "BLUE_SHIELD_IDAHO"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: BLUE_SHIELD_IDAHO",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "36088",
+      "name": "Reliance Standard Life",
+      "aliases": [
+        "RELIANCE_STANDARD_LIFE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: RELIANCE_STANDARD_LIFE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TNC02",
+      "name": "Renaissance Gov Prog Claims",
+      "aliases": [
+        "TNCO2"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: TNC02",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "RLHA1",
+      "name": "Renaissance Life And Health",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "",
+      "kansasRelevant": true,
+      "source": "tesia-vyne-public-list-2025-05-14"
+    },
+    {
+      "payerId": "01060",
+      "name": "RENAISSANCE LIFE AND HEALTH",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "TLX77",
+      "name": "Security Life Insurance Co of America",
+      "aliases": [
+        "47009",
+        "CX092",
+        "TLZ28"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: TLX77",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TPC17",
+      "name": "Select Health",
+      "aliases": [
+        "CX107",
+        "SX107",
+        "30192",
+        "SELECTHEALTH"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: SELECTHEALTH",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "SCION",
+      "name": "SKYGEN USA, LLC",
+      "aliases": [
+        "GACS1"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: SCION",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "SDCOM",
+      "name": "SKYGEN USA, LLC Commercial",
+      "aliases": [
+        "DIRECT_DENTAL"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: DIRECT_DENTAL",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "69019",
+      "name": "Standard Insurance Company of New York",
+      "aliases": [
+        "93024",
+        "STANDARD_INSURANCE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: STANDARD_INSURANCE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "89009",
+      "name": "Standard Insurance Company of New York",
+      "aliases": [
+        "13411",
+        "STANDARD_INSURANCE_NEW_YORK"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: STANDARD_INSURANCE_NEW_YORK",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "STR01",
+      "name": "Starmount Life Insurance Co",
+      "aliases": [
+        "STR01T1"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: STR01",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "67814",
+      "name": "Sun Life & Health Ins Co",
+      "aliases": [
+        "67814T2",
+        "67814T1",
+        "75238"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 67814",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "70408",
+      "name": "Sun Life Financial",
+      "aliases": [
+        "70408T1",
+        "SUN_LIFE_FINANCIAL"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: SUN_LIFE_FINANCIAL",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "06126",
+      "name": "Tesia Catch-All (unlisted payers)",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "",
+      "kansasRelevant": false,
+      "source": "tesia-vyne-public-list-2025-05-14"
+    },
+    {
+      "payerId": "99726",
+      "name": "TRICARE Dental (United Concordia)",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (payer-reference)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "CX002",
+      "name": "Tricare Dental Plan (UCCI)",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "",
+      "kansasRelevant": false,
+      "source": "tesia-vyne-public-list-2025-05-14"
+    },
+    {
+      "payerId": "ILDTA",
+      "name": "TRUASSURE",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "18004",
+      "name": "UCCI - FED VIP",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "GP133",
+      "name": "UHC Dental Government Programs",
+      "aliases": [
+        "86001 - 86003",
+        "86047 - 86049",
+        "WT004 - WT006",
+        "WT006",
+        "WT005",
+        "WT004",
+        "86049",
+        "86048",
+        "86047",
+        "86003",
+        "86002",
+        "86001",
+        "COMMUNITY_UNITED_HEALTHCARE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: COMMUNITY_UNITED_HEALTHCARE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "79480",
+      "name": "UMR",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "39026",
+      "name": "UMR_GEHA",
+      "aliases": [
+        "UNITED_MEDICAL_RESOURCES",
+        "UMR_SAN_ANTONIO",
+        "UMR_HARRINGTON",
+        "33108",
+        "74223",
+        "95266",
+        "75196",
+        "75245",
+        "87265",
+        "52132",
+        "UMR_WAUSAU"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: UMR_WAUSAU",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "80314",
+      "name": "UNICARE",
+      "aliases": [
+        "80314D",
+        "80314T2",
+        "80314T1",
+        "UNICARE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: UNICARE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "0000D",
+      "name": "United Concordia",
+      "aliases": [
+        "UNITED_CONCORDIA_FEDERAL_EMPLOYEES_PROGRAM",
+        "PERSONAL_CHOICE",
+        "HERSHEY_HEALTHSMILE",
+        "BLUE_SHIELD_PENNSYLVANNIA",
+        "UCCDP",
+        "54771",
+        "CX013",
+        "89070",
+        "CX007",
+        "CBPA2",
+        "CB865",
+        "CX002",
+        "DXTAS",
+        "18004",
+        "UCCTR",
+        "UCCMB",
+        "UCCEN",
+        "UCCDE",
+        "UCCAP",
+        "00864",
+        "TLW33",
+        "CXOO7",
+        "TLX74",
+        "CX008",
+        "TFQ25",
+        "CBMNU",
+        "CBAR2",
+        "TEMU1",
+        "99998",
+        "99994",
+        "TES03",
+        "99997",
+        "Z9901",
+        "99995",
+        "BCBS_LOUISIANA",
+        "MINNESOTA_BLUE_CROSS_DENTAL_(UCCI)",
+        "53287",
+        "BXMN1",
+        "TLU22",
+        "00720"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: UNITED_CONCORDIA",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "00864",
+      "name": "UNITED CONCORDIA - CX007",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "Imported from SoftDent/office ECS id via softdent_tesia_join (softdent-insco-sensei)",
+      "kansasRelevant": false,
+      "source": "softdent-ecs-import"
+    },
+    {
+      "payerId": "52133",
+      "name": "United Healthcare Dental",
+      "aliases": [
+        "PACIFICARE",
+        "BLUE_SHIELD_CALIFORNIA",
+        "CX060",
+        "CX053",
+        "BSCA1",
+        "5213",
+        "CX056",
+        "CX057",
+        "37060",
+        "94036",
+        "CX001",
+        "UHC01",
+        "52133T1",
+        "52133T3",
+        "52133T2",
+        "TPC06",
+        "TLW58",
+        "TLX81",
+        "TLW59",
+        "TLW68",
+        "TLX06",
+        "TBS03",
+        "TLW57",
+        "87726",
+        "TLU44",
+        "UNITED_HEALTHCARE"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: UNITED_HEALTHCARE",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "UHC_API",
+      "name": "United Healthcare Dental (Integration)",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: UHC_API",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "87726",
+      "name": "UnitedHealthcare",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": null,
+      "era835": null,
+      "notes": "",
+      "kansasRelevant": true,
+      "source": "tesia-vyne-public-list-2025-05-14"
+    },
+    {
+      "payerId": "STRDH",
+      "name": "Unum Dental - CA DHMO",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: STRDH",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "VYNE1",
+      "name": "Vyne Sample Responses",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY, CLEARCOVERAGE Vyne key: VYNE1",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "R7002",
+      "name": "Wilson Mcshane Corporation",
+      "aliases": [
+        "01066",
+        "WILSON_MCSHANE_CORP"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: WILSON_MCSHANE_CORP",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "70123",
+      "name": "WV PEIA",
+      "aliases": [],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: 70123",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    },
+    {
+      "payerId": "TLY21",
+      "name": "Zenith Administrators (MN)",
+      "aliases": [
+        "R7001",
+        "ZENITH"
+      ],
+      "claimsStatus": null,
+      "eligibility270": true,
+      "era835": null,
+      "notes": "Vyne features: ELIGIBILITY Vyne key: ZENITH",
+      "kansasRelevant": false,
+      "source": "office-tesia-import"
+    }
+  ]
+}

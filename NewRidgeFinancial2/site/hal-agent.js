@@ -1763,6 +1763,56 @@ const HalAgent = (function () {
         };
       },
     },
+    search_tesia_payers: {
+      label: "Search Desktop Tesia / Vyne payer IDs (clearinghouse routing)",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.searchTesiaPayers !== "function") {
+          return { ok: false, summary: "Tesia payer search requires the NR2 server." };
+        }
+        const q = String(args.query || args.payer || args.payerId || "");
+        const kansasOnly = /\bkansas\b|\bks\b/i.test(q) || !!args.kansas;
+        const payload = await bridge.searchTesiaPayers(q, 8, kansasOnly);
+        const text = payload && payload.text ? String(payload.text) : "No Tesia/Vyne payer matches.";
+        return {
+          ok: !!(payload && payload.count),
+          summary: text.slice(0, 3000) || "No Tesia/Vyne payer matches.",
+          count: payload && payload.count ? payload.count : 0,
+        };
+      },
+    },
+    join_softdent_tesia: {
+      label: "Join SoftDent InsCo ECS IDs to Desktop Tesia/Vyne payer list (exact IDs only)",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.joinSoftDentTesia !== "function") {
+          return { ok: false, summary: "SoftDent↔Tesia join requires the NR2 server." };
+        }
+        const dry = !!(args.dryRun || args.dry_run || args.preview);
+        const payload = await bridge.joinSoftDentTesia(dry);
+        const text =
+          payload && payload.text
+            ? String(payload.text)
+            : payload && payload.ok
+              ? JSON.stringify(payload.counts || payload)
+              : "SoftDent↔Tesia join failed.";
+        return {
+          ok: !!(payload && payload.ok),
+          summary: text.slice(0, 3000),
+          counts: payload && payload.counts ? payload.counts : null,
+        };
+      },
+    },
     lookup_fee_schedule: {
       label: "Look up office fee schedule amounts by CDT / carrier",
       run: async (ctx, args) => {
@@ -1821,7 +1871,17 @@ const HalAgent = (function () {
         }
         let payerName = String(args.payerName || args.payer || "").trim();
         let payerId = String(args.payerId || args.payer_id || "").trim();
-        // Resolve payerId from office payer reference when missing
+        // Resolve payerId from Tesia/Vyne list first, then office payer reference
+        if (payerName && !payerId && typeof bridge.searchTesiaPayers === "function") {
+          try {
+            const tesia = await bridge.searchTesiaPayers(payerName, 1, false);
+            const hit = tesia && tesia.items && tesia.items[0];
+            if (hit && hit.payerId) payerId = String(hit.payerId);
+            if (hit && hit.name && !payerName) payerName = String(hit.name);
+          } catch {
+            /* optional */
+          }
+        }
         if (payerName && !payerId && typeof bridge.searchPayerReference === "function") {
           try {
             const pref = await bridge.searchPayerReference(payerName, 1);
@@ -1835,6 +1895,7 @@ const HalAgent = (function () {
             /* optional */
           }
         }
+        const vendorArg = String(args.vendor || "auto").trim().toLowerCase();
         const payload = await bridge.fetchEligibility271({
           payerName,
           payerId,
@@ -1842,7 +1903,7 @@ const HalAgent = (function () {
           providerNpi: String(args.providerNpi || args.npi || ""),
           subscriberLastName: String(args.subscriberLastName || args.lastName || ""),
           subscriberDob: String(args.subscriberDob || args.dateOfBirth || ""),
-          vendor: String(args.vendor || "auto"),
+          vendor: vendorArg === "tesia" || vendorArg === "vyne" ? "vyne_tesia" : vendorArg || "auto",
         });
         const parts = [];
         if (payload && payload.message) parts.push(String(payload.message));
@@ -2645,6 +2706,18 @@ const HalAgent = (function () {
       gather.push("search_dental_carrier_catalog");
     }
     if (
+      /\b(tesia|vyne|payer\s*id|payor\s*id|e-?claim\s*id|clearinghouse\s*payer)\b/i.test(query)
+    ) {
+      gather.push("search_tesia_payers");
+    }
+    if (
+      /\b(softdent\s*[↔\-–]?\s*tesia|join\s+(softdent|tesia)|tesia\s+join|ecs\s*(payer\s*)?id)\b/i.test(
+        query
+      )
+    ) {
+      gather.push("join_softdent_tesia");
+    }
+    if (
       /\bD\d{4}\b/i.test(query) ||
       /\b(fee\s*schedule|allowed\s*amount|allowed\s*fee|contracted\s*fee|practice\s*amount|co-?45|underpay(?:ment)?)\b/i.test(
         query
@@ -2791,6 +2864,16 @@ const HalAgent = (function () {
         /\b(plan|policy|policies|ppo|dhmo|marketplace)\b/i.test(query))
     ) {
       tools.push("search_dental_carrier_catalog");
+    }
+    if (/\b(tesia|vyne|payer\s*id|payor\s*id|e-?claim\s*id|clearinghouse\s*payer)\b/i.test(query)) {
+      tools.push("search_tesia_payers");
+    }
+    if (
+      /\b(softdent\s*[↔\-–]?\s*tesia|join\s+(softdent|tesia)|tesia\s+join|ecs\s*(payer\s*)?id)\b/i.test(
+        query
+      )
+    ) {
+      tools.push("join_softdent_tesia");
     }
     if (
       /\bD\d{4}\b/i.test(query) ||

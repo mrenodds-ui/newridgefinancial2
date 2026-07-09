@@ -725,6 +725,56 @@ class DesktopApi:
 
         return {"ok": True, **clearinghouse_status()}
 
+    def search_tesia_payers(self, query: str, limit: int = 8, kansas_only: bool = False) -> dict:
+        from tesia_payer_list_store import format_tesia_hits, search_tesia_payers
+
+        hits = search_tesia_payers(str(query or ""), limit=int(limit or 8), kansas_only=bool(kansas_only))
+        return {"items": hits, "count": len(hits), "text": format_tesia_hits(hits)}
+
+    def import_tesia_payers(self, path_or_json: str, merge: bool = True) -> dict:
+        import json as _json
+
+        from tesia_payer_list_store import import_payer_list_file, import_payer_rows
+
+        raw = str(path_or_json or "").strip()
+        if not raw:
+            return {"ok": False, "error": "path_or_rows_required"}
+        if raw.startswith("{") or raw.startswith("["):
+            try:
+                payload = _json.loads(raw)
+            except _json.JSONDecodeError as exc:
+                return {"ok": False, "error": f"invalid_json:{exc}"}
+            if isinstance(payload, list):
+                return import_payer_rows(payload, merge=bool(merge))
+            if isinstance(payload, dict):
+                if payload.get("path") or payload.get("file"):
+                    return import_payer_list_file(str(payload.get("path") or payload.get("file")), merge=bool(merge))
+                rows = payload.get("rows") or payload.get("payers") or payload.get("items")
+                if isinstance(rows, list):
+                    return import_payer_rows(rows, merge=bool(merge))
+            return {"ok": False, "error": "path_or_rows_required"}
+        return import_payer_list_file(raw, merge=bool(merge))
+
+    def join_softdent_tesia(self, dry_run: bool = False) -> dict:
+        from softdent_tesia_join import apply_softdent_tesia_join, build_join_plan, format_join_summary
+
+        if dry_run:
+            plan = build_join_plan()
+            return {
+                "ok": True,
+                "dryRun": True,
+                "counts": plan.get("counts"),
+                "text": format_join_summary(
+                    {
+                        "counts": plan.get("counts"),
+                        "kansasExact": [r for r in (plan.get("exactMatches") or []) if r.get("kansasRelevant")][:10],
+                    }
+                ),
+            }
+        result = apply_softdent_tesia_join(write_payer_reference=True, expand_tesia=True)
+        result["text"] = format_join_summary(result)
+        return result
+
     def grep_program_source(self, query: str, limit: int = 24) -> dict:
         from program_source_grep import grep_program_source
 

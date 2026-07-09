@@ -1620,6 +1620,91 @@ class NR2BottleServer(BottleServer):
             except Exception as exc:
                 return _json_response({"ok": False, "error": str(exc)}, status=500)
 
+        @app.get("/api/tesia-payers")
+        def tesia_payers_api():
+            try:
+                from tesia_payer_list_store import format_tesia_hits, payer_list_summary, search_tesia_payers
+
+                query = str(bottle.request.params.get("q") or bottle.request.params.get("query") or "")
+                limit = int(bottle.request.params.get("limit") or 8)
+                kansas_only = str(bottle.request.params.get("kansas") or "").strip().lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                )
+                if query.strip() or kansas_only:
+                    items = search_tesia_payers(query, limit=limit, kansas_only=kansas_only)
+                    return _json_response(
+                        {
+                            "ok": True,
+                            "items": items,
+                            "count": len(items),
+                            "text": format_tesia_hits(items),
+                        }
+                    )
+                return _json_response(payer_list_summary())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc), "items": [], "count": 0}, status=500)
+
+        @app.post("/api/tesia-payers/import")
+        def tesia_payers_import_api():
+            try:
+                from tesia_payer_list_store import import_payer_list_file, import_payer_rows
+
+                body = bottle.request.json or {}
+                if not isinstance(body, dict):
+                    body = {}
+                merge = bool(body.get("merge", True))
+                if body.get("path") or body.get("file"):
+                    return _json_response(
+                        import_payer_list_file(str(body.get("path") or body.get("file")), merge=merge)
+                    )
+                rows = body.get("rows") or body.get("payers") or body.get("items")
+                if isinstance(rows, list):
+                    return _json_response(import_payer_rows(rows, merge=merge))
+                return _json_response(
+                    {
+                        "ok": False,
+                        "error": "path_or_rows_required",
+                        "hint": "POST {path: 'data/imports/tesia_export.csv'} or {rows: [...]}",
+                    },
+                    status=400,
+                )
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/tesia-payers/join-softdent")
+        def tesia_payers_join_softdent_api():
+            try:
+                from softdent_tesia_join import apply_softdent_tesia_join, build_join_plan, format_join_summary
+
+                body = bottle.request.json or {}
+                if not isinstance(body, dict):
+                    body = {}
+                dry_run = bool(body.get("dryRun") or body.get("dry_run"))
+                if dry_run:
+                    plan = build_join_plan()
+                    return _json_response(
+                        {
+                            "ok": True,
+                            "dryRun": True,
+                            "counts": plan.get("counts"),
+                            "text": format_join_summary({"counts": plan.get("counts"), "kansasExact": [
+                                r for r in plan.get("exactMatches") or [] if r.get("kansasRelevant")
+                            ][:10]}),
+                            "exactMatches": (plan.get("exactMatches") or [])[:20],
+                            "expandFromSoftDent": (plan.get("expandFromSoftDent") or [])[:20],
+                        }
+                    )
+                result = apply_softdent_tesia_join(
+                    write_payer_reference=bool(body.get("writePayerReference", True)),
+                    expand_tesia=bool(body.get("expandTesia", True)),
+                )
+                result["text"] = format_join_summary(result)
+                return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
         @app.get("/api/hal-memories")
         def hal_memories_api():
             try:
