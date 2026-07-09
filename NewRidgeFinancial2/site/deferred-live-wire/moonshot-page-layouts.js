@@ -23,9 +23,9 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "dataBind": "PageCanvasData.financialKpis()",
           "kpis": [
             { "widgetKey": "practiceFinancialOverview", "label": "Production MTD" },
-            { "widgetKey": "financialProductionTrend", "label": "Collections MTD" },
-            { "widgetKey": "payerMixAndCollections", "label": "Net Income YTD" },
-            { "widgetKey": "nr2KpiRibbon", "label": "A/R Days" },
+            { "widgetKey": "softdentCollectionsDaily", "label": "Collections MTD" },
+            { "widgetKey": "quickbooksNetIncomeSummary", "label": "Net Income YTD" },
+            { "widgetKey": "nr2CollectionLag", "label": "A/R Days" },
             { "widgetKey": "nr2GoalScorecard", "label": "Goal Attainment" }
           ]
         },

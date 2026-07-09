@@ -217,15 +217,17 @@ const PageCanvasData = (function () {
         label: collections.period ? `Collections (${collections.period})` : "Collections MTD",
         value: collections.value,
         hint: collections.hint,
-        tone: collections.tone || widgetTone("financialProductionTrend"),
-        widgetKey: "financialProductionTrend",
+        tone: collections.tone || widgetTone("softdentCollectionsDaily"),
+        // SoftDent collections series / overview — not production-trend.
+        widgetKey: "softdentCollectionsDaily",
       },
       {
         label: "Net Income YTD",
         value: fmt(ov.monthlyNetIncome),
         hint: fmt(ov.monthlyRevenue ? `Revenue ${ov.monthlyRevenue}` : null),
-        tone: widgetTone("payerMixAndCollections"),
-        widgetKey: "payerMixAndCollections",
+        tone: widgetTone("quickbooksNetIncomeSummary"),
+        // QuickBooks net income — not payer-mix.
+        widgetKey: "quickbooksNetIncomeSummary",
       },
       {
         label: "A/R Days",
@@ -237,8 +239,9 @@ const PageCanvasData = (function () {
             : lag.hasData
               ? "Monthly proxy"
               : "Cross-analytics",
-        tone: widgetTone("nr2KpiRibbon"),
-        widgetKey: "nr2KpiRibbon",
+        tone: widgetTone("nr2CollectionLag"),
+        // Collection lag / DSO — not the KPI ribbon container.
+        widgetKey: "nr2CollectionLag",
       },
       {
         label: "Goal Attainment",

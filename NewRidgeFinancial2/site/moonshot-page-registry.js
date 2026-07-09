@@ -2,7 +2,7 @@
  * Moonshot page registry — nav metadata + panel layouts from moonshot-page-layouts.js.
  */
 const MoonshotPageRegistry = (function () {
-  const SCHEMA_VERSION = "hal-10154";
+  const SCHEMA_VERSION = "hal-10155";
   const LAYOUT_EPOCH = "moonshot-mockup";
 
   const PRACTICE = {
@@ -32,9 +32,9 @@ const MoonshotPageRegistry = (function () {
       widgets: [
         { key: "nr2AlertTicker", title: "Exception Alert Ticker" },
         { key: "practiceFinancialOverview", title: "Practice Financial Overview" },
-        { key: "financialProductionTrend", title: "Collections MTD" },
-        { key: "payerMixAndCollections", title: "Net Income YTD" },
-        { key: "nr2KpiRibbon", title: "A/R Days" },
+        { key: "financialProductionTrend", title: "Production Trend & YTD" },
+        { key: "payerMixAndCollections", title: "Payer Mix & Collections" },
+        { key: "nr2KpiRibbon", title: "Cross-Analytics KPI Ribbon" },
         { key: "nr2GoalScorecard", title: "Goal Attainment" },
         { key: "nr2MonthlyTrendCombo", title: "Executive Monthly Trend" },
         { key: "nr2CollectionLag", title: "Collection Lag (DSO)" },

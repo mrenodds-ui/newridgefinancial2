@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10154",
-  "assetVersion": "hal-10154",
-  "schemaVersion": "hal-10154",
+  "BUILD_ID": "hal-10155",
+  "assetVersion": "hal-10155",
+  "schemaVersion": "hal-10155",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -18,5 +18,5 @@
     "office-manager"
   ],
   "builtAt": "2026-07-09T17:55:00Z",
-  "notes": "hal-10154: Stop fabricating 72% hygiene recall gauge; derive rate from SoftDent completed/(completed+due) or show empty."
+  "notes": "hal-10155: Stop mislabeling financialProductionTrend as Collections MTD; wire hero KPIs to real SoftDent/QB/DSO widgets."
 }

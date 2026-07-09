@@ -23,9 +23,9 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "dataBind": "PageCanvasData.financialKpis()",
           "kpis": [
             { "widgetKey": "practiceFinancialOverview", "label": "Production MTD" },
-            { "widgetKey": "financialProductionTrend", "label": "Collections MTD" },
-            { "widgetKey": "payerMixAndCollections", "label": "Net Income YTD" },
-            { "widgetKey": "nr2KpiRibbon", "label": "A/R Days" },
+            { "widgetKey": "softdentCollectionsDaily", "label": "Collections MTD" },
+            { "widgetKey": "quickbooksNetIncomeSummary", "label": "Net Income YTD" },
+            { "widgetKey": "nr2CollectionLag", "label": "A/R Days" },
             { "widgetKey": "nr2GoalScorecard", "label": "Goal Attainment" }
           ]
         },
@@ -223,7 +223,7 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "type": "stat-grid",
           "widgetKey": "periodCloseAndPosting",
           "colSpan": 6,
-          "title": "June Period Close",
+          "title": "Period Close",
           "dataBind": "PageCanvasData.documentsPeriodStats()"
         },
         {
@@ -231,7 +231,7 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "type": "table",
           "widgetKey": "journalPostingQueue",
           "colSpan": 6,
-          "title": "June Journal Entries",
+          "title": "Journal Entries",
           "dataBind": "PageCanvasData.journalQueueItems()"
         }
       ]
@@ -562,7 +562,7 @@ const MOONSHOT_PAGE_LAYOUTS = {
           "type": "gauge",
           "widgetKey": "periodCloseAndPosting",
           "colSpan": 6,
-          "title": "June Period Close",
+          "title": "Period Close",
           "dataBind": "PageCanvasData.metrics('periodCloseAndPosting')"
         },
         {
