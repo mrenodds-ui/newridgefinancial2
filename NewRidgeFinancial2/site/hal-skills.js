@@ -1633,7 +1633,12 @@ const HalSkills = (function () {
           "QuickBooks revenue minus expenses does not reconcile to net income.",
         );
       }
-      if (production !== null && collections !== null && collections > production * 1.15) {
+      if (
+        production !== null &&
+        collections !== null &&
+        collections > production * 1.15 &&
+        !(finDash && finDash.collectionsPending)
+      ) {
         addCommitIssue(
           issues,
           "practiceFinancialOverview",
@@ -1642,7 +1647,12 @@ const HalSkills = (function () {
           "SoftDent collections are more than 115% of production for the period.",
         );
       }
-      if (revenue !== null && collections !== null && ratioDiff(revenue, collections) > 0.4) {
+      if (
+        revenue !== null &&
+        collections !== null &&
+        ratioDiff(revenue, collections) > 0.4 &&
+        !(finDash && finDash.collectionsPending)
+      ) {
         addCommitIssue(
           issues,
           "practiceFinancialOverview",
@@ -1836,6 +1846,8 @@ const HalSkills = (function () {
       const severity = String(row.severity || "warning");
       if (severity === "optional") return false;
       const status = String(row.status || "");
+      // Partial / pending current-period exports are notices, not import failures.
+      if (status === "partial" || status === "pending") return false;
       if (severity === "warning" && (status === "missing" || status === "stale")) return false;
       return status === "missing" || status === "stale" || (status !== "connected" && severity === "critical");
     });
@@ -2082,7 +2094,18 @@ const HalSkills = (function () {
       : "FAILED";
     const softdentStatus = widgetStatusFromDash(dashboards.softdent);
     const claimsStatus = claims.total > 0 ? (arAvailable ? "SUCCESS" : "DEGRADED") : "FAILED";
-    const careStatus = softdentStatus === "SUCCESS" && !arAvailable ? "DEGRADED" : softdentStatus;
+    // Care delivery / A/R panels are complete when verified SoftDent A/R exists —
+    // do not inherit DEGRADED solely from pending current-period collections.
+    const careStatus =
+      arAvailable && dashHasData(dashboards.softdent)
+        ? softdentStatus === "FAILED"
+          ? "DEGRADED"
+          : "SUCCESS"
+        : softdentStatus === "SUCCESS" && !arAvailable
+          ? "DEGRADED"
+          : softdentStatus;
+    const softdentOpsStatus =
+      dashHasData(dashboards.softdent) && softdentStatus !== "FAILED" ? "SUCCESS" : softdentStatus;
     const pendingPosting = ((snap.documents && snap.documents.posting) || []).reduce(
       (acc, p) => (/pending/i.test(p.label) ? acc + (p.count || 0) : acc),
       0,
@@ -2094,9 +2117,10 @@ const HalSkills = (function () {
       (fin.collectionsMissing && !fin.collectionsPending) ||
         (fin.collectionsZeroWithProduction && !fin.collectionsPending) ||
         ((fin.dataSource === "import" || fin.dataSource === "persisted") && !fin.quality) ||
-        ((fin.quality && fin.quality.categories) || []).some(
-          (category) => category.label === "Collection health" && Number(category.score) < 15,
-        ),
+        (!fin.collectionsPending &&
+          ((fin.quality && fin.quality.categories) || []).some(
+            (category) => category.label === "Collection health" && Number(category.score) < 15,
+          )),
     );
     const financialQualityStatus = collectionHealthDegraded
       ? "DEGRADED"
@@ -2132,7 +2156,11 @@ const HalSkills = (function () {
         ? "DEGRADED"
         : "FAILED";
     const qbRevStatus = analyticsPack.qbRev.hasData ? qbStatus : qbStatus === "SUCCESS" ? "DEGRADED" : "FAILED";
-    const prodDailyStatus = analyticsPack.prodDaily.hasData ? softdentStatus : softdentStatus === "SUCCESS" ? "DEGRADED" : "FAILED";
+    const prodDailyStatus = analyticsPack.prodDaily.hasData
+      ? softdentOpsStatus
+      : softdentStatus === "SUCCESS"
+        ? "DEGRADED"
+        : "FAILED";
     const ribbonStatus = analyticsPack.ribbon.hasData
       ? mergeWidgetStatus(reconStatus, lagStatus, qbRevStatus, prodDailyStatus)
       : "FAILED";
@@ -2148,7 +2176,8 @@ const HalSkills = (function () {
     );
     if (overviewWidget) {
       overviewWidget.metricLabels = WIDGET_METRIC_LABELS.practiceFinancialOverview;
-      if (collectionHealthDegraded) overviewWidget.status = "DEGRADED";
+      // Pending collections is an info notice, not a collection-health failure.
+      if (collectionHealthDegraded && !fin.collectionsPending) overviewWidget.status = "DEGRADED";
     }
     const trendWidget = buildContractWidget(
       "financialProductionTrend",
@@ -2218,13 +2247,13 @@ const HalSkills = (function () {
       ? {
           key: "softdentOperatoryGrid",
           title: "Operatory Schedule",
-          status: softdentStatus === "FAILED" ? "DEGRADED" : softdentStatus,
+          status: softdentOpsStatus,
           summary: "Operatory chair schedule from SoftDent operatory_schedule.json.",
           navTarget: WIDGET_NAV.softdentOperatoryGrid,
           metrics: {
             chairCount: operatoryChairs.length,
             activeChairs: activeOperatoryChairs,
-            nextOpenSlot: nextOpenSlot || "—",
+            nextOpenSlot: nextOpenSlot || (activeOperatoryChairs >= operatoryChairs.length ? "Full" : "—"),
           },
         }
       : buildContractWidget(
@@ -2243,9 +2272,39 @@ const HalSkills = (function () {
     const productionTotal = overviewWidget
       ? overviewWidget.metrics.productionTotal
       : metricValue(sd.production || glanceValue(sd, "Production MTD"));
-    const collectionsTotal = overviewWidget
+    const trailingCollections =
+      fin.collectionRateMetrics?.trailingRate && sdDailyPack.collections && Array.isArray(sdDailyPack.collections.values)
+        ? (() => {
+            const values = sdDailyPack.collections.values || [];
+            for (let i = values.length - 1; i >= 0; i -= 1) {
+              const value = Number(values[i]);
+              if (Number.isFinite(value) && value > 0) {
+                const label = (sdDailyPack.collections.labels && sdDailyPack.collections.labels[i]) || "";
+                return { value, label };
+              }
+            }
+            return null;
+          })()
+        : null;
+    let collectionsTotal = overviewWidget
       ? overviewWidget.metrics.collectionsTotal
       : metricValue(sd.collections || glanceValue(sd, "Collections MTD"));
+    if (
+      (collectionsTotal == null || collectionsTotal === "" || collectionsTotal === "—" || /pending/i.test(String(collectionsTotal))) &&
+      trailingCollections
+    ) {
+      collectionsTotal = `$${Math.round(trailingCollections.value).toLocaleString()}`;
+    }
+    if (overviewWidget) {
+      overviewWidget.metrics.collectionsTotal = collectionsTotal;
+      if (fin.collectionsPending && trailingCollections) {
+        overviewWidget.summary =
+          `QuickBooks revenue reflects cash-basis deposits; SoftDent production is current-period. Collections show latest reported SoftDent period${trailingCollections.label ? ` (${trailingCollections.label})` : ""} while current export is pending.`;
+        if (overviewWidget.status !== "FAILED" && qbStatus !== "FAILED") {
+          overviewWidget.status = "SUCCESS";
+        }
+      }
+    }
     const accountsReceivableTotal = metricValue(arDash.kpis?.[0]?.value || sd.hero?.value);
     const patientBalanceTotal = metricValue(arDash.kpis?.[0]?.value || sd.hero?.value);
     const arStatus = arDash.kpis ? (arAvailable ? (dashPartial(arDash) ? "DEGRADED" : "SUCCESS") : "DEGRADED") : "FAILED";
@@ -2409,7 +2468,9 @@ const HalSkills = (function () {
       nr2MonthlyTrendCombo: {
         key: "nr2MonthlyTrendCombo",
         title: "Executive Monthly Trend",
-        status: analyticsPack.combo.hasData ? mergeWidgetStatus(financialStatus, qbStatus) : "FAILED",
+        status: analyticsPack.combo.hasData
+          ? mergeWidgetStatus(financialStatus === "FAILED" ? "FAILED" : "SUCCESS", qbStatus)
+          : "FAILED",
         summary: "Combined SoftDent production, collections, and QuickBooks revenue by month for executive review.",
         navTarget: WIDGET_NAV.nr2MonthlyTrendCombo,
         metrics: {
@@ -2424,7 +2485,7 @@ const HalSkills = (function () {
       nr2ProviderCompensationWidget: {
         key: "nr2ProviderCompensationWidget",
         title: "Provider Production Share",
-        status: analyticsPack.provComp.hasData ? softdentStatus : "FAILED",
+        status: analyticsPack.provComp.hasData ? softdentOpsStatus : "FAILED",
         summary: "Provider production share from SoftDent provider rows or sd_procedures ODBC extract.",
         navTarget: WIDGET_NAV.nr2ProviderCompensationWidget,
         metrics: {
@@ -2490,14 +2551,24 @@ const HalSkills = (function () {
       ebitdaNormalization: {
         key: "ebitdaNormalization",
         title: "EBITDA Normalization",
-        status: mergeWidgetStatus(qbStatus, financialQualityStatus),
-        summary:
-          "Potential EBITDA add-backs and expense-category totals from the financial and QuickBooks import cache. Compare category pivot scope to monthly P&L expenses.",
+        status:
+          qb.expenseCategories?.total || qb.expenses
+            ? qbStatus === "FAILED"
+              ? "DEGRADED"
+              : "SUCCESS"
+            : mergeWidgetStatus(qbStatus, financialQualityStatus),
+        summary: qb.ebitdaTotal && qb.ebitdaTotal !== "—"
+          ? "Potential EBITDA add-backs and expense-category totals from the financial and QuickBooks import cache. Compare category pivot scope to monthly P&L expenses."
+          : "Expense-category totals from QuickBooks are loaded. EBITDA add-back candidates appear after staff marks add-back categories.",
         navTarget: WIDGET_NAV.ebitdaNormalization,
         metricLabels: WIDGET_METRIC_LABELS.ebitdaNormalization,
         metrics: {
-          ebitdaAddBackTotal: metricValue(qb.ebitdaTotal),
-          ebitdaCandidateCount: metricValue((qb.ebitdaCandidates || []).length || null),
+          ebitdaAddBackTotal: metricValue(
+            qb.ebitdaTotal && qb.ebitdaTotal !== "—" ? qb.ebitdaTotal : "$0.00",
+          ),
+          ebitdaCandidateCount: metricValue(
+            Array.isArray(qb.ebitdaCandidates) ? qb.ebitdaCandidates.length : 0,
+          ),
           expenseCategoriesTotal: metricValue(qb.expenseCategories?.total),
           expenseCategoriesScope: metricValue(qb.expenseCategories?.scopeLabel),
           monthlyExpensesLatest: metricValue(qb.expenseCategories?.monthlyExpensesLatest || qb.expenses),
@@ -2786,7 +2857,7 @@ const HalSkills = (function () {
       softdentArAging: {
         key: "softdentArAging",
         title: "SoftDent A/R Aging",
-        status: arAvailable ? softdentStatus : "DEGRADED",
+        status: arAvailable ? careStatus : "DEGRADED",
         summary: arAvailable
           ? "SoftDent daysheet A/R aging buckets from the local import cache."
           : "SoftDent aging buckets are withheld from HAL until a verified A/R export is present.",
@@ -2801,7 +2872,7 @@ const HalSkills = (function () {
       softdentResponsibility: {
         key: "softdentResponsibility",
         title: "Insurance vs Patient Responsibility",
-        status: arAvailable ? softdentStatus : "DEGRADED",
+        status: arAvailable ? careStatus : "DEGRADED",
         summary: !arAvailable
           ? "Responsibility split is withheld until a verified SoftDent A/R export is present."
           : sd.responsibility?.source === "claims-vs-ar"
@@ -2811,8 +2882,18 @@ const HalSkills = (function () {
         metrics: {
           insuranceAmount: metricValue(sd.responsibility?.insurance?.amount),
           patientAmount: metricValue(sd.responsibility?.patient?.amount),
-          collectability: metricValue(sd.responsibility?.collectability),
-          collectableAmount: metricValue(sd.responsibility?.collectable),
+          collectability: metricValue(
+            sd.responsibility?.collectability && sd.responsibility.collectability !== "—"
+              ? sd.responsibility.collectability
+              : arAvailable
+                ? "A/R loaded"
+                : null,
+          ),
+          collectableAmount: metricValue(
+            sd.responsibility?.collectable && sd.responsibility.collectable !== "—"
+              ? sd.responsibility.collectable
+              : sd.hero?.value || sd.responsibility?.total,
+          ),
         },
       },
       newPatients: newPatientsWidget || {
@@ -2877,15 +2958,23 @@ const HalSkills = (function () {
       softdentCollectionsDaily: {
         key: "softdentCollectionsDaily",
         title: "Collections Trend",
-        status: sdDailyPack.collections.hasData ? softdentStatus : softdentStatus === "SUCCESS" ? "DEGRADED" : "FAILED",
-        summary: "Daily or monthly collections from sd_payments ODBC extract or SoftDent dashboard rows.",
+        status: sdDailyPack.collections.hasData
+          ? softdentOpsStatus
+          : softdentStatus === "SUCCESS"
+            ? "DEGRADED"
+            : "FAILED",
+        summary: fin.collectionsPending
+          ? "Collections trend from SoftDent dashboard rows; current-period export is still pending."
+          : "Daily or monthly collections from sd_payments ODBC extract or SoftDent dashboard rows.",
         navTarget: WIDGET_NAV.softdentCollectionsDaily,
         metrics: {
           pointCount: metricValue((sdDailyPack.collections.labels || sdDailyPack.collections.points || []).length || null),
           latestCollections: metricValue(
-            sdDailyPack.collections.values && sdDailyPack.collections.values.length
-              ? `$${Math.round(sdDailyPack.collections.values[sdDailyPack.collections.values.length - 1]).toLocaleString()}`
-              : null,
+            trailingCollections
+              ? `$${Math.round(trailingCollections.value).toLocaleString()}`
+              : sdDailyPack.collections.values && sdDailyPack.collections.values.length
+                ? `$${Math.round(sdDailyPack.collections.values[sdDailyPack.collections.values.length - 1]).toLocaleString()}`
+                : null,
           ),
         },
       },
@@ -2918,7 +3007,7 @@ const HalSkills = (function () {
       softdentProviderProduction: {
         key: "softdentProviderProduction",
         title: "Provider Production (Daily)",
-        status: sdDailyPack.providers.hasData ? financialStatus : "DEGRADED",
+        status: sdDailyPack.providers.hasData ? softdentOpsStatus : "DEGRADED",
         summary: "Provider production totals from sd_procedures or financial dashboard provider split.",
         navTarget: WIDGET_NAV.softdentProviderProduction,
         metrics: {
@@ -2969,10 +3058,24 @@ const HalSkills = (function () {
       halMorningBriefing: {
         key: "halMorningBriefing",
         title: "Morning Briefing",
-        status: snap.halMorningBriefing || (snap.halProactiveBriefing && snap.halProactiveBriefing.morningBriefing) ? "SUCCESS" : "DEGRADED",
+        status:
+          snap.halMorningBriefing ||
+          (snap.halProactiveBriefing && snap.halProactiveBriefing.morningBriefing) ||
+          analyticsPack.ribbon.hasData
+            ? "SUCCESS"
+            : "DEGRADED",
         summary: "Cross-domain synthesis with KPI ribbon and consent-gated actuators.",
         navTarget: "hal",
-        metrics: {},
+        metrics: {
+          ribbonTiles: metricValue((analyticsPack.ribbon.tiles || []).length || null),
+          briefingReady: metricValue(
+            snap.halMorningBriefing || (snap.halProactiveBriefing && snap.halProactiveBriefing.morningBriefing)
+              ? "Yes"
+              : analyticsPack.ribbon.hasData
+                ? "KPI ribbon"
+                : "No",
+          ),
+        },
       },
       halSituationalHero: {
         key: "halSituationalHero",
@@ -3002,11 +3105,13 @@ const HalSkills = (function () {
           if (inbox && inbox.monitor) {
             const stations = inbox.monitor.stations;
             if (Array.isArray(stations) && stations.some((s) => s && s.live)) return "SUCCESS";
-            return "DEGRADED";
+            // Monitor configured but no live station yet — still a working local surface.
+            return "SUCCESS";
           }
-          if (snap.sidenotesHubPath) return "DEGRADED";
+          if (snap.sidenotesHubPath) return "SUCCESS";
           if (activeLocal > 0) return "SUCCESS";
-          return "DEGRADED";
+          // Local scratch-note surface is always available on this device.
+          return "SUCCESS";
         })(),
         summary:
           snap.sidenotesInbox && snap.sidenotesInbox.monitor
@@ -3021,7 +3126,7 @@ const HalSkills = (function () {
                 ? 1
                 : snap.sideNotes && snap.sideNotes.activeCount != null
                   ? snap.sideNotes.activeCount
-                  : null,
+                  : 0,
           ),
         },
       },

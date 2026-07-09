@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10140",
-  "assetVersion": "hal-10140",
-  "schemaVersion": "hal-10140",
+  "BUILD_ID": "hal-10141",
+  "assetVersion": "hal-10141",
+  "schemaVersion": "hal-10141",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T18:00:00.000Z",
-  "notes": "hal-10140: Payer mix uses claims vs daysheet A/R when SoftDent dashboard dumps collections into patient-only attribution."
+  "builtAt": "2026-07-09T18:20:00.000Z",
+  "notes": "hal-10141: Stop cascading DEGRADED from pending July collections onto SoftDent ops/A/R widgets; fill honest collections and EBITDA metric fallbacks."
 }

@@ -185,12 +185,14 @@ const ImportLoader = (function () {
   function dashboardImportDepth(pageId, patch) {
     if (pageId === "financial") {
       if (patch.collectionsMissing || patch.collectionsZeroWithProduction) return "degraded";
-      if (patch.collectionsPending) return "partial";
       if (patch.periodAlignment && patch.periodAlignment.aligned === false && patch.bothSources) return "degraded";
       if (patch.singleSource) return "partial";
       const hasTrend = Array.isArray(patch.productionTrend?.production) && patch.productionTrend.production.length > 1;
       const hasPayer = Array.isArray(patch.payerMix?.slices) && patch.payerMix.slices.length > 0;
       const hasQuality = patch.quality && patch.quality.score > 0;
+      // Pending current-period collections still leave trailing rate / prior months usable.
+      if (patch.collectionsPending && hasTrend && hasPayer) return "complete";
+      if (patch.collectionsPending) return "partial";
       if (!hasTrend || !hasPayer || !hasQuality) return "partial";
       return "complete";
     }
@@ -205,6 +207,11 @@ const ImportLoader = (function () {
       if (patch.collectionsMissing) return "degraded";
       const hasCollections = patch.collectionsReported === true || Number(patch.collections || 0) > 0;
       const claimsOk = (patch.health || []).some((h) => /claims/i.test(String(h.label || "")) && h.ok);
+      const hasAr = Array.isArray(patch.aging) && patch.aging.length > 0;
+      const hasOperatory = Boolean(patch.operatoryConfigured || (Array.isArray(patch.operatoryChairs) && patch.operatoryChairs.length));
+      // Current-period collections pending is a notice, not SoftDent incompleteness, when
+      // claims/A/R/operatory lanes are already loaded.
+      if (patch.collectionsPending && (claimsOk || hasAr || hasOperatory)) return "complete";
       if (!hasCollections || !claimsOk) return "partial";
       return "complete";
     }
