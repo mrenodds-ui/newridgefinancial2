@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10144",
-  "assetVersion": "hal-10144",
-  "schemaVersion": "hal-10144",
+  "BUILD_ID": "hal-10145",
+  "assetVersion": "hal-10145",
+  "schemaVersion": "hal-10145",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T16:45:00.000Z",
-  "notes": "hal-10144: Treat open-month production vs QuickBooks variance as informational while SoftDent collections export is pending."
+  "builtAt": "2026-07-09T17:00:00.000Z",
+  "notes": "hal-10145: Prefer latest SoftDent practice-period metrics and live office priority in HAL chat."
 }

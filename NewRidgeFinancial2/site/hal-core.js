@@ -482,6 +482,69 @@ const HalCore = (function () {
       .trim();
   }
 
+  const STRUCTURED_PLAN_OPENER_RE =
+    /^(here(?:'s| is) a structured plan|here is a (?:brief )?(?:numbered )?plan|structured plan:)\s*[:.—-]?\s*/i;
+  const COT_PARAGRAPH_RE =
+    /^(First,?\s+I need to|Let me (?:break|think|verify|re-evaluate|reconsider|check|start)|We are given|Okay,?\s+the user|Hmm,?\s+the user|The user is asking|\*Double-checking|\*Lightbulb|\*Verifying|\*Structure check|\*Final verification|\*Why Friday|\*Critical constraint|\*Ordered steps)/i;
+  const DIRECT_ANSWER_MARKER_RE =
+    /\*\*Direct Answer:\*\*\s*|^Direct answer:\s*|^\*\*Here's (?:the|a) (?:direct )?answer:\*\*\s*/im;
+
+  function stripStructuredPlanOpener(text) {
+    return String(text || "").replace(STRUCTURED_PLAN_OPENER_RE, "").trim();
+  }
+
+  function stripChainOfThoughtProse(text) {
+    let out = String(text || "").trim();
+    if (!out) return out;
+    const marker = out.search(DIRECT_ANSWER_MARKER_RE);
+    if (marker >= 0) {
+      out = out.slice(marker).replace(DIRECT_ANSWER_MARKER_RE, "").trim();
+    }
+    // Drop leading scratchpad paragraphs that never reach staff-facing prose.
+    for (let pass = 0; pass < 8; pass++) {
+      const trimmed = out.trim();
+      if (!COT_PARAGRAPH_RE.test(trimmed) && !/^(Okay|Hmm|Let me|Wait|Pauses|Nods|Double-checks|Starts structuring)\b/i.test(trimmed)) {
+        break;
+      }
+      const split = trimmed.search(/\n\n+/);
+      if (split > 0 && split < trimmed.length - 40) {
+        out = trimmed.slice(split).trim();
+        continue;
+      }
+      const sentenceBreak = trimmed.search(/[.!?]\s+(?=[A-Z*"])/);
+      if (sentenceBreak > 0 && sentenceBreak < Math.min(480, trimmed.length - 60)) {
+        out = trimmed.slice(sentenceBreak + 1).trim();
+        continue;
+      }
+      out = trimmed.replace(COT_PARAGRAPH_RE, "").replace(/^(Okay|Hmm|Let me|Wait)[^.!?]*[.!?]?\s*/i, "").trim();
+      break;
+    }
+    return out.trim();
+  }
+
+  function needsReadOnlyLead(query) {
+    const q = String(query || "").toLowerCase();
+    return (
+      /\b(post|write|write[\s-]?back|push)\b/.test(q) &&
+      /\b(quickbooks|qb|softdent|ledger|journal)\b/.test(q)
+    ) || /\b(write to softdent|post to quickbooks|post journal|click post)\b/.test(q);
+  }
+
+  function needsConsentLead(query) {
+    const q = String(query || "");
+    // Write/post to SoftDent/QuickBooks is a read-only boundary, not a consent-email case.
+    if (needsReadOnlyLead(q)) return false;
+    return isOutboundActionPhrase(q) || /\bwithout (?:staff )?consent\b/i.test(q);
+  }
+
+  function hasReadOnlyMention(text) {
+    return /\bread[\s-]?only\b/i.test(String(text || ""));
+  }
+
+  function hasConsentMention(text) {
+    return /\bconsent\b/i.test(String(text || ""));
+  }
+
   function shouldEnforceMinSentences(query, route, meta, text) {
     meta = meta || {};
     if (typeof HalCursorParity !== "undefined" && HalCursorParity.shouldEnforceMinSentences) {
@@ -509,12 +572,24 @@ const HalCore = (function () {
 
   function minSentencePadding(query, route, meta, existing) {
     const halData = meta && meta.halData;
-    const top = halData && halData.topPriority && halData.topPriority.summary;
+    const liveOffice =
+      (halData &&
+        halData.runtime &&
+        halData.runtime.officeManager &&
+        halData.runtime.officeManager.topPriority) ||
+      null;
+    const top =
+      (liveOffice && (liveOffice.detail ? `${liveOffice.title}: ${liveOffice.detail}` : liveOffice.title)) ||
+      (halData &&
+        halData.topPriority &&
+        halData.topPriority.source === "office-manager" &&
+        halData.topPriority.summary) ||
+      null;
     const page = meta && meta.currentPage;
     const tool = meta && meta.toolSummary;
     const pool = [
       top
-        ? "The registry currently flags this as the top priority: " + top + "."
+        ? "Current office priority: " + top + "."
         : "I answer from the local program registry and import bundle — not live write-back to SoftDent or QuickBooks.",
       page
         ? "You are on the " + page + " page; name a widget if you want a narrower answer."
@@ -582,6 +657,18 @@ const HalCore = (function () {
     if (hasUnrequestedList(body, query) && !allowsMarkdownInReply(query, route, opts)) issues.push("numbered_list_unrequested");
     if (isYesNoQuestion(query) && !/^(yes|no|sure|absolutely|that one's|not from here|i can't|i can|different angle|to add)/i.test(body)) {
       issues.push("yes_no_not_direct");
+    }
+    if (!wantsStructuredPlan(query) && STRUCTURED_PLAN_OPENER_RE.test(body)) {
+      issues.push("structured_plan_opener");
+    }
+    if (needsReadOnlyLead(query) && !hasReadOnlyMention(body)) {
+      issues.push("missing_readonly_lead");
+    }
+    if (needsConsentLead(query) && !hasConsentMention(body)) {
+      issues.push("missing_consent_lead");
+    }
+    if (COT_PARAGRAPH_RE.test(body) || /<think>/i.test(body)) {
+      issues.push("chain_of_thought_exposed");
     }
     if (CHATBOT_FILLER_RE.test(body) || CHATBOT_CLOSER_RE.test(body)) issues.push("chatbot_filler");
     if (INTERNAL_JARGON_RE.test(body)) issues.push("internal_jargon");
@@ -754,6 +841,12 @@ const HalCore = (function () {
 
   function repairChatShape(query, text, route, issues) {
     let out = String(text || "").trim();
+    if (issues.includes("structured_plan_opener") || (!wantsStructuredPlan(query) && STRUCTURED_PLAN_OPENER_RE.test(out))) {
+      out = stripStructuredPlanOpener(out);
+    }
+    if (issues.includes("chain_of_thought_exposed") || COT_PARAGRAPH_RE.test(out) || /<think>/i.test(out)) {
+      out = stripChainOfThoughtProse(cleanModelText(out));
+    }
     if (issues.includes("identity_monologue")) out = stripHalIdentityMonologue(out, false);
     if (issues.includes("chatbot_filler")) out = stripChatbotFillers(out);
     if (issues.includes("internal_jargon")) out = stripInternalJargon(out);
@@ -787,6 +880,14 @@ const HalCore = (function () {
             : "Yes.";
       if (!prefix) prefix = blocked ? "No." : "Yes.";
       if (!/^(yes|no)\b/i.test(out)) out = prefix + " " + out;
+    }
+    if (issues.includes("missing_readonly_lead") && needsReadOnlyLead(query) && !hasReadOnlyMention(out)) {
+      const lead = "No — I stay read-only here.";
+      out = /^(yes|no)\b/i.test(out) ? out.replace(/^(yes|no)\b[.!—,\s]*/i, lead + " ") : lead + " " + out;
+    }
+    if (issues.includes("missing_consent_lead") && needsConsentLead(query) && !hasConsentMention(out)) {
+      const lead = "No — that needs your explicit consent.";
+      out = /^(yes|no)\b/i.test(out) ? out.replace(/^(yes|no)\b[.!—,\s]*/i, lead + " ") : lead + " " + out;
     }
     if (issues.includes("answer_not_first") && answersMustLead(query, route)) {
       if (/^blocked: firewall/.test(route && route.intent ? route.intent : "") && !/^no\b/i.test(out)) {
@@ -1171,7 +1272,9 @@ const HalCore = (function () {
     if (typeof HalCursorParity !== "undefined" && HalCursorParity.enrichPolishMeta) {
       meta = HalCursorParity.enrichPolishMeta(meta, query, route, meta.halModels);
     }
-    let out = stripInstructionLeaks(String(text || "").trim());
+    let out = cleanModelText(String(text || "").trim());
+    if (!wantsStructuredPlan(query)) out = stripStructuredPlanOpener(out);
+    out = stripInstructionLeaks(stripChainOfThoughtProse(out));
     const intent = route && route.intent ? String(route.intent) : "";
     if (/^capability:/.test(intent)) {
       meta = Object.assign({}, meta, { synthesize: false });
@@ -1251,7 +1354,16 @@ const HalCore = (function () {
       .replace(/\bit is\b/gi, "it's")
       .replace(/\bthat is\b/gi, "that's")
       .replace(/\bwe are\b/gi, "we're")
-      .replace(/\byou are\b/gi, "you're");
+      .replace(/\byou are\b/gi, "you're")
+      .replace(/\bI will\b/g, "I'll")
+      .replace(/\bI have\b/g, "I've")
+      .replace(/\bthere is\b/gi, "there's")
+      .replace(/\bI should inform you\b/gi, "Heads up")
+      .replace(/\bIf I may\b\.?/gi, "")
+      .replace(/\bI am detecting\b/gi, "There's")
+      .replace(/\bPardon the interruption\b\.?/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
   }
 
   function spokenNumbers(text) {
@@ -1305,7 +1417,15 @@ const HalCore = (function () {
     out = stripHalIdentityMonologue(out, false);
     out = spokenContractions(out);
     out = spokenNumbers(out);
-    out = out.replace(/[;:—–]/g, ".").replace(/\.\.+/g, ".").trim();
+    // Keep natural pauses — don't turn every dash/colon into a hard stop (sounds robotic).
+    out = out
+      .replace(/;/g, ",")
+      .replace(/\s*[—–]\s*/g, ", ")
+      .replace(/:\s+/g, ", ")
+      .replace(/\s+,/g, ",")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\.\.+/g, ".")
+      .trim();
 
     const budget = spokenBudgetFor(query, route, meta);
     let maxSentences = 3;
@@ -2525,6 +2645,10 @@ const HalCore = (function () {
       "Use short plain paragraphs. Do not use bullet lists or numbered steps unless the user asks for a list.",
       "Do not end with filler closings such as \"let me know\", \"if you want\", \"Would you like me to\", or open-ended helper questions.",
       "Do not emit hidden scratchpad, reasoning tags, markdown artifacts, or chain-of-thought text — return only the final answer staff should read.",
+      "Sound natural when spoken: use contractions, avoid stiff film-computer lines (\"I should inform you\", \"If I may\", \"I am detecting\").",
+      "Yes/no questions must start with Yes or No in the first sentence.",
+      "Never open with \"Here is a structured plan\" unless the user asked for a plan.",
+      "Outbound email/submit/fax/upload/post requests: first sentence must refuse without consent and must include the word consent.",
       "When the operator asks for a steady briefing (not a dashboard recap), speak in two short paragraphs and name SoftDent and QuickBooks when both are relevant.",
       "For QuickBooks write/post requests: first sentence must say you cannot post in QuickBooks and must include \"read-only\"; then explain human review is required.",
       "For collections trailing production: first sentence must reference aging report, accounts receivable, A/R, or outstanding balances, and must mention insurance.",
@@ -2682,9 +2806,12 @@ const HalCore = (function () {
   }
 
   function cleanModelText(text) {
-    let out = String(text);
+    let out = String(text || "");
     out = out.replace(/<think>[\s\S]*?<\/think>/gi, "");
     out = out.replace(/<\/?think>/gi, "");
+    out = out.replace(/<\/?reasoning>/gi, "");
+    out = out.replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "");
+    out = stripChainOfThoughtProse(out);
     out = out.replace(/\*[^*]+\*/g, "");
     out = out.replace(/^(Okay|Sure|Certainly|Hmm|Alright)[,.]?\s*(let me\s+)?(break this down|think through|think about|see|check|start|walk through)[^.!?]*[.!?]?\s*/i, "");
     out = out.replace(/^(Okay|Sure|Certainly)[,.]?\s*(from my (local )?)?(read-?only )?(monitoring )?perspective[,:]?\s*/i, "");
@@ -2693,7 +2820,7 @@ const HalCore = (function () {
     out = out.replace(/\s*\(Local .* · read-only · verify before acting\)\s*$/i, "");
     const monologueStart = /^(Okay|Hmm|Let me|Wait|Pauses|Nods|Double-checks|Starts structuring)/i;
     if (monologueStart.test(out.trim())) {
-      const riskIdx = out.search(/\*\*Risk Assessment\*\*|Risk Assessment|Human Verification|DO NOT PROCEED/i);
+      const riskIdx = out.search(/\*\*Risk Assessment\*\*|Risk Assessment|Human Verification|DO NOT PROCEED|Direct answer:/i);
       if (riskIdx > 0) out = out.slice(riskIdx);
     }
     return stripInstructionLeaks(out.trim());
@@ -4042,6 +4169,12 @@ const HalCore = (function () {
     offlineModelChatMessage,
     chatShapeIssues,
     repairChatShape,
+    stripChainOfThoughtProse,
+    stripStructuredPlanOpener,
+    needsReadOnlyLead,
+    needsConsentLead,
+    hasReadOnlyMention,
+    hasConsentMention,
     detectUserTone,
     isFollowUpQuery,
     isCorrectionQuery,

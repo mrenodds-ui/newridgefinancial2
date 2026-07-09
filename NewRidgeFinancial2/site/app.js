@@ -1305,10 +1305,25 @@ async function runHalProactiveCycle(options) {
   try {
     halProactiveBriefing = await HalProactive.runCycle(buildHalAgentCtx(), options);
     if (halProactiveBriefing) {
+      const office = halProactiveBriefing.officeManager || null;
       halData.runtime = Object.assign({}, halData.runtime || {}, {
         proactiveBriefing: halProactiveBriefing,
-        officeManager: halProactiveBriefing.officeManager || null,
+        officeManager: office,
       });
+      // Prefer live office priority over the static mission text in hal-manager.json.
+      if (office && office.topPriority) {
+        const live = office.topPriority;
+        halData.topPriority = {
+          title: live.title || "Live office priority",
+          summary: live.detail
+            ? `${live.title}: ${live.detail}`
+            : live.title || (halData.topPriority && halData.topPriority.summary) || "",
+          focus: (halData.topPriority && halData.topPriority.focus) || [],
+          source: "office-manager",
+          navTarget: live.navTarget || live.surface || null,
+          severity: live.severity || null,
+        };
+      }
     }
     renderProactiveBanner();
     if (options && options.showBootNotice && halProactiveBriefing && halProactiveBriefing.headline) {
@@ -2569,15 +2584,29 @@ async function forceHalWidgetPlacement(detail) {
       skipPlacement: skipImportRefresh,
     });
     if (halProactiveBriefing) {
+      const office = halProactiveBriefing.officeManager || null;
       halData.runtime = Object.assign({}, halData.runtime || {}, {
         proactiveBriefing: halProactiveBriefing,
-        officeManager: halProactiveBriefing.officeManager || null,
+        officeManager: office,
         lastWidgetPlacement: {
           at: new Date().toISOString(),
           pageId,
           reason,
         },
       });
+      if (office && office.topPriority) {
+        const live = office.topPriority;
+        halData.topPriority = {
+          title: live.title || "Live office priority",
+          summary: live.detail
+            ? `${live.title}: ${live.detail}`
+            : live.title || (halData.topPriority && halData.topPriority.summary) || "",
+          focus: (halData.topPriority && halData.topPriority.focus) || [],
+          source: "office-manager",
+          navTarget: live.navTarget || live.surface || null,
+          severity: live.severity || null,
+        };
+      }
       renderProactiveBanner();
     }
   }

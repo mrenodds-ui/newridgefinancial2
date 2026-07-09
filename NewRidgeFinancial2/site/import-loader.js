@@ -1817,12 +1817,33 @@ const ImportLoader = (function () {
     return (rows || []).reduce((acc, row) => acc + (coerceFloat(pickField(row, fieldNames)) || 0), 0);
   }
 
+  function practicePeriodKey(row) {
+    return normalizePeriodKey(pickField(row, ["Period", "period", "Month", "month"]) || "") || "";
+  }
+
+  function latestPracticeRows(rows) {
+    const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
+    if (!list.length) return [];
+    let latest = "";
+    list.forEach((row) => {
+      const key = practicePeriodKey(row);
+      if (key && key > latest) latest = key;
+    });
+    if (!latest) return list.slice(0, 1);
+    return list.filter((row) => practicePeriodKey(row) === latest);
+  }
+
   function buildPracticeDashboard(bundle) {
     const sd = (bundle && bundle.softdent) || {};
-    const npRows = (sd.newPatients && sd.newPatients.rows) || [];
-    const tpRows = (sd.treatmentPlans && sd.treatmentPlans.rows) || [];
-    const caRows = (sd.caseAcceptance && sd.caseAcceptance.rows) || [];
-    const hrRows = (sd.hygieneRecall && sd.hygieneRecall.rows) || [];
+    const npRowsAll = (sd.newPatients && sd.newPatients.rows) || [];
+    const tpRowsAll = (sd.treatmentPlans && sd.treatmentPlans.rows) || [];
+    const caRowsAll = (sd.caseAcceptance && sd.caseAcceptance.rows) || [];
+    const hrRowsAll = (sd.hygieneRecall && sd.hygieneRecall.rows) || [];
+    // Widget metrics show the latest exported period — not an accidental first-row / all-period mix.
+    const npRows = latestPracticeRows(npRowsAll);
+    const tpRows = latestPracticeRows(tpRowsAll);
+    const caRows = latestPracticeRows(caRowsAll);
+    const hrRows = latestPracticeRows(hrRowsAll);
     const hasNp = npRows.length > 0;
     const hasTp = tpRows.length > 0;
     const hasCa = caRows.length > 0;
@@ -1836,7 +1857,7 @@ const ImportLoader = (function () {
       caseAcceptance: { rate: null, presented: null, accepted: null, status: "Not Configured" },
       hygieneRecall: { completed: null, due: null, period: null, status: "Not Configured" },
     };
-    if (!hasNp && !hasTp && !hasCa && !hasHr) {
+    if (!npRowsAll.length && !tpRowsAll.length && !caRowsAll.length && !hrRowsAll.length) {
       return assignPatch(emptyDashboard("practice"), emptyPractice);
     }
     const npCount = hasNp
@@ -1846,13 +1867,18 @@ const ImportLoader = (function () {
     const presented = hasTp ? sumFieldRows(tpRows, ["Presented", "presented", "PlansPresented", "TxPresented"]) : null;
     const accepted = hasTp ? sumFieldRows(tpRows, ["Accepted", "accepted", "PlansAccepted", "TxAccepted"]) : null;
     const presentedValue = hasTp ? sumFieldRows(tpRows, ["Amount", "amount", "PresentedValue", "TotalAmount"]) : null;
+    const tpPeriod = hasTp ? String(pickField(tpRows[0], ["Period", "period", "Month", "month"]) || "—") : null;
     let caRate = hasCa ? pickField(caRows[0], ["AcceptanceRate", "acceptanceRate", "Rate", "rate"]) : null;
     let caPresented = hasCa ? coerceFloat(pickField(caRows[0], ["Presented", "presented", "PlansPresented"])) : null;
     let caAccepted = hasCa ? coerceFloat(pickField(caRows[0], ["Accepted", "accepted", "PlansAccepted"])) : null;
+    const caPeriod = hasCa ? String(pickField(caRows[0], ["Period", "period", "Month", "month"]) || "—") : null;
     if (!hasCa && presented > 0 && accepted != null) {
       caPresented = presented;
       caAccepted = accepted;
       caRate = `${((accepted / presented) * 100).toFixed(1)}%`;
+    } else if (caRate != null && caRate !== "" && !/%/.test(String(caRate))) {
+      const rateNum = coerceFloat(caRate);
+      if (rateNum != null) caRate = `${rateNum.toFixed(1)}%`;
     }
     const hrCompleted = hasHr
       ? sumFieldRows(hrRows, ["HygieneCompleted", "hygieneCompleted", "Completed", "completed"])
@@ -1863,7 +1889,12 @@ const ImportLoader = (function () {
       pageId: "practice",
       dataSource: "import",
       importedAt: bundle.loadedAt,
-      configured: { newPatients: hasNp, treatmentPlans: hasTp, caseAcceptance: hasCa || Boolean(caRate), hygieneRecall: hasHr },
+      configured: {
+        newPatients: npRowsAll.length > 0,
+        treatmentPlans: tpRowsAll.length > 0,
+        caseAcceptance: caRowsAll.length > 0 || Boolean(caRate),
+        hygieneRecall: hrRowsAll.length > 0,
+      },
       newPatients: hasNp
         ? { count: npCount, period: npPeriod, status: "Connected" }
         : { count: null, period: null, status: "Not Configured" },
@@ -1872,6 +1903,7 @@ const ImportLoader = (function () {
             presented,
             accepted,
             presentedValue: formatMoney(presentedValue),
+            period: tpPeriod,
             status: "Connected",
           }
         : { presented: null, accepted: null, presentedValue: null, status: "Not Configured" },
@@ -1881,6 +1913,7 @@ const ImportLoader = (function () {
               rate: caRate,
               presented: caPresented,
               accepted: caAccepted,
+              period: caPeriod || tpPeriod,
               status: hasCa ? "Connected" : "Derived",
             }
           : { rate: null, presented: null, accepted: null, status: "Not Configured" },
