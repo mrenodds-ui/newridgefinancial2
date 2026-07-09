@@ -370,9 +370,6 @@ const PageViews = (function () {
     if (!opts.importReadiness && syncStatus && syncStatus.level) {
       opts.importReadiness = syncStatus;
     }
-    if (typeof PageSchema !== "undefined" && PageSchema.LAYOUT_EPOCH === "moonshot-mockup") {
-      return opts;
-    }
     const fin = snap && snap.dashboards && snap.dashboards.financial;
     if (fin && fin.dateRange) {
       opts.periodLabel = fin.dateRange;
@@ -386,6 +383,9 @@ const PageViews = (function () {
         opts.periodLabel = snap.label;
         opts.reportRange = "";
       }
+    }
+    if (typeof PageSchema !== "undefined" && PageSchema.LAYOUT_EPOCH === "moonshot-mockup") {
+      return Object.keys(opts).length ? opts : null;
     }
     const IL = typeof ImportLoader !== "undefined" ? ImportLoader : null;
     if (IL && typeof IL.buildImportFreshnessBanner === "function" && state && state.pageId) {

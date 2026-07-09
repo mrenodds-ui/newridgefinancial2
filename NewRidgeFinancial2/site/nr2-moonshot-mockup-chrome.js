@@ -192,13 +192,72 @@ const MoonshotMockupChrome = (function () {
     return parts.join(" • ");
   }
 
+  function monthNameFromIsoPeriod(label) {
+    const raw = String(label || "").trim();
+    const match = raw.match(/^(\d{4})-(\d{2})/) || raw.match(/Period\s+(\d{4})-(\d{2})/i);
+    if (!match) return raw;
+    const months = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    const idx = Number(match[2]) - 1;
+    return months[idx] ? `${months[idx]} ${match[1]}` : raw;
+  }
+
+  function livePracticePeriod(state) {
+    let snap = (state && state.programSnapshot) || null;
+    if (!snap && typeof SnapshotStore !== "undefined" && typeof SnapshotStore.peek === "function") {
+      try {
+        snap = SnapshotStore.peek() || null;
+      } catch (_e) {
+        snap = null;
+      }
+    }
+    const fin = snap && snap.dashboards && snap.dashboards.financial;
+    const docs = snap && snap.documents;
+    let period =
+      (fin && fin.periodAlignment && fin.periodAlignment.comparablePeriod) ||
+      (fin && fin.comparablePeriod) ||
+      (docs && docs.period && docs.period.label) ||
+      "";
+    if (!period && fin && fin.dateRange) {
+      const fromRange = String(fin.dateRange).match(/(\d{4}-\d{2})/);
+      if (fromRange) period = fromRange[1];
+    }
+    if (!period && typeof PageCanvasData !== "undefined") {
+      try {
+        if (typeof PageCanvasData.documentsPeriodLabel === "function") {
+          period = PageCanvasData.documentsPeriodLabel() || period;
+        }
+      } catch (_e) {
+        /* keep fallback */
+      }
+    }
+    if (!period) return "";
+    return monthNameFromIsoPeriod(period);
+  }
+
   function renderTopHeader(state) {
     const practice = typeof PageSchema !== "undefined" ? PageSchema.PRACTICE : null;
     const safety = (state && state.safety) || (practice && practice.safety) || "Local data only";
+    const livePeriod = livePracticePeriod(state);
+    const display = practice
+      ? Object.assign({}, practice, { period: livePeriod || practice.period || "" })
+      : { name: "New Ridge Family Dental", period: livePeriod };
     return `<header class="top-header">
       <div class="practice-info">
-        <h1>${esc(practice ? practice.name : "New Ridge Family Dental")}</h1>
-        <p>${esc(practiceMetaLine(practice))}</p>
+        <h1>${esc(display.name || "New Ridge Family Dental")}</h1>
+        <p>${esc(practiceMetaLine(display))}</p>
       </div>
       <div class="safety-badge" title="Imports and HAL run on this machine only">${esc(safety)}</div>
     </header>`;

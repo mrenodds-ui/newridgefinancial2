@@ -2,15 +2,15 @@
  * Moonshot page registry — nav metadata + panel layouts from moonshot-page-layouts.js.
  */
 const MoonshotPageRegistry = (function () {
-  const SCHEMA_VERSION = "hal-10152";
+  const SCHEMA_VERSION = "hal-10153";
   const LAYOUT_EPOCH = "moonshot-mockup";
 
   const PRACTICE = {
     name: "New Ridge Family Dental",
     descriptor: "Family & cosmetic dentistry",
     location: "Ridgefield, Connecticut",
-    period: "June 2025",
-    reportRange: "Jun 1 – Jun 30, 2025",
+    period: "",
+    reportRange: "",
     operator: "Dr. Michael Reno",
   };
 

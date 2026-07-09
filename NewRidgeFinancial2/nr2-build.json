@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10152",
-  "assetVersion": "hal-10152",
-  "schemaVersion": "hal-10152",
+  "BUILD_ID": "hal-10153",
+  "assetVersion": "hal-10153",
+  "schemaVersion": "hal-10153",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T17:50:00.000Z",
-  "notes": "hal-10152: Stop fabricating Jan-Jun New Patient Flow; show real SoftDent periods or honest single-period tile."
+  "builtAt": "2026-07-09T17:55:00.000Z",
+  "notes": "hal-10153: Practice chrome header uses live SoftDent/docs period (July 2026) instead of hardcoded June 2025."
 }
