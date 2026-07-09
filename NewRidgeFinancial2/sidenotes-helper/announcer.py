@@ -19,34 +19,29 @@ import comtypes.client as cc
 SVSFlagsAsync = 1
 
 HAL9000_TEMPLATES = {
-    "direct": "Good afternoon. I have a message for you from {sender}.",
-    "broadcast": "I should inform you. A broadcast message has arrived from {sender}.",
+    "direct": "Message from {sender}.",
+    "broadcast": "Broadcast from {sender}.",
 }
 
 HAL9000_VARIANTS = {
     "direct": [
-        "Good afternoon. I have a message for you from {sender}.",
-        "Pardon the interruption. There is a new message from {sender}.",
-        "I thought you should know. {sender} has sent you a message.",
-        "A new message has arrived. It is from {sender}.",
-        "Excuse me. {sender} would like your attention.",
-        "You have a message waiting from {sender}.",
-        "If I may. {sender} has just messaged you.",
-        "I am detecting a new message from {sender}.",
+        "Message from {sender}.",
+        "New note from {sender}.",
+        "{sender} messaged you.",
+        "You've got a message from {sender}.",
+        "Quick note — {sender} just messaged you.",
     ],
     "broadcast": [
-        "I should inform you. A broadcast message has arrived from {sender}.",
-        "Attention, please. {sender} has sent a message to everyone.",
-        "{sender} has broadcast a message to the office.",
-        "A message for everyone has arrived from {sender}.",
-        "If I may. There is a broadcast from {sender}.",
-        "I am relaying a broadcast. It is from {sender}.",
+        "Broadcast from {sender}.",
+        "{sender} sent a message to everyone.",
+        "Office broadcast from {sender}.",
+        "Everyone message from {sender}.",
     ],
 }
 
-# Conversational HAL — not glacial film cadence.
+# Conversational HAL — brisk office pace (SAPI -10..+10).
 HAL_VOICE_PRESET = {
-    "rate": 0,
+    "rate": 3,
     "volume": 100,
     "voice_hint": "David",
     "processed_audio": False,
@@ -189,8 +184,8 @@ class Announcer:
 
     def __init__(
         self,
-        rate: int = 0,
-        volume: int = 100,
+        rate: int | None = None,
+        volume: int | None = None,
         voice_hint: str = "",
         *,
         voice_style: str = "",
@@ -201,9 +196,11 @@ class Announcer:
     ) -> None:
         _ = processed_audio  # legacy config — ignored; no WAV slowdown chain
         style = voice_style.strip().lower()
-        if style in ("hal9000", "hal", ""):
+        if rate is None:
             rate = HAL_VOICE_PRESET["rate"]
+        if volume is None:
             volume = HAL_VOICE_PRESET["volume"]
+        if style in ("hal9000", "hal", ""):
             voice_hint = voice_hint or HAL_VOICE_PRESET["voice_hint"]
 
         self._voice_style = style or "hal"
@@ -376,7 +373,7 @@ class BellController:
 
 
 def hal_test_phrase() -> str:
-    return "Good afternoon. HAL is online and ready."
+    return "HAL is online and ready."
 
 
 if __name__ == "__main__":

@@ -99,20 +99,20 @@ history is **not** re-announced.
 | `myStation` | `Server` | This computer's SideNotesIM station name; its own outgoing messages are not announced |
 | `pollSeconds` | `2.0` | How often the file is checked for changes |
 | `announce` | `true` | Speak announcements |
-| `voiceStyle` | `hal9000` | Voice preset: `hal9000` (slow, calm HAL 9000 style) or blank for default |
+| `voiceStyle` | `hal9000` | Voice preset label (`hal9000` / `hal`); uses brisk conversational pace, not film-slow |
 | `announceVaried` | `true` | Randomly vary the announcement wording each time (sender only; message text is never spoken) |
-| `announceVariants` / `announceBroadcastVariants` | `[]` | Optional custom phrasing pools (use `{sender}`); blank = built-in HAL phrasings |
+| `announceVariants` / `announceBroadcastVariants` | short lines | Custom phrasing pools (use `{sender}`); blank = built-in short lines |
 | `stationPeople` | office map | Maps SideNotes stations to staff names for announcements, e.g. Room 2 -> Mayci |
-| `processedAudio` | `true` | Render speech to WAV, then locally lower/slow/smooth/compress it for a closer HAL tone |
-| `announceTemplate` | HAL-style direct message phrase | Spoken text for direct messages |
-| `announceBroadcastTemplate` | HAL-style broadcast phrase | Spoken text for "Everyone" messages |
+| `processedAudio` | `false` | Legacy; ignored (no WAV slowdown chain) |
+| `announceTemplate` | `Message from {sender}.` | Spoken text for direct messages |
+| `announceBroadcastTemplate` | `Broadcast from {sender}.` | Spoken text for "Everyone" messages |
 | `announceScope` | `all` | `to_me_or_everyone` or `all`; use `all` for LAN-wide station feeds |
 | `suppressBell` | `true` | Mute the SideNotesIM bell while running (restored on exit) |
 | `duckMusic` | `true` | Lower background music during each announcement, then restore |
 | `duckMusicProcesses` | `["Pandora.exe"]` | App executables to duck (add `msedge.exe` / `chrome.exe` for Pandora in a browser) |
 | `duckMusicLevel` | `0.14` | Music volume while HAL is speaking (0.0–1.0; `0.14` ≈ 14%) |
-| `voiceHint` | `""` | Substring to pick a voice (e.g. `Zira`); blank = default |
-| `voiceRate` / `voiceVolume` | `-6` / `90` | SAPI rate (-10..10) and volume (0..100), before HAL WAV processing |
+| `voiceHint` | `David` | Substring to pick a SAPI voice; neural TTS uses GuyNeural when available |
+| `voiceRate` / `voiceVolume` | `3` / `100` | SAPI rate (-10..10) and volume (0..100); neural prosody is separate (`+12%`) |
 | `inboxPath` | _(auto)_ | Where the HAL inbox JSON is written |
 | `stationInboxPath` | _(auto)_ | Station-specific inbox path; blank = `sidenotes-inbox-<station>.json` next to `inboxPath` |
 | `inboxMax` | `50` | Max recent messages kept in the inbox |

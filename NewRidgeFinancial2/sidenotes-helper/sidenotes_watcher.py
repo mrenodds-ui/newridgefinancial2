@@ -102,7 +102,7 @@ def load_config() -> dict:
     cfg.setdefault("suppressBell", False)
     cfg.setdefault("voiceStyle", "hal9000")
     cfg.setdefault("voiceHint", "")
-    cfg.setdefault("voiceRate", 0)
+    cfg.setdefault("voiceRate", 3)
     cfg.setdefault("voiceVolume", 100)
     cfg.setdefault("processedAudio", False)
     cfg.setdefault("neuralTts", True)

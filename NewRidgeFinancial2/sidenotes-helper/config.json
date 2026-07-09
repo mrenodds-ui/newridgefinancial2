@@ -20,9 +20,20 @@
 
   "announceVaried": true,
 
-  "announceVariants": [],
+  "announceVariants": [
+    "Message from {sender}.",
+    "New note from {sender}.",
+    "{sender} messaged you.",
+    "You've got a message from {sender}.",
+    "Quick note — {sender} just messaged you."
+  ],
 
-  "announceBroadcastVariants": [],
+  "announceBroadcastVariants": [
+    "Broadcast from {sender}.",
+    "{sender} sent a message to everyone.",
+    "Office broadcast from {sender}.",
+    "Everyone message from {sender}."
+  ],
 
   "stationPeople": {
     "frontdesk 1": "Andrea and Jeannie",
@@ -37,9 +48,9 @@
     "darkroom": ""
   },
 
-  "announceTemplate": "Good afternoon. I have a message for you from {sender}.",
+  "announceTemplate": "Message from {sender}.",
 
-  "announceBroadcastTemplate": "I should inform you. A broadcast message has arrived from {sender}.",
+  "announceBroadcastTemplate": "Broadcast from {sender}.",
 
   "announceScope": "all",
 
@@ -53,7 +64,7 @@
 
   "voiceHint": "David",
 
-  "voiceRate": 0,
+  "voiceRate": 3,
 
   "voiceVolume": 100,
 
@@ -64,4 +75,3 @@
   "inboxMax": 50
 
 }
-
