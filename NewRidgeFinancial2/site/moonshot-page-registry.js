@@ -2,7 +2,7 @@
  * Moonshot page registry — nav metadata + panel layouts from moonshot-page-layouts.js.
  */
 const MoonshotPageRegistry = (function () {
-  const SCHEMA_VERSION = "hal-10131";
+  const SCHEMA_VERSION = "hal-10132";
   const LAYOUT_EPOCH = "moonshot-mockup";
 
   const PRACTICE = {
@@ -328,6 +328,17 @@ const MoonshotPageRegistry = (function () {
     return pagesMap()[pageId] || null;
   }
 
+  function pageMeta(pageId) {
+    return PAGE_META[pageId] || null;
+  }
+
+  function pageMetaWidgets(pageId) {
+    const meta = PAGE_META[pageId];
+    return (meta && Array.isArray(meta.widgets) ? meta.widgets : [])
+      .map((w) => w && w.key)
+      .filter(Boolean);
+  }
+
   function flatNav() {
     return NAV_GROUPS.flatMap((group) => group.pages.map((id) => pagesMap()[id]).filter(Boolean));
   }
@@ -376,6 +387,8 @@ const MoonshotPageRegistry = (function () {
       return staffPageIds();
     },
     byId,
+    pageMeta,
+    pageMetaWidgets,
     flatNav,
     navPages,
     isStaffPage,

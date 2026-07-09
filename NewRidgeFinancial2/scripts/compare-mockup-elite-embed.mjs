@@ -2,6 +2,9 @@
 /**
  * Compare elite mock HTML on disk vs PAGE_META widget keys + structure signatures.
  * Usage: node scripts/compare-mockup-elite-embed.mjs [page-id]
+ *
+ * Expected keys always come from PAGE_META (not runtime PAGES.widgets, which is
+ * intentionally empty in mock-embed staff mode).
  */
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
@@ -32,6 +35,9 @@ const STRUCTURE_SIG = [
   "stat-grid",
 ];
 
+/** HAL elite mock is a full widget mosaic; extras beyond PAGE_META are expected. */
+const ALLOW_ELITE_EXTRAS = new Set(["hal"]);
+
 function widgetKeysFromHtml(html) {
   const re = /data-hal-widget-key="([^"]+)"/g;
   const keys = [];
@@ -41,14 +47,20 @@ function widgetKeysFromHtml(html) {
 }
 
 function metaWidgetKeys(pageId) {
-  const meta = PageSchema.byId(pageId);
-  if (!meta) return [];
-  const fromMeta = (PageSchema.PAGES && PageSchema.PAGES[pageId] && PageSchema.PAGES[pageId].widgets) || [];
-  if (fromMeta.length) return fromMeta.map((w) => w.key).filter(Boolean);
+  if (typeof PageSchema.pageMetaWidgets === "function") {
+    const keys = PageSchema.pageMetaWidgets(pageId);
+    if (keys.length) return keys;
+  }
   const registrySrc = readFileSync(join(root, "site/moonshot-page-registry.js"), "utf8");
-  const block = registrySrc.match(new RegExp(`${pageId}:\\s*\\{[\\s\\S]*?widgets:\\s*\\[([\\s\\S]*?)\\]`, "m"));
-  if (!block) return [];
-  return [...block[1].matchAll(/key:\s*"([^"]+)"/g)].map((x) => x[1]);
+  const pageRe = new RegExp(
+    `(?:^|\\n)\\s*(?:"${pageId}"|${pageId})\\s*:\\s*\\{([\\s\\S]*?)\\n\\s*\\},?\\n\\s*(?:"|[a-zA-Z]|\\})`,
+    "m",
+  );
+  const pageBlock = registrySrc.match(pageRe);
+  if (!pageBlock) return [];
+  const widgetsBlock = pageBlock[1].match(/\bwidgets:\s*\[([\s\S]*?)\]/);
+  if (!widgetsBlock) return [];
+  return [...widgetsBlock[1].matchAll(/key:\s*"([^"]+)"/g)].map((x) => x[1]);
 }
 
 const pageIds = onlyPage ? [onlyPage] : PageSchema.STAFF_PAGE_IDS || [];
@@ -69,12 +81,13 @@ for (const pageId of pageIds) {
   const extra = eliteKeys.filter((k) => !expectedKeys.includes(k));
   const dupes = eliteKeys.filter((k, i) => eliteKeys.indexOf(k) !== i);
   const sigHits = STRUCTURE_SIG.filter((s) => html.includes(s));
+  const extrasFail = extra.length > 0 && expectedKeys.length > 0 && !ALLOW_ELITE_EXTRAS.has(pageId);
 
   if (missing.length) {
     console.error(`FAIL ${pageId}: elite HTML missing widget keys: ${missing.join(", ")}`);
     failures += 1;
   }
-  if (extra.length && expectedKeys.length && pageId !== "hal") {
+  if (extrasFail) {
     console.error(`FAIL ${pageId}: elite HTML extra widget keys: ${extra.join(", ")}`);
     failures += 1;
   }
@@ -88,7 +101,7 @@ for (const pageId of pageIds) {
     eliteKeys: eliteKeys.length,
     expectedKeys: expectedKeys.length,
     signatures: sigHits.length,
-    ok: !missing.length && !extra.length && !dupes.length,
+    ok: !missing.length && !extrasFail && !dupes.length,
   });
 }
 

@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10131",
-  "assetVersion": "hal-10131",
-  "schemaVersion": "hal-10131",
+  "BUILD_ID": "hal-10132",
+  "assetVersion": "hal-10132",
+  "schemaVersion": "hal-10132",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T16:45:00.000Z",
-  "notes": "hal-10131: Wire HAL Command Center live panels to import feed."
+  "builtAt": "2026-07-09T16:50:00.000Z",
+  "notes": "hal-10132: Fix elite embed parity checklist for HAL and Office Manager."
 }
