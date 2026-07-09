@@ -8,11 +8,51 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MOCKUP_ELITE_DIR = REPO_ROOT / ".local_logs" / "moonshot_financial_eval" / "page_mockups_elite"
 PAGE_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
+# Strip duplicate app chrome when elite HTML is shown inside the staff page iframe.
+# Outer shell (nav rail, hero, filters) comes from nr2-moonshot-mockup-chrome.js.
 EMBED_CSS = """
-.nav-rail { display: none !important; }
-.page-shell { margin-left: 0 !important; padding: 12px 0 24px !important; }
-.page-header, .page-filters { display: none !important; }
-body { min-height: auto !important; background: transparent !important; }
+.nav-rail,
+.ms-rail,
+aside.nav-rail { display: none !important; }
+
+.mission-frame { grid-template-columns: 1fr !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
+.app-shell { height: auto !important; min-height: 0 !important; overflow: visible !important; }
+
+.page-shell,
+.app,
+.ms-main,
+.main,
+.main-stage,
+header,
+main,
+.toolbar { margin-left: 0 !important; }
+
+.page-header,
+.page-filters,
+.page-title,
+.page-sub,
+.top-bar,
+.ms-topbar,
+body > header,
+.toolbar,
+.badge-safety { display: none !important; }
+
+body,
+html {
+  min-height: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+}
+
+.page-shell { padding: 0 0 24px !important; }
+main { padding-top: 0 !important; }
+.content,
+.widget-grid,
+.dashboard-grid { height: auto !important; max-height: none !important; overflow: visible !important; }
+
+.kanban { height: auto !important; min-height: 420px !important; max-height: none !important; }
+.lane { max-height: none !important; }
 """
 
 

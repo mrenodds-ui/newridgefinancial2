@@ -1819,6 +1819,10 @@ async function main() {
     assert(pageCanvasSrc.includes("mockupPreviewGate"), "mock-embed staff pages must use elite mock preview gate");
     assert(pageCanvasSrc.includes("ms-mockup-preview-frame"), "mock-embed staff pages must render iframe gate");
     assert(pageCanvasSrc.includes("/mockup-elite-embed/"), "mock-embed staff pages must point at elite embed route");
+    const embedPy = readFileSync(join(__dirname, "mockup_elite_embed.py"), "utf8");
+    assert(embedPy.includes(".ms-rail"), "elite embed must strip duplicate ms-rail chrome");
+    assert(embedPy.includes("body > header"), "elite embed must strip duplicate page headers");
+    assert(embedPy.includes(".mission-frame"), "elite embed must flatten mission-frame layouts");
     assert(!pageCanvasSrc.includes("MoonshotLayoutEngine.render"), "mock-embed staff pages must not wire layout engine");
   } else if (staffLiveWirePilot) {
     assert(pageCanvasSrc.includes("shouldLiveWire"), "live-wire pilot must gate per-page live render");
