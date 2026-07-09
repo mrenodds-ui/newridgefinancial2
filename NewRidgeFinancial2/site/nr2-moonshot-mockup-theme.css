@@ -2371,3 +2371,27 @@
 .app--moonshot-mockup #page-canvas [data-nr2-layout="moonshot-mockup-grid"] {
   display: none !important;
 }
+
+.app--mock-embed-solo {
+  grid-template-columns: 1fr !important;
+}
+
+/* Mock-embed: no left rail — page nav is horizontal in page chrome */
+html[data-nr2-staff-render="mock-embed"] .app--moonshot-mockup {
+  grid-template-columns: 1fr !important;
+}
+
+html[data-nr2-staff-render="mock-embed"] #sidebar,
+html[data-nr2-staff-render="mock-embed"] .nav-rail#sidebar,
+html[data-nr2-staff-render="mock-embed"] .nav-rail--mock-embed-hidden {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}

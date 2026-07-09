@@ -72,7 +72,7 @@ for (const pageId of pageIds) {
 const finHtml = await PageViews.previewPageHtml(halData, "financial", feed, snap);
 assertOk(
   "financial mock preview banner",
-  finHtml.includes("Elite mock preview") && finHtml.includes("ms-mockup-preview-iframe"),
+  finHtml.includes("ms-mockup-preview-iframe") && finHtml.includes("/mockup-elite-embed/financial"),
   "financial shows elite mock iframe",
 );
 

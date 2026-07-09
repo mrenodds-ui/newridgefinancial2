@@ -67,7 +67,7 @@ const previewWidgetFeed = HalSkills.buildWidgetFeed(previewSnapshot);
 
 const MOCKUP_EPOCH = PageSchema.LAYOUT_EPOCH === "moonshot-mockup";
 
-const MOCK_PREVIEW_CHECKS = ["ms-mockup-preview-frame", "mockup-elite-embed", "Elite mock preview"];
+const MOCK_PREVIEW_CHECKS = ["ms-mockup-preview-frame", "mockup-elite-embed", "ms-mockup-preview-iframe"];
 
 const FUNCTIONAL_PAGES = [
   { id: "financial", checks: MOCK_PREVIEW_CHECKS },
@@ -96,6 +96,17 @@ for (const page of FUNCTIONAL_PAGES) {
   );
   if (mockEmbedMode) {
     assert.ok(html.includes("ms-page-chrome--mock-embed"), `${page.id} must use compact mock-embed chrome`);
+    assert.ok(html.includes("mock-embed-nav"), `${page.id} must render top mock-embed page nav`);
+    assert.ok(!html.includes("sync-badge"), `${page.id} mock-embed must not show live sync badges`);
+    assert.ok(!html.includes("ms-import-notice"), `${page.id} mock-embed must not show import notices`);
+    assert.ok(!html.includes("storyboard-export-btn"), `${page.id} mock-embed must not show storyboard export chrome`);
+    assert.ok(!html.includes("ms-hal-readiness-strip"), `${page.id} mock-embed must not show HAL readiness strip`);
+    assert.ok(!html.includes("nr2-hal-readiness"), `${page.id} mock-embed must not show HAL readiness id`);
+    assert.ok(!html.includes("page-header-tools"), `${page.id} mock-embed must not show page header tools`);
+    assert.ok(!html.includes("filter-bar"), `${page.id} mock-embed must not show filter bar`);
+    assert.ok(!html.includes("hal-insight"), `${page.id} mock-embed must not show HAL insight banner`);
+    assert.ok(!html.includes('class="hero"'), `${page.id} mock-embed must not show page hero`);
+    assert.ok(!html.includes("ms-mockup-preview-banner"), `${page.id} mock-embed must not show elite preview banner`);
   } else {
     assert.ok(html.includes("hal-insight") || html.includes("filter-bar") || page.id === "hal", `${page.id} must use mockup insight or filter bar`);
   }
@@ -153,7 +164,6 @@ assert.ok(indexHtml.includes("hal-widget-master-chart.js"), "index must load Hal
 assert.ok(indexHtml.includes("hal-live-widget-bridge.js"), "index must load HalLiveWidgetBridge");
 assert.ok(indexHtml.includes("NR2_FINANCIAL_ONLY"), "financial index must declare NR2_FINANCIAL_ONLY");
 assert.ok(indexHtml.includes("nr2-moonshot-mockup-chrome.js"), "financial index must load mockup chrome");
-assert.ok(indexHtml.includes('class="nav-rail"'), "financial index must use mockup nav-rail");
 const navRailHtml =
   typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.renderNavRail
     ? MoonshotMockupChrome.renderNavRail("financial")
@@ -163,7 +173,15 @@ assert.ok(navRailHtml.includes("nav-practice"), "mockup nav must render practice
 assert.ok(navRailHtml.includes('data-nav="hal"'), "mockup nav must include HAL");
 if (mockEmbedMode) {
   assert.ok(!navRailHtml.includes("nav-sublist"), "mock-embed nav must hide widget subpages");
+  assert.ok(
+    indexHtml.includes('data-nr2-staff-render="mock-embed"') ||
+      indexHtml.includes("setAttribute('data-nr2-staff-render','mock-embed'"),
+    "index must tag mock-embed staff render mode",
+  );
+  assert.ok(indexHtml.includes("app--mock-embed-solo"), "mock-embed index must use solo layout without left rail");
+  assert.ok(!indexHtml.includes('id="sidebar"'), "mock-embed index must not include left sidebar element");
 } else {
+  assert.ok(indexHtml.includes('class="nav-rail"'), "financial index must use mockup nav-rail");
   assert.ok(navRailHtml.includes("nav-sublist"), "active page nav must render widget subpages");
   assert.ok(navRailHtml.includes("Practice Financial Overview"), "financial nav must list widget subpages");
 }
@@ -241,7 +259,20 @@ const pageCanvasJs = readFileSync(join(siteDir, "page-canvas.js"), "utf8");
 assert.ok(!pageViewsJs.includes("PAGE_OUTLINES"), "page-views must not use legacy PAGE_OUTLINES");
 assert.ok(!pageViewsJs.includes("MOCK_IMAGES"), "page-views must not use mock image routing");
 assert.ok(!pageViewsJs.includes("readDashboard"), "page-views must not fetch legacy dashboard renderers");
-assert.ok(pageViewsJs.includes("renderBody(pageId"), "page-views must delegate body HTML to PageCanvas");
+assert.ok(pageViewsJs.includes("stripMockEmbedLiveChrome"), "page-views must strip live chrome in mock-embed mode");
+assert.ok(pageViewsJs.includes("ms-hal-readiness-strip"), "page-views strip must remove HAL readiness strips");
+const mockupChromeJs = readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8");
+assert.ok(mockupChromeJs.includes("pageChromeMockEmbed"), "mockup chrome must expose mock-embed page chrome");
+assert.ok(
+  mockupChromeJs.includes("if (staffMockEmbedMode()) return pageChromeMockEmbed") ||
+    mockupChromeJs.includes("if (staffMockEmbedMode()) return pageChromeMockEmbed(state, schema, opts)"),
+  "pageChrome must redirect to mock-embed chrome",
+);
+assert.ok(
+  mockupChromeJs.includes("if (staffMockEmbedMode()) return") &&
+    mockupChromeJs.includes("refreshHalReadinessStrip"),
+  "refreshHalReadinessStrip must no-op in mock-embed mode",
+);
 assert.ok(pageCanvasJs.includes("PageCanvasData") || pageCanvasJs.includes("dataApi"), "page-canvas must render from HAL program snapshot data");
 assert.ok(pageCanvasJs.includes("ms-mockup-preview-frame"), "page-canvas must embed elite mock previews");
 if (pilotMode) {

@@ -1,9 +1,9 @@
 {
-  "BUILD_ID": "hal-10107",
-  "assetVersion": "hal-10107",
-  "schemaVersion": "hal-10107",
+  "BUILD_ID": "hal-10112",
+  "assetVersion": "hal-10112",
+  "schemaVersion": "hal-10112",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "mock-embed",
-  "builtAt": "2026-07-09T12:00:00.000Z",
-  "notes": "hal-10107: Compact mock-embed chrome — single shell; iframe shows widgets only."
+  "builtAt": "2026-07-09T13:15:00.000Z",
+  "notes": "hal-10112: Hard-block live sync/storyboard chrome on mock-embed staff pages."
 }

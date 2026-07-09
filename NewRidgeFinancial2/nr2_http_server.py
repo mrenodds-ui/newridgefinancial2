@@ -2955,6 +2955,24 @@ class NR2BottleServer(BottleServer):
             bottle.response.set_header("Expires", 0)
             return bottle.static_file("index.html", root=server.root_path)
 
+        @app.get("/deferred-live-wire/<file:path>")
+        def deferred_live_wire(file):
+            if not _desktop_access_ok():
+                bottle.abort(403, _desktop_only_html())
+            wire_root = Path(__file__).resolve().parent / "site" / "deferred-live-wire"
+            if not wire_root.is_dir():
+                wire_root = Path(__file__).resolve().parent / "deferred-live-wire"
+            safe = Path(file)
+            if safe.name != file or ".." in safe.parts:
+                bottle.abort(400, "Invalid path")
+            target = wire_root / file
+            if not target.is_file():
+                bottle.abort(404, "Deferred live-wire asset not found")
+            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            bottle.response.set_header("Pragma", "no-cache")
+            bottle.response.set_header("Expires", 0)
+            return bottle.static_file(file, root=str(wire_root))
+
         @app.get("/mockup-elite-embed/<page_id>")
         def mockup_elite_embed(page_id):
             if not _desktop_access_ok():

@@ -292,6 +292,7 @@ const MoonshotMockupChrome = (function () {
   }
 
   function renderPageHeaderTools(schema, opts, commandChipsHtml) {
+    if (staffMockEmbedMode()) return "";
     const o = opts || {};
     if (!schema || !schema.id) return commandChipsHtml ? `<div class="page-header-tools">${commandChipsHtml}</div>` : "";
     const parts = [];
@@ -337,11 +338,25 @@ const MoonshotMockupChrome = (function () {
     </div>`;
   }
 
+  function renderMockEmbedPageNav(activeId) {
+    const schema = typeof PageSchema !== "undefined" ? PageSchema : null;
+    if (!schema || typeof schema.flatNav !== "function") return "";
+    const items = schema
+      .flatNav()
+      .map((page) => {
+        if (!page || !page.id) return "";
+        const active = page.id === activeId ? " mock-embed-nav__link--active" : "";
+        const label = page.label || page.title || page.id;
+        return `<a class="mock-embed-nav__link${active}" href="#${esc(page.id)}" data-mock-embed-nav="${esc(page.id)}">${esc(label)}</a>`;
+      })
+      .join("");
+    if (!items) return "";
+    return `<nav class="mock-embed-nav" aria-label="Staff pages">${items}</nav>`;
+  }
+
   function pageChromeMockEmbed(state, schema, opts) {
-    const o = opts || {};
-    const headerTools =
-      schema && STAFF_HEADER_TOOL_PAGES.has(schema.id) ? renderPageHeaderTools(schema, o, "") : "";
-    return `<div class="ms-page-chrome ms-page-chrome--mock-embed">${headerTools}${o.halReadinessStrip || ""}</div>`;
+    const pageNav = renderMockEmbedPageNav(state && state.pageId);
+    return `<div class="ms-page-chrome ms-page-chrome--mock-embed">${pageNav}</div>`;
   }
 
   function pageChromeHal(state, schema, opts) {
@@ -360,6 +375,7 @@ const MoonshotMockupChrome = (function () {
   }
 
   function pageChrome(state, schema, insight, opts) {
+    if (staffMockEmbedMode()) return pageChromeMockEmbed(state, schema, opts);
     const o = opts || {};
     const commands =
       typeof PageSchema !== "undefined" && PageSchema.commandsFor && schema && schema.id
@@ -429,12 +445,7 @@ const MoonshotMockupChrome = (function () {
       return `<div class="ms-page-chrome ms-page-chrome--missing" role="alert"><p>Page unavailable.</p></div>`;
     }
     if (staffMockEmbedMode()) {
-      const HW = halWidgetsApi();
-      const halReadinessStrip =
-        HW && typeof HW.canvasPageStrip === "function" && state.halWidgetFeed
-          ? HW.canvasPageStrip(state.pageId, state.halWidgetFeed)
-          : "";
-      return pageChromeMockEmbed(state, schema, { halReadinessStrip, ...(o || {}) });
+      return pageChromeMockEmbed(state, schema, o);
     }
     if (state.pageId === "hal") {
       return pageChromeHal(state, schema, o);
@@ -496,6 +507,7 @@ const MoonshotMockupChrome = (function () {
   }
 
   function refreshHalReadinessStrip(pageId, feed) {
+    if (staffMockEmbedMode()) return;
     const HW = halWidgetsApi();
     if (!HW || !pageId) return;
     const readiness = HW.pageReadiness(pageId, feed || {});

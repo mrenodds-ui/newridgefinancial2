@@ -99,7 +99,19 @@ const ImportReadinessGate = (function () {
     }
   }
 
+  function staffMockEmbedMode() {
+    if (typeof window === "undefined") return false;
+    return (
+      window.NR2_STAFF_MOCK_ONLY ||
+      document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed"
+    );
+  }
+
   async function evaluate(pageId) {
+    if (staffMockEmbedMode()) {
+      removeGate();
+      return;
+    }
     if (typeof ImportTrafficBanner !== "undefined") {
       removeGate();
       return;
@@ -132,6 +144,7 @@ const ImportReadinessGate = (function () {
 
   function installListeners() {
     if (typeof window === "undefined") return;
+    if (staffMockEmbedMode()) return;
     window.addEventListener("nr2-import-readiness-changed", () => {
       onReadinessChanged();
       window.dispatchEvent(new CustomEvent("nr2:page-refresh-requested"));

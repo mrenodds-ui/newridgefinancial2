@@ -96,6 +96,12 @@ const ImportTrafficBanner = (function () {
 
   function install() {
     if (typeof window === "undefined") return;
+    if (
+      window.NR2_STAFF_MOCK_ONLY ||
+      document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed"
+    ) {
+      return;
+    }
     installOfflineInterstitial();
     window.addEventListener("nr2-import-readiness-changed", (ev) => {
       mount((ev && ev.detail) || (typeof DesktopBridge !== "undefined" && DesktopBridge.getCachedImportReadiness && DesktopBridge.getCachedImportReadiness()));

@@ -295,6 +295,23 @@ const PageViews = (function () {
     if (pilot && typeof pilot.init === "function") pilot.init(container);
   }
 
+  function staffMockEmbedMode() {
+    return (
+      (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
+      (typeof document !== "undefined" &&
+        document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed")
+    );
+  }
+
+  function stripMockEmbedLiveChrome(container) {
+    if (!staffMockEmbedMode() || !container) return;
+    container
+      .querySelectorAll(
+        ".page-header-tools, .sync-badge, .storyboard-export-btn, .cpa-export-btn, .ms-import-notice, .ms-mockup-preview-banner, .filter-bar, .hal-insight, .hero, .top-header, .alert-strip, .ms-hal-readiness-strip, #nr2-hal-readiness, .ms-hal-strip",
+      )
+      .forEach((el) => el.remove());
+  }
+
   function wireMockupPreviewFrames(container) {
     if (!container) return;
     const mockOnly =
@@ -320,6 +337,7 @@ const PageViews = (function () {
   }
 
   function chromeOptsFromState(state) {
+    if (staffMockEmbedMode()) return null;
     const snap = state && state.programSnapshot;
     const opts = {};
     const bundle = snap && snap.importBundle;
@@ -410,7 +428,7 @@ const PageViews = (function () {
     );
     document.body.setAttribute("data-nr2-layout", "moonshot-mockup-grid");
     wireCommon(container, onNavigate);
-    if (typeof NR2PageFilters !== "undefined" && NR2PageFilters.mountPageFilters) {
+    if (!staffMockEmbedMode() && typeof NR2PageFilters !== "undefined" && NR2PageFilters.mountPageFilters) {
       NR2PageFilters.mountPageFilters(container, pageId, { snapshot: programSnapshot });
     }
     const canvas = container.querySelector("#page-canvas");
@@ -421,6 +439,7 @@ const PageViews = (function () {
       canvas.innerHTML = Canvas.renderBody(pageId, halWidgetFeed, programSnapshot);
     }
     wireMockupPreviewFrames(container);
+    stripMockEmbedLiveChrome(container);
     refreshLiveIntegrationHealth().catch(() => {
       /* integration health optional; skip second full repaint to avoid page flash */
     });
