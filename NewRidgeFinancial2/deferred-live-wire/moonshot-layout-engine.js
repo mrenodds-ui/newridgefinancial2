@@ -836,14 +836,18 @@ const MoonshotLayoutEngine = (function () {
       return H.canvasStatGrid(pack.stats || []);
     },
     narrativeWorkflow(D, H, panel) {
+      const printBar = `<div class="composer-toolbar narrative-print-bar">
+        <button type="button" class="chip nr2-print-btn" data-nr2-print="narrative" aria-label="Print narrative draft">Print draft</button>
+        <button type="button" class="chip chip--ghost nr2-print-btn" data-nr2-print="page" aria-label="Print narratives page">Print page</button>
+      </div>`;
       if (panel && panel.type === "kanban") {
         const lanes = D && D.narrativeKanban ? D.narrativeKanban() : [];
         const board = H.canvasKanbanLanes(lanes, "narrativeWorkflow", { narratives: true });
         const hasCards = lanes.some((lane) => lane.items && lane.items.length);
-        if (hasCards) return board;
-        return `${board}${emptyFor(H, "narrativeWorkflow", "Narrative drafts")}`;
+        if (hasCards) return `${printBar}${board}`;
+        return `${printBar}${board}${emptyFor(H, "narrativeWorkflow", "Narrative drafts")}`;
       }
-      return emptyFor(H, "narrativeWorkflow", "Narrative drafts");
+      return `${printBar}${emptyFor(H, "narrativeWorkflow", "Narrative drafts")}`;
     },
   };
 

@@ -4625,6 +4625,13 @@ function handleNr2Print(scope) {
     PU.printDrawer();
     return;
   }
+  if (printScope === "narrative") {
+    const result = PU.printNarrativeDraft({ title: "Insurance narrative draft" });
+    if (result && result.ok === false) {
+      showHalActionNotice("Could not open the print dialog for the narrative draft.", "warn");
+    }
+    return;
+  }
   PU.printCurrentView({
     pageId,
     title: page ? page.title : pageId,

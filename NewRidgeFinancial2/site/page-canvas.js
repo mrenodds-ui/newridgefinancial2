@@ -1051,6 +1051,7 @@ const PageCanvas = (function () {
             <button type="button" class="chip" data-hal-cmd="Insert prior history into narrative">Insert history</button>
             <button type="button" class="chip" data-narrative-generate="1">Draft with HAL</button>
             <button type="button" class="chip" data-narrative-save="1">Save draft locally</button>
+            <button type="button" class="chip chip--ghost nr2-print-btn" data-nr2-print="narrative" aria-label="Print narrative draft">Print draft</button>
           </div>
           <div class="composer-panel" data-hal-widget-key="narrativeWorkflow" data-narrative-claim-id="${esc(claim && claim.id ? claim.id : "")}">
             ${canvasTextArea(draft || "", 12, true)}

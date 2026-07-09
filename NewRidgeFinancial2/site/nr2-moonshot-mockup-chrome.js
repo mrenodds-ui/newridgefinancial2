@@ -369,17 +369,32 @@ const MoonshotMockupChrome = (function () {
     return `<button type="button" class="storyboard-export-btn" data-nr2-export="page-storyboard" aria-label="Export page storyboard zip for PDF print">Storyboard</button>`;
   }
 
+  function renderPagePrintButton(pageId) {
+    const label = pageId === "narratives" ? "Print draft" : "Print";
+    const scope = pageId === "narratives" ? "narrative" : "page";
+    const aria =
+      pageId === "narratives"
+        ? "Print insurance narrative draft"
+        : pageId === "hal"
+          ? "Print HAL command center"
+          : "Print this page";
+    return `<button type="button" class="nr2-print-btn" data-nr2-print="${esc(scope)}" aria-label="${esc(aria)}">${esc(label)}</button>`;
+  }
+
   function renderPageHeaderTools(schema, opts, commandChipsHtml) {
     if (schema && staffMockEmbedPage(schema.id)) return "";
     const o = opts || {};
     if (!schema || !schema.id) return commandChipsHtml ? `<div class="page-header-tools">${commandChipsHtml}</div>` : "";
     const parts = [];
-    if (STAFF_HEADER_TOOL_PAGES.has(schema.id)) {
-      parts.push(renderImportSyncBadge(o.importReadiness, schema.id));
-      if (typeof NR2Tier3 !== "undefined" && NR2Tier3.renderSemanticZoomToggle) {
-        parts.push(NR2Tier3.renderSemanticZoomToggle(schema.id));
+    if (STAFF_HEADER_TOOL_PAGES.has(schema.id) || schema.id === "hal") {
+      if (STAFF_HEADER_TOOL_PAGES.has(schema.id)) {
+        parts.push(renderImportSyncBadge(o.importReadiness, schema.id));
+        if (typeof NR2Tier3 !== "undefined" && NR2Tier3.renderSemanticZoomToggle) {
+          parts.push(NR2Tier3.renderSemanticZoomToggle(schema.id));
+        }
+        parts.push(renderPageStoryboardButton());
       }
-      parts.push(renderPageStoryboardButton());
+      parts.push(renderPagePrintButton(schema.id));
     }
     if (schema.id === "financial") parts.push(renderFinancialCpaExportButton());
     if (commandChipsHtml) parts.push(commandChipsHtml);
@@ -432,14 +447,9 @@ const MoonshotMockupChrome = (function () {
     return `<nav class="mock-embed-nav" aria-label="Staff pages">${items}</nav>`;
   }
 
-  function pageChromeMockEmbed(state, schema, opts) {
-    const pageNav = renderMockEmbedPageNav(state && state.pageId);
-    return `<div class="ms-page-chrome ms-page-chrome--mock-embed">${pageNav}</div>`;
-  }
-
   function pageChromeHal(state, schema, opts) {
     const o = opts || {};
-    const toolbar = o.halToolbar || o.toolbarActions || "";
+    const toolbar = o.halToolbar || o.toolbarActions || renderPagePrintButton("hal");
     const soloNav = staffMockEmbedMode() ? renderMockEmbedPageNav(state && state.pageId) : "";
     return `<div class="ms-page-chrome ms-page-chrome--hal">
       ${soloNav}
@@ -451,6 +461,16 @@ const MoonshotMockupChrome = (function () {
         </div>
         <div class="header-status">${toolbar}</div>
       </header>
+    </div>`;
+  }
+
+  function pageChromeMockEmbed(state, schema, opts) {
+    const pageNav = renderMockEmbedPageNav(state && state.pageId);
+    const pageId = (schema && schema.id) || (state && state.pageId) || "";
+    const print = pageId ? renderPagePrintButton(pageId) : "";
+    return `<div class="ms-page-chrome ms-page-chrome--mock-embed">
+      ${pageNav}
+      ${print ? `<div class="page-header-tools page-header-tools--print-only">${print}</div>` : ""}
     </div>`;
   }
 

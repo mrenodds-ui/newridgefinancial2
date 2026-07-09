@@ -316,7 +316,7 @@ const PageViews = (function () {
     if (!staffMockEmbedPage(pageId)) return;
     container
       .querySelectorAll(
-        ".page-header-tools, .sync-badge, .storyboard-export-btn, .cpa-export-btn, .ms-import-notice, .ms-mockup-preview-banner, .filter-bar, .hal-insight, .hero, .top-header, .alert-strip, .ms-hal-readiness-strip, #nr2-hal-readiness, .ms-hal-strip",
+        ".page-header-tools, .sync-badge, .storyboard-export-btn, .cpa-export-btn, .nr2-print-btn, .narrative-print-bar, .ms-import-notice, .ms-mockup-preview-banner, .filter-bar, .hal-insight, .hero, .top-header, .alert-strip, .ms-hal-readiness-strip, #nr2-hal-readiness, .ms-hal-strip",
       )
       .forEach((el) => el.remove());
   }

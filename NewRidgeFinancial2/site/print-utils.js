@@ -196,6 +196,31 @@ const PrintUtils = (function () {
     return printText(title || "HAL reply", text);
   }
 
+  function printNarrativeDraft(opts) {
+    const o = opts || {};
+    const root =
+      document.querySelector('[data-hal-widget-key="narrativeWorkflow"]') ||
+      document.querySelector(".narratives-moonshot") ||
+      document.querySelector('[data-ms-page="narratives"]') ||
+      document.getElementById("appPage");
+    const area = root && root.querySelector("textarea[data-narrative-body], .composer-textarea, textarea");
+    const draft = area ? String(area.value || "").trim() : "";
+    const claimId =
+      (root && root.getAttribute && root.getAttribute("data-narrative-claim-id")) ||
+      (document.querySelector("[data-narrative-claim-id]") &&
+        document.querySelector("[data-narrative-claim-id]").getAttribute("data-narrative-claim-id")) ||
+      "";
+    const claimMeta = claimId ? `<p class="meta">Claim ${esc(claimId)}</p>` : "";
+    if (draft) {
+      return printHtml(
+        o.title || "Insurance narrative draft",
+        `${claimMeta}<pre>${esc(draft)}</pre>`,
+      );
+    }
+    // Fall back to printing the narratives page silhouette when no draft text yet.
+    return printElement(root, o.title || "Narratives");
+  }
+
   function printAnything(payload) {
     if (payload == null) return printCurrentView();
     if (typeof payload === "string") return printText("Print", payload);
@@ -209,6 +234,7 @@ const PrintUtils = (function () {
     if (p.scope === "widget") return printWidget(p.feed, p.widgetKey, p.title);
     if (p.scope === "snapshot") return printSnapshot(p.snapshot, p.halData, p.title);
     if (p.scope === "hal-reply") return printHalReply(p.history, p.title);
+    if (p.scope === "narrative") return printNarrativeDraft(p);
     if (p.scope === "page" || p.scope === "auto") return printCurrentView(p);
     return printCurrentView(p);
   }
@@ -225,6 +251,7 @@ const PrintUtils = (function () {
     printWidget,
     printSnapshot,
     printHalReply,
+    printNarrativeDraft,
     printAnything,
   };
 })();
