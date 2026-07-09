@@ -93,23 +93,53 @@ const HalOfficeManager = (function () {
     });
   }
 
+  function isExpectedInformationalValidation(issue) {
+    const severity = String((issue && issue.severity) || "info").toLowerCase();
+    if (severity !== "info") return false;
+    const message = String((issue && issue.message) || "").toLowerCase();
+    const metric = String((issue && issue.metricKey) || "").toLowerCase();
+    // Expected open-month / cross-system scope notes — keep in validation feed, not office top priority.
+    if (/informational only|different scopes/.test(message)) return true;
+    if (/collections export is pending|export is pending/.test(message)) return true;
+    if (/is incomplete|trailing rate/.test(message) && /collection/.test(metric + message)) return true;
+    if (metric === "quickbooksartotal" && /softdent operational a\/r/.test(message)) return true;
+    return false;
+  }
+
+  function validationPriorityTitle(issue) {
+    const message = String((issue && issue.message) || "").trim();
+    if (message) {
+      const first = message.split(/[.—]/)[0].trim();
+      if (first.length >= 12 && first.length <= 90) return first;
+      if (first.length > 90) return `${first.slice(0, 87)}…`;
+    }
+    const widget = issue && issue.widgetKey ? String(issue.widgetKey) : "widget";
+    const metric = issue && issue.metricKey ? String(issue.metricKey) : "metric";
+    return `Review ${widget}: ${metric}`;
+  }
+
   function analyzeWidgetValidationPriorities(snapshot, list, seen) {
     const feed = snapshot && snapshot.widgets;
     if (!feed || !feed.widgets) return;
     const validation = feed.accountingExcelValidation;
     if (validation && Array.isArray(validation.issues)) {
       validation.issues.forEach((issue, index) => {
+        if (isExpectedInformationalValidation(issue)) return;
+        const severity = issue.severity === "warning" || issue.severity === "critical" ? issue.severity : "info";
         pushPriority(list, seen, {
           id: `office-widget-validation-${issue.widgetKey}-${issue.metricKey || index}`,
           category: issue.widgetKey && issue.widgetKey.indexOf("quickbooks") >= 0 ? "revenue" : "data_sources",
-          severity: issue.severity === "warning" ? "warning" : "info",
-          title: `Validate ${issue.widgetKey || "widget"}: ${issue.metricKey || "metric"}`,
+          severity,
+          title: validationPriorityTitle(issue),
           detail: issue.message || "Accounting/excel commit validation flagged this metric.",
-          actionHint: "Reconcile source exports before trusting this widget value.",
+          actionHint:
+            severity === "info"
+              ? "Informational cross-check — no staff action required unless totals look wrong."
+              : "Reconcile source exports before trusting this widget value.",
           surface: (feed.widgets[issue.widgetKey] && feed.widgets[issue.widgetKey].navTarget) || "financial",
           navTarget: (feed.widgets[issue.widgetKey] && feed.widgets[issue.widgetKey].navTarget) || "financial",
           safetyBoundary: "local_only",
-          autoTask: issue.severity === "warning",
+          autoTask: severity === "warning" || severity === "critical",
           source: "widget_validation",
           sourceId: `widget-validation-${issue.widgetKey}-${issue.metricKey || index}`,
           evidence: [issue.widgetKey, issue.metricKey, issue.message].filter(Boolean),
@@ -146,6 +176,8 @@ const HalOfficeManager = (function () {
     (attention.items || []).forEach((item) => {
       // Meta rollup of open tasks — useful in attention text, not as a competing office priority.
       if (item.itemId === "local-office-tasks-open") return;
+      // Standing capability note, not actionable work.
+      if (item.itemId === "vendor-tracker-local-only") return;
       if (item.severity === "info" && (item.count || 0) < 3 && !item.missingDataCodes) return;
       const category =
         item.category === "claims_follow_up"
@@ -271,6 +303,45 @@ const HalOfficeManager = (function () {
     return { total, denied, review, ready, draft, genericPayer, namedPayer, rowCount: rows.length };
   }
 
+  function claimsReadinessBrief(snapshot) {
+    const claims = snapshot && snapshot.claims;
+    const rows = (claims && (claims.claims || claims.top)) || [];
+    if (!rows.length) return null;
+    if (typeof HalSkills === "undefined" || typeof HalSkills.buildClaimReadinessResponse !== "function") {
+      return null;
+    }
+    const resp = HalSkills.buildClaimReadinessResponse(rows);
+    const s = (resp && resp.summary) || {};
+    const items = (resp && resp.items) || [];
+    const daysheet = items.filter((i) => i.daysheetDerived).length;
+    const highPriority = items.filter((i) => i.priority === "high").length;
+    const topGaps = [];
+    items.slice(0, 8).forEach((item) => {
+      (item.missingItems || []).forEach((m) => {
+        if (/Human review/i.test(m)) return;
+        if (!topGaps.includes(m) && topGaps.length < 4) topGaps.push(m);
+      });
+    });
+    return {
+      readyCount: Number(s.readyCount || 0) || 0,
+      needsReviewCount: Number(s.needsReviewCount || 0) || 0,
+      blockedCount: Number(s.blockedCount || 0) || 0,
+      genericPayer: items.filter((i) => i.genericPayer).length,
+      daysheetDerived: daysheet,
+      highPriority,
+      topGaps,
+      examples: items
+        .filter((i) => i.status !== "ready" || i.genericPayer)
+        .slice(0, 3)
+        .map((i) => ({
+          claimRef: i.claimRef,
+          status: i.status,
+          summary: i.staffSummary,
+          genericPayer: !!i.genericPayer,
+        })),
+    };
+  }
+
   function formatDailyOfficeBriefing(state, snapshot) {
     const office = state || {};
     const priorities = office.priorities || [];
@@ -304,6 +375,21 @@ const HalOfficeManager = (function () {
       } else if (claimLanes.namedPayer > 0) {
         lines.push(`- Carrier labels present on ${claimLanes.namedPayer} claim(s) — use join_claim_payers for phones/IDs.`);
       }
+      const readiness = claimsReadinessBrief(snapshot);
+      if (readiness) {
+        lines.push(
+          `- Packet readiness: Ready ${readiness.readyCount} · Needs review ${readiness.needsReviewCount} · Blocked ${readiness.blockedCount}` +
+            (readiness.highPriority ? ` · High priority ${readiness.highPriority}` : "") +
+            (readiness.daysheetDerived ? ` · Daysheet-derived ${readiness.daysheetDerived}` : "") +
+            ".",
+        );
+        if (readiness.topGaps.length) {
+          lines.push(`- Common gaps: ${readiness.topGaps.join("; ")}.`);
+        }
+        readiness.examples.forEach((ex) => {
+          lines.push(`- Example ${ex.claimRef || "?"}: ${ex.summary}`);
+        });
+      }
       lines.push("");
     }
     if (!priorities.length) {
@@ -334,6 +420,7 @@ const HalOfficeManager = (function () {
     buildOfficeManagerState,
     formatDailyOfficeBriefing,
     claimsLaneSummary,
+    claimsReadinessBrief,
     postureFromPriorities,
   };
 })();

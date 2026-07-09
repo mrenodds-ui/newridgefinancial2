@@ -2015,6 +2015,48 @@ async function main() {
   const officeBrief = HalOfficeManager.formatDailyOfficeBriefing(officeState, proactiveSnapshot);
   assert(officeBrief.includes("Human must approve"), "daily office briefing must state human approval boundaries");
   assert(officeBrief.includes("Top office priorities"), "daily office briefing must list priorities");
+  const infoOnlyValidationSnap = {
+    widgets: {
+      widgets: {
+        arAgingAndCollections: { status: "SUCCESS", title: "A/R Aging", navTarget: "ar" },
+        practiceFinancialOverview: { status: "SUCCESS", title: "Practice Financial Overview", navTarget: "financial" },
+      },
+      accountingExcelValidation: {
+        issues: [
+          {
+            widgetKey: "arAgingAndCollections",
+            metricKey: "quickbooksArTotal",
+            severity: "info",
+            message:
+              "SoftDent operational A/R ($49,111.03) and QuickBooks ledger A/R ($17,250.00) use different scopes — variance $31861.03 is informational only.",
+          },
+          {
+            widgetKey: "practiceFinancialOverview",
+            metricKey: "collectionsTotal",
+            severity: "info",
+            message: "SoftDent collections export is pending for the QuickBooks-comparable period; production is loaded from provider totals.",
+          },
+          {
+            widgetKey: "quickbooksProfitLossDetail",
+            metricKey: "netIncome",
+            severity: "warning",
+            message: "P&L net income does not reconcile to income minus expenses.",
+          },
+        ],
+      },
+    },
+    officeTasks: [],
+  };
+  const filteredPriorities = HalOfficeManager.buildOfficePriorities(infoOnlyValidationSnap, { halSideNotes: [] });
+  assert(
+    !filteredPriorities.some((p) => /quickbooksArTotal|informational only|collections export is pending/i.test(`${p.title} ${p.detail}`)),
+    "expected informational SoftDent/QB scope and pending-collections notes must not become office priorities",
+  );
+  assert(
+    filteredPriorities.some((p) => p.severity === "warning" && /net income|reconcil/i.test(`${p.title} ${p.detail}`)),
+    "real warning validation issues must still surface as office priorities",
+  );
+  assert(!/^Validate /i.test(filteredPriorities[0].title), "validation priority titles must be human-readable, not Validate widget:metric");
   const officeBriefingRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show daily office briefing");
   assert(officeBriefingRoute.useOfficeBriefing === true, "daily office briefing must route locally");
   assert(HalAgent.SAFETY_POLICY.summary.includes("internal office manager"), "agent safety policy must describe office manager role");
