@@ -1404,7 +1404,7 @@ const HalCore = (function () {
     m = q.match(/^what happens if i ask you to (.+?)\??$/);
     if (m) return { kind: "hypothetical", action: m[1].trim() };
 
-    m = q.match(/^(?:are you allowed to|can you) (.+?)(?:\s+without staff approval)?\??$/);
+    m = q.match(/^(?:are you allowed to|can you) (.+?)(?:\s+without (?:staff approval|consent))?\??$/);
     if (m) return { kind: "can", action: m[1].trim() };
 
     return null;
@@ -2686,6 +2686,7 @@ const HalCore = (function () {
     out = out.replace(/<think>[\s\S]*?<\/think>/gi, "");
     out = out.replace(/<\/?think>/gi, "");
     out = out.replace(/\*[^*]+\*/g, "");
+    out = out.replace(/^(Okay|Sure|Certainly|Hmm|Alright)[,.]?\s*(let me\s+)?(break this down|think through|think about|see|check|start|walk through)[^.!?]*[.!?]?\s*/i, "");
     out = out.replace(/^(Okay|Sure|Certainly)[,.]?\s*(from my (local )?)?(read-?only )?(monitoring )?perspective[,:]?\s*/i, "");
     out = out.replace(/\s*\((Local chat draft|Local .* draft)[^)]*\)\s*$/i, "");
     out = out.replace(/\s*\(Local reasoning plan · read-only · verify before acting\)\s*$/i, "");

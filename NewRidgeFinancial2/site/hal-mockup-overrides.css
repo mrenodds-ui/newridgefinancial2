@@ -257,6 +257,266 @@
   }
 }
 
+.app--moonshot-mockup .ms-page--hal .chat-input-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .surface-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-cyan, #00d4ff);
+}
+
+.app--moonshot-mockup .ms-page--hal .surface-main strong {
+  font-size: 12px;
+  color: var(--text-primary, #f5f5f5);
+}
+
+/* Compact HAL layout — ~50% vertical footprint */
+.app--moonshot-mockup .hal-dashboard--compact .dashboard-grid {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-compact-top {
+  grid-column: span 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-compact-mid {
+  grid-column: span 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-situational-hero--compact {
+  grid-column: unset;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+  gap: 10px;
+  margin-bottom: 0;
+  padding: 12px;
+  min-height: 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-situational-hero__main {
+  min-width: 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-situational-hero__actions {
+  margin-top: 6px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-hero-kpi {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-hero-kpi .kpi-ribbon-tile {
+  padding: 4px 6px;
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-hero-kpi .kpi-ribbon-tile strong {
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-hero-actuators {
+  margin-top: 4px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-morning-briefing__sentence {
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 4px 0 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-status-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .lane-badge,
+.app--moonshot-mockup .hal-dashboard--compact .import-health {
+  grid-column: unset;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .lane-header {
+  margin-bottom: 8px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .lane-value {
+  font-size: 20px;
+  margin: 4px 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .health-score {
+  font-size: 20px;
+  margin: 2px 0 4px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .health-bar {
+  margin: 4px 0 6px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-footer,
+.app--moonshot-mockup .hal-dashboard--compact .widget-footer--compact {
+  margin-top: 6px;
+  padding-top: 6px;
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-panel--widgets {
+  grid-column: span 8;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-mosaic-tile {
+  padding: 8px 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-mosaic-tile .widget-header {
+  margin-bottom: 2px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-mosaic-tile .widget-title {
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .metric-large {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .metric-delta {
+  font-size: 9px;
+  margin-top: 2px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-meta--hal {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  margin: 2px 0 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-compact-mid .hal-panel--nav,
+.app--moonshot-mockup .hal-dashboard--compact .hal-compact-mid .hal-panel--sidenotes {
+  grid-column: unset;
+  margin: 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .dashboard-grid .widget-card {
+  padding: 12px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-panel--session {
+  grid-column: span 8;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .session-grid {
+  gap: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .session-note,
+.app--moonshot-mockup .hal-dashboard--compact .session-note--compact {
+  font-size: 10px;
+  margin: 4px 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .checklist-list {
+  max-height: 72px;
+  overflow-y: auto;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .activity-log {
+  max-height: 72px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .surface-list {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .sidenote-list {
+  max-height: 72px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .control-grid--compact {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .control-btn {
+  padding: 6px 4px;
+  font-size: 9px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .control-btn strong {
+  font-size: 9px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .prompt-chips {
+  gap: 4px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .prompt-chip {
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .ms-page-chrome--hal .alert-strip {
+  padding: 6px 12px;
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page--hal .ms-page-chrome--hal .header {
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page--hal .ms-page-chrome--hal .header .header-title h2 {
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-status-grid {
+  gap: 8px 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-status-ring {
+  padding: 4px 8px 4px 4px;
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-status-ring svg {
+  width: 28px;
+  height: 28px;
+}
+
+@media (max-width: 1200px) {
+  .app--moonshot-mockup .hal-dashboard--compact .hal-compact-top,
+  .app--moonshot-mockup .hal-dashboard--compact .hal-compact-mid {
+    grid-template-columns: 1fr;
+  }
+
+  .app--moonshot-mockup .hal-dashboard--compact .hal-panel--widgets {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app--moonshot-mockup .ms-page--hal .widget-mosaic-tile,
   .app--moonshot-mockup .ms-page--hal .widget-mosaic-tile:hover {

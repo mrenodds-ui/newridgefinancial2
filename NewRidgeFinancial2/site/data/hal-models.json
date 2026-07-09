@@ -39,7 +39,7 @@
         "vendor documentation"
       ]
     },
-    "activeLane": "chat8b",
+    "activeLane": "chat8b+escalate30b",
     "preferReasoning": true,
     "cursorParity": {
       "enabled": true,
@@ -169,25 +169,34 @@
       "think": false,
       "options": {
         "num_predict": 1536,
-        "num_ctx": 4096
+        "num_ctx": 3072
       }
     },
     "fastModel": {
-      "enabled": true,
+      "enabled": false,
       "endpoint": "http://127.0.0.1:11434/api/chat",
       "model": "hal-helper:14b",
       "timeoutMs": 60000,
       "temperature": 0.2
     },
+    "gpuPinnedModels": [
+      "hal-chat:8b",
+      "hal-escalate:30b"
+    ],
+    "gpuPinOptions": {
+      "hal-chat:8b": { "num_ctx": 3072 },
+      "hal-escalate:30b": { "num_ctx": 4096 }
+    },
     "reasoningModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "mistral-small3.1:24b-fast",
+      "model": "hal-escalate:30b",
       "timeoutMs": 210000,
       "temperature": 0.25,
+      "think": false,
       "options": {
         "num_predict": 1280,
-        "num_ctx": 8192,
+        "num_ctx": 4096,
         "repeat_penalty": 1.08,
         "top_p": 0.92
       }
@@ -195,12 +204,16 @@
     "escalationModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "qwen3:30b",
+      "model": "hal-escalate:30b",
       "timeoutMs": 180000,
       "temperature": 0.2,
-      "think": true
+      "think": false,
+      "options": {
+        "num_predict": 1280,
+        "num_ctx": 4096
+      }
     },
-    "note": "HAL routes general questions to local Ollama on 127.0.0.1. Optional cloud reasoning activates when NR2_CLOUD_API_KEY is set (PHI sanitized). fastModel (14B) assists mid-depth chat. Outbound actions require staff consent per action.",
+    "note": "HAL routes general questions to local Ollama on 127.0.0.1. GPU pins hal-chat:8b + hal-escalate:30b (4096 ctx) on 32 GB VRAM (R9700). Reasoning (reason21b) and escalation share hal-escalate:30b — no Mistral 24B load. 14B helper on demand. Optional cloud when NR2_CLOUD_API_KEY is set (PHI sanitized).",
     "naturalVoice": {
       "instructions": [
         "Write like Cursor Auto: clear, direct, collaborative — a capable agent explaining to a colleague.",
@@ -216,7 +229,7 @@
         { "role": "user", "content": "Can you post to QuickBooks?" },
         {
           "role": "assistant",
-          "content": "Yes — I can export approved journal entries to QuickBooks IIF after your explicit consent, or draft entries locally for review first. I do not click Post inside QuickBooks without consent. If you want a draft entry, name the account and period and I will line up the local view. Staff still review every line before anything leaves NR2. Say \"I consent\" when you are ready to export approved entries."
+          "content": "No — I cannot click Post inside QuickBooks from NR2. I can draft journal entries locally or export approved IIF after you say \"I consent\"; staff still post inside QuickBooks. Nothing writes back without explicit consent and review."
         },
         { "role": "user", "content": "Are you allowed to refresh imports?" },
         {
@@ -231,7 +244,7 @@
         { "role": "user", "content": "What happens if I ask you to email the payer?" },
         {
           "role": "assistant",
-          "content": "Yes — I can email the payer after your explicit consent when SMTP is configured. I will prepare the draft, show what will be sent, and wait for you to say \"I consent.\" Without consent I only prepare local notes and readiness checklists. That separation is intentional — each outbound action needs its own approval. I will never claim an email was sent without consent and audit logging."
+          "content": "No — I won't email the payer without explicit consent. I can prepare the draft locally, show what would be sent, and wait for you to say \"I consent.\" Without consent I only prepare notes and readiness checklists — nothing is delivered externally."
         },
         { "role": "user", "content": "That's wrong — I meant imports, not widgets." },
         {
@@ -271,7 +284,7 @@
   },
   "readinessDisplay": {
     "label": "Operator-verified local inventory",
-    "verifiedAt": "2026-06-30",
+    "verifiedAt": "2026-07-08",
     "localAiService": {
       "status": "Detected",
       "name": "Ollama",
@@ -281,30 +294,30 @@
     "api": {
       "status": "Reachable",
       "endpoint": "http://127.0.0.1:11434/api/version",
-      "version": "0.30.11"
+      "version": "0.31.1"
     },
-    "activeLane": "chat8b",
-    "laneExecution": "Enabled · single GPU 8B chat lane · 14B helper off · 24B reasoning on demand · loopback only",
-    "runningModel": "hal-chat:8b only — single GPU resident (~5 GB, ctx 2048)",
-    "gpuStatus": "AMD Radeon RX 9060 XT · 16 GB VRAM · single 8B chat lane (no dual 14B pin)",
+    "activeLane": "chat8b+escalate30b",
+    "laneExecution": "Enabled · GPU-pinned 8B chat + 30B escalation/reasoning (shared) · 14B helper on demand · loopback only",
+    "runningModel": "hal-chat:8b + hal-escalate:30b — dual GPU resident (~5 GB + ~18 GB, ctx 3072/4096, keep_alive -1)",
+    "gpuStatus": "AMD Radeon AI PRO R9700 · 32 GB VRAM · dual GPU pin: 8B chat + 30B escalation",
     "bindingStatus": "Ollama server binds 0.0.0.0:11434 (LAN access enabled by operator) · HAL client connects 127.0.0.1 only",
     "dataPolicy": "No patient or sensitive practice data sent to models or the web. Web research uses sanitized generic queries for public reference material.",
     "allModelsEnabled": true,
     "gpu": {
       "verified": true,
-      "verifiedAt": "2026-06-30",
-      "device": "AMD Radeon RX 9060 XT",
+      "verifiedAt": "2026-07-08",
+      "device": "AMD Radeon AI PRO R9700",
       "vendor": "AMD",
       "library": "ROCm",
-      "compute": "gfx1200",
-      "vramGiB": 15.9,
-      "layerOffload": "hal-chat:8b single resident on GPU (no dual 14B lane)",
-      "integratedGpu": "Intel Graphics present but dropped by Ollama (set OLLAMA_IGPU_ENABLE=1 to enable)",
-      "resolvedWarning": "rocblaslt TensileLibrary_lazy_gfx1200 lookup fixed by setting ROCBLAS_TENSILE_LIBPATH",
-      "lastVerifiedLoad": "hal-chat:8b only pinned (2048 ctx) · mistral-small3.1:24b-fast on demand"
+      "compute": "gfx1201",
+      "vramGiB": 32,
+      "layerOffload": "hal-chat:8b + hal-escalate:30b dual resident on GPU (~23 GB weights, ctx capped)",
+      "integratedGpu": "Intel Graphics present; OLLAMA_IGPU_ENABLE=0 (disabled for performance)",
+      "resolvedWarning": "rocblaslt TensileLibrary via ROCBLAS_TENSILE_LIBPATH; OLLAMA_MAX_LOADED_MODELS=2",
+      "lastVerifiedLoad": "hal-chat:8b + hal-escalate:30b pinned (keep_alive -1, ctx 3072/4096) · reason21b uses hal-escalate:30b"
     },
     "runtime": {
-      "ollamaVersion": "0.30.11",
+      "ollamaVersion": "0.31.1",
       "modelsPath": "D:\\LocalAI\\ActiveModels",
       "host": "0.0.0.0:11434",
       "lanAccess": "enabled (operator choice; not loopback-restricted)",
@@ -313,6 +326,7 @@
     },
     "availableModels": [
       "hal-chat:8b",
+      "hal-escalate:30b",
       "hal-helper:14b",
       "deepseek-r1:8b",
       "deepseek-r1:14b",
@@ -331,8 +345,8 @@
     "configuredModels": {
       "local": { "lane": "chat8b", "model": "hal-chat:8b", "available": true },
       "helper": { "lane": "helper14b", "model": "hal-helper:14b", "available": true, "onDemand": true, "gpuResidentWithLocal": false },
-      "reasoning": { "lane": "reason24b", "model": "mistral-small3.1:24b-fast", "available": true, "onDemand": true },
-      "escalation": { "lane": "escalate30b", "model": "qwen3:30b", "available": true },
+      "reasoning": { "lane": "reason24b", "model": "hal-escalate:30b", "available": true, "gpuPinnedWithLocal": true, "sharedWithEscalation": true },
+      "escalation": { "lane": "escalate30b", "model": "hal-escalate:30b", "available": true, "gpuPinnedWithLocal": true },
       "general": { "lane": "general14b", "model": "qwen3:14b", "available": true },
       "coder": { "lane": "coder30b", "model": "qwen3-coder:30b", "available": true },
       "coderHeavy": { "lane": "coder32b", "model": "qwen2.5-coder:32b", "available": true },
@@ -345,7 +359,7 @@
       "id": "helper14b",
       "name": "14B helper lane",
       "model": "hal-helper:14b",
-      "role": "Optional on-demand helper (not GPU-pinned; single-lane layout uses 8B chat only)",
+      "role": "Optional on-demand helper (not GPU-pinned; 8B+30B dual-pin layout)",
       "state": "Standby",
       "inventoryAvailable": true,
       "executionEnabled": false,
@@ -380,7 +394,7 @@
       "id": "chat8b",
       "name": "8B chat lane",
       "model": "hal-chat:8b",
-      "role": "GPU-pinned staff conversation, program monitoring summaries, and plain-language recommendations (sole chat lane)",
+      "role": "GPU-pinned staff conversation, program monitoring summaries, and plain-language recommendations (dual-resident with hal-escalate:30b)",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
@@ -395,7 +409,7 @@
         "verified": true,
         "processor": "100% GPU",
         "residentSize": "~5 GB",
-        "context": 2048,
+        "context": 3072,
         "quantization": "deepseek-r1:8b base"
       },
       "willAllow": [
@@ -413,26 +427,26 @@
     },
     {
       "id": "reason24b",
-      "name": "24B reasoning lane",
-      "model": "mistral-small3.1:24b-fast",
-      "role": "On-demand reasoning for plans, accounting/Excel-style review, insurance narratives, prioritization, and structured recommendations",
+      "name": "30B reasoning lane",
+      "model": "hal-escalate:30b",
+      "role": "GPU-pinned reasoning (shared with escalation) for plans, accounting review, insurance narratives, and structured recommendations",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "mistral-small3.1:24b-fast",
+        "model": "hal-escalate:30b",
         "timeoutMs": 180000,
-        "temperature": 0.3
+        "temperature": 0.25,
+        "think": false
       },
       "gpuFit": {
         "verified": true,
-        "onDemand": true,
-        "processor": "100% GPU when loaded",
-        "residentSize": "~14 GB",
-        "context": 8192,
-        "quantization": "Q4_K_S text-only"
+        "processor": "100% GPU",
+        "residentSize": "~18 GB (shared pin with escalate30b)",
+        "context": 4096,
+        "quantization": "Q4_K_M"
       },
       "willAllow": [
         "Prioritize work across pages",
@@ -448,18 +462,19 @@
     },
     {
       "id": "reason21b",
-      "name": "24B reasoning lane (alias)",
-      "model": "mistral-small3.1:24b-fast",
-      "role": "Alias for reason24b — program monitoring and accounting review",
+      "name": "30B reasoning lane (alias)",
+      "model": "hal-escalate:30b",
+      "role": "Alias for reason24b — gateway reason21b maps to hal-escalate:30b on R9700",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "mistral-small3.1:24b-fast",
+        "model": "hal-escalate:30b",
         "timeoutMs": 180000,
-        "temperature": 0.3
+        "temperature": 0.25,
+        "think": false
       },
       "willAllow": [
         "Prioritize work across pages",
@@ -474,18 +489,26 @@
     {
       "id": "escalate30b",
       "name": "30B escalation lane",
-      "model": "qwen3:30b",
-      "role": "Second-opinion review for complex or high-risk accounting, data, and recommendation questions",
+      "model": "hal-escalate:30b",
+      "role": "GPU-pinned escalation for complex or high-risk accounting, data, and recommendation questions",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "qwen3:30b",
+        "model": "hal-escalate:30b",
         "timeoutMs": 180000,
         "temperature": 0.2,
-        "think": true
+        "think": false
+      },
+      "gpuFit": {
+        "verified": true,
+        "processor": "100% GPU",
+        "residentSize": "~18 GB",
+        "context": 4096,
+        "quantization": "Q4_K_M",
+        "thinkMode": "disabled for visible staff-facing replies"
       },
       "willAllow": [
         "Second-opinion review",

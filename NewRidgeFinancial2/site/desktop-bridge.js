@@ -856,6 +856,37 @@ const DesktopBridge = (function () {
     return { items: [], count: 0 };
   }
 
+  async function updateHalSessionContext(payload) {
+    const body = payload && typeof payload === "object" ? payload : {};
+    if (hasDesktopApi() && window.pywebview.api.update_hal_session_context) {
+      return window.pywebview.api.update_hal_session_context(
+        String(body.claimId || body.claim_id || ""),
+        String(body.narrativeId || body.narrative_id || ""),
+        String(body.page || ""),
+        String(body.topic || ""),
+        String(body.payer || ""),
+      );
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/hal-learning/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
+    return { ok: false };
+  }
+
+  async function halLearningStatus() {
+    if (hasDesktopApi() && window.pywebview.api.hal_learning_status) {
+      return window.pywebview.api.hal_learning_status();
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/hal-learning/status");
+    }
+    return { ok: false };
+  }
+
   async function rememberHalFact(text, options) {
     const opts = options && typeof options === "object" ? options : {};
     if (hasDesktopApi() && window.pywebview.api.remember_hal_fact) {
@@ -1168,6 +1199,96 @@ const DesktopBridge = (function () {
     return { items: [], count: 0, text: "" };
   }
 
+  async function searchPayerReference(query, limit) {
+    if (hasDesktopApi() && window.pywebview.api.search_payer_reference) {
+      return window.pywebview.api.search_payer_reference(String(query || ""), Number(limit || 5));
+    }
+    if (hasLoopbackApi()) {
+      try {
+        const q = encodeURIComponent(String(query || ""));
+        const lim = Number(limit || 5);
+        return await loopbackJson(`/api/payer-reference?q=${q}&limit=${lim}`);
+      } catch {
+        return { items: [], count: 0, text: "" };
+      }
+    }
+    return { items: [], count: 0, text: "" };
+  }
+
+  async function listEligibilityCache(limit) {
+    if (hasDesktopApi() && window.pywebview.api.list_eligibility_cache) {
+      return window.pywebview.api.list_eligibility_cache(Number(limit || 20));
+    }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson(`/api/eligibility-cache?limit=${Number(limit || 20)}`);
+      } catch {
+        return { items: [], count: 0, text: "", summary: null };
+      }
+    }
+    return { items: [], count: 0, text: "", summary: null };
+  }
+
+  async function upsertEligibilityCache(entry) {
+    const payload = entry && typeof entry === "object" ? entry : {};
+    if (hasDesktopApi() && window.pywebview.api.upsert_eligibility_cache) {
+      return window.pywebview.api.upsert_eligibility_cache(JSON.stringify(payload));
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/eligibility-cache", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entry: payload }),
+      });
+    }
+    throw new Error(desktopRequiredMessage("Saving eligibility cache entries"));
+  }
+
+  async function searchEligibilityCache(query, limit) {
+    if (hasDesktopApi() && window.pywebview.api.search_eligibility_cache) {
+      return window.pywebview.api.search_eligibility_cache(String(query || ""), Number(limit || 10));
+    }
+    if (hasLoopbackApi()) {
+      try {
+        const q = encodeURIComponent(String(query || ""));
+        const lim = Number(limit || 10);
+        return await loopbackJson(`/api/eligibility-cache?q=${q}&limit=${lim}`);
+      } catch {
+        return { items: [], count: 0, text: "" };
+      }
+    }
+    return { items: [], count: 0, text: "" };
+  }
+
+  async function fetchEligibility271(request) {
+    const payload = request && typeof request === "object" ? request : {};
+    if (hasDesktopApi() && window.pywebview.api.fetch_eligibility_271) {
+      return window.pywebview.api.fetch_eligibility_271(JSON.stringify(payload));
+    }
+    if (hasLoopbackApi()) {
+      return loopbackJson("/api/eligibility-cache/fetch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request: payload }),
+      });
+    }
+    throw new Error(desktopRequiredMessage("Clearinghouse 271 fetch"));
+  }
+
+  async function clearinghouseStatus() {
+    if (hasDesktopApi() && window.pywebview.api.clearinghouse_status) {
+      return window.pywebview.api.clearinghouse_status();
+    }
+    if (hasLoopbackApi()) {
+      try {
+        return await loopbackJson("/api/eligibility-cache/status");
+      } catch {
+        return { ok: false, mockEnabled: false, liveReady: false };
+      }
+    }
+    return { ok: false, mockEnabled: false, liveReady: false };
+  }
+
   async function grepProgramSource(query, limit) {
     if (hasDesktopApi() && window.pywebview.api.grep_program_source) {
       return window.pywebview.api.grep_program_source(String(query || ""), Number(limit || 24));
@@ -1331,6 +1452,8 @@ const DesktopBridge = (function () {
     listHalMemories,
     rememberHalFact,
     rememberHalWebFindings,
+    updateHalSessionContext,
+    halLearningStatus,
     getTaxPlan,
     getIntegrationHealth,
     getAutomationRegistry,
@@ -1354,6 +1477,12 @@ const DesktopBridge = (function () {
     setPopupStation,
     showWorkstationMainWindow,
     searchHalMemories,
+    searchPayerReference,
+    listEligibilityCache,
+    upsertEligibilityCache,
+    searchEligibilityCache,
+    fetchEligibility271,
+    clearinghouseStatus,
     readClipboard,
     writeClipboard,
     installClipboardHandlers,

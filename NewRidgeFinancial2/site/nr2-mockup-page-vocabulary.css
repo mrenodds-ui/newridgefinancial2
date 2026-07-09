@@ -1932,6 +1932,38 @@
   min-height: 12rem;
 }
 
+.app--moonshot-mockup .ms-page .ms-mockup-preview-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  grid-column: 1 / -1;
+  min-height: 720px;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-banner {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-banner__title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-iframe {
+  background: #0a0a0c;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  flex: 1;
+  min-height: 680px;
+  width: 100%;
+}
+
 .app--moonshot-mockup .ms-page .ms-mockup-preview-gate__lead {
   color: var(--text-secondary);
   font-size: 13px;

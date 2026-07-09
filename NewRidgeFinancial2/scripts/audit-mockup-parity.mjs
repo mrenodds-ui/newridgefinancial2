@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Assert staff page bodies use mockup vocabulary from page_mockups/*.html
- * instead of legacy ms-* bridge / widget-kanban classes.
+ * Assert staff pages embed elite mock HTML and that elite mockups avoid legacy bridge classes.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,7 +11,7 @@ import { createRequire } from "node:module";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const site = join(root, "site");
-const mockups = join(root, "..", ".local_logs", "moonshot_financial_eval", "page_mockups");
+const mockupsElite = join(root, "..", ".local_logs", "moonshot_financial_eval", "page_mockups_elite");
 const require = createRequire(import.meta.url);
 
 process.env.NR2_LOAD_IMPORTS = "1";
@@ -31,7 +30,6 @@ for (const f of [
   "hal-widget-master-chart.js",
   "hal-page-widgets.js",
   "hal-live-widget-bridge.js",
-  "moonshot-page-layouts.js",
   "moonshot-page-registry.js",
   "nr2-moonshot-mockup-chrome.js",
   "tax-engine.js",
@@ -72,70 +70,61 @@ const FORBIDDEN_BODY = [
   /\bms-hbars/,
 ];
 
-const PAGE_REQUIRED = {
-  financial: ["provider-list", "chart-container", "widget-card", "nr2-alert-ticker", "kpi-ribbon"],
-  ar: ["kpi-grid", "kpi-tile", "heatmap-grid", "queue-list", "queue-item"],
-  claims: ["kanban-board", "kanban-column", "claim-card", "side-panel"],
-  narratives: ["composer-grid", "panel", "composer-textarea", "cdt-list"],
-  "office-manager": ["stats-bar", "stat-item", "focus-list"],
-  library: ["search-container", "search-box", "document-grid", "doc-card"],
-  documents: ["data-table", "doc-preview"],
-  softdent: ["widget-card", "funnel-chart", "funnel-label", "operatory-grid"],
-  quickbooks: ["dashboard-grid", "kpi-card", "sync-badge"],
-  taxes: ["widget-card", "tax-split-chart"],
+const ELITE_PAGE_REQUIRED = {
+  financial: ["widget-grid", "alert-ticker", "kpi-hero-row", "ms-panel", "data-hal-widget-key"],
+  ar: ["widget-grid", "kpi-hero", "ms-panel", "kanban-wrap", "data-hal-widget-key"],
+  claims: ["kanban", "data-hal-widget-key"],
+  narratives: ["kanban", "data-hal-widget-key"],
+  "office-manager": ["dashboard-grid", "kpi-hero", "data-hal-widget-key"],
+  library: ["search-box", "glass-panel", "data-hal-widget-key"],
+  documents: ["widget-grid", "ms-panel", "data-table", "preview-panel"],
+  softdent: ["funnel", "data-hal-widget-key"],
+  quickbooks: ["dashboard-grid", "glass-panel", "data-hal-widget-key"],
+  taxes: ["widget-grid", "ms-panel", "data-hal-widget-key"],
 };
 
 let failures = 0;
 for (const pageId of PageSchema.STAFF_PAGE_IDS || []) {
   const html = await PageViews.previewPageHtml(halData, pageId, feed, snap);
-  const bodyStart = html.indexOf("widget-grid") >= 0 ? html.indexOf("widget-grid") : html.indexOf("composer-grid");
-  const body = bodyStart >= 0 ? html.slice(bodyStart) : html;
+  if (!html.includes("ms-mockup-preview-frame")) {
+    console.error(`FAIL ${pageId}: staff page must use elite mock embed gate`);
+    failures += 1;
+    continue;
+  }
+  if (!html.includes(`/mockup-elite-embed/${pageId}`)) {
+    console.error(`FAIL ${pageId}: missing mockup-elite-embed iframe src`);
+    failures += 1;
+  }
+
+  const mockupPath = join(mockupsElite, `${pageId}.html`);
+  let mockHtml = "";
+  try {
+    mockHtml = readFileSync(mockupPath, "utf8");
+  } catch {
+    console.warn(`WARN ${pageId}: no elite mockup html at ${mockupPath}`);
+    continue;
+  }
 
   for (const re of FORBIDDEN_BODY) {
-    if (re.test(body)) {
-      console.error(`FAIL ${pageId}: forbidden legacy class ${re}`);
+    if (re.test(mockHtml)) {
+      console.error(`FAIL ${pageId}: forbidden legacy class in elite mock ${re}`);
       failures += 1;
     }
   }
 
-  const required = PAGE_REQUIRED[pageId] || ["widget-card"];
+  const required = ELITE_PAGE_REQUIRED[pageId] || ["ms-panel", "data-hal-widget-key"];
   for (const cls of required) {
-    if (!html.includes(cls)) {
-      console.error(`FAIL ${pageId}: missing mockup class ${cls}`);
+    if (!mockHtml.includes(cls)) {
+      console.error(`FAIL ${pageId}: elite mock missing class ${cls}`);
       failures += 1;
     }
   }
 
   if (pageId === "softdent") {
-    const funnelSteps = (html.match(/class="funnel-step(?:[^"]*)"/g) || []).length;
-    if (funnelSteps < 4) {
-      console.error(`FAIL softdent: expected 4 funnel-step rows, got ${funnelSteps}`);
+    const funnelSteps = (mockHtml.match(/class="funnel-step(?:[^"]*)"/g) || mockHtml.match(/class="funnel(?:[^"]*)"/g) || []).length;
+    if (funnelSteps < 1) {
+      console.error(`FAIL softdent: expected funnel markup, got ${funnelSteps}`);
       failures += 1;
-    }
-  }
-
-  const mockupPath = join(mockups, `${pageId}.html`);
-  const SIGNATURE_BY_PAGE = {
-    financial: ["provider-list", "chart-container", "nr2-alert-ticker", "kpi-ribbon"],
-    quickbooks: ["dashboard-grid", "kpi-card", "sync-badge"],
-    ar: ["kpi-grid", "heatmap-grid", "queue-list"],
-    claims: ["kanban-board", "claim-card", "side-panel"],
-    narratives: ["composer-grid", "composer-textarea"],
-    "office-manager": ["stats-bar"],
-  };
-  const signature = SIGNATURE_BY_PAGE[pageId];
-  if (signature) {
-    for (const cls of signature) {
-      if (!html.includes(cls)) {
-        console.error(`FAIL ${pageId}: expected mockup signature class ${cls}`);
-        failures += 1;
-      }
-    }
-  } else {
-    try {
-      readFileSync(mockupPath, "utf8");
-    } catch {
-      console.warn(`WARN ${pageId}: no mockup html at ${mockupPath}`);
     }
   }
 }

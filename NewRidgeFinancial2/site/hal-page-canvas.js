@@ -73,13 +73,12 @@ const HalPageCanvas = (function () {
           <div class="widget-header"><span class="widget-title">${H.esc(spec.label)}</span></div>
           <div class="metric-large text-glow">${H.esc(metrics || status)}</div>
           <div class="metric-delta ${deltaClass}"><span>${H.esc(status)}</span></div>
-          ${sparkBarsFromMetrics(w)}
-          <div class="widget-footer"><span>HAL · ${H.esc(page)}</span><span>${H.esc(status)}</span></div>
+          <div class="widget-canvas" data-nr2-spark-host="${H.esc(spec.key)}" aria-hidden="true">${sparkBarsFromMetrics(w)}</div>
         </article>`;
       })
       .join("");
     const widgetTotal = metricSpecs.length;
-    return `<section class="hal-panel--widgets hal-widget-mosaic" data-panel="widgetMosaic">${missionTiles}<p class="widget-meta widget-meta--hal">${readyTotal}/${widgetTotal} ready · click a tile to open page + ask HAL · ${H.esc((feed && feed.importMode) || "direct-first")}</p></section>`;
+    return `<section class="hal-panel--widgets hal-widget-mosaic dashboard-grid" data-panel="widgetMosaic">${missionTiles}<p class="widget-meta widget-meta--hal col-12">${readyTotal}/${widgetTotal} ready · local only · click a tile to open page + ask HAL · ${H.esc((feed && feed.importMode) || "direct-first")}</p></section>`;
   }
 
   function registryStats(ctx) {
@@ -152,7 +151,7 @@ const HalPageCanvas = (function () {
       <form class="chat-form chat-input" id="hpAskForm">
         <textarea class="chat-textarea" id="hpAskInput" rows="2" enterkeyhint="send" placeholder="Ask HAL anything…  (Enter to send)" aria-label="Ask HAL">${H.esc(halAskDraft || "")}</textarea>
         <div class="chat-input-row">
-          <button class="chat-send-btn" type="submit" ${halAskLoading ? "disabled" : ""}>${halAskLoading ? "…" : `${H.uiIcon("send")} SEND`}</button>
+          <button class="chat-send" type="submit" ${halAskLoading ? "disabled" : ""}>${halAskLoading ? "…" : `${H.uiIcon("send")} SEND`}</button>
         </div>
       </form>
       <div class="chat-suggestions prompt-chips prompt-chips--live">${suggestions.map((s) => H.actionChip(s, `data-hal-suggest="${H.esc(s)}"`)).join("")}</div>
@@ -225,30 +224,34 @@ const HalPageCanvas = (function () {
         ${H.actionChip("Refresh imports", 'data-hal-cmd="Refresh imports"')}
       </div>
     </div>`;
-    return postureBlock + importBlock;
+    return `<div class="hal-status-stack">${postureBlock}${importBlock}</div>`;
   }
 
   function renderSurfaces(ctx, H) {
     const { halData, halWidgetFeed } = ctx;
     const liveSurfaces = (halWidgetFeed && halWidgetFeed.surfaceCounts) || {};
-    const surfaces = ((halData && halData.workSurfaces && halData.workSurfaces.items) || [])
+    const allSurfaces = (halData && halData.workSurfaces && halData.workSurfaces.items) || [];
+    const compactSurfaces = allSurfaces.filter((item) => item.target !== "sidenotes").slice(0, 5);
+    const surfaces = compactSurfaces
       .map((item) => {
         const reg = ((halData && halData.registry) || []).find((e) => e.id === item.target);
         const live = liveSurfaces[item.target];
         const state = live ? H.mapSurfaceState(live.status) : reg ? reg.state : "unknown";
         const surfOpen = H.surfNavTarget(item);
         const surfCmd = `Explain the ${item.label} work surface and what staff should do next`;
-        return `<li class="surface-item surface-item" data-hal-surf-nav="${H.esc(surfOpen)}" data-hal-cmd="${H.esc(surfCmd)}" role="button" tabindex="0">
+        const badgeTone =
+          state === "Ready" ? "status-badge--ok" : state === "Needs review" ? "status-badge--warn" : "status-badge--off";
+        return `<li class="surface-row" data-hal-surf-nav="${H.esc(surfOpen)}" data-hal-cmd="${H.esc(surfCmd)}" role="button" tabindex="0">
           <span class="surface-icon">${H.surfNavIcon(item)}</span>
           <div class="surface-main"><strong>${H.esc(item.label)}</strong></div>
-          <span class="status-badge status-badge ${state === "Ready" ? "status-badge status-badge--ok" : state === "Needs review" ? "status-badge status-badge--warn" : "status-badge status-badge--off"}">${H.esc(state)}</span>
-          <button type="button" class="surface-open-btn" data-hal-surf-open="${H.esc(surfOpen)}" title="Open">${H.uiIcon("chevronRight")}</button>
+          <span class="status-badge ${badgeTone}">${H.esc(state)}</span>
+          <button type="button" class="surface-chev" data-hal-surf-open="${H.esc(surfOpen)}" title="Open">${H.uiIcon("chevronRight")}</button>
         </li>`;
       })
       .join("");
     return `<section class="widget-card hal-panel--nav surface-grid" data-panel="workSurfaces">
       ${H.cardHead("STAFF WORK SURFACES", "workSurfaces", "Jump to staff pages", H.cardIconRaw("ui", "surface"))}
-      <ul class="surface-list surface-list">${surfaces || H.emptyNote("No work surfaces configured.")}</ul>
+      <ul class="surface-list">${surfaces || H.emptyNote("No work surfaces configured.")}</ul>
     </section>`;
   }
 
@@ -256,20 +259,20 @@ const HalPageCanvas = (function () {
     const stats = registryStats(ctx);
     const { halData, halInlineFirewallResult, halAudit } = ctx;
     const consent = (halData && halData.consent) || {};
-    const categories = (consent.categories || []).slice(0, 4);
+    const categories = (consent.categories || []).slice(0, 3);
     const consentList = categories
       .map((item) => {
         const cmd = `Explain staff consent for ${item}`;
-        return `<li class="checklist-item" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>CONSENT</b></li>`;
+        return `<li class="checklist-row--active" data-hal-cmd="${H.esc(cmd)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>CONSENT</b></li>`;
       })
       .join("");
-    const localAlways = (consent.localAlways || []).slice(0, 5);
-    const activity = (halAudit || []).slice(-5).reverse();
+    const localAlways = (consent.localAlways || []).slice(0, 3);
+    const activity = (halAudit || []).slice(-3).reverse();
     const activityHtml = activity.length
       ? activity
           .map(
             (row) =>
-              `<li class="activity-item" data-hal-activity-cmd="${H.esc(row.query || row.label || "")}" role="button" tabindex="0"><i class="activity-dot activity-dot activity-dot--gold"></i><span>${H.esc(row.query || row.label || "")}</span><time>${H.esc(row.time || "")}</time></li>`,
+              `<li class="activity-row--active" data-hal-activity-cmd="${H.esc(row.query || row.label || "")}" role="button" tabindex="0"><i class="activity-dot activity-dot--gold"></i><span>${H.esc(row.query || row.label || "")}</span><time>${H.esc(row.time || "")}</time></li>`,
           )
           .join("")
       : H.emptyNote("No HAL activity in this session yet.");
@@ -279,15 +282,7 @@ const HalPageCanvas = (function () {
       ? `${lastReceipt.time || ""} · ${lastReceipt.intent || lastReceipt.query || "local action"}`.trim()
       : "No local receipt this session";
 
-    const outboundExecutors = [
-      "Email (SMTP)",
-      "QuickBooks IIF export",
-      "QuickBooks Online post",
-      "Claim submission packet",
-      "Narrative portal prep",
-      "Payer portal RPA prep",
-      "SoftDent writeback queue",
-    ];
+    const outboundExecutors = ["Email (SMTP)", "QuickBooks IIF export", "Claim submission packet", "SoftDent writeback queue"];
     const hci =
       typeof HalCapabilityIndex !== "undefined" && HalCapabilityIndex.compute
         ? HalCapabilityIndex.compute(ctx, ctx.halModels)
@@ -303,84 +298,42 @@ const HalPageCanvas = (function () {
       ? `<p class="session-note"><b>HAL 9000 ops:</b> ${ao.running && !ao.paused ? "running" : ao.paused ? "paused" : "stopped"}</p>`
       : "";
     const outboundList = outboundExecutors
-      .map((item) => `<li class="checklist-item" data-hal-cmd="Explain staff consent for ${H.esc(item)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>LIVE</b></li>`)
+      .map((item) => `<li class="checklist-row--active" data-hal-cmd="Explain staff consent for ${H.esc(item)}" role="button" tabindex="0"><span>${H.esc(item)}</span><b>LIVE</b></li>`)
       .join("");
     return `<section class="widget-card hal-panel--session" data-panel="session">
       <div class="session-grid">
         <div class="session-col" data-panel="consent">
           ${H.cardHead("TRUST & CONSENT", "consent", "Staff consent policy", H.cardIconRaw("ui", "shield"))}
-          <button type="button" class="consent-btn consent-btn" data-hal-cmd="Explain staff consent policy">${H.uiIcon("check")} CONSENT</button>
-          <ul class="checklist checklist">${consentList}</ul>
+          <button type="button" class="checklist-active--btn" data-hal-cmd="Explain staff consent policy">${H.uiIcon("check")} CONSENT</button>
+          <ul class="checklist-list">${consentList}</ul>
           <p class="session-note"><b>Executors (consent):</b></p>
-          <ul class="checklist checklist">${outboundList}</ul>
-          ${hciHtml}
-          ${aoHtml}
-          <p class="session-note"><b>Always local:</b> ${localAlways.length ? localAlways.slice(0, 5).map(H.esc).join(" · ") : "Open pages · Explain status"}</p>
-          <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Show outbound audit log">Outbound audit</button>
-          ${halInlineFirewallResult ? `<p class="session-note">${H.esc(halInlineFirewallResult.text || "")}</p>` : ""}
+          <ul class="checklist-list">${outboundList}</ul>
+          <p class="session-note session-note--compact"><b>Always local:</b> ${localAlways.length ? localAlways.map(H.esc).join(" · ") : "Open pages · Explain status"}</p>
+          ${halInlineFirewallResult ? `<p class="session-note session-note--compact">${H.esc(halInlineFirewallResult.text || "")}</p>` : ""}
         </div>
         <div class="session-col" data-panel="status">
           ${H.cardHead("RECENT ACTIVITY", "status", "Session audit log", H.cardIconRaw("ui", "activity"))}
-          <ul class="activity-log activity-log">${activityHtml}</ul>
+          <ul class="activity-log">${activityHtml}</ul>
         </div>
         <div class="session-col" data-panel="controls">
           ${H.cardHead("SYSTEM CONTROLS", "controls", "Readiness and diagnostics", H.cardIconRaw("ui", "check"))}
-          <div class="control-grid control-grid">
-            <button type="button" class="control-btn" data-hal-cmd="Run readiness check"><span class="control-icon">${H.uiIcon("check")}</span><strong>Readiness</strong></button>
+          <div class="control-grid control-grid--compact">
+            <button type="button" class="control-btn" data-hal-cmd="Run readiness check"><span class="control-icon">${H.uiIcon("check")}</span><strong>Ready</strong></button>
             <button type="button" class="control-btn" data-hal-cmd="Run operator smoke test"><span class="control-icon">${H.uiIcon("smoke")}</span><strong>Smoke</strong></button>
             <button type="button" class="control-btn" data-hal-cmd="Staff handoff summary"><span class="control-icon">${H.uiIcon("handoff")}</span><strong>Handoff</strong></button>
-            <button type="button" class="control-btn" data-hal-about-me><span class="control-icon">${H.uiIcon("voice")}</span><strong>About me</strong></button>
-            <button type="button" class="control-btn" data-hal-cmd="Monitor sidenotes"><span class="control-icon">${H.navIcon("sidenotes")}</span><strong>Staff notes</strong></button>
+            <button type="button" class="control-btn" data-hal-about-me><span class="control-icon">${H.uiIcon("voice")}</span><strong>About</strong></button>
             <button type="button" class="control-btn" data-hal-drawer="status"><span class="control-icon">${H.uiIcon("audit")}</span><strong>Audit</strong></button>
           </div>
-          <p class="widget-footer">Registry: ${H.esc(stats.readyCount)} ready · ${H.esc(stats.blockedCount)} blocked · Last receipt: ${H.esc(lastReceiptText)}</p>
+          <p class="widget-footer widget-footer--compact">Registry: ${H.esc(stats.readyCount)} ready · ${H.esc(stats.blockedCount)} blocked · Last receipt: ${H.esc(lastReceiptText)}</p>
           <details class="details-panel">
             <summary>Runtime diagnostics</summary>
+            ${hciHtml}
+            ${aoHtml}
             ${H.agentHealthHtml(ctx.halAgentHealth, ctx.halModels, ctx.halSideNotesInbox)}
             ${H.stressTestHtml(ctx.halStressTest)}
           </details>
         </div>
       </div>
-    </section>`;
-  }
-
-  function renderSidenotes(ctx, H) {
-    return H.sideNotesProgramCardHtml(ctx.halSideNotes, ctx.halSideNoteMonitor, ctx.halSideNotesInbox, ctx.sidenotesHubPath);
-  }
-
-  function renderMorningBriefing(ctx, H) {
-    const card =
-      ctx.halMorningBriefing ||
-      (ctx.halProactiveBriefing && ctx.halProactiveBriefing.morningBriefing) ||
-      null;
-    if (!card || !card.sentence) return "";
-    const domainChips = (card.domains || [])
-      .map((d) => `<span class="status-chip status-chip--ok">${H.esc(d)}</span>`)
-      .join(" ");
-    const kpiHtml = (card.kpiTiles || [])
-      .slice(0, 4)
-      .map(
-        (tile, index) =>
-          `<div class="kpi-ribbon-tile kpi-ribbon-tile--${H.esc(tile.tone || "neutral")}" data-hal-kpi-tile="${index}"><span>${H.esc(tile.label)}</span><strong>${H.esc(tile.value)}</strong></div>`,
-      )
-      .join("");
-    const actuatorHtml = (card.actuators || [])
-      .map((act) => {
-        const id = H.esc(act.actionId || "refresh-imports");
-        const label = H.esc(act.label || "Proceed");
-        if (act.actionId === "navigate" && act.target) {
-          return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-actuator="${id}" data-hal-action="openPage" data-open-page="${H.esc(act.target)}" data-hal-consent="1">${label}</button>`;
-        }
-        return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-actuator="${id}" data-hal-action="refreshImports" data-hal-consent="1">${label}</button>`;
-      })
-      .join("");
-    return `<section class="widget-card hal-panel--morning-briefing span-2" data-panel="morningBriefing" data-hal-widget-key="halMorningBriefing">
-      ${H.cardHead("MORNING BRIEFING", "morningBriefing", "Cross-domain synthesis · operator consent required for actions", H.cardIconRaw("widget", "nr2KpiRibbon"))}
-      <p class="hal-morning-briefing__sentence text-glow">${H.esc(card.sentence)}</p>
-      <div class="hal-morning-briefing__domains">${domainChips || H.emptyNote("Awaiting import data.")}</div>
-      ${kpiHtml ? `<div class="kpi-ribbon hal-morning-briefing__kpi">${kpiHtml}</div>` : ""}
-      <p class="widget-footer">${H.esc(card.importHealthSummary || "Import health included in synthesis.")}</p>
-      ${actuatorHtml ? `<div class="prompt-chips prompt-chips--live hal-morning-briefing__actuators">${actuatorHtml}</div>` : ""}
     </section>`;
   }
 
@@ -411,21 +364,47 @@ const HalPageCanvas = (function () {
       alertItems.push({ text: "Cross-analytics within review thresholds", level: "ok" });
     }
     const alertsHtml = alertItems
-      .slice(0, 3)
+      .slice(0, 2)
       .map(
         (item) =>
           `<button type="button" class="prompt-chip prompt-chip--action nr2-alert-ticker__item nr2-alert-ticker__item--${H.esc(item.level)}" data-hal-cmd="${H.esc(item.text)}">${H.esc(item.text)}</button>`,
       )
       .join("");
-    return `<section class="widget-card hal-situational-hero span-4" data-panel="situationalHero" data-hal-widget-key="halSituationalHero">
-      <div>
+    const kpiHtml =
+      briefing && briefing.kpiTiles && briefing.kpiTiles.length
+        ? `<div class="kpi-ribbon hal-hero-kpi" data-panel="morningBriefing" data-hal-widget-key="halMorningBriefing">${briefing.kpiTiles
+            .slice(0, 3)
+            .map(
+              (tile, index) =>
+                `<div class="kpi-ribbon-tile kpi-ribbon-tile--${H.esc(tile.tone || "neutral")}" data-hal-kpi-tile="${index}"><span>${H.esc(tile.label)}</span><strong>${H.esc(tile.value)}</strong></div>`,
+            )
+            .join("")}</div>`
+        : "";
+    const actuatorHtml =
+      briefing && briefing.actuators && briefing.actuators.length
+        ? `<div class="prompt-chips prompt-chips--live hal-hero-actuators">${briefing.actuators
+            .slice(0, 2)
+            .map((act) => {
+              const id = H.esc(act.actionId || "refresh-imports");
+              const label = H.esc(act.label || "Proceed");
+              if (act.actionId === "navigate" && act.target) {
+                return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-actuator="${id}" data-hal-action="openPage" data-open-page="${H.esc(act.target)}" data-hal-consent="1">${label}</button>`;
+              }
+              return `<button type="button" class="prompt-chip prompt-chip--action" data-hal-actuator="${id}" data-hal-action="refreshImports" data-hal-consent="1">${label}</button>`;
+            })
+            .join("")}</div>`
+        : "";
+    return `<section class="widget-card hal-situational-hero hal-situational-hero--compact" data-panel="situationalHero" data-hal-widget-key="halSituationalHero">
+      <div class="hal-situational-hero__main">
         ${H.cardHead("SITUATIONAL HERO", "situationalHero", "Living command posture", H.cardIconRaw("widget", "nr2KpiRibbon"))}
         <p class="hal-morning-briefing__sentence text-glow">${H.esc(sentence)}</p>
-        <div class="prompt-chips prompt-chips--live">
-          <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Summarize MTD production">Explain variance</button>
-          <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Show import health">Import health</button>
+        ${kpiHtml}
+        <div class="prompt-chips prompt-chips--live hal-situational-hero__actions">
+          <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Summarize MTD production">Variance</button>
+          <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Show import health">Imports</button>
           <button type="button" class="prompt-chip prompt-chip--action" data-hal-voice-ptt="1">Voice</button>
         </div>
+        ${actuatorHtml}
       </div>
       <div class="hal-situational-hero__alerts" aria-label="HAL exceptions">${alertsHtml}</div>
     </section>`;
@@ -433,12 +412,9 @@ const HalPageCanvas = (function () {
 
   function renderDashboard(ctx, H) {
     return [
-      renderSituationalHero(ctx, H),
-      renderMorningBriefing(ctx, H),
-      renderStatusRail(ctx, H),
+      `<div class="dashboard-grid hal-dashboard-top">${renderSituationalHero(ctx, H)}${renderStatusRail(ctx, H)}</div>`,
       renderWidgetMonitor(ctx, H),
-      renderSurfaces(ctx, H),
-      renderSidenotes(ctx, H),
+      `<div class="hal-compact-mid">${renderSurfaces(ctx, H)}</div>`,
       renderSession(ctx, H),
     ].join("");
   }

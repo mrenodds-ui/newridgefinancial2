@@ -156,7 +156,7 @@ const HalPage = (function () {
   }
 
   function drawerInfoBtn(panelKey, label) {
-    return `<button type="button" class="info-btn" data-hal-drawer="${esc(panelKey)}" title="${esc(label)}" aria-label="${esc(label)}">${uiIcon("info")}<span class="info-btn-label">i</span></button>`;
+    return `<button type="button" class="info-btn" data-hal-drawer="${esc(panelKey)}" title="${esc(label)}" aria-label="${esc(label)}">${uiIcon("info")}<span class="info-btn__label">i</span></button>`;
   }
 
   function formatStatus(value) {
@@ -373,7 +373,7 @@ const HalPage = (function () {
       <ul class="sidenote-list">${listHtml}</ul>
       <form class="sidenote-form" id="hpSideNoteForm" onsubmit="return false">
         <input class="sidenote-input" id="hpSideNoteInput" type="text" maxlength="500" placeholder="${staff ? "Quick note for this station" : "Quick sidenote — local only, HAL monitors changes"}" aria-label="Add sidenote" />
-        <button type="button" class="sidenote-add-btn" data-hal-sidenote-add>${uiIcon("add")} ADD</button>
+        <button type="button" class="sidenote-add" data-hal-sidenote-add>${uiIcon("add")} ADD</button>
       </form>`
       }
       ${
@@ -487,8 +487,16 @@ const HalPage = (function () {
     const reasoningModel = cm.reasoning || {};
     const escalationModel = cm.escalation || {};
     const inventory = rd.availableModels || [];
-    const inventoryPreview = inventory.slice(0, 4).join(" · ");
-    const inventoryMore = inventory.length > 4 ? ` +${inventory.length - 4} more` : "";
+    const configuredKeys = [
+      localModel.model,
+      escalationModel.model,
+      reasoningModel.model,
+      cm.helper && cm.helper.model,
+      cm.general && cm.general.model,
+    ].filter(Boolean);
+    const inventoryOrdered = [...new Set([...configuredKeys, ...inventory])];
+    const inventoryPreview = inventoryOrdered.slice(0, 8).join(" · ");
+    const inventoryMore = inventoryOrdered.length > 8 ? ` +${inventoryOrdered.length - 8} more` : "";
     const runtimes = [cfg.localModel, cfg.reasoningModel, cfg.escalationModel];
     const webResearchOn = cfg.webResearch && cfg.webResearch.enabled === true;
     const cloudCfg = cfg.cloudReasoning || {};
@@ -508,7 +516,7 @@ const HalPage = (function () {
 
     return `
       <div class="ai-readiness-panel">
-        <p class="ai-readiness-title">LOCAL AI READINESS <span class="text-muted">${displayLabel}</span></p>
+        <p class="ai-readiness-panel__title">LOCAL AI READINESS <span class="text-muted">${displayLabel}</span></p>
         <dl class="stats-grid stats-grid--ai">
           ${aiStatRow("LOCAL AI SERVICE", `${svc.status || "Unknown"} · ${svc.name || "—"}`, svc.status === "Detected")}
           ${aiStatRow("OLLAMA API", `${api.status || "Unknown"} · ${api.version || "—"}`, api.status === "Reachable")}
@@ -561,8 +569,8 @@ const HalPage = (function () {
       <div class="stress-panel__row">
         <label class="stress-label" for="hpStressCount">Questions</label>
         <input class="stress-input" id="hpStressCount" type="number" min="100" step="1000" value="${esc(total)}" ${running ? "disabled" : ""} />
-        <button type="button" class="stress-run-btn" id="hpStressRun" data-hal-stress-run ${running ? "disabled" : ""}>${uiIcon("check")} Run</button>
-        <button type="button" class="stress-stop-btn" id="hpStressStop" data-hal-stress-stop ${running ? "" : "disabled"}>${uiIcon("close")} Stop</button>
+        <button type="button" class="stress-run" id="hpStressRun" data-hal-stress-run ${running ? "disabled" : ""}>${uiIcon("check")} Run</button>
+        <button type="button" class="stress-stop" id="hpStressStop" data-hal-stress-stop ${running ? "" : "disabled"}>${uiIcon("close")} Stop</button>
       </div>
       <div class="stress-bar" aria-hidden="true"><span class="stress-bar-fill" id="hpStressBar" style="width:${pct}%"></span></div>
       <dl class="stress-stats">
@@ -585,7 +593,7 @@ const HalPage = (function () {
     return `<div class="agent-health-panel">
       <div class="stress-head">
         <h4>HAL RUNTIME HEALTH</h4>
-        <span class="stress-status stress-status stress-status--ok">${esc(h.architectureVersion || "hal-agent")}</span>
+        <span class="stress-status stress-status--ok">${esc(h.architectureVersion || "hal-agent")}</span>
       </div>
       <dl class="stress-stats">
         <div><dt>Model</dt><dd>${esc((rd.configuredModels && rd.configuredModels.local && rd.configuredModels.local.model) || rd.runningModel || "—")}</dd></div>
@@ -677,7 +685,7 @@ const HalPage = (function () {
     const dashHtml = Canvas && Canvas.renderDashboard ? Canvas.renderDashboard(ctx, H) : Canvas ? Canvas.render(ctx, H) : widgetsMonitorHtml(halWidgetFeed);
     const gridClass =
       Canvas && Canvas.gridClassName ? Canvas.gridClassName() : "dashboard-grid";
-    const halBodyInner = `<div class="hal-dashboard hal-cyber-grid"><div class="content-wrapper">
+    const halBodyInner = `<div class="hal-dashboard hal-dashboard--compact hal-cyber-grid"><div class="content-wrapper">
       <div class="${gridClass}">${dashHtml}</div>
       <aside class="chat-rail" aria-label="Ask HAL">${askHtml}</aside>
     </div></div>`;
@@ -685,9 +693,9 @@ const HalPage = (function () {
       typeof PageViews !== "undefined" && PageViews.buildPageState
         ? PageViews.buildPageState(halData, "hal", halWidgetFeed, ctx.halProgramSnapshot)
         : { pageId: "hal", halData, halWidgetFeed, programSnapshot: ctx.halProgramSnapshot };
-    const PC = typeof PageChrome !== "undefined" ? PageChrome : null;
-    if (PC && typeof PC.pageContent === "function") {
-      root.innerHTML = `<article class="ms-page ms-page--hal" data-pv-page="hal">${PC.pageContent(halState, halBodyInner, {
+    const MC = typeof MoonshotMockupChrome !== "undefined" ? MoonshotMockupChrome : null;
+    if (MC && typeof MC.pageContent === "function") {
+      root.innerHTML = `<article class="ms-page ms-page--hal" data-ms-page="hal">${MC.pageContent(halState, halBodyInner, {
         halToolbar: halStatusToolbar,
       })}</article>`;
       const pilot = typeof HalPilotWidgets !== "undefined" ? HalPilotWidgets : null;

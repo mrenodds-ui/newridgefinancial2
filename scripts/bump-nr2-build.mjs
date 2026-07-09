@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Bump NR2 build version across manifest, page schema, and index.html cache busts.
+ * Bump NR2 build version across manifest, moonshot page registry, and index.html cache busts.
  *
  * Usage:
  *   node scripts/bump-nr2-build.mjs hal-95
@@ -17,7 +17,7 @@ const nr2Dir = join(repoRoot, "NewRidgeFinancial2");
 const manifestPath = join(nr2Dir, "nr2-build.json");
 const siteManifestPath = join(nr2Dir, "site", "nr2-build.json");
 const indexPath = join(nr2Dir, "site", "index.html");
-const schemaPath = join(nr2Dir, "site", "page-schema.js");
+const schemaPath = join(nr2Dir, "site", "moonshot-page-registry.js");
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));

@@ -41,8 +41,8 @@ if (!globalThis.HAL) {
   globalThis.HAL = { skills: { defineSource() {} } };
 }
 require(join(siteDir, "hal-skills.js"));
-require(join(siteDir, "page-schema.js"));
-require(join(siteDir, "page-chrome.js"));
+require(join(siteDir, "moonshot-page-registry.js"));
+require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
 require(join(siteDir, "page-canvas-data.js"));
 require(join(siteDir, "page-canvas.js"));
 require(join(siteDir, "components.js"));
@@ -64,30 +64,28 @@ const pageIds = ["financial", "documents", "office-manager"];
 for (const pageId of pageIds) {
   const html = await PageViews.previewPageHtml(halData, pageId, feed, snap);
   assertOk(`${pageId} page renders`, html.includes("ms-page"), "mockup page surface");
+  assertOk(`${pageId} mock embed gate`, html.includes("ms-mockup-preview-frame"), "elite mock iframe gate");
+  assertOk(`${pageId} embed route`, html.includes(`/mockup-elite-embed/${pageId}`), "mockup elite embed src");
   assertOk(`${pageId} no mock shell`, !html.includes("pv--mock-image"), "no mock image");
 }
 
 const finHtml = await PageViews.previewPageHtml(halData, "financial", feed, snap);
 assertOk(
-  "financial month-end surface",
-  finHtml.includes("Production vs QuickBooks Reconciliation") ||
-    finHtml.includes("Month-End Close Checklist") ||
-    finHtml.includes("pv-month-end-blocker"),
-  "reconciliation or month-end panel",
+  "financial mock preview banner",
+  finHtml.includes("Elite mock preview") && finHtml.includes("ms-mockup-preview-iframe"),
+  "financial shows elite mock iframe",
 );
 
 const payload = MonthEndClose.buildReconciliationPayload(snap);
 assertOk("month-end payload builds", Boolean(payload && payload.checklist), `period=${payload?.period || "?"}`);
 
 const docsHtml = await PageViews.previewPageHtml(halData, "documents", feed, snap);
-assertOk("documents source breakdown", docsHtml.includes("Source breakdown"), "source panel present");
+assertOk("documents mock embed", docsHtml.includes("mockup-elite-embed/documents"), "documents iframe src");
 const breakdown = PageCanvasData.documentsSourceBreakdown();
 assertOk("documents source stats", Array.isArray(breakdown) && breakdown.length === 4, breakdown.map((r) => r.label).join(", "));
 
 const omHtml = await PageViews.previewPageHtml(halData, "office-manager", feed, snap);
-assertOk("office-manager ops health", omHtml.includes("Practice data") || omHtml.includes("Integration health"), "ops data panel");
-assertOk("ops health refresh wired", omHtml.includes("data-ops-refresh-health"), "refresh button");
-assertOk("ops support bundle wired", omHtml.includes("data-ops-support-bundle"), "support bundle button");
+assertOk("office-manager mock embed", omHtml.includes("mockup-elite-embed/office-manager"), "office-manager iframe src");
 
 const opsText = PortalOps.formatOpsHealthFromSnapshot(snap);
 assertOk("ops health formatter", opsText.includes("Import bundle") || opsText.includes("Journal queue"), opsText.split("\n")[0]);

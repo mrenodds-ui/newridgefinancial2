@@ -996,7 +996,12 @@ const HalAgent = (function () {
         if (!bridge || typeof bridge.rememberHalFact !== "function") {
           return { ok: false, summary: "Learning requires the NR2 server." };
         }
-        const text = String(args.text || args.query || "").trim();
+        let text = String(args.text || args.query || "").trim();
+        if (!text) {
+          const raw = String(args.query || ctx.lastQuery || "");
+          const m = raw.match(/(?:remember|save|learn|note)\s+(?:this|that)\s*:?\s*(.+)/i);
+          if (m && m[1]) text = m[1].trim();
+        }
         if (!text) return { ok: false, summary: "No fact text to remember." };
         try {
           const saved = await bridge.rememberHalFact(text, { source: args.source || "staff:remember" });
@@ -1269,6 +1274,73 @@ const HalAgent = (function () {
           summary: text.slice(0, 2500) || "No matching memories.",
           count: payload && payload.count ? payload.count : 0,
         };
+      },
+    },
+    search_payer_reference: {
+      label: "Search dental payer reference (routing + narrative hints)",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.searchPayerReference !== "function") {
+          return { ok: false, summary: "Payer reference search requires the NR2 server." };
+        }
+        const payload = await bridge.searchPayerReference(String(args.query || args.payer || ""), 4);
+        const text = payload && payload.text ? String(payload.text) : "No payer reference matches.";
+        return {
+          ok: !!(payload && payload.count),
+          summary: text.slice(0, 2500) || "No payer reference matches.",
+          count: payload && payload.count ? payload.count : 0,
+        };
+      },
+    },
+    list_eligibility_cache: {
+      label: "List cached eligibility snapshots (PHI-redacted)",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.listEligibilityCache !== "function") {
+          return { ok: false, summary: "Eligibility cache requires the NR2 server." };
+        }
+        const payload = await bridge.listEligibilityCache(Number(args.limit || 8));
+        const text = payload && payload.text ? String(payload.text) : "No fresh eligibility cache entries.";
+        return {
+          ok: !!(payload && payload.count),
+          summary: text.slice(0, 2500) || "No fresh eligibility cache entries.",
+          count: payload && payload.count ? payload.count : 0,
+        };
+      },
+    },
+    fetch_eligibility_271: {
+      label: "Fetch eligibility via clearinghouse 271 (stub)",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.fetchEligibility271 !== "function") {
+          return { ok: false, summary: "271 fetch requires the NR2 server." };
+        }
+        const payload = await bridge.fetchEligibility271({
+          payerName: String(args.payerName || args.payer || ""),
+          payerId: String(args.payerId || args.payer_id || ""),
+          memberId: String(args.memberId || args.member_id || ""),
+          providerNpi: String(args.providerNpi || args.npi || ""),
+          subscriberLastName: String(args.subscriberLastName || args.lastName || ""),
+          subscriberDob: String(args.subscriberDob || args.dateOfBirth || ""),
+          vendor: String(args.vendor || "auto"),
+        });
+        const summary = payload && payload.message ? String(payload.message) : payload && payload.error ? String(payload.error) : "271 fetch complete.";
+        return { ok: !!(payload && payload.ok), summary: summary.slice(0, 2500) };
       },
     },
     read_program_file: {
@@ -1803,10 +1875,33 @@ const HalAgent = (function () {
     if (/\b(how do i|help with|troubleshoot|why is my|operator help)\b/i.test(query)) {
       gather.push("read_program_help");
     }
-    if (/\b(remember|recall|you said|last time|memory)\b/i.test(query)) {
+    if (/\b(remember|recall|you said|last time|memory|memoai|learned)\b/i.test(query)) {
       gather.push("search_hal_memories");
     }
-    if (/\blearn this|save this|note that\b/i.test(query)) {
+    if (
+      /\b(claim|denied|denial|appeal|narrative|cdt|crown|srp|prophy|implant|endo|payer|insurance|eob|era|d2740|d4341|d6010|d3330)\b/i.test(
+        query,
+      )
+    ) {
+      gather.push("search_hal_memories");
+    }
+    if (/\b(tax|1120|k-1|scorp|quickbooks|softdent|import|a\/r|ar aging|hipaa|schedule|hygiene|closeout|osha)\b/i.test(query)) {
+      gather.push("search_hal_memories");
+    }
+    if (
+      /\b(payer reference|payer id|routing id|denial theme|common denial)\b/i.test(query) ||
+      (/\b(delta dental|metlife|cigna|guardian|aetna|uhc|united concordia|humana|medicaid|bcbs|blue cross)\b/i.test(query) &&
+        /\b(payer|insurance|denial|narrative|eob|claim)\b/i.test(query))
+    ) {
+      gather.push("search_payer_reference");
+    }
+    if (/\b(eligibility cache|deductible remaining|annual max remaining|benefit check|270|271|coinsurance)\b/i.test(query)) {
+      gather.push("list_eligibility_cache");
+    }
+    if (/\b(fetch 271|270\/271|clearinghouse eligibility|run eligibility)\b/i.test(query)) {
+      gather.push("fetch_eligibility_271");
+    }
+    if (/\blearn this|save this|note that|remember this|remember that|our office always|from now on\b/i.test(query)) {
       gather.push("remember_fact");
     }
     if (isTaskCompletionQuery(query)) {
@@ -1898,6 +1993,12 @@ const HalAgent = (function () {
       /\bdraft with hal\b/i.test(query)
     ) {
       tools.push("draft_insurance_narrative");
+    }
+    if (/\b(denial|narrative|eob|payer|insurance claim|appeal)\b/i.test(query)) {
+      tools.push("search_payer_reference");
+    }
+    if (/\b(eligibility|deductible|annual max|copay|benefit remaining|270|271)\b/i.test(query)) {
+      tools.push("list_eligibility_cache");
     }
     if (
       /\bsoftdent\b.*\b(odbc|extract|sd_|sqlite)\b|\bodbc\b.*\bsoftdent\b|\bsd_\w+\b|\bextract status\b/i.test(query)
@@ -2432,6 +2533,25 @@ const HalAgent = (function () {
     workingMemory.updatedAt = new Date().toISOString();
     if (typeof HalCore !== "undefined" && HalCore.updateSessionSummary) {
       workingMemory.sessionSummary = HalCore.updateSessionSummary(workingMemory.turns, workingMemory.sessionSummary);
+    }
+    if (meta && (meta.claimId || meta.narrativeId || meta.payer || meta.topic)) {
+      const bridge =
+        typeof DesktopBridge !== "undefined"
+          ? DesktopBridge
+          : typeof window !== "undefined" && window.DesktopBridge
+            ? window.DesktopBridge
+            : null;
+      if (bridge && typeof bridge.updateHalSessionContext === "function") {
+        bridge
+          .updateHalSessionContext({
+            claimId: meta.claimId || "",
+            narrativeId: meta.narrativeId || "",
+            payer: meta.payer || "",
+            page: meta.focus || workingMemory.currentPage || "",
+            topic: meta.topic || (meta.intent ? String(meta.intent) : ""),
+          })
+          .catch(() => {});
+      }
     }
     memoryDirty = true;
   }

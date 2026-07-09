@@ -1,17 +1,27 @@
-# Local Quantized AI (AMD Radeon RX 9060 XT 16GB)
+# Local Quantized AI (AMD Radeon AI PRO R9700 32GB)
 
-This repo routes **frontend-facing** HAL interactions through a **14B** model and **backend/HAL server** review through the same **14B** tag on a separate port. The browser never loads models directly; React calls backend HAL APIs, which call local model runtimes.
+> **Current workstation layout (2026-07-08):** GPU-pinned `hal-chat:8b` + `qwen3:30b` via Ollama on port 11434.
+> Install/refresh: `NewRidgeFinancial2/model-automation/Install-HAL-GPU-Chat-Escalate-Lanes.ps1`
+> Benchmark/router script: `local-llm-benchmark/ollama_smart_router.py`
+
+This repo routes **frontend-facing** HAL interactions through the **8B chat lane** and **30B escalation lane** on a single Ollama instance. The browser never loads models directly; the NR2 site calls HAL APIs / loopback Ollama on `127.0.0.1:11434`.
 
 ## Runtime selection
 
 | Check | Result on this workstation |
 | --- | --- |
-| ROCm (`rocminfo`, `rocm-smi`) | Not installed / not on PATH (Windows) |
-| Vulkan (`vulkaninfo`) | Available |
-| Preferred stack | **Ollama with Vulkan** (already integrated) |
+| GPU | AMD Radeon AI PRO R9700 · 32 GB VRAM |
+| ROCm (`rocminfo`, `rocm-smi`) | Via Ollama bundle (Windows) |
+| Preferred stack | **Ollama + ROCm** (integrated on Windows build) |
+| Pinned models | `hal-chat:8b` (~5 GB) + `qwen3:30b` (~18 GB) |
+| On-demand | `mistral-small3.1:24b-fast`, `hal-helper:14b` |
 | Fallback | **llama.cpp** server with Vulkan (`AI_RUNTIME=llama_cpp`) |
 
-ROCm is not assumed on Windows. Do not add CUDA-only tooling. This repo targets AMD Radeon on Windows with **Vulkan-first Ollama**; use **llama.cpp + Vulkan** when Ollama is unavailable. ROCm is optional on Linux only when cleanly supported for your GPU.
+ROCm is not assumed on Windows for custom tooling. Do not add CUDA-only tooling. This repo targets AMD Radeon on Windows with **Ollama**; use **llama.cpp + Vulkan** when Ollama is unavailable.
+
+### Legacy 16 GB layout (RX 9060 XT)
+
+Dual pin `hal-chat:8b` + `hal-helper:14b` only — see `NewRidgeFinancial2/model-automation/Install-HAL-GPU-Dual-Lanes.ps1`.
 
 ## Local-only artifacts (never commit)
 

@@ -98,7 +98,7 @@ const TaxEngine = (function () {
       { label: "Est. owner tax", value: formatMoney(totalOwnerTax), tone: "warning", hint: "Federal + Kansas · CPA review" },
     ];
 
-    return {
+    const plan = {
       taxYear: o.taxYear || TAX_YEAR,
       entity: ENTITY,
       state: STATE,
@@ -120,15 +120,34 @@ const TaxEngine = (function () {
         { id: "kansas", label: "Kansas income (est.)", amount: kansasTax },
       ],
       quarterlyEstimates: quarterly,
-      memoCitations: [
+      memoCitationIds: [
         "scorp-reasonable-compensation-dental",
         "scorp-section-199a-qbi",
         "kansas-pte-tax-election",
         "scorp-quickbooks-readonly-prep",
+        "nr2-taxes-page-scope",
+        "scorp-1120s-deadline",
       ],
       kpis,
       hasBookData: book > 0,
     };
+    const resolver =
+      typeof HalMemoIndex !== "undefined" && HalMemoIndex.resolveCitations
+        ? HalMemoIndex.resolveCitations.bind(HalMemoIndex)
+        : (ids) =>
+            (ids || []).map((id) => ({
+              id,
+              title: String(id || "")
+                .split("-")
+                .filter(Boolean)
+                .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(" "),
+              detail: "",
+              source: "",
+            }));
+    plan.memoCitations = resolver(plan.memoCitationIds || []);
+    delete plan.memoCitationIds;
+    return plan;
   }
 
   function parseMoneyString(value) {

@@ -1031,28 +1031,13 @@ const WorkstationPage = (function () {
     const station = esc(ctx.stationLabel || "Workstation");
     const tabsHtml = workstationPageTabBarHtml(ctx);
     const panelsHtml = `<div class="ws-page-panels">${sendMessagePanelHtml(ctx)}${historyPanelHtml(ctx)}${officeChatPanelHtml(ctx)}${syncPanelHtml(ctx)}${askHalPanelHtml(ctx)}</div>`;
-    const toolbar = `<span class="hp-status"><i class="hp-status__dot hp-status__dot--ok" aria-hidden="true"></i>STATION <b>${station}</b></span>`;
-    const PC = typeof PageChrome !== "undefined" ? PageChrome : null;
     const compact =
       typeof globalThis !== "undefined" && globalThis.NR2_WORKSTATION_ONLY;
-    if (compact) {
-      root.innerHTML = `<article class="pv pv--workstation pv--app pv--workstation-compact pv--sidenotes" data-pv-page="workstation">
+    const wsClass = compact ? "ws-page ws-page--workstation ws-page--compact" : "ws-page ws-page--workstation";
+    root.innerHTML = `<article class="${wsClass}" data-ws-page="workstation">
         ${tabsHtml}
         ${panelsHtml}
       </article>`;
-    } else if (PC && typeof PC.canvasShell === "function") {
-      const state =
-        typeof PageViews !== "undefined" && PageViews.buildPageState
-          ? PageViews.buildPageState(ctx.halData, "workstation", ctx.halWidgetFeed, ctx.halProgramSnapshot)
-          : { pageId: "workstation", halData: ctx.halData };
-      root.innerHTML = `<article class="pv pv--workstation pv--app pv--canvas" data-pv-page="workstation">
-        ${tabsHtml}
-        ${PC.canvasShell(state, { toolbarActions: toolbar, compact: true })}
-        <div class="pv-canvas-body">${panelsHtml}</div>
-      </article>`;
-    } else {
-      root.innerHTML = `${tabsHtml}${panelsHtml}`;
-    }
 
     const qaLog = root.querySelector("#wsQaLog");
     const officeLog = root.querySelector("#wsOfficeLog");

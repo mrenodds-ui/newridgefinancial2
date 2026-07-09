@@ -3,51 +3,6 @@
  * Matches .local_logs/.../page_mockups/*.html; no pv-canvas shell.
  */
 
-/* Legacy schema leak guard — mockup DOM must never carry old shell classes */
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-shell,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv--canvas,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-hero,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-body,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-toolbar,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-insight,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-filter-pill,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-hal-command-wrap,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-hal-command__box,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-canvas-command,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-table-wrap,
-.app--moonshot-mockup:not(.nr2-workstation-app) .hp-grid,
-.app--moonshot-mockup:not(.nr2-workstation-app) .hp-card,
-.app--moonshot-mockup:not(.nr2-workstation-app) .pv-card {
-  display: none !important;
-}
-
-/* All staff + HAL pages — block legacy styles.css pv/hp/hal-chat bleed inside page body */
-.app--moonshot-mockup .ms-page .pv-badge,
-.app--moonshot-mockup .ms-page .pv-chip,
-.app--moonshot-mockup .ms-page .pv-card,
-.app--moonshot-mockup .ms-page .pv-table,
-.app--moonshot-mockup .ms-page .pv-input,
-.app--moonshot-mockup .ms-page .pv-field,
-.app--moonshot-mockup .ms-page .pv-pill,
-.app--moonshot-mockup .ms-page .pv-canvas-shell,
-.app--moonshot-mockup .ms-page .pv-canvas-hero,
-.app--moonshot-mockup .ms-page .pv-canvas-body,
-.app--moonshot-mockup .ms-page .pv-canvas-toolbar,
-.app--moonshot-mockup .ms-page .pv-canvas-insight,
-.app--moonshot-mockup .ms-page .pv-filter-pill,
-.app--moonshot-mockup .ms-page .pv-hal-command-wrap,
-.app--moonshot-mockup .ms-page .pv-hal-command__box,
-.app--moonshot-mockup .ms-page .pv-hal-command,
-.app--moonshot-mockup .ms-page .pv-canvas-command,
-.app--moonshot-mockup .ms-page .pv-hero-period,
-.app--moonshot-mockup .ms-page .pv-hero-range,
-.app--moonshot-mockup .ms-page .hal-chat,
-.app--moonshot-mockup .ms-page .hal-msg,
-.app--moonshot-mockup .ms-page [class*=" hp-"],
-.app--moonshot-mockup .ms-page [class^="hp-"] {
-  display: none !important;
-}
-
 .app--moonshot-mockup {
   --bg-primary: #181818;
   --bg-surface: #1f1f1f;
@@ -2403,4 +2358,16 @@
   .app--moonshot-mockup .ms-page--hal .hal-panel--sidenotes {
     grid-column: span 4;
   }
+}
+
+/* Moonshot-only staff render — suppress legacy pv/hp shells when layout engine owns the page */
+.app--moonshot-mockup #page-canvas [data-nr2-layout="moonshot-layout"] {
+  display: block;
+}
+
+.app--moonshot-mockup #page-canvas .pv-canvas,
+.app--moonshot-mockup #page-canvas .pv-page,
+.app--moonshot-mockup #page-canvas .hp-canvas,
+.app--moonshot-mockup #page-canvas [data-nr2-layout="moonshot-mockup-grid"] {
+  display: none !important;
 }

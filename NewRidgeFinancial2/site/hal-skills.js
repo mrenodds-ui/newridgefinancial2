@@ -4415,49 +4415,74 @@ if (typeof window !== "undefined") {
 }
 
 /**
- * hal-skills.js — register missing datasets and health checks
+ * hal-skills.js — register missing datasets and health checks (browser HAL bus only)
  */
+const halSkillsBusApi =
+  typeof HAL !== "undefined" && HAL && HAL.skills && typeof HAL.skills.defineSource === "function"
+    ? HAL.skills
+    : typeof globalThis !== "undefined" &&
+        globalThis.HAL &&
+        globalThis.HAL.skills &&
+        typeof globalThis.HAL.skills.defineSource === "function"
+      ? globalThis.HAL.skills
+      : null;
 
-HAL.skills.defineSource('softdent', {
-  datasets: [
-    'softdent.dashboard','softdent.claims','softdent.clinicalNotes',
-    'softdent.ar','softdent.newPatients','softdent.treatmentPlans',
-    'softdent.caseAcceptance','softdent.hygieneRecall','softdent.operatory',
-    'softdent.procedures',        // NEW
-    'softdent.claimStatus'        // NEW
-  ],
-  healthCheck() {
-    const critical = ['softdent.dashboard','softdent.claims','softdent.procedures','softdent.claimStatus'];
-    const present = critical.filter(k => HAL.bus?.snapshot?.datasets?.[k]);
-    const ok = present.length === critical.length;
-    return {
-      status: ok ? 'SUCCESS' : 'DEGRADED',
-      detail: ok ? 'All critical SoftDent datasets present' : `${present.length}/${critical.length} critical datasets present`
-    };
-  }
-});
+if (halSkillsBusApi) {
+  halSkillsBusApi.defineSource("softdent", {
+    datasets: [
+      "softdent.dashboard",
+      "softdent.claims",
+      "softdent.clinicalNotes",
+      "softdent.ar",
+      "softdent.newPatients",
+      "softdent.treatmentPlans",
+      "softdent.caseAcceptance",
+      "softdent.hygieneRecall",
+      "softdent.operatory",
+      "softdent.procedures",
+      "softdent.claimStatus",
+    ],
+    healthCheck() {
+      const bus = (typeof HAL !== "undefined" && HAL) || globalThis.HAL;
+      const critical = ["softdent.dashboard", "softdent.claims", "softdent.procedures", "softdent.claimStatus"];
+      const present = critical.filter((k) => bus?.bus?.snapshot?.datasets?.[k]);
+      const ok = present.length === critical.length;
+      return {
+        status: ok ? "SUCCESS" : "DEGRADED",
+        detail: ok ? "All critical SoftDent datasets present" : `${present.length}/${critical.length} critical datasets present`,
+      };
+    },
+  });
 
-HAL.skills.defineSource('quickbooks', {
-  datasets: [
-    'quickbooks.revenue','quickbooks.profitAndLoss','quickbooks.expenses',
-    'quickbooks.expenseCategories','quickbooks.ar'
-  ],
-  healthCheck() {
-    const staleThreshold = 1440;
-    const sets = [
-      'quickbooks.revenue','quickbooks.profitAndLoss','quickbooks.expenses',
-      'quickbooks.expenseCategories','quickbooks.ar'
-    ];
-    let staleCount = 0;
-    sets.forEach(k => {
-      const ds = HAL.bus?.snapshot?.datasets?.[k];
-      if (!ds) return;
-      const age = ds.freshnessMinutes || ds.ageMinutes || 0;
-      if (age > staleThreshold) staleCount++;
-    });
-    return {
-      status: staleCount === 0 ? 'SUCCESS' : (staleCount >= 2 ? 'DEGRADED' : 'WARNING'),
-      detail: staleCount > 0 ? `${staleCount} QB dataset(s) stale (>24h)` : 'All QB datasets fresh'
-    };
-  }
-});
+  halSkillsBusApi.defineSource("quickbooks", {
+    datasets: [
+      "quickbooks.revenue",
+      "quickbooks.profitAndLoss",
+      "quickbooks.expenses",
+      "quickbooks.expenseCategories",
+      "quickbooks.ar",
+    ],
+    healthCheck() {
+      const bus = (typeof HAL !== "undefined" && HAL) || globalThis.HAL;
+      const staleThreshold = 1440;
+      const sets = [
+        "quickbooks.revenue",
+        "quickbooks.profitAndLoss",
+        "quickbooks.expenses",
+        "quickbooks.expenseCategories",
+        "quickbooks.ar",
+      ];
+      let staleCount = 0;
+      sets.forEach((k) => {
+        const ds = bus?.bus?.snapshot?.datasets?.[k];
+        if (!ds) return;
+        const age = ds.freshnessMinutes || ds.ageMinutes || 0;
+        if (age > staleThreshold) staleCount++;
+      });
+      return {
+        status: staleCount === 0 ? "SUCCESS" : staleCount >= 2 ? "DEGRADED" : "WARNING",
+        detail: staleCount > 0 ? `${staleCount} QB dataset(s) stale (>24h)` : "All QB datasets fresh",
+      };
+    },
+  });
+}

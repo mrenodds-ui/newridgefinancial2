@@ -1,7 +1,7 @@
 {
   "schemaEpoch": "moonshot-mockup",
   "staffRenderMode": "mock-embed",
-  "description": "Financial program mock-only bundle (8765) — staff pages embed elite HTML; HAL tab stays live.",
+  "description": "Financial program mock-only bundle (8765) — staff pages embed elite HTML; HAL tab stays live. Layout manifest not loaded until live-wire sign-off.",
   "shell": [
     "index.html",
     "styles.css",

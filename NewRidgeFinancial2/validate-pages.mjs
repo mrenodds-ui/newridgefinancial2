@@ -20,6 +20,8 @@ const indexHtml = readFileSync(join(siteDir, "index.html"), "utf8");
 const buildManifest = JSON.parse(readFileSync(join(__dirname, "nr2-build.json"), "utf8"));
 const expectedAssetVersion = buildManifest.assetVersion;
 const stylesCss = readFileSync(join(siteDir, "styles.css"), "utf8");
+const themeCss = readFileSync(join(siteDir, "nr2-moonshot-mockup-theme.css"), "utf8");
+const vocabCss = readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8");
 
 require(join(siteDir, "empty-states.js"));
 require(join(siteDir, "import-diagnostics.js"));
@@ -39,7 +41,6 @@ require(join(siteDir, "hal-widget-master-chart.js"));
 require(join(siteDir, "hal-page-widgets.js"));
 require(join(siteDir, "hal-live-widget-bridge.js"));
 const HalPilotWidgets = require(join(siteDir, "hal-pilot-widgets.js"));
-require(join(siteDir, "moonshot-page-layouts.js"));
 require(join(siteDir, "moonshot-page-registry.js"));
 require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
 require(join(siteDir, "tax-engine.js"));
@@ -62,7 +63,7 @@ const previewWidgetFeed = HalSkills.buildWidgetFeed(previewSnapshot);
 
 const MOCKUP_EPOCH = PageSchema.LAYOUT_EPOCH === "moonshot-mockup";
 
-const MOCK_PREVIEW_CHECKS = ["ms-mockup-preview-gate", "Mockup preview only", "page_mockups_elite"];
+const MOCK_PREVIEW_CHECKS = ["ms-mockup-preview-frame", "mockup-elite-embed", "Elite mock preview"];
 
 const FUNCTIONAL_PAGES = [
   { id: "financial", checks: MOCK_PREVIEW_CHECKS },
@@ -107,7 +108,7 @@ for (const page of FUNCTIONAL_PAGES) {
   assert.ok(!html.match(/\bhp-[a-z]/), `${page.id} must not use legacy hp-* class prefix`);
   assert.ok(!html.includes("data-nr2-chart-host"), `${page.id} must not mount chart overlay hosts`);
   if (page.id === "financial") {
-    assert.ok(html.includes("ms-mockup-preview-gate"), "financial page must use mock preview gate");
+    assert.ok(html.includes("ms-mockup-preview-frame"), "financial page must embed elite mock preview");
     assert.ok(
       html.includes("hal-insight") || html.includes("HAL Insight"),
       "financial page must show HAL insight banner",
@@ -157,8 +158,12 @@ assert.equal(
   "PageSchema.LAYOUT_EPOCH must be moonshot-mockup",
 );
 assert.equal(buildManifest.REQUIRED_EPOCH, "moonshot-mockup", "nr2-build.json must require moonshot-mockup epoch");
-assert.ok(indexHtml.includes("moonshot-page-layouts.js"), "index must load inlined layout manifest");
+assert.equal(buildManifest.staffRenderMode, "mock-embed", "nr2-build.json must use mock-embed staff render mode");
+assert.ok(indexHtml.includes("NR2_STAFF_MOCK_ONLY"), "index must enable staff mock-only mode");
+assert.ok(!indexHtml.includes("moonshot-page-layouts.js"), "index must not load layout manifest in mock-embed mode");
 assert.ok(!indexHtml.includes("moonshot-page-layouts.json"), "index must not load external layout JSON");
+assert.ok(!indexHtml.includes("charts/"), "index must not load chart overlay scripts in mock-embed mode");
+assert.ok(!indexHtml.includes("nr2-tier3.js"), "index must not load tier-3 bundle in mock-embed mode");
 assert.ok(indexHtml.includes("moonshot-page-registry.js"), "index must load Moonshot page registry");
 assert.ok(indexHtml.includes("nr2-moonshot-mockup-chrome.js"), "index must load Moonshot mockup chrome");
 assert.ok(!indexHtml.includes("page-chrome.js"), "index must not load legacy page-chrome.js");
@@ -184,9 +189,11 @@ assert.equal(
 );
 assert.equal(HalPilotWidgets.CANVAS_WIDGET_SCHEMA.mode, "canvas-feed", "staff pages must use canvas feed HAL wiring");
 assert.ok(!stylesCss.includes(".pv-bento"), "styles must not include legacy bento layout rules");
-assert.ok(stylesCss.includes(".pv-canvas-hero"), "styles must include canvas page hero");
-assert.ok(stylesCss.includes(".pv-hal-kanban"), "styles must include Kanban plain styling");
-assert.ok(stylesCss.includes(".pv-hal-pdf"), "styles must include PDF plain styling");
+assert.ok(!stylesCss.includes(".pv-canvas-hero"), "styles must not include legacy pv-canvas hero");
+assert.ok(!stylesCss.includes(".pv-fin-"), "styles must not include legacy financial pv-* blocks");
+assert.ok(themeCss.includes(".ms-page-chrome"), "moonshot theme must include ms-page-chrome");
+assert.ok(themeCss.includes(".widget-card"), "moonshot theme must include widget-card");
+assert.ok(vocabCss.includes(".ms-boot-error"), "mockup vocabulary must include ms-boot-error");
 assert.ok(indexHtml.includes("widget-contract.js"), "index must load WidgetContract");
 assert.ok(indexHtml.includes("snapshot-store.js"), "index must load SnapshotStore");
 assert.ok(indexHtml.includes("runtime-issues.js"), "index must load RuntimeIssues");
@@ -199,16 +206,14 @@ assert.ok(indexHtml.includes("page-canvas-data.js"), "index must load PageCanvas
 assert.ok(indexHtml.includes("page-canvas.js"), "index must load PageCanvas");
 const pageViewsJs = readFileSync(join(siteDir, "page-views.js"), "utf8");
 const pageCanvasJs = readFileSync(join(siteDir, "page-canvas.js"), "utf8");
-const moonshotLayoutJs = readFileSync(join(siteDir, "moonshot-layout-engine.js"), "utf8");
 assert.ok(!pageViewsJs.includes("PAGE_OUTLINES"), "page-views must not use legacy PAGE_OUTLINES");
 assert.ok(!pageViewsJs.includes("MOCK_IMAGES"), "page-views must not use mock image routing");
 assert.ok(!pageViewsJs.includes("readDashboard"), "page-views must not fetch legacy dashboard renderers");
 assert.ok(pageViewsJs.includes("renderBody(pageId"), "page-views must delegate body HTML to PageCanvas");
 assert.ok(pageCanvasJs.includes("PageCanvasData") || pageCanvasJs.includes("dataApi"), "page-canvas must render from HAL program snapshot data");
-assert.ok(pageCanvasJs.includes("ms-mockup-preview-gate"), "page-canvas must gate staff pages on mock HTML previews");
+assert.ok(pageCanvasJs.includes("ms-mockup-preview-frame"), "page-canvas must embed elite mock previews");
 assert.ok(!pageCanvasJs.includes("MoonshotLayoutEngine.render"), "page-canvas must not wire MoonshotLayoutEngine in live path");
-assert.ok(moonshotLayoutJs.includes("moonshot-page-layouts.js"), "moonshot layout engine must load inlined manifest");
-assert.ok(!moonshotLayoutJs.includes("moonshot-page-layouts.json"), "layout engine must not fetch external layout JSON");
+assert.ok(Object.keys(PageSchema.PAGES || {}).length >= 10, "PageSchema must build pages from registry metadata");
 assert.ok(!pageCanvasJs.includes("renderFinancial"), "page-canvas must not use legacy renderFinancial");
 assert.ok(!pageCanvasJs.includes("renderQuickbooksLegacy"), "page-canvas must not use legacy QuickBooks renderer");
 const pageCanvasDataJs = readFileSync(join(siteDir, "page-canvas-data.js"), "utf8");

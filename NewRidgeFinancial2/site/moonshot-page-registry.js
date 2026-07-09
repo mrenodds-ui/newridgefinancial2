@@ -250,9 +250,10 @@ const MoonshotPageRegistry = (function () {
   function buildPages() {
     const m = loadManifest();
     const pages = (m && m.pages) || {};
+    const pageIds = Object.keys(pages).length ? Object.keys(pages) : Object.keys(PAGE_META);
     const out = {};
-    for (const id of Object.keys(pages)) {
-      const spec = pages[id];
+    for (const id of pageIds) {
+      const spec = pages[id] || {};
       const meta = PAGE_META[id] || {};
       out[id] = {
         id,

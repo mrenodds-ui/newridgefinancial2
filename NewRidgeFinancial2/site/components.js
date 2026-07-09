@@ -275,10 +275,9 @@ const UI = (function () {
   function EmptyState(opts) {
     const o = opts || {};
     return `
-      <div class="pv-state pv-state--empty" role="status">
-        <div class="pv-state__icon">${o.icon || (typeof AppIcons !== "undefined" ? AppIcons.ui("empty") : "")}</div>
-        <strong class="pv-state__title">${esc(o.title || "Nothing here yet")}</strong>
-        <p class="pv-state__msg">${esc(o.message || "")}</p>
+      <div class="ms-boot-error" role="status">
+        <strong class="ms-boot-error__title">${esc(o.title || "Nothing here yet")}</strong>
+        <p class="ms-boot-error__msg">${esc(o.message || "")}</p>
         ${o.action || ""}
       </div>`;
   }
@@ -287,9 +286,9 @@ const UI = (function () {
   function LoadingState(opts) {
     const o = opts || {};
     return `
-      <div class="pv-state pv-state--loading" role="status" aria-live="polite">
+      <div class="ms-boot-error" role="status" aria-live="polite">
         <div class="pv-spinner" aria-hidden="true"></div>
-        <span class="pv-state__msg">${esc(o.label || "Loading…")}</span>
+        <span class="ms-boot-error__msg">${esc(o.label || "Loading…")}</span>
       </div>`;
   }
 
@@ -298,10 +297,9 @@ const UI = (function () {
     const o = opts || {};
     const retry = o.retryLabel !== null ? Button({ label: o.retryLabel || "Retry", variant: "secondary", attrs: { "data-retry": "1" } }) : "";
     return `
-      <div class="pv-state pv-state--error" role="alert">
-        <div class="pv-state__icon">${typeof AppIcons !== "undefined" ? AppIcons.ui("error") : ""}</div>
-        <strong class="pv-state__title">${esc(o.title || "Something went wrong")}</strong>
-        <p class="pv-state__msg">${esc(o.message || "Please try again.")}</p>
+      <div class="ms-boot-error" role="alert">
+        <strong class="ms-boot-error__title">${esc(o.title || "Something went wrong")}</strong>
+        <p class="ms-boot-error__msg">${esc(o.message || "Please try again.")}</p>
         ${o.onRetry === false ? "" : retry}
       </div>`;
   }

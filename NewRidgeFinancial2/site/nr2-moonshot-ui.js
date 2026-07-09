@@ -597,7 +597,7 @@ const NR2MoonshotUI = (function () {
     ) {
       return;
     }
-    if (root.querySelector(".ms-mockup-preview-gate")) return;
+    if (root.querySelector(".ms-mockup-preview-gate, .ms-mockup-preview-frame")) return;
     const isCanvas = typeof PageCanvas !== "undefined" && PageCanvas.hasPage && PageCanvas.hasPage(pageId);
     if (isCanvas) {
       await enhanceCanvasCharts(pageId, root);

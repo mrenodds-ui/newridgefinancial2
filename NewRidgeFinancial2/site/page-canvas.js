@@ -1180,15 +1180,16 @@ const PageCanvas = (function () {
 
   function mockupPreviewGate(pageId) {
     const H = buildMoonshotHelpers();
-    const mockPath = `.local_logs/moonshot_financial_eval/page_mockups_elite/${pageId}.html`;
     const noticeHtml = canvasImportNotice(pageImportNotice(pageId));
-    const gate = `<section class="widget-card col-12 ms-mockup-preview-gate" data-ms-page-gate="${H.esc(pageId)}">
-      <div class="widget-header"><span class="widget-title">Mockup preview only</span><span class="ms-muted">Live wiring disabled</span></div>
-      <p class="ms-mockup-preview-gate__lead">Staff page bodies render from elite HTML mockups only. Layout engine integration is not wired until operator sign-off.</p>
-      <p class="ms-mockup-preview-gate__path"><code>${H.esc(mockPath)}</code></p>
-      <p class="ms-muted">Gallery index: <code>.local_logs/moonshot_financial_eval/page_mockups_elite/index.html</code></p>
-    </section>`;
-    return noticeHtml + gate;
+    const embedSrc = `/mockup-elite-embed/${encodeURIComponent(pageId)}`;
+    const frame = `<div class="ms-mockup-preview-frame col-12" data-ms-page-gate="${H.esc(pageId)}">
+      <div class="ms-mockup-preview-banner">
+        <span class="ms-mockup-preview-banner__title">Elite mock preview</span>
+        <span class="ms-muted">Static HTML for UI evaluation — not wired to live imports</span>
+      </div>
+      <iframe class="ms-mockup-preview-iframe" src="${embedSrc}" title="Elite mockup: ${H.esc(pageId)}" loading="lazy"></iframe>
+    </div>`;
+    return noticeHtml + frame;
   }
 
   function renderBody(pageId, feed, programSnapshot) {

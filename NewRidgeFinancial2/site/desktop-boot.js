@@ -1,6 +1,6 @@
 /**
  * Desktop boot gate — verify schema shell loaded and all assets share one build version.
- * Runs after page-schema.js + page-chrome.js, before app.js.
+ * Runs after moonshot-page-registry.js + mockup chrome, before app.js.
  * Moonshot must-fix: verifyBuildConsensus + renderReloadUX (build consensus gate).
  * Moonshot stale-schema: emergencyPurgeAndReload + epoch manifest gate.
  */
@@ -23,13 +23,6 @@
     }
     if (typeof PageSchema !== "undefined" && PageSchema.SCHEMA_VERSION) {
       return String(PageSchema.SCHEMA_VERSION);
-    }
-    try {
-      if (typeof HalPageSchema !== "undefined" && HalPageSchema.SCHEMA_VERSION) {
-        return String(HalPageSchema.SCHEMA_VERSION);
-      }
-    } catch {
-      /* HalPageSchema may be mid-init */
     }
     return null;
   }
@@ -189,21 +182,21 @@
       .map((line) => `<li>${String(line).replace(/</g, "&lt;")}</li>`)
       .join("");
     const inner =
-      `<strong class="pv-state__title">${String(message).replace(/</g, "&lt;")}</strong>` +
-      (detailHtml ? `<ul class="pv-state__list">${detailHtml}</ul>` : "") +
-      `<p class="pv-state__msg">Close the window and launch <strong>${typeof WorkstationSchema !== "undefined" ? "Start Workstation" : "Start Program"}</strong> again. If this persists, clear site data for 127.0.0.1:8765 and run scripts/Refresh-NR2-DesktopShortcut.ps1.</p>`;
+      `<strong class="ms-boot-error__title">${String(message).replace(/</g, "&lt;")}</strong>` +
+      (detailHtml ? `<ul class="ms-boot-error__list">${detailHtml}</ul>` : "") +
+      `<p class="ms-boot-error__msg">Close the window and launch <strong>${typeof WorkstationSchema !== "undefined" ? "Start Workstation" : "Start Program"}</strong> again. If this persists, clear site data for 127.0.0.1:8765 and run scripts/Refresh-NR2-DesktopShortcut.ps1.</p>`;
     if (typeof WorkstationSchema !== "undefined" && frame.querySelector("#workstationPage")) {
       let banner = frame.querySelector(".nr2-boot-error");
       if (!banner) {
         banner = document.createElement("div");
-        banner.className = "pv-state pv-state--error nr2-boot-error ws-boot-error";
+        banner.className = "ms-boot-error nr2-boot-error ws-boot-error";
         banner.setAttribute("role", "alert");
         frame.insertBefore(banner, frame.firstChild);
       }
       banner.innerHTML = inner;
       return;
     }
-    frame.innerHTML = `<div class="pv-state pv-state--error nr2-boot-error" role="alert">${inner}</div>`;
+    frame.innerHTML = `<div class="ms-boot-error nr2-boot-error" role="alert">${inner}</div>`;
   }
 
   const schemaVersion = expectedSchemaVersion();
@@ -215,14 +208,14 @@
     null;
 
   if (!schemaVersion && !isWorkstationApp()) {
-    errors.push("page-schema.js did not define PageSchema.SCHEMA_VERSION.");
+    errors.push("moonshot-page-registry.js did not define PageSchema.SCHEMA_VERSION.");
   }
-  if (typeof PageChrome === "undefined") {
-    errors.push("page-chrome.js failed to load (PageChrome is undefined).");
+  if (typeof MoonshotMockupChrome === "undefined") {
+    errors.push("nr2-moonshot-mockup-chrome.js failed to load (MoonshotMockupChrome is undefined).");
   }
   if (typeof PageSchema === "undefined" || typeof PageSchema.navPages !== "function") {
     if (typeof WorkstationSchema === "undefined") {
-      errors.push("page-schema.js failed to load (PageSchema.navPages missing).");
+      errors.push("moonshot-page-registry.js failed to load (PageSchema.navPages missing).");
     }
   }
 

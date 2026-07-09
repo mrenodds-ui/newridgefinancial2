@@ -1453,6 +1453,87 @@ class NR2BottleServer(BottleServer):
             except Exception as exc:
                 return _json_response({"ok": False, "error": str(exc)}, status=500)
 
+        @app.get("/api/payer-reference")
+        def payer_reference_api():
+            try:
+                from payer_reference_store import format_payer_hits, payer_reference_summary, search_payers
+
+                query = str(bottle.request.params.get("q") or bottle.request.params.get("query") or "")
+                limit = int(bottle.request.params.get("limit") or 5)
+                if query.strip():
+                    items = search_payers(query, limit=limit)
+                    return _json_response(
+                        {
+                            "ok": True,
+                            "items": items,
+                            "count": len(items),
+                            "text": format_payer_hits(items),
+                        }
+                    )
+                return _json_response(payer_reference_summary())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc), "items": [], "count": 0}, status=500)
+
+        @app.get("/api/eligibility-cache")
+        def eligibility_cache_list_api():
+            try:
+                from eligibility_cache_store import eligibility_cache_summary, format_eligibility_hits, list_eligibility_entries, search_eligibility_cache
+
+                query = str(bottle.request.params.get("q") or bottle.request.params.get("query") or "")
+                limit = int(bottle.request.params.get("limit") or 10)
+                if query.strip():
+                    items = search_eligibility_cache(query, limit=limit)
+                else:
+                    items = list_eligibility_entries(limit=limit, fresh_only=True)
+                return _json_response(
+                    {
+                        "ok": True,
+                        "items": items,
+                        "count": len(items),
+                        "text": format_eligibility_hits(items),
+                        "summary": eligibility_cache_summary(),
+                    }
+                )
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc), "items": [], "count": 0}, status=500)
+
+        @app.post("/api/eligibility-cache")
+        def eligibility_cache_upsert_api():
+            try:
+                from eligibility_cache_store import upsert_eligibility_entry
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                entry_payload = payload.get("entry") if isinstance(payload.get("entry"), dict) else payload
+                return _json_response(upsert_eligibility_entry(entry_payload))
+            except ValueError as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=400)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/eligibility-cache/fetch")
+        def eligibility_cache_fetch_api():
+            try:
+                from clearinghouse_eligibility_adapter import fetch_eligibility_271
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                request_payload = payload.get("request") if isinstance(payload.get("request"), dict) else payload
+                return _json_response(fetch_eligibility_271(request_payload))
+            except ValueError as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=400)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/eligibility-cache/status")
+        def eligibility_cache_status_api():
+            try:
+                from clearinghouse_eligibility_adapter import clearinghouse_status
+
+                return _json_response({"ok": True, **clearinghouse_status()})
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
         @app.get("/api/hal-memories")
         def hal_memories_api():
             try:
@@ -1477,6 +1558,34 @@ class NR2BottleServer(BottleServer):
                     actor="Staff",
                 )
                 return _json_response(result)
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.get("/api/hal-learning/status")
+        def hal_learning_status_api():
+            try:
+                from hal_learning import learning_status
+
+                return _json_response(learning_status())
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc)}, status=500)
+
+        @app.post("/api/hal-learning/session")
+        def hal_session_context_api():
+            try:
+                from hal_learning import update_session_context
+
+                body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                payload = json.loads(body or "{}")
+                return _json_response(
+                    update_session_context(
+                        claim_id=str(payload.get("claimId") or payload.get("claim_id") or ""),
+                        narrative_id=str(payload.get("narrativeId") or payload.get("narrative_id") or ""),
+                        page=str(payload.get("page") or ""),
+                        topic=str(payload.get("topic") or ""),
+                        payer=str(payload.get("payer") or ""),
+                    )
+                )
             except Exception as exc:
                 return _json_response({"ok": False, "error": str(exc)}, status=500)
 
@@ -2845,6 +2954,20 @@ class NR2BottleServer(BottleServer):
             bottle.response.set_header("Pragma", "no-cache")
             bottle.response.set_header("Expires", 0)
             return bottle.static_file("index.html", root=server.root_path)
+
+        @app.get("/mockup-elite-embed/<page_id>")
+        def mockup_elite_embed(page_id):
+            if not _desktop_access_ok():
+                bottle.abort(403, _desktop_only_html())
+            from mockup_elite_embed import render_embed_html
+
+            html = render_embed_html(str(page_id or "").strip().lower())
+            if html is None:
+                bottle.abort(404, "Elite mock preview not found for this page.")
+            bottle.response.content_type = "text/html; charset=UTF-8"
+            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            bottle.response.set_header("Pragma", "no-cache")
+            return html
 
         @app.route("/<file:path>")
         def asset(file):

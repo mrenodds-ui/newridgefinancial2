@@ -15,7 +15,7 @@ process.env.NR2_LOAD_IMPORTS = "1";
 const HalSkills = require(join(__dirname, "site", "hal-skills.js"));
 const Services = require(join(__dirname, "site", "services.js"));
 const PageCanvasData = require(join(__dirname, "site", "page-canvas-data.js"));
-const PageSchema = require(join(__dirname, "site", "page-schema.js"));
+const PageSchema = require(join(__dirname, "site", "moonshot-page-registry.js"));
 
 const failures = [];
 const checks = [];
@@ -42,9 +42,9 @@ assertOk(
   schemaVersion || "missing",
 );
 assertOk(
-  "page-schema matches build manifest",
+  "page registry matches build manifest",
   String(PageSchema.SCHEMA_VERSION) === schemaVersion,
-  `page-schema=${PageSchema.SCHEMA_VERSION} manifest=${schemaVersion}`,
+  `registry=${PageSchema.SCHEMA_VERSION} manifest=${schemaVersion}`,
 );
 
 const snap = await Services.readProgramSnapshot();

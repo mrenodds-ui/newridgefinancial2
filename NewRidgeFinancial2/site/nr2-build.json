@@ -3,6 +3,7 @@
   "assetVersion": "hal-10100",
   "schemaVersion": "hal-10100",
   "REQUIRED_EPOCH": "moonshot-mockup",
+  "staffRenderMode": "mock-embed",
   "builtAt": "2026-07-08T17:30:00.000Z",
-  "notes": "hal-10100: Moonshot mockup data pipeline, QB layout, binders, chart mount, renderPageView wiring."
+  "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server."
 }

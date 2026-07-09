@@ -84,6 +84,16 @@ In direct-first mode (`NR2_DIRECT_FIRST_IMPORTS=1`, default), **refresh imports*
 
 HAL's top priority is to monitor the program, place correct import data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action.
 
+## Local HAL models (GPU)
+
+Workstation default (**R9700 32 GB**): GPU-pinned `hal-chat:8b` + `hal-escalate:30b` via Ollama on `127.0.0.1:11434`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Apply-HAL-GPU-Performance.ps1
+```
+
+Config: `site/data/hal-models.json` (`gpuPinnedModels`). Benchmark/router: repo-root `local-llm-benchmark/ollama_smart_router.py`.
+
 ## Tests
 
 From `NewRidgeFinancial2/`:

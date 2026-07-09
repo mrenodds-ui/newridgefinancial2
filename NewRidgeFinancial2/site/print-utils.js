@@ -143,7 +143,10 @@ const PrintUtils = (function () {
         .replace(/^#/, "")
         .trim() ||
       "financial";
-    const scoped = document.querySelector(`[data-pv-page="${pageId}"]`) || document.getElementById("appPage");
+    const scoped =
+      document.querySelector(`[data-ms-page="${pageId}"]`) ||
+      document.querySelector(`[data-pv-page="${pageId}"]`) ||
+      document.getElementById("appPage");
     return printElement(scoped, o.title || pageId);
   }
 

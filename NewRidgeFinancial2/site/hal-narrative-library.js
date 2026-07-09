@@ -45,9 +45,10 @@
 
   const MEMOAI_SOURCE_IDS = [
     "insurance-narrative-local-only",
+    "crown-d2740-medical-necessity",
+    "narrative-appeal-structure-sections",
+    "srp-d4341-vs-prophy-d1110-bundling",
     "no-external-submit-actions",
-    "softdent-export-file-mode",
-    "second-opinion-patient-claims-fast-path",
   ];
 
   function leadFor(focus, tone, length) {
