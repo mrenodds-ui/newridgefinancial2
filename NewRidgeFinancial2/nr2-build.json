@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10143",
-  "assetVersion": "hal-10143",
-  "schemaVersion": "hal-10143",
+  "BUILD_ID": "hal-10144",
+  "assetVersion": "hal-10144",
+  "schemaVersion": "hal-10144",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T16:32:33.000Z",
-  "notes": "hal-10143: Treat SoftDent operatory chair payloads as connected in import diagnostics."
+  "builtAt": "2026-07-09T16:45:00.000Z",
+  "notes": "hal-10144: Treat open-month production vs QuickBooks variance as informational while SoftDent collections export is pending."
 }

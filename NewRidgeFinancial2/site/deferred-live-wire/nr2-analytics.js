@@ -34,16 +34,34 @@ const NR2Analytics = (function () {
     return (snapshot && snapshot.importBundle) || null;
   }
 
+  function currentMonthPeriod() {
+    const now = new Date();
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+
   function dashboardRows(snapshot) {
     const fin = snapshot && snapshot.dashboards && snapshot.dashboards.financial;
+    const pendingPeriod = fin && fin.collectionsPending
+      ? normalizePeriod(
+          (fin.periodAlignment && fin.periodAlignment.comparablePeriod) ||
+            fin.comparablePeriod ||
+            (fin.collectionRateMetrics && fin.collectionRateMetrics.latestMonthPeriod) ||
+            "",
+        )
+      : "";
     if (fin && fin.productionTrend && Array.isArray(fin.productionTrend.labels) && fin.productionTrend.labels.length) {
       const labels = fin.productionTrend.labels;
       const production = fin.productionTrend.production || [];
-      return labels.map((period, i) => ({
-        period: normalizePeriod(period),
-        production: parseMoney(production[i]),
-        collections: 0,
-      }));
+      const collectionsSeries = fin.productionTrend.collections || [];
+      return labels.map((period, i) => {
+        const key = normalizePeriod(period);
+        return {
+          period: key,
+          production: parseMoney(production[i]),
+          collections: parseMoney(collectionsSeries[i]),
+          collectionsPending: Boolean(pendingPeriod && key === pendingPeriod),
+        };
+      });
     }
     const bundle = bundleFromSnapshot(snapshot);
     const dashboard = bundle && bundle.softdent && bundle.softdent.dashboard;
@@ -51,13 +69,37 @@ const NR2Analytics = (function () {
     if (Array.isArray(dashboard)) rows = dashboard;
     else if (dashboard && Array.isArray(dashboard.rows)) rows = dashboard.rows;
     return rows
-      .map((row) => ({
-        period: normalizePeriod(pickField(row, ["period", "Period", "year_month"])),
-        production: parseMoney(pickField(row, ["production", "Production"])),
-        collections: parseMoney(pickField(row, ["collections", "Collections"])),
-      }))
+      .map((row) => {
+        const period = normalizePeriod(pickField(row, ["period", "Period", "year_month"]));
+        const collectionsPending =
+          row.collectionsPending === true ||
+          row.CollectionsPending === true ||
+          Boolean(pendingPeriod && period === pendingPeriod);
+        const collectionsReported =
+          !collectionsPending &&
+          row.collectionsReported !== false &&
+          row.CollectionsReported !== false;
+        return {
+          period,
+          production: parseMoney(pickField(row, ["production", "Production"])),
+          collections: collectionsReported
+            ? parseMoney(pickField(row, ["collections", "Collections"]))
+            : 0,
+          collectionsPending,
+          collectionsReported,
+        };
+      })
       .filter((row) => row.period)
       .sort((a, b) => a.period.localeCompare(b.period));
+  }
+
+  function periodIncomplete(row) {
+    if (!row) return false;
+    if (row.collectionsPending) return true;
+    if (row.collectionsReported === false) return true;
+    // Current calendar month with production but no reported collections is still open.
+    if (row.period === currentMonthPeriod() && row.production > 0 && !(row.collections > 0)) return true;
+    return false;
   }
 
   function qbMonthlyRows(snapshot) {
@@ -107,12 +149,15 @@ const NR2Analytics = (function () {
     const rows = sdRows
       .map((sd) => {
         const qbRevenue = qbBy[sd.period];
+        const incomplete = periodIncomplete(sd);
         let variancePct = null;
         let tone = "neutral";
         if (sd.production > 0 && qbRevenue != null) {
           variancePct = Math.round(((qbRevenue - sd.production) / sd.production) * 1000) / 10;
           const abs = Math.abs(variancePct);
-          tone = abs <= 3 ? "ok" : abs <= 10 ? "warn" : "alert";
+          // Incomplete months (collections export pending) are informational — cash-basis
+          // deposits lag production by design until SoftDent closes the month.
+          tone = incomplete ? "neutral" : abs <= 3 ? "ok" : abs <= 10 ? "warn" : "alert";
         }
         return {
           period: sd.period,
@@ -120,15 +165,26 @@ const NR2Analytics = (function () {
           quickbooksRevenue: qbRevenue != null ? qbRevenue : null,
           variancePct,
           tone,
+          incomplete,
+          collectionsPending: Boolean(sd.collectionsPending),
         };
       })
       .filter((row) => row.softdentProduction > 0 || row.quickbooksRevenue != null);
     const latest = rows.length ? rows[rows.length - 1] : null;
+    const latestComplete = [...rows].reverse().find((row) => !row.incomplete && row.variancePct != null) || null;
+    const review = latest && latest.incomplete && latestComplete ? latestComplete : latest;
     return {
       rows: rows.slice(-12),
       latest,
+      latestComplete,
+      review,
       hasData: rows.length > 0,
-      summary: latest && latest.variancePct != null ? `Latest ${latest.period}: ${latest.variancePct}% variance` : "",
+      summary:
+        latest && latest.incomplete
+          ? `Current period ${latest.period} still open (collections export pending); review ${review && review.period ? review.period : "prior"} variance when available.`
+          : latest && latest.variancePct != null
+            ? `Latest ${latest.period}: ${latest.variancePct}% variance`
+            : "",
     };
   }
 
@@ -233,11 +289,12 @@ const NR2Analytics = (function () {
     const revenue = quickbooksMonthlyRevenue(snapshot);
     const daily = softdentProductionDaily(snapshot);
     const tiles = [];
-    if (recon.latest && recon.latest.variancePct != null) {
+    const varianceRow = recon.review || recon.latest;
+    if (varianceRow && varianceRow.variancePct != null) {
       tiles.push({
-        label: "Prod vs QB variance",
-        value: `${recon.latest.variancePct}%`,
-        tone: recon.latest.tone,
+        label: varianceRow.incomplete ? "Prod vs QB (open month)" : "Prod vs QB variance",
+        value: `${varianceRow.variancePct}%`,
+        tone: varianceRow.tone,
         widgetKey: "nr2ProductionReconciliation",
       });
     }
@@ -311,7 +368,21 @@ const NR2Analytics = (function () {
     const alerts = [];
     const recon = productionReconciliation(snapshot);
     const latest = recon.latest || {};
-    if (latest.variancePct != null && Math.abs(latest.variancePct) > 10) {
+    const review = recon.review || latest;
+    if (latest.incomplete) {
+      alerts.push({
+        level: "info",
+        text: `SoftDent collections export pending for ${latest.period || "current month"} — production vs QuickBooks variance is informational until month close`,
+        widgetKey: "softdentCollectionsDaily",
+      });
+      if (review && !review.incomplete && review.variancePct != null && Math.abs(review.variancePct) > 10) {
+        alerts.push({
+          level: "warn",
+          text: `Production vs QuickBooks variance ${review.variancePct}% (${review.period})`,
+          widgetKey: "nr2ProductionReconciliation",
+        });
+      }
+    } else if (latest.variancePct != null && Math.abs(latest.variancePct) > 10) {
       alerts.push({
         level: "warn",
         text: `Production vs QuickBooks variance ${latest.variancePct}% (${latest.period || "latest"})`,

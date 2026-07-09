@@ -1893,12 +1893,19 @@ const HalSkills = (function () {
 
     if (recon.hasData && recon.latest) {
       domains.push("production");
-      const variance = recon.latest.variancePct;
-      const period = recon.latest.period || "latest period";
-      if (variance != null) {
+      const review = recon.review || recon.latest;
+      if (recon.latest.incomplete) {
+        risk =
+          risk ||
+          `SoftDent collections export pending for ${recon.latest.period || "current month"} — production vs QuickBooks is informational until month close`;
+        actuators.push({ label: "Open SoftDent collections", actionId: "navigate", target: "softdent" });
+      }
+      const variance = review.variancePct;
+      const period = review.period || "latest period";
+      if (variance != null && !review.incomplete) {
         const abs = Math.abs(variance);
         if (abs > 10) {
-          risk = `Production vs QuickBooks revenue diverged ${variance}% in ${period}`;
+          risk = risk || `Production vs QuickBooks revenue diverged ${variance}% in ${period}`;
           actuators.push({ label: "Review reconciliation", actionId: "navigate", target: "financial" });
         } else if (abs <= 3) {
           opportunity = `Production and QuickBooks aligned within ${abs}% for ${period}`;
@@ -2386,9 +2393,10 @@ const HalSkills = (function () {
         metrics: {
           tileCount: metricValue((analyticsPack.ribbon.tiles || []).length || null),
           latestVariancePct: metricValue(
-            analyticsPack.recon.latest && analyticsPack.recon.latest.variancePct != null
-              ? `${analyticsPack.recon.latest.variancePct}%`
-              : null,
+            (() => {
+              const row = analyticsPack.recon.review || analyticsPack.recon.latest;
+              return row && row.variancePct != null ? `${row.variancePct}%` : null;
+            })(),
           ),
           collectionLagDays: metricValue(analyticsPack.lag.avgLagDays != null ? `${analyticsPack.lag.avgLagDays} days` : null),
           latestQbRevenue: metricValue(
@@ -2403,25 +2411,37 @@ const HalSkills = (function () {
         title: "Production vs QuickBooks Reconciliation",
         status: reconStatus,
         summary:
+          analyticsPack.recon.summary ||
           "Monthly SoftDent production compared to QuickBooks revenue (cash-basis deposits). Variance highlights timing and basis differences — not posting errors.",
         navTarget: WIDGET_NAV.nr2ProductionReconciliation,
         metrics: {
           comparablePeriods: metricValue(reconComparable.length || null),
-          latestPeriod: metricValue(analyticsPack.recon.latest ? analyticsPack.recon.latest.period : null),
-          latestVariancePct: metricValue(
-            analyticsPack.recon.latest && analyticsPack.recon.latest.variancePct != null
-              ? `${analyticsPack.recon.latest.variancePct}%`
+          latestPeriod: metricValue(
+            (analyticsPack.recon.review || analyticsPack.recon.latest)
+              ? (analyticsPack.recon.review || analyticsPack.recon.latest).period
               : null,
+          ),
+          latestVariancePct: metricValue(
+            (() => {
+              const row = analyticsPack.recon.review || analyticsPack.recon.latest;
+              return row && row.variancePct != null ? `${row.variancePct}%` : null;
+            })(),
           ),
           latestSoftdentProduction: metricValue(
-            analyticsPack.recon.latest && analyticsPack.recon.latest.softdentProduction != null
-              ? `$${Math.round(analyticsPack.recon.latest.softdentProduction).toLocaleString()}`
-              : null,
+            (() => {
+              const row = analyticsPack.recon.review || analyticsPack.recon.latest;
+              return row && row.softdentProduction != null
+                ? `$${Math.round(row.softdentProduction).toLocaleString()}`
+                : null;
+            })(),
           ),
           latestQuickbooksRevenue: metricValue(
-            analyticsPack.recon.latest && analyticsPack.recon.latest.quickbooksRevenue != null
-              ? `$${Math.round(analyticsPack.recon.latest.quickbooksRevenue).toLocaleString()}`
-              : null,
+            (() => {
+              const row = analyticsPack.recon.review || analyticsPack.recon.latest;
+              return row && row.quickbooksRevenue != null
+                ? `$${Math.round(row.quickbooksRevenue).toLocaleString()}`
+                : null;
+            })(),
           ),
         },
       },
