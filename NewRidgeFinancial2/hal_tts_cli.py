@@ -12,6 +12,25 @@ import time
 from hal_tts import neural_tts_available, synthesize_text_sync, tts_status
 
 
+def _play_mp3_mci(path: str) -> bool:
+    """Play MP3 via Windows MCI (winsound cannot decode MP3)."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+
+    winmm = ctypes.windll.winmm
+    alias = f"haltts{os.getpid()}"
+    buf = ctypes.create_unicode_buffer(255)
+    # Escape backslashes for MCI.
+    mci_path = path.replace("\\", "\\\\")
+    if winmm.mciSendStringW(f'open "{mci_path}" type mpegvideo alias {alias}', buf, 255, None) != 0:
+        return False
+    try:
+        return winmm.mciSendStringW(f"play {alias} wait", buf, 255, None) == 0
+    finally:
+        winmm.mciSendStringW(f"close {alias}", None, 0, None)
+
+
 def _play_mp3(data: bytes) -> None:
     if not data:
         raise RuntimeError("empty audio")
@@ -34,12 +53,9 @@ def _play_mp3(data: bytes) -> None:
             return
         except Exception:
             pass
-        if sys.platform == "win32":
-            import winsound
-
-            winsound.PlaySound(path, winsound.SND_FILENAME)
+        if _play_mp3_mci(path):
             return
-        raise RuntimeError("no audio playback backend")
+        raise RuntimeError("no audio playback backend (need pygame or Windows MCI for MP3)")
     finally:
         if path:
             try:

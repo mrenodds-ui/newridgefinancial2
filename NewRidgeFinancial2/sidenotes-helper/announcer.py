@@ -288,6 +288,23 @@ class Announcer:
             pass
         return False
 
+    def _play_mp3_mci(self, path: str) -> bool:
+        """Play MP3 via Windows MCI — winsound only handles WAV."""
+        if sys.platform != "win32":
+            return False
+        import ctypes
+
+        winmm = ctypes.windll.winmm
+        alias = f"halsn{os.getpid()}"
+        buf = ctypes.create_unicode_buffer(255)
+        mci_path = path.replace("\\", "\\\\")
+        if winmm.mciSendStringW(f'open "{mci_path}" type mpegvideo alias {alias}', buf, 255, None) != 0:
+            return False
+        try:
+            return winmm.mciSendStringW(f"play {alias} wait", buf, 255, None) == 0
+        finally:
+            winmm.mciSendStringW(f"close {alias}", None, 0, None)
+
     def _play_mp3(self, data: bytes) -> bool:
         if not data:
             return False
@@ -309,8 +326,10 @@ class Announcer:
                 return True
             except Exception:
                 pass
-            winsound.PlaySound(path, winsound.SND_FILENAME)
-            return True
+            if self._play_mp3_mci(path):
+                return True
+            # Last resort: WAV-only API — do not claim success for MP3.
+            return False
         except Exception:
             return False
         finally:

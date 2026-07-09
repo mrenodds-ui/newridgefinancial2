@@ -70,8 +70,12 @@ def resolve_neural_python(explicit: str = "") -> Path | None:
         if raw:
             candidates.append(Path(raw))
 
+    # Prefer the workstation package's bundled 64-bit Python (sibling of NewRidgeFinancial2).
+    pkg_root = NR2_ROOT.parent
     candidates.extend(
         [
+            pkg_root / "python" / "Scripts" / "python.exe",
+            NR2_ROOT / "python" / "Scripts" / "python.exe",
             REPO_ROOT / ".venv" / "Scripts" / "python.exe",
             REPO_ROOT / ".venv-py313" / "Scripts" / "python.exe",
             NR2_ROOT / ".venv" / "Scripts" / "python.exe",
