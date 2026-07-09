@@ -348,14 +348,22 @@ const MoonshotLayoutEngine = (function () {
     },
     softdentNewPatientsMTD(D, H) {
       const np = D && D.softdentNewPatientsMtdData ? D.softdentNewPatientsMtdData() : { count: 0, hasData: false };
+      const flow = D && D.newPatientsFlowSeries ? D.newPatientsFlowSeries() : { hasData: false, values: [] };
       const val = np.hasData ? String(np.count) : "—";
+      const periodHint = np.period ? String(np.period) : "MTD";
+      const sparkValues =
+        flow.hasData && flow.values && flow.values.length
+          ? flow.values
+          : np.hasData && np.count != null
+            ? [Number(np.count) || 0]
+            : [];
       const spark =
-        typeof H.barSparkline === "function"
-          ? H.barSparkline([4, 6, 5, 8, 7, np.count || 0], "success")
+        sparkValues.length && typeof H.barSparkline === "function"
+          ? H.barSparkline(sparkValues, "success")
           : "";
       return `<div class="ms-elite-stat-tile">
         <div class="kpi-value">${H.esc(val)}</div>
-        <div class="trend-indicator"><span>↑</span> MTD</div>
+        <div class="trend-indicator"><span>${H.esc(periodHint)}</span></div>
         ${spark}
       </div>`;
     },
@@ -371,11 +379,19 @@ const MoonshotLayoutEngine = (function () {
       </div>`;
     },
     newPatients(D, H) {
-      const np = D && D.metrics ? D.metrics("newPatients") : {};
-      const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-      const base = Number(np.newPatientCount) || 4;
-      const values = labels.map((_, i) => Math.max(1, base + (i % 3) - 1));
-      return H.chartContainer(H.vBarChart(labels, values, "#a78bfa"));
+      const flow = D && D.newPatientsFlowSeries ? D.newPatientsFlowSeries() : { hasData: false };
+      if (!flow.hasData || !flow.labels || !flow.labels.length) {
+        return H.canvasEmpty("New patient flow appears when SoftDent new-patient export periods are loaded.");
+      }
+      if (flow.singlePeriod && flow.values.length === 1) {
+        const period = flow.labels[0];
+        const count = flow.values[0];
+        return `<div class="ms-elite-stat-tile">
+          <div class="kpi-value">${H.esc(String(count))}</div>
+          <div class="trend-indicator"><span>${H.esc(period || "Latest period")}</span> · single exported period</div>
+        </div>`;
+      }
+      return H.chartContainer(H.vBarChart(flow.labels, flow.values, "#34d399"));
     },
     nr2ProviderCompensationWidget(D, H) {
       const provComp = D && D.nr2ProviderCompensation ? D.nr2ProviderCompensation() : { providers: [] };

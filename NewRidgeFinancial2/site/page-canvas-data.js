@@ -2320,6 +2320,62 @@ const PageCanvasData = (function () {
     return S ? S.newPatientsMtd(snapshot) : { hasData: false, count: 0 };
   }
 
+  function shortPeriodLabel(period) {
+    const raw = String(period || "").trim();
+    const match = raw.match(/^(\d{4})-(\d{2})/);
+    if (!match) return raw || "";
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const idx = Number(match[2]) - 1;
+    return months[idx] ? `${months[idx]} ${match[1].slice(2)}` : raw;
+  }
+
+  function newPatientsFlowSeries() {
+    const bundle = snapshot && snapshot.importBundle;
+    const rows = (bundle && bundle.softdent && bundle.softdent.newPatients && bundle.softdent.newPatients.rows) || [];
+    const byPeriod = {};
+    rows.forEach((row) => {
+      const period = String(
+        (row && (row.Period || row.period || row.Month || row.month)) || "",
+      ).trim();
+      if (!period) return;
+      const key = period.length >= 7 ? period.slice(0, 7) : period;
+      const count = Number(
+        String(row.Count || row.count || row.NewPatients || row.newPatients || row.Total || "0").replace(/,/g, ""),
+      );
+      if (!Number.isFinite(count)) return;
+      byPeriod[key] = (byPeriod[key] || 0) + count;
+    });
+    const labels = Object.keys(byPeriod).sort();
+    if (labels.length) {
+      return {
+        labels: labels.map(shortPeriodLabel),
+        values: labels.map((key) => byPeriod[key]),
+        periods: labels,
+        hasData: true,
+        singlePeriod: labels.length === 1,
+      };
+    }
+    const mtd = softdentNewPatientsMtdData();
+    const metricsNp = metrics("newPatients");
+    const count =
+      mtd && mtd.hasData && mtd.count != null
+        ? Number(mtd.count)
+        : metricsNp && metricsNp.newPatientCount != null
+          ? Number(metricsNp.newPatientCount)
+          : null;
+    const period = (mtd && mtd.period) || (metricsNp && metricsNp.period) || "";
+    if (count == null || !Number.isFinite(count)) {
+      return { labels: [], values: [], periods: [], hasData: false, singlePeriod: false };
+    }
+    return {
+      labels: [shortPeriodLabel(period) || "Latest"],
+      values: [count],
+      periods: period ? [String(period).slice(0, 7)] : [],
+      hasData: true,
+      singlePeriod: true,
+    };
+  }
+
   function softdentClaimsOutstandingData() {
     const S = softdentDailyApi();
     return S ? S.claimsOutstanding(snapshot) : { hasData: false, claims: [] };
@@ -2511,6 +2567,7 @@ const PageCanvasData = (function () {
     quickbooksQbArAging,
     softdentCollectionsDailySeries,
     softdentNewPatientsMtdData,
+    newPatientsFlowSeries,
     softdentClaimsOutstandingData,
     softdentProviderProductionData,
     softdentAppointmentsSnapshotData,

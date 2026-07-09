@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10151",
-  "assetVersion": "hal-10151",
-  "schemaVersion": "hal-10151",
+  "BUILD_ID": "hal-10152",
+  "assetVersion": "hal-10152",
+  "schemaVersion": "hal-10152",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T17:45:00.000Z",
-  "notes": "hal-10151: Demote expected SoftDent/QB scope and open-month validation notes from office top priority; use human-readable titles."
+  "builtAt": "2026-07-09T17:50:00.000Z",
+  "notes": "hal-10152: Stop fabricating Jan-Jun New Patient Flow; show real SoftDent periods or honest single-period tile."
 }
