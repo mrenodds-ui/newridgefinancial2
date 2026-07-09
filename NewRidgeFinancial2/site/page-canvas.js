@@ -1275,12 +1275,34 @@ const PageCanvas = (function () {
       const noticeHtml = canvasImportNotice(pageImportNotice(pageId));
       const LE = typeof MoonshotLayoutEngine !== "undefined" ? MoonshotLayoutEngine : null;
       if (!LE || typeof LE.render !== "function" || !LE.hasPage(pageId)) {
-        return liveWirePilotBanner(pageId) + noticeHtml + mockupPreviewGate(pageId);
+        /* P0: ROLLBACK PATH — To restore iframe overlay fallback, replace the next block with:
+           return liveWirePilotBanner(pageId) + noticeHtml + mockupPreviewGate(pageId);
+        */
+        return (
+          liveWirePilotBanner(pageId) +
+          noticeHtml +
+          `<div class="ms-layout-error" style="padding:24px;border:1px solid rgba(248,113,113,.4);background:rgba(248,113,113,.08);border-radius:8px;color:#f87171;">
+          <strong>Layout Engine required for live-wire pilot</strong><br>
+          <code style="color:#e5e5e7;">${H.esc(pageId)}</code>
+          <p style="margin:8px 0 0;color:#a3a3a3;font-size:12px;">
+            Ensure moonshot-layout-engine.js loads before page-canvas.js.
+            Elite mockups render without iframe overlay.
+          </p>
+        </div>`
+        );
       }
       const html = LE.render(pageId, H);
       return liveWirePilotBanner(pageId) + noticeHtml + (html || "");
     }
-    return mockupPreviewGate(pageId);
+    /* P2: Legacy non-live-wire path — iframe only if explicit rollback flag set */
+    if (typeof window !== "undefined" && window.__NR2_LEGACY_MOCKUP_FALLBACK) {
+      return mockupPreviewGate(pageId);
+    }
+    const H = buildMoonshotHelpers();
+    return `<div class="ms-layout-error" style="padding:24px;border:1px solid rgba(248,113,113,.4);background:rgba(248,113,113,.08);border-radius:8px;color:#f87171;">
+      <strong>Live-wire required</strong> — <code>${H.esc(pageId)}</code> is not on NR2_LIVE_WIRE_PAGES.
+      <p style="margin:8px 0 0;color:#a3a3a3;font-size:12px;">Set window.__NR2_LEGACY_MOCKUP_FALLBACK = true only to restore iframe mock-embed preview.</p>
+    </div>`;
   }
 
   function setFeed(feed, programSnapshot) {

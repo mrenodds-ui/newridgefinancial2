@@ -55,14 +55,26 @@ const MoonshotMockupChrome = (function () {
   }
 
   function staffMockEmbedMode() {
+    /* Moonshot no-overlay: mock-embed only when explicitly requested — elite catalog alone must not force overlay. */
     if (typeof globalThis !== "undefined" && globalThis.NR2_STAFF_MOCK_ONLY) return true;
-    return (
-      (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
-      (typeof document !== "undefined" &&
-        document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed") ||
+    if (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) return true;
+    if (
+      typeof document !== "undefined" &&
+      document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed"
+    ) {
+      return true;
+    }
+    const mode =
+      (typeof window !== "undefined" && window.NR2_STAFF_RENDER_MODE) ||
       (typeof window !== "undefined" &&
-        Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES) &&
-        window.__NR2_MOCKUP_ELITE_PAGES.length > 0)
+        window.NR2_BUILD &&
+        window.NR2_BUILD.staffRenderMode) ||
+      "";
+    if (mode === "live-wire-pilot" || mode === "live-wire") return false;
+    return (
+      typeof window !== "undefined" &&
+      Array.isArray(window.__NR2_MOCKUP_ELITE_PAGES) &&
+      window.__NR2_MOCKUP_ELITE_PAGES.length > 0
     );
   }
 

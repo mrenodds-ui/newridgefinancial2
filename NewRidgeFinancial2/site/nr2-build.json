@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10166",
-  "assetVersion": "hal-10166",
-  "schemaVersion": "hal-10166",
+  "BUILD_ID": "hal-10167",
+  "assetVersion": "hal-10167",
+  "schemaVersion": "hal-10167",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -17,6 +17,6 @@
     "hal",
     "office-manager"
   ],
-  "builtAt": "2026-07-09T19:40:39Z",
-  "notes": "hal-10166: Friendly HAL boot greeting + casual chat without diagnostics dump."
+  "builtAt": "2026-07-09T20:35:00Z",
+  "notes": "hal-10167: Moonshot no-overlay — kill mock-embed boot flags/critical CSS; live-wire never iframe."
 }
