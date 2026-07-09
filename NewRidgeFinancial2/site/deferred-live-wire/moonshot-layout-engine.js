@@ -1,0 +1,738 @@
+/**
+ * Moonshot-only page renderer — sole layout path from moonshot-page-layouts.js.
+ * No legacy merge, no chart overlay. Page metadata from MoonshotPageRegistry.
+ */
+const MoonshotLayoutEngine = (function () {
+  let MANIFEST = null;
+
+  function loadManifest() {
+    if (MANIFEST) return MANIFEST;
+    if (typeof MOONSHOT_PAGE_LAYOUTS !== "undefined") {
+      MANIFEST = MOONSHOT_PAGE_LAYOUTS;
+      return MANIFEST;
+    }
+    try {
+      if (typeof require !== "undefined") {
+        MANIFEST = require("./moonshot-page-layouts.js");
+        return MANIFEST;
+      }
+    } catch (_e) {
+      /* browser without script tag */
+    }
+    return MANIFEST;
+  }
+
+  function pageSpec(pageId) {
+    const m = loadManifest();
+    return m && m.pages && m.pages[pageId] ? m.pages[pageId] : null;
+  }
+
+  function hasPage(pageId) {
+    if (pageId === "hal") return false;
+    return Boolean(pageSpec(pageId));
+  }
+
+  function accentFor(pageId) {
+    const R = typeof MoonshotPageRegistry !== "undefined" ? MoonshotPageRegistry : PageSchema;
+    const p = R && R.byId ? R.byId(pageId) : null;
+    return (p && p.accent) || "green";
+  }
+
+  function render(pageId, H) {
+    const spec = pageSpec(pageId);
+    if (!spec || !H) return "";
+    const D = H.dataApi ? H.dataApi() : null;
+    const accent = accentFor(pageId);
+    const panels = spec.panels || [];
+    const shell = spec.shell || "widget-grid";
+
+    if (shell === "dashboard-grid") {
+      let inner = "";
+      if (pageId === "office-manager") {
+        if (D && D.opsDataPanelHtml) inner += D.opsDataPanelHtml();
+        if (H.canvasStatsBar && D && D.officeKpis) inner += H.canvasStatsBar(D.officeKpis());
+      }
+      if (pageId === "quickbooks") {
+        inner += renderQuickbooksDashboard(panels, D, H, accent);
+      } else {
+        inner += `<div class="dashboard-grid">${panels.map((p) => renderDashboardTile(p, D, H, pageId, accent)).join("")}</div>`;
+      }
+      return `${H.dashboardPageOpen(`${pageId}-moonshot`)}<div class="widget-grid">${inner}</div></div>`;
+    }
+
+    let body = panels.map((p) => H.gridCol(p.colSpan || 12, renderWidgetGridPanel(p, D, H, pageId, accent))).join("");
+    if (pageId === "softdent" && H.renderSoftdentOdbcStrip && D && D.softdentOdbcStatus) {
+      body += H.renderSoftdentOdbcStrip(D.softdentOdbcStatus());
+    }
+    return `${H.stackOpen(`${pageId}-moonshot`)}${body}</div>`;
+  }
+
+  function renderWidgetGridPanel(panel, D, H, pageId, accent) {
+    if (panel.type === "hero-kpi" && panel.colSpan && panel.colSpan < 12) {
+      const kpis = resolveHeroKpis(panel, D, H, pageId);
+      const kpi = Array.isArray(kpis) ? kpis[0] : kpis;
+      if (panel.halSubpanel && H.canvasPanel) {
+        return H.canvasPanel({
+          title: panel.title || (kpi && kpi.label) || "",
+          accent,
+          halSubpanel: panel.halSubpanel,
+          body: kpi
+            ? `<div class="kpi-value">${H.esc(kpi.value || "—")}</div>${kpi.hint ? `<span class="trend">${H.esc(kpi.hint)}</span>` : ""}`
+            : H.canvasEmpty("Claims metrics appear when SoftDent claims export is loaded."),
+        });
+      }
+      if (kpi && H.canvasMetricTile) {
+        const tile = { ...kpi, label: panel.title || kpi.label };
+        return H.canvasMetricTile(tile, panel.colSpan);
+      }
+    }
+    if (panel.type === "hero-kpi" && (!panel.colSpan || panel.colSpan >= 12)) {
+      const kpis = resolveHeroKpis(panel, D, H, pageId);
+      if (pageId === "ar" && kpis && kpis.length) {
+        return kpis.length >= 5 ? H.heroKpiRow(kpis, 6) : H.canvasKpiGrid(kpis);
+      }
+      const maxKpis = pageId === "financial" ? 5 : pageId === "ar" ? 6 : 4;
+      return kpis && kpis.length ? H.heroKpiRow(kpis, maxKpis) : "";
+    }
+    return H.canvasPanel({
+      title: panel.title || "",
+      accent,
+      widgetKey: panel.widgetKey,
+      halSubpanel: panel.halSubpanel,
+      chartHost: false,
+      colSpan: panel.colSpan,
+      body: renderPanelBody(panel, D, H, pageId, accent),
+    });
+  }
+
+  function renderDashboardTile(panel, D, H, pageId, accent) {
+    if (panel.type === "hero-kpi") {
+      const kpis = resolveHeroKpis(panel, D, H, pageId);
+      return (kpis || [])
+        .slice(0, 4)
+        .map((k) => {
+          const wk = k.widgetKey || panel.widgetKey || "";
+          const delta = k.delta ? `<span class="trend">${H.esc(k.delta)}</span>` : "";
+          return `<div class="card kpi-card kpi-glow-card"${H.kpiRefOnly ? H.kpiRefOnly(wk, k.label || panel.title) : ""}>
+            <div class="card-header"><span class="card-title">${H.esc(k.label || panel.title)}</span>${delta}</div>
+            <div class="card-value">${H.esc(k.value || "—")}</div>
+          </div>`;
+        })
+        .join("");
+    }
+    const wk = panel.widgetKey || "";
+    const body = renderPanelBody(panel, D, H, pageId, accent);
+    const chartCls = panel.type === "chart" ? " chart-large" : panel.type === "gauge" ? " kpi-card" : " chart-medium";
+    const attrs = panel.halSubpanel
+      ? ` data-hal-subpanel="${H.esc(panel.halSubpanel)}"`
+      : wk
+        ? ` data-hal-widget-key="${H.esc(wk)}"`
+        : "";
+    return `<div class="card widget-glow-border${chartCls}"${attrs}>
+      <div class="card-header"><span class="card-title">${H.esc(panel.title || "")}</span></div>
+      ${body}
+    </div>`;
+  }
+
+  function renderQuickbooksDashboard(panels, D, H, accent) {
+    const chunks = [];
+    let row = [];
+    panels.forEach((p) => {
+      if (p.type === "hero-kpi") {
+        if (row.length) chunks.push(`<div class="dashboard-grid">${row.join("")}</div>`);
+        row = [];
+        chunks.push(`<div class="dashboard-grid">${renderDashboardTile(p, D, H, "quickbooks", accent)}</div>`);
+        return;
+      }
+      row.push(renderDashboardTile(p, D, H, "quickbooks", accent));
+      if (row.length >= 3 || p.colSpan >= 12) {
+        chunks.push(`<div class="dashboard-grid">${row.join("")}</div>`);
+        row = [];
+      }
+    });
+    if (row.length) chunks.push(`<div class="dashboard-grid">${row.join("")}</div>`);
+    return chunks.join("");
+  }
+
+  function resolveHeroKpis(panel, D, H, pageId) {
+    if (!D) return [];
+    if (pageId === "financial") {
+      const built = D.financialKpis ? D.financialKpis() : [];
+      if (panel.kpis && panel.kpis.length) {
+        const byKey = Object.fromEntries(built.map((k) => [k.widgetKey, k]));
+        return panel.kpis.map((spec) => {
+          const base = byKey[spec.widgetKey] || { label: spec.label || spec.widgetKey, value: "—", widgetKey: spec.widgetKey };
+          return { ...base, label: spec.label || base.label, widgetKey: spec.widgetKey };
+        });
+      }
+      return built;
+    }
+    if (pageId === "softdent" && panel.kpis && panel.kpis.length) {
+      const built = D.softdentHeroKpis ? D.softdentHeroKpis() : D.softdentKpis ? D.softdentKpis() : [];
+      const byKey = Object.fromEntries(built.map((k) => [k.widgetKey, k]));
+      return panel.kpis.map((spec) => {
+        const base = byKey[spec.widgetKey] || { label: spec.label || spec.widgetKey, value: "—", widgetKey: spec.widgetKey };
+        return { ...base, label: spec.label || base.label, widgetKey: spec.widgetKey };
+      });
+    }
+    if (pageId === "softdent" && panel.widgetKey) {
+      const all = D.softdentKpis ? D.softdentKpis() : [];
+      if (panel.widgetKey === "careDeliveryPerformance") {
+        const base = all.find((k) => k.widgetKey === "careDeliveryPerformance") || { value: "—", widgetKey: "careDeliveryPerformance" };
+        return [{ ...base, label: panel.title || "Care Delivery Summary", widgetKey: "careDeliveryPerformance" }];
+      }
+      if (panel.widgetKey === "softdentNewPatientsMTD") {
+        const np = D.softdentNewPatientsMtdData ? D.softdentNewPatientsMtdData() : { count: 0 };
+        return [{ label: panel.title || "New Patients (MTD)", value: String(np.count ?? "—"), widgetKey: "softdentNewPatientsMTD" }];
+      }
+      if (panel.widgetKey === "caseAcceptance") {
+        const base = all.find((k) => k.widgetKey === "caseAcceptance") || { value: "—", widgetKey: "caseAcceptance" };
+        return [{ ...base, label: panel.title || "Case Acceptance Rate", widgetKey: "caseAcceptance" }];
+      }
+      if (panel.widgetKey === "softdentClaimsOutstanding") {
+        const co = D.softdentClaimsOutstandingData ? D.softdentClaimsOutstandingData() : { claims: [] };
+        return [{ label: panel.title || "Outstanding Claims", value: String((co.claims && co.claims.length) || 0), widgetKey: "softdentClaimsOutstanding" }];
+      }
+    }
+    if (pageId === "claims" && panel.kpis && panel.kpis.length) {
+      return D.claimsPipelineSummary ? D.claimsPipelineSummary() : D.claimsKpis ? D.claimsKpis() : [];
+    }
+    if (pageId === "ar" && panel.kpis && panel.kpis.length) {
+      const built = D.arEliteKpis ? D.arEliteKpis() : D.arKpis ? D.arKpis() : [];
+      const bySub = Object.fromEntries(built.filter((k) => k.halSubpanel).map((k) => [k.halSubpanel, k]));
+      return panel.kpis.map((spec) => {
+        const base = bySub[spec.halSubpanel] || { label: spec.label, value: "—", halSubpanel: spec.halSubpanel };
+        return { ...base, label: spec.label || base.label, halSubpanel: spec.halSubpanel };
+      });
+    }
+    if (pageId === "claims" && panel.halSubpanel) {
+      const all = D.claimsKpis ? D.claimsKpis() : [];
+      const idx = { claimsKpiTotal: 0, claimsKpiValue: 1, claimsKpiDenied: 2 }[panel.halSubpanel];
+      return idx != null && all[idx] ? [all[idx]] : [];
+    }
+    if (pageId === "ar") return D.arKpis ? D.arKpis() : [];
+    if (pageId === "quickbooks") return D.quickbooksKpis ? D.quickbooksKpis() : [];
+    return [];
+  }
+
+  function renderPanelBody(panel, D, H, pageId, accent) {
+    const wk = panel.widgetKey;
+    if (panel.type === "kanban" && wk && WIDGET_BODY[wk]) return WIDGET_BODY[wk](D, H, panel, pageId, accent);
+    if (wk && WIDGET_BODY[wk]) return WIDGET_BODY[wk](D, H, panel, pageId, accent);
+    if (panel.type === "hero-kpi") return "";
+    if (panel.halSubpanel && SUBPANEL_BODY[panel.halSubpanel]) {
+      return SUBPANEL_BODY[panel.halSubpanel](D, H, panel, pageId, accent);
+    }
+    return H.canvasEmpty(`${panel.title || "Widget"} data appears when imports are loaded.`);
+  }
+
+  const WIDGET_BODY = {
+    nr2AlertTicker(D, H) {
+      const alerts = D && D.nr2AlertTicker ? D.nr2AlertTicker() : { items: [] };
+      const items =
+        alerts.items && alerts.items.length
+          ? alerts.items
+          : [{ level: "ok", text: "Load imports to evaluate cross-analytics exception thresholds.", widgetKey: "nr2AlertTicker" }];
+      return H.canvasAlertTicker(items);
+    },
+    nr2MonthlyTrendCombo(D, H) {
+      const combo = D && D.nr2MonthlyTrendCombo ? D.nr2MonthlyTrendCombo() : {};
+      return H.canvasMonthlyTrendCombo(combo);
+    },
+    nr2KpiRibbon(D, H) {
+      const ribbon = D && D.nr2KpiRibbonTiles ? D.nr2KpiRibbonTiles() : { tiles: [] };
+      return H.canvasKpiRibbon(ribbon.tiles || []);
+    },
+    nr2GoalScorecard(D, H) {
+      return H.canvasGoalScorecard(D && D.nr2GoalScorecard ? D.nr2GoalScorecard() : {});
+    },
+    nr2ProductionReconciliation(D, H) {
+      return H.canvasReconciliationTable(D && D.nr2ProductionReconciliation ? D.nr2ProductionReconciliation() : { rows: [] });
+    },
+    softdentProductionDaily(D, H) {
+      const prodDaily = D && D.softdentProductionDailySeries ? D.softdentProductionDailySeries() : { points: [] };
+      return H.chartContainer(
+        prodDaily.points && prodDaily.points.length
+          ? H.vBarChart(
+              prodDaily.points.map((p) => p.date),
+              prodDaily.points.map((p) => p.production),
+              "#60a5fa",
+            )
+          : H.canvasEmpty("Production trend appears when SoftDent dashboard or daysheet export is loaded."),
+      );
+    },
+    nr2CollectionLag(D, H) {
+      const lag = D && D.nr2CollectionLag ? D.nr2CollectionLag() : {};
+      if (!lag.hasData) {
+        return H.canvasEmpty("Collection lag appears when A/R aging export is loaded.");
+      }
+      const days = lag.avgLagDays != null ? lag.avgLagDays : "—";
+      const arcPct = typeof days === "number" ? Math.min(100, Math.round((days / 60) * 100)) : 0;
+      return `<div class="ms-elite-dso-gauge gauge-container" role="img" aria-label="Collection lag ${days} days">
+        <svg viewBox="0 0 120 70" class="gauge-svg ms-elite-gauge-svg" aria-hidden="true">
+          <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="var(--line-subtle)" stroke-width="8"/>
+          <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="var(--gold)" stroke-width="8" stroke-dasharray="${(arcPct * 1.57).toFixed(1)} 157" stroke-linecap="round" class="ms-elite-gauge-arc"/>
+        </svg>
+        <div class="gauge-center"><strong class="gauge-value">${H.esc(String(days))}</strong><span class="gauge-label">Days</span></div>
+      </div>`;
+    },
+    providerPerformance(D, H) {
+      const providers = D && D.providerBars ? D.providerBars() : null;
+      if (!providers || !providers.items.length) {
+        return H.canvasEmpty("Provider performance appears when SoftDent dashboard export is loaded.");
+      }
+      return H.hBarChart(
+        providers.items.map((item) => ({ name: item.name, amount: item.amount, pct: item.pct })),
+        "amount",
+        "name",
+        "pct",
+      );
+    },
+    softdentNewPatientsMTD(D, H) {
+      const np = D && D.softdentNewPatientsMtdData ? D.softdentNewPatientsMtdData() : { count: 0, hasData: false };
+      const val = np.hasData ? String(np.count) : "—";
+      const spark =
+        typeof H.barSparkline === "function"
+          ? H.barSparkline([4, 6, 5, 8, 7, np.count || 0], "success")
+          : "";
+      return `<div class="ms-elite-stat-tile">
+        <div class="kpi-value">${H.esc(val)}</div>
+        <div class="trend-indicator"><span>↑</span> MTD</div>
+        ${spark}
+      </div>`;
+    },
+    softdentClaimsOutstanding(D, H) {
+      const co = D && D.softdentClaimsOutstandingData ? D.softdentClaimsOutstandingData() : { claims: [] };
+      const count = co.claims && co.claims.length ? co.claims.length : 0;
+      const total = co.claims && co.claims.length
+        ? co.claims.reduce((sum, row) => sum + (H.parseAmount(row.balance || row.amount) || 0), 0)
+        : 0;
+      return `<div class="ms-elite-stat-tile">
+        <div class="kpi-value">${H.esc(String(count || "—"))}</div>
+        <div class="trend-indicator ms-elite-stat-hint">${total ? H.esc(`$${Math.round(total).toLocaleString()}`) : "—"}</div>
+      </div>`;
+    },
+    newPatients(D, H) {
+      const np = D && D.metrics ? D.metrics("newPatients") : {};
+      const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+      const base = Number(np.newPatientCount) || 4;
+      const values = labels.map((_, i) => Math.max(1, base + (i % 3) - 1));
+      return H.chartContainer(H.vBarChart(labels, values, "#a78bfa"));
+    },
+    nr2ProviderCompensationWidget(D, H) {
+      const provComp = D && D.nr2ProviderCompensation ? D.nr2ProviderCompensation() : { providers: [] };
+      const providers = D && D.providerBars ? D.providerBars() : null;
+      const payload = provComp.hasData
+        ? provComp
+        : providers
+          ? {
+              providers: providers.items.map((item) => ({
+                name: item.name,
+                production: H.parseAmount(item.amount),
+                pct: item.pct,
+              })),
+              totalProduction: H.parseAmount(providers.total),
+              hasData: true,
+            }
+          : { providers: [] };
+      return H.canvasProviderCompShare(payload);
+    },
+    quickbooksProfitLossDetail(D, H) {
+      const rows = D && D.quickbooksPlRows ? D.quickbooksPlRows() : [];
+      return rows.length
+        ? H.canvasTable(["Account", "Amount", "Notes"], rows.slice(0, 12), true)
+        : H.canvasEmpty("QuickBooks P&amp;L rows appear when export is loaded.");
+    },
+    ebitdaNormalization(D, H) {
+      const rows = D && D.ebitdaRows ? D.ebitdaRows() : [];
+      return rows.length
+        ? H.canvasTable(["Adjustment", "Amount", "Reviewer", "Notes"], rows, true)
+        : H.canvasEmpty("EBITDA normalization appears when QuickBooks P&amp;L is loaded.");
+    },
+    taxBookToTaxBridge(D, H) {
+      const bridge = D && D.taxBridgeRows ? D.taxBridgeRows() : [];
+      return bridge.length
+        ? H.canvasTable(["Line item", "Amount"], bridge, true)
+        : H.canvasEmpty("Book-to-tax bridge appears when QuickBooks export is loaded.");
+    },
+    taxReasonableComp(D, H) {
+      const scenarios = D && D.taxCompScenarioRows ? D.taxCompScenarioRows() : [];
+      return scenarios.length
+        ? H.canvasTable(["W-2 salary", "Est. K-1", "Employer FICA", "Note"], scenarios, true)
+        : H.canvasEmpty("Load QuickBooks P&amp;L to model compensation scenarios.");
+    },
+    taxQuarterlyEstimates(D, H) {
+      const quarterly = D && D.taxQuarterlyRows ? D.taxQuarterlyRows() : [];
+      return quarterly.length
+        ? H.canvasTable(["Period", "Federal", "Kansas", "Due", "Amount"], quarterly, true)
+        : H.canvasEmpty("Quarterly estimates appear when tax engine runs.");
+    },
+    taxFederalStateSplit(D, H) {
+      const split = D && D.taxSplit ? D.taxSplit() : [];
+      if (!split.length) return H.canvasEmpty("Federal/state split appears when tax plan is loaded.");
+      const total = split.reduce((s, row) => s + H.parseAmount(row[1]), 0) || 1;
+      const slices = split.map((row, i) => ({
+        label: row[0],
+        pct: Math.round((H.parseAmount(row[1]) / total) * 100),
+        color: i ? "#a855f7" : "#60a5fa",
+      }));
+      return `<div class="tax-split-chart">${H.conicDonut(slices, "")}</div>`;
+    },
+    softdentCollectionsDaily(D, H) {
+      const coll = D && D.softdentCollectionsDailySeries ? D.softdentCollectionsDailySeries() : { labels: [], values: [] };
+      return H.chartContainer(
+        coll.hasData ? H.vBarChart(coll.labels, coll.values, "#34d399") : H.canvasEmpty("Collections trend appears when sd_payments is loaded."),
+      );
+    },
+    softdentProviderProduction(D, H) {
+      const prov = D && D.softdentProviderProductionData ? D.softdentProviderProductionData() : { providers: [] };
+      return H.chartContainer(
+        prov.hasData
+          ? H.hBarChart(
+              prov.providers.map((p) => ({
+                name: p.providerCode,
+                amount: `$${Math.round(p.production).toLocaleString()}`,
+                pct: prov.total ? Math.round((p.production / prov.total) * 100) : 0,
+              })),
+              "amount",
+              "name",
+              "pct",
+            )
+          : H.canvasEmpty("Provider production appears when sd_procedures is loaded."),
+      );
+    },
+    softdentArAging(D, H, panel) {
+      if (panel && panel.type === "heatmap") {
+        const heat = D && D.softdentArAgingHeatmap ? D.softdentArAgingHeatmap() : null;
+        if (heat && heat.matrix) return H.canvasHeatmap(heat.rowLabels, heat.colLabels, heat.matrix);
+        const aging = D && D.softdentAgingBars ? D.softdentAgingBars() : null;
+        const fallback = H.arHeatmapFromAging ? H.arHeatmapFromAging(aging) : null;
+        return fallback ? H.canvasHeatmap(fallback.rowLabels, fallback.colLabels, fallback.matrix) : H.canvasHeatmapPlaceholder();
+      }
+      const aging = D && D.softdentAgingBars ? D.softdentAgingBars() : null;
+      return H.chartContainer(
+        aging ? H.vBarChart(aging.labels, aging.values, "#60a5fa") : H.canvasEmpty("A/R aging appears when SoftDent A/R export is loaded."),
+      );
+    },
+    caseAcceptance(D, H, panel) {
+      const ca = H.metricsFromWidget("caseAcceptance");
+      const practice = D && D.practiceStats ? D.practiceStats() : {};
+      const raw = ca.acceptanceRate || ca.rate || practice.caseRate || 0;
+      const pct = typeof raw === "number" ? raw : H.parsePct(raw);
+      return H.canvasGauge(Math.min(100, Math.max(0, pct)), "Acceptance", "var(--accent-cyan, #22d3ee)");
+    },
+    hygieneRecall(D, H, panel) {
+      if (panel && panel.type === "gauge") {
+        const practice = D && D.practiceStats ? D.practiceStats() : {};
+        const hr = H.metricsFromWidget("hygieneRecall");
+        const raw = hr.recallRate || hr.rate || practice.recallRate || 72;
+        const pct = typeof raw === "number" ? raw : H.parsePct(raw);
+        return H.canvasGauge(Math.min(100, Math.max(0, pct)), "Recall", "var(--accent-cyan, #22d3ee)");
+      }
+      const practice = D && D.practiceStats ? D.practiceStats() : {};
+      return `${H.canvasRecallCalendar(practice)}${H.canvasStat(practice.hygieneCompleted || "—", "Hygiene completed", undefined, "hygieneRecall")}`;
+    },
+    softdentResponsibility(D, H) {
+      const resp = D && D.softdentResponsibilityDonut ? D.softdentResponsibilityDonut() : null;
+      return resp ? H.conicDonut(resp.slices, "") : H.canvasEmpty("Insurance vs patient split unavailable.");
+    },
+    treatmentPlanSummary(D, H, panel) {
+      const practice = D && D.practiceStats ? D.practiceStats() : {};
+      const ca = H.metricsFromWidget("caseAcceptance");
+      if (panel && panel.type === "funnel") {
+        return H.canvasFunnel([
+          { label: "Presented", value: H.fmtClaim(ca.plansPresented || practice.treatmentPresented || "0") },
+          { label: "Accepted", value: H.fmtClaim(ca.plansAccepted || practice.caseAccepted || "0") },
+          { label: "Scheduled", value: H.fmtClaim(ca.plansScheduled || practice.treatmentScheduled || "0") },
+          { label: "Completed", value: H.fmtClaim(ca.plansCompleted || practice.treatmentCompleted || "0") },
+        ]);
+      }
+      return H.canvasStat(practice.treatmentPresented || "—", "Treatment presented", undefined, "treatmentPlanSummary");
+    },
+    softdentAppointmentsSnapshot(D, H, panel) {
+      if (panel && panel.type === "stat-grid") {
+        const stats = D && D.softdentAppointmentStats ? D.softdentAppointmentStats() : [];
+        return stats.length ? H.canvasStatGrid(stats.map((s) => ({ ...s, widgetKey: "softdentAppointmentsSnapshot" }))) : H.canvasEmpty("Appointment snapshot appears when sd_appointments is loaded.");
+      }
+      const appt = D && D.softdentAppointmentsSnapshotData ? D.softdentAppointmentsSnapshotData() : { appointments: [] };
+      return appt.hasData
+        ? H.canvasTable(
+            ["Date", "Patient", "Provider", "Status"],
+            appt.appointments.map((a) => [a.date, a.patientId, a.provider, a.status]),
+            true,
+          )
+        : H.canvasEmpty("Appointment snapshot appears when sd_appointments is loaded.");
+    },
+    softdentOperatoryGrid(D, H) {
+      return H.canvasOperatoryGrid(D && D.softdentOperatoryGrid ? D.softdentOperatoryGrid() : null);
+    },
+    claimsPipeline(D, H) {
+      const lanes = D && D.claimsKanban ? D.claimsKanban() : [];
+      const kanbanLanes =
+        lanes.length > 0
+          ? lanes
+          : [
+              { lane: "Draft", tone: "muted", items: [] },
+              { lane: "Needs Review", tone: "orange", items: [] },
+              { lane: "Ready", tone: "green", items: [] },
+              { lane: "Denied", tone: "orange", items: [] },
+            ];
+      return H.canvasKanbanLanes(kanbanLanes, "claimsPipeline", { claims: true });
+    },
+    arAgingAndCollections(D, H, panel) {
+      const aging = D && D.arAgingBars ? D.arAgingBars() : D && D.softdentAgingBars ? D.softdentAgingBars() : null;
+      const heat = H.arHeatmapFromAging ? H.arHeatmapFromAging(aging) : null;
+      const waterfall =
+        aging && aging.labels && aging.values
+          ? `<div class="ms-elite-waterfall">${aging.labels
+              .map((label, i) => {
+                const max = Math.max(...aging.values, 1);
+                const pct = Math.round(((aging.values[i] || 0) / max) * 100);
+                return `<div class="ms-elite-waterfall-row"><span class="ms-elite-waterfall-label">${H.esc(label)}</span><div class="ms-elite-waterfall-track"><div class="ms-elite-waterfall-fill" style="--w:${pct}%"></div></div><span class="ms-elite-stat-num">$${Math.round(aging.values[i] || 0).toLocaleString()}</span></div>`;
+              })
+              .join("")}</div>`
+          : `<div class="ms-elite-waterfall"><div class="ms-elite-waterfall-row"><span class="ms-elite-waterfall-label">A/R buckets</span><div class="ms-elite-waterfall-track"><div class="ms-elite-waterfall-fill" style="--w:0%"></div></div><span class="ms-elite-stat-num">—</span></div></div>`;
+      const heatHtml = heat ? H.canvasHeatmap(heat.rowLabels, heat.colLabels, heat.matrix) : H.canvasHeatmapPlaceholder();
+      return `${waterfall}${heatHtml}`;
+    },
+    smartClaimsAndReceivables(D, H) {
+      const kanban = D && D.arFollowUpKanban ? D.arFollowUpKanban() : [];
+      const kanbanLanes =
+        kanban.length > 0
+          ? kanban
+          : [
+              { lane: "Needs call", tone: "orange", items: [] },
+              { lane: "Awaiting payer", tone: "blue", items: [] },
+              { lane: "Ready to close", tone: "green", items: [] },
+            ];
+      return H.canvasPriorityQueue(kanbanLanes, "smartClaimsAndReceivables");
+    },
+    arOutstandingClaims(D, H) {
+      const claims = D && D.arTopClaimsTable ? D.arTopClaimsTable() : [];
+      return claims.length
+        ? H.canvasTable(["Patient", "Procedure", "Payer", "Balance", "Age"], claims, true)
+        : H.canvasEmpty("Outstanding claim detail will appear when SoftDent claims export is loaded.");
+    },
+    quickbooksMonthlyRevenue(D, H) {
+      const moRev = D && D.quickbooksMonthlyRevenueSeries ? D.quickbooksMonthlyRevenueSeries() : { labels: [], values: [] };
+      const plTrend = D && D.quickbooksPlTrend ? D.quickbooksPlTrend() : null;
+      if (plTrend && plTrend.labels) {
+        return H.chartContainer(H.dualLineChart(plTrend.labels, plTrend.series), true);
+      }
+      return moRev.hasData
+        ? H.chartContainer(H.vBarChart(moRev.labels, moRev.values, "#00d4ff"))
+        : H.canvasEmpty("Monthly revenue trend appears when QuickBooks P&amp;L is loaded.");
+    },
+    quickbooksRevenueByService(D, H) {
+      const revSvc = D && D.quickbooksRevenueByService ? D.quickbooksRevenueByService() : { slices: [] };
+      if (!revSvc.hasData) return H.canvasEmpty("Revenue-by-service appears when QuickBooks category exports are loaded.");
+      const slices = revSvc.slices.map((s, i) => ({
+        label: s.label,
+        pct: s.pct || Math.round((s.amount / (revSvc.total || 1)) * 100),
+        color: ["#60a5fa", "#34d399", "#f59e0b", "#a855f7"][i % 4],
+      }));
+      return H.conicDonut(slices, "");
+    },
+    quickbooksNetIncomeSummary(D, H) {
+      const netInc = D && D.quickbooksNetIncomeSummary ? D.quickbooksNetIncomeSummary() : {};
+      const ytd = netInc.hasData && netInc.ytdNetIncome != null ? `$${Math.round(netInc.ytdNetIncome).toLocaleString()}` : "—";
+      const margin = netInc.marginPct != null ? `${netInc.marginPct}%` : "—";
+      const qoq = netInc.qoqGrowthPct != null ? `${netInc.qoqGrowthPct}%` : "—";
+      return H.canvasStatGrid([
+        { value: ytd, label: "YTD Net Income", widgetKey: "quickbooksNetIncomeSummary" },
+        { value: margin, label: "Margin", widgetKey: "quickbooksNetIncomeSummary" },
+        { value: qoq, label: "QOQ Growth", widgetKey: "quickbooksNetIncomeSummary" },
+      ]);
+    },
+    quickbooksBalanceSheetSummary(D, H) {
+      const bs = D && D.quickbooksBalanceSheetSummary ? D.quickbooksBalanceSheetSummary() : { assets: [] };
+      return bs.hasData
+        ? H.canvasTable(
+            ["Asset", "Amount"],
+            (bs.assets || []).map((row) => [row.label, `$${Math.round(row.amount).toLocaleString()}`]),
+            true,
+          )
+        : H.canvasEmpty("Balance sheet summary appears when QuickBooks imports are loaded.");
+    },
+    quickbooksCashFlowTrend(D, H) {
+      const cf = D && D.quickbooksCashFlowTrend ? D.quickbooksCashFlowTrend() : { labels: [], net: [] };
+      return cf.hasData
+        ? H.chartContainer(H.dualLineChart(cf.labels, [{ label: "Net", tone: "success", data: cf.net }]), true)
+        : H.canvasEmpty("Cash flow trend appears when QuickBooks monthly P&amp;L is loaded.");
+    },
+    quickbooksExpenseBreakdown(D, H) {
+      const expenseBars = D && D.quickbooksExpenseBars ? D.quickbooksExpenseBars() : null;
+      if (!expenseBars || !expenseBars.labels.length) {
+        return H.canvasEmpty("Expense breakdown appears when QuickBooks export is loaded.");
+      }
+      const max = Math.max(...expenseBars.values, 1);
+      return `<div class="ms-elite-stat-grid">${expenseBars.labels
+        .map((label, i) => {
+          const val = expenseBars.values[i] || 0;
+          const pct = Math.round((val / max) * 100);
+          return `<div class="ms-elite-stat-row"><span class="ms-elite-stat-label">${H.esc(label)}</span><div class="ms-elite-stat-bar-bg"><div class="ms-elite-stat-bar-fill" style="--w:${pct}%"></div></div><span class="ms-elite-stat-num">$${Math.round(val).toLocaleString()}</span></div>`;
+        })
+        .join("")}</div>`;
+    },
+    quickbooksArAging(D, H) {
+      const qbAr = D && D.quickbooksQbArAging ? D.quickbooksQbArAging() : { buckets: [] };
+      return qbAr.hasData
+        ? H.canvasTable(
+            ["Bucket", "Balance"],
+            qbAr.buckets.map((b) => [b.bucket, `$${Math.round(b.balance).toLocaleString()}`]),
+            true,
+          )
+        : H.canvasEmpty("QuickBooks A/R aging appears when quickbooks_ar.csv is loaded.");
+    },
+    documentIntakeQueue(D, H) {
+      const queue = D && D.documentsQueueRows ? D.documentsQueueRows() : [];
+      return queue.length
+        ? H.canvasTable(["Document", "Category", "Amount", "Date"], queue, true)
+        : H.canvasEmpty("Accounting documents will appear when the local document queue is populated.");
+    },
+    documentPreview(D, H) {
+      const doc = D && D.firstDocument ? D.firstDocument() : null;
+      return `${H.canvasDocPreview(doc ? doc.vendor || doc.id || "Document" : "Document preview", doc && doc.pages ? doc.pages : 1)}${doc ? "" : H.canvasEmpty("Document preview will appear when a document is selected.")}`;
+    },
+    accountsPayableAutomation(D, H) {
+      const apRows = D && D.accountsPayableRows ? D.accountsPayableRows() : [];
+      if (apRows.length) {
+        return H.canvasTable(["Vendor", "Amount", "Due", "Status"], apRows, true);
+      }
+      const ap = H.metricsFromWidget("accountsPayableAutomation");
+      return H.canvasTable(
+        ["Metric", "Value"],
+        [
+          ["Expense total", H.fmtClaim(ap.expenseTotal)],
+          ["Posted", `${H.parsePct(ap.postedPct)}%`],
+        ],
+        true,
+      );
+    },
+    periodCloseAndPosting(D, H) {
+      const periodStats = D && D.documentsPeriodStats ? D.documentsPeriodStats() : [];
+      if (periodStats.length) {
+        return H.canvasStatGrid(periodStats.map((s) => ({ ...s, widgetKey: "periodCloseAndPosting" })));
+      }
+      return H.canvasEmpty("Period close metrics will appear when documents are assigned to a period.");
+    },
+    journalPostingQueue(D, H) {
+      const journalItems = D && D.journalQueueItems ? D.journalQueueItems() : [];
+      return journalItems.length ? H.renderJournalQueuePanel(journalItems) : H.canvasEmpty("Journal posting queue requires the NR2 server. Run StartProgram.bat.");
+    },
+    documentLibrary(D, H) {
+      const rows = D && D.libraryRows ? D.libraryRows() : [];
+      const doc = D && D.firstLibraryDoc ? D.firstLibraryDoc() : null;
+      return `${rows.length ? H.canvasTable(["Document", "Category", "Updated", "Expires"], rows, true) : H.canvasEmpty("Library documents appear when contract and compliance files are indexed.")}${doc ? H.canvasDocPreview(doc.title || "Preview", doc.pages || 1) : ""}`;
+    },
+    officeManagerPriorities(D, H) {
+      const kanban = D && D.officeKanban ? D.officeKanban() : [];
+      const kanbanLanes =
+        kanban.length > 0
+          ? kanban
+          : [
+              { lane: "Billing", tone: "orange", items: [] },
+              { lane: "Scheduling", tone: "blue", items: [] },
+              { lane: "Owner review", tone: "green", items: [] },
+            ];
+      return H.canvasKanbanLanes(kanbanLanes, "officeManagerPriorities");
+    },
+    officeManagerSurfaces(D, H) {
+      const staffPages =
+        typeof PageSchema !== "undefined" && PageSchema.NAV_GROUPS
+          ? PageSchema.NAV_GROUPS.flatMap((g) => g.pages).filter((id) => id !== "hal" && id !== "office-manager")
+          : [];
+      return H.canvasNavPills(staffPages);
+    },
+    narrativeWorkflow(D, H, panel) {
+      if (panel && panel.type === "kanban") {
+        const lanes = D && D.narrativeKanban ? D.narrativeKanban() : [];
+        return H.canvasKanbanLanes(lanes, "narrativeWorkflow", { narratives: true });
+      }
+      return H.canvasEmpty("Narrative drafts appear when local drafts or claim sources are loaded.");
+    },
+  };
+
+  const SUBPANEL_BODY = {
+    claimsVolumeTrend(D, H) {
+      const claims = D && D.allClaims ? D.allClaims() : [];
+      const total = Math.max(claims.length, 1);
+      const volLabels = ["Week 1", "Week 2", "Week 3", "Week 4"];
+      const volValues = volLabels.map((_, i) => Math.max(0, Math.round(total * (0.2 + i * 0.05))));
+      return H.chartContainer(
+        claims.length ? H.vBarChart(volLabels, volValues, "#a855f7") : H.canvasEmpty("Claims volume appears when SoftDent claims export is loaded."),
+      );
+    },
+    claimsPayerBreakdown(D, H) {
+      const claims = D && D.allClaims ? D.allClaims() : [];
+      const payerMap = {};
+      claims.forEach((c) => {
+        const p = String(c.payer || "Other").slice(0, 20);
+        payerMap[p] = (payerMap[p] || 0) + 1;
+      });
+      const entries = Object.entries(payerMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      if (!entries.length) return H.canvasEmpty("Payer breakdown appears when claims export is loaded.");
+      return H.chartContainer(H.vBarChart(entries.map((e) => e[0]), entries.map((e) => e[1]), "#f59e0b"));
+    },
+    arDistribution(D, H) {
+      const payer = D && D.payerDonut ? D.payerDonut() : null;
+      return payer ? H.conicDonut(payer.slices, payer.center, 96) : H.canvasEmpty("Payer mix will appear when collections data is loaded.");
+    },
+    categoryFacets(D, H) {
+      return `<input class="search-box" type="search" placeholder="Search library…" aria-label="Search library" /><div class="document-grid"><span class="text-muted">Contracts · Compliance · Insurance</span></div>`;
+    },
+    taxMemoEvidence(D, H) {
+      const citations = D && D.taxMemoCitations ? D.taxMemoCitations() : [];
+      const topics = D && D.taxMemoTopics ? D.taxMemoTopics() : [];
+      const disclaimer = D && D.taxDisclaimer ? D.taxDisclaimer() : "Read-only planning — CPA review required before filing.";
+      const memoItems = citations.length
+        ? citations.map((c) => `<li><strong>${H.esc(c.title || c.source || "Citation")}</strong><span>${H.esc(c.detail || c.excerpt || "")}</span></li>`).join("")
+        : topics.length
+          ? topics.map((t) => `<li><strong>${H.esc(t.title || t.topic || "Topic")}</strong><span>${H.esc(t.summary || t.detail || "")}</span></li>`).join("")
+          : `<li><strong>MemoAI evidence</strong><span>Load QuickBooks P&amp;L and run the tax engine to attach IRS and Kansas guidance citations.</span></li>`;
+      return `<p class="text-muted">${H.esc(disclaimer)}</p><ul class="ms-tax-memo">${memoItems}</ul>`;
+    },
+    caseAcceptanceFunnel(D, H) {
+      const practice = D && D.practiceStats ? D.practiceStats() : {};
+      const ca = H.metricsFromWidget("caseAcceptance");
+      const funnelSteps = [
+        { label: "Presented", value: H.fmtClaim(ca.plansPresented || practice.treatmentPresented || "0") },
+        { label: "Accepted", value: H.fmtClaim(ca.plansAccepted || practice.caseAccepted || "0") },
+        { label: "Scheduled", value: H.fmtClaim(ca.plansScheduled || practice.treatmentScheduled || "0") },
+        { label: "Completed", value: H.fmtClaim(ca.plansCompleted || practice.treatmentCompleted || "0") },
+      ];
+      return H.canvasFunnel(funnelSteps);
+    },
+    ebitdaFunnel(D, H) {
+      const rows = D && D.ebitdaRows ? D.ebitdaRows() : [];
+      return rows.length
+        ? H.canvasTable(["Adjustment", "Amount", "Reviewer", "Notes"], rows, true)
+        : H.canvasEmpty("EBITDA normalization appears when QuickBooks P&amp;L is loaded.");
+    },
+    claimsSidebar(D, H) {
+      const claim = D && D.firstClaim ? D.firstClaim() : null;
+      return H.canvasClaimSidebar(claim, "claimsPipeline");
+    },
+    documentsSourceBreakdown(D, H) {
+      const stats = D && D.documentsSourceBreakdown ? D.documentsSourceBreakdown() : [];
+      return stats.length
+        ? H.canvasStatGrid(stats.map((s) => ({ ...s, widgetKey: undefined })))
+        : H.canvasEmpty("Source breakdown appears when document queue is populated.");
+    },
+    officeTaskQueue(D, H) {
+      const tasks = D && D.officeTaskRows ? D.officeTaskRows() : [];
+      return tasks.length
+        ? H.canvasTable(["Due", "Category", "Task", "Status"], tasks, true)
+        : H.canvasEmpty("Local office tasks will appear when HAL or staff create them.");
+    },
+  };
+
+  return { render, hasPage, loadManifest, pageSpec };
+})();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = MoonshotLayoutEngine;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.MoonshotLayoutEngine = MoonshotLayoutEngine;
+}

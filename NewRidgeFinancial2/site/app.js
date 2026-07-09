@@ -1305,11 +1305,7 @@ function scheduleHalWidgetRefresh(snapshot, options) {
         )
       ) {
         PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
-        if (
-          !staffMockEmbedNavHidden() &&
-          typeof MoonshotMockupChrome !== "undefined" &&
-          MoonshotMockupChrome.refreshHalReadinessStrip
-        ) {
+        if (shouldRefreshHalReadiness(currentId) && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
           MoonshotMockupChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
         }
         if (typeof NR2Tier3 !== "undefined" && NR2Tier3.publishHeroMetrics && currentId === "financial") {
@@ -4972,11 +4968,38 @@ function openInitialStaffPage() {
   select(initial);
 }
 
+function shouldRefreshHalReadiness(pageId) {
+  const MC =
+    (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome) ||
+    (typeof globalThis !== "undefined" && globalThis.MoonshotMockupChrome) ||
+    null;
+  if (MC && typeof MC.staffMockEmbedPage === "function") {
+    return !MC.staffMockEmbedPage(pageId);
+  }
+  return !staffMockEmbedNavHidden();
+}
+
 function staffMockEmbedNavHidden() {
   return (
     (typeof window !== "undefined" && window.NR2_STAFF_MOCK_ONLY) ||
     (typeof document !== "undefined" &&
       document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed")
+  );
+}
+
+function syncStaffRenderModeAttr(pageId) {
+  if (typeof document === "undefined") return;
+  const MC =
+    (typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome) ||
+    (typeof globalThis !== "undefined" && globalThis.MoonshotMockupChrome) ||
+    null;
+  const mockPage =
+    MC && typeof MC.staffMockEmbedPage === "function"
+      ? MC.staffMockEmbedPage(pageId)
+      : staffMockEmbedNavHidden();
+  document.documentElement.setAttribute(
+    "data-nr2-staff-render",
+    mockPage ? "mock-embed" : "live-wire-pilot",
   );
 }
 
@@ -4996,7 +5019,7 @@ function renderSidebar(activeId) {
   sidebar.removeAttribute("aria-hidden");
   if (PageSchema.LAYOUT_EPOCH !== "moonshot-mockup") {
     sidebar.innerHTML =
-      '<div class="sidebar__boot-error">Stale schema blocked. Reload with ?v=hal-10112&__nr2_purge=1</div>';
+      '<div class="sidebar__boot-error">Stale schema blocked. Reload with ?v=hal-10113&__nr2_purge=1</div>';
     return;
   }
   const MC =
@@ -5051,6 +5074,7 @@ function select(id, options) {
     return;
   }
   const pageId = resolvePageId(id);
+  syncStaffRenderModeAttr(pageId);
   const page = getPages().find((p) => p.id === pageId) || getPages().find((p) => p.id === defaultPageId()) || getPages()[0];
   if (!page) return;
   const isHal =
@@ -5071,11 +5095,7 @@ function select(id, options) {
       appPage.hidden = false;
       if (PageViews && PageViews.hasPage(page.id)) {
         PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed, halProgramSnapshot);
-        if (
-          !staffMockEmbedNavHidden() &&
-          typeof MoonshotMockupChrome !== "undefined" &&
-          MoonshotMockupChrome.refreshHalReadinessStrip
-        ) {
+        if (shouldRefreshHalReadiness(currentId) && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
           MoonshotMockupChrome.refreshHalReadinessStrip(page.id, halWidgetFeed);
         }
       } else if (window.UI && window.UI.ErrorState) {
@@ -5682,11 +5702,7 @@ if (appPage) {
       const currentId = resolvePageId(window.location.hash);
       if (currentId === "quickbooks" && PageViews && PageViews.hasPage("quickbooks")) {
         PageViews.renderPageView(appPage, halData, "quickbooks", select, halWidgetFeed, halProgramSnapshot);
-        if (
-          !staffMockEmbedNavHidden() &&
-          typeof MoonshotMockupChrome !== "undefined" &&
-          MoonshotMockupChrome.refreshHalReadinessStrip
-        ) {
+        if (shouldRefreshHalReadiness(currentId) && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
           MoonshotMockupChrome.refreshHalReadinessStrip("quickbooks", halWidgetFeed);
         }
       }
@@ -6062,11 +6078,7 @@ if (typeof window !== "undefined") {
     const currentId = (window.location.hash || "").replace("#", "") || getPages()[0].id;
     if (currentId !== "hal" && appPage && !appPage.hidden && PageViews && PageViews.hasPage(currentId)) {
       PageViews.renderPageView(appPage, halData, currentId, select, halWidgetFeed, halProgramSnapshot);
-      if (
-        !staffMockEmbedNavHidden() &&
-        typeof MoonshotMockupChrome !== "undefined" &&
-        MoonshotMockupChrome.refreshHalReadinessStrip
-      ) {
+      if (shouldRefreshHalReadiness(currentId) && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
         MoonshotMockupChrome.refreshHalReadinessStrip(currentId, halWidgetFeed);
       }
     }

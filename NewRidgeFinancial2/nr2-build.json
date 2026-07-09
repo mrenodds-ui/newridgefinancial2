@@ -1,9 +1,10 @@
 {
-  "BUILD_ID": "hal-10112",
-  "assetVersion": "hal-10112",
-  "schemaVersion": "hal-10112",
+  "BUILD_ID": "hal-10113",
+  "assetVersion": "hal-10113",
+  "schemaVersion": "hal-10113",
   "REQUIRED_EPOCH": "moonshot-mockup",
-  "staffRenderMode": "mock-embed",
-  "builtAt": "2026-07-09T13:15:00.000Z",
-  "notes": "hal-10112: Hard-block live sync/storyboard chrome on mock-embed staff pages."
+  "staffRenderMode": "live-wire-pilot",
+  "liveWirePages": ["financial"],
+  "builtAt": "2026-07-09T13:45:00.000Z",
+  "notes": "hal-10113: Live-wire pilot — Financial uses MoonshotLayoutEngine; other staff pages stay mock-embed."
 }

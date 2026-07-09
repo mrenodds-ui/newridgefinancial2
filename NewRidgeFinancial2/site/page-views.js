@@ -303,8 +303,17 @@ const PageViews = (function () {
     );
   }
 
+  function staffMockEmbedPage(pageId) {
+    const MC = typeof MoonshotMockupChrome !== "undefined" ? MoonshotMockupChrome : null;
+    if (MC && typeof MC.staffMockEmbedPage === "function") return MC.staffMockEmbedPage(pageId);
+    return staffMockEmbedMode();
+  }
+
   function stripMockEmbedLiveChrome(container) {
-    if (!staffMockEmbedMode() || !container) return;
+    if (!container) return;
+    const pageEl = container.querySelector("[data-ms-page]");
+    const pageId = pageEl && pageEl.getAttribute("data-ms-page");
+    if (!staffMockEmbedPage(pageId)) return;
     container
       .querySelectorAll(
         ".page-header-tools, .sync-badge, .storyboard-export-btn, .cpa-export-btn, .ms-import-notice, .ms-mockup-preview-banner, .filter-bar, .hal-insight, .hero, .top-header, .alert-strip, .ms-hal-readiness-strip, #nr2-hal-readiness, .ms-hal-strip",
@@ -337,7 +346,7 @@ const PageViews = (function () {
   }
 
   function chromeOptsFromState(state) {
-    if (staffMockEmbedMode()) return null;
+    if (staffMockEmbedPage(state && state.pageId)) return null;
     const snap = state && state.programSnapshot;
     const opts = {};
     const bundle = snap && snap.importBundle;
@@ -428,7 +437,7 @@ const PageViews = (function () {
     );
     document.body.setAttribute("data-nr2-layout", "moonshot-mockup-grid");
     wireCommon(container, onNavigate);
-    if (!staffMockEmbedMode() && typeof NR2PageFilters !== "undefined" && NR2PageFilters.mountPageFilters) {
+    if (!staffMockEmbedPage(pageId) && typeof NR2PageFilters !== "undefined" && NR2PageFilters.mountPageFilters) {
       NR2PageFilters.mountPageFilters(container, pageId, { snapshot: programSnapshot });
     }
     const canvas = container.querySelector("#page-canvas");

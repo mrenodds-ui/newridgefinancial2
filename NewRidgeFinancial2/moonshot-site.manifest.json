@@ -1,7 +1,8 @@
 {
   "schemaEpoch": "moonshot-mockup",
-  "staffRenderMode": "mock-embed",
-  "description": "Financial program mock-only bundle (8765) — staff pages embed elite HTML; HAL tab stays live.",
+  "staffRenderMode": "live-wire-pilot",
+  "liveWirePages": ["financial"],
+  "description": "Financial program live-wire pilot (8765) — Financial live via MoonshotLayoutEngine; other staff pages mock-embed.",
   "shell": [
     "index.html",
     "styles.css",
@@ -71,6 +72,8 @@
     "hal-capability-index.js",
     "program-strength.js",
     "tax-engine.js",
+    "deferred-live-wire/moonshot-page-layouts.js",
+    "deferred-live-wire/moonshot-layout-engine.js",
     "page-canvas-data.js",
     "page-canvas.js",
     "nr2-page-filters.js",
@@ -88,8 +91,6 @@
     "app.js"
   ],
   "deferredUntilLiveWire": [
-    "moonshot-page-layouts.js",
-    "moonshot-layout-engine.js",
     "charts/import-timeline.js",
     "charts/ar-heatmap.js",
     "charts/practice-pulse.js",

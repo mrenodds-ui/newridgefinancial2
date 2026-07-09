@@ -66,6 +66,25 @@ const MoonshotMockupChrome = (function () {
     );
   }
 
+  function liveWirePages() {
+    const RT = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : {};
+    const build = RT.NR2_BUILD || null;
+    if (build && build.staffRenderMode === "live-wire-pilot" && Array.isArray(build.liveWirePages)) {
+      return build.liveWirePages;
+    }
+    if (Array.isArray(RT.NR2_LIVE_WIRE_PAGES)) {
+      return RT.NR2_LIVE_WIRE_PAGES;
+    }
+    return [];
+  }
+
+  function staffMockEmbedPage(pageId) {
+    if (!staffMockEmbedMode()) return false;
+    const live = liveWirePages();
+    if (live.length && pageId) return !live.includes(pageId);
+    return true;
+  }
+
   function renderNavSubitems(page, activeId) {
     const mockOnly = staffMockEmbedMode();
     if (mockOnly && page) {
@@ -292,7 +311,7 @@ const MoonshotMockupChrome = (function () {
   }
 
   function renderPageHeaderTools(schema, opts, commandChipsHtml) {
-    if (staffMockEmbedMode()) return "";
+    if (schema && staffMockEmbedPage(schema.id)) return "";
     const o = opts || {};
     if (!schema || !schema.id) return commandChipsHtml ? `<div class="page-header-tools">${commandChipsHtml}</div>` : "";
     const parts = [];
@@ -375,7 +394,7 @@ const MoonshotMockupChrome = (function () {
   }
 
   function pageChrome(state, schema, insight, opts) {
-    if (staffMockEmbedMode()) return pageChromeMockEmbed(state, schema, opts);
+    if (schema && staffMockEmbedPage(schema.id)) return pageChromeMockEmbed(state, schema, opts);
     const o = opts || {};
     const commands =
       typeof PageSchema !== "undefined" && PageSchema.commandsFor && schema && schema.id
@@ -444,7 +463,7 @@ const MoonshotMockupChrome = (function () {
     if (!schema) {
       return `<div class="ms-page-chrome ms-page-chrome--missing" role="alert"><p>Page unavailable.</p></div>`;
     }
-    if (staffMockEmbedMode()) {
+    if (staffMockEmbedPage(state.pageId)) {
       return pageChromeMockEmbed(state, schema, o);
     }
     if (state.pageId === "hal") {
@@ -507,7 +526,7 @@ const MoonshotMockupChrome = (function () {
   }
 
   function refreshHalReadinessStrip(pageId, feed) {
-    if (staffMockEmbedMode()) return;
+    if (staffMockEmbedPage(pageId)) return;
     const HW = halWidgetsApi();
     if (!HW || !pageId) return;
     const readiness = HW.pageReadiness(pageId, feed || {});
@@ -539,6 +558,8 @@ const MoonshotMockupChrome = (function () {
     refreshHalReadinessStrip,
     setHalReadiness,
     mockupInsight,
+    staffMockEmbedPage,
+    liveWirePages,
   };
 })();
 

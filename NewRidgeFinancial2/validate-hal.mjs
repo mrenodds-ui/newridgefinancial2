@@ -1826,7 +1826,11 @@ async function main() {
     assert(!pageCanvasSrc.includes("MoonshotLayoutEngine.render"), "mock-embed staff pages must not wire layout engine");
   } else if (staffLiveWirePilot) {
     assert(pageCanvasSrc.includes("shouldLiveWire"), "live-wire pilot must gate per-page live render");
-    assert(pageCanvasSrc.includes("MoonshotLayoutEngine.render"), "live-wire pilot must wire layout engine");
+    assert(
+      pageCanvasSrc.includes("MoonshotLayoutEngine") &&
+        (pageCanvasSrc.includes("MoonshotLayoutEngine.render") || pageCanvasSrc.includes("LE.render")),
+      "live-wire pilot must wire layout engine",
+    );
     assert(pageCanvasSrc.includes("mockupPreviewGate"), "live-wire pilot must keep mock-embed fallback for other pages");
   } else {
     assert(pageCanvasSrc.includes("dashboardHost"), "QB mockup must wrap dashboard-grid in dashboardHost");

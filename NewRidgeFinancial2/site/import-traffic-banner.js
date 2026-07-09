@@ -96,9 +96,12 @@ const ImportTrafficBanner = (function () {
 
   function install() {
     if (typeof window === "undefined") return;
+    const build = window.NR2_BUILD || {};
+    const pilot = build.staffRenderMode === "live-wire-pilot" || window.NR2_STAFF_RENDER_MODE === "live-wire-pilot";
     if (
-      window.NR2_STAFF_MOCK_ONLY ||
-      document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed"
+      !pilot &&
+      (window.NR2_STAFF_MOCK_ONLY ||
+        document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed")
     ) {
       return;
     }

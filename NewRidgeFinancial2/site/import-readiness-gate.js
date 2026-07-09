@@ -99,16 +99,27 @@ const ImportReadinessGate = (function () {
     }
   }
 
-  function staffMockEmbedMode() {
+  function staffMockEmbedPage(pageId) {
     if (typeof window === "undefined") return false;
-    return (
+    if (
       window.NR2_STAFF_MOCK_ONLY ||
       document.documentElement.getAttribute("data-nr2-staff-render") === "mock-embed"
-    );
+    ) {
+      const build = window.NR2_BUILD || {};
+      const live =
+        build.staffRenderMode === "live-wire-pilot" && Array.isArray(build.liveWirePages)
+          ? build.liveWirePages
+          : Array.isArray(window.NR2_LIVE_WIRE_PAGES)
+            ? window.NR2_LIVE_WIRE_PAGES
+            : [];
+      if (live.length && pageId) return !live.includes(pageId);
+      return true;
+    }
+    return false;
   }
 
   async function evaluate(pageId) {
-    if (staffMockEmbedMode()) {
+    if (staffMockEmbedPage(pageId)) {
       removeGate();
       return;
     }
@@ -142,9 +153,15 @@ const ImportReadinessGate = (function () {
     await evaluate(pageId);
   }
 
+  function liveWirePilotActive() {
+    const build = typeof window !== "undefined" && window.NR2_BUILD ? window.NR2_BUILD : null;
+    if (build && build.staffRenderMode === "live-wire-pilot") return true;
+    return typeof window !== "undefined" && window.NR2_STAFF_RENDER_MODE === "live-wire-pilot";
+  }
+
   function installListeners() {
     if (typeof window === "undefined") return;
-    if (staffMockEmbedMode()) return;
+    if (staffMockEmbedPage("financial") && !liveWirePilotActive()) return;
     window.addEventListener("nr2-import-readiness-changed", () => {
       onReadinessChanged();
       window.dispatchEvent(new CustomEvent("nr2:page-refresh-requested"));

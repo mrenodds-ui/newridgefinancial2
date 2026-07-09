@@ -1178,6 +1178,28 @@ const PageCanvas = (function () {
     };
   }
 
+  function liveWirePages() {
+    const RT = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : {};
+    const build = RT.NR2_BUILD || null;
+    if (build && build.staffRenderMode === "live-wire-pilot" && Array.isArray(build.liveWirePages)) {
+      return build.liveWirePages;
+    }
+    if (Array.isArray(RT.NR2_LIVE_WIRE_PAGES)) {
+      return RT.NR2_LIVE_WIRE_PAGES;
+    }
+    return [];
+  }
+
+  function shouldLiveWire(pageId) {
+    const live = liveWirePages();
+    return live.length > 0 && live.includes(pageId);
+  }
+
+  function liveWirePilotBanner(pageId) {
+    if (!shouldLiveWire(pageId)) return "";
+    return `<div class="ms-live-wire-pilot-banner" role="status"><strong>Live-wire pilot</strong> — ${pageId} uses MoonshotLayoutEngine; other staff pages stay mock-embed.</div>`;
+  }
+
   function mockupPreviewGate(pageId) {
     const H = buildMoonshotHelpers();
     const hasMock =
@@ -1208,6 +1230,16 @@ const PageCanvas = (function () {
     activeSnapshot = programSnapshot || null;
     const D = dataApi();
     if (D) D.bind(activeFeed, activeSnapshot);
+    if (shouldLiveWire(pageId)) {
+      const H = buildMoonshotHelpers();
+      const noticeHtml = canvasImportNotice(pageImportNotice(pageId));
+      const LE = typeof MoonshotLayoutEngine !== "undefined" ? MoonshotLayoutEngine : null;
+      if (!LE || typeof LE.render !== "function" || !LE.hasPage(pageId)) {
+        return liveWirePilotBanner(pageId) + noticeHtml + mockupPreviewGate(pageId);
+      }
+      const html = LE.render(pageId, H);
+      return liveWirePilotBanner(pageId) + noticeHtml + (html || "");
+    }
     return mockupPreviewGate(pageId);
   }
 
