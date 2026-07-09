@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10136",
-  "assetVersion": "hal-10136",
-  "schemaVersion": "hal-10136",
+  "BUILD_ID": "hal-10137",
+  "assetVersion": "hal-10137",
+  "schemaVersion": "hal-10137",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T17:15:00.000Z",
-  "notes": "hal-10136: SoftDent insurance vs patient split from open claims vs daysheet A/R when dashboard attribution is not an A/R split."
+  "builtAt": "2026-07-09T17:25:00.000Z",
+  "notes": "hal-10137: SoftDent operatory schedule widget reads chairs from SoftDent dashboard/import, not practice dashboard."
 }

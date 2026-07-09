@@ -2194,14 +2194,45 @@ const HalSkills = (function () {
       practiceConfigured.hygieneRecall ? practiceStatus : "FAILED",
       "Hygiene completed and recall due counts from SoftDent when hygiene_recall_summary export is configured.",
     );
-    const operatoryChairs = (practiceDash && practiceDash.operatoryChairs) || [];
+    const operatoryChairs =
+      (sd && Array.isArray(sd.operatoryChairs) && sd.operatoryChairs.length && sd.operatoryChairs) ||
+      (practiceDash && Array.isArray(practiceDash.operatoryChairs) && practiceDash.operatoryChairs.length && practiceDash.operatoryChairs) ||
+      ((snap.importBundle &&
+        snap.importBundle.softdent &&
+        snap.importBundle.softdent.operatory &&
+        snap.importBundle.softdent.operatory.operatoryChairs) ||
+        []);
     const operatoryConfigured = Array.isArray(operatoryChairs) && operatoryChairs.length > 0;
-    const operatoryGridWidget = buildContractWidget(
-      "softdentOperatoryGrid",
-      contractCtx,
-      operatoryConfigured ? practiceStatus : "FAILED",
-      "Operatory chair schedule from SoftDent when the dashboard export includes operatory columns.",
-    );
+    let activeOperatoryChairs = 0;
+    let nextOpenSlot = null;
+    operatoryChairs.forEach((room) => {
+      const slots = (room && room.slots) || [];
+      const hasPatient = slots.some((slot) => slot && (slot.patient || slot.patientName));
+      if (hasPatient) activeOperatoryChairs += 1;
+      if (!nextOpenSlot) {
+        const open = slots.find((slot) => slot && !(slot.patient || slot.patientName) && (slot.time || slot.start));
+        if (open) nextOpenSlot = open.time || open.start || null;
+      }
+    });
+    const operatoryGridWidget = operatoryConfigured
+      ? {
+          key: "softdentOperatoryGrid",
+          title: "Operatory Schedule",
+          status: softdentStatus === "FAILED" ? "DEGRADED" : softdentStatus,
+          summary: "Operatory chair schedule from SoftDent operatory_schedule.json.",
+          navTarget: WIDGET_NAV.softdentOperatoryGrid,
+          metrics: {
+            chairCount: operatoryChairs.length,
+            activeChairs: activeOperatoryChairs,
+            nextOpenSlot: nextOpenSlot || "—",
+          },
+        }
+      : buildContractWidget(
+          "softdentOperatoryGrid",
+          contractCtx,
+          "FAILED",
+          "Operatory chair schedule from SoftDent when operatory_schedule.json is present.",
+        );
     const monthlyRevenue = overviewWidget
       ? overviewWidget.metrics.monthlyRevenue
       : metricValue(qb.revenue);
@@ -2812,7 +2843,7 @@ const HalSkills = (function () {
         key: "softdentOperatoryGrid",
         title: "Operatory Schedule",
         status: "FAILED",
-        summary: "Operatory chair schedule from SoftDent when the dashboard export includes operatory columns.",
+        summary: "Operatory chair schedule from SoftDent when operatory_schedule.json is present.",
         navTarget: WIDGET_NAV.softdentOperatoryGrid,
         metrics: {
           chairCount: "Not Configured",
