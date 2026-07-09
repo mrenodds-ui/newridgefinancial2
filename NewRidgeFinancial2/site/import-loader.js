@@ -1595,14 +1595,28 @@ const ImportLoader = (function () {
           vs: qbPeriod ? `QuickBooks · ${qbPeriod}` : "QuickBooks import",
         },
       ],
-      providers: {
-        rows: aggregate.rows.map((row) => ({
-          name: row.provider,
-          amount: formatMoney(row.production),
-          pct: production ? Math.round((row.production / production) * 1000) / 10 : 0,
-        })),
-        total: { amount: formatMoney(production), pct: 100 },
-      },
+      providers: (() => {
+        // Share % must use the same period scope as Production MTD (comparable
+        // display totals). All-period provider rows over a single-month total
+        // previously produced impossible shares (e.g. 508%).
+        const providerSource =
+          displayAggregate && Array.isArray(displayAggregate.rows) && displayAggregate.rows.length
+            ? displayAggregate
+            : aggregate;
+        const providerTotal =
+          (providerSource.totals && providerSource.totals.production) ||
+          (providerSource.rows || []).reduce((sum, row) => sum + (row.production || 0), 0) ||
+          production ||
+          0;
+        return {
+          rows: (providerSource.rows || []).map((row) => ({
+            name: row.provider,
+            amount: formatMoney(row.production),
+            pct: providerTotal ? Math.round((row.production / providerTotal) * 1000) / 10 : 0,
+          })),
+          total: { amount: formatMoney(providerTotal), pct: 100 },
+        };
+      })(),
       freshness: [
         {
           system: "SoftDent",

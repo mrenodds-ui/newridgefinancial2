@@ -1,5 +1,5 @@
 /* Offline read-only cache — Moonshot Phase 9; mock-embed uses network-first for versioned assets. */
-const BUILD_ID = "hal-10137";
+const BUILD_ID = "hal-10138";
 const CACHE = "nr2-offline-v12-mock-embed";
 const INTEGRITY = "nr2-offline-integrity-v2";
 const SHELL = ["/", "/index.html"];
@@ -128,5 +128,6 @@ self.addEventListener("fetch", (event) => {
       }),
   );
 });
+
 
 

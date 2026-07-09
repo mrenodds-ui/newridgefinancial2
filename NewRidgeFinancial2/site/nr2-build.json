@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10137",
-  "assetVersion": "hal-10137",
-  "schemaVersion": "hal-10137",
+  "BUILD_ID": "hal-10138",
+  "assetVersion": "hal-10138",
+  "schemaVersion": "hal-10138",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T17:25:00.000Z",
-  "notes": "hal-10137: SoftDent operatory schedule widget reads chairs from SoftDent dashboard/import, not practice dashboard."
+  "builtAt": "2026-07-09T17:35:00.000Z",
+  "notes": "hal-10138: Provider production share uses comparable-period totals so percentages cannot exceed 100%."
 }
