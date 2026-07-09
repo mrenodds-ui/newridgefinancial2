@@ -643,6 +643,14 @@ const HalSkills = (function () {
       }
     } else {
       missingCodes.add("missing_softdent_claims_export");
+      items.push({
+        itemId: "claims-export-missing",
+        category: "imports",
+        severity: "warning",
+        title: "SoftDent claims export missing",
+        detail: "Claims attention is limited until the SoftDent claims export is in the inbox.",
+        actionHint: widgetImportCta("claimsPipeline", "Claims"),
+      });
     }
 
     const documents = snap.documents;
@@ -723,11 +731,28 @@ const HalSkills = (function () {
   }
 
   function formatOfficeManagerAttention(resp) {
-    const lines = ["Office-manager attention (local only):", resp.summary, ""];
+    const lines = ["What needs attention today (local only):", resp.summary, ""];
     resp.items.slice(0, 8).forEach((item) => {
       const sev = item.severity === "critical" ? "[!]" : item.severity === "warning" ? "[*]" : "[i]";
       lines.push(`${sev} ${item.title}${item.count ? ` (${item.count})` : ""} — ${item.detail}`);
+      if (item.actionHint) lines.push(`   Next: ${item.actionHint}`);
     });
+    if (Array.isArray(resp.missingDataCodes) && resp.missingDataCodes.length) {
+      const fileHints = [];
+      resp.missingDataCodes.forEach((code) => {
+        if (code === "missing_softdent_claims_export") {
+          fileHints.push(widgetImportCta("claimsPipeline", "Claims"));
+        } else if (code === "missing_treatment_plan_export") {
+          fileHints.push(widgetImportCta("treatmentPlanSummary", "Treatment plans"));
+        } else if (code === "missing_hygiene_recall_export") {
+          fileHints.push(widgetImportCta("hygieneRecall", "Hygiene recall"));
+        }
+      });
+      if (fileHints.length) {
+        lines.push("", "Exact exports still needed:");
+        fileHints.slice(0, 4).forEach((h) => lines.push(`- ${h}`));
+      }
+    }
     lines.push("", resp.safetyDisclaimer);
     return lines.join("\n");
   }
@@ -4925,6 +4950,7 @@ const HalSkills = (function () {
     formatEmptyWidgetExplanation,
     DATASET_CONTRACTS,
     WIDGET_DATASETS,
+    datasetNextAction,
     widgetImportCta,
     formatDailyOwnerBriefing,
     formatAccountingReviewQueue,

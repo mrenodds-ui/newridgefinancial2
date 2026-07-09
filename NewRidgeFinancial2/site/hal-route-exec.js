@@ -656,7 +656,27 @@ const HalRouteExec = (function () {
       const tasks = await resolveOfficeTasks(ctx);
       const metrics = HalSkills.computeTaskMetrics(tasks);
       const resp = HalSkills.buildOfficeManagerAttention(snapshot, metrics);
-      return outcome(HalSkills.formatOfficeManagerAttention(resp), "office", result.intent);
+      const sections = [HalSkills.formatOfficeManagerAttention(resp)];
+      const workTool = toolResults && toolResults.list_autonomous_work;
+      if (workTool && workTool.ok && workTool.summary) {
+        sections.push(String(workTool.summary).slice(0, 1800));
+      }
+      const importTool = toolResults && toolResults.read_import_diagnostics;
+      if (importTool && importTool.ok && importTool.summary) {
+        const importLines = String(importTool.summary)
+          .split(/\n+/)
+          .filter((line) => /missing|stale|partial|not_configured|Next:/i.test(line))
+          .slice(0, 8);
+        if (importLines.length) {
+          sections.push(["Stale or missing imports:", ...importLines].join("\n"));
+        }
+      }
+      const claimsTool = toolResults && toolResults.read_claims_summary;
+      if (claimsTool && claimsTool.ok && claimsTool.summary) {
+        sections.push(String(claimsTool.summary).slice(0, 900));
+      }
+      sections.push("Next step: work the top attention item locally. Dial, zip, email, and live post stay staff-gated.");
+      return outcome(sections.join("\n\n"), "office", result.intent);
     }
 
     if (result.useOfficeMessageSend) {

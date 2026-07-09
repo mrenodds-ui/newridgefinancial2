@@ -592,7 +592,7 @@
   ],
   "validation": {
     "suggestionRoutes": {
-      "Show what needs attention today": "priorities",
+      "Show what needs attention today": "office: attention",
       "What is ready to work on": "registry: ready",
       "What is blocked": "registry: blocked",
       "Make a plan for today": "reasoning",

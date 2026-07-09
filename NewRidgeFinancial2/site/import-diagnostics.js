@@ -400,15 +400,44 @@ const ImportDiagnostics = (function () {
     return labels[status] || status;
   }
 
+  function exactExportHint(item) {
+    if (!item) return "";
+    if (item.collectorHint && /Expected export file:|Add |Re-export /i.test(String(item.collectorHint))) {
+      return String(item.collectorHint);
+    }
+    const Skills =
+      typeof HalSkills !== "undefined"
+        ? HalSkills
+        : typeof window !== "undefined" && window.HalSkills
+          ? window.HalSkills
+          : null;
+    const contracts = Skills && Skills.DATASET_CONTRACTS ? Skills.DATASET_CONTRACTS : null;
+    const contract = contracts && item.datasetKey ? contracts[item.datasetKey] : null;
+    if (contract && typeof Skills.datasetNextAction === "function") {
+      return Skills.datasetNextAction(contract, item, null);
+    }
+    if (contract && Array.isArray(contract.files) && contract.files[0]) {
+      const file = contract.files[0];
+      const dir = contract.importDir || "the import inbox";
+      if (item.status === "stale") return `Re-export ${file} into ${dir}, then run refresh imports.`;
+      if (item.status === "missing" || item.status === "not_configured" || !item.found) {
+        return `Add ${file} into ${dir}, then run refresh imports.`;
+      }
+    }
+    return item.collectorHint ? String(item.collectorHint) : "";
+  }
+
   function formatDatasetLines(diagnostics) {
     if (!diagnostics || !Array.isArray(diagnostics.datasets)) return [];
     return diagnostics.datasets.map((item) => {
       const label = statusLabel(item.status);
       const file = item.sourceFile ? ` file=${item.sourceFile}` : "";
       const rows = item.found ? ` rows=${item.rowCount}` : "";
-      const hint = item.collectorHint ? ` collector=${item.collectorHint}` : "";
       const checksum = item.checksumChanged ? " checksum-changed" : "";
-      return `- ${item.datasetKey}: ${label}${file}${rows}${checksum}. ${item.detail || ""}${hint}`;
+      const needsAction = /missing|stale|partial|not_configured/i.test(String(item.status || ""));
+      const action = needsAction ? exactExportHint(item) : "";
+      const actionBit = action ? ` Next: ${action}` : "";
+      return `- ${item.datasetKey}: ${label}${file}${rows}${checksum}. ${item.detail || ""}${actionBit}`;
     });
   }
 
@@ -437,6 +466,7 @@ const ImportDiagnostics = (function () {
     evaluateBundle,
     checkUpstreamHealth,
     statusLabel,
+    exactExportHint,
     formatDatasetLines,
     systemSummary,
   };

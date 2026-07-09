@@ -38,12 +38,14 @@ class PayerReferenceTests(unittest.TestCase):
         self.assertIsNotNone(match)
         assert match is not None
         self.assertIn("metlife", str(match.get("matchedName") or "").lower())
+        self.assertTrue(match.get("tesiaPayerId"))
         self.assertIsNone(enrich_claim_payer("Insurance"))
         text = format_claim_payer_joins(
             [{"id": "C1", "payer": "METLIFE DENTAL", "status": "Denied"}, {"id": "C2", "payer": "Insurance"}]
         )
-        self.assertIn("Claim ↔ payer reference", text)
+        self.assertIn("Claim <-> payer reference", text)
         self.assertIn("METLIFE", text.upper())
+        self.assertRegex(text, r"Tesia/Vyne\s+(0000E|65978)")
 
 
 class EligibilityCacheTests(unittest.TestCase):

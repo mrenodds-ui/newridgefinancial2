@@ -2348,12 +2348,14 @@ const HalAgent = (function () {
     if (/\breadiness\b/i.test(q)) lead = "Readiness checks from local tools show:";
     else if (/\bimport|fresh|stale|missing|softdent|quickbooks\b/i.test(q)) lead = "Import and source status from local checks:";
     else if (isInvestigateQuery(q, route)) lead = "Local diagnostics for this question:";
-    else if (/\bprioriti|attention|blocked\b/i.test(q)) lead = "From local office data:";
+    else if (/\bprioriti|attention|blocked|what should i|good morning|hello\b/i.test(q) || (route && route.useOfficeAttention))
+      lead = "What needs attention today:";
     else lead = "From local program evidence:";
 
     let next = "Next step: refresh imports or name a specific page if you want a narrower check.";
     if (/\breadiness\b/i.test(q)) next = "Next step: run readiness from HAL or open the page named in the findings.";
     else if (route && route.intent === "imports: refresh") next = "Next step: verify export paths, then refresh imports if files are missing.";
+    else if (route && route.useOfficeAttention) next = "Next step: work the top attention item locally; outbound stays staff-gated.";
     else if (/\bdenied|claim\b/i.test(q)) next = "Next step: open Claims Workbench and work the Needs Review lane first.";
 
     const evidenceTag = "This is based on the local program data gathered for this question.";
@@ -2640,6 +2642,13 @@ const HalAgent = (function () {
     }
     if (/\b(import|diagnostic|export|fresh|stale|inbox|dataset)\b/i.test(query)) {
       gather.push("read_import_diagnostics");
+    }
+    if (
+      /\bwhat (needs|requires) attention\b|\bwhat should i (do|work on)\b|\b(start of day|morning (brief|check))\b|^(good\s+)?(morning|hello|hi)\b/i.test(
+        query,
+      )
+    ) {
+      gather.push("list_autonomous_work", "read_import_diagnostics", "read_claims_summary");
     }
     if (/\bdefine\b|english word|vocabulary|dictionary|random english\b/i.test(query)) {
       gather.push("lookup_english_word");
@@ -3049,6 +3058,14 @@ const HalAgent = (function () {
     ) {
       tools.push("read_tasks");
     }
+    if (route.useOfficeAttention) {
+      tools.push(
+        "list_autonomous_work",
+        "read_import_diagnostics",
+        "read_claims_summary",
+        "read_office_briefing",
+      );
+    }
     if (route.useDocRag || (/\b(library|search|compliance|policy)\b/i.test(query) && !route.text)) {
       tools.push("search_document_library");
     }
@@ -3075,6 +3092,13 @@ const HalAgent = (function () {
       /\b(daily office briefing|office manager briefing|office briefing|what should staff do today)\b/i.test(query)
     ) {
       tools.push("read_office_briefing");
+    }
+    if (
+      /\bwhat (needs|requires) attention\b|\bwhat should i (do|work on|focus on)\b|\b(start of day|start my day)\b/i.test(
+        query,
+      )
+    ) {
+      tools.push("list_autonomous_work", "read_import_diagnostics", "read_claims_summary", "read_office_briefing");
     }
     if (intent === "consent" || /\bconsent\b/i.test(query)) tools.push("explain_consent");
     if (intent === "firewall" || /\bfirewall\b/i.test(query)) tools.push("explain_consent");

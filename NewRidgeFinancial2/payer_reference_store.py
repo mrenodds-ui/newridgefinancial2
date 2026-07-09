@@ -134,11 +134,39 @@ def enrich_claim_payer(payer_label: str) -> dict[str, Any] | None:
     notes = str(payer.get("narrativeNotes") or "").strip()
     if len(notes) > 220:
         notes = notes[:220].rstrip() + "…"
+    tesia_id = str(payer.get("tesiaPayerId") or "").strip()
+    elig_270: bool | None = None
+    if tesia_id:
+        try:
+            from tesia_payer_list_store import find_payer_by_any_id
+
+            tesia = find_payer_by_any_id(tesia_id)
+            if tesia:
+                tesia_id = str(tesia.get("payerId") or tesia_id)
+                if "eligibility270" in tesia:
+                    elig_270 = tesia.get("eligibility270")
+        except Exception:
+            pass
+    elif payer.get("payerIds"):
+        try:
+            from tesia_payer_list_store import find_payer_by_any_id
+
+            for cand in payer.get("payerIds") or []:
+                tesia = find_payer_by_any_id(str(cand))
+                if tesia:
+                    tesia_id = str(tesia.get("payerId") or cand)
+                    if "eligibility270" in tesia:
+                        elig_270 = tesia.get("eligibility270")
+                    break
+        except Exception:
+            pass
     return {
         "claimPayer": label,
         "matchedName": payer.get("name"),
         "matchedId": payer.get("id"),
         "payerIds": list(payer.get("payerIds") or [])[:3],
+        "tesiaPayerId": tesia_id or None,
+        "eligibility270": elig_270,
         "eligibilityNotes": str(payer.get("eligibilityNotes") or "").strip()[:160],
         "narrativeNotes": notes,
         "commonDenialCodes": list(payer.get("commonDenialCodes") or [])[:6],
@@ -165,7 +193,7 @@ def format_claim_payer_joins(claims: list[dict[str, Any]]) -> str:
     joined = [c for c in enriched if c.get("payerMatch")]
     if not joined:
         return ""
-    lines = ["Claim ↔ payer reference joins (routing hints — verify card/InsCo before submit):"]
+    lines = ["Claim <-> payer reference joins (routing hints — verify card/InsCo before submit):"]
     for claim in joined[:8]:
         m = claim["payerMatch"]
         cid = claim.get("id") or claim.get("claimId") or "?"
@@ -174,9 +202,14 @@ def format_claim_payer_joins(claims: list[dict[str, Any]]) -> str:
         line = f"- {cid}"
         if status:
             line += f" [{status}]"
-        line += f": {m.get('claimPayer')} → {m.get('matchedName')}"
+        line += f": {m.get('claimPayer')} -> {m.get('matchedName')}"
         if ids:
             line += f" (IDs: {ids})"
+        tesia = str(m.get("tesiaPayerId") or "").strip()
+        if tesia:
+            elig = m.get("eligibility270")
+            elig_bit = " · 270=yes" if elig is True else (" · 270=no/verify" if elig is False else "")
+            line += f" · Tesia/Vyne {tesia}{elig_bit}"
         lines.append(line)
         if m.get("eligibilityNotes"):
             lines.append(f"  Contacts: {m['eligibilityNotes']}")

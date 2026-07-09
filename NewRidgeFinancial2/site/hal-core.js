@@ -1883,20 +1883,8 @@ const HalCore = (function () {
     }
 
     if (/\b(can you|could you|are you allowed to)\b.*\b(show|check)\b.*\b(what needs attention|needs attention today|attention today)\b/.test(q)) {
-      const top = (halData && halData.topPriority && halData.topPriority.summary) || "";
-      return {
-        intent: "capability:attention-today",
-        lane: "local",
-        text: pickVariant([
-          top
-            ? `Yes. I can show what needs attention today from the local registry. ${top} Staff should clear needs-review items before outbound steps. Next step: open the flagged page or ask for import status if widgets look empty.`
-            : "Yes. I can show what needs attention today from registry state and import health. Start with needs-review lanes on QuickBooks, A/R, and Claims when imports are fresh. Next step: show import status, then open the page you care about.",
-          top
-            ? `Yes — attention today starts with: ${top} I rank from registry and import bundle only — not live write-back. Next step: name Financial, Claims, A/R, or QuickBooks for a narrower pass.`
-            : "Yes — I read registry priorities and import freshness to say what needs attention. Refresh imports first when tiles look empty. Next step: refresh imports or open Claims Workbench.",
-        ]),
-        actions: [],
-      };
+      // Actually show today's attention board (not a yes-I-can capability stub).
+      return { intent: "office: attention", lane: "local", useOfficeAttention: true, text: "", actions: [] };
     }
 
     if (/\bpacket readiness\b.*\bdenied claim\b/.test(q) || /\bdenied claim\b.*\bpacket readiness\b/.test(q)) {
@@ -2112,10 +2100,8 @@ const HalCore = (function () {
         .trim()
         .toLowerCase();
       if (/make a plan|plan for today/.test(planAction)) {
-        const planRoute = routeHalCommand(halData, halModels, pages, "What needs attention today?", {
-          capabilityInner: true,
-        });
-        if (planRoute) return planRoute;
+        // "Can you make a plan…" stays local — show today's attention board (no reasoning lane).
+        return { intent: "office: attention", lane: "local", useOfficeAttention: true, text: "", actions: [] };
       }
     }
 
@@ -2411,8 +2397,19 @@ const HalCore = (function () {
       return { intent: "claims: readiness", lane: "local", useClaimReadiness: true, text: "", actions: [] };
     }
 
-    // Office-manager attention
-    if (/\boffice[\s-]?manager\b/.test(query) && !/\btask\b/.test(query)) {
+    // Office-manager attention / "what should I do today"
+    // Keep "prioritize my work" / "make a plan" on the reasoning lane below.
+    if (
+      (/\boffice[\s-]?manager\b/.test(query) && !/\btask\b/.test(query)) ||
+      /\bwhat (needs|requires) attention\b/.test(query) ||
+      /\bshow what needs attention\b/.test(query) ||
+      /\bwhat should i (do|work on|focus on)\b/.test(query) ||
+      /\bwhat should (i|we) do (today|now|next)\b/.test(query) ||
+      /\b(start of day|start my day|morning (brief|check|routine))\b/.test(query) ||
+      /\bwhat do you (need|want) me to (do|work)\b/.test(query) ||
+      /\b(good\s+)?(morning|afternoon)\b/.test(query) ||
+      /(?:^|\b)(hello|hi|hey)\s*[!.]?$/.test(query)
+    ) {
       return { intent: "office: attention", lane: "local", useOfficeAttention: true, text: "", actions: [] };
     }
 
@@ -3916,8 +3913,13 @@ const HalCore = (function () {
       return { intent: "proactive: briefing", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
     }
 
-    if (/\bpriorit|needs attention|attention today|what needs attention|what should (i|we) do|to-?do|\btoday\b/.test(query)) {
-      return { intent: "priorities", lane: "local", useProactiveBriefing: true, text: "", actions: [] };
+    if (
+      /\b(needs attention|attention today|what needs attention|what should (i|we) do|to-?do)\b/.test(query) ||
+      /\bpriorities today\b/.test(query)
+    ) {
+      // Prefer office-manager attention (autonomous work + imports + claims) over generic proactive briefing.
+      // Leave "prioritize my work" / "make a plan for today" to the reasoning lane above.
+      return { intent: "office: attention", lane: "local", useOfficeAttention: true, text: "", actions: [] };
     }
 
     if (/\b(consent|consent policy|guardrail|guardrails|safety)\b/.test(query) || /\bfirewall\b/.test(query)) {

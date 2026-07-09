@@ -96,7 +96,16 @@ function buildRoutingRegressionCases() {
     }
   }
 
-  addMany(["What needs attention today?", "priorities today"], "priorities");
+  addMany(
+    [
+      "What needs attention today?",
+      "what should I do today",
+      "Show what needs attention today",
+      "Good morning",
+      "priorities today",
+    ],
+    "office: attention",
+  );
   addMany(["What is ready to work on", "ready pages"], "registry: ready");
   addMany(["What is blocked", "show blockers", "what is waiting"], "registry: blocked");
   addMany(["consent policy", "what are the guardrails?"], "consent");
@@ -465,7 +474,7 @@ async function main() {
       got === expectedIntent ||
       got.startsWith(expectedIntent) ||
       (expectedIntent === "reasoning" &&
-        got === "priorities" &&
+        (got === "priorities" || got === "office: attention") &&
         /\bcan you\b/i.test(question) &&
         /\bmake a plan|plan for today\b/i.test(question));
     laneCounts[result.lane] = (laneCounts[result.lane] || 0) + 1;
@@ -683,7 +692,9 @@ async function main() {
   );
   assert(HalCore.laneReady(halModels, "reason21b"), "reasoning lane must be execution-ready on loopback");
   assert(HalCore.laneReady(halModels, "escalate30b"), "escalation lane must be execution-ready on loopback");
-  assert(HalCore.laneReady(halModels, "oss120b"), "oss120b lane must be execution-ready on loopback");
+  const ossLane = halModels.lanes.find((lane) => lane.id === "oss120b");
+  assert(ossLane && ossLane.executionEnabled === false, "oss120b must stay standby/on-demand (never pin on 32 GB)");
+  assert(ossLane.runtime && ossLane.runtime.enabled === false, "oss120b runtime must stay disabled until explicitly enabled");
   const ossRoute = HalCore.routeHalCommand(halData, halModels, pages, "run this through 120b");
   assert(ossRoute.lane === "oss120b" && ossRoute.useOss === true, "120b queries must route to oss120b lane");
   HalPageMod.render({
@@ -1343,7 +1354,10 @@ async function main() {
     pages,
     "Quick question: can you make a plan for today without staff approval?",
   );
-  assert(planCan.useProactiveBriefing || planCan.intent.includes("capability"), "plan can-you must stay local");
+  assert(
+    planCan.useOfficeAttention || planCan.useProactiveBriefing || planCan.intent.includes("capability"),
+    "plan can-you must stay local",
+  );
   assert(planCan.lane !== "reason21b", "plan can-you must not require reasoning lane");
   passed++;
   const printPageRoute = HalCore.routeHalCommand(halData, halModels, pages, "print this page");
@@ -2059,6 +2073,15 @@ async function main() {
   assert(!/^Validate /i.test(filteredPriorities[0].title), "validation priority titles must be human-readable, not Validate widget:metric");
   const officeBriefingRoute = HalCore.routeHalCommand(halData, halModels, pages, "Show daily office briefing");
   assert(officeBriefingRoute.useOfficeBriefing === true, "daily office briefing must route locally");
+  const attentionRoute = HalCore.routeHalCommand(halData, halModels, pages, "What should I do today?");
+  assert(attentionRoute.useOfficeAttention === true, "what should I do today must route to office attention");
+  const morningRoute = HalCore.routeHalCommand(halData, halModels, pages, "Good morning");
+  assert(morningRoute.useOfficeAttention === true, "good morning must route to office attention");
+  const attentionFmt = HalSkills.formatOfficeManagerAttention(
+    HalSkills.buildOfficeManagerAttention({ claims: null }, { open: 0, blocked: 0, inProgress: 0, completed: 0 }),
+  );
+  assert(/What needs attention today/i.test(attentionFmt), "attention format must lead with what needs attention");
+  assert(/softdent_claims_export\.csv/i.test(attentionFmt), "attention format must name exact claims export when missing");
   assert(HalAgent.SAFETY_POLICY.summary.includes("internal office manager"), "agent safety policy must describe office manager role");
 
   const HalAgentProgramming = globalThis.HalAgentProgramming;
@@ -2079,7 +2102,11 @@ async function main() {
   const defineRoute = HalCore.routeHalCommand(halData, halModels, pages, "Define ability.");
   assert(defineRoute.useEnglishDefine === true && defineRoute.englishWord === "ability", "Define word must accept trailing period");
   const planToday = HalCore.routeHalCommand(halData, halModels, pages, "Can you make a plan for today?");
-  assert(planToday.useProactiveBriefing === true, "Can you make a plan must use proactive briefing not reasoning");
+  assert(
+    planToday.useOfficeAttention === true || planToday.useProactiveBriefing === true,
+    "Can you make a plan must stay local (attention board or proactive briefing), not reasoning",
+  );
+  assert(planToday.lane !== "reason21b", "Can you make a plan must not require reasoning lane");
   const importCurrency = HalCore.routeHalCommand(halData, halModels, pages, "Analyze whether imports are current enough for management review.");
   assert(importCurrency.useImportStatus === true, "import currency analyze must use import status route");
   assert(halModels.config.agentProgramming.subtaskMaxDepth === 2, "subtask max depth must be 2");
