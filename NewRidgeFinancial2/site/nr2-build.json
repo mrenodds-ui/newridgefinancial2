@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10130",
-  "assetVersion": "hal-10130",
-  "schemaVersion": "hal-10130",
+  "BUILD_ID": "hal-10131",
+  "assetVersion": "hal-10131",
+  "schemaVersion": "hal-10131",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T16:35:00.000Z",
-  "notes": "hal-10130: Complete live-wire pilot for all staff pages including HAL and Office Manager."
+  "builtAt": "2026-07-09T16:45:00.000Z",
+  "notes": "hal-10131: Wire HAL Command Center live panels to import feed."
 }

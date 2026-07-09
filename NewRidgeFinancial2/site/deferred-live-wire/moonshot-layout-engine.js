@@ -643,6 +643,72 @@ const MoonshotLayoutEngine = (function () {
           : [];
       return H.canvasNavPills(staffPages);
     },
+    halAskHal(D, H) {
+      const RT = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : {};
+      const history =
+        (typeof halChatHistory !== "undefined" && Array.isArray(halChatHistory) && halChatHistory) ||
+        RT.halChatHistory ||
+        [];
+      const loading =
+        (typeof halAskLoading !== "undefined" && !!halAskLoading) || !!RT.halAskLoading;
+      const draft =
+        (typeof halAskDraft !== "undefined" && halAskDraft) || RT.halAskDraft || "";
+      const messages = history.slice(-12);
+      const chatHtml = messages.length
+        ? `<div class="chat-history">${messages
+            .map((m) => {
+              const roleClass = m.role === "user" ? "message message-user" : "message message-hal";
+              const who = m.role === "user" ? "You" : "HAL";
+              return `<div class="${roleClass}"><div class="message-head"><span>${H.esc(who)}</span></div><p>${H.esc(m.text || "")}</p></div>`;
+            })
+            .join("")}</div>`
+        : `<p class="chat-placeholder">Ask about imports, widgets, or today's plan…</p>`;
+      const suggestions = D && D.halAskHalSuggestions ? D.halAskHalSuggestions() : [];
+      const chips = suggestions
+        .map(
+          (s) =>
+            `<button type="button" class="prompt-chip" data-hal-suggest="${H.esc(s)}">${H.esc(s)}</button>`,
+        )
+        .join("");
+      return `<div class="chat-rail-panel" data-panel="askHal" data-hal-widget-key="halAskHal">
+        <div class="chat-header">
+          <div class="chat-title"><span class="chat-avatar" aria-hidden="true">AI</span> Ask HAL</div>
+          <div class="chat-status">Local only</div>
+        </div>
+        <div class="chat-messages">${chatHtml}</div>
+        <form class="chat-form chat-input" id="hpAskForm">
+          <textarea class="chat-textarea" id="hpAskInput" rows="2" enterkeyhint="send" placeholder="Ask HAL anything…  (Enter to send)" aria-label="Ask HAL">${H.esc(draft)}</textarea>
+          <div class="chat-input-row">
+            <button class="chat-send" type="submit" ${loading ? "disabled" : ""}>${loading ? "…" : "SEND"}</button>
+          </div>
+        </form>
+        <div class="chat-suggestions prompt-chips prompt-chips--live">${chips}</div>
+      </div>`;
+    },
+    halImportHealth(D, H) {
+      const health = D && D.halImportHealthStats ? D.halImportHealthStats() : { hasData: false, stats: [] };
+      if (!health.hasData) {
+        return H.canvasEmpty("Import & Source Health data appears when imports are loaded.");
+      }
+      const mode = health.importMode
+        ? `<p class="widget-footer">Mode: ${H.esc(String(health.importMode))} · ${H.esc(String(health.status || ""))}</p>`
+        : "";
+      return `${H.canvasStatGrid(health.stats || [])}${mode}`;
+    },
+    practiceFinancialOverview(D, H) {
+      const pack = D && D.halPracticeOverviewStats ? D.halPracticeOverviewStats() : { hasData: false, stats: [] };
+      if (!pack.hasData) {
+        return H.canvasEmpty("Practice Financial Overview data appears when imports are loaded.");
+      }
+      return H.canvasStatGrid(pack.stats || []);
+    },
+    careDeliveryPerformance(D, H) {
+      const pack = D && D.halCareDeliveryStats ? D.halCareDeliveryStats() : { hasData: false, stats: [] };
+      if (!pack.hasData) {
+        return H.canvasEmpty("Care Delivery Summary data appears when imports are loaded.");
+      }
+      return H.canvasStatGrid(pack.stats || []);
+    },
     narrativeWorkflow(D, H, panel) {
       if (panel && panel.type === "kanban") {
         const lanes = D && D.narrativeKanban ? D.narrativeKanban() : [];

@@ -5034,7 +5034,23 @@ function stopHalStressTest() {
 
 function renderHalScreen() {
   const root = halMountRoot();
-  if (!root || !window.HalPage) return;
+  if (!root) return;
+  const liveWireHal =
+    typeof MoonshotMockupChrome !== "undefined" &&
+    typeof MoonshotMockupChrome.staffMockEmbedPage === "function" &&
+    !MoonshotMockupChrome.staffMockEmbedPage("hal") &&
+    PageViews &&
+    typeof PageViews.hasPage === "function" &&
+    PageViews.hasPage("hal");
+  if (liveWireHal) {
+    PageViews.renderPageView(root, halData, "hal", select, halWidgetFeed, halProgramSnapshot);
+    if (shouldRefreshHalReadiness("hal") && typeof MoonshotMockupChrome !== "undefined" && MoonshotMockupChrome.refreshHalReadinessStrip) {
+      MoonshotMockupChrome.refreshHalReadinessStrip("hal", halWidgetFeed);
+    }
+    typewriteLastHalMessage();
+    return;
+  }
+  if (!window.HalPage) return;
   HalPage.render({
     root,
     halData,
@@ -5190,10 +5206,23 @@ function select(id, options) {
     PageViews &&
     !PageViews.hasPage(page.id) &&
     !staffMockEmbedNavHidden();
+  const liveWireHal =
+    page.id === "hal" &&
+    PageViews &&
+    PageViews.hasPage(page.id) &&
+    typeof MoonshotMockupChrome !== "undefined" &&
+    typeof MoonshotMockupChrome.staffMockEmbedPage === "function" &&
+    !MoonshotMockupChrome.staffMockEmbedPage("hal");
   const isWorkstation =
     !NR2_FINANCIAL_ONLY && page.id === "workstation" && PageViews && !PageViews.hasPage(page.id);
   if (appPage) {
     if (isHal) {
+      appPage.hidden = false;
+      renderHalScreen();
+      activateSideNotesPanel().catch(() => {
+        /* sidenotes inbox optional */
+      });
+    } else if (liveWireHal) {
       appPage.hidden = false;
       renderHalScreen();
       activateSideNotesPanel().catch(() => {

@@ -1689,6 +1689,126 @@ const PageCanvasData = (function () {
     ];
   }
 
+  function halImportHealthStats() {
+    const w = widget("halImportHealth");
+    const m = (w && w.metrics) || {};
+    const bundle = snapshot && snapshot.importBundle;
+    const diag = (bundle && bundle.diagnostics && bundle.diagnostics.summary) || {};
+    const health = (feed && feed.sourceHealth) || {};
+    const connected = m.connectedDatasets != null ? m.connectedDatasets : diag.connected != null ? diag.connected : health.connected;
+    const partial = m.partialDatasets != null ? m.partialDatasets : diag.partial != null ? diag.partial : health.partial;
+    const missing = m.missingDatasets != null ? m.missingDatasets : diag.missing != null ? diag.missing : health.missing;
+    const hasData = connected != null || partial != null || missing != null || Boolean(w);
+    const c = Number(connected) || 0;
+    const p = Number(partial) || 0;
+    const miss = Number(missing) || 0;
+    const total = Math.max(1, c + p + miss);
+    const pct = Math.round((c / total) * 100);
+    return {
+      hasData,
+      status: (w && w.status) || "—",
+      importMode: (bundle && bundle.importMode) || (feed && feed.importMode) || "cache",
+      pct,
+      stats: [
+        { label: "Connected", value: fmt(connected), tone: "success", widgetKey: "halImportHealth" },
+        { label: "Partial", value: fmt(partial), tone: "warning", widgetKey: "halImportHealth" },
+        { label: "Missing", value: fmt(missing), tone: miss > 0 ? "warning" : undefined, widgetKey: "halImportHealth" },
+        { label: "Health", value: hasData ? `${pct}%` : "—", tone: pct >= 70 ? "success" : "warning", widgetKey: "halImportHealth" },
+      ],
+    };
+  }
+
+  function halPracticeOverviewStats() {
+    const ov = metrics("practiceFinancialOverview");
+    const fin = dash("financial") || {};
+    const hasData =
+      ov.productionTotal != null ||
+      ov.collectionsTotal != null ||
+      ov.monthlyNetIncome != null ||
+      (fin.productionMtd && fin.productionMtd.value != null);
+    return {
+      hasData,
+      stats: [
+        {
+          label: "Production MTD",
+          value: fmt(ov.productionTotal || (fin.productionMtd && fin.productionMtd.value)),
+          tone: widgetTone("practiceFinancialOverview"),
+          widgetKey: "practiceFinancialOverview",
+        },
+        {
+          label: "Collections",
+          value: collectionsDisplay(fin, ov.collectionsTotal).value,
+          tone: widgetTone("practiceFinancialOverview"),
+          widgetKey: "practiceFinancialOverview",
+        },
+        {
+          label: "Open A/R",
+          value: fmt(ov.arTotal || metrics("arAgingAndCollections").totalOutstanding),
+          tone: "warning",
+          widgetKey: "practiceFinancialOverview",
+        },
+        {
+          label: "Book net",
+          value: fmt(ov.monthlyNetIncome || metrics("quickbooksProfitLossDetail").netIncome),
+          tone: widgetTone("quickbooksProfitLossDetail"),
+          widgetKey: "practiceFinancialOverview",
+        },
+      ],
+    };
+  }
+
+  function halCareDeliveryStats() {
+    const care = metrics("careDeliveryPerformance");
+    const practice = practiceStats();
+    const sd = dash("softdent") || {};
+    const patientCount = care.patientCount || glanceValue(sd, "Total Patients");
+    const production = care.productionTotal || metrics("financialProductionTrend").productionMtd;
+    const newPatients = metrics("newPatients").newPatientCount || practice.newPatients;
+    const hasData =
+      (production != null && production !== "") ||
+      (patientCount != null && patientCount !== "") ||
+      (care.providerCount != null && care.providerCount !== "") ||
+      (newPatients != null && newPatients !== "");
+    return {
+      hasData,
+      stats: [
+        {
+          label: "Production MTD",
+          value: fmt(production),
+          tone: widgetTone("careDeliveryPerformance"),
+          widgetKey: "careDeliveryPerformance",
+        },
+        {
+          label: "Active patients",
+          value: fmt(patientCount),
+          widgetKey: "careDeliveryPerformance",
+        },
+        {
+          label: "Providers",
+          value: fmt(care.providerCount),
+          widgetKey: "careDeliveryPerformance",
+        },
+        {
+          label: "New patients",
+          value: fmt(newPatients),
+          tone: widgetTone("newPatients"),
+          widgetKey: "careDeliveryPerformance",
+        },
+      ],
+    };
+  }
+
+  function halAskHalSuggestions() {
+    const ask = (typeof globalThis !== "undefined" && globalThis.halData && globalThis.halData.askHal) || null;
+    const suggestions = (ask && ask.suggestions) || [
+      "Show import health",
+      "Summarize MTD production",
+      "List open claims",
+      "Explain QuickBooks net income",
+    ];
+    return suggestions.slice(0, 6);
+  }
+
   function officeKanban() {
     const tasks = (snapshot && snapshot.officeTasks) || [];
     if (tasks.length) {
@@ -2183,6 +2303,10 @@ const PageCanvasData = (function () {
     libraryRows,
     firstLibraryDoc,
     officeKpis,
+    halImportHealthStats,
+    halPracticeOverviewStats,
+    halCareDeliveryStats,
+    halAskHalSuggestions,
     officeKanban,
     officeTaskRows,
     officeTimeline,
