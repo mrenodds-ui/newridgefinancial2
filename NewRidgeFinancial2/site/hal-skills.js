@@ -2748,9 +2748,11 @@ const HalSkills = (function () {
         key: "softdentResponsibility",
         title: "Insurance vs Patient Responsibility",
         status: arAvailable ? softdentStatus : "DEGRADED",
-        summary: arAvailable
-          ? "Insurance/patient A/R split and collectability from the SoftDent dashboard cache."
-          : "Responsibility split is withheld until a verified SoftDent A/R export is present.",
+        summary: !arAvailable
+          ? "Responsibility split is withheld until a verified SoftDent A/R export is present."
+          : sd.responsibility?.source === "claims-vs-ar"
+            ? "Insurance vs patient portion estimated from open SoftDent claims against daysheet A/R."
+            : "Insurance/patient A/R split and collectability from the SoftDent dashboard cache.",
         navTarget: WIDGET_NAV.softdentResponsibility,
         metrics: {
           insuranceAmount: metricValue(sd.responsibility?.insurance?.amount),

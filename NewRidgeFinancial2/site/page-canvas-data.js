@@ -162,7 +162,10 @@ const PageCanvasData = (function () {
 
   function verifiedArWidgetReady(key) {
     const w = widget(key);
-    return String((w && w.status) || "").toUpperCase() === "SUCCESS";
+    const status = String((w && w.status) || "").toUpperCase();
+    // SoftDent A/R widgets stay DEGRADED when collections export is pending, but
+    // aging/responsibility panels still have verified A/R rows to render.
+    return status === "SUCCESS" || status === "DEGRADED";
   }
 
   function periodSubtitle() {
@@ -659,19 +662,53 @@ const PageCanvasData = (function () {
     };
   }
 
+  function outstandingClaimsAmount() {
+    const claims = (snapshot && snapshot.claims && snapshot.claims.claims) || [];
+    if (claims.length) {
+      return claims.reduce((sum, row) => sum + parseAmount(row.amount || row.outstanding || row.balance), 0);
+    }
+    const bundle = snapshot && snapshot.importBundle;
+    const rows = (bundle && bundle.softdent && bundle.softdent.claims && bundle.softdent.claims.rows) || [];
+    return rows.reduce((sum, row) => {
+      const amount =
+        parseAmount(row.ClaimAmount) ||
+        parseAmount(row.Outstanding) ||
+        parseAmount(row.Balance) ||
+        parseAmount(row.amount);
+      return sum + amount;
+    }, 0);
+  }
+
   function softdentResponsibilityDonut() {
     if (!verifiedArWidgetReady("softdentResponsibility")) return null;
     const sd = dash("softdent") || {};
     const resp = sd.responsibility || {};
-    const ins = parseAmount(resp.insurance && resp.insurance.amount);
-    const pat = parseAmount(resp.patient && resp.patient.amount);
+    let ins = parseAmount(resp.insurance && resp.insurance.amount);
+    let pat = parseAmount(resp.patient && resp.patient.amount);
+    // Dashboard "patient" often mirrors collections attribution, not A/R. Require
+    // a real two-sided split before trusting those fields.
+    if (!(ins > 0 && pat > 0)) {
+      const aging = softdentAgingBars();
+      const arTotal = aging
+        ? aging.values.reduce((sum, value) => sum + (Number(value) || 0), 0)
+        : parseAmount(sd.hero && sd.hero.value) || parseAmount(resp.total);
+      const claimTotal = outstandingClaimsAmount();
+      if (arTotal > 0 && claimTotal > 0) {
+        ins = Math.min(claimTotal, arTotal);
+        pat = Math.max(0, arTotal - ins);
+      } else {
+        return null;
+      }
+    }
     const total = ins + pat;
     if (!total) return null;
+    const usedClaimsProxy = !(parseAmount(resp.insurance && resp.insurance.amount) > 0 && parseAmount(resp.patient && resp.patient.amount) > 0);
     return {
       slices: [
         { label: "Insurance", pct: Math.round((ins / total) * 1000) / 10, color: "#60a5fa" },
         { label: "Patient portion", pct: Math.round((pat / total) * 1000) / 10, color: "#d6b15e" },
       ],
+      hint: resp.source === "claims-vs-ar" || usedClaimsProxy ? "Open SoftDent claims vs daysheet A/R" : resp.hint || null,
     };
   }
 

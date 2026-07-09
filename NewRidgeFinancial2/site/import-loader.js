@@ -1182,6 +1182,70 @@ const ImportLoader = (function () {
     return { revenue, expenses, netIncome, derivedNetIncome, plNetIncome, plReconcile, modifiedAt, revenueRows, expenseRows, plRows };
   }
 
+  function buildSoftdentResponsibility(bundle, aggregate, arTotal, hasAr) {
+    const dashIns = (aggregate && aggregate.totals && aggregate.totals.insurance) || 0;
+    const dashPat = (aggregate && aggregate.totals && aggregate.totals.patient) || 0;
+    // SoftDent dashboard "patient" often equals collections attribution, not A/R.
+    // Only trust those fields when both sides are positive and sum near daysheet A/R.
+    const dashTotal = dashIns + dashPat;
+    const dashLooksLikeArSplit =
+      hasAr &&
+      dashIns > 0 &&
+      dashPat > 0 &&
+      arTotal > 0 &&
+      Math.abs(dashTotal - arTotal) / arTotal < 0.35;
+    if (dashLooksLikeArSplit) {
+      return {
+        total: formatMoney(arTotal),
+        insurance: {
+          amount: formatMoney(dashIns),
+          pct: Math.round((dashIns / dashTotal) * 1000) / 10,
+        },
+        patient: {
+          amount: formatMoney(dashPat),
+          pct: Math.round((dashPat / dashTotal) * 1000) / 10,
+        },
+        collectability: "—",
+        collectable: "—",
+        source: "dashboard",
+      };
+    }
+    const claimRows = ((bundle.softdent && bundle.softdent.claims && bundle.softdent.claims.rows) || []);
+    const claimTotal = claimRows.reduce((sum, row) => {
+      const amount =
+        coerceFloat(pickField(row, ["ClaimAmount", "Outstanding", "Balance", "amount", "Billed"])) || 0;
+      return sum + amount;
+    }, 0);
+    if (hasAr && arTotal > 0 && claimTotal > 0) {
+      const insurance = Math.min(claimTotal, arTotal);
+      const patient = Math.max(0, arTotal - insurance);
+      const total = insurance + patient;
+      return {
+        total: formatMoney(arTotal),
+        insurance: {
+          amount: formatMoney(insurance),
+          pct: total ? Math.round((insurance / total) * 1000) / 10 : 0,
+        },
+        patient: {
+          amount: formatMoney(patient),
+          pct: total ? Math.round((patient / total) * 1000) / 10 : 0,
+        },
+        collectability: "—",
+        collectable: "—",
+        source: "claims-vs-ar",
+        hint: "Open SoftDent claims vs daysheet A/R",
+      };
+    }
+    return {
+      total: hasAr ? formatMoney(arTotal) : "—",
+      insurance: { amount: formatMoney(0), pct: 0 },
+      patient: { amount: formatMoney(0), pct: 0 },
+      collectability: "—",
+      collectable: "—",
+      source: null,
+    };
+  }
+
   function buildSoftdentDashboard(bundle) {
     if (!hasSoftdentImport(bundle)) return null;
     const sd = bundle.softdent || {};
@@ -1299,13 +1363,7 @@ const ImportLoader = (function () {
         amount: formatMoney(bucket.amount),
         pct: arTotal ? Math.round((bucket.amount / arTotal) * 1000) / 10 : 0,
       })),
-      responsibility: {
-            total: hasAr ? formatMoney(arTotal) : "—",
-            insurance: { amount: formatMoney(aggregate.totals.insurance), pct: 0 },
-            patient: { amount: formatMoney(aggregate.totals.patient), pct: 0 },
-            collectability: "—",
-            collectable: "—",
-          },
+      responsibility: buildSoftdentResponsibility(bundle, aggregate, arTotal, hasAr),
       health: [
         { label: "Connection", value: "Imported", ok: true },
         { label: "Data Freshness", value: formatFreshness(modifiedAt), ok: true },

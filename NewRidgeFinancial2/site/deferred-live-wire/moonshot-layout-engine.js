@@ -433,7 +433,9 @@ const MoonshotLayoutEngine = (function () {
     },
     softdentResponsibility(D, H) {
       const resp = D && D.softdentResponsibilityDonut ? D.softdentResponsibilityDonut() : null;
-      return resp ? H.conicDonut(resp.slices, "") : H.canvasEmpty("Insurance vs patient split unavailable.");
+      if (!resp) return H.canvasEmpty("Insurance vs patient split unavailable.");
+      const center = resp.hint ? `<span class="donut-hint">${H.esc(resp.hint)}</span>` : "";
+      return H.conicDonut(resp.slices, center);
     },
     treatmentPlanSummary(D, H, panel) {
       const practice = D && D.practiceStats ? D.practiceStats() : {};

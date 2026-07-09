@@ -1,10 +1,10 @@
 {
-  "BUILD_ID": "hal-10135",
-  "assetVersion": "hal-10135",
-  "schemaVersion": "hal-10135",
+  "BUILD_ID": "hal-10136",
+  "assetVersion": "hal-10136",
+  "schemaVersion": "hal-10136",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": ["financial", "softdent", "quickbooks", "ar", "taxes", "claims", "narratives", "documents", "library", "hal", "office-manager"],
-  "builtAt": "2026-07-09T17:05:00.000Z",
-  "notes": "hal-10135: Populate Active patients from today's SoftDent operatory schedule when dashboard census is missing."
+  "builtAt": "2026-07-09T17:15:00.000Z",
+  "notes": "hal-10136: SoftDent insurance vs patient split from open claims vs daysheet A/R when dashboard attribution is not an A/R split."
 }
