@@ -151,13 +151,29 @@ const NR2SoftdentDaily = (function () {
     if (live) return live;
     const practice = snapshot && snapshot.dashboards && snapshot.dashboards.practice;
     const chairs = (practice && practice.operatoryChairs) || [];
-    const appointments = chairs.slice(0, 12).map((chair) => ({
-      date: chair.time || chair.start || "Today",
-      patientId: chair.patient || chair.patientName || "ΓÇö",
-      provider: chair.provider || chair.providerName || "ΓÇö",
-      status: chair.status || "scheduled",
-    }));
-    return { hasData: appointments.length > 0, appointments };
+    if (chairs.length) {
+      const appointments = chairs.slice(0, 12).map((chair) => ({
+        date: chair.time || chair.start || "Today",
+        patientId: chair.patient || chair.patientName || "—",
+        provider: chair.provider || chair.providerName || "—",
+        status: chair.status || "scheduled",
+      }));
+      return { hasData: appointments.length > 0, appointments };
+    }
+    const rooms = operatoryGrid(snapshot) || [];
+    const appointments = [];
+    rooms.forEach((room) => {
+      const roomName = room.name || room.operatory || room.provider || "Operatory";
+      (room.slots || []).forEach((slot) => {
+        appointments.push({
+          date: slot.time || slot.start || "Today",
+          patientId: slot.patient || slot.patientName || "—",
+          provider: roomName,
+          status: slot.tone === "ok" ? "checked-in" : slot.status || "scheduled",
+        });
+      });
+    });
+    return { hasData: appointments.length > 0, appointments: appointments.slice(0, 20) };
   }
 
   function claimsOutstanding(snapshot) {
@@ -182,11 +198,14 @@ const NR2SoftdentDaily = (function () {
     const live = useLive("providerProduction");
     if (live) return live;
     const fin = snapshot && snapshot.dashboards && snapshot.dashboards.financial;
+    if (fin && fin.dataSource === "empty") return { hasData: false, providers: [], total: 0 };
     const providers = (fin && fin.providers && fin.providers.rows) || [];
-    const mapped = providers.map((row) => ({
-      providerCode: String(row.name || row.provider || ""),
-      production: parseMoney(row.amount || row.production),
-    }));
+    const mapped = providers
+      .map((row) => ({
+        providerCode: String(row.name || row.provider || ""),
+        production: parseMoney(row.amount || row.production),
+      }))
+      .filter((row) => row.providerCode && row.production > 0);
     const total = mapped.reduce((acc, row) => acc + row.production, 0);
     return { hasData: mapped.length > 0, providers: mapped, total: Math.round(total) };
   }

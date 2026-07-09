@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10160",
-  "assetVersion": "hal-10160",
-  "schemaVersion": "hal-10160",
+  "BUILD_ID": "hal-10161",
+  "assetVersion": "hal-10161",
+  "schemaVersion": "hal-10161",
   "REQUIRED_EPOCH": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
   "liveWirePages": [
@@ -18,5 +18,5 @@
     "office-manager"
   ],
   "builtAt": "2026-07-09T17:55:00Z",
-  "notes": "hal-10160: Stop inventing QB Balance Sheet cash from P&L and fake green all-clear alert ticker; trim decorative SoftDent filter chips."
+  "notes": "hal-10161: Stop seeding fake Dr. Michael Reno 100% provider row in empty financial shell; gate provider widgets on real amounts."
 }

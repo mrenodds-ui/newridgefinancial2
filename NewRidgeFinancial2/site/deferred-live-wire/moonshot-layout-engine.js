@@ -396,21 +396,23 @@ const MoonshotLayoutEngine = (function () {
       return H.chartContainer(H.vBarChart(flow.labels, flow.values, "#34d399"));
     },
     nr2ProviderCompensationWidget(D, H) {
-      const provComp = D && D.nr2ProviderCompensation ? D.nr2ProviderCompensation() : { providers: [] };
+      const provComp = D && D.nr2ProviderCompensation ? D.nr2ProviderCompensation() : { providers: [], hasData: false };
+      if (provComp.hasData && provComp.providers && provComp.providers.length) {
+        return H.canvasProviderCompShare(provComp);
+      }
       const providers = D && D.providerBars ? D.providerBars() : null;
-      const payload = provComp.hasData
-        ? provComp
-        : providers
-          ? {
-              providers: providers.items.map((item) => ({
-                name: item.name,
-                production: H.parseAmount(item.amount),
-                pct: item.pct,
-              })),
-              totalProduction: H.parseAmount(providers.total),
-              hasData: true,
-            }
-          : { providers: [] };
+      if (!providers || !providers.items || !providers.items.length) {
+        return H.canvasEmpty("Provider production share appears when SoftDent dashboard provider rows are loaded.");
+      }
+      const payload = {
+        providers: providers.items.map((item) => ({
+          name: item.name,
+          production: H.parseAmount(item.amount),
+          pct: item.pct,
+        })),
+        totalProduction: H.parseAmount(providers.total),
+        hasData: true,
+      };
       return H.canvasProviderCompShare(payload);
     },
     quickbooksProfitLossDetail(D, H) {
@@ -457,7 +459,7 @@ const MoonshotLayoutEngine = (function () {
     softdentCollectionsDaily(D, H) {
       const coll = D && D.softdentCollectionsDailySeries ? D.softdentCollectionsDailySeries() : { labels: [], values: [] };
       return H.chartContainer(
-        coll.hasData ? H.vBarChart(coll.labels, coll.values, "#34d399") : H.canvasEmpty("Collections trend appears when sd_payments is loaded."),
+        coll.hasData ? H.vBarChart(coll.labels, coll.values, "#34d399") : H.canvasEmpty("Collections trend appears when SoftDent dashboard collections or sd_payments export is loaded."),
       );
     },
     softdentProviderProduction(D, H) {
@@ -474,7 +476,7 @@ const MoonshotLayoutEngine = (function () {
               "name",
               "pct",
             )
-          : H.canvasEmpty("Provider production appears when sd_procedures is loaded."),
+          : H.canvasEmpty("Provider production appears when SoftDent dashboard provider rows or sd_procedures export is loaded."),
       );
     },
     softdentArAging(D, H, panel) {

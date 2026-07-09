@@ -33,7 +33,7 @@ const EmptyStates = (function () {
         ytd: [],
       },
       payerMix: { total: "—", rate: "—", rateTrend: "", slices: [] },
-      providers: { rows: [{ name: PRIMARY_PROVIDER, amount: "—", pct: 100 }], total: { amount: "—", pct: 100 } },
+      providers: { rows: [], total: { amount: "—", pct: null } },
       freshness: [
         { system: "SoftDent", status: "Missing", date: "—", time: "", freq: "Export" },
         { system: "QuickBooks", status: "Missing", date: "—", time: "", freq: "Export" },

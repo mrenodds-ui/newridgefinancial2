@@ -659,7 +659,12 @@ const PageCanvasData = (function () {
 
   function providerBars() {
     const fin = dash("financial") || {};
-    const rows = (fin.providers && fin.providers.rows) || [];
+    if (fin.dataSource === "empty") return null;
+    const rows = ((fin.providers && fin.providers.rows) || []).filter((r) => {
+      const amount = parseAmount(r && r.amount);
+      const name = String((r && r.name) || "").trim();
+      return name && amount > 0;
+    });
     if (!rows.length) return null;
     return {
       items: rows.map((r) => ({ name: r.name, amount: r.amount, pct: parseAmount(r.pct) })),

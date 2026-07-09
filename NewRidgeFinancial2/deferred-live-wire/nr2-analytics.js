@@ -467,11 +467,17 @@ const NR2Analytics = (function () {
 
   function providerCompensation(snapshot) {
     const fin = snapshot && snapshot.dashboards && snapshot.dashboards.financial;
+    if (fin && fin.dataSource === "empty") {
+      return { providers: [], totalProduction: 0, hasData: false };
+    }
     const rows = (fin && fin.providers && fin.providers.rows) || [];
-    const mapped = (Array.isArray(rows) ? rows : []).slice(0, 8).map((row) => ({
-      name: String(row.name || row.provider || "Provider"),
-      production: parseMoney(row.production || row.amount),
-    }));
+    const mapped = (Array.isArray(rows) ? rows : [])
+      .slice(0, 8)
+      .map((row) => ({
+        name: String(row.name || row.provider || "Provider"),
+        production: parseMoney(row.production || row.amount),
+      }))
+      .filter((row) => row.name && row.production > 0);
     const total = mapped.reduce((sum, row) => sum + row.production, 0);
     return {
       providers: mapped.map((row) => ({

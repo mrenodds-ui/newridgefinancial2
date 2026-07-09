@@ -198,11 +198,14 @@ const NR2SoftdentDaily = (function () {
     const live = useLive("providerProduction");
     if (live) return live;
     const fin = snapshot && snapshot.dashboards && snapshot.dashboards.financial;
+    if (fin && fin.dataSource === "empty") return { hasData: false, providers: [], total: 0 };
     const providers = (fin && fin.providers && fin.providers.rows) || [];
-    const mapped = providers.map((row) => ({
-      providerCode: String(row.name || row.provider || ""),
-      production: parseMoney(row.amount || row.production),
-    }));
+    const mapped = providers
+      .map((row) => ({
+        providerCode: String(row.name || row.provider || ""),
+        production: parseMoney(row.amount || row.production),
+      }))
+      .filter((row) => row.providerCode && row.production > 0);
     const total = mapped.reduce((acc, row) => acc + row.production, 0);
     return { hasData: mapped.length > 0, providers: mapped, total: Math.round(total) };
   }
