@@ -3411,6 +3411,26 @@ def format_census_reply(page: str, census: dict[str, Any]) -> str:
     return " ".join(lines)
 
 
+def format_learn_priorities_reply(*, empty_highlights: list[str] | None = None) -> str:
+    """Staff-assistant answer: what to teach HAL (not a generic 'no preferences' disclaimer)."""
+    lines = [
+        "I don't invent hobbies — I do have operational learning priorities for New Ridge.",
+        "Two memory layers: (1) governed `docs/hal_knowledge/memories.jsonl` (maintainer-approved durable rules); "
+        "(2) staff `app_data/nr2/learned_memories.jsonl` via Ask HAL: Remember this: … (no PHI/secrets).",
+        "Highest-value facts to teach next: write-off approval thresholds and SoftDent adjustment codes; "
+        "broken-appointment fee/policy; dual-insurance / COB order; payer quirks and denial themes "
+        "(e.g. alternate benefit, frequency limits); vendor/clearinghouse contacts and submission guidelines; "
+        "fee-schedule exceptions that differ from the imported fee file; appeal sequencing preferences.",
+        "How: say Remember this: <one non-PHI fact>, or fill docs/hal_knowledge/NEW_RIDGE_OPERATING_RULES_WORKSHEET.md "
+        "and run scripts/seed_practice_learned_memories.py.",
+        "Separate from memory: empty widgets need SoftDent/QB exports + Sync — not a remember fact. "
+        "Ask: which widgets are empty on all pages?",
+    ]
+    if empty_highlights:
+        lines.append("Current empty examples: " + " · ".join(str(h) for h in empty_highlights[:8]) + ".")
+    return " ".join(lines)
+
+
 def format_export_playbook_reply(topic: str = "both") -> str:
     book = build_export_playbook()
     parts = [
@@ -4029,6 +4049,40 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
                     actions.append({"type": "highlight_widget", "widgetId": str(empty_ids[0]), "ms": 4000})
             notes.append(reply_txt)
             handled = True
+
+    # --- What should HAL learn / teach me (staff memory priorities) ---
+    wants_learn = bool(
+        re.search(
+            r"\b("
+            r"what (would|do) you (like|want|prefer) to learn|"
+            r"what should (i|we) (teach|tell|remember|save)|"
+            r"what (can|should) (you|hal) learn|"
+            r"learning priorities|"
+            r"teach (you|hal)|"
+            r"what.*(governed|learned) memor"
+            r")\b",
+            q,
+        )
+    )
+    if (not handled) and wants_learn:
+        highlights: list[str] = []
+        try:
+            all_payload = build_all_pages_widget_census()
+            raw = all_payload.get("emptyHighlights") if isinstance(all_payload, dict) else None
+            if isinstance(raw, list):
+                highlights = [str(h) for h in raw[:8]]
+        except Exception:  # noqa: BLE001
+            highlights = []
+        notes.append(format_learn_priorities_reply(empty_highlights=highlights or None))
+        actions.append(
+            {
+                "type": "set_status_banner",
+                "message": "Learning priorities · Remember this: …",
+                "hint": "Staff learned_memories + governed memories.jsonl — no PHI.",
+                "tone": "ok",
+            }
+        )
+        handled = True
 
     # --- SoftDent / QuickBooks export playbook (when + how) ---
     export_sd = bool(

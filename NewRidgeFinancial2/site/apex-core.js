@@ -2120,6 +2120,7 @@
       { label: "Import status", query: "Verify SoftDent and QuickBooks import status" },
       { label: "Which widgets empty?", query: "Which widgets are empty on this page?" },
       { label: "All pages widget health", query: "Which widgets are empty on all pages?" },
+      { label: "What should HAL learn?", query: "What would you like to learn?" },
       { label: "Dictate to findings", query: "dictate findings: clinical exam supports the billed procedure" },
       { label: "How to get SoftDent exports", query: "How do I get SoftDent exports?" },
       { label: "How to get QuickBooks exports", query: "How do I get QuickBooks exports?" },
