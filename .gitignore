@@ -199,3 +199,6 @@ app_data/nr2/document_library/tax_returns/**/*.png
 app_data/nr2/document_library/tax_returns/**/*.jpg
 !app_data/nr2/document_library/tax_returns/**/README.txt
 
+
+# Moonshot consult scratch snapshots (local only; never commit)
+NewRidgeFinancial2/docs/_consult_scratch/
