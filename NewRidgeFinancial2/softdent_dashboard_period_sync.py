@@ -25,32 +25,45 @@ def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {str(row[1]) for row in cur.fetchall()}
 
 
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
+    return cur.fetchone() is not None
+
+
 def _aggregate_daysheet(db_path: Path, periods: list[str]) -> dict[str, dict[str, float]]:
     if not db_path.is_file() or not periods:
         return {}
     conn = sqlite3.connect(db_path)
     columns = _table_columns(conn, "daysheet_totals")
-    if "year_month" not in columns:
+    if "year_month" not in columns and "report_date" not in columns:
         conn.close()
         return {}
     insurance_sql = "SUM(COALESCE(insurance_payment_total, 0))" if "insurance_payment_total" in columns else "0"
+    # Backfill year_month from report_date when null (aggregation fix — not inventing amounts)
+    if "report_date" in columns:
+        ym_expr = "COALESCE(NULLIF(year_month, ''), substr(replace(report_date, '/', '-'), 1, 7))"
+    else:
+        ym_expr = "year_month"
     placeholders = ",".join("?" for _ in periods)
     cur = conn.cursor()
     cur.execute(
         f"""
-        SELECT year_month,
+        SELECT {ym_expr} AS ym,
                SUM(COALESCE(gross_production, 0)),
                SUM(COALESCE(net_production, 0)),
                SUM(COALESCE(collections, 0)),
                {insurance_sql}
         FROM daysheet_totals
-        WHERE year_month IN ({placeholders})
-        GROUP BY year_month
+        WHERE {ym_expr} IN ({placeholders})
+        GROUP BY ym
         """,
         periods,
     )
     out: dict[str, dict[str, float]] = {}
     for year_month, gross, net, collections, insurance in cur.fetchall():
+        if not year_month:
+            continue
         production = float(gross or net or 0)
         coll = float(collections or 0)
         ins = float(insurance or 0)
@@ -60,6 +73,35 @@ def _aggregate_daysheet(db_path: Path, periods: list[str]) -> dict[str, dict[str
             "insurance": ins,
             "patient": max(0.0, coll - ins),
         }
+    # Honest insurance remap: when daysheet footer insurance is 0/null but sd_payments
+    # has Insurance Check Payment rows for that month, use those (never invent).
+    if _table_exists(conn, "sd_payments"):
+        pay_cols = _table_columns(conn, "sd_payments")
+        if "method" in pay_cols and "amount" in pay_cols and "payment_date" in pay_cols:
+            cur.execute(
+                f"""
+                SELECT substr(replace(payment_date, '/', '-'), 1, 7) AS ym,
+                       SUM(COALESCE(amount, 0))
+                FROM sd_payments
+                WHERE lower(method) LIKE '%insurance%check%'
+                  AND substr(replace(payment_date, '/', '-'), 1, 7) IN ({placeholders})
+                GROUP BY ym
+                """,
+                periods,
+            )
+            for ym, amt in cur.fetchall():
+                if not ym or ym not in out:
+                    continue
+                try:
+                    ins_amt = float(amt or 0)
+                except (TypeError, ValueError):
+                    continue
+                if ins_amt <= 0:
+                    continue
+                if float(out[ym].get("insurance") or 0) <= 0:
+                    coll = float(out[ym].get("collections") or 0)
+                    out[ym]["insurance"] = ins_amt
+                    out[ym]["patient"] = max(0.0, coll - ins_amt)
     conn.close()
     return out
 

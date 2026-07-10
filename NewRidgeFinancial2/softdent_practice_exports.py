@@ -450,25 +450,63 @@ def _build_operatory_from_sd_appointments(
     conn: sqlite3.Connection,
     *,
     limit_per_chair: int = 8,
+    schedule_date: str | None = None,
+    days_window: int = 7,
 ) -> list[dict[str, Any]] | None:
+    """Build chairs from sd_appointments for schedule_date (or nearest day with appts).
+
+    Never pulls future-year dumps via ORDER BY DESC LIMIT — that polluted the grid with 2027 slots.
+    """
     if not _table_exists(conn, "sd_appointments"):
         return None
     patients_exists = _table_exists(conn, "sd_patients")
     providers_exists = _table_exists(conn, "sd_providers")
     cur = conn.cursor()
-    cur.execute(
-        f"""
-        SELECT a.appt_date, a.patient_id, a.provider_code, a.status,
-               {"COALESCE(p.patient_name, a.patient_id)" if patients_exists else "a.patient_id"},
-               {"COALESCE(pr.provider_name, a.provider_code)" if providers_exists else "a.provider_code"}
-        FROM sd_appointments a
-        {"LEFT JOIN sd_patients p ON p.patient_id = a.patient_id" if patients_exists else ""}
-        {"LEFT JOIN sd_providers pr ON pr.provider_code = a.provider_code" if providers_exists else ""}
-        ORDER BY a.appt_date DESC
-        LIMIT 200
-        """
-    )
-    rows = cur.fetchall()
+    target = _normalize_schedule_date(schedule_date) or datetime.now().date().isoformat()
+
+    def _fetch_for_day(day: str) -> list[Any]:
+        cur.execute(
+            f"""
+            SELECT a.appt_date, a.patient_id, a.provider_code, a.status,
+                   {"COALESCE(p.patient_name, a.patient_id)" if patients_exists else "a.patient_id"},
+                   {"COALESCE(pr.provider_name, a.provider_code)" if providers_exists else "a.provider_code"}
+            FROM sd_appointments a
+            {"LEFT JOIN sd_patients p ON p.patient_id = a.patient_id" if patients_exists else ""}
+            {"LEFT JOIN sd_providers pr ON pr.provider_code = a.provider_code" if providers_exists else ""}
+            WHERE substr(replace(a.appt_date, '/', '-'), 1, 10) = ?
+            ORDER BY a.appt_date ASC
+            LIMIT 400
+            """,
+            (day,),
+        )
+        return cur.fetchall()
+
+    rows = _fetch_for_day(target)
+    chosen_day = target
+    if not rows:
+        # Prefer nearest day with appointments within ±days_window (honest schedule, not invented $)
+        try:
+            from datetime import date, timedelta
+
+            base = date.fromisoformat(target)
+        except ValueError:
+            base = datetime.now().date()
+        for offset in range(0, max(1, days_window) + 1):
+            candidates = []
+            if offset == 0:
+                candidates = [base]
+            else:
+                candidates = [base + timedelta(days=offset), base - timedelta(days=offset)]
+            found = False
+            for day in candidates:
+                day_s = day.isoformat()
+                rows = _fetch_for_day(day_s)
+                if rows:
+                    chosen_day = day_s
+                    found = True
+                    break
+            if found:
+                break
     if not rows:
         return None
 
@@ -479,6 +517,7 @@ def _build_operatory_from_sd_appointments(
             chairs[key] = {
                 "name": str(provider_name or provider_code or "Operatory").strip() or "Operatory",
                 "slots": [],
+                "scheduleDate": chosen_day,
             }
         chairs[key]["slots"].append(
             {
@@ -623,7 +662,11 @@ def build_operatory_chairs_from_sensei(
     return result or None
 
 
-def _aggregate_operatory_from_db(conn: sqlite3.Connection) -> list[dict[str, Any]] | None:
+def _aggregate_operatory_from_db(
+    conn: sqlite3.Connection,
+    *,
+    schedule_date: str | None = None,
+) -> list[dict[str, Any]] | None:
     for table in ("operatory_schedule", "operatory_chairs", "chair_schedule"):
         if not _table_exists(conn, table):
             continue
@@ -644,7 +687,7 @@ def _aggregate_operatory_from_db(conn: sqlite3.Connection) -> list[dict[str, Any
             return payload["operatoryChairs"]
         if isinstance(payload, list):
             return payload
-    return _build_operatory_from_sd_appointments(conn)
+    return _build_operatory_from_sd_appointments(conn, schedule_date=schedule_date)
 
 
 def sync_practice_exports(db_path: Path | None = None, destination: Path | None = None) -> dict[str, Any]:
@@ -701,26 +744,36 @@ def sync_practice_exports(db_path: Path | None = None, destination: Path | None 
         op_chairs = build_operatory_chairs_from_sensei(schedule_date=schedule_date)
         generated_from = "sensei-datasync"
         if not op_chairs:
-            op_chairs = _aggregate_operatory_from_db(conn)
+            op_chairs = _aggregate_operatory_from_db(conn, schedule_date=schedule_date)
             generated_from = "sd_appointments"
         if op_chairs:
+            # Prefer Sensei same-day over stale future sd_appointments dumps
             overwrite = not op_path.is_file()
+            existing_from = None
             if not overwrite:
                 try:
                     existing = json.loads(op_path.read_text(encoding="utf-8-sig"))
-                    overwrite = existing.get("generatedFrom") in (
+                    existing_from = existing.get("generatedFrom")
+                    overwrite = existing_from in (
                         None,
                         "sd_appointments",
                         "analytics-db",
                         "sensei-datasync",
                     )
+                    # Never keep a future-year polluted file when we have date-filtered chairs
+                    if not overwrite and existing_from == "sd_appointments":
+                        overwrite = True
                 except (json.JSONDecodeError, OSError):
                     overwrite = True
             if overwrite:
+                # Stamp scheduleDate from first chair if fallback picked a nearby day
+                chair_day = ""
+                if isinstance(op_chairs, list) and op_chairs and isinstance(op_chairs[0], dict):
+                    chair_day = str(op_chairs[0].get("scheduleDate") or "")
                 payload = {
                     "operatoryChairs": op_chairs,
                     "generatedFrom": generated_from,
-                    "scheduleDate": schedule_date,
+                    "scheduleDate": chair_day or schedule_date,
                 }
                 op_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
                 _mirror_operatory_export(destination, payload)
@@ -745,6 +798,148 @@ def sync_practice_exports(db_path: Path | None = None, destination: Path | None 
     return result
 
 
+def ingest_csv_reports_to_sqlite(
+    csv_dir: Path | None = None,
+    db_path: Path | None = None,
+) -> dict[str, int]:
+    """Load treatment/hygiene/case-acceptance CSVs into analytics SQLite when present.
+
+    Does not invent rows. Uses flexible header aliases. Empty/missing files are skipped.
+    """
+    db_path = db_path or resolve_analytics_db()
+    if not db_path or not Path(db_path).is_file():
+        return {}
+
+    roots: list[Path] = []
+    if csv_dir is not None:
+        roots.append(csv_dir)
+    roots.append(softdent_import_dir())
+    exports = Path(os.environ.get("SOFTDENT_FINANCIAL_EXPORTS", r"C:\SoftDentFinancialExports"))
+    roots.append(exports)
+
+    def _find(name: str) -> Path | None:
+        for root in roots:
+            candidate = root / name
+            if candidate.is_file():
+                return candidate
+        return None
+
+    mappings: dict[str, tuple[str, dict[str, tuple[str, ...]]]] = {
+        "treatment_plan_summary.csv": (
+            "sd_treatment_plan_csv",
+            {
+                "patient_id": ("PatientID", "patient_id", "MRN", "Id"),
+                "patient_name": ("PatientName", "patient_name", "Name"),
+                "plan_date": ("PlanDate", "plan_date", "Date", "Period"),
+                "total_fee": ("TotalFee", "total_fee", "Presented", "PresentedAmount", "Value"),
+                "accepted": ("Accepted", "accepted", "AcceptedAmount"),
+            },
+        ),
+        "hygiene_recall_summary.csv": (
+            "sd_hygiene_recall_csv",
+            {
+                "patient_id": ("PatientID", "patient_id", "MRN"),
+                "patient_name": ("PatientName", "patient_name", "Name"),
+                "due_date": ("DueDate", "due_date", "Due", "Period"),
+                "status": ("Status", "status", "Completed", "Overdue"),
+            },
+        ),
+        "case_acceptance.csv": (
+            "sd_case_acceptance_csv",
+            {
+                "patient_id": ("PatientID", "patient_id", "MRN"),
+                "patient_name": ("PatientName", "patient_name", "Name"),
+                "presented": ("Presented", "PresentedAmount", "presented"),
+                "accepted": ("Accepted", "AcceptedAmount", "accepted"),
+                "period": ("Period", "period", "Date"),
+            },
+        ),
+    }
+
+    counts: dict[str, int] = {}
+    extracted_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        for filename, (table, colmap) in mappings.items():
+            path = _find(filename)
+            if not path:
+                continue
+            cols_sql = ", ".join([f"{k} TEXT" for k in colmap.keys()] + ["source_file TEXT", "extracted_at TEXT"])
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} ({cols_sql})")
+            conn.execute(f"DELETE FROM {table}")
+            rows: list[dict[str, Any]] = []
+            with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                reader = csv.DictReader(handle)
+                if not reader.fieldnames:
+                    continue
+                field_lookup = {str(f).strip().lower(): str(f) for f in reader.fieldnames if f}
+                for row in reader:
+                    db_row: dict[str, Any] = {}
+                    for dest, aliases in colmap.items():
+                        value = ""
+                        for alias in aliases:
+                            src = field_lookup.get(alias.lower())
+                            if src and row.get(src) not in (None, ""):
+                                value = str(row.get(src) or "").strip()
+                                break
+                        db_row[dest] = value
+                    if not any(db_row.values()):
+                        continue
+                    db_row["source_file"] = path.name
+                    db_row["extracted_at"] = extracted_at
+                    rows.append(db_row)
+            if not rows:
+                continue
+            placeholders = ", ".join(f":{k}" for k in rows[0].keys())
+            col_names = ", ".join(rows[0].keys())
+            conn.executemany(f"INSERT INTO {table} ({col_names}) VALUES ({placeholders})", rows)
+            counts[table] = len(rows)
+
+            # Also hydrate summary-shaped treatment_plan_summary when empty and CSV has period totals
+            if table == "sd_treatment_plan_csv" and _table_exists(conn, "treatment_plan_summary"):
+                cur = conn.execute("SELECT COUNT(*) FROM treatment_plan_summary")
+                if int(cur.fetchone()[0] or 0) == 0:
+                    presented = 0.0
+                    accepted = 0.0
+                    for row in rows:
+                        try:
+                            presented += float(str(row.get("total_fee") or "0").replace("$", "").replace(",", "") or 0)
+                        except ValueError:
+                            pass
+                        try:
+                            accepted += float(str(row.get("accepted") or "0").replace("$", "").replace(",", "") or 0)
+                        except ValueError:
+                            pass
+                    conn.execute(
+                        """
+                        INSERT INTO treatment_plan_summary (
+                            row_sha256, business_key, report_date, total_treatment_plans,
+                            total_treatment_plan_value, accepted_count, accepted_value,
+                            presented_count, presented_value, status, source_file, imported_at_utc
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            f"csv:{path.name}:{extracted_at}",
+                            f"csv-ingest:{path.name}",
+                            extracted_at[:10],
+                            len(rows),
+                            presented,
+                            sum(1 for r in rows if str(r.get("accepted") or "").strip() not in {"", "0", "0.0", "false", "no"}),
+                            accepted,
+                            len(rows),
+                            presented,
+                            "csv-ingest",
+                            path.name,
+                            extracted_at,
+                        ),
+                    )
+                    counts["treatment_plan_summary"] = 1
+        conn.commit()
+    finally:
+        conn.close()
+    return counts
+
+
 if __name__ == "__main__":
     import json as _json
 
@@ -760,4 +955,5 @@ __all__ = [
     "run_odbc_lane",
     "sync_practice_exports",
     "read_practice_export_datasets",
+    "ingest_csv_reports_to_sqlite",
 ]

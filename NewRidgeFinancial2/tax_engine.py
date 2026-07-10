@@ -190,3 +190,152 @@ def build_tax_plan_from_bundle(bundle: dict[str, Any] | None) -> dict[str, Any]:
         ebitda_add_backs=add_backs,
         period_label=period or "QuickBooks import",
     )
+
+
+def compute_ebitda_walk(
+    bundle: dict[str, Any] | None,
+    *,
+    planning: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Owner-normalized EBITDA walk from QB imports only — never invent missing lines.
+
+    Optional `planning` overrides (operator scrubber): salaryBand (display only),
+    depreciation, interest, oneTime — never written to QuickBooks.
+    """
+    bundle = bundle or {}
+    plan = build_tax_plan_from_bundle(bundle)
+    qb = bundle.get("quickbooks") if isinstance(bundle.get("quickbooks"), dict) else {}
+    cat_rows = ((qb.get("expenseCategories") or {}).get("rows") or []) if isinstance(qb, dict) else []
+
+    def _pick(row: dict, keys: tuple[str, ...]) -> float | None:
+        for key in keys:
+            raw = row.get(key)
+            if raw is None or raw == "":
+                continue
+            try:
+                return float(str(raw).replace("$", "").replace(",", ""))
+            except ValueError:
+                continue
+        return None
+
+    dep = 0.0
+    interest = 0.0
+    dep_found = False
+    interest_found = False
+    for row in cat_rows:
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get("Category") or row.get("Account") or row.get("Name") or "").lower()
+        amt = _pick(row, ("Amount", "amount", "Total"))
+        if amt is None:
+            continue
+        if any(t in label for t in ("depreci", "amort", "§179", "section 179")):
+            dep += abs(float(amt))
+            dep_found = True
+        if any(t in label for t in ("interest", "loan interest", "mortgage interest")):
+            interest += abs(float(amt))
+            interest_found = True
+
+    book = plan.get("bookNetIncome")
+    has_book = isinstance(book, (int, float)) and float(book) != 0
+    if plan.get("hasBookData") and isinstance(book, (int, float)):
+        has_book = True
+
+    book_steps: list[dict[str, Any]] = []
+    missing: list[str] = []
+    if has_book:
+        book_steps.append({"label": "Net Income (QB)", "value": float(book), "kind": "start"})
+    else:
+        missing.append("QB net income")
+
+    if dep_found:
+        book_steps.append({"label": "Add: Depreciation / Amort", "value": float(dep), "kind": "positive"})
+    else:
+        missing.append("Depreciation (enter via CPA / add-backs)")
+
+    if interest_found:
+        book_steps.append({"label": "Add: Interest", "value": float(interest), "kind": "positive"})
+    else:
+        missing.append("Interest expense")
+
+    book_ebitda = None
+    if has_book:
+        book_ebitda = float(book) + (float(dep) if dep_found else 0.0) + (float(interest) if interest_found else 0.0)
+        book_steps.append({"label": "EBITDA (book)", "value": float(book_ebitda), "kind": "total"})
+
+    # Planning column — operator scrubber only
+    plan_in = planning if isinstance(planning, dict) else {}
+    plan_dep = plan_in.get("depreciation")
+    plan_int = plan_in.get("interest")
+    plan_one = plan_in.get("oneTime")
+    salary = plan_in.get("officerSalary")  # scenario note only — not added to EBITDA unless oneTime
+
+    use_dep = float(plan_dep) if isinstance(plan_dep, (int, float)) else (float(dep) if dep_found else 0.0)
+    use_int = float(plan_int) if isinstance(plan_int, (int, float)) else (float(interest) if interest_found else 0.0)
+    use_one = float(plan_one) if isinstance(plan_one, (int, float)) else 0.0
+
+    plan_steps: list[dict[str, Any]] = []
+    plan_ebitda = None
+    if has_book:
+        plan_steps.append({"label": "Net Income (QB)", "value": float(book), "kind": "start"})
+        plan_steps.append({"label": "Add: Depreciation (planning)", "value": use_dep, "kind": "positive"})
+        plan_steps.append({"label": "Add: Interest (planning)", "value": use_int, "kind": "positive"})
+        if use_one:
+            plan_steps.append({"label": "One-time adj (planning)", "value": use_one, "kind": "positive" if use_one >= 0 else "negative"})
+        plan_ebitda = float(book) + use_dep + use_int + use_one
+        plan_steps.append({"label": "EBITDA (planning)", "value": float(plan_ebitda), "kind": "total"})
+
+    modeled_w2 = plan.get("modeledOfficerW2")
+    salary_default = int(modeled_w2) if isinstance(modeled_w2, (int, float)) else 220_000
+    salary_default = max(180_000, min(280_000, salary_default))
+
+    return {
+        "available": has_book,
+        "ebitda": book_ebitda,
+        "planningEbitda": plan_ebitda,
+        "bookNetIncome": float(book) if isinstance(book, (int, float)) else None,
+        "depreciation": float(dep) if dep_found else None,
+        "interest": float(interest) if interest_found else None,
+        "steps": book_steps,
+        "planningSteps": plan_steps,
+        "missing": missing,
+        "periodLabel": plan.get("periodLabel") or "",
+        "disclaimer": "Management calculation from QuickBooks imports — not GAAP; CPA review for valuation use.",
+        "scrubber": {
+            "officerSalary": {
+                "min": 180_000,
+                "max": 280_000,
+                "step": 10_000,
+                "default": salary_default,
+                "value": int(salary) if isinstance(salary, (int, float)) else salary_default,
+                "label": "Officer Compensation Scenario",
+                "hint": "Planning band only — not payroll import; does not change book EBITDA unless you use one-time adj.",
+            },
+            "depreciation": {
+                "min": 0,
+                "max": max(float(dep) if dep_found else 0.0, 1.0),
+                "step": 500,
+                "default": float(dep) if dep_found else 0.0,
+                "value": use_dep,
+                "label": "Depreciation / Amort Add-Back",
+                "lockedMaxFromImport": dep_found,
+            },
+            "interest": {
+                "min": 0,
+                "max": max(float(interest) if interest_found else 0.0, 1.0),
+                "step": 100,
+                "default": float(interest) if interest_found else 0.0,
+                "value": use_int,
+                "label": "Interest Add-Back",
+                "lockedMaxFromImport": interest_found,
+            },
+            "oneTime": {
+                "min": -50_000,
+                "max": 50_000,
+                "step": 500,
+                "default": 0,
+                "value": use_one,
+                "label": "Discretionary / One-Time Items",
+            },
+        },
+    }

@@ -989,6 +989,25 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
                     result["warnings"].append(f"SoftDent ODBC extract: {warning}")
     except Exception as exc:
         result["warnings"].append(f"SoftDent ODBC extract skipped: {exc}")
+    try:
+        from softdent_transaction_extract import extract_all_transactions
+        from softdent_practice_exports import ingest_csv_reports_to_sqlite
+
+        tx_extract = extract_all_transactions(force=True)
+        result["softdent"]["transactionExtract"] = {
+            "ok": bool(tx_extract.get("ok")),
+            "transactions": int(tx_extract.get("transactions") or 0),
+            "register": int(tx_extract.get("register") or 0),
+            "operatory": int(tx_extract.get("operatory") or 0),
+            "parity": ((tx_extract.get("verification") or {}).get("parity_ratio")),
+        }
+        for warning in tx_extract.get("warnings") or []:
+            result["warnings"].append(f"SoftDent transaction extract: {warning}")
+        csv_counts = ingest_csv_reports_to_sqlite()
+        if csv_counts:
+            result["softdent"]["csvReportIngest"] = csv_counts
+    except Exception as exc:
+        result["warnings"].append(f"SoftDent transaction/CSV extract skipped: {exc}")
     if pipeline.get("practiceSync") and not (pipeline["practiceSync"].get("written") or []):
         db_hint = (pipeline["practiceSync"].get("collectionsDiagnostic") or {}).get("analyticsDb")
         if db_hint:

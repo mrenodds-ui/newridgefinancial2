@@ -1,8 +1,8 @@
 {
-  "BUILD_ID": "hal-10360",
-  "assetVersion": "hal-10360",
-  "schemaVersion": "hal-10360",
+  "BUILD_ID": "hal-10370",
+  "assetVersion": "hal-10370",
+  "schemaVersion": "hal-10370",
   "epoch": "nr2-apex",
   "releasedAt": "2026-07-10",
-  "notes": "hal-10360: voice-to-narrative + payer-specific appeal templates (Delta/Guardian/MetLife/BCBS + operator overrides)."
+  "notes": "hal-10370: SoftDent full extract — transactions/register/operatory JSONL→SQLite, payment code normalize, CSV report ingest, import_sync hook."
 }

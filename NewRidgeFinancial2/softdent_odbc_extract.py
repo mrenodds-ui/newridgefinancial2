@@ -384,8 +384,24 @@ def table_row_counts(db_path: Path | None) -> dict[str, int]:
         conn.close()
 
 
-def _is_payment(code: str, description: str) -> bool:
+def _normalize_softdent_code(code: str) -> str:
+    """SoftDent daysheet/JSONL sometimes emits codes as ``2.00`` instead of ``2``."""
     normalized = str(code or "").strip()
+    if not normalized:
+        return ""
+    if normalized.replace(".", "", 1).isdigit() and "." in normalized:
+        try:
+            as_float = float(normalized)
+            if as_float == int(as_float) and as_float < 1000:
+                return str(int(as_float))
+        except ValueError:
+            pass
+    return normalized
+
+
+def _is_payment(code: str, description: str) -> bool:
+    """Detect payments using SoftDent v19 transaction codes + description fallback."""
+    normalized = _normalize_softdent_code(code)
     text = str(description or "").lower()
     if normalized in WRITEOFF_CODES:
         return False
@@ -393,15 +409,22 @@ def _is_payment(code: str, description: str) -> bool:
         return True
     if any(normalized.startswith(prefix) for prefix in PAYMENT_PROCEDURE_PREFIXES):
         return True
-    return any(token in text for token in ("payment", "visa", "mastercard", "check", "cash", "insurance check"))
+    return any(
+        token in text
+        for token in ("payment", "visa", "mastercard", "amex", "check", "cash", "insurance check")
+    )
 
 
 def _is_adjustment(code: str, description: str) -> bool:
-    normalized = str(code or "").strip()
+    """Detect adjustments/write-offs using SoftDent codes 51/52 + description tokens."""
+    normalized = _normalize_softdent_code(code)
     text = str(description or "").lower()
     if normalized in WRITEOFF_CODES:
         return True
-    return "write-off" in text or "write off" in text or "adjustment" in text
+    return any(
+        token in text
+        for token in ("write-off", "write off", "writeoff", "adjustment", "adjust", "courtesy")
+    )
 
 
 def _row_amount(row: dict[str, Any]) -> float:

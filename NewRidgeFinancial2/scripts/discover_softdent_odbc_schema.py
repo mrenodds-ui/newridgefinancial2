@@ -303,6 +303,32 @@ def suggest_queries_from_discovery(
     return suggested, meta
 
 
+def suggest_transaction_queries(tables: list[str], columns: dict[str, list[str]]) -> dict[str, str]:
+    """Generate illustrative SQL for transaction / fee / payment-plan tables (verify before use)."""
+    suggestions: dict[str, str] = {}
+    tx_candidates = [t for t in tables if "trans" in t.lower()]
+    if tx_candidates:
+        tx_table = tx_candidates[0]
+        cols = columns.get(tx_table) or []
+        col_str = ", ".join(cols[:10]) if cols else "*"
+        suggestions["sd_transactions_odbc"] = (
+            f"-- Illustrative only; verify columns first\n"
+            f"SELECT {col_str} FROM {tx_table} WHERE Date >= '{{date_start}}'"
+        )
+    fee_candidates = [t for t in tables if "fee" in t.lower() or "schedule" in t.lower()]
+    if fee_candidates:
+        suggestions["sd_fee_schedules"] = f"-- Illustrative only\nSELECT * FROM {fee_candidates[0]}"
+    pp_candidates = [
+        t for t in tables if "paymentplan" in t.lower().replace("_", "") or "payplan" in t.lower()
+    ]
+    if pp_candidates:
+        suggestions["sd_payment_plans"] = f"-- Illustrative only\nSELECT * FROM {pp_candidates[0]}"
+    ledger_candidates = [t for t in tables if "ledger" in t.lower()]
+    if ledger_candidates:
+        suggestions["sd_patient_ledger"] = f"-- Illustrative only\nSELECT * FROM {ledger_candidates[0]}"
+    return suggestions
+
+
 def discover() -> dict:
     if not odbc_configured():
         return {
@@ -325,6 +351,7 @@ def discover() -> dict:
                 column_samples[table] = _list_columns(cursor, table)
         suggested_env, query_meta = suggest_queries_from_discovery(table_matches, column_samples)
         claims_meta = query_meta.get("sd_claims") or {}
+        suggested_tx = suggest_transaction_queries(tables, column_samples)
         return {
             "ok": True,
             "dsn": odbc_dsn(),
@@ -333,12 +360,14 @@ def discover() -> dict:
             "tableMatches": table_matches,
             "columnSamples": column_samples,
             "suggestedEnv": suggested_env,
+            "suggestedTransactionQueries": suggested_tx,
             "queryMeta": query_meta,
             "claimsQueryReady": claims_meta.get("source") == "columns",
             "nextSteps": [
                 "Copy suggestedEnv lines into repo .env (column-built queries preferred when discovery matched).",
                 "Or set NR2_SOFTDENT_USE_DISCOVERY_QUERIES=1 so extract reads suggestedEnv from this JSON when env SQL is empty.",
                 "SOFTDENT_ODBC_CLAIMS_QUERY is the highest-value query for named Payer labels (claim readiness / join).",
+                "Review suggestedTransactionQueries for fee schedules / payment plans / ledger (illustrative until verified).",
                 "Set NR2_CONSENT_EXECUTOR=1 to allow POST /api/admin/extract-softdent-odbc.",
                 "Run import_sync.py or sync from the SoftDent page to populate sd_* tables.",
             ],

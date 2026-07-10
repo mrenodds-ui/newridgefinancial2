@@ -193,3 +193,9 @@ _archive/
 Thumbs.db
 
 .fake
+# Local tax returns (PHI/financial — never commit)
+app_data/nr2/document_library/tax_returns/**/*.pdf
+app_data/nr2/document_library/tax_returns/**/*.png
+app_data/nr2/document_library/tax_returns/**/*.jpg
+!app_data/nr2/document_library/tax_returns/**/README.txt
+
