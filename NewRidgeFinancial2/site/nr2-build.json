@@ -1,22 +1,8 @@
 {
-  "BUILD_ID": "hal-10169",
-  "assetVersion": "hal-10169",
-  "schemaVersion": "hal-10169",
-  "REQUIRED_EPOCH": "moonshot-mockup",
-  "staffRenderMode": "live-wire-pilot",
-  "liveWirePages": [
-    "financial",
-    "softdent",
-    "quickbooks",
-    "ar",
-    "taxes",
-    "claims",
-    "narratives",
-    "documents",
-    "library",
-    "hal",
-    "office-manager"
-  ],
-  "builtAt": "2026-07-09T21:05:00Z",
-  "notes": "hal-10169: Moonshot extreme high-tech density + panel relayout (consult apply)."
+  "BUILD_ID": "hal-10360",
+  "assetVersion": "hal-10360",
+  "schemaVersion": "hal-10360",
+  "epoch": "nr2-apex",
+  "releasedAt": "2026-07-10",
+  "notes": "hal-10360: voice-to-narrative + payer-specific appeal templates (Delta/Guardian/MetLife/BCBS + operator overrides)."
 }

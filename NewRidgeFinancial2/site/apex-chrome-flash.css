@@ -1,0 +1,277 @@
+/* NR2-Apex Flash Chrome — high-tech presentation layer
+ * Build: hal-10260
+ * Respects prefers-reduced-motion
+ */
+
+/* Phosphor text glow */
+.apex-page-title,
+.apex-brand,
+.apex-kpi-value:not(.is-empty),
+.apex-ticker__item--metric,
+.apex-ticker__item--hal {
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.35), 0 0 16px rgba(0, 240, 255, 0.12);
+}
+
+.apex-page-title.apex-glitch.active {
+  animation: apexGlitch 0.15s ease-out;
+}
+
+/* Holographic instrument lift */
+.apex-mosaic {
+  perspective: 1200px;
+}
+
+.apex-inst {
+  transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.2s ease;
+}
+
+.apex-inst:hover {
+  transform: translateY(-3px) scale(1.015);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(0, 240, 255, 0.12),
+    0 0 36px rgba(0, 240, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* Corner brackets via background (does not steal ::before/::after from apex-bridge) */
+.apex-inst {
+  background-color: var(--apex-elevated);
+  background-image:
+    linear-gradient(var(--apex-cyan), var(--apex-cyan)),
+    linear-gradient(var(--apex-cyan), var(--apex-cyan)),
+    linear-gradient(var(--apex-cyan), var(--apex-cyan)),
+    linear-gradient(var(--apex-cyan), var(--apex-cyan)),
+    linear-gradient(var(--apex-cyan), var(--apex-cyan)),
+    linear-gradient(var(--apex-cyan), var(--apex-cyan)),
+    linear-gradient(var(--apex-cyan), var(--apex-cyan)),
+    linear-gradient(var(--apex-cyan), var(--apex-cyan));
+  background-size:
+    10px 1px, 1px 10px,
+    10px 1px, 1px 10px,
+    10px 1px, 1px 10px,
+    10px 1px, 1px 10px;
+  background-position:
+    top left, top left,
+    top right, top right,
+    bottom left, bottom left,
+    bottom right, bottom right;
+  background-repeat: no-repeat;
+}
+
+.apex-inst:hover {
+  background-size:
+    16px 1px, 1px 16px,
+    16px 1px, 1px 16px,
+    16px 1px, 1px 16px,
+    16px 1px, 1px 16px;
+}
+
+/* Ambient scanline sweep */
+body.apex-scan-sweep::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: -100%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.035), transparent);
+  pointer-events: none;
+  animation: apexSweep 22s linear infinite;
+  z-index: 50;
+}
+
+@keyframes apexSweep {
+  0% {
+    left: -40%;
+  }
+  8% {
+    left: 100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Sidebar status LEDs (right edge — avoid icon overlap) */
+.apex-sidebar .apex-nav-btn {
+  position: relative;
+  padding-right: 18px;
+}
+
+.apex-sidebar .apex-nav-btn::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--apex-cyan-dim);
+  opacity: 0.35;
+  transition: all 0.25s ease;
+}
+
+.apex-sidebar .apex-nav-btn.active::after {
+  background: var(--apex-cyan);
+  opacity: 1;
+  box-shadow: 0 0 8px var(--apex-cyan);
+}
+
+.apex-sidebar .apex-nav-btn.is-updating::after {
+  animation: apexLedPulse 0.8s ease-in-out infinite;
+  background: var(--apex-amber);
+  box-shadow: 0 0 8px var(--apex-amber);
+}
+
+@keyframes apexLedPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes apexGlitch {
+  0% {
+    text-shadow: -2px 0 var(--apex-magenta), 2px 0 var(--apex-amber);
+    transform: translateX(-1px);
+  }
+  25% {
+    text-shadow: 2px 0 var(--apex-magenta), -2px 0 var(--apex-amber);
+    transform: translateX(1px);
+  }
+  50% {
+    text-shadow: -1px 0 var(--apex-amber), 1px 0 var(--apex-cyan);
+  }
+  100% {
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.35);
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apex-inst:hover {
+    transform: none;
+  }
+
+  body.apex-scan-sweep::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .apex-sidebar .apex-nav-btn.is-updating::after {
+    animation: none;
+    opacity: 1;
+  }
+
+  .apex-page-title.apex-glitch.active {
+    animation: none;
+  }
+
+  .apex-grid-floor {
+    display: none;
+  }
+}
+
+/* Perspective grid floor — starship bridge depth */
+.apex-grid-floor {
+  position: fixed;
+  left: var(--sidebar-width, 240px);
+  right: 0;
+  bottom: var(--ticker-bottom-height, 28px);
+  height: 18vh;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.07;
+  background:
+    linear-gradient(to top, rgba(0, 240, 255, 0.35), transparent 70%),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 38px,
+      rgba(0, 240, 255, 0.55) 38px,
+      rgba(0, 240, 255, 0.55) 39px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 28px,
+      rgba(0, 240, 255, 0.4) 28px,
+      rgba(0, 240, 255, 0.4) 29px
+    );
+  transform-origin: 50% 100%;
+  transform: perspective(420px) rotateX(62deg) scale(1.15);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+}
+
+body.apex-bridge .apex-main {
+  position: relative;
+  z-index: 2;
+}
+
+/* Bottom telemetry strip */
+:root {
+  --ticker-bottom-height: 28px;
+}
+
+.apex-ticker--bottom {
+  top: auto;
+  bottom: 0;
+  height: var(--ticker-bottom-height);
+  border-top: 1px solid var(--apex-border);
+  border-bottom: none;
+  box-shadow: 0 -1px 0 var(--apex-cyan-dim);
+  z-index: 1000;
+}
+
+.apex-ticker--bottom .apex-ticker__label {
+  color: var(--apex-amber);
+  background: rgba(255, 184, 0, 0.06);
+}
+
+.apex-ticker--bottom .apex-ticker__track {
+  animation-duration: 55s;
+  animation-direction: reverse;
+}
+
+body.apex-bridge .apex-main {
+  margin-bottom: var(--ticker-bottom-height);
+  min-height: calc(100vh - var(--ticker-height) - var(--ticker-bottom-height));
+}
+
+body.apex-bridge .apex-sidebar {
+  bottom: var(--ticker-bottom-height);
+}
+
+/* Stage glitch flash on page change */
+.apex-main.is-glitching .apex-page-title {
+  animation: apexGlitch 0.18s ease-out;
+}
+
+.apex-main.is-glitching #apex-stage {
+  filter: contrast(1.08) saturate(1.15);
+  transition: filter 0.18s ease;
+}
+
+/* Threshold alert pulse + holo tilt (hal-10290) */
+@keyframes apexAlertPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 160, 0, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 160, 0, 0.35); }
+}
+.apex-alert-pulse {
+  animation: apexAlertPulse 2s ease-in-out 3;
+  border-color: var(--apex-amber) !important;
+}
+.apex-holo-tilt {
+  transform-style: preserve-3d;
+  transition: transform 0.12s ease-out;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .apex-alert-pulse { animation: none; border-width: 2px; }
+  .apex-holo-tilt { transform: none !important; transition: none; }
+}

@@ -1,2 +1,6 @@
-ClaimId,PatientName,Payer,ServiceDate,ClaimAmount,ClaimStatus
-CLM-CI-001,Sample Patient,Delta Dental,2025-06-01,420.00,Needs Review
+ClaimId,PatientName,Payer,ServiceDate,ClaimAmount,ClaimStatus,Age
+CLM-CI-001,Sample Patient,Delta Dental,2025-06-01,420.00,Needs Review,45
+CLM-CI-002,Jordan Lee,Guardian,2025-04-15,890.00,Denied,72
+CLM-CI-003,Alex Rivera,MetLife,2025-01-20,1250.00,Open,110
+CLM-CI-004,Sam Patel,Delta Dental,2025-05-10,310.00,Submitted,38
+CLM-CI-005,Casey Nguyen,BCBS,2024-12-01,640.00,Pending,200

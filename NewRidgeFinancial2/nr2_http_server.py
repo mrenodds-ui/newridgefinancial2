@@ -3079,6 +3079,11 @@ class NR2BottleServer(BottleServer):
                 bottle.response.status = 500
                 return json.dumps({"error": str(exc)})
 
+        # NR2-Apex widget/print/sync routes (wrap existing financial_reports / import_loader)
+        from apex_backend import register_apex_routes
+
+        register_apex_routes(app, _json_response)
+
         @app.get("/api/daily-closeout")
         def daily_closeout_api():
             bottle.response.content_type = "application/json"

@@ -1,22 +1,8 @@
 {
-  "BUILD_ID": "hal-10170",
-  "assetVersion": "hal-10170",
-  "schemaVersion": "hal-10170",
-  "REQUIRED_EPOCH": "moonshot-mockup",
-  "staffRenderMode": "live-wire-pilot",
-  "liveWirePages": [
-    "financial",
-    "softdent",
-    "quickbooks",
-    "ar",
-    "taxes",
-    "claims",
-    "narratives",
-    "documents",
-    "library",
-    "hal",
-    "office-manager"
-  ],
-  "builtAt": "2026-07-09T22:10:00Z",
-  "notes": "hal-10170: Moonshot system/HAL redesign apply — denser HAL chat-right, demoted diagnostics, elite HAL widget trim, HTTPS docs."
+  "BUILD_ID": "hal-10370",
+  "assetVersion": "hal-10370",
+  "schemaVersion": "hal-10370",
+  "epoch": "nr2-apex",
+  "releasedAt": "2026-07-10",
+  "notes": "hal-10370: SoftDent full extract — transactions/register/operatory JSONL→SQLite, payment code normalize, CSV report ingest, import_sync hook."
 }

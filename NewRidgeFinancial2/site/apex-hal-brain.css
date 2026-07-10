@@ -1,0 +1,117 @@
+/* HAL Neural Core Display — Build: hal-10260 */
+
+.hal-brain-container {
+  grid-column: 1 / -1;
+  background:
+    radial-gradient(ellipse at center, rgba(0, 240, 255, 0.05) 0%, transparent 65%),
+    var(--apex-elevated);
+  border: 1px solid var(--apex-border);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  animation: instBoot 520ms ease-out;
+}
+
+.apex-hal-main .hal-brain-container {
+  grid-column: 1 / -1;
+  grid-row: span 2;
+  min-height: 320px;
+}
+
+.hal-brain-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--apex-border);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.hal-brain-label {
+  font-family: "Orbitron", sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--apex-cyan);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.45);
+}
+
+.hal-brain-state {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  padding: 4px 8px;
+  border: 1px solid var(--apex-cyan-dim);
+  color: var(--apex-cyan);
+  background: rgba(0, 240, 255, 0.05);
+  letter-spacing: 0.08em;
+  transition: all 0.25s ease;
+}
+
+.hal-brain-state.thinking {
+  border-color: rgba(255, 184, 0, 0.55);
+  color: var(--apex-amber);
+  background: rgba(255, 184, 0, 0.1);
+  animation: apexStatePulse 1s ease-in-out infinite;
+}
+
+.hal-brain-state.reply {
+  border-color: var(--apex-cyan);
+  color: var(--apex-cyan);
+  background: rgba(0, 240, 255, 0.12);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
+}
+
+@keyframes apexStatePulse {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.hal-brain-canvas {
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
+  display: block;
+}
+
+.hal-brain-metrics {
+  display: flex;
+  gap: 20px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--apex-border);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.hal-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hal-metric-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--apex-text-secondary);
+}
+
+.hal-metric-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: var(--apex-cyan);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hal-brain-state.thinking {
+    animation: none;
+  }
+  .hal-brain-container {
+    animation: none;
+  }
+}
