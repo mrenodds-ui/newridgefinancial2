@@ -1,6 +1,8 @@
-ClaimId,PatientName,Payer,ServiceDate,ClaimAmount,ClaimStatus,Age
-CLM-CI-001,Sample Patient,Delta Dental,2025-06-01,420.00,Needs Review,45
-CLM-CI-002,Jordan Lee,Guardian,2025-04-15,890.00,Denied,72
-CLM-CI-003,Alex Rivera,MetLife,2025-01-20,1250.00,Open,110
-CLM-CI-004,Sam Patel,Delta Dental,2025-05-10,310.00,Submitted,38
-CLM-CI-005,Casey Nguyen,BCBS,2024-12-01,640.00,Pending,200
+ClaimId,PatientName,Payer,ServiceDate,ClaimAmount,ClaimStatus,Age,ProcCode,ProcedureDesc,EraStatus,DenialCode,AttachmentsPresent,AttachmentsRequired
+CLM-CI-001,Sample Patient,Delta Dental,2025-06-01,420.00,Needs Review,45,D4341,Scaling/Root Planing,,,1,2
+CLM-CI-002,Jordan Lee,Guardian,2025-04-15,890.00,Denied,72,D2740,Crown Porcelain,,CO-45,3,3
+CLM-CI-003,Alex Rivera,MetLife,2025-01-20,1250.00,Open,110,D6057,Implant Crown,,,0,2
+CLM-CI-004,Sam Patel,Delta Dental,2025-05-10,310.00,Submitted,38,D0120,Periodic Eval,,,2,2
+CLM-CI-005,Casey Nguyen,BCBS,2024-12-01,640.00,Pending,200,D7210,Surgical Extraction,,,0,1
+CLM-CI-006,Riley Brooks,Cigna,2025-05-20,115.00,ERA Matched,25,D1110,Prophylaxis Adult,Matched,,1,1
+CLM-CI-007,Morgan Ellis,Guardian,2025-03-01,185.00,Paid,40,D2330,Resin One Surface,Posted,,1,1

@@ -165,6 +165,54 @@ def bucket_for_age(age_days: int | None) -> str | None:
     return None
 
 
+KANBAN_COLUMNS = ("submitted", "pendingReview", "eraMatched", "denied", "paid")
+KANBAN_LABELS = {
+    "submitted": "Submitted",
+    "pendingReview": "Pending Review",
+    "eraMatched": "ERA Matched",
+    "denied": "Denied",
+    "paid": "Paid",
+}
+
+
+def status_column_for_claim(tile: dict[str, Any]) -> str:
+    """Map SoftDent ClaimStatus (+ aging fallback) to kanban column. Never invents status."""
+    status = str(tile.get("status") or "").strip().lower()
+    if re.search(r"denied|reject", status):
+        return "denied"
+    if re.search(r"\bpaid\b|posted|closed|complete|collected|settled", status):
+        return "paid"
+    if re.search(r"\bera\b|matched|remit|eob\b", status):
+        return "eraMatched"
+    if re.search(r"review|hold|needs.?review|pending.?review", status):
+        return "pendingReview"
+    if re.search(r"submit|sent|billed|open|pending|in.?process|active|new", status):
+        return "submitted"
+    age = tile.get("ageDays")
+    if isinstance(age, int):
+        if age >= 60:
+            return "pendingReview"
+        return "submitted"
+    if status and status != "unknown":
+        return "pendingReview"
+    return "submitted"
+
+
+def aging_risk_for_claim(tile: dict[str, Any]) -> str | None:
+    """Honest aging/status risk only — hide when no age and not denied."""
+    status = str(tile.get("status") or "")
+    if re.search(r"denied|reject", status, re.I):
+        return "high"
+    age = tile.get("ageDays")
+    if not isinstance(age, int):
+        return None
+    if age >= 90:
+        return "high"
+    if age >= 60:
+        return "medium"
+    return "low"
+
+
 def normalize_claim_row(row: dict[str, Any], *, as_of: datetime | None = None) -> dict[str, Any] | None:
     if not isinstance(row, dict):
         return None
@@ -182,10 +230,24 @@ def normalize_claim_row(row: dict[str, Any], *, as_of: datetime | None = None) -
     age = _age_days_from_row(row, as_of=as_of)
     status = _pick(row, ("ClaimStatus", "Status", "status", "claimStatus")) or "Unknown"
     payer = _pick(row, ("Payer", "Insurance", "Carrier", "payer", "InsuranceCompany")) or None
-    procs_raw = _pick(row, ("ProcCodes", "Procedures", "ProcedureCodes", "CDT", "Codes"))
+    procs_raw = _pick(
+        row,
+        ("ProcCodes", "Procedures", "ProcedureCodes", "CDT", "Codes", "ProcCode", "Procedure", "Code"),
+    )
     procedures = [p.strip() for p in re.split(r"[,;|/]+", procs_raw) if p.strip()] if procs_raw else None
+    proc_desc = _pick(row, ("ProcedureDesc", "ProcedureDescription", "Description", "ProcDesc")) or None
     billed = _parse_money(row.get("ClaimAmount") or row.get("Billed") or row.get("Amount") or row.get("billedAmount"))
-    return {
+    era_raw = _pick(row, ("EraStatus", "ERAStatus", "ERA", "RemitStatus", "eraStatus"))
+    denial = _pick(row, ("DenialCode", "CARC", "ReasonCode", "DenialReason", "denialCode")) or None
+    att_cur = _parse_int(row.get("AttachmentsPresent") or row.get("AttachmentCount") or row.get("Attachments"))
+    att_req = _parse_int(row.get("AttachmentsRequired") or row.get("RequiredAttachments"))
+    attachments = None
+    if att_cur is not None or att_req is not None:
+        attachments = {
+            "current": att_cur if att_cur is not None else 0,
+            "required": att_req if att_req is not None else None,
+        }
+    tile: dict[str, Any] = {
         "claimId": claim_id,
         "patientName": patient or "—",
         "date": date_s or "",
@@ -194,9 +256,16 @@ def normalize_claim_row(row: dict[str, Any], *, as_of: datetime | None = None) -
         "payer": payer,
         "status": status,
         "procedures": procedures,
+        "procedureDesc": proc_desc,
         "billedAmount": billed,
+        "eraStatus": era_raw or None,
+        "denialCode": denial,
+        "attachments": attachments,
         "source": "softdent-import",
     }
+    tile["column"] = status_column_for_claim(tile)
+    tile["risk"] = aging_risk_for_claim(tile)
+    return tile
 
 
 def build_aging_buckets(
@@ -248,6 +317,211 @@ def find_claim_by_id(rows: list[dict[str, Any]], claim_id: str) -> dict[str, Any
             tile["importedAt"] = _utc_now()
             return tile
     return None
+
+
+def build_status_columns(
+    rows: list[dict[str, Any]],
+    *,
+    as_of: datetime | None = None,
+) -> dict[str, Any]:
+    """Read-only Claims Workbench columns from SoftDent import (mockup parity Phase 1)."""
+    columns: dict[str, list[dict[str, Any]]] = {k: [] for k in KANBAN_COLUMNS}
+    missing_fields: set[str] = set()
+    amount_present = 0
+    era_known = 0
+    era_matched = 0
+    risk_counts = {"high": 0, "medium": 0, "low": 0}
+    pending_dollars = 0.0
+    pending_has_amount = False
+    normalized: list[dict[str, Any]] = []
+
+    for row in rows:
+        tile = normalize_claim_row(row, as_of=as_of)
+        if not tile:
+            continue
+        card = dict(tile)
+        col = str(card.get("column") or "submitted")
+        if col not in columns:
+            col = "submitted"
+            card["column"] = col
+        if not card.get("procedures"):
+            missing_fields.add("procedure")
+        if card.get("attachments") is None:
+            missing_fields.add("attachments")
+        if card.get("eraStatus") is None and col not in {"eraMatched", "paid"}:
+            missing_fields.add("eraStatus")
+        if card.get("billedAmount") is None:
+            missing_fields.add("amount")
+        else:
+            amount_present += 1
+            if col in {"submitted", "pendingReview"}:
+                pending_dollars += float(card["billedAmount"])
+                pending_has_amount = True
+        if card.get("eraStatus") or col == "eraMatched":
+            era_known += 1
+            era_s = str(card.get("eraStatus") or "").lower()
+            if col == "eraMatched" or re.search(r"match|posted|paid", era_s):
+                era_matched += 1
+        risk = card.get("risk")
+        if risk in risk_counts:
+            risk_counts[risk] += 1
+        # Compact card for UI (still import-backed)
+        columns[col].append(
+            {
+                "claimId": card.get("claimId"),
+                "patientName": card.get("patientName"),
+                "date": card.get("date"),
+                "ageDays": card.get("ageDays"),
+                "payer": card.get("payer"),
+                "status": card.get("status"),
+                "procedures": card.get("procedures"),
+                "procedureDesc": card.get("procedureDesc"),
+                "billedAmount": card.get("billedAmount"),
+                "eraStatus": card.get("eraStatus"),
+                "denialCode": card.get("denialCode"),
+                "attachments": card.get("attachments"),
+                "risk": card.get("risk"),
+                "column": col,
+                "bucket": card.get("bucket"),
+            }
+        )
+        normalized.append(card)
+
+    def _sort_key(t: dict[str, Any]) -> tuple[int, str]:
+        age = t.get("ageDays")
+        return (-(age if isinstance(age, int) else -1), str(t.get("claimId") or ""))
+
+    for key in columns:
+        columns[key].sort(key=_sort_key)
+
+    counts = {k: len(v) for k, v in columns.items()}
+    at_risk = int(risk_counts["high"]) + int(counts.get("denied") or 0)
+    # Avoid double-counting denied already marked high
+    denied_high = sum(1 for c in columns["denied"] if c.get("risk") == "high")
+    at_risk = int(risk_counts["high"]) + max(0, int(counts.get("denied") or 0) - denied_high)
+
+    era_rate = None
+    if era_known > 0:
+        era_rate = round(era_matched / era_known, 4)
+
+    return {
+        "columns": columns,
+        "counts": counts,
+        "totalClaims": len(normalized),
+        "available": bool(normalized),
+        "meta": {
+            "pendingDollars": round(pending_dollars, 2) if pending_has_amount else None,
+            "atRiskCount": at_risk if normalized else None,
+            "eraMatchRate": era_rate,
+            "riskCounts": risk_counts,
+            "amountPresentCount": amount_present,
+            "missingFields": sorted(missing_fields),
+            "readOnly": True,
+            "dragDisabled": True,
+            "lastImport": _utc_now(),
+        },
+        "claims": normalized,
+    }
+
+
+def kanban_widget(payload: dict[str, Any]) -> dict[str, Any]:
+    columns = payload.get("columns") if isinstance(payload.get("columns"), dict) else {}
+    counts = payload.get("counts") if isinstance(payload.get("counts"), dict) else {}
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+    has = bool(payload.get("available")) and any(counts.get(k) for k in KANBAN_COLUMNS)
+    missing = meta.get("missingFields") if isinstance(meta.get("missingFields"), list) else []
+    hint_bits = [
+        "Import-backed SoftDent claims · read-only status columns (no drag write-back).",
+        "Click card for detail · HAL can focus the board.",
+    ]
+    if missing:
+        hint_bits.append("Hidden when missing on import: " + ", ".join(str(m) for m in missing[:6]))
+    return {
+        "id": "claims-kanban-board",
+        "type": "claims-kanban",
+        "label": "Claims Workbench",
+        "size": "full",
+        "columns": {k: (columns.get(k) if isinstance(columns.get(k), list) else []) for k in KANBAN_COLUMNS},
+        "columnLabels": dict(KANBAN_LABELS),
+        "counts": {k: int(counts.get(k) or 0) for k in KANBAN_COLUMNS},
+        "meta": meta,
+        "filters": ["all", "high-risk", "unmatched", "missing-attachments"],
+        "status": "ok" if has else "empty",
+        "emptyMessage": "Import SoftDent claims to populate the Claims Workbench kanban",
+        "hint": " ".join(hint_bits),
+        "halChips": [
+            {"label": "Focus kanban", "query": "Focus claims workbench kanban"},
+            {"label": "High risk claims", "query": "Filter claims high risk"},
+            {"label": "Unmatched", "query": "Filter claims unmatched"},
+            {"label": "Sync & refill", "query": "Sync imports and populate the widgets"},
+        ],
+    }
+
+
+def claims_header_stats_widget(meta: dict[str, Any], *, available: bool) -> dict[str, Any]:
+    pending = meta.get("pendingDollars") if isinstance(meta, dict) else None
+    at_risk = meta.get("atRiskCount") if isinstance(meta, dict) else None
+    era = meta.get("eraMatchRate") if isinstance(meta, dict) else None
+    missing = meta.get("missingFields") if isinstance(meta.get("missingFields"), list) else []
+    stats = [
+        {
+            "id": "pending",
+            "label": "Pending $",
+            "value": pending,
+            "format": "money",
+            "tone": "warning",
+            "empty": pending is None,
+            "emptyHint": "Claim amounts not on import" if "amount" in missing or pending is None else "",
+        },
+        {
+            "id": "at-risk",
+            "label": "At Risk",
+            "value": at_risk,
+            "format": "count",
+            "tone": "danger",
+            "empty": at_risk is None,
+            "emptyHint": "Needs Age/Days or denied status",
+        },
+        {
+            "id": "era-match",
+            "label": "ERA Match",
+            "value": era,
+            "format": "pct",
+            "tone": "success",
+            "empty": era is None,
+            "emptyHint": "ERA status not on SoftDent import",
+        },
+    ]
+    return {
+        "id": "claims-header-stats",
+        "type": "claims-header-stats",
+        "label": "Claims Pipeline Stats",
+        "size": "full",
+        "stats": stats,
+        "status": "ok" if available else "empty",
+        "emptyMessage": "Import SoftDent claims for pipeline stats",
+        "hint": "Import-backed only — never invents dollars or ERA %.",
+    }
+
+
+def claims_risk_analytics_widget(meta: dict[str, Any], *, available: bool) -> dict[str, Any]:
+    risks = meta.get("riskCounts") if isinstance(meta.get("riskCounts"), dict) else {}
+    bars = [
+        {"label": "High", "key": "high", "value": int(risks.get("high") or 0), "tone": "high"},
+        {"label": "Medium", "key": "medium", "value": int(risks.get("medium") or 0), "tone": "medium"},
+        {"label": "Low", "key": "low", "value": int(risks.get("low") or 0), "tone": "low"},
+    ]
+    total = sum(b["value"] for b in bars)
+    return {
+        "id": "claims-risk-analytics",
+        "type": "claims-risk-bars",
+        "label": "Aging Risk",
+        "size": "m",
+        "bars": bars,
+        "status": "ok" if available and total else "empty",
+        "emptyMessage": "Aging risk appears when Age/Days or denied status is on the import",
+        "hint": "Derived from SoftDent Age/Days + denied status — not a payer denial score.",
+    }
 
 
 def clinical_note_summaries(rows: list[dict[str, Any]], *, limit: int = 80) -> list[dict[str, Any]]:

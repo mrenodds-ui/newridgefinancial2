@@ -6,7 +6,7 @@
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
-  const ASSET_V = "hal-10360";
+  const ASSET_V = "hal-10390";
 
   const PAGE_TITLES = {
     financial: "Financial",
@@ -42,6 +42,8 @@
     if (type === "heatmap" || type === "calculator" || type === "categorize" || type === "tax-library")
       return "xl";
     if (type === "ebitda-scrubber" || type === "filing-workflow" || type === "claim-shelf") return "full";
+    if (type === "claims-kanban" || type === "claims-header-stats" || type === "daily-huddle") return "full";
+    if (type === "claims-risk-bars" || type === "claim-attachments") return type === "claim-attachments" ? "l" : "m";
     if (type === "scenario-manager" || type === "workpaper") return type === "scenario-manager" ? "xl" : "l";
     if (type === "status") return "s";
     return "s";
@@ -794,6 +796,252 @@
         `;
       }
 
+      if (this.type === "claims-header-stats") {
+        const stats = Array.isArray(this.spec.stats) ? this.spec.stats : [];
+        const empty = this.spec.status === "empty" || !stats.length;
+        const cells = stats
+          .map((s) => {
+            const tone = String((s && s.tone) || "");
+            let display = "—";
+            if (s && s.value != null && s.empty !== true) {
+              if (s.format === "money") display = formatMoney(s.value) || "—";
+              else if (s.format === "pct") display = `${Math.round(Number(s.value) * 1000) / 10}%`;
+              else display = formatCount(s.value) || String(s.value);
+            }
+            const hint = s && s.empty ? String(s.emptyHint || "Not on import") : "";
+            return `<div class="apex-claims-stat ${s && s.empty ? "is-empty" : ""}" title="${this.escape(hint)}">
+              <div class="apex-claims-stat__value ${this.escape(tone)}">${this.escape(display)}</div>
+              <div class="apex-claims-stat__label">${this.escape((s && s.label) || "")}</div>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No pipeline stats"
+                )}</div>`
+              : `<div class="apex-claims-stats">${cells}</div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "claims-risk-bars") {
+        const bars = Array.isArray(this.spec.bars) ? this.spec.bars : [];
+        const max = Math.max(1, ...bars.map((b) => Number((b && b.value) || 0)));
+        const empty = this.spec.status === "empty" || !bars.some((b) => Number((b && b.value) || 0) > 0);
+        const rows = bars
+          .map((b) => {
+            const val = Number((b && b.value) || 0);
+            const pct = Math.round((val / max) * 100);
+            const tone = String((b && b.tone) || "low");
+            return `<div class="apex-claims-risk-row">
+              <span class="apex-claims-risk-label">${this.escape((b && b.label) || "")}</span>
+              <div class="apex-claims-risk-track"><div class="apex-claims-risk-fill apex-claims-risk-fill--${this.escape(
+                tone
+              )}" style="width:${pct}%"></div></div>
+              <span class="apex-claims-risk-value">${this.escape(String(val))}</span>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No aging risk data"
+                )}</div>`
+              : `<div class="apex-claims-risk">${rows}</div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "claims-kanban") {
+        const columns = this.spec.columns && typeof this.spec.columns === "object" ? this.spec.columns : {};
+        const labels = this.spec.columnLabels && typeof this.spec.columnLabels === "object" ? this.spec.columnLabels : {};
+        const counts = this.spec.counts && typeof this.spec.counts === "object" ? this.spec.counts : {};
+        const order = ["submitted", "pendingReview", "eraMatched", "denied", "paid"];
+        const empty = this.spec.status === "empty";
+        const colHtml = order
+          .map((key) => {
+            const cards = Array.isArray(columns[key]) ? columns[key] : [];
+            const count = typeof counts[key] === "number" ? counts[key] : cards.length;
+            const cardHtml = cards
+              .map((c) => {
+                const id = String((c && c.claimId) || "");
+                const risk = c && c.risk ? String(c.risk) : "";
+                const procs = Array.isArray(c && c.procedures) ? c.procedures.join(", ") : "";
+                const procLine = procs
+                  ? procs + (c && c.procedureDesc ? " · " + c.procedureDesc : "")
+                  : c && c.procedureDesc
+                    ? String(c.procedureDesc)
+                    : "";
+                const amount =
+                  c && c.billedAmount != null && Number.isFinite(Number(c.billedAmount))
+                    ? formatMoney(c.billedAmount)
+                    : "";
+                const payer = String((c && c.payer) || "");
+                let att = "";
+                if (c && c.attachments && typeof c.attachments === "object") {
+                  const cur = c.attachments.current;
+                  const req = c.attachments.required;
+                  if (req != null) {
+                    const complete = Number(cur) >= Number(req);
+                    att = `<span class="apex-claim-card__att ${complete ? "is-complete" : "is-missing"}">📎 ${this.escape(
+                      String(cur)
+                    )}/${this.escape(String(req))}</span>`;
+                  } else if (cur != null) {
+                    att = `<span class="apex-claim-card__att">📎 ${this.escape(String(cur))}</span>`;
+                  }
+                }
+                let era = "";
+                if (c && c.denialCode) {
+                  era = `<span class="apex-claim-card__era is-denied">${this.escape(String(c.denialCode))}</span>`;
+                } else if (c && c.eraStatus) {
+                  era = `<span class="apex-claim-card__era">${this.escape(String(c.eraStatus))}</span>`;
+                } else if (key === "eraMatched") {
+                  era = `<span class="apex-claim-card__era is-matched">ERA Match</span>`;
+                } else if (key === "paid") {
+                  era = `<span class="apex-claim-card__era is-matched">Paid</span>`;
+                }
+                const riskClass = risk ? ` risk-${this.escape(risk)}` : key === "eraMatched" || key === "paid" ? " matched" : "";
+                const riskBadge = risk
+                  ? `<span class="apex-claim-card__risk risk-${this.escape(risk)}">${this.escape(
+                      risk === "high" ? "High" : risk === "medium" ? "Med" : "Low"
+                    )}</span>`
+                  : "";
+                return `<div class="apex-claim-card${riskClass}" data-claim-id="${this.escape(
+                  id
+                )}" data-claim-card data-risk="${this.escape(risk)}" data-column="${this.escape(key)}" data-has-era="${
+                  c && c.eraStatus ? "1" : "0"
+                }" data-has-att="${c && c.attachments ? "1" : "0"}" data-patient="${this.escape(
+                  String((c && c.patientName) || "")
+                )}">
+                  <div class="apex-claim-card__head">
+                    <span class="apex-claim-card__id">${this.escape(id)}</span>
+                    ${riskBadge}
+                  </div>
+                  <div class="apex-claim-card__patient">${this.escape(String((c && c.patientName) || "—"))}</div>
+                  ${
+                    procLine
+                      ? `<div class="apex-claim-card__proc">${this.escape(procLine)}</div>`
+                      : `<div class="apex-claim-card__proc is-muted">Procedure not on import</div>`
+                  }
+                  <div class="apex-claim-card__meta">
+                    <span>${this.escape(payer || "Payer —")}</span>
+                    <span class="apex-claim-card__amt">${this.escape(amount || "—")}</span>
+                  </div>
+                  <div class="apex-claim-card__foot">${att}${era}</div>
+                  <div class="apex-claim-card__actions" data-claim-actions>
+                    <button type="button" class="apex-claim-act" data-claim-act="generate-narrative" title="NR2 only — does not write SoftDent">Narrative</button>
+                    <button type="button" class="apex-claim-act" data-claim-act="follow-up-note" title="NR2 follow-up note">Note</button>
+                    <button type="button" class="apex-claim-act" data-claim-act="schedule-callback" title="NR2 callback">Callback</button>
+                    <label class="apex-claim-act apex-claim-act--check"><input type="checkbox" data-batch-claim value="${this.escape(
+                      id
+                    )}" /> Batch</label>
+                  </div>
+                </div>`;
+              })
+              .join("");
+            return `<div class="apex-claims-kanban__col" data-kanban-col="${this.escape(key)}">
+              <div class="apex-claims-kanban__col-head">
+                <span>${this.escape(labels[key] || key)}</span>
+                <span class="apex-claims-kanban__count">${this.escape(String(count))}</span>
+              </div>
+              <div class="apex-claims-kanban__col-body">${
+                cardHtml || `<div class="apex-claims-kanban__empty">No claims</div>`
+              }</div>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            <div class="apex-widget-actions">
+              <div class="apex-claims-kanban__filters" data-kanban-filters>
+                <button type="button" class="apex-filter-btn is-active" data-kanban-filter="all">All Claims</button>
+                <button type="button" class="apex-filter-btn" data-kanban-filter="high-risk">High Risk</button>
+                <button type="button" class="apex-filter-btn" data-kanban-filter="unmatched" title="Needs ERA status on import">Unmatched</button>
+                <button type="button" class="apex-filter-btn" data-kanban-filter="missing-attachments" title="Needs attachment fields on import">Missing Attachments</button>
+              </div>
+              <button type="button" class="apex-btn apex-btn--small" data-action="batch-narratives" title="Batch appeal seed for checked claims">Batch narratives</button>
+              ${printBtn}
+            </div>
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No claims for workbench"
+                )}</div>`
+              : `<div class="apex-claims-kanban" data-claims-kanban>
+                  <div class="apex-claims-kanban__note">Read-only SoftDent status · NR2 card actions only (no SoftDent write-back)</div>
+                  <div class="apex-claims-kanban__board">${colHtml}</div>
+                </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "daily-huddle") {
+        const items = Array.isArray(this.spec.priorities) ? this.spec.priorities : [];
+        const list = items
+          .map((p) => `<li class="apex-huddle-item">${this.escape(String(p))}</li>`)
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          <ol class="apex-huddle-list">${list || `<li class="apex-huddle-item">No priorities flagged</li>`}</ol>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "claim-attachments") {
+        const items = Array.isArray(this.spec.items) ? this.spec.items : [];
+        const empty = this.spec.status === "empty" || !items.length;
+        const rows = items
+          .map(
+            (it) =>
+              `<div class="apex-att-row"><strong>${this.escape(it.claimId || "")}</strong>
+              <span>${this.escape(it.filename || "")}</span>
+              <span class="apex-kpi-hint">${this.escape(it.at || "")}</span></div>`
+          )
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          <form class="apex-att-upload" data-claim-att-upload>
+            <input type="text" name="claimId" placeholder="Claim ID" required />
+            <input type="file" name="file" required />
+            <button type="submit" class="apex-btn apex-btn--small">Upload</button>
+          </form>
+          <form class="apex-att-upload" data-era-upload title="Upload ERA/835 text">
+            <input type="file" name="file" accept=".txt,.835,.era,*" required />
+            <button type="submit" class="apex-btn apex-btn--small">Ingest ERA 835</button>
+          </form>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No attachments"
+                )}</div>`
+              : `<div class="apex-att-list">${rows}</div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
       if (this.type === "countdown") {
         const items = Array.isArray(this.spec.items) ? this.spec.items : [];
         const empty = !items.length;
@@ -1190,6 +1438,12 @@
       if (this.type === "claim-shelf") {
         wireClaimShelf(this.element, this.spec);
       }
+      if (this.type === "claims-kanban") {
+        wireClaimsKanban(this.element, this.spec);
+      }
+      if (this.type === "claim-attachments") {
+        wireClaimAttachments(this.element);
+      }
     }
   }
 
@@ -1220,6 +1474,16 @@
       } else {
         parts.push(`Ask: focus this aging shelf, sync imports, or find a claim by ID.`);
       }
+    }
+    if (s.type === "claims-kanban") {
+      const counts = s.counts || {};
+      parts.push(
+        `kanbanCounts=submitted:${counts.submitted || 0},pendingReview:${counts.pendingReview || 0},eraMatched:${
+          counts.eraMatched || 0
+        },denied:${counts.denied || 0},paid:${counts.paid || 0}`
+      );
+      parts.push(`readOnly=true · drag write-back disabled`);
+      parts.push(`Ask: focus claims workbench, filter high risk, open a claim by ID.`);
     }
     if (s.hint) parts.push(`hint=${s.hint}`);
     if (s.message) parts.push(`message=${s.message}`);
@@ -1690,6 +1954,11 @@
   async function openClaimDrawer(claimId) {
     const id = String(claimId || "").trim();
     if (!id) return;
+    try {
+      sessionStorage.setItem("nr2-apex-focused-claim", id);
+    } catch (_err) {
+      /* ignore */
+    }
     closeClaimDrawer();
     const drawer = document.createElement("aside");
     drawer.id = "apex-claim-drawer";
@@ -1801,11 +2070,165 @@
     }
   }
 
+  function applyKanbanFilter(root, filter) {
+    const f = String(filter || "all");
+    root.querySelectorAll("[data-kanban-filter]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.getAttribute("data-kanban-filter") === f);
+    });
+    root.querySelectorAll("[data-claim-card]").forEach((card) => {
+      let show = true;
+      if (f === "high-risk") show = card.getAttribute("data-risk") === "high";
+      else if (f === "unmatched") {
+        const col = card.getAttribute("data-column") || "";
+        show = col !== "eraMatched" && col !== "paid" && card.getAttribute("data-has-era") !== "1";
+      } else if (f === "missing-attachments") {
+        show =
+          card.getAttribute("data-has-att") === "1" &&
+          !!card.querySelector(".apex-claim-card__att.is-missing");
+      }
+      card.hidden = !show;
+    });
+  }
+
+  function wireClaimsKanban(root, _spec) {
+    if (!root || root.dataset.claimsKanbanWired === "1") return;
+    root.dataset.claimsKanbanWired = "1";
+    root.querySelectorAll("[data-claim-card]").forEach((card) => {
+      card.addEventListener("click", (ev) => {
+        if (ev.target && ev.target.closest("[data-claim-actions]")) return;
+        openClaimDrawer(card.getAttribute("data-claim-id"));
+      });
+    });
+    root.querySelectorAll("[data-claim-act]").forEach((btn) => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const card = btn.closest("[data-claim-card]");
+        const claimId = card && card.getAttribute("data-claim-id");
+        const action = btn.getAttribute("data-claim-act");
+        if (!claimId || !action) return;
+        const patientName = (card && card.getAttribute("data-patient")) || "";
+        if (action === "generate-narrative") {
+          try {
+            await apexFetch(`${config.apiBase}/claims/actions`, {
+              method: "POST",
+              body: JSON.stringify({ claimId, action, patientName }),
+            });
+          } catch (_err) {
+            /* continue to narratives */
+          }
+          try {
+            sessionStorage.setItem(
+              "nr2-apex-narrative-seed",
+              JSON.stringify({ claimId, patientName, voiceCarry: true })
+            );
+            sessionStorage.setItem("nr2-apex-focused-claim", claimId);
+          } catch (_err) {
+            /* ignore */
+          }
+          loadPage("narratives");
+          return;
+        }
+        let note = "";
+        if (action === "follow-up-note") {
+          note = window.prompt("Follow-up note (stored in NR2 only — not SoftDent):", "") || "";
+          if (!note.trim()) return;
+        } else if (action === "schedule-callback") {
+          note = window.prompt("Callback note / when (NR2 only):", "Callback requested") || "";
+        }
+        try {
+          const res = await apexFetch(`${config.apiBase}/claims/actions`, {
+            method: "POST",
+            body: JSON.stringify({ claimId, action, note, patientName }),
+          });
+          const data = await res.json().catch(() => ({}));
+          window.alert(data.message || data.error || (data.ok ? "Action recorded" : "Failed"));
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    });
+    root.querySelectorAll("[data-batch-claim]").forEach((cb) => {
+      cb.addEventListener("click", (ev) => ev.stopPropagation());
+    });
+    root.querySelectorAll("[data-kanban-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyKanbanFilter(root, btn.getAttribute("data-kanban-filter"));
+      });
+    });
+    const batch = root.querySelector('[data-action="batch-narratives"]');
+    if (batch) {
+      batch.addEventListener("click", () => {
+        const ids = Array.from(root.querySelectorAll("[data-batch-claim]:checked")).map((el) => el.value);
+        if (!ids.length) {
+          window.alert("Check Batch on one or more claim cards first.");
+          return;
+        }
+        try {
+          sessionStorage.setItem(
+            "nr2-apex-narrative-seed",
+            JSON.stringify({ claimIds: ids, claimId: ids[0], bulkAppeal: true, batchNarrative: true })
+          );
+        } catch (_err) {
+          /* ignore */
+        }
+        loadPage("narratives");
+      });
+    }
+  }
+
+  function wireClaimAttachments(root) {
+    if (!root || root.dataset.attWired === "1") return;
+    root.dataset.attWired = "1";
+    const form = root.querySelector("[data-claim-att-upload]");
+    if (form) {
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(form);
+        try {
+          const res = await apexFetch(`${config.apiBase}/claims/attachments`, { method: "POST", body: fd });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || "Upload failed");
+            return;
+          }
+          await loadPage("documents", { silent: false });
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    }
+    const era = root.querySelector("[data-era-upload]");
+    if (era) {
+      era.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(era);
+        try {
+          const res = await apexFetch(`${config.apiBase}/claims/era-ingest`, { method: "POST", body: fd });
+          const data = await res.json().catch(() => ({}));
+          window.alert(
+            data.ok
+              ? `ERA ingested: ${data.matchedCount || 0} matched of ${data.segmentCount || 0} segments`
+              : data.error || "ERA ingest failed"
+          );
+          if (data.ok) await loadPage("claims", { silent: false });
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    }
+  }
+
   function focusClaimTile(claimId) {
     const id = String(claimId || "").trim();
     if (!id) return;
     const tile = document.querySelector(`[data-claim-id="${CSS.escape ? CSS.escape(id) : id.replace(/"/g, "")}"]`);
     if (tile) {
+      try {
+        sessionStorage.setItem("nr2-apex-focused-claim", id);
+      } catch (_err) {
+        /* ignore */
+      }
       tile.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       tile.classList.add("apex-hal-highlight");
       setTimeout(() => tile.classList.remove("apex-hal-highlight"), 4000);
@@ -1978,6 +2401,39 @@
             setTimeout(() => el.classList.remove("apex-hal-highlight"), 4000);
             results.push(`focus_bucket:${bucket}`);
           }
+        } else if (type === "filter_claims_kanban") {
+          await new Promise((r) => setTimeout(r, 100));
+          const board = document.querySelector('[data-widget-id="claims-kanban-board"]');
+          if (board) {
+            board.scrollIntoView({ behavior: "smooth", block: "center" });
+            applyKanbanFilter(board, action.filter || "all");
+            board.classList.add("apex-hal-highlight");
+            setTimeout(() => board.classList.remove("apex-hal-highlight"), 4000);
+            results.push(`filter_kanban:${action.filter || "all"}`);
+          }
+        } else if (type === "narrative_from_focused_claim") {
+          let cid = "";
+          try {
+            cid = sessionStorage.getItem("nr2-apex-focused-claim") || "";
+          } catch (_err) {
+            cid = "";
+          }
+          const focused = document.querySelector(".apex-claim-card.apex-hal-highlight, [data-claim-card].is-focused");
+          if (!cid && focused) cid = focused.getAttribute("data-claim-id") || "";
+          if (cid) {
+            try {
+              sessionStorage.setItem(
+                "nr2-apex-narrative-seed",
+                JSON.stringify({ claimId: cid, voiceCarry: true })
+              );
+            } catch (_err) {
+              /* ignore */
+            }
+            if (currentPage !== "narratives") await loadPage("narratives");
+            results.push(`narrative_carry:${cid}`);
+          } else {
+            results.push("narrative_carry:none");
+          }
         }
       } catch (_err) {
         results.push(`fail:${type}`);
@@ -2018,8 +2474,11 @@
         board = null;
       }
 
-      if (board && board.handled && Array.isArray(board.actions) && board.actions.length) {
-        await runHalBoardActions(board.actions);
+      // Deterministic board reply wins over LLM — including widget census (not governed memory).
+      if (board && board.handled) {
+        if (Array.isArray(board.actions) && board.actions.length) {
+          await runHalBoardActions(board.actions);
+        }
         const reply = String(board.reply || "Board updated from imports.");
         if (pending) {
           if (window.ApexMotion && typeof window.ApexMotion.decodeText === "function") {
@@ -2126,6 +2585,10 @@
       { label: "Focus EBITDA scrubber", query: "Focus the EBITDA scrubber" },
       { label: "Focus A/R", query: "Show me A/R aging flow" },
       { label: "Focus 90-day claims", query: "Focus 90-day claims" },
+      { label: "Claims workbench", query: "Focus claims workbench kanban" },
+      { label: "High-risk claims", query: "Filter claims high risk" },
+      { label: "Import health", query: "Import health status" },
+      { label: "Morning briefing", query: "Morning briefing" },
       { label: "Claims aging status", query: "Claims import status" },
       { label: "Categorize assist", query: "Open categorize suggestions" },
       { label: "Print view", action: "print" },
