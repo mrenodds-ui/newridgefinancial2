@@ -3687,6 +3687,47 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
     notes: list[str] = []
     handled = False
 
+    # Advisory / ethics questions must reach chat — do not hijack on topic keywords
+    # like "categorize", "import health", or "ebitda" embedded in a longer ask.
+    advisory_chat = bool(
+        re.search(
+            r"\b("
+            r"prioritize|ranked|action list|what should (i|we|front desk|staff)|"
+            r"how (do|should|can) (i|we)|why (is|are|do|does)|explain|"
+            r"compare|draft|outline|advise|recommend|give (me )?(a )?(ranked|priority)|"
+            r"if i ask|invent|fabricate|make up|look better|what (exact|do you) do|"
+            r"refuse|should you|would you"
+            r")\b",
+            q,
+        )
+    ) or (len(q.split()) >= 12 and "?" in query)
+    explicit_board = bool(
+        re.search(
+            r"\b("
+            r"focus|highlight|point (me )?to|look at|open widget|"
+            r"show me (the )?(widget|scrubber|board|kanban|table|categorize|ebitda)|"
+            r"open (the )?(categorize|ebitda|claims workbench|import health)|"
+            r"go to|switch to|take me to|navigate"
+            r")\b",
+            q,
+        )
+    )
+    allow_topic_focus = explicit_board or not advisory_chat
+
+    # --- Ethics: never invent dollars / write-offs (deterministic refusal) ---
+    if re.search(
+        r"\b(invent|fabricate|fake|make up)\b.{0,80}\b(write-?off|\$|dollar|ebitda|revenue|collections|kpi)\b",
+        q,
+    ) or re.search(
+        r"\b(write-?off|ebitda).{0,60}\b(invent|fake|fabricate|look better|make .{0,20} better)\b",
+        q,
+    ):
+        notes.append(
+            "I will not invent write-offs or dollar amounts to make EBITDA (or any KPI) look better. "
+            "Books stay import-backed; staff posts real adjustments in SoftDent/QuickBooks with approval."
+        )
+        handled = True
+
     # --- Sync / populate from imports ---
     if re.search(
         r"\b(sync|refresh imports|reload imports|pull (softdent|quickbooks|qb)|update (the )?board|populate (the )?(widgets|board)|refill widgets)\b",
@@ -3774,8 +3815,8 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(90[- ]?day claims?|claims? (aged )?90|aging over 90)\b", "claims-aging-90", "claims"),
         (r"\b(claims? aging|aging (tiles|shelves|claims))\b", "claims-aging-30", "claims"),
     )
-    if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
-        re.search(pat, q) for pat, _wid, _pg in focus_rules
+    if (not handled) and allow_topic_focus and (
+        explicit_board or any(re.search(pat, q) for pat, _wid, _pg in focus_rules)
     ):
         for pat, wid, pg in focus_rules:
             if re.search(pat, q):
@@ -3892,7 +3933,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         handled = True
 
     # --- Surface categorize suggestions (already computed from imports; not inventing $) ---
-    if re.search(r"\b(categorize|suggest categor|expense categor|remap categor)\b", q):
+    if allow_topic_focus and re.search(r"\b(categorize|suggest categor|expense categor|remap categor)\b", q):
         _reports, bundle, _err = _load_reports_and_bundle()
         cat = build_categorize_assist(bundle)
         n = len(cat.get("suggestions") or [])
@@ -3922,6 +3963,134 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         if re.search(r"\bopen\b", q):
             actions.append({"type": "open_claim_detail", "claimId": cid})
         notes.append(f"Focusing claim tile `{cid}` from SoftDent import (no invented fields).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?high[- ]?risk\b|\bhigh[- ]?risk claims?\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "high-risk"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to high aging-risk cards (import-backed Age/Days + denied).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?unmatched\b|\bunmatched claims?\b|\bera unmatched\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "unmatched"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to unmatched / non-ERA cards (import-backed only).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?missing attachments?\b|\bmissing attachments?\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "missing-attachments"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to cards with missing attachments when that field is on the import.")
+        handled = True
+
+    if re.search(r"\b(show|switch to|use)\s+(claims?\s+)?table(\s+view)?\b|\bclaims? table view\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "set_claims_view", "view": "table"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Switching Claims Workbench to dense table view (SoftDent read-only).")
+        handled = True
+
+    if re.search(r"\b(show|switch to|use)\s+(claims?\s+)?kanban(\s+view)?\b|\bclaims? kanban view\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "set_claims_view", "view": "kanban"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Switching Claims Workbench to kanban columns (SoftDent read-only).")
+        handled = True
+
+    if re.search(r"\b(focus|show)\s+(claims?\s+)?workbench\b|\bclaims? workbench\b", q) and not handled:
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "all"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Focusing Claims Workbench (table default · SoftDent read-only).")
+        handled = True
+
+    if allow_topic_focus and re.search(r"\b(import health|health monitor|stale imports?)\b", q):
+        from apex_program_improve_pack import assess_import_health
+
+        _reports, bundle, _err = _load_reports_and_bundle()
+        health = assess_import_health(bundle)
+        alerts = health.get("alerts") if isinstance(health.get("alerts"), list) else []
+        msg = alerts[0]["message"] if alerts else "Imports healthy"
+        actions.append(
+            {
+                "type": "set_status_banner",
+                "message": str(msg)[:120],
+                "hint": (alerts[0].get("hint") if alerts else "Proactive monitor clear") or "",
+                "tone": "warn" if health.get("tone") == "warn" else "ok",
+            }
+        )
+        actions.append({"type": "focus_widget", "widgetId": "import-health-monitor"})
+        if not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": page if page in APEX_PAGES else "office-manager"})
+        notes.append(f"Import health: {msg}")
+        handled = True
+
+    # FIN-001/004/007 — Morning Financial Brief + empty-widget diagnosis
+    if re.search(
+        r"\b(morning financial brief|financial (morning )?brief|why (are )?(my )?widgets empty|"
+        r"collections pending|empty (financial )?widgets|widgets not (imported|populated)|"
+        r"missing collections)\b",
+        q,
+    ):
+        try:
+            from apex_financial_console_pack import (
+                build_morning_financial_brief,
+                format_hal_morning_financial_reply,
+            )
+
+            reports, bundle, _err = _load_reports_and_bundle()
+            brief = build_morning_financial_brief(bundle, reports if isinstance(reports, dict) else {})
+            reply = format_hal_morning_financial_reply(brief)
+            if page != "financial" and not any(a.get("type") == "navigate" for a in actions):
+                actions.append({"type": "navigate", "page": "financial"})
+                page = "financial"
+            actions.append({"type": "focus_widget", "widgetId": "financial-command-strip"})
+            actions.append(
+                {
+                    "type": "set_status_banner",
+                    "message": str(brief.get("message") or "Financial brief")[:140],
+                    "hint": "Collections/Daysheet export unlocks revenue split widgets"
+                    if brief.get("collectionsPending")
+                    else (brief.get("hint") or ""),
+                    "tone": "warn" if brief.get("tone") == "warn" else "ok",
+                }
+            )
+            if brief.get("collectionsPending"):
+                actions.append({"type": "refresh_softdent_period"})
+            notes.append(reply)
+            handled = True
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"Morning financial brief unavailable: {exc}")
+            handled = True
+
+    if re.search(r"\b(morning (brief|briefing|huddle)|daily huddle)\b", q) and not handled:
+        if page != "office-manager" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "office-manager"})
+            page = "office-manager"
+        actions.append({"type": "focus_widget", "widgetId": "om-daily-huddle"})
+        notes.append("Opening Daily Huddle priorities (import-backed).")
+        handled = True
+
+    if re.search(r"\b(draft appeal|generate narrative|appeal)\b.*\b(this|that|current|focused)\s+claim\b|\bfor (this|that) claim\b", q):
+        actions.append({"type": "narrative_from_focused_claim"})
+        if page != "narratives" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "narratives"})
+        notes.append("Carrying focused claim context into Narratives (voice context carry).")
         handled = True
 
     if re.search(r"\b(claims? import status|aging tiles? status)\b", q):
