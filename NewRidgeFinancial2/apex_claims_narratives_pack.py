@@ -457,6 +457,7 @@ def kanban_widget(payload: dict[str, Any]) -> dict[str, Any]:
         "size": "full",
         "defaultView": "table",
         "views": ["table", "kanban"],
+        "rowCap": 50,
         "rows": rows,
         "columns": {k: (columns.get(k) if isinstance(columns.get(k), list) else []) for k in KANBAN_COLUMNS},
         "columnLabels": dict(KANBAN_LABELS),
@@ -517,12 +518,19 @@ def claims_aging_exposure_widget(
     else:
         status = "ok"
         empty = ""
+    # Hide dollar line entirely when no import amounts (consult honesty rule)
+    any_dollars = any(c.get("dollars") is not None for c in cols)
+    if not any_dollars:
+        for c in cols:
+            c.pop("dollars", None)
+            c["hideDollars"] = True
     return {
         "id": "claims-aging-exposure",
         "type": "claims-aging-exposure",
         "label": "Claims Aging Exposure",
-        "size": "l",
+        "size": "xl",
         "columns": cols,
+        "showDollars": any_dollars,
         "status": status,
         "emptyMessage": empty,
         "hint": "One matrix replaces three huge shelves · click a column to filter the workbench · $ only when on import.",
@@ -597,6 +605,14 @@ def claims_critical_actions_widget(kanban_payload: dict[str, Any]) -> dict[str, 
                 "hint": "Workbench clear of denied/unmatched/attachment gaps from import",
             }
         )
+    actions.append(
+        {
+            "id": "sync",
+            "label": "Sync SoftDent / QB imports",
+            "filter": "__sync__",
+            "hint": "Trigger import sync (NR2) — does not write SoftDent",
+        }
+    )
     return {
         "id": "claims-critical-actions",
         "type": "claims-critical-actions",
@@ -639,27 +655,12 @@ def claims_executive_strip_widget(
             "tone": "danger",
         },
         {
-            "id": "aging30",
-            "label": "30+",
-            "value": summary.get("agingPast30"),
-            "format": "count",
-            "tone": "warning",
-        },
-        {
-            "id": "pending",
-            "label": "Pending $",
+            "id": "atrisk",
+            "label": "At Risk $",
             "value": pending,
             "format": "money",
-            "tone": "warning",
-            "empty": pending is None,
-        },
-        {
-            "id": "atrisk",
-            "label": "At Risk",
-            "value": at_risk,
-            "format": "count",
             "tone": "danger",
-            "empty": at_risk is None,
+            "empty": pending is None,
         },
         {
             "id": "era",
@@ -675,7 +676,7 @@ def claims_executive_strip_widget(
         "id": "claims-executive-strip",
         "type": "claims-executive-strip",
         "label": "Claims Command Strip",
-        "size": "full",
+        "size": "strip",
         "pills": pills,
         "status": "ok" if available else "empty",
         "emptyMessage": "Import SoftDent claims for executive strip",
@@ -740,12 +741,32 @@ def claims_risk_analytics_widget(meta: dict[str, Any], *, available: bool) -> di
     return {
         "id": "claims-risk-analytics",
         "type": "claims-risk-bars",
-        "label": "Aging Risk",
+        "label": "Risk Trend",
         "size": "m",
         "bars": bars,
         "status": "ok" if available and total else "empty",
         "emptyMessage": "Aging risk appears when Age/Days or denied status is on the import",
-        "hint": "Derived from SoftDent Age/Days + denied status — not a payer denial score.",
+        "hint": "Derived from SoftDent Age/Days + denied status — not a payer denial score · no invented 7d history.",
+    }
+
+
+def claims_era_gauge_widget(meta: dict[str, Any], *, available: bool) -> dict[str, Any]:
+    """ERA match rate gauge — Level 4 of executive RCM console."""
+    era = meta.get("eraMatchRate") if isinstance(meta, dict) else None
+    unmatched = meta.get("unmatchedCount") if isinstance(meta, dict) else None
+    missing = meta.get("missingFields") if isinstance(meta.get("missingFields"), list) else []
+    has = era is not None and isinstance(era, (int, float))
+    return {
+        "id": "claims-era-gauge",
+        "type": "claims-era-gauge",
+        "label": "ERA Match Rate",
+        "size": "m",
+        "value": float(era) if has else None,
+        "unmatchedCount": unmatched,
+        "status": "ok" if available and has else "empty",
+        "emptyMessage": "ERA match % appears when ERA status is on the SoftDent import (or after NR2 ERA ingest)",
+        "hint": "Import-backed only — never invents match rates."
+        + ((" Hidden fields: " + ", ".join(str(m) for m in missing[:4])) if missing else ""),
     }
 
 

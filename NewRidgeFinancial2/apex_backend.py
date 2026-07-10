@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10410"
+BUILD_ID = "hal-10420"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -2552,14 +2552,15 @@ def _claims_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dic
         summary["followUpHint"] = ct.get("followUpHint") or summary.get("followUpHint")
         summary["totalClaims"] = total
 
-    # Professional layout (hal-10410): strip + exposure + actions + table/kanban workbench
-    # (replaces three huge 30/60/90 shelves as primary presentation)
+    # Professional layout (hal-10420): Executive RCM Console primary design
+    # Import strip → KPI strip → aging+critical → table/kanban workbench → risk+ERA
     try:
         from apex_claims_narratives_pack import (
             apply_aging_threshold_alerts,
             build_status_columns,
             claims_aging_exposure_widget,
             claims_critical_actions_widget,
+            claims_era_gauge_widget,
             claims_executive_strip_widget,
             claims_risk_analytics_widget,
             kanban_widget,
@@ -2598,7 +2599,11 @@ def _claims_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dic
         aging_meta = summary.get("agingMeta") if isinstance(summary.get("agingMeta"), dict) else {}
         missing_age = bool(aging_meta.get("missingAgeField"))
 
-        widgets.append(import_health_widget(bundle))
+        health = import_health_widget(bundle)
+        health["size"] = "strip"
+        health["label"] = "Import Health"
+        health["compact"] = True
+        widgets.append(health)
         widgets.append(claims_executive_strip_widget(summary, kmeta))
         widgets.append(
             claims_aging_exposure_widget(
@@ -2611,6 +2616,7 @@ def _claims_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dic
         widgets.append(
             claims_risk_analytics_widget(kmeta, available=bool(kanban_payload.get("available")))
         )
+        widgets.append(claims_era_gauge_widget(kmeta, available=bool(kanban_payload.get("available"))))
         apply_aging_threshold_alerts(
             widgets,
             {"counts": summary.get("agingCounts") or {}},
@@ -2646,6 +2652,7 @@ def _claims_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dic
             )
         )
 
+    # Below-fold analytics (not part of primary above-fold console)
     widgets.append(build_ins_patient_split(bundle))
     _apply_threshold_alerts(widgets, reports, claims_summary=summary)
     return widgets

@@ -6,7 +6,59 @@
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
-  const ASSET_V = "hal-10410";
+  const ASSET_V = "hal-10420";
+  const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
+
+  function formatPatientDisplay(name) {
+    const raw = String(name || "").trim();
+    if (!raw) return "—";
+    if (raw.includes(",")) return raw;
+    const parts = raw.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      const last = parts[parts.length - 1];
+      const first = parts.slice(0, -1).join(" ");
+      return `${last}, ${first}`;
+    }
+    return raw;
+  }
+
+  function attachmentDotHtml(att) {
+    if (!att || typeof att !== "object") {
+      return `<span class="apex-wb-att apex-wb-att--unknown" title="Attachments not on import">—</span>`;
+    }
+    const cur = Number(att.current);
+    const req = att.required;
+    if (req != null && Number.isFinite(Number(req))) {
+      const ok = Number.isFinite(cur) && cur >= Number(req);
+      return `<span class="apex-wb-att ${ok ? "apex-wb-att--ok" : "apex-wb-att--missing"}" title="${
+        ok ? "Attachments complete" : "Missing attachments"
+      }">${ok ? "●" : "○"}</span>`;
+    }
+    if (Number.isFinite(cur) && cur > 0) {
+      return `<span class="apex-wb-att apex-wb-att--ok" title="${cur} attachment(s)">●</span>`;
+    }
+    return `<span class="apex-wb-att apex-wb-att--unknown" title="No attachment count">—</span>`;
+  }
+
+  function preferredWorkbenchView(fallback) {
+    try {
+      const v = sessionStorage.getItem(WB_VIEW_KEY) || localStorage.getItem(WB_VIEW_KEY);
+      if (v === "table" || v === "kanban") return v;
+    } catch (_err) {
+      /* ignore */
+    }
+    return fallback === "kanban" ? "kanban" : "table";
+  }
+
+  function persistWorkbenchView(view) {
+    const v = view === "kanban" ? "kanban" : "table";
+    try {
+      localStorage.setItem(WB_VIEW_KEY, v);
+      sessionStorage.setItem(WB_VIEW_KEY, v);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
 
   const PAGE_TITLES = {
     financial: "Financial",
@@ -42,11 +94,13 @@
     if (type === "heatmap" || type === "calculator" || type === "categorize" || type === "tax-library")
       return "xl";
     if (type === "ebitda-scrubber" || type === "filing-workflow" || type === "claim-shelf") return "full";
-    if (type === "claims-kanban" || type === "claims-workbench" || type === "claims-header-stats" || type === "daily-huddle" || type === "claims-executive-strip")
+    if (type === "claims-kanban" || type === "claims-workbench" || type === "claims-header-stats" || type === "daily-huddle")
       return "full";
-    if (type === "claims-aging-exposure") return "l";
+    if (type === "claims-executive-strip") return "strip";
+    if (type === "claims-aging-exposure") return "xl";
     if (type === "claims-critical-actions") return "m";
-    if (type === "claims-risk-bars" || type === "claim-attachments") return type === "claim-attachments" ? "l" : "m";
+    if (type === "claims-risk-bars" || type === "claims-era-gauge" || type === "claim-attachments")
+      return type === "claim-attachments" ? "l" : "m";
     if (type === "scenario-manager" || type === "workpaper") return type === "scenario-manager" ? "xl" : "l";
     if (type === "status") return "s";
     return "s";
@@ -184,6 +238,7 @@
       if (this.type === "status" || this.spec.status === "awaiting-migration") {
         const checks = Array.isArray(this.spec.checks) ? this.spec.checks : [];
         const actions = Array.isArray(this.spec.actions) ? this.spec.actions : [];
+        const compact = this.spec.compact === true || this.spec.size === "strip";
         const checkHtml = checks.length
           ? `<ul class="apex-c0-checks">${checks
               .map(
@@ -202,6 +257,17 @@
         const refreshBtn = this.spec.refreshUrl
           ? `<button type="button" class="apex-btn apex-btn--small" data-c0-refresh>Refresh SoftDent period imports</button>`
           : "";
+        if (compact) {
+          const tone = this.spec.status === "empty" || this.spec.status === "warn" ? "is-warn" : "is-ok";
+          return `
+            <div class="apex-import-strip ${tone}">
+              <span class="apex-import-strip__label">${label}</span>
+              <span class="apex-import-strip__msg">${this.escape(this.spec.message || "—")}</span>
+              <span class="apex-import-strip__hint">${this.escape(this.spec.hint || "")}</span>
+              ${refreshBtn}
+            </div>
+          `;
+        }
         return `
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
@@ -821,21 +887,20 @@
           })
           .join("");
         return `
-          <header class="apex-widget-header apex-widget-header--compact">
-            <span class="apex-widget-label">${label}</span>
-            ${printBtn}
-          </header>
-          ${
-            empty
-              ? `<div class="apex-kpi-value is-empty">${this.escape(this.spec.emptyMessage || "No strip data")}</div>`
-              : `<div class="apex-exec-strip">${cells}</div>`
-          }
-          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+          <div class="apex-exec-strip-wrap">
+            <span class="apex-exec-strip-wrap__label">${label}</span>
+            ${
+              empty
+                ? `<div class="apex-kpi-value is-empty">${this.escape(this.spec.emptyMessage || "No strip data")}</div>`
+                : `<div class="apex-exec-strip">${cells}</div>`
+            }
+          </div>
         `;
       }
 
       if (this.type === "claims-aging-exposure") {
         const cols = Array.isArray(this.spec.columns) ? this.spec.columns : [];
+        const showDollars = this.spec.showDollars !== false && cols.some((c) => c && c.dollars != null);
         const empty = this.spec.status === "empty" || !cols.some((c) => Number((c && c.count) || 0) > 0);
         const max = Math.max(1, ...cols.map((c) => Number((c && c.count) || 0)));
         const cells = cols
@@ -843,7 +908,9 @@
             const count = Number((c && c.count) || 0);
             const pct = Math.round((count / max) * 100);
             const dollars =
-              c && c.dollars != null && Number.isFinite(Number(c.dollars)) ? formatMoney(c.dollars) : "—";
+              showDollars && c && c.dollars != null && Number.isFinite(Number(c.dollars))
+                ? formatMoney(c.dollars)
+                : null;
             return `<button type="button" class="apex-aging-col apex-aging-col--${this.escape(
               (c && c.tone) || "cyan"
             )}" data-age-bucket="${this.escape((c && c.bucket) || "")}" title="Filter workbench to ${this.escape(
@@ -851,7 +918,7 @@
             )}">
               <span class="apex-aging-col__label">${this.escape((c && c.label) || "")}</span>
               <span class="apex-aging-col__count">${this.escape(String(count))}</span>
-              <span class="apex-aging-col__dollars">${this.escape(dollars)}</span>
+              ${dollars ? `<span class="apex-aging-col__dollars">${this.escape(dollars)}</span>` : ""}
               <span class="apex-aging-col__bar"><span style="width:${pct}%"></span></span>
             </button>`;
           })
@@ -961,6 +1028,34 @@
         `;
       }
 
+      if (this.type === "claims-era-gauge") {
+        const empty = this.spec.status === "empty" || this.spec.value == null;
+        const pct = empty ? 0 : Math.max(0, Math.min(100, Math.round(Number(this.spec.value) * 1000) / 10));
+        const unmatched =
+          this.spec.unmatchedCount != null ? formatCount(this.spec.unmatchedCount) : null;
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "ERA match unavailable"
+                )}</div>`
+              : `<div class="apex-era-gauge" data-era-gauge>
+                  <div class="apex-era-gauge__ring" style="--era-pct:${pct}">
+                    <span class="apex-era-gauge__value">${this.escape(String(pct))}%</span>
+                  </div>
+                  <div class="apex-era-gauge__meta">matched
+                    ${unmatched != null ? ` · ${this.escape(String(unmatched))} unmatched` : ""}
+                  </div>
+                </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
       if (this.type === "claims-kanban" || this.type === "claims-workbench") {
         const columns = this.spec.columns && typeof this.spec.columns === "object" ? this.spec.columns : {};
         const labels = this.spec.columnLabels && typeof this.spec.columnLabels === "object" ? this.spec.columnLabels : {};
@@ -968,13 +1063,16 @@
         const rows = Array.isArray(this.spec.rows) ? this.spec.rows : [];
         const order = ["submitted", "pendingReview", "eraMatched", "denied", "paid"];
         const empty = this.spec.status === "empty";
-        const defaultView = String(this.spec.defaultView || "table");
+        const defaultView = preferredWorkbenchView(String(this.spec.defaultView || "table"));
+        const rowCap = Math.max(10, Number(this.spec.rowCap) || 50);
         const flatRows = rows.length
           ? rows
           : order.flatMap((key) =>
               Array.isArray(columns[key]) ? columns[key].map((c) => Object.assign({ column: key }, c || {})) : []
             );
-        const tableRows = flatRows
+        const visibleRows = flatRows.slice(0, rowCap);
+        const moreCount = Math.max(0, flatRows.length - visibleRows.length);
+        const tableRows = visibleRows
           .map((c) => {
             const id = String((c && c.claimId) || "");
             const risk = c && c.risk ? String(c.risk) : "";
@@ -983,12 +1081,8 @@
                 ? formatMoney(c.billedAmount)
                 : "—";
             const age = c && typeof c.ageDays === "number" ? `${c.ageDays}d` : "—";
-            let att = "—";
-            if (c && c.attachments && typeof c.attachments === "object") {
-              const cur = c.attachments.current;
-              const req = c.attachments.required;
-              att = req != null ? `${cur}/${req}` : String(cur != null ? cur : "—");
-            }
+            const patient = formatPatientDisplay((c && c.patientName) || "");
+            const attHtml = attachmentDotHtml(c && c.attachments);
             return `<tr class="apex-wb-row" data-claim-id="${this.escape(id)}" data-claim-row data-risk="${this.escape(
               risk
             )}" data-column="${this.escape(String((c && c.column) || ""))}" data-bucket="${this.escape(
@@ -998,16 +1092,14 @@
             }" data-patient="${this.escape(String((c && c.patientName) || ""))}">
               <td><input type="checkbox" data-batch-claim value="${this.escape(id)}" /></td>
               <td class="apex-wb-id">${this.escape(id)}</td>
-              <td>${this.escape(String((c && c.patientName) || "—"))}</td>
+              <td>${this.escape(patient)}</td>
               <td>${this.escape(String((c && c.payer) || "—"))}</td>
               <td>${this.escape(age)}</td>
               <td><span class="apex-wb-status">${this.escape(String((c && c.status) || "—"))}</span></td>
               <td class="apex-wb-amt">${this.escape(amount)}</td>
-              <td>${this.escape(att)}</td>
+              <td class="apex-wb-att-cell">${attHtml}</td>
               <td class="apex-wb-acts">
-                <button type="button" class="apex-claim-act" data-claim-act="generate-narrative">Narr</button>
-                <button type="button" class="apex-claim-act" data-claim-act="follow-up-note">Note</button>
-                <button type="button" class="apex-claim-act" data-claim-act="open">Open</button>
+                <button type="button" class="apex-claim-act" data-claim-act="open" title="Open detail">›</button>
               </td>
             </tr>`;
           })
@@ -1075,7 +1167,7 @@
                     <span class="apex-claim-card__id">${this.escape(id)}</span>
                     ${riskBadge}
                   </div>
-                  <div class="apex-claim-card__patient">${this.escape(String((c && c.patientName) || "—"))}</div>
+                  <div class="apex-claim-card__patient">${this.escape(formatPatientDisplay((c && c.patientName) || ""))}</div>
                   ${
                     procLine
                       ? `<div class="apex-claim-card__proc">${this.escape(procLine)}</div>`
@@ -1134,12 +1226,19 @@
               : `<div class="apex-claims-workbench" data-claims-workbench data-view="${this.escape(defaultView)}">
                   <div class="apex-claims-kanban__note">Table + Kanban · SoftDent read-only · NR2 actions only</div>
                   <div class="apex-wb-table-wrap" data-wb-panel="table">
-                    <table class="apex-wb-table">
+                    <table class="apex-wb-table apex-wb-table--dense">
                       <thead><tr>
-                        <th></th><th>Claim</th><th>Patient</th><th>Payer</th><th>Age</th><th>Status</th><th>Amount</th><th>Att</th><th>Act</th>
+                        <th></th><th>Claim</th><th>Patient</th><th>Payer</th><th>Age</th><th>Status</th><th>Amount</th><th>Att</th><th></th>
                       </tr></thead>
                       <tbody>${tableRows || `<tr><td colspan="9">No rows</td></tr>`}</tbody>
                     </table>
+                    ${
+                      moreCount
+                        ? `<div class="apex-wb-more">Showing ${this.escape(String(visibleRows.length))} of ${this.escape(
+                            String(flatRows.length)
+                          )} · use filters to focus</div>`
+                        : ""
+                    }
                   </div>
                   <div class="apex-claims-kanban__board" data-wb-panel="kanban">${colHtml}</div>
                 </div>`
@@ -2269,6 +2368,7 @@
         show =
           el.getAttribute("data-has-att") === "1" &&
           (!!el.querySelector(".apex-claim-card__att.is-missing") ||
+            !!el.querySelector(".apex-wb-att--missing") ||
             (() => {
               const attCell = el.querySelector("td:nth-child(8)");
               if (!attCell) return false;
@@ -2297,6 +2397,7 @@
     root.querySelectorAll("[data-wb-view]").forEach((btn) => {
       btn.classList.toggle("is-active", btn.getAttribute("data-wb-view") === v);
     });
+    persistWorkbenchView(v);
   }
 
   function wireClaimsAgingExposure(root) {
@@ -2319,8 +2420,22 @@
     if (!root || root.dataset.critWired === "1") return;
     root.dataset.critWired = "1";
     root.querySelectorAll("[data-crit-filter]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const filter = btn.getAttribute("data-crit-filter") || "all";
+        if (filter === "__sync__") {
+          try {
+            const res = await apexFetch(`${config.apiBase}/sync/trigger`, {
+              method: "POST",
+              body: JSON.stringify({}),
+            });
+            const data = await res.json().catch(() => ({}));
+            window.alert(data.message || data.error || (data.ok ? "Sync triggered" : "Sync failed"));
+            if (data.ok) await loadPage("claims", { silent: false });
+          } catch (err) {
+            window.alert(String((err && err.message) || err));
+          }
+          return;
+        }
         const board = findWidgetEl("claims-kanban-board");
         if (!board) return;
         board.scrollIntoView({ behavior: "smooth", block: "center" });

@@ -1,31 +1,36 @@
-# Moonshot AI — Claims Pro Presentation APPLIED
+# Moonshot AI — Claims Pro Presentation PRIMARY DESIGN APPLIED
 
 **Date:** 2026-07-10  
-**Build:** **hal-10410**  
+**Build:** **hal-10420**  
 **Consult:** `MOONSHOT_CLAIMS_PRO_PRESENTATION_CONSULT_2026-07-10.md`  
-**Operator:** “can you do both?” → Option A dual mode (dense table default + kanban toggle)
+**Operator:** “implement primary design” (Executive RCM Console / Option A)
 
-## What shipped
+## Layout (matches consult wireframe)
 
-1. **Aging Exposure** (`claims-aging-exposure`) — one 30/60/90 matrix replaces three full-width shelves. Click a column → filters the workbench. Legacy HAL IDs `claims-aging-30/60/90` resolve via `aliasIds`.
-2. **Executive strip** + **Critical actions** — compact KPIs and click-to-filter queues.
-3. **Claims Workbench** (`type: claims-workbench`, id still `claims-kanban-board`) — **Table** default + **Kanban** toggle. Same SoftDent read-only data; NR2 row/card actions only.
-4. HAL: `set_claims_view`, aging alias focus also filters workbench; table/kanban voice commands.
+| Level | Widget | Notes |
+|-------|--------|-------|
+| 1 | Import Health (`size: strip`) | ~40px compact strip |
+| 1 | Claims Command Strip (`size: strip`) | Total / Open / Denied / At Risk $ / ERA % — unified card |
+| 2 | Aging Exposure (`xl`) + Critical Actions (`m`) | Paired row; click filters workbench; Sync action on critical |
+| 3 | Claims Workbench | Dense **table** default (32px rows) + Kanban toggle; view preference persisted |
+| 4 | Risk Trend + ERA Match Rate gauge | Two medium widgets |
 
-## Honest constraints preserved
+## Density / honesty polish
 
-- No invented dollars / claim IDs / patients
-- SoftDent read-only (no write-back)
-- Empty states when Age/Days or claims import missing
+- Patient as `Last, First` when parseable  
+- Attachment ● / ○ / — (no invented counts)  
+- Dollar exposure hidden when amounts not on import  
+- Table capped at 50 rows with “showing N of M”  
+- SoftDent read-only; no invented dollars / claim IDs  
 
 ## Files
 
-- `apex_claims_narratives_pack.py` — exposure / critical / strip / workbench widgets
-- `apex_backend.py` — `_claims_widgets` layout + HAL board-actions + `BUILD_ID`
-- `site/apex-core.js` — renderers, dual-view wiring, alias focus
-- `site/apex-bridge.css` — pro layout styles
-- `nr2-build.json` / `site/nr2-build.json` / `site/index.html` → **hal-10410**
+- `apex_claims_narratives_pack.py` — exposure/strip/critical/ERA gauge/workbench  
+- `apex_backend.py` — `_claims_widgets` primary layout + `BUILD_ID`  
+- `site/apex-core.js` / `apex-bridge.css` / `index.html`  
+- `nr2-build.json` → **hal-10420**
 
-## Rollback
+## Prior
 
-Revert to prior Claims layout (three shelves + kanban-only) from pre-`hal-10410` commit; restore `BUILD_ID` / asset query strings.
+- `hal-10410` dual table/kanban scaffold  
+- This build completes primary design sizing + Level 4 ERA gauge + density polish  
