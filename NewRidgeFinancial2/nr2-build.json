@@ -1,8 +1,6 @@
 {
-  "BUILD_ID": "hal-10370",
-  "assetVersion": "hal-10370",
-  "schemaVersion": "hal-10370",
-  "epoch": "nr2-apex",
-  "releasedAt": "2026-07-10",
-  "notes": "hal-10370: SoftDent full extract — transactions/register/operatory JSONL→SQLite, payment code normalize, CSV report ingest, import_sync hook."
+  "BUILD_ID": "hal-10431",
+  "assetVersion": "hal-10431",
+  "schemaVersion": "hal-10431",
+  "notes": "hal-10431: Pin HAL ask box at bottom of chat rail; Enter submits (Shift+Enter newline)."
 }

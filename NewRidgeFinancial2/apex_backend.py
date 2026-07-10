@@ -28,10 +28,10 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10360"
+BUILD_ID = "hal-10431"
 
 HAL_STATUS_SUGGESTION = (
-    "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
+    "Dictate findings: … · morning financial brief · which widgets empty on all pages? · SoftDent sync"
 )
 
 # In-memory print packet store (session-local; browser print is primary)
@@ -1586,85 +1586,64 @@ def _financial_widgets_from_reports(
     reports: dict[str, Any],
     bundle: dict[str, Any],
 ) -> list[dict[str, Any]]:
+    """Financial Executive Console (hal-10430) — Moonshot Option A primary design.
+
+    Strip 1 command → Strip 2 vitals → dual-trend+provider → revenue composition →
+    A/R+claims KPIs → EBITDA station. Empty large instruments collapse to strips.
+    """
     widgets: list[dict[str, Any]] = []
-    rows = _dashboard_rows(bundle)
-    latest = _latest_period_row(rows)
-
-    prod = _parse_money(latest.get("production")) if latest else None
-    coll = None
-    if latest:
-        if latest.get("collectionsReported") is False or latest.get("collectionsPending") is True:
-            coll = None
-        elif "collections" in latest:
-            coll = _parse_money(latest.get("collections"))
-
-    if prod is not None:
-        widgets.append(
-            {
-                "id": "prod-mtd",
-                "type": "kpi",
-                "label": "Production (latest period)",
-                "value": prod,
-                "unit": "money",
-                "deltaLabel": str(latest.get("period") or latest.get("year_month") or ""),
-                "sparkline": _spark_from_rows(rows, "production"),
-                "hint": "From SoftDent dashboard import cache — not invented.",
-            }
-        )
-    else:
-        widgets.append(
-            _empty_kpi(
-                "prod-mtd",
-                "Production (latest period)",
-                hint="SoftDent dashboard production rows not loaded. Refresh imports.",
-            )
-        )
-
-    if coll is not None:
-        widgets.append(
-            {
-                "id": "collections-mtd",
-                "type": "kpi",
-                "label": "Collections (latest period)",
-                "value": coll,
-                "unit": "money",
-                "deltaLabel": str(latest.get("period") or latest.get("year_month") or ""),
-                "sparkline": _spark_from_rows(rows, "collections"),
-                "hint": "From SoftDent dashboard import cache — not invented.",
-            }
-        )
-    else:
-        widgets.append(
-            _empty_kpi(
-                "collections-mtd",
-                "Collections (latest period)",
-                hint="Collections pending for latest SoftDent period — not reported as $0. Sync SoftDent collections/daysheet export.",
-            )
-        )
-
     ar = reports.get("arAging") if isinstance(reports.get("arAging"), dict) else {}
-    ar_total = ar.get("totalOutstanding")
-    if isinstance(ar_total, (int, float)):
-        widgets.append(
-            {
-                "id": "ar-outstanding",
-                "type": "kpi",
-                "label": "A/R Outstanding",
-                "value": float(ar_total),
-                "unit": "money",
-                "deltaLabel": f"90+ share {ar.get('ninetyPlusPct', 0)}%",
-                "hint": str(ar.get("followUpHint") or "From SoftDent A/R import."),
-            }
-        )
-    else:
-        widgets.append(
-            _empty_kpi(
-                "ar-outstanding",
-                "A/R Outstanding",
-                hint="A/R aging import not available.",
-            )
+
+    try:
+        from apex_financial_console_pack import (
+            build_dual_axis_trend,
+            build_ebitda_station,
+            build_financial_command_strip,
+            build_financial_vital_signs,
+            build_revenue_composition,
+            collapse_empty_large,
         )
 
+        # Level 1 — Command strip (import + period + morning brief)
+        widgets.append(build_financial_command_strip(bundle, reports))
+        # Level 2 — Vital signs (prod / collections / A/R / efficiency)
+        vitals = build_financial_vital_signs(reports, bundle)
+        ninety_pct = ar.get("ninetyPlusPct")
+        if isinstance(ninety_pct, (int, float)) and float(ninety_pct) > 20.0:
+            vitals["alert"] = True
+            vitals["alertReason"] = f"90+ share {float(ninety_pct):.1f}% exceeds 20%"
+        widgets.append(vitals)
+        # Level 3 — Velocity: dual-axis trend + provider bars
+        widgets.append(build_dual_axis_trend(bundle))
+        provider = build_provider_horizontal_bars(bundle)
+        if provider.get("status") == "empty":
+            provider = collapse_empty_large(provider)
+        elif str(provider.get("hint") or "").lower().find("thin") >= 0:
+            provider["size"] = "m"
+        else:
+            provider["size"] = "m"
+        widgets.append(provider)
+        # Level 4 — Revenue composition (conditional collapse when empty)
+        widgets.append(build_revenue_composition(bundle))
+    except Exception as exc:  # noqa: BLE001
+        # Fallback: legacy mosaic if console pack fails
+        widgets.append(
+            _status_widget(
+                "financial-console-fallback",
+                "Financial console",
+                message="Using legacy layout",
+                hint=f"Console pack unavailable: {exc}",
+                status="empty",
+            )
+        )
+        widgets.insert(0, build_import_freshness(bundle))
+        widgets[0]["size"] = "strip"
+        widgets[0]["compact"] = True
+        widgets.insert(1, build_period_scrubber(bundle, page="financial"))
+        widgets[1]["size"] = "strip"
+        widgets.extend(_visual_boost_financial(reports, bundle))
+
+    # Level 5 — A/R aging + secondary KPIs (compact)
     buckets = reports.get("arAgingBuckets") if isinstance(reports.get("arAgingBuckets"), list) else []
     series = []
     for b in buckets:
@@ -1680,42 +1659,35 @@ def _financial_widgets_from_reports(
                 "type": "chart",
                 "chartType": "bar",
                 "label": "A/R Aging",
+                "size": "m",
                 "series": series,
                 "hint": "Buckets from SoftDent A/R import via financial_reports.",
             }
         )
     else:
-        widgets.append(
-            _empty_chart(
-                "ar-aging-chart",
-                "A/R Aging",
-                hint="Import SoftDent A/R aging to populate this chart.",
-            )
+        empty_ar = _empty_chart(
+            "ar-aging-chart",
+            "A/R Aging",
+            hint="Import SoftDent A/R aging to populate this chart.",
         )
+        empty_ar["size"] = "strip"
+        empty_ar["collapseWhenEmpty"] = True
+        empty_ar["compact"] = True
+        widgets.append(empty_ar)
 
     ct = reports.get("claimTracking") if isinstance(reports.get("claimTracking"), dict) else {}
     total_claims = ct.get("totalClaims")
-    if isinstance(total_claims, int):
-        widgets.append(
-            {
-                "id": "claims-total",
-                "type": "kpi",
-                "label": "Claims (import)",
-                "value": total_claims,
-                "unit": "count",
-                "deltaLabel": f"Denied {ct.get('deniedCount', 0)}",
-                "hint": str(ct.get("followUpHint") or "From SoftDent claims import."),
-            }
+    widgets.append(
+        _count_kpi(
+            "claims-total",
+            "Claims (import)",
+            total_claims if isinstance(total_claims, int) else None,
+            hint=str(ct.get("followUpHint") or "From SoftDent claims import.")
+            if isinstance(total_claims, int)
+            else "Claims import not available.",
+            delta_label=f"Denied {ct.get('deniedCount', 0)}" if isinstance(total_claims, int) else None,
         )
-    else:
-        widgets.append(
-            _empty_kpi(
-                "claims-total",
-                "Claims (import)",
-                hint="Claims import not available.",
-            )
-        )
-
+    )
     denied = ct.get("deniedCount")
     if isinstance(denied, int):
         widgets.append(
@@ -1757,46 +1729,33 @@ def _financial_widgets_from_reports(
         }
     )
 
-    prod_vals = _spark_from_rows(rows, "production")
-    if len(prod_vals) >= 2:
-        widgets.append(
-            {
-                "id": "prod-trend",
-                "type": "chart",
-                "chartType": "line",
-                "label": "Production Trend",
-                "values": prod_vals,
-                "hint": "Last periods from SoftDent dashboard import.",
-            }
-        )
-
     note = reports.get("collectionsNote")
     if note:
         widgets.append(
-            _status_widget(
-                "collections-note",
-                "Collections note",
-                message="Guidance",
-                hint=str(note),
-            )
+            {
+                **_status_widget(
+                    "collections-note",
+                    "Collections note",
+                    message="Guidance",
+                    hint=str(note),
+                ),
+                "size": "strip",
+                "compact": True,
+            }
         )
 
-    widgets[0:0] = _visual_boost_financial(reports, bundle)
-    widgets.insert(0, build_period_scrubber(bundle, page="financial"))
-    widgets.insert(0, build_import_freshness(bundle))
-    widgets.append(build_provider_horizontal_bars(bundle))
-    widgets.append(build_payer_donut(bundle))
-    widgets.append(build_collection_bullet(bundle))
-    widgets.append(build_ins_patient_split(bundle))
-    widgets.append(build_ebitda_waterfall(bundle))
-    widgets.append(build_ebitda_scrubber(bundle))
-    # Threshold alert on A/R KPI when 90+ share > 20%
-    for w in widgets:
-        if isinstance(w, dict) and w.get("id") == "ar-outstanding":
-            ninety_pct = ar.get("ninetyPlusPct")
-            if isinstance(ninety_pct, (int, float)) and float(ninety_pct) > 20.0:
-                w["alert"] = True
-                w["alertReason"] = f"90+ share {float(ninety_pct):.1f}% exceeds 20%"
+    # Level 6 — EBITDA Command Station
+    try:
+        from apex_financial_console_pack import build_ebitda_station, collapse_empty_large
+
+        station = build_ebitda_station(bundle)
+        if station.get("status") == "empty":
+            station = collapse_empty_large(station)
+        widgets.append(station)
+    except Exception:
+        widgets.append(build_ebitda_waterfall(bundle))
+        widgets.append(build_ebitda_scrubber(bundle))
+
     _apply_threshold_alerts(widgets, reports)
     return widgets
 
@@ -3199,11 +3158,32 @@ def _widget_has_data(w: dict[str, Any]) -> bool:
     if wtype == "claim-shelf":
         tiles = w.get("tiles") if isinstance(w.get("tiles"), list) else []
         return bool(tiles)
+    if wtype == "claims-kanban":
+        columns = w.get("columns") if isinstance(w.get("columns"), dict) else {}
+        return any(isinstance(v, list) and v for v in columns.values())
+    if wtype == "claims-header-stats":
+        stats = w.get("stats") if isinstance(w.get("stats"), list) else []
+        return any(isinstance(s, dict) and s.get("value") is not None for s in stats)
+    if wtype == "claims-risk-bars":
+        bars = w.get("bars") if isinstance(w.get("bars"), list) else []
+        return any(isinstance(b, dict) and int(b.get("value") or 0) > 0 for b in bars)
+    if wtype in {"claims-executive-strip", "executive-strip"}:
+        pills = w.get("pills") if isinstance(w.get("pills"), list) else []
+        return any(isinstance(p, dict) and p.get("value") is not None and not p.get("empty") for p in pills)
+    if wtype == "financial-command-strip":
+        return bool(w.get("importMessage") or w.get("briefMessage") or w.get("periods"))
+    if wtype == "revenue-composition":
+        return bool(w.get("segments") or w.get("slices"))
+    if wtype == "dual-axis-trend":
+        return bool(w.get("production") or w.get("collections"))
+    if wtype == "ebitda-station":
+        return bool(w.get("steps"))
     if wtype == "kpi":
         return w.get("value") is not None and w.get("value") != ""
     if wtype in {"chart", "bar", "line"}:
         series = w.get("series") if isinstance(w.get("series"), list) else []
-        return bool(series)
+        values = w.get("values") if isinstance(w.get("values"), list) else []
+        return bool(series or values)
     if wtype == "funnel":
         return bool(w.get("stages"))
     if wtype in {"donut", "stacked-bar", "horizontal-bar"}:
@@ -3730,17 +3710,19 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
     # --- Focus / highlight specific instruments ---
     focus_rules = (
         (r"\bebitda scrubber|ebitda slider|planning ebitda\b", "ebitda-scrubber", "taxes"),
-        (r"\bebitda\b", "ebitda-scrubber", "taxes"),
+        (r"\bebitda station|ebitda command\b", "ebitda-station", "financial"),
+        (r"\bebitda\b", "ebitda-station", "financial"),
         (r"\b(provider production|production by provider)\b", "provider-hbar", "financial"),
-        (r"\b(payer mix|insurance vs patient)\b", "payer-donut", "financial"),
-        (r"\b(collection efficiency|collections? ratio)\b", "collection-bullet", "financial"),
+        (r"\b(payer mix|insurance vs patient|revenue composition)\b", "revenue-composition", "financial"),
+        (r"\b(collection efficiency|collections? ratio)\b", "financial-vital-signs", "financial"),
         (r"\b(a/?r (aging )?flow|aging waterfall|collectible)\b", "ar-waterfall", "ar"),
         (r"\b(categorize|categoris|expense categor)\b", "hal-categorize-assist", "quickbooks"),
         (r"\b(tax (returns? )?library|upload (tax )?return)\b", "tax-returns-library", "documents"),
         (r"\b(book.?to.?tax|tax bridge)\b", "tax-bridge-waterfall", "taxes"),
-        (r"\b(import (sync )?verify|import status|import readiness)\b", "import-freshness", "financial"),
-        (r"\b(morning brief)\b", "morning-brief", "financial"),
-        (r"\b(liquidity|collections pulse|production pulse)\b", "liquidity-pulse", "financial"),
+        (r"\b(import (sync )?verify|import status|import readiness|financial command)\b", "financial-command-strip", "financial"),
+        (r"\b(morning (financial )?brief|financial brief)\b", "financial-command-strip", "financial"),
+        (r"\b(vital signs|financial vitals)\b", "financial-vital-signs", "financial"),
+        (r"\b(liquidity|collections pulse|production pulse|dual.?axis|production (and|&) collections)\b", "financial-dual-trend", "financial"),
         (r"\bfederal tax\b", "tax-federal-est", "taxes"),
         (r"\bkansas tax\b", "tax-kansas-est", "taxes"),
         (r"\b(scenario manager|saved scenarios|tax scenarios)\b", "cpa-scenarios", "taxes"),
@@ -3752,7 +3734,17 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(30[- ]?day claims?|claims? (aged )?30)\b", "claims-aging-30", "claims"),
         (r"\b(60[- ]?day claims?|claims? (aged )?60)\b", "claims-aging-60", "claims"),
         (r"\b(90[- ]?day claims?|claims? (aged )?90|aging over 90)\b", "claims-aging-90", "claims"),
-        (r"\b(claims? aging|aging (tiles|shelves|claims))\b", "claims-aging-30", "claims"),
+        (r"\b(claims? aging|aging (tiles|shelves|claims|exposure|matrix))\b", "claims-aging-exposure", "claims"),
+        (r"\b(claims? (workbench|kanban|table)|kanban board|status (board|columns))\b", "claims-kanban-board", "claims"),
+        (r"\b(critical actions?|action queue)\b", "claims-critical-actions", "claims"),
+        (r"\b(executive strip|claims? (kpi|command) strip)\b", "claims-executive-strip", "claims"),
+        (r"\b(aging risk|risk (bars|analytics))\b", "claims-risk-analytics", "claims"),
+        (r"\b(pipeline stats|claims? (header )?stats|pending dollars)\b", "claims-header-stats", "claims"),
+        (r"\b(import health|health monitor|stale imports?)\b", "import-health-monitor", None),
+        (r"\b(daily huddle|morning huddle|morning briefing)\b", "om-daily-huddle", "office-manager"),
+        (r"\b(ebitda trend|ebitda chart)\b", "ebitda-station", "financial"),
+        (r"\b(a/?r forecast|aging forecast)\b", "ar-aging-forecast", "ar"),
+        (r"\b(claim attachments?|attachment bridge)\b", "claim-attachments-bridge", "documents"),
     )
     if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
         re.search(pat, q) for pat, _wid, _pg in focus_rules
@@ -3866,7 +3858,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         )
         if not any(a.get("type") == "navigate" for a in actions):
             actions.append({"type": "navigate", "page": "financial"})
-            actions.append({"type": "focus_widget", "widgetId": "import-freshness"})
+            actions.append({"type": "focus_widget", "widgetId": "financial-command-strip"})
         notes.append(str(fresh.get("message") or "Import diagnostics loaded from cache."))
         notes.append(str(fresh.get("hint") or ""))
         handled = True
@@ -3902,6 +3894,134 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         if re.search(r"\bopen\b", q):
             actions.append({"type": "open_claim_detail", "claimId": cid})
         notes.append(f"Focusing claim tile `{cid}` from SoftDent import (no invented fields).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?high[- ]?risk\b|\bhigh[- ]?risk claims?\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "high-risk"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to high aging-risk cards (import-backed Age/Days + denied).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?unmatched\b|\bunmatched claims?\b|\bera unmatched\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "unmatched"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to unmatched / non-ERA cards (import-backed only).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?missing attachments?\b|\bmissing attachments?\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "missing-attachments"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to cards with missing attachments when that field is on the import.")
+        handled = True
+
+    if re.search(r"\b(show|switch to|use)\s+(claims?\s+)?table(\s+view)?\b|\bclaims? table view\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "set_claims_view", "view": "table"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Switching Claims Workbench to dense table view (SoftDent read-only).")
+        handled = True
+
+    if re.search(r"\b(show|switch to|use)\s+(claims?\s+)?kanban(\s+view)?\b|\bclaims? kanban view\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "set_claims_view", "view": "kanban"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Switching Claims Workbench to kanban columns (SoftDent read-only).")
+        handled = True
+
+    if re.search(r"\b(focus|show)\s+(claims?\s+)?workbench\b|\bclaims? workbench\b", q) and not handled:
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "all"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Focusing Claims Workbench (table default · SoftDent read-only).")
+        handled = True
+
+    if re.search(r"\b(import health|health monitor|stale imports?)\b", q):
+        from apex_program_improve_pack import assess_import_health
+
+        _reports, bundle, _err = _load_reports_and_bundle()
+        health = assess_import_health(bundle)
+        alerts = health.get("alerts") if isinstance(health.get("alerts"), list) else []
+        msg = alerts[0]["message"] if alerts else "Imports healthy"
+        actions.append(
+            {
+                "type": "set_status_banner",
+                "message": str(msg)[:120],
+                "hint": (alerts[0].get("hint") if alerts else "Proactive monitor clear") or "",
+                "tone": "warn" if health.get("tone") == "warn" else "ok",
+            }
+        )
+        actions.append({"type": "focus_widget", "widgetId": "import-health-monitor"})
+        if not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": page if page in APEX_PAGES else "office-manager"})
+        notes.append(f"Import health: {msg}")
+        handled = True
+
+    # FIN-001/004/007 — Morning Financial Brief + empty-widget diagnosis
+    if re.search(
+        r"\b(morning financial brief|financial (morning )?brief|why (are )?(my )?widgets empty|"
+        r"collections pending|empty (financial )?widgets|widgets not (imported|populated)|"
+        r"missing collections)\b",
+        q,
+    ):
+        try:
+            from apex_financial_console_pack import (
+                build_morning_financial_brief,
+                format_hal_morning_financial_reply,
+            )
+
+            reports, bundle, _err = _load_reports_and_bundle()
+            brief = build_morning_financial_brief(bundle, reports if isinstance(reports, dict) else {})
+            reply = format_hal_morning_financial_reply(brief)
+            if page != "financial" and not any(a.get("type") == "navigate" for a in actions):
+                actions.append({"type": "navigate", "page": "financial"})
+                page = "financial"
+            actions.append({"type": "focus_widget", "widgetId": "financial-command-strip"})
+            actions.append(
+                {
+                    "type": "set_status_banner",
+                    "message": str(brief.get("message") or "Financial brief")[:140],
+                    "hint": "Collections/Daysheet export unlocks revenue split widgets"
+                    if brief.get("collectionsPending")
+                    else (brief.get("hint") or ""),
+                    "tone": "warn" if brief.get("tone") == "warn" else "ok",
+                }
+            )
+            if brief.get("collectionsPending"):
+                actions.append({"type": "refresh_softdent_period"})
+            notes.append(reply)
+            handled = True
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"Morning financial brief unavailable: {exc}")
+            handled = True
+
+    if re.search(r"\b(morning (brief|briefing|huddle)|daily huddle)\b", q) and not handled:
+        if page != "office-manager" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "office-manager"})
+            page = "office-manager"
+        actions.append({"type": "focus_widget", "widgetId": "om-daily-huddle"})
+        notes.append("Opening Daily Huddle priorities (import-backed).")
+        handled = True
+
+    if re.search(r"\b(draft appeal|generate narrative|appeal)\b.*\b(this|that|current|focused)\s+claim\b|\bfor (this|that) claim\b", q):
+        actions.append({"type": "narrative_from_focused_claim"})
+        if page != "narratives" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "narratives"})
+        notes.append("Carrying focused claim context into Narratives (voice context carry).")
         handled = True
 
     if re.search(r"\b(claims? import status|aging tiles? status)\b", q):
