@@ -30,6 +30,16 @@ function assertOk(name, ok, detail) {
   else fail(name, detail);
 }
 
+const buildManifest = JSON.parse(readFileSync(join(__dirname, "nr2-build.json"), "utf8"));
+if (buildManifest.staffRenderMode === "apex") {
+  const indexHtml = readFileSync(join(siteDir, "index.html"), "utf8");
+  assertOk("apex epoch", indexHtml.includes('data-nr2-epoch="nr2-apex"'), "nr2-apex");
+  assertOk("apex-core loaded", indexHtml.includes("apex-core.js"), "apex-core.js");
+  assertOk("office-manager page wired", /office-manager/.test(indexHtml), "office-manager");
+  assertOk("financial page wired", /financial/.test(indexHtml), "financial");
+  console.log(JSON.stringify({ ok: failures.length === 0, mode: "apex", checks, failures }, null, 2));
+  process.exit(failures.length ? 1 : 0);
+}
 require(join(siteDir, "empty-states.js"));
 require(join(siteDir, "import-diagnostics.js"));
 require(join(siteDir, "import-loader.js"));
