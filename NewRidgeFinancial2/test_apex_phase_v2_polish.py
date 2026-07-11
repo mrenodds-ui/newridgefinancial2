@@ -34,7 +34,7 @@ class PhaseV2PolishTests(unittest.TestCase):
         invalidate_explain_cache(reason="test_teardown")
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10489")
+        self.assertEqual(BUILD_ID, "hal-10490")
 
     def test_explain_cache_default_off(self):
         os.environ.pop("NR2_EXPLAIN_CACHE", None)
@@ -136,8 +136,8 @@ class PhaseV2PolishTests(unittest.TestCase):
         self.assertIn(".apex-mosaic--u3", css)
         self.assertIn(".hal-insight-banner", css)
         html = (SITE / "index.html").read_text(encoding="utf-8")
-        self.assertIn("apex-mobile-polish.css?v=hal-10489", html)
-        self.assertIn('data-apex-version="hal-10489"', html)
+        self.assertIn("apex-mobile-polish.css?v=hal-10490", html)
+        self.assertIn('data-apex-version="hal-10490"', html)
 
 
 if __name__ == "__main__":

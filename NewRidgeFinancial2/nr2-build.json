@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10489",
-  "assetVersion": "hal-10489",
-  "schemaVersion": "hal-10489",
-  "notes": "hal-10489: Moonshot V2 30B explain cache + mobile viewport polish.",
-  "builtAt": "2026-07-11T19:00:00.000Z"
+  "BUILD_ID": "hal-10490",
+  "assetVersion": "hal-10490",
+  "schemaVersion": "hal-10490",
+  "notes": "hal-10490: Moonshot W0 SoftDent extended metrics views (case acceptance, aging, scheduling).",
+  "builtAt": "2026-07-11T19:15:00.000Z"
 }

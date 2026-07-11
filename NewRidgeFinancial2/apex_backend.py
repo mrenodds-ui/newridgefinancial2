@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10489"
+BUILD_ID = "hal-10490"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1832,6 +1832,12 @@ def _financial_widgets_from_reports(
     except Exception:
         pass
     try:
+        from apex_softdent_extended_pack import extended_metrics_widgets
+
+        widgets.extend(extended_metrics_widgets(bundle))
+    except Exception:
+        pass
+    try:
         from apex_deep_audit_pack import deep_audit_widget
 
         widgets.append(deep_audit_widget(bundle))
@@ -2285,6 +2291,12 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
 
         widgets.extend(production_widgets(bundle))
         widgets.extend(aging_schedule_widgets(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_softdent_extended_pack import extended_metrics_widgets
+
+        widgets.extend(extended_metrics_widgets(bundle))
     except Exception:
         pass
     try:
@@ -5386,6 +5398,18 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             from apex_reconciliation_pack import reconciliation_status
 
             result = reconciliation_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/extended-metrics-status")
+    def apex_extended_metrics_status():
+        """Phase W0 — SoftDent case acceptance / aging / scheduling views."""
+        try:
+            from apex_softdent_extended_pack import extended_metrics_status
+
+            result = extended_metrics_status()
             result["buildId"] = BUILD_ID
             return json_response_fn(result)
         except Exception as exc:  # noqa: BLE001

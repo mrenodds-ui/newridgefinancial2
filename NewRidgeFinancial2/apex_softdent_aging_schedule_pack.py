@@ -71,6 +71,73 @@ def _sd_rows(bundle: dict[str, Any] | None, key: str) -> list[dict[str, Any]]:
         return [r for r in rows if isinstance(r, dict)]
 
 
+def _operatory_chairs(bundle: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(bundle, dict):
+        return []
+    sd = bundle.get("softdent") if isinstance(bundle.get("softdent"), dict) else {}
+    op = sd.get("operatory") if isinstance(sd.get("operatory"), dict) else {}
+    chairs = op.get("operatoryChairs") if isinstance(op.get("operatoryChairs"), list) else []
+    return [c for c in chairs if isinstance(c, dict)]
+
+
+def _schedule_source_rows(bundle: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Prefer explicit schedule/operatory rows; else derive from operatoryChairs[] slots."""
+    rows = _sd_rows(bundle, "operatory")
+    if rows:
+        return rows
+    chairs = _operatory_chairs(bundle)
+    if not chairs:
+        return []
+    slot_count = 0
+    for chair in chairs:
+        slots = chair.get("slots")
+        if isinstance(slots, list):
+            slot_count += len(slots)
+    # Capacity unknown from chairs alone — appointments only; fill_rate stays null unless slots>0.
+    return [
+        {
+            "period": "current",
+            "Appointments": slot_count,
+            "Broken": 0,
+            "Capacity": None,
+            "Used": None,
+            "source": "operatoryChairs",
+        }
+    ]
+
+
+def _insurance_pending_total(rows: list[dict[str, Any]]) -> float | None:
+    total = 0.0
+    found = False
+    for row in rows:
+        amt = _parse_money(
+            row.get("InsPending")
+            or row.get("insurance_pending")
+            or row.get("InsurancePending")
+            or row.get("InsAR")
+        )
+        if amt is not None:
+            total += amt
+            found = True
+    return total if found else None
+
+
+def _scheduled_production_total(rows: list[dict[str, Any]]) -> float | None:
+    total = 0.0
+    found = False
+    for row in rows:
+        amt = _parse_money(
+            row.get("ScheduledProduction")
+            or row.get("scheduled_production")
+            or row.get("ProdScheduled")
+            or row.get("ProductionScheduled")
+        )
+        if amt is not None:
+            total += amt
+            found = True
+    return total if found else None
+
+
 def _bucket_from_aging_rows(rows: list[dict[str, Any]]) -> dict[str, float]:
     """Roll detail or summary rows into aging buckets — amounts only."""
     buckets = {"0-30": 0.0, "31-60": 0.0, "61-90": 0.0, "90+": 0.0}
@@ -120,7 +187,7 @@ def _bucket_from_aging_rows(rows: list[dict[str, Any]]) -> dict[str, float]:
 
 def assess_aging_schedule_gap(bundle: dict[str, Any] | None = None) -> dict[str, Any]:
     aging = _sd_rows(bundle, "ar")
-    sched = _sd_rows(bundle, "operatory")
+    sched = _schedule_source_rows(bundle)
     issues: list[str] = []
     if not aging:
         issues.append("SoftDent A/R / patient aging summary not in bundle.")
@@ -142,6 +209,7 @@ def assess_aging_schedule_gap(bundle: dict[str, Any] | None = None) -> dict[str,
         "schedulingPending": not bool(sched),
         "agingRowCount": len(aging),
         "schedulingRowCount": len(sched),
+        "fromOperatoryChairs": bool(_operatory_chairs(bundle)) and not bool(_sd_rows(bundle, "operatory")),
         "fixHint": None if gap == GAP_OK else (FIX_HINT_AGING if not aging else FIX_HINT_SCHED),
         "issues": issues,
         "honesty": "empty_not_zero" if gap != GAP_OK else "reported",
@@ -157,13 +225,14 @@ def ingest_aging_schedule_into_conn(
 ) -> dict[str, Any]:
     stamp = now or _utc_now()
     aging_rows = _sd_rows(bundle, "ar")
-    sched_rows = _sd_rows(bundle, "operatory")
+    sched_rows = _schedule_source_rows(bundle)
     aging_n = 0
     sched_n = 0
 
     if aging_rows:
         buckets = _bucket_from_aging_rows(aging_rows)
         total = sum(buckets.values())
+        ins_pending = _insurance_pending_total(aging_rows)
         # Prefer period on first row
         period = _period_key(aging_rows[0]) if aging_rows else "current"
         conn.execute("DELETE FROM softdent_patient_aging WHERE period = ? AND source = ?", (period, "import_bundle"))
@@ -171,8 +240,8 @@ def ingest_aging_schedule_into_conn(
             """
             INSERT INTO softdent_patient_aging (
                 period, bucket_0_30, bucket_31_60, bucket_61_90, bucket_90_plus,
-                total_ar, source_file, source, ingested_at
-            ) VALUES (?,?,?,?,?,?,?,?,?)
+                total_ar, insurance_pending, source_file, source, ingested_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 period,
@@ -181,6 +250,7 @@ def ingest_aging_schedule_into_conn(
                 buckets["61-90"],
                 buckets["90+"],
                 total if total else None,
+                ins_pending,
                 None,
                 "import_bundle",
                 stamp,
@@ -207,17 +277,19 @@ def ingest_aging_schedule_into_conn(
                 capacity += 100.0
                 used += float(util) if util <= 1 else float(util)
         fill = None
+        from_chairs = any(str(row.get("source") or "") == "operatoryChairs" for row in sched_rows)
         if capacity > 0:
             fill = round(used / capacity, 4) if used <= capacity * 2 else round(min(used, 100) / 100.0, 4)
-        elif total_appts > 0:
+        elif total_appts > 0 and not from_chairs:
             fill = round(max(0.0, (total_appts - broken) / float(total_appts)), 4)
+        scheduled_prod = _scheduled_production_total(sched_rows)
         conn.execute("DELETE FROM softdent_scheduling WHERE period = ? AND source = ?", (period, "import_bundle"))
         conn.execute(
             """
             INSERT INTO softdent_scheduling (
                 period, total_appointments, broken_appointments, fill_rate,
-                capacity_hours, used_hours, source_file, source, ingested_at
-            ) VALUES (?,?,?,?,?,?,?,?,?)
+                capacity_hours, used_hours, scheduled_production, source_file, source, ingested_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 period,
@@ -226,6 +298,7 @@ def ingest_aging_schedule_into_conn(
                 fill,
                 capacity or None,
                 used or None,
+                scheduled_prod,
                 None,
                 "import_bundle",
                 stamp,
@@ -241,6 +314,7 @@ def ingest_aging_schedule_into_conn(
         "gapCode": gap.get("gapCode"),
         "agingPending": gap.get("agingPending"),
         "schedulingPending": gap.get("schedulingPending"),
+        "fromOperatoryChairs": gap.get("fromOperatoryChairs"),
     }
 
 
