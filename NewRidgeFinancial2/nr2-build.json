@@ -1,6 +1,7 @@
 {
-  "BUILD_ID": "hal-10461",
-  "assetVersion": "hal-10461",
-  "schemaVersion": "hal-10461",
-  "notes": "hal-10461: Disable automatic Apex page refresh and stop silent-poll flicker."
+  "BUILD_ID": "hal-10463",
+  "assetVersion": "hal-10463",
+  "schemaVersion": "hal-10463",
+  "notes": "hal-10463: Apex HAL Console chat box v2 (auto-resize, copy, receipts, empty state).",
+  "builtAt": "2026-07-11T12:09:06.147Z"
 }

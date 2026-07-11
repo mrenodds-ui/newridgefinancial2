@@ -1,6 +1,7 @@
 {
-  "BUILD_ID": "hal-10461",
-  "assetVersion": "hal-10461",
-  "schemaVersion": "hal-10461",
-  "notes": "hal-10461: Disable automatic Apex page refresh and stop silent-poll flicker."
+  "BUILD_ID": "hal-10463",
+  "assetVersion": "hal-10463",
+  "schemaVersion": "hal-10463",
+  "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server.",
+  "builtAt": "2026-07-11T12:09:06.147Z"
 }

@@ -1174,6 +1174,8 @@ body.apex-focus-open::before {
   outline: 2px solid var(--apex-cyan) !important;
   box-shadow: 0 0 0 4px rgba(0, 240, 255, 0.2), 0 0 24px rgba(0, 240, 255, 0.35) !important;
   animation: apexHalPulse 1.2s ease-in-out 2;
+  position: relative;
+  z-index: 20;
 }
 @keyframes apexHalPulse {
   0%, 100% { filter: brightness(1); }
