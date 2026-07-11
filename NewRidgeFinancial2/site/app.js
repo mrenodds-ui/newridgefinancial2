@@ -1869,7 +1869,96 @@ async function runHalPageCmd(cmd, opts) {
 }
 if (typeof window !== "undefined") {
   window.NR2_FLAGS = Object.assign({ hal_commands: true }, window.NR2_FLAGS || {});
+  window.NR2_CONFIG = Object.assign({ voiceReportsEnabled: true }, window.NR2_CONFIG || {});
   window.runHalPageCmd = runHalPageCmd;
+}
+
+function voiceReportsEnabled() {
+  const cfg = (typeof window !== "undefined" && window.NR2_CONFIG) || {};
+  return cfg.voiceReportsEnabled !== false;
+}
+
+function submitHalVoiceQuery(transcript) {
+  const q = String(transcript || "").trim();
+  if (!q) return;
+  if (typeof runHalPageCmd === "function") {
+    runHalPageCmd(q, { openHal: true });
+    return;
+  }
+  const logEl = document.querySelector("[data-hal-messages]");
+  if (logEl && typeof askHal === "function") {
+    askHal(q, logEl);
+  }
+}
+
+function initHalVoicePttHold() {
+  if (!voiceReportsEnabled()) return;
+  document.querySelectorAll("[data-hal-voice-ptt='hold']").forEach((voicePtt) => {
+    if (voicePtt._halHoldWired) return;
+    voicePtt._halHoldWired = true;
+    const startRecognition = () => {
+      const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!Rec) {
+        if (typeof showHalActionNotice === "function") {
+          showHalActionNotice("Speech recognition not available in this browser.", "warn");
+        }
+        return;
+      }
+      try {
+        if (window._currentRecognition) {
+          try {
+            window._currentRecognition.stop();
+          } catch (_err) {
+            /* ignore */
+          }
+          window._currentRecognition = null;
+        }
+        const rec = new Rec();
+        rec.lang = "en-US";
+        rec.interimResults = true;
+        rec.onresult = (e) => {
+          const transcript = Array.from(e.results)
+            .map((r) => r[0].transcript)
+            .join("");
+          const last = e.results[e.results.length - 1];
+          if (last && last.isFinal) {
+            submitHalVoiceQuery(transcript);
+          }
+        };
+        rec.onerror = () => {
+          window._currentRecognition = null;
+          voicePtt.classList.remove("is-listening");
+        };
+        rec.onend = () => {
+          window._currentRecognition = null;
+          voicePtt.classList.remove("is-listening");
+        };
+        rec.start();
+        window._currentRecognition = rec;
+        voicePtt.classList.add("is-listening");
+      } catch (_err) {
+        /* optional */
+      }
+    };
+    const stopRecognition = () => {
+      voicePtt.classList.remove("is-listening");
+      if (window._currentRecognition) {
+        try {
+          window._currentRecognition.stop();
+        } catch (_err) {
+          /* ignore */
+        }
+        window._currentRecognition = null;
+      }
+    };
+    voicePtt.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      startRecognition();
+    });
+    voicePtt.addEventListener("pointerup", stopRecognition);
+    voicePtt.addEventListener("pointerleave", stopRecognition);
+    voicePtt.addEventListener("pointercancel", stopRecognition);
+  });
 }
 
 async function handleHalChromeInteraction(event) {
@@ -1918,6 +2007,11 @@ async function handleHalChromeInteraction(event) {
   }
   const voicePtt = event.target.closest("[data-hal-voice-ptt]");
   if (voicePtt) {
+    const mode = String(voicePtt.getAttribute("data-hal-voice-ptt") || "click").toLowerCase();
+    if (mode === "hold") {
+      // Hold-to-talk is wired via pointer listeners (initHalVoicePttHold); click is a no-op tip.
+      return true;
+    }
     const briefing =
       (typeof HalProactive !== "undefined" && HalProactive.lastBriefing && HalProactive.lastBriefing.morningBriefing) ||
       null;
@@ -5379,6 +5473,21 @@ function select(id, options) {
         if (typeof window !== "undefined") window.NR2_OM_LIVE_SCHEDULE = null;
       });
   }
+  // Moonshot Mon–Thu: weekly schedule list prefetch
+  if (
+    !NR2_WORKSTATION_ONLY &&
+    page.id === "office-manager" &&
+    typeof NR2SoftdentDaily !== "undefined" &&
+    typeof NR2SoftdentDaily.prefetchWeeklyForOM === "function"
+  ) {
+    NR2SoftdentDaily.prefetchWeeklyForOM()
+      .then(() => {
+        scheduleHalWidgetRefresh(null, { repaint: true });
+      })
+      .catch(() => {
+        if (typeof window !== "undefined") window.NR2_OM_WEEKLY_SCHEDULE = null;
+      });
+  }
   const scrollTo = options && options.scrollTo;
   if (scrollTo) {
     requestAnimationFrame(() => {
@@ -6264,6 +6373,7 @@ async function boot() {
     });
   }
   if (typeof NR2Tier3 !== "undefined" && NR2Tier3.install) NR2Tier3.install();
+  if (typeof initHalVoicePttHold === "function") initHalVoicePttHold();
   if (!NR2_WORKSTATION_ONLY) startHalHubDispatcher();
   if (NR2_WORKSTATION_ONLY) {
     startWorkstationHubHeartbeat();

@@ -480,6 +480,44 @@
     };
   }
 
+  function containsPhi(text) {
+    // SSN, phone, DOB patterns — Moonshot HAL voice+report Phase 2
+    return /\b\d{3}-\d{2}-\d{4}\b|\b\d{3}-\d{3}-\d{4}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(
+      String(text || "")
+    );
+  }
+
+  function loadVoiceCalibration() {
+    try {
+      const saved = localStorage.getItem("nr2:hal:voice:calibration");
+      if (saved) {
+        const cfg = JSON.parse(saved);
+        if (cfg && typeof cfg === "object") {
+          if (cfg.rate != null) HAL_CHAT.rate = Number(cfg.rate) || HAL_CHAT.rate;
+          if (cfg.pitch != null) HAL_CHAT.pitch = Number(cfg.pitch) || HAL_CHAT.pitch;
+        }
+      }
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function saveVoiceCalibration(cfg) {
+    try {
+      localStorage.setItem("nr2:hal:voice:calibration", JSON.stringify(cfg || {}));
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function setCalibration(rate, pitch) {
+    if (rate != null) HAL_CHAT.rate = Number(rate);
+    if (pitch != null) HAL_CHAT.pitch = Number(pitch);
+    saveVoiceCalibration({ rate: HAL_CHAT.rate, pitch: HAL_CHAT.pitch });
+  }
+
+  loadVoiceCalibration();
+
   function qaSkipSpeech() {
     return !!(global._halRandomQaSkipSpeech || global.HAL_SKIP_SPEECH);
   }
@@ -494,9 +532,22 @@
     if (qaSkipSpeech() || options.skipSpeech) {
       return { started: false, durationMs: 0, skipped: true, reason: "qa-skip-speech" };
     }
+    // PHI guard: block speech unless explicitly allowed
+    if (containsPhi(displayText) && !options.allowPhi) {
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn("[HalVoice] PHI detected in speech; skipping TTS. Set allowPhi:true to override.");
+      }
+      return { started: false, durationMs: 0, skipped: true, reason: "phi-content-blocked" };
+    }
 
     const raw = resolveSpokenText(displayText, options);
     if (!raw) return { started: false, durationMs: 0 };
+    if (containsPhi(raw) && !options.allowPhi) {
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn("[HalVoice] PHI detected in spoken excerpt; skipping TTS.");
+      }
+      return { started: false, durationMs: 0, skipped: true, reason: "phi-content-blocked" };
+    }
 
     const gen = options.interrupt !== false ? beginSpeechGeneration() : speechGeneration;
     const voice = pickVoice(HAL_CHAT.voiceHints);
@@ -528,6 +579,12 @@
     const raw = String(text || "").trim();
     if (!raw || qaSkipSpeech() || options.skipSpeech) {
       return { started: false, durationMs: 0, skipped: true };
+    }
+    if (containsPhi(raw) && !options.allowPhi) {
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn("[HalVoice] PHI detected in briefing; skipping TTS.");
+      }
+      return { started: false, durationMs: 0, skipped: true, reason: "phi-content-blocked" };
     }
     const excerpt = raw.length > 420 ? raw.slice(0, 420).replace(/\s+\S*$/, "") + "…" : raw;
     return speakConversationalAsync(excerpt, HAL_CHAT, { interrupt: true });
@@ -572,6 +629,10 @@
     cancelSpeech,
     estimateDurationMs,
     estimateConversationalDurationMs,
+    containsPhi,
+    setCalibration,
+    loadVoiceCalibration,
+    saveVoiceCalibration,
     test: testVoice,
     testVoice,
     pickVoice,

@@ -2549,6 +2549,86 @@ class NR2BottleServer(BottleServer):
             target = str(bottle.request.query.get("date") or "").strip() or None
             return _json_response(appointments_today_snapshot(target_date=target))
 
+        @app.get("/api/softdent/appointments-range")
+        def softdent_appointments_range_api():
+            """Mon–Thu (or N-day) SoftDent appointment list — PHI hashes, SoftDent read-only."""
+            import bottle
+            from nr2_softdent_daily import appointments_range_snapshot, monday_of_week_iso
+
+            start = str(bottle.request.query.get("start") or "").strip() or monday_of_week_iso()
+            try:
+                days = int(bottle.request.query.get("days") or 4)
+            except ValueError:
+                days = 4
+            provider = str(bottle.request.query.get("provider") or "").strip() or None
+            return _json_response(
+                appointments_range_snapshot(start, days=days, provider_filter=provider)
+            )
+
+        @app.get("/api/softdent/today-schedule")
+        def softdent_today_schedule_api():
+            """Alias for Moonshot daily_ops_briefing (read-only SoftDent appointments)."""
+            import bottle
+            from nr2_softdent_daily import appointments_today_snapshot
+
+            target = str(bottle.request.query.get("date") or "").strip() or None
+            return _json_response(appointments_today_snapshot(target_date=target))
+
+        @app.get("/api/claims/aging-summary")
+        def claims_aging_summary_api():
+            """Counts-only aging summary for spoken briefings (no invented dollars)."""
+            from datetime import date, datetime
+
+            from nr2_softdent_daily import claims_outstanding
+
+            raw = claims_outstanding(limit=200)
+            claims = raw.get("claims") if isinstance(raw.get("claims"), list) else []
+            over30 = 0
+            today = date.today()
+            for claim in claims:
+                if not isinstance(claim, dict):
+                    continue
+                sd = str(claim.get("serviceDate") or "")[:10]
+                try:
+                    d = datetime.strptime(sd, "%Y-%m-%d").date()
+                except ValueError:
+                    continue
+                if (today - d).days > 30:
+                    over30 += 1
+            return _json_response(
+                {
+                    "ok": True,
+                    "hasData": bool(claims),
+                    "count": len(claims),
+                    "over30": over30,
+                    "source": raw.get("source"),
+                }
+            )
+
+        @app.get("/api/employee/on-duty")
+        def employee_on_duty_api():
+            """Staff currently clocked in (read-only shift context)."""
+            try:
+                from employee_actions import get_current_shift_context
+                from local_store import LocalStore
+
+                store = LocalStore(NR2_DATA_DIR)
+                ctx = get_current_shift_context(store)
+                names = []
+                if ctx.get("active"):
+                    names.append(str(ctx.get("employeeId") or "HAL"))
+                return _json_response(
+                    {
+                        "ok": True,
+                        "names": names,
+                        "count": len(names),
+                        "active": bool(ctx.get("active")),
+                        "tier": ctx.get("tier"),
+                    }
+                )
+            except Exception as exc:
+                return _json_response({"ok": False, "error": str(exc), "names": [], "count": 0}, status=500)
+
         @app.get("/api/softdent/provider-utilization-7d")
         def softdent_provider_utilization_7d_api():
             from nr2_softdent_daily import provider_utilization_last_7d

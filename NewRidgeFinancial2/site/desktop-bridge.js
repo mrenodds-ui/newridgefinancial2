@@ -1418,6 +1418,46 @@ const DesktopBridge = (function () {
     return { ok: false, reply: "Treatment estimate requires the NR2 loopback server." };
   }
 
+  async function fetchPatientDossier(patientId, options) {
+    if (!hasLoopbackApi()) {
+      return { ok: false, error: "Patient dossier requires NR2 loopback server." };
+    }
+    const pid = String(patientId || "").trim();
+    if (!pid) return { ok: false, error: "patientId required" };
+    const opts = options && typeof options === "object" ? options : {};
+    const summarize = opts.summarize === true || opts.summarize === 1 || opts.summarize === "1";
+    const q = summarize ? "?summarize=1" : "";
+    try {
+      return await loopbackJson(`/api/apex/patient-dossier/${encodeURIComponent(pid)}${q}`);
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err || "dossier unavailable") };
+    }
+  }
+
+  async function fetchPatientDossierMini(patientId) {
+    if (!hasLoopbackApi()) return { ok: false, error: "loopback required" };
+    const pid = String(patientId || "").trim();
+    if (!pid) return { ok: false, error: "patientId required" };
+    try {
+      return await loopbackJson(`/api/apex/patient-dossier-mini/${encodeURIComponent(pid)}`);
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+  }
+
+  async function auditHalPatientContext(payload) {
+    if (!hasLoopbackApi()) return { ok: false };
+    try {
+      return await loopbackJson("/api/audit/hal-patient-context", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+      });
+    } catch (_err) {
+      return { ok: false };
+    }
+  }
+
   async function listEligibilityCache(limit) {
     if (hasDesktopApi() && window.pywebview.api.list_eligibility_cache) {
       return window.pywebview.api.list_eligibility_cache(Number(limit || 20));
@@ -1689,6 +1729,9 @@ const DesktopBridge = (function () {
     joinClaimPayers,
     lookupFeeSchedule,
     lookupTreatmentEstimate,
+    fetchPatientDossier,
+    fetchPatientDossierMini,
+    auditHalPatientContext,
     listEligibilityCache,
     upsertEligibilityCache,
     searchEligibilityCache,

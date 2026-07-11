@@ -198,10 +198,12 @@
       type === "treemap" ||
       type === "scatter-plot" ||
       type === "pareto-chart" ||
-      type === "utilization-board"
+      type === "utilization-board" ||
+      type === "schedule-list" ||
+      type === "patient-dossier-card"
     )
       return "l";
-    if (type === "dual-axis-trend" || type === "timeline-lanes" || type === "status-matrix" || type === "radial-gauge")
+    if (type === "dual-axis-trend" || type === "timeline-lanes" || type === "status-matrix" || type === "radial-gauge" || type === "action-list" || type === "bar-list")
       return "m";
     if (type === "credit-float") return "strip";
     if (type === "bullet" || type === "scrubber") return type === "scrubber" ? "full" : "s";
@@ -2133,6 +2135,136 @@
         `;
       }
 
+      if (this.type === "schedule-list") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const days = Array.isArray(data.days) ? data.days : [];
+        const empty = this.spec.status === "empty" || !days.some((d) => d && (d.count > 0 || (d.slots && d.slots.length)));
+        const dayHtml = days
+          .map((day) => {
+            const slots = Array.isArray(day.slots) ? day.slots : [];
+            const rows = slots.length
+              ? slots
+                  .map((s) => {
+                    const hash = String((s && (s.patientHash || s.initials)) || "——");
+                    const pid = String((s && s.patientId) || "");
+                    return `<button type="button" class="apex-sched-slot" data-om-patient-id="${this.escape(
+                      pid
+                    )}" data-om-patient-hash="${this.escape(hash)}" title="Ask HAL about this patient">
+                      <span class="apex-sched-hash">${this.escape(hash)}</span>
+                      <span class="apex-sched-meta">${this.escape(String((s && s.time) || "—"))} · ${this.escape(
+                      String((s && s.provider) || "—")
+                    )} · ${this.escape(String((s && s.status) || ""))}</span>
+                    </button>`;
+                  })
+                  .join("")
+              : `<div class="apex-kpi-value is-empty">${this.escape(
+                  day.emptyMessage || `No SoftDent appointments for ${day.date || "day"}.`
+                )}</div>`;
+            return `<div class="apex-sched-day">
+              <div class="apex-sched-day-head"><strong>${this.escape(
+                String(day.dayName || "")
+              )}</strong> ${this.escape(String(day.date || ""))} · ${this.escape(
+              String(day.count != null ? day.count : slots.length)
+            )}</div>
+              <div class="apex-sched-slots">${rows}</div>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || "No appointments found for Mon–Thu — verify SoftDent sync."
+                )}</div>`
+              : `<div class="apex-sched-list" data-schedule-list>
+                   <div class="apex-sched-range">${this.escape(String(data.dateRange || ""))}</div>
+                   ${dayHtml}
+                 </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "action-list" || this.type === "bar-list") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const items = Array.isArray(data.items)
+          ? data.items
+          : Array.isArray(data.rows)
+            ? data.rows.map((r) => ({
+                id: r.provider,
+                payer: "",
+                status: `${r.appointments != null ? r.appointments : 0} appts`,
+                amount: null,
+                serviceDate: "",
+                label: r.provider,
+              }))
+            : [];
+        const empty = this.spec.status === "empty" || !items.length;
+        const list = items
+          .map((it) => {
+            const amt = it.amount != null && it.amount !== "" ? String(it.amount) : "";
+            const labelText = it.label || it.id || "—";
+            return `<li class="apex-action-li">
+              <strong>${this.escape(String(labelText))}</strong>
+              <span>${this.escape(String(it.payer || ""))}${it.status ? " · " + this.escape(String(it.status)) : ""}</span>
+              <span>${this.escape(amt || (it.serviceDate ? String(it.serviceDate) : ""))}</span>
+            </li>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || this.spec.emptyMessage || "No items"
+                )}</div>`
+              : `<ul class="apex-action-list">${list}</ul>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "patient-dossier-card") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const empty = this.spec.status === "empty" && !data.patientHash;
+        const gap = data.schemaGap
+          ? `<div class="apex-kpi-hint">${this.escape(String(data.schemaGap))}</div>`
+          : "";
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty || (!data.patientHash && !data.initials)
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || "Select a patient from Mon–Thu schedule."
+                )}</div>`
+              : `<div class="apex-dossier-card">
+                   <div class="apex-dossier-hash">${this.escape(String(data.patientHash || "——"))} · ${this.escape(
+                     String(data.initials || "P—")
+                   )}</div>
+                   <div>Carrier: ${this.escape(String(data.primaryCarrier || "unknown"))}</div>
+                   <div>Open claims: ${this.escape(
+                     data.openClaims != null ? String(data.openClaims) : "unknown"
+                   )}</div>
+                   <div>Last visit: ${this.escape(String(data.lastVisit || "unknown"))}</div>
+                   <div>Balance: ${this.escape(String(data.accountBalance || "unavailable"))}</div>
+                   <div>Notes: ${data.hasClinicalNotes ? "on file" : "none"}</div>
+                 </div>`
+          }
+          ${gap}
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
       if (this.type === "radial-gauge") {
         const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
         const empty = this.spec.status === "empty" || data.due == null;
@@ -3501,6 +3633,9 @@
       if (this.type === "claim-shelf") {
         wireClaimShelf(this.element, this.spec);
       }
+      if (this.type === "schedule-list") {
+        wireOmScheduleList(this.element);
+      }
       if (this.type === "claims-kanban" || this.type === "claims-workbench") {
         wireClaimsKanban(this.element, this.spec);
       }
@@ -4476,6 +4611,42 @@
     }
   }
 
+  function wireOmScheduleList(root) {
+    if (!root || root.dataset.omSchedWired === "1") return;
+    root.dataset.omSchedWired = "1";
+    root.querySelectorAll("[data-om-patient-id], [data-om-patient-hash]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const pid = btn.getAttribute("data-om-patient-id") || "";
+        const hash = btn.getAttribute("data-om-patient-hash") || "";
+        const key = pid || hash;
+        if (!key) return;
+        if (typeof HalAgent !== "undefined" && typeof HalAgent.setOMPatientContext === "function") {
+          HalAgent.setOMPatientContext(key);
+        } else if (typeof window !== "undefined") {
+          window.NR2_OM_PATIENT_CONTEXT = key;
+        }
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (bridge && typeof bridge.auditHalPatientContext === "function") {
+          bridge.auditHalPatientContext({
+            patientHash: hash || String(key).slice(0, 4),
+            action: "set_context",
+            timestamp: new Date().toISOString(),
+          });
+        }
+        // Soft visual selection
+        root.querySelectorAll(".apex-sched-slot.is-selected").forEach((el) => el.classList.remove("is-selected"));
+        btn.classList.add("is-selected");
+        try {
+          window.dispatchEvent(
+            new CustomEvent("nr2-om-patient-context", { detail: { patientId: key, patientHash: hash } })
+          );
+        } catch (_e) {
+          /* ignore */
+        }
+      });
+    });
+  }
+
   function findWidgetEl(widgetId) {
     const id = String(widgetId || "").replace(/\\/g, "").replace(/"/g, "");
     if (!id) return null;
@@ -5097,6 +5268,37 @@
             window.ApexNarratives.applyVoiceText(section, text, mode);
             results.push(`narrative:${mode}:${section}`);
           }
+        } else if (type === "run_tool") {
+          const cfg = window.NR2_CONFIG || {};
+          if (cfg.voiceReportsEnabled === false) {
+            results.push("run_tool:disabled");
+            continue;
+          }
+          const toolId = String(action.tool || "").trim();
+          const def = window.HalAgent && HalAgent.TOOL_DEFS && HalAgent.TOOL_DEFS[toolId];
+          if (!def || typeof def.run !== "function") {
+            results.push(`run_tool:missing:${toolId}`);
+            continue;
+          }
+          const toolRes = await def.run({}, { query: "" }, { speak: action.speak !== false });
+          if (toolRes && toolRes.summary) {
+            const logEl = document.querySelector("[data-hal-messages]");
+            if (logEl && typeof appendHalMessage === "function") {
+              appendHalMessage(logEl, "hal", String(toolRes.summary).slice(0, 4000), { skipPersist: true });
+            }
+          }
+          // Tool may already have spoken; if speak requested and excerpt present but not spoken yet, speak once
+          if (
+            action.speak !== false &&
+            toolRes &&
+            toolRes.spokenExcerpt &&
+            typeof HalVoice !== "undefined" &&
+            HalVoice.speakHalBriefing &&
+            !(toolRes._spokenByTool)
+          ) {
+            // clock_out etc. already speak inside run; skip double-speak
+          }
+          results.push(toolRes && toolRes.ok !== false ? `run_tool:${toolId}` : `run_tool_fail:${toolId}`);
         } else if (type === "focus_claims_bucket") {
           const bucket = String(action.bucket || "30");
           const wid = `claims-aging-${bucket}`;
@@ -5271,6 +5473,8 @@
               "open_claim_detail",
               "focus_claims_bucket",
               "narrative_append",
+              "narrative_from_focused_claim",
+              "run_tool",
             ].includes(a.type)
           );
           if (safe.length) {

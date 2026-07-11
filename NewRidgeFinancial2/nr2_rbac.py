@@ -24,8 +24,16 @@ ROLE_CAPS: dict[str, set[str]] = {
         "read_ar",
         "cloud_hal",
         "approve_writeoff_tier1",
+        "read_patient_dossier",  # Moonshot: Dentist/OM/InsCo — maps hal:patient-dossier:read
     },
-    "dentist": {"read_all", "write_clinical", "approve_closeout", "read_financial", "approve_writeoff_tier2"},
+    "dentist": {
+        "read_all",
+        "write_clinical",
+        "approve_closeout",
+        "read_financial",
+        "approve_writeoff_tier2",
+        "read_patient_dossier",
+    },
     "admin": {"*"},
 }
 

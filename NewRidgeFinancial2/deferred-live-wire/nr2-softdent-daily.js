@@ -7,6 +7,7 @@ const NR2SoftdentDaily = (function () {
     newPatientsMtd: "/api/softdent/new-patients-mtd",
     appointmentsSnapshot: "/api/softdent/appointments-snapshot",
     appointmentsToday: "/api/softdent/appointments-today",
+    appointmentsRange: "/api/softdent/appointments-range",
     claimsOutstanding: "/api/softdent/claims-outstanding",
     providerProduction: "/api/softdent/provider-production",
     providerUtilization7d: "/api/softdent/provider-utilization-7d",
@@ -266,8 +267,36 @@ const NR2SoftdentDaily = (function () {
     return data;
   }
 
+  function getMondayISO(d) {
+    const date = d instanceof Date ? new Date(d.getTime()) : new Date();
+    const day = date.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    date.setDate(date.getDate() + diff);
+    return date.toISOString().slice(0, 10);
+  }
+
+  async function prefetchWeeklyForOM() {
+    const monday = getMondayISO(new Date());
+    const url = `${LIVE_ENDPOINTS.appointmentsRange}?start=${encodeURIComponent(monday)}&days=4`;
+    const data = await fetchJson(url);
+    if (data && typeof data === "object") {
+      liveCache.appointmentsRange = data;
+      liveFetchedAt = Date.now();
+      if (typeof window !== "undefined") {
+        window.NR2_OM_WEEKLY_SCHEDULE = data;
+      }
+    } else if (typeof window !== "undefined") {
+      window.NR2_OM_WEEKLY_SCHEDULE = null;
+    }
+    return data;
+  }
+
   function appointmentsToday() {
     return useLive("appointmentsToday") || (typeof window !== "undefined" ? window.NR2_OM_LIVE_SCHEDULE : null);
+  }
+
+  function appointmentsRange() {
+    return useLive("appointmentsRange") || (typeof window !== "undefined" ? window.NR2_OM_WEEKLY_SCHEDULE : null);
   }
 
   return {
@@ -275,6 +304,7 @@ const NR2SoftdentDaily = (function () {
     newPatientsMtd,
     appointmentsSnapshot,
     appointmentsToday,
+    appointmentsRange,
     claimsOutstanding,
     providerProduction,
     adjustmentLog,
@@ -282,6 +312,8 @@ const NR2SoftdentDaily = (function () {
     operatoryGrid,
     prefetchLive,
     prefetchTodayForOM,
+    prefetchWeeklyForOM,
+    getMondayISO,
     clearLiveCache,
     getLiveCache: () => liveCache,
   };

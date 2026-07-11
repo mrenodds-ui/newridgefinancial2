@@ -306,6 +306,123 @@ def appointments_today_snapshot(*, target_date: str | None = None) -> dict[str, 
         conn.close()
 
 
+def _initials_from_name(raw_name: str) -> str:
+    parts = [x for x in str(raw_name or "").split() if x]
+    letters = "".join(p[0] for p in parts[:2] if p).upper()
+    return f"{letters or 'P'}—"
+
+
+def appointments_range_snapshot(
+    start_iso: str,
+    days: int = 4,
+    *,
+    provider_filter: str | None = None,
+) -> dict[str, Any]:
+    """Multi-day appointment list for OM (Mon–Thu). PHI-safe hashes. SoftDent read-only.
+
+    Real sd_appointments columns only (no appt_time). sd_patients uses patient_name
+    (not first_name/last_name). Time displays as '—' honestly.
+    """
+    from datetime import datetime, timedelta
+
+    conn, db_path = _open_db()
+    if not conn:
+        return {"hasData": False, "days": [], "source": "none", "dbPath": str(db_path) if db_path else None}
+
+    try:
+        if not _table_exists(conn, "sd_appointments"):
+            return {
+                "hasData": False,
+                "days": [],
+                "source": "none",
+                "dbPath": str(db_path),
+                "emptyMessage": "sd_appointments table missing — run SoftDent extract.",
+            }
+
+        start_raw = str(start_iso or "")[:10]
+        try:
+            start_dt = datetime.fromisoformat(start_raw)
+        except ValueError:
+            return {"hasData": False, "days": [], "source": "none", "error": "invalid start date"}
+
+        day_count = max(1, min(int(days or 4), 14))
+        dates = [(start_dt + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(day_count)]
+        placeholders = ",".join("?" * len(dates))
+        # Normalize date compare: SoftDent may store YYYY-MM-DD or with time suffix
+        sql = f"""
+        SELECT a.appt_date, a.patient_id, a.provider_code, a.status, p.patient_name
+        FROM sd_appointments a
+        LEFT JOIN sd_patients p ON a.patient_id = p.patient_id
+        WHERE substr(replace(a.appt_date, '/', '-'), 1, 10) IN ({placeholders})
+        ORDER BY a.appt_date, a.provider_code
+        """
+        params: list[Any] = list(dates)
+        if provider_filter:
+            sql = sql.replace(
+                f"WHERE substr(replace(a.appt_date, '/', '-'), 1, 10) IN ({placeholders})",
+                f"WHERE substr(replace(a.appt_date, '/', '-'), 1, 10) IN ({placeholders})"
+                " AND COALESCE(a.provider_code,'') = ?",
+            )
+            params.append(str(provider_filter))
+
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+
+        days_out: list[dict[str, Any]] = []
+        for d in dates:
+            day_rows = [r for r in rows if str(r[0] or "")[:10].replace("/", "-") == d]
+            slots: list[dict[str, Any]] = []
+            for r in day_rows:
+                patient_raw = str(r[4] or "").strip()
+                slots.append(
+                    {
+                        "patientId": str(r[1] or ""),
+                        "patientHash": _hash_patient_id(str(r[1] or "")),
+                        "initials": _initials_from_name(patient_raw) if patient_raw else "P—",
+                        "provider": str(r[2] or "") or "—",
+                        "status": _normalize_appt_status(str(r[3] or "")),
+                        "time": "—",  # SoftDent schema lacks time; honest placeholder
+                        "procedureHint": "—",
+                    }
+                )
+            days_out.append(
+                {
+                    "date": d,
+                    "dayName": datetime.fromisoformat(d).strftime("%a"),
+                    "slots": slots,
+                    "count": len(slots),
+                    "emptyMessage": f"No SoftDent appointments for {d}." if not slots else "",
+                }
+            )
+
+        return {
+            "hasData": any(d["count"] > 0 for d in days_out),
+            "days": days_out,
+            "dateRange": f"{dates[0]} to {dates[-1]}",
+            "source": "sd_appointments",
+            "dbPath": str(db_path),
+            "emptyMessage": "No appointments found for Mon–Thu — verify SoftDent sync.",
+        }
+    finally:
+        conn.close()
+
+
+def monday_of_week_iso(ref_iso: str | None = None) -> str:
+    """ISO date for Monday of the week containing ref (default: today)."""
+    from datetime import date, datetime, timedelta
+
+    if ref_iso:
+        try:
+            d = datetime.fromisoformat(str(ref_iso)[:10]).date()
+        except ValueError:
+            d = date.today()
+    else:
+        d = date.today()
+    monday = d - timedelta(days=d.weekday())
+    return monday.isoformat()
+
+
 def provider_utilization_last_7d() -> dict[str, Any]:
     """Appointment counts by provider for the last 7 calendar days (read-only)."""
     from datetime import date, timedelta

@@ -900,6 +900,198 @@ def build_provider_utilization_trend(util: dict[str, Any] | None = None) -> dict
     )
 
 
+# ——— Mon–Thu schedule + patient dossier surfaces (Moonshot 2026-07-11) ———
+
+
+def build_weekly_schedule_list(
+    bundle: dict[str, Any],
+    live_range: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """OM widget: Mon–Thu patient list (PHI-safe hashes)."""
+    _ = bundle
+    data = live_range if (live_range and isinstance(live_range, dict)) else {"days": [], "hasData": False}
+    days = data.get("days") if isinstance(data.get("days"), list) else []
+    has = bool(data.get("hasData"))
+    return _wrap(
+        widget_id="weekly-schedule-list",
+        type_="schedule-list",
+        title="This Week's Schedule (Mon–Thu)",
+        page="office-manager",
+        size="xl",
+        status="ok" if has else "empty",
+        data={
+            "days": days,
+            "dateRange": data.get("dateRange") or "",
+            "emptyMessage": data.get("emptyMessage")
+            or "No appointments found for Mon–Thu — verify SoftDent sync.",
+        },
+        hint="Multi-day schedule view; click patient hash to open dossier / set HAL context.",
+        collapse_when_empty=False,
+    )
+
+
+def build_patient_dossier_card(dossier: dict[str, Any] | None = None) -> dict[str, Any]:
+    """NICE / SHOULD: OM patient dossier mini or raw dossier card."""
+    d = dossier if isinstance(dossier, dict) else {}
+    demo = d.get("demographics") if isinstance(d.get("demographics"), dict) else {}
+    mini_ok = d.get("ok") is True or bool(demo) or bool(d.get("patientHash"))
+    payload = {
+        "patientHash": d.get("patientHash") or demo.get("nameHash") or "——",
+        "initials": d.get("initials") or demo.get("initials") or "P—",
+        "primaryCarrier": d.get("primaryCarrier"),
+        "openClaims": d.get("openClaims"),
+        "lastVisit": d.get("lastVisit") or demo.get("lastVisit") or "unknown",
+        "accountBalance": d.get("accountBalance") or "unavailable",
+        "hasClinicalNotes": d.get("hasClinicalNotes"),
+        "appointments": d.get("appointments") or [],
+        "procedures": d.get("procedures") or [],
+        "claims": d.get("claims") or [],
+        "transactions": d.get("transactions") or {},
+        "clinicalNotes": d.get("clinicalNotes") or [],
+        "treatmentEstimates": d.get("treatmentEstimates") or [],
+        "gaps": d.get("gaps") or [],
+        "emptyMessage": d.get("error")
+        or "Select a patient from Mon–Thu schedule (click hash) to load dossier.",
+    }
+    return _wrap(
+        widget_id="patient-dossier-card",
+        type_="patient-dossier-card",
+        title="Patient Dossier",
+        page="office-manager",
+        size="l",
+        status="ok" if mini_ok else "empty",
+        data=payload,
+        hint="PHI-safe hashes/initials · SoftDent read-only · empty≠$0 · Ask HAL: Summarize patient …",
+        collapse_when_empty=False,
+    )
+
+
+def build_patient_dossier_mini(dossier: dict[str, Any] | None = None) -> dict[str, Any]:
+    """SHOULD: compact demographics / insurance / open claims when patient selected."""
+    d = dossier if isinstance(dossier, dict) else {}
+    ok = bool(d.get("ok"))
+    return _wrap(
+        widget_id="patient-dossier-mini",
+        type_="patient-dossier-card",
+        title="Patient Info",
+        page="office-manager",
+        size="m",
+        status="ok" if ok else "empty",
+        data={
+            "patientHash": d.get("patientHash") or "——",
+            "initials": d.get("initials") or "P—",
+            "primaryCarrier": d.get("primaryCarrier") or "unknown",
+            "openClaims": d.get("openClaims") if d.get("openClaims") is not None else "unknown",
+            "lastVisit": d.get("lastVisit") or "unknown",
+            "accountBalance": d.get("accountBalance") or "unavailable",
+            "hasClinicalNotes": d.get("hasClinicalNotes"),
+            "dobYear": d.get("dobYear"),
+            "schemaGap": d.get("schemaGap"),
+            "emptyMessage": "Click a patient hash on the Mon–Thu list to load info.",
+        },
+        hint="Carrier name only · balance unavailable if not in extract (never $0).",
+        collapse_when_empty=False,
+    )
+
+
+def build_active_treatment_plans(estimates: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """SHOULD: treatment plan estimate surface from SoftDent aggregates."""
+    rows = [e for e in (estimates or []) if isinstance(e, dict)]
+    status = "ok" if rows else "empty"
+    return _wrap(
+        widget_id="active-treatment-plans",
+        type_="action-list",
+        title="Treatment Plan Estimates",
+        page="office-manager",
+        size="m",
+        status=status,
+        data={
+            "items": [
+                {
+                    "id": str(r.get("ada") or "—"),
+                    "payer": str(r.get("payer") or "—"),
+                    "status": str(r.get("reason") or "estimate"),
+                    "amount": r.get("estimate") if r.get("estimate") not in (None, 0, "0", "$0.00") else "unknown",
+                    "serviceDate": "",
+                }
+                for r in rows[:8]
+            ],
+            "count": len(rows),
+            "emptyMessage": "No treatment estimates — select patient or ask HAL lookup_treatment_estimate.",
+        },
+        hint="Historical SoftDent payment-line averages only — not a benefits guarantee.",
+        collapse_when_empty=status == "empty",
+    )
+
+
+def build_claims_review_detail(detail: dict[str, Any] | None = None) -> dict[str, Any]:
+    """SHOULD: claims review detail for selected patient."""
+    payload = detail if isinstance(detail, dict) else {}
+    items = payload.get("items") if isinstance(payload.get("items"), list) else []
+    mapped = []
+    for it in items[:10]:
+        if not isinstance(it, dict):
+            continue
+        mapped.append(
+            {
+                "id": str(it.get("claimId") or it.get("claimHash") or "—"),
+                "payer": str(it.get("payer") or "—"),
+                "status": str(it.get("status") or "—"),
+                "amount": it.get("amount") if it.get("amount") not in (None, 0, "$0.00") else "unknown",
+                "serviceDate": str(it.get("serviceDate") or ""),
+            }
+        )
+    status = "ok" if mapped else "empty"
+    return _wrap(
+        widget_id="claim-review-detail",
+        type_="action-list",
+        title="Claim Review Detail",
+        page="office-manager",
+        size="m",
+        status=status,
+        data={
+            "items": mapped,
+            "count": len(mapped),
+            "patientHash": payload.get("patientHash"),
+            "emptyMessage": payload.get("emptyMessage")
+            or "Select a patient to review SoftDent claims (empty ≠ $0).",
+        },
+        hint="Ask HAL to draft_insurance_narrative for a claim id — staff submits outside NR2.",
+        collapse_when_empty=status == "empty",
+    )
+
+
+def build_clinical_notes_summary(notes: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """NICE: clinical notes viewer for selected patient."""
+    items = [n for n in (notes or []) if isinstance(n, dict)]
+    status = "ok" if items else "empty"
+    return _wrap(
+        widget_id="clinical-notes-summary",
+        type_="action-list",
+        title="Clinical Notes",
+        page="office-manager",
+        size="m",
+        status=status,
+        data={
+            "items": [
+                {
+                    "id": str(i + 1),
+                    "payer": str(n.get("source") or "clinical"),
+                    "status": str(n.get("station") or ""),
+                    "amount": None,
+                    "serviceDate": "",
+                    "label": str(n.get("summary") or "")[:160],
+                }
+                for i, n in enumerate(items[:5])
+            ],
+            "count": len(items),
+            "emptyMessage": "No clinical note packs for selected patient — ask HAL to summarize notes.",
+        },
+        hint="SideNotes / local clinical bridge only — SoftDent read-only.",
+        collapse_when_empty=status == "empty",
+    )
+
+
 def append_financial_missing(widgets: list[dict[str, Any]], bundle: dict[str, Any]) -> None:
     widgets.append(build_expense_treemap(bundle, page="financial"))
     widgets.append(build_procedure_scatter(bundle))
@@ -924,17 +1116,31 @@ def append_claims_missing(widgets: list[dict[str, Any]], bundle: dict[str, Any])
 def append_office_manager_missing(widgets: list[dict[str, Any]], bundle: dict[str, Any]) -> None:
     live_schedule: dict[str, Any] | None = None
     util: dict[str, Any] | None = None
+    live_range: dict[str, Any] | None = None
     try:
-        from nr2_softdent_daily import appointments_today_snapshot, provider_utilization_last_7d
+        from nr2_softdent_daily import (
+            appointments_range_snapshot,
+            appointments_today_snapshot,
+            monday_of_week_iso,
+            provider_utilization_last_7d,
+        )
 
         live_schedule = appointments_today_snapshot()
         util = provider_utilization_last_7d()
+        live_range = appointments_range_snapshot(monday_of_week_iso(), days=4)
     except Exception:
         live_schedule = None
         util = None
+        live_range = None
     widgets.append(build_operatory_board(bundle, live_schedule=live_schedule))
+    widgets.append(build_weekly_schedule_list(bundle, live_range=live_range))
     widgets.append(build_recall_gauge(bundle))
     widgets.append(build_treatment_pipeline(bundle, page="office-manager"))
     widgets.append(build_verification_matrix(bundle, page="office-manager"))
     widgets.append(build_claims_needing_narrative(bundle))
     widgets.append(build_provider_utilization_trend(util))
+    widgets.append(build_patient_dossier_card(None))
+    widgets.append(build_patient_dossier_mini(None))
+    widgets.append(build_active_treatment_plans(None))
+    widgets.append(build_claims_review_detail(None))
+    widgets.append(build_clinical_notes_summary(None))

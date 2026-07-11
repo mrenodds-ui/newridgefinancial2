@@ -8,6 +8,7 @@ Never invent dollar amounts — missing fields become honest empty KPIs.
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 from datetime import datetime, timezone
@@ -28,7 +29,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10494"
+BUILD_ID = "hal-10495"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -4112,6 +4113,27 @@ def apex_print_job(packet_type: str, payload: dict[str, Any] | None = None) -> d
     }
 
 
+def parse_voice_report_command(query: str) -> dict[str, Any] | None:
+    """
+    Parse voice commands for reports (Moonshot HAL voice+report consult).
+    Returns: {"tool": "clock_out_shift"|"readiness_diagnostics"|"daily_ops_briefing", "speak": True}
+    """
+    q = str(query or "").strip().lower()
+    if not q:
+        return None
+    # Avoid collision with existing parsers
+    if re.search(r"\b(salary|ebitda|depreciat|scrubber|narrat|dictat)\b", q):
+        return None
+
+    if re.search(r"\b(handoff|shift report|end of shift|clock out)\b", q):
+        return {"tool": "clock_out_shift", "speak": True, "intent": "handoff"}
+    if re.search(r"\b(readiness|system check|health check|smoke test)\b", q):
+        return {"tool": "readiness_diagnostics", "speak": True, "intent": "readiness"}
+    if re.search(r"\b(briefing|morning brief|daily ops|status update)\b", q):
+        return {"tool": "daily_ops_briefing", "speak": True, "intent": "briefing"}
+    return None
+
+
 def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Deterministic HAL → board control.
@@ -4396,6 +4418,29 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
                 "(your spoken/typed words only — HAL does not invent clinical findings)."
             )
             handled = True
+
+    # --- Voice → report tools (handoff / readiness / daily ops briefing) ---
+    if not handled:
+        # Operator-approved proceed: enabled unless NR2_CONFIG.voiceReportsEnabled === false (client),
+        # or env NR2_VOICE_REPORTS=0.
+        voice_reports_on = os.environ.get("NR2_VOICE_REPORTS", "1").strip().lower() not in (
+            "0",
+            "false",
+            "no",
+            "off",
+        )
+        if voice_reports_on:
+            voice_report = parse_voice_report_command(query)
+            if voice_report:
+                actions.append(
+                    {
+                        "type": "run_tool",
+                        "tool": voice_report["tool"],
+                        "speak": voice_report.get("speak", True),
+                    }
+                )
+                notes.append(f"Voice report request: {voice_report['intent']}")
+                handled = True
 
     # --- Save scenario by voice ---
     save_m = re.search(r"\bsave scenario\s+(.+)$", q)
@@ -4887,6 +4932,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
             "(EBITDA scrubber, claims 30/60/90 shelves, scenarios, filing, workpaper, variance), "
             "report which widgets are empty vs showing data, explain when/how to grab SoftDent and QuickBooks exports, "
             "focus a claim by ID, or set planning scrubber inputs by voice. "
+            "Voice reports: handoff report, readiness check, morning briefing / daily ops. "
             "I never invent dollar amounts or claim facts — values come from SoftDent/QuickBooks imports only."
         )
 
@@ -6413,7 +6459,135 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc)}, status=500)
 
-        @app.get("/api/apex/export-playbook")
+    @app.get("/api/apex/patient-dossier/<patient_id>")
+    def apex_patient_dossier_api(patient_id: str):
+        """HAL mega-dossier — SoftDent READ-ONLY, empty≠$0, RBAC read_patient_dossier."""
+        try:
+            import bottle
+            from nr2_rbac import current_role, has_capability
+            from patient_dossier import (
+                build_patient_dossier,
+                check_rate_limit,
+                format_dossier_markdown,
+                summarize_dossier_with_local_ai,
+            )
+            from hal_patient_audit import log_patient_query
+
+            if not (
+                has_capability("read_patient_dossier")
+                or has_capability("read_all")
+                or has_capability("*")
+            ):
+                return json_response_fn(
+                    {
+                        "ok": False,
+                        "error": "Permission denied: patient dossier. Contact office manager.",
+                        "capability": "read_patient_dossier",
+                        "role": current_role(),
+                        "buildId": BUILD_ID,
+                    },
+                    status=403,
+                )
+
+            session_id = str(
+                bottle.request.headers.get("X-NR2-Session-Token")
+                or bottle.request.query.get("session")
+                or ""
+            ).strip()
+            allowed, retry_after = check_rate_limit(session_id or current_role())
+            if not allowed:
+                return json_response_fn(
+                    {
+                        "ok": False,
+                        "error": "rate_limited",
+                        "retryAfterSec": retry_after,
+                        "buildId": BUILD_ID,
+                    },
+                    status=429,
+                )
+
+            practice = str(bottle.request.query.get("practiceId") or "").strip()
+            do_summarize = str(bottle.request.query.get("summarize") or "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            dossier = build_patient_dossier(patient_id, practice_id=practice)
+            staff_id = str(bottle.request.headers.get("X-NR2-Staff-Id") or current_role() or "Staff")
+            log_patient_query(staff_id, patient_id, "dossier_summary", session_id=session_id)
+
+            payload: dict[str, Any] = {
+                "ok": bool(dossier.get("ok", True)),
+                "dossier": dossier,
+                "summaryMarkdown": format_dossier_markdown(dossier),
+                "buildId": BUILD_ID,
+            }
+            if do_summarize:
+                ai = summarize_dossier_with_local_ai(dossier)
+                payload["summary"] = ai.get("summary")
+                payload["summarySource"] = ai.get("source")
+                payload["summaryModel"] = ai.get("model")
+                if ai.get("error"):
+                    payload["summaryError"] = ai.get("error")
+            return json_response_fn(payload)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/patient-dossier-mini/<patient_id>")
+    def apex_patient_dossier_mini_api(patient_id: str):
+        try:
+            from nr2_rbac import current_role, has_capability
+            from om_patient_dossier import get_patient_dossier_mini
+            from hal_patient_audit import log_hal_patient_action
+            from patient_dossier import patient_hash
+
+            if not (
+                has_capability("read_patient_dossier")
+                or has_capability("read_all")
+                or has_capability("*")
+                or has_capability("read_schedule")
+            ):
+                return json_response_fn(
+                    {"ok": False, "error": "capability_rejected", "role": current_role(), "buildId": BUILD_ID},
+                    status=403,
+                )
+            mini = get_patient_dossier_mini(patient_id)
+            log_hal_patient_action(
+                user_id=current_role(),
+                patient_hash=patient_hash(patient_id),
+                action="query_summary",
+                tools_used='["get_patient_dossier_mini"]',
+            )
+            mini["buildId"] = BUILD_ID
+            return json_response_fn(mini)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/audit/hal-patient-context")
+    def apex_hal_patient_context_audit_api():
+        try:
+            import bottle
+            from nr2_rbac import current_role
+            from hal_patient_audit import log_hal_patient_action
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            ph = str(payload.get("patientHash") or payload.get("patient_hash") or "").strip()
+            action = str(payload.get("action") or "set_context").strip()
+            if not ph:
+                return json_response_fn({"ok": False, "error": "patientHash required", "buildId": BUILD_ID}, status=400)
+            log_hal_patient_action(
+                user_id=str(payload.get("userId") or current_role()),
+                patient_hash=ph,
+                action=action,
+                tools_used=str(payload.get("toolsUsed") or "[]"),
+                ip=str(bottle.request.remote_addr or ""),
+            )
+            return json_response_fn({"ok": True, "buildId": BUILD_ID})
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/export-playbook")
     def apex_export_playbook_api():
         try:
             return json_response_fn({"ok": True, "playbook": build_export_playbook(), "buildId": BUILD_ID})

@@ -231,6 +231,97 @@ const HalAgent = (function () {
     ],
   };
 
+  // OM / HAL patient context (ephemeral per tab) — Moonshot Mon–Thu + dossier consults
+  let omPatientContext = null;
+  let omPatientContextSetAt = 0;
+  const OM_PATIENT_CONTEXT_TTL_MS = 15 * 60 * 1000;
+
+  function getOMPatientContext() {
+    if (!omPatientContext) return null;
+    if (Date.now() - omPatientContextSetAt > OM_PATIENT_CONTEXT_TTL_MS) {
+      omPatientContext = null;
+      return null;
+    }
+    return omPatientContext;
+  }
+
+  function setOMPatientContext(patientId) {
+    const pid = String(patientId || "").trim();
+    omPatientContext = pid || null;
+    omPatientContextSetAt = pid ? Date.now() : 0;
+    const bridge =
+      typeof DesktopBridge !== "undefined"
+        ? DesktopBridge
+        : typeof window !== "undefined" && window.DesktopBridge
+          ? window.DesktopBridge
+          : null;
+    if (bridge && typeof bridge.auditHalPatientContext === "function" && pid) {
+      const hash = pid.length === 4 ? pid.toUpperCase() : String(pid).slice(0, 4);
+      try {
+        bridge.auditHalPatientContext({
+          patientHash: hash,
+          action: "set_context",
+          timestamp: new Date().toISOString(),
+        });
+      } catch (_e) {
+        /* audit best-effort */
+      }
+    }
+    if (typeof window !== "undefined") {
+      window.NR2_OM_PATIENT_CONTEXT = omPatientContext;
+      try {
+        window.dispatchEvent(
+          new CustomEvent("nr2-om-patient-context", { detail: { patientId: omPatientContext } })
+        );
+      } catch (_e2) {
+        /* ignore */
+      }
+    }
+    return omPatientContext;
+  }
+
+  async function hasPatientDossierCapability() {
+    const bridge =
+      typeof DesktopBridge !== "undefined"
+        ? DesktopBridge
+        : typeof window !== "undefined" && window.DesktopBridge
+          ? window.DesktopBridge
+          : null;
+    if (!bridge || typeof bridge.getAppInfo !== "function") {
+      // Default OM role on workstation — allow; server still enforces
+      return true;
+    }
+    try {
+      const info = await bridge.getAppInfo();
+      const caps = (info && info.capabilities) || [];
+      if (!Array.isArray(caps)) return true;
+      return (
+        caps.includes("*") ||
+        caps.includes("read_all") ||
+        caps.includes("read_patient_dossier")
+      );
+    } catch (_e) {
+      return true;
+    }
+  }
+
+  function cloudHalBlockedForPatientTools() {
+    const bridge =
+      typeof DesktopBridge !== "undefined"
+        ? DesktopBridge
+        : typeof window !== "undefined" && window.DesktopBridge
+          ? window.DesktopBridge
+          : null;
+    const settings = bridge && typeof bridge.getCachedCloudHalSettings === "function"
+      ? bridge.getCachedCloudHalSettings()
+      : null;
+    // Patient PHI tools must stay local — reject when cloud HAL explicitly enabled for routing
+    if (settings && settings.enabled === true && settings.forceCloudForPatient === true) {
+      return true;
+    }
+    return false;
+  }
+
   const TOOL_DEFS = {
     read_program_snapshot: {
       label: "Read program snapshot",
@@ -707,12 +798,130 @@ const HalAgent = (function () {
         if (!bridge || typeof bridge.fetchClinicalContext !== "function") {
           return { ok: false, summary: "Clinical context requires loopback server." };
         }
-        const patientId = String(args.patientId || args.query || "").trim();
+        let patientId = String(args.patientId || args.query || "").trim();
+        if (!patientId && getOMPatientContext()) patientId = getOMPatientContext();
         const data = await bridge.fetchClinicalContext({ limit: 5, patientId: patientId || undefined });
         const items = (data && data.items) || [];
         if (!items.length) return { ok: true, summary: "No clinical summaries on file." };
         const lines = items.map((it, idx) => `${idx + 1}. ${String(it.summary || it.text || "").slice(0, 240)}`);
         return { ok: true, summary: lines.join("\n\n"), readOnly: true };
+      },
+    },
+    summarize_patient_dossier: {
+      label: "Summarize patient dossier (data + tx + notes + claims)",
+      run: async (ctx, args) => {
+        if (cloudHalBlockedForPatientTools()) {
+          return { ok: false, summary: "Patient dossier is local-only — cloud HAL blocked for PHI." };
+        }
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.fetchPatientDossier !== "function") {
+          return { ok: false, summary: "Patient dossier requires NR2 loopback server." };
+        }
+        if (!(await hasPatientDossierCapability())) {
+          return {
+            ok: false,
+            summary: "You do not have permission to request patient dossiers. Contact office manager.",
+          };
+        }
+        let patientId = String(args.patientId || args.patient_id || "").trim();
+        if (!patientId) {
+          const q = String(args.query || "").trim();
+          const m = q.match(
+            /\b(?:patient|dossier|summarize)\s+([A-Za-z0-9_-]{3,64})\b/i
+          );
+          patientId = m ? m[1] : "";
+        }
+        if (!patientId && getOMPatientContext()) patientId = getOMPatientContext();
+        if (!patientId) {
+          return {
+            ok: false,
+            summary: "Provide a patient id (or select a patient on the Mon–Thu schedule).",
+          };
+        }
+        const data = await bridge.fetchPatientDossier(patientId, { summarize: true });
+        if (!data || data.ok === false) {
+          return {
+            ok: false,
+            summary: (data && (data.error || data.summary)) || "Dossier unavailable.",
+          };
+        }
+        const text =
+          (data.summary && String(data.summary)) ||
+          (data.summaryMarkdown && String(data.summaryMarkdown)) ||
+          "Dossier loaded but summary empty.";
+        // Honesty guard
+        if (/\$0\.00|\b\$0\b/.test(text) && data.dossier) {
+          const md = data.summaryMarkdown || text;
+          return { ok: true, summary: String(md).slice(0, 4000), patientId, source: "honesty_guard" };
+        }
+        return {
+          ok: true,
+          summary: text.slice(0, 4000),
+          patientId,
+          source: data.summarySource || "dossier",
+          dossier: data.dossier || null,
+        };
+      },
+    },
+    read_patient_summary: {
+      label: "Read patient demographics/insurance mini-summary (OM context)",
+      run: async (ctx, args) => {
+        if (cloudHalBlockedForPatientTools()) {
+          return { ok: false, summary: "Patient tools are local-only." };
+        }
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.fetchPatientDossierMini !== "function") {
+          return { ok: false, summary: "Patient summary requires NR2 loopback server." };
+        }
+        let patientId = String(args.patientId || args.patient_id || "").trim();
+        if (!patientId && getOMPatientContext()) patientId = getOMPatientContext();
+        if (!patientId) {
+          return { ok: false, summary: "No patient selected in OM — click a hash on Mon–Thu schedule." };
+        }
+        const data = await bridge.fetchPatientDossierMini(patientId);
+        if (!data || !data.ok) {
+          return { ok: false, summary: (data && data.error) || "Patient not found." };
+        }
+        const lines = [
+          `Patient ${data.patientHash || "——"} (${data.initials || "P—"})`,
+          `Carrier: ${data.primaryCarrier || "unknown"}`,
+          `Open claims: ${data.openClaims != null ? data.openClaims : "unknown"}`,
+          `Last visit: ${data.lastVisit || "unknown"}`,
+          `Account balance: ${data.accountBalance || "unavailable"} (empty ≠ $0)`,
+          `Clinical notes: ${data.hasClinicalNotes ? "yes" : "none on file"}`,
+        ];
+        if (data.schemaGap) lines.push(`Schema note: ${data.schemaGap}`);
+        return { ok: true, summary: lines.join("\n"), patientId, mini: data };
+      },
+    },
+    clear_patient_context: {
+      label: "Clear OM patient context for HAL",
+      run: async () => {
+        setOMPatientContext(null);
+        return { ok: true, summary: "Patient context cleared.", status: "cleared" };
+      },
+    },
+    set_patient_context: {
+      label: "Set OM patient context for HAL (staff-gated)",
+      run: async (ctx, args) => {
+        const patientId = String(args.patientId || args.patient_id || args.query || "").trim();
+        if (!patientId) return { ok: false, summary: "Provide patientId." };
+        setOMPatientContext(patientId);
+        return {
+          ok: true,
+          summary: `HAL patient context set to ${patientId.length === 4 ? patientId.toUpperCase() : "selected patient"} (15 min TTL).`,
+          patientId,
+        };
       },
     },
     build_collections_queue: {
@@ -1051,7 +1260,7 @@ const HalAgent = (function () {
     },
     clock_out_shift: {
       label: "Clock out and generate shift handoff report",
-      run: async () => {
+      run: async (ctx, args, options = {}) => {
         const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
         if (!bridge || typeof bridge.loopbackJson !== "function") {
           return { ok: false, summary: "Clock-out requires loopback server." };
@@ -1061,16 +1270,28 @@ const HalAgent = (function () {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({}),
         });
+
+        // Generate spoken excerpt (1-2 sentences) — Moonshot voice+report Phase 1
+        const openCount = data.openItemCount || 0;
+        const spoken = `Handoff ${data.handoffId || "ready"}: ${openCount} open item${
+          openCount !== 1 ? "s" : ""
+        }. Shift closed.`;
+
+        if (options.speak !== false && typeof HalVoice !== "undefined" && HalVoice.speakHalBriefing) {
+          HalVoice.speakHalBriefing(spoken, { interrupt: true });
+        }
+
         return {
           ok: true,
-          summary: `Handoff ${data.handoffId}: ${data.openItemCount || 0} open item(s).\n${data.reportMarkdown || ""}`,
+          summary: data.reportMarkdown || `Handoff ${data.handoffId}: ${openCount} open item(s).`,
+          spokenExcerpt: spoken,
           handoff: data,
         };
       },
     },
     get_last_handoff_report: {
       label: "Retrieve prior shift handoff report",
-      run: async (ctx, args) => {
+      run: async (ctx, args, options = {}) => {
         const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
         if (!bridge || typeof bridge.loopbackJson !== "function") {
           return { ok: false, summary: "Handoff retrieval requires loopback server." };
@@ -1079,7 +1300,72 @@ const HalAgent = (function () {
         if (!id) return { ok: false, summary: "handoffId required." };
         const data = await bridge.loopbackJson(`/api/shift/handoff/${encodeURIComponent(String(id))}`);
         const md = (data.handoff && data.handoff.reportMarkdown) || "";
-        return { ok: true, summary: md || "Empty handoff.", handoff: data.handoff };
+        const openCount =
+          (data.handoff && (data.handoff.openItemCount || data.handoff.open_item_count)) || 0;
+        const spoken = `Handoff ${id}: ${openCount} open item${openCount !== 1 ? "s" : ""}.`;
+        if (options.speak !== false && typeof HalVoice !== "undefined" && HalVoice.speakHalBriefing) {
+          HalVoice.speakHalBriefing(spoken, { interrupt: true });
+        }
+        return { ok: true, summary: md || "Empty handoff.", spokenExcerpt: spoken, handoff: data.handoff };
+      },
+    },
+    readiness_diagnostics: {
+      label: "Run HAL readiness / system health diagnostics",
+      run: async (ctx, args, options = {}) => {
+        let report = null;
+        if (ctx && typeof ctx.runReadinessDiagnostics === "function") {
+          report = ctx.runReadinessDiagnostics();
+        } else if (typeof HalCore !== "undefined" && typeof HalCore.runReadinessDiagnostics === "function") {
+          report = HalCore.runReadinessDiagnostics();
+        }
+        if (!report) {
+          return { ok: false, summary: "Readiness diagnostics unavailable." };
+        }
+        const summary =
+          typeof HalCore !== "undefined" && HalCore.formatReadinessSummary
+            ? HalCore.formatReadinessSummary(report)
+            : String(report.summary || report.overall || "Readiness complete.");
+        const overall = report.overall || "unknown";
+        const n = (report.results && report.results.length) || 0;
+        const spoken = `Readiness ${overall} across ${n} check${n !== 1 ? "s" : ""}.`;
+        if (options.speak !== false && typeof HalVoice !== "undefined" && HalVoice.speakHalBriefing) {
+          HalVoice.speakHalBriefing(spoken, { interrupt: true });
+        }
+        return { ok: true, summary: summary.slice(0, 3000), spokenExcerpt: spoken, report };
+      },
+    },
+    daily_ops_briefing: {
+      label: "Generate daily operations briefing",
+      run: async (ctx, args, options = {}) => {
+        const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+        if (!bridge || typeof bridge.loopbackJson !== "function") {
+          return { ok: false, summary: "Bridge required." };
+        }
+
+        // Parallel READ-ONLY queries (SoftDent + employee status) — Moonshot Phase 4
+        const [schedule, claims, staff] = await Promise.all([
+          bridge.loopbackJson("/api/softdent/today-schedule").catch(() => ({})),
+          bridge.loopbackJson("/api/claims/aging-summary").catch(() => ({})),
+          bridge.loopbackJson("/api/employee/on-duty").catch(() => ({})),
+        ]);
+
+        const patientCount = schedule && schedule.count != null ? Number(schedule.count) : 0;
+        const agingCount = claims && claims.over30 != null ? Number(claims.over30) : 0;
+        const staffNames = (staff && Array.isArray(staff.names) ? staff.names : []).filter(Boolean);
+        const staffList = staffNames.join(", ");
+
+        const markdown = `## Daily Ops Briefing - ${new Date().toLocaleDateString()}
+- **Schedule**: ${patientCount} patients
+- **Claims >30d**: ${agingCount}
+- **Staff**: ${staffList || "None logged"}
+`;
+        const spoken = `Today: ${patientCount} patients scheduled. ${agingCount} claims over 30 days. ${staffNames.length} staff on duty.`;
+
+        if (options.speak !== false && typeof HalVoice !== "undefined" && HalVoice.speakHalBriefing) {
+          HalVoice.speakHalBriefing(spoken, { interrupt: true });
+        }
+
+        return { ok: true, summary: markdown, spokenExcerpt: spoken };
       },
     },
     click_to_dial: {
@@ -2993,6 +3279,23 @@ const HalAgent = (function () {
     if (/\b(clinical summary|clinical context|sidenotes|procedure narrative)\b/i.test(query)) {
       tools.push("read_clinical_summary");
     }
+    if (
+      /\b(summarize\s+patient|patient\s+dossier|mega[- ]?dossier|full\s+summary\s+of\s+patient|dossier\s+for\s+patient)\b/i.test(
+        query
+      ) ||
+      /\bsummarize\s+[A-Za-z0-9]{4}\b/i.test(query)
+    ) {
+      if (!tools.includes("summarize_patient_dossier")) tools.push("summarize_patient_dossier");
+    }
+    if (
+      /\b(about\s+this\s+patient|patient\s+summary|selected\s+patient|ask\s+hal\s+about)\b/i.test(query)
+    ) {
+      if (!tools.includes("read_patient_summary")) tools.push("read_patient_summary");
+      if (!tools.includes("summarize_patient_dossier")) tools.push("summarize_patient_dossier");
+    }
+    if (/\b(clear\s+patient\s+context|forget\s+patient)\b/i.test(query)) {
+      if (!tools.includes("clear_patient_context")) tools.push("clear_patient_context");
+    }
     if (/\b(collection letter|collection call|schedule call)\b/i.test(query)) {
       tools.push("generate_collection_letter", "schedule_call_task");
     }
@@ -3049,6 +3352,12 @@ const HalAgent = (function () {
     }
     if (/\b(clock out|shift handoff|end shift|handoff report)\b/i.test(query)) {
       tools.push("clock_out_shift", "get_last_handoff_report");
+    }
+    if (/\b(readiness|system check|health check|smoke test)\b/i.test(query)) {
+      if (!tools.includes("readiness_diagnostics")) tools.push("readiness_diagnostics");
+    }
+    if (/\b(briefing|morning brief|daily ops|status update)\b/i.test(query)) {
+      if (!tools.includes("daily_ops_briefing")) tools.push("daily_ops_briefing");
     }
     if (/\b(click.?to.?dial|call patient|phone script|voip)\b/i.test(query)) {
       tools.push("click_to_dial", "log_call_outcome");
@@ -4848,6 +5157,8 @@ const HalAgent = (function () {
     getLastWebResearch,
     getApprovedMemories,
     updatePreferences,
+    setOMPatientContext,
+    getOMPatientContext,
     logRepair,
     parsePatchFromQuery,
     isTaskCompletionQuery,
