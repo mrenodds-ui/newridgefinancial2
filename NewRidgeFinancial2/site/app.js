@@ -2349,10 +2349,19 @@ function saveReadinessDiagnostics() {
 }
 
 function collectReadinessRuntime() {
+  let storageMode = "sessionStorage";
+  if (hasRuntimeAccess()) {
+    storageMode = "sqlite";
+  } else if (window.DesktopBridge && DesktopBridge.browserStorageMode) {
+    storageMode = DesktopBridge.browserStorageMode();
+  } else if (window.Nr2IndexedDb && Nr2IndexedDb.isAvailable && Nr2IndexedDb.isAvailable()) {
+    storageMode = "indexedDB";
+  }
   return {
     halImage: "",
-    storageMode: hasRuntimeAccess() ? "sqlite" : "sessionStorage",
+    storageMode,
     desktopBridgeOk: hasRuntimeAccess(),
+    indexedDbOk: Boolean(window.Nr2IndexedDb && Nr2IndexedDb.isAvailable && Nr2IndexedDb.isAvailable()),
     activeSession: halWorkSession,
   };
 }

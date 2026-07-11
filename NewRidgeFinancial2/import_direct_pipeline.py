@@ -435,18 +435,28 @@ def build_quickbooks_pipeline_datasets() -> dict[str, dict[str, Any] | None]:
     return merged
 
 
-def resolve_softdent_dataset(key: str, names: tuple[str, ...]) -> dict[str, Any] | None:
-    pipeline = build_softdent_pipeline_datasets()
+def resolve_softdent_dataset(
+    key: str,
+    names: tuple[str, ...],
+    *,
+    pipeline: dict[str, dict[str, Any] | None] | None = None,
+) -> dict[str, Any] | None:
+    pipe = pipeline if pipeline is not None else build_softdent_pipeline_datasets()
     return pick_freshest_dataset(
-        pipeline.get(key),
+        pipe.get(key),
         load_upstream_export_dataset("softdent", names),
     )
 
 
-def resolve_quickbooks_dataset(key: str, names: tuple[str, ...]) -> dict[str, Any] | None:
-    pipeline = build_quickbooks_pipeline_datasets()
+def resolve_quickbooks_dataset(
+    key: str,
+    names: tuple[str, ...],
+    *,
+    pipeline: dict[str, dict[str, Any] | None] | None = None,
+) -> dict[str, Any] | None:
+    pipe = pipeline if pipeline is not None else build_quickbooks_pipeline_datasets()
     return pick_freshest_dataset(
-        pipeline.get(key),
+        pipe.get(key),
         load_upstream_export_dataset("quickbooks", names),
     )
 

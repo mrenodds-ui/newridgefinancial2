@@ -85,8 +85,17 @@ def direct_first_imports_enabled() -> bool:
 
 
 def direct_first_write_cache_enabled() -> bool:
-    """Optional: copy direct reads into document-inbox on manual refresh."""
-    return os.environ.get("NR2_DIRECT_FIRST_WRITE_CACHE", "0").strip().lower() in {"1", "true", "yes", "on"}
+    """Mirror direct upstream reads into document-inbox on refresh (keeps widget hot-path live).
+
+    Default ON so Sync updates the inbox that cache-only widget reads use. Set
+    NR2_DIRECT_FIRST_WRITE_CACHE=0 to disable.
+    """
+    return os.environ.get("NR2_DIRECT_FIRST_WRITE_CACHE", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
 
 
 def _payload_to_dataset(payload: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -173,28 +182,66 @@ def assemble_direct_import_sections() -> dict[str, Any]:
     pipeline_error: str | None = None
     try:
         from import_direct_pipeline import (
+            build_quickbooks_pipeline_datasets,
+            build_softdent_pipeline_datasets,
             load_upstream_export_dataset,
+            pick_freshest_dataset,
             pipeline_first_imports_enabled,
-            resolve_quickbooks_dataset,
-            resolve_softdent_dataset,
         )
 
         if pipeline_first_imports_enabled():
+            # Build each pipeline once — resolve_* used to rebuild the full SoftDent/QB
+            # pipeline per dataset key (7× SoftDent + 4× QB), which made page loads multi-second.
+            sd_pipe = build_softdent_pipeline_datasets()
+            qb_pipe = build_quickbooks_pipeline_datasets()
             return {
                 "softdent": {
-                    "dashboard": resolve_softdent_dataset("dashboard", SOFTDENT_DASHBOARD_NAMES),
-                    "claims": resolve_softdent_dataset("claims", SOFTDENT_CLAIMS_NAMES),
-                    "clinicalNotes": resolve_softdent_dataset("clinicalNotes", SOFTDENT_CLINICAL_NAMES),
-                    "ar": resolve_softdent_dataset("ar", SOFTDENT_AR_NAMES),
-                    "newPatients": resolve_softdent_dataset("newPatients", SOFTDENT_NEW_PATIENTS_NAMES),
-                    "treatmentPlans": resolve_softdent_dataset("treatmentPlans", SOFTDENT_TREATMENT_PLANS_NAMES),
-                    "caseAcceptance": resolve_softdent_dataset("caseAcceptance", SOFTDENT_CASE_ACCEPTANCE_NAMES),
+                    "dashboard": pick_freshest_dataset(
+                        sd_pipe.get("dashboard"),
+                        load_upstream_export_dataset("softdent", SOFTDENT_DASHBOARD_NAMES),
+                    ),
+                    "claims": pick_freshest_dataset(
+                        sd_pipe.get("claims"),
+                        load_upstream_export_dataset("softdent", SOFTDENT_CLAIMS_NAMES),
+                    ),
+                    "clinicalNotes": pick_freshest_dataset(
+                        sd_pipe.get("clinicalNotes"),
+                        load_upstream_export_dataset("softdent", SOFTDENT_CLINICAL_NAMES),
+                    ),
+                    "ar": pick_freshest_dataset(
+                        sd_pipe.get("ar"),
+                        load_upstream_export_dataset("softdent", SOFTDENT_AR_NAMES),
+                    ),
+                    "newPatients": pick_freshest_dataset(
+                        sd_pipe.get("newPatients"),
+                        load_upstream_export_dataset("softdent", SOFTDENT_NEW_PATIENTS_NAMES),
+                    ),
+                    "treatmentPlans": pick_freshest_dataset(
+                        sd_pipe.get("treatmentPlans"),
+                        load_upstream_export_dataset("softdent", SOFTDENT_TREATMENT_PLANS_NAMES),
+                    ),
+                    "caseAcceptance": pick_freshest_dataset(
+                        sd_pipe.get("caseAcceptance"),
+                        load_upstream_export_dataset("softdent", SOFTDENT_CASE_ACCEPTANCE_NAMES),
+                    ),
                 },
                 "quickbooks": {
-                    "revenue": resolve_quickbooks_dataset("revenue", QUICKBOOKS_REVENUE_NAMES),
-                    "expenses": resolve_quickbooks_dataset("expenses", QUICKBOOKS_EXPENSE_NAMES),
-                    "profitAndLoss": resolve_quickbooks_dataset("profitAndLoss", QUICKBOOKS_PL_NAMES),
-                    "expenseCategories": resolve_quickbooks_dataset("expenseCategories", QUICKBOOKS_EXPENSE_CATEGORY_NAMES),
+                    "revenue": pick_freshest_dataset(
+                        qb_pipe.get("revenue"),
+                        load_upstream_export_dataset("quickbooks", QUICKBOOKS_REVENUE_NAMES),
+                    ),
+                    "expenses": pick_freshest_dataset(
+                        qb_pipe.get("expenses"),
+                        load_upstream_export_dataset("quickbooks", QUICKBOOKS_EXPENSE_NAMES),
+                    ),
+                    "profitAndLoss": pick_freshest_dataset(
+                        qb_pipe.get("profitAndLoss"),
+                        load_upstream_export_dataset("quickbooks", QUICKBOOKS_PL_NAMES),
+                    ),
+                    "expenseCategories": pick_freshest_dataset(
+                        qb_pipe.get("expenseCategories"),
+                        load_upstream_export_dataset("quickbooks", QUICKBOOKS_EXPENSE_CATEGORY_NAMES),
+                    ),
                     "ar": load_upstream_export_dataset("quickbooks", QUICKBOOKS_AR_NAMES),
                 },
             }

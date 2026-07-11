@@ -152,6 +152,59 @@ class DirectFirstImportTests(unittest.TestCase):
             assert loaded is not None
             self.assertEqual((loaded.get("rows") or [])[0].get("ClaimId"), "NEW-1")
 
+    def test_load_dataset_prefers_rich_claims_over_jane_doe_stub(self) -> None:
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp)
+            stub = cache_dir / "softdent_claims_export.csv"
+            stub.write_text(
+                "ClaimId,PatientName,Payer,ServiceDate,ClaimAmount,ClaimStatus\n"
+                "CLM-001,Jane Doe,Delta Dental,2026-06-10,420.0,Ready\n",
+                encoding="utf-8",
+            )
+            rich = cache_dir / "softdent_claims_export.json"
+            rich.write_text(
+                json.dumps(
+                    [
+                        {
+                            "ClaimId": "DS-20260528-1",
+                            "PatientName": "Bernett, Jeffery Adam",
+                            "Payer": "Insurance",
+                        },
+                        {
+                            "ClaimId": "DS-20260528-2",
+                            "PatientName": "Smith, Ada",
+                            "Payer": "Insurance",
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            from import_loader import _load_dataset
+
+            loaded = _load_dataset(
+                cache_dir,
+                ("softdent_claims_export.csv", "softdent_claims_export.json"),
+            )
+        self.assertIsNotNone(loaded)
+        assert loaded is not None
+        self.assertEqual(loaded.get("sourceFile"), "softdent_claims_export.json")
+        self.assertEqual(len(loaded.get("rows") or []), 2)
+        self.assertNotEqual((loaded.get("rows") or [])[0].get("PatientName"), "Jane Doe")
+
+    def test_write_cache_enabled_by_default(self) -> None:
+        from practice_source_access import direct_first_write_cache_enabled
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NR2_DIRECT_FIRST_WRITE_CACHE", None)
+            self.assertTrue(direct_first_write_cache_enabled())
+        with patch.dict(os.environ, {"NR2_DIRECT_FIRST_WRITE_CACHE": "0"}, clear=False):
+            self.assertFalse(direct_first_write_cache_enabled())
+
 
 if __name__ == "__main__":
     unittest.main()
+

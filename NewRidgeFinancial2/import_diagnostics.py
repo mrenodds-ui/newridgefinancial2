@@ -579,7 +579,9 @@ def assess_import_readiness(
 
     from import_loader import load_import_bundle
 
-    bundle = load_import_bundle(sync=False, deep=False)
+    # Readiness gates must stay fast on the single-threaded HTTP loop.
+    # Live direct-first reads still happen in widget/data loaders.
+    bundle = load_import_bundle(sync=False, deep=False, direct=False)
     loaded_at = _parse_iso(str(bundle.get("loadedAt") or ""))
     age_hours: float | None = None
     if loaded_at is not None:
