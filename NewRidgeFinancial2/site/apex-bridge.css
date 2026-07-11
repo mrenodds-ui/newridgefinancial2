@@ -871,6 +871,15 @@ body.apex-bridge {
   min-height: calc(100vh - var(--ticker-height) - 56px);
 }
 
+/* U3 — denser organized flow; keeps existing tokens / starship-bridge */
+.apex-mosaic--u3 {
+  grid-auto-flow: dense;
+}
+.apex-mosaic--u3[data-layout-phase="U3"] {
+  /* subtle cue only — no theme rewrite */
+  --mosaic-gap: calc(var(--mosaic-gap, 12px) * 0.92);
+}
+
 /* Financial: pack strips/charts/KPIs to the top with a compact row unit */
 #apex-stage.apex-mosaic[data-page="financial"] {
   --mosaic-row: 96px;
@@ -1037,6 +1046,7 @@ body.apex-bridge {
 .apex-stage--hal .apex-hal-rail {
   position: sticky;
   top: calc(var(--ticker-height) + 56px);
+  height: calc(100vh - var(--ticker-height) - 72px);
   max-height: calc(100vh - var(--ticker-height) - 72px);
   overflow: hidden;
   min-width: 0;
@@ -1044,7 +1054,9 @@ body.apex-bridge {
 
 .apex-stage--hal .apex-widget--hal-chat,
 .apex-stage--hal .apex-inst--hal-chat {
-  min-height: calc(100vh - var(--ticker-height) - 96px);
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   grid-column: auto;
   grid-row: auto;
   overflow: hidden;
@@ -1754,6 +1766,859 @@ body.apex-focus-open::before {
 .apex-claims-tile__date {
   font-size: 11px;
   color: var(--apex-text-secondary);
+}
+
+/* ——— Claims Workbench kanban (hal-10380 mockup parity Phase 1) ——— */
+.apex-claims-stats {
+  display: flex;
+  gap: 28px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  padding: 4px 0 8px;
+}
+.apex-claims-stat {
+  text-align: right;
+  min-width: 88px;
+}
+.apex-claims-stat.is-empty .apex-claims-stat__value {
+  opacity: 0.45;
+}
+.apex-claims-stat__value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.apex-claims-stat__value.warning { color: var(--apex-amber, #f5a623); }
+.apex-claims-stat__value.danger { color: #e85d75; }
+.apex-claims-stat__value.success { color: #10b981; }
+.apex-claims-stat__label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--apex-text-secondary);
+  margin-top: 2px;
+}
+
+.apex-claims-risk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+.apex-claims-risk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.apex-claims-risk-label {
+  width: 56px;
+  color: var(--apex-text-secondary);
+}
+.apex-claims-risk-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.apex-claims-risk-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 400ms ease;
+}
+.apex-claims-risk-fill--high { background: #ef4444; }
+.apex-claims-risk-fill--medium { background: #f97316; }
+.apex-claims-risk-fill--low { background: #10b981; }
+.apex-claims-risk-value {
+  width: 28px;
+  text-align: right;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.apex-inst--strip {
+  grid-column: 1 / -1;
+  grid-row: span 1;
+  min-height: 0;
+  max-height: 88px;
+  padding: 8px 12px;
+}
+.apex-inst--strip .apex-widget-header {
+  display: none;
+}
+.apex-import-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  min-height: 36px;
+  font-size: 12px;
+}
+.apex-import-strip__label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--apex-text-secondary);
+}
+.apex-import-strip__msg {
+  font-weight: 600;
+}
+.apex-import-strip.is-ok .apex-import-strip__msg {
+  color: var(--apex-cyan, #00f0ff);
+}
+.apex-import-strip.is-warn .apex-import-strip__msg {
+  color: #f97316;
+}
+.apex-import-strip__hint {
+  color: var(--apex-text-secondary);
+  font-size: 11px;
+  flex: 1;
+  min-width: 160px;
+}
+.apex-exec-strip-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  justify-content: center;
+}
+.apex-exec-strip-wrap__label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--apex-text-secondary);
+}
+.apex-exec-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0;
+  border: 1px solid var(--apex-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.18);
+}
+.apex-exec-pill {
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--apex-border);
+  border-radius: 0;
+}
+.apex-exec-pill:last-child {
+  border-right: none;
+}
+.apex-exec-pill__value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--apex-text);
+}
+.apex-claims-workbench[data-view="table"] {
+  min-height: 0;
+}
+.apex-inst--full:has([data-claims-workbench][data-view="table"]) {
+  min-height: 360px;
+  grid-row: span 2;
+}
+.apex-wb-table--dense td,
+.apex-wb-table--dense th {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  height: 32px;
+  line-height: 1.2;
+}
+.apex-wb-att {
+  font-size: 14px;
+  line-height: 1;
+}
+.apex-wb-att--ok { color: #10b981; }
+.apex-wb-att--missing { color: #f97316; }
+.apex-wb-att--unknown { color: var(--apex-text-secondary); opacity: 0.7; }
+.apex-wb-more {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--apex-text-secondary);
+  border-top: 1px solid var(--apex-border);
+}
+.apex-era-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.apex-era-gauge__ring {
+  --era-pct: 0;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(
+    var(--apex-cyan, #00f0ff) calc(var(--era-pct) * 1%),
+    rgba(255, 255, 255, 0.08) 0
+  );
+  position: relative;
+}
+.apex-era-gauge__ring::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  background: var(--apex-elevated, #0a1018);
+}
+.apex-era-gauge__value {
+  position: relative;
+  z-index: 1;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 22px;
+  font-weight: 600;
+}
+.apex-era-gauge__meta {
+  font-size: 11px;
+  color: var(--apex-text-secondary);
+}
+
+/* —— Professional Claims (hal-10410+) —— */
+.apex-exec-pill__value.tone-warn,
+.apex-exec-pill__value.warn,
+.apex-exec-pill__value.warning { color: #f97316; }
+.apex-exec-pill__value.tone-danger,
+.apex-exec-pill__value.rose,
+.apex-exec-pill__value.danger { color: #ef4444; }
+.apex-exec-pill__value.tone-ok,
+.apex-exec-pill__value.tone-success,
+.apex-exec-pill__value.success,
+.apex-exec-pill__value.cyan { color: var(--apex-cyan, #00f0ff); }
+.apex-exec-pill__label {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--apex-text-secondary);
+}
+.apex-exec-pill.is-empty .apex-exec-pill__value {
+  opacity: 0.45;
+}
+
+.apex-exec-pill__sub {
+  margin-top: 2px;
+  font-size: 9px;
+  color: var(--apex-text-secondary);
+  letter-spacing: 0.02em;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* —— Financial Executive Console (hal-10430) —— */
+.apex-fin-command {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  min-height: 40px;
+  font-size: 12px;
+}
+.apex-fin-command__import {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.apex-fin-command.is-ok .apex-import-strip__msg {
+  color: var(--apex-cyan, #00f0ff);
+}
+.apex-fin-command.is-warn .apex-import-strip__msg {
+  color: #f97316;
+}
+.apex-fin-command__periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.apex-fin-command__brief {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  flex: 1;
+  min-width: 200px;
+}
+.apex-fin-command__brief-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--apex-text-secondary);
+}
+.apex-fin-command__brief-msg {
+  font-size: 11px;
+  color: var(--apex-text);
+  flex: 1;
+  min-width: 140px;
+}
+
+.apex-compact-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-height: 36px;
+  padding: 4px 0;
+}
+.apex-compact-action__title {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--apex-text-secondary);
+}
+.apex-compact-action__msg {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f97316;
+  flex: 1;
+  min-width: 160px;
+}
+
+.apex-revenue-comp {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.apex-donut--sm {
+  width: 88px;
+  height: 88px;
+}
+
+.apex-dual-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--apex-text-secondary);
+  margin-bottom: 6px;
+}
+.apex-dual-leg--prod::before,
+.apex-dual-leg--coll::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.apex-dual-leg--prod::before {
+  background: var(--apex-cyan, #00f0ff);
+}
+.apex-dual-leg--coll::before {
+  background: #ffb800;
+  opacity: 0.85;
+}
+.apex-dual-track {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 110px;
+  padding-top: 4px;
+}
+.apex-dual-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 9px;
+  color: var(--apex-text-secondary);
+}
+.apex-dual-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 90px;
+  width: 100%;
+  justify-content: center;
+}
+.apex-dual-bars i {
+  display: block;
+  width: 40%;
+  max-width: 14px;
+  border-radius: 3px 3px 0 0;
+  min-height: 4px;
+}
+.apex-dual-prod {
+  background: var(--apex-cyan, #00f0ff);
+}
+.apex-dual-coll {
+  background: #ffb800;
+  opacity: 0.9;
+}
+
+.apex-ebitda-station {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.apex-ebitda-station__trend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.apex-ebitda-station__trend .apex-sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 28px;
+  flex: 1;
+}
+@media (max-width: 900px) {
+  .apex-ebitda-station {
+    grid-template-columns: 1fr;
+  }
+}
+
+.apex-aging-exposure {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.apex-aging-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  padding: 14px 14px 12px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--apex-border);
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.apex-aging-col:hover {
+  border-color: var(--apex-cyan, #00f0ff);
+  background: rgba(0, 240, 255, 0.06);
+}
+.apex-aging-col__label {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--apex-text-secondary);
+}
+.apex-aging-col__count {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+}
+.apex-aging-col--cyan .apex-aging-col__count { color: var(--apex-cyan, #00f0ff); }
+.apex-aging-col--amber .apex-aging-col__count { color: #f97316; }
+.apex-aging-col--rose .apex-aging-col__count { color: #ef4444; }
+.apex-aging-col__dollars {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--apex-text-secondary);
+}
+.apex-aging-col__bar {
+  display: block;
+  height: 4px;
+  margin-top: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.apex-aging-col__bar > span {
+  display: block;
+  height: 100%;
+  background: currentColor;
+  opacity: 0.85;
+}
+.apex-aging-col--cyan { color: var(--apex-cyan, #00f0ff); }
+.apex-aging-col--amber { color: #f97316; }
+.apex-aging-col--rose { color: #ef4444; }
+
+.apex-crit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.apex-crit-action {
+  text-align: left;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--apex-border);
+  border-radius: 8px;
+  color: var(--apex-text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+}
+.apex-crit-action:hover {
+  border-color: var(--apex-cyan, #00f0ff);
+  background: rgba(0, 240, 255, 0.06);
+}
+
+.apex-wb-views {
+  display: flex;
+  gap: 6px;
+  margin-right: 8px;
+}
+.apex-claims-workbench[data-view="table"] [data-wb-panel="kanban"] {
+  display: none;
+}
+.apex-claims-workbench[data-view="kanban"] [data-wb-panel="table"] {
+  display: none;
+}
+.apex-wb-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--apex-border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.apex-wb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.apex-wb-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--apex-text-secondary);
+  border-bottom: 1px solid var(--apex-border);
+  white-space: nowrap;
+}
+.apex-wb-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+  line-height: 1.25;
+}
+.apex-wb-row {
+  cursor: pointer;
+}
+.apex-wb-row:hover {
+  background: rgba(0, 240, 255, 0.05);
+}
+.apex-wb-row[hidden] {
+  display: none;
+}
+.apex-wb-id {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--apex-cyan, #00f0ff);
+}
+.apex-wb-amt {
+  font-family: "JetBrains Mono", monospace;
+  white-space: nowrap;
+}
+.apex-wb-status {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+}
+.apex-wb-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  white-space: nowrap;
+}
+.apex-wb-acts .apex-claim-act {
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+.apex-claims-kanban__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-right: 8px;
+}
+.apex-filter-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--apex-border);
+  color: var(--apex-text-secondary);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.apex-filter-btn:hover,
+.apex-filter-btn.is-active {
+  background: var(--apex-cyan, #00f0ff);
+  color: #041018;
+  border-color: var(--apex-cyan, #00f0ff);
+}
+.apex-claims-kanban__note {
+  font-size: 10px;
+  color: var(--apex-text-secondary);
+  margin-bottom: 10px;
+  letter-spacing: 0.03em;
+}
+.apex-claims-kanban__board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  gap: 12px;
+  overflow-x: auto;
+  min-height: 280px;
+  padding-bottom: 6px;
+}
+.apex-claims-kanban__col {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--apex-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-height: 420px;
+}
+.apex-claims-kanban__col-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--apex-border);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.apex-claims-kanban__count {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  color: var(--apex-text-secondary);
+}
+.apex-claims-kanban__col-body {
+  padding: 10px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.apex-claims-kanban__empty {
+  font-size: 11px;
+  color: var(--apex-text-secondary);
+  padding: 12px 4px;
+  text-align: center;
+}
+.apex-claim-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  background: var(--apex-surface, #1f1f1f);
+  border: 1px solid var(--apex-border);
+  border-radius: 8px;
+  padding: 10px 12px 10px 14px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 120ms, box-shadow 120ms, transform 120ms;
+}
+.apex-claim-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--apex-cyan, #00f0ff);
+}
+.apex-claim-card.risk-high::before { background: #ef4444; }
+.apex-claim-card.risk-medium::before { background: #f97316; }
+.apex-claim-card.matched::before { background: #10b981; }
+.apex-claim-card:hover {
+  border-color: var(--apex-cyan-dim, rgba(0, 240, 255, 0.45));
+  box-shadow: 0 4px 18px rgba(0, 212, 255, 0.1);
+  transform: translateY(-1px);
+}
+.apex-claim-card[hidden] { display: none !important; }
+.apex-claim-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.apex-claim-card__id {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--apex-cyan);
+  font-weight: 600;
+}
+.apex-claim-card__risk {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.apex-claim-card__risk.risk-high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+.apex-claim-card__risk.risk-medium {
+  background: rgba(249, 115, 22, 0.2);
+  color: #f97316;
+}
+.apex-claim-card__risk.risk-low {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+.apex-claim-card__patient {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.apex-claim-card__proc {
+  font-size: 11px;
+  color: var(--apex-text-secondary);
+  margin-bottom: 8px;
+}
+.apex-claim-card__proc.is-muted {
+  font-style: italic;
+  opacity: 0.7;
+}
+.apex-claim-card__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.apex-claim-card__amt {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+}
+.apex-claim-card__foot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--apex-border);
+  font-size: 10px;
+}
+.apex-claim-card__att.is-complete { color: #10b981; }
+.apex-claim-card__att.is-missing { color: #f97316; }
+.apex-claim-card__era {
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 212, 255, 0.15);
+  color: var(--apex-cyan);
+}
+.apex-claim-card__era.is-matched {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+.apex-claim-card__era.is-denied {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+.apex-claim-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--apex-border);
+}
+.apex-claim-act {
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--apex-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--apex-text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+}
+.apex-claim-act:hover {
+  border-color: var(--apex-cyan);
+  color: var(--apex-cyan);
+}
+.apex-claim-act--check {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.apex-huddle-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.apex-huddle-item {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.apex-att-upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.apex-att-upload input[type="text"],
+.apex-att-upload input[type="file"] {
+  font-size: 12px;
+  max-width: 180px;
+}
+.apex-att-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.apex-att-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+@media (max-width: 1100px) {
+  .apex-claims-kanban__board {
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
+  }
+  .apex-aging-exposure {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .apex-claims-kanban__board {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+  .apex-claims-stats {
+    justify-content: flex-start;
+  }
+  .apex-wb-views {
+    width: 100%;
+  }
 }
 .apex-claim-drawer {
   position: fixed;
