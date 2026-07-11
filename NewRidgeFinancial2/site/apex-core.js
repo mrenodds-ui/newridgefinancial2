@@ -1,13 +1,13 @@
 /**
  * NR2-Apex Core — Bridge mosaic, silent refresh, print, session-aware fetch
- * Build: hal-10492 (V2 explain cache + mobile polish)
+ * Build: hal-10493 (V2 explain cache + mobile polish)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10492";
+  const ASSET_V = "hal-10493";
   const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
   const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
   const PARENT_PAGES = new Set([

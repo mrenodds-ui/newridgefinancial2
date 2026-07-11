@@ -42,7 +42,7 @@ class ImportCronDqW1Tests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10492")
+        self.assertEqual(BUILD_ID, "hal-10493")
 
     def test_dq_default_on_cron_default_off(self):
         os.environ.pop("NR2_IMPORT_DQ", None)
