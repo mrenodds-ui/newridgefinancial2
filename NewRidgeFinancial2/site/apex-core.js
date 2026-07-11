@@ -1,12 +1,170 @@
 /**
  * NR2-Apex Core — Bridge mosaic, silent refresh, print, session-aware fetch
- * Build: hal-10360 (citations drill-down, FILED library, A/R outlook, C0 operatory)
+ * Build: hal-10475 (IndexedDB widget cache + browser storage fallback)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
-  const ASSET_V = "hal-10360";
+  const REFRESH_HEADER = "X-NR2-Refresh-Token";
+  const ASSET_V = "hal-10475";
+  const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
+  const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
+  const PARENT_PAGES = new Set([
+    "financial",
+    "taxes",
+    "softdent",
+    "quickbooks",
+    "ar",
+    "claims",
+    "narratives",
+    "documents",
+    "library",
+    "office-manager",
+    "hal",
+  ]);
+  const SUBPAGE_LINKS = {
+    financial: [
+      { sub: null, label: "Overview" },
+      { sub: "workpapers", label: "Workpapers" },
+      { sub: "providers", label: "Providers" },
+      { sub: "periods", label: "Periods" },
+    ],
+    taxes: [
+      { sub: null, label: "Overview" },
+      { sub: "entities", label: "Entities" },
+      { sub: "calendar", label: "Calendar" },
+      { sub: "workpapers", label: "Workpapers" },
+    ],
+    softdent: [
+      { sub: null, label: "Overview" },
+      { sub: "register", label: "Register" },
+      { sub: "schedule", label: "Schedule" },
+    ],
+    quickbooks: [
+      { sub: null, label: "Overview" },
+      { sub: "coa", label: "COA" },
+      { sub: "vendors", label: "Vendors" },
+    ],
+    claims: [
+      { sub: null, label: "Workbench" },
+      { sub: "detail", label: "Detail" },
+      { sub: "batch", label: "Batch" },
+      { sub: "era", label: "ERA" },
+      { sub: "attachments", label: "Attachments" },
+    ],
+    ar: [
+      { sub: null, label: "Overview" },
+      { sub: "collections", label: "Collections" },
+      { sub: "aging-detail", label: "Aging Detail" },
+      { sub: "forecast", label: "Forecast" },
+    ],
+    narratives: [
+      { sub: null, label: "Workspace" },
+      { sub: "templates", label: "Templates" },
+      { sub: "history", label: "History" },
+      { sub: "audit", label: "Audit" },
+    ],
+    documents: [
+      { sub: null, label: "Overview" },
+      { sub: "claim-docs", label: "Claim Docs" },
+      { sub: "tax-docs", label: "Tax Docs" },
+    ],
+    library: [
+      { sub: null, label: "Overview" },
+      { sub: "payers", label: "Payers" },
+      { sub: "codes", label: "Codes" },
+    ],
+    "office-manager": [
+      { sub: null, label: "Overview" },
+      { sub: "huddle", label: "Huddle" },
+      { sub: "tasks", label: "Tasks" },
+    ],
+    hal: [
+      { sub: null, label: "Chat" },
+      { sub: "history", label: "History" },
+      { sub: "system-logs", label: "System Logs" },
+    ],
+  };
+  const SUBPAGE_TITLES = {
+    workpapers: "Workpapers",
+    providers: "Providers",
+    periods: "Periods",
+    entities: "Entities",
+    calendar: "Calendar",
+    register: "Register",
+    schedule: "Schedule",
+    coa: "COA",
+    vendors: "Vendors",
+    detail: "Detail",
+    batch: "Batch",
+    era: "ERA",
+    attachments: "Attachments",
+    collections: "Collections",
+    "aging-detail": "Aging Detail",
+    forecast: "Forecast",
+    templates: "Templates",
+    history: "History",
+    audit: "Audit",
+    "claim-docs": "Claim Docs",
+    "tax-docs": "Tax Docs",
+    payers: "Payers",
+    codes: "Codes",
+    huddle: "Huddle",
+    tasks: "Tasks",
+    "system-logs": "System Logs",
+  };
+
+  function formatPatientDisplay(name) {
+    const raw = String(name || "").trim();
+    if (!raw) return "—";
+    if (raw.includes(",")) return raw;
+    const parts = raw.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      const last = parts[parts.length - 1];
+      const first = parts.slice(0, -1).join(" ");
+      return `${last}, ${first}`;
+    }
+    return raw;
+  }
+
+  function attachmentDotHtml(att) {
+    if (!att || typeof att !== "object") {
+      return `<span class="apex-wb-att apex-wb-att--unknown" title="Attachments not on import">—</span>`;
+    }
+    const cur = Number(att.current);
+    const req = att.required;
+    if (req != null && Number.isFinite(Number(req))) {
+      const ok = Number.isFinite(cur) && cur >= Number(req);
+      return `<span class="apex-wb-att ${ok ? "apex-wb-att--ok" : "apex-wb-att--missing"}" title="${
+        ok ? "Attachments complete" : "Missing attachments"
+      }">${ok ? "●" : "○"}</span>`;
+    }
+    if (Number.isFinite(cur) && cur > 0) {
+      return `<span class="apex-wb-att apex-wb-att--ok" title="${cur} attachment(s)">●</span>`;
+    }
+    return `<span class="apex-wb-att apex-wb-att--unknown" title="No attachment count">—</span>`;
+  }
+
+  function preferredWorkbenchView(fallback) {
+    try {
+      const v = sessionStorage.getItem(WB_VIEW_KEY) || localStorage.getItem(WB_VIEW_KEY);
+      if (v === "table" || v === "kanban") return v;
+    } catch (_err) {
+      /* ignore */
+    }
+    return fallback === "kanban" ? "kanban" : "table";
+  }
+
+  function persistWorkbenchView(view) {
+    const v = view === "kanban" ? "kanban" : "table";
+    try {
+      localStorage.setItem(WB_VIEW_KEY, v);
+      sessionStorage.setItem(WB_VIEW_KEY, v);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
 
   const PAGE_TITLES = {
     financial: "Financial",
@@ -44,6 +202,7 @@
     if (type === "ebitda-scrubber" || type === "filing-workflow" || type === "claim-shelf") return "full";
     if (type === "scenario-manager" || type === "workpaper") return type === "scenario-manager" ? "xl" : "l";
     if (type === "status") return "s";
+    if (type === "ai-insight") return "l";
     return "s";
   }
 
@@ -170,6 +329,72 @@
             </form>
             <div class="apex-kpi-hint">${this.escape(this.spec.hint || "Local HAL command surface")}</div>
           </div>
+        `;
+      }
+
+      if (this.type === "ai-insight") {
+        const insight = this.spec.insight && typeof this.spec.insight === "object" ? this.spec.insight : null;
+        const empty = this.spec.status === "empty" || !insight;
+        if (empty) {
+          return `
+            <header class="apex-widget-header">
+              <span class="apex-widget-label">${label}</span>
+              ${printBtn}
+            </header>
+            <div class="apex-kpi-value is-empty">${this.escape(this.spec.emptyMessage || "No structured insight")}</div>
+            <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+          `;
+        }
+        const data = insight.data && typeof insight.data === "object" ? insight.data : {};
+        const refs = Array.isArray(insight.source_refs) ? insight.source_refs : [];
+        const conf = this.escape(String(insight.confidence || ""));
+        const wt = this.escape(String(insight.widget_type || ""));
+        let body = "";
+        if (insight.widget_type === "kpi-card") {
+          const unit = data.unit === "dollars" ? "$" : data.unit === "percent" ? "%" : "";
+          const val =
+            data.value == null || data.value === ""
+              ? "—"
+              : unit === "$"
+                ? formatMoney(data.value)
+                : unit === "%"
+                  ? `${Number(data.value).toFixed(1)}%`
+                  : String(data.value);
+          body = `<div class="apex-kpi-value">${this.escape(val)}</div>
+            <div class="apex-kpi-hint">${this.escape(data.trend_direction || "")} ${
+            data.trend_percent != null ? this.escape(String(data.trend_percent) + "%") : ""
+          }</div>`;
+        } else if (insight.widget_type === "trend-chart") {
+          const series = Array.isArray(data.series) ? data.series : [];
+          body = `<ul class="apex-huddle-list">${series
+            .map(
+              (s) =>
+                `<li class="apex-huddle-item">${this.escape((s && s.label) || "")}: ${
+                  s && s.value != null ? this.escape(String(s.value)) : "—"
+                }</li>`
+            )
+            .join("")}</ul>`;
+        } else if (insight.widget_type === "alert-banner") {
+          body = `<div class="apex-kpi-value">${this.escape(String(data.severity || "info").toUpperCase())}</div>
+            <div class="apex-kpi-hint">${this.escape(String(data.message || ""))}</div>`;
+        }
+        const cta =
+          insight.action_cta && insight.action_cta.route
+            ? `<button type="button" class="apex-btn apex-btn--small" data-insight-route="${this.escape(
+                insight.action_cta.route
+              )}">${this.escape(insight.action_cta.label || "Open")}</button>`
+            : "";
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            <span class="apex-kpi-hint">${wt} · ${conf}</span>
+            ${printBtn}
+          </header>
+          ${body}
+          <p class="apex-kpi-hint">${this.escape(String(insight.explanation || ""))}</p>
+          <div class="apex-kpi-hint">sources: ${this.escape(refs.join(" · ") || "—")}</div>
+          ${cta}
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
         `;
       }
 
@@ -1190,6 +1415,24 @@
       if (this.type === "claim-shelf") {
         wireClaimShelf(this.element, this.spec);
       }
+      if (this.type === "claims-kanban" || this.type === "claims-workbench") {
+        wireClaimsKanban(this.element, this.spec);
+      }
+      if (this.type === "claims-aging-exposure") {
+        wireClaimsAgingExposure(this.element);
+      }
+      if (this.type === "claims-critical-actions") {
+        wireClaimsCriticalActions(this.element);
+      }
+      if (this.type === "claim-attachments") {
+        wireClaimAttachments(this.element);
+      }
+      if (this.type === "status" || this.spec.rememberForm) {
+        wireHalSaidRemember(this.element);
+      }
+      if (this.type === "ai-insight") {
+        wireAiInsight(this.element);
+      }
     }
   }
 
@@ -1801,6 +2044,357 @@
     }
   }
 
+  function findWidgetEl(widgetId) {
+    const id = String(widgetId || "").replace(/\\/g, "").replace(/"/g, "");
+    if (!id) return null;
+    const direct = document.querySelector(`[data-widget-id="${id}"]`);
+    if (direct) return direct;
+    return (
+      Array.from(document.querySelectorAll("[data-alias-ids]")).find((el) => {
+        const aliases = String(el.getAttribute("data-alias-ids") || "").split(/\s+/);
+        return aliases.includes(id);
+      }) || null
+    );
+  }
+
+  function applyKanbanFilter(root, filter) {
+    const f = String(filter || "all");
+    root.querySelectorAll("[data-kanban-filter]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.getAttribute("data-kanban-filter") === f);
+    });
+    const matchItem = (el) => {
+      let show = true;
+      if (f === "high-risk") show = el.getAttribute("data-risk") === "high";
+      else if (f === "unmatched") {
+        const col = el.getAttribute("data-column") || "";
+        show = col !== "eraMatched" && col !== "paid" && el.getAttribute("data-has-era") !== "1";
+      } else if (f === "missing-attachments") {
+        show =
+          el.getAttribute("data-has-att") === "1" &&
+          (!!el.querySelector(".apex-claim-card__att.is-missing") ||
+            !!el.querySelector(".apex-wb-att--missing") ||
+            (() => {
+              const attCell = el.querySelector("td:nth-child(8)");
+              if (!attCell) return false;
+              const t = String(attCell.textContent || "");
+              const m = t.match(/^(\d+)\/(\d+)$/);
+              return m ? Number(m[1]) < Number(m[2]) : false;
+            })());
+      } else if (f === "bucket-30" || f === "bucket-60" || f === "bucket-90") {
+        const want = f.replace("bucket-", "");
+        show = el.getAttribute("data-bucket") === want;
+      }
+      return show;
+    };
+    root.querySelectorAll("[data-claim-card]").forEach((card) => {
+      card.hidden = !matchItem(card);
+    });
+    root.querySelectorAll("[data-claim-row]").forEach((row) => {
+      row.hidden = !matchItem(row);
+    });
+  }
+
+  function setClaimsWorkbenchView(root, view) {
+    const v = view === "kanban" ? "kanban" : "table";
+    const wb = root.querySelector("[data-claims-workbench]") || root;
+    wb.setAttribute("data-view", v);
+    root.querySelectorAll("[data-wb-view]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.getAttribute("data-wb-view") === v);
+    });
+    persistWorkbenchView(v);
+  }
+
+  function wireClaimsAgingExposure(root) {
+    if (!root || root.dataset.agingWired === "1") return;
+    root.dataset.agingWired = "1";
+    root.querySelectorAll("[data-age-bucket]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const bucket = btn.getAttribute("data-age-bucket") || "";
+        const board = findWidgetEl("claims-kanban-board");
+        if (!board) return;
+        board.scrollIntoView({ behavior: "smooth", block: "center" });
+        applyKanbanFilter(board, bucket ? `bucket-${bucket}` : "all");
+        board.classList.add("apex-hal-highlight");
+        setTimeout(() => board.classList.remove("apex-hal-highlight"), 2500);
+      });
+    });
+  }
+
+  function wireClaimsCriticalActions(root) {
+    if (!root || root.dataset.critWired === "1") return;
+    root.dataset.critWired = "1";
+    root.querySelectorAll("[data-crit-filter]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const filter = btn.getAttribute("data-crit-filter") || "all";
+        if (filter === "__sync__") {
+          try {
+            const res = await apexFetch(`${config.apiBase}/sync/trigger`, {
+              method: "POST",
+              body: JSON.stringify({}),
+            });
+            const data = await res.json().catch(() => ({}));
+            window.alert(data.message || data.error || (data.ok ? "Sync triggered" : "Sync failed"));
+            if (data.ok) await loadPage("claims", { silent: false });
+          } catch (err) {
+            window.alert(String((err && err.message) || err));
+          }
+          return;
+        }
+        const board = findWidgetEl("claims-kanban-board");
+        if (!board) return;
+        board.scrollIntoView({ behavior: "smooth", block: "center" });
+        applyKanbanFilter(board, filter);
+        board.classList.add("apex-hal-highlight");
+        setTimeout(() => board.classList.remove("apex-hal-highlight"), 2500);
+      });
+    });
+  }
+
+  function wireClaimsKanban(root, _spec) {
+    if (!root || root.dataset.claimsKanbanWired === "1") return;
+    root.dataset.claimsKanbanWired = "1";
+    root.querySelectorAll("[data-wb-view]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setClaimsWorkbenchView(root, btn.getAttribute("data-wb-view"));
+      });
+    });
+    root.querySelectorAll("[data-claim-card], [data-claim-row]").forEach((card) => {
+      card.addEventListener("click", (ev) => {
+        if (ev.target && (ev.target.closest("[data-claim-actions]") || ev.target.closest(".apex-wb-acts"))) return;
+        if (ev.target && (ev.target.closest("label") || ev.target.matches("input"))) return;
+        openClaimDrawer(card.getAttribute("data-claim-id"));
+      });
+    });
+    root.querySelectorAll("[data-claim-act]").forEach((btn) => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const card = btn.closest("[data-claim-card], [data-claim-row]");
+        const claimId = card && card.getAttribute("data-claim-id");
+        const action = btn.getAttribute("data-claim-act");
+        if (!claimId || !action) return;
+        const patientName = (card && card.getAttribute("data-patient")) || "";
+        if (action === "open") {
+          openClaimDrawer(claimId);
+          return;
+        }
+        if (action === "generate-narrative") {
+          try {
+            await apexFetch(`${config.apiBase}/claims/actions`, {
+              method: "POST",
+              body: JSON.stringify({ claimId, action, patientName }),
+            });
+          } catch (_err) {
+            /* continue to narratives */
+          }
+          try {
+            sessionStorage.setItem(
+              "nr2-apex-narrative-seed",
+              JSON.stringify({ claimId, patientName, voiceCarry: true })
+            );
+            sessionStorage.setItem("nr2-apex-focused-claim", claimId);
+          } catch (_err) {
+            /* ignore */
+          }
+          loadPage("narratives");
+          return;
+        }
+        let note = "";
+        if (action === "follow-up-note") {
+          note = window.prompt("Follow-up note (stored in NR2 only — not SoftDent):", "") || "";
+          if (!note.trim()) return;
+        } else if (action === "schedule-callback") {
+          note = window.prompt("Callback note / when (NR2 only):", "Callback requested") || "";
+        }
+        try {
+          const res = await apexFetch(`${config.apiBase}/claims/actions`, {
+            method: "POST",
+            body: JSON.stringify({ claimId, action, note, patientName }),
+          });
+          const data = await res.json().catch(() => ({}));
+          window.alert(data.message || data.error || (data.ok ? "Action recorded" : "Failed"));
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    });
+    root.querySelectorAll("[data-batch-claim]").forEach((cb) => {
+      cb.addEventListener("click", (ev) => ev.stopPropagation());
+    });
+    root.querySelectorAll("[data-kanban-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyKanbanFilter(root, btn.getAttribute("data-kanban-filter"));
+      });
+    });
+    const batch = root.querySelector('[data-action="batch-narratives"]');
+    if (batch) {
+      batch.addEventListener("click", () => {
+        const ids = Array.from(root.querySelectorAll("[data-batch-claim]:checked")).map((el) => el.value);
+        if (ids.length) {
+          try {
+            sessionStorage.setItem(
+              "nr2-apex-narrative-seed",
+              JSON.stringify({ claimIds: ids, claimId: ids[0], bulkAppeal: true, batchNarrative: true })
+            );
+          } catch (_err) {
+            /* ignore */
+          }
+        }
+        loadPage("claims/batch");
+      });
+    }
+  }
+
+  function wireClaimAttachments(root) {
+    if (!root || root.dataset.attWired === "1") return;
+    root.dataset.attWired = "1";
+    const form = root.querySelector("[data-claim-att-upload]");
+    if (form) {
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(form);
+        try {
+          const res = await apexFetch(`${config.apiBase}/claims/attachments`, { method: "POST", body: fd });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || "Upload failed");
+            return;
+          }
+          await loadPage(
+            currentSub === "claim-docs"
+              ? formatApexHash("documents", "claim-docs", currentQuery)
+              : "documents"
+          );
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    }
+    const era = root.querySelector("[data-era-upload]");
+    if (era) {
+      era.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(era);
+        try {
+          const res = await apexFetch(`${config.apiBase}/claims/era-ingest`, { method: "POST", body: fd });
+          const data = await res.json().catch(() => ({}));
+          window.alert(
+            data.ok
+              ? `ERA ingested: ${data.matchedCount || 0} matched of ${data.segmentCount || 0} segments`
+              : data.error || "ERA ingest failed"
+          );
+          if (data.ok) await loadPage("claims", { silent: false });
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    }
+    const signoffForm = root.querySelector("[data-clinical-signoff-form]");
+    if (signoffForm) {
+      signoffForm.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(signoffForm);
+        try {
+          const res = await apexFetch(`${config.apiBase}/hal/clinical-signoff`, {
+            method: "POST",
+            body: JSON.stringify({
+              claimId: String(fd.get("claimId") || "").trim(),
+              narrativeId: String(fd.get("narrativeId") || "").trim(),
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || "Sign-off request failed");
+            return;
+          }
+          await loadPage("narratives");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    }
+    root.querySelectorAll("[data-signoff-approve], [data-signoff-reject]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-signoff-approve") || btn.getAttribute("data-signoff-reject");
+        const status = btn.hasAttribute("data-signoff-approve") ? "approved" : "rejected";
+        try {
+          const res = await apexFetch(`${config.apiBase}/hal/clinical-signoff`, {
+            method: "POST",
+            body: JSON.stringify({ id, status }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || "Update failed");
+            return;
+          }
+          await loadPage(currentPage || "narratives");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    });
+    root.querySelectorAll("[data-eob-posted]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const claimId = btn.getAttribute("data-eob-posted") || "";
+        try {
+          const res = await apexFetch(`${config.apiBase}/hal/eob-posted`, {
+            method: "POST",
+            body: JSON.stringify({ claimId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || "Mark posted failed");
+            return;
+          }
+          await loadPage(currentPage || "office-manager");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    });
+  }
+
+  function wireAiInsight(root) {
+    if (!root || root.dataset.wiredInsight === "1") return;
+    root.dataset.wiredInsight = "1";
+    root.querySelectorAll("[data-insight-route]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const page = btn.getAttribute("data-insight-route") || "hal";
+        loadPage(page);
+      });
+    });
+  }
+
+  function wireHalSaidRemember(root) {
+    if (!root || root.dataset.wiredRemember === "1") return;
+    const form = root.querySelector("[data-hal-remember-form]");
+    if (!form) return;
+    root.dataset.wiredRemember = "1";
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(form);
+      try {
+        const res = await apexFetch(`${config.apiBase}/hal/remember-structured`, {
+          method: "POST",
+          body: JSON.stringify({
+            category: String(fd.get("category") || "").trim(),
+            payerId: String(fd.get("payerId") || "").trim(),
+            fact: String(fd.get("fact") || "").trim(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          window.alert(data.error || "Remember failed");
+          return;
+        }
+        window.alert("Saved to learned memories (no PHI).");
+        form.reset();
+      } catch (err) {
+        window.alert(String((err && err.message) || err));
+      }
+    });
+  }
+
   function focusClaimTile(claimId) {
     const id = String(claimId || "").trim();
     if (!id) return;
@@ -1986,6 +2580,27 @@
     return results;
   }
 
+  let orchestratorEnabledCache = null;
+  let orchestratorEnabledAt = 0;
+
+  async function refreshOrchestratorEnabled() {
+    const now = Date.now();
+    if (orchestratorEnabledCache !== null && now - orchestratorEnabledAt < 30000) {
+      return orchestratorEnabledCache;
+    }
+    try {
+      const res = await apexFetch(`${config.apiBase}/hal/orchestrator`);
+      const data = await res.json().catch(() => ({}));
+      orchestratorEnabledCache = !!(data && data.enabled);
+      orchestratorEnabledAt = now;
+      return orchestratorEnabledCache;
+    } catch (_err) {
+      orchestratorEnabledCache = false;
+      orchestratorEnabledAt = now;
+      return false;
+    }
+  }
+
   async function askHal(query, logEl) {
     const q = String(query || "").trim();
     if (!q) return;
@@ -2034,23 +2649,49 @@
         return;
       }
 
-      // 2) Conversational HAL for questions (still no write of invented $ into widgets)
-      const res = await apexFetch(config.halChatEndpoint, {
-        method: "POST",
-        body: JSON.stringify({
-          query: q,
-          lane: "chat8b",
-          shiftContext: {
+      // 2) Conversational HAL — Phase I0 orchestrator when flagged; else evaluate-query
+      const useOrch = await refreshOrchestratorEnabled();
+      const chatUrl = useOrch ? `${config.apiBase}/hal/orchestrate` : config.halChatEndpoint;
+      const chatBody = useOrch
+        ? {
+            query: q,
             page: currentPage,
-            boardHint: board && board.reply ? board.reply : undefined,
-            honesty: "Do not invent financial dollar amounts. Prefer import-backed facts.",
-          },
-        }),
+            shiftContext: {
+              page: currentPage,
+              boardHint: board && board.reply ? board.reply : undefined,
+              honesty: "Do not invent financial dollar amounts. Prefer import-backed facts.",
+            },
+          }
+        : {
+            query: q,
+            lane: "chat8b",
+            shiftContext: {
+              page: currentPage,
+              boardHint: board && board.reply ? board.reply : undefined,
+              honesty: "Do not invent financial dollar amounts. Prefer import-backed facts.",
+            },
+          };
+      const res = await apexFetch(chatUrl, {
+        method: "POST",
+        body: JSON.stringify(chatBody),
       });
       const data = await res.json().catch(() => ({}));
       let reply = "";
       if (data && (data.text || data.answer || data.reply)) {
         reply = String(data.text || data.answer || data.reply);
+        if (useOrch && data.lane) {
+          reply = `${reply}\n\n— lane: ${data.lane}${data.classification && data.classification.reason ? ` (${data.classification.reason})` : ""}${
+            data.structured ? " · structured insight" : data.insightError ? ` · insight: ${data.insightError}` : ""
+          }`;
+        }
+        if (useOrch && data.structured && data.insight && currentPage === "hal") {
+          try {
+            // Soft-refresh HAL page so ai-insight widget can pick up last insight via session
+            sessionStorage.setItem("nr2-apex-last-insight", JSON.stringify(data.insight));
+          } catch (_e) {
+            /* ignore */
+          }
+        }
       } else if (data && data.error) {
         reply = `HAL unavailable: ${data.error}`;
       } else if (!res.ok) {
