@@ -48,7 +48,7 @@ class ImportQuarantinePhaseU2bTests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10486")
+        self.assertEqual(BUILD_ID, "hal-10487")
 
     def test_flag_default_on(self):
         prev = os.environ.pop("NR2_IMPORT_QUARANTINE", None)

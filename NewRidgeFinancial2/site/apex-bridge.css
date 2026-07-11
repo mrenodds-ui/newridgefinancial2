@@ -1511,3 +1511,24 @@ body.apex-claim-drawer-open::after {
 @media (max-width: 1100px) {
   .narr-workspace { grid-template-columns: 1fr; }
 }
+
+/* V0 — data freshness chips (timestamps only) */
+.nr2-freshness-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 20px 0;
+  align-items: center;
+}
+.nr2-freshness-chip {
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+}
+.nr2-freshness-chip--fresh { border-color: rgba(80, 200, 120, 0.55); }
+.nr2-freshness-chip--stale { border-color: rgba(220, 180, 60, 0.55); }
+.nr2-freshness-chip--critical { border-color: rgba(220, 80, 80, 0.65); }
+.nr2-freshness-chip--unknown { opacity: 0.7; }

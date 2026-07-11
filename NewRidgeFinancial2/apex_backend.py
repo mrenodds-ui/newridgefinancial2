@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10486"
+BUILD_ID = "hal-10487"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1853,6 +1853,18 @@ def _financial_widgets_from_reports(
         from apex_dashboard_layout_pack import layout_widget
 
         widgets.append(layout_widget(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_ai_telemetry_pack import telemetry_widget
+
+        widgets.append(telemetry_widget(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_sync_status_pack import freshness_widget
+
+        widgets.append(freshness_widget(bundle))
     except Exception:
         pass
 
@@ -3998,6 +4010,8 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(reconcil|variance alert|production vs payroll variance)\b", "reconciliation-status", "financial"),
         (r"\b(import quarantine|quarantined import|poisoned (file|export))\b", "import-quarantine-status", "financial"),
         (r"\b(dashboard layout|mosaic layout|widget order)\b", "dashboard-layout-status", "financial"),
+        (r"\b(ai lane health|lane telemetry|model latency)\b", "ai-lane-health", "financial"),
+        (r"\b(data freshness|sync status|import age)\b", "data-freshness-status", "financial"),
     )
     if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
         re.search(pat, q) for pat, _wid, _pg in focus_rules
@@ -5471,6 +5485,33 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             result = reset_layout(page)
             result["buildId"] = BUILD_ID
             return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/ai-lane-health")
+    def apex_ai_lane_health():
+        """Phase V0 — 8B/30B latency & error counters (no PHI)."""
+        try:
+            from apex_ai_telemetry_pack import lane_health, maybe_emit_telemetry_alert
+
+            result = lane_health()
+            if result.get("alertLanes"):
+                result["alert"] = maybe_emit_telemetry_alert(result)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/sync-status")
+    def apex_sync_status():
+        """Phase V0 — SoftDent/QB/ERA last-import freshness chips."""
+        try:
+            from apex_sync_status_pack import build_sync_status
+
+            _reports, bundle, _err = _load_reports_and_bundle()
+            result = build_sync_status(bundle=bundle)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
 
