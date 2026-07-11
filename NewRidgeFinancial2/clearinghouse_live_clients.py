@@ -495,6 +495,38 @@ def _availity_token(scope: str) -> tuple[str | None, str | None]:
     return token, None
 
 
+def _availity_acquire_token(*, prefer_demo: bool) -> tuple[str | None, str | None, bool, str]:
+    """Return (token, error, used_demo, scope).
+
+    When prefer_demo is False (live), try production scope first; on unauthorized_client
+    fall back to demo if AVAILITY_LIVE_FALLBACK_DEMO is enabled (default true).
+    """
+    live_scope = "healthcare-hipaa-transactions"
+    demo_scope = "healthcare-hipaa-transactions-demo"
+    if prefer_demo:
+        tok, err = _availity_token(demo_scope)
+        return tok, err, True, demo_scope
+
+    tok, err = _availity_token(live_scope)
+    if tok:
+        return tok, None, False, live_scope
+
+    # Live subscription missing — fall back to demo so HAL still works while Standard Plan is pending
+    allow_fallback = True
+    if "AVAILITY_LIVE_FALLBACK_DEMO" in os.environ:
+        allow_fallback = env_bool("AVAILITY_LIVE_FALLBACK_DEMO", default=True)
+    else:
+        user_flag = resolve_env("AVAILITY_LIVE_FALLBACK_DEMO")
+        if user_flag:
+            allow_fallback = user_flag.strip().lower() in ("1", "true", "yes", "on")
+    if allow_fallback:
+        tok2, err2 = _availity_token(demo_scope)
+        if tok2:
+            return tok2, None, True, demo_scope
+        return None, err2 or err, True, demo_scope
+    return None, err, False, live_scope
+
+
 def _build_availity_form(req: dict[str, Any], *, demo: bool) -> dict[str, Any]:
     if demo:
         member_id = str(req.get("memberId") or "").strip()
@@ -568,7 +600,23 @@ def fetch_availity_271(req: dict[str, Any]) -> dict[str, Any]:
             "message": "Set AVAILITY_KEY_CODE and AVAILITY_SECRET (or AVAILITY_CLIENT_ID / AVAILITY_CLIENT_SECRET).",
         }
 
-    demo = _availity_use_demo()
+    prefer_demo = _availity_use_demo()
+    token, token_err, demo, scope = _availity_acquire_token(prefer_demo=prefer_demo)
+    if token_err or not token:
+        return {
+            "ok": False,
+            "configured": True,
+            "vendor": "availity",
+            "error": token_err or "token_failed",
+            "message": (
+                "Availity token request failed. Demo keys need scope "
+                "healthcare-hipaa-transactions-demo (AVAILITY_USE_DEMO=1). "
+                "For live patients set AVAILITY_USE_DEMO=0 after Standard Plan approval."
+            ),
+            "scope": scope,
+        }
+
+    # Rebuild form if we fell back to demo after a live preference
     try:
         form = _build_availity_form(req, demo=demo)
     except ValueError as exc:
@@ -578,20 +626,8 @@ def fetch_availity_271(req: dict[str, Any]) -> dict[str, Any]:
             "vendor": "availity",
             "error": str(exc),
             "message": "Missing required fields for live Availity 271 (memberId, payerId, providerNpi).",
-        }
-
-    scope = _availity_scope()
-    token, token_err = _availity_token(scope)
-    if token_err or not token:
-        return {
-            "ok": False,
-            "configured": True,
-            "vendor": "availity",
-            "error": token_err or "token_failed",
-            "message": (
-                "Availity token request failed. Demo keys need scope "
-                "healthcare-hipaa-transactions-demo (AVAILITY_USE_DEMO=1)."
-            ),
+            "demo": demo,
+            "scope": scope,
         }
 
     headers = {
@@ -647,7 +683,14 @@ def fetch_availity_271(req: dict[str, Any]) -> dict[str, Any]:
         )[:400]
     result = _cache_mapped_entry(entry, vendor="availity", raw=mapped_source)
     result["demo"] = demo
+    result["scope"] = scope
     result["coverageId"] = coverage_id
+    if demo and not prefer_demo:
+        result["message"] = (
+            "Live Availity scope unavailable — used demo fallback. "
+            "Approve Standard Plan, then AVAILITY_USE_DEMO=0 for real patients."
+        )
+        result["liveFallbackDemo"] = True
     return result
 
 

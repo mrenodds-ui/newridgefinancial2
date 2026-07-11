@@ -2024,6 +2024,16 @@ async function handleHalChromeInteraction(event) {
     }
     return true;
   }
+  const readLast = event.target.closest("[data-hal-read-last-report]");
+  if (readLast) {
+    if (typeof HalReports !== "undefined" && HalReports.readSummary) {
+      const res = HalReports.readSummary();
+      if (!res.ok && typeof showHalActionNotice === "function") {
+        showHalActionNotice("No spoken report summary yet — try morning briefing or handoff report.", "info");
+      }
+    }
+    return true;
+  }
   const actuatorBtn = event.target.closest("[data-hal-actuator]");
   if (actuatorBtn) {
     await handleHalActuatorClick(actuatorBtn);

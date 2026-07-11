@@ -5121,6 +5121,17 @@
           }
         });
         meta.appendChild(copyBtn);
+        if (opts && (opts.spokenExcerpt || opts.readSummary)) {
+          const report = {
+            summary: String(text == null ? "" : text),
+            spokenExcerpt: String(opts.spokenExcerpt || text || ""),
+            tool: opts.tool || "hal",
+          };
+          if (typeof HalReports !== "undefined" && HalReports.attachReadButton) {
+            HalReports.remember(report);
+            HalReports.attachReadButton(meta, report);
+          }
+        }
       }
       row.appendChild(meta);
     }
@@ -5284,19 +5295,20 @@
           if (toolRes && toolRes.summary) {
             const logEl = document.querySelector("[data-hal-messages]");
             if (logEl && typeof appendHalMessage === "function") {
-              appendHalMessage(logEl, "hal", String(toolRes.summary).slice(0, 4000), { skipPersist: true });
+              appendHalMessage(logEl, "hal", String(toolRes.summary).slice(0, 4000), {
+                skipPersist: true,
+                spokenExcerpt: toolRes.spokenExcerpt || "",
+                tool: toolId,
+                readSummary: true,
+              });
             }
-          }
-          // Tool may already have spoken; if speak requested and excerpt present but not spoken yet, speak once
-          if (
-            action.speak !== false &&
-            toolRes &&
-            toolRes.spokenExcerpt &&
-            typeof HalVoice !== "undefined" &&
-            HalVoice.speakHalBriefing &&
-            !(toolRes._spokenByTool)
-          ) {
-            // clock_out etc. already speak inside run; skip double-speak
+            if (typeof HalReports !== "undefined" && HalReports.remember) {
+              HalReports.remember({
+                tool: toolId,
+                summary: toolRes.summary,
+                spokenExcerpt: toolRes.spokenExcerpt || toolRes.summary,
+              });
+            }
           }
           results.push(toolRes && toolRes.ok !== false ? `run_tool:${toolId}` : `run_tool_fail:${toolId}`);
         } else if (type === "focus_claims_bucket") {

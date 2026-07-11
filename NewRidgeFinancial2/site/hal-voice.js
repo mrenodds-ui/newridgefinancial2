@@ -57,6 +57,7 @@
   function beginSpeechGeneration() {
     speechGeneration += 1;
     cancelSpeech();
+    startBargeInListener(speechGeneration);
     return speechGeneration;
   }
 
@@ -268,6 +269,7 @@
 
   function cancelSpeech() {
     let stopped = false;
+    stopBargeInListener();
     if (currentAudio) {
       currentAudio.pause();
       currentAudio.removeAttribute("src");
@@ -280,6 +282,61 @@
       stopped = true;
     }
     return stopped;
+  }
+
+  let _bargeRec = null;
+
+  function stopBargeInListener() {
+    if (!_bargeRec) return;
+    try {
+      _bargeRec.onresult = null;
+      _bargeRec.onerror = null;
+      _bargeRec.onend = null;
+      _bargeRec.stop();
+    } catch (_err) {
+      /* ignore */
+    }
+    _bargeRec = null;
+  }
+
+  function startBargeInListener(gen) {
+    // Moonshot NICE: barge-in hotword "HAL, stop" while HAL is speaking
+    const cfg = global.NR2_CONFIG || {};
+    if (cfg.voiceReportsEnabled === false || cfg.halBargeIn === false) return;
+    const Rec = global.SpeechRecognition || global.webkitSpeechRecognition;
+    if (!Rec) return;
+    stopBargeInListener();
+    try {
+      const rec = new Rec();
+      rec.lang = "en-US";
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.onresult = (event) => {
+        if (!speechGenerationAlive(gen)) {
+          stopBargeInListener();
+          return;
+        }
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          transcript += (event.results[i][0] && event.results[i][0].transcript) || "";
+        }
+        const t = String(transcript || "").toLowerCase();
+        if (/\bhal[,.]?\s*stop\b|\bstop (talking|speaking|hal)\b|\b(be )?quiet\b|\bhush\b/.test(t)) {
+          speechGeneration += 1;
+          cancelSpeech();
+        }
+      };
+      rec.onerror = () => {
+        _bargeRec = null;
+      };
+      rec.onend = () => {
+        if (_bargeRec === rec) _bargeRec = null;
+      };
+      _bargeRec = rec;
+      rec.start();
+    } catch (_err) {
+      _bargeRec = null;
+    }
   }
 
   function applyUtterance(utter, profile, voice) {
@@ -633,6 +690,8 @@
     setCalibration,
     loadVoiceCalibration,
     saveVoiceCalibration,
+    startBargeInListener,
+    stopBargeInListener,
     test: testVoice,
     testVoice,
     pickVoice,

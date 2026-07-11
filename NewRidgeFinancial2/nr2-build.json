@@ -1,7 +1,7 @@
 {
-  "schemaVersion": "hal-10495",
-  "BUILD_ID": "hal-10495",
-  "assetVersion": "hal-10495",
-  "builtAt": "2026-07-11T21:00:00.000Z",
-  "notes": "hal-10495: Moonshot HAL patient dossier + OM Mon-Thu schedule + HAL patient context."
+  "schemaVersion": "hal-10496",
+  "BUILD_ID": "hal-10496",
+  "assetVersion": "hal-10496",
+  "builtAt": "2026-07-11T21:10:00.000Z",
+  "notes": "hal-10496: Voice NICE Read Summary + HAL stop barge-in; Availity live-with-demo fallback."
 }

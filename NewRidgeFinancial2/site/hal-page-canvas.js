@@ -404,6 +404,7 @@ const HalPageCanvas = (function () {
           <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Summarize MTD production">Variance</button>
           <button type="button" class="prompt-chip prompt-chip--action" data-hal-cmd="Show import health">Imports</button>
           <button type="button" class="prompt-chip prompt-chip--action" data-hal-voice-ptt="hold" title="Hold to talk">Voice</button>
+          <button type="button" class="prompt-chip prompt-chip--action" data-hal-read-last-report="1" title="Re-speak last report summary">Read Summary</button>
         </div>
         ${actuatorHtml}
       </div>
