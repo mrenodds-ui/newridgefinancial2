@@ -2,5 +2,7 @@
   "BUILD_ID": "hal-10431",
   "assetVersion": "hal-10431",
   "schemaVersion": "hal-10431",
+  "epoch": "nr2-apex",
+  "releasedAt": "2026-07-10",
   "notes": "hal-10431: Pin HAL ask box at bottom of chat rail; Enter submits (Shift+Enter newline)."
 }
