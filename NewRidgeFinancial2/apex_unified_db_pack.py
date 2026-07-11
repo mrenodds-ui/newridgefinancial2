@@ -381,6 +381,7 @@ def ingest_from_bundle(
     bundle: dict[str, Any] | None,
     *,
     db_path: Path | None = None,
+    skip_dq: bool = False,
 ) -> dict[str, Any]:
     """Upsert SoftDent periods + QB expenses from import bundle. Additive only."""
     b = bundle if isinstance(bundle, dict) else {}
@@ -392,6 +393,27 @@ def ingest_from_bundle(
     t0_meta: dict[str, Any] = {}
     t1_meta: dict[str, Any] = {}
     t2_meta: dict[str, Any] = {}
+
+    # W1 — reject-only DQ before merge (no imputation)
+    dq_meta: dict[str, Any] | None = None
+    if not skip_dq:
+        try:
+            from apex_import_dq_pack import dq_enabled, validate_bundle_dq
+
+            if dq_enabled():
+                dq_meta = validate_bundle_dq(b)
+                if not dq_meta.get("ok"):
+                    return {
+                        "ok": False,
+                        "reason": "dq_blocked",
+                        "gapCode": dq_meta.get("gapCode"),
+                        "dq": dq_meta,
+                        "phase": "W1",
+                        "softDentWriteBack": False,
+                        "importedAt": now,
+                    }
+        except Exception as exc:  # noqa: BLE001
+            dq_meta = {"ok": False, "error": str(exc), "bypassed": True}
 
     try:
         from apex_softdent_hardening_pack import assess_collections_gap
@@ -596,6 +618,7 @@ def ingest_from_bundle(
         "netProfitRows": int(t2_meta.get("netProfitRows") or 0) if isinstance(t2_meta, dict) else 0,
         "gapCode": gap_code,
         "payrollGapCode": payroll_meta.get("gapCode") if isinstance(payroll_meta, dict) else None,
+        "dq": dq_meta,
         "dbPath": str(db_path or unified_db_path()),
         "importedAt": now,
         "localOnly": True,

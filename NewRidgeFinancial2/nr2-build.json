@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10490",
-  "assetVersion": "hal-10490",
-  "schemaVersion": "hal-10490",
-  "notes": "hal-10490: Moonshot W0 SoftDent extended metrics views (case acceptance, aging, scheduling).",
-  "builtAt": "2026-07-11T19:15:00.000Z"
+  "BUILD_ID": "hal-10491",
+  "assetVersion": "hal-10491",
+  "schemaVersion": "hal-10491",
+  "notes": "hal-10491: Moonshot W1 import cron + DQ reject-only gates.",
+  "builtAt": "2026-07-11T19:30:00.000Z"
 }

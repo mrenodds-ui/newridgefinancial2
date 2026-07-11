@@ -36,7 +36,7 @@ class DashboardLayoutPhaseU3Tests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10490")
+        self.assertEqual(BUILD_ID, "hal-10491")
 
     def test_flag_default_on(self):
         prev = os.environ.pop("NR2_DASHBOARD_LAYOUT", None)
