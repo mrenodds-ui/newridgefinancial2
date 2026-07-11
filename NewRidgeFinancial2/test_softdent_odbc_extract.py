@@ -237,5 +237,111 @@ class SoftdentOdbcExtractTests(unittest.TestCase):
         self.assertIn("sd_patients", status["configuredQueryTables"])
 
 
+class SoftDentInsuranceExtractTests(unittest.TestCase):
+    """Moonshot SoftDent insurance extract (hal-10498)."""
+
+    def test_insurance_schema_created(self) -> None:
+        from softdent_odbc_extract import SD_TABLES, _table_exists
+
+        conn = sqlite3.connect(":memory:")
+        try:
+            ensure_sd_schema(conn)
+            self.assertTrue(_table_exists(conn, "sd_patient_insurance"))
+            self.assertTrue(_table_exists(conn, "sd_carrier_payer_map"))
+            self.assertIn("sd_patient_insurance", SD_TABLES)
+        finally:
+            conn.close()
+
+    def test_insurance_csv_honest_nulls(self) -> None:
+        from softdent_odbc_extract import load_insurance_csv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "patient_insurance_20260711.csv"
+            path.write_text(
+                "PatientID,InsuranceCompany,PolicyNumber,GroupNumber,Priority\n"
+                "P100,Delta Dental,,GRP1,1\n"
+                "P200,MetLife,MEM999,GRP2,2\n",
+                encoding="utf-8",
+            )
+            conn = sqlite3.connect(":memory:")
+            ensure_sd_schema(conn)
+            count = load_insurance_csv(path, conn, practice_id="")
+            self.assertEqual(count, 2)
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT member_id, insurance_name, priority FROM sd_patient_insurance WHERE patient_id='P100'"
+            )
+            row = cur.fetchone()
+            self.assertIsNone(row[0])  # empty PolicyNumber → NULL
+            self.assertEqual(row[1], "Delta Dental")
+            cur.execute(
+                "SELECT member_id, priority FROM sd_patient_insurance WHERE patient_id='P200'"
+            )
+            row2 = cur.fetchone()
+            self.assertEqual(row2[0], "MEM999")
+            self.assertEqual(row2[1], 2)
+            conn.close()
+
+    def test_carrier_payer_map_lookup(self) -> None:
+        from softdent_odbc_extract import lookup_carrier_payer_id, upsert_carrier_payer_map
+
+        conn = sqlite3.connect(":memory:")
+        ensure_sd_schema(conn)
+        upsert_carrier_payer_map(
+            conn, practice_id="", carrier_code="DELTA", payer_id="CX001", insurance_name="Delta"
+        )
+        self.assertEqual(lookup_carrier_payer_id(conn, practice_id="", carrier_code="DELTA"), "CX001")
+        self.assertIsNone(lookup_carrier_payer_id(conn, practice_id="", carrier_code="UNKNOWN"))
+        conn.close()
+
+    def test_relationship_and_termination_helpers(self) -> None:
+        from softdent_odbc_extract import _normalize_relationship_code, _termination_still_active
+
+        self.assertEqual(_normalize_relationship_code("1"), "SELF")
+        self.assertEqual(_normalize_relationship_code("spouse"), "SPOUSE")
+        self.assertTrue(_termination_still_active(None, today="2026-07-11"))
+        self.assertFalse(_termination_still_active("2026-01-01", today="2026-07-11"))
+        self.assertTrue(_termination_still_active("2026-12-31", today="2026-07-11"))
+
+    def test_extract_patient_insurance_mock_odbc(self) -> None:
+        from softdent_odbc_extract import extract_patient_insurance
+
+        class _Cur:
+            description = [
+                ("patient_id",),
+                ("priority",),
+                ("member_id",),
+                ("insurance_name",),
+                ("payer_id",),
+                ("carrier_code",),
+                ("relationship_code",),
+                ("termination_date",),
+            ]
+
+            def execute(self, *_a, **_k):
+                return None
+
+            def fetchall(self):
+                return [
+                    ("P1", 1, "", "Delta Dental", None, "DELTA", "1", None),
+                    ("P2", 1, "M2", "MetLife", "PAY2", "MET", "2", "2099-01-01"),
+                ]
+
+        class _Odbc:
+            def cursor(self):
+                return _Cur()
+
+        conn = sqlite3.connect(":memory:")
+        ensure_sd_schema(conn)
+        n = extract_patient_insurance(_Odbc(), conn, practice_id="", sql="SELECT 1")
+        self.assertEqual(n, 2)
+        cur = conn.cursor()
+        cur.execute("SELECT member_id, relationship_code FROM sd_patient_insurance WHERE patient_id='P1'")
+        r1 = cur.fetchone()
+        self.assertIsNone(r1[0])
+        self.assertEqual(r1[1], "SELF")
+        conn.close()
+
+
 if __name__ == "__main__":
     unittest.main()

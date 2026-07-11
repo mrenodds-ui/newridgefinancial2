@@ -1,7 +1,7 @@
 {
-  "schemaVersion": "hal-10497",
-  "BUILD_ID": "hal-10497",
-  "assetVersion": "hal-10497",
-  "builtAt": "2026-07-11T22:00:00.000Z",
-  "notes": "hal-10497: Availity eligibility in HAL patient dossier (cache-first, demo honesty, OM widget)."
+  "schemaVersion": "hal-10498",
+  "BUILD_ID": "hal-10498",
+  "assetVersion": "hal-10498",
+  "builtAt": "2026-07-11T22:30:00.000Z",
+  "notes": "hal-10498: SoftDent sd_patient_insurance extract for dossier Availity auto-eligibility."
 }
