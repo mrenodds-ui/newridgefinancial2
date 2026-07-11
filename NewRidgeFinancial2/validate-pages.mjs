@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
  * Validate approved mockup pages have been converted into real functional pages.
+ * Apex staffRenderMode uses a separate bridge surface — validate that path lightly.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -15,10 +16,30 @@ const require = createRequire(import.meta.url);
 
 process.env.NR2_LOAD_IMPORTS = "1";
 
-const appJs = readFileSync(join(siteDir, "app.js"), "utf8");
 const indexHtml = readFileSync(join(siteDir, "index.html"), "utf8");
 const buildManifest = JSON.parse(readFileSync(join(__dirname, "nr2-build.json"), "utf8"));
 const expectedAssetVersion = buildManifest.assetVersion;
+const apexMode = buildManifest.staffRenderMode === "apex";
+
+if (apexMode) {
+  assert.ok(indexHtml.includes("data-nr2-epoch=\"nr2-apex\""), "apex index must declare nr2-apex epoch");
+  assert.ok(indexHtml.includes("apex-core.js"), "apex index must load apex-core.js");
+  assert.ok(indexHtml.includes("apex-bridge.css"), "apex index must load apex-bridge.css");
+  assert.ok(indexHtml.includes(expectedAssetVersion), "apex index must cache-bust with assetVersion");
+  assert.ok(indexHtml.includes("hal-voice.js"), "apex index must load hal-voice.js");
+  assert.ok(indexHtml.includes("hal-reports.js"), "apex index must load hal-reports.js");
+  const pages = ["financial", "softdent", "quickbooks", "claims", "hal", "office-manager"];
+  for (const page of pages) {
+    assert.ok(
+      indexHtml.includes(`data-page="${page}"`) || indexHtml.includes(`"${page}"`),
+      `apex index should reference page ${page}`,
+    );
+  }
+  console.log("validate-pages: apex mode OK");
+  process.exit(0);
+}
+
+const appJs = readFileSync(join(siteDir, "app.js"), "utf8");
 const mockEmbedMode = buildManifest.staffRenderMode === "mock-embed";
 const pilotMode = buildManifest.staffRenderMode === "live-wire-pilot";
 const liveWirePages = pilotMode && Array.isArray(buildManifest.liveWirePages) ? buildManifest.liveWirePages : [];
@@ -68,7 +89,9 @@ require(join(siteDir, "hal-page-widgets.js"));
 require(join(siteDir, "hal-live-widget-bridge.js"));
 const HalPilotWidgets = require(join(siteDir, "hal-pilot-widgets.js"));
 globalThis.__NR2_MOCKUP_ELITE_PAGES = undefined;
-require(join(siteDir, "data/mockup-elite-pages.js"));
+const elitePagesPath = join(siteDir, "data/mockup-elite-pages.js");
+assert.ok(existsSync(elitePagesPath), "mock-embed/pilot mode requires site/data/mockup-elite-pages.js");
+require(elitePagesPath);
 require(join(siteDir, "moonshot-page-registry.js"));
 require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
 require(join(siteDir, "tax-engine.js"));

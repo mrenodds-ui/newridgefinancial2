@@ -47,7 +47,7 @@ class SyntheticFixturesPhaseV1Tests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10493")
+        self.assertEqual(BUILD_ID, "hal-10498")
 
     def test_write_and_load_fixtures(self):
         paths = write_fixtures(out_dir=self.fix_out)

@@ -41,7 +41,7 @@ class PhaseV0BurnInTests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10493")
+        self.assertEqual(BUILD_ID, "hal-10498")
 
     def test_telemetry_default_off(self):
         os.environ.pop("NR2_AI_TELEMETRY", None)

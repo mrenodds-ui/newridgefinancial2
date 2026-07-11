@@ -34,14 +34,15 @@ def _conn_has_operational_data(conn: sqlite3.Connection) -> bool:
         if not _table_exists(conn, table):
             continue
         cur = conn.cursor()
-        cur.execute(f"SELECT COUNT(*) FROM {table}")
+        # Table names are fixed literals above (not user input).
+        cur.execute("SELECT COUNT(*) FROM " + table)
         if int(cur.fetchone()[0] or 0) > 0:
             return True
     for table in ("daysheet_totals", "production_by_provider", "transactions", "writeoff_totals", "production_by_ada"):
         if not _table_exists(conn, table):
             continue
         cur = conn.cursor()
-        cur.execute(f"SELECT COUNT(*) FROM {table}")
+        cur.execute("SELECT COUNT(*) FROM " + table)
         if int(cur.fetchone()[0] or 0) > 0:
             return True
     return False

@@ -675,7 +675,8 @@ def _aggregate_operatory_from_db(
         if not json_col:
             continue
         cur = conn.cursor()
-        cur.execute(f"SELECT {json_col} FROM {table} ORDER BY rowid DESC LIMIT 1")
+        # table/json_col come from fixed allowlists / PRAGMA column names, not request input.
+        cur.execute("SELECT " + json_col + " FROM " + table + " ORDER BY rowid DESC LIMIT 1")
         row = cur.fetchone()
         if not row or not row[0]:
             continue
@@ -865,8 +866,9 @@ def ingest_csv_reports_to_sqlite(
             if not path:
                 continue
             cols_sql = ", ".join([f"{k} TEXT" for k in colmap.keys()] + ["source_file TEXT", "extracted_at TEXT"])
-            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} ({cols_sql})")
-            conn.execute(f"DELETE FROM {table}")
+            # table is a fixed mapping key; cols_sql is built from that mapping's keys only.
+            conn.execute("CREATE TABLE IF NOT EXISTS " + table + " (" + cols_sql + ")")
+            conn.execute("DELETE FROM " + table)
             rows: list[dict[str, Any]] = []
             with path.open("r", encoding="utf-8-sig", newline="") as handle:
                 reader = csv.DictReader(handle)

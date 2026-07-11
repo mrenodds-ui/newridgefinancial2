@@ -1,0 +1,309 @@
+/**
+ * Moonshot Phase 4 — shared high-tech glow vocabulary (staff pages + HAL).
+ */
+.app--moonshot-mockup {
+  --ms-glow-cyan: 0 0 8px rgba(0, 212, 255, 0.55);
+  --ms-glow-green: 0 0 8px rgba(0, 230, 118, 0.45);
+  --ms-glow-orange: 0 0 8px rgba(255, 152, 0, 0.45);
+}
+
+.app--moonshot-mockup .ms-page .widget-glow-border,
+.app--moonshot-mockup .ms-page .kpi-glow-card,
+.app--moonshot-mockup .ms-page .card.kpi-card {
+  border-color: rgba(0, 212, 255, 0.18);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.app--moonshot-mockup .ms-page .widget-glow-border:hover,
+.app--moonshot-mockup .ms-page .kpi-glow-card:hover,
+.app--moonshot-mockup .ms-page .card.kpi-card:hover {
+  border-color: rgba(0, 212, 255, 0.38);
+  box-shadow: var(--ms-glow-cyan);
+  transform: translateY(-1px);
+}
+
+.app--moonshot-mockup .ms-page .widget-accent-orange {
+  border-color: rgba(255, 152, 0, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .widget-accent-orange:hover {
+  box-shadow: var(--ms-glow-orange);
+}
+
+.app--moonshot-mockup .ms-page .sync-stale-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffb74d;
+  border: 1px solid rgba(255, 152, 0, 0.35);
+  background: rgba(255, 152, 0, 0.08);
+  box-shadow: var(--ms-glow-orange);
+}
+
+.app--moonshot-mockup .ms-page .ms-import-notice {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  background: rgba(0, 212, 255, 0.06);
+  color: var(--text-secondary, #a3a3a3);
+}
+
+.app--moonshot-mockup .ms-page .ms-import-notice--warning {
+  border-color: rgba(255, 152, 0, 0.35);
+  background: rgba(255, 152, 0, 0.08);
+  color: #ffb74d;
+}
+
+.app--moonshot-mockup .ms-page .ms-import-notice--error {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.08);
+  color: #fca5a5;
+}
+
+.app--moonshot-mockup .ms-page .funnel-step--active .funnel-bar {
+  box-shadow: var(--ms-glow-cyan);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .kanban-board--claims .kanban-column:first-child {
+  border-color: rgba(124, 77, 255, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .kanban-board--claims .kanban-column:first-child .column-header {
+  color: #00d4ff;
+  text-shadow: var(--ms-glow-cyan);
+}
+
+.app--moonshot-mockup .ms-page .data-table--striped tbody tr:hover {
+  background: rgba(0, 212, 255, 0.06);
+  box-shadow: inset 2px 0 0 rgba(0, 212, 255, 0.55);
+}
+
+.app--moonshot-mockup .ms-page .heatmap-cell {
+  transition: box-shadow 0.15s ease;
+}
+
+.app--moonshot-mockup .ms-page .heatmap-cell:hover {
+  box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.45);
+}
+
+.app--moonshot-mockup .ms-page .operatory-grid .operatory-chair {
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.app--moonshot-mockup .ms-page .operatory-grid .operatory-chair:hover {
+  border-color: rgba(0, 212, 255, 0.4);
+  box-shadow: var(--ms-glow-cyan);
+}
+
+.app--moonshot-mockup .ms-page .doc-preview,
+.app--moonshot-mockup .ms-page .library-card {
+  border: 1px solid rgba(0, 212, 255, 0.12);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app--moonshot-mockup .ms-page .library-card:hover,
+.app--moonshot-mockup .ms-page .doc-preview:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ms-glow-cyan);
+}
+
+.app--moonshot-mockup .ms-page .chart-large .trend-chart-svg path,
+.app--moonshot-mockup .ms-page .chart-medium .trend-chart-svg path {
+  filter: drop-shadow(0 0 4px rgba(0, 212, 255, 0.35));
+}
+
+.app--moonshot-mockup .ms-page .widget-mount-glow {
+  animation: widget-mount-glow 0.45s ease-out;
+}
+
+@keyframes widget-mount-glow {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+body.nr2-workstation-app .ws-root {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(0, 212, 255, 0.06) 1px, transparent 0),
+    linear-gradient(180deg, #181818 0%, #141414 100%);
+  background-size: 24px 24px, 100% 100%;
+}
+
+body.nr2-workstation-app .ws-sn-toolbar-tab--active {
+  box-shadow: inset 0 -2px 0 var(--accent-cyan), var(--ms-glow-cyan, 0 0 8px rgba(0, 212, 255, 0.35));
+}
+
+body.nr2-workstation-app .ws-office-pane,
+body.nr2-workstation-app .ws-hal-pane {
+  border: 1px solid rgba(0, 212, 255, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.app--moonshot-mockup .page-header-tools {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.app--moonshot-mockup .page-header-tools .prompt-chips--page {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.app--moonshot-mockup .page-header-tools .sync-badge {
+  margin: 0;
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 184, 0, 0.25);
+  border-radius: 8px;
+  background: rgba(255, 184, 0, 0.06);
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker__item {
+  font-size: 0.8125rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker__item--warn {
+  background: rgba(255, 184, 0, 0.15);
+  color: var(--accent-amber, #ffb800);
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker__item--ok {
+  background: rgba(46, 204, 113, 0.12);
+  color: var(--accent-green, #2ecc71);
+}
+
+.app--moonshot-mockup .ms-page .kpi-card .kpi-spark-bars,
+.app--moonshot-mockup .ms-page .metric-tile .kpi-spark-bars {
+  align-items: flex-end;
+  display: flex;
+  gap: 2px;
+  height: 28px;
+  margin-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page .kpi-card .kpi-spark-bar,
+.app--moonshot-mockup .ms-page .metric-tile .kpi-spark-bar {
+  flex: 1;
+  min-width: 3px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent-cyan, #00d4ff);
+}
+
+.app--moonshot-mockup .page-header-tools .cpa-export-btn,
+.app--moonshot-mockup .page-header-tools .storyboard-export-btn,
+.app--moonshot-mockup .page-header-tools .nr2-print-btn,
+.app--moonshot-mockup .ms-page-chrome--hal .nr2-print-btn {
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--text-primary, #e8e8e8);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .page-header-tools .cpa-export-btn:hover,
+.app--moonshot-mockup .page-header-tools .storyboard-export-btn:hover,
+.app--moonshot-mockup .page-header-tools .nr2-print-btn:hover,
+.app--moonshot-mockup .ms-page-chrome--hal .nr2-print-btn:hover {
+  background: rgba(0, 212, 255, 0.16);
+}
+
+.app--moonshot-mockup .page-header-tools .cpa-export-btn:focus-visible,
+.app--moonshot-mockup .page-header-tools .storyboard-export-btn:focus-visible,
+.app--moonshot-mockup .page-header-tools .nr2-print-btn:focus-visible,
+.app--moonshot-mockup .ms-page-chrome--hal .nr2-print-btn:focus-visible {
+  outline: 2px solid var(--accent-cyan, #00d4ff);
+  outline-offset: 2px;
+}
+
+.app--moonshot-mockup .ms-page-chrome--mock-embed .page-header-tools--print-only {
+  display: flex !important;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-print-bar {
+  margin-bottom: 10px;
+}
+
+.app--moonshot-mockup .filter-bar button:focus-visible,
+.app--moonshot-mockup .page-header-tools button:focus-visible,
+.app--moonshot-mockup [data-nr2-print]:focus-visible,
+.app--moonshot-mockup [data-nr2-export]:focus-visible {
+  outline: 2px solid var(--accent-cyan, #00d4ff);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app--moonshot-mockup .ms-page .widget-mount-glow {
+    animation: none !important;
+  }
+}
+
+@media print {
+  .app--moonshot-mockup,
+  .app--moonshot-mockup .ms-page,
+  body.nr2-workstation-app,
+  body.nr2-workstation-app .ws-root {
+    background: #fff !important;
+    background-image: none !important;
+    color: #000 !important;
+  }
+
+  .app--moonshot-mockup .ms-page .card,
+  .app--moonshot-mockup .ms-page .widget-mosaic-tile,
+  .app--moonshot-mockup .ms-page .widget-card,
+  .app--moonshot-mockup .ms-page .kpi-card,
+  .app--moonshot-mockup .ms-page .chart-large,
+  .app--moonshot-mockup .ms-page .chart-medium {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border-color: #ccc !important;
+    color: #000 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .app--moonshot-mockup nav,
+  .app--moonshot-mockup .alert-strip,
+  .app--moonshot-mockup .filter-bar,
+  .app--moonshot-mockup .page-header-tools,
+  .app--moonshot-mockup .hal-insight,
+  .app--moonshot-mockup [data-nr2-print],
+  .app--moonshot-mockup .cpa-export-btn {
+    display: none !important;
+  }
+}

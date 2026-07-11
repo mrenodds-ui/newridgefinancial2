@@ -40,12 +40,18 @@ def _sample_bundle() -> dict:
 
 class Nr2QbReportsTests(unittest.TestCase):
     def test_net_income_summary(self) -> None:
-        result = net_income_summary(bundle=_sample_bundle())
+        with mock.patch("nr2_qb_reports._cached_report", return_value=None), mock.patch(
+            "nr2_qb_reports.load_probe_summary", return_value={}
+        ):
+            result = net_income_summary(bundle=_sample_bundle())
         self.assertTrue(result["hasData"])
         self.assertEqual(result["ytdNetIncome"], 60000.0)
 
     def test_cash_flow_trend(self) -> None:
-        result = cash_flow_trend(bundle=_sample_bundle())
+        with mock.patch("nr2_qb_reports._cached_report", return_value=None), mock.patch(
+            "nr2_qb_reports.load_probe_summary", return_value={}
+        ):
+            result = cash_flow_trend(bundle=_sample_bundle())
         self.assertTrue(result["hasData"])
         self.assertEqual(len(result["labels"]), 2)
 
@@ -73,7 +79,10 @@ class Nr2QbReportsTests(unittest.TestCase):
         self.assertTrue(all("Cash" not in str(row.get("label") or "") for row in result["assets"]))
 
     def test_ar_aging_from_import(self) -> None:
-        result = ar_aging(bundle=_sample_bundle())
+        with mock.patch("nr2_qb_reports._cached_report", return_value=None), mock.patch(
+            "nr2_qb_reports.load_probe_summary", return_value={}
+        ):
+            result = ar_aging(bundle=_sample_bundle())
         self.assertTrue(result["hasData"])
         self.assertEqual(result["total"], 15700.0)
 

@@ -49,12 +49,15 @@ class RateLimitTests(unittest.TestCase):
 
     def test_burst_returns_false(self) -> None:
         fp = "test-fp"
-        for _ in range(100):
-            ok, _ = is_allowed(fp, "read")
-            self.assertTrue(ok)
-        ok, retry = is_allowed(fp, "read")
-        self.assertFalse(ok)
-        self.assertGreaterEqual(retry, 1)
+        # Default read limit is 300/min; pin a small limit for this unit test.
+        with mock.patch.dict(os.environ, {"NR2_RATE_READ_PER_MIN": "5"}, clear=False):
+            reset_for_tests()
+            for _ in range(5):
+                ok, _ = is_allowed(fp, "read")
+                self.assertTrue(ok)
+            ok, retry = is_allowed(fp, "read")
+            self.assertFalse(ok)
+            self.assertGreaterEqual(retry, 1)
 
     def test_hal_route_class(self) -> None:
         self.assertEqual(classify_route("/api/hal/evaluate-query", "POST"), "hal")

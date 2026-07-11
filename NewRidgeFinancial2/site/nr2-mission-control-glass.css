@@ -1,0 +1,404 @@
+/**
+ * Moonshot Mission Control — Terminal Glass Aesthetic
+ * Scope: .app--moonshot-mockup .ms-mission-control (live-wire shell)
+ * Linked after nr2-moonshot-glow.css. No Google Fonts CDN (loopback).
+ */
+.app--moonshot-mockup .ms-mission-control {
+  --mc-bg: #0a0a0c;
+  --mc-surface: rgba(16, 16, 20, 0.72);
+  --mc-border: rgba(255, 255, 255, 0.06);
+  --mc-border-hover: rgba(255, 255, 255, 0.12);
+  --mc-cyan: #22d3ee;
+  --mc-cyan-glow: 0 0 8px rgba(34, 211, 238, 0.35);
+  --mc-gold: #d6b15e;
+  --mc-gold-glow: 0 0 8px rgba(214, 177, 94, 0.35);
+  --mc-amber: #fbbf24;
+  --mc-red: #f87171;
+  --mc-green: #34d399;
+  --mc-blue: #60a5fa;
+  --mc-pink: #f472b6;
+  --font-mono: "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace;
+  --mc-accent: var(--mc-cyan);
+  --mc-accent-glow: var(--mc-cyan-glow);
+}
+
+.app--moonshot-mockup .ms-mission-control.financial-moonshot,
+.app--moonshot-mockup .ms-mission-control.claims-moonshot,
+.app--moonshot-mockup .ms-mission-control.library-moonshot {
+  --mc-accent: var(--mc-cyan);
+  --mc-accent-glow: var(--mc-cyan-glow);
+}
+.app--moonshot-mockup .ms-mission-control.quickbooks-moonshot {
+  --mc-accent: var(--mc-blue);
+  --mc-accent-glow: 0 0 8px rgba(96, 165, 250, 0.35);
+}
+.app--moonshot-mockup .ms-mission-control.ar-moonshot {
+  --mc-accent: var(--mc-red);
+  --mc-accent-glow: 0 0 8px rgba(248, 113, 113, 0.35);
+}
+.app--moonshot-mockup .ms-mission-control.taxes-moonshot {
+  --mc-accent: var(--mc-amber);
+  --mc-accent-glow: 0 0 8px rgba(251, 191, 36, 0.35);
+}
+.app--moonshot-mockup .ms-mission-control.narratives-moonshot {
+  --mc-accent: var(--mc-pink);
+  --mc-accent-glow: 0 0 8px rgba(244, 114, 182, 0.35);
+}
+.app--moonshot-mockup .ms-mission-control.documents-moonshot {
+  --mc-accent: var(--mc-gold);
+  --mc-accent-glow: var(--mc-gold-glow);
+}
+.app--moonshot-mockup .ms-mission-control.softdent-moonshot {
+  --mc-accent: var(--mc-cyan);
+  --mc-accent-glow: var(--mc-cyan-glow);
+}
+.app--moonshot-mockup .ms-mission-control.office-manager-moonshot {
+  --mc-accent: var(--mc-green);
+  --mc-accent-glow: 0 0 8px rgba(52, 211, 153, 0.35);
+}
+.app--moonshot-mockup .ms-mission-control.hal-moonshot,
+.app--moonshot-mockup .ms-page--hal.ms-mission-control {
+  --mc-accent: var(--mc-red);
+  --mc-accent-glow: 0 0 8px rgba(248, 113, 113, 0.35);
+}
+
+/* Shell density */
+.app--moonshot-mockup .ms-mission-control.widget-grid,
+.app--moonshot-mockup .ms-mission-control .widget-grid {
+  gap: 12px;
+}
+
+/* Obsidian glass panels + existing elite surfaces */
+.app--moonshot-mockup .ms-mission-control .ms-panel-obsidian,
+.app--moonshot-mockup .ms-mission-control .canvas-panel,
+.app--moonshot-mockup .ms-mission-control .ms-panel,
+.app--moonshot-mockup .ms-mission-control .widget-card,
+.app--moonshot-mockup .ms-mission-control .kpi-tile,
+.app--moonshot-mockup .ms-mission-control .kpi-large,
+.app--moonshot-mockup .ms-mission-control .kpi-hero-tile,
+.app--moonshot-mockup .ms-mission-control .ms-elite-stat-tile {
+  background: var(--mc-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--mc-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.app--moonshot-mockup .ms-mission-control .ms-panel-obsidian:hover,
+.app--moonshot-mockup .ms-mission-control .canvas-panel:hover,
+.app--moonshot-mockup .ms-mission-control .ms-panel:hover,
+.app--moonshot-mockup .ms-mission-control .widget-card:hover,
+.app--moonshot-mockup .ms-mission-control .kpi-tile:hover,
+.app--moonshot-mockup .ms-mission-control .kpi-large:hover,
+.app--moonshot-mockup .ms-mission-control .kpi-hero-tile:hover,
+.app--moonshot-mockup .ms-mission-control .ms-elite-stat-tile:hover {
+  border-color: var(--mc-border-hover);
+  box-shadow: var(--mc-accent-glow);
+  transform: translateY(-1px);
+}
+
+/* Monospace figures */
+.app--moonshot-mockup .ms-mission-control .kpi-mono,
+.app--moonshot-mockup .ms-mission-control .kpi-value,
+.app--moonshot-mockup .ms-mission-control .figure,
+.app--moonshot-mockup .ms-mission-control td.numeric,
+.app--moonshot-mockup .ms-mission-control .chart-value,
+.app--moonshot-mockup .ms-mission-control .data-table td,
+.app--moonshot-mockup .ms-mission-control .claim-amount,
+.app--moonshot-mockup .ms-mission-control .provider-amount,
+.app--moonshot-mockup .ms-mission-control .column-count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* KPI hero density */
+.app--moonshot-mockup .ms-mission-control .kpi-hero-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.app--moonshot-mockup .ms-mission-control .kpi-hero-tile {
+  padding: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.app--moonshot-mockup .ms-mission-control .kpi-hero-tile::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--mc-accent), transparent);
+  opacity: 0.6;
+}
+.app--moonshot-mockup .ms-mission-control .kpi-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+.app--moonshot-mockup .ms-mission-control .kpi-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #f0f0f2;
+}
+
+/* Severity */
+.app--moonshot-mockup .ms-mission-control .severity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+.app--moonshot-mockup .ms-mission-control .severity-dot.high {
+  background: var(--mc-red);
+  box-shadow: 0 0 6px var(--mc-red);
+  animation: severity-blink 1.5s infinite;
+}
+.app--moonshot-mockup .ms-mission-control .severity-dot.med {
+  background: var(--mc-amber);
+}
+.app--moonshot-mockup .ms-mission-control .severity-dot.low {
+  background: var(--mc-green);
+}
+@keyframes severity-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.app--moonshot-mockup .ms-mission-control tr.severity-high td:first-child,
+.app--moonshot-mockup .ms-mission-control .glow-red {
+  border-left: 3px solid var(--mc-red);
+}
+.app--moonshot-mockup .ms-mission-control tr.severity-med td:first-child {
+  border-left: 3px solid var(--mc-amber);
+}
+.app--moonshot-mockup .ms-mission-control tr.severity-low td:first-child {
+  border-left: 3px solid var(--mc-green);
+}
+.app--moonshot-mockup .ms-mission-control .glow-red {
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.25);
+}
+
+/* Mission kanban — dual-class: existing + mission */
+.app--moonshot-mockup .ms-mission-control .kanban-board.kanban-mission,
+.app--moonshot-mockup .ms-mission-control .kanban-board--claims,
+.app--moonshot-mockup .ms-mission-control .kanban-board--narratives {
+  gap: 10px;
+}
+.app--moonshot-mockup .ms-mission-control .kanban-column.kanban-lane-mission,
+.app--moonshot-mockup .ms-mission-control .kanban-column {
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: 8px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.app--moonshot-mockup .ms-mission-control .kanban-column .column-header,
+.app--moonshot-mockup .ms-mission-control .kanban-lane-mission .lane-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.app--moonshot-mockup .ms-mission-control .kanban-column .column-header::before,
+.app--moonshot-mockup .ms-mission-control .kanban-lane-mission .lane-header::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mc-accent);
+  box-shadow: 0 0 6px var(--mc-accent);
+  flex-shrink: 0;
+}
+.app--moonshot-mockup .ms-mission-control .kanban-column:nth-child(1) .column-header::before {
+  background: #a78bfa;
+  box-shadow: 0 0 6px #a78bfa;
+}
+.app--moonshot-mockup .ms-mission-control .kanban-column:nth-child(2) .column-header::before {
+  background: var(--mc-cyan);
+  box-shadow: 0 0 6px var(--mc-cyan);
+}
+.app--moonshot-mockup .ms-mission-control .kanban-column:nth-child(3) .column-header::before {
+  background: var(--mc-green);
+  box-shadow: 0 0 6px var(--mc-green);
+}
+.app--moonshot-mockup .ms-mission-control .kanban-column:nth-child(4) .column-header::before {
+  background: var(--mc-amber);
+  box-shadow: 0 0 6px var(--mc-amber);
+}
+.app--moonshot-mockup .ms-mission-control .kanban-column:nth-child(5) .column-header::before {
+  background: var(--mc-blue);
+  box-shadow: 0 0 6px var(--mc-blue);
+}
+.app--moonshot-mockup .ms-mission-control .kanban-column:nth-child(6) .column-header::before {
+  background: var(--mc-red);
+  box-shadow: 0 0 6px var(--mc-red);
+}
+.app--moonshot-mockup .ms-mission-control .claim-card,
+.app--moonshot-mockup .ms-mission-control .narrative-card,
+.app--moonshot-mockup .ms-mission-control .kanban-card-mission {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.app--moonshot-mockup .ms-mission-control .claim-card:hover,
+.app--moonshot-mockup .ms-mission-control .narrative-card:hover,
+.app--moonshot-mockup .ms-mission-control .kanban-card-mission:hover {
+  border-color: color-mix(in srgb, var(--mc-accent) 45%, transparent);
+  transform: translateY(-2px);
+}
+
+/* Chart scanline */
+@keyframes nr2-mc-scan {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+.app--moonshot-mockup .ms-mission-control .chart-container {
+  position: relative;
+  overflow: hidden;
+}
+.app--moonshot-mockup .ms-mission-control .chart-container::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.04), transparent);
+  animation: nr2-mc-scan 6s linear infinite;
+  pointer-events: none;
+}
+
+/* Live pulse */
+@keyframes nr2-mc-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.app--moonshot-mockup .ms-mission-control .live-indicator::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--mc-green);
+  border-radius: 50%;
+  margin-right: 6px;
+  animation: nr2-mc-live-pulse 2s infinite;
+  box-shadow: 0 0 6px var(--mc-green);
+}
+
+/* Honest empty — terminal style */
+.app--moonshot-mockup .ms-mission-control .empty-terminal,
+.app--moonshot-mockup .ms-mission-control .widget-empty.empty-terminal {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #64748b;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+/* Documents vault gold edge */
+.app--moonshot-mockup .ms-mission-control.documents-moonshot .data-table tbody tr td:first-child {
+  border-left: 2px solid rgba(214, 177, 94, 0.35);
+}
+
+/* A/R aged glow when severity present */
+.app--moonshot-mockup .ms-mission-control.ar-moonshot tr.severity-high {
+  background: rgba(248, 113, 113, 0.06);
+}
+
+/* HAL header accent only (transcript glass deferred) */
+.app--moonshot-mockup .ms-page--hal.ms-mission-control .ms-page-chrome,
+.app--moonshot-mockup .hal-moonshot.ms-mission-control {
+  box-shadow: inset 0 2px 0 rgba(248, 113, 113, 0.45);
+}
+
+/* P1: Strengthen elite glass distinction (Moonshot no-overlay consult) */
+.app--moonshot-mockup .ms-mission-control .ms-panel,
+.app--moonshot-mockup .ms-mission-control .widget-card {
+  background: rgba(16, 16, 20, 0.85);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.app--moonshot-mockup .ms-mission-control .ms-panel:hover,
+.app--moonshot-mockup .ms-mission-control .widget-card:hover {
+  border-color: var(--mc-accent);
+  box-shadow: 0 0 0 1px var(--mc-accent), 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* CSS-001: Elite page header (LAY-001) */
+.app--moonshot-mockup .ms-mission-control .ms-page-header {
+  grid-column: 1 / -1;
+  margin: 0 0 12px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.app--moonshot-mockup .ms-mission-control .ms-page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #f0f0f2;
+}
+.app--moonshot-mockup .ms-mission-control .ms-page-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #94a3b8;
+}
+.app--moonshot-mockup .ms-mission-control .ms-page-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.app--moonshot-mockup .ms-mission-control .ms-filter-chip {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+.app--moonshot-mockup .ms-mission-control .ms-filter-chip.active,
+.app--moonshot-mockup .ms-mission-control .ms-filter-chip:hover {
+  border-color: color-mix(in srgb, var(--mc-accent) 55%, transparent);
+  box-shadow: var(--mc-accent-glow);
+  color: #f0f0f2;
+}

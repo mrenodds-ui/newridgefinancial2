@@ -1,0 +1,621 @@
+/**
+ * Moonshot Phase 1 (hal-10063) — HAL Command Center mock parity overrides.
+ * Scoped to HAL page; complements nr2-moonshot-mockup-theme.css.
+ */
+.app--moonshot-mockup {
+  --neon-cyan: #00d4ff;
+  --neon-green: #00e676;
+  --neon-orange: #ff9800;
+  --ms-bg-deep: #181818;
+  --ms-glow-cyan: 0 0 8px rgba(0, 212, 255, 0.55);
+  --ms-glow-green: 0 0 8px rgba(0, 230, 118, 0.5);
+  --ms-glow-orange: 0 0 8px rgba(255, 152, 0, 0.45);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-cyber-grid {
+  background-color: var(--ms-bg-deep);
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(0, 212, 255, 0.07) 1px, transparent 0),
+    radial-gradient(ellipse at 20% 0%, rgba(124, 77, 255, 0.08), transparent 45%);
+  background-size: 24px 24px, 100% 100%;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-ring {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid var(--border-subtle, #333);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--neon-cyan);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-ring svg {
+  flex-shrink: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-ring__label b {
+  color: var(--text-primary, #fff);
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-ring--green {
+  color: var(--neon-green);
+  box-shadow: var(--ms-glow-green);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-ring--cyan {
+  box-shadow: var(--ms-glow-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-status-pulse {
+  animation: hal-status-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes hal-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.82;
+  }
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-consent-chip {
+  border: 1px solid rgba(0, 230, 118, 0.35);
+  background: rgba(0, 230, 118, 0.08);
+  color: var(--neon-green);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-consent-chip:hover {
+  box-shadow: var(--ms-glow-green);
+}
+
+.app--moonshot-mockup .ms-page--hal .text-glow {
+  text-shadow: 0 0 12px rgba(0, 212, 255, 0.35);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-widget-mosaic {
+  grid-column: span 4;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.app--moonshot-mockup .ms-page--hal .span-1 {
+  grid-column: span 1;
+}
+
+.app--moonshot-mockup .ms-page--hal .span-2 {
+  grid-column: span 2;
+}
+
+.app--moonshot-mockup .ms-page--hal .span-3 {
+  grid-column: span 3;
+}
+
+.app--moonshot-mockup .ms-page--hal .span-4 {
+  grid-column: span 4;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-panel--morning-briefing {
+  grid-column: span 2;
+  min-height: 180px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-situational-hero {
+  grid-column: span 4;
+  align-items: stretch;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 2fr 1fr;
+  margin-bottom: 4px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-situational-hero__alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-agent-loop {
+  border-top: 1px solid rgba(0, 212, 255, 0.15);
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-agent-loop__step {
+  background: rgba(0, 212, 255, 0.06);
+  border-left: 3px solid var(--accent-cyan, #00d4ff);
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-agent-loop__step strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.app--moonshot-mockup .ms-page--hal .chat-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-sparkline {
+  align-items: flex-end;
+  display: flex;
+  gap: 2px;
+  height: 36px;
+  margin-top: 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-sparkline .kpi-spark-bar {
+  background: linear-gradient(180deg, rgba(0, 212, 255, 0.9), rgba(0, 230, 118, 0.55));
+  border-radius: 2px 2px 0 0;
+  flex: 1;
+  min-width: 3px;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-mosaic-tile {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.app--moonshot-mockup .ms-page--hal .widget-mosaic-tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 212, 255, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), var(--ms-glow-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-health-ring[data-health-score] {
+  position: relative;
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-health-ring[data-health-score].hal-health-ring--stale .health-score {
+  color: var(--neon-orange);
+  text-shadow: var(--ms-glow-orange);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-prompt-chip,
+.app--moonshot-mockup .ms-page--hal .chat-suggestions .prompt-chip {
+  border-color: rgba(0, 212, 255, 0.25);
+}
+
+.app--moonshot-mockup .ms-page--hal .hal-prompt-chip:hover,
+.app--moonshot-mockup .ms-page--hal .chat-suggestions .prompt-chip:hover {
+  box-shadow: var(--ms-glow-cyan);
+}
+
+.app--moonshot-mockup .ms-page--hal .badge-live {
+  color: var(--neon-green);
+  box-shadow: var(--ms-glow-green);
+  animation: hal-status-pulse 2s ease-in-out infinite;
+}
+
+.app--moonshot-mockup .ms-page--hal .badge-offline {
+  color: #ff5252;
+  box-shadow: 0 0 8px rgba(255, 82, 82, 0.4);
+}
+
+.app--moonshot-mockup .ms-page--hal .surface-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.app--moonshot-mockup .nav-item.active[data-nav="hal"],
+.app--moonshot-mockup .nav-page--active .nav-item[data-nav="hal"] {
+  border-left: 3px solid var(--neon-cyan);
+  box-shadow: inset 0 0 12px rgba(0, 212, 255, 0.08);
+}
+
+.app--moonshot-mockup .nav-subgroup__title {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #888);
+  padding: 8px 24px 4px;
+  margin: 0;
+}
+
+.app--moonshot-mockup .widget-mount-glow {
+  animation: widget-mount-glow 0.45s ease-out;
+}
+
+@keyframes widget-mount-glow {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app--moonshot-mockup .ms-page--hal .chat-input-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page--hal .surface-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-cyan, #00d4ff);
+}
+
+.app--moonshot-mockup .ms-page--hal .surface-main strong {
+  font-size: 12px;
+  color: var(--text-primary, #f5f5f5);
+}
+
+/* Compact HAL layout — ~50% vertical footprint */
+.app--moonshot-mockup .hal-dashboard--compact .dashboard-grid {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-compact-top {
+  grid-column: span 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-compact-mid {
+  grid-column: span 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-situational-hero--compact {
+  grid-column: unset;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+  gap: 10px;
+  margin-bottom: 0;
+  padding: 12px;
+  min-height: 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-situational-hero__main {
+  min-width: 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-situational-hero__actions {
+  margin-top: 6px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-hero-kpi {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-hero-kpi .kpi-ribbon-tile {
+  padding: 4px 6px;
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-hero-kpi .kpi-ribbon-tile strong {
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-hero-actuators {
+  margin-top: 4px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-morning-briefing__sentence {
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 4px 0 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-status-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .lane-badge,
+.app--moonshot-mockup .hal-dashboard--compact .import-health {
+  grid-column: unset;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .lane-header {
+  margin-bottom: 8px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .lane-value {
+  font-size: 20px;
+  margin: 4px 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .health-score {
+  font-size: 20px;
+  margin: 2px 0 4px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .health-bar {
+  margin: 4px 0 6px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-footer,
+.app--moonshot-mockup .hal-dashboard--compact .widget-footer--compact {
+  margin-top: 6px;
+  padding-top: 6px;
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-panel--widgets {
+  grid-column: span 8;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-mosaic-tile {
+  padding: 8px 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-mosaic-tile .widget-header {
+  margin-bottom: 2px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-mosaic-tile .widget-title {
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .metric-large {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .metric-delta {
+  font-size: 9px;
+  margin-top: 2px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-meta--hal {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  margin: 2px 0 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-compact-mid .hal-panel--nav,
+.app--moonshot-mockup .hal-dashboard--compact .hal-compact-mid .hal-panel--sidenotes {
+  grid-column: unset;
+  margin: 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .dashboard-grid .widget-card {
+  padding: 12px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-panel--session {
+  grid-column: span 8;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .session-grid {
+  gap: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .session-note,
+.app--moonshot-mockup .hal-dashboard--compact .session-note--compact {
+  font-size: 10px;
+  margin: 4px 0;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .checklist-list {
+  max-height: 72px;
+  overflow-y: auto;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .activity-log {
+  max-height: 72px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .surface-list {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .sidenote-list {
+  max-height: 72px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .control-grid--compact {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .control-btn {
+  padding: 6px 4px;
+  font-size: 9px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .control-btn strong {
+  font-size: 9px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .prompt-chips {
+  gap: 4px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .prompt-chip {
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .ms-page--hal .ms-page-chrome--hal .alert-strip {
+  padding: 6px 12px;
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page--hal .ms-page-chrome--hal .header {
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page--hal .ms-page-chrome--hal .header .header-title h2 {
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-status-grid {
+  gap: 8px 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-status-ring {
+  padding: 4px 8px 4px 4px;
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-status-ring svg {
+  width: 28px;
+  height: 28px;
+}
+
+@media (max-width: 1200px) {
+  .app--moonshot-mockup .hal-dashboard--compact .hal-compact-top,
+  .app--moonshot-mockup .hal-dashboard--compact .hal-compact-mid {
+    grid-template-columns: 1fr;
+  }
+
+  .app--moonshot-mockup .hal-dashboard--compact .hal-panel--widgets {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app--moonshot-mockup .ms-page--hal .widget-mosaic-tile,
+  .app--moonshot-mockup .ms-page--hal .widget-mosaic-tile:hover {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .app--moonshot-mockup .ms-page--hal .badge-live {
+    animation: none !important;
+  }
+
+  .app--moonshot-mockup .widget-mount-glow {
+    animation: none !important;
+  }
+}
+
+/* Moonshot denser HAL: wider right chat rail + smaller mosaic tiles */
+.app--moonshot-mockup .ms-page--hal .content-wrapper {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .content-wrapper > .dashboard-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app--moonshot-mockup .ms-page--hal .chat-rail {
+  width: 380px;
+  max-width: 40vw;
+  position: sticky;
+  top: 0;
+  align-self: stretch;
+  height: calc(100vh - 120px);
+  max-height: calc(100vh - 120px);
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .dashboard-grid {
+  gap: 8px;
+  padding: 10px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .hal-panel--widgets {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .widget-mosaic-tile {
+  padding: 8px;
+  min-height: 84px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .metric-large {
+  font-size: 13px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .details-panel--compact {
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .details-panel--compact summary {
+  cursor: pointer;
+  color: var(--accent-cyan, #22d3ee);
+}
+
+.app--moonshot-mockup .hal-dashboard--compact .checklist-list {
+  max-height: 64px;
+}
+
+/* Staff pages: compact widget density (Moonshot) */
+.app--moonshot-mockup .ms-page:not(.ms-page--hal) .widget-grid {
+  gap: 12px;
+}
+
+.app--moonshot-mockup .ms-page:not(.ms-page--hal) .widget-card {
+  padding: 12px 14px;
+}
+
+.app--moonshot-mockup .ms-page:not(.ms-page--hal) .kpi-large .kpi-value {
+  font-size: 28px;
+  margin: 4px 0;
+}
+
+.app--moonshot-mockup .ms-page:not(.ms-page--hal) .widget-header {
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+  .app--moonshot-mockup .ms-page--hal .content-wrapper {
+    flex-direction: column;
+  }
+
+  .app--moonshot-mockup .ms-page--hal .chat-rail {
+    width: 100%;
+    max-width: none;
+    height: 420px;
+    position: relative;
+  }
+}

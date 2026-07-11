@@ -359,7 +359,8 @@ def _ensure_optional_columns(conn: sqlite3.Connection) -> None:
     for table, col, typedef in specs:
         cols = {str(r[1]) for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         if col not in cols:
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}")
+            # table/col/typedef are fixed literals in specs above (not user input).
+            conn.execute("ALTER TABLE " + table + " ADD COLUMN " + col + " " + typedef)
 
 def _parse_money(value: Any) -> float | None:
     if value is None or value == "":

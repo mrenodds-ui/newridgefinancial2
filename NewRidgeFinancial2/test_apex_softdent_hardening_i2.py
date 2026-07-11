@@ -115,7 +115,13 @@ class SoftDentHardeningPhaseI2Tests(unittest.TestCase):
         self.assertEqual(w.get("def"), "DEF-001")
 
     def test_hal_why_collections(self):
-        r = resolve_hal_board_actions({"query": "why are collections empty?", "page": "hal"})
+        from unittest import mock
+
+        with mock.patch(
+            "apex_backend._load_reports_and_bundle",
+            return_value=({}, _bundle_pending(), None),
+        ):
+            r = resolve_hal_board_actions({"query": "why are collections empty?", "page": "hal"})
         self.assertTrue(r.get("handled"))
         reply = str(r.get("reply") or "")
         self.assertIn("DEF-001", reply)

@@ -644,9 +644,13 @@ async function main() {
   assert(halModels.config.externalCallsEnabled === false, "external model calls must stay disabled");
   assert(halModels.config.webResearch && halModels.config.webResearch.enabled === true, "web research must be enabled");
   assert(halModels.config.webResearch.mode === "broad", "web research must use broad practice scope");
+  const singleGpu = halModels.config.singleGpuLayout && halModels.config.singleGpuLayout.enabled === true;
   for (const runtime of [halModels.config.localModel, halModels.config.reasoningModel, halModels.config.escalationModel]) {
     assert(runtime.enabled === true, "model lane must be enabled for local execution");
     assert(HalCore.isLocalModelEndpoint(runtime.endpoint), `model endpoint must be loopback-only: ${runtime.endpoint}`);
+    if (singleGpu) {
+      assert(runtime.model === "hal-local:24b", "single-GPU layout must pin all active runtimes to hal-local:24b");
+    }
   }
   for (const lane of halModels.lanes) {
     assert(lane.inventoryAvailable === true, `lane ${lane.id} inventory should be marked available`);
@@ -659,27 +663,41 @@ async function main() {
     const runtime = HalCore.laneRuntime(halModels, lane.id);
     assert(runtime && HalCore.isLocalModelEndpoint(runtime.endpoint), `lane ${lane.id} runtime must be loopback-only`);
   }
-  assert(halModels.readinessDisplay.allModelsEnabled === true, "readiness display must reflect all models enabled");
+  if (singleGpu) {
+    assert(halModels.config.singleGpuLayout.approvedModel === "hal-local:24b", "approved single-GPU model must be hal-local:24b");
+    assert(halModels.readinessDisplay.allModelsEnabled === false, "single-GPU layout keeps standby lanes disabled");
+    assert(halModels.readinessDisplay.configuredModels.local.model === "hal-local:24b", "local model must be hal-local:24b");
+    assert(halHtml.includes("hal-local:24b"), "HAL page must show single 24B model inventory");
+  } else {
+    assert(halModels.readinessDisplay.allModelsEnabled === true, "readiness display must reflect all models enabled");
+    assert(halModels.readinessDisplay.configuredModels.local.model === "hal-chat:8b", "local model must use the GPU 8B chat lane");
+    assert(halModels.readinessDisplay.configuredModels.helper.model === "hal-helper:14b", "helper model must use the GPU 14B helper lane");
+    assert(halHtml.includes("hal-chat:8b"), "HAL page must show GPU 8B chat model inventory");
+    assert(halHtml.includes("hal-helper:14b"), "HAL page must show GPU 14B helper model inventory");
+    assert(halHtml.includes("hal-escalate:30b"), "HAL page must show escalation model inventory");
+  }
   assert(halHtml.includes("LOCAL AI READINESS"), "HAL page must render AI readiness");
   assert(halHtml.includes("local only"), "HAL page must label AI lanes as local only");
   assert(halHtml.includes("Available inventory"), "HAL page must show available model inventory");
-  assert(halModels.readinessDisplay.configuredModels.local.model === "hal-chat:8b", "local model must use the GPU 8B chat lane");
-  assert(halModels.readinessDisplay.configuredModels.helper.model === "hal-helper:14b", "helper model must use the GPU 14B helper lane");
-  assert(halHtml.includes("hal-chat:8b"), "HAL page must show GPU 8B chat model inventory");
-  assert(halHtml.includes("hal-helper:14b"), "HAL page must show GPU 14B helper model inventory");
   assert(
     halHtml.includes(halModels.readinessDisplay.configuredModels.reasoning.model),
     "HAL page must show on-demand reasoning model inventory",
   );
-  assert(halHtml.includes("hal-escalate:30b"), "HAL page must show escalation model inventory");
   assert(halModels.readinessDisplay.gpu && halModels.readinessDisplay.gpu.verified === true, "GPU must be marked verified in readiness display");
   assert(/Radeon RX 9060 XT|R9700|ROCm/i.test(halHtml), "HAL page must show the verified GPU device");
   assert(/sensitive raw data|SoftDent|QuickBooks/i.test(halHtml), "HAL page must show sensitive-data no-egress policy");
   assert(HalCore.laneReady(halModels, "chat8b"), "chat lane must be execution-ready on loopback");
   const chatRuntime = HalCore.laneRuntime(halModels, "chat8b");
-  assert(chatRuntime && chatRuntime.think === false, "chat lane must disable thinking tokens");
-  assert(chatRuntime.options && chatRuntime.options.num_predict === 1536, "chat lane token cap must match hal-models.json localModel");
-  assert(chatRuntime.options.num_ctx === 3072, "chat lane context must match hal-models.json localModel");
+  const localRuntime = halModels.config.localModel || {};
+  if (singleGpu) {
+    assert(chatRuntime && chatRuntime.model === "hal-local:24b", "chat lane model must be hal-local:24b under single-GPU layout");
+    assert(localRuntime.think === false, "localModel must disable thinking tokens");
+    assert(localRuntime.options && Number(localRuntime.options.num_ctx) === 8192, "single-GPU chat context must be 8192");
+  } else {
+    assert(chatRuntime && chatRuntime.think === false, "chat lane must disable thinking tokens");
+    assert(chatRuntime.options && chatRuntime.options.num_predict === 1536, "chat lane token cap must match hal-models.json localModel");
+    assert(chatRuntime.options.num_ctx === 3072, "chat lane context must match hal-models.json localModel");
+  }
   assert(
     HalCore.buildFastChatSystemPrompt(halData, null).includes("PROGRAMMING:"),
     "fast chat prompt must include Auto agent programming contract",
@@ -689,7 +707,7 @@ async function main() {
   assert(helperLane && helperLane.executionEnabled === false, "helper lane must be standby in single-lane layout");
   assert(halModels.readinessDisplay.configuredModels.helper.onDemand === true, "helper lane must be on-demand only");
   assert(
-    halModels.readinessDisplay.configuredModels.helper.gpuResidentWithLocal === false,
+    halModels.readinessDisplay.configuredModels.helper.gpuResidentWithLocal !== true,
     "helper lane must not be GPU co-resident in single-lane layout",
   );
   assert(HalCore.laneReady(halModels, "reason21b"), "reasoning lane must be execution-ready on loopback");

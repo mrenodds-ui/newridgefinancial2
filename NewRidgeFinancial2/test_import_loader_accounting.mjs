@@ -127,7 +127,7 @@ assert.equal(ytdInferred.scope, "ytd_inferred");
 
 const arBoth = compareArCrossSource(49111.03, 48800.5);
 assert.equal(arBoth.comparable, false);
-assert.equal(arBoth.variance, 310.53);
+assert.ok(Math.abs(Number(arBoth.variance) - 310.53) < 0.005, `variance=${arBoth.variance}`);
 assert.match(arBoth.message, /informational/i);
 
 const arReview = compareArCrossSource(49111.03, 40000);
