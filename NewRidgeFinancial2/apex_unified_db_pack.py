@@ -130,6 +130,21 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_era_agg_period ON softdent_era_aggregates(period);
 
+        CREATE TABLE IF NOT EXISTS era_835_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period TEXT NOT NULL,
+            payer_name TEXT,
+            procedure_code TEXT,
+            total_paid REAL,
+            claim_count INTEGER,
+            adjustment_reasons TEXT,
+            source_file TEXT,
+            source TEXT,
+            ingested_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_era835_period ON era_835_payments(period);
+        CREATE INDEX IF NOT EXISTS idx_era835_payer ON era_835_payments(payer_name);
+
         CREATE TABLE IF NOT EXISTS softdent_production (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             period TEXT NOT NULL,
@@ -572,6 +587,28 @@ def list_production_vs_payroll(*, limit: int = 12, db_path: Path | None = None) 
                 "totalProduction": r["total_production"],
                 "totalPayroll": r["total_payroll"],
                 "payrollToProductionRatio": r["payroll_to_production_ratio"],
+            }
+            for r in rows
+        ]
+
+
+def list_collection_vs_ap(*, limit: int = 12, db_path: Path | None = None) -> list[dict[str, Any]]:
+    with open_unified(path=db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT period, collections, total_ap, net_profit
+            FROM v_collection_vs_ap
+            ORDER BY period DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit), 36)),),
+        ).fetchall()
+        return [
+            {
+                "period": r["period"],
+                "collections": r["collections"],
+                "totalAp": r["total_ap"],
+                "netProfit": r["net_profit"],
             }
             for r in rows
         ]

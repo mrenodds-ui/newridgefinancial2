@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10481",
-  "assetVersion": "hal-10481",
-  "schemaVersion": "hal-10481",
-  "notes": "hal-10481: Moonshot T0-T5 SoftDent/QB unified metrics, import poll, orchestrator default ON.",
-  "builtAt": "2026-07-11T17:55:54.000Z"
+  "BUILD_ID": "hal-10486",
+  "assetVersion": "hal-10486",
+  "schemaVersion": "hal-10486",
+  "notes": "hal-10486: Moonshot U3 dashboard layout schema + mosaic ordering (starship-bridge).",
+  "builtAt": "2026-07-11T18:42:02.000Z"
 }

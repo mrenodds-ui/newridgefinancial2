@@ -871,6 +871,15 @@ body.apex-bridge {
   min-height: calc(100vh - var(--ticker-height) - 56px);
 }
 
+/* U3 — denser organized flow; keeps existing tokens / starship-bridge */
+.apex-mosaic--u3 {
+  grid-auto-flow: dense;
+}
+.apex-mosaic--u3[data-layout-phase="U3"] {
+  /* subtle cue only — no theme rewrite */
+  --mosaic-gap: calc(var(--mosaic-gap, 12px) * 0.92);
+}
+
 /* Financial: pack strips/charts/KPIs to the top with a compact row unit */
 #apex-stage.apex-mosaic[data-page="financial"] {
   --mosaic-row: 96px;

@@ -1,13 +1,13 @@
 /**
  * NR2-Apex Core — Bridge mosaic, silent refresh, print, session-aware fetch
- * Build: hal-10481 (IndexedDB widget cache + browser storage fallback)
+ * Build: hal-10486 (IndexedDB widget cache + browser storage fallback)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10481";
+  const ASSET_V = "hal-10486";
   const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
   const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
   const PARENT_PAGES = new Set([
@@ -4678,10 +4678,31 @@
 
     root.className = "apex-stage apex-mosaic";
     root.dataset.page = currentPage;
-    specs.forEach((spec, idx) => {
+    let orderedSpecs = specs;
+    try {
+      if (window.Nr2DashboardLayout && typeof window.Nr2DashboardLayout.orderSpecs === "function") {
+        const local =
+          typeof window.Nr2DashboardLayout.loadLocal === "function"
+            ? window.Nr2DashboardLayout.loadLocal(currentPage)
+            : null;
+        if (local) orderedSpecs = window.Nr2DashboardLayout.orderSpecs(specs, local);
+        window.Nr2DashboardLayout.markStage(root, currentPage);
+        if (typeof window.Nr2DashboardLayout.fetchLayout === "function") {
+          window.Nr2DashboardLayout.fetchLayout(currentPage).catch(() => {});
+        }
+      }
+    } catch (_) {}
+    orderedSpecs.forEach((spec, idx) => {
       const widget = new Widget(spec);
       widgets.set(widget.id, widget);
-      root.appendChild(widget.render(idx));
+      const el = widget.render(idx);
+      if (spec && spec.layout && el && el.style) {
+        const w = Number(spec.layout.w);
+        if (w >= 12) el.classList.add("apex-inst--full");
+        else if (w >= 8) el.classList.add("apex-inst--xl");
+        else if (w >= 6) el.classList.add("apex-inst--l");
+      }
+      root.appendChild(el);
     });
     if (window.ApexMotion && typeof window.ApexMotion.enableHoloTilt === "function") {
       window.ApexMotion.enableHoloTilt(root);

@@ -352,6 +352,13 @@ def ingest_era_835(
         result = attach_era_to_ingest(result, filename=filename)
     except Exception as exc:  # noqa: BLE001
         result["unifiedEraAggregate"] = {"ok": False, "error": str(exc)}
+    # Phase U1 — payer/proc aggregates (no PHI)
+    try:
+        from apex_era835_pack import attach_u1_to_era_ingest
+
+        result = attach_u1_to_era_ingest(result, content=content, filename=filename)
+    except Exception as exc:  # noqa: BLE001
+        result["era835U1"] = {"ok": False, "error": str(exc)}
     return result
 
 

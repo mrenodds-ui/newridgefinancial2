@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10481"
+BUILD_ID = "hal-10486"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1893,6 +1893,30 @@ def _financial_widgets_from_reports(
         widgets.append(production_vs_payroll_widget(bundle))
     except Exception:
         pass
+    try:
+        from apex_deep_audit_pack import deep_audit_widget
+
+        widgets.append(deep_audit_widget(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_reconciliation_pack import reconciliation_widget
+
+        widgets.append(reconciliation_widget(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_import_quarantine_pack import quarantine_widget
+
+        widgets.append(quarantine_widget(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_dashboard_layout_pack import layout_widget
+
+        widgets.append(layout_widget(bundle))
+    except Exception:
+        pass
 
     _apply_threshold_alerts(widgets, reports)
     return widgets
@@ -2325,6 +2349,12 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
 
         widgets.extend(production_widgets(bundle))
         widgets.extend(aging_schedule_widgets(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_era835_pack import era835_widget
+
+        widgets.append(era835_widget(bundle))
     except Exception:
         pass
 
@@ -3558,6 +3588,16 @@ def build_apex_widgets(
     if errors:
         source_note += f" (partial: {'; '.join(errors)})"
 
+    # Phase U3 — reorder widgets by dashboard layout schema (parent page only)
+    if not sub_key:
+        try:
+            from apex_dashboard_layout_pack import order_widget_specs
+
+            widgets = order_widget_specs(widgets, page=pid)
+            source_note += " +U3 layout"
+        except Exception:
+            pass
+
     page_label = f"{pid}/{sub_key}" if sub_key else pid
     payload = {
         "page": page_label,
@@ -4255,6 +4295,11 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(scheduling (gap|metrics)|fill rate|broken appointments)\b", "softdent-scheduling-gap", "softdent"),
         (r"\b(net profit|qb net profit)\b", "qb-net-profit-gap", "quickbooks"),
         (r"\b(production vs payroll|payroll.?to.?production)\b", "production-vs-payroll", "financial"),
+        (r"\b(deep audit|monthly (practice )?health audit|quarter forecast)\b", "deep-audit-status", "financial"),
+        (r"\b(era\s*835|remittance|era ingest)\b", "era835-ingest-gap", "softdent"),
+        (r"\b(reconcil|variance alert|production vs payroll variance)\b", "reconciliation-status", "financial"),
+        (r"\b(import quarantine|quarantined import|poisoned (file|export))\b", "import-quarantine-status", "financial"),
+        (r"\b(dashboard layout|mosaic layout|widget order)\b", "dashboard-layout-status", "financial"),
     )
     if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
         re.search(pat, q) for pat, _wid, _pg in focus_rules
@@ -5497,6 +5542,249 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             result["buildId"] = BUILD_ID
             status = 200 if result.get("ok") or result.get("reason") == "orchestrator_disabled" else 400
             return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/deep-audit-status")
+    def apex_deep_audit_status():
+        """Phase U0 — deep audit / forecast status."""
+        try:
+            from apex_deep_audit_pack import deep_audit_status
+
+            result = deep_audit_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/deep-audit")
+    def apex_deep_audit():
+        """Phase U0 — monthly practice health audit (30B / classify-only)."""
+        try:
+            import bottle
+            from apex_deep_audit_pack import generate_monthly_audit
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            classify_only = bool(payload.get("classifyOnly") or payload.get("classify_only"))
+            period = payload.get("period")
+            result = generate_monthly_audit(
+                period=str(period) if period else None,
+                classify_only=classify_only,
+            )
+            result["buildId"] = BUILD_ID
+            status = (
+                200
+                if result.get("ok")
+                or result.get("reason") in {"orchestrator_disabled", "deep_audit_disabled"}
+                else 400
+            )
+            return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/deep-forecast")
+    def apex_deep_forecast():
+        """Phase U0 — quarter forecast scaffold (null future $ until 30B)."""
+        try:
+            import bottle
+            from apex_deep_audit_pack import forecast_next_quarter
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            classify_only = bool(payload.get("classifyOnly") or payload.get("classify_only"))
+            period = payload.get("period")
+            result = forecast_next_quarter(
+                period=str(period) if period else None,
+                classify_only=classify_only,
+            )
+            result["buildId"] = BUILD_ID
+            status = (
+                200
+                if result.get("ok")
+                or result.get("reason") in {"orchestrator_disabled", "deep_audit_disabled"}
+                else 400
+            )
+            return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/era835-status")
+    def apex_era835_status():
+        try:
+            from apex_era835_pack import era835_status
+
+            result = era835_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/era835-payments")
+    def apex_era835_payments():
+        try:
+            from apex_era835_pack import list_era835_payments
+
+            rows = list_era835_payments(limit=50)
+            return json_response_fn(
+                {"ok": True, "phase": "U1", "rows": rows, "buildId": BUILD_ID}
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/era835-ingest")
+    def apex_era835_ingest():
+        """Phase U1 — parse ERA 835 EDI/CSV into payer aggregates (no PHI)."""
+        try:
+            import bottle
+            from apex_era835_pack import ingest_era835_to_unified
+
+            upload = bottle.request.files.get("file") if bottle.request.files else None
+            text = ""
+            filename = None
+            if upload is not None:
+                filename = str(getattr(upload, "filename", None) or "era.835")
+                text = upload.file.read().decode("utf-8", errors="replace")
+            else:
+                raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                try:
+                    payload = json.loads(raw or "{}")
+                except Exception:
+                    payload = {"text": raw}
+                text = str(payload.get("text") or payload.get("content") or "")
+                filename = payload.get("filename")
+            result = ingest_era835_to_unified(content=text, filename=filename)
+            result["buildId"] = BUILD_ID
+            status = (
+                200
+                if result.get("ok")
+                or result.get("reason") == "era835_disabled"
+                or result.get("gap") == "ERA835_PENDING"
+                else 400
+            )
+            return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/reconciliation-status")
+    def apex_reconciliation_status():
+        try:
+            from apex_reconciliation_pack import reconciliation_status
+
+            result = reconciliation_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/reconciliation")
+    def apex_reconciliation_run():
+        """Phase U2 — SoftDent×QB variance scan (+ optional 30B explainer)."""
+        try:
+            import bottle
+            from apex_reconciliation_pack import run_reconciliation
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            classify_only = bool(payload.get("classifyOnly") or payload.get("classify_only"))
+            explain = payload.get("explain")
+            if explain is None:
+                explain = True
+            period = payload.get("period")
+            result = run_reconciliation(
+                period=str(period) if period else None,
+                classify_only=classify_only,
+                explain=bool(explain),
+            )
+            result["buildId"] = BUILD_ID
+            status = (
+                200
+                if result.get("ok") or result.get("reason") == "reconciliation_disabled"
+                else 400
+            )
+            return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/import-quarantine-status")
+    def apex_import_quarantine_status():
+        try:
+            from apex_import_quarantine_pack import quarantine_status
+
+            result = quarantine_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/import-quarantine")
+    def apex_import_quarantine_list():
+        try:
+            from apex_import_quarantine_pack import list_quarantine
+
+            rows = list_quarantine(limit=50)
+            return json_response_fn(
+                {"ok": True, "phase": "U2b", "rows": rows, "buildId": BUILD_ID}
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/import-quarantine-release")
+    def apex_import_quarantine_release():
+        try:
+            import bottle
+            from apex_import_quarantine_pack import release_quarantine
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            name = str(payload.get("name") or payload.get("file") or "")
+            result = release_quarantine(name)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/dashboard-layout")
+    def apex_dashboard_layout_get():
+        try:
+            import bottle
+            from apex_dashboard_layout_pack import get_layout
+
+            page = str(bottle.request.query.get("page") or "financial")
+            result = get_layout(page)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/dashboard-layout")
+    def apex_dashboard_layout_save():
+        try:
+            import bottle
+            from apex_dashboard_layout_pack import save_layout
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            page = payload.get("page")
+            layout = payload.get("layout") if isinstance(payload.get("layout"), dict) else payload
+            result = save_layout(layout, page=str(page) if page else None)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/dashboard-layout-reset")
+    def apex_dashboard_layout_reset():
+        try:
+            import bottle
+            from apex_dashboard_layout_pack import reset_layout
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            page = str(payload.get("page") or "financial")
+            result = reset_layout(page)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
 

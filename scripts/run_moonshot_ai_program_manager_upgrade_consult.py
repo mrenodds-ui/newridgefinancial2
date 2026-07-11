@@ -50,42 +50,38 @@ NewRidge Family Financial (Kansas dental S-corp; SoftDent + QuickBooks imports;
 local HTTPS starship-bridge; Ollama GPU lanes chat8b + escalate30b).
 
 CRITICAL CONSTRAINTS:
-1. Answer the OPERATOR REQUEST VERBATIM again (RE-AUDIT #3). The operator message was CUT OFF
+1. Answer the OPERATOR REQUEST VERBATIM again (RE-AUDIT #4). The operator message was CUT OFF
    mid-sentence at "unified local database/state management system (e.g.," — note truncation,
    assume SQLite/NR2 app_data as unified store. Deliver a complete consult for sections 1–2
-   against the LIVE codebase NOW (build hal-10481), not earlier states.
+   against the LIVE codebase NOW (build hal-10486), not earlier states.
 2. ALREADY SHIPPED — do NOT rebuild:
-   - MUST I0–I4 (hal-10471..10475): orchestrator shell, structured insights,
-     DEF-001 Collections honesty, nr2_unified.db, integration gates
-   - SHOULD S0–S3 (hal-10479): QB payroll/AP + SSN redact, ERA aggregates + ERA_835_AVAILABLE,
-     proactive health monitor CLI, orchestrator opt-in GA docs
-   - NICE N0 (hal-10480): insight SSE (/api/apex/hal/insight-stream) + 5s poll fallback
-   - T0–T5 (hal-10481): SoftDent production + case acceptance; aging buckets + scheduling;
-     QB net profit; import poll/watcher; v_production_vs_payroll + v_collection_vs_ap;
-     efficiency_audit crossRef on hal-ai-insight; NR2_AI_ORCHESTRATOR defaults ON
-     (disable with =0/false/no/off)
+   - MUST I0–I4, SHOULD S0–S3, NICE N0, T0–T5 (through hal-10481)
+   - U0 (hal-10482): deep audit & forecast pack (30B monthly audit → SSE; NR2_DEEP_AUDIT)
+   - U1 (hal-10483): ERA 835 X12/CSV payer/proc aggregates (no PHI; NR2_ERA835)
+   - U2 (hal-10484): SoftDent×QB MoM reconciliation 5%/$500 (NR2_RECONCILIATION)
+   - U2b (hal-10485): import quarantine + admin alerts (NR2_IMPORT_QUARANTINE)
+   - U3 (hal-10486): dashboard layout schema + mosaic order (starship-bridge; NR2_DASHBOARD_LAYOUT)
 3. CONSULT ONLY — DO NOT APPLY code. Paste-ready sketches labeled CONSULT ONLY. Wait for approve.
 4. Ground EVERY recommendation in LIVE FACTS + attached excerpts. Evolve NR2 packs; no rewrite;
    no SoftDent write-back; never invent dollars; PHI local; empty ≠ $0.
-5. Map CURRENT (post I0–I4 + S0–S3 + N0 + T0–T5) vs TARGET. Rank ONLY remaining gaps
-   MUST/SHOULD/NICE with S/M/L effort and next-wave phases (U0..Un). Call out polish,
-   staging validation, burn-in ops, and any true product blockers left.
+5. Map CURRENT (post U0–U3) vs TARGET. Rank ONLY remaining gaps MUST/SHOULD/NICE with S/M/L
+   effort and next-wave phases (V0..Vn). If the original operator ask is substantially met,
+   say so clearly and focus on burn-in ops, staging validation, and polish gaps only.
 6. End with APPROVAL CHECKLIST for next work only.
 
 OUTPUT FORMAT (strict markdown):
-# Verdict — AI Program Manager re-audit #3 (post T0–T5 / hal-10481)
+# Verdict — AI Program Manager re-audit #4 (post U0–U3 / hal-10486)
 ## 0. Operator Intent (quote; note truncation; consult-only re-run)
-## 1. Current Architecture Audit (what exists at hal-10481)
-### 1A Model lanes & orchestrator (default ON)
-### 1B SoftDent production/aging/scheduling + DEF-001 + ERA
-### 1C QuickBooks payroll/AP/net profit + expenses
-### 1D Unified DB + cross-ref views + practice_health_snapshot
-### 1E Structured insights + SSE + efficiency_audit binding
-### 1F Import poll/watcher automation
+## 1. Current Architecture Audit (what exists at hal-10486)
+### 1A Orchestrator + deep audit/forecast (U0)
+### 1B SoftDent + ERA 835 aggregates (U1) + DEF-001
+### 1C QuickBooks + reconciliation (U2)
+### 1D Unified DB + import poll/quarantine (T3/U2b)
+### 1E Insights SSE + dashboard layout (N0/U3)
 ## 2. Gap Map — REMAINING only
 Table: Area | Status | Gap | Effort | Depends on
 ## 3. Target Architecture (next wave only)
-## 4. Coding Plan — Phase U0..Un (CONSULT ONLY sketches for remaining work)
+## 4. Coding Plan — Phase V0..Vn (CONSULT ONLY sketches for remaining work)
 ## 5. MUST / SHOULD / NICE ranked table (remaining)
 ## 6. Risks, PHI, SoftDent honesty, Rollback
 ## 7. Approval Checklist (next wave only)
@@ -102,12 +98,13 @@ def _truncate(text: str, max_lines: int) -> str:
 
 CONTEXT_FILES: list[tuple[str, int]] = [
     ("NewRidgeFinancial2/nr2-build.json", 12),
-    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_T0_T5_APPLIED_2026-07-11.md", 60),
-    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_N0_APPLIED_2026-07-11.md", 40),
-    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT2_2026-07-11.md", 50),
-    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_S3_APPLIED_2026-07-11.md", 40),
-    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_I4_APPLIED_2026-07-11.md", 30),
-    ("NewRidgeFinancial2/site/data/hal-models.json", 60),
+    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_U3_APPLIED_2026-07-11.md", 50),
+    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_U2B_APPLIED_2026-07-11.md", 40),
+    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_U2_APPLIED_2026-07-11.md", 40),
+    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_U1_APPLIED_2026-07-11.md", 40),
+    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_U0_APPLIED_2026-07-11.md", 40),
+    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT3_2026-07-11.md", 40),
+    ("NewRidgeFinancial2/site/data/hal-models.json", 40),
 ]
 
 
@@ -123,14 +120,13 @@ def build_context() -> str:
         parts.append(f"### FILE: {rel}\n```{ext}\n{body}\n```")
 
     for rel, max_lines in (
-        ("NewRidgeFinancial2/apex_orchestrator_pack.py", 60),
-        ("NewRidgeFinancial2/apex_softdent_production_pack.py", 50),
-        ("NewRidgeFinancial2/apex_softdent_aging_schedule_pack.py", 50),
-        ("NewRidgeFinancial2/apex_qb_net_profit_pack.py", 50),
-        ("NewRidgeFinancial2/apex_import_watcher_pack.py", 60),
-        ("NewRidgeFinancial2/apex_unified_db_pack.py", 80),
-        ("NewRidgeFinancial2/apex_structured_insight_pack.py", 50),
-        ("NewRidgeFinancial2/apex_insight_sse_pack.py", 40),
+        ("NewRidgeFinancial2/apex_orchestrator_pack.py", 40),
+        ("NewRidgeFinancial2/apex_deep_audit_pack.py", 40),
+        ("NewRidgeFinancial2/apex_era835_pack.py", 40),
+        ("NewRidgeFinancial2/apex_reconciliation_pack.py", 40),
+        ("NewRidgeFinancial2/apex_import_quarantine_pack.py", 40),
+        ("NewRidgeFinancial2/apex_dashboard_layout_pack.py", 40),
+        ("NewRidgeFinancial2/apex_unified_db_pack.py", 50),
     ):
         path = REPO / rel
         if path.is_file():
@@ -141,20 +137,13 @@ def build_context() -> str:
             )
 
     parts.append(
-        """### LIVE FACTS (hal-10481 — RE-AUDIT #3 after I0–I4 + S0–S3 + N0 + T0–T5)
-- Epoch: NR2 Apex starship bridge (local HTTPS Chrome). SoftDent + QuickBooks import-backed.
-- MUST I0–I4 + SHOULD S0–S3 + NICE N0 + T0–T5 SHIPPED on builds through hal-10481.
-- Orchestrator flag NR2_AI_ORCHESTRATOR defaults ON (T5); disable with 0/false/no/off.
-- SoftDent: DEF-001 honesty; production + case acceptance; aging buckets; scheduling;
-  ERA aggregates; ERA_835_AVAILABLE proposal only — no write-back.
-- QuickBooks: expenses + payroll/AP (SSN redact) + net profit; missing → pending ≠ $0.
-- Unified: nr2_unified.db + practice_health_snapshot + v_production_vs_payroll +
-  v_collection_vs_ap; ingest hooks on Sync; import poll/watcher (debounce 2s, retry×3).
-- Insights: structured JSON + PHI reject; SSE + 5s poll; efficiency_audit attaches
-  v_production_vs_payroll crossRef on hal-ai-insight.
-- Proactive monitor CLI exists; deep lane runs when orchestrator enabled.
+        """### LIVE FACTS (hal-10486 — RE-AUDIT #4 after U0–U3)
+- Program Manager upgrade waves shipped: I0–I4, S0–S3, N0, T0–T5, U0–U3/U2b.
+- Orchestrator default ON; deep audit/forecast; ERA 835 aggregates; MoM reconciliation;
+  import quarantine; dashboard layout schema on starship-bridge.
+- Honesty rules enforced: empty ≠ $0; gap codes; no SoftDent write-back; PHI stripped on ERA.
 - Operator request (verbatim) re-submitted. CONSULT ONLY — remaining gaps only.
-- Hard rules: never invent $; PHI local; empty widgets stay empty; no SoftDent write-back.
+- If operator sections 1–2 are substantially met, declare that and rank only residual polish/ops.
 """
     )
     return "\n\n".join(parts)
@@ -175,11 +164,10 @@ def main() -> int:
 
     print(f"Using {key_name} @ {base_url} model={model}")
     user = (
-        "OPERATOR REQUEST (VERBATIM — do not rewrite) — RE-RUN #3 after T0–T5 / hal-10481:\n\n"
+        "OPERATOR REQUEST (VERBATIM — do not rewrite) — RE-RUN #4 after U0–U3 / hal-10486:\n\n"
         f"{OPERATOR_REQUEST_VERBATIM}\n\n"
-        "NOTE: Same truncated operator message. MUST I0–I4, SHOULD S0–S3, NICE N0, and "
-        "T0–T5 (SoftDent/QB unified metrics, import watcher, orchestrator default ON) "
-        "are already shipped on hal-10481. Re-audit ONLY remaining gaps. "
+        "NOTE: Same truncated operator message. I0–I4, S0–S3, N0, T0–T5, and U0–U3/U2b "
+        "are shipped on hal-10486. Re-audit ONLY remaining gaps. "
         "CONSULT ONLY — do not apply. Wait for approval.\n\n"
         "## Codebase context\n\n"
         + build_context()
@@ -222,14 +210,14 @@ def main() -> int:
         status = "error"
 
     header = (
-        f"# Moonshot AI — AI Program Manager Upgrade RE-AUDIT #3 (CONSULT ONLY)\n\n"
+        f"# Moonshot AI — AI Program Manager Upgrade RE-AUDIT #4 (CONSULT ONLY)\n\n"
         f"**Date:** {DATE}  \n"
         f"**Model:** {model}  \n"
         f"**Key:** {key_name}  \n"
         f"**Endpoint:** {base_url}  \n"
         f"**Status:** {status}  \n"
-        f"**Build reviewed:** hal-10481 (post I0–I4 + S0–S3 + N0 + T0–T5)  \n"
-        f"**Prior:** `MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT2_2026-07-11.md`  \n"
+        f"**Build reviewed:** hal-10486 (post U0–U3 / U2b)  \n"
+        f"**Prior:** `MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT3_2026-07-11.md`  \n"
         f"**Script:** `scripts/run_moonshot_ai_program_manager_upgrade_consult.py`  \n"
         f"**Apply:** DO NOT APPLY / DO NOT CODE until operator approves.\n\n"
         f"## Operator request (verbatim)\n\n"
@@ -237,8 +225,8 @@ def main() -> int:
         f"---\n\n"
     )
     full = header + (content or "(empty)")
-    out_file = OUT / f"MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT3_{DATE}.md"
-    doc_file = DOCS / f"MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT3_{DATE}.md"
+    out_file = OUT / f"MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT4_{DATE}.md"
+    doc_file = DOCS / f"MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT4_{DATE}.md"
     out_file.write_text(full, encoding="utf-8")
     doc_file.write_text(full, encoding="utf-8")
     print(out_file)
