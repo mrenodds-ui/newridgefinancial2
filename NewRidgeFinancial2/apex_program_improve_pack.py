@@ -321,13 +321,21 @@ def ingest_era_835(
     data["updatedAt"] = _utc_now()
     _save_json(STORE_KEY_ERA_MATCHES, data)
     _audit("era:ingest", {"segments": len(segments), "matched": len(matched), "file": filename})
-    return {
+    result = {
         "ok": True,
         "segmentCount": len(segments),
         "matchedCount": len(matched),
         "matches": matched[:40],
         "byClaimCount": len(by_claim),
     }
+    # HAL-said improve: denial→Steve + EOB backlog (NR2-local only)
+    try:
+        from apex_hal_said_improve_pack import process_era_workflow
+
+        result["halSaidWorkflow"] = process_era_workflow(result, filename=filename)
+    except Exception as exc:  # noqa: BLE001
+        result["halSaidWorkflow"] = {"ok": False, "error": str(exc)}
+    return result
 
 
 def era_matches_map() -> dict[str, dict[str, Any]]:
@@ -457,6 +465,23 @@ def save_claim_attachment(
     if not cid:
         return {"ok": False, "error": "claimId required"}
     safe_name = re.sub(r"[^\w.\-]+", "_", Path(filename or "attachment.bin").name)[:120]
+    ext = Path(safe_name).suffix.lower()
+    allowed = {".pdf", ".png", ".jpg", ".jpeg"}
+    if ext not in allowed:
+        return {
+            "ok": False,
+            "error": f"File type not allowed ({ext or 'none'}). Allowed: PDF, PNG, JPG (max 10MB).",
+        }
+    if len(raw) > 10 * 1024 * 1024:
+        return {"ok": False, "error": "File exceeds 10MB limit"}
+    # Lightweight content sniff (not a full AV scan — operator-approved gate)
+    head = raw[:8]
+    if ext == ".pdf" and not head.startswith(b"%PDF"):
+        return {"ok": False, "error": "File content does not look like a PDF"}
+    if ext in {".png"} and not head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return {"ok": False, "error": "File content does not look like a PNG"}
+    if ext in {".jpg", ".jpeg"} and not head.startswith(b"\xff\xd8"):
+        return {"ok": False, "error": "File content does not look like a JPEG"}
     dest_dir = Path(NR2_DATA_DIR) / "claim_attachments" / re.sub(r"[^\w\-]+", "_", cid)[:80]
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{uuid.uuid4().hex[:8]}_{safe_name}"
@@ -469,6 +494,7 @@ def save_claim_attachment(
         "bytes": len(raw),
         "note": (note or "")[:500],
         "at": _utc_now(),
+        "storageRoot": str(Path(NR2_DATA_DIR) / "claim_attachments").replace("\\", "/"),
     }
     data = _load_json(STORE_KEY_CLAIM_ATTACHMENTS)
     items = data.get("items") if isinstance(data.get("items"), list) else []
@@ -513,6 +539,14 @@ def build_daily_huddle_widget(reports: dict[str, Any], bundle: dict[str, Any]) -
     for a in health.get("alerts") or []:
         if isinstance(a, dict) and a.get("message"):
             priorities.append(str(a["message"]))
+    try:
+        from apex_hal_said_improve_pack import huddle_extra_priorities
+
+        for extra in huddle_extra_priorities():
+            if extra not in priorities:
+                priorities.append(extra)
+    except Exception:
+        pass
 
     # Claims 90+
     try:
@@ -540,21 +574,35 @@ def build_daily_huddle_widget(reports: dict[str, Any], bundle: dict[str, Any]) -
     if isinstance(ninety, (int, float)) and float(ninety) >= 5000:
         priorities.append(f"A/R 90+ outstanding ${float(ninety):,.0f}")
 
-    # Operatory utilization signal
+    # Operatory utilization signal (chair-shaped import)
     op_count = 0
+    chair_n = 0
+    slot_n = 0
     try:
         softdent = bundle.get("softdent") if isinstance(bundle.get("softdent"), dict) else {}
-        for key in ("operatorySchedule", "operatory", "schedule"):
+        chairs: list[Any] = []
+        for key in ("operatory", "operatorySchedule", "schedule"):
             sec = softdent.get(key)
+            if isinstance(sec, dict) and isinstance(sec.get("operatoryChairs"), list):
+                chairs = sec["operatoryChairs"]
+                break
             if isinstance(sec, dict) and isinstance(sec.get("rows"), list):
                 op_count = len(sec["rows"])
                 break
             if isinstance(sec, list):
                 op_count = len(sec)
                 break
+        if chairs:
+            chair_n = len(chairs)
+            for chair in chairs:
+                if isinstance(chair, dict) and isinstance(chair.get("slots"), list):
+                    slot_n += len(chair["slots"])
+            op_count = slot_n
     except Exception:
         op_count = 0
-    if op_count:
+    if chair_n:
+        priorities.append(f"Operatory: {chair_n} chair(s), {slot_n} scheduled slot(s)")
+    elif op_count:
         priorities.append(f"Operatory schedule rows on import: {op_count}")
 
     if not priorities:

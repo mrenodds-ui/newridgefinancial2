@@ -178,18 +178,11 @@ body {
   position: sticky;
   top: 68px;
   align-self: start;
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 80px);
   max-height: calc(100vh - 80px);
-  overflow: hidden;
 }
 
 .apex-hal-rail .apex-widget--hal-chat {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
-  max-height: 100%;
+  min-height: calc(100vh - 96px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -197,40 +190,70 @@ body {
 
 .apex-hal-rail .apex-widget--hal-chat .apex-widget-header {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .apex-hal-chat {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  background: var(--apex-elevated, var(--apex-surface));
+  border-radius: var(--apex-radius);
 }
 
 .apex-hal-chat__messages {
   flex: 1 1 auto;
   min-height: 120px;
-  max-height: none;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
   background: var(--apex-surface);
   border: 1px solid var(--apex-border);
   border-radius: var(--apex-radius);
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  margin: 0 0 4px;
+}
+
+.apex-hal-chat__empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--apex-text-secondary);
+  opacity: 0.85;
+}
+
+.apex-hal-chat__empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--apex-cyan);
+  margin-bottom: 4px;
+}
+
+.apex-hal-chat__empty-hint {
+  font-size: 11px;
 }
 
 .apex-hal-chat__msg {
+  position: relative;
   font-size: 12px;
-  line-height: 1.45;
-  padding: 8px 10px;
+  line-height: 1.5;
+  padding: 10px 12px;
   border-radius: var(--apex-radius);
-  max-width: 95%;
+  max-width: 88%;
   white-space: pre-wrap;
   word-break: break-word;
+  animation: apex-hal-fade-in 180ms ease-out;
+}
+
+@keyframes apex-hal-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .apex-hal-chat__msg--user {
@@ -247,84 +270,230 @@ body {
   border: 1px solid var(--apex-border);
 }
 
+.apex-hal-chat__msg--system {
+  align-self: center;
+  max-width: 95%;
+  font-size: 11px;
+  color: var(--apex-text-secondary);
+  background: transparent;
+  border: 1px dashed var(--apex-border);
+  opacity: 0.9;
+}
+
+.apex-hal-chat__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity var(--apex-anim-fast);
+  font-size: 10px;
+  color: var(--apex-text-secondary);
+}
+
+.apex-hal-chat__msg:hover .apex-hal-chat__meta-row,
+.apex-hal-chat__msg:focus-within .apex-hal-chat__meta-row {
+  opacity: 1;
+}
+
+.apex-hal-chat__copy {
+  background: transparent;
+  border: none;
+  color: var(--apex-cyan);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 10px;
+  border-radius: 4px;
+}
+
+.apex-hal-chat__copy:hover {
+  background: var(--apex-cyan-dim);
+}
+
+.apex-hal-chat__chips-wrap {
+  flex-shrink: 0;
+  position: relative;
+  padding: 0 2px;
+  margin-bottom: 4px;
+}
+
+.apex-hal-chat__chips-wrap::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  background: linear-gradient(to right, transparent, var(--apex-elevated));
+  pointer-events: none;
+}
+
 .apex-hal-chat__chips {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
-  flex-shrink: 0;
-  max-height: 72px;
-  overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+
+.apex-hal-chat__chips::-webkit-scrollbar {
+  display: none;
 }
 
 .apex-hal-chat__chip {
+  flex: 0 0 auto;
   border: 1px solid var(--apex-border);
   background: var(--apex-surface);
   color: var(--apex-text-secondary);
   border-radius: var(--apex-radius);
-  padding: 4px 8px;
+  padding: 5px 10px;
   font-size: 11px;
   cursor: pointer;
   transition: all var(--apex-anim-fast);
+  white-space: nowrap;
 }
 
-.apex-hal-chat__chip:hover {
+.apex-hal-chat__chip:hover,
+.apex-hal-chat__chip:focus {
   color: var(--apex-cyan);
   border-color: var(--apex-cyan-dim);
   background: var(--apex-cyan-dim);
+  outline: none;
 }
 
+.apex-hal-chat__composer,
 .apex-hal-chat__form {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
   gap: 8px;
-  align-items: end;
+  align-items: flex-end;
   flex-shrink: 0;
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
+  padding: 8px 0 0;
   background: var(--apex-elevated, var(--apex-surface));
-  padding-top: 4px;
+  border-top: 1px solid var(--apex-border);
+  z-index: 2;
+}
+
+.apex-hal-chat__input-sizer {
+  flex: 1 1 auto;
+  position: relative;
+  min-width: 0;
 }
 
 .apex-hal-chat__input {
   width: 100%;
-  resize: vertical;
-  min-height: 52px;
-  max-height: 120px;
+  field-sizing: content;
+  min-height: 44px;
+  max-height: 160px;
+  resize: none;
   background: var(--apex-surface);
   border: 1px solid var(--apex-border);
   border-radius: var(--apex-radius);
   color: var(--apex-text-primary);
-  padding: 8px 10px;
+  padding: 10px 12px;
   font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@supports not (field-sizing: content) {
+  .apex-hal-chat__input {
+    overflow-y: auto;
+  }
 }
 
 .apex-hal-chat__input:focus {
   outline: none;
   border-color: var(--apex-cyan);
-  box-shadow: 0 0 0 1px var(--apex-cyan-dim);
+  box-shadow: 0 0 0 2px var(--apex-cyan-dim);
 }
 
 .apex-hal-chat__send {
+  flex: 0 0 auto;
+  height: 44px;
+  width: 44px;
+  display: grid;
+  place-items: center;
   border: 1px solid var(--apex-cyan-dim);
   background: var(--apex-cyan-dim);
   color: var(--apex-cyan);
   border-radius: var(--apex-radius);
-  padding: 10px 14px;
+  padding: 0;
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   cursor: pointer;
   transition: all var(--apex-anim-fast);
 }
 
-.apex-hal-chat .apex-kpi-hint {
+.apex-hal-chat__send:hover {
+  background: rgba(0, 240, 255, 0.28);
+}
+
+.apex-hal-chat__send:active {
+  transform: translateY(1px);
+}
+
+.apex-hal-chat__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 0;
+  font-size: 11px;
+  color: var(--apex-text-secondary);
   flex-shrink: 0;
 }
 
-.apex-hal-chat__send:hover {
-  background: rgba(0, 240, 255, 0.28);
+.apex-hal-chat__hint,
+.apex-hal-chat .apex-kpi-hint {
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.apex-hal-chat__indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--apex-cyan);
+  font-weight: 500;
+}
+
+.apex-hal-chat__indicator[hidden] {
+  display: none;
+}
+
+.apex-hal-chat__dot {
+  width: 6px;
+  height: 6px;
+  background: var(--apex-cyan);
+  border-radius: 50%;
+  animation: apex-hal-chat-pulse 1.5s infinite;
+}
+
+@keyframes apex-hal-chat-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.apex-hal-chat__live-indicator {
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  background: var(--apex-cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--apex-elevated);
+}
+
+.apex-hal-chat__live-indicator.is-busy {
+  background: var(--apex-amber, #f59e0b);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apex-hal-chat__msg {
+    animation: none;
+  }
+  .apex-hal-chat__dot {
+    animation: none;
+  }
 }
 
 .apex-widget {
@@ -530,15 +699,11 @@ body {
 
   .apex-hal-rail {
     position: static;
-    height: auto;
     max-height: none;
-    overflow: visible;
   }
 
   .apex-hal-rail .apex-widget--hal-chat {
-    min-height: 420px;
-    height: min(70vh, 640px);
-    max-height: min(70vh, 640px);
+    min-height: 360px;
   }
 }
 

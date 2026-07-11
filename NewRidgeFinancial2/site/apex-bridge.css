@@ -1140,8 +1140,20 @@ body.apex-bridge {
   max-width: none; overflow: auto; box-shadow: 0 0 0 1px var(--apex-cyan), 0 24px 80px rgba(0,0,0,0.65);
   backdrop-filter: blur(8px);
 }
+.apex-focus-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 3990;
+  cursor: pointer;
+}
+body.apex-focus-open .apex-focus-backdrop {
+  display: block;
+}
+/* Legacy pseudo backdrop (kept inert) — real #apex-focus-backdrop handles dismiss clicks */
 body.apex-focus-open::before {
-  content: ""; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 3990;
+  content: none;
 }
 
 /* Tax library + Ask HAL (hal-10300) */
@@ -1167,6 +1179,8 @@ body.apex-focus-open::before {
   outline: 2px solid var(--apex-cyan) !important;
   box-shadow: 0 0 0 4px rgba(0, 240, 255, 0.2), 0 0 24px rgba(0, 240, 255, 0.35) !important;
   animation: apexHalPulse 1.2s ease-in-out 2;
+  position: relative;
+  z-index: 20;
 }
 @keyframes apexHalPulse {
   0%, 100% { filter: brightness(1); }
@@ -2214,6 +2228,8 @@ body.apex-claim-drawer-open::after {
   inset: 0;
   background: rgba(0,0,0,0.45);
   z-index: 4190;
+  cursor: pointer;
+  pointer-events: auto;
 }
 .apex-claim-drawer__head {
   display: flex;
