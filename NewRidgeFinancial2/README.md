@@ -48,13 +48,12 @@ NewRidgeFinancial2/
   import-manifest.json shared import filename contract (Python + JS)
   local_store.py     local SQLite state store
   site/
+    indexeddb-store.js IndexedDB client cache (Apex widgets + browser storage fallback)
     import-loader.js maps import files into dashboard shapes HAL uses
-    index.html        app shell
-    styles.css        mission-control shell styling
-    app.js            internal routing and local app state
-    page-views.js     real client-side screens for program pages
-    hal-page.js       real HAL Command Center screen
-    desktop-bridge.js loopback HTTP + optional pywebview bridge
+    index.html        Apex Bridge app shell
+    apex-core.js      mosaic load/refresh + IndexedDB stale-while-revalidate
+    desktop-bridge.js loopback HTTP + optional pywebview bridge (IndexedDB/session fallback)
+    app.js            HAL command-center routing and local app state (legacy shell paths)
 ```
 
 ## Stop

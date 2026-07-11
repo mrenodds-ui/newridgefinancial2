@@ -2,6 +2,8 @@
   "BUILD_ID": "hal-10475",
   "assetVersion": "hal-10475",
   "schemaVersion": "hal-10475",
+  "epoch": "nr2-apex",
+  "releasedAt": "2026-07-10",
   "notes": "hal-10475: Phase I4 MUST-wave closeout (integration gates + flag smoke).",
   "builtAt": "2026-07-11T17:25:17.000Z"
 }

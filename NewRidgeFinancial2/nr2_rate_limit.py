@@ -45,6 +45,7 @@ RATE_LIMIT_EXEMPT_PATHS = frozenset(
         "/api/import-readiness",
         "/api/import-sync-status",
         "/api/import-sync-reset",
+        "/api/webhooks/website-appointment",
         "/nr2-build.json",
     }
 )
