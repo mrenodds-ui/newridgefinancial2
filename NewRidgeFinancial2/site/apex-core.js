@@ -6,59 +6,7 @@
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
-  const ASSET_V = "hal-10420";
-  const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
-
-  function formatPatientDisplay(name) {
-    const raw = String(name || "").trim();
-    if (!raw) return "—";
-    if (raw.includes(",")) return raw;
-    const parts = raw.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) {
-      const last = parts[parts.length - 1];
-      const first = parts.slice(0, -1).join(" ");
-      return `${last}, ${first}`;
-    }
-    return raw;
-  }
-
-  function attachmentDotHtml(att) {
-    if (!att || typeof att !== "object") {
-      return `<span class="apex-wb-att apex-wb-att--unknown" title="Attachments not on import">—</span>`;
-    }
-    const cur = Number(att.current);
-    const req = att.required;
-    if (req != null && Number.isFinite(Number(req))) {
-      const ok = Number.isFinite(cur) && cur >= Number(req);
-      return `<span class="apex-wb-att ${ok ? "apex-wb-att--ok" : "apex-wb-att--missing"}" title="${
-        ok ? "Attachments complete" : "Missing attachments"
-      }">${ok ? "●" : "○"}</span>`;
-    }
-    if (Number.isFinite(cur) && cur > 0) {
-      return `<span class="apex-wb-att apex-wb-att--ok" title="${cur} attachment(s)">●</span>`;
-    }
-    return `<span class="apex-wb-att apex-wb-att--unknown" title="No attachment count">—</span>`;
-  }
-
-  function preferredWorkbenchView(fallback) {
-    try {
-      const v = sessionStorage.getItem(WB_VIEW_KEY) || localStorage.getItem(WB_VIEW_KEY);
-      if (v === "table" || v === "kanban") return v;
-    } catch (_err) {
-      /* ignore */
-    }
-    return fallback === "kanban" ? "kanban" : "table";
-  }
-
-  function persistWorkbenchView(view) {
-    const v = view === "kanban" ? "kanban" : "table";
-    try {
-      localStorage.setItem(WB_VIEW_KEY, v);
-      sessionStorage.setItem(WB_VIEW_KEY, v);
-    } catch (_err) {
-      /* ignore */
-    }
-  }
+  const ASSET_V = "hal-10360";
 
   const PAGE_TITLES = {
     financial: "Financial",
@@ -76,6 +24,14 @@
 
   function instrumentSize(spec) {
     const type = String((spec && spec.type) || "kpi");
+    // FIN-002: empty large instruments collapse to strip
+    if (
+      spec &&
+      (spec.collapseWhenEmpty === true || spec.compact === true) &&
+      (spec.status === "empty" || spec.status === "awaiting-migration")
+    ) {
+      return "strip";
+    }
     if (spec && spec.size) return String(spec.size);
     if (type === "hal-chat") return "hal-chat";
     if (type === "chart" || type === "bar" || type === "line") return "l";
@@ -87,16 +43,20 @@
       type === "horizontal-bar" ||
       type === "donut" ||
       type === "stacked-bar" ||
-      type === "waterfall"
+      type === "waterfall" ||
+      type === "revenue-composition"
     )
       return "l";
+    if (type === "dual-axis-trend") return "m";
     if (type === "bullet" || type === "scrubber") return type === "scrubber" ? "full" : "s";
     if (type === "heatmap" || type === "calculator" || type === "categorize" || type === "tax-library")
       return "xl";
-    if (type === "ebitda-scrubber" || type === "filing-workflow" || type === "claim-shelf") return "full";
+    if (type === "ebitda-scrubber" || type === "ebitda-station" || type === "filing-workflow" || type === "claim-shelf")
+      return "full";
     if (type === "claims-kanban" || type === "claims-workbench" || type === "claims-header-stats" || type === "daily-huddle")
       return "full";
-    if (type === "claims-executive-strip") return "strip";
+    if (type === "claims-executive-strip" || type === "executive-strip" || type === "financial-command-strip")
+      return "strip";
     if (type === "claims-aging-exposure") return "xl";
     if (type === "claims-critical-actions") return "m";
     if (type === "claims-risk-bars" || type === "claims-era-gauge" || type === "claim-attachments")
@@ -191,9 +151,6 @@
       const size = instrumentSize(this.spec);
       el.className = `apex-widget apex-inst apex-inst--${size}`;
       el.dataset.widgetId = this.id;
-      if (Array.isArray(this.spec.aliasIds) && this.spec.aliasIds.length) {
-        el.dataset.aliasIds = this.spec.aliasIds.map(String).join(" ");
-      }
       el.style.animationDelay = `${index * config.animStagger}ms`;
       if (this.type === "hal-chat") {
         el.classList.add("apex-widget--hal-chat", "apex-inst--hal-chat");
@@ -227,7 +184,7 @@
             <div class="apex-hal-chat__messages" data-hal-messages aria-live="polite"></div>
             <div class="apex-hal-chat__chips" data-hal-chips></div>
             <form class="apex-hal-chat__form" data-hal-form>
-              <textarea class="apex-hal-chat__input" data-hal-input rows="2" placeholder="Ask HAL…" aria-label="Ask HAL"></textarea>
+              <textarea class="apex-hal-chat__input" data-hal-input rows="2" enterkeyhint="send" placeholder="Ask HAL… (Enter to send · Shift+Enter for new line)" aria-label="Ask HAL"></textarea>
               <button type="submit" class="apex-hal-chat__send" data-hal-send>Send</button>
             </form>
             <div class="apex-kpi-hint">${this.escape(this.spec.hint || "Local HAL command surface")}</div>
@@ -238,7 +195,6 @@
       if (this.type === "status" || this.spec.status === "awaiting-migration") {
         const checks = Array.isArray(this.spec.checks) ? this.spec.checks : [];
         const actions = Array.isArray(this.spec.actions) ? this.spec.actions : [];
-        const compact = this.spec.compact === true || this.spec.size === "strip";
         const checkHtml = checks.length
           ? `<ul class="apex-c0-checks">${checks
               .map(
@@ -257,17 +213,6 @@
         const refreshBtn = this.spec.refreshUrl
           ? `<button type="button" class="apex-btn apex-btn--small" data-c0-refresh>Refresh SoftDent period imports</button>`
           : "";
-        if (compact) {
-          const tone = this.spec.status === "empty" || this.spec.status === "warn" ? "is-warn" : "is-ok";
-          return `
-            <div class="apex-import-strip ${tone}">
-              <span class="apex-import-strip__label">${label}</span>
-              <span class="apex-import-strip__msg">${this.escape(this.spec.message || "—")}</span>
-              <span class="apex-import-strip__hint">${this.escape(this.spec.hint || "")}</span>
-              ${refreshBtn}
-            </div>
-          `;
-        }
         return `
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
@@ -868,21 +813,25 @@
         `;
       }
 
-      if (this.type === "claims-executive-strip") {
+      if (this.type === "claims-executive-strip" || this.type === "executive-strip") {
         const pills = Array.isArray(this.spec.pills) ? this.spec.pills : [];
         const empty = this.spec.status === "empty" || !pills.length;
         const cells = pills
           .map((s) => {
             const tone = String((s && s.tone) || "");
             let display = "—";
-            if (s && s.value != null && s.empty !== true) {
+            if (s && s.pending) display = "Pending";
+            else if (s && s.value != null && s.empty !== true) {
               if (s.format === "money") display = formatMoney(s.value) || "—";
               else if (s.format === "pct") display = `${Math.round(Number(s.value) * 1000) / 10}%`;
+              else if (s.format === "pct_points") display = `${Number(s.value).toFixed(1)}%`;
               else display = formatCount(s.value) || String(s.value);
             }
-            return `<div class="apex-exec-pill ${s && s.empty ? "is-empty" : ""}">
+            const sub = s && s.sub ? `<div class="apex-exec-pill__sub">${this.escape(s.sub)}</div>` : "";
+            return `<div class="apex-exec-pill ${s && (s.empty || s.pending) ? "is-empty" : ""}">
               <div class="apex-exec-pill__value ${this.escape(tone)}">${this.escape(display)}</div>
               <div class="apex-exec-pill__label">${this.escape((s && s.label) || "")}</div>
+              ${sub}
             </div>`;
           })
           .join("");
@@ -895,6 +844,291 @@
                 : `<div class="apex-exec-strip">${cells}</div>`
             }
           </div>
+        `;
+      }
+
+      if (this.type === "financial-command-strip") {
+        const tone =
+          this.spec.importStatus === "empty" || this.spec.briefTone === "warn" ? "is-warn" : "is-ok";
+        const periods = Array.isArray(this.spec.periods) ? this.spec.periods : [];
+        const active = String(this.spec.activePeriod || "");
+        const chips = periods
+          .slice(-8)
+          .map((p) => {
+            const on = String(p) === active ? " is-active" : "";
+            return `<button type="button" class="apex-scrub-chip${on}" data-period="${this.escape(
+              String(p)
+            )}">${this.escape(String(p))}</button>`;
+          })
+          .join("");
+        const actions = Array.isArray(this.spec.briefActions) ? this.spec.briefActions : [];
+        const actionBtn = actions.length
+          ? `<button type="button" class="apex-btn apex-btn--small" data-fin-cmd-action="${this.escape(
+              actions[0].id || "refresh_softdent_period"
+            )}">${this.escape(actions[0].label || "Sync")}</button>`
+          : "";
+        return `
+          <div class="apex-fin-command ${tone}">
+            <div class="apex-fin-command__import">
+              <span class="apex-import-strip__label">${label}</span>
+              <span class="apex-import-strip__msg">${this.escape(this.spec.importMessage || "—")}</span>
+            </div>
+            <div class="apex-fin-command__periods" data-fin-periods>${chips || `<span class="apex-kpi-hint">No periods</span>`}</div>
+            <div class="apex-fin-command__brief">
+              <span class="apex-fin-command__brief-label">Brief</span>
+              <span class="apex-fin-command__brief-msg">${this.escape(this.spec.briefMessage || "")}</span>
+              ${actionBtn}
+            </div>
+          </div>
+        `;
+      }
+
+      if (this.type === "revenue-composition") {
+        const segs = Array.isArray(this.spec.segments) ? this.spec.segments : [];
+        const slices = Array.isArray(this.spec.slices) ? this.spec.slices : [];
+        const empty = this.spec.status === "empty" || (!segs.length && !slices.length);
+        if (empty) {
+          return `
+            <div class="apex-compact-action">
+              <div class="apex-compact-action__title">${label}</div>
+              <div class="apex-compact-action__msg">${this.escape(
+                this.spec.emptyMessage || "Awaiting Collections export"
+              )}</div>
+              <button type="button" class="apex-btn apex-btn--small" data-fin-cmd-action="${this.escape(
+                this.spec.halAction || "refresh_softdent_period"
+              )}">${this.escape(this.spec.halActionLabel || "Sync SoftDent Collections")}</button>
+              <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+            </div>
+          `;
+        }
+        const totalSeg = segs.reduce((a, s) => a + (Number(s.value) || 0), 0) || 1;
+        const stack = segs
+          .map((s) => {
+            const v = Number(s.value) || 0;
+            const pct = Math.max(4, Math.round((v / totalSeg) * 100));
+            return `<div class="apex-stack-seg" style="width:${pct}%"><span>${this.escape(s.label || "")}</span></div>`;
+          })
+          .join("");
+        const totalDonut = slices.reduce((a, s) => a + (Number(s.value) || 0), 0) || 1;
+        let acc = 0;
+        const colors = ["#00f0ff", "#ffb800", "#ff0066", "#7cffc4", "#a78bfa", "#38bdf8"];
+        const stops = slices
+          .map((s, i) => {
+            const v = Number(s.value) || 0;
+            const start = (acc / totalDonut) * 100;
+            acc += v;
+            const end = (acc / totalDonut) * 100;
+            return `${colors[i % colors.length]} ${start}% ${end}%`;
+          })
+          .join(", ");
+        const legend = slices
+          .map((s, i) => {
+            const v = Number(s.value) || 0;
+            const pct = Math.round((v / totalDonut) * 100);
+            const disp = this.spec.unit === "count" ? formatCount(v) : formatMoney(v) || String(v);
+            return `<div class="apex-donut-leg"><i style="background:${colors[i % colors.length]}"></i>
+              <span>${this.escape(s.label || "")}</span>
+              <strong>${this.escape(disp || "")} · ${pct}%</strong></div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          <div class="apex-revenue-comp">
+            ${
+              segs.length
+                ? `<div class="apex-revenue-comp__split">
+                    <div class="apex-mini-label">Insurance vs Patient</div>
+                    <div class="apex-stack-bar apex-stack-bar--tall">${stack}</div>
+                    <div class="apex-stack-meta">${segs
+                      .map(
+                        (s) =>
+                          `<span>${this.escape(s.label)}: ${this.escape(formatMoney(s.value) || "—")}</span>`
+                      )
+                      .join(" · ")}</div>
+                  </div>`
+                : ""
+            }
+            ${
+              slices.length
+                ? `<div class="apex-revenue-comp__donut">
+                    <div class="apex-mini-label">Payer Mix</div>
+                    <div class="apex-donut-wrap">
+                      <div class="apex-donut apex-donut--sm" style="background:conic-gradient(${stops})"></div>
+                      <div class="apex-donut-legend">${legend}</div>
+                    </div>
+                  </div>`
+                : ""
+            }
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "dual-axis-trend") {
+        const prod = Array.isArray(this.spec.production) ? this.spec.production : [];
+        const coll = Array.isArray(this.spec.collections) ? this.spec.collections : [];
+        const empty = this.spec.status === "empty" || (prod.length < 2 && coll.length < 2);
+        if (empty) {
+          return `
+            <div class="apex-compact-action">
+              <div class="apex-compact-action__title">${label}</div>
+              <div class="apex-compact-action__msg">${this.escape(
+                this.spec.emptyMessage || "Need ≥2 periods"
+              )}</div>
+              <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+            </div>
+          `;
+        }
+        const max = Math.max(
+          1,
+          ...prod.map((s) => Number(s.value) || 0),
+          ...coll.map((s) => Number(s.value) || 0)
+        );
+        const n = Math.max(prod.length, coll.length, 1);
+        const bars = [];
+        for (let i = 0; i < n; i++) {
+          const pv = Number((prod[i] && prod[i].value) || 0);
+          const cv = Number((coll[i] && coll[i].value) || 0);
+          const ph = Math.max(4, Math.round((pv / max) * 100));
+          const ch = cv ? Math.max(4, Math.round((cv / max) * 100)) : 0;
+          const lab = (prod[i] && prod[i].label) || (coll[i] && coll[i].label) || `P${i + 1}`;
+          bars.push(`<div class="apex-dual-col" title="${this.escape(lab)}">
+            <div class="apex-dual-bars">
+              <i class="apex-dual-prod" style="height:${ph}%"></i>
+              ${ch ? `<i class="apex-dual-coll" style="height:${ch}%"></i>` : ""}
+            </div>
+            <span>${this.escape(String(lab).slice(-5))}</span>
+          </div>`);
+        }
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          <div class="apex-dual-legend"><span class="apex-dual-leg--prod">Production</span>
+            <span class="apex-dual-leg--coll">Collections</span></div>
+          <div class="apex-dual-track">${bars.join("")}</div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "ebitda-station") {
+        const empty = this.spec.status === "empty";
+        const locked = !!this.spec.locked;
+        const sc = this.spec.scrubber || {};
+        const bookE = this.spec.bookEbitda;
+        const planE = this.spec.planningEbitda;
+        const steps = Array.isArray(this.spec.steps) ? this.spec.steps : [];
+        const trend = Array.isArray(this.spec.trend) ? this.spec.trend : [];
+        const showCite = !!this.spec.showCitations;
+        const max = Math.max(...steps.map((s) => Math.abs(Number(s.value) || 0)), 1);
+        const rows = steps
+          .map((s) => {
+            const v = Number(s.value) || 0;
+            const pct = Math.max(6, Math.round((Math.abs(v) / max) * 100));
+            const kind = s.kind || "positive";
+            const citeKey = s.citeKey || "";
+            const cite =
+              showCite && s.citation
+                ? `<button type="button" class="apex-wf-cite" data-cite-key="${this.escape(
+                    citeKey
+                  )}" title="Open source rows">${this.escape(s.citation)}</button>`
+                : "";
+            return `<div class="apex-wf-row apex-wf-row--${this.escape(kind)}">
+              <span class="apex-wf-label">${this.escape(s.label || "")}${cite}</span>
+              <div class="apex-wf-track"><i style="width:${pct}%"></i></div>
+              <span class="apex-wf-val">${this.escape(formatMoney(v) || String(v))}</span>
+            </div>`;
+          })
+          .join("");
+        const tMax = Math.max(...trend.map((s) => Number(s.value) || 0), 1);
+        const spark = trend
+          .map((s) => {
+            const v = Number(s.value) || 0;
+            const h = Math.max(8, Math.round((v / tMax) * 100));
+            return `<div class="apex-spark-bar" style="height:${h}%" title="${this.escape(
+              s.label || ""
+            )}"></div>`;
+          })
+          .join("");
+        const slider = (key, cfg) => {
+          if (!cfg) return "";
+          const val = cfg.value != null ? cfg.value : cfg.default;
+          return `<label class="apex-scrub-slider">
+            <span>${this.escape(cfg.label || key)}</span>
+            <input type="range" data-scrub-key="${this.escape(key)}"
+              min="${Number(cfg.min) || 0}" max="${Number(cfg.max) || 1}" step="${Number(cfg.step) || 1}"
+              value="${Number(val) || 0}" ${locked ? "disabled" : ""} />
+            <output data-scrub-out="${this.escape(key)}">${this.escape(formatMoney(val) || String(val))}</output>
+          </label>`;
+        };
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            <div class="apex-widget-actions">
+              <button type="button" class="apex-icon-btn" data-action="focus" title="Focus">⛶</button>
+              ${printBtn}
+            </div>
+          </header>
+          ${
+            trend.length
+              ? `<div class="apex-ebitda-station__trend"><span class="apex-mini-label">Trend</span>
+                  <div class="apex-sparkline" data-sparkline>${spark}</div></div>`
+              : ""
+          }
+          <div class="apex-ebitda-banner">${this.escape(
+            this.spec.disclaimer || "PLANNING ONLY — NOT BOOKED TO QUICKBOOKS"
+          )}${locked ? " · FILING LOCKED" : ""}</div>
+          ${
+            empty
+              ? `<div class="apex-compact-action">
+                  <div class="apex-compact-action__msg">${this.escape(
+                    this.spec.emptyMessage || "Need QB net income"
+                  )}</div>
+                  <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+                </div>`
+              : `<div class="apex-ebitda-station">
+                  <div class="apex-waterfall">${rows}</div>
+                  <div class="apex-ebitda-scrub" data-ebitda-scrub
+                    data-book-net="${this.spec.bookNetIncome != null ? this.spec.bookNetIncome : ""}"
+                    data-book-ebitda="${bookE != null ? bookE : ""}"
+                    data-locked="${locked ? "1" : "0"}">
+                    <div class="apex-ebitda-cols">
+                      <div class="apex-ebitda-col apex-ebitda-col--book">
+                        <div class="apex-ebitda-col-title">🔒 Book</div>
+                        <div class="apex-kpi-value" data-book-out>${this.escape(formatMoney(bookE) || "—")}</div>
+                      </div>
+                      <div class="apex-ebitda-col apex-ebitda-col--plan">
+                        <div class="apex-ebitda-col-title">✏️ Planning</div>
+                        <div class="apex-kpi-value" data-plan-out>${this.escape(formatMoney(planE) || "—")}</div>
+                        <div class="apex-kpi-delta" data-delta-out></div>
+                      </div>
+                    </div>
+                    <div class="apex-ebitda-sliders">
+                      ${slider("officerSalary", sc.officerSalary)}
+                      ${slider("depreciation", sc.depreciation)}
+                      ${slider("interest", sc.interest)}
+                      ${slider("oneTime", sc.oneTime)}
+                    </div>
+                    <div class="apex-ebitda-actions">
+                      <button type="button" class="apex-btn apex-btn--small" data-scrub-reset ${
+                        locked ? "disabled" : ""
+                      }>Restore from Imports</button>
+                      <button type="button" class="apex-btn apex-btn--small" data-scrub-save ${
+                        locked ? "disabled" : ""
+                      }>Save Scenario</button>
+                      <input type="text" data-scrub-name placeholder="Scenario name" maxlength="48" ${
+                        locked ? "disabled" : ""
+                      } />
+                      <select data-scrub-load><option value="">Load scenario…</option></select>
+                    </div>
+                  </div>
+                </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
         `;
       }
 
@@ -1667,19 +1901,17 @@
       if (this.type === "tax-library") {
         wireTaxLibrary(this.element);
       }
-      if (this.type === "ebitda-scrubber") {
+      if (this.type === "ebitda-scrubber" || this.type === "ebitda-station") {
         wireEbitdaScrubber(this.element, this.spec);
       }
-      if (this.type === "scenario-manager") {
-        wireScenarioManager(this.element);
+      if (this.type === "ebitda-station") {
+        this.element.querySelectorAll("[data-cite-key]").forEach((btn) => {
+          btn.addEventListener("click", () =>
+            openCitationModal(btn.getAttribute("data-cite-key") || "", btn.textContent || "")
+          );
+        });
       }
-      if (this.type === "filing-workflow") {
-        wireFilingWorkflow(this.element);
-      }
-      if (this.type === "workpaper") {
-        wireWorkpaper(this.element);
-      }
-      if (this.type === "scrubber") {
+      if (this.type === "financial-command-strip" || this.type === "scrubber") {
         this.element.querySelectorAll("[data-period]").forEach((chip) => {
           chip.addEventListener("click", () => {
             this.element.querySelectorAll(".apex-scrub-chip").forEach((c) => c.classList.remove("is-active"));
@@ -1691,20 +1923,55 @@
           });
         });
       }
+      if (
+        this.type === "financial-command-strip" ||
+        this.type === "revenue-composition" ||
+        this.type === "dual-axis-trend"
+      ) {
+        this.element.querySelectorAll("[data-fin-cmd-action]").forEach((btn) => {
+          if (btn.dataset.wired === "1") return;
+          btn.dataset.wired = "1";
+          btn.addEventListener("click", async () => {
+            const act = btn.getAttribute("data-fin-cmd-action") || "refresh_softdent_period";
+            btn.disabled = true;
+            const prev = btn.textContent;
+            btn.textContent = "Working…";
+            try {
+              if (act === "sync_imports") {
+                await runHalBoardActions([{ type: "sync_imports", fullSync: true }, { type: "refresh_page" }]);
+              } else if (act === "focus_ebitda") {
+                const el = findWidgetEl("ebitda-station");
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el.classList.add("apex-hal-highlight");
+                  setTimeout(() => el.classList.remove("apex-hal-highlight"), 3500);
+                }
+              } else {
+                await runHalBoardActions([
+                  { type: "refresh_softdent_period" },
+                  { type: "refresh_page" },
+                ]);
+              }
+            } catch (err) {
+              window.alert(String((err && err.message) || err));
+            } finally {
+              btn.disabled = false;
+              btn.textContent = prev;
+            }
+          });
+        });
+      }
+      if (this.type === "scenario-manager") {
+        wireScenarioManager(this.element);
+      }
+      if (this.type === "filing-workflow") {
+        wireFilingWorkflow(this.element);
+      }
+      if (this.type === "workpaper") {
+        wireWorkpaper(this.element);
+      }
       if (this.type === "claim-shelf") {
         wireClaimShelf(this.element, this.spec);
-      }
-      if (this.type === "claims-kanban" || this.type === "claims-workbench") {
-        wireClaimsKanban(this.element, this.spec);
-      }
-      if (this.type === "claims-aging-exposure") {
-        wireClaimsAgingExposure(this.element);
-      }
-      if (this.type === "claims-critical-actions") {
-        wireClaimsCriticalActions(this.element);
-      }
-      if (this.type === "claim-attachments") {
-        wireClaimAttachments(this.element);
       }
     }
   }
@@ -1736,24 +2003,6 @@
       } else {
         parts.push(`Ask: focus this aging shelf, sync imports, or find a claim by ID.`);
       }
-    }
-    if (s.type === "claims-kanban" || s.type === "claims-workbench") {
-      const counts = s.counts || {};
-      parts.push(
-        `workbenchCounts=submitted:${counts.submitted || 0},pendingReview:${counts.pendingReview || 0},eraMatched:${
-          counts.eraMatched || 0
-        },denied:${counts.denied || 0},paid:${counts.paid || 0}`
-      );
-      parts.push(`defaultView=${s.defaultView || "table"} · readOnly=true · drag write-back disabled`);
-      parts.push(`Ask: show table or kanban view, filter high risk, open a claim by ID.`);
-    }
-    if (s.type === "claims-aging-exposure") {
-      const cols = Array.isArray(s.columns) ? s.columns : [];
-      parts.push(
-        "agingExposure=" +
-          cols.map((c) => `${(c && c.bucket) || "?"}:${(c && c.count) || 0}`).join(",")
-      );
-      parts.push(`Ask: focus 30/60/90 day claims to filter the workbench.`);
     }
     if (s.hint) parts.push(`hint=${s.hint}`);
     if (s.message) parts.push(`message=${s.message}`);
@@ -2224,11 +2473,6 @@
   async function openClaimDrawer(claimId) {
     const id = String(claimId || "").trim();
     if (!id) return;
-    try {
-      sessionStorage.setItem("nr2-apex-focused-claim", id);
-    } catch (_err) {
-      /* ignore */
-    }
     closeClaimDrawer();
     const drawer = document.createElement("aside");
     drawer.id = "apex-claim-drawer";
@@ -2340,261 +2584,11 @@
     }
   }
 
-  function findWidgetEl(widgetId) {
-    const id = String(widgetId || "").replace(/\\/g, "").replace(/"/g, "");
-    if (!id) return null;
-    const direct = document.querySelector(`[data-widget-id="${id}"]`);
-    if (direct) return direct;
-    return (
-      Array.from(document.querySelectorAll("[data-alias-ids]")).find((el) => {
-        const aliases = String(el.getAttribute("data-alias-ids") || "").split(/\s+/);
-        return aliases.includes(id);
-      }) || null
-    );
-  }
-
-  function applyKanbanFilter(root, filter) {
-    const f = String(filter || "all");
-    root.querySelectorAll("[data-kanban-filter]").forEach((btn) => {
-      btn.classList.toggle("is-active", btn.getAttribute("data-kanban-filter") === f);
-    });
-    const matchItem = (el) => {
-      let show = true;
-      if (f === "high-risk") show = el.getAttribute("data-risk") === "high";
-      else if (f === "unmatched") {
-        const col = el.getAttribute("data-column") || "";
-        show = col !== "eraMatched" && col !== "paid" && el.getAttribute("data-has-era") !== "1";
-      } else if (f === "missing-attachments") {
-        show =
-          el.getAttribute("data-has-att") === "1" &&
-          (!!el.querySelector(".apex-claim-card__att.is-missing") ||
-            !!el.querySelector(".apex-wb-att--missing") ||
-            (() => {
-              const attCell = el.querySelector("td:nth-child(8)");
-              if (!attCell) return false;
-              const t = String(attCell.textContent || "");
-              const m = t.match(/^(\d+)\/(\d+)$/);
-              return m ? Number(m[1]) < Number(m[2]) : false;
-            })());
-      } else if (f === "bucket-30" || f === "bucket-60" || f === "bucket-90") {
-        const want = f.replace("bucket-", "");
-        show = el.getAttribute("data-bucket") === want;
-      }
-      return show;
-    };
-    root.querySelectorAll("[data-claim-card]").forEach((card) => {
-      card.hidden = !matchItem(card);
-    });
-    root.querySelectorAll("[data-claim-row]").forEach((row) => {
-      row.hidden = !matchItem(row);
-    });
-  }
-
-  function setClaimsWorkbenchView(root, view) {
-    const v = view === "kanban" ? "kanban" : "table";
-    const wb = root.querySelector("[data-claims-workbench]") || root;
-    wb.setAttribute("data-view", v);
-    root.querySelectorAll("[data-wb-view]").forEach((btn) => {
-      btn.classList.toggle("is-active", btn.getAttribute("data-wb-view") === v);
-    });
-    persistWorkbenchView(v);
-  }
-
-  function wireClaimsAgingExposure(root) {
-    if (!root || root.dataset.agingWired === "1") return;
-    root.dataset.agingWired = "1";
-    root.querySelectorAll("[data-age-bucket]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const bucket = btn.getAttribute("data-age-bucket") || "";
-        const board = findWidgetEl("claims-kanban-board");
-        if (!board) return;
-        board.scrollIntoView({ behavior: "smooth", block: "center" });
-        applyKanbanFilter(board, bucket ? `bucket-${bucket}` : "all");
-        board.classList.add("apex-hal-highlight");
-        setTimeout(() => board.classList.remove("apex-hal-highlight"), 2500);
-      });
-    });
-  }
-
-  function wireClaimsCriticalActions(root) {
-    if (!root || root.dataset.critWired === "1") return;
-    root.dataset.critWired = "1";
-    root.querySelectorAll("[data-crit-filter]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const filter = btn.getAttribute("data-crit-filter") || "all";
-        if (filter === "__sync__") {
-          try {
-            const res = await apexFetch(`${config.apiBase}/sync/trigger`, {
-              method: "POST",
-              body: JSON.stringify({}),
-            });
-            const data = await res.json().catch(() => ({}));
-            window.alert(data.message || data.error || (data.ok ? "Sync triggered" : "Sync failed"));
-            if (data.ok) await loadPage("claims", { silent: false });
-          } catch (err) {
-            window.alert(String((err && err.message) || err));
-          }
-          return;
-        }
-        const board = findWidgetEl("claims-kanban-board");
-        if (!board) return;
-        board.scrollIntoView({ behavior: "smooth", block: "center" });
-        applyKanbanFilter(board, filter);
-        board.classList.add("apex-hal-highlight");
-        setTimeout(() => board.classList.remove("apex-hal-highlight"), 2500);
-      });
-    });
-  }
-
-  function wireClaimsKanban(root, _spec) {
-    if (!root || root.dataset.claimsKanbanWired === "1") return;
-    root.dataset.claimsKanbanWired = "1";
-    root.querySelectorAll("[data-wb-view]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        setClaimsWorkbenchView(root, btn.getAttribute("data-wb-view"));
-      });
-    });
-    root.querySelectorAll("[data-claim-card], [data-claim-row]").forEach((card) => {
-      card.addEventListener("click", (ev) => {
-        if (ev.target && (ev.target.closest("[data-claim-actions]") || ev.target.closest(".apex-wb-acts"))) return;
-        if (ev.target && (ev.target.closest("label") || ev.target.matches("input"))) return;
-        openClaimDrawer(card.getAttribute("data-claim-id"));
-      });
-    });
-    root.querySelectorAll("[data-claim-act]").forEach((btn) => {
-      btn.addEventListener("click", async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        const card = btn.closest("[data-claim-card], [data-claim-row]");
-        const claimId = card && card.getAttribute("data-claim-id");
-        const action = btn.getAttribute("data-claim-act");
-        if (!claimId || !action) return;
-        const patientName = (card && card.getAttribute("data-patient")) || "";
-        if (action === "open") {
-          openClaimDrawer(claimId);
-          return;
-        }
-        if (action === "generate-narrative") {
-          try {
-            await apexFetch(`${config.apiBase}/claims/actions`, {
-              method: "POST",
-              body: JSON.stringify({ claimId, action, patientName }),
-            });
-          } catch (_err) {
-            /* continue to narratives */
-          }
-          try {
-            sessionStorage.setItem(
-              "nr2-apex-narrative-seed",
-              JSON.stringify({ claimId, patientName, voiceCarry: true })
-            );
-            sessionStorage.setItem("nr2-apex-focused-claim", claimId);
-          } catch (_err) {
-            /* ignore */
-          }
-          loadPage("narratives");
-          return;
-        }
-        let note = "";
-        if (action === "follow-up-note") {
-          note = window.prompt("Follow-up note (stored in NR2 only — not SoftDent):", "") || "";
-          if (!note.trim()) return;
-        } else if (action === "schedule-callback") {
-          note = window.prompt("Callback note / when (NR2 only):", "Callback requested") || "";
-        }
-        try {
-          const res = await apexFetch(`${config.apiBase}/claims/actions`, {
-            method: "POST",
-            body: JSON.stringify({ claimId, action, note, patientName }),
-          });
-          const data = await res.json().catch(() => ({}));
-          window.alert(data.message || data.error || (data.ok ? "Action recorded" : "Failed"));
-        } catch (err) {
-          window.alert(String((err && err.message) || err));
-        }
-      });
-    });
-    root.querySelectorAll("[data-batch-claim]").forEach((cb) => {
-      cb.addEventListener("click", (ev) => ev.stopPropagation());
-    });
-    root.querySelectorAll("[data-kanban-filter]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        applyKanbanFilter(root, btn.getAttribute("data-kanban-filter"));
-      });
-    });
-    const batch = root.querySelector('[data-action="batch-narratives"]');
-    if (batch) {
-      batch.addEventListener("click", () => {
-        const ids = Array.from(root.querySelectorAll("[data-batch-claim]:checked")).map((el) => el.value);
-        if (!ids.length) {
-          window.alert("Check Batch on one or more claim rows/cards first.");
-          return;
-        }
-        try {
-          sessionStorage.setItem(
-            "nr2-apex-narrative-seed",
-            JSON.stringify({ claimIds: ids, claimId: ids[0], bulkAppeal: true, batchNarrative: true })
-          );
-        } catch (_err) {
-          /* ignore */
-        }
-        loadPage("narratives");
-      });
-    }
-  }
-
-  function wireClaimAttachments(root) {
-    if (!root || root.dataset.attWired === "1") return;
-    root.dataset.attWired = "1";
-    const form = root.querySelector("[data-claim-att-upload]");
-    if (form) {
-      form.addEventListener("submit", async (ev) => {
-        ev.preventDefault();
-        const fd = new FormData(form);
-        try {
-          const res = await apexFetch(`${config.apiBase}/claims/attachments`, { method: "POST", body: fd });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || data.ok === false) {
-            window.alert(data.error || "Upload failed");
-            return;
-          }
-          await loadPage("documents", { silent: false });
-        } catch (err) {
-          window.alert(String((err && err.message) || err));
-        }
-      });
-    }
-    const era = root.querySelector("[data-era-upload]");
-    if (era) {
-      era.addEventListener("submit", async (ev) => {
-        ev.preventDefault();
-        const fd = new FormData(era);
-        try {
-          const res = await apexFetch(`${config.apiBase}/claims/era-ingest`, { method: "POST", body: fd });
-          const data = await res.json().catch(() => ({}));
-          window.alert(
-            data.ok
-              ? `ERA ingested: ${data.matchedCount || 0} matched of ${data.segmentCount || 0} segments`
-              : data.error || "ERA ingest failed"
-          );
-          if (data.ok) await loadPage("claims", { silent: false });
-        } catch (err) {
-          window.alert(String((err && err.message) || err));
-        }
-      });
-    }
-  }
-
   function focusClaimTile(claimId) {
     const id = String(claimId || "").trim();
     if (!id) return;
     const tile = document.querySelector(`[data-claim-id="${CSS.escape ? CSS.escape(id) : id.replace(/"/g, "")}"]`);
     if (tile) {
-      try {
-        sessionStorage.setItem("nr2-apex-focused-claim", id);
-      } catch (_err) {
-        /* ignore */
-      }
       tile.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       tile.classList.add("apex-hal-highlight");
       setTimeout(() => tile.classList.remove("apex-hal-highlight"), 4000);
@@ -2701,7 +2695,7 @@
           if (!id) continue;
           // Allow navigate to settle
           await new Promise((r) => setTimeout(r, 80));
-          const el = findWidgetEl(id);
+          const el = document.querySelector(`[data-widget-id="${id.replace(/\\/g, "").replace(/"/g, "")}"]`);
           if (el) {
             el.scrollIntoView({ behavior: "smooth", block: "center" });
             if (type === "focus_widget") toggleFocus(el);
@@ -2709,11 +2703,6 @@
             const ms = Number(action.ms) || 3500;
             setTimeout(() => el.classList.remove("apex-hal-highlight"), ms);
             results.push(`${type}:${id}`);
-          }
-          const bucketAlias = id.match(/^claims-aging-(30|60|90)$/);
-          if (bucketAlias && type === "focus_widget") {
-            const board = findWidgetEl("claims-kanban-board");
-            if (board) applyKanbanFilter(board, `bucket-${bucketAlias[1]}`);
           }
         } else if (type === "set_status_banner") {
           const meta = metaEl();
@@ -2762,61 +2751,15 @@
           }
         } else if (type === "focus_claims_bucket") {
           const bucket = String(action.bucket || "30");
+          const wid = `claims-aging-${bucket}`;
           await new Promise((r) => setTimeout(r, 80));
-          const el = findWidgetEl("claims-aging-exposure") || findWidgetEl(`claims-aging-${bucket}`);
+          const el = document.querySelector(`[data-widget-id="${wid}"]`);
           if (el) {
             el.scrollIntoView({ behavior: "smooth", block: "center" });
             toggleFocus(el);
             el.classList.add("apex-hal-highlight");
             setTimeout(() => el.classList.remove("apex-hal-highlight"), 4000);
-          }
-          const board = findWidgetEl("claims-kanban-board");
-          if (board) {
-            applyKanbanFilter(board, `bucket-${bucket}`);
             results.push(`focus_bucket:${bucket}`);
-          }
-        } else if (type === "set_claims_view") {
-          await new Promise((r) => setTimeout(r, 80));
-          const board = findWidgetEl("claims-kanban-board");
-          if (board) {
-            board.scrollIntoView({ behavior: "smooth", block: "center" });
-            setClaimsWorkbenchView(board, action.view || "table");
-            board.classList.add("apex-hal-highlight");
-            setTimeout(() => board.classList.remove("apex-hal-highlight"), 3500);
-            results.push(`set_view:${action.view || "table"}`);
-          }
-        } else if (type === "filter_claims_kanban") {
-          await new Promise((r) => setTimeout(r, 100));
-          const board = findWidgetEl("claims-kanban-board");
-          if (board) {
-            board.scrollIntoView({ behavior: "smooth", block: "center" });
-            applyKanbanFilter(board, action.filter || "all");
-            board.classList.add("apex-hal-highlight");
-            setTimeout(() => board.classList.remove("apex-hal-highlight"), 4000);
-            results.push(`filter_kanban:${action.filter || "all"}`);
-          }
-        } else if (type === "narrative_from_focused_claim") {
-          let cid = "";
-          try {
-            cid = sessionStorage.getItem("nr2-apex-focused-claim") || "";
-          } catch (_err) {
-            cid = "";
-          }
-          const focused = document.querySelector(".apex-claim-card.apex-hal-highlight, [data-claim-card].is-focused");
-          if (!cid && focused) cid = focused.getAttribute("data-claim-id") || "";
-          if (cid) {
-            try {
-              sessionStorage.setItem(
-                "nr2-apex-narrative-seed",
-                JSON.stringify({ claimId: cid, voiceCarry: true })
-              );
-            } catch (_err) {
-              /* ignore */
-            }
-            if (currentPage !== "narratives") await loadPage("narratives");
-            results.push(`narrative_carry:${cid}`);
-          } else {
-            results.push("narrative_carry:none");
           }
         }
       } catch (_err) {
@@ -2858,11 +2801,8 @@
         board = null;
       }
 
-      // Deterministic board reply wins over LLM — including widget census (not governed memory).
-      if (board && board.handled) {
-        if (Array.isArray(board.actions) && board.actions.length) {
-          await runHalBoardActions(board.actions);
-        }
+      if (board && board.handled && Array.isArray(board.actions) && board.actions.length) {
+        await runHalBoardActions(board.actions);
         const reply = String(board.reply || "Board updated from imports.");
         if (pending) {
           if (window.ApexMotion && typeof window.ApexMotion.decodeText === "function") {
@@ -2921,10 +2861,7 @@
               "focus_claim_tile",
               "open_claim_detail",
               "focus_claims_bucket",
-              "filter_claims_kanban",
-              "set_claims_view",
               "narrative_append",
-              "narrative_from_focused_claim",
             ].includes(a.type)
           );
           if (safe.length) await runHalBoardActions(safe);
@@ -2966,19 +2903,12 @@
       { label: "Import status", query: "Verify SoftDent and QuickBooks import status" },
       { label: "Which widgets empty?", query: "Which widgets are empty on this page?" },
       { label: "All pages widget health", query: "Which widgets are empty on all pages?" },
-      { label: "What should HAL learn?", query: "What would you like to learn?" },
-      { label: "Tx plan data status", query: "Treatment planning data status" },
-      { label: "Delta pay for D0274?", query: "How much will Delta Dental typically pay for D0274?" },
       { label: "Dictate to findings", query: "dictate findings: clinical exam supports the billed procedure" },
       { label: "How to get SoftDent exports", query: "How do I get SoftDent exports?" },
       { label: "How to get QuickBooks exports", query: "How do I get QuickBooks exports?" },
       { label: "Focus EBITDA scrubber", query: "Focus the EBITDA scrubber" },
       { label: "Focus A/R", query: "Show me A/R aging flow" },
       { label: "Focus 90-day claims", query: "Focus 90-day claims" },
-      { label: "Claims workbench", query: "Focus claims workbench kanban" },
-      { label: "High-risk claims", query: "Filter claims high risk" },
-      { label: "Import health", query: "Import health status" },
-      { label: "Morning briefing", query: "Morning briefing" },
       { label: "Claims aging status", query: "Claims import status" },
       { label: "Categorize assist", query: "Open categorize suggestions" },
       { label: "Print view", action: "print" },
@@ -3039,12 +2969,30 @@
     const input = panel.querySelector("[data-hal-input]");
     const chips = panel.querySelector("[data-hal-chips]");
     loadHalSuggestionChips(chips, logEl);
+
+    const submitAsk = () => {
+      if (!input) return;
+      const q = input.value;
+      input.value = "";
+      askHal(q, logEl);
+      try {
+        input.focus();
+      } catch (_err) {
+        /* ignore */
+      }
+    };
+
     if (form && input) {
       form.addEventListener("submit", (ev) => {
         ev.preventDefault();
-        const q = input.value;
-        input.value = "";
-        askHal(q, logEl);
+        submitAsk();
+      });
+      // Enter sends; Shift+Enter inserts a newline
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Enter" || ev.shiftKey || ev.isComposing) return;
+        ev.preventDefault();
+        if (form.requestSubmit) form.requestSubmit();
+        else submitAsk();
       });
     }
   }

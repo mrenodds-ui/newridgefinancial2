@@ -791,14 +791,19 @@ body.apex-bridge {
 .apex-stage--hal .apex-hal-rail {
   position: sticky;
   top: calc(var(--ticker-height) + 56px);
+  height: calc(100vh - var(--ticker-height) - 72px);
   max-height: calc(100vh - var(--ticker-height) - 72px);
+  overflow: hidden;
 }
 
 .apex-stage--hal .apex-widget--hal-chat,
 .apex-stage--hal .apex-inst--hal-chat {
-  min-height: calc(100vh - var(--ticker-height) - 96px);
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   grid-column: auto;
   grid-row: auto;
+  overflow: hidden;
 }
 
 /* ——— NARRATIVES BRIDGE ——— */
@@ -1567,6 +1572,188 @@ body.apex-focus-open::before {
 }
 .apex-exec-pill.is-empty .apex-exec-pill__value {
   opacity: 0.45;
+}
+
+.apex-exec-pill__sub {
+  margin-top: 2px;
+  font-size: 9px;
+  color: var(--apex-text-secondary);
+  letter-spacing: 0.02em;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* —— Financial Executive Console (hal-10430) —— */
+.apex-fin-command {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  min-height: 40px;
+  font-size: 12px;
+}
+.apex-fin-command__import {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.apex-fin-command.is-ok .apex-import-strip__msg {
+  color: var(--apex-cyan, #00f0ff);
+}
+.apex-fin-command.is-warn .apex-import-strip__msg {
+  color: #f97316;
+}
+.apex-fin-command__periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.apex-fin-command__brief {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  flex: 1;
+  min-width: 200px;
+}
+.apex-fin-command__brief-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--apex-text-secondary);
+}
+.apex-fin-command__brief-msg {
+  font-size: 11px;
+  color: var(--apex-text);
+  flex: 1;
+  min-width: 140px;
+}
+
+.apex-compact-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-height: 36px;
+  padding: 4px 0;
+}
+.apex-compact-action__title {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--apex-text-secondary);
+}
+.apex-compact-action__msg {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f97316;
+  flex: 1;
+  min-width: 160px;
+}
+
+.apex-revenue-comp {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.apex-donut--sm {
+  width: 88px;
+  height: 88px;
+}
+
+.apex-dual-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--apex-text-secondary);
+  margin-bottom: 6px;
+}
+.apex-dual-leg--prod::before,
+.apex-dual-leg--coll::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.apex-dual-leg--prod::before {
+  background: var(--apex-cyan, #00f0ff);
+}
+.apex-dual-leg--coll::before {
+  background: #ffb800;
+  opacity: 0.85;
+}
+.apex-dual-track {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 110px;
+  padding-top: 4px;
+}
+.apex-dual-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 9px;
+  color: var(--apex-text-secondary);
+}
+.apex-dual-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 90px;
+  width: 100%;
+  justify-content: center;
+}
+.apex-dual-bars i {
+  display: block;
+  width: 40%;
+  max-width: 14px;
+  border-radius: 3px 3px 0 0;
+  min-height: 4px;
+}
+.apex-dual-prod {
+  background: var(--apex-cyan, #00f0ff);
+}
+.apex-dual-coll {
+  background: #ffb800;
+  opacity: 0.9;
+}
+
+.apex-ebitda-station {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.apex-ebitda-station__trend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.apex-ebitda-station__trend .apex-sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 28px;
+  flex: 1;
+}
+@media (max-width: 900px) {
+  .apex-ebitda-station {
+    grid-template-columns: 1fr;
+  }
 }
 
 .apex-aging-exposure {
