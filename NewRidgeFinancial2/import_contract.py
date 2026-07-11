@@ -96,6 +96,15 @@ _FALLBACK_DATASET_NAMES: dict[str, tuple[str, ...]] = {
         "softdent_procedures_export.csv",
         "softdent_procedures_data.csv",
         "softdent_procedures_export.json",
+        "production.csv",
+        "production_by_provider.csv",
+        "softdent_production.csv",
+    ),
+    "softdent.production": (
+        "production.csv",
+        "production_by_provider.csv",
+        "softdent_production.csv",
+        "softdent_procedures_export.csv",
     ),
     "softdent.claimStatus": (
         "softdent_claim_status_export.csv",
@@ -221,4 +230,5 @@ SOFTDENT_CASE_ACCEPTANCE_NAMES = _MANIFEST_NAMES["softdent.caseAcceptance"]
 SOFTDENT_HYGIENE_RECALL_NAMES = _MANIFEST_NAMES["softdent.hygieneRecall"]
 SOFTDENT_OPERATORY_NAMES = _MANIFEST_NAMES["softdent.operatory"]
 SOFTDENT_PROCEDURES_NAMES = _MANIFEST_NAMES["softdent.procedures"]
+SOFTDENT_PRODUCTION_NAMES = _MANIFEST_NAMES["softdent.production"]
 SOFTDENT_CLAIM_STATUS_NAMES = _MANIFEST_NAMES["softdent.claimStatus"]

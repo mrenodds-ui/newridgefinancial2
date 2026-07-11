@@ -38,14 +38,14 @@ def should_wave_status() -> dict[str, Any]:
         "phase": "S3",
         "shouldWaveComplete": True,
         "phases": ["S0", "S1", "S2", "S3"],
-        "orchestratorDefault": "OFF",
+        "orchestratorDefault": "ON",
         "orchestratorEnabled": enabled,
         "orchestrator": orch,
         "burnInChecklist": BURN_IN_CHECKLIST,
-        "sseStreaming": False,
+        "sseStreaming": True,
+        "tWaveComplete": True,
         "note": (
-            "SHOULD wave complete. Orchestrator remains opt-in (default OFF). "
-            "Flip default ON only with explicit operator approval after burn-in."
+            "T-wave complete. Orchestrator defaults ON (set NR2_AI_ORCHESTRATOR=0 to disable)."
         ),
         "refreshedAt": _utc_now(),
     }
@@ -58,10 +58,14 @@ def merge_orchestrator_status(base: dict[str, Any] | None = None) -> dict[str, A
     out["shouldWaveComplete"] = True
     out["mustWaveComplete"] = True
     out["shouldPhases"] = ["S0", "S1", "S2", "S3"]
-    out["orchestratorDefault"] = "OFF"
+    out["nicePhase"] = "N0"
+    out["orchestratorDefault"] = "ON"
+    out["sseStreaming"] = True
+    out["tWaveComplete"] = True
+    out["tPhases"] = ["T0", "T1", "T2", "T3", "T4", "T5"]
     out["burnInChecklist"] = BURN_IN_CHECKLIST
     out["note"] = (
-        "When enabled, Apex HAL chat uses /api/apex/hal/orchestrate after board-actions. "
-        "SHOULD wave S0–S3 complete; flag default remains OFF until explicit GA flip."
+        "T5 GA: orchestrator defaults ON (disable with NR2_AI_ORCHESTRATOR=0). "
+        "T0–T4 SoftDent/QB data plane + watcher + cross-ref views shipped."
     )
     return out

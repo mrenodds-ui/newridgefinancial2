@@ -14,22 +14,22 @@ from apex_orchestrator_pack import (
 
 
 class OrchestratorPhaseI0Tests(unittest.TestCase):
-    def test_flag_default_off(self):
+    def test_flag_default_on(self):
         prev = os.environ.pop("NR2_AI_ORCHESTRATOR", None)
         try:
-            self.assertFalse(orchestrator_enabled())
+            self.assertTrue(orchestrator_enabled())
             st = orchestrator_status()
-            self.assertFalse(st.get("enabled"))
-            self.assertEqual(st.get("phase"), "S3")
+            self.assertTrue(st.get("enabled"))
+            self.assertEqual(st.get("orchestratorDefault"), "ON")
         finally:
             if prev is not None:
                 os.environ["NR2_AI_ORCHESTRATOR"] = prev
 
-    def test_flag_on(self):
+    def test_flag_off(self):
         prev = os.environ.get("NR2_AI_ORCHESTRATOR")
-        os.environ["NR2_AI_ORCHESTRATOR"] = "1"
+        os.environ["NR2_AI_ORCHESTRATOR"] = "0"
         try:
-            self.assertTrue(orchestrator_enabled())
+            self.assertFalse(orchestrator_enabled())
         finally:
             if prev is None:
                 os.environ.pop("NR2_AI_ORCHESTRATOR", None)
@@ -75,13 +75,16 @@ class OrchestratorPhaseI0Tests(unittest.TestCase):
         self.assertFalse(result.get("structured"))
 
     def test_disabled_blocks_full_execute(self):
-        prev = os.environ.pop("NR2_AI_ORCHESTRATOR", None)
+        prev = os.environ.get("NR2_AI_ORCHESTRATOR")
+        os.environ["NR2_AI_ORCHESTRATOR"] = "0"
         try:
             result = orchestrate("hello", classify_only=False, force_enabled=None)
             self.assertFalse(result.get("ok"))
             self.assertEqual(result.get("error"), "orchestrator_disabled")
         finally:
-            if prev is not None:
+            if prev is None:
+                os.environ.pop("NR2_AI_ORCHESTRATOR", None)
+            else:
                 os.environ["NR2_AI_ORCHESTRATOR"] = prev
 
     def test_status_payload_on_hal_status(self):

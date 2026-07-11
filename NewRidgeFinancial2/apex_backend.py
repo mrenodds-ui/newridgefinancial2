@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10479"
+BUILD_ID = "hal-10481"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1881,6 +1881,18 @@ def _financial_widgets_from_reports(
         widgets.extend(payroll_ap_widgets(bundle))
     except Exception:
         pass
+    try:
+        from apex_softdent_production_pack import production_widgets
+        from apex_softdent_aging_schedule_pack import aging_schedule_widgets
+        from apex_qb_net_profit_pack import net_profit_widget
+        from apex_unified_db_pack import production_vs_payroll_widget
+
+        widgets.extend(production_widgets(bundle))
+        widgets.extend(aging_schedule_widgets(bundle))
+        widgets.append(net_profit_widget(bundle))
+        widgets.append(production_vs_payroll_widget(bundle))
+    except Exception:
+        pass
 
     _apply_threshold_alerts(widgets, reports)
     return widgets
@@ -2307,6 +2319,14 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
         widgets.insert(0, collections_gap_widget(bundle))
     except Exception:
         pass
+    try:
+        from apex_softdent_production_pack import production_widgets
+        from apex_softdent_aging_schedule_pack import aging_schedule_widgets
+
+        widgets.extend(production_widgets(bundle))
+        widgets.extend(aging_schedule_widgets(bundle))
+    except Exception:
+        pass
 
     return widgets
 
@@ -2385,6 +2405,12 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
             from apex_qb_payroll_pack import payroll_ap_widgets
 
             widgets.extend(payroll_ap_widgets(bundle))
+        except Exception:
+            pass
+        try:
+            from apex_qb_net_profit_pack import net_profit_widget
+
+            widgets.append(net_profit_widget(bundle))
         except Exception:
             pass
         return widgets
@@ -2487,6 +2513,12 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
         from apex_qb_payroll_pack import payroll_ap_widgets
 
         widgets.extend(payroll_ap_widgets(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_qb_net_profit_pack import net_profit_widget
+
+        widgets.append(net_profit_widget(bundle))
     except Exception:
         pass
     return widgets
@@ -4217,6 +4249,12 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(unified (db|database|snapshot)|nr2_unified|practice health snapshot)\b", "unified-db-snapshot", "financial"),
         (r"\b(payroll (gap|import|detail)|qb payroll|show payroll)\b", "qb-payroll-gap", "quickbooks"),
         (r"\b(ap aging|accounts payable|unpaid bills|show ap)\b", "qb-ap-aging", "quickbooks"),
+        (r"\b(production (gap|import)|softdent production)\b", "softdent-production-gap", "softdent"),
+        (r"\b(case acceptance|acceptance rate)\b", "softdent-case-acceptance-gap", "softdent"),
+        (r"\b(patient aging|aging summary|aging buckets)\b", "softdent-aging-gap", "softdent"),
+        (r"\b(scheduling (gap|metrics)|fill rate|broken appointments)\b", "softdent-scheduling-gap", "softdent"),
+        (r"\b(net profit|qb net profit)\b", "qb-net-profit-gap", "quickbooks"),
+        (r"\b(production vs payroll|payroll.?to.?production)\b", "production-vs-payroll", "financial"),
     )
     if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
         re.search(pat, q) for pat, _wid, _pg in focus_rules
@@ -5407,6 +5445,45 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
 
+    @app.get("/api/apex/hal/insight-latest")
+    def apex_insight_latest():
+        try:
+            from apex_insight_sse_pack import insight_latest_payload
+
+            result = insight_latest_payload()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/insight-stream")
+    def apex_insight_stream():
+        """Server-Sent Events for live AI insight widget updates."""
+        import bottle
+        from apex_insight_sse_pack import insight_sse_frames
+
+        watch = 0.0
+        try:
+            watch = float(bottle.request.query.get("watch") or 0)
+        except (TypeError, ValueError):
+            watch = 0.0
+        watch = max(0.0, min(watch, 30.0))
+        bottle.response.content_type = "text/event-stream; charset=utf-8"
+        bottle.response.set_header("Cache-Control", "no-cache")
+        bottle.response.set_header("X-Accel-Buffering", "no")
+        return insight_sse_frames(watch_seconds=watch)
+
+    @app.get("/api/apex/hal/insight-sse-status")
+    def apex_insight_sse_status():
+        try:
+            from apex_insight_sse_pack import sse_status
+
+            result = sse_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
     @app.post("/api/apex/hal/health-audit")
     def apex_health_audit():
         try:
@@ -5420,6 +5497,36 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             result["buildId"] = BUILD_ID
             status = 200 if result.get("ok") or result.get("reason") == "orchestrator_disabled" else 400
             return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/import-watcher-status")
+    def apex_import_watcher_status():
+        """Phase T3 — import inbox poll/watcher status."""
+        try:
+            from apex_import_watcher_pack import watcher_status
+
+            result = watcher_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/import-poll")
+    def apex_import_poll():
+        """Phase T3 — one-shot import inbox poll (debounce + ingest)."""
+        try:
+            import bottle
+            from apex_import_watcher_pack import poll_once
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            since = payload.get("sinceMtime")
+            if since is None:
+                since = payload.get("since_mtime")
+            result = poll_once(since_mtime=float(since) if since is not None else None)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
 

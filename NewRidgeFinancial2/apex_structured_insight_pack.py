@@ -186,12 +186,39 @@ def build_structured_system_prompt(base: str = "") -> str:
     return f"{base}\n\n{STRUCTURED_SYSTEM_HINT}"
 
 
+def _efficiency_audit_cross_ref(insight: dict[str, Any]) -> dict[str, Any] | None:
+    """T4: attach v_production_vs_payroll when deep lane returns efficiency_audit."""
+    audit_type = str(
+        insight.get("type")
+        or insight.get("audit_type")
+        or insight.get("insight_type")
+        or ""
+    ).strip().lower()
+    if audit_type != "efficiency_audit":
+        return None
+    try:
+        from apex_unified_db_pack import list_production_vs_payroll
+
+        rows = list_production_vs_payroll(limit=6)
+        return {
+            "view": "v_production_vs_payroll",
+            "rows": rows,
+            "note": "Payroll-to-production ratios from unified DB (empty ≠ $0).",
+        }
+    except Exception:
+        return {
+            "view": "v_production_vs_payroll",
+            "rows": [],
+            "note": "Cross-ref unavailable — Sync SoftDent production + QB payroll first.",
+        }
+
+
 def ai_insight_widget(insight: dict[str, Any] | None = None, *, empty_hint: str | None = None) -> dict[str, Any]:
     """Apex widget spec — renders without executing raw HTML from the model."""
     if insight is None:
         insight = load_last_insight()
     if isinstance(insight, dict) and insight.get("widget_type"):
-        return {
+        widget: dict[str, Any] = {
             "id": "hal-ai-insight",
             "type": "ai-insight",
             "label": str(insight.get("title") or "AI Insight"),
@@ -200,6 +227,14 @@ def ai_insight_widget(insight: dict[str, Any] | None = None, *, empty_hint: str 
             "insight": insight,
             "hint": "Schema-validated HAL insight · source_refs required for numbers.",
         }
+        cross = _efficiency_audit_cross_ref(insight)
+        if cross is not None:
+            widget["crossRef"] = cross
+            widget["hint"] = (
+                "efficiency_audit · v_production_vs_payroll ratios attached · "
+                "source_refs required for numbers."
+            )
+        return widget
     return {
         "id": "hal-ai-insight",
         "type": "ai-insight",

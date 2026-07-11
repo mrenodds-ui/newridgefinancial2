@@ -45,7 +45,8 @@ def _utc_now() -> str:
 
 def orchestrator_enabled() -> bool:
     raw = str(os.getenv("NR2_AI_ORCHESTRATOR") or "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
+    # Phase T5 (Moonshot REAUDIT2): default ON unless explicitly disabled
+    return raw not in {"0", "false", "no", "off"}
 
 
 def classify_intent(
@@ -125,10 +126,10 @@ def orchestrator_status() -> dict[str, Any]:
         "unifiedDb": True,
         "mustWaveComplete": True,
         "shouldWaveComplete": True,
-        "orchestratorDefault": "OFF",
+        "orchestratorDefault": "ON",
         "note": (
-            "When enabled, Apex HAL chat uses /api/apex/hal/orchestrate after board-actions. "
-            "MUST I0–I4 + SHOULD S0–S3 complete. Flag default OFF."
+            "Phase T5: NR2_AI_ORCHESTRATOR defaults ON. Set =0/false/off to disable. "
+            "MUST+SHOULD+N0+T0–T4 complete."
         ),
         "refreshedAt": _utc_now(),
     }

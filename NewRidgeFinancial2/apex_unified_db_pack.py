@@ -130,6 +130,70 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_era_agg_period ON softdent_era_aggregates(period);
 
+        CREATE TABLE IF NOT EXISTS softdent_production (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period TEXT NOT NULL,
+            provider_id TEXT,
+            procedure_code TEXT,
+            procedure_description TEXT,
+            production_amount REAL,
+            quantity INTEGER,
+            posted_date TEXT,
+            source_file TEXT,
+            source TEXT,
+            ingested_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_sd_prod_period ON softdent_production(period);
+
+        CREATE TABLE IF NOT EXISTS softdent_case_acceptance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period TEXT NOT NULL,
+            provider_id TEXT,
+            treatment_planned_amount REAL,
+            accepted_amount REAL,
+            acceptance_rate REAL,
+            source_file TEXT,
+            source TEXT,
+            ingested_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS softdent_patient_aging (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period TEXT NOT NULL,
+            bucket_0_30 REAL,
+            bucket_31_60 REAL,
+            bucket_61_90 REAL,
+            bucket_90_plus REAL,
+            total_ar REAL,
+            source_file TEXT,
+            source TEXT,
+            ingested_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS softdent_scheduling (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period TEXT NOT NULL,
+            total_appointments INTEGER,
+            broken_appointments INTEGER,
+            fill_rate REAL,
+            capacity_hours REAL,
+            used_hours REAL,
+            source_file TEXT,
+            source TEXT,
+            ingested_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS qb_net_profit (
+            period TEXT NOT NULL PRIMARY KEY,
+            total_income REAL,
+            total_expenses REAL,
+            total_payroll REAL,
+            net_profit REAL,
+            source_file TEXT,
+            source TEXT,
+            ingested_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS import_health_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source TEXT NOT NULL,
@@ -153,6 +217,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
              FROM qb_payroll_rows pr WHERE pr.period = p.period) AS total_payroll,
             (SELECT SUM(ap.amount_due) FROM qb_ap_rows ap WHERE ap.period = p.period) AS total_ap,
             (SELECT SUM(era.payment_total) FROM softdent_era_aggregates era WHERE era.period = p.period) AS era_payment_total,
+            (SELECT np.net_profit FROM qb_net_profit np WHERE np.period = p.period) AS qb_net_profit,
             CASE
                 WHEN p.collections IS NOT NULL
                 THEN p.collections
@@ -165,6 +230,38 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
                 ELSE NULL
             END AS net_operating
         FROM softdent_period_metrics p;
+
+        DROP VIEW IF EXISTS v_production_vs_payroll;
+        CREATE VIEW v_production_vs_payroll AS
+        SELECT
+            p.period AS period,
+            COALESCE(SUM(p.production_amount), 0) AS total_production,
+            COALESCE((
+                SELECT SUM(COALESCE(py.gross_wages, 0) + COALESCE(py.employer_taxes, 0))
+                FROM qb_payroll_rows py WHERE py.period = p.period
+            ), 0) AS total_payroll,
+            CASE
+                WHEN COALESCE(SUM(p.production_amount), 0) > 0
+                THEN ROUND(
+                    COALESCE((
+                        SELECT SUM(COALESCE(py.gross_wages, 0) + COALESCE(py.employer_taxes, 0))
+                        FROM qb_payroll_rows py WHERE py.period = p.period
+                    ), 0) / SUM(p.production_amount),
+                    4
+                )
+                ELSE NULL
+            END AS payroll_to_production_ratio
+        FROM softdent_production p
+        GROUP BY p.period;
+
+        DROP VIEW IF EXISTS v_collection_vs_ap;
+        CREATE VIEW v_collection_vs_ap AS
+        SELECT
+            m.period AS period,
+            m.collections AS collections,
+            (SELECT SUM(ap.amount_due) FROM qb_ap_rows ap WHERE ap.period = m.period) AS total_ap,
+            (SELECT np.net_profit FROM qb_net_profit np WHERE np.period = m.period) AS net_profit
+        FROM softdent_period_metrics m;
         """
     )
     conn.commit()
@@ -198,6 +295,9 @@ def ingest_from_bundle(
     qb_n = 0
     gap_code = None
     payroll_meta: dict[str, Any] = {}
+    t0_meta: dict[str, Any] = {}
+    t1_meta: dict[str, Any] = {}
+    t2_meta: dict[str, Any] = {}
 
     try:
         from apex_softdent_hardening_pack import assess_collections_gap
@@ -339,14 +439,39 @@ def ingest_from_bundle(
         except Exception as exc:  # noqa: BLE001
             payroll_meta = {"ok": False, "error": str(exc)}
 
+        # Phase T0 — SoftDent production + case acceptance
+        try:
+            from apex_softdent_production_pack import ingest_softdent_production_into_conn
+
+            t0_meta = ingest_softdent_production_into_conn(conn, b, now=now)
+        except Exception as exc:  # noqa: BLE001
+            t0_meta = {"ok": False, "error": str(exc)}
+
+        # Phase T1 — aging + scheduling
+        try:
+            from apex_softdent_aging_schedule_pack import ingest_aging_schedule_into_conn
+
+            t1_meta = ingest_aging_schedule_into_conn(conn, b, now=now)
+        except Exception as exc:  # noqa: BLE001
+            t1_meta = {"ok": False, "error": str(exc)}
+
+        # Phase T2 — QB net profit
+        try:
+            from apex_qb_net_profit_pack import ingest_net_profit_into_conn
+
+            t2_meta = ingest_net_profit_into_conn(conn, b, now=now)
+        except Exception as exc:  # noqa: BLE001
+            t2_meta = {"ok": False, "error": str(exc)}
+
         # Import health log
         diag = b.get("diagnostics") if isinstance(b.get("diagnostics"), dict) else {}
         summary = diag.get("summary") if isinstance(diag.get("summary"), dict) else {}
         flags: list[str] = []
         if gap_code and gap_code != "OK":
             flags.append(str(gap_code))
-        if isinstance(payroll_meta, dict) and payroll_meta.get("gapCode") and payroll_meta.get("gapCode") != "OK":
-            flags.append(str(payroll_meta["gapCode"]))
+        for meta in (payroll_meta, t0_meta, t1_meta, t2_meta):
+            if isinstance(meta, dict) and meta.get("gapCode") and meta.get("gapCode") != "OK":
+                flags.append(str(meta["gapCode"]))
         gap_flags = json.dumps(flags)
         conn.execute(
             """
@@ -370,6 +495,11 @@ def ingest_from_bundle(
         "qbExpenseRows": qb_n,
         "qbPayrollRows": int(payroll_meta.get("payrollRows") or 0) if isinstance(payroll_meta, dict) else 0,
         "qbApRows": int(payroll_meta.get("apRows") or 0) if isinstance(payroll_meta, dict) else 0,
+        "productionRows": int(t0_meta.get("productionRows") or 0) if isinstance(t0_meta, dict) else 0,
+        "caseAcceptanceRows": int(t0_meta.get("caseAcceptanceRows") or 0) if isinstance(t0_meta, dict) else 0,
+        "agingPeriods": int(t1_meta.get("agingPeriods") or 0) if isinstance(t1_meta, dict) else 0,
+        "schedulingPeriods": int(t1_meta.get("schedulingPeriods") or 0) if isinstance(t1_meta, dict) else 0,
+        "netProfitRows": int(t2_meta.get("netProfitRows") or 0) if isinstance(t2_meta, dict) else 0,
         "gapCode": gap_code,
         "payrollGapCode": payroll_meta.get("gapCode") if isinstance(payroll_meta, dict) else None,
         "dbPath": str(db_path or unified_db_path()),
@@ -422,6 +552,59 @@ def orchestrator_context_snapshot(*, limit: int = 6, db_path: Path | None = None
         "periods": snaps,
         "stalenessNote": "Values mirrored from last Apex Sync ingest — verify import health if stale.",
         "refreshedAt": _utc_now(),
+    }
+
+
+def list_production_vs_payroll(*, limit: int = 12, db_path: Path | None = None) -> list[dict[str, Any]]:
+    with open_unified(path=db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT period, total_production, total_payroll, payroll_to_production_ratio
+            FROM v_production_vs_payroll
+            ORDER BY period DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit), 36)),),
+        ).fetchall()
+        return [
+            {
+                "period": r["period"],
+                "totalProduction": r["total_production"],
+                "totalPayroll": r["total_payroll"],
+                "payrollToProductionRatio": r["payroll_to_production_ratio"],
+            }
+            for r in rows
+        ]
+
+
+def production_vs_payroll_widget(bundle: dict[str, Any] | None = None) -> dict[str, Any]:
+    del bundle
+    rows = list_production_vs_payroll(limit=5)
+    if not rows:
+        return {
+            "id": "production-vs-payroll",
+            "type": "status",
+            "label": "Production vs Payroll (T4)",
+            "size": "full",
+            "status": "empty",
+            "message": "No production×payroll join yet",
+            "emptyMessage": "Import SoftDent production + QB payroll, then Sync.",
+            "hint": "View v_production_vs_payroll — empty ≠ $0.",
+        }
+    latest = rows[0]
+    ratio = latest.get("payrollToProductionRatio")
+    return {
+        "id": "production-vs-payroll",
+        "type": "status",
+        "label": "Production vs Payroll (T4)",
+        "size": "full",
+        "status": "ok",
+        "message": (
+            f"{latest.get('period')}: prod={latest.get('totalProduction')} "
+            f"payroll={latest.get('totalPayroll')} ratio={ratio}"
+        ),
+        "hint": "From v_production_vs_payroll (import-mirrored).",
+        "rows": rows,
     }
 
 

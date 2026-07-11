@@ -26,12 +26,12 @@ GOOD_KPI = {
 
 class AiPmMustWaveI4Gates(unittest.TestCase):
     def test_build_id_i4(self):
-        self.assertEqual(BUILD_ID, "hal-10479")
+        self.assertEqual(BUILD_ID, "hal-10481")
 
-    def test_flag_still_default_off(self):
+    def test_flag_still_default_on(self):
         prev = os.environ.pop("NR2_AI_ORCHESTRATOR", None)
         try:
-            self.assertFalse(orchestrator_enabled())
+            self.assertTrue(orchestrator_enabled())
         finally:
             if prev is not None:
                 os.environ["NR2_AI_ORCHESTRATOR"] = prev

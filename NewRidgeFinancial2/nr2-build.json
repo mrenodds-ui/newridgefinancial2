@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10479",
-  "assetVersion": "hal-10479",
-  "schemaVersion": "hal-10479",
-  "notes": "hal-10479: SHOULD wave S0-S3 (QB payroll/AP, ERA harden, health monitor, orchestrator opt-in GA).",
-  "builtAt": "2026-07-11T17:39:19.000Z"
+  "BUILD_ID": "hal-10481",
+  "assetVersion": "hal-10481",
+  "schemaVersion": "hal-10481",
+  "notes": "hal-10481: Moonshot T0-T5 SoftDent/QB unified metrics, import poll, orchestrator default ON.",
+  "builtAt": "2026-07-11T17:55:54.000Z"
 }

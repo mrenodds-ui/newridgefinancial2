@@ -29,6 +29,7 @@ from import_contract import (
     SOFTDENT_DASHBOARD_NAMES,
     SOFTDENT_NEW_PATIENTS_NAMES,
     SOFTDENT_PROCEDURES_NAMES,
+    SOFTDENT_PRODUCTION_NAMES,
     SOFTDENT_CLAIM_STATUS_NAMES,
     SOFTDENT_TREATMENT_PLANS_NAMES,
     manifest_warnings,
@@ -518,6 +519,7 @@ def _load_import_bundle_uncached(*, sync: bool, deep: bool, direct_first: bool) 
             "hygieneRecall": _softdent("hygieneRecall", SOFTDENT_HYGIENE_RECALL_NAMES),
             "operatory": _load_operatory_dataset(softdent_dir, SOFTDENT_OPERATORY_NAMES),
             "procedures": _softdent("procedures", SOFTDENT_PROCEDURES_NAMES),
+            "production": _softdent("production", SOFTDENT_PRODUCTION_NAMES),
             "claimStatus": _softdent("claimStatus", SOFTDENT_CLAIM_STATUS_NAMES),
         },
         "quickbooks": {
