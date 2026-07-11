@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10483"
+BUILD_ID = "hal-10484"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1835,6 +1835,12 @@ def _financial_widgets_from_reports(
         from apex_deep_audit_pack import deep_audit_widget
 
         widgets.append(deep_audit_widget(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_reconciliation_pack import reconciliation_widget
+
+        widgets.append(reconciliation_widget(bundle))
     except Exception:
         pass
 
@@ -3963,6 +3969,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(production vs payroll|payroll.?to.?production)\b", "production-vs-payroll", "financial"),
         (r"\b(deep audit|monthly (practice )?health audit|quarter forecast)\b", "deep-audit-status", "financial"),
         (r"\b(era\s*835|remittance|era ingest)\b", "era835-ingest-gap", "softdent"),
+        (r"\b(reconcil|variance alert|production vs payroll variance)\b", "reconciliation-status", "financial"),
     )
     if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
         re.search(pat, q) for pat, _wid, _pg in focus_rules
@@ -5311,6 +5318,46 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
                 if result.get("ok")
                 or result.get("reason") == "era835_disabled"
                 or result.get("gap") == "ERA835_PENDING"
+                else 400
+            )
+            return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/reconciliation-status")
+    def apex_reconciliation_status():
+        try:
+            from apex_reconciliation_pack import reconciliation_status
+
+            result = reconciliation_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/reconciliation")
+    def apex_reconciliation_run():
+        """Phase U2 — SoftDent×QB variance scan (+ optional 30B explainer)."""
+        try:
+            import bottle
+            from apex_reconciliation_pack import run_reconciliation
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            classify_only = bool(payload.get("classifyOnly") or payload.get("classify_only"))
+            explain = payload.get("explain")
+            if explain is None:
+                explain = True
+            period = payload.get("period")
+            result = run_reconciliation(
+                period=str(period) if period else None,
+                classify_only=classify_only,
+                explain=bool(explain),
+            )
+            result["buildId"] = BUILD_ID
+            status = (
+                200
+                if result.get("ok") or result.get("reason") == "reconciliation_disabled"
                 else 400
             )
             return json_response_fn(result, status=status)

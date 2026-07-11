@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10483",
-  "assetVersion": "hal-10483",
-  "schemaVersion": "hal-10483",
-  "notes": "hal-10483: Moonshot U1 ERA 835 payer/proc aggregates (no PHI, no SoftDent write-back).",
-  "builtAt": "2026-07-11T18:35:09.000Z"
+  "BUILD_ID": "hal-10484",
+  "assetVersion": "hal-10484",
+  "schemaVersion": "hal-10484",
+  "notes": "hal-10484: Moonshot U2 SoftDent\u00d7QB reconciliation variance engine (5%/$500).",
+  "builtAt": "2026-07-11T18:37:57.000Z"
 }
