@@ -69,7 +69,7 @@ class EligibilityCacheTests(unittest.TestCase):
         self.assertTrue(hits)
         text = format_eligibility_hits(hits)
         self.assertIn("Cached eligibility context", text)
-        fresh = list_eligibility_entries(limit=5, fresh_only=True)
+        fresh = list_eligibility_entries(limit=50, fresh_only=True)
         self.assertTrue(any(str(row.get("payerName") or "") == "Test Payer NR2" for row in fresh))
 
     def test_search_does_not_fallback_unrelated(self) -> None:

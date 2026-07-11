@@ -136,6 +136,7 @@ def normalize_eligibility_entry(raw: dict[str, Any]) -> dict[str, Any]:
         "waitingPeriods": str(raw.get("waitingPeriods") or "").strip()[:300],
         "limitations": str(raw.get("limitations") or "").strip()[:400],
         "ttlHours": raw.get("ttlHours", DEFAULT_TTL_HOURS),
+        "demo": bool(raw.get("demo")),
     }
     return entry
 
@@ -148,6 +149,33 @@ def upsert_eligibility_entry(raw: dict[str, Any]) -> dict[str, Any]:
     rows.sort(key=lambda row: str(row.get("cachedAt") or ""), reverse=True)
     _write_index(rows[:500])
     return {"ok": True, "entry": entry}
+
+
+def get_cached_eligibility(cache_key: str) -> dict[str, Any] | None:
+    """Moonshot dossier path — lookup by PHI-safe hashed id; fresh only."""
+    key = str(cache_key or "").strip()
+    if not key:
+        return None
+    for row in _read_index():
+        if str(row.get("id") or "") != key:
+            continue
+        if not _is_fresh(row):
+            return None
+        return dict(row)
+    return None
+
+
+def store_eligibility_snapshot(
+    cache_key: str, entry: dict[str, Any], *, ttl_sec: int = 300
+) -> dict[str, Any]:
+    """Store redacted snapshot under hashed dossier cache key (default 5-min TTL)."""
+    payload = dict(entry or {})
+    payload["id"] = str(cache_key or "").strip() or payload.get("id")
+    ttl_hours = max(0.01, float(ttl_sec or 300) / 3600.0)
+    payload["ttlHours"] = ttl_hours
+    if not payload.get("payerName") and not payload.get("payer"):
+        payload["payerName"] = str(payload.get("planDescription") or "Unknown payer")
+    return upsert_eligibility_entry(payload)
 
 
 def list_eligibility_entries(*, limit: int = 20, fresh_only: bool = True) -> list[dict[str, Any]]:
