@@ -180,6 +180,7 @@
         "remember_fact",
         "draft_insurance_narrative",
         "lookup_fee_schedule",
+        "lookup_treatment_estimate",
         "join_claim_payers",
         "softdent_extract_status"
       ],

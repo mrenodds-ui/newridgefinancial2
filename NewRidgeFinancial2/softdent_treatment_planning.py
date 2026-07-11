@@ -820,3 +820,20 @@ def treatment_planning_status(db_path: Path | None = None) -> dict[str, Any]:
     finally:
         conn.close()
     return out
+
+# Moonshot OM Phase 2 — HAL tool discovery metadata (handlers already implemented above).
+HAL_TOOLS = {
+    "lookup_treatment_estimate": {
+        "description": "Look up estimated insurance payment for ADA code and payer",
+        "parameters": {
+            "ada_code": "str (e.g., D2740)",
+            "payer_name": "str (insurance company name or 'unknown')",
+        },
+        "handler": "lookup_treatment_estimate",
+    },
+    "format_treatment_estimate_reply": {
+        "description": "Format estimate for patient-friendly display",
+        "parameters": {"estimate_dict": "dict from lookup_treatment_estimate"},
+        "handler": "format_treatment_estimate_reply",
+    },
+}

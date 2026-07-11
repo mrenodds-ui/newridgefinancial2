@@ -2541,6 +2541,20 @@ class NR2BottleServer(BottleServer):
 
             return _json_response(appointments_snapshot())
 
+        @app.get("/api/softdent/appointments-today")
+        def softdent_appointments_today_api():
+            import bottle
+            from nr2_softdent_daily import appointments_today_snapshot
+
+            target = str(bottle.request.query.get("date") or "").strip() or None
+            return _json_response(appointments_today_snapshot(target_date=target))
+
+        @app.get("/api/softdent/provider-utilization-7d")
+        def softdent_provider_utilization_7d_api():
+            from nr2_softdent_daily import provider_utilization_last_7d
+
+            return _json_response(provider_utilization_last_7d())
+
         @app.get("/api/softdent/claims-outstanding")
         def softdent_claims_outstanding_api():
             from nr2_softdent_daily import claims_outstanding

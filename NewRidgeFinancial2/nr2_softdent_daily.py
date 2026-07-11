@@ -215,6 +215,153 @@ def appointments_snapshot(*, limit: int = 12) -> dict[str, Any]:
     return {"hasData": bool(appointments), "appointments": appointments, "source": source, "dbPath": str(db_path)}
 
 
+def _hash_patient_id(patient_id: str) -> str:
+    """PHI-safe 4-char hash for OM widgets (Moonshot OM-A0)."""
+    import hashlib
+
+    raw = str(patient_id or "").strip()
+    if not raw:
+        return "——"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:4].upper()
+
+
+def _normalize_appt_status(raw: str) -> str:
+    r = str(raw or "").lower()
+    if any(x in r for x in ("cancel", "no show", "noshow", "broken")):
+        return "open"
+    if any(x in r for x in ("complete", "seen", "checkout", "checked out")):
+        return "completed"
+    if any(x in r for x in ("checkin", "check-in", "here", "arrived")):
+        return "checked-in"
+    if "block" in r:
+        return "blocked"
+    return "booked"
+
+
+def appointments_today_snapshot(*, target_date: str | None = None) -> dict[str, Any]:
+    """Today's SoftDent appointments grouped for OM operatory board (read-only).
+
+    Uses real sd_appointments columns (appt_date, patient_id, provider_code, status)
+    via softdent_practice_exports._build_operatory_from_sd_appointments — no invented
+    operatory/time schema. Patient display is hashed (PHI-safe).
+    """
+    from datetime import date
+
+    from softdent_practice_exports import _build_operatory_from_sd_appointments
+
+    target = (target_date or date.today().isoformat())[:10]
+    conn, db_path = _open_db()
+    if not conn:
+        return {
+            "hasData": False,
+            "operatories": [],
+            "date": target,
+            "count": 0,
+            "source": "none",
+        }
+    try:
+        chairs = _build_operatory_from_sd_appointments(conn, schedule_date=target, days_window=0)
+        if not chairs:
+            return {
+                "hasData": False,
+                "operatories": [],
+                "date": target,
+                "count": 0,
+                "source": "sd_appointments",
+                "dbPath": str(db_path),
+                "emptyMessage": "No SoftDent appointments for today — run SoftDent sync.",
+            }
+        chosen_day = str(chairs[0].get("scheduleDate") or target)[:10]
+        operatories: list[dict[str, Any]] = []
+        total = 0
+        for chair in chairs[:8]:
+            slots_out: list[dict[str, Any]] = []
+            for slot in (chair.get("slots") or [])[:12]:
+                if not isinstance(slot, dict):
+                    continue
+                patient_raw = str(slot.get("patient") or "").strip()
+                status = _normalize_appt_status(str(slot.get("procedure") or slot.get("tone") or ""))
+                # procedure field holds status label from builder; tone is visual
+                if slot.get("tone") == "ok":
+                    status = "checked-in"
+                slots_out.append(
+                    {
+                        "time": str(slot.get("time") or "—")[:5],
+                        "status": status,
+                        "patientHash": _hash_patient_id(patient_raw) if patient_raw else None,
+                        "provider": str(chair.get("name") or ""),
+                    }
+                )
+                total += 1
+            operatories.append({"name": str(chair.get("name") or "Op—"), "slots": slots_out})
+        return {
+            "hasData": total > 0,
+            "operatories": operatories,
+            "date": chosen_day,
+            "count": total,
+            "source": "sd_appointments",
+            "dbPath": str(db_path),
+        }
+    finally:
+        conn.close()
+
+
+def provider_utilization_last_7d() -> dict[str, Any]:
+    """Appointment counts by provider for the last 7 calendar days (read-only)."""
+    from datetime import date, timedelta
+
+    end = date.today()
+    start = end - timedelta(days=6)
+    conn, db_path = _open_db()
+    if not conn:
+        return {
+            "hasData": False,
+            "providers": [],
+            "days": 7,
+            "startDate": start.isoformat(),
+            "endDate": end.isoformat(),
+        }
+    try:
+        if not _table_exists(conn, "sd_appointments"):
+            return {
+                "hasData": False,
+                "providers": [],
+                "days": 7,
+                "startDate": start.isoformat(),
+                "endDate": end.isoformat(),
+                "dbPath": str(db_path),
+            }
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT COALESCE(provider_code, 'unassigned') AS provider,
+                   COUNT(*) AS appt_count
+            FROM sd_appointments
+            WHERE substr(replace(appt_date, '/', '-'), 1, 10) >= ?
+              AND substr(replace(appt_date, '/', '-'), 1, 10) <= ?
+            GROUP BY COALESCE(provider_code, 'unassigned')
+            ORDER BY appt_count DESC
+            LIMIT 12
+            """,
+            (start.isoformat(), end.isoformat()),
+        )
+        providers = [
+            {"providerCode": str(row[0] or "unassigned"), "appointments": int(row[1] or 0)}
+            for row in cur.fetchall()
+        ]
+    finally:
+        conn.close()
+    return {
+        "hasData": bool(providers),
+        "providers": providers,
+        "days": 7,
+        "startDate": start.isoformat(),
+        "endDate": end.isoformat(),
+        "source": "sd_appointments",
+        "dbPath": str(db_path),
+    }
+
+
 def claims_outstanding(*, limit: int = 10) -> dict[str, Any]:
     conn, db_path = _connect()
     if not conn:

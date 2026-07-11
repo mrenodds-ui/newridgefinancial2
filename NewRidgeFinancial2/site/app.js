@@ -5361,6 +5361,24 @@ function select(id, options) {
       })
       .catch(() => {});
   }
+  // Moonshot OM-A0: load today's SoftDent appointments whenever Office Manager opens.
+  if (
+    !NR2_WORKSTATION_ONLY &&
+    page.id === "office-manager" &&
+    typeof NR2SoftdentDaily !== "undefined" &&
+    typeof NR2SoftdentDaily.prefetchTodayForOM === "function"
+  ) {
+    NR2SoftdentDaily.prefetchTodayForOM()
+      .then(() => {
+        scheduleHalWidgetRefresh(null, { repaint: true });
+        if (appPage && !appPage.hidden && PageViews && PageViews.hasPage(page.id)) {
+          PageViews.renderPageView(appPage, halData, page.id, select, halWidgetFeed, halProgramSnapshot);
+        }
+      })
+      .catch(() => {
+        if (typeof window !== "undefined") window.NR2_OM_LIVE_SCHEDULE = null;
+      });
+  }
   const scrollTo = options && options.scrollTo;
   if (scrollTo) {
     requestAnimationFrame(() => {

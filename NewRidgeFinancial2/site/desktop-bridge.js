@@ -1403,6 +1403,21 @@ const DesktopBridge = (function () {
     return { items: [], count: 0, text: "" };
   }
 
+  async function lookupTreatmentEstimate(payer, adaCode) {
+    const payerQ = String(payer || "").trim();
+    const ada = String(adaCode || "").trim();
+    if (hasLoopbackApi()) {
+      try {
+        const p = encodeURIComponent(payerQ);
+        const a = encodeURIComponent(ada);
+        return await loopbackJson(`/api/apex/treatment-planning/estimate?payer=${p}&ada=${a}`);
+      } catch {
+        return { ok: false, reply: "Treatment estimate lookup failed." };
+      }
+    }
+    return { ok: false, reply: "Treatment estimate requires the NR2 loopback server." };
+  }
+
   async function listEligibilityCache(limit) {
     if (hasDesktopApi() && window.pywebview.api.list_eligibility_cache) {
       return window.pywebview.api.list_eligibility_cache(Number(limit || 20));
@@ -1673,6 +1688,7 @@ const DesktopBridge = (function () {
     joinSoftDentTesia,
     joinClaimPayers,
     lookupFeeSchedule,
+    lookupTreatmentEstimate,
     listEligibilityCache,
     upsertEligibilityCache,
     searchEligibilityCache,

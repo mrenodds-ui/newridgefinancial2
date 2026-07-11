@@ -6,8 +6,10 @@ const NR2SoftdentDaily = (function () {
     collectionsDaily: "/api/softdent/collections-daily",
     newPatientsMtd: "/api/softdent/new-patients-mtd",
     appointmentsSnapshot: "/api/softdent/appointments-snapshot",
+    appointmentsToday: "/api/softdent/appointments-today",
     claimsOutstanding: "/api/softdent/claims-outstanding",
     providerProduction: "/api/softdent/provider-production",
+    providerUtilization7d: "/api/softdent/provider-utilization-7d",
     adjustmentLog: "/api/softdent/adjustment-log",
     patientRetention: "/api/softdent/patient-retention",
     operatoryGrid: "/api/softdent/operatory-grid",
@@ -250,16 +252,36 @@ const NR2SoftdentDaily = (function () {
     return null;
   }
 
+  async function prefetchTodayForOM() {
+    const data = await fetchJson(LIVE_ENDPOINTS.appointmentsToday);
+    if (data && typeof data === "object") {
+      liveCache.appointmentsToday = data;
+      liveFetchedAt = Date.now();
+      if (typeof window !== "undefined") {
+        window.NR2_OM_LIVE_SCHEDULE = data;
+      }
+    } else if (typeof window !== "undefined") {
+      window.NR2_OM_LIVE_SCHEDULE = null;
+    }
+    return data;
+  }
+
+  function appointmentsToday() {
+    return useLive("appointmentsToday") || (typeof window !== "undefined" ? window.NR2_OM_LIVE_SCHEDULE : null);
+  }
+
   return {
     collectionsDaily,
     newPatientsMtd,
     appointmentsSnapshot,
+    appointmentsToday,
     claimsOutstanding,
     providerProduction,
     adjustmentLog,
     patientRetention,
     operatoryGrid,
     prefetchLive,
+    prefetchTodayForOM,
     clearLiveCache,
     getLiveCache: () => liveCache,
   };

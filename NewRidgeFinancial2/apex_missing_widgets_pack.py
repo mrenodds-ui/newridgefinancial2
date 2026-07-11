@@ -637,7 +637,46 @@ def build_verification_matrix(bundle: dict[str, Any], *, page: str = "claims") -
 # ——— W-09 Operatory Utilization Board ———
 
 
-def build_operatory_board(bundle: dict[str, Any]) -> dict[str, Any]:
+def build_operatory_board(
+    bundle: dict[str, Any],
+    live_schedule: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    # Priority 1: live OM appointments (Moonshot OM-A0)
+    if live_schedule and live_schedule.get("hasData"):
+        operatories_live: list[dict[str, Any]] = []
+        for op in live_schedule.get("operatories") or []:
+            if not isinstance(op, dict):
+                continue
+            slots: list[dict[str, Any]] = []
+            for slot in op.get("slots") or []:
+                if not isinstance(slot, dict):
+                    continue
+                slots.append(
+                    {
+                        "time": str(slot.get("time") or "—"),
+                        "status": str(slot.get("status") or "booked"),
+                        "patientHash": slot.get("patientHash"),
+                    }
+                )
+            operatories_live.append({"name": str(op.get("name") or "Op—"), "slots": slots})
+        return _wrap(
+            widget_id="operatory-util-board",
+            type_="utilization-board",
+            title="Operatory Board",
+            page="office-manager",
+            size="l",
+            status="ok" if operatories_live else "empty",
+            data={
+                "operatories": operatories_live,
+                "date": live_schedule.get("date"),
+                "count": live_schedule.get("count"),
+                "source": live_schedule.get("source"),
+                "emptyMessage": live_schedule.get("emptyMessage") or "No schedule data — run SoftDent sync.",
+            },
+            hint="Today's SoftDent schedule — live fetch; patient hashes only (PHI-safe).",
+            collapse_when_empty=not operatories_live,
+        )
+
     sd = bundle.get("softdent") if isinstance(bundle.get("softdent"), dict) else {}
     schedule = sd.get("schedule_today") if isinstance(sd.get("schedule_today"), dict) else {}
     ops = schedule.get("operatories") if isinstance(schedule.get("operatories"), list) else []
@@ -692,7 +731,7 @@ def build_operatory_board(bundle: dict[str, Any]) -> dict[str, Any]:
     data = {
         "operatories": operatories,
         "date": schedule.get("date"),
-        "emptyMessage": "No schedule data",
+        "emptyMessage": "No schedule data — run SoftDent sync or refresh Office Manager.",
     }
     return _wrap(
         widget_id="operatory-util-board",
@@ -747,6 +786,14 @@ def build_recall_gauge(bundle: dict[str, Any]) -> dict[str, Any]:
     if due and scheduled is not None and due > 0:
         pct = round((scheduled / due) * 100, 1)
 
+    booking_hint = None
+    if isinstance(due, int) and isinstance(scheduled, int) and due > scheduled:
+        open_slots = due - scheduled
+        booking_hint = (
+            f"{open_slots} recall patient(s) still unscheduled — use SoftDent chair schedule "
+            "to book; NR2 is read-only."
+        )
+
     status = "empty" if due is None else "ok"
     data = {
         "due": due,
@@ -754,6 +801,7 @@ def build_recall_gauge(bundle: dict[str, Any]) -> dict[str, Any]:
         "contacted": contacted,
         "totalActive": total,
         "pctScheduled": pct,
+        "bookingHint": booking_hint,
         "emptyMessage": "Recall tracking unavailable",
     }
     return _wrap(
@@ -764,7 +812,90 @@ def build_recall_gauge(bundle: dict[str, Any]) -> dict[str, Any]:
         size="m",
         status=status,
         data=data,
-        hint="SoftDent recall due vs scheduled — empty without recall export.",
+        hint=booking_hint
+        or "SoftDent recall due vs scheduled — empty without recall export.",
+        collapse_when_empty=status == "empty",
+    )
+
+
+# ——— OM claims needing narrative / review (Moonshot Phase 2) ———
+
+
+def build_claims_needing_narrative(bundle: dict[str, Any]) -> dict[str, Any]:
+    """OM action list: SoftDent claims in pending/denied/appeal lanes (honest, no invented $)."""
+    rows = (
+        _section_rows(bundle, "softdent", "claims")
+        or _section_rows(bundle, "softdent", "claimStatus")
+        or []
+    )
+    urgent: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        status = str(row.get("ClaimStatus") or row.get("Status") or row.get("status") or "").lower()
+        if not any(x in status for x in ("pending", "deny", "appeal", "reject", "review", "open")):
+            continue
+        claim_id = str(row.get("ClaimId") or row.get("claim_id") or row.get("id") or "").strip()
+        if not claim_id:
+            continue
+        amt = _parse_money(row.get("ClaimAmount") or row.get("amount") or row.get("Amount"))
+        urgent.append(
+            {
+                "id": claim_id,
+                "payer": str(row.get("Payer") or row.get("payer") or "—"),
+                "status": str(row.get("ClaimStatus") or row.get("Status") or status),
+                "amount": amt,
+                "serviceDate": str(row.get("ServiceDate") or row.get("service_date") or ""),
+            }
+        )
+        if len(urgent) >= 5:
+            break
+
+    status = "ok" if urgent else "empty"
+    return _wrap(
+        widget_id="claims-narrative-queue",
+        type_="action-list",
+        title="Claims Needing Narratives",
+        page="office-manager",
+        size="m",
+        status=status,
+        data={
+            "items": urgent,
+            "count": len(urgent),
+            "emptyMessage": "No pending/denied SoftDent claims in import for narrative review.",
+        },
+        hint="Prioritize these for HAL draft_insurance_narrative — staff still submits outside NR2.",
+        collapse_when_empty=status == "empty",
+    )
+
+
+def build_provider_utilization_trend(util: dict[str, Any] | None = None) -> dict[str, Any]:
+    """OM sidebar: last-7-day appointment counts by provider (Moonshot Phase 3 NICE)."""
+    payload = util if isinstance(util, dict) else {}
+    providers = payload.get("providers") if isinstance(payload.get("providers"), list) else []
+    rows = [
+        {
+            "provider": str(p.get("providerCode") or "—"),
+            "appointments": int(p.get("appointments") or 0),
+        }
+        for p in providers
+        if isinstance(p, dict) and int(p.get("appointments") or 0) > 0
+    ]
+    status = "ok" if rows else "empty"
+    return _wrap(
+        widget_id="provider-util-7d",
+        type_="bar-list",
+        title="Provider Appointments — 7 Day",
+        page="office-manager",
+        size="m",
+        status=status,
+        data={
+            "rows": rows,
+            "startDate": payload.get("startDate"),
+            "endDate": payload.get("endDate"),
+            "emptyMessage": "No SoftDent appointments in the last 7 days.",
+        },
+        hint="Counts from sd_appointments only — not production dollars.",
         collapse_when_empty=status == "empty",
     )
 
@@ -791,7 +922,19 @@ def append_claims_missing(widgets: list[dict[str, Any]], bundle: dict[str, Any])
 
 
 def append_office_manager_missing(widgets: list[dict[str, Any]], bundle: dict[str, Any]) -> None:
-    widgets.append(build_operatory_board(bundle))
+    live_schedule: dict[str, Any] | None = None
+    util: dict[str, Any] | None = None
+    try:
+        from nr2_softdent_daily import appointments_today_snapshot, provider_utilization_last_7d
+
+        live_schedule = appointments_today_snapshot()
+        util = provider_utilization_last_7d()
+    except Exception:
+        live_schedule = None
+        util = None
+    widgets.append(build_operatory_board(bundle, live_schedule=live_schedule))
     widgets.append(build_recall_gauge(bundle))
     widgets.append(build_treatment_pipeline(bundle, page="office-manager"))
     widgets.append(build_verification_matrix(bundle, page="office-manager"))
+    widgets.append(build_claims_needing_narrative(bundle))
+    widgets.append(build_provider_utilization_trend(util))

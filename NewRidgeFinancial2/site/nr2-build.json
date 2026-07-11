@@ -1,8 +1,7 @@
 {
-  "BUILD_ID": "hal-10400",
-  "assetVersion": "hal-10400",
-  "schemaVersion": "hal-10400",
-  "epoch": "nr2-apex",
-  "releasedAt": "2026-07-10",
-  "notes": "hal-10400: SoftDent insurance payment lines + ADA crosswalk to PHI-safe treatment_planning_estimates for HAL."
+  "schemaVersion": "hal-10494",
+  "BUILD_ID": "hal-10494",
+  "assetVersion": "hal-10494",
+  "builtAt": "2026-07-11T20:33:47.000Z",
+  "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server."
 }

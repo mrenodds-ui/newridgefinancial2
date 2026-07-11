@@ -1836,6 +1836,31 @@ const HalAgent = (function () {
         };
       },
     },
+    lookup_treatment_estimate: {
+      label: "Look up SoftDent-derived insurance estimate for ADA code × payer",
+      run: async (ctx, args) => {
+        const bridge =
+          typeof DesktopBridge !== "undefined"
+            ? DesktopBridge
+            : typeof window !== "undefined" && window.DesktopBridge
+              ? window.DesktopBridge
+              : null;
+        if (!bridge || typeof bridge.lookupTreatmentEstimate !== "function") {
+          return { ok: false, summary: "Treatment estimate lookup requires the NR2 server." };
+        }
+        const ada = String(args.ada_code || args.ada || args.code || args.cdt || "").trim();
+        const payer = String(args.payer_name || args.payer || args.query || "").trim();
+        const payload = await bridge.lookupTreatmentEstimate(payer, ada);
+        const text =
+          (payload && (payload.reply || payload.text)) ||
+          "No treatment estimate available for that payer × ADA (empty ≠ $0).";
+        return {
+          ok: !!(payload && payload.ok),
+          summary: String(text).slice(0, 2500),
+          result: payload && payload.result ? payload.result : null,
+        };
+      },
+    },
     list_eligibility_cache: {
       label: "List cached eligibility snapshots (PHI-redacted)",
       run: async (ctx, args) => {
@@ -2612,6 +2637,13 @@ const HalAgent = (function () {
         if (!had.has("search_payer_reference")) add.push("search_payer_reference");
         if (!had.has("lookup_fee_schedule") && /\bD\d{4}\b|fee|allowed|co-?45|underpay/i.test(query)) {
           add.push("lookup_fee_schedule");
+        }
+        if (
+          !had.has("lookup_treatment_estimate") &&
+          /\b(estimate|treatment\s*plan|how much.*(pay|cover)|insurance\s*pay)/i.test(query) &&
+          /\bD\d{4}\b/i.test(query)
+        ) {
+          add.push("lookup_treatment_estimate");
         }
         if (!had.has("search_hal_memories")) add.push("search_hal_memories");
         if (/\b(claim|denied|denial|appeal)\b/i.test(query)) {
