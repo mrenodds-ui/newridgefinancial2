@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10487",
-  "assetVersion": "hal-10487",
-  "schemaVersion": "hal-10487",
-  "notes": "hal-10487: Moonshot V0 burn-in \u2014 AI lane telemetry, scheduled audit, data freshness.",
-  "builtAt": "2026-07-11T18:46:24.000Z"
+  "BUILD_ID": "hal-10488",
+  "assetVersion": "hal-10488",
+  "schemaVersion": "hal-10488",
+  "notes": "hal-10488: Moonshot V1 synthetic SoftDent/QB/ERA fixtures for reconciliation staging.",
+  "builtAt": "2026-07-11T18:48:10.000Z"
 }

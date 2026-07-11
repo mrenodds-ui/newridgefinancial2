@@ -1,0 +1,307 @@
+{
+  "meta": {
+    "fixture": "noisy_mom",
+    "phase": "V1",
+    "expected": {
+      "production": 60000.0,
+      "priorProduction": 50000.0,
+      "productionDelta": 10000.0,
+      "alert": true,
+      "gapCode": "RECON_VARIANCE"
+    },
+    "anonymized": true
+  },
+  "loadedAt": "2026-07-11T12:00:00Z",
+  "softdent": {
+    "dashboard": {
+      "rows": [
+        {
+          "period": "2026-05",
+          "production": 50000.0,
+          "collections": 40000,
+          "collectionsPending": false
+        },
+        {
+          "period": "2026-06",
+          "production": 60000.0,
+          "collections": 45000,
+          "collectionsPending": false
+        }
+      ]
+    },
+    "procedures": {
+      "rows": [
+        {
+          "period": "2026-05",
+          "Provider": "SYNTH_PROV_A",
+          "ProcCode": "D1110",
+          "Amount": 5000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_001"
+        },
+        {
+          "period": "2026-05",
+          "Provider": "SYNTH_PROV_B",
+          "ProcCode": "D0120",
+          "Amount": 5000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_002"
+        },
+        {
+          "period": "2026-05",
+          "Provider": "SYNTH_PROV_C",
+          "ProcCode": "D2391",
+          "Amount": 5000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_003"
+        },
+        {
+          "period": "2026-05",
+          "Provider": "SYNTH_PROV_A",
+          "ProcCode": "D2740",
+          "Amount": 5000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_004"
+        },
+        {
+          "period": "2026-05",
+          "Provider": "SYNTH_PROV_B",
+          "ProcCode": "D4341",
+          "Amount": 5000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_005"
+        },
+        {
+          "period": "2026-05",
+          "Provider": "SYNTH_PROV_C",
+          "ProcCode": "D1110",
+          "Amount": 5000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_006"
+        },
+        {
+          "period": "2026-05",
+          "Provider": "SYNTH_PROV_A",
+          "ProcCode": "D0120",
+          "Amount": 5000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_007"
+        },
+        {
+          "period": "2026-05",
+          "Provider": "SYNTH_PROV_B",
+          "ProcCode": "D2391",
+          "Amount": 5000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_008"
+        },
+        {
+          "period": "2026-05",
+          "Provider": "SYNTH_PROV_C",
+          "ProcCode": "D2740",
+          "Amount": 5000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_009"
+        },
+        {
+          "period": "2026-05",
+          "Provider": "SYNTH_PROV_A",
+          "ProcCode": "D4341",
+          "Amount": 5000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_010"
+        },
+        {
+          "period": "2026-06",
+          "Provider": "SYNTH_PROV_A",
+          "ProcCode": "D1110",
+          "Amount": 6000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_001"
+        },
+        {
+          "period": "2026-06",
+          "Provider": "SYNTH_PROV_B",
+          "ProcCode": "D0120",
+          "Amount": 6000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_002"
+        },
+        {
+          "period": "2026-06",
+          "Provider": "SYNTH_PROV_C",
+          "ProcCode": "D2391",
+          "Amount": 6000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_003"
+        },
+        {
+          "period": "2026-06",
+          "Provider": "SYNTH_PROV_A",
+          "ProcCode": "D2740",
+          "Amount": 6000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_004"
+        },
+        {
+          "period": "2026-06",
+          "Provider": "SYNTH_PROV_B",
+          "ProcCode": "D4341",
+          "Amount": 6000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_005"
+        },
+        {
+          "period": "2026-06",
+          "Provider": "SYNTH_PROV_C",
+          "ProcCode": "D1110",
+          "Amount": 6000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_006"
+        },
+        {
+          "period": "2026-06",
+          "Provider": "SYNTH_PROV_A",
+          "ProcCode": "D0120",
+          "Amount": 6000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_007"
+        },
+        {
+          "period": "2026-06",
+          "Provider": "SYNTH_PROV_B",
+          "ProcCode": "D2391",
+          "Amount": 6000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_008"
+        },
+        {
+          "period": "2026-06",
+          "Provider": "SYNTH_PROV_C",
+          "ProcCode": "D2740",
+          "Amount": 6000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_009"
+        },
+        {
+          "period": "2026-06",
+          "Provider": "SYNTH_PROV_A",
+          "ProcCode": "D4341",
+          "Amount": 6000.0,
+          "Qty": 1,
+          "PatientId": "SYNTH_010"
+        }
+      ]
+    },
+    "caseAcceptance": {
+      "rows": [
+        {
+          "period": "2026-06",
+          "Presented": 10000,
+          "Accepted": 7000
+        }
+      ]
+    },
+    "ar": {
+      "rows": [
+        {
+          "Bucket": "0-30",
+          "Balance": 3000
+        }
+      ]
+    },
+    "operatory": {
+      "rows": [
+        {
+          "period": "2026-06",
+          "Appointments": 50,
+          "Broken": 4,
+          "Capacity": 80,
+          "Used": 60
+        }
+      ]
+    }
+  },
+  "quickbooks": {
+    "profitAndLoss": {
+      "rows": [
+        {
+          "period": "2026-05",
+          "TotalIncome": 50000.0,
+          "TotalExpenses": 12000,
+          "Payroll": 15000.0,
+          "NetIncome": 18000
+        },
+        {
+          "period": "2026-06",
+          "TotalIncome": 60000.0,
+          "TotalExpenses": 14000,
+          "Payroll": 15500.0,
+          "NetIncome": 25000
+        }
+      ]
+    },
+    "expenseCategories": {
+      "rows": [
+        {
+          "Category": "Supplies",
+          "Amount": 900
+        }
+      ]
+    },
+    "payroll": {
+      "rows": [
+        {
+          "Employee": "SYNTH_STAFF_1",
+          "Wages": 6000.0,
+          "period": "2026-05",
+          "NetPay": 4500.0
+        },
+        {
+          "Employee": "SYNTH_STAFF_2",
+          "Wages": 5250.0,
+          "period": "2026-05",
+          "NetPay": 3937.5
+        },
+        {
+          "Employee": "SYNTH_STAFF_3",
+          "Wages": 3750.0,
+          "period": "2026-05",
+          "NetPay": 2812.5
+        },
+        {
+          "Employee": "SYNTH_STAFF_1",
+          "Wages": 6200.0,
+          "period": "2026-06",
+          "NetPay": 4650.0
+        },
+        {
+          "Employee": "SYNTH_STAFF_2",
+          "Wages": 5425.0,
+          "period": "2026-06",
+          "NetPay": 4068.75
+        },
+        {
+          "Employee": "SYNTH_STAFF_3",
+          "Wages": 3875.0,
+          "period": "2026-06",
+          "NetPay": 2906.25
+        }
+      ]
+    },
+    "ap": {
+      "rows": [
+        {
+          "period": "2026-05",
+          "Vendor": "SYNTH_VENDOR",
+          "AmountDue": 500
+        },
+        {
+          "period": "2026-06",
+          "Vendor": "SYNTH_VENDOR",
+          "AmountDue": 700
+        }
+      ]
+    }
+  }
+}

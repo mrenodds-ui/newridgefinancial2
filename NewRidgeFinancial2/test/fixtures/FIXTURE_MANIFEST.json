@@ -1,0 +1,20 @@
+{
+  "phase": "V1",
+  "quiet": {
+    "production": 50000.0,
+    "payroll": 15000.0,
+    "expectAlert": false
+  },
+  "moonshotDocExample": {
+    "production": 50000.0,
+    "payroll": 48500.0,
+    "gapPct": 0.03
+  },
+  "noisy": {
+    "production": 60000.0,
+    "priorProduction": 50000.0,
+    "expectAlert": true
+  },
+  "anonymized": true,
+  "note": "Synthetic only \u2014 empty \u2260 $0; no SoftDent write-back."
+}
