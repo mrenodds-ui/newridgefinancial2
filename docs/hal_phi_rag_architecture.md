@@ -7,10 +7,11 @@ This document describes the safest practical way to add AI-assisted question ans
 Based on the current repository:
 
 - Data originates from read-only SoftDent exports and related financial imports.
-- The backend is a local FastAPI service.
-- The backend uses SQLite as a local cache and analytics store.
-- The browser frontend uses IndexedDB for local client caching.
-- Existing HAL endpoints are placeholders and should not be treated as a production AI boundary.
+- The active runtime is NewRidgeFinancial2 (loopback Bottle API + Apex vanilla JS UI).
+- Server-side persistence uses SQLite as a local cache and analytics store.
+- The browser uses IndexedDB (`site/indexeddb-store.js`) for Apex widget mosaic caching and non-chat key/value fallback when SQLite is unavailable.
+- Chat / model transcripts stay out of IndexedDB (session-only denylist); prefer SQLite or in-memory for those.
+- Existing HAL endpoints must still be treated as a governed AI boundary, not an open data plane.
 - The documented operating model is read-only and localhost-first.
 
 This means the right starting point is not direct live EHR connectivity. The right starting point is a local retrieval layer over approved exported data, with strict de-identification and audit logging before any model call.
@@ -158,10 +159,11 @@ Suggested future modules:
 
 ### Frontend
 
-- Keep the browser page as a thin question/answer client.
+- Keep the browser page as a thin question/answer and mosaic client.
 - Do not store raw PHI prompts or model context in browser storage.
-- Avoid persisting model transcripts in IndexedDB unless there is a reviewed retention policy.
-- Send questions to the FastAPI backend and let the backend enforce sanitization and authorization.
+- IndexedDB may cache aggregated widget mosaics (no claim-detail `id` pages) and non-chat operational keys.
+- Do not persist model transcripts in IndexedDB unless there is a reviewed retention policy (enforced today via `Nr2IndexedDb.isSessionOnlyKey`).
+- Send questions to the local NR2/HAL API and let the server enforce sanitization and authorization.
 
 ## Security controls
 

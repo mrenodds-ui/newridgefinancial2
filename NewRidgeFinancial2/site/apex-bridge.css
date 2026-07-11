@@ -626,13 +626,19 @@ body.apex-bridge {
   padding: 12px 20px;
   border-bottom: 1px solid var(--apex-border);
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   background: rgba(5, 5, 8, 0.55);
   position: sticky;
   top: var(--ticker-height);
   z-index: 50;
+}
+
+.apex-stage-header__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
 }
 
 .apex-page-title {
@@ -650,6 +656,204 @@ body.apex-bridge {
   color: var(--apex-text-secondary);
 }
 
+.apex-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.apex-subnav[hidden] {
+  display: none !important;
+}
+
+.apex-subnav.is-visible {
+  animation: apexSubnavIn 0.28s ease-out;
+}
+
+.apex-subnav-btn {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--apex-text-secondary);
+  background: transparent;
+  border: 1px solid var(--apex-border);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.apex-subnav-btn:hover,
+.apex-subnav-btn.is-active {
+  color: var(--apex-cyan);
+  border-color: rgba(0, 240, 255, 0.45);
+  background: rgba(0, 240, 255, 0.08);
+}
+
+.apex-workpaper-scrubber {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.apex-wp-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--apex-text-secondary);
+  cursor: pointer;
+}
+
+.apex-claim-detail-card {
+  margin: 0 0 12px;
+}
+
+.apex-claim-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.apex-col-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.apex-col-form input,
+.apex-col-form select {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--apex-border);
+  color: var(--apex-text);
+  padding: 4px 8px;
+  min-width: 110px;
+}
+
+.apex-subhead {
+  font-family: "Orbitron", sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--apex-cyan);
+  margin: 14px 0 6px;
+}
+
+.apex-collection-bench,
+.apex-batch-selector,
+.apex-huddle-mosaic,
+.apex-dropzone,
+.apex-payer-lib {
+  max-height: 520px;
+  overflow: auto;
+}
+
+.apex-payer-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.apex-payer-card {
+  border: 1px solid var(--apex-border);
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.apex-payer-card h3 {
+  margin: 0 0 6px;
+  font-family: "Orbitron", sans-serif;
+  font-size: 12px;
+  color: var(--apex-cyan);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.apex-forecast-trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-height: 140px;
+  padding: 8px 0;
+}
+
+.apex-forecast-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  color: var(--apex-text-secondary);
+}
+
+.apex-forecast-bar {
+  width: 100%;
+  max-width: 28px;
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0.85), rgba(0, 240, 255, 0.25));
+  border: 1px solid rgba(0, 240, 255, 0.35);
+}
+
+.apex-period-variance {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.apex-var-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 80px;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+}
+
+.apex-var-track {
+  height: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--apex-border);
+}
+
+.apex-var-track i {
+  display: block;
+  height: 100%;
+  background: rgba(0, 240, 255, 0.65);
+}
+
+.apex-var-row.is-down .apex-var-track i {
+  background: rgba(255, 110, 110, 0.7);
+}
+
+.apex-var-val {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.apex-data-table-wrap {
+  max-height: 480px;
+  overflow: auto;
+}
+
+.apex-huddle-task.is-done {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+@keyframes apexSubnavIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ——— FIXED MOSAIC (no stretch) ——— */
 .apex-mosaic,
 #apex-stage.apex-mosaic,
@@ -657,6 +861,7 @@ body.apex-bridge {
   display: grid;
   grid-template-columns: repeat(auto-fill, var(--mosaic-col));
   grid-auto-rows: var(--mosaic-row);
+  grid-auto-flow: dense;
   gap: var(--mosaic-gap);
   padding: 16px 20px 28px;
   justify-content: start;
@@ -664,15 +869,6 @@ body.apex-bridge {
   max-width: none;
   margin: 0;
   min-height: calc(100vh - var(--ticker-height) - 56px);
-}
-
-/* U3 — denser organized flow; keeps existing tokens / starship-bridge */
-.apex-mosaic--u3 {
-  grid-auto-flow: dense;
-}
-.apex-mosaic--u3[data-layout-phase="U3"] {
-  /* subtle cue only — no theme rewrite */
-  --mosaic-gap: calc(var(--mosaic-gap, 12px) * 0.92);
 }
 
 /* Financial: pack strips/charts/KPIs to the top with a compact row unit */
@@ -817,11 +1013,11 @@ body.apex-bridge {
   opacity: 0.88;
 }
 
-/* HAL page: mosaic + chat rail inside main */
+/* HAL page: mosaic + chat rail (~2/3 of prior wide rail) */
 .apex-stage--hal.apex-mosaic,
 #apex-stage.apex-stage--hal {
   display: grid;
-  grid-template-columns: 1fr minmax(300px, 360px);
+  grid-template-columns: minmax(0, 1fr) minmax(347px, 28vw);
   grid-auto-rows: auto;
   gap: var(--mosaic-gap);
   padding: 16px 20px 28px;
@@ -842,6 +1038,8 @@ body.apex-bridge {
   position: sticky;
   top: calc(var(--ticker-height) + 56px);
   max-height: calc(100vh - var(--ticker-height) - 72px);
+  overflow: hidden;
+  min-width: 0;
 }
 
 .apex-stage--hal .apex-widget--hal-chat,
@@ -849,6 +1047,35 @@ body.apex-bridge {
   min-height: calc(100vh - var(--ticker-height) - 96px);
   grid-column: auto;
   grid-row: auto;
+  overflow: hidden;
+  /* Hover must not tilt/lift the chat — it felt like a page refresh and fought the sticky rail. */
+  transform: none !important;
+  transition: border-color 160ms, box-shadow 160ms;
+}
+
+.apex-stage--hal .apex-inst--hal-chat:hover,
+.apex-stage--hal .apex-widget--hal-chat:hover {
+  transform: none !important;
+  box-shadow: none;
+  border-color: var(--apex-border);
+}
+
+.apex-stage--hal .apex-inst--hal-chat:hover::after,
+.apex-stage--hal .apex-widget--hal-chat:hover::after {
+  opacity: 0;
+}
+
+@media (max-width: 1100px) {
+  .apex-stage--hal.apex-mosaic,
+  #apex-stage.apex-stage--hal {
+    grid-template-columns: 1fr;
+  }
+  .apex-stage--hal .apex-hal-rail {
+    position: relative;
+    top: auto;
+    height: min(70vh, 640px);
+    max-height: min(70vh, 640px);
+  }
 }
 
 /* ——— NARRATIVES BRIDGE ——— */
@@ -1155,13 +1382,145 @@ body.apex-bridge {
 .apex-bullet-marker { position: absolute; top: -2px; width: 3px; height: 22px; background: var(--apex-amber); box-shadow: 0 0 8px var(--apex-amber); transform: translateX(-50%); }
 
 .apex-waterfall { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-.apex-wf-row { display: grid; grid-template-columns: 90px 1fr 72px; gap: 8px; align-items: center; }
+.apex-wf-row { display: grid; grid-template-columns: 16px 90px 1fr 72px; gap: 8px; align-items: center; }
+.apex-wf-conn { font-size: 11px; color: var(--apex-magenta); text-align: center; }
 .apex-wf-label { font-size: 10px; color: var(--apex-text-secondary); }
 .apex-wf-track { height: 12px; background: var(--apex-surface); border: 1px solid var(--apex-border); border-radius: 2px; overflow: hidden; }
 .apex-wf-track i { display: block; height: 100%; background: linear-gradient(90deg, rgba(0,240,255,0.7), rgba(0,240,255,0.2)); }
 .apex-wf-row--total .apex-wf-track i { background: linear-gradient(90deg, rgba(255,0,102,0.7), rgba(255,0,102,0.25)); }
 .apex-wf-row--negative .apex-wf-track i { background: linear-gradient(90deg, rgba(255,184,0,0.7), rgba(255,184,0,0.25)); }
 .apex-wf-val { font-size: 10px; text-align: right; color: var(--apex-cyan); font-variant-numeric: tabular-nums; }
+.apex-wf-row--start .apex-wf-track i,
+.apex-wf-row--add .apex-wf-track i { background: linear-gradient(90deg, rgba(0,240,255,0.7), rgba(0,240,255,0.2)); }
+.apex-wf-row--sub .apex-wf-track i { background: linear-gradient(90deg, rgba(255,0,170,0.7), rgba(255,0,170,0.25)); }
+.apex-wf-row--end .apex-wf-track i { background: linear-gradient(90deg, rgba(255,184,0,0.8), rgba(255,184,0,0.3)); }
+.apex-waterfall--muted { opacity: 0.45; }
+.apex-funnel-rate,
+.apex-funnel-connector { font-size: 9px; color: var(--apex-magenta); margin-left: 4px; }
+.apex-funnel-val { font-size: 9px; color: var(--apex-text-secondary); margin-left: 4px; }
+.apex-funnel--empty,
+.apex-lanes--empty,
+.apex-matrix--empty { opacity: 0.55; }
+
+/* W-01..W-10 missing widgets (Moonshot CODING_HAL 2026-07-11) */
+.apex-treemap { display: flex; flex-wrap: wrap; gap: 4px; min-height: 120px; margin-top: 6px; }
+.apex-treemap-cell {
+  min-width: 72px; min-height: 56px; padding: 6px; border: 1px solid var(--apex-cyan);
+  background: rgba(0, 240, 255, 0.08); display: flex; flex-direction: column; gap: 2px;
+  transition: fill-opacity 0.15s ease, box-shadow 0.15s ease;
+}
+.apex-treemap-cell:hover { background: rgba(0, 240, 255, 0.22); box-shadow: 0 0 8px rgba(0, 240, 255, 0.35); }
+.apex-treemap-cell strong { font-size: 10px; color: var(--apex-amber); }
+.apex-treemap-cell em { font-style: normal; font-size: 11px; color: var(--apex-cyan); font-variant-numeric: tabular-nums; }
+.apex-treemap-children { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.apex-treemap-child { font-size: 9px; color: var(--apex-text-secondary); border: 1px solid var(--apex-border); padding: 1px 4px; }
+.apex-treemap--empty .apex-treemap-cell { border-color: rgba(120, 140, 160, 0.5); background: rgba(80, 90, 100, 0.15); }
+
+.apex-scatter { display: grid; grid-template-columns: 18px 1fr; grid-template-rows: 1fr 16px; gap: 4px; margin-top: 6px; min-height: 140px; }
+.apex-scatter-ylab { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 9px; color: var(--apex-text-secondary); }
+.apex-scatter-xlab { grid-column: 2; font-size: 9px; color: var(--apex-text-secondary); text-align: center; }
+.apex-scatter-plot {
+  position: relative; border: 1px solid var(--apex-border); background:
+    linear-gradient(to right, transparent 49.5%, rgba(0,240,255,0.08) 49.5%, rgba(0,240,255,0.08) 50.5%, transparent 50.5%),
+    linear-gradient(to bottom, transparent 49.5%, rgba(0,240,255,0.08) 49.5%, rgba(0,240,255,0.08) 50.5%, transparent 50.5%);
+  min-height: 120px;
+}
+.apex-scatter-svg { width: 100%; height: 120px; display: block; }
+.apex-scatter-quad-svg { stroke: rgba(0, 240, 255, 0.35); stroke-width: 0.4; }
+.apex-scatter-cross-v, .apex-scatter-cross-h { stroke: rgba(0, 240, 255, 0.55); stroke-width: 0.35; }
+.apex-scatter-point { fill: var(--apex-cyan); }
+.apex-scatter-point--underpaid { fill: var(--apex-amber); }
+.apex-scatter-point--low-collect { fill: var(--apex-magenta); }
+
+.apex-pareto { position: relative; display: flex; flex-direction: column; gap: 6px; margin-top: 6px; min-height: 80px; }
+.apex-pareto--empty { opacity: 0.55; }
+.apex-pareto-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 1;
+}
+.apex-pareto-row { display: grid; grid-template-columns: 56px 1fr 56px 40px; gap: 6px; align-items: center; position: relative; z-index: 2; }
+.apex-pareto-code { font-size: 10px; color: var(--apex-text-secondary); }
+.apex-pareto-track { height: 10px; background: var(--apex-surface); border: 1px solid var(--apex-border); overflow: hidden; }
+.apex-pareto-bar { display: block; height: 100%; background: linear-gradient(90deg, var(--apex-cyan), rgba(0,240,255,0.25)); }
+.apex-pareto-amt, .apex-pareto-cum { font-size: 10px; color: var(--apex-amber); text-align: right; font-variant-numeric: tabular-nums; }
+
+.apex-lanes { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.apex-lane-row { display: grid; grid-template-columns: 52px 1fr 28px; gap: 6px; align-items: center; }
+.apex-lane-code { font-size: 10px; color: var(--apex-text-secondary); }
+.apex-lane-track { display: flex; height: 12px; border: 1px solid var(--apex-border); overflow: hidden; }
+.apex-lane-segment { display: flex; align-items: center; justify-content: center; font-size: 8px; color: #05070a; min-width: 2px; }
+.apex-lane-segment--cyan { background: var(--apex-cyan); }
+.apex-lane-segment--amber { background: var(--apex-amber); }
+.apex-lane-segment--magenta { background: var(--apex-magenta); color: #fff; }
+.apex-lane-segment--alert { background: #ff4455; color: #fff; }
+.apex-lane-total { font-size: 10px; text-align: right; color: var(--apex-cyan); }
+
+.apex-float-strip {
+  display: flex; align-items: center; gap: 10px; overflow-x: auto; min-height: 80px;
+  padding: 6px 0; margin-top: 4px;
+}
+.apex-float-label { font-size: 10px; letter-spacing: 0.08em; color: var(--apex-cyan); flex: 0 0 auto; }
+.apex-float-pills { display: flex; gap: 8px; flex: 1 1 auto; }
+.apex-float-pill {
+  flex: 0 0 auto; background: var(--apex-amber); color: #05070a;
+  border-radius: 12px; padding: 2px 8px; font-size: 10px; font-weight: 600;
+  box-shadow: 0 0 8px rgba(255, 184, 0, 0.35);
+}
+.apex-float-pill--empty { background: transparent; border: 1px solid var(--apex-amber); color: var(--apex-amber); }
+.apex-float-total { flex: 0 0 auto; font-size: 11px; color: var(--apex-cyan); font-variant-numeric: tabular-nums; }
+
+.apex-matrix { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.apex-matrix-head, .apex-matrix-row {
+  display: grid; grid-template-columns: 1fr repeat(3, 36px); gap: 4px; align-items: center; font-size: 10px;
+}
+.apex-matrix-head { color: var(--apex-text-secondary); }
+.apex-matrix-hash { color: var(--apex-cyan); }
+.apex-matrix-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; justify-self: center; border: 1px solid var(--apex-border); }
+.apex-matrix-dot--verified { background: var(--apex-cyan); border-color: var(--apex-cyan); }
+.apex-matrix-dot--pending { background: var(--apex-amber); border-color: var(--apex-amber); }
+.apex-matrix-dot--failed { background: var(--apex-magenta); border-color: var(--apex-magenta); }
+.apex-matrix-dot--unknown { background: transparent; }
+.apex-matrix-legend { font-size: 9px; color: var(--apex-text-secondary); margin-top: 4px; }
+
+.apex-op-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; margin-top: 6px; }
+.apex-op-card {
+  border: 1px solid var(--apex-border); padding: 8px; display: flex; flex-direction: column; gap: 2px;
+  background: rgba(0, 240, 255, 0.04);
+}
+.apex-op-card strong { font-size: 11px; color: var(--apex-cyan); }
+.apex-op-card--occ { box-shadow: 0 0 10px rgba(255, 0, 170, 0.25); border-color: var(--apex-magenta); }
+.apex-op-card--avail { border-color: var(--apex-cyan); }
+.apex-op-card--turn { border-color: var(--apex-amber); }
+.apex-op-mark { font-size: 14px; color: var(--apex-amber); }
+.apex-op-patient, .apex-op-time { font-size: 10px; color: var(--apex-text-secondary); }
+.apex-op-legend { grid-column: 1 / -1; font-size: 9px; color: var(--apex-text-secondary); }
+
+.apex-op-grid { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; overflow-x: auto; }
+.apex-op-grid-head, .apex-op-grid-row {
+  display: grid; grid-template-columns: 56px 1fr; gap: 6px; align-items: center; font-size: 10px;
+}
+.apex-op-grid-head { color: var(--apex-text-secondary); }
+.apex-op-grid-head > span:not(.apex-op-grid-corner),
+.apex-op-grid-slots {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(44px, 1fr); gap: 4px;
+}
+.apex-op-grid-name { color: var(--apex-cyan); font-size: 10px; }
+.apex-op-slot {
+  min-height: 28px; border: 1px solid var(--apex-cyan); display: flex; align-items: center;
+  justify-content: center; font-size: 9px; padding: 2px;
+}
+.apex-op-slot--booked { background: var(--apex-amber); color: #05070a; border-color: var(--apex-amber); }
+.apex-op-slot--open { background: transparent; }
+.apex-op-slot--blocked { background: rgba(120, 130, 140, 0.35); border-color: rgba(120, 130, 140, 0.6); color: var(--apex-text-secondary); }
+
+.apex-gauge { display: flex; flex-direction: column; align-items: center; margin-top: 4px; }
+.apex-gauge-svg { width: 140px; height: 116px; }
+.apex-gauge-arc { fill: none; stroke-width: 12; }
+.apex-gauge-arc--track { stroke: var(--apex-magenta); opacity: 0.3; }
+.apex-gauge-arc--fill { stroke: var(--apex-cyan); }
+.apex-gauge-pct { fill: var(--apex-amber); font-size: 16px; font-family: JetBrains Mono, monospace; font-weight: 700; }
+.apex-gauge-target { fill: var(--apex-amber); stroke: var(--apex-bg, #05070a); stroke-width: 1; }
+.apex-gauge-meta { font-size: 10px; color: var(--apex-cyan); margin-top: 2px; }
+.apex-gauge--empty { opacity: 0.45; }
 
 .apex-stack-bar--tall { height: 28px; margin-top: 8px; }
 .apex-stack-meta { margin-top: 6px; font-size: 10px; color: var(--apex-text-secondary); }
@@ -1185,8 +1544,20 @@ body.apex-bridge {
   max-width: none; overflow: auto; box-shadow: 0 0 0 1px var(--apex-cyan), 0 24px 80px rgba(0,0,0,0.65);
   backdrop-filter: blur(8px);
 }
+.apex-focus-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 3990;
+  cursor: pointer;
+}
+body.apex-focus-open .apex-focus-backdrop {
+  display: block;
+}
+/* Legacy pseudo backdrop (kept inert) — real #apex-focus-backdrop handles dismiss clicks */
 body.apex-focus-open::before {
-  content: ""; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 3990;
+  content: none;
 }
 
 /* Tax library + Ask HAL (hal-10300) */
@@ -1212,6 +1583,8 @@ body.apex-focus-open::before {
   outline: 2px solid var(--apex-cyan) !important;
   box-shadow: 0 0 0 4px rgba(0, 240, 255, 0.2), 0 0 24px rgba(0, 240, 255, 0.35) !important;
   animation: apexHalPulse 1.2s ease-in-out 2;
+  position: relative;
+  z-index: 20;
 }
 @keyframes apexHalPulse {
   0%, 100% { filter: brightness(1); }
@@ -1406,6 +1779,8 @@ body.apex-claim-drawer-open::after {
   inset: 0;
   background: rgba(0,0,0,0.45);
   z-index: 4190;
+  cursor: pointer;
+  pointer-events: auto;
 }
 .apex-claim-drawer__head {
   display: flex;

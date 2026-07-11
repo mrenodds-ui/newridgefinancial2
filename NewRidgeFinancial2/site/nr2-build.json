@@ -1,7 +1,6 @@
 {
-  "BUILD_ID": "hal-10493",
-  "assetVersion": "hal-10493",
-  "schemaVersion": "hal-10493",
-  "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server.",
-  "builtAt": "2026-07-11T20:00:00.000Z"
+  "BUILD_ID": "hal-10460",
+  "assetVersion": "hal-10460",
+  "schemaVersion": "hal-10460",
+  "notes": "hal-10460: Wave-5 remaining master-map ADD subpages (taxes/SD/QB/AR aging/narratives/docs/lib/OM/HAL)."
 }

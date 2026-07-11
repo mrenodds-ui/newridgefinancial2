@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10493"
+BUILD_ID = "hal-10460"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -40,6 +40,10 @@ _NARRATIVE_PACKETS: dict[str, dict[str, Any]] = {}
 _WORKPAPER_PACKETS: dict[str, dict[str, Any]] = {}
 _TICKER_CACHE: dict[str, Any] = {"at": 0.0, "payload": None}
 _TICKER_CACHE_TTL_SEC = 10.0
+_WIDGETS_CACHE: dict[str, dict[str, Any]] = {}
+_WIDGETS_CACHE_TTL_SEC = 15.0
+_REPORTS_BUNDLE_CACHE: dict[str, Any] = {"at": 0.0, "reports": None, "bundle": None, "errors": None}
+_REPORTS_BUNDLE_CACHE_TTL_SEC = 20.0
 
 
 def _utc_now() -> str:
@@ -1479,17 +1483,25 @@ def save_tax_return_upload(*, year: str, jurisdiction: str, filename: str, data:
 
 
 def _load_reports_and_bundle() -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+    import copy
+    import time
+
+    now = time.monotonic()
+    cached_at = float(_REPORTS_BUNDLE_CACHE.get("at") or 0.0)
+    if (
+        _REPORTS_BUNDLE_CACHE.get("reports") is not None
+        and _REPORTS_BUNDLE_CACHE.get("bundle") is not None
+        and (now - cached_at) < _REPORTS_BUNDLE_CACHE_TTL_SEC
+    ):
+        return (
+            copy.deepcopy(_REPORTS_BUNDLE_CACHE["reports"]),
+            copy.deepcopy(_REPORTS_BUNDLE_CACHE["bundle"]),
+            list(_REPORTS_BUNDLE_CACHE.get("errors") or []),
+        )
+
     reports: dict[str, Any] = {}
     bundle: dict[str, Any] = {}
     errors: list[str] = []
-
-    try:
-        from financial_reports import build_financial_reports
-
-        reports = build_financial_reports(sync_exports=False)
-    except Exception as exc:  # noqa: BLE001 — surface honest empty state
-        errors.append(f"financial_reports: {exc}")
-        reports = {}
 
     try:
         from import_loader import load_import_bundle
@@ -1499,6 +1511,19 @@ def _load_reports_and_bundle() -> tuple[dict[str, Any], dict[str, Any], list[str
         errors.append(f"import_loader: {exc}")
         bundle = {}
 
+    try:
+        from financial_reports import build_financial_reports
+
+        # Reuse the same bundle — avoid a second cold import scan on every page.
+        reports = build_financial_reports(sync_exports=False, bundle=bundle or None)
+    except Exception as exc:  # noqa: BLE001 — surface honest empty state
+        errors.append(f"financial_reports: {exc}")
+        reports = {}
+
+    _REPORTS_BUNDLE_CACHE["at"] = time.monotonic()
+    _REPORTS_BUNDLE_CACHE["reports"] = copy.deepcopy(reports)
+    _REPORTS_BUNDLE_CACHE["bundle"] = copy.deepcopy(bundle)
+    _REPORTS_BUNDLE_CACHE["errors"] = list(errors)
     return reports, bundle, errors
 
 
@@ -1595,19 +1620,83 @@ def _financial_widgets_from_reports(
     reports: dict[str, Any],
     bundle: dict[str, Any],
 ) -> list[dict[str, Any]]:
+    """Financial Executive Console (hal-10430) — Moonshot Option A primary design.
+
+    Packed top-down: command → vitals → chart row (trend/provider/A/R/revenue) →
+    KPI row → notes → EBITDA. Empty large instruments collapse to strips.
+    """
     widgets: list[dict[str, Any]] = []
     rows = _dashboard_rows(bundle)
     latest = _latest_period_row(rows)
 
-    prod = _parse_money(latest.get("production")) if latest else None
-    coll = None
-    if latest:
-        if latest.get("collectionsReported") is False or latest.get("collectionsPending") is True:
-            coll = None
-        elif "collections" in latest:
-            coll = _parse_money(latest.get("collections"))
+    def _ar_aging_widget() -> dict[str, Any]:
+        buckets = (
+            reports.get("arAgingBuckets")
+            if isinstance(reports.get("arAgingBuckets"), list)
+            else []
+        )
+        series = []
+        for b in buckets:
+            if not isinstance(b, dict):
+                continue
+            amt = b.get("amount")
+            if isinstance(amt, (int, float)):
+                series.append({"label": str(b.get("bucket") or ""), "value": float(amt)})
+        if series and any(s["value"] for s in series):
+            return {
+                "id": "ar-aging-chart",
+                "type": "chart",
+                "chartType": "bar",
+                "label": "A/R Aging",
+                "size": "m",
+                "series": series,
+                "hint": "Buckets from SoftDent A/R import via financial_reports.",
+            }
+        empty_ar = _empty_chart(
+            "ar-aging-chart",
+            "A/R Aging",
+            hint="Import SoftDent A/R aging to populate this chart.",
+        )
+        empty_ar["size"] = "strip"
+        empty_ar["collapseWhenEmpty"] = True
+        empty_ar["compact"] = True
+        return empty_ar
 
-    if prod is not None:
+    try:
+        from apex_financial_console_pack import (
+            build_dual_axis_trend,
+            build_ebitda_station,
+            build_financial_command_strip,
+            build_financial_vital_signs,
+            build_revenue_composition,
+            collapse_empty_large,
+        )
+
+        # Level 1 — Command strip (import + period + morning brief)
+        widgets.append(build_financial_command_strip(bundle, reports))
+        # Level 2 — Vital signs (prod / collections / A/R / efficiency)
+        vitals = build_financial_vital_signs(reports, bundle)
+        ninety_pct = ar.get("ninetyPlusPct")
+        if isinstance(ninety_pct, (int, float)) and float(ninety_pct) > 20.0:
+            vitals["alert"] = True
+            vitals["alertReason"] = f"90+ share {float(ninety_pct):.1f}% exceeds 20%"
+        widgets.append(vitals)
+        # Level 3 — Chart row: dual-trend + provider + A/R (all size m for tight pack)
+        widgets.append(build_dual_axis_trend(bundle))
+        provider = build_provider_horizontal_bars(bundle)
+        if provider.get("status") == "empty":
+            provider = collapse_empty_large(provider)
+        else:
+            provider["size"] = "m"
+        widgets.append(provider)
+        widgets.append(_ar_aging_widget())
+        # Level 4 — Revenue composition (m when populated so it packs with charts)
+        revenue = build_revenue_composition(bundle)
+        if revenue.get("status") == "ok" and revenue.get("size") == "l":
+            revenue["size"] = "m"
+        widgets.append(revenue)
+    except Exception as exc:  # noqa: BLE001
+        # Fallback: legacy mosaic if console pack fails
         widgets.append(
             {
                 "id": "prod-mtd",
@@ -1673,58 +1762,28 @@ def _financial_widgets_from_reports(
                 hint="A/R aging import not available.",
             )
         )
+        widgets.insert(0, build_import_freshness(bundle))
+        widgets[0]["size"] = "strip"
+        widgets[0]["compact"] = True
+        widgets.insert(1, build_period_scrubber(bundle, page="financial"))
+        widgets[1]["size"] = "strip"
+        widgets.extend(_visual_boost_financial(reports, bundle))
+        widgets.append(_ar_aging_widget())
 
-    buckets = reports.get("arAgingBuckets") if isinstance(reports.get("arAgingBuckets"), list) else []
-    series = []
-    for b in buckets:
-        if not isinstance(b, dict):
-            continue
-        amt = b.get("amount")
-        if isinstance(amt, (int, float)):
-            series.append({"label": str(b.get("bucket") or ""), "value": float(amt)})
-    if series and any(s["value"] for s in series):
-        widgets.append(
-            {
-                "id": "ar-aging-chart",
-                "type": "chart",
-                "chartType": "bar",
-                "label": "A/R Aging",
-                "series": series,
-                "hint": "Buckets from SoftDent A/R import via financial_reports.",
-            }
-        )
-    else:
-        widgets.append(
-            _empty_chart(
-                "ar-aging-chart",
-                "A/R Aging",
-                hint="Import SoftDent A/R aging to populate this chart.",
-            )
-        )
-
+    # Level 5 — Secondary KPIs (compact size s, packed as one row)
     ct = reports.get("claimTracking") if isinstance(reports.get("claimTracking"), dict) else {}
     total_claims = ct.get("totalClaims")
-    if isinstance(total_claims, int):
-        widgets.append(
-            {
-                "id": "claims-total",
-                "type": "kpi",
-                "label": "Claims (import)",
-                "value": total_claims,
-                "unit": "count",
-                "deltaLabel": f"Denied {ct.get('deniedCount', 0)}",
-                "hint": str(ct.get("followUpHint") or "From SoftDent claims import."),
-            }
-        )
-    else:
-        widgets.append(
-            _empty_kpi(
-                "claims-total",
-                "Claims (import)",
-                hint="Claims import not available.",
-            )
-        )
-
+    claims_kpi = _count_kpi(
+        "claims-total",
+        "Claims (import)",
+        total_claims if isinstance(total_claims, int) else None,
+        hint=str(ct.get("followUpHint") or "From SoftDent claims import.")
+        if isinstance(total_claims, int)
+        else "Claims import not available.",
+        delta_label=f"Denied {ct.get('deniedCount', 0)}" if isinstance(total_claims, int) else None,
+    )
+    claims_kpi["size"] = "s"
+    widgets.append(claims_kpi)
     denied = ct.get("deniedCount")
     if isinstance(denied, int):
         widgets.append(
@@ -1734,6 +1793,7 @@ def _financial_widgets_from_reports(
                 "label": "Denied Claims",
                 "value": denied,
                 "unit": "count",
+                "size": "s",
                 "deltaLabel": f"Aging 30+ {ct.get('deniedAgingPast30Days', 0)}",
                 "hint": "Counts from SoftDent claims import — not invented.",
             }
@@ -1748,6 +1808,7 @@ def _financial_widgets_from_reports(
             "label": "Treatment Plans",
             "value": tp.get("rowCount") if tp.get("available") else None,
             "unit": "count",
+            "size": "s",
             "status": "empty" if not tp.get("available") else "ok",
             "emptyMessage": "No data",
             "hint": "Practice export treatment plans." if tp.get("available") else "Treatment plan export not loaded.",
@@ -1760,6 +1821,7 @@ def _financial_widgets_from_reports(
             "label": "Case Acceptance Rows",
             "value": ca.get("rowCount") if ca.get("available") else None,
             "unit": "count",
+            "size": "s",
             "status": "empty" if not ca.get("available") else "ok",
             "emptyMessage": "No data",
             "hint": "Practice export case acceptance." if ca.get("available") else "Case acceptance export not loaded.",
@@ -1807,97 +1869,7 @@ def _financial_widgets_from_reports(
         append_financial_missing(widgets, bundle)
     except Exception:
         pass
-    try:
-        from apex_unified_db_pack import unified_db_widget
 
-        widgets.append(unified_db_widget(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_qb_payroll_pack import payroll_ap_widgets
-
-        widgets.extend(payroll_ap_widgets(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_softdent_production_pack import production_widgets
-        from apex_softdent_aging_schedule_pack import aging_schedule_widgets
-        from apex_qb_net_profit_pack import net_profit_widget
-        from apex_unified_db_pack import production_vs_payroll_widget
-
-        widgets.extend(production_widgets(bundle))
-        widgets.extend(aging_schedule_widgets(bundle))
-        widgets.append(net_profit_widget(bundle))
-        widgets.append(production_vs_payroll_widget(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_softdent_extended_pack import extended_metrics_widgets
-
-        widgets.extend(extended_metrics_widgets(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_deep_audit_pack import deep_audit_widget
-
-        widgets.append(deep_audit_widget(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_reconciliation_pack import reconciliation_widget
-
-        widgets.append(reconciliation_widget(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_import_quarantine_pack import quarantine_widget
-
-        widgets.append(quarantine_widget(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_import_dq_pack import dq_widget
-        from apex_import_scheduler_pack import import_cron_widget
-
-        widgets.append(dq_widget(bundle))
-        widgets.append(import_cron_widget(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_dashboard_layout_pack import layout_widget
-
-        widgets.append(layout_widget(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_ai_telemetry_pack import telemetry_widget
-
-        widgets.append(telemetry_widget(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_sync_status_pack import freshness_widget
-
-        widgets.append(freshness_widget(bundle))
-    except Exception:
-        pass
-
-    widgets[0:0] = _visual_boost_financial(reports, bundle)
-    widgets.insert(0, build_period_scrubber(bundle, page="financial"))
-    widgets.insert(0, build_import_freshness(bundle))
-    widgets.append(build_provider_horizontal_bars(bundle))
-    widgets.append(build_payer_donut(bundle))
-    widgets.append(build_collection_bullet(bundle))
-    widgets.append(build_ins_patient_split(bundle))
-    widgets.append(build_ebitda_waterfall(bundle))
-    widgets.append(build_ebitda_scrubber(bundle))
-    # Threshold alert on A/R KPI when 90+ share > 20%
-    for w in widgets:
-        if isinstance(w, dict) and w.get("id") == "ar-outstanding":
-            ninety_pct = ar.get("ninetyPlusPct")
-            if isinstance(ninety_pct, (int, float)) and float(ninety_pct) > 20.0:
-                w["alert"] = True
-                w["alertReason"] = f"90+ share {float(ninety_pct):.1f}% exceeds 20%"
     _apply_threshold_alerts(widgets, reports)
     return widgets
 
@@ -2130,6 +2102,16 @@ def _taxes_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict
 
     widgets.extend(_visual_boost_taxes(plan))
     widgets.insert(0, build_period_scrubber(bundle, page="taxes"))
+    try:
+        from apex_bar_trend_page_org_pack import build_ebitda_variance_bar
+        from apex_financial_console_pack import collapse_empty_large
+
+        variance = build_ebitda_variance_bar(bundle)
+        if variance.get("status") == "empty":
+            variance = collapse_empty_large(variance)
+        widgets.append(variance)
+    except Exception:
+        pass
     return widgets
 
 
@@ -2277,6 +2259,26 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
             )
         )
 
+    try:
+        from apex_bar_trend_page_org_pack import (
+            build_import_health_timeline,
+            build_operatory_util_chart,
+            build_stale_import_alert_chip,
+        )
+        from apex_financial_console_pack import collapse_empty_large
+
+        widgets.insert(0, build_stale_import_alert_chip(bundle))
+        timeline = build_import_health_timeline(bundle)
+        if timeline.get("status") == "empty":
+            timeline = collapse_empty_large(timeline)
+        widgets.append(timeline)
+        util = build_operatory_util_chart(bundle)
+        if util.get("status") == "empty":
+            util = collapse_empty_large(util)
+        widgets.append(util)
+    except Exception:
+        pass
+
     procedures = _section_rows(bundle, "softdent", "procedures")
     widgets.append(
         _count_kpi(
@@ -2374,23 +2376,17 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
                 hint="Expense category rows appear after QuickBooks category import.",
             )
         )
+        try:
+            from apex_financial_console_pack import collapse_empty_large
+
+            widgets.append(collapse_empty_large(build_expense_horizontal_bars(bundle)))
+        except Exception:
+            widgets.append(build_expense_horizontal_bars(bundle))
         widgets.append(build_categorize_assist(bundle))
         try:
             from apex_missing_widgets_pack import append_quickbooks_missing
 
             append_quickbooks_missing(widgets, bundle)
-        except Exception:
-            pass
-        try:
-            from apex_qb_payroll_pack import payroll_ap_widgets
-
-            widgets.extend(payroll_ap_widgets(bundle))
-        except Exception:
-            pass
-        try:
-            from apex_qb_net_profit_pack import net_profit_widget
-
-            widgets.append(net_profit_widget(bundle))
         except Exception:
             pass
         return widgets
@@ -2469,23 +2465,24 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
         )
 
     widgets.append(build_expense_horizontal_bars(bundle))
+    try:
+        from apex_financial_console_pack import collapse_empty_large
+
+        # Phase 6 polish: empty expense hbar collapses to strip chip
+        for i, w in enumerate(widgets):
+            if isinstance(w, dict) and w.get("id") == "qb-expense-hbar" and w.get("status") == "empty":
+                widgets[i] = collapse_empty_large(w)
+                break
+            if isinstance(w, dict) and w.get("id") == "qb-expense-hbar":
+                w["size"] = "m"
+                break
+    except Exception:
+        pass
     widgets.append(build_categorize_assist(bundle))
     try:
         from apex_missing_widgets_pack import append_quickbooks_missing
 
         append_quickbooks_missing(widgets, bundle)
-    except Exception:
-        pass
-    try:
-        from apex_qb_payroll_pack import payroll_ap_widgets
-
-        widgets.extend(payroll_ap_widgets(bundle))
-    except Exception:
-        pass
-    try:
-        from apex_qb_net_profit_pack import net_profit_widget
-
-        widgets.append(net_profit_widget(bundle))
     except Exception:
         pass
     return widgets
@@ -2617,7 +2614,20 @@ def _ar_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[st
     widgets[0:0] = _visual_boost_ar(reports, bundle)
     widgets.append(build_ar_waterfall(reports, bundle))
     widgets.append(build_ar_aging_outlook(reports, bundle))
+    try:
+        from apex_bar_trend_page_org_pack import build_ar_forecast_trend_blocked
+
+        # Phase 5: honest blocked dual-axis stub (no illustrative decay dollars)
+        widgets.append(build_ar_forecast_trend_blocked(reports, bundle))
+    except Exception:
+        pass
     widgets.append(build_collection_bullet(bundle))
+    try:
+        from apex_missing_widgets_pack import append_ar_missing
+
+        append_ar_missing(widgets, bundle)
+    except Exception:
+        pass
     _apply_threshold_alerts(widgets, reports)
     return widgets
 
@@ -2773,18 +2783,60 @@ def _claims_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dic
         from apex_claims_narratives_pack import apply_aging_threshold_alerts, shelf_widget
 
         buckets = summary.get("agingBuckets") if isinstance(summary.get("agingBuckets"), dict) else {}
-        meta = summary.get("agingMeta") if isinstance(summary.get("agingMeta"), dict) else {}
-        missing_age = bool(meta.get("missingAgeField"))
-        for bucket in ("30", "60", "90"):
-            tiles = buckets.get(bucket) if isinstance(buckets.get(bucket), list) else []
-            widgets.append(shelf_widget(bucket, tiles, missing_age=missing_age and not tiles))
+        aging_meta = summary.get("agingMeta") if isinstance(summary.get("agingMeta"), dict) else {}
+        missing_age = bool(aging_meta.get("missingAgeField"))
+
+        health = import_health_widget(bundle)
+        health["size"] = "strip"
+        health["label"] = "Import Health"
+        health["compact"] = True
+        widgets.append(health)
+        widgets.append(claims_executive_strip_widget(summary, kmeta))
+        try:
+            from apex_bar_trend_page_org_pack import (
+                build_claims_aging_mini_trend,
+                build_claims_status_bar,
+            )
+
+            widgets.append(
+                build_claims_status_bar(summary, kanban_payload.get("counts") if isinstance(kanban_payload, dict) else None)
+            )
+            widgets.append(
+                build_claims_aging_mini_trend(
+                    summary.get("agingCounts") if isinstance(summary.get("agingCounts"), dict) else {}
+                )
+            )
+        except Exception:
+            pass
+        widgets.append(
+            claims_aging_exposure_widget(
+                {"buckets": buckets or {}, "counts": summary.get("agingCounts") or {}},
+                missing_age=missing_age,
+            )
+        )
+        widgets.append(claims_critical_actions_widget(kanban_payload))
+        widgets.append(kanban_widget(kanban_payload))
+        widgets.append(
+            claims_risk_analytics_widget(kmeta, available=bool(kanban_payload.get("available")))
+        )
+        widgets.append(claims_era_gauge_widget(kmeta, available=bool(kanban_payload.get("available"))))
         apply_aging_threshold_alerts(
             widgets,
             {"counts": summary.get("agingCounts") or {}},
         )
     except Exception:
         pass
+    try:
+        from apex_hal_said_improve_pack import append_claims_hal_said
 
+    # Below-fold analytics (not part of primary above-fold console)
+    widgets.append(build_ins_patient_split(bundle))
+    try:
+        from apex_missing_widgets_pack import append_claims_missing
+
+        append_claims_missing(widgets, bundle)
+    except Exception:
+        pass
     _apply_threshold_alerts(widgets, reports, claims_summary=summary)
     return widgets
 
@@ -2869,6 +2921,14 @@ def _narratives_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
                 status="empty",
             )
         )
+
+    try:
+        from apex_hal_said_improve_pack import clinical_signoff_widget, policy_changelog_widget
+
+        widgets.append(clinical_signoff_widget())
+        widgets.append(policy_changelog_widget())
+    except Exception:
+        pass
 
     return widgets
 
@@ -2958,6 +3018,18 @@ def _documents_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[
         )
 
     widgets.append(build_tax_library_widget())
+    try:
+        from apex_program_improve_pack import claim_attachments_widget
+
+        widgets.append(claim_attachments_widget())
+    except Exception:
+        pass
+    try:
+        from apex_hal_said_improve_pack import eob_backlog_widget
+
+        widgets.append(eob_backlog_widget())
+    except Exception:
+        pass
     return widgets
 
 
@@ -3180,6 +3252,25 @@ def _office_manager_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> 
     widgets.append(build_payer_donut(bundle))
     widgets.append(build_ins_patient_split(bundle))
     widgets.insert(0, build_import_freshness(bundle))
+    try:
+        from apex_bar_trend_page_org_pack import build_operatory_util_chart
+        from apex_financial_console_pack import collapse_empty_large
+        from apex_program_improve_pack import build_daily_huddle_widget, import_health_widget
+
+        widgets.insert(0, import_health_widget(bundle))
+        widgets.insert(0, build_daily_huddle_widget(reports, bundle))
+        util = build_operatory_util_chart(bundle)
+        if util.get("status") == "empty":
+            util = collapse_empty_large(util)
+        widgets.insert(1, util)
+    except Exception:
+        pass
+    try:
+        from apex_missing_widgets_pack import append_office_manager_missing
+
+        append_office_manager_missing(widgets, bundle)
+    except Exception:
+        pass
     return widgets
 
 
@@ -3276,7 +3367,11 @@ def _hal_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[s
             "hal-mosaic-coll",
             "Collections",
             coll,
-            hint="SoftDent dashboard." if coll is not None else "Collections pending/missing.",
+            hint=(
+                "SoftDent dashboard."
+                if coll is not None
+                else "Collections pending/missing — import SoftDent daysheet / Register for a Period, then Sync."
+            ),
         )
     )
 
@@ -3308,18 +3403,6 @@ def _hal_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[s
         append_hal_page_hal_said(widgets)
     except Exception:
         pass
-    try:
-        from apex_structured_insight_pack import ai_insight_widget
-
-        widgets.append(ai_insight_widget())
-    except Exception:
-        pass
-    try:
-        from apex_unified_db_pack import unified_db_widget
-
-        widgets.append(unified_db_widget(bundle))
-    except Exception:
-        pass
     return widgets
 
 
@@ -3338,11 +3421,22 @@ _PAGE_BUILDERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], list[dict[s
 }
 
 
-def build_apex_widgets(page_id: str) -> dict[str, Any]:
+def build_apex_widgets(
+    page_id: str,
+    *,
+    sub: str | None = None,
+    claim_id: str | None = None,
+) -> dict[str, Any]:
+    import copy
+    import time
+
     pid = re.sub(r"[^a-z0-9\-]", "", str(page_id or "").strip().lower())
+    sub_key = re.sub(r"[^a-z0-9\-]", "", str(sub or "").strip().lower()) or None
+    cid = str(claim_id or "").strip() or None
     if pid not in APEX_PAGES:
         return {
             "page": pid or "unknown",
+            "sub": sub_key,
             "refreshedAt": _utc_now(),
             "buildId": BUILD_ID,
             "widgets": [
@@ -3358,23 +3452,89 @@ def build_apex_widgets(page_id: str) -> dict[str, Any]:
             "sourceNote": "invalid page",
         }
 
-    reports, bundle, errors = _load_reports_and_bundle()
-    builder = _PAGE_BUILDERS[pid]
-    widgets = builder(reports, bundle)
+    cache_key = pid if not sub_key else f"{pid}:{sub_key}:{cid or ''}"
+    # Local-DB / attachment-backed subpages must not serve stale payloads.
+    skip_cache = sub_key in {
+        "collections",
+        "huddle",
+        "batch",
+        "claim-docs",
+        "payers",
+        "era",
+        "forecast",
+        "periods",
+        "calendar",
+        "tasks",
+        "attachments",
+        "history",
+        "audit",
+        "templates",
+        "system-logs",
+        "tax-docs",
+    }
+    now = time.monotonic()
+    if not skip_cache:
+        hit = _WIDGETS_CACHE.get(cache_key)
+        if hit and (now - float(hit.get("at") or 0.0)) < _WIDGETS_CACHE_TTL_SEC:
+            cached = hit.get("payload")
+            if isinstance(cached, dict):
+                return copy.deepcopy(cached)
 
-    source_note = f"{pid}: financial_reports + import_loader"
+    reports, bundle, errors = _load_reports_and_bundle()
+    if sub_key:
+        try:
+            from apex_subpages_pack import resolve_subpage_builder
+
+            sub_builder = resolve_subpage_builder(pid, sub_key)
+        except Exception:
+            sub_builder = None
+        if sub_builder is None:
+            widgets = [
+                {
+                    "id": "unknown-subpage",
+                    "type": "status",
+                    "status": "empty",
+                    "label": "Unknown subpage",
+                    "message": f"No subpage '{sub_key}' under {pid}",
+                    "hint": "Supported: financial/workpapers|providers|periods, claims/detail|batch|era, ar/collections|forecast, office-manager/huddle, documents/claim-docs, library/payers.",
+                }
+            ]
+            source_note = f"{pid}/{sub_key}: unknown subpage"
+        elif pid == "financial" and sub_key == "workpapers":
+            widgets = sub_builder(
+                reports,
+                bundle,
+                workpaper_widget=build_workpaper_widget,
+                variance_widget=build_variance_alert_widget,
+            )
+            source_note = f"{pid}/{sub_key}: subpage pack + CPA workpaper"
+        elif pid == "claims" and sub_key == "detail":
+            widgets = sub_builder(reports, bundle, claim_id=cid)
+            source_note = f"{pid}/{sub_key}: claim detail (id={cid or 'none'})"
+        elif pid == "documents" and sub_key == "claim-docs":
+            widgets = sub_builder(reports, bundle, claim_id=cid)
+            source_note = f"{pid}/{sub_key}: claim docs (id={cid or 'none'})"
+        elif pid == "claims" and sub_key == "attachments":
+            widgets = sub_builder(reports, bundle, claim_id=cid)
+            source_note = f"{pid}/{sub_key}: claim attachments (id={cid or 'none'})"
+        elif pid == "taxes" and sub_key == "workpapers":
+            widgets = sub_builder(
+                reports,
+                bundle,
+                workpaper_widget=build_workpaper_widget,
+                variance_widget=build_variance_alert_widget,
+            )
+            source_note = f"{pid}/{sub_key}: tax workpapers"
+        else:
+            widgets = sub_builder(reports, bundle)
+            source_note = f"{pid}/{sub_key}: subpage pack"
+    else:
+        builder = _PAGE_BUILDERS[pid]
+        widgets = builder(reports, bundle)
+        source_note = f"{pid}: financial_reports + import_loader"
+
     if errors:
         source_note += f" (partial: {'; '.join(errors)})"
-
-    # Phase U3 — reorder widgets by dashboard layout schema (parent page only)
-    if not sub_key:
-        try:
-            from apex_dashboard_layout_pack import order_widget_specs
-
-            widgets = order_widget_specs(widgets, page=pid)
-            source_note += " +U3 layout"
-        except Exception:
-            pass
 
     page_label = f"{pid}/{sub_key}" if sub_key else pid
     payload = {
@@ -3388,7 +3548,11 @@ def build_apex_widgets(page_id: str) -> dict[str, Any]:
         "sourceNote": source_note,
         "errors": errors or None,
         "widgetCensus": summarize_widget_census(widgets),
+        "cachedForSec": 0 if skip_cache else _WIDGETS_CACHE_TTL_SEC,
     }
+    if not skip_cache:
+        _WIDGETS_CACHE[cache_key] = {"at": time.monotonic(), "payload": copy.deepcopy(payload)}
+    return payload
 
 
 def _widget_has_data(w: dict[str, Any]) -> bool:
@@ -3426,7 +3590,9 @@ def summarize_widget_census(widgets: list[dict[str, Any]]) -> dict[str, Any]:
         if not isinstance(w, dict):
             continue
         wid = str(w.get("id") or "")
-        if not wid or wid.startswith("hal-chat"):
+        wtype = str(w.get("type") or "").strip().lower()
+        # Skip chat surface — id is often "hal-ask", not "hal-chat*"
+        if not wid or wid.startswith("hal-chat") or wtype == "hal-chat":
             continue
         label = str(w.get("label") or wid)
         hint = str(w.get("hint") or w.get("emptyMessage") or "")
@@ -3444,6 +3610,45 @@ def summarize_widget_census(widgets: list[dict[str, Any]]) -> dict[str, Any]:
         "emptyWidgets": empty[:12],
         "populatedWidgets": populated[:12],
     }
+
+
+def census_has_collections_pending(census: dict[str, Any] | None) -> bool:
+    """True when Collections KPI is empty because SoftDent period is pending/missing."""
+    if not isinstance(census, dict):
+        return False
+    empties = census.get("emptyWidgets") if isinstance(census.get("emptyWidgets"), list) else []
+    for row in empties:
+        if not isinstance(row, dict):
+            continue
+        wid = str(row.get("id") or "").strip().lower()
+        label = str(row.get("label") or "").strip().lower()
+        hint = str(row.get("hint") or "").strip().lower()
+        if wid in {"hal-mosaic-coll", "sd-collections"} or label == "collections":
+            if "pending" in hint or "missing" in hint:
+                return True
+    return False
+
+
+def append_collections_pending_board_actions(actions: list[dict[str, Any]]) -> None:
+    """Guide staff to SoftDent Collections KPI — honesty: never invent $."""
+    actions.append(
+        {
+            "type": "set_status_banner",
+            "message": "Collections pending: import SoftDent daysheet / Register for a Period, then Sync.",
+            "hint": "Not $0 — production exists without reported collections for the latest period.",
+            "tone": "warn",
+        }
+    )
+    if not any(a.get("type") == "navigate" and a.get("page") == "softdent" for a in actions):
+        actions.append({"type": "navigate", "page": "softdent"})
+    actions.append({"type": "focus_widget", "widgetId": "sd-collections"})
+    actions.append({"type": "highlight_widget", "widgetId": "sd-collections", "ms": 4500})
+
+
+COLLECTIONS_PENDING_FIX = (
+    "Fix: Import SoftDent daysheet or complete Register for a Period, then Sync imports "
+    "(or ask HAL to refresh SoftDent period). Collections stay empty until reported — not $0."
+)
 
 
 def build_page_widget_census(page_id: str) -> dict[str, Any]:
@@ -3553,11 +3758,13 @@ def format_page_inventory_reply(page_id: str) -> str:
         lines.append(
             "Empty: "
             + " · ".join(
-                f"{e.get('label') or e.get('id')}" + (f" ({str(e.get('hint') or '')[:60]})" if e.get("hint") else "")
+                f"{e.get('label') or e.get('id')}" + (f" ({str(e.get('hint') or '')[:80]})" if e.get("hint") else "")
                 for e in empties[:8]
                 if isinstance(e, dict)
             )
         )
+    if census_has_collections_pending(census):
+        lines.append(COLLECTIONS_PENDING_FIX)
     return " ".join(lines)
 
 
@@ -3608,9 +3815,35 @@ def format_census_reply(page: str, census: dict[str, Any]) -> str:
             hint = str(row.get("hint") or "").strip()
             bits.append(f"{label}" + (f" — {hint}" if hint else ""))
         lines.append("Empty: " + " · ".join(bits))
-        lines.append("Fix: place SoftDent/QB exports in the inbox (or refresh ODBC), then Sync imports. Ask: how do I get SoftDent/QuickBooks exports?")
+        if census_has_collections_pending(census):
+            lines.append(COLLECTIONS_PENDING_FIX)
+        else:
+            lines.append(
+                "Fix: place SoftDent/QB exports in the inbox (or refresh ODBC), then Sync imports. "
+                "Ask: how do I get SoftDent/QuickBooks exports?"
+            )
     else:
         lines.append("All listed instruments on this page currently show data from the import cache.")
+    return " ".join(lines)
+
+
+def format_learn_priorities_reply(*, empty_highlights: list[str] | None = None) -> str:
+    """Staff-assistant answer: what to teach HAL (not a generic 'no preferences' disclaimer)."""
+    lines = [
+        "I don't invent hobbies — I do have operational learning priorities for New Ridge.",
+        "Two memory layers: (1) governed `docs/hal_knowledge/memories.jsonl` (maintainer-approved durable rules); "
+        "(2) staff `app_data/nr2/learned_memories.jsonl` via Ask HAL: Remember this: … (no PHI/secrets).",
+        "Highest-value facts to teach next: write-off approval thresholds and SoftDent adjustment codes; "
+        "broken-appointment fee/policy; dual-insurance / COB order; payer quirks and denial themes "
+        "(e.g. alternate benefit, frequency limits); vendor/clearinghouse contacts and submission guidelines; "
+        "fee-schedule exceptions that differ from the imported fee file; appeal sequencing preferences.",
+        "How: say Remember this: <one non-PHI fact>, or fill docs/hal_knowledge/NEW_RIDGE_OPERATING_RULES_WORKSHEET.md "
+        "and run scripts/seed_practice_learned_memories.py.",
+        "Separate from memory: empty widgets need SoftDent/QB exports + Sync — not a remember fact. "
+        "Ask: which widgets are empty on all pages?",
+    ]
+    if empty_highlights:
+        lines.append("Current empty examples: " + " · ".join(str(h) for h in empty_highlights[:8]) + ".")
     return " ".join(lines)
 
 
@@ -3879,6 +4112,71 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
     actions: list[dict[str, Any]] = []
     notes: list[str] = []
     handled = False
+    ctx = body.get("context") if isinstance(body.get("context"), dict) else {}
+    ctx_widget = str(ctx.get("widgetId") or ctx.get("id") or "").strip()
+
+    # --- Ask-HAL on a specific widget (consult §4) — focus/highlight only, then chat may continue ---
+    if ctx_widget and re.search(r"\b(explain this widget|explain (the )?widget|what is this widget)\b", q):
+        actions.append({"type": "focus_widget", "widgetId": ctx_widget})
+        actions.append({"type": "highlight_widget", "widgetId": ctx_widget, "ms": 4000})
+        denial_codes = ctx.get("denialCodes") if isinstance(ctx.get("denialCodes"), list) else []
+        patient_hash = ctx.get("patientHash") if isinstance(ctx.get("patientHash"), list) else []
+        if denial_codes:
+            notes.append(
+                "Denial codes in view (import-backed): "
+                + ", ".join(str(c) for c in denial_codes[:8])
+                + ". Summarize top denial impact only from these codes — never invent dollars."
+            )
+        elif patient_hash:
+            notes.append(
+                "Anonymized patient hashes in view: "
+                + ", ".join(str(h) for h in patient_hash[:8])
+                + ". Refer by hash/initials only — no PHI expansion."
+            )
+        else:
+            notes.append(f"Focusing widget `{ctx_widget}` for explanation (import-backed display only).")
+        handled = True
+
+    # Advisory / ethics questions must reach chat — do not hijack on topic keywords
+    # like "categorize", "import health", or "ebitda" embedded in a longer ask.
+    advisory_chat = bool(
+        re.search(
+            r"\b("
+            r"prioritize|ranked|action list|what should (i|we|front desk|staff)|"
+            r"how (do|should|can) (i|we)|why (is|are|do|does)|explain|"
+            r"compare|draft|outline|advise|recommend|give (me )?(a )?(ranked|priority)|"
+            r"if i ask|invent|fabricate|make up|look better|what (exact|do you) do|"
+            r"refuse|should you|would you"
+            r")\b",
+            q,
+        )
+    ) or (len(q.split()) >= 12 and "?" in query)
+    explicit_board = bool(
+        re.search(
+            r"\b("
+            r"focus|highlight|point (me )?to|look at|open widget|"
+            r"show me (the )?(widget|scrubber|board|kanban|table|categorize|ebitda)|"
+            r"open (the )?(categorize|ebitda|claims workbench|import health)|"
+            r"go to|switch to|take me to|navigate"
+            r")\b",
+            q,
+        )
+    )
+    allow_topic_focus = explicit_board or not advisory_chat
+
+    # --- Ethics: never invent dollars / write-offs (deterministic refusal) ---
+    if re.search(
+        r"\b(invent|fabricate|fake|make up)\b.{0,80}\b(write-?off|\$|dollar|ebitda|revenue|collections|kpi)\b",
+        q,
+    ) or re.search(
+        r"\b(write-?off|ebitda).{0,60}\b(invent|fake|fabricate|look better|make .{0,20} better)\b",
+        q,
+    ):
+        notes.append(
+            "I will not invent write-offs or dollar amounts to make EBITDA (or any KPI) look better. "
+            "Books stay import-backed; staff posts real adjustments in SoftDent/QuickBooks with approval."
+        )
+        handled = True
 
     # --- Sync / populate from imports ---
     if re.search(
@@ -3912,6 +4210,26 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         actions.append({"type": "refresh_page"})
         notes.append("Refreshing widgets from the current import cache (no new file sync).")
         handled = True
+
+    # --- Phase 3: targeted refresh_widget (consult optional enhancement) ---
+    if re.search(r"\b(refresh (this |the )?(widget|instrument)|reload (this |the )?widget)\b", q):
+        wid = ctx_widget or ""
+        if not wid:
+            # try focus_rules match for named widget in same utterance
+            for pat, rule_wid, _pg in (
+                (r"\bexpense treemap\b", "expense-treemap", None),
+                (r"\bdenial pareto\b", "denial-pareto", None),
+                (r"\bunapplied\b", "unapplied-credit-float", None),
+                (r"\brecall gauge\b", "recall-gauge", None),
+                (r"\bcash (flow )?bridge\b", "cash-flow-bridge", None),
+            ):
+                if re.search(pat, q):
+                    wid = rule_wid
+                    break
+        if wid:
+            actions.append({"type": "refresh_widget", "widgetId": wid})
+            notes.append(f"Refreshing widget `{wid}` from import cache.")
+            handled = True
 
     # --- Navigate to a page ---
     page_map = {
@@ -4007,34 +4325,9 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(insurance )?verification matrix|eligibility matrix|verify (patients|benefits)|insurance check|elig(ibility)? matrix\b", "verification-matrix", "claims"),
         (r"\boperatory (util|board|schedule|status)|chair (util|schedule|board)|room (board|schedule)|op schedule|op board\b", "operatory-util-board", "office-manager"),
         (r"\brecall gauge|recall (status|tracker|compliance)|hygiene (recall|due)|recall (percent|rate|board)\b", "recall-gauge", "office-manager"),
-        # HAL-said improve-fix (2026-07-11)
-        (r"\beob (posting )?backlog|unposted eob|era backlog\b", "eob-posting-backlog", "office-manager"),
-        (r"\b(clinical )?sign-?off|dr\.?\s*reno (sign|review)|pending clinical review\b", "clinical-signoff-queue", "narratives"),
-        (r"\bpayer (change )?alerts?|carrier (update|change) alerts?\b", "payer-change-alerts", "office-manager"),
-        (r"\bpolicy (change|changelog|updates?)\b", "policy-changelog", "office-manager"),
-        (r"\bpayer contacts?|carrier (phones?|contacts?)|eligibility phones?\b", "payer-contact-admin", "office-manager"),
-        (r"\b(teach hal|structured remember|remember (form|structured))\b", "hal-structured-remember", "hal"),
-        (r"\b(ai insight|structured insight|insight (card|widget))\b", "hal-ai-insight", "hal"),
-        (r"\b(collections gap|def-?001|daysheet gap|why .{0,20}collections)\b", "softdent-collections-gap", "softdent"),
-        (r"\b(unified (db|database|snapshot)|nr2_unified|practice health snapshot)\b", "unified-db-snapshot", "financial"),
-        (r"\b(payroll (gap|import|detail)|qb payroll|show payroll)\b", "qb-payroll-gap", "quickbooks"),
-        (r"\b(ap aging|accounts payable|unpaid bills|show ap)\b", "qb-ap-aging", "quickbooks"),
-        (r"\b(production (gap|import)|softdent production)\b", "softdent-production-gap", "softdent"),
-        (r"\b(case acceptance|acceptance rate)\b", "softdent-case-acceptance-gap", "softdent"),
-        (r"\b(patient aging|aging summary|aging buckets)\b", "softdent-aging-gap", "softdent"),
-        (r"\b(scheduling (gap|metrics)|fill rate|broken appointments)\b", "softdent-scheduling-gap", "softdent"),
-        (r"\b(net profit|qb net profit)\b", "qb-net-profit-gap", "quickbooks"),
-        (r"\b(production vs payroll|payroll.?to.?production)\b", "production-vs-payroll", "financial"),
-        (r"\b(deep audit|monthly (practice )?health audit|quarter forecast)\b", "deep-audit-status", "financial"),
-        (r"\b(era\s*835|remittance|era ingest)\b", "era835-ingest-gap", "softdent"),
-        (r"\b(reconcil|variance alert|production vs payroll variance)\b", "reconciliation-status", "financial"),
-        (r"\b(import quarantine|quarantined import|poisoned (file|export))\b", "import-quarantine-panel", "financial"),
-        (r"\b(dashboard layout|mosaic layout|widget order)\b", "dashboard-layout-status", "financial"),
-        (r"\b(ai lane health|lane telemetry|model latency)\b", "ai-lane-health", "financial"),
-        (r"\b(data freshness|sync status|import age)\b", "data-freshness-status", "financial"),
     )
-    if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
-        re.search(pat, q) for pat, _wid, _pg in focus_rules
+    if (not handled) and allow_topic_focus and (
+        explicit_board or any(re.search(pat, q) for pat, _wid, _pg in focus_rules)
     ):
         for pat, wid, pg in focus_rules:
             if re.search(pat, q):
@@ -4151,7 +4444,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         handled = True
 
     # --- Surface categorize suggestions (already computed from imports; not inventing $) ---
-    if re.search(r"\b(categorize|suggest categor|expense categor|remap categor)\b", q):
+    if allow_topic_focus and re.search(r"\b(categorize|suggest categor|expense categor|remap categor)\b", q):
         _reports, bundle, _err = _load_reports_and_bundle()
         cat = build_categorize_assist(bundle)
         n = len(cat.get("suggestions") or [])
@@ -4181,6 +4474,134 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         if re.search(r"\bopen\b", q):
             actions.append({"type": "open_claim_detail", "claimId": cid})
         notes.append(f"Focusing claim tile `{cid}` from SoftDent import (no invented fields).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?high[- ]?risk\b|\bhigh[- ]?risk claims?\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "high-risk"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to high aging-risk cards (import-backed Age/Days + denied).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?unmatched\b|\bunmatched claims?\b|\bera unmatched\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "unmatched"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to unmatched / non-ERA cards (import-backed only).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?missing attachments?\b|\bmissing attachments?\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "missing-attachments"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to cards with missing attachments when that field is on the import.")
+        handled = True
+
+    if re.search(r"\b(show|switch to|use)\s+(claims?\s+)?table(\s+view)?\b|\bclaims? table view\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "set_claims_view", "view": "table"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Switching Claims Workbench to dense table view (SoftDent read-only).")
+        handled = True
+
+    if re.search(r"\b(show|switch to|use)\s+(claims?\s+)?kanban(\s+view)?\b|\bclaims? kanban view\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "set_claims_view", "view": "kanban"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Switching Claims Workbench to kanban columns (SoftDent read-only).")
+        handled = True
+
+    if re.search(r"\b(focus|show)\s+(claims?\s+)?workbench\b|\bclaims? workbench\b", q) and not handled:
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "all"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Focusing Claims Workbench (table default · SoftDent read-only).")
+        handled = True
+
+    if allow_topic_focus and re.search(r"\b(import health|health monitor|stale imports?)\b", q):
+        from apex_program_improve_pack import assess_import_health
+
+        _reports, bundle, _err = _load_reports_and_bundle()
+        health = assess_import_health(bundle)
+        alerts = health.get("alerts") if isinstance(health.get("alerts"), list) else []
+        msg = alerts[0]["message"] if alerts else "Imports healthy"
+        actions.append(
+            {
+                "type": "set_status_banner",
+                "message": str(msg)[:120],
+                "hint": (alerts[0].get("hint") if alerts else "Proactive monitor clear") or "",
+                "tone": "warn" if health.get("tone") == "warn" else "ok",
+            }
+        )
+        actions.append({"type": "focus_widget", "widgetId": "import-health-monitor"})
+        if not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": page if page in APEX_PAGES else "office-manager"})
+        notes.append(f"Import health: {msg}")
+        handled = True
+
+    # FIN-001/004/007 — Morning Financial Brief + empty-widget diagnosis
+    if re.search(
+        r"\b(morning financial brief|financial (morning )?brief|why (are )?(my )?widgets empty|"
+        r"collections pending|empty (financial )?widgets|widgets not (imported|populated)|"
+        r"missing collections)\b",
+        q,
+    ):
+        try:
+            from apex_financial_console_pack import (
+                build_morning_financial_brief,
+                format_hal_morning_financial_reply,
+            )
+
+            reports, bundle, _err = _load_reports_and_bundle()
+            brief = build_morning_financial_brief(bundle, reports if isinstance(reports, dict) else {})
+            reply = format_hal_morning_financial_reply(brief)
+            if page != "financial" and not any(a.get("type") == "navigate" for a in actions):
+                actions.append({"type": "navigate", "page": "financial"})
+                page = "financial"
+            actions.append({"type": "focus_widget", "widgetId": "financial-command-strip"})
+            actions.append(
+                {
+                    "type": "set_status_banner",
+                    "message": str(brief.get("message") or "Financial brief")[:140],
+                    "hint": "Collections/Daysheet export unlocks revenue split widgets"
+                    if brief.get("collectionsPending")
+                    else (brief.get("hint") or ""),
+                    "tone": "warn" if brief.get("tone") == "warn" else "ok",
+                }
+            )
+            if brief.get("collectionsPending"):
+                actions.append({"type": "refresh_softdent_period"})
+            notes.append(reply)
+            handled = True
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"Morning financial brief unavailable: {exc}")
+            handled = True
+
+    if re.search(r"\b(morning (brief|briefing|huddle)|daily huddle)\b", q) and not handled:
+        if page != "office-manager" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "office-manager"})
+            page = "office-manager"
+        actions.append({"type": "focus_widget", "widgetId": "om-daily-huddle"})
+        notes.append("Opening Daily Huddle priorities (import-backed).")
+        handled = True
+
+    if re.search(r"\b(draft appeal|generate narrative|appeal)\b.*\b(this|that|current|focused)\s+claim\b|\bfor (this|that) claim\b", q):
+        actions.append({"type": "narrative_from_focused_claim"})
+        if page != "narratives" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "narratives"})
+        notes.append("Carrying focused claim context into Narratives (voice context carry).")
         handled = True
 
     if re.search(r"\b(claims? import status|aging tiles? status)\b", q):
@@ -4280,87 +4701,41 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
                 page = page_in_query
             if wants_inventory and not wants_census:
                 reply_txt = format_page_inventory_reply(target)
-                actions.append(
-                    {
-                        "type": "set_status_banner",
-                        "message": f"Widget inventory · {target}",
-                        "hint": "Import-backed page map.",
-                        "tone": "ok",
-                    }
-                )
+                inv_census = build_page_widget_census(target).get("census")
+                inv_census = inv_census if isinstance(inv_census, dict) else {}
+                if census_has_collections_pending(inv_census):
+                    append_collections_pending_board_actions(actions)
+                else:
+                    actions.append(
+                        {
+                            "type": "set_status_banner",
+                            "message": f"Widget inventory · {target}",
+                            "hint": "Import-backed page map.",
+                            "tone": "ok",
+                        }
+                    )
             else:
                 census_payload = build_page_widget_census(target)
                 census = census_payload.get("census") if isinstance(census_payload.get("census"), dict) else {}
                 reply_txt = format_census_reply(str(census_payload.get("page") or target), census)
                 empty_n = int(census.get("empty") or 0)
-                actions.append(
-                    {
-                        "type": "set_status_banner",
-                        "message": f"{target}: {census.get('withData', 0)}/{census.get('total', 0)} with data"
-                        + (f" · {empty_n} empty" if empty_n else ""),
-                        "hint": "Import-backed census — HAL does not invent values.",
-                        "tone": "warn" if empty_n else "ok",
-                    }
-                )
-                empty_ids = census.get("emptyIds") if isinstance(census.get("emptyIds"), list) else []
-                if empty_ids:
-                    actions.append({"type": "focus_widget", "widgetId": str(empty_ids[0])})
-                    actions.append({"type": "highlight_widget", "widgetId": str(empty_ids[0]), "ms": 4000})
+                if census_has_collections_pending(census):
+                    append_collections_pending_board_actions(actions)
+                else:
+                    actions.append(
+                        {
+                            "type": "set_status_banner",
+                            "message": f"{target}: {census.get('withData', 0)}/{census.get('total', 0)} with data"
+                            + (f" · {empty_n} empty" if empty_n else ""),
+                            "hint": "Import-backed census — HAL does not invent values.",
+                            "tone": "warn" if empty_n else "ok",
+                        }
+                    )
+                    empty_ids = census.get("emptyIds") if isinstance(census.get("emptyIds"), list) else []
+                    if empty_ids:
+                        actions.append({"type": "focus_widget", "widgetId": str(empty_ids[0])})
+                        actions.append({"type": "highlight_widget", "widgetId": str(empty_ids[0]), "ms": 4000})
             notes.append(reply_txt)
-            handled = True
-
-    # --- DEF-001 / Phase I2: why collections empty ---
-    if (not handled) and re.search(
-        r"\b(why .{0,40}collections|collections (empty|pending|missing|gap)|def-?001|daysheet (gap|missing))\b",
-        q,
-    ):
-        try:
-            from apex_softdent_hardening_pack import assess_collections_gap, format_collections_gap_reply
-
-            _reports, bundle, _err = _load_reports_and_bundle()
-            gap = assess_collections_gap(bundle)
-            notes.append(format_collections_gap_reply(gap))
-            if not gap.get("healthy"):
-                append_collections_pending_board_actions(actions)
-            if gap.get("healthy"):
-                actions.append(
-                    {
-                        "type": "set_status_banner",
-                        "message": f"Collections reported · {gap.get('period') or 'latest'}",
-                        "hint": "gapCode=OK",
-                        "tone": "ok",
-                    }
-                )
-            if page != "softdent" and not any(a.get("type") == "navigate" for a in actions):
-                actions.append({"type": "navigate", "page": "softdent"})
-            actions.append({"type": "focus_widget", "widgetId": "softdent-collections-gap"})
-            actions.append({"type": "highlight_widget", "widgetId": "softdent-collections-gap", "ms": 4500})
-            handled = True
-        except Exception as exc:  # noqa: BLE001
-            notes.append(f"Collections gap check failed: {exc}")
-            handled = True
-
-    # --- S0: QB payroll / AP honesty ---
-    if (not handled) and re.search(
-        r"\b(payroll (gap|pending|import)|why .{0,20}payroll|ap aging|accounts payable|unpaid bills)\b",
-        q,
-    ):
-        try:
-            from apex_qb_payroll_pack import assess_payroll_ap_gap, format_payroll_ap_reply
-
-            _reports, bundle, _err = _load_reports_and_bundle()
-            gap = assess_payroll_ap_gap(bundle)
-            notes.append(format_payroll_ap_reply(gap))
-            if page != "quickbooks" and not any(a.get("type") == "navigate" for a in actions):
-                actions.append({"type": "navigate", "page": "quickbooks"})
-            wid = "qb-payroll-gap" if gap.get("payrollPending") else "qb-ap-aging"
-            if re.search(r"\b(ap|payable|unpaid)\b", q):
-                wid = "qb-ap-aging"
-            actions.append({"type": "focus_widget", "widgetId": wid})
-            actions.append({"type": "highlight_widget", "widgetId": wid, "ms": 4500})
-            handled = True
-        except Exception as exc:  # noqa: BLE001
-            notes.append(f"Payroll/AP gap check failed: {exc}")
             handled = True
 
     # --- HAL-said: assign SoftDent denials → Steve (NR2 tasks only) ---
@@ -4426,16 +4801,12 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
     wants_learn = bool(
         re.search(
             r"\b("
-            r"what (would|do|should) you (like|want|prefer|prioritize) to learn|"
-            r"what (would|do|should) (you|hal) prioritize|"
-            r"prioritize learning|"
-            r"learning priorit|"
-            r"key areas .{0,40}learn|"
+            r"what (would|do) you (like|want|prefer) to learn|"
             r"what should (i|we) (teach|tell|remember|save)|"
             r"what (can|should) (you|hal) learn|"
-            r"what .{0,30}(governed|learned) memor|"
+            r"learning priorities|"
             r"teach (you|hal)|"
-            r"based on .{0,40}governed memor"
+            r"what.*(governed|learned) memor"
             r")\b",
             q,
         )
@@ -4459,59 +4830,6 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
             }
         )
         handled = True
-
-    # --- Treatment planning estimate (InsCo × ADA from payment-line aggregates) ---
-    if not handled:
-        try:
-            from softdent_treatment_planning import (
-                format_treatment_estimate_reply,
-                lookup_treatment_estimate,
-                parse_treatment_estimate_query,
-                treatment_planning_status,
-            )
-
-            parsed = parse_treatment_estimate_query(query)
-            if parsed:
-                est = lookup_treatment_estimate(payer=parsed["payer"], ada_code=parsed["adaCode"])
-                reply_txt = format_treatment_estimate_reply(est)
-                notes.append(reply_txt)
-                tone = "ok" if est.get("sufficient") else "warn"
-                actions.append(
-                    {
-                        "type": "set_status_banner",
-                        "message": f"Tx plan estimate · {parsed['payer']} × {parsed['adaCode']}",
-                        "hint": "Historical SoftDent payment-line averages — not a benefits guarantee.",
-                        "tone": tone,
-                    }
-                )
-                handled = True
-            elif re.search(
-                r"\b(treatment plan(ning)? (data|status|ready|estimates?)|insurance payment (analysis|lines)|"
-                r"ada (payer|payment) (data|estimates?))\b",
-                q,
-            ):
-                st = treatment_planning_status()
-                notes.append(
-                    f"Treatment-planning data: {st.get('paymentLines', 0)} payment lines, "
-                    f"{st.get('procedureCodes', 0)} procedure crosswalk rows, "
-                    f"{st.get('estimates', 0)} InsCo×ADA estimates "
-                    f"({st.get('estimatesWithMinSample', 0)} with n>=10). "
-                    f"{st.get('hint') or ''}"
-                )
-                actions.append(
-                    {
-                        "type": "set_status_banner",
-                        "message": (
-                            f"Tx planning: {st.get('estimatesWithMinSample', 0)} ready estimates "
-                            f"/ {st.get('estimates', 0)} total"
-                        ),
-                        "hint": st.get("hint") or "",
-                        "tone": "ok" if int(st.get("estimatesWithMinSample") or 0) else "warn",
-                    }
-                )
-                handled = True
-        except Exception as exc:  # noqa: BLE001
-            notes.append(f"Treatment-planning lookup unavailable: {exc}")
 
     # --- SoftDent / QuickBooks export playbook (when + how) ---
     export_sd = bool(
@@ -4614,12 +4932,6 @@ def apex_sync_trigger(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         _REPORTS_BUNDLE_CACHE["errors"] = None
         _TICKER_CACHE["at"] = 0.0
         _TICKER_CACHE["payload"] = None
-        try:
-            from apex_reconciliation_pack import invalidate_explain_cache
-
-            result["explainCache"] = invalidate_explain_cache(reason="import")
-        except Exception as exc:  # noqa: BLE001
-            result["explainCache"] = {"ok": False, "error": str(exc)}
         result["status"] = "ok"
         result["completedAt"] = _utc_now()
         result["importMode"] = bundle.get("importMode")
@@ -5032,7 +5344,11 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
                     pass
             except Exception:
                 pass
-            return json_response_fn(build_apex_widgets(page_id))
+            import bottle
+
+            sub = bottle.request.query.get("sub") or None
+            claim_id = bottle.request.query.get("id") or None
+            return json_response_fn(build_apex_widgets(page_id, sub=sub, claim_id=claim_id))
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "widgets": []}, status=500)
 
@@ -5696,6 +6012,349 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             return json_response_fn(apex_claims_aging_payload())
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buckets": {}}, status=500)
+
+    @app.get("/api/apex/claims-kanban")
+    def apex_claims_kanban_api():
+        try:
+            return json_response_fn(apex_claims_kanban_payload())
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "columns": {}}, status=500)
+
+    @app.get("/api/apex/claims/actions")
+    def apex_claim_actions_list():
+        try:
+            import bottle
+            from apex_program_improve_pack import list_claim_actions
+
+            cid = str(bottle.request.query.get("claimId") or "").strip() or None
+            return json_response_fn(
+                {"ok": True, "entries": list_claim_actions(cid), "buildId": BUILD_ID}
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "entries": []}, status=500)
+
+    @app.post("/api/apex/claims/actions")
+    def apex_claim_actions_post():
+        try:
+            import bottle
+            from apex_program_improve_pack import record_claim_action
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            result = record_claim_action(payload)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/claims/era-ingest")
+    def apex_era_ingest_api():
+        try:
+            import bottle
+            from apex_program_improve_pack import ingest_era_835
+
+            upload = bottle.request.files.get("file") if bottle.request.files else None
+            text = ""
+            filename = None
+            if upload is not None:
+                filename = str(getattr(upload, "filename", None) or "era.835")
+                text = upload.file.read().decode("utf-8", errors="replace")
+            else:
+                raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                try:
+                    payload = json.loads(raw or "{}")
+                except Exception:
+                    payload = {"text": raw}
+                text = str(payload.get("text") or payload.get("content") or "")
+                filename = payload.get("filename")
+            _reports, bundle, _err = _load_reports_and_bundle()
+            rows = _section_rows(bundle, "softdent", "claims") or _section_rows(
+                bundle, "softdent", "claimStatus"
+            )
+            result = ingest_era_835(text, rows if isinstance(rows, list) else [], filename=filename)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.get("/api/apex/claims/attachments")
+    def apex_claim_attachments_list():
+        try:
+            import bottle
+            from apex_program_improve_pack import list_claim_attachments
+
+            cid = str(bottle.request.query.get("claimId") or "").strip() or None
+            return json_response_fn(
+                {"ok": True, "items": list_claim_attachments(cid), "buildId": BUILD_ID}
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "items": []}, status=500)
+
+    @app.post("/api/apex/claims/attachments")
+    def apex_claim_attachments_upload():
+        try:
+            import bottle
+            from apex_program_improve_pack import save_claim_attachment
+
+            upload = bottle.request.files.get("file")
+            claim_id = str(bottle.request.forms.get("claimId") or "").strip()
+            note = str(bottle.request.forms.get("note") or "").strip() or None
+            if upload is None:
+                return json_response_fn({"ok": False, "error": "file required"}, status=400)
+            raw = upload.file.read()
+            result = save_claim_attachment(
+                claim_id=claim_id,
+                filename=str(getattr(upload, "filename", None) or "attachment.bin"),
+                raw=raw,
+                note=note,
+            )
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/hal/remember-structured")
+    def apex_remember_structured():
+        try:
+            import bottle
+            from apex_hal_said_improve_pack import remember_structured
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            result = remember_structured(payload)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/hal/clinical-signoff")
+    def apex_clinical_signoff_post():
+        try:
+            import bottle
+            from apex_hal_said_improve_pack import resolve_clinical_signoff, submit_clinical_signoff
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            if payload.get("id") and (
+                payload.get("status") or payload.get("decision") or payload.get("resolve")
+            ):
+                result = resolve_clinical_signoff(payload)
+            else:
+                result = submit_clinical_signoff(payload)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.get("/api/apex/hal/clinical-signoff")
+    def apex_clinical_signoff_list():
+        try:
+            import bottle
+            from apex_hal_said_improve_pack import list_clinical_signoffs
+
+            st = str(bottle.request.query.get("status") or "").strip() or None
+            return json_response_fn(
+                {"ok": True, "entries": list_clinical_signoffs(status=st), "buildId": BUILD_ID}
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "entries": []}, status=500)
+
+    @app.post("/api/apex/hal/eob-posted")
+    def apex_eob_posted():
+        try:
+            import bottle
+            from apex_hal_said_improve_pack import mark_eob_posted
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            result = mark_eob_posted(str(payload.get("claimId") or payload.get("claim_id") or ""))
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.get("/api/apex/hal/eob-backlog")
+    def apex_eob_backlog_list():
+        try:
+            from apex_hal_said_improve_pack import list_eob_backlog
+
+            return json_response_fn(
+                {"ok": True, "items": list_eob_backlog(), "buildId": BUILD_ID}
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "items": []}, status=500)
+
+    @app.post("/api/apex/hal/policy-change")
+    def apex_policy_change_post():
+        try:
+            import bottle
+            from apex_hal_said_improve_pack import record_policy_change
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            result = record_policy_change(payload)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.get("/api/apex/hal/policy-change")
+    def apex_policy_change_list():
+        try:
+            import bottle
+            from apex_hal_said_improve_pack import list_policy_changes
+
+            pid = str(bottle.request.query.get("payerId") or "").strip() or None
+            return json_response_fn(
+                {"ok": True, "entries": list_policy_changes(payer_id=pid), "buildId": BUILD_ID}
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "entries": []}, status=500)
+
+    @app.post("/api/apex/hal/payer-field")
+    def apex_payer_field_update():
+        try:
+            import bottle
+            from apex_hal_said_improve_pack import update_payer_field
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            result = update_payer_field(
+                str(payload.get("payerId") or payload.get("payer_id") or ""),
+                str(payload.get("field") or ""),
+                str(payload.get("value") or ""),
+            )
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.get("/api/apex/hal/normalize-carrier")
+    def apex_normalize_carrier():
+        try:
+            import bottle
+            from apex_hal_said_improve_pack import normalize_softdent_label
+
+            label = str(bottle.request.query.get("label") or bottle.request.query.get("q") or "")
+            result = normalize_softdent_label(label)
+            result["buildId"] = BUILD_ID
+            result["ok"] = True
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/hal/assign-denials")
+    def apex_assign_denials():
+        try:
+            from apex_hal_said_improve_pack import assign_softdent_denials_to_steve
+
+            _reports, bundle, _err = _load_reports_and_bundle()
+            rows = _section_rows(bundle, "softdent", "claims") or _section_rows(
+                bundle, "softdent", "claimStatus"
+            )
+            result = assign_softdent_denials_to_steve(rows if isinstance(rows, list) else [])
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.get("/api/apex/import-health")
+    def apex_import_health_api():
+        try:
+            from apex_program_improve_pack import assess_import_health
+
+            _reports, bundle, _err = _load_reports_and_bundle()
+            result = assess_import_health(bundle)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/narratives/batch-seed")
+    def apex_narratives_batch_seed():
+        try:
+            import bottle
+            from apex_program_improve_pack import batch_narrative_seed
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            ids = payload.get("claimIds") if isinstance(payload.get("claimIds"), list) else []
+            result = batch_narrative_seed(ids, payer=str(payload.get("payer") or "") or None)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/local/collection-notes")
+    def apex_local_collection_notes():
+        try:
+            import bottle
+            from nr2_local_db import upsert_collection_note
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            result = upsert_collection_note(payload if isinstance(payload, dict) else {})
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/local/tasks")
+    def apex_local_tasks():
+        try:
+            import bottle
+            from nr2_local_db import upsert_task
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            result = upsert_task(payload if isinstance(payload, dict) else {})
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/local/huddle")
+    def apex_local_huddle():
+        try:
+            import bottle
+            from nr2_local_db import record_huddle
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            pri = payload.get("priorities") if isinstance(payload.get("priorities"), list) else []
+            result = record_huddle(pri, note=str(payload.get("note") or "") or None)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/local/payers")
+    def apex_local_payers():
+        try:
+            import bottle
+            from nr2_local_db import upsert_payer_guideline
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            result = upsert_payer_guideline(payload if isinstance(payload, dict) else {})
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/local/tax-payments")
+    def apex_local_tax_payments():
+        try:
+            import bottle
+            from nr2_local_db import upsert_tax_payment
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            result = upsert_tax_payment(payload if isinstance(payload, dict) else {})
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
 
     @app.get("/api/apex/widget-census/<page_id>")
     def apex_widget_census_api(page_id: str):

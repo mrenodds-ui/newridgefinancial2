@@ -560,7 +560,15 @@ class NR2BottleServer(BottleServer):
             import hashlib
             import json as _json
 
-            from nr2_browser_security import abort_browser_auth, financial_read_path, host_allowed, register_browser_session, token_fingerprint
+            from nr2_browser_security import (
+                abort_browser_auth,
+                bind_session_user_agent,
+                financial_read_path,
+                host_allowed,
+                register_browser_session,
+                session_vault,
+                token_fingerprint,
+            )
             from nr2_rate_limit import classify_route, is_allowed, is_rate_limit_exempt
 
             if not _desktop_access_ok():
@@ -569,7 +577,11 @@ class NR2BottleServer(BottleServer):
                 abort_browser_auth("host_rejected", "Host header not allowed for NR2 loopback.")
             active_token = _browser_session_token or _desktop_session_token
             if _loopback_secured() and active_token:
-                register_browser_session(active_token)
+                # Register once; subsequent requests only refresh UA binding.
+                if session_vault().has_session(active_token):
+                    bind_session_user_agent(active_token)
+                else:
+                    register_browser_session(active_token)
             if _loopback_secured() and _browser_api_request():
                 path = bottle.request.path or ""
                 if not is_rate_limit_exempt(path):
@@ -581,7 +593,14 @@ class NR2BottleServer(BottleServer):
                         bottle.response.headers["Retry-After"] = str(retry)
                         bottle.abort(429, _json.dumps({"ok": False, "error": "rate_limited", "retryAfter": retry}))
             if _browser_app() and _state_changing_request() and not _browser_mutation_auth_ok():
-                abort_browser_auth(_browser_mutation_auth_reason(), "Loopback mutation auth failed.")
+                reason = _browser_mutation_auth_reason()
+                abort_browser_auth(
+                    reason,
+                    "Loopback mutation auth failed.",
+                    recovery_token=(_browser_session_token or ensure_browser_session_token())
+                    if reason in ("token_invalid", "binding_invalid")
+                    else None,
+                )
             if (
                 _browser_app()
                 and bottle.request.method == "GET"

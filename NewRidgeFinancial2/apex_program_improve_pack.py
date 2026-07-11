@@ -217,16 +217,6 @@ def assess_import_health(bundle: dict[str, Any] | None = None) -> dict[str, Any]
     except Exception:
         pass
 
-    # DEF-001 SoftDent Collections/Daysheet gap (Phase I2)
-    try:
-        from apex_softdent_hardening_pack import import_health_collections_alert
-
-        alert = import_health_collections_alert(b)
-        if alert:
-            alerts.append(alert)
-    except Exception:
-        pass
-
     tone = "ok"
     if any(a.get("severity") == "warn" for a in alerts):
         tone = "warn"
@@ -345,20 +335,6 @@ def ingest_era_835(
         result["halSaidWorkflow"] = process_era_workflow(result, filename=filename)
     except Exception as exc:  # noqa: BLE001
         result["halSaidWorkflow"] = {"ok": False, "error": str(exc)}
-    # Phase S1 — unified aggregate (totals only)
-    try:
-        from apex_softdent_era_pack import attach_era_to_ingest
-
-        result = attach_era_to_ingest(result, filename=filename)
-    except Exception as exc:  # noqa: BLE001
-        result["unifiedEraAggregate"] = {"ok": False, "error": str(exc)}
-    # Phase U1 — payer/proc aggregates (no PHI)
-    try:
-        from apex_era835_pack import attach_u1_to_era_ingest
-
-        result = attach_u1_to_era_ingest(result, content=content, filename=filename)
-    except Exception as exc:  # noqa: BLE001
-        result["era835U1"] = {"ok": False, "error": str(exc)}
     return result
 
 

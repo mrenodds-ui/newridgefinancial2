@@ -308,13 +308,6 @@ def build_revenue_composition(bundle: dict[str, Any]) -> dict[str, Any]:
     pending = "collectionsPending" in str(split.get("emptyMessage") or "") or "pending" in str(
         split.get("hint") or ""
     ).lower()
-    gap_meta: dict = {}
-    try:
-        from apex_softdent_hardening_pack import assess_collections_gap
-
-        gap_meta = assess_collections_gap(bundle)
-    except Exception:
-        gap_meta = {}
     return {
         "id": "revenue-composition",
         "type": "revenue-composition",
@@ -325,21 +318,15 @@ def build_revenue_composition(bundle: dict[str, Any]) -> dict[str, Any]:
         "slices": [],
         "status": "empty",
         "emptyMessage": (
-            f"{gap_meta.get('gapCode')}: Collections/Daysheet gap — export SoftDent Collections/Daysheet "
-            "(Reports > Accounting) then Sync"
-            if gap_meta.get("gapCode") and gap_meta.get("gapCode") != "OK"
-            else "Collections pending for current period — export SoftDent Collections/Daysheet "
+            "Collections pending for current period — export SoftDent Collections/Daysheet "
             "(Reports > Accounting) into C:\\SoftDent\\softdentexportreports or C:\\SoftDentReportExports"
         ),
-        "hint": (gap_meta.get("fixHint") if gap_meta.get("fixHint") else None)
-        or split.get("hint")
+        "hint": split.get("hint")
         or donut.get("hint")
         or "Production may be present; insurance/patient split waits on Collections/Daysheet totals.",
         "halAction": "refresh_softdent_period",
         "halActionLabel": "Sync SoftDent Collections",
-        "collectionsPending": pending or bool(gap_meta.get("collectionsPending")),
-        "gapCode": gap_meta.get("gapCode"),
-        "def": "DEF-001",
+        "collectionsPending": pending,
         "aliasIds": ["ins-patient-split", "payer-donut"],
     }
 

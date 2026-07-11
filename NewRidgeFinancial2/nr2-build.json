@@ -1,7 +1,6 @@
 {
-  "BUILD_ID": "hal-10493",
-  "assetVersion": "hal-10493",
-  "schemaVersion": "hal-10493",
-  "notes": "hal-10493: Moonshot X0-X2 burn-in ops runbooks (flags stay OFF until operator runs scripts).",
-  "builtAt": "2026-07-11T20:00:00.000Z"
+  "BUILD_ID": "hal-10460",
+  "assetVersion": "hal-10460",
+  "schemaVersion": "hal-10460",
+  "notes": "hal-10460: Wave-5 remaining master-map ADD subpages (taxes/SD/QB/AR aging/narratives/docs/lib/OM/HAL)."
 }

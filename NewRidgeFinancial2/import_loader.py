@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import copy
 import csv
 import json
 import os
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -218,17 +221,43 @@ def _load_dataset(directory: Path, names: tuple[str, ...]) -> dict[str, Any] | N
     paths = _all_existing(directory, names)
     if not paths:
         return None
-    path: Path | None = None
-    rows: list[dict[str, Any]] = []
+
+    is_sample_claims = None
+    try:
+        from import_sync import _is_sample_claims as _sample_fn
+
+        is_sample_claims = _sample_fn
+    except Exception:
+        is_sample_claims = None
+
+    best_path: Path | None = None
+    best_rows: list[dict[str, Any]] = []
+    best_key: tuple[int, int, int, float] | None = None
+    fallback_path: Path | None = None
+    fallback_rows: list[dict[str, Any]] = []
+
     for candidate in paths:
         candidate_rows = _read_tabular(candidate)
-        if _rows_are_usable(candidate_rows):
-            path = candidate
-            rows = candidate_rows
-            break
-    if path is None:
-        path = paths[0]
-        rows = _read_tabular(path)
+        if not _rows_are_usable(candidate_rows):
+            continue
+        if fallback_path is None:
+            fallback_path = candidate
+            fallback_rows = candidate_rows
+        sample = bool(is_sample_claims and is_sample_claims(candidate_rows))
+        # Prefer non-sample, then most rows, then JSON over CSV, then newest mtime.
+        key = (
+            0 if sample else 1,
+            len(candidate_rows),
+            1 if candidate.suffix.lower() == ".json" else 0,
+            candidate.stat().st_mtime,
+        )
+        if best_key is None or key > best_key:
+            best_key = key
+            best_path = candidate
+            best_rows = candidate_rows
+
+    path = best_path or fallback_path or paths[0]
+    rows = best_rows if best_path is not None else (fallback_rows or _read_tabular(path))
     file_sha: str | None = None
     try:
         from import_cache_ttl import sha256_file
@@ -365,8 +394,36 @@ def _write_direct_sections_to_cache(sections: dict[str, Any]) -> dict[str, Any]:
     return {"written": written, "errors": errors}
 
 
-def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, Any]:
-    direct_first = direct_first_imports_enabled()
+def load_import_bundle(*, sync: bool = True, deep: bool = False, direct: bool | None = None) -> dict[str, Any]:
+    """Load SoftDent/QB import bundle.
+
+    direct=None → honor NR2 direct-first setting
+    direct=True  → force upstream/direct sections
+    direct=False → cache/document-inbox only (fast path for readiness gates)
+    """
+    direct_first = direct_first_imports_enabled() if direct is None else bool(direct)
+    # Short in-process TTL so the single-threaded HTTP loop is not re-scanning
+    # upstream on every widget/app-info hit during page load.
+    cache_key = (bool(sync), bool(deep), bool(direct_first), "v1")
+    if not sync:
+        with _BUNDLE_CACHE_LOCK:
+            hit = _BUNDLE_CACHE.get(cache_key)
+            if hit and (time.monotonic() - float(hit.get("at") or 0)) < _BUNDLE_CACHE_TTL_SEC:
+                return copy.deepcopy(hit["bundle"])
+    bundle = _load_import_bundle_uncached(sync=sync, deep=deep, direct_first=direct_first)
+    if not sync:
+        with _BUNDLE_CACHE_LOCK:
+            _BUNDLE_CACHE[cache_key] = {"at": time.monotonic(), "bundle": copy.deepcopy(bundle)}
+    return bundle
+
+
+_BUNDLE_CACHE: dict[tuple, dict[str, Any]] = {}
+_BUNDLE_CACHE_LOCK = threading.Lock()
+# Keep warm across page switches / silent refresh (client polls ~30s).
+_BUNDLE_CACHE_TTL_SEC = 90.0
+
+
+def _load_import_bundle_uncached(*, sync: bool, deep: bool, direct_first: bool) -> dict[str, Any]:
     sync_status: dict[str, Any] = {
         "attempted": sync and not direct_first,
         "ok": True,
@@ -388,11 +445,24 @@ def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, An
         try:
             from practice_source_access import direct_first_write_cache_enabled
 
-            sections = _load_direct_sections()
+            # Refresh document-inbox from upstream/daysheet so cache-only readers
+            # and scheduled tools stay on live practice data, not stale stubs.
+            inbox_sync: dict[str, Any] | None = None
+            try:
+                from import_sync import sync_imports
+
+                inbox_sync = sync_imports()
+            except Exception as inbox_exc:
+                inbox_sync = {"ok": False, "error": str(inbox_exc)}
+
             sync_status["attempted"] = True
-            sync_status["result"] = {"directFirst": True, "refreshedAt": datetime.now(timezone.utc).isoformat()}
-            if direct_first_write_cache_enabled():
-                sync_status["result"]["cacheWrite"] = _write_direct_sections_to_cache(sections)
+            sync_status["result"] = {
+                "directFirst": True,
+                "refreshedAt": datetime.now(timezone.utc).isoformat(),
+                "inboxSync": inbox_sync,
+            }
+            # Cache mirror runs after direct_sections are loaded below.
+            sync_status["result"]["_pendingCacheWrite"] = direct_first_write_cache_enabled()
         except Exception as exc:
             sync_status["ok"] = False
             sync_status["error"] = str(exc)
@@ -401,11 +471,18 @@ def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, An
     quickbooks_dir = quickbooks_import_dir()
     direct_sections: dict[str, Any] | None = None
     direct_pipeline_error: str | None = None
-    if direct_first and sync:
+    # Direct-first widgets read upstream on every load (real-time); sync=True also
+    # refreshes the document-inbox cache for tools that still read files on disk.
+    if direct_first:
         try:
             direct_sections = _load_direct_sections()
             if isinstance(direct_sections, dict):
                 direct_pipeline_error = direct_sections.get("directPipelineError")
+            pending_write = False
+            if isinstance(sync_status.get("result"), dict):
+                pending_write = bool(sync_status["result"].pop("_pendingCacheWrite", False))
+            if pending_write and isinstance(direct_sections, dict):
+                sync_status["result"]["cacheWrite"] = _write_direct_sections_to_cache(direct_sections)
         except Exception as exc:
             sync_status.setdefault("warnings", [])
             if isinstance(sync_status["warnings"], list):
