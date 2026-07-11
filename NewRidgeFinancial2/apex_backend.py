@@ -3473,6 +3473,39 @@ def format_census_reply(page: str, census: dict[str, Any]) -> str:
     return " ".join(lines)
 
 
+def format_learn_priorities_reply(*, empty_highlights: list[str] | None = None) -> str:
+    """Staff-assistant answer: what to teach HAL (not a generic 'no preferences' disclaimer)."""
+    lines = [
+        "Operational learning priorities for New Ridge (not hobbies) — two lanes:",
+        "A) STAFF MEMORY (Remember this: … → learned_memories.jsonl; no PHI/secrets): "
+        "payer-specific denial reason codes and appeal narratives (Sun Life composites, MetLife downgrades, etc.); "
+        "carrier workflow quirks (prior-auth steps, DentaQuest/Medicaid forms, surface notation); "
+        "clearinghouse/SoftDent error → rejection mappings; internal billing exceptions "
+        "(write-off thresholds, discount agreements, payment-plan rules); concise appeal templates that worked.",
+        "B) IMPORT DATA (not memory — dollars stay in analytics): SoftDent Insurance Payment Analysis CSV → "
+        r"C:\SoftDentFinancialExports\insurance_payments_YYYYMMDD.csv (+ optional procedure_codes_YYYYMMDD.csv), "
+        "then Sync so HAL can answer InsCo × ADA paid-after-write-off estimates for treatment planning "
+        "(e.g. How much will Delta Dental typically pay for D0274?).",
+        "Governed layer: docs/hal_knowledge/memories.jsonl (maintainer-approved). "
+        "Worksheet: docs/hal_knowledge/NEW_RIDGE_OPERATING_RULES_WORKSHEET.md + scripts/seed_practice_learned_memories.py.",
+        "Ask: Treatment planning data status · which widgets are empty on all pages?",
+    ]
+    try:
+        from softdent_treatment_planning import treatment_planning_status
+
+        st = treatment_planning_status()
+        lines.append(
+            f"Live tx-planning ingest: {st.get('paymentLines', 0)} payment lines, "
+            f"{st.get('estimatesWithMinSample', 0)} InsCo×ADA estimates with n>=10 "
+            f"(of {st.get('estimates', 0)} total)."
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    if empty_highlights:
+        lines.append("Current empty widget examples: " + " · ".join(str(h) for h in empty_highlights[:8]) + ".")
+    return " ".join(lines)
+
+
 def format_export_playbook_reply(topic: str = "both") -> str:
     book = build_export_playbook()
     parts = [
@@ -4210,6 +4243,97 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
                     actions.append({"type": "highlight_widget", "widgetId": str(empty_ids[0]), "ms": 4000})
             notes.append(reply_txt)
             handled = True
+
+    # --- What should HAL learn / teach me (staff memory priorities) ---
+    wants_learn = bool(
+        re.search(
+            r"\b("
+            r"what (would|do|should) you (like|want|prefer|prioritize) to learn|"
+            r"what (would|do|should) (you|hal) prioritize|"
+            r"prioritize learning|"
+            r"learning priorit|"
+            r"key areas .{0,40}learn|"
+            r"what should (i|we) (teach|tell|remember|save)|"
+            r"what (can|should) (you|hal) learn|"
+            r"what .{0,30}(governed|learned) memor|"
+            r"teach (you|hal)|"
+            r"based on .{0,40}governed memor"
+            r")\b",
+            q,
+        )
+    )
+    if (not handled) and wants_learn:
+        highlights: list[str] = []
+        try:
+            all_payload = build_all_pages_widget_census()
+            raw = all_payload.get("emptyHighlights") if isinstance(all_payload, dict) else None
+            if isinstance(raw, list):
+                highlights = [str(h) for h in raw[:8]]
+        except Exception:  # noqa: BLE001
+            highlights = []
+        notes.append(format_learn_priorities_reply(empty_highlights=highlights or None))
+        actions.append(
+            {
+                "type": "set_status_banner",
+                "message": "Learning priorities · Remember this: …",
+                "hint": "Staff learned_memories + governed memories.jsonl — no PHI.",
+                "tone": "ok",
+            }
+        )
+        handled = True
+
+    # --- Treatment planning estimate (InsCo × ADA from payment-line aggregates) ---
+    if not handled:
+        try:
+            from softdent_treatment_planning import (
+                format_treatment_estimate_reply,
+                lookup_treatment_estimate,
+                parse_treatment_estimate_query,
+                treatment_planning_status,
+            )
+
+            parsed = parse_treatment_estimate_query(query)
+            if parsed:
+                est = lookup_treatment_estimate(payer=parsed["payer"], ada_code=parsed["adaCode"])
+                reply_txt = format_treatment_estimate_reply(est)
+                notes.append(reply_txt)
+                tone = "ok" if est.get("sufficient") else "warn"
+                actions.append(
+                    {
+                        "type": "set_status_banner",
+                        "message": f"Tx plan estimate · {parsed['payer']} × {parsed['adaCode']}",
+                        "hint": "Historical SoftDent payment-line averages — not a benefits guarantee.",
+                        "tone": tone,
+                    }
+                )
+                handled = True
+            elif re.search(
+                r"\b(treatment plan(ning)? (data|status|ready|estimates?)|insurance payment (analysis|lines)|"
+                r"ada (payer|payment) (data|estimates?))\b",
+                q,
+            ):
+                st = treatment_planning_status()
+                notes.append(
+                    f"Treatment-planning data: {st.get('paymentLines', 0)} payment lines, "
+                    f"{st.get('procedureCodes', 0)} procedure crosswalk rows, "
+                    f"{st.get('estimates', 0)} InsCo×ADA estimates "
+                    f"({st.get('estimatesWithMinSample', 0)} with n>=10). "
+                    f"{st.get('hint') or ''}"
+                )
+                actions.append(
+                    {
+                        "type": "set_status_banner",
+                        "message": (
+                            f"Tx planning: {st.get('estimatesWithMinSample', 0)} ready estimates "
+                            f"/ {st.get('estimates', 0)} total"
+                        ),
+                        "hint": st.get("hint") or "",
+                        "tone": "ok" if int(st.get("estimatesWithMinSample") or 0) else "warn",
+                    }
+                )
+                handled = True
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"Treatment-planning lookup unavailable: {exc}")
 
     # --- SoftDent / QuickBooks export playbook (when + how) ---
     export_sd = bool(

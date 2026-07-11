@@ -2,5 +2,7 @@
   "BUILD_ID": "hal-10420",
   "assetVersion": "hal-10420",
   "schemaVersion": "hal-10420",
-  "notes": "hal-10420: Claims Executive RCM Console primary design — compact strips, aging+critical pair, dense table, ERA gauge."
+  "epoch": "nr2-apex",
+  "releasedAt": "2026-07-10",
+  "notes": "hal-10420: Claims Executive RCM Console primary design - compact strips, aging+critical pair, dense table, ERA gauge."
 }
