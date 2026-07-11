@@ -1858,7 +1858,7 @@ const HalAgent = (function () {
       },
     },
     fetch_eligibility_271: {
-      label: "Fetch eligibility via clearinghouse 271 (or report status / use cache)",
+      label: "Fetch eligibility via Availity/clearinghouse 271 (or report status / use cache)",
       run: async (ctx, args) => {
         const bridge =
           typeof DesktopBridge !== "undefined"
@@ -1869,7 +1869,7 @@ const HalAgent = (function () {
         if (!bridge || typeof bridge.fetchEligibility271 !== "function") {
           return { ok: false, summary: "271 fetch requires the NR2 server." };
         }
-        let payerName = String(args.payerName || args.payer || "").trim();
+        let payerName = String(args.payerName || args.payer || args.query || "").trim();
         let payerId = String(args.payerId || args.payer_id || "").trim();
         // Resolve payerId from Tesia/Vyne list first, then office payer reference
         if (payerName && !payerId && typeof bridge.searchTesiaPayers === "function") {
@@ -1896,6 +1896,16 @@ const HalAgent = (function () {
           }
         }
         const vendorArg = String(args.vendor || "auto").trim().toLowerCase();
+        let vendor = vendorArg || "auto";
+        if (vendor === "tesia" || vendor === "vyne") vendor = "vyne_tesia";
+        if (vendor === "availity_demo" || vendor === "availity-coverages") vendor = "availity";
+        // Prefer Availity when the user/query mentions it
+        if (
+          vendor === "auto" &&
+          /\bavaility\b/i.test(String(args.query || args.payerName || args.payer || ""))
+        ) {
+          vendor = "availity";
+        }
         const payload = await bridge.fetchEligibility271({
           payerName,
           payerId,
@@ -1903,17 +1913,32 @@ const HalAgent = (function () {
           providerNpi: String(args.providerNpi || args.npi || ""),
           subscriberLastName: String(args.subscriberLastName || args.lastName || ""),
           subscriberDob: String(args.subscriberDob || args.dateOfBirth || ""),
-          vendor: vendorArg === "tesia" || vendorArg === "vyne" ? "vyne_tesia" : vendorArg || "auto",
+          vendor,
         });
         const parts = [];
         if (payload && payload.message) parts.push(String(payload.message));
         else if (payload && payload.error) parts.push(String(payload.error));
+        if (payload && payload.demo) parts.push("(Availity demo mock — not live patient data.)");
+        if (payload && payload.entry) {
+          const e = payload.entry;
+          const bits = [];
+          if (e.payerName) bits.push(String(e.payerName));
+          if (e.deductibleRemaining != null) bits.push("deductible remaining " + e.deductibleRemaining);
+          if (e.annualMaxRemaining != null) bits.push("annual max remaining " + e.annualMaxRemaining);
+          if (bits.length) parts.push("Cached: " + bits.join("; ") + ".");
+        }
         if (payload && payload.hint) parts.push("Hint: " + String(payload.hint));
         if (payload && payload.status) {
           const st = payload.status;
           const live = st.liveReady ? "live credentials present" : "live credentials missing";
           const mock = st.mockEnabled ? "mock ON" : "mock OFF";
           parts.push(`Clearinghouse status: ${live}; ${mock}.`);
+          if (st.vendors && st.vendors.availity) {
+            const av = st.vendors.availity;
+            parts.push(
+              `Availity: ${av.configured ? "configured" : "not configured"}${av.demo ? " (demo)" : ""}.`
+            );
+          }
           if (st.requiredLiveFields && st.requiredLiveFields.length) {
             parts.push("Live 271 needs: " + st.requiredLiveFields.join(", ") + ".");
           }
@@ -1932,6 +1957,13 @@ const HalAgent = (function () {
         }
         const summary = parts.join(" ") || "271 fetch complete.";
         return { ok: !!(payload && payload.ok), summary: summary.slice(0, 2500) };
+      },
+    },
+    fetch_availity_eligibility: {
+      label: "Fetch dental eligibility/benefits via Availity Coverages (demo or live)",
+      run: async (ctx, args) => {
+        const def = TOOL_DEFS.fetch_eligibility_271;
+        return def.run(ctx, Object.assign({}, args, { vendor: "availity" }));
       },
     },
     read_program_file: {
@@ -2746,8 +2778,13 @@ const HalAgent = (function () {
     if (/\b(eligibility cache|deductible remaining|annual max remaining|benefit check|270|271|coinsurance)\b/i.test(query)) {
       gather.push("list_eligibility_cache");
     }
-    if (/\b(fetch 271|270\/271|clearinghouse eligibility|run eligibility)\b/i.test(query)) {
+    if (
+      /\b(fetch 271|270\/271|clearinghouse eligibility|run eligibility|availity|fetch availity|check (?:eligibility|benefits) (?:with |via )?availity)\b/i.test(
+        query
+      )
+    ) {
       gather.push("fetch_eligibility_271");
+      if (/\bavaility\b/i.test(query)) gather.push("fetch_availity_eligibility");
     }
     if (/\b(claim|denied|denial|appeal|packet|readiness|pre-?submit)\b/i.test(query) && wantsInsuranceOpsTools(query)) {
       gather.push("read_claims_summary");
@@ -2903,6 +2940,12 @@ const HalAgent = (function () {
     }
     if (/\b(eligibility|deductible|annual max|copay|benefit remaining|270|271)\b/i.test(query)) {
       tools.push("list_eligibility_cache");
+    }
+    if (/\b(availity|fetch 271|270\/271|clearinghouse eligibility|run eligibility)\b/i.test(query)) {
+      if (!tools.includes("fetch_eligibility_271")) tools.push("fetch_eligibility_271");
+      if (/\bavaility\b/i.test(query) && !tools.includes("fetch_availity_eligibility")) {
+        tools.push("fetch_availity_eligibility");
+      }
     }
     if (
       /\bsoftdent\b.*\b(odbc|extract|sd_|sqlite)\b|\bodbc\b.*\bsoftdent\b|\bsd_\w+\b|\bextract status\b/i.test(query)

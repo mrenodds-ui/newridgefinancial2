@@ -130,6 +130,148 @@ def map_vyne_eligibility_response(data: dict[str, Any], req: dict[str, Any]) -> 
     return entry
 
 
+def _availity_coverage_root(data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize list vs single coverage payloads from Availity Coverages API."""
+    if isinstance(data.get("coverages"), list) and data["coverages"]:
+        first = data["coverages"][0]
+        if isinstance(first, dict):
+            return first
+    return data
+
+
+def _availity_plan_block(coverage: dict[str, Any]) -> dict[str, Any]:
+    plans = coverage.get("plans")
+    if isinstance(plans, list) and plans and isinstance(plans[0], dict):
+        return plans[0]
+    plan = coverage.get("plan")
+    return plan if isinstance(plan, dict) else {}
+
+
+def _availity_collect_amounts(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    amounts: list[dict[str, Any]] = []
+    raw = plan.get("amounts")
+    if isinstance(raw, list):
+        amounts.extend(item for item in raw if isinstance(item, dict))
+    elif isinstance(raw, dict):
+        amounts.append(raw)
+    for benefit in plan.get("benefits") or []:
+        if not isinstance(benefit, dict):
+            continue
+        detail = benefit.get("benefitDetail") if isinstance(benefit.get("benefitDetail"), dict) else {}
+        for block in (benefit.get("amounts"), detail.get("amounts"), detail.get("deductibles"), detail):
+            if isinstance(block, list):
+                amounts.extend(item for item in block if isinstance(item, dict))
+            elif isinstance(block, dict):
+                amounts.append(block)
+                for nested_key in ("deductibles", "coInsurance", "coPayment", "outOfPocket"):
+                    nested = block.get(nested_key)
+                    if isinstance(nested, dict):
+                        amounts.append(nested)
+                    elif isinstance(nested, list):
+                        amounts.extend(item for item in nested if isinstance(item, dict))
+    return amounts
+
+
+def _amount_label(item: dict[str, Any]) -> str:
+    return " ".join(
+        str(item.get(field) or "")
+        for field in ("name", "description", "amountQualifier", "amountQualifierCode", "units", "coverageLevel")
+    ).lower()
+
+
+def _pick_amount(amounts: list[dict[str, Any]], *keywords: str, require_all: bool = False) -> float | int | None:
+    keys = [k.lower() for k in keywords]
+    for item in amounts:
+        label = _amount_label(item)
+        if require_all:
+            if not all(k in label for k in keys):
+                continue
+        elif not any(k in label for k in keys):
+            continue
+        for field in ("amount", "remaining", "remainingAmount", "benefitAmount", "monetaryAmount", "value"):
+            num = _as_number(item.get(field))
+            if num is not None:
+                return num
+    return None
+
+
+def map_availity_eligibility_response(data: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
+    """Map Availity Coverages (270/271) JSON into PHI-redacted cache entry."""
+    coverage = _availity_coverage_root(data)
+    payer = coverage.get("payer") if isinstance(coverage.get("payer"), dict) else {}
+    plan = _availity_plan_block(coverage)
+    amounts = _availity_collect_amounts(plan)
+    benefits = plan.get("benefits") if isinstance(plan.get("benefits"), list) else []
+
+    deductible_remaining = (
+        _pick_amount(amounts, "deductible", "remaining", require_all=True)
+        or _pick_amount(amounts, "deductible")
+        or _find_first(coverage, "remainingDeductible", "deductibleRemaining")
+        or _find_benefit_amount(benefits, "deductible")
+    )
+    deductible_individual = (
+        _pick_amount(amounts, "deductible") or _find_first(coverage, "totalDeductible", "deductibleIndividual")
+    )
+    annual_max_remaining = (
+        _pick_amount(amounts, "annual", "maximum", "remaining", require_all=True)
+        or _pick_amount(amounts, "annual", "maximum", require_all=True)
+        or _pick_amount(amounts, "annual", "max", require_all=True)
+        or _find_first(coverage, "annualMaxRemaining", "maximumRemaining")
+        or _find_benefit_amount(benefits, "annual", "maximum")
+    )
+    annual_max = (
+        _pick_amount(amounts, "annual", "maximum", require_all=True)
+        or _find_first(coverage, "annualMax", "annualMaximum")
+    )
+    preventive = _find_benefit_amount(benefits, "preventive", "diagnostic", "dental care") or _pick_amount(
+        amounts, "preventive", "coinsurance"
+    )
+    basic_coins = _find_benefit_amount(benefits, "basic", "restorative") or _pick_amount(amounts, "basic")
+    major_coins = _find_benefit_amount(benefits, "major", "prosth") or _pick_amount(amounts, "major")
+
+    limitations: list[str] = []
+    status = str(coverage.get("status") or plan.get("status") or "").strip()
+    if status:
+        limitations.append(f"Plan status: {status}")
+    for item in benefits[:10]:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("name") or item.get("status") or "").strip()
+        if label and len(label) > 2:
+            limitations.append(label[:120])
+
+    member_id = str(req.get("memberId") or req.get("memberIdRedacted") or "")
+    subscriber = coverage.get("subscriber") if isinstance(coverage.get("subscriber"), dict) else {}
+    if not member_id and subscriber.get("memberId"):
+        member_id = str(subscriber.get("memberId"))
+
+    plan_name = str(
+        plan.get("planName")
+        or plan.get("description")
+        or plan.get("groupName")
+        or coverage.get("planName")
+        or ""
+    ).strip()
+
+    return {
+        "payerName": str(req.get("payerName") or payer.get("name") or payer.get("displayName") or "").strip(),
+        "payerId": str(req.get("payerId") or payer.get("payerId") or payer.get("id") or "").strip(),
+        "planDescription": plan_name[:120],
+        "memberIdRedacted": redact_member_id(member_id),
+        "subscriberRedacted": str(req.get("subscriberRedacted") or req.get("subscriberLastName") or "").strip()[:40],
+        "deductibleIndividual": deductible_individual,
+        "deductibleRemaining": deductible_remaining,
+        "annualMax": annual_max,
+        "annualMaxRemaining": annual_max_remaining,
+        "coinsurancePreventive": preventive,
+        "coinsuranceBasic": basic_coins,
+        "coinsuranceMajor": major_coins,
+        "limitations": "; ".join(limitations[:4])[:400],
+        "source": "availity_271",
+        "ttlHours": 72,
+    }
+
+
 def map_dentalxchange_eligibility_response(data: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
     benefits = data.get("benefits") or data.get("benefitDetails") or data.get("benefitsInformation")
     if not isinstance(benefits, list):

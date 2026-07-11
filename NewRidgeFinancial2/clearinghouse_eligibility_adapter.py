@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
+from clearinghouse_http import resolve_env
 from clearinghouse_live_clients import (
+    fetch_availity_271,
     fetch_change_healthcare_271,
     fetch_dentalxchange_271,
     fetch_vyne_tesia_271,
@@ -13,9 +14,16 @@ from clearinghouse_live_clients import (
 )
 from eligibility_cache_store import upsert_eligibility_entry
 
-VENDORS = ("dentalxchange", "change_healthcare", "vyne_tesia", "tesia", "vyne", "mock")
+VENDORS = ("availity", "dentalxchange", "change_healthcare", "vyne_tesia", "tesia", "vyne", "mock")
 
 _VENDOR_ENV = {
+    "availity": (
+        "AVAILITY_KEY_CODE",
+        "AVAILITY_SECRET",
+        "AVAILITY_CLIENT_ID",
+        "AVAILITY_CLIENT_SECRET",
+        "AVAILITY_API_KEY",
+    ),
     "dentalxchange": ("DENTALXCHANGE_API_KEY", "DENTALXCHANGE_API_SECRET"),
     "change_healthcare": ("CHANGE_HEALTHCARE_CLIENT_ID", "CHANGE_HEALTHCARE_CLIENT_SECRET"),
     "vyne_tesia": ("VYNE_API_KEY", "TESIA_API_KEY", "VYNE_BEARER_TOKEN", "TESIA_BEARER_TOKEN"),
@@ -24,17 +32,23 @@ _VENDOR_ENV = {
 
 def _vendor_configured(vendor: str) -> bool:
     keys = _VENDOR_ENV.get(vendor) or ()
-    return any(os.environ.get(key, "").strip() for key in keys)
+    return any(resolve_env(key) for key in keys)
 
 
 def _mock_enabled() -> bool:
-    return os.environ.get("CLEARINGHOUSE_MOCK", "").strip().lower() in ("1", "true", "yes")
+    return resolve_env("CLEARINGHOUSE_MOCK").strip().lower() in ("1", "true", "yes")
 
 
 def normalize_eligibility_request(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("request_must_be_object")
-    payer_name = str(payload.get("payerName") or payload.get("payer_name") or "").strip()
+    payer_name = str(
+        payload.get("payerName")
+        or payload.get("payer_name")
+        or payload.get("payer")
+        or payload.get("query")
+        or ""
+    ).strip()
     if not payer_name:
         raise ValueError("payerName_required")
     return {
@@ -56,6 +70,8 @@ def _normalize_vendor_alias(vendor: str) -> str:
     v = str(vendor or "").strip().lower()
     if v in {"tesia", "vyne", "desktop_tesia", "desktop-tesia"}:
         return "vyne_tesia"
+    if v in {"availity", "availity_demo", "availity-coverages"}:
+        return "availity"
     return v
 
 
@@ -65,7 +81,7 @@ def _pick_vendor(requested: str) -> str:
         return vendor
     if _mock_enabled():
         return "mock"
-    for name in ("vyne_tesia", "dentalxchange", "change_healthcare"):
+    for name in ("availity", "vyne_tesia", "dentalxchange", "change_healthcare"):
         if _vendor_configured(name):
             return name
     return ""
@@ -79,15 +95,15 @@ def _stub_not_configured(vendor: str) -> dict[str, Any]:
         "vendor": vendor or "none",
         "error": "clearinghouse_not_configured",
         "message": (
-            "Live 271 fetch is not configured. Set VYNE_API_KEY / TESIA_API_KEY "
-            "(Desktop Tesia), DENTALXCHANGE_API_KEY, or CHANGE_HEALTHCARE_CLIENT_ID, "
-            "or CLEARINGHOUSE_MOCK=1 for local testing."
+            "Live 271 fetch is not configured. Set AVAILITY_KEY_CODE / AVAILITY_SECRET, "
+            "VYNE_API_KEY / TESIA_API_KEY (Desktop Tesia), DENTALXCHANGE_API_KEY, or "
+            "CHANGE_HEALTHCARE_CLIENT_ID, or CLEARINGHOUSE_MOCK=1 for local testing."
         ),
         "hint": (
-            "Staff can use Desktop Tesia UI for eligibility, search_tesia_payers for "
-            "payer IDs, cached eligibility (list_eligibility_cache), or POST a "
-            "PHI-redacted snapshot to /api/eligibility-cache. Live 271 needs memberId, "
-            "payerId, and providerNpi once credentials are set."
+            "Staff can use Availity (fetch_eligibility_271 vendor=availity), Desktop Tesia UI, "
+            "search_tesia_payers for payer IDs, cached eligibility (list_eligibility_cache), or "
+            "POST a PHI-redacted snapshot to /api/eligibility-cache. Live 271 needs memberId, "
+            "payerId, and providerNpi once credentials are set (Availity demo can run with payerName only)."
         ),
         "status": status,
     }
@@ -142,6 +158,8 @@ def fetch_eligibility_271(payload: dict[str, Any]) -> dict[str, Any]:
         return _mock_271_response(req)
     if not _vendor_configured(vendor):
         return _stub_not_configured(vendor)
+    if vendor == "availity":
+        return fetch_availity_271(req)
     if vendor == "change_healthcare":
         return fetch_change_healthcare_271(req)
     if vendor == "dentalxchange":
@@ -153,7 +171,7 @@ def fetch_eligibility_271(payload: dict[str, Any]) -> dict[str, Any]:
 
 def clearinghouse_status() -> dict[str, Any]:
     endpoints = vendor_endpoints()
-    vendor_names = ("vyne_tesia", "dentalxchange", "change_healthcare")
+    vendor_names = ("availity", "vyne_tesia", "dentalxchange", "change_healthcare")
     return {
         "vendors": {
             name: {
@@ -165,10 +183,10 @@ def clearinghouse_status() -> dict[str, Any]:
         },
         "mockEnabled": _mock_enabled(),
         "liveReady": any(_vendor_configured(name) for name in vendor_names),
-        "preferredOfficeVendor": "vyne_tesia",
+        "preferredOfficeVendor": "availity",
         "requiredLiveFields": ["memberId", "payerId", "providerNpi"],
         "desktopTesiaNote": (
-            "Office uses Desktop Tesia (Vyne). Import payer list via "
-            "/api/tesia-payers/import; live API needs VYNE_*/TESIA_* credentials."
+            "Office uses Desktop Tesia (Vyne) and Availity Coverages. Import payer list via "
+            "/api/tesia-payers/import; Availity uses AVAILITY_KEY_CODE / AVAILITY_SECRET."
         ),
     }

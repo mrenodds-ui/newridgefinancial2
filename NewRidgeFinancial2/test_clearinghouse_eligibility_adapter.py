@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-import json
 import os
 import unittest
 from unittest.mock import patch
 
-from clearinghouse_271_mapper import map_dentalxchange_eligibility_response, map_optum_eligibility_response
+from clearinghouse_271_mapper import (
+    map_availity_eligibility_response,
+    map_dentalxchange_eligibility_response,
+    map_optum_eligibility_response,
+)
 from clearinghouse_eligibility_adapter import clearinghouse_status, fetch_eligibility_271, normalize_eligibility_request
-from clearinghouse_live_clients import fetch_change_healthcare_271, fetch_dentalxchange_271
+from clearinghouse_live_clients import fetch_availity_271, fetch_change_healthcare_271, fetch_dentalxchange_271
 from clearinghouse_http import redact_member_id
 
 OPTUM_SAMPLE = {
@@ -37,6 +40,29 @@ DXC_SAMPLE = {
     ],
 }
 
+AVAILITY_SAMPLE = {
+    "id": "123",
+    "status": "Complete",
+    "payer": {"name": "BCBSF", "payerId": "BCBSF"},
+    "subscriber": {"memberId": "H39522358"},
+    "plans": [
+        {
+            "status": "Active Coverage",
+            "planName": "Demo Dental PPO",
+            "amounts": [
+                {"name": "Individual Deductible Remaining", "amount": "75"},
+                {"name": "Annual Maximum Remaining", "amount": "1100"},
+            ],
+            "benefits": [
+                {"name": "Dental Care", "status": "Active"},
+                {"name": "Preventive", "benefitAmount": "100"},
+                {"name": "Basic Coinsurance", "benefitAmount": "80"},
+                {"name": "Major Coinsurance", "benefitAmount": "50"},
+            ],
+        }
+    ],
+}
+
 
 class MapperTests(unittest.TestCase):
     def test_redact_member_id(self) -> None:
@@ -61,17 +87,32 @@ class MapperTests(unittest.TestCase):
         self.assertEqual(entry["annualMaxRemaining"], 900)
         self.assertEqual(entry["memberIdRedacted"], "***8888")
 
+    def test_map_availity_response(self) -> None:
+        entry = map_availity_eligibility_response(
+            AVAILITY_SAMPLE,
+            {"payerName": "BCBS Florida", "memberId": "H39522358"},
+        )
+        self.assertEqual(entry["source"], "availity_271")
+        self.assertEqual(entry["memberIdRedacted"], "***2358")
+        self.assertEqual(entry["deductibleRemaining"], 75)
+        self.assertEqual(entry["annualMaxRemaining"], 1100)
+        self.assertIn("Dental Care", entry.get("limitations") or "")
+
 
 class ClearinghouseAdapterTests(unittest.TestCase):
     def test_normalize_requires_payer(self) -> None:
         with self.assertRaises(ValueError):
             normalize_eligibility_request({})
 
+    def test_normalize_accepts_query_as_payer(self) -> None:
+        req = normalize_eligibility_request({"query": "Delta Dental"})
+        self.assertEqual(req["payerName"], "Delta Dental")
+
     def test_not_configured_without_env(self) -> None:
-        with patch.dict(os.environ, {}, clear=True):
-            os.environ.pop("CLEARINGHOUSE_MOCK", None)
-            os.environ.pop("DENTALXCHANGE_API_KEY", None)
-            result = fetch_eligibility_271({"payerName": "Delta Dental"})
+        with patch("clearinghouse_http.read_user_env", return_value=""):
+            with patch("clearinghouse_eligibility_adapter.resolve_env", return_value=""):
+                with patch.dict(os.environ, {}, clear=True):
+                    result = fetch_eligibility_271({"payerName": "Delta Dental"})
         self.assertFalse(result.get("ok"))
         self.assertEqual(result.get("error"), "clearinghouse_not_configured")
         self.assertIn("status", result)
@@ -93,7 +134,23 @@ class ClearinghouseAdapterTests(unittest.TestCase):
     def test_clearinghouse_status_shape(self) -> None:
         status = clearinghouse_status()
         self.assertIn("vendors", status)
+        self.assertIn("availity", status["vendors"])
         self.assertIn("requiredLiveFields", status)
+        self.assertEqual(status.get("preferredOfficeVendor"), "availity")
+
+    def test_availity_vendor_dispatch(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"AVAILITY_KEY_CODE": "key", "AVAILITY_SECRET": "secret", "AVAILITY_USE_DEMO": "1"},
+            clear=False,
+        ):
+            with patch(
+                "clearinghouse_eligibility_adapter.fetch_availity_271",
+                return_value={"ok": True, "vendor": "availity"},
+            ) as mocked:
+                result = fetch_eligibility_271({"payerName": "Delta Dental", "vendor": "availity"})
+        self.assertTrue(result.get("ok"))
+        mocked.assert_called_once()
 
 
 class LiveClientTests(unittest.TestCase):
@@ -106,7 +163,7 @@ class LiveClientTests(unittest.TestCase):
             "subscriberLastName": "Doe",
         }
 
-        def fake_http(*, method, url, headers=None, body=None, timeout=45.0):
+        def fake_http(*, method, url, headers=None, body=None, form=None, timeout=45.0):
             if url.endswith("/token") or "/apip/auth/v2/token" in url:
                 return 200, {"access_token": "tok", "expires_in": 3600}, None
             return 200, OPTUM_SAMPLE, None
@@ -144,9 +201,49 @@ class LiveClientTests(unittest.TestCase):
         self.assertTrue(result.get("ok"))
         self.assertEqual(result.get("vendor"), "dentalxchange")
 
+    def test_availity_demo_success(self) -> None:
+        req = {"payerName": "BCBS Florida", "vendor": "availity"}
+
+        def fake_http(*, method, url, headers=None, body=None, form=None, timeout=45.0):
+            if url.endswith("/token") or "/v1/token" in url:
+                self.assertIsNotNone(form)
+                return 200, {"access_token": "av-tok", "expires_in": 300, "token_type": "Bearer"}, None
+            if method == "POST" and "coverages" in url:
+                return 200, {"coverages": [{"id": "123", "status": "Complete"}]}, None
+            if method == "GET" and url.rstrip("/").endswith("/123"):
+                return 200, AVAILITY_SAMPLE, None
+            return 404, {"error": "unexpected"}, None
+
+        with patch.dict(
+            os.environ,
+            {
+                "AVAILITY_KEY_CODE": "key",
+                "AVAILITY_SECRET": "secret",
+                "AVAILITY_USE_DEMO": "1",
+                "CLEARINGHOUSE_MOCK": "0",
+            },
+            clear=False,
+        ):
+            with patch("clearinghouse_live_clients.http_json", side_effect=fake_http):
+                import clearinghouse_live_clients as clc
+
+                clc._AVAILITY_TOKEN_CACHE.update({"token": "", "expires_at": 0.0, "scope": ""})
+                result = fetch_availity_271(req)
+        self.assertTrue(result.get("ok"), result)
+        self.assertEqual(result.get("vendor"), "availity")
+        self.assertTrue(result.get("demo"))
+        self.assertEqual(result["entry"]["source"], "availity_271")
+        self.assertEqual(result["entry"]["deductibleRemaining"], 75)
+
     def test_live_missing_member_id(self) -> None:
-        with patch.dict(os.environ, {"CHANGE_HEALTHCARE_CLIENT_ID": "id", "CHANGE_HEALTHCARE_CLIENT_SECRET": "sec"}, clear=False):
-            result = fetch_change_healthcare_271({"payerName": "Delta", "payerId": "1", "providerNpi": "1234567890"})
+        with patch.dict(
+            os.environ,
+            {"CHANGE_HEALTHCARE_CLIENT_ID": "id", "CHANGE_HEALTHCARE_CLIENT_SECRET": "sec"},
+            clear=False,
+        ):
+            result = fetch_change_healthcare_271(
+                {"payerName": "Delta", "payerId": "1", "providerNpi": "1234567890"}
+            )
         self.assertFalse(result.get("ok"))
         self.assertEqual(result.get("error"), "memberId_required_for_live_271")
 

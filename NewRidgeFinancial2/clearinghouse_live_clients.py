@@ -8,18 +8,20 @@ import time
 from typing import Any
 
 from clearinghouse_271_mapper import (
+    map_availity_eligibility_response,
     map_dentalxchange_eligibility_response,
     map_optum_eligibility_response,
     map_vyne_eligibility_response,
 )
-from clearinghouse_http import env_bool, http_json, redact_member_id
+from clearinghouse_http import env_bool, http_json, redact_member_id, resolve_env
 from eligibility_cache_store import upsert_eligibility_entry
 
 _TOKEN_CACHE: dict[str, Any] = {"token": "", "expires_at": 0.0, "base": ""}
+_AVAILITY_TOKEN_CACHE: dict[str, Any] = {"token": "", "expires_at": 0.0, "scope": ""}
 
 
 def _env(name: str, default: str = "") -> str:
-    return str(os.environ.get(name) or default).strip()
+    return resolve_env(name, default)
 
 
 def _optum_base_url() -> str:
@@ -44,6 +46,49 @@ def _vyne_eligibility_url() -> str:
     if not path.startswith("/"):
         path = f"/{path}"
     return f"{_vyne_base_url()}{path}"
+
+
+def _availity_base_url() -> str:
+    return _env("AVAILITY_BASE_URL", "https://api.availity.com").rstrip("/")
+
+
+def _availity_use_demo() -> bool:
+    # Default demo=true — current office keys are Demo-plan only.
+    if "AVAILITY_USE_DEMO" in os.environ:
+        return env_bool("AVAILITY_USE_DEMO", default=True)
+    user_flag = resolve_env("AVAILITY_USE_DEMO")
+    if user_flag:
+        return user_flag.strip().lower() in ("1", "true", "yes", "on")
+    return True
+
+
+def _availity_scope() -> str:
+    explicit = _env("AVAILITY_SCOPE")
+    if explicit:
+        return explicit
+    if _availity_use_demo():
+        return "healthcare-hipaa-transactions-demo"
+    return "healthcare-hipaa-transactions"
+
+
+def _availity_token_url() -> str:
+    return _env("AVAILITY_TOKEN_URL") or f"{_availity_base_url()}/v1/token"
+
+
+def _availity_coverages_url() -> str:
+    explicit = _env("AVAILITY_COVERAGES_URL") or _env("AVAILITY_ELIGIBILITY_URL")
+    if explicit:
+        return explicit.rstrip("/")
+    path = _env("AVAILITY_COVERAGES_PATH", "/availity/v1/coverages")
+    if not path.startswith("/"):
+        path = f"/{path}"
+    return f"{_availity_base_url()}{path}"
+
+
+def _availity_credentials() -> tuple[str, str]:
+    client_id = _env("AVAILITY_KEY_CODE") or _env("AVAILITY_CLIENT_ID") or _env("AVAILITY_API_KEY")
+    client_secret = _env("AVAILITY_SECRET") or _env("AVAILITY_CLIENT_SECRET") or _env("AVAILITY_API_SECRET")
+    return client_id, client_secret
 
 
 def _dxc_eligibility_url() -> str:
@@ -410,8 +455,211 @@ def fetch_vyne_tesia_271(req: dict[str, Any]) -> dict[str, Any]:
     return _cache_mapped_entry(entry, vendor="vyne_tesia", raw=payload)
 
 
+def _availity_token(scope: str) -> tuple[str | None, str | None]:
+    now = time.time()
+    if (
+        _AVAILITY_TOKEN_CACHE.get("token")
+        and _AVAILITY_TOKEN_CACHE.get("scope") == scope
+        and float(_AVAILITY_TOKEN_CACHE.get("expires_at") or 0) > now + 30
+    ):
+        return str(_AVAILITY_TOKEN_CACHE["token"]), None
+
+    client_id, client_secret = _availity_credentials()
+    if not client_id or not client_secret:
+        return None, "missing_availity_credentials"
+
+    status, payload, err = http_json(
+        method="POST",
+        url=_availity_token_url(),
+        form={
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": scope,
+        },
+        timeout=30.0,
+    )
+    if err:
+        return None, err
+    if not isinstance(payload, dict):
+        return None, f"token_http_{status}"
+    # Availity sometimes returns 200 with error payload
+    if payload.get("error") or status >= 400:
+        desc = str(payload.get("error_description") or payload.get("error") or f"token_http_{status}")
+        return None, desc
+    token = str(payload.get("access_token") or "")
+    if not token:
+        return None, "token_missing"
+    expires_in = float(payload.get("expires_in") or 300)
+    _AVAILITY_TOKEN_CACHE.update({"token": token, "expires_at": now + expires_in, "scope": scope})
+    return token, None
+
+
+def _build_availity_form(req: dict[str, Any], *, demo: bool) -> dict[str, Any]:
+    if demo:
+        member_id = str(req.get("memberId") or "").strip()
+        if not member_id or member_id.startswith("***"):
+            member_id = "AETNA12345"
+        payer_id = str(req.get("payerId") or "").strip() or "BCBSF"
+        npi = str(req.get("providerNpi") or _env("NR2_PROVIDER_NPI") or "1234567893").strip()
+    else:
+        member_id = _require_live_member_id(req)
+        payer_id = _require_payer_id(req)
+        npi = _require_provider_npi(req)
+
+    service_date = str(req.get("serviceDate") or "").strip() or time.strftime("%Y-%m-%d")
+    form: dict[str, Any] = {
+        "payerId": payer_id,
+        "providerNpi": npi,
+        "memberId": member_id,
+        "asOfDate": service_date,
+        "serviceType": "35",  # dental
+        "patientLastName": str(req.get("subscriberLastName") or "DOE").strip() or "DOE",
+        "patientFirstName": str(req.get("subscriberFirstName") or "JOHN").strip() or "JOHN",
+        "patientBirthDate": str(req.get("subscriberDob") or "1980-01-01").strip() or "1980-01-01",
+    }
+    return form
+
+
+def _availity_coverage_id(payload: dict[str, Any]) -> str:
+    if str(payload.get("id") or "").strip():
+        return str(payload["id"]).strip()
+    coverages = payload.get("coverages")
+    if isinstance(coverages, list) and coverages and isinstance(coverages[0], dict):
+        return str(coverages[0].get("id") or "").strip()
+    links = payload.get("links") if isinstance(payload.get("links"), dict) else {}
+    self_link = links.get("self") if isinstance(links.get("self"), dict) else {}
+    href = str(self_link.get("href") or "")
+    if "/coverages/" in href:
+        return href.rstrip("/").split("/coverages/")[-1].split("?")[0]
+    return ""
+
+
+def _availity_fetch_detail(token: str, coverage_id: str, *, demo: bool) -> dict[str, Any] | None:
+    if not coverage_id:
+        return None
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+    if demo:
+        headers["X-Api-Mock-Response"] = "true"
+        headers["X-Api-Mock-Scenario-ID"] = _env("AVAILITY_MOCK_SCENARIO", "Coverages-Complete-i")
+    status, payload, err = http_json(
+        method="GET",
+        url=f"{_availity_coverages_url()}/{coverage_id}",
+        headers=headers,
+        timeout=60.0,
+    )
+    if err or status >= 400 or not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def fetch_availity_271(req: dict[str, Any]) -> dict[str, Any]:
+    """Live / demo eligibility via Availity Coverages API (270/271)."""
+    client_id, client_secret = _availity_credentials()
+    if not client_id or not client_secret:
+        return {
+            "ok": False,
+            "configured": False,
+            "vendor": "availity",
+            "error": "missing_availity_credentials",
+            "message": "Set AVAILITY_KEY_CODE and AVAILITY_SECRET (or AVAILITY_CLIENT_ID / AVAILITY_CLIENT_SECRET).",
+        }
+
+    demo = _availity_use_demo()
+    try:
+        form = _build_availity_form(req, demo=demo)
+    except ValueError as exc:
+        return {
+            "ok": False,
+            "configured": True,
+            "vendor": "availity",
+            "error": str(exc),
+            "message": "Missing required fields for live Availity 271 (memberId, payerId, providerNpi).",
+        }
+
+    scope = _availity_scope()
+    token, token_err = _availity_token(scope)
+    if token_err or not token:
+        return {
+            "ok": False,
+            "configured": True,
+            "vendor": "availity",
+            "error": token_err or "token_failed",
+            "message": (
+                "Availity token request failed. Demo keys need scope "
+                "healthcare-hipaa-transactions-demo (AVAILITY_USE_DEMO=1)."
+            ),
+        }
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+    if demo:
+        headers["X-Api-Mock-Response"] = "true"
+        headers["X-Api-Mock-Scenario-ID"] = _env("AVAILITY_MOCK_SCENARIO", "Coverages-Complete-i")
+
+    status, payload, err = http_json(
+        method="POST",
+        url=_availity_coverages_url(),
+        headers=headers,
+        form=form,
+        timeout=60.0,
+    )
+    if err:
+        return {"ok": False, "configured": True, "vendor": "availity", "error": err, "message": "271 HTTP error."}
+    if status >= 400:
+        detail = payload if isinstance(payload, dict) else {"body": str(payload)[:500]}
+        return {
+            "ok": False,
+            "configured": True,
+            "vendor": "availity",
+            "error": f"eligibility_http_{status}",
+            "message": "Availity coverages request rejected.",
+            "raw271": detail,
+        }
+    if not isinstance(payload, dict):
+        return {
+            "ok": False,
+            "configured": True,
+            "vendor": "availity",
+            "error": "invalid_json_response",
+            "message": "Unexpected Availity response format.",
+        }
+
+    coverage_id = _availity_coverage_id(payload)
+    detail = _availity_fetch_detail(token, coverage_id, demo=demo) if coverage_id else None
+    mapped_source = detail or payload
+
+    # Keep request member id for redaction when demo response substitutes member ids
+    map_req = dict(req)
+    if not map_req.get("memberId"):
+        map_req["memberId"] = form.get("memberId")
+
+    entry = map_availity_eligibility_response(mapped_source, map_req)
+    entry["memberIdRedacted"] = redact_member_id(str(map_req.get("memberId") or ""))
+    if demo:
+        entry["limitations"] = (
+            (str(entry.get("limitations") or "") + "; Availity demo mock — not live patient data.").strip("; ").strip()
+        )[:400]
+    result = _cache_mapped_entry(entry, vendor="availity", raw=mapped_source)
+    result["demo"] = demo
+    result["coverageId"] = coverage_id
+    return result
+
+
 def vendor_endpoints() -> dict[str, Any]:
     return {
+        "availity": {
+            "baseUrl": _availity_base_url(),
+            "tokenUrl": _availity_token_url(),
+            "eligibilityUrl": _availity_coverages_url(),
+            "demo": _availity_use_demo(),
+            "scope": _availity_scope(),
+        },
         "dentalxchange": {
             "eligibilityUrl": _dxc_eligibility_url(),
             "baseUrl": _dxc_base_url(),
