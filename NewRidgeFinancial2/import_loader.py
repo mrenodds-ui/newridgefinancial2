@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from import_contract import (
+    QUICKBOOKS_AP_NAMES,
     QUICKBOOKS_AR_NAMES,
     QUICKBOOKS_EXPENSE_CATEGORY_NAMES,
     QUICKBOOKS_EXPENSE_NAMES,
+    QUICKBOOKS_PAYROLL_NAMES,
     QUICKBOOKS_PL_NAMES,
     QUICKBOOKS_REVENUE_NAMES,
     SOFTDENT_AR_NAMES,
@@ -448,6 +450,8 @@ def load_import_bundle(*, sync: bool = True, deep: bool = False) -> dict[str, An
             "profitAndLoss": _quickbooks("profitAndLoss", QUICKBOOKS_PL_NAMES),
             "expenseCategories": _quickbooks("expenseCategories", QUICKBOOKS_EXPENSE_CATEGORY_NAMES),
             "ar": _quickbooks("ar", QUICKBOOKS_AR_NAMES),
+            "payroll": _quickbooks("payroll", QUICKBOOKS_PAYROLL_NAMES),
+            "ap": _quickbooks("ap", QUICKBOOKS_AP_NAMES),
         },
     }
     if direct_pipeline_error:

@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10475",
-  "assetVersion": "hal-10475",
-  "schemaVersion": "hal-10475",
-  "notes": "hal-10475: Phase I4 MUST-wave closeout (integration gates + flag smoke).",
-  "builtAt": "2026-07-11T17:25:17.000Z"
+  "BUILD_ID": "hal-10479",
+  "assetVersion": "hal-10479",
+  "schemaVersion": "hal-10479",
+  "notes": "hal-10479: SHOULD wave S0-S3 (QB payroll/AP, ERA harden, health monitor, orchestrator opt-in GA).",
+  "builtAt": "2026-07-11T17:39:19.000Z"
 }

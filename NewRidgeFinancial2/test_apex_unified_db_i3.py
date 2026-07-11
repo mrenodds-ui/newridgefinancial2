@@ -104,7 +104,7 @@ class UnifiedDbPhaseI3Tests(unittest.TestCase):
 
     def test_orchestrator_status_i3(self):
         st = orchestrator_status()
-        self.assertEqual(st.get("phase"), "I4")
+        self.assertEqual(st.get("phase"), "S3")
         self.assertTrue(st.get("unifiedDb"))
 
     def test_classify_only_includes_unified_for_deep(self):
@@ -115,7 +115,7 @@ class UnifiedDbPhaseI3Tests(unittest.TestCase):
             force_enabled=True,
         )
         self.assertEqual(r.get("lane"), "escalate30b")
-        self.assertEqual(r.get("phase"), "I4")
+        self.assertEqual(r.get("phase"), "S3")
         # unifiedContext may be empty periods if no prior ingest — key should still exist
         self.assertIn("unifiedContext", r)
 

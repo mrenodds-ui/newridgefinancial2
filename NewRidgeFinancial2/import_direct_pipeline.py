@@ -14,8 +14,10 @@ from pathlib import Path
 from typing import Any
 
 from import_contract import (
+    QUICKBOOKS_AP_NAMES,
     QUICKBOOKS_EXPENSE_CATEGORY_NAMES,
     QUICKBOOKS_EXPENSE_NAMES,
+    QUICKBOOKS_PAYROLL_NAMES,
     QUICKBOOKS_PL_NAMES,
     QUICKBOOKS_REVENUE_NAMES,
     SOFTDENT_AR_NAMES,
@@ -463,4 +465,6 @@ QUICKBOOKS_EXPORT_KEYS: dict[str, tuple[str, ...]] = {
     "expenses": QUICKBOOKS_EXPENSE_NAMES,
     "profitAndLoss": QUICKBOOKS_PL_NAMES,
     "expenseCategories": QUICKBOOKS_EXPENSE_CATEGORY_NAMES,
+    "payroll": QUICKBOOKS_PAYROLL_NAMES,
+    "ap": QUICKBOOKS_AP_NAMES,
 }

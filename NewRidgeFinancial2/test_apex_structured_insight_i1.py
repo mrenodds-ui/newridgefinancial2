@@ -37,7 +37,7 @@ GOOD_ALERT = {
 class StructuredInsightPhaseI1Tests(unittest.TestCase):
     def test_orchestrator_phase_i1(self):
         st = orchestrator_status()
-        self.assertEqual(st.get("phase"), "I4")
+        self.assertEqual(st.get("phase"), "S3")
         self.assertTrue(st.get("structuredInsights"))
         self.assertTrue(st.get("unifiedDb"))
 

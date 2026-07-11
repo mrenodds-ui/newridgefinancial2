@@ -345,6 +345,13 @@ def ingest_era_835(
         result["halSaidWorkflow"] = process_era_workflow(result, filename=filename)
     except Exception as exc:  # noqa: BLE001
         result["halSaidWorkflow"] = {"ok": False, "error": str(exc)}
+    # Phase S1 — unified aggregate (totals only)
+    try:
+        from apex_softdent_era_pack import attach_era_to_ingest
+
+        result = attach_era_to_ingest(result, filename=filename)
+    except Exception as exc:  # noqa: BLE001
+        result["unifiedEraAggregate"] = {"ok": False, "error": str(exc)}
     return result
 
 
