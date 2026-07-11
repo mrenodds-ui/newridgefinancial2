@@ -193,9 +193,17 @@
       type === "horizontal-bar" ||
       type === "donut" ||
       type === "stacked-bar" ||
-      type === "waterfall"
+      type === "waterfall" ||
+      type === "revenue-composition" ||
+      type === "treemap" ||
+      type === "scatter-plot" ||
+      type === "pareto-chart" ||
+      type === "utilization-board"
     )
       return "l";
+    if (type === "dual-axis-trend" || type === "timeline-lanes" || type === "status-matrix" || type === "radial-gauge")
+      return "m";
+    if (type === "credit-float") return "strip";
     if (type === "bullet" || type === "scrubber") return type === "scrubber" ? "full" : "s";
     if (type === "heatmap" || type === "calculator" || type === "categorize" || type === "tax-library")
       return "xl";
@@ -547,23 +555,34 @@
       }
 
       if (this.type === "waterfall") {
-        const steps = Array.isArray(this.spec.steps) ? this.spec.steps : [];
-        const empty = !steps.length;
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const steps = Array.isArray(this.spec.steps)
+          ? this.spec.steps
+          : Array.isArray(data.steps)
+            ? data.steps
+            : [];
+        const empty = !steps.length || this.spec.status === "empty";
         const showCite = !!this.spec.showCitations;
         const max = Math.max(...steps.map((s) => Math.abs(Number(s.value) || 0)), 1);
+        const kindMap = { start: "start", add: "add", sub: "sub", end: "end", positive: "positive", total: "total", negative: "sub" };
+        const connMap = { start: "", add: "↑", sub: "↓", end: "=", positive: "", total: "=", negative: "↓" };
         const rows = steps
-          .map((s) => {
-            const v = Number(s.value) || 0;
-            const pct = Math.max(6, Math.round((Math.abs(v) / max) * 100));
-            const kind = s.kind || "positive";
+          .map((s, idx) => {
+            const v = s.value;
+            const has = v !== null && v !== undefined && Number.isFinite(Number(v));
+            const num = has ? Number(v) : 0;
+            const pct = has ? Math.max(6, Math.round((Math.abs(num) / max) * 100)) : 6;
+            const kind = kindMap[s.kind] || kindMap[s.type] || "positive";
             const citeKey = s.citeKey || "";
             const cite = showCite && s.citation
               ? `<button type="button" class="apex-wf-cite" data-cite-key="${this.escape(citeKey)}" title="Open source rows">${this.escape(s.citation)}</button>`
               : "";
-            return `<div class="apex-wf-row apex-wf-row--${this.escape(kind)}">
+            const conn = idx === 0 ? "" : connMap[kind] || "·";
+            return `<div class="apex-wf-row apex-wf-row--${this.escape(kind)}${has ? "" : " is-empty"}">
+              <span class="apex-wf-conn" aria-hidden="true">${this.escape(conn)}</span>
               <span class="apex-wf-label">${this.escape(s.label || "")}${cite}</span>
               <div class="apex-wf-track"><i style="width:${pct}%"></i></div>
-              <span class="apex-wf-val">${this.escape(formatMoney(v) || String(v))}</span>
+              <span class="apex-wf-val">${this.escape(has ? formatMoney(num) || String(num) : "$—")}</span>
             </div>`;
           })
           .join("");
@@ -577,7 +596,10 @@
           </header>
           ${
             empty
-              ? `<div class="apex-kpi-value is-empty">${this.escape(this.spec.emptyMessage || "No steps")}</div>`
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || this.spec.emptyMessage || "No steps"
+                )}</div>
+                 ${steps.length ? `<div class="apex-waterfall apex-waterfall--muted">${rows}</div>` : ""}`
               : `<div class="apex-waterfall">${rows}</div>`
           }
           <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
@@ -1509,18 +1531,40 @@
       }
 
       if (this.type === "funnel") {
-        const stages = Array.isArray(this.spec.stages) ? this.spec.stages : [];
-        const empty = !stages.length;
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        let stages = Array.isArray(this.spec.stages)
+          ? this.spec.stages
+          : Array.isArray(data.stages)
+            ? data.stages
+            : [];
+        const empty = !stages.length || this.spec.status === "empty";
+        // Consult empty: single gray stage with — / $—
+        if (empty && !stages.length) {
+          stages = [{ name: "Presented", stage: "Presented", count: null, value: null, conversionRate: null }];
+        }
         const max = Math.max(...stages.map((s) => Number(s.count) || 0), 1);
         const rows = stages
-          .map((s) => {
-            const n = Number(s.count) || 0;
-            const pct = Math.max(8, Math.round((n / max) * 100));
-            return `<div class="apex-funnel-row"><span class="apex-funnel-label">${this.escape(
-              s.stage
+          .map((s, idx) => {
+            const n = s.count;
+            const has = n !== null && n !== undefined && Number.isFinite(Number(n));
+            const num = has ? Number(n) : 0;
+            const pct = has ? Math.max(8, Math.round((num / max) * 100)) : empty ? 40 : 8;
+            const stageName = s.stage || s.name || "";
+            const valHint =
+              s.value !== null && s.value !== undefined && Number.isFinite(Number(s.value))
+                ? formatMoney(s.value) || String(s.value)
+                : "$—";
+            const rate =
+              !empty && s.conversionRate !== null && s.conversionRate !== undefined
+                ? `<span class="apex-funnel-rate apex-funnel-connector">↓ ${this.escape(String(s.conversionRate))}%</span>`
+                : idx > 0 && !empty
+                  ? `<span class="apex-funnel-connector">↓</span>`
+                  : "";
+            return `<div class="apex-funnel-row${empty ? " is-empty" : ""}"><span class="apex-funnel-label">${this.escape(
+              stageName
             )}</span><div class="apex-funnel-bar"><i style="width:${pct}%"></i></div><span class="apex-funnel-count">${this.escape(
-              formatCount(n) || "0"
-            )}</span></div>`;
+              has ? formatCount(num) || "0" : "—"
+            )}</span><span class="apex-funnel-val">${this.escape(valHint)}</span>${rate}</div>`;
           })
           .join("");
         return `
@@ -1530,8 +1574,503 @@
           </header>
           ${
             empty
-              ? `<div class="apex-kpi-value is-empty">${this.escape(this.spec.emptyMessage || "No claims stages")}</div>`
-              : `<div class="apex-funnel">${rows}</div>`
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || this.spec.emptyMessage || "No claims stages"
+                )}</div>`
+              : ""
+          }
+          <div class="apex-funnel${empty ? " apex-funnel--empty" : ""}">${rows}</div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "treemap") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const cats = Array.isArray(data.categories) ? data.categories : [];
+        const empty = this.spec.status === "empty" || !cats.length;
+        // Consult: SVG <rect> nested proportional layout (squarified-lite row pack)
+        const W = 320;
+        const H = 140;
+        const weights = cats.map((c) => {
+          const v = c.value;
+          const has = v !== null && v !== undefined && Number.isFinite(Number(v));
+          return has ? Math.max(Number(v), 0.01) : 1;
+        });
+        const sum = weights.reduce((a, b) => a + b, 0) || 1;
+        let x = 0;
+        const rects = cats
+          .map((c, i) => {
+            const w = (weights[i] / sum) * W;
+            const v = c.value;
+            const has = v !== null && v !== undefined && Number.isFinite(Number(v));
+            const rawName = String(c.name || "Category—");
+            const name = this.escape(rawName.slice(0, 14));
+            const val = this.escape(has ? formatMoney(v) || String(v) : "$—");
+            const kids = Array.isArray(c.children) ? c.children : [];
+            let childRects = "";
+            if (kids.length && w > 40) {
+              const cw = w / kids.length;
+              childRects = kids
+                .map((ch, j) => {
+                  const cv = ch.value;
+                  const chas = cv !== null && cv !== undefined && Number.isFinite(Number(cv));
+                  const cx = x + j * cw;
+                  return `<rect class="apex-treemap-cell" x="${cx + 1}" y="${H * 0.55}" width="${Math.max(
+                    cw - 2,
+                    2
+                  )}" height="${H * 0.4}" />
+                    <text class="apex-treemap-label" x="${cx + 4}" y="${H * 0.7}">${this.escape(
+                    String(ch.name || "Sub—").slice(0, 8)
+                  )}</text>
+                    <text class="apex-treemap-value" x="${cx + 4}" y="${H * 0.85}">${this.escape(
+                    chas ? formatMoney(cv) || String(cv) : "$—"
+                  )}</text>`;
+                })
+                .join("");
+            }
+            const block = `<g class="apex-treemap-g">
+              <rect class="apex-treemap-cell" x="${x}" y="0" width="${Math.max(w - 1, 2)}" height="${
+              kids.length ? H * 0.52 : H
+            }" />
+              <text class="apex-treemap-label" x="${x + 4}" y="14">${name}</text>
+              <text class="apex-treemap-value" x="${x + 4}" y="28">${val}</text>
+              ${childRects}
+            </g>`;
+            x += w;
+            return block;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || "Expense hierarchy unavailable"
+                )}</div>
+                 <svg class="apex-treemap-svg apex-treemap--empty" viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}">
+                   <rect class="apex-treemap-cell" x="0" y="0" width="${W / 3 - 2}" height="${H}" />
+                   <rect class="apex-treemap-cell" x="${W / 3}" y="0" width="${W / 3 - 2}" height="${H}" />
+                   <rect class="apex-treemap-cell" x="${(2 * W) / 3}" y="0" width="${W / 3}" height="${H}" />
+                   <text class="apex-treemap-label" x="8" y="18">Category—</text>
+                   <text class="apex-treemap-value" x="8" y="34">$—</text>
+                   <text class="apex-treemap-label" x="${W / 3 + 8}" y="18">Category—</text>
+                   <text class="apex-treemap-value" x="${W / 3 + 8}" y="34">$—</text>
+                   <text class="apex-treemap-label" x="${(2 * W) / 3 + 8}" y="18">Category—</text>
+                   <text class="apex-treemap-value" x="${(2 * W) / 3 + 8}" y="34">$—</text>
+                 </svg>`
+              : `<svg class="apex-treemap-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}">
+            ${rects}
+          </svg>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "scatter-plot") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const points = Array.isArray(data.points) ? data.points : [];
+        const empty = this.spec.status === "empty" || !points.length;
+        const xs = points.map((p) => Number(p.x)).filter((n) => Number.isFinite(n));
+        const ys = points.map((p) => Number(p.y)).filter((n) => Number.isFinite(n));
+        const maxX = Math.max(...xs, 1);
+        const maxY = Math.max(...ys, 1);
+        const median = (arr) => {
+          if (!arr.length) return null;
+          const sorted = [...arr].sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        };
+        const medX =
+          data.medianX != null && Number.isFinite(Number(data.medianX))
+            ? Number(data.medianX)
+            : median(xs);
+        const medY =
+          data.medianY != null && Number.isFinite(Number(data.medianY))
+            ? Number(data.medianY)
+            : median(ys);
+        const qx = medX != null ? (medX / maxX) * 100 : 50;
+        const qy = medY != null ? 100 - (medY / maxY) * 100 : 50;
+        // Consult: SVG <circle> elements + quadrant lines
+        const dots = points
+          .map((p) => {
+            const hasX = p.x !== null && p.x !== undefined && Number.isFinite(Number(p.x));
+            const hasY = p.y !== null && p.y !== undefined && Number.isFinite(Number(p.y));
+            const x = empty && !hasX && !hasY ? 8 : hasX ? (Number(p.x) / maxX) * 100 : 8;
+            const y = empty && !hasX && !hasY ? 92 : hasY ? 100 - (Number(p.y) / maxY) * 100 : 92;
+            const r = Math.min(Math.max(Number(p.r) || 5, 3), 14) / 2;
+            let tone = "ok";
+            if (hasX && hasY && Number(p.y) < Number(p.x) * 0.7) tone = "underpaid";
+            if (hasX && hasY && Number(p.y) < Number(p.x) * 0.4) tone = "low-collect";
+            return `<circle class="apex-scatter-point apex-scatter-point--${tone}" cx="${x}" cy="${y}" r="${r}" data-x="${x}" data-y="${y}" data-label="${this.escape(
+              p.label || p.code || "D—"
+            )}"><title>${this.escape(p.label || p.code || "D—")}</title></circle>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            <div class="apex-widget-actions">
+              <button type="button" class="apex-icon-btn" data-action="focus" title="Focus">⛶</button>
+              ${printBtn}
+            </div>
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(data.emptyMessage || "Cost data unavailable")}</div>`
+              : ""
+          }
+          <div class="apex-scatter" data-scatter>
+            <span class="apex-scatter-ylab">${this.escape(data.yLabel || "Net Collection")} ($—)</span>
+            <div class="apex-scatter-plot">
+              <svg class="apex-scatter-svg" viewBox="0 0 100 100" preserveAspectRatio="none" data-scatter-svg>
+                <line class="apex-scatter-quad-svg" x1="${qx}" y1="0" x2="${qx}" y2="100" />
+                <line class="apex-scatter-quad-svg" x1="0" y1="${qy}" x2="100" y2="${qy}" />
+                ${dots}
+                <line class="apex-scatter-cross-v" data-scatter-cross-v x1="0" y1="0" x2="0" y2="100" visibility="hidden" />
+                <line class="apex-scatter-cross-h" data-scatter-cross-h x1="0" y1="0" x2="100" y2="0" visibility="hidden" />
+              </svg>
+            </div>
+            <span class="apex-scatter-xlab">${this.escape(data.xLabel || "Billed Fee")} ($—)</span>
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "pareto-chart") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        let bars = Array.isArray(data.bars) ? data.bars : [];
+        let cumulative = Array.isArray(data.cumulative) ? data.cumulative : [];
+        const threshold = Number(data.threshold) || 80;
+        const empty = this.spec.status === "empty" || !bars.length;
+        // Consult empty: gray zeroed bars + cumulative hugs 0%
+        if (empty && !bars.length) {
+          bars = [{ code: "—", amount: null, count: 0, pct: 0 }];
+          cumulative = [0];
+        }
+        const maxPct = Math.max(...bars.map((b) => Number(b.pct) || 0), 1);
+        const rows = bars
+          .map((b, i) => {
+            const pct = Number(b.pct) || 0;
+            const width = empty ? 4 : Math.max(4, Math.round((pct / maxPct) * 100));
+            const cum = cumulative[i] != null ? cumulative[i] : empty ? 0 : "";
+            return `<div class="apex-pareto-row${empty ? " is-empty" : ""}">
+              <span class="apex-pareto-code">${this.escape(b.code || "CO—")}</span>
+              <div class="apex-pareto-track"><i class="apex-pareto-bar" style="width:${width}%"></i></div>
+              <span class="apex-pareto-amt">${this.escape(
+                b.amount != null && Number.isFinite(Number(b.amount)) ? formatMoney(b.amount) || String(b.amount) : "$—"
+              )}</span>
+              <span class="apex-pareto-cum">${this.escape(cum !== "" ? `${cum}%` : "0%")}</span>
+            </div>`;
+          })
+          .join("");
+        // Cumulative % on Y; threshold = horizontal line at 80%
+        const n = Math.max(bars.length, 1);
+        const pts = (cumulative.length ? cumulative : [0])
+          .slice(0, bars.length)
+          .map((c, i) => {
+            const px = ((i + 0.5) / n) * 100;
+            const py = 100 - Math.max(0, Math.min(100, Number(c) || 0));
+            return `${px},${py}`;
+          })
+          .join(" ");
+        const threshY = 100 - threshold;
+        const lineSvg = `<svg class="apex-pareto-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+               <polyline class="apex-pareto-line" points="${pts}" />
+               <line class="apex-pareto-threshold" x1="0" y1="${threshY}" x2="100" y2="${threshY}" />
+             </svg>`;
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(data.emptyMessage || "No denials recorded")}</div>`
+              : ""
+          }
+          <div class="apex-pareto${empty ? " apex-pareto--empty" : ""}" style="--pareto-threshold:${threshold}%">
+            ${lineSvg}
+            ${rows}
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "timeline-lanes") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        let lanes = Array.isArray(data.lanes) ? data.lanes : [];
+        const empty = this.spec.status === "empty" || !lanes.length;
+        // Consult empty: collapse to single line with zeroed segments
+        if (empty && !lanes.length) {
+          lanes = [
+            {
+              code: "D—",
+              total: 0,
+              segments: [
+                { bucket: "0-30", count: 0, color: "cyan" },
+                { bucket: "31-60", count: 0, color: "amber" },
+                { bucket: "61-90", count: 0, color: "magenta" },
+                { bucket: "90+", count: 0, color: "alert" },
+              ],
+            },
+          ];
+        }
+        const rows = lanes
+          .map((lane) => {
+            const segs = Array.isArray(lane.segments) ? lane.segments : [];
+            const total = segs.reduce((a, s) => a + (Number(s.count) || 0), 0) || 1;
+            const segHtml = segs
+              .map((s) => {
+                const n = Number(s.count) || 0;
+                const w = Math.max(n ? 8 : 2, Math.round((n / total) * 100));
+                return `<span class="apex-lane-segment apex-lane-segment--${this.escape(
+                  s.color || "cyan"
+                )}" style="flex:${w}" title="${this.escape(s.bucket || "")}: ${n}">${n}</span>`;
+              })
+              .join("");
+            return `<div class="apex-lane-row">
+              <span class="apex-lane-code">${this.escape(lane.code || "D—")}</span>
+              <div class="apex-lane-track">${segHtml}</div>
+              <span class="apex-lane-total">${this.escape(
+                lane.total != null ? String(lane.total) : "0"
+              )}</span>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(data.emptyMessage || "No pending pre-auths")}</div>`
+              : ""
+          }
+          <div class="apex-lanes${empty ? " apex-lanes--empty" : ""}">${rows}</div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "credit-float") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const credits = Array.isArray(data.credits) ? data.credits : [];
+        const empty = this.spec.status === "empty" || !credits.length;
+        const pills = credits
+          .map((c) => {
+            const amt =
+              c.amount != null && Number.isFinite(Number(c.amount))
+                ? formatMoney(c.amount) || String(c.amount)
+                : "$—";
+            return `<span class="apex-float-pill">${this.escape(c.patientHash || "P—")}: ${this.escape(amt)}</span>`;
+          })
+          .join("");
+        const total =
+          data.total != null && Number.isFinite(Number(data.total))
+            ? formatMoney(data.total) || String(data.total)
+            : "$—";
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-float-strip"><span class="apex-float-pill apex-float-pill--empty">${this.escape(
+                  data.emptyMessage || "No unapplied credits"
+                )}</span></div>`
+              : `<div class="apex-float-strip">
+                   <span class="apex-float-label">UNAPPLIED CREDITS</span>
+                   <div class="apex-float-pills">${pills}</div>
+                   <span class="apex-float-total">Total: ${this.escape(total)}</span>
+                 </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "status-matrix") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        let patients = Array.isArray(data.patients) ? data.patients : [];
+        const empty = this.spec.status === "empty" || !patients.length;
+        // Consult empty: all gray dots
+        if (empty && !patients.length) {
+          patients = [
+            { hash: "P—", elig: null, ben: null, breakdown: null },
+            { hash: "P—", elig: null, ben: null, breakdown: null },
+            { hash: "P—", elig: null, ben: null, breakdown: null },
+          ];
+        }
+        const tone = (v) => {
+          const s = String(v || "").toLowerCase();
+          if (s === "verified" || s === "ok" || s === "yes") return "verified";
+          if (s === "pending" || s === "wait") return "pending";
+          if (s === "failed" || s === "fail" || s === "no") return "failed";
+          return "unknown";
+        };
+        const rows = patients
+          .map((p) => {
+            return `<div class="apex-matrix-row">
+              <span class="apex-matrix-hash">${this.escape(p.hash || "P—")}</span>
+              <i class="apex-matrix-dot apex-matrix-dot--${tone(p.elig)}" title="Elig"></i>
+              <i class="apex-matrix-dot apex-matrix-dot--${tone(p.ben)}" title="Ben"></i>
+              <i class="apex-matrix-dot apex-matrix-dot--${tone(p.breakdown)}" title="Breakdown"></i>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || "Verification tracking disabled"
+                )}</div>`
+              : ""
+          }
+          <div class="apex-matrix${empty ? " apex-matrix--empty" : ""}">
+            <div class="apex-matrix-head"><span></span><span>Elig</span><span>Ben</span><span>Break</span></div>
+            ${rows}
+            <div class="apex-matrix-legend">●Verified ○Pending ◉Failed</div>
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "utilization-board") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const ops = Array.isArray(data.operatories) ? data.operatories : [];
+        const empty = this.spec.status === "empty" || !ops.length;
+        // Coding consult: grid rows = operatories, columns = time slots
+        const times = [];
+        ops.forEach((op) => {
+          (Array.isArray(op.slots) ? op.slots : []).forEach((slot) => {
+            const t = String((slot && slot.time) || "").trim();
+            if (t && !times.includes(t)) times.push(t);
+          });
+        });
+        times.sort();
+        const head =
+          times.length > 0
+            ? `<div class="apex-op-grid-head"><span class="apex-op-grid-corner">Op</span>${times
+                .map((t) => `<span>${this.escape(t)}</span>`)
+                .join("")}</div>`
+            : "";
+        const rows = ops
+          .map((op) => {
+            const slots = Array.isArray(op.slots) ? op.slots : [];
+            const byTime = {};
+            slots.forEach((slot) => {
+              byTime[String(slot.time || "")] = slot;
+            });
+            const cells =
+              times.length > 0
+                ? times
+                    .map((t) => {
+                      const slot = byTime[t] || { status: "open" };
+                      const st = String(slot.status || "open").toLowerCase();
+                      const tone = st.includes("book")
+                        ? "booked"
+                        : st.includes("block")
+                          ? "blocked"
+                          : "open";
+                      return `<span class="apex-op-slot apex-op-slot--${tone}" title="${this.escape(t)}">${this.escape(
+                        tone === "booked" ? slot.patientHash || "•" : tone === "blocked" ? "×" : ""
+                      )}</span>`;
+                    })
+                    .join("")
+                : slots
+                    .map((slot) => {
+                      const st = String(slot.status || "open").toLowerCase();
+                      const tone = st.includes("book")
+                        ? "booked"
+                        : st.includes("block")
+                          ? "blocked"
+                          : "open";
+                      return `<span class="apex-op-slot apex-op-slot--${tone}">${this.escape(
+                        tone === "booked" ? slot.patientHash || "•" : ""
+                      )}</span>`;
+                    })
+                    .join("");
+            return `<div class="apex-op-grid-row" style="--op-cols:${Math.max(times.length, slots.length, 1)}">
+              <strong class="apex-op-grid-name">${this.escape(op.name || "Op—")}</strong>
+              <div class="apex-op-grid-slots">${cells}</div>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(data.emptyMessage || "No schedule data")}</div>`
+              : `<div class="apex-op-grid">${head}${rows}
+                   <div class="apex-op-legend">amber=booked · cyan outline=open · gray=blocked</div>
+                 </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "radial-gauge") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const empty = this.spec.status === "empty" || data.due == null;
+        const pct = data.pctScheduled != null && Number.isFinite(Number(data.pctScheduled))
+          ? Math.max(0, Math.min(100, Number(data.pctScheduled)))
+          : null;
+        const target = 80;
+        const r = 42;
+        const c = 2 * Math.PI * r;
+        const fill = pct == null ? 0 : (pct / 100) * c * 0.75;
+        const track = c * 0.75;
+        // Amber target marker at 80% along 270° arc (starts at 135°)
+        const targetAngle = 135 + (target / 100) * 270;
+        const rad = (targetAngle * Math.PI) / 180;
+        const tx = 60 + r * Math.cos(rad);
+        const ty = 58 + r * Math.sin(rad);
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || "Recall tracking unavailable"
+                )}</div>
+                 <div class="apex-gauge apex-gauge--empty">
+                   <svg viewBox="0 0 120 100" class="apex-gauge-svg" aria-hidden="true">
+                     <circle class="apex-gauge-arc apex-gauge-arc--track" cx="60" cy="58" r="${r}"
+                       stroke-dasharray="${track} ${c}" stroke-dashoffset="0" transform="rotate(135 60 58)" />
+                     <text x="60" y="62" text-anchor="middle" class="apex-gauge-pct">—%</text>
+                   </svg>
+                 </div>`
+              : `<div class="apex-gauge">
+                   <svg viewBox="0 0 120 100" class="apex-gauge-svg" aria-hidden="true">
+                     <circle class="apex-gauge-arc apex-gauge-arc--track" cx="60" cy="58" r="${r}"
+                       stroke-dasharray="${track} ${c}" stroke-dashoffset="0" transform="rotate(135 60 58)" />
+                     <circle class="apex-gauge-arc apex-gauge-arc--fill" cx="60" cy="58" r="${r}"
+                       stroke-dasharray="${fill} ${c}" stroke-dashoffset="0" transform="rotate(135 60 58)" />
+                     <circle class="apex-gauge-target" cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="3.5" />
+                     <text x="60" y="62" text-anchor="middle" class="apex-gauge-pct">${this.escape(
+                       pct != null ? `${pct}%` : "—%"
+                     )}</text>
+                   </svg>
+                   <div class="apex-gauge-meta">Due: ${this.escape(
+                     data.due != null ? String(data.due) : "—"
+                   )} · Target: 80% · Sch: ${this.escape(
+                     data.scheduled != null ? String(data.scheduled) : "—"
+                   )}${
+                     data.contacted != null ? ` · Contacted: ${this.escape(String(data.contacted))}` : ""
+                   }</div>
+                 </div>`
           }
           <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
         `;
@@ -2664,6 +3203,48 @@
           btn.addEventListener("click", () => openCitationModal(btn.getAttribute("data-cite-key") || "", btn.textContent || ""));
         });
       }
+      if (this.type === "scatter-plot") {
+        const plot = this.element.querySelector("[data-scatter] .apex-scatter-plot");
+        const svg = this.element.querySelector("[data-scatter-svg]");
+        const crossV = this.element.querySelector("[data-scatter-cross-v]");
+        const crossH = this.element.querySelector("[data-scatter-cross-h]");
+        if (plot && svg && crossV && crossH) {
+          const circles = Array.from(svg.querySelectorAll("circle.apex-scatter-point"));
+          plot.addEventListener("mousemove", (ev) => {
+            const rect = plot.getBoundingClientRect();
+            let x = ((ev.clientX - rect.left) / rect.width) * 100;
+            let y = ((ev.clientY - rect.top) / rect.height) * 100;
+            // Consult: snap to nearest point
+            if (circles.length) {
+              let best = null;
+              let bestD = Infinity;
+              circles.forEach((c) => {
+                const cx = Number(c.getAttribute("cx")) || 0;
+                const cy = Number(c.getAttribute("cy")) || 0;
+                const d = (cx - x) * (cx - x) + (cy - y) * (cy - y);
+                if (d < bestD) {
+                  bestD = d;
+                  best = { cx, cy };
+                }
+              });
+              if (best) {
+                x = best.cx;
+                y = best.cy;
+              }
+            }
+            crossV.setAttribute("visibility", "visible");
+            crossH.setAttribute("visibility", "visible");
+            crossV.setAttribute("x1", String(x));
+            crossV.setAttribute("x2", String(x));
+            crossH.setAttribute("y1", String(y));
+            crossH.setAttribute("y2", String(y));
+          });
+          plot.addEventListener("mouseleave", () => {
+            crossV.setAttribute("visibility", "hidden");
+            crossH.setAttribute("visibility", "hidden");
+          });
+        }
+      }
       if (this.type === "status") {
         const refreshBtn = this.element.querySelector("[data-c0-refresh]");
         if (refreshBtn && refreshBtn.dataset.wired !== "1") {
@@ -2749,22 +3330,77 @@
 
   function askHalAboutWidget(spec) {
     const s = spec || {};
+    const data = s.data && typeof s.data === "object" ? s.data : {};
+    const widgetId = String(s.id || s.widgetId || "");
+    const status = String(s.status || (data && data.emptyMessage && !data.bars && !data.points ? "empty" : "ok"));
+    const context = {
+      widgetId,
+      page: currentPage,
+      status: status || "ok",
+    };
+
+    // Consult §4 — widget-specific HAL context (PHI-safe)
+    if (widgetId === "denial-pareto" || s.type === "pareto-chart") {
+      const codes = Array.isArray(s.denialCodes)
+        ? s.denialCodes
+        : Array.isArray(data.bars)
+          ? data.bars.map((b) => b && b.code).filter(Boolean)
+          : [];
+      if (codes.length) context.denialCodes = codes.slice(0, 12);
+    }
+    if (
+      widgetId === "unapplied-credit-float" ||
+      widgetId === "verification-matrix" ||
+      widgetId === "operatory-util-board" ||
+      s.type === "credit-float" ||
+      s.type === "status-matrix" ||
+      s.type === "utilization-board"
+    ) {
+      const hashes = [];
+      if (Array.isArray(data.credits)) {
+        data.credits.forEach((c) => {
+          if (c && c.patientHash) hashes.push(String(c.patientHash));
+        });
+      }
+      if (Array.isArray(data.patients)) {
+        data.patients.forEach((p) => {
+          if (p && p.hash) hashes.push(String(p.hash));
+        });
+      }
+      if (Array.isArray(data.operatories)) {
+        data.operatories.forEach((op) => {
+          (Array.isArray(op.slots) ? op.slots : []).forEach((slot) => {
+            if (slot && slot.patientHash) hashes.push(String(slot.patientHash));
+          });
+        });
+      }
+      if (hashes.length) context.patientHash = hashes.slice(0, 12);
+    }
+
     const parts = [
       `Widget context (do not invent dollars beyond these figures):`,
       `page=${currentPage}`,
-      `id=${s.id || ""}`,
-      `label=${s.label || ""}`,
+      `id=${widgetId}`,
+      `widgetId=${widgetId}`,
+      `label=${s.label || s.title || ""}`,
       `type=${s.type || ""}`,
+      `context=${JSON.stringify(context)}`,
     ];
     if (s.value !== null && s.value !== undefined && s.value !== "") {
       parts.push(`value=${s.value}${s.unit ? " " + s.unit : ""}`);
     }
     if (s.status === "empty" || s.status === "awaiting-migration") {
       parts.push(`dataStatus=EMPTY`);
-      parts.push(`emptyMessage=${s.emptyMessage || "No data"}`);
+      parts.push(`emptyMessage=${s.emptyMessage || data.emptyMessage || "No data"}`);
       parts.push(`Ask: which widgets are empty? · how do I get SoftDent/QuickBooks exports? · Sync imports`);
     } else {
       parts.push(`dataStatus=SHOWING`);
+    }
+    if (context.denialCodes) {
+      parts.push(`denialCodes=${context.denialCodes.join(",")}`);
+    }
+    if (context.patientHash) {
+      parts.push(`patientHash=${context.patientHash.join(",")}`);
     }
     if (s.type === "claim-shelf") {
       parts.push(`bucket=${s.bucket || ""}`);
@@ -2814,7 +3450,28 @@
       );
     }
     parts.push("Explain what this means for the practice and what to prioritize next.");
-    askHalFromBridge(parts.join(" | "));
+
+    // Consult §4 — deterministic focus/highlight via board-actions before chat
+    const query = `Explain this widget`;
+    apexFetch(`${config.apiBase}/hal/board-actions`, {
+      method: "POST",
+      body: JSON.stringify({ query, page: currentPage, context }),
+    })
+      .then((res) => res.json().catch(() => ({})))
+      .then((board) => {
+        if (board && Array.isArray(board.actions) && board.actions.length) {
+          return runHalBoardActions(board.actions);
+        }
+        // Fallback: focus locally if board did not handle
+        return runHalBoardActions([
+          { type: "focus_widget", widgetId },
+          { type: "highlight_widget", widgetId, ms: 4000 },
+        ]);
+      })
+      .catch(() => {})
+      .finally(() => {
+        askHalFromBridge(parts.join(" | "));
+      });
   }
 
   function wireTaxLibrary(root) {
@@ -4295,6 +4952,20 @@
         } else if (type === "refresh_page") {
           await loadPage(currentPage, { silent: true });
           results.push("refreshed");
+        } else if (type === "refresh_widget") {
+          // Phase 3: targeted refresh — silent page reload then re-focus widget
+          const id = String(action.widgetId || "").trim();
+          await loadPage(currentPage, { silent: true });
+          if (id) {
+            await new Promise((r) => setTimeout(r, 80));
+            const el = findWidgetEl(id);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.classList.add("apex-hal-highlight");
+              setTimeout(() => el.classList.remove("apex-hal-highlight"), Number(action.ms) || 2500);
+            }
+          }
+          results.push(id ? `refresh_widget:${id}` : "refresh_widget");
         } else if (type === "focus_widget" || type === "highlight_widget") {
           const id = String(action.widgetId || "").trim();
           if (!id) continue;
@@ -4470,6 +5141,7 @@
             [
               "sync_imports",
               "refresh_page",
+              "refresh_widget",
               "navigate",
               "focus_widget",
               "highlight_widget",

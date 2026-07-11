@@ -1178,13 +1178,145 @@ body.apex-bridge {
 .apex-bullet-marker { position: absolute; top: -2px; width: 3px; height: 22px; background: var(--apex-amber); box-shadow: 0 0 8px var(--apex-amber); transform: translateX(-50%); }
 
 .apex-waterfall { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-.apex-wf-row { display: grid; grid-template-columns: 90px 1fr 72px; gap: 8px; align-items: center; }
+.apex-wf-row { display: grid; grid-template-columns: 16px 90px 1fr 72px; gap: 8px; align-items: center; }
+.apex-wf-conn { font-size: 11px; color: var(--apex-magenta); text-align: center; }
 .apex-wf-label { font-size: 10px; color: var(--apex-text-secondary); }
 .apex-wf-track { height: 12px; background: var(--apex-surface); border: 1px solid var(--apex-border); border-radius: 2px; overflow: hidden; }
 .apex-wf-track i { display: block; height: 100%; background: linear-gradient(90deg, rgba(0,240,255,0.7), rgba(0,240,255,0.2)); }
 .apex-wf-row--total .apex-wf-track i { background: linear-gradient(90deg, rgba(255,0,102,0.7), rgba(255,0,102,0.25)); }
 .apex-wf-row--negative .apex-wf-track i { background: linear-gradient(90deg, rgba(255,184,0,0.7), rgba(255,184,0,0.25)); }
 .apex-wf-val { font-size: 10px; text-align: right; color: var(--apex-cyan); font-variant-numeric: tabular-nums; }
+.apex-wf-row--start .apex-wf-track i,
+.apex-wf-row--add .apex-wf-track i { background: linear-gradient(90deg, rgba(0,240,255,0.7), rgba(0,240,255,0.2)); }
+.apex-wf-row--sub .apex-wf-track i { background: linear-gradient(90deg, rgba(255,0,170,0.7), rgba(255,0,170,0.25)); }
+.apex-wf-row--end .apex-wf-track i { background: linear-gradient(90deg, rgba(255,184,0,0.8), rgba(255,184,0,0.3)); }
+.apex-waterfall--muted { opacity: 0.45; }
+.apex-funnel-rate,
+.apex-funnel-connector { font-size: 9px; color: var(--apex-magenta); margin-left: 4px; }
+.apex-funnel-val { font-size: 9px; color: var(--apex-text-secondary); margin-left: 4px; }
+.apex-funnel--empty,
+.apex-lanes--empty,
+.apex-matrix--empty { opacity: 0.55; }
+
+/* W-01..W-10 missing widgets (Moonshot CODING_HAL 2026-07-11) */
+.apex-treemap { display: flex; flex-wrap: wrap; gap: 4px; min-height: 120px; margin-top: 6px; }
+.apex-treemap-cell {
+  min-width: 72px; min-height: 56px; padding: 6px; border: 1px solid var(--apex-cyan);
+  background: rgba(0, 240, 255, 0.08); display: flex; flex-direction: column; gap: 2px;
+  transition: fill-opacity 0.15s ease, box-shadow 0.15s ease;
+}
+.apex-treemap-cell:hover { background: rgba(0, 240, 255, 0.22); box-shadow: 0 0 8px rgba(0, 240, 255, 0.35); }
+.apex-treemap-cell strong { font-size: 10px; color: var(--apex-amber); }
+.apex-treemap-cell em { font-style: normal; font-size: 11px; color: var(--apex-cyan); font-variant-numeric: tabular-nums; }
+.apex-treemap-children { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.apex-treemap-child { font-size: 9px; color: var(--apex-text-secondary); border: 1px solid var(--apex-border); padding: 1px 4px; }
+.apex-treemap--empty .apex-treemap-cell { border-color: rgba(120, 140, 160, 0.5); background: rgba(80, 90, 100, 0.15); }
+
+.apex-scatter { display: grid; grid-template-columns: 18px 1fr; grid-template-rows: 1fr 16px; gap: 4px; margin-top: 6px; min-height: 140px; }
+.apex-scatter-ylab { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 9px; color: var(--apex-text-secondary); }
+.apex-scatter-xlab { grid-column: 2; font-size: 9px; color: var(--apex-text-secondary); text-align: center; }
+.apex-scatter-plot {
+  position: relative; border: 1px solid var(--apex-border); background:
+    linear-gradient(to right, transparent 49.5%, rgba(0,240,255,0.08) 49.5%, rgba(0,240,255,0.08) 50.5%, transparent 50.5%),
+    linear-gradient(to bottom, transparent 49.5%, rgba(0,240,255,0.08) 49.5%, rgba(0,240,255,0.08) 50.5%, transparent 50.5%);
+  min-height: 120px;
+}
+.apex-scatter-svg { width: 100%; height: 120px; display: block; }
+.apex-scatter-quad-svg { stroke: rgba(0, 240, 255, 0.35); stroke-width: 0.4; }
+.apex-scatter-cross-v, .apex-scatter-cross-h { stroke: rgba(0, 240, 255, 0.55); stroke-width: 0.35; }
+.apex-scatter-point { fill: var(--apex-cyan); }
+.apex-scatter-point--underpaid { fill: var(--apex-amber); }
+.apex-scatter-point--low-collect { fill: var(--apex-magenta); }
+
+.apex-pareto { position: relative; display: flex; flex-direction: column; gap: 6px; margin-top: 6px; min-height: 80px; }
+.apex-pareto--empty { opacity: 0.55; }
+.apex-pareto-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 1;
+}
+.apex-pareto-row { display: grid; grid-template-columns: 56px 1fr 56px 40px; gap: 6px; align-items: center; position: relative; z-index: 2; }
+.apex-pareto-code { font-size: 10px; color: var(--apex-text-secondary); }
+.apex-pareto-track { height: 10px; background: var(--apex-surface); border: 1px solid var(--apex-border); overflow: hidden; }
+.apex-pareto-bar { display: block; height: 100%; background: linear-gradient(90deg, var(--apex-cyan), rgba(0,240,255,0.25)); }
+.apex-pareto-amt, .apex-pareto-cum { font-size: 10px; color: var(--apex-amber); text-align: right; font-variant-numeric: tabular-nums; }
+
+.apex-lanes { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.apex-lane-row { display: grid; grid-template-columns: 52px 1fr 28px; gap: 6px; align-items: center; }
+.apex-lane-code { font-size: 10px; color: var(--apex-text-secondary); }
+.apex-lane-track { display: flex; height: 12px; border: 1px solid var(--apex-border); overflow: hidden; }
+.apex-lane-segment { display: flex; align-items: center; justify-content: center; font-size: 8px; color: #05070a; min-width: 2px; }
+.apex-lane-segment--cyan { background: var(--apex-cyan); }
+.apex-lane-segment--amber { background: var(--apex-amber); }
+.apex-lane-segment--magenta { background: var(--apex-magenta); color: #fff; }
+.apex-lane-segment--alert { background: #ff4455; color: #fff; }
+.apex-lane-total { font-size: 10px; text-align: right; color: var(--apex-cyan); }
+
+.apex-float-strip {
+  display: flex; align-items: center; gap: 10px; overflow-x: auto; min-height: 80px;
+  padding: 6px 0; margin-top: 4px;
+}
+.apex-float-label { font-size: 10px; letter-spacing: 0.08em; color: var(--apex-cyan); flex: 0 0 auto; }
+.apex-float-pills { display: flex; gap: 8px; flex: 1 1 auto; }
+.apex-float-pill {
+  flex: 0 0 auto; background: var(--apex-amber); color: #05070a;
+  border-radius: 12px; padding: 2px 8px; font-size: 10px; font-weight: 600;
+  box-shadow: 0 0 8px rgba(255, 184, 0, 0.35);
+}
+.apex-float-pill--empty { background: transparent; border: 1px solid var(--apex-amber); color: var(--apex-amber); }
+.apex-float-total { flex: 0 0 auto; font-size: 11px; color: var(--apex-cyan); font-variant-numeric: tabular-nums; }
+
+.apex-matrix { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.apex-matrix-head, .apex-matrix-row {
+  display: grid; grid-template-columns: 1fr repeat(3, 36px); gap: 4px; align-items: center; font-size: 10px;
+}
+.apex-matrix-head { color: var(--apex-text-secondary); }
+.apex-matrix-hash { color: var(--apex-cyan); }
+.apex-matrix-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; justify-self: center; border: 1px solid var(--apex-border); }
+.apex-matrix-dot--verified { background: var(--apex-cyan); border-color: var(--apex-cyan); }
+.apex-matrix-dot--pending { background: var(--apex-amber); border-color: var(--apex-amber); }
+.apex-matrix-dot--failed { background: var(--apex-magenta); border-color: var(--apex-magenta); }
+.apex-matrix-dot--unknown { background: transparent; }
+.apex-matrix-legend { font-size: 9px; color: var(--apex-text-secondary); margin-top: 4px; }
+
+.apex-op-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; margin-top: 6px; }
+.apex-op-card {
+  border: 1px solid var(--apex-border); padding: 8px; display: flex; flex-direction: column; gap: 2px;
+  background: rgba(0, 240, 255, 0.04);
+}
+.apex-op-card strong { font-size: 11px; color: var(--apex-cyan); }
+.apex-op-card--occ { box-shadow: 0 0 10px rgba(255, 0, 170, 0.25); border-color: var(--apex-magenta); }
+.apex-op-card--avail { border-color: var(--apex-cyan); }
+.apex-op-card--turn { border-color: var(--apex-amber); }
+.apex-op-mark { font-size: 14px; color: var(--apex-amber); }
+.apex-op-patient, .apex-op-time { font-size: 10px; color: var(--apex-text-secondary); }
+.apex-op-legend { grid-column: 1 / -1; font-size: 9px; color: var(--apex-text-secondary); }
+
+.apex-op-grid { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; overflow-x: auto; }
+.apex-op-grid-head, .apex-op-grid-row {
+  display: grid; grid-template-columns: 56px 1fr; gap: 6px; align-items: center; font-size: 10px;
+}
+.apex-op-grid-head { color: var(--apex-text-secondary); }
+.apex-op-grid-head > span:not(.apex-op-grid-corner),
+.apex-op-grid-slots {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(44px, 1fr); gap: 4px;
+}
+.apex-op-grid-name { color: var(--apex-cyan); font-size: 10px; }
+.apex-op-slot {
+  min-height: 28px; border: 1px solid var(--apex-cyan); display: flex; align-items: center;
+  justify-content: center; font-size: 9px; padding: 2px;
+}
+.apex-op-slot--booked { background: var(--apex-amber); color: #05070a; border-color: var(--apex-amber); }
+.apex-op-slot--open { background: transparent; }
+.apex-op-slot--blocked { background: rgba(120, 130, 140, 0.35); border-color: rgba(120, 130, 140, 0.6); color: var(--apex-text-secondary); }
+
+.apex-gauge { display: flex; flex-direction: column; align-items: center; margin-top: 4px; }
+.apex-gauge-svg { width: 140px; height: 116px; }
+.apex-gauge-arc { fill: none; stroke-width: 12; }
+.apex-gauge-arc--track { stroke: var(--apex-magenta); opacity: 0.3; }
+.apex-gauge-arc--fill { stroke: var(--apex-cyan); }
+.apex-gauge-pct { fill: var(--apex-amber); font-size: 16px; font-family: JetBrains Mono, monospace; font-weight: 700; }
+.apex-gauge-target { fill: var(--apex-amber); stroke: var(--apex-bg, #05070a); stroke-width: 1; }
+.apex-gauge-meta { font-size: 10px; color: var(--apex-cyan); margin-top: 2px; }
+.apex-gauge--empty { opacity: 0.45; }
 
 .apex-stack-bar--tall { height: 28px; margin-top: 8px; }
 .apex-stack-meta { margin-top: 6px; font-size: 10px; color: var(--apex-text-secondary); }

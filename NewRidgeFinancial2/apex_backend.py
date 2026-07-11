@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10450"
+BUILD_ID = "hal-10455"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1854,22 +1854,13 @@ def _financial_widgets_from_reports(
     except Exception:
         pass
 
-    widgets[0:0] = _visual_boost_financial(reports, bundle)
-    widgets.insert(0, build_period_scrubber(bundle, page="financial"))
-    widgets.insert(0, build_import_freshness(bundle))
-    widgets.append(build_provider_horizontal_bars(bundle))
-    widgets.append(build_payer_donut(bundle))
-    widgets.append(build_collection_bullet(bundle))
-    widgets.append(build_ins_patient_split(bundle))
-    widgets.append(build_ebitda_waterfall(bundle))
-    widgets.append(build_ebitda_scrubber(bundle))
-    # Threshold alert on A/R KPI when 90+ share > 20%
-    for w in widgets:
-        if isinstance(w, dict) and w.get("id") == "ar-outstanding":
-            ninety_pct = ar.get("ninetyPlusPct")
-            if isinstance(ninety_pct, (int, float)) and float(ninety_pct) > 20.0:
-                w["alert"] = True
-                w["alertReason"] = f"90+ share {float(ninety_pct):.1f}% exceeds 20%"
+    try:
+        from apex_missing_widgets_pack import append_financial_missing
+
+        append_financial_missing(widgets, bundle)
+    except Exception:
+        pass
+
     _apply_threshold_alerts(widgets, reports)
     return widgets
 
@@ -2349,6 +2340,12 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
         except Exception:
             widgets.append(build_expense_horizontal_bars(bundle))
         widgets.append(build_categorize_assist(bundle))
+        try:
+            from apex_missing_widgets_pack import append_quickbooks_missing
+
+            append_quickbooks_missing(widgets, bundle)
+        except Exception:
+            pass
         return widgets
 
     widgets.append(
@@ -2439,6 +2436,12 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
     except Exception:
         pass
     widgets.append(build_categorize_assist(bundle))
+    try:
+        from apex_missing_widgets_pack import append_quickbooks_missing
+
+        append_quickbooks_missing(widgets, bundle)
+    except Exception:
+        pass
     return widgets
 
 
@@ -2576,6 +2579,12 @@ def _ar_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[st
     except Exception:
         pass
     widgets.append(build_collection_bullet(bundle))
+    try:
+        from apex_missing_widgets_pack import append_ar_missing
+
+        append_ar_missing(widgets, bundle)
+    except Exception:
+        pass
     _apply_threshold_alerts(widgets, reports)
     return widgets
 
@@ -2777,7 +2786,12 @@ def _claims_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dic
     try:
         from apex_hal_said_improve_pack import append_claims_hal_said
 
-        append_claims_hal_said(widgets)
+    # Below-fold analytics (not part of primary above-fold console)
+    widgets.append(build_ins_patient_split(bundle))
+    try:
+        from apex_missing_widgets_pack import append_claims_missing
+
+        append_claims_missing(widgets, bundle)
     except Exception:
         pass
     _apply_threshold_alerts(widgets, reports, claims_summary=summary)
@@ -3206,6 +3220,12 @@ def _office_manager_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> 
         if util.get("status") == "empty":
             util = collapse_empty_large(util)
         widgets.insert(1, util)
+    except Exception:
+        pass
+    try:
+        from apex_missing_widgets_pack import append_office_manager_missing
+
+        append_office_manager_missing(widgets, bundle)
     except Exception:
         pass
     return widgets
@@ -3957,6 +3977,30 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
     actions: list[dict[str, Any]] = []
     notes: list[str] = []
     handled = False
+    ctx = body.get("context") if isinstance(body.get("context"), dict) else {}
+    ctx_widget = str(ctx.get("widgetId") or ctx.get("id") or "").strip()
+
+    # --- Ask-HAL on a specific widget (consult §4) — focus/highlight only, then chat may continue ---
+    if ctx_widget and re.search(r"\b(explain this widget|explain (the )?widget|what is this widget)\b", q):
+        actions.append({"type": "focus_widget", "widgetId": ctx_widget})
+        actions.append({"type": "highlight_widget", "widgetId": ctx_widget, "ms": 4000})
+        denial_codes = ctx.get("denialCodes") if isinstance(ctx.get("denialCodes"), list) else []
+        patient_hash = ctx.get("patientHash") if isinstance(ctx.get("patientHash"), list) else []
+        if denial_codes:
+            notes.append(
+                "Denial codes in view (import-backed): "
+                + ", ".join(str(c) for c in denial_codes[:8])
+                + ". Summarize top denial impact only from these codes — never invent dollars."
+            )
+        elif patient_hash:
+            notes.append(
+                "Anonymized patient hashes in view: "
+                + ", ".join(str(h) for h in patient_hash[:8])
+                + ". Refer by hash/initials only — no PHI expansion."
+            )
+        else:
+            notes.append(f"Focusing widget `{ctx_widget}` for explanation (import-backed display only).")
+        handled = True
 
     # Advisory / ethics questions must reach chat — do not hijack on topic keywords
     # like "categorize", "import health", or "ebitda" embedded in a longer ask.
@@ -4032,6 +4076,26 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         notes.append("Refreshing widgets from the current import cache (no new file sync).")
         handled = True
 
+    # --- Phase 3: targeted refresh_widget (consult optional enhancement) ---
+    if re.search(r"\b(refresh (this |the )?(widget|instrument)|reload (this |the )?widget)\b", q):
+        wid = ctx_widget or ""
+        if not wid:
+            # try focus_rules match for named widget in same utterance
+            for pat, rule_wid, _pg in (
+                (r"\bexpense treemap\b", "expense-treemap", None),
+                (r"\bdenial pareto\b", "denial-pareto", None),
+                (r"\bunapplied\b", "unapplied-credit-float", None),
+                (r"\brecall gauge\b", "recall-gauge", None),
+                (r"\bcash (flow )?bridge\b", "cash-flow-bridge", None),
+            ):
+                if re.search(pat, q):
+                    wid = rule_wid
+                    break
+        if wid:
+            actions.append({"type": "refresh_widget", "widgetId": wid})
+            notes.append(f"Refreshing widget `{wid}` from import cache.")
+            handled = True
+
     # --- Navigate to a page ---
     page_map = {
         "financial": r"\b(financial|finance|dashboard)\b",
@@ -4097,7 +4161,8 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(claims status (bar|distribution|chart)|status distribution)\b", "claims-status-bar", "claims"),
         (r"\b(claims (aging )?trend|90\+ aging trend)\b", "claims-aging-mini-trend", "claims"),
         (r"\b(import health timeline|import timeline)\b", "import-health-timeline", "softdent"),
-        (r"\b(operatory (util|slot|load)|chair (load|slots))\b", "operatory-util-trend", "office-manager"),
+        # Prefer W-09 board for board/schedule/status; keep trend for util/slot/load charts
+        (r"\b(operatory (slot|load)|chair (load|slots)|operatory util(ization)? (trend|chart))\b", "operatory-util-trend", "office-manager"),
         (r"\b(ar forecast|a/?r forecast|era velocity)\b", "ar-forecast-trend", "ar"),
         (r"\b(expense (hbar|bars|categories)|qb expense)\b", "qb-expense-hbar", "quickbooks"),
         (r"\b(a/?r forecast|aging forecast)\b", "ar-aging-forecast", "ar"),
@@ -4113,13 +4178,6 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(insurance )?verification matrix|eligibility matrix|verify (patients|benefits)|insurance check|elig(ibility)? matrix\b", "verification-matrix", "claims"),
         (r"\boperatory (util|board|schedule|status)|chair (util|schedule|board)|room (board|schedule)|op schedule|op board\b", "operatory-util-board", "office-manager"),
         (r"\brecall gauge|recall (status|tracker|compliance)|hygiene (recall|due)|recall (percent|rate|board)\b", "recall-gauge", "office-manager"),
-        # HAL-said improve-fix (2026-07-11)
-        (r"\beob (posting )?backlog|unposted eob|era backlog\b", "eob-posting-backlog", "office-manager"),
-        (r"\b(clinical )?sign-?off|dr\.?\s*reno (sign|review)|pending clinical review\b", "clinical-signoff-queue", "narratives"),
-        (r"\bpayer (change )?alerts?|carrier (update|change) alerts?\b", "payer-change-alerts", "office-manager"),
-        (r"\bpolicy (change|changelog|updates?)\b", "policy-changelog", "office-manager"),
-        (r"\bpayer contacts?|carrier (phones?|contacts?)|eligibility phones?\b", "payer-contact-admin", "office-manager"),
-        (r"\b(teach hal|structured remember|remember (form|structured))\b", "hal-structured-remember", "hal"),
     )
     if (not handled) and allow_topic_focus and (
         explicit_board or any(re.search(pat, q) for pat, _wid, _pg in focus_rules)

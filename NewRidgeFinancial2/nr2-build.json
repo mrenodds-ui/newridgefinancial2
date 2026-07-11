@@ -1,6 +1,6 @@
 {
-  "BUILD_ID": "hal-10441",
-  "assetVersion": "hal-10441",
-  "schemaVersion": "hal-10441",
-  "notes": "hal-10441: Fix HAL HTTP 403 — session refresh recovery + fast cache-only readiness so app-info/mutations are not wedged behind direct-first scans."
+  "BUILD_ID": "hal-10455",
+  "assetVersion": "hal-10455",
+  "schemaVersion": "hal-10455",
+  "notes": "hal-10455: Coding empty-state fidelity — funnel/lanes/matrix placeholders, waterfall connectors, theme matrix tones."
 }
