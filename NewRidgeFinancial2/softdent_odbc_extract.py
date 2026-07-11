@@ -776,7 +776,7 @@ def table_row_counts(db_path: Path | None) -> dict[str, int]:
                 out[table] = 0
                 continue
             cur = conn.cursor()
-            # Whitelist-only identifier (not user input) — avoid execute(f"...")
+            # Whitelist-only table name from SD_TABLES (not user input).
             cur.execute("SELECT COUNT(*) FROM {}".format(table))
             out[table] = int(cur.fetchone()[0] or 0)
         return out
