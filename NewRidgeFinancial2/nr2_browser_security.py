@@ -52,6 +52,8 @@ FINANCIAL_READ_PREFIXES = (
     "/api/apex/narratives",
     "/api/apex/claims",
     "/api/apex/claims-aging",
+    "/api/apex/claims-kanban",
+    "/api/apex/import-health",
     "/api/apex/tax-returns",
     "/api/apex/scenarios",
     "/api/apex/filing",

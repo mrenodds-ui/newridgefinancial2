@@ -58,5 +58,7 @@ Ops: `NewRidgeFinancial2/model-automation/README.md`
 ## See Also
 
 - `NewRidgeFinancial2/README.md`
+- `NewRidgeFinancial2/docs/HAL_LOCAL_24B_SINGLE_GPU_2026-07-11.md`
+- `docs/local_quantized_ai_setup.md`
 - `docs/hal_phi_rag_architecture.md`
 - `SECURITY_HEADERS.md`

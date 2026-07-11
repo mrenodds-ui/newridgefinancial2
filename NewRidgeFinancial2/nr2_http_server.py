@@ -275,6 +275,9 @@ def _browser_mutation_auth_ok() -> bool:
 
         if hub_notify_access_ok():
             return True
+    if path == "/api/webhooks/website-appointment" and method == "POST":
+        # Shared-secret validated in handler (Gravity Forms / tunnel).
+        return True
     if not _loopback_request():
         return False
     expected = _browser_session_token or ensure_browser_session_token()
@@ -334,6 +337,8 @@ def _lan_hal_hub_access_ok() -> bool:
 
             return hub_last_broadcast_access_ok()
     if path == "/api/workstation/show" and method in ("POST", "OPTIONS") and _loopback_request():
+        return True
+    if path == "/api/webhooks/website-appointment" and method in ("POST", "OPTIONS"):
         return True
     if method == "OPTIONS" and path.startswith("/api/"):
         return True
@@ -1105,6 +1110,118 @@ class NR2BottleServer(BottleServer):
             payload = json.loads(body or "{}")
             _audit_mutation("patient_payment_webhook", detail={"patientId": payload.get("patientId"), "amount": payload.get("amount")})
             return _json_response({"ok": True, "freshnessInvalidated": True, "patientId": payload.get("patientId")})
+
+        @app.post("/api/webhooks/website-appointment")
+        def website_appointment_webhook_api():
+            """Gravity Forms (or compatible) appointment-request webhook → HAL sidenote."""
+            from sidenotes_local_store import insert_sidenote_local
+            from website_leads_store import (
+                format_lead_sidenote,
+                insert_website_lead,
+                normalize_gravity_forms_payload,
+                webhook_secret_configured,
+                webhook_secret_valid,
+            )
+
+            provided = (
+                bottle.request.headers.get("X-NR2-Webhook-Secret")
+                or bottle.request.headers.get("X-Webhook-Secret")
+                or bottle.request.params.get("secret")
+                or ""
+            )
+            auth = bottle.request.headers.get("Authorization") or ""
+            if auth.lower().startswith("bearer "):
+                provided = auth[7:].strip() or provided
+            if webhook_secret_configured() and not webhook_secret_valid(provided):
+                return _json_response({"ok": False, "error": "invalid_webhook_secret"}, status=403)
+            if not webhook_secret_configured() and not _loopback_request():
+                return _json_response(
+                    {"ok": False, "error": "webhook_secret_required", "hint": "Set NR2_WEBSITE_WEBHOOK_SECRET"},
+                    status=403,
+                )
+
+            payload: dict = {}
+            ctype = str(bottle.request.content_type or "").lower()
+            if "application/json" in ctype or (bottle.request.body and not bottle.request.forms):
+                raw_body = bottle.request.body.read().decode("utf-8") if bottle.request.body else ""
+                if raw_body.strip():
+                    try:
+                        parsed = json.loads(raw_body)
+                        if isinstance(parsed, dict):
+                            payload = parsed
+                    except json.JSONDecodeError:
+                        payload = {"rawBody": raw_body[:4000]}
+            if not payload and bottle.request.forms:
+                payload = {k: bottle.request.forms.get(k) for k in bottle.request.forms.keys()}
+            if not payload and bottle.request.json and isinstance(bottle.request.json, dict):
+                payload = dict(bottle.request.json)
+
+            normalized = normalize_gravity_forms_payload(payload)
+            if not (normalized.get("name") or normalized.get("email") or normalized.get("phone")):
+                return _json_response(
+                    {"ok": False, "error": "missing_contact_fields", "hint": "Need name, email, or phone"},
+                    status=400,
+                )
+
+            store = _local_store()
+            sidenote = None
+            with store._connect() as conn:
+                lead = insert_website_lead(conn, normalized=normalized, source="gravity_forms")
+                if not lead.get("duplicate"):
+                    note_text = format_lead_sidenote(lead)
+                    sidenote = insert_sidenote_local(
+                        conn,
+                        text=note_text,
+                        source="website",
+                        station="appointment-request",
+                    )
+                conn.commit()
+
+            _audit_mutation(
+                "website_appointment_webhook",
+                detail={
+                    "leadId": lead.get("id"),
+                    "duplicate": bool(lead.get("duplicate")),
+                    "hasEmail": bool(lead.get("email")),
+                    "hasPhone": bool(lead.get("phone")),
+                },
+            )
+            return _json_response(
+                {
+                    "ok": True,
+                    "lead": {k: v for k, v in lead.items() if k != "raw_json"},
+                    "sidenote": sidenote,
+                    "halVisible": True,
+                }
+            )
+
+        @app.get("/api/website-leads")
+        def website_leads_list_api():
+            from website_leads_store import list_website_leads
+
+            status = str(bottle.request.params.get("status") or "open").strip()
+            if status.lower() in ("all", "*"):
+                status_filter = None
+            else:
+                status_filter = status
+            limit = int(bottle.request.params.get("limit") or 50)
+            with _local_store()._connect() as conn:
+                items = list_website_leads(conn, status=status_filter, limit=limit)
+            for item in items:
+                item.pop("raw_json", None)
+            return _json_response({"ok": True, "items": items, "count": len(items)})
+
+        @app.post("/api/website-leads/<lead_id>/handled")
+        def website_leads_handled_api(lead_id: str):
+            from website_leads_store import mark_website_lead_handled
+
+            with _local_store()._connect() as conn:
+                result = mark_website_lead_handled(conn, lead_id)
+                conn.commit()
+            if not result.get("ok"):
+                return _json_response(result, status=404)
+            _audit_mutation("website_lead_handled", detail={"leadId": lead_id})
+            return _json_response(result)
 
         @app.get("/api/ocr-exceptions")
         def ocr_exceptions_list_api():
