@@ -930,10 +930,77 @@ def build_weekly_schedule_list(
     )
 
 
+def render_eligibility_card(eligibility: dict[str, Any] | None) -> dict[str, Any]:
+    """Return OM widget JSON for eligibility sub-card."""
+    elig = eligibility if isinstance(eligibility, dict) else {}
+    benefits = elig.get("benefits") if isinstance(elig.get("benefits"), dict) else {}
+    gaps = elig.get("gaps") if isinstance(elig.get("gaps"), list) else []
+    is_demo = bool(elig.get("demo"))
+
+    def fmt_money(val: Any) -> str:
+        if val in (None, "unknown", "", 0, 0.0):
+            return "unknown"
+        try:
+            return f"${float(val):,.2f}"
+        except (TypeError, ValueError):
+            return "unknown"
+
+    rows = [
+        {"label": "Plan", "value": benefits.get("planName") or "—"},
+        {"label": "Payer", "value": benefits.get("payerName") or "—"},
+        {"label": "Deductible Remaining", "value": fmt_money(benefits.get("deductibleRemaining"))},
+        {"label": "Annual Max Remaining", "value": fmt_money(benefits.get("annualMaxRemaining"))},
+        {"label": "Preventive", "value": benefits.get("preventive") or "unknown"},
+        {"label": "Basic", "value": benefits.get("basic") or "unknown"},
+        {"label": "Major", "value": benefits.get("major") or "unknown"},
+    ]
+    limitations = benefits.get("limitations")
+    if isinstance(limitations, str):
+        lim_list = [x.strip() for x in limitations.split(";") if x.strip()][:5]
+    elif isinstance(limitations, list):
+        lim_list = [str(x) for x in limitations[:5]]
+    else:
+        lim_list = []
+
+    return {
+        "widget": "eligibility-card",
+        "title": "Insurance Eligibility",
+        "badge": "DEMO" if is_demo else None,
+        "badgeColor": "orange" if is_demo else None,
+        "warning": f"SoftDent gaps: {', '.join(str(g) for g in gaps)}" if gaps else None,
+        "error": elig.get("error") if not benefits else None,
+        "rows": rows,
+        "limitations": lim_list,
+        "queriedAt": elig.get("queriedAt"),
+        "cacheHit": bool(elig.get("cacheHit")),
+    }
+
+
+def build_eligibility_card_widget(eligibility: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Standalone OM eligibility-card widget."""
+    card = render_eligibility_card(eligibility)
+    has_data = bool(card.get("rows")) and card["rows"][0].get("value") not in (None, "—", "unknown")
+    has_gaps = bool(card.get("warning") or card.get("error"))
+    status = "ok" if has_data or has_gaps else "empty"
+    return _wrap(
+        widget_id="eligibility-card",
+        type_="eligibility-card",
+        title="Insurance Eligibility",
+        page="office-manager",
+        size="m",
+        status=status,
+        data=card,
+        hint="Availity 271 benefits · demo until Standard Plan · empty≠$0",
+        collapse_when_empty=False,
+    )
+
+
 def build_patient_dossier_card(dossier: dict[str, Any] | None = None) -> dict[str, Any]:
     """NICE / SHOULD: OM patient dossier mini or raw dossier card."""
     d = dossier if isinstance(dossier, dict) else {}
     demo = d.get("demographics") if isinstance(d.get("demographics"), dict) else {}
+    elig = d.get("eligibility") if isinstance(d.get("eligibility"), dict) else {}
+    eligibility_card = render_eligibility_card(elig) if elig else None
     mini_ok = d.get("ok") is True or bool(demo) or bool(d.get("patientHash"))
     payload = {
         "patientHash": d.get("patientHash") or demo.get("nameHash") or "——",
@@ -949,6 +1016,8 @@ def build_patient_dossier_card(dossier: dict[str, Any] | None = None) -> dict[st
         "transactions": d.get("transactions") or {},
         "clinicalNotes": d.get("clinicalNotes") or [],
         "treatmentEstimates": d.get("treatmentEstimates") or [],
+        "eligibility": elig,
+        "eligibilityCard": eligibility_card,
         "gaps": d.get("gaps") or [],
         "emptyMessage": d.get("error")
         or "Select a patient from Mon–Thu schedule (click hash) to load dossier.",
@@ -1140,6 +1209,7 @@ def append_office_manager_missing(widgets: list[dict[str, Any]], bundle: dict[st
     widgets.append(build_claims_needing_narrative(bundle))
     widgets.append(build_provider_utilization_trend(util))
     widgets.append(build_patient_dossier_card(None))
+    widgets.append(build_eligibility_card_widget(None))
     widgets.append(build_patient_dossier_mini(None))
     widgets.append(build_active_treatment_plans(None))
     widgets.append(build_claims_review_detail(None))

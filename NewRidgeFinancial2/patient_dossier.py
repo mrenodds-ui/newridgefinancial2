@@ -8,6 +8,7 @@ patient_name (sd_claims has no patient_id). Clinical notes via nr2_clinical_brid
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
@@ -41,6 +42,188 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
     cur = conn.cursor()
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
     return cur.fetchone() is not None
+
+
+def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table})")
+    return {str(row[1]) for row in cur.fetchall()}
+
+
+def _dossier_eligibility_enabled() -> bool:
+    return os.environ.get("DOSSIER_ELIGIBILITY_ENABLED", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+
+
+def _empty_eligibility(*, error: str | None = None) -> dict[str, Any]:
+    return {
+        "queriedAt": datetime.now(timezone.utc).isoformat(),
+        "source": "availity_271",
+        "live": False,
+        "demo": False,
+        "scope": None,
+        "gaps": [],
+        "benefits": None,
+        "error": error,
+        "cacheHit": False,
+    }
+
+
+def _normalize_money_field(val: Any) -> str | float:
+    if val in (None, "", 0, 0.0):
+        return "unknown"
+    return val
+
+
+def _normalize_eligibility_benefits(entry: dict[str, Any]) -> dict[str, Any]:
+    """Map cache/271 entry to dossier benefits; empty money → 'unknown'."""
+    preventive = entry.get("preventive")
+    if preventive in (None, ""):
+        preventive = entry.get("coinsurancePreventive")
+    basic = entry.get("basic")
+    if basic in (None, ""):
+        basic = entry.get("coinsuranceBasic")
+    major = entry.get("major")
+    if major in (None, ""):
+        major = entry.get("coinsuranceMajor")
+
+    limits_raw = entry.get("limitations")
+    if isinstance(limits_raw, list):
+        limitations = [str(x).strip() for x in limits_raw if str(x).strip()][:5]
+    elif isinstance(limits_raw, str) and limits_raw.strip():
+        limitations = [x.strip() for x in limits_raw.split(";") if x.strip()][:5]
+    else:
+        limitations = []
+
+    return {
+        "planName": str(entry.get("planName") or entry.get("planDescription") or "unknown").strip() or "unknown",
+        "payerName": str(entry.get("payerName") or entry.get("payer") or "unknown").strip() or "unknown",
+        "memberIdRedacted": str(entry.get("memberIdRedacted") or "unknown").strip() or "unknown",
+        "deductibleRemaining": _normalize_money_field(entry.get("deductibleRemaining")),
+        "annualMaxRemaining": _normalize_money_field(entry.get("annualMaxRemaining")),
+        "annualMax": _normalize_money_field(entry.get("annualMax")),
+        "preventive": str(preventive) if preventive not in (None, "") else "unknown",
+        "basic": str(basic) if basic not in (None, "") else "unknown",
+        "major": str(major) if major not in (None, "") else "unknown",
+        "limitations": limitations,
+        "planYear": str(entry.get("planYear") or "unknown"),
+        "serviceDate": str(
+            entry.get("serviceDate") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        ),
+    }
+
+
+def _resolve_eligibility_for_patient(
+    conn: sqlite3.Connection | None,
+    patient_id: str,
+    practice_id: str,
+    *,
+    eligibility_overrides: dict[str, Any] | None = None,
+    force_fetch: bool = False,
+) -> dict[str, Any]:
+    """Build eligibility from SoftDent (read-only) + Availity cache; honest gaps, no invention."""
+    if not _dossier_eligibility_enabled():
+        return _empty_eligibility(error="Eligibility disabled (DOSSIER_ELIGIBILITY_ENABLED=0)")
+
+    eligibility: dict[str, Any] = _empty_eligibility()
+    overrides = eligibility_overrides if isinstance(eligibility_overrides, dict) else {}
+
+    member_id = str(overrides.get("memberId") or overrides.get("member_id") or "").strip() or None
+    payer_id = str(overrides.get("payerId") or overrides.get("payer_id") or "").strip() or None
+    payer_name = str(overrides.get("payerName") or overrides.get("payer_name") or "").strip() or None
+    provider_npi = str(
+        overrides.get("providerNpi") or overrides.get("provider_npi") or os.environ.get("NR2_PROVIDER_NPI", "")
+    ).strip() or None
+
+    if conn and not member_id and _table_exists(conn, "sd_patient_insurance"):
+        cols = _column_names(conn, "sd_patient_insurance")
+        select_cols = [c for c in ("member_id", "subscriber_id", "insurance_name", "payer_id") if c in cols]
+        if select_cols:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT {', '.join(select_cols)} FROM sd_patient_insurance WHERE patient_id = ? LIMIT 1",
+                (patient_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                row_d = dict(row)
+                if not member_id:
+                    member_id = (
+                        str(row_d.get("member_id") or row_d.get("subscriber_id") or "").strip() or None
+                    )
+                if not payer_name:
+                    payer_name = str(row_d.get("insurance_name") or "").strip() or None
+                if not payer_id:
+                    payer_id = str(row_d.get("payer_id") or "").strip() or None
+
+    if not provider_npi:
+        provider_npi = os.environ.get("NR2_PROVIDER_NPI", "").strip() or None
+
+    if not member_id:
+        eligibility["gaps"].append("memberId")
+    if not payer_id and not payer_name:
+        eligibility["gaps"].append("payerId")
+    if not provider_npi:
+        eligibility["gaps"].append("providerNPI")
+
+    if eligibility["gaps"]:
+        eligibility["error"] = f"SoftDent missing: {', '.join(eligibility['gaps'])}"
+        return eligibility
+
+    cache_seed = f"{patient_id}:{member_id}:{payer_id or payer_name}:{provider_npi}"
+    cache_key = patient_hash(cache_seed)
+
+    try:
+        from eligibility_cache_store import get_cached_eligibility, store_eligibility_snapshot
+        from clearinghouse_eligibility_adapter import fetch_eligibility_271
+
+        cached = get_cached_eligibility(cache_key)
+        if cached:
+            benefits = _normalize_eligibility_benefits(cached)
+            eligibility["benefits"] = benefits
+            eligibility["demo"] = bool(cached.get("demo"))
+            eligibility["live"] = not eligibility["demo"]
+            eligibility["scope"] = "demo" if eligibility["demo"] else "live"
+            eligibility["cacheHit"] = True
+            return eligibility
+
+        if not force_fetch:
+            eligibility["error"] = (
+                "Eligibility not queried — use HAL fetch_eligibility_271 with member/payer details, "
+                "or pass fetchEligibility=1 with overrides."
+            )
+            return eligibility
+
+        req = {
+            "memberId": member_id,
+            "payerId": payer_id or "",
+            "payerName": payer_name or "",
+            "providerNpi": provider_npi,
+            "vendor": "availity",
+        }
+        result = fetch_eligibility_271(req)
+        if result.get("ok") and result.get("entry"):
+            entry = dict(result["entry"])
+            benefits = _normalize_eligibility_benefits(entry)
+            eligibility["benefits"] = benefits
+            eligibility["demo"] = bool(result.get("demo"))
+            eligibility["live"] = not eligibility["demo"] and not result.get("demo")
+            eligibility["scope"] = "demo" if eligibility["demo"] else "live"
+            store_payload = dict(entry)
+            store_payload.update(benefits)
+            store_payload["demo"] = eligibility["demo"]
+            store_eligibility_snapshot(cache_key, store_payload, ttl_sec=300)
+        else:
+            eligibility["error"] = result.get("message") or result.get("error") or "Eligibility unavailable"
+            eligibility["demo"] = bool(result.get("demo"))
+    except Exception as exc:  # noqa: BLE001
+        eligibility["error"] = f"Eligibility fetch failed: {exc}"
+
+    return eligibility
 
 
 def _open_db() -> tuple[sqlite3.Connection | None, Any]:
@@ -95,6 +278,8 @@ def build_patient_dossier(
     use_cache: bool = True,
     include_clinical: bool = True,
     include_estimates: bool = True,
+    eligibility_overrides: dict[str, Any] | None = None,
+    force_eligibility_fetch: bool = False,
 ) -> dict[str, Any]:
     """Build PHI-safe dossier JSON from local SoftDent extract + clinical bridge.
 
@@ -102,8 +287,10 @@ def build_patient_dossier(
     """
     pid = str(patient_id or "").strip()
     practice = str(practice_id or "").strip()
+    has_elig_overrides = bool(eligibility_overrides)
+    skip_dossier_cache = has_elig_overrides or force_eligibility_fetch
     cache_key = f"{practice}|{pid}"
-    if use_cache and cache_key in _CACHE:
+    if use_cache and not skip_dossier_cache and cache_key in _CACHE:
         ts, cached = _CACHE[cache_key]
         if time.time() - ts < _CACHE_TTL_SEC:
             out = dict(cached)
@@ -122,6 +309,7 @@ def build_patient_dossier(
         "claims": [],
         "clinicalNotes": [],
         "treatmentEstimates": [],
+        "eligibility": _empty_eligibility(),
         "gaps": [],
         "source": "sd_*",
         "readOnly": True,
@@ -136,6 +324,13 @@ def build_patient_dossier(
     dossier["dbPath"] = str(db_path) if db_path else None
     if not conn:
         dossier["gaps"].append("SoftDent analytics DB unavailable — run SoftDent extract.")
+        dossier["eligibility"] = _resolve_eligibility_for_patient(
+            None,
+            pid,
+            practice,
+            eligibility_overrides=eligibility_overrides,
+            force_fetch=force_eligibility_fetch,
+        )
         dossier["ok"] = False
         return dossier
 
@@ -360,6 +555,14 @@ def build_patient_dossier(
             except Exception as exc:  # noqa: BLE001
                 dossier["gaps"].append(f"treatment estimate lookup failed: {exc}")
 
+        dossier["eligibility"] = _resolve_eligibility_for_patient(
+            conn,
+            pid,
+            practice,
+            eligibility_overrides=eligibility_overrides,
+            force_fetch=force_eligibility_fetch,
+        )
+
     finally:
         conn.close()
 
@@ -390,7 +593,7 @@ def build_patient_dossier(
             dossier["gaps"].append(f"clinical context unavailable: {exc}")
 
     dossier["ok"] = True
-    if use_cache:
+    if use_cache and not skip_dossier_cache:
         _CACHE[cache_key] = (time.time(), dict(dossier))
     return dossier
 
@@ -468,6 +671,38 @@ def format_dossier_markdown(dossier: dict[str, Any]) -> str:
     else:
         for n in notes[:5]:
             lines.append(f"- {str(n.get('summary') or '')[:200]}")
+
+    elig = d.get("eligibility") if isinstance(d.get("eligibility"), dict) else {}
+    lines.extend(["", "### Eligibility"])
+    demo_prefix = "[DEMO DATA] " if elig.get("demo") else ""
+    if elig.get("gaps"):
+        lines.append(
+            f"- {demo_prefix}Insurance details incomplete in SoftDent: missing {', '.join(elig['gaps'])}. "
+            "Use HAL fetch_eligibility_271 tool to query manually."
+        )
+    elif elig.get("error") and not elig.get("benefits"):
+        lines.append(f"- {demo_prefix}{elig.get('error')}")
+    elif elig.get("benefits"):
+        ben = elig["benefits"]
+        lines.append(f"- {demo_prefix}Plan: {ben.get('planName') or 'unknown'} · Payer: {ben.get('payerName') or 'unknown'}")
+        ded = ben.get("deductibleRemaining")
+        if ded == "unknown":
+            lines.append(f"- {demo_prefix}Deductible remaining: unknown")
+        else:
+            lines.append(f"- {demo_prefix}Deductible remaining: {ded}")
+        amax = ben.get("annualMaxRemaining")
+        if amax == "unknown":
+            lines.append(f"- {demo_prefix}Annual max remaining: unknown")
+        else:
+            lines.append(f"- {demo_prefix}Annual max remaining: {amax}")
+        lines.append(
+            f"- {demo_prefix}Preventive: {ben.get('preventive') or 'unknown'} · "
+            f"Basic: {ben.get('basic') or 'unknown'} · Major: {ben.get('major') or 'unknown'}"
+        )
+        if elig.get("cacheHit"):
+            lines.append("- (cached eligibility snapshot)")
+    else:
+        lines.append("- No eligibility data on file")
 
     gaps = d.get("gaps") or []
     if gaps:

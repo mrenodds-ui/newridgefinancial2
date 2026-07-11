@@ -1,13 +1,13 @@
 /**
  * NR2-Apex Core — Bridge mosaic, silent refresh, print, session-aware fetch
- * Build: hal-10460 (wave-5 remaining master-map ADD subpages)
+ * Build: hal-10497 (Availity eligibility in patient dossier)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10460";
+  const ASSET_V = "hal-10497";
   const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
   const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
   const PARENT_PAGES = new Set([
@@ -182,6 +182,14 @@
 
   function instrumentSize(spec) {
     const type = String((spec && spec.type) || "kpi");
+    // FIN-002: empty large instruments collapse to strip
+    if (
+      spec &&
+      (spec.collapseWhenEmpty === true || spec.compact === true) &&
+      (spec.status === "empty" || spec.status === "awaiting-migration")
+    ) {
+      return "strip";
+    }
     if (spec && spec.size) return String(spec.size);
     if (type === "hal-chat") return "hal-chat";
     if (type === "chart" || type === "bar" || type === "line") return "l";
@@ -203,13 +211,23 @@
       type === "patient-dossier-card"
     )
       return "l";
+    if (type === "eligibility-card") return "m";
     if (type === "dual-axis-trend" || type === "timeline-lanes" || type === "status-matrix" || type === "radial-gauge" || type === "action-list" || type === "bar-list")
       return "m";
     if (type === "credit-float") return "strip";
     if (type === "bullet" || type === "scrubber") return type === "scrubber" ? "full" : "s";
     if (type === "heatmap" || type === "calculator" || type === "categorize" || type === "tax-library")
       return "xl";
-    if (type === "ebitda-scrubber" || type === "filing-workflow" || type === "claim-shelf") return "full";
+    if (type === "ebitda-scrubber" || type === "ebitda-station" || type === "filing-workflow" || type === "claim-shelf")
+      return "full";
+    if (type === "claims-kanban" || type === "claims-workbench" || type === "claims-header-stats" || type === "daily-huddle")
+      return "full";
+    if (type === "claims-executive-strip" || type === "executive-strip" || type === "financial-command-strip")
+      return "strip";
+    if (type === "claims-aging-exposure") return "xl";
+    if (type === "claims-critical-actions") return "m";
+    if (type === "claims-risk-bars" || type === "claims-era-gauge" || type === "claim-attachments")
+      return type === "claim-attachments" ? "l" : "m";
     if (type === "scenario-manager" || type === "workpaper") return type === "scenario-manager" ? "xl" : "l";
     if (type === "workpaper-scrubber" || type === "claim-detail-card") return "full";
     if (type === "collection-task-list" || type === "huddle-mosaic" || type === "batch-selector") return "full";
@@ -224,7 +242,8 @@
   }
 
   const config = {
-    refreshInterval: 30 * 60 * 1000, // 30 minutes — avoid page flicker from silent widget polls
+    // 0 = no automatic page reload. Sync button / HAL refresh_page still reload.
+    refreshInterval: 0,
     apiBase: "/api/apex",
     halChatEndpoint: "/api/hal/evaluate-query",
     animStagger: 50,
@@ -334,6 +353,9 @@
       const size = instrumentSize(this.spec);
       el.className = `apex-widget apex-inst apex-inst--${size}`;
       el.dataset.widgetId = this.id;
+      if (Array.isArray(this.spec.aliasIds) && this.spec.aliasIds.length) {
+        el.dataset.aliasIds = this.spec.aliasIds.map(String).join(" ");
+      }
       el.style.animationDelay = `${index * config.animStagger}ms`;
       if (this.type === "hal-chat") {
         el.classList.add("apex-widget--hal-chat", "apex-inst--hal-chat");
@@ -498,6 +520,7 @@
       if (this.type === "status" || this.spec.status === "awaiting-migration") {
         const checks = Array.isArray(this.spec.checks) ? this.spec.checks : [];
         const actions = Array.isArray(this.spec.actions) ? this.spec.actions : [];
+        const compact = this.spec.compact === true || this.spec.size === "strip";
         const checkHtml = checks.length
           ? `<ul class="apex-c0-checks">${checks
               .map(
@@ -1321,12 +1344,13 @@
             </article>`
           )
           .join("");
+        const halSaidAttr = this.spec.halSaidAdmin ? ' data-hal-said-admin="1"' : "";
         return `
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
             ${printBtn}
           </header>
-          <div class="apex-payer-lib" data-payer-reference>
+          <div class="apex-payer-lib" data-payer-reference${halSaidAttr}>
             <form class="apex-col-form" data-payer-form>
               <input name="payerName" placeholder="Payer name" required />
               <input name="appealDeadlineDays" placeholder="Appeal days" />
@@ -2237,6 +2261,8 @@
         const gap = data.schemaGap
           ? `<div class="apex-kpi-hint">${this.escape(String(data.schemaGap))}</div>`
           : "";
+        const eligCard = data.eligibilityCard && typeof data.eligibilityCard === "object" ? data.eligibilityCard : null;
+        const eligHtml = eligCard ? this.renderEligibilityCardInner(eligCard) : "";
         return `
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
@@ -2258,9 +2284,29 @@
                    <div>Last visit: ${this.escape(String(data.lastVisit || "unknown"))}</div>
                    <div>Balance: ${this.escape(String(data.accountBalance || "unavailable"))}</div>
                    <div>Notes: ${data.hasClinicalNotes ? "on file" : "none"}</div>
+                   ${eligHtml}
                  </div>`
           }
           ${gap}
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "eligibility-card") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const empty = this.spec.status === "empty" && !data.rows;
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || this.spec.emptyMessage || "No eligibility data"
+                )}</div>`
+              : this.renderEligibilityCardInner(data)
+          }
           <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
         `;
       }
@@ -3282,6 +3328,42 @@
       `;
     }
 
+    renderEligibilityCardInner(w) {
+      const card = w && typeof w === "object" ? w : {};
+      const demoBanner = card.badge
+        ? `<span class="apex-badge apex-badge--${this.escape(String(card.badgeColor || "orange"))}">${this.escape(String(card.badge))}</span>`
+        : "";
+      const gapBanner = card.warning
+        ? `<div class="apex-kpi-hint apex-kpi-hint--warn">${this.escape(String(card.warning))}</div>`
+        : "";
+      const errBanner = card.error
+        ? `<div class="apex-kpi-hint apex-kpi-hint--warn">${this.escape(String(card.error))}</div>`
+        : "";
+      const rows = (card.rows || [])
+        .map(
+          (r) =>
+            `<tr><td>${this.escape(String((r && r.label) || ""))}</td><td>${this.escape(
+              String((r && r.value) || "—")
+            )}</td></tr>`
+        )
+        .join("");
+      const lims = (card.limitations || [])
+        .map((l) => `<li class="apex-kpi-hint">${this.escape(String(l))}</li>`)
+        .join("");
+      return `
+        <div class="apex-eligibility-card">
+          <h4 class="apex-eligibility-title">${this.escape(String(card.title || "Insurance Eligibility"))} ${demoBanner}</h4>
+          ${gapBanner}
+          ${errBanner}
+          <table class="apex-mini-table">${rows}</table>
+          ${lims ? `<ul class="apex-eligibility-limits">${lims}</ul>` : ""}
+          <div class="apex-kpi-hint">Queried: ${this.escape(String(card.queriedAt || "—"))}${
+            card.cacheHit ? " · cached" : ""
+          }</div>
+        </div>
+      `;
+    }
+
     escape(s) {
       return String(s == null ? "" : s)
         .replace(/&/g, "&amp;")
@@ -3529,19 +3611,17 @@
       if (this.type === "tax-library") {
         wireTaxLibrary(this.element);
       }
-      if (this.type === "ebitda-scrubber") {
+      if (this.type === "ebitda-scrubber" || this.type === "ebitda-station") {
         wireEbitdaScrubber(this.element, this.spec);
       }
-      if (this.type === "scenario-manager") {
-        wireScenarioManager(this.element);
+      if (this.type === "ebitda-station") {
+        this.element.querySelectorAll("[data-cite-key]").forEach((btn) => {
+          btn.addEventListener("click", () =>
+            openCitationModal(btn.getAttribute("data-cite-key") || "", btn.textContent || "")
+          );
+        });
       }
-      if (this.type === "filing-workflow") {
-        wireFilingWorkflow(this.element);
-      }
-      if (this.type === "workpaper") {
-        wireWorkpaper(this.element);
-      }
-      if (this.type === "scrubber") {
+      if (this.type === "financial-command-strip" || this.type === "scrubber") {
         this.element.querySelectorAll("[data-period]").forEach((chip) => {
           chip.addEventListener("click", () => {
             this.element.querySelectorAll(".apex-scrub-chip").forEach((c) => c.classList.remove("is-active"));
@@ -3651,6 +3731,9 @@
       if (this.type === "status" || this.spec.rememberForm) {
         wireHalSaidRemember(this.element);
       }
+      if (this.type === "ai-insight") {
+        wireAiInsight(this.element);
+      }
     }
   }
 
@@ -3736,6 +3819,24 @@
       } else {
         parts.push(`Ask: focus this aging shelf, sync imports, or find a claim by ID.`);
       }
+    }
+    if (s.type === "claims-kanban" || s.type === "claims-workbench") {
+      const counts = s.counts || {};
+      parts.push(
+        `workbenchCounts=submitted:${counts.submitted || 0},pendingReview:${counts.pendingReview || 0},eraMatched:${
+          counts.eraMatched || 0
+        },denied:${counts.denied || 0},paid:${counts.paid || 0}`
+      );
+      parts.push(`defaultView=${s.defaultView || "table"} · readOnly=true · drag write-back disabled`);
+      parts.push(`Ask: show table or kanban view, filter high risk, open a claim by ID.`);
+    }
+    if (s.type === "claims-aging-exposure") {
+      const cols = Array.isArray(s.columns) ? s.columns : [];
+      parts.push(
+        "agingExposure=" +
+          cols.map((c) => `${(c && c.bucket) || "?"}:${(c && c.count) || 0}`).join(",")
+      );
+      parts.push(`Ask: focus 30/60/90 day claims to filter the workbench.`);
     }
     if (s.hint) parts.push(`hint=${s.hint}`);
     if (s.message) parts.push(`message=${s.message}`);
@@ -4450,13 +4551,49 @@
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const fd = new FormData(form);
-      const body = {
-        payerName: String(fd.get("payerName") || "").trim(),
-        appealDeadlineDays: String(fd.get("appealDeadlineDays") || "").trim(),
-        contact: String(fd.get("contact") || "").trim(),
-        guidelines: String(fd.get("guidelines") || "").trim(),
-      };
+      const payerName = String(fd.get("payerName") || "").trim();
+      const contact = String(fd.get("contact") || "").trim();
+      const guidelines = String(fd.get("guidelines") || "").trim();
+      // HAL-said admin on office-manager: update payer_reference.json eligibilityNotes
+      const isHalSaid = !!root.querySelector("[data-hal-said-admin]");
       try {
+        if (isHalSaid) {
+          // Resolve payer id via normalize, then patch eligibilityNotes
+          const normRes = await apexFetch(
+            `${config.apiBase}/hal/normalize-carrier?label=${encodeURIComponent(payerName)}`
+          );
+          const norm = await normRes.json().catch(() => ({}));
+          const payerId = norm.canonical_id && norm.matched ? norm.canonical_id : payerName;
+          if (contact) {
+            const res = await apexFetch(`${config.apiBase}/hal/payer-field`, {
+              method: "POST",
+              body: JSON.stringify({
+                payerId,
+                field: "eligibilityNotes",
+                value: contact.startsWith("Eligibility") ? contact : `Eligibility phone ${contact}`,
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.ok === false) {
+              window.alert(data.error || `Payer field update failed (HTTP ${res.status})`);
+              return;
+            }
+          }
+          if (guidelines) {
+            await apexFetch(`${config.apiBase}/hal/payer-field`, {
+              method: "POST",
+              body: JSON.stringify({ payerId, field: "narrativeNotes", value: guidelines }),
+            });
+          }
+          await loadPage("office-manager");
+          return;
+        }
+        const body = {
+          payerName,
+          appealDeadlineDays: String(fd.get("appealDeadlineDays") || "").trim(),
+          contact,
+          guidelines,
+        };
         const res = await apexFetch(`${config.apiBase}/local/payers`, {
           method: "POST",
           body: JSON.stringify(body),
@@ -4573,6 +4710,11 @@
   async function openClaimDrawer(claimId) {
     const id = String(claimId || "").trim();
     if (!id) return;
+    try {
+      sessionStorage.setItem("nr2-apex-focused-claim", id);
+    } catch (_err) {
+      /* ignore */
+    }
     closeClaimDrawer();
     await loadPage(`claims/detail?id=${encodeURIComponent(id)}`);
   }
@@ -4957,6 +5099,17 @@
     });
   }
 
+  function wireAiInsight(root) {
+    if (!root || root.dataset.wiredInsight === "1") return;
+    root.dataset.wiredInsight = "1";
+    root.querySelectorAll("[data-insight-route]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const page = btn.getAttribute("data-insight-route") || "hal";
+        loadPage(page);
+      });
+    });
+  }
+
   function wireHalSaidRemember(root) {
     if (!root || root.dataset.wiredRemember === "1") return;
     const form = root.querySelector("[data-hal-remember-form]");
@@ -4992,6 +5145,11 @@
     if (!id) return;
     const tile = document.querySelector(`[data-claim-id="${CSS.escape ? CSS.escape(id) : id.replace(/"/g, "")}"]`);
     if (tile) {
+      try {
+        sessionStorage.setItem("nr2-apex-focused-claim", id);
+      } catch (_err) {
+        /* ignore */
+      }
       tile.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       tile.classList.add("apex-hal-highlight");
       setTimeout(() => tile.classList.remove("apex-hal-highlight"), 4000);
@@ -5089,6 +5247,9 @@
   function appendHalMessage(logEl, role, text, opts) {
     if (!logEl) return;
     const persist = !(opts && opts.skipPersist);
+    const empty = logEl.querySelector("[data-hal-empty]");
+    if (empty) empty.remove();
+
     const row = document.createElement("div");
     row.className = `apex-hal-chat__msg apex-hal-chat__msg--${role}`;
 
@@ -5147,16 +5308,62 @@
   }
 
   function restoreHalTranscript(logEl) {
-    if (!logEl || !halTranscript.length) return;
-    if (logEl.childElementCount) return;
+    if (!logEl) return;
+    logEl.innerHTML = "";
+    if (!halTranscript.length) {
+      const empty = document.createElement("div");
+      empty.className = "apex-hal-chat__empty";
+      empty.dataset.halEmpty = "1";
+      const title = document.createElement("div");
+      title.className = "apex-hal-chat__empty-title";
+      title.textContent = "Command surface ready";
+      const hint = document.createElement("div");
+      hint.className = "apex-hal-chat__empty-hint";
+      hint.textContent = 'Try: "Sync imports", "Focus claims", or "Explain EBITDA"';
+      empty.appendChild(title);
+      empty.appendChild(hint);
+      logEl.appendChild(empty);
+      return;
+    }
     halTranscript.forEach((entry) => {
       appendHalMessage(logEl, entry.role, entry.text, { skipPersist: true });
     });
   }
 
+  function setHalChatBusyUi(root, busy) {
+    const panel = root && root.querySelector ? root : document;
+    const live = panel.querySelector && panel.querySelector("[data-hal-live]");
+    const indicator = panel.querySelector && panel.querySelector("[data-hal-indicator]");
+    if (live) live.classList.toggle("is-busy", !!busy);
+    if (indicator) {
+      if (busy) indicator.removeAttribute("hidden");
+      else indicator.setAttribute("hidden", "");
+    }
+  }
+
   function finalizeHalPending(pending, reply) {
     const text = String(reply == null ? "" : reply);
-    if (pending) pending.textContent = text;
+    if (pending) {
+      const textEl = pending.querySelector(".apex-hal-chat__msg-text");
+      if (textEl) textEl.textContent = text;
+      else pending.textContent = text;
+      // Refresh copy button target if present
+      const copyBtn = pending.querySelector(".apex-hal-chat__copy");
+      if (copyBtn) {
+        copyBtn.onclick = null;
+        copyBtn.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            copyBtn.textContent = "Copied";
+            setTimeout(() => {
+              copyBtn.textContent = "Copy";
+            }, 2000);
+          } catch (_err) {
+            /* ignore */
+          }
+        });
+      }
+    }
     // Replace the trailing "Thinking…" transcript entry with the real reply.
     for (let i = halTranscript.length - 1; i >= 0; i -= 1) {
       if (halTranscript[i].role === "hal" && halTranscript[i].text === "Thinking…") {
@@ -5166,8 +5373,23 @@
     }
     halTranscript.push({ role: "hal", text });
     if (halTranscript.length > HAL_TRANSCRIPT_MAX) {
-      halTranscript.splice(0,halTranscript.length - HAL_TRANSCRIPT_MAX);
+      halTranscript.splice(0, halTranscript.length - HAL_TRANSCRIPT_MAX);
     }
+  }
+
+  function appendHalReceipt(logEl, actions, results) {
+    if (!logEl) return;
+    const list = Array.isArray(actions) ? actions : [];
+    if (!list.length) return;
+    const res = Array.isArray(results) ? results : [];
+    const summary = list
+      .map((a, i) => {
+        const r = String(res[i] || "");
+        const ok = r && !r.startsWith("fail");
+        return `${ok ? "✓" : "⚠"} ${a && a.type ? a.type : "action"}`;
+      })
+      .join(" · ");
+    appendHalMessage(logEl, "system", `HAL executed: ${summary}`, { skipPersist: true });
   }
 
   async function runHalBoardActions(actions) {
@@ -5224,7 +5446,7 @@
           if (!id) continue;
           // Allow navigate to settle
           await new Promise((r) => setTimeout(r, 80));
-          const el = document.querySelector(`[data-widget-id="${id.replace(/\\/g, "").replace(/"/g, "")}"]`);
+          const el = findWidgetEl(id);
           if (el) {
             el.scrollIntoView({ behavior: "smooth", block: "center" });
             // HAL-driven focus auto-dismisses so the dim overlay cannot trap navigation.
@@ -5233,6 +5455,11 @@
             const ms = Number(action.ms) || 3500;
             setTimeout(() => el.classList.remove("apex-hal-highlight"), ms);
             results.push(`${type}:${id}`);
+          }
+          const bucketAlias = id.match(/^claims-aging-(30|60|90)$/);
+          if (bucketAlias && type === "focus_widget") {
+            const board = findWidgetEl("claims-kanban-board");
+            if (board) applyKanbanFilter(board, `bucket-${bucketAlias[1]}`);
           }
         } else if (type === "set_status_banner") {
           const meta = metaEl();
@@ -5313,15 +5540,61 @@
           results.push(toolRes && toolRes.ok !== false ? `run_tool:${toolId}` : `run_tool_fail:${toolId}`);
         } else if (type === "focus_claims_bucket") {
           const bucket = String(action.bucket || "30");
-          const wid = `claims-aging-${bucket}`;
           await new Promise((r) => setTimeout(r, 80));
-          const el = document.querySelector(`[data-widget-id="${wid}"]`);
+          const el = findWidgetEl("claims-aging-exposure") || findWidgetEl(`claims-aging-${bucket}`);
           if (el) {
             el.scrollIntoView({ behavior: "smooth", block: "center" });
             toggleFocus(el);
             el.classList.add("apex-hal-highlight");
             setTimeout(() => el.classList.remove("apex-hal-highlight"), 4000);
+          }
+          const board = findWidgetEl("claims-kanban-board");
+          if (board) {
+            applyKanbanFilter(board, `bucket-${bucket}`);
             results.push(`focus_bucket:${bucket}`);
+          }
+        } else if (type === "set_claims_view") {
+          await new Promise((r) => setTimeout(r, 80));
+          const board = findWidgetEl("claims-kanban-board");
+          if (board) {
+            board.scrollIntoView({ behavior: "smooth", block: "center" });
+            setClaimsWorkbenchView(board, action.view || "table");
+            board.classList.add("apex-hal-highlight");
+            setTimeout(() => board.classList.remove("apex-hal-highlight"), 3500);
+            results.push(`set_view:${action.view || "table"}`);
+          }
+        } else if (type === "filter_claims_kanban") {
+          await new Promise((r) => setTimeout(r, 100));
+          const board = findWidgetEl("claims-kanban-board");
+          if (board) {
+            board.scrollIntoView({ behavior: "smooth", block: "center" });
+            applyKanbanFilter(board, action.filter || "all");
+            board.classList.add("apex-hal-highlight");
+            setTimeout(() => board.classList.remove("apex-hal-highlight"), 4000);
+            results.push(`filter_kanban:${action.filter || "all"}`);
+          }
+        } else if (type === "narrative_from_focused_claim") {
+          let cid = "";
+          try {
+            cid = sessionStorage.getItem("nr2-apex-focused-claim") || "";
+          } catch (_err) {
+            cid = "";
+          }
+          const focused = document.querySelector(".apex-claim-card.apex-hal-highlight, [data-claim-card].is-focused");
+          if (!cid && focused) cid = focused.getAttribute("data-claim-id") || "";
+          if (cid) {
+            try {
+              sessionStorage.setItem(
+                "nr2-apex-narrative-seed",
+                JSON.stringify({ claimId: cid, voiceCarry: true })
+              );
+            } catch (_err) {
+              /* ignore */
+            }
+            if (currentPage !== "narratives") await loadPage("narratives");
+            results.push(`narrative_carry:${cid}`);
+          } else {
+            results.push("narrative_carry:none");
           }
         }
       } catch (_err) {
@@ -5484,6 +5757,8 @@
               "focus_claim_tile",
               "open_claim_detail",
               "focus_claims_bucket",
+              "filter_claims_kanban",
+              "set_claims_view",
               "narrative_append",
               "narrative_from_focused_claim",
               "run_tool",
@@ -5514,6 +5789,7 @@
       }
     } finally {
       halChatBusy = false;
+      setHalChatBusyUi(chatRoot, false);
       if (window.ApexHal && typeof window.ApexHal.setHeaderStatus === "function") {
         const st = (lastHalStatus && lastHalStatus.status) || "idle";
         window.ApexHal.setHeaderStatus(st, (lastHalStatus && lastHalStatus.statusLabel) || undefined);
@@ -5538,6 +5814,10 @@
       { label: "Focus EBITDA scrubber", query: "Focus the EBITDA scrubber" },
       { label: "Focus A/R", query: "Show me A/R aging flow" },
       { label: "Focus 90-day claims", query: "Focus 90-day claims" },
+      { label: "Claims workbench", query: "Focus claims workbench kanban" },
+      { label: "High-risk claims", query: "Filter claims high risk" },
+      { label: "Import health", query: "Import health status" },
+      { label: "Morning briefing", query: "Morning briefing" },
       { label: "Claims aging status", query: "Claims import status" },
       { label: "Categorize assist", query: "Open categorize suggestions" },
       { label: "Print view", action: "print" },
@@ -5758,7 +6038,21 @@
 
     root.className = "apex-stage apex-mosaic";
     root.dataset.page = currentPage;
-    specs.forEach((spec, idx) => {
+    let orderedSpecs = specs;
+    try {
+      if (window.Nr2DashboardLayout && typeof window.Nr2DashboardLayout.orderSpecs === "function") {
+        const local =
+          typeof window.Nr2DashboardLayout.loadLocal === "function"
+            ? window.Nr2DashboardLayout.loadLocal(currentPage)
+            : null;
+        if (local) orderedSpecs = window.Nr2DashboardLayout.orderSpecs(specs, local);
+        window.Nr2DashboardLayout.markStage(root, currentPage);
+        if (typeof window.Nr2DashboardLayout.fetchLayout === "function") {
+          window.Nr2DashboardLayout.fetchLayout(currentPage).catch(() => {});
+        }
+      }
+    } catch (_) {}
+    orderedSpecs.forEach((spec, idx) => {
       const widget = new Widget(spec);
       widgets.set(widget.id, widget);
       const el = widget.render(idx);
@@ -5847,18 +6141,24 @@
         const p = btn.getAttribute("data-sub-parent") || parent;
         const s = btn.getAttribute("data-sub") || "";
         const q = s === "detail" && currentQuery.id ? { id: currentQuery.id } : {};
-        loadPage(formatApexHash(p, s || null, q));
+        const target = formatApexHash(p, s || null, q);
+        // Re-clicking the active subnav must not wipe HAL chat / mosaic.
+        if (target === routeKey(currentPage, currentSub, currentQuery)) return;
+        loadPage(target);
       });
     });
   }
 
-  function setPageTitle(pageId, sub) {
+  function setPageTitle(pageId, sub, opts) {
+    const silent = Boolean(opts && opts.silent);
     const el = document.getElementById("apex-page-title");
     if (el) {
       const base = PAGE_TITLES[pageId] || pageId || "Apex";
       const subLabel = sub ? SUBPAGE_TITLES[sub] || sub : "";
-      el.textContent = subLabel ? `${base} · ${subLabel}` : base;
-      if (window.ApexMotion && typeof window.ApexMotion.triggerGlitch === "function") {
+      const next = subLabel ? `${base} · ${subLabel}` : base;
+      if (el.textContent !== next) el.textContent = next;
+      // Never glitch/flash on silent polls — that looked like a full page refresh.
+      if (!silent && window.ApexMotion && typeof window.ApexMotion.triggerGlitch === "function") {
         window.ApexMotion.triggerGlitch(el);
       }
     }
@@ -5898,8 +6198,8 @@
     // Never wipe HAL chat while a reply is in flight (auto-refresh / nav race).
     if (halChatBusy && currentPage === "hal") silent = true;
     setHash(currentPage, currentSub, currentQuery);
-    setPageTitle(currentPage, currentSub);
-    renderSubnav(currentPage, currentSub);
+    setPageTitle(currentPage, currentSub, { silent });
+    if (!silent) renderSubnav(currentPage, currentSub);
     const root = stage();
     if (!root) return;
 
@@ -5948,11 +6248,48 @@
       root.dataset.page = currentPage;
       if (currentSub) root.dataset.sub = currentSub;
       else delete root.dataset.sub;
-      root.querySelectorAll(".apex-inst, .apex-widget").forEach((el) => {
-        // Keep HAL chat interactive during silent refresh (it is not re-patched).
-        if (el.classList.contains("apex-widget--hal-chat")) return;
-        el.classList.add("is-updating");
-      });
+      // Do not add is-updating (breathe animation) on silent polls — that flickered the mosaic.
+    }
+
+    const idb = typeof window !== "undefined" ? window.Nr2IndexedDb : null;
+    let paintedFromCache = false;
+
+    function applyWidgetPayload(payload, { fromCache }) {
+      const list = (payload && payload.widgets) || [];
+      if (silent && widgets.size && patchWidgets(list)) {
+        /* in-place — no flash */
+      } else if (silent && currentPage === "hal" && !currentSub) {
+        // Never full-remount HAL on silent refresh — that wiped chat history on hover/timer races.
+        softRenderHalMain(list);
+      } else if (silent) {
+        // Silent poll must never wipe the mosaic (instBoot looked like a full page refresh).
+        // Keep current widgets; Sync / navigation still remount intentionally.
+      } else {
+        renderWidgets(list);
+        if (currentPage === "hal" && !currentSub) {
+          restoreHalTranscript(document.querySelector("[data-hal-messages]"));
+        }
+        root.classList.add("is-entering");
+        setTimeout(() => root.classList.remove("is-entering"), 400);
+      }
+      const metaPayload = Object.assign({}, payload || {});
+      if (fromCache) {
+        metaPayload.sourceNote = (metaPayload.sourceNote ? metaPayload.sourceNote + " · " : "") + "IndexedDB cache";
+      }
+      setMeta(metaPayload, { silent });
+    }
+
+    // Stale-while-revalidate: paint IndexedDB cache immediately on cold navigations.
+    if (!silent && idb && idb.loadWidgets) {
+      try {
+        const cached = await idb.loadWidgets(currentPage, currentSub, currentQuery);
+        if (cached && cached.payload && Array.isArray(cached.payload.widgets)) {
+          applyWidgetPayload(cached.payload, { fromCache: true });
+          paintedFromCache = true;
+        }
+      } catch (_err) {
+        /* cache optional */
+      }
     }
 
     try {
@@ -5966,23 +6303,9 @@
       const res = await apexFetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
-      const list = payload.widgets || [];
-      if (silent && widgets.size && patchWidgets(list)) {
-        /* in-place — no flash */
-      } else if (silent && currentPage === "hal" && !currentSub) {
-        // Never full-remount HAL on silent refresh — that wiped chat history on hover/timer races.
-        if (!softRenderHalMain(list)) {
-          root.querySelectorAll(".apex-inst, .apex-widget").forEach((el) => el.classList.remove("is-updating"));
-        }
-      } else {
-        renderWidgets(list);
-        if (currentPage === "hal" && !currentSub) {
-          restoreHalTranscript(document.querySelector("[data-hal-messages]"));
-        }
-        if (!silent) {
-          root.classList.add("is-entering");
-          setTimeout(() => root.classList.remove("is-entering"), 400);
-        }
+      applyWidgetPayload(payload, { fromCache: false });
+      if (idb && idb.cacheWidgets) {
+        idb.cacheWidgets(currentPage, currentSub, currentQuery, payload).catch(() => {});
       }
       startAutoRefresh();
     } catch (err) {
@@ -6011,10 +6334,15 @@
   }
 
   function startAutoRefresh() {
-    if (refreshTimer) clearInterval(refreshTimer);
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+    const ms = Number(config.refreshInterval) || 0;
+    if (ms <= 0) return;
     refreshTimer = setInterval(
       () => loadPage(formatApexHash(currentPage, currentSub, currentQuery), { silent: true }),
-      config.refreshInterval
+      ms
     );
   }
 
