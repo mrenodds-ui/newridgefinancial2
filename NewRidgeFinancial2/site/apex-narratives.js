@@ -1,6 +1,6 @@
 /**
  * NR2-Apex Interactive Narratives — starship document bridge
- * Build: hal-10360 — voice-to-narrative + payer-specific appeal templates
+ * Build: hal-10380 — center-box draft apply + seed/structure merge fix
  */
 (function () {
   "use strict";
@@ -30,6 +30,7 @@
   let sections = DEFAULT_SECTIONS.map((s) => ({ ...s }));
   let activeId = "intro";
   let lastSuggestion = "";
+  let lastStatusNote = "";
   let sources = { clinicalNotes: [], claims: [], insurance: [], lastImport: "" };
   let selectedNotes = new Set();
   let selectedClaimId = "";
@@ -40,6 +41,10 @@
   let selectedTemplateId = "";
   let voiceListening = false;
   let voiceRecognition = null;
+  let consentChecked = false;
+  let denialReasonDraft = "";
+  let narrTypeDraft = "appeal";
+  let activeBridge = false;
 
   function escape(s) {
     return String(s == null ? "" : s)
@@ -168,7 +173,9 @@
         <button type="button" class="apex-btn${voiceListening ? " is-live" : ""}" id="btn-voice-narr" title="Voice to narrative (browser mic)">
           ${voiceListening ? "● Listening…" : "🎙 Voice"}
         </button>
-        <div class="narr-composer__status" id="composer-status">Draft · ${escape(sec.title)}</div>
+        <div class="narr-composer__status" id="composer-status">${escape(
+          lastStatusNote || `Draft · ${sec.title}`
+        )}</div>
       </div>
       <div id="narr-locked-chips">${contextChipsHtml()}</div>
       <textarea class="narr-composer__editor" id="narr-editor" placeholder="Compose clinical narrative for ${escape(
@@ -199,10 +206,14 @@
       <div class="narr-context__section">
         <h4>Insurance Narrative (HAL)</h4>
         <select class="narr-ins-type" id="ins-narr-type">
-          <option value="appeal">Appeal Letter</option>
-          <option value="medical-necessity">Medical Necessity</option>
-          <option value="attachment-cover">Attachment Cover Letter</option>
-          <option value="prior-auth">Prior Authorization</option>
+          <option value="appeal" ${narrTypeDraft === "appeal" ? "selected" : ""}>Appeal Letter</option>
+          <option value="medical-necessity" ${
+            narrTypeDraft === "medical-necessity" ? "selected" : ""
+          }>Medical Necessity</option>
+          <option value="attachment-cover" ${
+            narrTypeDraft === "attachment-cover" ? "selected" : ""
+          }>Attachment Cover Letter</option>
+          <option value="prior-auth" ${narrTypeDraft === "prior-auth" ? "selected" : ""}>Prior Authorization</option>
         </select>
         <select class="narr-ins-type" id="ins-payer-template" title="Payer-specific appeal template">
           <option value="">Payer template (auto from selected payer)…</option>
@@ -215,9 +226,11 @@
             )
             .join("")}
         </select>
-        <input class="narr-ins-type" id="ins-denial-reason" type="text" placeholder="Denial reason (appeals)" />
+        <input class="narr-ins-type" id="ins-denial-reason" type="text" placeholder="Denial reason (appeals)" value="${escape(
+          denialReasonDraft
+        )}" />
         <label class="narr-consent">
-          <input type="checkbox" id="ins-consent" />
+          <input type="checkbox" id="ins-consent" ${consentChecked ? "checked" : ""} />
           <span>I confirm this narrative is based solely on imported clinical data and accurate to the best of my knowledge.</span>
         </label>
         <button type="button" class="apex-btn apex-btn--primary" id="btn-ins-generate">Generate Payer Draft</button>
@@ -226,8 +239,14 @@
       <div class="narr-context__section">
         <h4>HAL Suggestions</h4>
         <div class="narr-suggestion" id="narr-hal-suggestion">
-          <p class="narr-suggestion__text" id="narr-suggestion-text">Select text or generate an insurance draft.</p>
-          <button type="button" class="apex-btn apex-btn--small" id="btn-apply-suggestion" disabled>Apply</button>
+          <p class="narr-suggestion__text" id="narr-suggestion-text">${escape(
+            lastSuggestion
+              ? lastSuggestion.slice(0, 400) + (lastSuggestion.length > 400 ? "…" : "")
+              : "Select text or generate an insurance draft."
+          )}</p>
+          <button type="button" class="apex-btn apex-btn--small" id="btn-apply-suggestion" ${
+            lastSuggestion ? "" : "disabled"
+          }>Apply to center</button>
         </div>
       </div>
       <div class="narr-context__section">
@@ -254,19 +273,57 @@
     if (editor && sec) sec.content = editor.value;
   }
 
+  function snapshotFormState() {
+    const consent = document.getElementById("ins-consent");
+    const typeEl = document.getElementById("ins-narr-type");
+    const denialEl = document.getElementById("ins-denial-reason");
+    const tpl = document.getElementById("ins-payer-template");
+    if (consent) consentChecked = !!consent.checked;
+    if (typeEl) narrTypeDraft = String(typeEl.value || "appeal");
+    if (denialEl) denialReasonDraft = String(denialEl.value || "");
+    if (tpl) selectedTemplateId = String(tpl.value || selectedTemplateId || "");
+  }
+
+  function putDraftInCenter(text, sectionId, statusNote) {
+    const body = String(text || "");
+    if (!body.trim()) return false;
+    persistEditor();
+    const sid = String(sectionId || activeId || "insurance");
+    if (!sections.some((s) => s.id === sid)) {
+      sections.push({ id: sid, title: sid, content: "" });
+    }
+    const sec = sections.find((s) => s.id === sid);
+    if (!sec) return false;
+    sec.content = body;
+    activeId = sid;
+    lastSuggestion = body;
+    lastStatusNote = statusNote || `Draft · ${sec.title} · in center · human review required`;
+    remount();
+    const editor = document.getElementById("narr-editor");
+    if (editor) {
+      editor.focus();
+      editor.scrollTop = 0;
+    }
+    return true;
+  }
+
   function setActive(id) {
     persistEditor();
+    snapshotFormState();
     if (!sections.some((s) => s.id === id)) return;
     activeId = id;
+    lastStatusNote = `Draft · ${(sections.find((s) => s.id === id) || {}).title || id}`;
     remount();
   }
 
   function remount() {
     const stage = document.getElementById("apex-stage");
     if (!stage) return;
+    snapshotFormState();
     stage.className = "apex-stage apex-mosaic";
     stage.innerHTML = shellHtml();
     wire(stage);
+    activeBridge = true;
   }
 
   function applySeed() {
@@ -289,7 +346,18 @@
             "\n\nGenerate one appeal per claim with consent, or compose a combined packet manually.\n";
         }
       }
-      if (seed.claimId) activeId = "insurance";
+      if (seed.claimId) {
+        activeId = "insurance";
+        const sec = sections.find((s) => s.id === "insurance");
+        if (sec && !String(sec.content || "").trim()) {
+          sec.content =
+            `Insurance narrative draft for claim ${seed.claimId}` +
+            (seed.patientName ? ` · ${seed.patientName}` : "") +
+            (seed.payer ? ` · ${seed.payer}` : "") +
+            (seed.date ? ` · DOS ${seed.date}` : "") +
+            `\n\nLock context, check consent, then Generate Payer Draft — the letter will appear in this center box.\n`;
+        }
+      }
     } catch (_err) {
       /* ignore */
     }
@@ -301,11 +369,26 @@
       if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data.sections) && data.sections.length) {
-        sections = data.sections.map((s, i) => ({
-          id: String(s.id || `sec-${i}`),
-          title: String(s.title || `Section ${i + 1}`),
-          content: s.content === "[PLACEHOLDER]" ? "" : String(s.content || ""),
-        }));
+        const prev = {};
+        sections.forEach((s) => {
+          if (s && s.id) prev[s.id] = s;
+        });
+        sections = data.sections.map((s, i) => {
+          const id = String(s.id || `sec-${i}`);
+          const incoming = s.content === "[PLACEHOLDER]" ? "" : String(s.content || "");
+          const kept = prev[id] && String(prev[id].content || "").trim() ? String(prev[id].content) : "";
+          return {
+            id,
+            title: String(s.title || `Section ${i + 1}`),
+            content: incoming || kept || "",
+          };
+        });
+        // Keep any local-only sections (e.g. user-added) that API omitted
+        Object.keys(prev).forEach((id) => {
+          if (!sections.some((s) => s.id === id) && String(prev[id].content || "").trim()) {
+            sections.push(prev[id]);
+          }
+        });
         if (!sections.some((s) => s.id === activeId)) activeId = sections[0].id;
       }
       if (data.sources && typeof data.sources === "object") {
@@ -324,6 +407,7 @@
   }
 
   async function lockContext() {
+    snapshotFormState();
     try {
       const res = await fetchFn("/api/apex/narratives/context", {
         method: "POST",
@@ -335,12 +419,11 @@
       });
       const data = await res.json().catch(() => ({}));
       lockedContextId = String((data && data.contextId) || "");
+      lastStatusNote = lockedContextId
+        ? `Context locked · ${lockedContextId}`
+        : `Context lock failed`;
       const status = document.getElementById("composer-status");
-      if (status) {
-        status.textContent = lockedContextId
-          ? `Context locked · ${lockedContextId}`
-          : `Context lock failed`;
-      }
+      if (status) status.textContent = lastStatusNote;
       const chips = document.getElementById("narr-locked-chips");
       if (chips) chips.innerHTML = contextChipsHtml();
     } catch (err) {
@@ -349,18 +432,32 @@
   }
 
   async function generateInsurance() {
+    snapshotFormState();
     const consent = document.getElementById("ins-consent");
     const typeEl = document.getElementById("ins-narr-type");
     const denialEl = document.getElementById("ins-denial-reason");
     const out = document.getElementById("narr-suggestion-text");
     const applyBtn = document.getElementById("btn-apply-suggestion");
+    const status = document.getElementById("composer-status");
     if (!consent || !consent.checked) {
       if (out) out.textContent = "Consent checkbox required before generating an insurance narrative.";
       return;
     }
+    if (!selectedClaimId && selectedNotes.size === 0 && !lockedContextId) {
+      if (out) {
+        out.textContent =
+          "Select a claim and/or clinical notes, then Lock Context before generating.";
+      }
+      return;
+    }
     if (out) out.textContent = "HAL composing payer draft from locked import context…";
+    if (status) status.textContent = "Generating payer draft…";
     if (applyBtn) applyBtn.disabled = true;
     try {
+      // Auto-lock if operator selected sources but skipped Lock
+      if (!lockedContextId && (selectedClaimId || selectedNotes.size)) {
+        await lockContext();
+      }
       const res = await fetchFn("/api/apex/hal/narrative-generate", {
         method: "POST",
         body: JSON.stringify({
@@ -368,8 +465,8 @@
           clinicalNoteIds: Array.from(selectedNotes),
           claimId: selectedClaimId || null,
           payerId: selectedPayerId || null,
-          type: (typeEl && typeEl.value) || "appeal",
-          denialReason: (denialEl && denialEl.value) || "",
+          type: (typeEl && typeEl.value) || narrTypeDraft || "appeal",
+          denialReason: (denialEl && denialEl.value) || denialReasonDraft || "",
           templateId: selectedTemplateId || (document.getElementById("ins-payer-template") || {}).value || null,
           operatorConsent: true,
         }),
@@ -377,18 +474,22 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.ok === false) {
         lastSuggestion = "";
-        if (out) out.textContent = data.error || "Insurance narrative generation failed.";
+        const errMsg = data.error || `Insurance narrative generation failed (HTTP ${res.status}).`;
+        if (out) out.textContent = errMsg;
+        if (status) status.textContent = "Generate failed";
         return;
       }
-      lastSuggestion = String(data.draftText || "");
-      if (out) out.textContent = lastSuggestion.slice(0, 400) + (lastSuggestion.length > 400 ? "…" : "");
-      if (applyBtn) applyBtn.disabled = !lastSuggestion;
-      // Prefer insurance section
-      if (sections.some((s) => s.id === "insurance")) {
-        activeId = "insurance";
+      const draft = String(data.draftText || data.suggestion || data.text || "");
+      if (!draft.trim()) {
+        if (out) out.textContent = "HAL returned an empty draft.";
+        if (status) status.textContent = "Empty draft";
+        return;
       }
+      // Center box is the source of truth — put full narrative there immediately
+      putDraftInCenter(draft, "insurance", "Insurance draft · center box · human review required");
     } catch (err) {
       if (out) out.textContent = `HAL generate failed: ${String((err && err.message) || err)}`;
+      if (status) status.textContent = "Generate failed";
     }
   }
 
@@ -398,6 +499,7 @@
     const applyBtn = document.getElementById("btn-apply-suggestion");
     if (!editor) return;
     persistEditor();
+    snapshotFormState();
     const selected = editor.value.substring(editor.selectionStart, editor.selectionEnd);
     const text = (selected || editor.value || "").trim();
     if (!text) {
@@ -416,28 +518,38 @@
         }),
       });
       const data = await res.json().catch(() => ({}));
-      lastSuggestion = String((data && (data.suggestion || data.text || data.reply || data.draftText)) || "");
-      if (!lastSuggestion) lastSuggestion = "HAL returned no rewrite for that selection.";
-      if (out) out.textContent = lastSuggestion;
-      if (applyBtn) applyBtn.disabled = !lastSuggestion;
+      const draft = String((data && (data.suggestion || data.text || data.reply || data.draftText)) || "");
+      if (!draft) {
+        if (out) out.textContent = "HAL returned no rewrite for that selection.";
+        return;
+      }
+      lastSuggestion = draft;
+      // Selection replace stays in center editor; full-doc rewrite replaces center content
+      if (selected && editor.selectionStart !== editor.selectionEnd) {
+        editor.setRangeText(draft, editor.selectionStart, editor.selectionEnd, "end");
+        persistEditor();
+        if (out) out.textContent = draft.slice(0, 400) + (draft.length > 400 ? "…" : "");
+        if (applyBtn) applyBtn.disabled = false;
+        lastStatusNote = `Draft · ${activeSection().title} · HAL rewrite applied in center`;
+        const status = document.getElementById("composer-status");
+        if (status) status.textContent = lastStatusNote;
+      } else {
+        putDraftInCenter(draft, activeId, `Draft · ${activeSection().title} · HAL rewrite · center`);
+      }
     } catch (err) {
       if (out) out.textContent = `HAL rewrite failed: ${String((err && err.message) || err)}`;
     }
   }
 
   function applySuggestion() {
-    const editor = document.getElementById("narr-editor");
-    if (!editor || !lastSuggestion) return;
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    if (start !== end) {
-      editor.setRangeText(lastSuggestion, start, end, "end");
-    } else {
-      editor.value = lastSuggestion;
-    }
-    persistEditor();
-    const status = document.getElementById("composer-status");
-    if (status) status.textContent = `Draft · ${activeSection().title} · HAL applied · human review required`;
+    if (!lastSuggestion) return;
+    putDraftInCenter(
+      lastSuggestion,
+      sections.some((s) => s.id === "insurance") && /insurance|appeal|payer|dear /i.test(lastSuggestion)
+        ? "insurance"
+        : activeId,
+      `Draft · center · HAL applied · human review required`
+    );
   }
 
   function insertTemplate() {
@@ -557,6 +669,7 @@
     });
     document.getElementById("btn-add-section")?.addEventListener("click", () => {
       persistEditor();
+      snapshotFormState();
       const id = `sec-${Date.now()}`;
       sections.push({ id, title: `Section ${sections.length + 1}`, content: "" });
       activeId = id;
@@ -564,6 +677,8 @@
     });
     root.querySelectorAll("[data-sel-note]").forEach((el) => {
       el.addEventListener("change", () => {
+        snapshotFormState();
+        persistEditor();
         const id = el.value;
         if (el.checked) selectedNotes.add(id);
         else selectedNotes.delete(id);
@@ -573,6 +688,8 @@
     root.querySelectorAll("[data-sel-claim]").forEach((el) => {
       el.addEventListener("change", () => {
         if (el.checked) {
+          snapshotFormState();
+          persistEditor();
           selectedClaimId = el.value;
           const claim = (sources.claims || []).find((c) => c.claimId === selectedClaimId);
           if (claim && claim.payer && !selectedPayerId) {
@@ -585,6 +702,8 @@
     root.querySelectorAll("[data-sel-payer]").forEach((el) => {
       el.addEventListener("change", () => {
         if (el.checked) {
+          snapshotFormState();
+          persistEditor();
           selectedPayerId = el.value;
           remount();
         }
@@ -596,12 +715,22 @@
     document.getElementById("btn-apply-suggestion")?.addEventListener("click", applySuggestion);
     document.getElementById("btn-insert-template")?.addEventListener("click", insertTemplate);
     document.getElementById("btn-voice-narr")?.addEventListener("click", toggleVoiceDictation);
+    document.getElementById("ins-consent")?.addEventListener("change", (ev) => {
+      consentChecked = !!(ev.target && ev.target.checked);
+    });
+    document.getElementById("ins-narr-type")?.addEventListener("change", (ev) => {
+      narrTypeDraft = String(ev.target.value || "appeal");
+    });
+    document.getElementById("ins-denial-reason")?.addEventListener("input", (ev) => {
+      denialReasonDraft = String(ev.target.value || "");
+    });
     document.getElementById("ins-payer-template")?.addEventListener("change", (ev) => {
       selectedTemplateId = String(ev.target.value || "");
     });
     document.getElementById("btn-generate-packet")?.addEventListener("click", generatePacket);
     document.getElementById("btn-save-draft")?.addEventListener("click", () => {
       persistEditor();
+      snapshotFormState();
       try {
         sessionStorage.setItem(
           "nr2-apex-narrative-draft",
@@ -617,8 +746,9 @@
       } catch (_err) {
         /* ignore */
       }
+      lastStatusNote = `Saved · ${activeSection().title}`;
       const status = document.getElementById("composer-status");
-      if (status) status.textContent = `Saved · ${activeSection().title}`;
+      if (status) status.textContent = lastStatusNote;
     });
     document.getElementById("narr-editor")?.addEventListener("input", persistEditor);
   }
@@ -643,9 +773,11 @@
 
   async function mount(stageEl) {
     if (!stageEl) return;
+    activeBridge = true;
+    // Structure first, then restore/seed so drafts are not wiped
+    await loadStructure();
     restoreDraft();
     applySeed();
-    await loadStructure();
     stageEl.className = "apex-stage apex-mosaic";
     stageEl.innerHTML = shellHtml();
     wire(stageEl);
@@ -654,7 +786,7 @@
   }
 
   function isActive() {
-    return !!document.getElementById("narratives-bridge");
+    return !!activeBridge && !!document.getElementById("narratives-bridge");
   }
 
   window.ApexNarratives = {

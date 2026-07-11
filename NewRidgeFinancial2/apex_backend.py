@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10400"
+BUILD_ID = "hal-10420"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1790,6 +1790,12 @@ def _financial_widgets_from_reports(
     widgets.append(build_ins_patient_split(bundle))
     widgets.append(build_ebitda_waterfall(bundle))
     widgets.append(build_ebitda_scrubber(bundle))
+    try:
+        from apex_program_improve_pack import build_ebitda_trend_widget
+
+        widgets.append(build_ebitda_trend_widget(bundle))
+    except Exception:
+        pass
     # Threshold alert on A/R KPI when 90+ share > 20%
     for w in widgets:
         if isinstance(w, dict) and w.get("id") == "ar-outstanding":
@@ -2446,6 +2452,12 @@ def _ar_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[st
     widgets[0:0] = _visual_boost_ar(reports, bundle)
     widgets.append(build_ar_waterfall(reports, bundle))
     widgets.append(build_ar_aging_outlook(reports, bundle))
+    try:
+        from apex_program_improve_pack import build_ar_forecast_widget
+
+        widgets.append(build_ar_forecast_widget(reports, bundle))
+    except Exception:
+        pass
     widgets.append(build_collection_bullet(bundle))
     _apply_threshold_alerts(widgets, reports)
     return widgets
@@ -2538,82 +2550,110 @@ def _claims_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dic
         summary["deniedCount"] = ct.get("deniedCount")
         summary["agingPast30"] = ct.get("deniedAgingPast30Days")
         summary["followUpHint"] = ct.get("followUpHint") or summary.get("followUpHint")
+        summary["totalClaims"] = total
 
-    widgets.append(
-        _count_kpi(
-            "claims-total",
-            "Total Claims",
-            total,
-            hint="SoftDent claims import." if total is not None else "Claims import not available.",
-        )
-    )
-    widgets.append(
-        _count_kpi(
-            "claims-open",
-            "Open / Pending Claims",
-            summary.get("openCount") if summary.get("available") else None,
-            hint="Statuses matching open/pending/review from SoftDent ClaimStatus."
-            if summary.get("available")
-            else "Import SoftDent claims to count open items.",
-        )
-    )
-    widgets.append(
-        _count_kpi(
-            "claims-denied",
-            "Denied Claims",
-            summary.get("deniedCount") if summary.get("available") else None,
-            hint="Denied/rejected ClaimStatus counts — not invented."
-            if summary.get("available")
-            else "Claims import not available.",
-        )
-    )
-    widgets.append(
-        _count_kpi(
-            "claims-aging-count",
-            "Aging Past 30 Days",
-            summary.get("agingPast30") if summary.get("available") else None,
-            hint="Rows aged ≥30 days from SoftDent Age/Days or ServiceDate — not invented."
-            if summary.get("available")
-            else "Aging days appear when claim export includes Age/Days or ServiceDate.",
-        )
-    )
-
-    by_status = summary.get("byStatus") if isinstance(summary.get("byStatus"), dict) else {}
-    if by_status:
-        top = sorted(by_status.items(), key=lambda kv: kv[1], reverse=True)[:4]
-        status_msg = ", ".join(f"{k}: {v}" for k, v in top)
-    else:
-        status_msg = "No status breakdown"
-    widgets.append(
-        _status_widget(
-            "claims-follow-up",
-            "Claims Follow-up",
-            message=status_msg,
-            hint=str(summary.get("followUpHint") or ct.get("followUpHint") or "Review open and denied claims."),
-            status="ok" if summary.get("available") else "empty",
-        )
-    )
-
-    widgets[0:0] = _visual_boost_claims(bundle, reports)
-    widgets.append(build_ins_patient_split(bundle))
-
-    # Moonshot C1–C2: 30 / 60 / 90 day claim tile shelves
+    # Professional layout (hal-10420): Executive RCM Console primary design
+    # Import strip → KPI strip → aging+critical → table/kanban workbench → risk+ERA
     try:
-        from apex_claims_narratives_pack import apply_aging_threshold_alerts, shelf_widget
+        from apex_claims_narratives_pack import (
+            apply_aging_threshold_alerts,
+            build_status_columns,
+            claims_aging_exposure_widget,
+            claims_critical_actions_widget,
+            claims_era_gauge_widget,
+            claims_executive_strip_widget,
+            claims_risk_analytics_widget,
+            kanban_widget,
+        )
+        from apex_program_improve_pack import (
+            apply_era_to_kanban_columns,
+            attachment_counts,
+            import_health_widget,
+        )
 
+        claim_rows = _section_rows(bundle, "softdent", "claims") or _section_rows(
+            bundle, "softdent", "claimStatus"
+        )
+        kanban_payload = build_status_columns(claim_rows if isinstance(claim_rows, list) else [])
+        cols = kanban_payload.get("columns") if isinstance(kanban_payload.get("columns"), dict) else {}
+        kanban_payload["columns"] = apply_era_to_kanban_columns(cols)
+        kanban_payload["counts"] = {
+            k: len(v) if isinstance(v, list) else 0 for k, v in (kanban_payload.get("columns") or {}).items()
+        }
+        att_counts = attachment_counts()
+        for _col, cards in (kanban_payload.get("columns") or {}).items():
+            if not isinstance(cards, list):
+                continue
+            for card in cards:
+                if not isinstance(card, dict):
+                    continue
+                cid = str(card.get("claimId") or "")
+                n = int(att_counts.get(cid) or 0)
+                if n and not card.get("attachments"):
+                    card["attachments"] = {"current": n, "required": None}
+                elif n and isinstance(card.get("attachments"), dict):
+                    card["attachments"]["current"] = max(int(card["attachments"].get("current") or 0), n)
+
+        kmeta = kanban_payload.get("meta") if isinstance(kanban_payload.get("meta"), dict) else {}
         buckets = summary.get("agingBuckets") if isinstance(summary.get("agingBuckets"), dict) else {}
-        meta = summary.get("agingMeta") if isinstance(summary.get("agingMeta"), dict) else {}
-        missing_age = bool(meta.get("missingAgeField"))
-        for bucket in ("30", "60", "90"):
-            tiles = buckets.get(bucket) if isinstance(buckets.get(bucket), list) else []
-            widgets.append(shelf_widget(bucket, tiles, missing_age=missing_age and not tiles))
+        aging_meta = summary.get("agingMeta") if isinstance(summary.get("agingMeta"), dict) else {}
+        missing_age = bool(aging_meta.get("missingAgeField"))
+
+        health = import_health_widget(bundle)
+        health["size"] = "strip"
+        health["label"] = "Import Health"
+        health["compact"] = True
+        widgets.append(health)
+        widgets.append(claims_executive_strip_widget(summary, kmeta))
+        widgets.append(
+            claims_aging_exposure_widget(
+                {"buckets": buckets or {}, "counts": summary.get("agingCounts") or {}},
+                missing_age=missing_age,
+            )
+        )
+        widgets.append(claims_critical_actions_widget(kanban_payload))
+        widgets.append(kanban_widget(kanban_payload))
+        widgets.append(
+            claims_risk_analytics_widget(kmeta, available=bool(kanban_payload.get("available")))
+        )
+        widgets.append(claims_era_gauge_widget(kmeta, available=bool(kanban_payload.get("available"))))
         apply_aging_threshold_alerts(
             widgets,
             {"counts": summary.get("agingCounts") or {}},
         )
     except Exception:
-        pass
+        # Fallback: legacy KPI mosaic if pack import fails
+        widgets.append(
+            _count_kpi(
+                "claims-total",
+                "Total Claims",
+                total,
+                hint="SoftDent claims import." if total is not None else "Claims import not available.",
+            )
+        )
+        widgets.append(
+            _count_kpi(
+                "claims-open",
+                "Open / Pending Claims",
+                summary.get("openCount") if summary.get("available") else None,
+                hint="Statuses matching open/pending/review from SoftDent ClaimStatus."
+                if summary.get("available")
+                else "Import SoftDent claims to count open items.",
+            )
+        )
+        widgets.append(
+            _count_kpi(
+                "claims-denied",
+                "Denied Claims",
+                summary.get("deniedCount") if summary.get("available") else None,
+                hint="Denied/rejected ClaimStatus counts — not invented."
+                if summary.get("available")
+                else "Claims import not available.",
+            )
+        )
 
+    # Below-fold analytics (not part of primary above-fold console)
+    widgets.append(build_ins_patient_split(bundle))
     _apply_threshold_alerts(widgets, reports, claims_summary=summary)
     return widgets
 
@@ -2787,6 +2827,12 @@ def _documents_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[
         )
 
     widgets.append(build_tax_library_widget())
+    try:
+        from apex_program_improve_pack import claim_attachments_widget
+
+        widgets.append(claim_attachments_widget())
+    except Exception:
+        pass
     return widgets
 
 
@@ -3009,6 +3055,13 @@ def _office_manager_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> 
     widgets.append(build_payer_donut(bundle))
     widgets.append(build_ins_patient_split(bundle))
     widgets.insert(0, build_import_freshness(bundle))
+    try:
+        from apex_program_improve_pack import build_daily_huddle_widget, import_health_widget
+
+        widgets.insert(0, import_health_widget(bundle))
+        widgets.insert(0, build_daily_huddle_widget(reports, bundle))
+    except Exception:
+        pass
     return widgets
 
 
@@ -3199,6 +3252,15 @@ def _widget_has_data(w: dict[str, Any]) -> bool:
     if wtype == "claim-shelf":
         tiles = w.get("tiles") if isinstance(w.get("tiles"), list) else []
         return bool(tiles)
+    if wtype == "claims-kanban":
+        columns = w.get("columns") if isinstance(w.get("columns"), dict) else {}
+        return any(isinstance(v, list) and v for v in columns.values())
+    if wtype == "claims-header-stats":
+        stats = w.get("stats") if isinstance(w.get("stats"), list) else []
+        return any(isinstance(s, dict) and s.get("value") is not None for s in stats)
+    if wtype == "claims-risk-bars":
+        bars = w.get("bars") if isinstance(w.get("bars"), list) else []
+        return any(isinstance(b, dict) and int(b.get("value") or 0) > 0 for b in bars)
     if wtype == "kpi":
         return w.get("value") is not None and w.get("value") != ""
     if wtype in {"chart", "bar", "line"}:
@@ -3785,14 +3847,24 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(30[- ]?day claims?|claims? (aged )?30)\b", "claims-aging-30", "claims"),
         (r"\b(60[- ]?day claims?|claims? (aged )?60)\b", "claims-aging-60", "claims"),
         (r"\b(90[- ]?day claims?|claims? (aged )?90|aging over 90)\b", "claims-aging-90", "claims"),
-        (r"\b(claims? aging|aging (tiles|shelves|claims))\b", "claims-aging-30", "claims"),
+        (r"\b(claims? aging|aging (tiles|shelves|claims|exposure|matrix))\b", "claims-aging-exposure", "claims"),
+        (r"\b(claims? (workbench|kanban|table)|kanban board|status (board|columns))\b", "claims-kanban-board", "claims"),
+        (r"\b(critical actions?|action queue)\b", "claims-critical-actions", "claims"),
+        (r"\b(executive strip|claims? (kpi|command) strip)\b", "claims-executive-strip", "claims"),
+        (r"\b(aging risk|risk (bars|analytics))\b", "claims-risk-analytics", "claims"),
+        (r"\b(pipeline stats|claims? (header )?stats|pending dollars)\b", "claims-header-stats", "claims"),
+        (r"\b(import health|health monitor|stale imports?)\b", "import-health-monitor", None),
+        (r"\b(daily huddle|morning (brief|huddle|briefing))\b", "om-daily-huddle", "office-manager"),
+        (r"\b(ebitda trend|ebitda chart)\b", "ebitda-trend", "financial"),
+        (r"\b(a/?r forecast|aging forecast)\b", "ar-aging-forecast", "ar"),
+        (r"\b(claim attachments?|attachment bridge)\b", "claim-attachments-bridge", "documents"),
     )
     if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
         re.search(pat, q) for pat, _wid, _pg in focus_rules
     ):
         for pat, wid, pg in focus_rules:
             if re.search(pat, q):
-                if pg != page and not any(a.get("type") == "navigate" for a in actions):
+                if pg and pg != page and not any(a.get("type") == "navigate" for a in actions):
                     actions.append({"type": "navigate", "page": pg})
                     page = pg
                 actions.append({"type": "focus_widget", "widgetId": wid})
@@ -3937,6 +4009,96 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         notes.append(f"Focusing claim tile `{cid}` from SoftDent import (no invented fields).")
         handled = True
 
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?high[- ]?risk\b|\bhigh[- ]?risk claims?\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "high-risk"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to high aging-risk cards (import-backed Age/Days + denied).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?unmatched\b|\bunmatched claims?\b|\bera unmatched\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "unmatched"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to unmatched / non-ERA cards (import-backed only).")
+        handled = True
+
+    if re.search(r"\b(filter|show)\s+(claims?\s+)?missing attachments?\b|\bmissing attachments?\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "missing-attachments"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Filtering Claims Workbench to cards with missing attachments when that field is on the import.")
+        handled = True
+
+    if re.search(r"\b(show|switch to|use)\s+(claims?\s+)?table(\s+view)?\b|\bclaims? table view\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "set_claims_view", "view": "table"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Switching Claims Workbench to dense table view (SoftDent read-only).")
+        handled = True
+
+    if re.search(r"\b(show|switch to|use)\s+(claims?\s+)?kanban(\s+view)?\b|\bclaims? kanban view\b", q):
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "set_claims_view", "view": "kanban"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Switching Claims Workbench to kanban columns (SoftDent read-only).")
+        handled = True
+
+    if re.search(r"\b(focus|show)\s+(claims?\s+)?workbench\b|\bclaims? workbench\b", q) and not handled:
+        if page != "claims" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "claims"})
+            page = "claims"
+        actions.append({"type": "filter_claims_kanban", "filter": "all"})
+        actions.append({"type": "focus_widget", "widgetId": "claims-kanban-board"})
+        notes.append("Focusing Claims Workbench (table default · SoftDent read-only).")
+        handled = True
+
+    if re.search(r"\b(import health|health monitor|stale imports?)\b", q):
+        from apex_program_improve_pack import assess_import_health
+
+        _reports, bundle, _err = _load_reports_and_bundle()
+        health = assess_import_health(bundle)
+        alerts = health.get("alerts") if isinstance(health.get("alerts"), list) else []
+        msg = alerts[0]["message"] if alerts else "Imports healthy"
+        actions.append(
+            {
+                "type": "set_status_banner",
+                "message": str(msg)[:120],
+                "hint": (alerts[0].get("hint") if alerts else "Proactive monitor clear") or "",
+                "tone": "warn" if health.get("tone") == "warn" else "ok",
+            }
+        )
+        actions.append({"type": "focus_widget", "widgetId": "import-health-monitor"})
+        if not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": page if page in APEX_PAGES else "office-manager"})
+        notes.append(f"Import health: {msg}")
+        handled = True
+
+    if re.search(r"\b(morning (brief|briefing|huddle)|daily huddle)\b", q):
+        if page != "office-manager" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "office-manager"})
+            page = "office-manager"
+        actions.append({"type": "focus_widget", "widgetId": "om-daily-huddle"})
+        notes.append("Opening Daily Huddle priorities (import-backed).")
+        handled = True
+
+    if re.search(r"\b(draft appeal|generate narrative|appeal)\b.*\b(this|that|current|focused)\s+claim\b|\bfor (this|that) claim\b", q):
+        actions.append({"type": "narrative_from_focused_claim"})
+        if page != "narratives" and not any(a.get("type") == "navigate" for a in actions):
+            actions.append({"type": "navigate", "page": "narratives"})
+        notes.append("Carrying focused claim context into Narratives (voice context carry).")
+        handled = True
+
     if re.search(r"\b(claims? import status|aging tiles? status)\b", q):
         _reports, bundle, _err = _load_reports_and_bundle()
         summary = _claims_summary_from_bundle(bundle)
@@ -3974,8 +4136,19 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         handled = True
 
     # --- Widget data census (current page, named page, or all pages) ---
+    # Runtime mosaic census — not governed memory. Memory holds payer/policy hints only;
+    # widget inventory/health always comes from build_*_widget_census.
     wants_all_pages = bool(
-        re.search(r"\b(all pages|every page|whole (app|program|bridge)|program.?wide|across (all )?pages)\b", q)
+        re.search(
+            r"\b("
+            r"all pages|every page|whole (app|program|bridge)|program.?wide|across (all )?pages|"
+            r"(see|know|show|list|find|view|check|inspect)\s+(me\s+)?(all|every|the)\s+widgets?|"
+            r"all (the )?widgets?|"
+            r"every widget|"
+            r"widgets? (across|in) (the )?(app|program|bridge|office)"
+            r")\b",
+            q,
+        )
     )
     page_in_query = None
     for pid in APEX_PAGES:
@@ -3995,7 +4168,15 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
                 page_in_query = pid
                 break
     wants_inventory = bool(
-        re.search(r"\b(what|which|list)\s+widgets\b|\bwidget(s)?\s+(on|for|list|inventory|map)\b|\bwidgets on\b", q)
+        re.search(
+            r"\b("
+            r"(what|which|list|show|see|know)\s+(all\s+)?(the\s+)?widgets?\b|"
+            r"widget(s)?\s+(on|for|list|inventory|map|catalog)\b|"
+            r"widgets on\b|"
+            r"can you see (all |the )?widgets?"
+            r")\b",
+            q,
+        )
     )
     wants_census = bool(
         re.search(
@@ -4003,7 +4184,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
             r"which widgets (are )?(empty|populated|showing|have data)|"
             r"do(es)? (the )?widgets? (show|have|display) data|"
             r"widget (health|census|status|data)|"
-            r"are (the )?widgets? empty|"
+            r"are (all |the )?widgets? (empty|healthy|populated|showing)|"
             r"empty widgets|"
             r"what('s| is) (empty|missing) on (this|the|all)\s*(page|pages)?"
             r")\b",
@@ -4493,6 +4674,25 @@ def apex_claims_aging_payload() -> dict[str, Any]:
     }
 
 
+def apex_claims_kanban_payload() -> dict[str, Any]:
+    _reports, bundle, errors = _load_reports_and_bundle()
+    rows = _section_rows(bundle, "softdent", "claims") or _section_rows(bundle, "softdent", "claimStatus")
+    from apex_claims_narratives_pack import build_status_columns
+
+    payload = build_status_columns(rows if isinstance(rows, list) else [])
+    return {
+        "ok": True,
+        "columns": payload.get("columns") or {},
+        "counts": payload.get("counts") or {},
+        "meta": payload.get("meta") or {},
+        "totalClaims": payload.get("totalClaims") or 0,
+        "available": bool(payload.get("available")),
+        "errors": errors[:3] if errors else [],
+        "buildId": BUILD_ID,
+        "refreshedAt": _utc_now(),
+    }
+
+
 def apex_claim_detail(claim_id: str) -> dict[str, Any]:
     _reports, bundle, _errors = _load_reports_and_bundle()
     rows = _section_rows(bundle, "softdent", "claims") or _section_rows(bundle, "softdent", "claimStatus")
@@ -4725,6 +4925,133 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buckets": {}}, status=500)
 
+    @app.get("/api/apex/claims-kanban")
+    def apex_claims_kanban_api():
+        try:
+            return json_response_fn(apex_claims_kanban_payload())
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "columns": {}}, status=500)
+
+    @app.get("/api/apex/claims/actions")
+    def apex_claim_actions_list():
+        try:
+            import bottle
+            from apex_program_improve_pack import list_claim_actions
+
+            cid = str(bottle.request.query.get("claimId") or "").strip() or None
+            return json_response_fn(
+                {"ok": True, "entries": list_claim_actions(cid), "buildId": BUILD_ID}
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "entries": []}, status=500)
+
+    @app.post("/api/apex/claims/actions")
+    def apex_claim_actions_post():
+        try:
+            import bottle
+            from apex_program_improve_pack import record_claim_action
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            result = record_claim_action(payload)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/claims/era-ingest")
+    def apex_era_ingest_api():
+        try:
+            import bottle
+            from apex_program_improve_pack import ingest_era_835
+
+            upload = bottle.request.files.get("file") if bottle.request.files else None
+            text = ""
+            filename = None
+            if upload is not None:
+                filename = str(getattr(upload, "filename", None) or "era.835")
+                text = upload.file.read().decode("utf-8", errors="replace")
+            else:
+                raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                try:
+                    payload = json.loads(raw or "{}")
+                except Exception:
+                    payload = {"text": raw}
+                text = str(payload.get("text") or payload.get("content") or "")
+                filename = payload.get("filename")
+            _reports, bundle, _err = _load_reports_and_bundle()
+            rows = _section_rows(bundle, "softdent", "claims") or _section_rows(
+                bundle, "softdent", "claimStatus"
+            )
+            result = ingest_era_835(text, rows if isinstance(rows, list) else [], filename=filename)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.get("/api/apex/claims/attachments")
+    def apex_claim_attachments_list():
+        try:
+            import bottle
+            from apex_program_improve_pack import list_claim_attachments
+
+            cid = str(bottle.request.query.get("claimId") or "").strip() or None
+            return json_response_fn(
+                {"ok": True, "items": list_claim_attachments(cid), "buildId": BUILD_ID}
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "items": []}, status=500)
+
+    @app.post("/api/apex/claims/attachments")
+    def apex_claim_attachments_upload():
+        try:
+            import bottle
+            from apex_program_improve_pack import save_claim_attachment
+
+            upload = bottle.request.files.get("file")
+            claim_id = str(bottle.request.forms.get("claimId") or "").strip()
+            note = str(bottle.request.forms.get("note") or "").strip() or None
+            if upload is None:
+                return json_response_fn({"ok": False, "error": "file required"}, status=400)
+            raw = upload.file.read()
+            result = save_claim_attachment(
+                claim_id=claim_id,
+                filename=str(getattr(upload, "filename", None) or "attachment.bin"),
+                raw=raw,
+                note=note,
+            )
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.get("/api/apex/import-health")
+    def apex_import_health_api():
+        try:
+            from apex_program_improve_pack import assess_import_health
+
+            _reports, bundle, _err = _load_reports_and_bundle()
+            result = assess_import_health(bundle)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
+    @app.post("/api/apex/narratives/batch-seed")
+    def apex_narratives_batch_seed():
+        try:
+            import bottle
+            from apex_program_improve_pack import batch_narrative_seed
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            ids = payload.get("claimIds") if isinstance(payload.get("claimIds"), list) else []
+            result = batch_narrative_seed(ids, payer=str(payload.get("payer") or "") or None)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc)}, status=500)
+
     @app.get("/api/apex/widget-census/<page_id>")
     def apex_widget_census_api(page_id: str):
         try:
@@ -4741,7 +5068,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc)}, status=500)
 
-@app.get("/api/apex/treatment-planning/status")
+    @app.get("/api/apex/treatment-planning/status")
     def apex_treatment_planning_status_api():
         try:
             from softdent_treatment_planning import treatment_planning_status
@@ -4771,7 +5098,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc)}, status=500)
 
-        @app.get("/api/apex/export-playbook")
+    @app.get("/api/apex/export-playbook")
     def apex_export_playbook_api():
         try:
             return json_response_fn({"ok": True, "playbook": build_export_playbook(), "buildId": BUILD_ID})
