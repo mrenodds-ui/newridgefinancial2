@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-WATCH_EXTS = {".csv", ".xlsx", ".xls", ".json"}
+WATCH_EXTS = {".csv", ".xlsx", ".xls", ".json", ".835", ".edi", ".txt"}
 
 
 def _utc_now() -> str:

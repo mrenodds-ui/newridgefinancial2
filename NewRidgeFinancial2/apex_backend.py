@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10482"
+BUILD_ID = "hal-10483"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -2257,6 +2257,12 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
         widgets.extend(aging_schedule_widgets(bundle))
     except Exception:
         pass
+    try:
+        from apex_era835_pack import era835_widget
+
+        widgets.append(era835_widget(bundle))
+    except Exception:
+        pass
 
     return widgets
 
@@ -3956,6 +3962,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(net profit|qb net profit)\b", "qb-net-profit-gap", "quickbooks"),
         (r"\b(production vs payroll|payroll.?to.?production)\b", "production-vs-payroll", "financial"),
         (r"\b(deep audit|monthly (practice )?health audit|quarter forecast)\b", "deep-audit-status", "financial"),
+        (r"\b(era\s*835|remittance|era ingest)\b", "era835-ingest-gap", "softdent"),
     )
     if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
         re.search(pat, q) for pat, _wid, _pg in focus_rules
@@ -5247,6 +5254,63 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
                 200
                 if result.get("ok")
                 or result.get("reason") in {"orchestrator_disabled", "deep_audit_disabled"}
+                else 400
+            )
+            return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/era835-status")
+    def apex_era835_status():
+        try:
+            from apex_era835_pack import era835_status
+
+            result = era835_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/era835-payments")
+    def apex_era835_payments():
+        try:
+            from apex_era835_pack import list_era835_payments
+
+            rows = list_era835_payments(limit=50)
+            return json_response_fn(
+                {"ok": True, "phase": "U1", "rows": rows, "buildId": BUILD_ID}
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/era835-ingest")
+    def apex_era835_ingest():
+        """Phase U1 — parse ERA 835 EDI/CSV into payer aggregates (no PHI)."""
+        try:
+            import bottle
+            from apex_era835_pack import ingest_era835_to_unified
+
+            upload = bottle.request.files.get("file") if bottle.request.files else None
+            text = ""
+            filename = None
+            if upload is not None:
+                filename = str(getattr(upload, "filename", None) or "era.835")
+                text = upload.file.read().decode("utf-8", errors="replace")
+            else:
+                raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+                try:
+                    payload = json.loads(raw or "{}")
+                except Exception:
+                    payload = {"text": raw}
+                text = str(payload.get("text") or payload.get("content") or "")
+                filename = payload.get("filename")
+            result = ingest_era835_to_unified(content=text, filename=filename)
+            result["buildId"] = BUILD_ID
+            status = (
+                200
+                if result.get("ok")
+                or result.get("reason") == "era835_disabled"
+                or result.get("gap") == "ERA835_PENDING"
                 else 400
             )
             return json_response_fn(result, status=status)

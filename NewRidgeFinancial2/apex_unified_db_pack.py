@@ -130,6 +130,21 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_era_agg_period ON softdent_era_aggregates(period);
 
+        CREATE TABLE IF NOT EXISTS era_835_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period TEXT NOT NULL,
+            payer_name TEXT,
+            procedure_code TEXT,
+            total_paid REAL,
+            claim_count INTEGER,
+            adjustment_reasons TEXT,
+            source_file TEXT,
+            source TEXT,
+            ingested_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_era835_period ON era_835_payments(period);
+        CREATE INDEX IF NOT EXISTS idx_era835_payer ON era_835_payments(payer_name);
+
         CREATE TABLE IF NOT EXISTS softdent_production (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             period TEXT NOT NULL,

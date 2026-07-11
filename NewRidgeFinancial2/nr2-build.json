@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10482",
-  "assetVersion": "hal-10482",
-  "schemaVersion": "hal-10482",
-  "notes": "hal-10482: Moonshot U0 deep audit & forecast pack (30B monthly health audit \u2192 SSE).",
-  "builtAt": "2026-07-11T18:32:00.000Z"
+  "BUILD_ID": "hal-10483",
+  "assetVersion": "hal-10483",
+  "schemaVersion": "hal-10483",
+  "notes": "hal-10483: Moonshot U1 ERA 835 payer/proc aggregates (no PHI, no SoftDent write-back).",
+  "builtAt": "2026-07-11T18:35:09.000Z"
 }
