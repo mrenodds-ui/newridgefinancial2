@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10485"
+BUILD_ID = "hal-10486"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1849,6 +1849,12 @@ def _financial_widgets_from_reports(
         widgets.append(quarantine_widget(bundle))
     except Exception:
         pass
+    try:
+        from apex_dashboard_layout_pack import layout_widget
+
+        widgets.append(layout_widget(bundle))
+    except Exception:
+        pass
 
     widgets[0:0] = _visual_boost_financial(reports, bundle)
     widgets.insert(0, build_period_scrubber(bundle, page="financial"))
@@ -3328,8 +3334,22 @@ def build_apex_widgets(page_id: str) -> dict[str, Any]:
     if errors:
         source_note += f" (partial: {'; '.join(errors)})"
 
-    return {
-        "page": pid,
+    # Phase U3 — reorder widgets by dashboard layout schema (parent page only)
+    if not sub_key:
+        try:
+            from apex_dashboard_layout_pack import order_widget_specs
+
+            widgets = order_widget_specs(widgets, page=pid)
+            source_note += " +U3 layout"
+        except Exception:
+            pass
+
+    page_label = f"{pid}/{sub_key}" if sub_key else pid
+    payload = {
+        "page": page_label,
+        "parent": pid,
+        "sub": sub_key,
+        "claimId": cid,
         "refreshedAt": reports.get("generatedAt") or bundle.get("loadedAt") or _utc_now(),
         "buildId": BUILD_ID,
         "widgets": widgets,
@@ -3977,6 +3997,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(era\s*835|remittance|era ingest)\b", "era835-ingest-gap", "softdent"),
         (r"\b(reconcil|variance alert|production vs payroll variance)\b", "reconciliation-status", "financial"),
         (r"\b(import quarantine|quarantined import|poisoned (file|export))\b", "import-quarantine-status", "financial"),
+        (r"\b(dashboard layout|mosaic layout|widget order)\b", "dashboard-layout-status", "financial"),
     )
     if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
         re.search(pat, q) for pat, _wid, _pg in focus_rules
@@ -5404,6 +5425,50 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             payload = json.loads(raw or "{}")
             name = str(payload.get("name") or payload.get("file") or "")
             result = release_quarantine(name)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/dashboard-layout")
+    def apex_dashboard_layout_get():
+        try:
+            import bottle
+            from apex_dashboard_layout_pack import get_layout
+
+            page = str(bottle.request.query.get("page") or "financial")
+            result = get_layout(page)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/dashboard-layout")
+    def apex_dashboard_layout_save():
+        try:
+            import bottle
+            from apex_dashboard_layout_pack import save_layout
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            page = payload.get("page")
+            layout = payload.get("layout") if isinstance(payload.get("layout"), dict) else payload
+            result = save_layout(layout, page=str(page) if page else None)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/dashboard-layout-reset")
+    def apex_dashboard_layout_reset():
+        try:
+            import bottle
+            from apex_dashboard_layout_pack import reset_layout
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            page = str(payload.get("page") or "financial")
+            result = reset_layout(page)
             result["buildId"] = BUILD_ID
             return json_response_fn(result, status=200 if result.get("ok") else 400)
         except Exception as exc:  # noqa: BLE001

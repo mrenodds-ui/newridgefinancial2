@@ -112,7 +112,7 @@ class TWaveMoonshotTests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10485")
+        self.assertEqual(BUILD_ID, "hal-10486")
 
     def test_t5_orchestrator_default_on(self):
         prev = os.environ.pop("NR2_AI_ORCHESTRATOR", None)

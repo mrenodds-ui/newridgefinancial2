@@ -666,6 +666,56 @@ body.apex-bridge {
   min-height: calc(100vh - var(--ticker-height) - 56px);
 }
 
+/* U3 — denser organized flow; keeps existing tokens / starship-bridge */
+.apex-mosaic--u3 {
+  grid-auto-flow: dense;
+}
+.apex-mosaic--u3[data-layout-phase="U3"] {
+  /* subtle cue only — no theme rewrite */
+  --mosaic-gap: calc(var(--mosaic-gap, 12px) * 0.92);
+}
+
+/* Financial: pack strips/charts/KPIs to the top with a compact row unit */
+#apex-stage.apex-mosaic[data-page="financial"] {
+  --mosaic-row: 96px;
+  --mosaic-col: 260px;
+  --mosaic-gap: 8px;
+  padding: 10px 16px 20px;
+  align-content: start;
+  grid-auto-flow: row dense;
+}
+
+#apex-stage.apex-mosaic[data-page="financial"] .apex-inst--s {
+  grid-column: span 1;
+  grid-row: span 2;
+}
+#apex-stage.apex-mosaic[data-page="financial"] .apex-inst--m {
+  grid-column: span 1;
+  grid-row: span 4;
+}
+#apex-stage.apex-mosaic[data-page="financial"] .apex-inst--l {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+#apex-stage.apex-mosaic[data-page="financial"] .apex-inst--xl {
+  grid-column: span 2;
+  grid-row: span 4;
+}
+#apex-stage.apex-mosaic[data-page="financial"] .apex-inst--full {
+  grid-column: 1 / -1;
+  grid-row: span 5;
+  min-height: 360px;
+}
+#apex-stage.apex-mosaic[data-page="financial"] .apex-inst--strip {
+  grid-column: 1 / -1;
+  grid-row: span 1;
+  max-height: none;
+  min-height: 0;
+  height: auto;
+  padding: 6px 12px;
+  overflow: hidden;
+}
+
 /* Instruments */
 .apex-inst,
 .apex-widget.apex-inst {

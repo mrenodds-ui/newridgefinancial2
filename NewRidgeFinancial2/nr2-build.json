@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10485",
-  "assetVersion": "hal-10485",
-  "schemaVersion": "hal-10485",
-  "notes": "hal-10485: Moonshot U2b import quarantine + admin alerts on persistent failure.",
-  "builtAt": "2026-07-11T18:39:40.000Z"
+  "BUILD_ID": "hal-10486",
+  "assetVersion": "hal-10486",
+  "schemaVersion": "hal-10486",
+  "notes": "hal-10486: Moonshot U3 dashboard layout schema + mosaic ordering (starship-bridge).",
+  "builtAt": "2026-07-11T18:42:02.000Z"
 }
