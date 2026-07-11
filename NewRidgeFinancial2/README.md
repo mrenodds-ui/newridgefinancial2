@@ -97,13 +97,15 @@ HAL's top priority is to monitor the program, place correct import data into the
 
 ## Local HAL models (GPU)
 
-Workstation default (**R9700 32 GB**): GPU-pinned `hal-chat:8b` + `hal-escalate:30b` via Ollama on `127.0.0.1:11434`.
+Workstation default (**R9700 32 GB**, 2026-07-11): single GPU-pinned **`hal-local:24b`** (Q4_K_M) via Ollama on `127.0.0.1:11434`. Orchestrator lane ids (`chat8b`, `escalate30b`, …) still exist but all resolve to that one model. Prior 8B/30B tags stay on disk for rollback / future external-GPU 8B.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Apply-HAL-GPU-Performance.ps1
+powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Start-HAL-Ollama-Local.ps1
 ```
 
-Config: `site/data/hal-models.json` (`gpuPinnedModels`). Benchmark/router: repo-root `local-llm-benchmark/ollama_smart_router.py`.
+Config: `site/data/hal-models.json` (`gpuPinnedModels`, `singleGpuLayout`).  
+Detail: `docs/HAL_LOCAL_24B_SINGLE_GPU_2026-07-11.md` · architecture overview: repo-root `ARCHITECTURE.md`.
 
 ## Tests
 

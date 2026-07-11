@@ -1,21 +1,26 @@
 # Local Quantized AI (AMD Radeon AI PRO R9700 32GB)
 
-> **Current workstation layout (2026-07-08):** GPU-pinned `hal-chat:8b` + `qwen3:30b` via Ollama on port 11434.
-> Install/refresh: `NewRidgeFinancial2/model-automation/Install-HAL-GPU-Chat-Escalate-Lanes.ps1`
-> Benchmark/router script: `local-llm-benchmark/ollama_smart_router.py`
+> **Current workstation layout (2026-07-11):** single GPU-pinned `hal-local:24b` (`mistral-small3.1:24b` **Q4_K_M**, `num_ctx` 8192) via Ollama on `127.0.0.1:11434`.
+> `OLLAMA_MAX_LOADED_MODELS=1` · loopback-only · Intel iGPU disabled (`OLLAMA_IGPU_ENABLE=0`).
+> Install/refresh: `NewRidgeFinancial2/model-automation/Apply-HAL-GPU-Performance.ps1`
+> Loopback serve: `NewRidgeFinancial2/model-automation/Start-HAL-Ollama-Local.ps1`
+> Detail / tests / rollback: `NewRidgeFinancial2/docs/HAL_LOCAL_24B_SINGLE_GPU_2026-07-11.md`
+> Architecture overview: repo-root `ARCHITECTURE.md`
 
-This repo routes **frontend-facing** HAL interactions through the **8B chat lane** and **30B escalation lane** on a single Ollama instance. The browser never loads models directly; the NR2 site calls HAL APIs / loopback Ollama on `127.0.0.1:11434`.
+NR2 routes HAL through **one** local 24B model. Lane keys (`chat8b`, `reason21b`, `escalate30b`, `coder32b`) are preserved for policy/routing but all map to `hal-local:24b`. The browser never loads models; the site calls loopback Ollama / HAL APIs.
+
+**Evolution:** Replaced the prior dual pin (`hal-chat:8b` + `hal-escalate:30b`) to avoid concurrent dual-load and VRAM thrashing on the internal 32 GB card. 8B/30B/coder files remain on disk (not auto-routed). **Future:** external ~12 GB GPU may host a separate 8B while 24B stays on the R9700.
 
 ## Runtime selection
 
 | Check | Result on this workstation |
 | --- | --- |
-| GPU | AMD Radeon AI PRO R9700 · 32 GB VRAM |
-| ROCm (`rocminfo`, `rocm-smi`) | Via Ollama bundle (Windows) |
-| Preferred stack | **Ollama + ROCm** (integrated on Windows build) |
-| Pinned models | `hal-chat:8b` (~5 GB) + `qwen3:30b` (~18 GB) |
-| On-demand | `mistral-small3.1:24b-fast`, `hal-helper:14b` |
-| Fallback | **llama.cpp** server with Vulkan (`AI_RUNTIME=llama_cpp`) |
+| GPU | AMD Radeon AI PRO R9700 · 32 GB VRAM · HIP/ROCm index 0 |
+| Preferred stack | **Ollama + ROCm** (Windows bundle) |
+| Pinned model | `hal-local:24b` (~15 GB resident @ 8K, 100% GPU target) |
+| Max loaded | **1** |
+| On disk (not auto-routed) | `hal-chat:8b`, `hal-escalate:30b`, `qwen2.5-coder:32b`, helpers |
+| Fallback | **llama.cpp** server with Vulkan (`AI_RUNTIME=llama_cpp`) when Ollama unavailable |
 
 ROCm is not assumed on Windows for custom tooling. Do not add CUDA-only tooling. This repo targets AMD Radeon on Windows with **Ollama**; use **llama.cpp + Vulkan** when Ollama is unavailable.
 
