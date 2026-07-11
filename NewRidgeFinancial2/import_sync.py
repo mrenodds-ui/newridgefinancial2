@@ -49,7 +49,16 @@ QB_SDK_SUMMARY = SOFTDENT_FINANCIAL_EXPORTS / "quickbooks_diagnostics" / "quickb
 BRIDGE_AGGREGATE_JSON = NEW_RIDGE_BRIDGE_EXPORTS / "softdent_bridge_latest.json"
 
 SAMPLE_PROVIDER_MARKERS = frozenset({"dr. adams", "dr. lee", "hygiene team"})
-SAMPLE_PATIENT_MARKERS = frozenset({"john doe", "maria santos"})
+SAMPLE_PATIENT_MARKERS = frozenset(
+    {
+        "john doe",
+        "jane doe",
+        "maria santos",
+        "test patient",
+        "sample patient",
+    }
+)
+SAMPLE_CLAIM_ID_MARKERS = frozenset({"clm-001", "claim-001", "sample-001", "demo-001"})
 
 
 def _env_path(name: str, default: Path | None = None) -> Path | None:
@@ -205,8 +214,20 @@ def _is_sample_dashboard(rows: list[dict[str, Any]]) -> bool:
 
 
 def _is_sample_claims(rows: list[dict[str, Any]]) -> bool:
+    """True for known demo/stub claims that must not block live daysheet/ODBC exports."""
+    if not rows:
+        return False
     patients = {str(row.get("PatientName") or row.get("patient") or "").strip().lower() for row in rows}
-    return bool(patients & SAMPLE_PATIENT_MARKERS)
+    if patients & SAMPLE_PATIENT_MARKERS:
+        return True
+    # Single-row CLM-001 / demo ids are fixture stubs (often with a fake named payer).
+    if len(rows) == 1:
+        cid = str(
+            rows[0].get("ClaimId") or rows[0].get("claimId") or rows[0].get("id") or ""
+        ).strip().lower()
+        if cid in SAMPLE_CLAIM_ID_MARKERS:
+            return True
+    return False
 
 
 def _is_generic_payer(value: str) -> bool:
@@ -1006,6 +1027,19 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
         csv_counts = ingest_csv_reports_to_sqlite()
         if csv_counts:
             result["softdent"]["csvReportIngest"] = csv_counts
+        from softdent_treatment_planning import run_treatment_planning_ingest
+
+        tp = run_treatment_planning_ingest()
+        result["softdent"]["treatmentPlanning"] = {
+            "ok": bool(tp.get("ok")),
+            "paymentLines": int(tp.get("paymentLines") or 0),
+            "procedureCodes": int(tp.get("procedureCodes") or 0),
+            "estimates": int(tp.get("estimates") or 0),
+            "paymentFile": tp.get("paymentFile"),
+            "procedureFile": tp.get("procedureFile"),
+        }
+        for warning in tp.get("warnings") or []:
+            result["warnings"].append(f"SoftDent treatment planning: {warning}")
     except Exception as exc:
         result["warnings"].append(f"SoftDent transaction/CSV extract skipped: {exc}")
     if pipeline.get("practiceSync") and not (pipeline["practiceSync"].get("written") or []):

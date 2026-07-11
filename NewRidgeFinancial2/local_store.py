@@ -44,12 +44,14 @@ class LocalStore:
             from hal_employee_workflows import init_employee_workflow_schemas
             from operator_audit_store import init_operator_audit_schema
             from sidenotes_local_store import init_sidenotes_local_schema
+            from website_leads_store import init_website_leads_schema
 
             init_posting_queue_schema(conn)
             init_ocr_exceptions_schema(conn)
             init_employee_workflow_schemas(conn)
             init_operator_audit_schema(conn)
             init_sidenotes_local_schema(conn)
+            init_website_leads_schema(conn)
 
     def get(self, key: str) -> str | None:
         with self._connect() as conn:

@@ -49,24 +49,34 @@
   function decodeText(element, finalText, charset) {
     if (!element) return;
     const text = String(finalText == null ? "" : finalText);
-    if (prefersReducedMotion) {
+    // Cancel any in-flight decode on this node (overlapping HAL replies).
+    if (element._apexDecodeTimer) {
+      clearInterval(element._apexDecodeTimer);
+      element._apexDecodeTimer = null;
+    }
+    if (prefersReducedMotion || text.length > 280) {
+      // Long HAL answers: skip scramble — it takes too long and can leave garbage.
       element.textContent = text;
       return;
     }
     const chars = charset || "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let iterations = 0;
-    const interval = setInterval(() => {
+    let revealed = 0;
+    element._apexDecodeTimer = setInterval(() => {
+      revealed += 1;
       element.textContent = text
         .split("")
         .map((char, idx) => {
-          if (idx < iterations) return text[idx];
+          if (idx < revealed) return text[idx];
           if (char === " " || char === "\n") return char;
           return chars[Math.floor(Math.random() * chars.length)];
         })
         .join("");
-      if (iterations >= text.length) clearInterval(interval);
-      iterations += 1 / 3;
-    }, 40);
+      if (revealed >= text.length) {
+        clearInterval(element._apexDecodeTimer);
+        element._apexDecodeTimer = null;
+        element.textContent = text;
+      }
+    }, 16);
   }
 
   function enableHoloTilt(root) {
@@ -74,6 +84,10 @@
     const cards = root.querySelectorAll(".apex-widget.apex-inst");
     cards.forEach((card) => {
       if (card.dataset.holoBound) return;
+      // Never tilt the HAL chat rail — mousemove + transform looked like a full refresh.
+      if (card.classList.contains("apex-inst--hal-chat") || card.classList.contains("apex-widget--hal-chat")) {
+        return;
+      }
       card.dataset.holoBound = "1";
       card.classList.add("apex-holo-tilt");
       card.addEventListener("mousemove", (ev) => {

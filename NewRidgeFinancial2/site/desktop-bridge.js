@@ -214,6 +214,54 @@ const DesktopBridge = (function () {
     }
   }
 
+  function idb() {
+    return typeof window !== "undefined" ? window.Nr2IndexedDb : null;
+  }
+
+  function browserStorageMode() {
+    const store = idb();
+    if (store && store.isAvailable && store.isAvailable()) return "indexedDB";
+    return "sessionStorage";
+  }
+
+  async function browserStorageGet(key) {
+    const store = idb();
+    const sessionOnly = store && store.isSessionOnlyKey && store.isSessionOnlyKey(key);
+    if (store && store.isAvailable && store.isAvailable() && !sessionOnly) {
+      try {
+        const fromIdb = await store.get(key);
+        if (fromIdb != null) return fromIdb;
+      } catch {
+        /* fall through */
+      }
+    }
+    try {
+      const raw = sessionStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function browserStorageSet(key, value) {
+    const payload = JSON.stringify(value);
+    const store = idb();
+    const sessionOnly = store && store.isSessionOnlyKey && store.isSessionOnlyKey(key);
+    if (store && store.isAvailable && store.isAvailable() && !sessionOnly) {
+      try {
+        const ok = await store.set(key, value);
+        if (ok) return;
+      } catch {
+        /* fall through to sessionStorage */
+      }
+    }
+    try {
+      sessionStorage.setItem(key, payload);
+    } catch {
+      /* storage may be unavailable */
+    }
+  }
+
   async function storageGet(key) {
     if (hasDesktopApi()) {
       const raw = await window.pywebview.api.storage_get(key);
@@ -224,15 +272,10 @@ const DesktopBridge = (function () {
         const payload = await loopbackJson(`/api/storage/${encodeURIComponent(key)}`);
         return parseStorageValue(payload && payload.value);
       } catch {
-        return null;
+        return browserStorageGet(key);
       }
     }
-    try {
-      const raw = sessionStorage.getItem(key);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
+    return browserStorageGet(key);
   }
 
   async function storageSet(key, value) {
@@ -250,14 +293,10 @@ const DesktopBridge = (function () {
         });
         return;
       } catch {
-        /* fall through to sessionStorage */
+        /* fall through to IndexedDB / sessionStorage */
       }
     }
-    try {
-      sessionStorage.setItem(key, payload);
-    } catch {
-      /* storage may be unavailable */
-    }
+    await browserStorageSet(key, value);
   }
 
   async function getImportReadiness() {
@@ -1547,6 +1586,7 @@ const DesktopBridge = (function () {
     hasRuntimeAccess,
     isLoopbackHost,
     runtimeMode,
+    browserStorageMode,
     desktopRequiredMessage,
     whenReady,
     readDataFile,
