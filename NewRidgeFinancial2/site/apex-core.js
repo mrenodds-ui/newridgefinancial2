@@ -1,12 +1,170 @@
 /**
  * NR2-Apex Core — Bridge mosaic, silent refresh, print, session-aware fetch
- * Build: hal-10360 (citations drill-down, FILED library, A/R outlook, C0 operatory)
+ * Build: hal-10461 (kill periodic page flicker)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
-  const ASSET_V = "hal-10360";
+  const REFRESH_HEADER = "X-NR2-Refresh-Token";
+  const ASSET_V = "hal-10461";
+  const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
+  const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
+  const PARENT_PAGES = new Set([
+    "financial",
+    "taxes",
+    "softdent",
+    "quickbooks",
+    "ar",
+    "claims",
+    "narratives",
+    "documents",
+    "library",
+    "office-manager",
+    "hal",
+  ]);
+  const SUBPAGE_LINKS = {
+    financial: [
+      { sub: null, label: "Overview" },
+      { sub: "workpapers", label: "Workpapers" },
+      { sub: "providers", label: "Providers" },
+      { sub: "periods", label: "Periods" },
+    ],
+    taxes: [
+      { sub: null, label: "Overview" },
+      { sub: "entities", label: "Entities" },
+      { sub: "calendar", label: "Calendar" },
+      { sub: "workpapers", label: "Workpapers" },
+    ],
+    softdent: [
+      { sub: null, label: "Overview" },
+      { sub: "register", label: "Register" },
+      { sub: "schedule", label: "Schedule" },
+    ],
+    quickbooks: [
+      { sub: null, label: "Overview" },
+      { sub: "coa", label: "COA" },
+      { sub: "vendors", label: "Vendors" },
+    ],
+    claims: [
+      { sub: null, label: "Workbench" },
+      { sub: "detail", label: "Detail" },
+      { sub: "batch", label: "Batch" },
+      { sub: "era", label: "ERA" },
+      { sub: "attachments", label: "Attachments" },
+    ],
+    ar: [
+      { sub: null, label: "Overview" },
+      { sub: "collections", label: "Collections" },
+      { sub: "aging-detail", label: "Aging Detail" },
+      { sub: "forecast", label: "Forecast" },
+    ],
+    narratives: [
+      { sub: null, label: "Workspace" },
+      { sub: "templates", label: "Templates" },
+      { sub: "history", label: "History" },
+      { sub: "audit", label: "Audit" },
+    ],
+    documents: [
+      { sub: null, label: "Overview" },
+      { sub: "claim-docs", label: "Claim Docs" },
+      { sub: "tax-docs", label: "Tax Docs" },
+    ],
+    library: [
+      { sub: null, label: "Overview" },
+      { sub: "payers", label: "Payers" },
+      { sub: "codes", label: "Codes" },
+    ],
+    "office-manager": [
+      { sub: null, label: "Overview" },
+      { sub: "huddle", label: "Huddle" },
+      { sub: "tasks", label: "Tasks" },
+    ],
+    hal: [
+      { sub: null, label: "Chat" },
+      { sub: "history", label: "History" },
+      { sub: "system-logs", label: "System Logs" },
+    ],
+  };
+  const SUBPAGE_TITLES = {
+    workpapers: "Workpapers",
+    providers: "Providers",
+    periods: "Periods",
+    entities: "Entities",
+    calendar: "Calendar",
+    register: "Register",
+    schedule: "Schedule",
+    coa: "COA",
+    vendors: "Vendors",
+    detail: "Detail",
+    batch: "Batch",
+    era: "ERA",
+    attachments: "Attachments",
+    collections: "Collections",
+    "aging-detail": "Aging Detail",
+    forecast: "Forecast",
+    templates: "Templates",
+    history: "History",
+    audit: "Audit",
+    "claim-docs": "Claim Docs",
+    "tax-docs": "Tax Docs",
+    payers: "Payers",
+    codes: "Codes",
+    huddle: "Huddle",
+    tasks: "Tasks",
+    "system-logs": "System Logs",
+  };
+
+  function formatPatientDisplay(name) {
+    const raw = String(name || "").trim();
+    if (!raw) return "—";
+    if (raw.includes(",")) return raw;
+    const parts = raw.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      const last = parts[parts.length - 1];
+      const first = parts.slice(0, -1).join(" ");
+      return `${last}, ${first}`;
+    }
+    return raw;
+  }
+
+  function attachmentDotHtml(att) {
+    if (!att || typeof att !== "object") {
+      return `<span class="apex-wb-att apex-wb-att--unknown" title="Attachments not on import">—</span>`;
+    }
+    const cur = Number(att.current);
+    const req = att.required;
+    if (req != null && Number.isFinite(Number(req))) {
+      const ok = Number.isFinite(cur) && cur >= Number(req);
+      return `<span class="apex-wb-att ${ok ? "apex-wb-att--ok" : "apex-wb-att--missing"}" title="${
+        ok ? "Attachments complete" : "Missing attachments"
+      }">${ok ? "●" : "○"}</span>`;
+    }
+    if (Number.isFinite(cur) && cur > 0) {
+      return `<span class="apex-wb-att apex-wb-att--ok" title="${cur} attachment(s)">●</span>`;
+    }
+    return `<span class="apex-wb-att apex-wb-att--unknown" title="No attachment count">—</span>`;
+  }
+
+  function preferredWorkbenchView(fallback) {
+    try {
+      const v = sessionStorage.getItem(WB_VIEW_KEY) || localStorage.getItem(WB_VIEW_KEY);
+      if (v === "table" || v === "kanban") return v;
+    } catch (_err) {
+      /* ignore */
+    }
+    return fallback === "kanban" ? "kanban" : "table";
+  }
+
+  function persistWorkbenchView(view) {
+    const v = view === "kanban" ? "kanban" : "table";
+    try {
+      localStorage.setItem(WB_VIEW_KEY, v);
+      sessionStorage.setItem(WB_VIEW_KEY, v);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
 
   const PAGE_TITLES = {
     financial: "Financial",
@@ -48,7 +206,8 @@
   }
 
   const config = {
-    refreshInterval: 30000,
+    // 0 = no automatic page reload. Sync button / HAL refresh_page still reload.
+    refreshInterval: 0,
     apiBase: "/api/apex",
     halChatEndpoint: "/api/hal/evaluate-query",
     animStagger: 50,
@@ -2323,26 +2482,112 @@
     }
   }
 
-  function setPageTitle(pageId) {
+  function parseApexHash(raw) {
+    const hash = String(raw || "")
+      .replace(/^#/, "")
+      .trim();
+    if (!hash) return { parent: "financial", sub: null, query: {} };
+    const qIdx = hash.indexOf("?");
+    const pathPart = qIdx >= 0 ? hash.slice(0, qIdx) : hash;
+    const queryPart = qIdx >= 0 ? hash.slice(qIdx + 1) : "";
+    const query = {};
+    if (queryPart) {
+      try {
+        new URLSearchParams(queryPart).forEach((v, k) => {
+          query[k] = v;
+        });
+      } catch (_err) {
+        /* ignore */
+      }
+    }
+    const parts = pathPart.split("/").filter(Boolean);
+    let parent = String(parts[0] || "financial")
+      .toLowerCase()
+      .replace(/[^a-z0-9\-]/g, "");
+    let sub = parts[1]
+      ? String(parts[1])
+          .toLowerCase()
+          .replace(/[^a-z0-9\-]/g, "")
+      : null;
+    if (!PARENT_PAGES.has(parent)) {
+      parent = "financial";
+      sub = null;
+    }
+    if (sub === "") sub = null;
+    return { parent, sub, query };
+  }
+
+  function formatApexHash(parent, sub, query) {
+    let h = String(parent || "financial").trim();
+    if (sub) h += `/${sub}`;
+    const id = query && query.id ? String(query.id).trim() : "";
+    if (id) h += `?id=${encodeURIComponent(id)}`;
+    return h;
+  }
+
+  function routeKey(parent, sub, query) {
+    return formatApexHash(parent, sub, query || {});
+  }
+
+  function renderSubnav(parent, sub) {
+    const nav = document.getElementById("apex-subnav");
+    if (!nav) return;
+    const links = SUBPAGE_LINKS[parent];
+    if (!links || !links.length) {
+      nav.hidden = true;
+      nav.innerHTML = "";
+      nav.classList.remove("is-visible");
+      return;
+    }
+    nav.hidden = false;
+    nav.classList.add("is-visible");
+    nav.innerHTML = links
+      .map((item) => {
+        const active = (item.sub || null) === (sub || null);
+        return `<button type="button" class="apex-subnav-btn${active ? " is-active" : ""}" data-sub-parent="${parent}" data-sub="${
+          item.sub || ""
+        }">${escapeHtml(item.label)}</button>`;
+      })
+      .join("");
+    nav.querySelectorAll("[data-sub-parent]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const p = btn.getAttribute("data-sub-parent") || parent;
+        const s = btn.getAttribute("data-sub") || "";
+        const q = s === "detail" && currentQuery.id ? { id: currentQuery.id } : {};
+        loadPage(formatApexHash(p, s || null, q));
+      });
+    });
+  }
+
+  function setPageTitle(pageId, sub, opts) {
+    const silent = Boolean(opts && opts.silent);
     const el = document.getElementById("apex-page-title");
     if (el) {
-      el.textContent = PAGE_TITLES[pageId] || pageId || "Apex";
-      if (window.ApexMotion && typeof window.ApexMotion.triggerGlitch === "function") {
+      const base = PAGE_TITLES[pageId] || pageId || "Apex";
+      const subLabel = sub ? SUBPAGE_TITLES[sub] || sub : "";
+      const next = subLabel ? `${base} · ${subLabel}` : base;
+      if (el.textContent !== next) el.textContent = next;
+      // Never glitch/flash on silent polls — that looked like a full page refresh.
+      if (!silent && window.ApexMotion && typeof window.ApexMotion.triggerGlitch === "function") {
         window.ApexMotion.triggerGlitch(el);
       }
     }
-    if (window.ApexMotion && typeof window.ApexMotion.flashStage === "function") {
+    if (!silent && window.ApexMotion && typeof window.ApexMotion.flashStage === "function") {
       window.ApexMotion.flashStage();
     }
   }
 
-  function setMeta(payload) {
+  function setMeta(payload, opts) {
     const el = metaEl();
     if (!el) return;
+    const silent = Boolean(opts && opts.silent);
     const at = payload && payload.refreshedAt ? payload.refreshedAt : "—";
     const page = payload && payload.page ? payload.page : currentPage;
     const note = payload && payload.sourceNote ? payload.sourceNote : "";
-    el.textContent = `Page: ${page} · Refreshed: ${at}${note ? " · " + note : ""}`;
+    const next = `Page: ${page} · Refreshed: ${at}${note ? " · " + note : ""}`;
+    if (el.textContent === next) return;
+    el.textContent = next;
+    if (silent) return;
     el.classList.add("is-live");
     setTimeout(() => el.classList.remove("is-live"), 1200);
   }
@@ -2356,11 +2601,17 @@
     }
   }
 
-  async function loadPage(pageId, opts) {
-    const silent = opts && opts.silent;
-    currentPage = pageId || currentPage || "financial";
-    setHash(currentPage);
-    setPageTitle(currentPage);
+  async function loadPage(pageIdOrHash, opts) {
+    let silent = Boolean(opts && opts.silent);
+    const parsed = parseApexHash(pageIdOrHash || formatApexHash(currentPage, currentSub, currentQuery));
+    currentPage = parsed.parent || currentPage || "financial";
+    currentSub = parsed.sub;
+    currentQuery = parsed.query && typeof parsed.query === "object" ? parsed.query : {};
+    // Never wipe HAL chat while a reply is in flight (auto-refresh / nav race).
+    if (halChatBusy && currentPage === "hal") silent = true;
+    setHash(currentPage, currentSub, currentQuery);
+    setPageTitle(currentPage, currentSub, { silent });
+    if (!silent) renderSubnav(currentPage, currentSub);
     const root = stage();
     if (!root) return;
 
@@ -2390,7 +2641,11 @@
             '<div class="apex-status-msg is-error">Narratives module missing (apex-narratives.js).</div>';
         }
       }
-      setMeta({ page: "narratives", refreshedAt: new Date().toISOString(), sourceNote: "interactive narratives bridge" });
+      setMeta(
+        { page: "narratives", refreshedAt: new Date().toISOString(), sourceNote: "interactive narratives bridge" },
+        { silent }
+      );
+      startAutoRefresh();
       return;
     }
 
@@ -2398,11 +2653,10 @@
       root.className = currentPage === "hal" ? "apex-stage apex-stage--hal" : "apex-stage apex-mosaic";
       root.innerHTML = '<div class="apex-status-msg">Loading bridge instruments…</div>';
     } else {
-      root.querySelectorAll(".apex-inst, .apex-widget").forEach((el) => {
-        // Keep HAL chat interactive during silent refresh (it is not re-patched).
-        if (el.classList.contains("apex-widget--hal-chat")) return;
-        el.classList.add("is-updating");
-      });
+      root.dataset.page = currentPage;
+      if (currentSub) root.dataset.sub = currentSub;
+      else delete root.dataset.sub;
+      // Do not add is-updating (breathe animation) on silent polls — that flickered the mosaic.
     }
 
     try {
@@ -2412,14 +2666,21 @@
       const list = payload.widgets || [];
       if (silent && widgets.size && patchWidgets(list)) {
         /* in-place — no flash */
+      } else if (silent && currentPage === "hal" && !currentSub) {
+        // Never full-remount HAL on silent refresh — that wiped chat history on hover/timer races.
+        softRenderHalMain(list);
+      } else if (silent) {
+        // Silent poll must never wipe the mosaic (instBoot looked like a full page refresh).
+        // Keep current widgets; Sync / navigation still remount intentionally.
       } else {
         renderWidgets(list);
-        if (!silent) {
-          root.classList.add("is-entering");
-          setTimeout(() => root.classList.remove("is-entering"), 400);
+        if (currentPage === "hal" && !currentSub) {
+          restoreHalTranscript(document.querySelector("[data-hal-messages]"));
         }
+        root.classList.add("is-entering");
+        setTimeout(() => root.classList.remove("is-entering"), 400);
       }
-      setMeta(payload);
+      setMeta(payload, { silent });
       startAutoRefresh();
     } catch (err) {
       if (!silent) {
@@ -2427,15 +2688,21 @@
         root.innerHTML = `<div class="apex-status-msg is-error">Error loading data: ${String(
           (err && err.message) || err
         )}</div>`;
-      } else {
-        root.querySelectorAll(".apex-inst, .apex-widget").forEach((el) => el.classList.remove("is-updating"));
       }
     }
   }
 
   function startAutoRefresh() {
-    if (refreshTimer) clearInterval(refreshTimer);
-    refreshTimer = setInterval(() => loadPage(currentPage, { silent: true }), config.refreshInterval);
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+    const ms = Number(config.refreshInterval) || 0;
+    if (ms <= 0) return;
+    refreshTimer = setInterval(
+      () => loadPage(formatApexHash(currentPage, currentSub, currentQuery), { silent: true }),
+      ms
+    );
   }
 
   async function printPage(widgetId) {

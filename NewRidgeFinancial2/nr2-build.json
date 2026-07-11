@@ -1,6 +1,6 @@
 {
-  "BUILD_ID": "hal-10440",
-  "assetVersion": "hal-10440",
-  "schemaVersion": "hal-10440",
-  "notes": "hal-10440: Fix HAL focus overlay trapping clicks — dismiss on navigate, backdrop click, Escape, and auto-timeout."
+  "BUILD_ID": "hal-10461",
+  "assetVersion": "hal-10461",
+  "schemaVersion": "hal-10461",
+  "notes": "hal-10461: Disable automatic Apex page refresh and stop silent-poll flicker."
 }
