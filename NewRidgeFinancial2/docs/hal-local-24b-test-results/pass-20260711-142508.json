@@ -1,0 +1,103 @@
+{
+  "at": "2026-07-11T19:25:08+00:00",
+  "promoted": true,
+  "gate": {
+    "ok": true,
+    "gate": "local_24b_single",
+    "failures": [],
+    "selectedModel": "hal-local:24b",
+    "quantization": "Q4_K_M",
+    "gpuName": "AMD Radeon AI PRO R9700",
+    "gpuIndex": 0,
+    "vramTotalGiB": 32.0,
+    "vramUsedGiB": 14.84,
+    "vramAvailableGiB": 17.16,
+    "fullyGpuResident": true,
+    "cpuOffloadPercent": 0.0,
+    "modelLoadStatus": "loaded",
+    "loadedModels": [
+      "hal-local:24b"
+    ],
+    "contextSize": 8192,
+    "localEndpoint": "http://127.0.0.1:11434/api/chat",
+    "activeProvider": "local-ollama",
+    "fallbackStatus": "cloud_disabled",
+    "listenerLocalOnly": true,
+    "ollamaHostEnv": "127.0.0.1:11434",
+    "processorHint": "mistral3",
+    "hipVisibleDevices": "0",
+    "maxLoadedModelsEnv": "1"
+  },
+  "prompts": [
+    {
+      "ok": true,
+      "elapsedSec": 1.472,
+      "loadDurationSec": 0.177,
+      "firstTokenMs": 1157.6,
+      "tokensPerSecond": 15.26,
+      "evalCount": 2,
+      "replyPreview": "Ready",
+      "name": "simple",
+      "error": null
+    },
+    {
+      "ok": true,
+      "elapsedSec": 13.44,
+      "loadDurationSec": 0.176,
+      "firstTokenMs": 216.7,
+      "tokensPerSecond": 7.68,
+      "evalCount": 100,
+      "replyPreview": "An A/R aging report indicating that insurance aging is higher than patient aging typically requires staff to review unpaid claims first because it suggests potential issues with claim processing or reimbursement. This discrepancy often poin",
+      "name": "accounting",
+      "error": null
+    },
+    {
+      "ok": true,
+      "elapsedSec": 4.792,
+      "loadDurationSec": 0.224,
+      "firstTokenMs": 203.2,
+      "tokensPerSecond": 7.8,
+      "evalCount": 34,
+      "replyPreview": "Check if the softdent_claims_export.csv file is missing or stale. Verify the last successful import date and time for this file in the local system.",
+      "name": "diagnostic",
+      "error": null
+    },
+    {
+      "ok": true,
+      "elapsedSec": 4.987,
+      "loadDurationSec": 0.177,
+      "firstTokenMs": 194.8,
+      "tokensPerSecond": 7.81,
+      "evalCount": 36,
+      "replyPreview": "HAL cannot submit, email, post, or upload to SoftDent or QuickBooks due to being read-only. Consent is required for any outbound submission or email.",
+      "name": "summarization",
+      "error": null
+    },
+    {
+      "ok": true,
+      "elapsedSec": 12.87,
+      "loadDurationSec": 0.18,
+      "firstTokenMs": 179.2,
+      "tokensPerSecond": 7.68,
+      "evalCount": 96,
+      "replyPreview": "The function `post_qb` is unsafe because it implies that it can modify QuickBooks data. The safety issue is that it suggests write access, which contradicts the read-only nature of the finance app.  The basis for this answer is the function",
+      "name": "code_review",
+      "error": null
+    }
+  ],
+  "stability": null,
+  "metrics": {
+    "medianTokensPerSecond": 7.8,
+    "vramSafetyMarginGiB": 5.0
+  },
+  "routing": {
+    "localApprovedLanes": [
+      "chat8b",
+      "reason21b",
+      "escalate30b",
+      "coder32b"
+    ],
+    "model": "hal-local:24b",
+    "cloudUnchanged": true
+  }
+}

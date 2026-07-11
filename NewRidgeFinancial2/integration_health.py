@@ -21,21 +21,138 @@ from import_diagnostics import (
 from import_loader import load_import_bundle
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+NR2_ROOT = Path(__file__).resolve().parent
 DATA_DIR = REPO_ROOT / "app_data" / "nr2"
+HAL_MODELS_PATH = NR2_ROOT / "site" / "data" / "hal-models.json"
+APPROVED_LOCAL_MODEL = "hal-local:24b"
+APPROVED_QUANT = "Q4_K_M"
+VRAM_TOTAL_GIB = 32.0
+VRAM_SAFETY_MARGIN_GIB = 5.0
+MAX_CPU_OFFLOAD_PCT = 5.0
 
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _http_json(url: str, timeout: float = 3.0) -> dict[str, Any]:
+    with urllib.request.urlopen(url, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
 def _probe_ollama(endpoint: str = "http://127.0.0.1:11434/api/tags", timeout: float = 3.0) -> dict[str, Any]:
     try:
-        with urllib.request.urlopen(endpoint, timeout=timeout) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
+        body = _http_json(endpoint, timeout=timeout)
         models = [m.get("name") for m in body.get("models", []) if m.get("name")]
         return {"ok": True, "endpoint": endpoint.replace("/api/tags", ""), "modelCount": len(models), "models": models[:12]}
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
         return {"ok": False, "endpoint": endpoint.replace("/api/tags", ""), "error": str(exc)}
+
+
+def probe_local_24b_readiness(
+    base: str = "http://127.0.0.1:11434",
+    timeout: float = 5.0,
+) -> dict[str, Any]:
+    """Readiness gate for single-24B R9700 layout. Fail closed on policy violations."""
+    failures: list[str] = []
+    base = base.rstrip("/")
+    host_env = os.environ.get("OLLAMA_HOST", "127.0.0.1:11434")
+    listener_local = host_env.startswith("127.0.0.1") or host_env.startswith("localhost")
+    if not listener_local:
+        failures.append(f"listener_not_local:{host_env}")
+
+    config: dict[str, Any] = {}
+    try:
+        config = json.loads(HAL_MODELS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        failures.append(f"hal_models_unreadable:{exc}")
+
+    cfg = config.get("config") if isinstance(config, dict) else {}
+    display = config.get("readinessDisplay") if isinstance(config, dict) else {}
+    approved = (
+        (cfg or {}).get("singleGpuLayout", {}) or {}
+    ).get("approvedModel") or APPROVED_LOCAL_MODEL
+    quant = (
+        (cfg or {}).get("singleGpuLayout", {}) or {}
+    ).get("quantization") or APPROVED_QUANT
+    ctx = int(((cfg or {}).get("singleGpuLayout", {}) or {}).get("numCtx") or 8192)
+    cloud_on = bool(((cfg or {}).get("cloudReasoning") or {}).get("enabled"))
+    gpu_name = ((display or {}).get("gpu") or {}).get("device") or "AMD Radeon AI PRO R9700"
+    gpu_index = ((display or {}).get("gpu") or {}).get("gpuIndex")
+    if gpu_index is None:
+        gpu_index = int(os.environ.get("HIP_VISIBLE_DEVICES") or "0")
+
+    loaded: list[dict[str, Any]] = []
+    try:
+        ps = _http_json(f"{base}/api/ps", timeout=timeout)
+        loaded = list(ps.get("models") or [])
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        failures.append(f"ollama_ps_unreachable:{exc}")
+
+    names = [str(m.get("name") or m.get("model") or "") for m in loaded]
+    if len(loaded) > 1:
+        failures.append(f"multiple_models_loaded:{names}")
+    if loaded and approved not in names and not any(approved in n for n in names):
+        failures.append(f"wrong_model_loaded:{names}")
+    if not loaded:
+        failures.append("model_not_loaded")
+
+    size_bytes = 0
+    size_vram = 0
+    processor = ""
+    cpu_offload_pct = 0.0
+    fully_gpu = False
+    if loaded:
+        m0 = loaded[0]
+        size_bytes = int(m0.get("size") or 0)
+        size_vram = int(m0.get("size_vram") or 0)
+        details = m0.get("details") or {}
+        processor = str(details.get("family") or m0.get("processor") or "")
+        if size_bytes > 0:
+            cpu_offload_pct = max(0.0, round(100.0 * (1.0 - (size_vram / size_bytes)), 2))
+        fully_gpu = size_vram > 0 and cpu_offload_pct <= MAX_CPU_OFFLOAD_PCT
+        if not fully_gpu:
+            failures.append(f"cpu_offload_pct:{cpu_offload_pct}")
+
+    vram_used_gib = round(size_vram / (1024**3), 2) if size_vram else 0.0
+    vram_avail_gib = round(VRAM_TOTAL_GIB - vram_used_gib, 2)
+    if loaded and vram_avail_gib < VRAM_SAFETY_MARGIN_GIB:
+        failures.append(f"vram_headroom_low:{vram_avail_gib}")
+
+    hip = os.environ.get("HIP_VISIBLE_DEVICES")
+    if hip is not None and str(hip).strip() not in ("", str(gpu_index)):
+        if str(hip).strip() != "0" and int(str(gpu_index)) == 0:
+            failures.append(f"wrong_gpu_env:HIP_VISIBLE_DEVICES={hip}")
+
+    max_loaded = os.environ.get("OLLAMA_MAX_LOADED_MODELS", "")
+    if max_loaded and max_loaded != "1":
+        failures.append(f"max_loaded_models:{max_loaded}")
+
+    return {
+        "ok": len(failures) == 0,
+        "gate": "local_24b_single",
+        "failures": failures,
+        "selectedModel": approved,
+        "quantization": quant,
+        "gpuName": gpu_name,
+        "gpuIndex": gpu_index,
+        "vramTotalGiB": VRAM_TOTAL_GIB,
+        "vramUsedGiB": vram_used_gib,
+        "vramAvailableGiB": vram_avail_gib,
+        "fullyGpuResident": fully_gpu,
+        "cpuOffloadPercent": cpu_offload_pct,
+        "modelLoadStatus": "loaded" if loaded else "not_loaded",
+        "loadedModels": names,
+        "contextSize": ctx,
+        "localEndpoint": f"{base}/api/chat",
+        "activeProvider": "openai-cloud" if cloud_on else "local-ollama",
+        "fallbackStatus": "cloud_enabled" if cloud_on else "cloud_disabled",
+        "listenerLocalOnly": listener_local,
+        "ollamaHostEnv": host_env,
+        "processorHint": processor,
+        "hipVisibleDevices": hip,
+        "maxLoadedModelsEnv": max_loaded or None,
+    }
 
 
 def _document_queue_count(store: Any | None, *, heal: bool = False) -> dict[str, Any]:
@@ -183,18 +300,36 @@ def integration_health_snapshot(
         )
 
     ollama = _probe_ollama()
+    local24 = probe_local_24b_readiness()
+    ollama["local24b"] = local24
+    ollama_ok = bool(ollama.get("ok")) and bool(local24.get("ok"))
+    if ollama.get("ok") and local24.get("ok"):
+        ollama_detail = (
+            f"{local24.get('selectedModel')} · {local24.get('quantization')} · "
+            f"GPU {local24.get('gpuName')} idx={local24.get('gpuIndex')} · "
+            f"VRAM {local24.get('vramUsedGiB')}/{local24.get('vramTotalGiB')} GiB "
+            f"(avail {local24.get('vramAvailableGiB')}) · "
+            f"GPU-resident={local24.get('fullyGpuResident')} · "
+            f"CPU-offload={local24.get('cpuOffloadPercent')}% · "
+            f"ctx={local24.get('contextSize')} · "
+            f"provider={local24.get('activeProvider')} · "
+            f"fallback={local24.get('fallbackStatus')}"
+        )
+        ollama_status = "ok"
+    elif ollama.get("ok"):
+        ollama_detail = f"Ollama up but 24B readiness failed: {', '.join(local24.get('failures') or [])}"
+        ollama_status = "fail"
+    else:
+        ollama_detail = str(ollama.get("error") or "Unreachable")
+        ollama_status = "fail"
     integrations.append(
         _integration_row(
             integration_id="ollama",
             label="Local AI (Ollama)",
-            ok=bool(ollama.get("ok")),
-            status="ok" if ollama.get("ok") else "fail",
-            detail=(
-                f"{ollama.get('modelCount', 0)} models reachable."
-                if ollama.get("ok")
-                else str(ollama.get("error") or "Unreachable")
-            ),
-            action_hint="Start ollama.exe serve and verify hal-chat:8b is loaded.",
+            ok=ollama_ok,
+            status=ollama_status,
+            detail=ollama_detail,
+            action_hint="Run Apply-HAL-GPU-Performance.ps1 and validate_hal_local_24b.py; expect only hal-local:24b loaded.",
         )
     )
 

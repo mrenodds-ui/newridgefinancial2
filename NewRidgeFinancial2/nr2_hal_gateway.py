@@ -17,10 +17,12 @@ SOFT_STALE_WATERMARK = (
     "[DATA SOFT-STALE — analytical guidance only; verify amounts against fresh imports before acting]"
 )
 LANE_MODELS = {
-    "chat8b": "hal-chat:8b",
-    # R9700 32 GB: reason + escalation share GPU-pinned hal-escalate:30b (no Mistral 24B load).
-    "reason21b": "hal-escalate:30b",
-    "escalate30b": "hal-escalate:30b",
+    # R9700 32 GB single-model layout: all approved local lanes → hal-local:24b (Q4_K_M).
+    # Lane keys preserved for routing policy; do not load 8B/30B/coder concurrently.
+    "chat8b": "hal-local:24b",
+    "reason21b": "hal-local:24b",
+    "escalate30b": "hal-local:24b",
+    "coder32b": "hal-local:24b",
 }
 LANE_HISTORY_KEY = "nr2:hal:lane-history"
 LANE_OVERRIDE_KEY = "nr2:hal:lane-override-log"

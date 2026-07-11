@@ -1,0 +1,20 @@
+{
+  "capturedAt": "2026-07-11",
+  "layout": "hybrid-dual-pin-8b-30b",
+  "reason": "Snapshot before switching to single hal-local:24b on R9700",
+  "env": {
+    "OLLAMA_MAX_LOADED_MODELS": "2",
+    "OLLAMA_NUM_PARALLEL": "1",
+    "OLLAMA_IGPU_ENABLE": "0",
+    "OLLAMA_MODELS": "D:\\LocalAI\\ActiveModels",
+    "OLLAMA_HOST_NOTE": "Prior readinessDisplay noted 0.0.0.0:11434; rollback script sets 127.0.0.1:11434"
+  },
+  "gpuPinnedModels": ["hal-chat:8b", "hal-escalate:30b"],
+  "onDemandCoder": "qwen2.5-coder:32b",
+  "gatewayLaneModels": {
+    "chat8b": "hal-chat:8b",
+    "reason21b": "hal-escalate:30b",
+    "escalate30b": "hal-escalate:30b"
+  },
+  "rollbackCommand": "powershell -ExecutionPolicy Bypass -File .\\NewRidgeFinancial2\\model-automation\\Rollback-HAL-Dual-8B-30B.ps1"
+}

@@ -1,0 +1,53 @@
+{
+  "at": "2026-07-11T20:10:25+00:00",
+  "promoted": true,
+  "gate": {
+    "ok": true,
+    "gate": "local_24b_single",
+    "failures": [],
+    "selectedModel": "hal-local:24b",
+    "quantization": "Q4_K_M",
+    "gpuName": "AMD Radeon AI PRO R9700",
+    "gpuIndex": 0,
+    "vramTotalGiB": 32.0,
+    "vramUsedGiB": 14.84,
+    "vramAvailableGiB": 17.16,
+    "fullyGpuResident": true,
+    "cpuOffloadPercent": 0.0,
+    "modelLoadStatus": "loaded",
+    "loadedModels": [
+      "hal-local:24b"
+    ],
+    "contextSize": 8192,
+    "localEndpoint": "http://127.0.0.1:11434/api/chat",
+    "activeProvider": "local-ollama",
+    "fallbackStatus": "cloud_disabled",
+    "listenerLocalOnly": true,
+    "ollamaHostEnv": "127.0.0.1:11434",
+    "processorHint": "mistral3",
+    "hipVisibleDevices": "0",
+    "maxLoadedModelsEnv": "1"
+  },
+  "prompts": [],
+  "stability": {
+    "minutes": 30,
+    "samples": 31,
+    "failures": 0,
+    "crashesOrTimeouts": 0,
+    "ok": true
+  },
+  "metrics": {
+    "medianTokensPerSecond": null,
+    "vramSafetyMarginGiB": 5.0
+  },
+  "routing": {
+    "localApprovedLanes": [
+      "chat8b",
+      "reason21b",
+      "escalate30b",
+      "coder32b"
+    ],
+    "model": "hal-local:24b",
+    "cloudUnchanged": true
+  }
+}
