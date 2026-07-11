@@ -1,13 +1,13 @@
 /**
  * NR2-Apex Core — Bridge mosaic, silent refresh, print, session-aware fetch
- * Build: hal-10489 (V2 explain cache + mobile polish)
+ * Build: hal-10493 (V2 explain cache + mobile polish)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10489";
+  const ASSET_V = "hal-10493";
   const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
   const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
   const PARENT_PAGES = new Set([
@@ -216,6 +216,7 @@
       return "full";
     if (type === "data-table" || type === "tax-calendar" || type === "task-board") return "full";
     if (type === "status") return "s";
+    if (type === "quarantine-panel") return "full";
     if (type === "ai-insight") return "l";
     return "s";
   }
@@ -434,6 +435,45 @@
           <p class="apex-kpi-hint">${this.escape(String(insight.explanation || ""))}</p>
           <div class="apex-kpi-hint">sources: ${this.escape(refs.join(" · ") || "—")}</div>
           ${cta}
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "quarantine-panel") {
+        const items = Array.isArray(this.spec.items) ? this.spec.items : [];
+        const rows = items.length
+          ? `<table class="apex-q-table" data-quarantine-table>
+              <thead><tr><th>File</th><th>Error</th><th>Attempts</th><th></th></tr></thead>
+              <tbody>
+                ${items
+                  .map((it) => {
+                    const name = this.escape(String((it && it.name) || ""));
+                    const err = this.escape(String((it && (it.error_code || it.error)) || "—"));
+                    const attempts =
+                      it && it.row_count != null ? this.escape(String(it.row_count)) : "—";
+                    return `<tr data-q-name="${name}">
+                      <td class="apex-q-name">${name}</td>
+                      <td>${err}</td>
+                      <td>${attempts}</td>
+                      <td class="apex-q-actions">
+                        <button type="button" class="apex-btn apex-btn--small" data-q-retry="${name}">Retry</button>
+                        <button type="button" class="apex-btn apex-btn--small" data-q-purge="${name}">Purge</button>
+                      </td>
+                    </tr>`;
+                  })
+                  .join("")}
+              </tbody>
+            </table>`
+          : `<div class="apex-kpi-value is-empty">${this.escape(
+              this.spec.message || "No quarantined imports"
+            )}</div>`;
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            <button type="button" class="apex-btn apex-btn--small" data-q-refresh>Refresh</button>
+            ${printBtn}
+          </header>
+          ${rows}
           <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
         `;
       }

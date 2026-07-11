@@ -455,22 +455,86 @@ def release_quarantine(name: str, *, restore_dir: Path | None = None) -> dict[st
     }
 
 
+def purge_quarantine(name: str) -> dict[str, Any]:
+    """Permanently delete a quarantined export + reason sidecar (no SoftDent write-back)."""
+    qdir = quarantine_dir()
+    src = qdir / Path(name).name
+    if not src.is_file():
+        return {"ok": False, "error": "not_found", "phase": "W2"}
+    reason_path = qdir / f"{src.name}.reason.json"
+    try:
+        src.unlink()
+    except OSError as exc:
+        return {"ok": False, "error": str(exc), "phase": "W2"}
+    if reason_path.is_file():
+        try:
+            reason_path.unlink()
+        except OSError:
+            pass
+    clear_failure(src.name)
+    return {
+        "ok": True,
+        "phase": "W2",
+        "purged": src.name,
+        "softDentWriteBack": False,
+        "refreshedAt": _utc_now(),
+    }
+
+
+def retry_quarantine(name: str, *, restore_dir: Path | None = None) -> dict[str, Any]:
+    """Release quarantined file to inbox, then queue ingest (DQ-gated)."""
+    released = release_quarantine(name, restore_dir=restore_dir)
+    if not released.get("ok"):
+        released["phase"] = "W2"
+        return released
+    path = released.get("releasedTo")
+    ingest: dict[str, Any] = {"ok": False, "error": "missing_path"}
+    if path:
+        try:
+            from apex_import_watcher_pack import queue_import
+
+            ingest = queue_import(path)
+        except Exception as exc:  # noqa: BLE001
+            ingest = {"ok": False, "error": str(exc)}
+    return {
+        "ok": bool(ingest.get("ok")),
+        "phase": "W2",
+        "released": released,
+        "ingest": ingest,
+        "softDentWriteBack": False,
+        "refreshedAt": _utc_now(),
+    }
+
+
+def quarantine_ui_enabled() -> bool:
+    raw = str(os.getenv("NR2_QUARANTINE_UI") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
 def quarantine_status() -> dict[str, Any]:
     items = list_quarantine(limit=20)
     state = _load_failure_state()
     files = state.get("files") if isinstance(state.get("files"), dict) else {}
     return {
         "ok": True,
-        "phase": "U2b",
+        "phase": "U2b+W2",
         "enabled": quarantine_enabled(),
+        "uiEnabled": quarantine_ui_enabled(),
         "flag": "NR2_IMPORT_QUARANTINE",
+        "uiFlag": "NR2_QUARANTINE_UI",
         "threshold": fail_threshold(),
         "quarantineDir": str(quarantine_dir()),
         "quarantineCount": len(items),
         "trackedFailures": len(files),
         "items": items[:10],
         "gapCode": GAP_IMPORT_QUARANTINED if items else None,
-        "note": "Persistent failures move to quarantine; admin alert via insight SSE.",
+        "endpoints": {
+            "list": "GET /api/apex/hal/import-quarantine",
+            "retry": "POST /api/apex/hal/import-quarantine-retry",
+            "purge": "POST /api/apex/hal/import-quarantine-purge",
+            "release": "POST /api/apex/hal/import-quarantine-release",
+        },
+        "note": "Persistent failures move to quarantine; W2 panel can retry or purge.",
         "refreshedAt": _utc_now(),
     }
 
@@ -478,25 +542,48 @@ def quarantine_status() -> dict[str, Any]:
 def quarantine_widget(bundle: dict[str, Any] | None = None) -> dict[str, Any]:
     del bundle
     st = quarantine_status()
-    count = int(st.get("quarantineCount") or 0)
-    if count <= 0:
+    if not quarantine_ui_enabled():
         return {
-            "id": "import-quarantine-status",
+            "id": "import-quarantine-panel",
             "type": "status",
-            "label": "Import Quarantine (U2b)",
+            "label": "Quarantine Review (W2)",
             "size": "full",
-            "status": "ok",
-            "message": "No quarantined imports",
-            "hint": f"Fail threshold={st.get('threshold')} · flag={'ON' if st.get('enabled') else 'OFF'}",
+            "status": "empty",
+            "message": "Quarantine UI disabled",
+            "hint": "Set NR2_QUARANTINE_UI=1 (default on).",
         }
+    count = int(st.get("quarantineCount") or 0)
+    items = st.get("items") if isinstance(st.get("items"), list) else []
+    # Normalize fields for panel (error_code alias)
+    panel_items = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        panel_items.append(
+            {
+                "name": it.get("name"),
+                "error_code": it.get("error") or it.get("gapCode") or GAP_IMPORT_QUARANTINED,
+                "row_count": it.get("attempts"),
+                "size": it.get("size"),
+                "quarantinedAt": it.get("quarantinedAt"),
+            }
+        )
     return {
-        "id": "import-quarantine-status",
-        "type": "status",
-        "label": "Import Quarantine (U2b)",
+        "id": "import-quarantine-panel",
+        "type": "quarantine-panel",
+        "label": "Quarantine Review (W2)",
         "size": "full",
-        "status": "warn",
-        "message": f"{count} file(s) quarantined — {GAP_IMPORT_QUARANTINED}",
-        "hint": "Fix export format, release from quarantine, re-Sync. Empty ≠ $0.",
-        "items": st.get("items"),
-        "gapCode": GAP_IMPORT_QUARANTINED,
+        "status": "ok" if count == 0 else "warn",
+        "message": (
+            "No quarantined imports"
+            if count <= 0
+            else f"{count} file(s) quarantined — {GAP_IMPORT_QUARANTINED}"
+        ),
+        "hint": (
+            f"Fail threshold={st.get('threshold')} · retry re-queues ingest; "
+            "purge deletes local quarantine copy only. Empty ≠ $0."
+        ),
+        "items": panel_items,
+        "gapCode": GAP_IMPORT_QUARANTINED if count else None,
+        "endpoints": st.get("endpoints"),
     }

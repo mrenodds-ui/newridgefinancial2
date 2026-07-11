@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10489"
+BUILD_ID = "hal-10493"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1894,6 +1894,12 @@ def _financial_widgets_from_reports(
     except Exception:
         pass
     try:
+        from apex_softdent_extended_pack import extended_metrics_widgets
+
+        widgets.extend(extended_metrics_widgets(bundle))
+    except Exception:
+        pass
+    try:
         from apex_deep_audit_pack import deep_audit_widget
 
         widgets.append(deep_audit_widget(bundle))
@@ -1909,6 +1915,14 @@ def _financial_widgets_from_reports(
         from apex_import_quarantine_pack import quarantine_widget
 
         widgets.append(quarantine_widget(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_import_dq_pack import dq_widget
+        from apex_import_scheduler_pack import import_cron_widget
+
+        widgets.append(dq_widget(bundle))
+        widgets.append(import_cron_widget(bundle))
     except Exception:
         pass
     try:
@@ -2361,6 +2375,12 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
 
         widgets.extend(production_widgets(bundle))
         widgets.extend(aging_schedule_widgets(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_softdent_extended_pack import extended_metrics_widgets
+
+        widgets.extend(extended_metrics_widgets(bundle))
     except Exception:
         pass
     try:
@@ -4310,7 +4330,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(deep audit|monthly (practice )?health audit|quarter forecast)\b", "deep-audit-status", "financial"),
         (r"\b(era\s*835|remittance|era ingest)\b", "era835-ingest-gap", "softdent"),
         (r"\b(reconcil|variance alert|production vs payroll variance)\b", "reconciliation-status", "financial"),
-        (r"\b(import quarantine|quarantined import|poisoned (file|export))\b", "import-quarantine-status", "financial"),
+        (r"\b(import quarantine|quarantined import|poisoned (file|export))\b", "import-quarantine-panel", "financial"),
         (r"\b(dashboard layout|mosaic layout|widget order)\b", "dashboard-layout-status", "financial"),
         (r"\b(ai lane health|lane telemetry|model latency)\b", "ai-lane-health", "financial"),
         (r"\b(data freshness|sync status|import age)\b", "data-freshness-status", "financial"),
@@ -5697,6 +5717,18 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
 
+    @app.get("/api/apex/hal/extended-metrics-status")
+    def apex_extended_metrics_status():
+        """Phase W0 — SoftDent case acceptance / aging / scheduling views."""
+        try:
+            from apex_softdent_extended_pack import extended_metrics_status
+
+            result = extended_metrics_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
     @app.post("/api/apex/hal/reconciliation")
     def apex_reconciliation_run():
         """Phase U2 — SoftDent×QB variance scan (+ optional 30B explainer)."""
@@ -5744,7 +5776,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
 
             rows = list_quarantine(limit=50)
             return json_response_fn(
-                {"ok": True, "phase": "U2b", "rows": rows, "buildId": BUILD_ID}
+                {"ok": True, "phase": "U2b+W2", "rows": rows, "buildId": BUILD_ID}
             )
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
@@ -5759,6 +5791,38 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             payload = json.loads(raw or "{}")
             name = str(payload.get("name") or payload.get("file") or "")
             result = release_quarantine(name)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/import-quarantine-retry")
+    def apex_import_quarantine_retry():
+        """Phase W2 — release quarantined file and re-queue ingest."""
+        try:
+            import bottle
+            from apex_import_quarantine_pack import retry_quarantine
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            name = str(payload.get("name") or payload.get("file") or "")
+            result = retry_quarantine(name)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/import-quarantine-purge")
+    def apex_import_quarantine_purge():
+        """Phase W2 — permanently delete quarantined local copy (+ reason sidecar)."""
+        try:
+            import bottle
+            from apex_import_quarantine_pack import purge_quarantine
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            name = str(payload.get("name") or payload.get("file") or "")
+            result = purge_quarantine(name)
             result["buildId"] = BUILD_ID
             return json_response_fn(result, status=200 if result.get("ok") else 400)
         except Exception as exc:  # noqa: BLE001
@@ -5842,6 +5906,54 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             from apex_import_watcher_pack import watcher_status
 
             result = watcher_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/import-cron-status")
+    def apex_import_cron_status():
+        """Phase W1 — import cron + DQ status."""
+        try:
+            from apex_import_scheduler_pack import import_cron_status
+
+            result = import_cron_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/import-cron-run")
+    def apex_import_cron_run():
+        """Phase W1 — one-shot cron tick (honors NR2_IMPORT_CRON unless force)."""
+        try:
+            import bottle
+            from apex_import_scheduler_pack import run_import_cron_once
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            force = bool(payload.get("force"))
+            result = run_import_cron_once(force=force)
+            result["buildId"] = BUILD_ID
+            log = result.get("log") if isinstance(result.get("log"), dict) else result
+            status = 200
+            if isinstance(log, dict) and log.get("reason") == "import_cron_disabled":
+                status = 400
+            elif isinstance(log, dict) and int(log.get("exit") or 0) not in {0, 2}:
+                status = 400
+            return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/import-dq-status")
+    def apex_import_dq_status():
+        """Phase W1 — DQ flag + optional live bundle check."""
+        try:
+            from apex_import_dq_pack import dq_status, validate_bundle_dq
+
+            result = dq_status()
+            _reports, bundle, _err = _load_reports_and_bundle()
+            result["live"] = validate_bundle_dq(bundle if isinstance(bundle, dict) else {})
             result["buildId"] = BUILD_ID
             return json_response_fn(result)
         except Exception as exc:  # noqa: BLE001

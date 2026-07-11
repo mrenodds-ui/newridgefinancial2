@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10489",
-  "assetVersion": "hal-10489",
-  "schemaVersion": "hal-10489",
-  "notes": "hal-10489: Moonshot V2 30B explain cache + mobile viewport polish.",
-  "builtAt": "2026-07-11T19:00:00.000Z"
+  "BUILD_ID": "hal-10493",
+  "assetVersion": "hal-10493",
+  "schemaVersion": "hal-10493",
+  "notes": "hal-10493: Moonshot X0-X2 burn-in ops runbooks (flags stay OFF until operator runs scripts).",
+  "builtAt": "2026-07-11T20:00:00.000Z"
 }

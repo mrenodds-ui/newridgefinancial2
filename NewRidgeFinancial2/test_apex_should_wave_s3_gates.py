@@ -12,7 +12,7 @@ from apex_orchestrator_polish_pack import should_wave_status
 
 class ShouldWavePhaseS3Gates(unittest.TestCase):
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10489")
+        self.assertEqual(BUILD_ID, "hal-10493")
 
     def test_flag_still_default_off(self):
         prev = os.environ.get("NR2_AI_ORCHESTRATOR")

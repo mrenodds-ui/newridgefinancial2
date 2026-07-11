@@ -48,7 +48,7 @@ class ImportQuarantinePhaseU2bTests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10489")
+        self.assertEqual(BUILD_ID, "hal-10493")
 
     def test_flag_default_on(self):
         prev = os.environ.pop("NR2_IMPORT_QUARANTINE", None)
@@ -98,10 +98,10 @@ class ImportQuarantinePhaseU2bTests(unittest.TestCase):
 
     def test_status_and_widget(self):
         st = quarantine_status()
-        self.assertEqual(st.get("phase"), "U2b")
+        self.assertTrue(str(st.get("phase") or "").startswith("U2b"))
         out = build_apex_widgets("financial")
         ids = {w.get("id") for w in (out.get("widgets") or []) if isinstance(w, dict)}
-        self.assertIn("import-quarantine-status", ids)
+        self.assertIn("import-quarantine-panel", ids)
 
     def test_disabled(self):
         prev = os.environ.get("NR2_IMPORT_QUARANTINE")

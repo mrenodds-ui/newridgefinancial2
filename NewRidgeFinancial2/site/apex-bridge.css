@@ -2772,3 +2772,28 @@ body.apex-claim-drawer-open::after {
 .nr2-freshness-chip--stale { border-color: rgba(220, 180, 60, 0.55); }
 .nr2-freshness-chip--critical { border-color: rgba(220, 80, 80, 0.65); }
 .nr2-freshness-chip--unknown { opacity: 0.7; }
+
+/* W2 — quarantine review panel */
+.apex-q-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 6px;
+}
+.apex-q-table th,
+.apex-q-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--apex-border, rgba(0, 240, 255, 0.15));
+  vertical-align: middle;
+}
+.apex-q-name {
+  font-family: var(--apex-mono, "JetBrains Mono", monospace);
+  word-break: break-all;
+  max-width: 280px;
+}
+.apex-q-actions {
+  white-space: nowrap;
+  display: flex;
+  gap: 6px;
+}

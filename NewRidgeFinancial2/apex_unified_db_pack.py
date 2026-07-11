@@ -180,6 +180,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             bucket_61_90 REAL,
             bucket_90_plus REAL,
             total_ar REAL,
+            insurance_pending REAL,
             source_file TEXT,
             source TEXT,
             ingested_at TEXT NOT NULL
@@ -193,6 +194,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             fill_rate REAL,
             capacity_hours REAL,
             used_hours REAL,
+            scheduled_production REAL,
             source_file TEXT,
             source TEXT,
             ingested_at TEXT NOT NULL
@@ -277,10 +279,87 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             (SELECT SUM(ap.amount_due) FROM qb_ap_rows ap WHERE ap.period = m.period) AS total_ap,
             (SELECT np.net_profit FROM qb_net_profit np WHERE np.period = m.period) AS net_profit
         FROM softdent_period_metrics m;
+
+        DROP VIEW IF EXISTS v_case_acceptance;
+        CREATE VIEW v_case_acceptance AS
+        SELECT
+            period AS period,
+            SUM(COALESCE(treatment_planned_amount, 0)) AS treatment_planned,
+            SUM(COALESCE(accepted_amount, 0)) AS treatment_accepted,
+            CASE
+                WHEN SUM(COALESCE(treatment_planned_amount, 0)) > 0
+                THEN ROUND(SUM(COALESCE(accepted_amount, 0)) / SUM(treatment_planned_amount), 4)
+                ELSE NULL
+            END AS acceptance_rate,
+            CASE
+                WHEN COUNT(*) < 1 THEN 'none'
+                WHEN SUM(COALESCE(treatment_planned_amount, 0)) <= 0 THEN 'low'
+                WHEN SUM(COALESCE(treatment_planned_amount, 0)) < 5000 THEN 'low'
+                ELSE 'high'
+            END AS confidence
+        FROM softdent_case_acceptance
+        GROUP BY period;
+
+        DROP VIEW IF EXISTS v_patient_aging;
+        CREATE VIEW v_patient_aging AS
+        SELECT
+            period AS period,
+            bucket_0_30 AS bucket_0_30,
+            bucket_31_60 AS bucket_31_60,
+            bucket_61_90 AS bucket_61_90,
+            bucket_90_plus AS bucket_90_plus,
+            insurance_pending AS insurance_pending,
+            COALESCE(
+                total_ar,
+                COALESCE(bucket_0_30, 0) + COALESCE(bucket_31_60, 0)
+                + COALESCE(bucket_61_90, 0) + COALESCE(bucket_90_plus, 0)
+            ) AS total_ar
+        FROM softdent_patient_aging;
+
+        DROP VIEW IF EXISTS v_scheduling_efficiency;
+        CREATE VIEW v_scheduling_efficiency AS
+        SELECT
+            s.period AS period,
+            s.total_appointments AS total_appointments,
+            s.broken_appointments AS broken_appointments,
+            s.fill_rate AS fill_rate,
+            s.scheduled_production AS scheduled_production,
+            COALESCE(
+                (SELECT m.production FROM softdent_period_metrics m WHERE m.period = s.period),
+                (SELECT SUM(p.production_amount) FROM softdent_production p WHERE p.period = s.period)
+            ) AS actual_production,
+            CASE
+                WHEN s.scheduled_production IS NOT NULL AND s.scheduled_production > 0
+                     AND COALESCE(
+                         (SELECT m.production FROM softdent_period_metrics m WHERE m.period = s.period),
+                         (SELECT SUM(p.production_amount) FROM softdent_production p WHERE p.period = s.period)
+                     ) IS NOT NULL
+                THEN ROUND(
+                    COALESCE(
+                        (SELECT m.production FROM softdent_period_metrics m WHERE m.period = s.period),
+                        (SELECT SUM(p.production_amount) FROM softdent_production p WHERE p.period = s.period)
+                    ) / s.scheduled_production,
+                    4
+                )
+                ELSE NULL
+            END AS schedule_accuracy
+        FROM softdent_scheduling s;
         """
     )
+    _ensure_optional_columns(conn)
     conn.commit()
 
+
+def _ensure_optional_columns(conn: sqlite3.Connection) -> None:
+    """Additive columns for W0 (safe on older DBs created before insurance/scheduled fields)."""
+    specs = (
+        ("softdent_patient_aging", "insurance_pending", "REAL"),
+        ("softdent_scheduling", "scheduled_production", "REAL"),
+    )
+    for table, col, typedef in specs:
+        cols = {str(r[1]) for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if col not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}")
 
 def _parse_money(value: Any) -> float | None:
     if value is None or value == "":
@@ -302,6 +381,7 @@ def ingest_from_bundle(
     bundle: dict[str, Any] | None,
     *,
     db_path: Path | None = None,
+    skip_dq: bool = False,
 ) -> dict[str, Any]:
     """Upsert SoftDent periods + QB expenses from import bundle. Additive only."""
     b = bundle if isinstance(bundle, dict) else {}
@@ -313,6 +393,27 @@ def ingest_from_bundle(
     t0_meta: dict[str, Any] = {}
     t1_meta: dict[str, Any] = {}
     t2_meta: dict[str, Any] = {}
+
+    # W1 — reject-only DQ before merge (no imputation)
+    dq_meta: dict[str, Any] | None = None
+    if not skip_dq:
+        try:
+            from apex_import_dq_pack import dq_enabled, validate_bundle_dq
+
+            if dq_enabled():
+                dq_meta = validate_bundle_dq(b)
+                if not dq_meta.get("ok"):
+                    return {
+                        "ok": False,
+                        "reason": "dq_blocked",
+                        "gapCode": dq_meta.get("gapCode"),
+                        "dq": dq_meta,
+                        "phase": "W1",
+                        "softDentWriteBack": False,
+                        "importedAt": now,
+                    }
+        except Exception as exc:  # noqa: BLE001
+            dq_meta = {"ok": False, "error": str(exc), "bypassed": True}
 
     try:
         from apex_softdent_hardening_pack import assess_collections_gap
@@ -517,6 +618,7 @@ def ingest_from_bundle(
         "netProfitRows": int(t2_meta.get("netProfitRows") or 0) if isinstance(t2_meta, dict) else 0,
         "gapCode": gap_code,
         "payrollGapCode": payroll_meta.get("gapCode") if isinstance(payroll_meta, dict) else None,
+        "dq": dq_meta,
         "dbPath": str(db_path or unified_db_path()),
         "importedAt": now,
         "localOnly": True,
@@ -609,6 +711,81 @@ def list_collection_vs_ap(*, limit: int = 12, db_path: Path | None = None) -> li
                 "collections": r["collections"],
                 "totalAp": r["total_ap"],
                 "netProfit": r["net_profit"],
+            }
+            for r in rows
+        ]
+
+
+def list_case_acceptance(*, limit: int = 12, db_path: Path | None = None) -> list[dict[str, Any]]:
+    with open_unified(path=db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT period, treatment_planned, treatment_accepted, acceptance_rate, confidence
+            FROM v_case_acceptance
+            ORDER BY period DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit), 36)),),
+        ).fetchall()
+        return [
+            {
+                "period": r["period"],
+                "treatmentPlanned": r["treatment_planned"],
+                "treatmentAccepted": r["treatment_accepted"],
+                "acceptanceRate": r["acceptance_rate"],
+                "confidence": r["confidence"],
+            }
+            for r in rows
+        ]
+
+
+def list_patient_aging(*, limit: int = 12, db_path: Path | None = None) -> list[dict[str, Any]]:
+    with open_unified(path=db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT period, bucket_0_30, bucket_31_60, bucket_61_90, bucket_90_plus,
+                   insurance_pending, total_ar
+            FROM v_patient_aging
+            ORDER BY period DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit), 36)),),
+        ).fetchall()
+        return [
+            {
+                "period": r["period"],
+                "bucket0_30": r["bucket_0_30"],
+                "bucket31_60": r["bucket_31_60"],
+                "bucket61_90": r["bucket_61_90"],
+                "bucket90Plus": r["bucket_90_plus"],
+                "insurancePending": r["insurance_pending"],
+                "totalAr": r["total_ar"],
+            }
+            for r in rows
+        ]
+
+
+def list_scheduling_efficiency(*, limit: int = 12, db_path: Path | None = None) -> list[dict[str, Any]]:
+    with open_unified(path=db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT period, total_appointments, broken_appointments, fill_rate,
+                   scheduled_production, actual_production, schedule_accuracy
+            FROM v_scheduling_efficiency
+            ORDER BY period DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit), 36)),),
+        ).fetchall()
+        return [
+            {
+                "period": r["period"],
+                "totalAppointments": r["total_appointments"],
+                "brokenAppointments": r["broken_appointments"],
+                "fillRate": r["fill_rate"],
+                "scheduledProduction": r["scheduled_production"],
+                "actualProduction": r["actual_production"],
+                "scheduleAccuracy": r["schedule_accuracy"],
             }
             for r in rows
         ]
