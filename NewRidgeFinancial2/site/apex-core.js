@@ -1,13 +1,13 @@
 /**
  * NR2-Apex Core — Bridge mosaic, silent refresh, print, session-aware fetch
- * Build: hal-10470 (HAL census skip + Collections pending actions)
+ * Build: hal-10471 (IndexedDB widget cache + browser storage fallback)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10470";
+  const ASSET_V = "hal-10471";
   const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
   const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
   const PARENT_PAGES = new Set([
@@ -4936,11 +4936,11 @@
       // Do not add is-updating (breathe animation) on silent polls — that flickered the mosaic.
     }
 
-    try {
-      const res = await apexFetch(`${config.apiBase}/widgets/${encodeURIComponent(currentPage)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const payload = await res.json();
-      const list = payload.widgets || [];
+    const idb = typeof window !== "undefined" ? window.Nr2IndexedDb : null;
+    let paintedFromCache = false;
+
+    function applyWidgetPayload(payload, { fromCache }) {
+      const list = (payload && payload.widgets) || [];
       if (silent && widgets.size && patchWidgets(list)) {
         /* in-place — no flash */
       } else if (silent && currentPage === "hal" && !currentSub) {
@@ -4957,14 +4957,63 @@
         root.classList.add("is-entering");
         setTimeout(() => root.classList.remove("is-entering"), 400);
       }
-      setMeta(payload, { silent });
+      const metaPayload = Object.assign({}, payload || {});
+      if (fromCache) {
+        metaPayload.sourceNote = (metaPayload.sourceNote ? metaPayload.sourceNote + " · " : "") + "IndexedDB cache";
+      }
+      setMeta(metaPayload, { silent });
+    }
+
+    // Stale-while-revalidate: paint IndexedDB cache immediately on cold navigations.
+    if (!silent && idb && idb.loadWidgets) {
+      try {
+        const cached = await idb.loadWidgets(currentPage, currentSub, currentQuery);
+        if (cached && cached.payload && Array.isArray(cached.payload.widgets)) {
+          applyWidgetPayload(cached.payload, { fromCache: true });
+          paintedFromCache = true;
+        }
+      } catch (_err) {
+        /* cache optional */
+      }
+    }
+
+    try {
+      let url = `${config.apiBase}/widgets/${encodeURIComponent(currentPage)}`;
+      if (currentSub) {
+        const qs = new URLSearchParams();
+        qs.set("sub", currentSub);
+        if (currentQuery.id) qs.set("id", String(currentQuery.id));
+        url += `?${qs.toString()}`;
+      }
+      const res = await apexFetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const payload = await res.json();
+      applyWidgetPayload(payload, { fromCache: false });
+      if (idb && idb.cacheWidgets) {
+        idb.cacheWidgets(currentPage, currentSub, currentQuery, payload).catch(() => {});
+      }
       startAutoRefresh();
     } catch (err) {
-      if (!silent) {
+      if (!silent && !paintedFromCache) {
+        // Network failed — last chance IndexedDB fallback.
+        if (idb && idb.loadWidgets) {
+          try {
+            const cached = await idb.loadWidgets(currentPage, currentSub, currentQuery);
+            if (cached && cached.payload && Array.isArray(cached.payload.widgets)) {
+              applyWidgetPayload(cached.payload, { fromCache: true });
+              startAutoRefresh();
+              return;
+            }
+          } catch (_cacheErr) {
+            /* fall through to error UI */
+          }
+        }
         root.className = "apex-stage apex-mosaic";
         root.innerHTML = `<div class="apex-status-msg is-error">Error loading data: ${String(
           (err && err.message) || err
         )}</div>`;
+      } else if (paintedFromCache) {
+        startAutoRefresh();
       }
     }
   }

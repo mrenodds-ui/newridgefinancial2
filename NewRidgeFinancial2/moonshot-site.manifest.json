@@ -1,8 +1,10 @@
 {
   "schemaEpoch": "moonshot-mockup",
   "staffRenderMode": "live-wire-pilot",
-  "liveWirePages": ["financial"],
-  "description": "Financial program live-wire pilot (8765) — Financial live via MoonshotLayoutEngine; other staff pages mock-embed.",
+  "liveWirePages": [
+    "financial"
+  ],
+  "description": "Financial program live-wire pilot (8765) \u2014 Financial live via MoonshotLayoutEngine; other staff pages mock-embed.",
   "shell": [
     "index.html",
     "styles.css",
@@ -19,6 +21,7 @@
     "import-loader.js",
     "document-posting.js",
     "month-end-close.js",
+    "indexeddb-store.js",
     "desktop-bridge.js",
     "import-readiness-gate.js",
     "import-traffic-banner.js",

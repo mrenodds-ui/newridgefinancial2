@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10470",
-  "assetVersion": "hal-10470",
-  "schemaVersion": "hal-10470",
-  "notes": "hal-10470: HAL-said improve-fix approve-all (denials->Steve, sign-off, EOB, payer sync, remember structured).",
-  "builtAt": "2026-07-11T12:33:41.000Z"
+  "BUILD_ID": "hal-10471",
+  "assetVersion": "hal-10471",
+  "schemaVersion": "hal-10471",
+  "notes": "hal-10471: Restore IndexedDB client cache for Apex widgets + browser storage fallback.",
+  "builtAt": "2026-07-11T17:24:53.000Z"
 }
