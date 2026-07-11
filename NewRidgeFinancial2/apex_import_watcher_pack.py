@@ -64,17 +64,43 @@ def queue_import(path: str | Path) -> dict[str, Any]:
 
             bundle = load_import_bundle(sync=False, deep=False, read_only=True)
             result = ingest_from_bundle(bundle)
-            return {
-                "ok": bool(result.get("ok")),
+            ok = bool(result.get("ok"))
+            out = {
+                "ok": ok,
                 "path": str(p),
                 "attempt": attempt,
                 "unifiedIngest": result,
                 "queuedAt": _utc_now(),
             }
+            if ok:
+                try:
+                    from apex_import_quarantine_pack import clear_failure
+
+                    clear_failure(p)
+                except Exception:
+                    pass
+                return out
+            last_err = str(result.get("error") or result.get("reason") or "ingest_not_ok")
         except Exception as exc:  # noqa: BLE001
             last_err = str(exc)
             time.sleep(2.0)
-    return {"ok": False, "path": str(p), "error": last_err, "queuedAt": _utc_now()}
+    # Phase U2b — persistent failure → quarantine after threshold
+    quarantine = None
+    try:
+        from apex_import_quarantine_pack import maybe_quarantine_after_failure
+
+        quarantine = maybe_quarantine_after_failure(
+            p, error=last_err, attempts=3
+        )
+    except Exception as exc:  # noqa: BLE001
+        quarantine = {"ok": False, "error": str(exc)}
+    return {
+        "ok": False,
+        "path": str(p),
+        "error": last_err,
+        "quarantine": quarantine,
+        "queuedAt": _utc_now(),
+    }
 
 
 def poll_once(*, since_mtime: float | None = None) -> dict[str, Any]:
@@ -178,11 +204,24 @@ def start_watcher() -> dict[str, Any]:
 
 def watcher_status() -> dict[str, Any]:
     running = bool(_POLL_THREAD and _POLL_THREAD.is_alive())
+    q = {}
+    try:
+        from apex_import_quarantine_pack import quarantine_status
+
+        q = quarantine_status()
+    except Exception:
+        q = {}
     return {
         "ok": True,
-        "phase": "T3",
+        "phase": "T3+U2b",
         "pollRunning": running,
         "paths": [str(p) for p in import_inbox_paths()],
-        "note": "Poll default 300s; watchdog used when installed. Debounce 2s, retry×3.",
+        "quarantine": {
+            "enabled": q.get("enabled"),
+            "count": q.get("quarantineCount"),
+            "threshold": q.get("threshold"),
+            "dir": q.get("quarantineDir"),
+        },
+        "note": "Poll default 300s; quarantine after persistent failures (U2b).",
         "refreshedAt": _utc_now(),
     }

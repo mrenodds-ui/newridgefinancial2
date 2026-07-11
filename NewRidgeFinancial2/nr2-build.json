@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10484",
-  "assetVersion": "hal-10484",
-  "schemaVersion": "hal-10484",
-  "notes": "hal-10484: Moonshot U2 SoftDent\u00d7QB reconciliation variance engine (5%/$500).",
-  "builtAt": "2026-07-11T18:37:57.000Z"
+  "BUILD_ID": "hal-10485",
+  "assetVersion": "hal-10485",
+  "schemaVersion": "hal-10485",
+  "notes": "hal-10485: Moonshot U2b import quarantine + admin alerts on persistent failure.",
+  "builtAt": "2026-07-11T18:39:40.000Z"
 }

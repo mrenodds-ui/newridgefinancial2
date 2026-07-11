@@ -112,7 +112,7 @@ class TWaveMoonshotTests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10484")
+        self.assertEqual(BUILD_ID, "hal-10485")
 
     def test_t5_orchestrator_default_on(self):
         prev = os.environ.pop("NR2_AI_ORCHESTRATOR", None)
@@ -169,7 +169,7 @@ class TWaveMoonshotTests(unittest.TestCase):
     def test_t3_watcher_status(self):
         st = watcher_status()
         self.assertTrue(st.get("ok"))
-        self.assertEqual(st.get("phase"), "T3")
+        self.assertEqual(st.get("phase"), "T3+U2b")
         self.assertTrue(import_inbox_paths())
         # poll_once with high cutoff finds nothing — still ok
         out = poll_once(since_mtime=10**12)
