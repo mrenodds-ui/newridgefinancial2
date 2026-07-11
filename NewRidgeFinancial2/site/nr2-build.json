@@ -1,7 +1,7 @@
 {
-  "schemaVersion": "hal-10494",
-  "BUILD_ID": "hal-10494",
-  "assetVersion": "hal-10494",
-  "builtAt": "2026-07-11T20:33:47.000Z",
-  "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server."
+  "schemaVersion": "hal-10495",
+  "BUILD_ID": "hal-10495",
+  "assetVersion": "hal-10495",
+  "builtAt": "2026-07-11T21:00:00.000Z",
+  "notes": "hal-10495: Moonshot HAL patient dossier + OM Mon-Thu schedule + HAL patient context."
 }
