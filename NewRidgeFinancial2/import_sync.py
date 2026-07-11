@@ -1006,6 +1006,19 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
         csv_counts = ingest_csv_reports_to_sqlite()
         if csv_counts:
             result["softdent"]["csvReportIngest"] = csv_counts
+        from softdent_treatment_planning import run_treatment_planning_ingest
+
+        tp = run_treatment_planning_ingest()
+        result["softdent"]["treatmentPlanning"] = {
+            "ok": bool(tp.get("ok")),
+            "paymentLines": int(tp.get("paymentLines") or 0),
+            "procedureCodes": int(tp.get("procedureCodes") or 0),
+            "estimates": int(tp.get("estimates") or 0),
+            "paymentFile": tp.get("paymentFile"),
+            "procedureFile": tp.get("procedureFile"),
+        }
+        for warning in tp.get("warnings") or []:
+            result["warnings"].append(f"SoftDent treatment planning: {warning}")
     except Exception as exc:
         result["warnings"].append(f"SoftDent transaction/CSV extract skipped: {exc}")
     if pipeline.get("practiceSync") and not (pipeline["practiceSync"].get("written") or []):

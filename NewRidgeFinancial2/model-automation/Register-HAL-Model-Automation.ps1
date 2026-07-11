@@ -11,7 +11,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$nr2Root = Split-Path -Parent $scriptRoot
 $warmScript = Join-Path $scriptRoot "Keep-HAL-Models-Warm.ps1"
+. (Join-Path $nr2Root "scripts\Get-HiddenPowerShellLauncher.ps1")
 
 $startupTaskLabel = if ($SystemBoot) { "New Ridge HAL Model Warmup (System Boot)" } else { "New Ridge HAL Model Warmup (Logon)" }
 if ([string]::IsNullOrWhiteSpace($StartupTaskName)) {
@@ -22,50 +24,48 @@ if (-not (Test-Path $warmScript)) {
     throw "Warm script not found: $warmScript"
 }
 
-$arguments = @(
-    "-NoProfile",
-    "-WindowStyle Hidden",
-    "-ExecutionPolicy Bypass",
-    "-File `"$warmScript`""
-)
+$psArgs = @()
+if ($AllConfigured) { $psArgs += "-AllConfigured" }
+if ($IncludeReasoningLanes) { $psArgs += "-IncludeReasoningLanes" }
 
-if ($AllConfigured) {
-    $arguments += "-AllConfigured"
-}
+$taskCommand = Get-HiddenPowerShellTaskCommand -ScriptPath $warmScript -ExtraArgs $psArgs
 
-if ($IncludeReasoningLanes) {
-    $arguments += "-IncludeReasoningLanes"
-}
-
-$taskCommand = "powershell.exe " + ($arguments -join " ")
-
-# Recurring task: re-warm the lane models on a short interval so the active
-# set stays resident and recovers automatically after any eviction or restart.
-# Runs in the current user session (no elevation required).
 schtasks.exe /Create /TN $TaskName /SC MINUTE /MO $RepeatMinutes /TR $taskCommand /F
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to create or update scheduled task '$TaskName'."
 }
 
 if ($SystemBoot) {
-    # Pre-logon boot start. Requires an elevated (Administrator) shell because
-    # it runs as SYSTEM at machine startup, whether or not anyone logs on.
     schtasks.exe /Create /TN $StartupTaskName /SC ONSTART /TR $taskCommand /RU "SYSTEM" /RL HIGHEST /F
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to create boot task '$StartupTaskName'. Run this script in an elevated (Administrator) PowerShell for -SystemBoot."
     }
     Write-Host "  '$StartupTaskName' runs at system startup (SYSTEM, pre-logon)."
 } else {
-    # At-logon warm start via the current user's Startup folder. This runs when
-    # the user logs on, needs no elevation, and is independent of the NR2 app.
     $startupDir = [Environment]::GetFolderPath("Startup")
-    $launcher = Join-Path $startupDir "NewRidge-HAL-Model-Warmup.cmd"
-    $launcherBody = "@echo off`r`nstart `"`" /min powershell.exe " + ($arguments -join " ")
-    Set-Content -Path $launcher -Value $launcherBody -Encoding ASCII
-    Write-Host "  Logon warm start installed: $launcher"
+    $launcherInfo = Get-HiddenPowerShellLauncher
+    $oldCmd = Join-Path $startupDir "NewRidge-HAL-Model-Warmup.cmd"
+    $oldVbs = Join-Path $startupDir "NewRidge-HAL-Model-Warmup.vbs"
+    Remove-Item $oldCmd, $oldVbs -Force -ErrorAction SilentlyContinue
+
+    # .pyw runs under pythonw with no console
+    $startupPyw = Join-Path $startupDir "NewRidge-HAL-Model-Warmup.pyw"
+    $extraLiteral = ($psArgs | ForEach-Object { ", " + ($_ | ConvertTo-Json) }) -join ""
+    $pywBody = @"
+import runpy, sys
+sys.argv = [r"$($launcherInfo.Launcher)", r"$warmScript"$extraLiteral]
+runpy.run_path(r"$($launcherInfo.Launcher)", run_name="__main__")
+"@
+    if ($launcherInfo.Kind -ne "pythonw") {
+        # Fallback: tiny cmd that still tries to stay quiet
+        $startupPyw = Join-Path $startupDir "NewRidge-HAL-Model-Warmup.cmd"
+        $pywBody = "@echo off`r`n$taskCommand"
+    }
+    Set-Content -Path $startupPyw -Value $pywBody -Encoding ASCII
+    Write-Host "  Logon warm start installed: $startupPyw"
 }
 
-Write-Host "Scheduled tasks registered:"
+Write-Host "Scheduled tasks registered (hidden):"
 Write-Host "  '$TaskName' runs every $RepeatMinutes minute(s)."
 Write-Host "Command: $taskCommand"
 Write-Host ""
