@@ -139,7 +139,7 @@ class VyneTesiaAdapterTests(unittest.TestCase):
 
         status = clearinghouse_status()
         self.assertIn("vyne_tesia", status.get("vendors") or {})
-        self.assertEqual(status.get("preferredOfficeVendor"), "vyne_tesia")
+        self.assertEqual(status.get("preferredOfficeVendor"), "availity")
 
     def test_vendor_alias_tesia(self) -> None:
         from clearinghouse_eligibility_adapter import _normalize_vendor_alias, _pick_vendor

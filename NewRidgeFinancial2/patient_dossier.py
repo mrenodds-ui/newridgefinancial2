@@ -143,9 +143,11 @@ def _resolve_eligibility_for_patient(
         cols = _column_names(conn, "sd_patient_insurance")
         select_cols = [c for c in ("member_id", "subscriber_id", "insurance_name", "payer_id") if c in cols]
         if select_cols:
+            order = " ORDER BY priority ASC" if "priority" in cols else ""
             cur = conn.cursor()
             cur.execute(
-                f"SELECT {', '.join(select_cols)} FROM sd_patient_insurance WHERE patient_id = ? LIMIT 1",
+                f"SELECT {', '.join(select_cols)} FROM sd_patient_insurance "
+                f"WHERE patient_id = ?{order} LIMIT 1",
                 (patient_id,),
             )
             row = cur.fetchone()
@@ -171,7 +173,13 @@ def _resolve_eligibility_for_patient(
         eligibility["gaps"].append("providerNPI")
 
     if eligibility["gaps"]:
-        eligibility["error"] = f"SoftDent missing: {', '.join(eligibility['gaps'])}"
+        if payer_name and "memberId" in eligibility["gaps"]:
+            eligibility["error"] = (
+                f"Primary insurance on file ({payer_name}) but Member ID missing from SoftDent. "
+                f"Gaps: {', '.join(eligibility['gaps'])}"
+            )
+        else:
+            eligibility["error"] = f"SoftDent missing: {', '.join(eligibility['gaps'])}"
         return eligibility
 
     cache_seed = f"{patient_id}:{member_id}:{payer_id or payer_name}:{provider_npi}"

@@ -41,6 +41,7 @@ SD_TABLES = (
     "sd_claims",
     "sd_payments",
     "sd_adjustments",
+    "sd_patient_insurance",
 )
 
 SENSEI_ENTITY_WRAPPERS = {
@@ -98,6 +99,7 @@ ODBC_QUERY_ENV_BY_TABLE = {
     "sd_appointments": "SOFTDENT_ODBC_APPOINTMENTS_QUERY",
     "sd_providers": "SOFTDENT_ODBC_PROVIDERS_QUERY",
     "sd_adjustments": "SOFTDENT_ODBC_ADJUSTMENTS_QUERY",
+    "sd_patient_insurance": "SOFTDENT_ODBC_INSURANCE_QUERY",
 }
 
 
@@ -252,6 +254,32 @@ def ensure_sd_schema(conn: sqlite3.Connection) -> None:
             extracted_at TEXT,
             PRIMARY KEY (practice_id, patient_id, adj_date, ada_code, amount)
         );
+        CREATE TABLE IF NOT EXISTS sd_patient_insurance (
+            practice_id TEXT NOT NULL DEFAULT '',
+            patient_id TEXT NOT NULL,
+            priority INTEGER NOT NULL DEFAULT 1,
+            member_id TEXT,
+            subscriber_id TEXT,
+            subscriber_name TEXT,
+            relationship_code TEXT,
+            carrier_code TEXT,
+            insurance_name TEXT,
+            payer_id TEXT,
+            group_number TEXT,
+            group_name TEXT,
+            effective_date TEXT,
+            termination_date TEXT,
+            extracted_at TEXT NOT NULL,
+            PRIMARY KEY (practice_id, patient_id, priority)
+        );
+        CREATE TABLE IF NOT EXISTS sd_carrier_payer_map (
+            practice_id TEXT NOT NULL DEFAULT '',
+            carrier_code TEXT NOT NULL,
+            payer_id TEXT NOT NULL,
+            insurance_name TEXT,
+            updated_at TEXT,
+            PRIMARY KEY (practice_id, carrier_code)
+        );
         CREATE TABLE IF NOT EXISTS sd_extract_meta (
             key TEXT PRIMARY KEY,
             value TEXT
@@ -266,6 +294,376 @@ def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
         "INSERT OR REPLACE INTO sd_extract_meta (key, value) VALUES (?, ?)",
         (key, value),
     )
+
+
+_REL_CODE_MAP = {
+    "1": "SELF",
+    "2": "SPOUSE",
+    "3": "CHILD",
+    "4": "OTHER",
+    "S": "SELF",
+    "SELF": "SELF",
+    "SPOUSE": "SPOUSE",
+    "CHILD": "CHILD",
+    "OTHER": "OTHER",
+}
+
+DEFAULT_INSURANCE_ODBC_QUERY = """
+SELECT
+    p.Patient_ID AS patient_id,
+    CASE
+        WHEN UPPER(COALESCE(pi.Ins_Type, pi.Type, 'PRI')) IN ('SEC', '2', 'SECONDARY') THEN 2
+        WHEN UPPER(COALESCE(pi.Ins_Type, pi.Type, 'PRI')) IN ('TER', '3', 'TERTIARY') THEN 3
+        ELSE 1
+    END AS priority,
+    pi.Member_ID AS member_id,
+    pi.Subscriber_ID AS subscriber_id,
+    pi.Subscriber_Name AS subscriber_name,
+    pi.Relationship AS relationship_code,
+    c.Carrier_Code AS carrier_code,
+    c.Carrier_Name AS insurance_name,
+    c.EDI_Code AS payer_id,
+    pi.Group_Num AS group_number,
+    pi.Group_Name AS group_name,
+    pi.Effective_Date AS effective_date,
+    pi.Termination_Date AS termination_date
+FROM PATIENT p
+INNER JOIN PAT_INS pi ON p.Patient_ID = pi.Patient_ID
+LEFT JOIN CARRIER c ON pi.Carrier_Code = c.Carrier_Code
+WHERE pi.Carrier_Code IS NOT NULL
+""".strip()
+
+
+def _norm_empty(val: Any) -> str | None:
+    """Honest empty→NULL; never invent member/payer IDs."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    return s if s else None
+
+
+def _normalize_relationship_code(raw: Any) -> str | None:
+    code = _norm_empty(raw)
+    if not code:
+        return None
+    return _REL_CODE_MAP.get(code.upper(), code.upper())
+
+
+def _termination_still_active(termination_date: str | None, *, today: str | None = None) -> bool:
+    """NICE: skip policies terminated before today when date is parseable."""
+    term = _norm_empty(termination_date)
+    if not term:
+        return True
+    day = today or datetime.now(timezone.utc).date().isoformat()
+    digits = re.sub(r"[^0-9]", "", term)
+    if len(digits) >= 8:
+        iso = f"{digits[0:4]}-{digits[4:6]}-{digits[6:8]}"
+        try:
+            return iso >= day[:10]
+        except Exception:
+            return True
+    return True
+
+
+def discover_insurance_tables(odbc_conn) -> list[dict[str, str]]:
+    """Read-only catalog search for SoftDent insurance/carrier tables."""
+    cur = odbc_conn.cursor()
+    try:
+        try:
+            cur.execute(
+                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
+                "WHERE TABLE_TYPE = 'TABLE' AND (UPPER(TABLE_NAME) LIKE ? OR UPPER(TABLE_NAME) LIKE ?)",
+                ("%INS%", "%CARR%"),
+            )
+            rows = cur.fetchall()
+            if rows:
+                return [{"table": str(r[0])} for r in rows]
+        except Exception:
+            pass
+        cur.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'TABLE'")
+        return [{"table": str(r[0])} for r in cur.fetchall()]
+    except Exception as exc:
+        return [{"error": str(exc)}]
+
+
+def lookup_carrier_payer_id(
+    sqlite_conn: sqlite3.Connection, *, practice_id: str, carrier_code: str | None
+) -> str | None:
+    """SHOULD: map SoftDent carrier_code → Availity payerId when EDI code missing."""
+    code = _norm_empty(carrier_code)
+    if not code or not _table_exists(sqlite_conn, "sd_carrier_payer_map"):
+        return None
+    cur = sqlite_conn.cursor()
+    cur.execute(
+        """
+        SELECT payer_id FROM sd_carrier_payer_map
+        WHERE practice_id = ? AND carrier_code = ? LIMIT 1
+        """,
+        (practice_id or "", code),
+    )
+    row = cur.fetchone()
+    return _norm_empty(row[0]) if row else None
+
+
+def upsert_carrier_payer_map(
+    sqlite_conn: sqlite3.Connection,
+    *,
+    practice_id: str,
+    carrier_code: str,
+    payer_id: str,
+    insurance_name: str | None = None,
+) -> None:
+    ensure_sd_schema(sqlite_conn)
+    sqlite_conn.execute(
+        """
+        INSERT INTO sd_carrier_payer_map (practice_id, carrier_code, payer_id, insurance_name, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(practice_id, carrier_code) DO UPDATE SET
+            payer_id=excluded.payer_id,
+            insurance_name=COALESCE(excluded.insurance_name, sd_carrier_payer_map.insurance_name),
+            updated_at=excluded.updated_at
+        """,
+        (
+            practice_id or "",
+            str(carrier_code).strip(),
+            str(payer_id).strip(),
+            _norm_empty(insurance_name),
+            _utc_now(),
+        ),
+    )
+
+
+def resolve_insurance_odbc_query() -> str:
+    env_sql = os.environ.get("SOFTDENT_ODBC_INSURANCE_QUERY", "").strip()
+    if env_sql:
+        return env_sql
+    discovery = load_discovery_suggested_env()
+    suggested = str(discovery.get("SOFTDENT_ODBC_INSURANCE_QUERY") or "").strip()
+    return suggested or DEFAULT_INSURANCE_ODBC_QUERY
+
+
+def extract_patient_insurance(
+    odbc_conn,
+    sqlite_conn: sqlite3.Connection,
+    practice_id: str = "",
+    *,
+    dry_run: bool = False,
+    sql: str | None = None,
+) -> int:
+    """Extract insurance policies from SoftDent → sd_patient_insurance.
+
+    Honest: empty strings stored as NULL. No invented payer/member IDs.
+    SoftDent READ-ONLY (SELECT only on ODBC).
+    """
+    ensure_sd_schema(sqlite_conn)
+    extracted_at = _utc_now()
+    count = 0
+    query = (sql or resolve_insurance_odbc_query()).strip()
+    if not query:
+        return 0
+
+    cur_odbc = odbc_conn.cursor()
+    cur_odbc.execute(query)
+    cols = [str(desc[0]) for desc in (cur_odbc.description or [])]
+    practice = str(practice_id or "").strip()
+
+    for row in cur_odbc.fetchall():
+        row_dict = {cols[i]: row[i] for i in range(len(cols))}
+        patient_id = _norm_empty(
+            row_dict.get("patient_id") or row_dict.get("Patient_ID") or row_dict.get("PatientID")
+        )
+        if not patient_id:
+            continue
+
+        try:
+            priority = int(row_dict.get("priority") or 1)
+        except (TypeError, ValueError):
+            priority = 1
+        if priority < 1:
+            priority = 1
+
+        member_id = _norm_empty(row_dict.get("member_id") or row_dict.get("Member_ID") or row_dict.get("PolicyNumber"))
+        subscriber_id = _norm_empty(row_dict.get("subscriber_id") or row_dict.get("Subscriber_ID"))
+        subscriber_name = _norm_empty(row_dict.get("subscriber_name") or row_dict.get("Subscriber_Name"))
+        relationship_code = _normalize_relationship_code(
+            row_dict.get("relationship_code") or row_dict.get("Relationship")
+        )
+        carrier_code = _norm_empty(row_dict.get("carrier_code") or row_dict.get("Carrier_Code"))
+        insurance_name = _norm_empty(
+            row_dict.get("insurance_name") or row_dict.get("Carrier_Name") or row_dict.get("InsuranceCompany")
+        )
+        payer_id = _norm_empty(row_dict.get("payer_id") or row_dict.get("EDI_Code") or row_dict.get("PayerId"))
+        group_number = _norm_empty(row_dict.get("group_number") or row_dict.get("Group_Num") or row_dict.get("GroupNumber"))
+        group_name = _norm_empty(row_dict.get("group_name") or row_dict.get("Group_Name"))
+        effective_date = _norm_empty(row_dict.get("effective_date") or row_dict.get("Effective_Date"))
+        termination_date = _norm_empty(row_dict.get("termination_date") or row_dict.get("Termination_Date"))
+
+        if not _termination_still_active(termination_date):
+            continue
+
+        if not payer_id and carrier_code:
+            payer_id = lookup_carrier_payer_id(sqlite_conn, practice_id=practice, carrier_code=carrier_code)
+
+        if dry_run:
+            count += 1
+            continue
+
+        sqlite_conn.execute(
+            """
+            INSERT INTO sd_patient_insurance (
+                practice_id, patient_id, priority, member_id, subscriber_id,
+                subscriber_name, relationship_code, carrier_code, insurance_name,
+                payer_id, group_number, group_name, effective_date, termination_date, extracted_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(practice_id, patient_id, priority) DO UPDATE SET
+                member_id=excluded.member_id,
+                subscriber_id=excluded.subscriber_id,
+                subscriber_name=excluded.subscriber_name,
+                relationship_code=excluded.relationship_code,
+                carrier_code=excluded.carrier_code,
+                insurance_name=excluded.insurance_name,
+                payer_id=excluded.payer_id,
+                group_number=excluded.group_number,
+                group_name=excluded.group_name,
+                effective_date=excluded.effective_date,
+                termination_date=excluded.termination_date,
+                extracted_at=excluded.extracted_at
+            """,
+            (
+                practice,
+                patient_id,
+                priority,
+                member_id,
+                subscriber_id,
+                subscriber_name,
+                relationship_code,
+                carrier_code,
+                insurance_name,
+                payer_id,
+                group_number,
+                group_name,
+                effective_date,
+                termination_date,
+                extracted_at,
+            ),
+        )
+        count += 1
+
+    if not dry_run:
+        sqlite_conn.commit()
+    return count
+
+
+def resolve_insurance_csv_path() -> Path | None:
+    configured = _env_path("SOFTDENT_INSURANCE_CSV_PATH")
+    if configured and configured.is_file():
+        return configured
+    roots: list[Path] = []
+    try:
+        from import_sync import SOFTDENT_FINANCIAL_EXPORTS, _softdent_direct_read_roots
+
+        if SOFTDENT_FINANCIAL_EXPORTS:
+            roots.append(Path(SOFTDENT_FINANCIAL_EXPORTS))
+        roots.extend(_softdent_direct_read_roots())
+    except Exception:
+        pass
+    patterns = (
+        "patient_insurance*.csv",
+        "PatientInsurance*.csv",
+        "insurance_patients*.csv",
+        "*patient*insurance*.csv",
+    )
+    matches: list[Path] = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for pattern in patterns:
+            matches.extend(root.glob(pattern))
+    files = [p for p in matches if p.is_file()]
+    if not files:
+        return None
+    return max(files, key=lambda item: item.stat().st_mtime)
+
+
+def load_insurance_csv(
+    csv_path: Path,
+    sqlite_conn: sqlite3.Connection,
+    practice_id: str = "",
+) -> int:
+    """SHOULD: ingest SoftDent Financial Export Patient Insurance CSV."""
+    ensure_sd_schema(sqlite_conn)
+    if not csv_path or not Path(csv_path).is_file():
+        return 0
+    extracted_at = _utc_now()
+    practice = str(practice_id or "").strip()
+    count = 0
+    with open(csv_path, newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            patient_id = _norm_empty(
+                row.get("PatientID")
+                or row.get("Patient ID")
+                or row.get("patient_id")
+                or row.get("PatID")
+            )
+            if not patient_id:
+                continue
+            member_id = _norm_empty(
+                row.get("PolicyNumber")
+                or row.get("Member ID")
+                or row.get("MemberID")
+                or row.get("member_id")
+            )
+            insurance_name = _norm_empty(
+                row.get("InsuranceCompany")
+                or row.get("Insurance Company")
+                or row.get("Carrier")
+                or row.get("insurance_name")
+            )
+            carrier_code = _norm_empty(row.get("CarrierCode") or row.get("Carrier Code") or row.get("carrier_code"))
+            payer_id = _norm_empty(row.get("PayerID") or row.get("Payer Id") or row.get("EDI_Code") or row.get("payer_id"))
+            group_number = _norm_empty(row.get("GroupNumber") or row.get("Group Number") or row.get("group_number"))
+            priority_raw = row.get("Priority") or row.get("InsType") or "1"
+            try:
+                priority = 2 if str(priority_raw).strip().upper() in ("2", "SEC", "SECONDARY") else 1
+            except Exception:
+                priority = 1
+            if not payer_id and carrier_code:
+                payer_id = lookup_carrier_payer_id(sqlite_conn, practice_id=practice, carrier_code=carrier_code)
+            term = _norm_empty(row.get("TerminationDate") or row.get("termination_date"))
+            if not _termination_still_active(term):
+                continue
+            sqlite_conn.execute(
+                """
+                INSERT INTO sd_patient_insurance (
+                    practice_id, patient_id, priority, member_id, insurance_name,
+                    carrier_code, payer_id, group_number, termination_date, extracted_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(practice_id, patient_id, priority) DO UPDATE SET
+                    member_id=excluded.member_id,
+                    insurance_name=excluded.insurance_name,
+                    carrier_code=excluded.carrier_code,
+                    payer_id=excluded.payer_id,
+                    group_number=excluded.group_number,
+                    termination_date=excluded.termination_date,
+                    extracted_at=excluded.extracted_at
+                """,
+                (
+                    practice,
+                    patient_id,
+                    priority,
+                    member_id,
+                    insurance_name,
+                    carrier_code,
+                    payer_id,
+                    group_number,
+                    term,
+                    extracted_at,
+                ),
+            )
+            count += 1
+    sqlite_conn.commit()
+    return count
 
 
 def read_extract_meta(db_path: Path | None = None) -> dict[str, str]:
@@ -372,12 +770,14 @@ def table_row_counts(db_path: Path | None) -> dict[str, int]:
     conn = sqlite3.connect(db_path)
     try:
         out: dict[str, int] = {}
+        allowed = frozenset(SD_TABLES)
         for table in SD_TABLES:
-            if not _table_exists(conn, table):
+            if table not in allowed or not _table_exists(conn, table):
                 out[table] = 0
                 continue
             cur = conn.cursor()
-            cur.execute(f"SELECT COUNT(*) FROM {table}")
+            # Whitelist-only table name from SD_TABLES (not user input).
+            cur.execute("SELECT COUNT(*) FROM {}".format(table))
             out[table] = int(cur.fetchone()[0] or 0)
         return out
     finally:
@@ -659,7 +1059,7 @@ def _populate_from_odbc(conn: sqlite3.Connection, *, extracted_at: str) -> dict[
     try:
         cursor = odbc_conn.cursor()
         for table, sql in query_map.items():
-            if not sql:
+            if not sql or table == "sd_patient_insurance":
                 continue
             cursor.execute(sql)
             columns = [str(col[0]) for col in (cursor.description or [])]
@@ -793,6 +1193,28 @@ def _populate_from_odbc(conn: sqlite3.Connection, *, extracted_at: str) -> dict[
                     )
                     inserted += 1
             result["tables"][table] = inserted
+
+        # Moonshot SoftDent insurance extract (MUST) — separate path; honest NULLs
+        try:
+            discovered = discover_insurance_tables(odbc_conn)
+            _set_meta(
+                conn,
+                "insurance_discovered_tables",
+                json.dumps([d.get("table") for d in discovered if d.get("table")][:40]),
+            )
+        except Exception as disc_exc:
+            _set_meta(conn, "insurance_discovery_error", str(disc_exc)[:400])
+        try:
+            ins_count = extract_patient_insurance(odbc_conn, conn, practice_id="")
+            result["tables"]["sd_patient_insurance"] = ins_count
+            _set_meta(conn, "insurance_extracted_count", str(ins_count))
+            _set_meta(conn, "insurance_extracted_at", extracted_at)
+            _set_meta(conn, "insurance_extract_error", "")
+        except Exception as ins_exc:
+            result["tables"]["sd_patient_insurance"] = 0
+            _set_meta(conn, "insurance_extract_error", str(ins_exc)[:500])
+            # Continue — do not fail entire ODBC extract for insurance alone
+
         conn.commit()
         result["ok"] = any(int(value or 0) > 0 for value in result["tables"].values())
     except Exception as exc:
@@ -1262,6 +1684,22 @@ def extract_softdent_odbc(*, db_path: Path | None = None, force: bool = False) -
                 fallback_counts[key] = fallback_counts.get(key, 0) + int(value or 0)
         claims_count = _populate_from_claims_csv(conn, _resolve_claims_path() or Path(""), extracted_at=extracted_at)
         fallback_counts["sd_claims"] = fallback_counts.get("sd_claims", 0) + claims_count
+
+        # SHOULD: CSV fallback for patient insurance when ODBC insurance empty/unavailable
+        try:
+            csv_path = resolve_insurance_csv_path()
+            if csv_path:
+                csv_count = load_insurance_csv(csv_path, conn, practice_id="")
+                fallback_counts["sd_patient_insurance"] = (
+                    int(fallback_counts.get("sd_patient_insurance") or 0) + csv_count
+                )
+                _set_meta(conn, "insurance_csv_path", str(csv_path))
+                _set_meta(conn, "insurance_csv_count", str(csv_count))
+                _set_meta(conn, "insurance_csv_at", extracted_at)
+        except Exception as csv_exc:
+            _set_meta(conn, "insurance_csv_error", str(csv_exc)[:400])
+            result["warnings"].append(f"insurance_csv:{csv_exc}")
+
         result["fallback"] = fallback_counts
 
         # After ODBC/Sensei populate named payers, refresh inbox CSV for HAL join/readiness.

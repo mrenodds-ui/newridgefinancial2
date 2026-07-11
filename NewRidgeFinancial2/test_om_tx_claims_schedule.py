@@ -22,7 +22,7 @@ from nr2_softdent_daily import (
 
 class OmTxClaimsScheduleGates(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10495")
+        self.assertEqual(BUILD_ID, "hal-10498")
 
     def test_operatory_board_empty_honest(self) -> None:
         w = build_operatory_board({})
