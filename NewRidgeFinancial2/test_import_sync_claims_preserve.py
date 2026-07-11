@@ -8,6 +8,7 @@ from import_sync import (
     _claims_have_named_payers,
     _claims_look_daysheet_derived,
     _is_generic_payer,
+    _is_sample_claims,
 )
 
 
@@ -36,6 +37,27 @@ class ClaimsPreserveHelpersTests(unittest.TestCase):
         ]
         self.assertTrue(_claims_look_daysheet_derived(daysheet))
         self.assertFalse(_claims_look_daysheet_derived(softdent))
+
+    def test_jane_doe_stub_is_sample(self) -> None:
+        stub = [
+            {
+                "ClaimId": "CLM-001",
+                "PatientName": "Jane Doe",
+                "Payer": "Delta Dental",
+                "ClaimAmount": "420.0",
+            }
+        ]
+        self.assertTrue(_is_sample_claims(stub))
+
+    def test_real_claims_not_sample(self) -> None:
+        rows = [
+            {
+                "ClaimId": "DS-20260528-1080404-1110-3",
+                "PatientName": "Bernett, Jeffery Adam",
+                "Payer": "Insurance",
+            }
+        ]
+        self.assertFalse(_is_sample_claims(rows))
 
 
 if __name__ == "__main__":

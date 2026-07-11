@@ -99,11 +99,16 @@ def _ar_aging_buckets(ar_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"bucket": label, "amount": round(totals[label], 2)} for label in ("0-30", "31-60", "61-90", "90+")]
 
 
-def build_financial_reports(*, sync_exports: bool = False) -> dict[str, Any]:
+def build_financial_reports(
+    *,
+    sync_exports: bool = False,
+    bundle: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if sync_exports:
         sync_practice_exports()
 
-    bundle = load_import_bundle(sync=False, deep=False)
+    if bundle is None:
+        bundle = load_import_bundle(sync=False, deep=False)
     sd = bundle.get("softdent") if isinstance(bundle.get("softdent"), dict) else {}
     claims_rows = (sd.get("claims") or {}).get("rows") if isinstance(sd.get("claims"), dict) else []
     ar_rows = (sd.get("ar") or {}).get("rows") if isinstance(sd.get("ar"), dict) else []
