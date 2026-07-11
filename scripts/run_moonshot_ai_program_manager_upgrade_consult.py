@@ -47,41 +47,43 @@ Please evaluate my existing codebase and provide the complete, production-ready 
 
 SYSTEM = """You are Moonshot AI (kimi-k2 class) — senior NR2 Apex + HAL architect for
 NewRidge Family Financial (Kansas dental S-corp; SoftDent + QuickBooks imports;
-local HTTPS starship-bridge; Ollama GPU lanes chat8b + escalate30b).
+local HTTPS starship-bridge; local Ollama on R9700).
 
 CRITICAL CONSTRAINTS:
-1. Answer the OPERATOR REQUEST VERBATIM again (RE-AUDIT #7). The operator message was CUT OFF
+1. Answer the OPERATOR REQUEST VERBATIM again (RE-AUDIT #8). The operator message was CUT OFF
    mid-sentence at "unified local database/state management system (e.g.," — note truncation,
    assume SQLite/NR2 app_data as unified store. Deliver a complete consult for sections 1–2
-   against the LIVE codebase NOW (build hal-10493), not earlier states.
+   against the LIVE codebase NOW (tip after f3281f5 / hal-10493 + single-24B local AI), not earlier states.
 2. ALREADY SHIPPED — do NOT rebuild:
    - Feature waves through W0–W2 (hal-10492): orchestrator, SoftDent/QB automation, unified DB,
      ERA, reconciliation, import DQ/cron, quarantine UI, extended metrics, burn-in telemetry packs
-   - REAUDIT6 X0–X2 (hal-10493): OPT-IN ops runbooks only
-     (nr2_burnin_enable_flags.ps1, nr2_register_scheduled_tasks.ps1, validate_nr2_burnin.py).
-     Burn-in flags remain DEFAULT OFF until operator executes scripts.
+   - X0–X2 (hal-10493): burn-in ops runbooks; operator later ENABLED flags + Task Scheduler on this machine
+   - REAUDIT7 declared PROGRAM COMPLETE PENDING BURN-IN; burn-in was then executed
+   - Single-24B local AI (commit f3281f5): all approved local lanes → `hal-local:24b` (Q4_K_M) on
+     R9700 only; OLLAMA_MAX_LOADED_MODELS=1; loopback-only; dual 8B+30B NOT auto-routed (files retained).
+     Original request said 8B/30B hierarchy — architecture EVOLVED to one 24B; acknowledge this honestly.
 3. CONSULT ONLY — DO NOT APPLY code. Wait for approve.
 4. Ground EVERY recommendation in LIVE FACTS. Evolve NR2; no rewrite; no SoftDent write-back;
    never invent dollars; PHI local; empty ≠ $0.
-5. If sections 1–2 are COMPLETE pending operator burn-in enablement, say so CLEARLY as the
-   primary verdict. Rank ONLY residual items. Prefer:
-   - confirm "program complete / awaiting burn-in"
+5. If sections 1–2 are COMPLETE after burn-in + single-24B, say so CLEARLY as the primary verdict.
+   Rank ONLY residual items. Prefer:
+   - confirm "program complete" (or residual Future-vendor only)
    - optional tiny polish ONLY if grounded in real gaps
-   - Future vendor items (QB Online API, SoftDent live API, ERA write-back)
+   - Future vendor items (QB Online API, SoftDent live API, ERA write-back; optional external 12GB GPU for separate 8B)
    Do NOT invent a large new feature wave (Y0..) unless a real MUST gap remains.
-6. End with APPROVAL CHECKLIST (burn-in enablement and/or Future only).
+6. End with APPROVAL CHECKLIST (Future vendor / optional polish only).
 
 OUTPUT FORMAT (strict markdown):
-# Verdict — AI Program Manager re-audit #7 (post X0–X2 / hal-10493)
+# Verdict — AI Program Manager re-audit #8 (post burn-in + single-24B)
 ## 0. Operator Intent (quote; note truncation; consult-only re-run)
-## 1. Current Architecture Audit (what exists at hal-10493) — brief
+## 1. Current Architecture Audit (what exists NOW) — brief
 ## 2. Gap Map — REMAINING only
 Table: Area | Status | Gap | Effort | Depends on
 ## 3. Target Architecture (next wave only — or NONE if complete)
 ## 4. Coding Plan — only if MUST gaps remain (else state NO NEW CODE)
 ## 5. MUST / SHOULD / NICE ranked table (remaining)
 ## 6. Risks, PHI, SoftDent honesty, Rollback
-## 7. Approval Checklist (burn-in enablement / Future only)
+## 7. Approval Checklist (Future / optional only)
 DO NOT APPLY until operator says approve / proceed.
 """
 
@@ -95,9 +97,10 @@ def _truncate(text: str, max_lines: int) -> str:
 
 CONTEXT_FILES: list[tuple[str, int]] = [
     ("NewRidgeFinancial2/nr2-build.json", 12),
-    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_X0_X2_APPLIED_2026-07-11.md", 80),
-    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT6_2026-07-11.md", 60),
-    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_W2_APPLIED_2026-07-11.md", 30),
+    ("NewRidgeFinancial2/docs/HAL_LOCAL_24B_SINGLE_GPU_2026-07-11.md", 80),
+    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT7_2026-07-11.md", 60),
+    ("NewRidgeFinancial2/docs/MOONSHOT_AI_PM_PHASE_X0_X2_APPLIED_2026-07-11.md", 40),
+    ("NewRidgeFinancial2/site/data/hal-models.json", 80),
 ]
 
 
@@ -127,12 +130,13 @@ def build_context() -> str:
             )
 
     parts.append(
-        """### LIVE FACTS (hal-10493 — RE-AUDIT #7 after X0–X2)
-- Feature program through W2 is shipped. X0–X2 are opt-in ops scripts only.
-- Burn-in flags still DEFAULT OFF until operator runs nr2_burnin_enable_flags.ps1.
-- Task Scheduler not registered until operator runs nr2_register_scheduled_tasks.ps1.
-- Honesty rules enforced throughout. SoftDent read-only.
-- If original sections 1–2 are met, declare PROGRAM COMPLETE PENDING BURN-IN.
+        """### LIVE FACTS (RE-AUDIT #8 — post burn-in + single-24B)
+- Feature program through W2 shipped; X0–X2 burn-in runbooks shipped; operator ENABLED burn-in flags + Task Scheduler on this workstation.
+- Local AI: single `hal-local:24b` (mistral-small3.1:24b Q4_K_M) on R9700 32GB; MAX_LOADED_MODELS=1; lanes chat8b/reason21b/escalate30b/coder32b → same 24B; cloudReasoning still off.
+- Prompt suite + 30m stability PASSED; loopback OLLAMA_HOST=127.0.0.1; rollback script exists for dual 8B+30B.
+- Honesty rules enforced. SoftDent read-only. Empty ≠ $0.
+- Original operator ask wanted 8B+30B hierarchy; evolved to one 24B — judge whether sections 1–2 intent is still met.
+- Prefer PROGRAM COMPLETE (Future vendor APIs only) if accurate.
 """
     )
     return "\n\n".join(parts)
@@ -153,11 +157,11 @@ def main() -> int:
 
     print(f"Using {key_name} @ {base_url} model={model}")
     user = (
-        "OPERATOR REQUEST (VERBATIM — do not rewrite) — RE-RUN #7 after X0–X2 / hal-10493:\n\n"
+        "OPERATOR REQUEST (VERBATIM — do not rewrite) — RE-RUN #8 after burn-in + single-24B:\n\n"
         f"{OPERATOR_REQUEST_VERBATIM}\n\n"
-        "NOTE: Feature waves through W2 + X0–X2 burn-in runbooks are shipped on hal-10493. "
-        "Re-audit ONLY remaining gaps. Prefer 'complete pending burn-in' if accurate. "
-        "CONSULT ONLY — do not apply.\n\n"
+        "NOTE: Same early-afternoon upgrade message. Feature waves through W2 + X0–X2 + burn-in "
+        "enablement + single-24B local AI are now live. Re-audit ONLY remaining gaps. "
+        "Prefer 'program complete / Future vendor only' if accurate. CONSULT ONLY — do not apply.\n\n"
         "## Codebase context\n\n"
         + build_context()
     )
@@ -199,14 +203,14 @@ def main() -> int:
         status = "error"
 
     header = (
-        f"# Moonshot AI — AI Program Manager Upgrade RE-AUDIT #7 (CONSULT ONLY)\n\n"
+        f"# Moonshot AI — AI Program Manager Upgrade RE-AUDIT #8 (CONSULT ONLY)\n\n"
         f"**Date:** {DATE}  \n"
         f"**Model:** {model}  \n"
         f"**Key:** {key_name}  \n"
         f"**Endpoint:** {base_url}  \n"
         f"**Status:** {status}  \n"
-        f"**Build reviewed:** hal-10493 (post X0–X2)  \n"
-        f"**Prior:** `MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT6_2026-07-11.md`  \n"
+        f"**Build reviewed:** tip after f3281f5 (hal-10493 + single-24B)  \n"
+        f"**Prior:** `MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT7_2026-07-11.md`  \n"
         f"**Script:** `scripts/run_moonshot_ai_program_manager_upgrade_consult.py`  \n"
         f"**Apply:** DO NOT APPLY / DO NOT CODE until operator approves.\n\n"
         f"## Operator request (verbatim)\n\n"
@@ -214,8 +218,8 @@ def main() -> int:
         f"---\n\n"
     )
     full = header + (content or "(empty)")
-    out_file = OUT / f"MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT7_{DATE}.md"
-    doc_file = DOCS / f"MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT7_{DATE}.md"
+    out_file = OUT / f"MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT8_{DATE}.md"
+    doc_file = DOCS / f"MOONSHOT_AI_PROGRAM_MANAGER_UPGRADE_REAUDIT8_{DATE}.md"
     out_file.write_text(full, encoding="utf-8")
     doc_file.write_text(full, encoding="utf-8")
     print(out_file)
