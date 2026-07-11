@@ -63,10 +63,8 @@ def log_patient_query(
     init_audit()
     from patient_dossier import patient_hash
 
-    ph = patient_hash(patient_id_or_hash) if len(str(patient_id_or_hash)) != 4 else str(patient_id_or_hash).upper()
-    # If input looks like raw id (not 4-char hash), always hash
-    if len(str(patient_id_or_hash).strip()) != 4:
-        ph = patient_hash(patient_id_or_hash)
+    # Always store 4-char SHA256 hash — never raw SoftDent patient_id / name
+    ph = patient_hash(patient_id_or_hash)
 
     conn = _conn()
     try:
