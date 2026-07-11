@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10491",
-  "assetVersion": "hal-10491",
-  "schemaVersion": "hal-10491",
+  "BUILD_ID": "hal-10492",
+  "assetVersion": "hal-10492",
+  "schemaVersion": "hal-10492",
   "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server.",
-  "builtAt": "2026-07-11T19:30:00.000Z"
+  "builtAt": "2026-07-11T19:45:00.000Z"
 }

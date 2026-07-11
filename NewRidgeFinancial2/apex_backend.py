@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10491"
+BUILD_ID = "hal-10492"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -4028,7 +4028,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(deep audit|monthly (practice )?health audit|quarter forecast)\b", "deep-audit-status", "financial"),
         (r"\b(era\s*835|remittance|era ingest)\b", "era835-ingest-gap", "softdent"),
         (r"\b(reconcil|variance alert|production vs payroll variance)\b", "reconciliation-status", "financial"),
-        (r"\b(import quarantine|quarantined import|poisoned (file|export))\b", "import-quarantine-status", "financial"),
+        (r"\b(import quarantine|quarantined import|poisoned (file|export))\b", "import-quarantine-panel", "financial"),
         (r"\b(dashboard layout|mosaic layout|widget order)\b", "dashboard-layout-status", "financial"),
         (r"\b(ai lane health|lane telemetry|model latency)\b", "ai-lane-health", "financial"),
         (r"\b(data freshness|sync status|import age)\b", "data-freshness-status", "financial"),
@@ -5470,7 +5470,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
 
             rows = list_quarantine(limit=50)
             return json_response_fn(
-                {"ok": True, "phase": "U2b", "rows": rows, "buildId": BUILD_ID}
+                {"ok": True, "phase": "U2b+W2", "rows": rows, "buildId": BUILD_ID}
             )
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
@@ -5485,6 +5485,38 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             payload = json.loads(raw or "{}")
             name = str(payload.get("name") or payload.get("file") or "")
             result = release_quarantine(name)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/import-quarantine-retry")
+    def apex_import_quarantine_retry():
+        """Phase W2 — release quarantined file and re-queue ingest."""
+        try:
+            import bottle
+            from apex_import_quarantine_pack import retry_quarantine
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            name = str(payload.get("name") or payload.get("file") or "")
+            result = retry_quarantine(name)
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/import-quarantine-purge")
+    def apex_import_quarantine_purge():
+        """Phase W2 — permanently delete quarantined local copy (+ reason sidecar)."""
+        try:
+            import bottle
+            from apex_import_quarantine_pack import purge_quarantine
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            name = str(payload.get("name") or payload.get("file") or "")
+            result = purge_quarantine(name)
             result["buildId"] = BUILD_ID
             return json_response_fn(result, status=200 if result.get("ok") else 400)
         except Exception as exc:  # noqa: BLE001

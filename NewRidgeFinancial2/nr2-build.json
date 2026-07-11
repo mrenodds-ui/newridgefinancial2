@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10491",
-  "assetVersion": "hal-10491",
-  "schemaVersion": "hal-10491",
-  "notes": "hal-10491: Moonshot W1 import cron + DQ reject-only gates.",
-  "builtAt": "2026-07-11T19:30:00.000Z"
+  "BUILD_ID": "hal-10492",
+  "assetVersion": "hal-10492",
+  "schemaVersion": "hal-10492",
+  "notes": "hal-10492: Moonshot W2 quarantine review UI (retry/purge panel).",
+  "builtAt": "2026-07-11T19:45:00.000Z"
 }

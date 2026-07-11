@@ -98,7 +98,7 @@ class DeepAuditPhaseU0Tests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10491")
+        self.assertEqual(BUILD_ID, "hal-10492")
 
     def test_period_math(self):
         self.assertEqual(period_minus_months("2026-06", 5), "2026-01")

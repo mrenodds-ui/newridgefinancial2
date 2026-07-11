@@ -31,7 +31,7 @@ DEFAULT_LAYOUTS: dict[str, dict[str, Any]] = {
             {"id": "reconciliation-status", "x": 6, "y": 3, "w": 6, "h": 2, "order": 2},
             {"id": "production-vs-payroll", "x": 0, "y": 5, "w": 6, "h": 2, "order": 3},
             {"id": "unified-db-snapshot", "x": 6, "y": 5, "w": 6, "h": 2, "order": 4},
-            {"id": "import-quarantine-status", "x": 0, "y": 7, "w": 12, "h": 2, "order": 5},
+            {"id": "import-quarantine-panel", "x": 0, "y": 7, "w": 12, "h": 2, "order": 5},
         ],
     },
     "softdent": {
