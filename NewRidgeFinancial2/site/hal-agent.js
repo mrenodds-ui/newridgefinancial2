@@ -843,7 +843,14 @@ const HalAgent = (function () {
             summary: "Provide a patient id (or select a patient on the Mon–Thu schedule).",
           };
         }
-        const data = await bridge.fetchPatientDossier(patientId, { summarize: true });
+        const data = await bridge.fetchPatientDossier(patientId, {
+          summarize: true,
+          memberId: args.memberId || args.member_id,
+          payerId: args.payerId || args.payer_id,
+          payerName: args.payerName || args.payer_name,
+          providerNpi: args.providerNpi || args.provider_npi,
+          fetchEligibility: args.fetchEligibility || args.fetch_eligibility,
+        });
         if (!data || data.ok === false) {
           return {
             ok: false,

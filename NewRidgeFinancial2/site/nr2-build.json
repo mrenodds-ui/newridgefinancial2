@@ -1,7 +1,7 @@
 {
-  "schemaVersion": "hal-10496",
-  "BUILD_ID": "hal-10496",
-  "assetVersion": "hal-10496",
-  "builtAt": "2026-07-11T21:10:00.000Z",
-  "notes": "hal-10496: Voice NICE Read Summary + HAL stop barge-in; Availity live-with-demo fallback."
+  "schemaVersion": "hal-10497",
+  "BUILD_ID": "hal-10497",
+  "assetVersion": "hal-10497",
+  "builtAt": "2026-07-11T22:00:00.000Z",
+  "notes": "hal-10497: Availity eligibility in HAL patient dossier (cache-first, demo honesty, OM widget)."
 }

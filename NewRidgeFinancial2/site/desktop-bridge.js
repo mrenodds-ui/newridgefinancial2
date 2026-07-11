@@ -1426,7 +1426,16 @@ const DesktopBridge = (function () {
     if (!pid) return { ok: false, error: "patientId required" };
     const opts = options && typeof options === "object" ? options : {};
     const summarize = opts.summarize === true || opts.summarize === 1 || opts.summarize === "1";
-    const q = summarize ? "?summarize=1" : "";
+    const params = new URLSearchParams();
+    if (summarize) params.set("summarize", "1");
+    if (opts.memberId) params.set("memberId", String(opts.memberId));
+    if (opts.payerId) params.set("payerId", String(opts.payerId));
+    if (opts.payerName) params.set("payerName", String(opts.payerName));
+    if (opts.providerNpi) params.set("providerNpi", String(opts.providerNpi));
+    if (opts.fetchEligibility === true || opts.fetchEligibility === 1 || opts.fetchEligibility === "1") {
+      params.set("fetchEligibility", "1");
+    }
+    const q = params.toString() ? `?${params.toString()}` : "";
     try {
       return await loopbackJson(`/api/apex/patient-dossier/${encodeURIComponent(pid)}${q}`);
     } catch (err) {
