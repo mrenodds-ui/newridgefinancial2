@@ -1,9 +1,7 @@
 {
-  "BUILD_ID": "hal-10476",
-  "assetVersion": "hal-10476",
-  "schemaVersion": "hal-10476",
-  "epoch": "nr2-apex",
-  "releasedAt": "2026-07-10",
-  "notes": "hal-10476: Widgets/charts/subpages merged onto main (post AI-PM MUST + HAL UX).",
-  "builtAt": "2026-07-11T21:30:00.000Z"
+  "BUILD_ID": "hal-10479",
+  "assetVersion": "hal-10479",
+  "schemaVersion": "hal-10479",
+  "notes": "Mirror of ../nr2-build.json \u2014 served to the UI over the local HTTP server.",
+  "builtAt": "2026-07-11T17:39:19.000Z"
 }

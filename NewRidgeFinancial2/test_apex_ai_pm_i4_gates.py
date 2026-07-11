@@ -26,7 +26,7 @@ GOOD_KPI = {
 
 class AiPmMustWaveI4Gates(unittest.TestCase):
     def test_build_id_i4(self):
-        self.assertEqual(BUILD_ID, "hal-10475")
+        self.assertEqual(BUILD_ID, "hal-10479")
 
     def test_flag_still_default_off(self):
         prev = os.environ.pop("NR2_AI_ORCHESTRATOR", None)
@@ -39,11 +39,12 @@ class AiPmMustWaveI4Gates(unittest.TestCase):
     def test_orchestrator_status_must_wave_complete(self):
         st = orchestrator_status()
         self.assertTrue(st.get("ok"))
-        self.assertEqual(st.get("phase"), "I4")
+        self.assertEqual(st.get("phase"), "S3")
         self.assertEqual(st.get("flag"), "NR2_AI_ORCHESTRATOR")
         self.assertTrue(st.get("structuredInsights"))
         self.assertTrue(st.get("unifiedDb"))
         self.assertTrue(st.get("mustWaveComplete"))
+        self.assertTrue(st.get("shouldWaveComplete"))
         self.assertIn("chat8b", st.get("lanes") or [])
         self.assertIn("escalate30b", st.get("lanes") or [])
 
@@ -58,7 +59,7 @@ class AiPmMustWaveI4Gates(unittest.TestCase):
         )
         self.assertTrue(result.get("ok"))
         self.assertTrue(result.get("requireStructured"))
-        self.assertEqual(result.get("phase"), "I4")
+        self.assertEqual(result.get("phase"), "S3")
 
     def test_i1_schema_files_present(self):
         root = Path(__file__).resolve().parent / "data" / "insight_schemas"

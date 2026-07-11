@@ -115,22 +115,30 @@ def classify_intent(
 
 
 def orchestrator_status() -> dict[str, Any]:
-    return {
+    base = {
         "ok": True,
         "enabled": orchestrator_enabled(),
-        "phase": "I4",
+        "phase": "S3",
         "flag": "NR2_AI_ORCHESTRATOR",
         "lanes": ["chat8b", "reason21b", "escalate30b"],
         "structuredInsights": True,
         "unifiedDb": True,
         "mustWaveComplete": True,
+        "shouldWaveComplete": True,
+        "orchestratorDefault": "OFF",
         "note": (
             "When enabled, Apex HAL chat uses /api/apex/hal/orchestrate after board-actions. "
-            "MUST wave I0–I4 complete: orchestrator, structured insights, Collections honesty, "
-            "unified SQLite, integration gates. Flag default OFF."
+            "MUST I0–I4 + SHOULD S0–S3 complete. Flag default OFF."
         ),
         "refreshedAt": _utc_now(),
     }
+    try:
+        from apex_orchestrator_polish_pack import merge_orchestrator_status
+
+        return merge_orchestrator_status(base)
+    except Exception:
+        return base
+
 
 
 def orchestrate(
@@ -176,7 +184,7 @@ def orchestrate(
         "ok": True,
         "orchestrator": True,
         "enabled": enabled,
-        "phase": "I4",
+        "phase": "S3",
         "lane": lane,
         "classification": classification,
         "structured": False,
@@ -236,7 +244,7 @@ def orchestrate(
     out["orchestrator"] = True
     out["lane"] = result.get("resolvedLane") or lane
     out["classification"] = classification
-    out["phase"] = "I4"
+    out["phase"] = "S3"
     out["unifiedContext"] = unified_ctx
     if "ok" not in out:
         out["ok"] = bool(result.get("ok")) if isinstance(result, dict) else False

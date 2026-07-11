@@ -93,6 +93,43 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_qb_exp_period ON qb_expense_rows(period);
 
+        CREATE TABLE IF NOT EXISTS qb_payroll_rows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period TEXT NOT NULL,
+            employee TEXT NOT NULL,
+            gross_wages REAL,
+            employee_taxes REAL,
+            employer_taxes REAL,
+            net_pay REAL,
+            source TEXT,
+            imported_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_qb_payroll_period ON qb_payroll_rows(period);
+
+        CREATE TABLE IF NOT EXISTS qb_ap_rows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period TEXT NOT NULL,
+            vendor TEXT NOT NULL,
+            bill_date TEXT,
+            due_date TEXT,
+            amount_due REAL,
+            aging_bucket TEXT,
+            source TEXT,
+            imported_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_qb_ap_period ON qb_ap_rows(period);
+
+        CREATE TABLE IF NOT EXISTS softdent_era_aggregates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period TEXT NOT NULL,
+            payment_total REAL,
+            claim_count INTEGER,
+            source_file TEXT,
+            source TEXT,
+            imported_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_era_agg_period ON softdent_era_aggregates(period);
+
         CREATE TABLE IF NOT EXISTS import_health_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source TEXT NOT NULL,
@@ -103,7 +140,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             detected_at TEXT NOT NULL
         );
 
-        CREATE VIEW IF NOT EXISTS practice_health_snapshot AS
+        DROP VIEW IF EXISTS practice_health_snapshot;
+        CREATE VIEW practice_health_snapshot AS
         SELECT
             p.period AS period,
             p.production AS production_amount,
@@ -111,9 +149,19 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             p.collections_pending AS collections_pending,
             p.gap_code AS gap_code,
             COALESCE((SELECT SUM(e.amount) FROM qb_expense_rows e WHERE e.period = p.period), 0) AS total_expenses,
+            (SELECT SUM(COALESCE(pr.gross_wages, 0) + COALESCE(pr.employer_taxes, 0))
+             FROM qb_payroll_rows pr WHERE pr.period = p.period) AS total_payroll,
+            (SELECT SUM(ap.amount_due) FROM qb_ap_rows ap WHERE ap.period = p.period) AS total_ap,
+            (SELECT SUM(era.payment_total) FROM softdent_era_aggregates era WHERE era.period = p.period) AS era_payment_total,
             CASE
                 WHEN p.collections IS NOT NULL
-                THEN p.collections - COALESCE((SELECT SUM(e.amount) FROM qb_expense_rows e WHERE e.period = p.period), 0)
+                THEN p.collections
+                     - COALESCE((SELECT SUM(e.amount) FROM qb_expense_rows e WHERE e.period = p.period), 0)
+                     - COALESCE(
+                         (SELECT SUM(COALESCE(pr.gross_wages, 0) + COALESCE(pr.employer_taxes, 0))
+                          FROM qb_payroll_rows pr WHERE pr.period = p.period),
+                         0
+                       )
                 ELSE NULL
             END AS net_operating
         FROM softdent_period_metrics p;
@@ -149,6 +197,7 @@ def ingest_from_bundle(
     softdent_n = 0
     qb_n = 0
     gap_code = None
+    payroll_meta: dict[str, Any] = {}
 
     try:
         from apex_softdent_hardening_pack import assess_collections_gap
@@ -280,10 +329,25 @@ def ingest_from_bundle(
                 )
                 qb_n += 1
 
+        # Phase S0 — payroll + AP (SSN redacted in pack)
+        try:
+            from apex_qb_payroll_pack import ingest_payroll_ap_into_conn
+
+            payroll_meta = ingest_payroll_ap_into_conn(
+                conn, b, period_qb=period_qb, now=now
+            )
+        except Exception as exc:  # noqa: BLE001
+            payroll_meta = {"ok": False, "error": str(exc)}
+
         # Import health log
         diag = b.get("diagnostics") if isinstance(b.get("diagnostics"), dict) else {}
         summary = diag.get("summary") if isinstance(diag.get("summary"), dict) else {}
-        gap_flags = json.dumps([gap_code] if gap_code and gap_code != "OK" else [])
+        flags: list[str] = []
+        if gap_code and gap_code != "OK":
+            flags.append(str(gap_code))
+        if isinstance(payroll_meta, dict) and payroll_meta.get("gapCode") and payroll_meta.get("gapCode") != "OK":
+            flags.append(str(payroll_meta["gapCode"]))
+        gap_flags = json.dumps(flags)
         conn.execute(
             """
             INSERT INTO import_health_log (source, export_type, row_count, staleness_hours, gap_flags, detected_at)
@@ -304,7 +368,10 @@ def ingest_from_bundle(
         "ok": True,
         "softdentPeriods": softdent_n,
         "qbExpenseRows": qb_n,
+        "qbPayrollRows": int(payroll_meta.get("payrollRows") or 0) if isinstance(payroll_meta, dict) else 0,
+        "qbApRows": int(payroll_meta.get("apRows") or 0) if isinstance(payroll_meta, dict) else 0,
         "gapCode": gap_code,
+        "payrollGapCode": payroll_meta.get("gapCode") if isinstance(payroll_meta, dict) else None,
         "dbPath": str(db_path or unified_db_path()),
         "importedAt": now,
         "localOnly": True,
@@ -316,7 +383,7 @@ def list_practice_health_snapshots(*, limit: int = 12, db_path: Path | None = No
         rows = conn.execute(
             """
             SELECT period, production_amount, collection_amount, collections_pending, gap_code,
-                   total_expenses, net_operating
+                   total_expenses, total_payroll, total_ap, era_payment_total, net_operating
             FROM practice_health_snapshot
             ORDER BY period DESC
             LIMIT ?
@@ -325,6 +392,7 @@ def list_practice_health_snapshots(*, limit: int = 12, db_path: Path | None = No
         ).fetchall()
         out: list[dict[str, Any]] = []
         for r in rows:
+            payroll = r["total_payroll"]
             out.append(
                 {
                     "period": r["period"],
@@ -333,6 +401,10 @@ def list_practice_health_snapshots(*, limit: int = 12, db_path: Path | None = No
                     "collectionsPending": bool(r["collections_pending"]),
                     "gapCode": r["gap_code"],
                     "totalExpenses": r["total_expenses"],
+                    "totalPayroll": payroll,
+                    "payrollPending": payroll is None,
+                    "totalAp": r["total_ap"],
+                    "eraPaymentTotal": r["era_payment_total"],
                     "netOperating": r["net_operating"],
                 }
             )

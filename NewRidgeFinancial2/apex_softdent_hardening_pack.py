@@ -116,7 +116,7 @@ def assess_collections_gap(bundle: dict[str, Any] | None = None) -> dict[str, An
         pass
 
     healthy = gap == GAP_OK
-    return {
+    result = {
         "ok": True,
         "gapCode": gap,
         "healthy": healthy,
@@ -132,6 +132,14 @@ def assess_collections_gap(bundle: dict[str, Any] | None = None) -> dict[str, An
         "def": "DEF-001",
         "checkedAt": _utc_now(),
     }
+    # Phase S1 — ERA aggregate proposal when collections still empty
+    try:
+        from apex_softdent_era_pack import enrich_collections_gap_with_era
+
+        result = enrich_collections_gap_with_era(result)
+    except Exception:
+        pass
+    return result
 
 
 def collections_gap_widget(bundle: dict[str, Any] | None = None) -> dict[str, Any]:

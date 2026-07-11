@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10476"
+BUILD_ID = "hal-10479"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1875,6 +1875,12 @@ def _financial_widgets_from_reports(
         widgets.append(unified_db_widget(bundle))
     except Exception:
         pass
+    try:
+        from apex_qb_payroll_pack import payroll_ap_widgets
+
+        widgets.extend(payroll_ap_widgets(bundle))
+    except Exception:
+        pass
 
     _apply_threshold_alerts(widgets, reports)
     return widgets
@@ -2375,6 +2381,12 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
             append_quickbooks_missing(widgets, bundle)
         except Exception:
             pass
+        try:
+            from apex_qb_payroll_pack import payroll_ap_widgets
+
+            widgets.extend(payroll_ap_widgets(bundle))
+        except Exception:
+            pass
         return widgets
 
     widgets.append(
@@ -2469,6 +2481,12 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
         from apex_missing_widgets_pack import append_quickbooks_missing
 
         append_quickbooks_missing(widgets, bundle)
+    except Exception:
+        pass
+    try:
+        from apex_qb_payroll_pack import payroll_ap_widgets
+
+        widgets.extend(payroll_ap_widgets(bundle))
     except Exception:
         pass
     return widgets
@@ -4110,15 +4128,27 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
     nav_target = None
     # Prefer explicit "go to / open / show <page>"
     if re.search(r"\b(go to|open|show|switch to|take me to)\b", q):
-        for pid, pat in page_map.items():
-            if re.search(pat, q):
-                nav_target = pid
-                break
-    if nav_target and nav_target != page:
-        actions.append({"type": "navigate", "page": nav_target})
-        notes.append(f"Opening the {nav_target} page.")
-        handled = True
-        page = nav_target
+        # QB AP aging must not route to SoftDent A/R (bare "aging" trap)
+        if re.search(r"\b(ap aging|accounts payable|unpaid bills|qb[- ]?ap)\b", q):
+            nav_target = "quickbooks"
+            if nav_target != page:
+                actions.append({"type": "navigate", "page": nav_target})
+                notes.append(f"Opening the {nav_target} page.")
+                page = nav_target
+            actions.append({"type": "focus_widget", "widgetId": "qb-ap-aging"})
+            actions.append({"type": "highlight_widget", "widgetId": "qb-ap-aging", "ms": 4500})
+            notes.append("Focusing widget `qb-ap-aging` (import-backed display only).")
+            handled = True
+        else:
+            for pid, pat in page_map.items():
+                if re.search(pat, q):
+                    nav_target = pid
+                    break
+            if nav_target and nav_target != page:
+                actions.append({"type": "navigate", "page": nav_target})
+                notes.append(f"Opening the {nav_target} page.")
+                handled = True
+                page = nav_target
 
     # --- Focus / highlight specific instruments ---
     focus_rules = (
@@ -4185,6 +4215,8 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(ai insight|structured insight|insight (card|widget))\b", "hal-ai-insight", "hal"),
         (r"\b(collections gap|def-?001|daysheet gap|why .{0,20}collections)\b", "softdent-collections-gap", "softdent"),
         (r"\b(unified (db|database|snapshot)|nr2_unified|practice health snapshot)\b", "unified-db-snapshot", "financial"),
+        (r"\b(payroll (gap|import|detail)|qb payroll|show payroll)\b", "qb-payroll-gap", "quickbooks"),
+        (r"\b(ap aging|accounts payable|unpaid bills|show ap)\b", "qb-ap-aging", "quickbooks"),
     )
     if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
         re.search(pat, q) for pat, _wid, _pg in focus_rules
@@ -4491,6 +4523,29 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
             handled = True
         except Exception as exc:  # noqa: BLE001
             notes.append(f"Collections gap check failed: {exc}")
+            handled = True
+
+    # --- S0: QB payroll / AP honesty ---
+    if (not handled) and re.search(
+        r"\b(payroll (gap|pending|import)|why .{0,20}payroll|ap aging|accounts payable|unpaid bills)\b",
+        q,
+    ):
+        try:
+            from apex_qb_payroll_pack import assess_payroll_ap_gap, format_payroll_ap_reply
+
+            _reports, bundle, _err = _load_reports_and_bundle()
+            gap = assess_payroll_ap_gap(bundle)
+            notes.append(format_payroll_ap_reply(gap))
+            if page != "quickbooks" and not any(a.get("type") == "navigate" for a in actions):
+                actions.append({"type": "navigate", "page": "quickbooks"})
+            wid = "qb-payroll-gap" if gap.get("payrollPending") else "qb-ap-aging"
+            if re.search(r"\b(ap|payable|unpaid)\b", q):
+                wid = "qb-ap-aging"
+            actions.append({"type": "focus_widget", "widgetId": wid})
+            actions.append({"type": "highlight_widget", "widgetId": wid, "ms": 4500})
+            handled = True
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"Payroll/AP gap check failed: {exc}")
             handled = True
 
     # --- HAL-said: assign SoftDent denials → Steve (NR2 tasks only) ---
@@ -5338,6 +5393,33 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             result = orchestrator_context_snapshot(limit=12)
             result["buildId"] = BUILD_ID
             return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/should-wave")
+    def apex_should_wave_status():
+        try:
+            from apex_orchestrator_polish_pack import should_wave_status
+
+            result = should_wave_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/health-audit")
+    def apex_health_audit():
+        try:
+            import bottle
+            from apex_health_monitor_pack import run_scheduled_health_audit
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            classify_only = bool(payload.get("classifyOnly") or payload.get("classify_only"))
+            result = run_scheduled_health_audit(classify_only=classify_only)
+            result["buildId"] = BUILD_ID
+            status = 200 if result.get("ok") or result.get("reason") == "orchestrator_disabled" else 400
+            return json_response_fn(result, status=status)
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
 

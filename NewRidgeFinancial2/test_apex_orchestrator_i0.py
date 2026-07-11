@@ -20,7 +20,7 @@ class OrchestratorPhaseI0Tests(unittest.TestCase):
             self.assertFalse(orchestrator_enabled())
             st = orchestrator_status()
             self.assertFalse(st.get("enabled"))
-            self.assertEqual(st.get("phase"), "I4")
+            self.assertEqual(st.get("phase"), "S3")
         finally:
             if prev is not None:
                 os.environ["NR2_AI_ORCHESTRATOR"] = prev
