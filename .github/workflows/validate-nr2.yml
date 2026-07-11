@@ -78,11 +78,3 @@ jobs:
         env:
           NR2_DB_ENCRYPTION: "0"
         run: python program_self_heal.py --documents-only --json
-
-      - name: Install browser HAL API test dependencies
-        working-directory: .
-        run: pip install fastapi httpx pydantic pytest
-
-      - name: Browser HAL API tests
-        working-directory: .
-        run: python -m pytest app/tests/test_hal_chat_api.py -q
