@@ -16,6 +16,11 @@
   animation: apexGlitch 0.15s ease-out;
 }
 
+/* Phase-1 subnav enter (pairs with apex-bridge.css) */
+.apex-subnav.is-visible {
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
 /* Holographic instrument lift */
 .apex-mosaic {
   perspective: 1200px;

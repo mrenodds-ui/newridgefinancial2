@@ -153,7 +153,24 @@ def _iter_daysheet_transactions(formatted_rows: list[list[Any]]) -> list[dict[st
     return rows
 
 
+_DAYSHEET_TX_CACHE: dict[str, dict[str, Any]] = {}
+
+
 def _load_daysheet_transactions(path: Path) -> list[dict[str, Any]]:
+    """Parse daysheet JSONL once per path+mtime (claims + clinical share the same file)."""
+    cache_key = str(path)
+    try:
+        st = path.stat()
+        mtime = float(st.st_mtime)
+        size = int(st.st_size)
+    except OSError:
+        mtime = 0.0
+        size = 0
+    hit = _DAYSHEET_TX_CACHE.get(cache_key)
+    if hit and hit.get("mtime") == mtime and hit.get("size") == size:
+        rows = hit.get("rows")
+        return rows if isinstance(rows, list) else []
+
     transactions: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
         for line in handle:
@@ -173,6 +190,7 @@ def _load_daysheet_transactions(path: Path) -> list[dict[str, Any]]:
                 if report_date and not row.get("reportDate"):
                     row["reportDate"] = report_date
                 transactions.append(row)
+    _DAYSHEET_TX_CACHE[cache_key] = {"mtime": mtime, "size": size, "rows": transactions}
     return transactions
 
 

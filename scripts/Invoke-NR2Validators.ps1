@@ -18,15 +18,28 @@ if (-not $node) {
     return
 }
 
+$indexPath = Join-Path $Nr2Dir 'site\index.html'
+$isApex = $false
+if (Test-Path $indexPath) {
+    $indexHead = (Get-Content -Path $indexPath -TotalCount 40 -ErrorAction SilentlyContinue) -join "`n"
+    $isApex = $indexHead -match 'nr2-apex|apex-bridge'
+}
+
 Push-Location $Nr2Dir
 try {
-    Write-Host 'Validating NR2 pages...' -ForegroundColor Cyan
-    & node validate-pages.mjs
-    if ($LASTEXITCODE -ne 0) { throw 'validate-pages.mjs failed' }
+    if ($isApex) {
+        Write-Host 'Validating Apex Bridge...' -ForegroundColor Cyan
+        & node validate-apex.mjs
+        if ($LASTEXITCODE -ne 0) { throw 'validate-apex.mjs failed' }
+    } else {
+        Write-Host 'Validating NR2 pages...' -ForegroundColor Cyan
+        & node validate-pages.mjs
+        if ($LASTEXITCODE -ne 0) { throw 'validate-pages.mjs failed' }
 
-    Write-Host 'Validating HAL...' -ForegroundColor Cyan
-    & node validate-hal.mjs
-    if ($LASTEXITCODE -ne 0) { throw 'validate-hal.mjs failed' }
+        Write-Host 'Validating HAL...' -ForegroundColor Cyan
+        & node validate-hal.mjs
+        if ($LASTEXITCODE -ne 0) { throw 'validate-hal.mjs failed' }
+    }
 
     Write-Host 'NR2 validators passed.' -ForegroundColor Green
 } finally {

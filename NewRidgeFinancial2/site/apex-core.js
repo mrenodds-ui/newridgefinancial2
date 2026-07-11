@@ -193,14 +193,28 @@
       type === "horizontal-bar" ||
       type === "donut" ||
       type === "stacked-bar" ||
-      type === "waterfall"
+      type === "waterfall" ||
+      type === "revenue-composition" ||
+      type === "treemap" ||
+      type === "scatter-plot" ||
+      type === "pareto-chart" ||
+      type === "utilization-board"
     )
       return "l";
+    if (type === "dual-axis-trend" || type === "timeline-lanes" || type === "status-matrix" || type === "radial-gauge")
+      return "m";
+    if (type === "credit-float") return "strip";
     if (type === "bullet" || type === "scrubber") return type === "scrubber" ? "full" : "s";
     if (type === "heatmap" || type === "calculator" || type === "categorize" || type === "tax-library")
       return "xl";
     if (type === "ebitda-scrubber" || type === "filing-workflow" || type === "claim-shelf") return "full";
     if (type === "scenario-manager" || type === "workpaper") return type === "scenario-manager" ? "xl" : "l";
+    if (type === "workpaper-scrubber" || type === "claim-detail-card") return "full";
+    if (type === "collection-task-list" || type === "huddle-mosaic" || type === "batch-selector") return "full";
+    if (type === "attachment-dropzone" || type === "payer-reference-card") return "full";
+    if (type === "era-matching-table" || type === "forecast-trend-line" || type === "period-variance-chart")
+      return "full";
+    if (type === "data-table" || type === "tax-calendar" || type === "task-board") return "full";
     if (type === "status") return "s";
     if (type === "quarantine-panel") return "full";
     if (type === "ai-insight") return "l";
@@ -208,7 +222,7 @@
   }
 
   const config = {
-    refreshInterval: 30000,
+    refreshInterval: 30 * 60 * 1000, // 30 minutes — avoid page flicker from silent widget polls
     apiBase: "/api/apex",
     halChatEndpoint: "/api/hal/evaluate-query",
     animStagger: 50,
@@ -223,41 +237,67 @@
 
   let sessionToken = "";
   let currentPage = "financial";
+  let currentSub = null;
+  let currentQuery = {};
   let refreshTimer = null;
   const widgets = new Map();
   let lastHalStatus = null;
+  let halChatBusy = false;
+  /** Persist HAL chat across remounts so hover/silent refresh cannot wipe replies. */
+  const halTranscript = [];
+  const HAL_TRANSCRIPT_MAX = 80;
 
   const stage = () => document.getElementById("apex-stage");
   const metaEl = () => document.getElementById("apex-meta");
 
-  async function ensureSessionToken() {
-    if (sessionToken) return sessionToken;
+  async function ensureSessionToken(forceRefresh) {
+    if (sessionToken && !forceRefresh) return sessionToken;
     try {
       const res = await fetch("/api/app-info", {
         cache: "no-store",
         credentials: "same-origin",
       });
-      if (!res.ok) return "";
+      const refresh = res.headers.get(REFRESH_HEADER);
+      if (refresh) sessionToken = refresh.trim();
+      if (!res.ok) return sessionToken || "";
       const info = await res.json();
-      sessionToken = String((info && (info.sessionToken || info.csrfToken)) || "").trim();
+      sessionToken = String((info && (info.sessionToken || info.csrfToken)) || sessionToken || "").trim();
     } catch (_err) {
-      sessionToken = "";
+      if (!sessionToken) sessionToken = "";
     }
     return sessionToken;
   }
 
-  async function apexFetch(url, options) {
+  function captureSessionRefresh(res) {
+    if (!res || !res.headers) return "";
+    const rotated =
+      res.headers.get(REFRESH_HEADER) ||
+      res.headers.get(SESSION_HEADER) ||
+      res.headers.get("X-NR2-Session") ||
+      "";
+    if (rotated) sessionToken = rotated.trim();
+    return rotated.trim();
+  }
+
+  async function apexFetch(url, options, _retried) {
     const opts = Object.assign({ credentials: "same-origin", cache: "no-store" }, options || {});
     opts.headers = Object.assign({}, opts.headers || {});
-    const token = await ensureSessionToken();
+    const token = await ensureSessionToken(Boolean(_retried));
     if (token) opts.headers[SESSION_HEADER] = token;
     const isForm = typeof FormData !== "undefined" && opts.body instanceof FormData;
     if (opts.body && !isForm && !opts.headers["Content-Type"]) {
       opts.headers["Content-Type"] = "application/json";
     }
     const res = await fetch(url, opts);
-    const rotated = res.headers.get(SESSION_HEADER) || res.headers.get("X-NR2-Session");
-    if (rotated) sessionToken = rotated.trim();
+    const refreshed = captureSessionRefresh(res);
+    if (res.status === 403 && !_retried) {
+      // Stale token / binding after NR2 restart — always re-bind via app-info and retry once.
+      sessionToken = refreshed || "";
+      await ensureSessionToken(true);
+      if (sessionToken) {
+        return apexFetch(url, options, true);
+      }
+    }
     return res;
   }
 
@@ -591,23 +631,34 @@
       }
 
       if (this.type === "waterfall") {
-        const steps = Array.isArray(this.spec.steps) ? this.spec.steps : [];
-        const empty = !steps.length;
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const steps = Array.isArray(this.spec.steps)
+          ? this.spec.steps
+          : Array.isArray(data.steps)
+            ? data.steps
+            : [];
+        const empty = !steps.length || this.spec.status === "empty";
         const showCite = !!this.spec.showCitations;
         const max = Math.max(...steps.map((s) => Math.abs(Number(s.value) || 0)), 1);
+        const kindMap = { start: "start", add: "add", sub: "sub", end: "end", positive: "positive", total: "total", negative: "sub" };
+        const connMap = { start: "", add: "↑", sub: "↓", end: "=", positive: "", total: "=", negative: "↓" };
         const rows = steps
-          .map((s) => {
-            const v = Number(s.value) || 0;
-            const pct = Math.max(6, Math.round((Math.abs(v) / max) * 100));
-            const kind = s.kind || "positive";
+          .map((s, idx) => {
+            const v = s.value;
+            const has = v !== null && v !== undefined && Number.isFinite(Number(v));
+            const num = has ? Number(v) : 0;
+            const pct = has ? Math.max(6, Math.round((Math.abs(num) / max) * 100)) : 6;
+            const kind = kindMap[s.kind] || kindMap[s.type] || "positive";
             const citeKey = s.citeKey || "";
             const cite = showCite && s.citation
               ? `<button type="button" class="apex-wf-cite" data-cite-key="${this.escape(citeKey)}" title="Open source rows">${this.escape(s.citation)}</button>`
               : "";
-            return `<div class="apex-wf-row apex-wf-row--${this.escape(kind)}">
+            const conn = idx === 0 ? "" : connMap[kind] || "·";
+            return `<div class="apex-wf-row apex-wf-row--${this.escape(kind)}${has ? "" : " is-empty"}">
+              <span class="apex-wf-conn" aria-hidden="true">${this.escape(conn)}</span>
               <span class="apex-wf-label">${this.escape(s.label || "")}${cite}</span>
               <div class="apex-wf-track"><i style="width:${pct}%"></i></div>
-              <span class="apex-wf-val">${this.escape(formatMoney(v) || String(v))}</span>
+              <span class="apex-wf-val">${this.escape(has ? formatMoney(num) || String(num) : "$—")}</span>
             </div>`;
           })
           .join("");
@@ -621,7 +672,10 @@
           </header>
           ${
             empty
-              ? `<div class="apex-kpi-value is-empty">${this.escape(this.spec.emptyMessage || "No steps")}</div>`
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || this.spec.emptyMessage || "No steps"
+                )}</div>
+                 ${steps.length ? `<div class="apex-waterfall apex-waterfall--muted">${rows}</div>` : ""}`
               : `<div class="apex-waterfall">${rows}</div>`
           }
           <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
@@ -913,6 +967,576 @@
         `;
       }
 
+      if (this.type === "workpaper-scrubber") {
+        const cats = Array.isArray(this.spec.categories) ? this.spec.categories : [];
+        const empty = this.spec.status === "empty" || !cats.length;
+        const rows = cats
+          .map((c) => {
+            const id = String((c && c.id) || "");
+            const amt =
+              c && c.amount != null && Number.isFinite(Number(c.amount))
+                ? formatMoney(c.amount)
+                : "—";
+            return `<tr data-wp-cat="${this.escape(id)}">
+              <td><label class="apex-wp-flag"><input type="checkbox" data-cpa-flag value="${this.escape(
+                id
+              )}" /> Flag</label></td>
+              <td>${this.escape((c && c.label) || "")}</td>
+              <td class="apex-num">${this.escape(amt || "—")}</td>
+              <td class="apex-cite">${this.escape((c && c.citation) || "")}</td>
+            </tr>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No categories"
+                )}</div>`
+              : `<div class="apex-workpaper-scrubber" data-workpaper-scrubber>
+                  <table class="apex-cite-table">
+                    <thead><tr><th>CPA</th><th>Category</th><th>Amount</th><th>Citation</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                  </table>
+                </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "claim-detail-card") {
+        const claim = this.spec.claim && typeof this.spec.claim === "object" ? this.spec.claim : null;
+        const empty = this.spec.status === "empty" || !claim;
+        if (empty) {
+          return `
+            <header class="apex-widget-header">
+              <span class="apex-widget-label">${label}</span>
+              ${printBtn}
+            </header>
+            <div class="apex-kpi-value is-empty">${this.escape(
+              this.spec.emptyMessage || "No claim selected"
+            )}</div>
+            <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+            <div class="apex-claim-detail-actions">
+              <button type="button" class="apex-btn" data-back-claims>Back to Claims</button>
+            </div>
+          `;
+        }
+        const procs = Array.isArray(claim.procedures) ? claim.procedures.join(", ") : "—";
+        const billed =
+          claim.billedAmount != null && Number.isFinite(Number(claim.billedAmount))
+            ? formatMoney(claim.billedAmount)
+            : "— (not on import)";
+        const cid = String(claim.claimId || this.spec.claimId || "");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          <dl class="apex-claim-dl apex-claim-detail-card" data-claim-detail data-claim-id="${this.escape(cid)}">
+            <div><dt>Claim ID</dt><dd>${this.escape(cid)}</dd></div>
+            <div><dt>Patient</dt><dd>${this.escape(claim.patientInitials || claim.patientName || "—")}</dd></div>
+            <div><dt>Date of service</dt><dd>${this.escape(claim.date || "—")}</dd></div>
+            <div><dt>Age (days)</dt><dd>${this.escape(
+              claim.ageDays != null ? String(claim.ageDays) : "—"
+            )}</dd></div>
+            <div><dt>Payer</dt><dd>${this.escape(claim.payer || "—")}</dd></div>
+            <div><dt>Status</dt><dd>${this.escape(claim.status || "—")}</dd></div>
+            <div><dt>Procedures</dt><dd>${this.escape(procs)}</dd></div>
+            <div><dt>Billed</dt><dd>${this.escape(billed)}</dd></div>
+          </dl>
+          <div class="apex-claim-detail-actions">
+            <button type="button" class="apex-btn" data-back-claims>Back to Claims</button>
+            <button type="button" class="apex-btn apex-btn--primary" data-draft-narrative-sub>Draft Narrative</button>
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "collection-task-list") {
+        const seeds = Array.isArray(this.spec.seeds) ? this.spec.seeds : [];
+        const notes = Array.isArray(this.spec.notes) ? this.spec.notes : [];
+        const empty = this.spec.status === "empty" && !seeds.length && !notes.length;
+        const seedRows = seeds
+          .map((s) => {
+            const cid = String((s && s.claimId) || "");
+            const amt =
+              s && s.billedAmount != null && Number.isFinite(Number(s.billedAmount))
+                ? formatMoney(s.billedAmount)
+                : "—";
+            return `<tr>
+              <td>${this.escape(cid)}</td>
+              <td>${this.escape((s && s.patientInitials) || "—")}</td>
+              <td>${this.escape(String((s && s.ageDays) != null ? s.ageDays : "—"))}</td>
+              <td>${this.escape((s && s.bucket) || "—")}</td>
+              <td>${this.escape(amt || "—")}</td>
+              <td><button type="button" class="apex-btn apex-btn--small" data-col-seed-claim="${this.escape(
+                cid
+              )}" data-col-initials="${this.escape((s && s.patientInitials) || "")}">Log</button></td>
+            </tr>`;
+          })
+          .join("");
+        const noteRows = notes
+          .map((n) => {
+            return `<tr>
+              <td>${this.escape((n && n.claimId) || "")}</td>
+              <td>${this.escape((n && n.patientInitials) || "—")}</td>
+              <td>${this.escape((n && n.status) || "")}</td>
+              <td>${this.escape((n && n.followUp) || "—")}</td>
+              <td colspan="2">${this.escape((n && n.note) || "")}</td>
+            </tr>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No collection items"
+                )}</div>`
+              : `<div class="apex-collection-bench" data-collection-bench>
+                  <form class="apex-col-form" data-col-form>
+                    <input name="claimId" placeholder="Claim ID" required />
+                    <input name="patientInitials" placeholder="Initials" maxlength="8" />
+                    <select name="status">
+                      <option value="called">called</option>
+                      <option value="promised">promised</option>
+                      <option value="disputed">disputed</option>
+                      <option value="open">open</option>
+                      <option value="closed">closed</option>
+                    </select>
+                    <input name="followUp" placeholder="Follow-up YYYY-MM-DD" />
+                    <input name="note" placeholder="Note (local only)" />
+                    <button type="submit" class="apex-btn apex-btn--primary">Save note</button>
+                  </form>
+                  <h3 class="apex-subhead">Aged claim seeds</h3>
+                  <table class="apex-cite-table"><thead><tr>
+                    <th>Claim</th><th>Pt</th><th>Age</th><th>Bucket</th><th>Billed</th><th></th>
+                  </tr></thead><tbody>${seedRows || "<tr><td colspan='6'>None</td></tr>"}</tbody></table>
+                  <h3 class="apex-subhead">Local notes</h3>
+                  <table class="apex-cite-table"><thead><tr>
+                    <th>Claim</th><th>Pt</th><th>Status</th><th>Follow-up</th><th colspan="2">Note</th>
+                  </tr></thead><tbody>${noteRows || "<tr><td colspan='6'>None yet</td></tr>"}</tbody></table>
+                </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "huddle-mosaic") {
+        const priorities = Array.isArray(this.spec.priorities) ? this.spec.priorities : [];
+        const history = Array.isArray(this.spec.history) ? this.spec.history : [];
+        const tasks = Array.isArray(this.spec.tasks) ? this.spec.tasks : [];
+        const list = priorities
+          .map((p) => `<li class="apex-huddle-item">${this.escape(String(p))}</li>`)
+          .join("");
+        const hist = history
+          .map(
+            (h) =>
+              `<li class="apex-huddle-hist">${this.escape((h && h.createdAt) || "")} · ${this.escape(
+                String(((h && h.priorities) || []).length)
+              )} items</li>`
+          )
+          .join("");
+        const taskRows = tasks
+          .map(
+            (t) =>
+              `<li class="apex-huddle-task">${this.escape((t && t.title) || "")}${
+                t && t.dueDate ? " · due " + this.escape(t.dueDate) : ""
+              }</li>`
+          )
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          <div class="apex-huddle-mosaic" data-huddle-mosaic>
+            <ol class="apex-huddle-list">${list || `<li class="apex-huddle-item">No priorities flagged</li>`}</ol>
+            <div class="apex-claim-detail-actions">
+              <button type="button" class="apex-btn apex-btn--primary" data-huddle-save>Save huddle snapshot</button>
+            </div>
+            <form class="apex-col-form" data-huddle-task-form>
+              <input name="title" placeholder="New office task" required />
+              <input name="assignee" placeholder="Assignee" />
+              <input name="dueDate" placeholder="Due YYYY-MM-DD" />
+              <button type="submit" class="apex-btn">Add task</button>
+            </form>
+            <h3 class="apex-subhead">Open tasks</h3>
+            <ul class="apex-huddle-list">${taskRows || "<li class='apex-huddle-item'>None</li>"}</ul>
+            <h3 class="apex-subhead">Recent huddle history</h3>
+            <ul class="apex-huddle-list">${hist || "<li class='apex-huddle-item'>None saved yet</li>"}</ul>
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "batch-selector") {
+        const cands = Array.isArray(this.spec.candidates) ? this.spec.candidates : [];
+        const empty = this.spec.status === "empty" || !cands.length;
+        const rows = cands
+          .map((c) => {
+            const cid = String((c && c.claimId) || "");
+            const amt =
+              c && c.billedAmount != null && Number.isFinite(Number(c.billedAmount))
+                ? formatMoney(c.billedAmount)
+                : "—";
+            return `<tr>
+              <td><input type="checkbox" data-batch-claim value="${this.escape(cid)}" /></td>
+              <td>${this.escape(cid)}</td>
+              <td>${this.escape((c && c.patientInitials) || "—")}</td>
+              <td>${this.escape((c && c.payer) || "—")}</td>
+              <td>${this.escape(String((c && c.ageDays) != null ? c.ageDays : "—"))}</td>
+              <td>${this.escape((c && c.status) || "—")}</td>
+              <td>${this.escape(amt || "—")}</td>
+            </tr>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            <div class="apex-widget-actions">
+              <button type="button" class="apex-btn apex-btn--primary" data-batch-seed>Seed Narratives</button>
+              ${printBtn}
+            </div>
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No candidates"
+                )}</div>`
+              : `<div class="apex-batch-selector" data-batch-selector>
+                  <table class="apex-cite-table">
+                    <thead><tr>
+                      <th></th><th>Claim</th><th>Pt</th><th>Payer</th><th>Age</th><th>Status</th><th>Billed</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                  </table>
+                </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "attachment-dropzone") {
+        const items = Array.isArray(this.spec.items) ? this.spec.items : [];
+        const empty = this.spec.status === "empty" || !items.length;
+        const prefill = String(this.spec.claimId || "");
+        const rows = items
+          .map(
+            (it) =>
+              `<div class="apex-att-row"><strong>${this.escape(it.claimId || "")}</strong>
+              <span>${this.escape(it.filename || "")}</span>
+              <span class="apex-kpi-hint">${this.escape(String(it.bytes != null ? it.bytes + " B" : ""))} · ${this.escape(
+                it.at || ""
+              )}</span></div>`
+          )
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          <div class="apex-dropzone" data-attachment-dropzone>
+            <form class="apex-att-upload apex-col-form" data-claim-att-upload>
+              <input type="text" name="claimId" placeholder="Claim ID" value="${this.escape(prefill)}" required />
+              <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" required />
+              <input type="text" name="note" placeholder="Note (optional)" />
+              <button type="submit" class="apex-btn apex-btn--primary">Upload</button>
+            </form>
+            <p class="apex-kpi-hint">Dropzone: PDF / PNG / JPG · max 10MB · ${this.escape(
+              this.spec.storageRoot || "local claim_attachments"
+            )}</p>
+            ${
+              empty
+                ? `<div class="apex-kpi-value is-empty">${this.escape(
+                    this.spec.emptyMessage || "No attachments"
+                  )}</div>`
+                : `<div class="apex-att-list">${rows}</div>`
+            }
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "payer-reference-card") {
+        const payers = Array.isArray(this.spec.payers) ? this.spec.payers : [];
+        const empty = this.spec.status === "empty" || !payers.length;
+        const cards = payers
+          .map(
+            (p) => `<article class="apex-payer-card">
+              <h3>${this.escape((p && p.payerName) || "")}</h3>
+              <p class="apex-kpi-hint">Appeal deadline: ${this.escape(
+                p && p.appealDeadlineDays != null ? String(p.appealDeadlineDays) + " days" : "—"
+              )} · Contact: ${this.escape((p && p.contact) || "—")}</p>
+              <p>${this.escape((p && p.guidelines) || "")}</p>
+            </article>`
+          )
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          <div class="apex-payer-lib" data-payer-reference>
+            <form class="apex-col-form" data-payer-form>
+              <input name="payerName" placeholder="Payer name" required />
+              <input name="appealDeadlineDays" placeholder="Appeal days" />
+              <input name="contact" placeholder="Contact" />
+              <input name="guidelines" placeholder="Guidelines / requirements" />
+              <button type="submit" class="apex-btn apex-btn--primary">Save payer</button>
+            </form>
+            ${
+              empty
+                ? `<div class="apex-kpi-value is-empty">${this.escape(
+                    this.spec.emptyMessage || "No payers"
+                  )}</div>`
+                : `<div class="apex-payer-grid">${cards}</div>`
+            }
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "era-matching-table") {
+        const rows = Array.isArray(this.spec.rows) ? this.spec.rows : [];
+        const history = Array.isArray(this.spec.history) ? this.spec.history : [];
+        const empty = this.spec.status === "empty" || !rows.length;
+        const body = rows
+          .map((r) => {
+            const paid =
+              r && r.paidAmount != null && Number.isFinite(Number(r.paidAmount))
+                ? formatMoney(r.paidAmount)
+                : "—";
+            const conf =
+              r && r.confidence != null && Number.isFinite(Number(r.confidence))
+                ? (Number(r.confidence) * 100).toFixed(0) + "%"
+                : "—";
+            return `<tr>
+              <td>${this.escape((r && r.claimId) || "")}</td>
+              <td>${this.escape((r && r.patientInitials) || "—")}</td>
+              <td>${this.escape(conf)}</td>
+              <td>${this.escape(paid || "—")}</td>
+              <td>${this.escape((r && r.denialCode) || "—")}</td>
+              <td>${this.escape((r && r.sourceFile) || "—")}</td>
+            </tr>`;
+          })
+          .join("");
+        const hist = history
+          .map(
+            (h) =>
+              `<li>${this.escape((h && h.at) || "")} · ${this.escape((h && h.filename) || "era")} · matched ${this.escape(
+                String((h && h.matchedCount) != null ? h.matchedCount : "—")
+              )}/${this.escape(String((h && h.segmentCount) != null ? h.segmentCount : "—"))}</li>`
+          )
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          <div class="apex-era-table" data-era-matching>
+            <form class="apex-att-upload apex-col-form" data-era-upload title="Upload ERA/835 text">
+              <input type="file" name="file" accept=".txt,.835,.era,*" required />
+              <button type="submit" class="apex-btn apex-btn--primary">Ingest ERA 835</button>
+            </form>
+            ${
+              empty
+                ? `<div class="apex-kpi-value is-empty">${this.escape(
+                    this.spec.emptyMessage || "Awaiting ERA 835 Pipeline"
+                  )}</div>`
+                : `<table class="apex-cite-table"><thead><tr>
+                    <th>Claim</th><th>Pt</th><th>Conf</th><th>Paid</th><th>Code</th><th>File</th>
+                  </tr></thead><tbody>${body}</tbody></table>`
+            }
+            <h3 class="apex-subhead">Ingest history</h3>
+            <ul class="apex-huddle-list">${hist || "<li>None yet</li>"}</ul>
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "forecast-trend-line") {
+        const points = Array.isArray(this.spec.points) ? this.spec.points : [];
+        const empty = this.spec.status === "empty" || this.spec.blocked || !points.length;
+        const max = Math.max(...points.map((p) => Number(p.value) || 0), 1);
+        const bars = points
+          .map((p) => {
+            const v = Number(p.value) || 0;
+            const pct = Math.max(6, Math.round((v / max) * 100));
+            return `<div class="apex-forecast-col" title="${this.escape(p.label || "")}: ${this.escape(
+              String(v)
+            )}">
+              <div class="apex-forecast-bar" style="height:${pct}%"></div>
+              <span>${this.escape(String(p.label || "").slice(5) || p.label || "")}</span>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "Awaiting ERA 835 Pipeline"
+                )}</div>`
+              : `<div class="apex-forecast-trend" data-forecast-trend>${bars}</div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "period-variance-chart") {
+        const bars = Array.isArray(this.spec.bars) ? this.spec.bars : [];
+        const empty = this.spec.status === "empty" || this.spec.blocked || !bars.length;
+        const max = Math.max(...bars.map((b) => Math.abs(Number(b.value) || 0)), 1);
+        const rows = bars
+          .map((b) => {
+            const v = Number(b.value) || 0;
+            const pct = Math.max(6, Math.round((Math.abs(v) / max) * 100));
+            const neg = v < 0;
+            return `<div class="apex-var-row${neg ? " is-down" : ""}">
+              <span class="apex-var-label">${this.escape((b && b.label) || "")}</span>
+              <div class="apex-var-track"><i style="width:${pct}%"></i></div>
+              <span class="apex-var-val">${this.escape(formatMoney(v) || String(v))}</span>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "Awaiting multi-period imports"
+                )}</div>`
+              : `<div class="apex-period-variance" data-period-variance>${rows}</div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "data-table") {
+        const cols = Array.isArray(this.spec.columns) ? this.spec.columns : [];
+        const rows = Array.isArray(this.spec.rows) ? this.spec.rows : [];
+        const empty = this.spec.status === "empty" || !rows.length;
+        const head = cols.map((c) => `<th>${this.escape(c)}</th>`).join("");
+        const body = rows
+          .map((r) => {
+            const cells = cols
+              .map((c) => {
+                let v = r && r[c];
+                if (c.toLowerCase().includes("amount") || c === "fee" || c === "billedAmount") {
+                  v =
+                    v != null && Number.isFinite(Number(v)) ? formatMoney(v) : v == null ? "—" : v;
+                }
+                return `<td>${this.escape(v == null ? "—" : String(v))}</td>`;
+              })
+              .join("");
+            return `<tr>${cells}</tr>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No rows"
+                )}</div>`
+              : `<div class="apex-data-table-wrap"><table class="apex-cite-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "tax-calendar") {
+        const items = Array.isArray(this.spec.items) ? this.spec.items : [];
+        const empty = this.spec.status === "empty" || !items.length;
+        const cards = items
+          .map((it) => {
+            const amt =
+              it && it.amount != null && Number.isFinite(Number(it.amount))
+                ? formatMoney(it.amount)
+                : "—";
+            return `<article class="apex-payer-card">
+              <h3>${this.escape((it && it.label) || "Q")}</h3>
+              <p><strong>${this.escape(amt || "—")}</strong> · due ${this.escape((it && it.due) || "—")}</p>
+              <p class="apex-kpi-hint">${it && it.logged ? "Payment logged (local)" : "Not logged"}</p>
+              <button type="button" class="apex-btn apex-btn--small" data-tax-log="${this.escape(
+                (it && it.label) || ""
+              )}">Log payment</button>
+            </article>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No quarters"
+                )}</div>`
+              : `<div class="apex-payer-grid" data-tax-calendar>${cards}</div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "task-board") {
+        const tasks = Array.isArray(this.spec.tasks) ? this.spec.tasks : [];
+        const empty = this.spec.status === "empty" && !tasks.length;
+        const list = tasks
+          .map(
+            (t) => `<li class="apex-huddle-task${t && t.done ? " is-done" : ""}">
+              <label><input type="checkbox" data-task-toggle="${this.escape(String((t && t.id) || ""))}" ${
+              t && t.done ? "checked" : ""
+            }/> ${this.escape((t && t.title) || "")}</label>
+              <span class="apex-kpi-hint">${this.escape((t && t.assignee) || "")} ${this.escape(
+              (t && t.dueDate) || ""
+            )}</span>
+            </li>`
+          )
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          <div class="apex-task-board" data-task-board>
+            <form class="apex-col-form" data-task-form>
+              <input name="title" placeholder="Task title" required />
+              <input name="assignee" placeholder="Assignee" />
+              <input name="dueDate" placeholder="Due YYYY-MM-DD" />
+              <button type="submit" class="apex-btn apex-btn--primary">Add task</button>
+            </form>
+            ${
+              empty
+                ? `<div class="apex-kpi-value is-empty">${this.escape(
+                    this.spec.emptyMessage || "No tasks"
+                  )}</div>`
+                : `<ul class="apex-huddle-list">${list}</ul>`
+            }
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
       if (this.type === "pulse") {
         const segs = Array.isArray(this.spec.segments) ? this.spec.segments : [];
         const empty = this.spec.status === "empty" || !segs.length;
@@ -982,18 +1606,40 @@
       }
 
       if (this.type === "funnel") {
-        const stages = Array.isArray(this.spec.stages) ? this.spec.stages : [];
-        const empty = !stages.length;
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        let stages = Array.isArray(this.spec.stages)
+          ? this.spec.stages
+          : Array.isArray(data.stages)
+            ? data.stages
+            : [];
+        const empty = !stages.length || this.spec.status === "empty";
+        // Consult empty: single gray stage with — / $—
+        if (empty && !stages.length) {
+          stages = [{ name: "Presented", stage: "Presented", count: null, value: null, conversionRate: null }];
+        }
         const max = Math.max(...stages.map((s) => Number(s.count) || 0), 1);
         const rows = stages
-          .map((s) => {
-            const n = Number(s.count) || 0;
-            const pct = Math.max(8, Math.round((n / max) * 100));
-            return `<div class="apex-funnel-row"><span class="apex-funnel-label">${this.escape(
-              s.stage
+          .map((s, idx) => {
+            const n = s.count;
+            const has = n !== null && n !== undefined && Number.isFinite(Number(n));
+            const num = has ? Number(n) : 0;
+            const pct = has ? Math.max(8, Math.round((num / max) * 100)) : empty ? 40 : 8;
+            const stageName = s.stage || s.name || "";
+            const valHint =
+              s.value !== null && s.value !== undefined && Number.isFinite(Number(s.value))
+                ? formatMoney(s.value) || String(s.value)
+                : "$—";
+            const rate =
+              !empty && s.conversionRate !== null && s.conversionRate !== undefined
+                ? `<span class="apex-funnel-rate apex-funnel-connector">↓ ${this.escape(String(s.conversionRate))}%</span>`
+                : idx > 0 && !empty
+                  ? `<span class="apex-funnel-connector">↓</span>`
+                  : "";
+            return `<div class="apex-funnel-row${empty ? " is-empty" : ""}"><span class="apex-funnel-label">${this.escape(
+              stageName
             )}</span><div class="apex-funnel-bar"><i style="width:${pct}%"></i></div><span class="apex-funnel-count">${this.escape(
-              formatCount(n) || "0"
-            )}</span></div>`;
+              has ? formatCount(num) || "0" : "—"
+            )}</span><span class="apex-funnel-val">${this.escape(valHint)}</span>${rate}</div>`;
           })
           .join("");
         return `
@@ -1003,8 +1649,503 @@
           </header>
           ${
             empty
-              ? `<div class="apex-kpi-value is-empty">${this.escape(this.spec.emptyMessage || "No claims stages")}</div>`
-              : `<div class="apex-funnel">${rows}</div>`
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || this.spec.emptyMessage || "No claims stages"
+                )}</div>`
+              : ""
+          }
+          <div class="apex-funnel${empty ? " apex-funnel--empty" : ""}">${rows}</div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "treemap") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const cats = Array.isArray(data.categories) ? data.categories : [];
+        const empty = this.spec.status === "empty" || !cats.length;
+        // Consult: SVG <rect> nested proportional layout (squarified-lite row pack)
+        const W = 320;
+        const H = 140;
+        const weights = cats.map((c) => {
+          const v = c.value;
+          const has = v !== null && v !== undefined && Number.isFinite(Number(v));
+          return has ? Math.max(Number(v), 0.01) : 1;
+        });
+        const sum = weights.reduce((a, b) => a + b, 0) || 1;
+        let x = 0;
+        const rects = cats
+          .map((c, i) => {
+            const w = (weights[i] / sum) * W;
+            const v = c.value;
+            const has = v !== null && v !== undefined && Number.isFinite(Number(v));
+            const rawName = String(c.name || "Category—");
+            const name = this.escape(rawName.slice(0, 14));
+            const val = this.escape(has ? formatMoney(v) || String(v) : "$—");
+            const kids = Array.isArray(c.children) ? c.children : [];
+            let childRects = "";
+            if (kids.length && w > 40) {
+              const cw = w / kids.length;
+              childRects = kids
+                .map((ch, j) => {
+                  const cv = ch.value;
+                  const chas = cv !== null && cv !== undefined && Number.isFinite(Number(cv));
+                  const cx = x + j * cw;
+                  return `<rect class="apex-treemap-cell" x="${cx + 1}" y="${H * 0.55}" width="${Math.max(
+                    cw - 2,
+                    2
+                  )}" height="${H * 0.4}" />
+                    <text class="apex-treemap-label" x="${cx + 4}" y="${H * 0.7}">${this.escape(
+                    String(ch.name || "Sub—").slice(0, 8)
+                  )}</text>
+                    <text class="apex-treemap-value" x="${cx + 4}" y="${H * 0.85}">${this.escape(
+                    chas ? formatMoney(cv) || String(cv) : "$—"
+                  )}</text>`;
+                })
+                .join("");
+            }
+            const block = `<g class="apex-treemap-g">
+              <rect class="apex-treemap-cell" x="${x}" y="0" width="${Math.max(w - 1, 2)}" height="${
+              kids.length ? H * 0.52 : H
+            }" />
+              <text class="apex-treemap-label" x="${x + 4}" y="14">${name}</text>
+              <text class="apex-treemap-value" x="${x + 4}" y="28">${val}</text>
+              ${childRects}
+            </g>`;
+            x += w;
+            return block;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || "Expense hierarchy unavailable"
+                )}</div>
+                 <svg class="apex-treemap-svg apex-treemap--empty" viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}">
+                   <rect class="apex-treemap-cell" x="0" y="0" width="${W / 3 - 2}" height="${H}" />
+                   <rect class="apex-treemap-cell" x="${W / 3}" y="0" width="${W / 3 - 2}" height="${H}" />
+                   <rect class="apex-treemap-cell" x="${(2 * W) / 3}" y="0" width="${W / 3}" height="${H}" />
+                   <text class="apex-treemap-label" x="8" y="18">Category—</text>
+                   <text class="apex-treemap-value" x="8" y="34">$—</text>
+                   <text class="apex-treemap-label" x="${W / 3 + 8}" y="18">Category—</text>
+                   <text class="apex-treemap-value" x="${W / 3 + 8}" y="34">$—</text>
+                   <text class="apex-treemap-label" x="${(2 * W) / 3 + 8}" y="18">Category—</text>
+                   <text class="apex-treemap-value" x="${(2 * W) / 3 + 8}" y="34">$—</text>
+                 </svg>`
+              : `<svg class="apex-treemap-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}">
+            ${rects}
+          </svg>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "scatter-plot") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const points = Array.isArray(data.points) ? data.points : [];
+        const empty = this.spec.status === "empty" || !points.length;
+        const xs = points.map((p) => Number(p.x)).filter((n) => Number.isFinite(n));
+        const ys = points.map((p) => Number(p.y)).filter((n) => Number.isFinite(n));
+        const maxX = Math.max(...xs, 1);
+        const maxY = Math.max(...ys, 1);
+        const median = (arr) => {
+          if (!arr.length) return null;
+          const sorted = [...arr].sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        };
+        const medX =
+          data.medianX != null && Number.isFinite(Number(data.medianX))
+            ? Number(data.medianX)
+            : median(xs);
+        const medY =
+          data.medianY != null && Number.isFinite(Number(data.medianY))
+            ? Number(data.medianY)
+            : median(ys);
+        const qx = medX != null ? (medX / maxX) * 100 : 50;
+        const qy = medY != null ? 100 - (medY / maxY) * 100 : 50;
+        // Consult: SVG <circle> elements + quadrant lines
+        const dots = points
+          .map((p) => {
+            const hasX = p.x !== null && p.x !== undefined && Number.isFinite(Number(p.x));
+            const hasY = p.y !== null && p.y !== undefined && Number.isFinite(Number(p.y));
+            const x = empty && !hasX && !hasY ? 8 : hasX ? (Number(p.x) / maxX) * 100 : 8;
+            const y = empty && !hasX && !hasY ? 92 : hasY ? 100 - (Number(p.y) / maxY) * 100 : 92;
+            const r = Math.min(Math.max(Number(p.r) || 5, 3), 14) / 2;
+            let tone = "ok";
+            if (hasX && hasY && Number(p.y) < Number(p.x) * 0.7) tone = "underpaid";
+            if (hasX && hasY && Number(p.y) < Number(p.x) * 0.4) tone = "low-collect";
+            return `<circle class="apex-scatter-point apex-scatter-point--${tone}" cx="${x}" cy="${y}" r="${r}" data-x="${x}" data-y="${y}" data-label="${this.escape(
+              p.label || p.code || "D—"
+            )}"><title>${this.escape(p.label || p.code || "D—")}</title></circle>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            <div class="apex-widget-actions">
+              <button type="button" class="apex-icon-btn" data-action="focus" title="Focus">⛶</button>
+              ${printBtn}
+            </div>
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(data.emptyMessage || "Cost data unavailable")}</div>`
+              : ""
+          }
+          <div class="apex-scatter" data-scatter>
+            <span class="apex-scatter-ylab">${this.escape(data.yLabel || "Net Collection")} ($—)</span>
+            <div class="apex-scatter-plot">
+              <svg class="apex-scatter-svg" viewBox="0 0 100 100" preserveAspectRatio="none" data-scatter-svg>
+                <line class="apex-scatter-quad-svg" x1="${qx}" y1="0" x2="${qx}" y2="100" />
+                <line class="apex-scatter-quad-svg" x1="0" y1="${qy}" x2="100" y2="${qy}" />
+                ${dots}
+                <line class="apex-scatter-cross-v" data-scatter-cross-v x1="0" y1="0" x2="0" y2="100" visibility="hidden" />
+                <line class="apex-scatter-cross-h" data-scatter-cross-h x1="0" y1="0" x2="100" y2="0" visibility="hidden" />
+              </svg>
+            </div>
+            <span class="apex-scatter-xlab">${this.escape(data.xLabel || "Billed Fee")} ($—)</span>
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "pareto-chart") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        let bars = Array.isArray(data.bars) ? data.bars : [];
+        let cumulative = Array.isArray(data.cumulative) ? data.cumulative : [];
+        const threshold = Number(data.threshold) || 80;
+        const empty = this.spec.status === "empty" || !bars.length;
+        // Consult empty: gray zeroed bars + cumulative hugs 0%
+        if (empty && !bars.length) {
+          bars = [{ code: "—", amount: null, count: 0, pct: 0 }];
+          cumulative = [0];
+        }
+        const maxPct = Math.max(...bars.map((b) => Number(b.pct) || 0), 1);
+        const rows = bars
+          .map((b, i) => {
+            const pct = Number(b.pct) || 0;
+            const width = empty ? 4 : Math.max(4, Math.round((pct / maxPct) * 100));
+            const cum = cumulative[i] != null ? cumulative[i] : empty ? 0 : "";
+            return `<div class="apex-pareto-row${empty ? " is-empty" : ""}">
+              <span class="apex-pareto-code">${this.escape(b.code || "CO—")}</span>
+              <div class="apex-pareto-track"><i class="apex-pareto-bar" style="width:${width}%"></i></div>
+              <span class="apex-pareto-amt">${this.escape(
+                b.amount != null && Number.isFinite(Number(b.amount)) ? formatMoney(b.amount) || String(b.amount) : "$—"
+              )}</span>
+              <span class="apex-pareto-cum">${this.escape(cum !== "" ? `${cum}%` : "0%")}</span>
+            </div>`;
+          })
+          .join("");
+        // Cumulative % on Y; threshold = horizontal line at 80%
+        const n = Math.max(bars.length, 1);
+        const pts = (cumulative.length ? cumulative : [0])
+          .slice(0, bars.length)
+          .map((c, i) => {
+            const px = ((i + 0.5) / n) * 100;
+            const py = 100 - Math.max(0, Math.min(100, Number(c) || 0));
+            return `${px},${py}`;
+          })
+          .join(" ");
+        const threshY = 100 - threshold;
+        const lineSvg = `<svg class="apex-pareto-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+               <polyline class="apex-pareto-line" points="${pts}" />
+               <line class="apex-pareto-threshold" x1="0" y1="${threshY}" x2="100" y2="${threshY}" />
+             </svg>`;
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(data.emptyMessage || "No denials recorded")}</div>`
+              : ""
+          }
+          <div class="apex-pareto${empty ? " apex-pareto--empty" : ""}" style="--pareto-threshold:${threshold}%">
+            ${lineSvg}
+            ${rows}
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "timeline-lanes") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        let lanes = Array.isArray(data.lanes) ? data.lanes : [];
+        const empty = this.spec.status === "empty" || !lanes.length;
+        // Consult empty: collapse to single line with zeroed segments
+        if (empty && !lanes.length) {
+          lanes = [
+            {
+              code: "D—",
+              total: 0,
+              segments: [
+                { bucket: "0-30", count: 0, color: "cyan" },
+                { bucket: "31-60", count: 0, color: "amber" },
+                { bucket: "61-90", count: 0, color: "magenta" },
+                { bucket: "90+", count: 0, color: "alert" },
+              ],
+            },
+          ];
+        }
+        const rows = lanes
+          .map((lane) => {
+            const segs = Array.isArray(lane.segments) ? lane.segments : [];
+            const total = segs.reduce((a, s) => a + (Number(s.count) || 0), 0) || 1;
+            const segHtml = segs
+              .map((s) => {
+                const n = Number(s.count) || 0;
+                const w = Math.max(n ? 8 : 2, Math.round((n / total) * 100));
+                return `<span class="apex-lane-segment apex-lane-segment--${this.escape(
+                  s.color || "cyan"
+                )}" style="flex:${w}" title="${this.escape(s.bucket || "")}: ${n}">${n}</span>`;
+              })
+              .join("");
+            return `<div class="apex-lane-row">
+              <span class="apex-lane-code">${this.escape(lane.code || "D—")}</span>
+              <div class="apex-lane-track">${segHtml}</div>
+              <span class="apex-lane-total">${this.escape(
+                lane.total != null ? String(lane.total) : "0"
+              )}</span>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(data.emptyMessage || "No pending pre-auths")}</div>`
+              : ""
+          }
+          <div class="apex-lanes${empty ? " apex-lanes--empty" : ""}">${rows}</div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "credit-float") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const credits = Array.isArray(data.credits) ? data.credits : [];
+        const empty = this.spec.status === "empty" || !credits.length;
+        const pills = credits
+          .map((c) => {
+            const amt =
+              c.amount != null && Number.isFinite(Number(c.amount))
+                ? formatMoney(c.amount) || String(c.amount)
+                : "$—";
+            return `<span class="apex-float-pill">${this.escape(c.patientHash || "P—")}: ${this.escape(amt)}</span>`;
+          })
+          .join("");
+        const total =
+          data.total != null && Number.isFinite(Number(data.total))
+            ? formatMoney(data.total) || String(data.total)
+            : "$—";
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-float-strip"><span class="apex-float-pill apex-float-pill--empty">${this.escape(
+                  data.emptyMessage || "No unapplied credits"
+                )}</span></div>`
+              : `<div class="apex-float-strip">
+                   <span class="apex-float-label">UNAPPLIED CREDITS</span>
+                   <div class="apex-float-pills">${pills}</div>
+                   <span class="apex-float-total">Total: ${this.escape(total)}</span>
+                 </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "status-matrix") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        let patients = Array.isArray(data.patients) ? data.patients : [];
+        const empty = this.spec.status === "empty" || !patients.length;
+        // Consult empty: all gray dots
+        if (empty && !patients.length) {
+          patients = [
+            { hash: "P—", elig: null, ben: null, breakdown: null },
+            { hash: "P—", elig: null, ben: null, breakdown: null },
+            { hash: "P—", elig: null, ben: null, breakdown: null },
+          ];
+        }
+        const tone = (v) => {
+          const s = String(v || "").toLowerCase();
+          if (s === "verified" || s === "ok" || s === "yes") return "verified";
+          if (s === "pending" || s === "wait") return "pending";
+          if (s === "failed" || s === "fail" || s === "no") return "failed";
+          return "unknown";
+        };
+        const rows = patients
+          .map((p) => {
+            return `<div class="apex-matrix-row">
+              <span class="apex-matrix-hash">${this.escape(p.hash || "P—")}</span>
+              <i class="apex-matrix-dot apex-matrix-dot--${tone(p.elig)}" title="Elig"></i>
+              <i class="apex-matrix-dot apex-matrix-dot--${tone(p.ben)}" title="Ben"></i>
+              <i class="apex-matrix-dot apex-matrix-dot--${tone(p.breakdown)}" title="Breakdown"></i>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || "Verification tracking disabled"
+                )}</div>`
+              : ""
+          }
+          <div class="apex-matrix${empty ? " apex-matrix--empty" : ""}">
+            <div class="apex-matrix-head"><span></span><span>Elig</span><span>Ben</span><span>Break</span></div>
+            ${rows}
+            <div class="apex-matrix-legend">●Verified ○Pending ◉Failed</div>
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "utilization-board") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const ops = Array.isArray(data.operatories) ? data.operatories : [];
+        const empty = this.spec.status === "empty" || !ops.length;
+        // Coding consult: grid rows = operatories, columns = time slots
+        const times = [];
+        ops.forEach((op) => {
+          (Array.isArray(op.slots) ? op.slots : []).forEach((slot) => {
+            const t = String((slot && slot.time) || "").trim();
+            if (t && !times.includes(t)) times.push(t);
+          });
+        });
+        times.sort();
+        const head =
+          times.length > 0
+            ? `<div class="apex-op-grid-head"><span class="apex-op-grid-corner">Op</span>${times
+                .map((t) => `<span>${this.escape(t)}</span>`)
+                .join("")}</div>`
+            : "";
+        const rows = ops
+          .map((op) => {
+            const slots = Array.isArray(op.slots) ? op.slots : [];
+            const byTime = {};
+            slots.forEach((slot) => {
+              byTime[String(slot.time || "")] = slot;
+            });
+            const cells =
+              times.length > 0
+                ? times
+                    .map((t) => {
+                      const slot = byTime[t] || { status: "open" };
+                      const st = String(slot.status || "open").toLowerCase();
+                      const tone = st.includes("book")
+                        ? "booked"
+                        : st.includes("block")
+                          ? "blocked"
+                          : "open";
+                      return `<span class="apex-op-slot apex-op-slot--${tone}" title="${this.escape(t)}">${this.escape(
+                        tone === "booked" ? slot.patientHash || "•" : tone === "blocked" ? "×" : ""
+                      )}</span>`;
+                    })
+                    .join("")
+                : slots
+                    .map((slot) => {
+                      const st = String(slot.status || "open").toLowerCase();
+                      const tone = st.includes("book")
+                        ? "booked"
+                        : st.includes("block")
+                          ? "blocked"
+                          : "open";
+                      return `<span class="apex-op-slot apex-op-slot--${tone}">${this.escape(
+                        tone === "booked" ? slot.patientHash || "•" : ""
+                      )}</span>`;
+                    })
+                    .join("");
+            return `<div class="apex-op-grid-row" style="--op-cols:${Math.max(times.length, slots.length, 1)}">
+              <strong class="apex-op-grid-name">${this.escape(op.name || "Op—")}</strong>
+              <div class="apex-op-grid-slots">${cells}</div>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(data.emptyMessage || "No schedule data")}</div>`
+              : `<div class="apex-op-grid">${head}${rows}
+                   <div class="apex-op-legend">amber=booked · cyan outline=open · gray=blocked</div>
+                 </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "radial-gauge") {
+        const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
+        const empty = this.spec.status === "empty" || data.due == null;
+        const pct = data.pctScheduled != null && Number.isFinite(Number(data.pctScheduled))
+          ? Math.max(0, Math.min(100, Number(data.pctScheduled)))
+          : null;
+        const target = 80;
+        const r = 42;
+        const c = 2 * Math.PI * r;
+        const fill = pct == null ? 0 : (pct / 100) * c * 0.75;
+        const track = c * 0.75;
+        // Amber target marker at 80% along 270° arc (starts at 135°)
+        const targetAngle = 135 + (target / 100) * 270;
+        const rad = (targetAngle * Math.PI) / 180;
+        const tx = 60 + r * Math.cos(rad);
+        const ty = 58 + r * Math.sin(rad);
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            ${printBtn}
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  data.emptyMessage || "Recall tracking unavailable"
+                )}</div>
+                 <div class="apex-gauge apex-gauge--empty">
+                   <svg viewBox="0 0 120 100" class="apex-gauge-svg" aria-hidden="true">
+                     <circle class="apex-gauge-arc apex-gauge-arc--track" cx="60" cy="58" r="${r}"
+                       stroke-dasharray="${track} ${c}" stroke-dashoffset="0" transform="rotate(135 60 58)" />
+                     <text x="60" y="62" text-anchor="middle" class="apex-gauge-pct">—%</text>
+                   </svg>
+                 </div>`
+              : `<div class="apex-gauge">
+                   <svg viewBox="0 0 120 100" class="apex-gauge-svg" aria-hidden="true">
+                     <circle class="apex-gauge-arc apex-gauge-arc--track" cx="60" cy="58" r="${r}"
+                       stroke-dasharray="${track} ${c}" stroke-dashoffset="0" transform="rotate(135 60 58)" />
+                     <circle class="apex-gauge-arc apex-gauge-arc--fill" cx="60" cy="58" r="${r}"
+                       stroke-dasharray="${fill} ${c}" stroke-dashoffset="0" transform="rotate(135 60 58)" />
+                     <circle class="apex-gauge-target" cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="3.5" />
+                     <text x="60" y="62" text-anchor="middle" class="apex-gauge-pct">${this.escape(
+                       pct != null ? `${pct}%` : "—%"
+                     )}</text>
+                   </svg>
+                   <div class="apex-gauge-meta">Due: ${this.escape(
+                     data.due != null ? String(data.due) : "—"
+                   )} · Target: 80% · Sch: ${this.escape(
+                     data.scheduled != null ? String(data.scheduled) : "—"
+                   )}${
+                     data.contacted != null ? ` · Contacted: ${this.escape(String(data.contacted))}` : ""
+                   }</div>
+                 </div>`
           }
           <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
         `;
@@ -1390,6 +2531,48 @@
           btn.addEventListener("click", () => openCitationModal(btn.getAttribute("data-cite-key") || "", btn.textContent || ""));
         });
       }
+      if (this.type === "scatter-plot") {
+        const plot = this.element.querySelector("[data-scatter] .apex-scatter-plot");
+        const svg = this.element.querySelector("[data-scatter-svg]");
+        const crossV = this.element.querySelector("[data-scatter-cross-v]");
+        const crossH = this.element.querySelector("[data-scatter-cross-h]");
+        if (plot && svg && crossV && crossH) {
+          const circles = Array.from(svg.querySelectorAll("circle.apex-scatter-point"));
+          plot.addEventListener("mousemove", (ev) => {
+            const rect = plot.getBoundingClientRect();
+            let x = ((ev.clientX - rect.left) / rect.width) * 100;
+            let y = ((ev.clientY - rect.top) / rect.height) * 100;
+            // Consult: snap to nearest point
+            if (circles.length) {
+              let best = null;
+              let bestD = Infinity;
+              circles.forEach((c) => {
+                const cx = Number(c.getAttribute("cx")) || 0;
+                const cy = Number(c.getAttribute("cy")) || 0;
+                const d = (cx - x) * (cx - x) + (cy - y) * (cy - y);
+                if (d < bestD) {
+                  bestD = d;
+                  best = { cx, cy };
+                }
+              });
+              if (best) {
+                x = best.cx;
+                y = best.cy;
+              }
+            }
+            crossV.setAttribute("visibility", "visible");
+            crossH.setAttribute("visibility", "visible");
+            crossV.setAttribute("x1", String(x));
+            crossV.setAttribute("x2", String(x));
+            crossH.setAttribute("y1", String(y));
+            crossH.setAttribute("y2", String(y));
+          });
+          plot.addEventListener("mouseleave", () => {
+            crossV.setAttribute("visibility", "hidden");
+            crossH.setAttribute("visibility", "hidden");
+          });
+        }
+      }
       if (this.type === "status") {
         const refreshBtn = this.element.querySelector("[data-c0-refresh]");
         if (refreshBtn && refreshBtn.dataset.wired !== "1") {
@@ -1452,6 +2635,83 @@
           });
         });
       }
+      if (
+        this.type === "financial-command-strip" ||
+        this.type === "revenue-composition" ||
+        this.type === "dual-axis-trend"
+      ) {
+        this.element.querySelectorAll("[data-fin-cmd-action]").forEach((btn) => {
+          if (btn.dataset.wired === "1") return;
+          btn.dataset.wired = "1";
+          btn.addEventListener("click", async () => {
+            const act = btn.getAttribute("data-fin-cmd-action") || "refresh_softdent_period";
+            btn.disabled = true;
+            const prev = btn.textContent;
+            btn.textContent = "Working…";
+            try {
+              if (act === "sync_imports") {
+                await runHalBoardActions([{ type: "sync_imports", fullSync: true }, { type: "refresh_page" }]);
+              } else if (act === "focus_ebitda") {
+                const el = findWidgetEl("ebitda-station");
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el.classList.add("apex-hal-highlight");
+                  setTimeout(() => el.classList.remove("apex-hal-highlight"), 3500);
+                }
+              } else {
+                await runHalBoardActions([
+                  { type: "refresh_softdent_period" },
+                  { type: "refresh_page" },
+                ]);
+              }
+            } catch (err) {
+              window.alert(String((err && err.message) || err));
+            } finally {
+              btn.disabled = false;
+              btn.textContent = prev;
+            }
+          });
+        });
+      }
+      if (this.type === "scenario-manager") {
+        wireScenarioManager(this.element);
+      }
+      if (this.type === "filing-workflow") {
+        wireFilingWorkflow(this.element);
+      }
+      if (this.type === "workpaper") {
+        wireWorkpaper(this.element);
+      }
+      if (this.type === "workpaper-scrubber") {
+        wireWorkpaperScrubber(this.element);
+      }
+      if (this.type === "claim-detail-card") {
+        wireClaimDetailCard(this.element, this.spec);
+      }
+      if (this.type === "collection-task-list") {
+        wireCollectionTaskList(this.element, this.spec);
+      }
+      if (this.type === "huddle-mosaic") {
+        wireHuddleMosaic(this.element, this.spec);
+      }
+      if (this.type === "batch-selector") {
+        wireBatchSelector(this.element);
+      }
+      if (this.type === "attachment-dropzone") {
+        wireAttachmentDropzone(this.element);
+      }
+      if (this.type === "payer-reference-card") {
+        wirePayerReferenceCard(this.element);
+      }
+      if (this.type === "era-matching-table") {
+        wireEraMatchingTable(this.element);
+      }
+      if (this.type === "tax-calendar") {
+        wireTaxCalendar(this.element);
+      }
+      if (this.type === "task-board") {
+        wireTaskBoard(this.element);
+      }
       if (this.type === "claim-shelf") {
         wireClaimShelf(this.element, this.spec);
       }
@@ -1478,22 +2738,77 @@
 
   function askHalAboutWidget(spec) {
     const s = spec || {};
+    const data = s.data && typeof s.data === "object" ? s.data : {};
+    const widgetId = String(s.id || s.widgetId || "");
+    const status = String(s.status || (data && data.emptyMessage && !data.bars && !data.points ? "empty" : "ok"));
+    const context = {
+      widgetId,
+      page: currentPage,
+      status: status || "ok",
+    };
+
+    // Consult §4 — widget-specific HAL context (PHI-safe)
+    if (widgetId === "denial-pareto" || s.type === "pareto-chart") {
+      const codes = Array.isArray(s.denialCodes)
+        ? s.denialCodes
+        : Array.isArray(data.bars)
+          ? data.bars.map((b) => b && b.code).filter(Boolean)
+          : [];
+      if (codes.length) context.denialCodes = codes.slice(0, 12);
+    }
+    if (
+      widgetId === "unapplied-credit-float" ||
+      widgetId === "verification-matrix" ||
+      widgetId === "operatory-util-board" ||
+      s.type === "credit-float" ||
+      s.type === "status-matrix" ||
+      s.type === "utilization-board"
+    ) {
+      const hashes = [];
+      if (Array.isArray(data.credits)) {
+        data.credits.forEach((c) => {
+          if (c && c.patientHash) hashes.push(String(c.patientHash));
+        });
+      }
+      if (Array.isArray(data.patients)) {
+        data.patients.forEach((p) => {
+          if (p && p.hash) hashes.push(String(p.hash));
+        });
+      }
+      if (Array.isArray(data.operatories)) {
+        data.operatories.forEach((op) => {
+          (Array.isArray(op.slots) ? op.slots : []).forEach((slot) => {
+            if (slot && slot.patientHash) hashes.push(String(slot.patientHash));
+          });
+        });
+      }
+      if (hashes.length) context.patientHash = hashes.slice(0, 12);
+    }
+
     const parts = [
       `Widget context (do not invent dollars beyond these figures):`,
       `page=${currentPage}`,
-      `id=${s.id || ""}`,
-      `label=${s.label || ""}`,
+      `id=${widgetId}`,
+      `widgetId=${widgetId}`,
+      `label=${s.label || s.title || ""}`,
       `type=${s.type || ""}`,
+      `context=${JSON.stringify(context)}`,
     ];
     if (s.value !== null && s.value !== undefined && s.value !== "") {
       parts.push(`value=${s.value}${s.unit ? " " + s.unit : ""}`);
     }
     if (s.status === "empty" || s.status === "awaiting-migration") {
       parts.push(`dataStatus=EMPTY`);
-      parts.push(`emptyMessage=${s.emptyMessage || "No data"}`);
+      parts.push(`emptyMessage=${s.emptyMessage || data.emptyMessage || "No data"}`);
       parts.push(`Ask: which widgets are empty? · how do I get SoftDent/QuickBooks exports? · Sync imports`);
     } else {
       parts.push(`dataStatus=SHOWING`);
+    }
+    if (context.denialCodes) {
+      parts.push(`denialCodes=${context.denialCodes.join(",")}`);
+    }
+    if (context.patientHash) {
+      parts.push(`patientHash=${context.patientHash.join(",")}`);
     }
     if (s.type === "claim-shelf") {
       parts.push(`bucket=${s.bucket || ""}`);
@@ -1543,7 +2858,28 @@
       );
     }
     parts.push("Explain what this means for the practice and what to prioritize next.");
-    askHalFromBridge(parts.join(" | "));
+
+    // Consult §4 — deterministic focus/highlight via board-actions before chat
+    const query = `Explain this widget`;
+    apexFetch(`${config.apiBase}/hal/board-actions`, {
+      method: "POST",
+      body: JSON.stringify({ query, page: currentPage, context }),
+    })
+      .then((res) => res.json().catch(() => ({})))
+      .then((board) => {
+        if (board && Array.isArray(board.actions) && board.actions.length) {
+          return runHalBoardActions(board.actions);
+        }
+        // Fallback: focus locally if board did not handle
+        return runHalBoardActions([
+          { type: "focus_widget", widgetId },
+          { type: "highlight_widget", widgetId, ms: 4000 },
+        ]);
+      })
+      .catch(() => {})
+      .finally(() => {
+        askHalFromBridge(parts.join(" | "));
+      });
   }
 
   function wireTaxLibrary(root) {
@@ -1961,6 +3297,352 @@
       } catch (err) {
         window.alert(String((err && err.message) || err));
       }
+    });
+  }
+
+  function loadCpaFlags() {
+    try {
+      const raw = sessionStorage.getItem(CPA_FLAG_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_err) {
+      return {};
+    }
+  }
+
+  function saveCpaFlags(flags) {
+    try {
+      sessionStorage.setItem(CPA_FLAG_KEY, JSON.stringify(flags || {}));
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function wireWorkpaperScrubber(root) {
+    const box = root.querySelector("[data-workpaper-scrubber]");
+    if (!box || box.dataset.wired === "1") return;
+    box.dataset.wired = "1";
+    const flags = loadCpaFlags();
+    box.querySelectorAll("[data-cpa-flag]").forEach((input) => {
+      const id = String(input.value || "");
+      input.checked = !!flags[id];
+      input.addEventListener("change", () => {
+        const next = loadCpaFlags();
+        if (input.checked) next[id] = true;
+        else delete next[id];
+        saveCpaFlags(next);
+      });
+    });
+  }
+
+  function wireClaimDetailCard(root, spec) {
+    if (!root || root.dataset.wiredDetail === "1") return;
+    root.dataset.wiredDetail = "1";
+    const back = root.querySelector("[data-back-claims]");
+    if (back) {
+      back.addEventListener("click", () => loadPage("claims"));
+    }
+    const draft = root.querySelector("[data-draft-narrative-sub]");
+    if (draft) {
+      draft.addEventListener("click", () => {
+        const claim = (spec && spec.claim) || {};
+        const cid = String((claim && claim.claimId) || (spec && spec.claimId) || "");
+        try {
+          sessionStorage.setItem(
+            "nr2-apex-narrative-seed",
+            JSON.stringify({
+              claimId: cid,
+              patientName: "",
+              payer: (claim && claim.payer) || "",
+              date: (claim && claim.date) || "",
+            })
+          );
+          sessionStorage.setItem("nr2-apex-focused-claim", cid);
+        } catch (_err) {
+          /* ignore */
+        }
+        loadPage("narratives");
+      });
+    }
+  }
+
+  function wireCollectionTaskList(root, _spec) {
+    if (!root || root.dataset.wiredCol === "1") return;
+    root.dataset.wiredCol = "1";
+    const form = root.querySelector("[data-col-form]");
+    if (form) {
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(form);
+        const body = {
+          claimId: String(fd.get("claimId") || "").trim(),
+          patientInitials: String(fd.get("patientInitials") || "").trim(),
+          status: String(fd.get("status") || "open"),
+          followUp: String(fd.get("followUp") || "").trim(),
+          note: String(fd.get("note") || "").trim(),
+        };
+        try {
+          const res = await apexFetch(`${config.apiBase}/local/collection-notes`, {
+            method: "POST",
+            body: JSON.stringify(body),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || `Save failed (HTTP ${res.status})`);
+            return;
+          }
+          await loadPage("ar/collections");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    }
+    root.querySelectorAll("[data-col-seed-claim]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!form) return;
+        const claimInput = form.querySelector('[name="claimId"]');
+        const initInput = form.querySelector('[name="patientInitials"]');
+        if (claimInput) claimInput.value = btn.getAttribute("data-col-seed-claim") || "";
+        if (initInput) initInput.value = btn.getAttribute("data-col-initials") || "";
+        claimInput && claimInput.focus();
+      });
+    });
+  }
+
+  function wireHuddleMosaic(root, spec) {
+    if (!root || root.dataset.wiredHuddle === "1") return;
+    root.dataset.wiredHuddle = "1";
+    const saveBtn = root.querySelector("[data-huddle-save]");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", async () => {
+        const priorities = Array.isArray(spec && spec.priorities) ? spec.priorities : [];
+        try {
+          const res = await apexFetch(`${config.apiBase}/local/huddle`, {
+            method: "POST",
+            body: JSON.stringify({ priorities }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || `Huddle save failed (HTTP ${res.status})`);
+            return;
+          }
+          await loadPage("office-manager/huddle");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    }
+    const taskForm = root.querySelector("[data-huddle-task-form]");
+    if (taskForm) {
+      taskForm.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(taskForm);
+        const body = {
+          title: String(fd.get("title") || "").trim(),
+          assignee: String(fd.get("assignee") || "").trim(),
+          dueDate: String(fd.get("dueDate") || "").trim(),
+        };
+        try {
+          const res = await apexFetch(`${config.apiBase}/local/tasks`, {
+            method: "POST",
+            body: JSON.stringify(body),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || `Task save failed (HTTP ${res.status})`);
+            return;
+          }
+          await loadPage("office-manager/huddle");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    }
+  }
+
+  function wireBatchSelector(root) {
+    if (!root || root.dataset.wiredBatch === "1") return;
+    root.dataset.wiredBatch = "1";
+    const seedBtn = root.querySelector("[data-batch-seed]");
+    if (!seedBtn) return;
+    seedBtn.addEventListener("click", async () => {
+      const ids = Array.from(root.querySelectorAll("[data-batch-claim]:checked")).map((el) => el.value);
+      if (!ids.length) {
+        window.alert("Select at least one claim.");
+        return;
+      }
+      try {
+        const res = await apexFetch(`${config.apiBase}/narratives/batch-seed`, {
+          method: "POST",
+          body: JSON.stringify({ claimIds: ids }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          window.alert(data.error || `Batch seed failed (HTTP ${res.status})`);
+          return;
+        }
+        try {
+          sessionStorage.setItem("nr2-apex-narrative-seed", JSON.stringify(data.seed || { claimIds: ids }));
+        } catch (_err) {
+          /* ignore */
+        }
+        loadPage("narratives");
+      } catch (err) {
+        window.alert(String((err && err.message) || err));
+      }
+    });
+  }
+
+  function wireAttachmentDropzone(root) {
+    if (!root || root.dataset.wiredDrop === "1") return;
+    root.dataset.wiredDrop = "1";
+    const form = root.querySelector("[data-claim-att-upload]");
+    if (!form) return;
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(form);
+      const cid = String(fd.get("claimId") || "").trim();
+      try {
+        const res = await apexFetch(`${config.apiBase}/claims/attachments`, { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          window.alert(data.error || "Upload failed");
+          return;
+        }
+        const hash =
+          currentPage === "claims" && currentSub === "attachments"
+            ? cid
+              ? `claims/attachments?id=${encodeURIComponent(cid)}`
+              : "claims/attachments"
+            : cid
+              ? `documents/claim-docs?id=${encodeURIComponent(cid)}`
+              : "documents/claim-docs";
+        await loadPage(hash);
+      } catch (err) {
+        window.alert(String((err && err.message) || err));
+      }
+    });
+  }
+
+  function wirePayerReferenceCard(root) {
+    if (!root || root.dataset.wiredPayer === "1") return;
+    root.dataset.wiredPayer = "1";
+    const form = root.querySelector("[data-payer-form]");
+    if (!form) return;
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(form);
+      const body = {
+        payerName: String(fd.get("payerName") || "").trim(),
+        appealDeadlineDays: String(fd.get("appealDeadlineDays") || "").trim(),
+        contact: String(fd.get("contact") || "").trim(),
+        guidelines: String(fd.get("guidelines") || "").trim(),
+      };
+      try {
+        const res = await apexFetch(`${config.apiBase}/local/payers`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          window.alert(data.error || `Save failed (HTTP ${res.status})`);
+          return;
+        }
+        await loadPage("library/payers");
+      } catch (err) {
+        window.alert(String((err && err.message) || err));
+      }
+    });
+  }
+
+  function wireEraMatchingTable(root) {
+    if (!root || root.dataset.wiredEra === "1") return;
+    root.dataset.wiredEra = "1";
+    const era = root.querySelector("[data-era-upload]");
+    if (!era) return;
+    era.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(era);
+      try {
+        const res = await apexFetch(`${config.apiBase}/claims/era-ingest`, { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+        window.alert(
+          data.ok
+            ? `ERA ingested: ${data.matchedCount || 0} matched of ${data.segmentCount || 0} segments`
+            : data.error || "ERA ingest failed"
+        );
+        if (data.ok) await loadPage("claims/era");
+      } catch (err) {
+        window.alert(String((err && err.message) || err));
+      }
+    });
+  }
+
+  function wireTaxCalendar(root) {
+    if (!root || root.dataset.wiredTaxCal === "1") return;
+    root.dataset.wiredTaxCal = "1";
+    root.querySelectorAll("[data-tax-log]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const quarter = btn.getAttribute("data-tax-log") || "";
+        try {
+          const res = await apexFetch(`${config.apiBase}/local/tax-payments`, {
+            method: "POST",
+            body: JSON.stringify({ quarter }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || "Log failed");
+            return;
+          }
+          await loadPage("taxes/calendar");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    });
+  }
+
+  function wireTaskBoard(root) {
+    if (!root || root.dataset.wiredTasks === "1") return;
+    root.dataset.wiredTasks = "1";
+    const form = root.querySelector("[data-task-form]");
+    if (form) {
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(form);
+        try {
+          const res = await apexFetch(`${config.apiBase}/local/tasks`, {
+            method: "POST",
+            body: JSON.stringify({
+              title: String(fd.get("title") || "").trim(),
+              assignee: String(fd.get("assignee") || "").trim(),
+              dueDate: String(fd.get("dueDate") || "").trim(),
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || "Task save failed");
+            return;
+          }
+          await loadPage("office-manager/tasks");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        }
+      });
+    }
+    root.querySelectorAll("[data-task-toggle]").forEach((cb) => {
+      cb.addEventListener("change", async () => {
+        const id = cb.getAttribute("data-task-toggle");
+        try {
+          await apexFetch(`${config.apiBase}/local/tasks`, {
+            method: "POST",
+            body: JSON.stringify({ id: Number(id), done: cb.checked }),
+          });
+          await loadPage("office-manager/tasks", { silent: true });
+        } catch (_err) {
+          /* ignore */
+        }
+      });
     });
   }
 
@@ -2497,13 +4179,44 @@
     recalc();
   }
 
-  function appendHalMessage(logEl, role, text) {
+  function appendHalMessage(logEl, role, text, opts) {
     if (!logEl) return;
+    const persist = !(opts && opts.skipPersist);
     const row = document.createElement("div");
     row.className = `apex-hal-chat__msg apex-hal-chat__msg--${role}`;
     row.textContent = text;
     logEl.appendChild(row);
     logEl.scrollTop = logEl.scrollHeight;
+    if (persist) {
+      halTranscript.push({ role: String(role || "hal"), text: String(text == null ? "" : text) });
+      if (halTranscript.length > HAL_TRANSCRIPT_MAX) {
+        halTranscript.splice(0, halTranscript.length - HAL_TRANSCRIPT_MAX);
+      }
+    }
+  }
+
+  function restoreHalTranscript(logEl) {
+    if (!logEl || !halTranscript.length) return;
+    if (logEl.childElementCount) return;
+    halTranscript.forEach((entry) => {
+      appendHalMessage(logEl, entry.role, entry.text, { skipPersist: true });
+    });
+  }
+
+  function finalizeHalPending(pending, reply) {
+    const text = String(reply == null ? "" : reply);
+    if (pending) pending.textContent = text;
+    // Replace the trailing "Thinking…" transcript entry with the real reply.
+    for (let i = halTranscript.length - 1; i >= 0; i -= 1) {
+      if (halTranscript[i].role === "hal" && halTranscript[i].text === "Thinking…") {
+        halTranscript[i] = { role: "hal", text };
+        return;
+      }
+    }
+    halTranscript.push({ role: "hal", text });
+    if (halTranscript.length > HAL_TRANSCRIPT_MAX) {
+      halTranscript.splice(0,halTranscript.length - HAL_TRANSCRIPT_MAX);
+    }
   }
 
   async function runHalBoardActions(actions) {
@@ -2541,6 +4254,20 @@
         } else if (type === "refresh_page") {
           await loadPage(currentPage, { silent: true });
           results.push("refreshed");
+        } else if (type === "refresh_widget") {
+          // Phase 3: targeted refresh — silent page reload then re-focus widget
+          const id = String(action.widgetId || "").trim();
+          await loadPage(currentPage, { silent: true });
+          if (id) {
+            await new Promise((r) => setTimeout(r, 80));
+            const el = findWidgetEl(id);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.classList.add("apex-hal-highlight");
+              setTimeout(() => el.classList.remove("apex-hal-highlight"), Number(action.ms) || 2500);
+            }
+          }
+          results.push(id ? `refresh_widget:${id}` : "refresh_widget");
         } else if (type === "focus_widget" || type === "highlight_widget") {
           const id = String(action.widgetId || "").trim();
           if (!id) continue;
@@ -2660,6 +4387,7 @@
       window.ApexHalBrain.setState("thinking");
     }
     const t0 = Date.now();
+    halChatBusy = true;
     try {
       // 1) Deterministic board control (sync/focus/navigate) — never invents $
       let board = null;
@@ -2677,11 +4405,7 @@
         await runHalBoardActions(board.actions);
         const reply = String(board.reply || "Board updated from imports.");
         if (pending) {
-          if (window.ApexMotion && typeof window.ApexMotion.decodeText === "function") {
-            window.ApexMotion.decodeText(pending, reply);
-          } else {
-            pending.textContent = reply;
-          }
+          finalizeHalPending(pending, reply);
         } else appendHalMessage(logEl, "hal", reply);
         if (window.ApexHalBrain && typeof window.ApexHalBrain.setState === "function") {
           window.ApexHalBrain.setState("reply");
@@ -2733,9 +4457,16 @@
           }
         }
       } else if (data && data.error) {
-        reply = `HAL unavailable: ${data.error}`;
+        const reason = data.reason ? ` (${data.reason})` : "";
+        reply = `HAL unavailable: ${data.error}${reason}`;
       } else if (!res.ok) {
-        reply = `HAL request failed (HTTP ${res.status}).`;
+        let reason = "";
+        try {
+          reason = data && data.reason ? ` · ${data.reason}` : "";
+        } catch (_e) {
+          /* ignore */
+        }
+        reply = `HAL request failed (HTTP ${res.status}${reason}). Hard-refresh the page if this persists.`;
       } else {
         reply = "HAL returned no text for that query.";
       }
@@ -2749,6 +4480,7 @@
             [
               "sync_imports",
               "refresh_page",
+              "refresh_widget",
               "navigate",
               "focus_widget",
               "highlight_widget",
@@ -2769,23 +4501,20 @@
         reply = reply.replace(/<!--HAL_ACTIONS:\[[\s\S]*?\]-->/, "").trim();
       }
       if (pending) {
-        if (window.ApexMotion && typeof window.ApexMotion.decodeText === "function") {
-          window.ApexMotion.decodeText(pending, reply);
-        } else {
-          pending.textContent = reply;
-        }
+        finalizeHalPending(pending, reply);
       } else appendHalMessage(logEl, "hal", reply);
       if (window.ApexHalBrain && typeof window.ApexHalBrain.setState === "function") {
         window.ApexHalBrain.setState("reply");
       }
     } catch (err) {
       const msg = `HAL bridge error: ${String((err && err.message) || err)}`;
-      if (pending) pending.textContent = msg;
+      if (pending) finalizeHalPending(pending, msg);
       else appendHalMessage(logEl, "hal", msg);
       if (window.ApexHalBrain && typeof window.ApexHalBrain.setState === "function") {
         window.ApexHalBrain.setState("idle");
       }
     } finally {
+      halChatBusy = false;
       if (window.ApexHal && typeof window.ApexHal.setHeaderStatus === "function") {
         const st = (lastHalStatus && lastHalStatus.status) || "idle";
         window.ApexHal.setHeaderStatus(st, (lastHalStatus && lastHalStatus.statusLabel) || undefined);
@@ -2866,6 +4595,7 @@
     const form = panel.querySelector("[data-hal-form]");
     const input = panel.querySelector("[data-hal-input]");
     const chips = panel.querySelector("[data-hal-chips]");
+    restoreHalTranscript(logEl);
     loadHalSuggestionChips(chips, logEl);
     if (form && input) {
       form.addEventListener("submit", (ev) => {
@@ -2898,6 +4628,50 @@
       }
       w.patch(spec);
     });
+    return true;
+  }
+
+  function softRenderHalMain(list) {
+    const root = stage();
+    if (!root) return false;
+    const main = root.querySelector(".apex-hal-main");
+    const rail = root.querySelector(".apex-hal-rail");
+    const chatHost = rail && rail.querySelector(".apex-widget--hal-chat, .apex-inst--hal-chat");
+    if (!main || !rail || !chatHost) return false;
+
+    const specs = list || [];
+    const chatSpec = specs.find((s) => s && s.type === "hal-chat");
+    const mainSpecs = chatSpec ? specs.filter((s) => s !== chatSpec) : specs;
+
+    // Drop non-chat widgets from the registry; keep chat DOM + history.
+    Array.from(widgets.entries()).forEach(([id, w]) => {
+      if (w && w.type !== "hal-chat") widgets.delete(id);
+    });
+
+    if (window.ApexHalBrain && typeof window.ApexHalBrain.destroy === "function") {
+      window.ApexHalBrain.destroy();
+    }
+    main.innerHTML = "";
+    if (window.ApexHalBrain && typeof window.ApexHalBrain.mount === "function") {
+      window.ApexHalBrain.mount(main);
+    }
+    mainSpecs.forEach((spec, idx) => {
+      const widget = new Widget(spec);
+      widgets.set(widget.id, widget);
+      main.appendChild(widget.render(idx));
+    });
+    if (chatSpec) {
+      const existing = Array.from(widgets.values()).find((w) => w && w.type === "hal-chat");
+      if (existing) {
+        existing.spec = chatSpec;
+        if (existing.element) existing.element.classList.remove("is-updating");
+      } else {
+        widgets.set(String(chatSpec.id || "hal-chat"), Object.assign(new Widget(chatSpec), { element: chatHost }));
+      }
+    }
+    if (window.ApexMotion && typeof window.ApexMotion.enableHoloTilt === "function") {
+      window.ApexMotion.enableHoloTilt(main);
+    }
     return true;
   }
 
@@ -2975,10 +4749,89 @@
     }
   }
 
-  function setPageTitle(pageId) {
+  function parseApexHash(raw) {
+    const hash = String(raw || "")
+      .replace(/^#/, "")
+      .trim();
+    if (!hash) return { parent: "financial", sub: null, query: {} };
+    const qIdx = hash.indexOf("?");
+    const pathPart = qIdx >= 0 ? hash.slice(0, qIdx) : hash;
+    const queryPart = qIdx >= 0 ? hash.slice(qIdx + 1) : "";
+    const query = {};
+    if (queryPart) {
+      try {
+        new URLSearchParams(queryPart).forEach((v, k) => {
+          query[k] = v;
+        });
+      } catch (_err) {
+        /* ignore */
+      }
+    }
+    const parts = pathPart.split("/").filter(Boolean);
+    let parent = String(parts[0] || "financial")
+      .toLowerCase()
+      .replace(/[^a-z0-9\-]/g, "");
+    let sub = parts[1]
+      ? String(parts[1])
+          .toLowerCase()
+          .replace(/[^a-z0-9\-]/g, "")
+      : null;
+    if (!PARENT_PAGES.has(parent)) {
+      parent = "financial";
+      sub = null;
+    }
+    if (sub === "") sub = null;
+    return { parent, sub, query };
+  }
+
+  function formatApexHash(parent, sub, query) {
+    let h = String(parent || "financial").trim();
+    if (sub) h += `/${sub}`;
+    const id = query && query.id ? String(query.id).trim() : "";
+    if (id) h += `?id=${encodeURIComponent(id)}`;
+    return h;
+  }
+
+  function routeKey(parent, sub, query) {
+    return formatApexHash(parent, sub, query || {});
+  }
+
+  function renderSubnav(parent, sub) {
+    const nav = document.getElementById("apex-subnav");
+    if (!nav) return;
+    const links = SUBPAGE_LINKS[parent];
+    if (!links || !links.length) {
+      nav.hidden = true;
+      nav.innerHTML = "";
+      nav.classList.remove("is-visible");
+      return;
+    }
+    nav.hidden = false;
+    nav.classList.add("is-visible");
+    nav.innerHTML = links
+      .map((item) => {
+        const active = (item.sub || null) === (sub || null);
+        return `<button type="button" class="apex-subnav-btn${active ? " is-active" : ""}" data-sub-parent="${parent}" data-sub="${
+          item.sub || ""
+        }">${escapeHtml(item.label)}</button>`;
+      })
+      .join("");
+    nav.querySelectorAll("[data-sub-parent]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const p = btn.getAttribute("data-sub-parent") || parent;
+        const s = btn.getAttribute("data-sub") || "";
+        const q = s === "detail" && currentQuery.id ? { id: currentQuery.id } : {};
+        loadPage(formatApexHash(p, s || null, q));
+      });
+    });
+  }
+
+  function setPageTitle(pageId, sub) {
     const el = document.getElementById("apex-page-title");
     if (el) {
-      el.textContent = PAGE_TITLES[pageId] || pageId || "Apex";
+      const base = PAGE_TITLES[pageId] || pageId || "Apex";
+      const subLabel = sub ? SUBPAGE_TITLES[sub] || sub : "";
+      el.textContent = subLabel ? `${base} · ${subLabel}` : base;
       if (window.ApexMotion && typeof window.ApexMotion.triggerGlitch === "function") {
         window.ApexMotion.triggerGlitch(el);
       }
@@ -2992,27 +4845,31 @@
     const el = metaEl();
     if (!el) return;
     const at = payload && payload.refreshedAt ? payload.refreshedAt : "—";
-    const page = payload && payload.page ? payload.page : currentPage;
+    const page = payload && payload.page ? payload.page : routeKey(currentPage, currentSub, currentQuery);
     const note = payload && payload.sourceNote ? payload.sourceNote : "";
     el.textContent = `Page: ${page} · Refreshed: ${at}${note ? " · " + note : ""}`;
     el.classList.add("is-live");
     setTimeout(() => el.classList.remove("is-live"), 1200);
   }
 
-  function setHash(pageId) {
-    const next = String(pageId || "").trim();
-    if (!next) return;
-    const desired = `#${next}`;
+  function setHash(parent, sub, query) {
+    const desired = `#${formatApexHash(parent, sub, query)}`;
     if (location.hash !== desired) {
       history.replaceState(null, "", desired);
     }
   }
 
-  async function loadPage(pageId, opts) {
-    const silent = opts && opts.silent;
-    currentPage = pageId || currentPage || "financial";
-    setHash(currentPage);
-    setPageTitle(currentPage);
+  async function loadPage(pageIdOrHash, opts) {
+    let silent = Boolean(opts && opts.silent);
+    const parsed = parseApexHash(pageIdOrHash || formatApexHash(currentPage, currentSub, currentQuery));
+    currentPage = parsed.parent || currentPage || "financial";
+    currentSub = parsed.sub;
+    currentQuery = parsed.query && typeof parsed.query === "object" ? parsed.query : {};
+    // Never wipe HAL chat while a reply is in flight (auto-refresh / nav race).
+    if (halChatBusy && currentPage === "hal") silent = true;
+    setHash(currentPage, currentSub, currentQuery);
+    setPageTitle(currentPage, currentSub);
+    renderSubnav(currentPage, currentSub);
     const root = stage();
     if (!root) return;
 
@@ -3021,7 +4878,7 @@
     });
 
     // Interactive narratives workspace (not KPI mosaic)
-    if (currentPage === "narratives") {
+    if (currentPage === "narratives" && !currentSub) {
       if (refreshTimer) clearInterval(refreshTimer);
       if (window.ApexHalBrain && typeof window.ApexHalBrain.destroy === "function") {
         window.ApexHalBrain.destroy();
@@ -3041,9 +4898,16 @@
     }
 
     if (!silent) {
-      root.className = currentPage === "hal" ? "apex-stage apex-stage--hal" : "apex-stage apex-mosaic";
+      root.className =
+        currentPage === "hal" && !currentSub ? "apex-stage apex-stage--hal" : "apex-stage apex-mosaic";
+      root.dataset.page = currentPage;
+      if (currentSub) root.dataset.sub = currentSub;
+      else delete root.dataset.sub;
       root.innerHTML = '<div class="apex-status-msg">Loading bridge instruments…</div>';
     } else {
+      root.dataset.page = currentPage;
+      if (currentSub) root.dataset.sub = currentSub;
+      else delete root.dataset.sub;
       root.querySelectorAll(".apex-inst, .apex-widget").forEach((el) => {
         // Keep HAL chat interactive during silent refresh (it is not re-patched).
         if (el.classList.contains("apex-widget--hal-chat")) return;
@@ -3058,8 +4922,16 @@
       const list = payload.widgets || [];
       if (silent && widgets.size && patchWidgets(list)) {
         /* in-place — no flash */
+      } else if (silent && currentPage === "hal" && !currentSub) {
+        // Never full-remount HAL on silent refresh — that wiped chat history on hover/timer races.
+        if (!softRenderHalMain(list)) {
+          root.querySelectorAll(".apex-inst, .apex-widget").forEach((el) => el.classList.remove("is-updating"));
+        }
       } else {
         renderWidgets(list);
+        if (currentPage === "hal" && !currentSub) {
+          restoreHalTranscript(document.querySelector("[data-hal-messages]"));
+        }
         if (!silent) {
           root.classList.add("is-entering");
           setTimeout(() => root.classList.remove("is-entering"), 400);
@@ -3081,7 +4953,10 @@
 
   function startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
-    refreshTimer = setInterval(() => loadPage(currentPage, { silent: true }), config.refreshInterval);
+    refreshTimer = setInterval(
+      () => loadPage(formatApexHash(currentPage, currentSub, currentQuery), { silent: true }),
+      config.refreshInterval
+    );
   }
 
   async function printPage(widgetId) {
@@ -3131,7 +5006,7 @@
     } catch (_err) {
       syncNote = "Sync request failed — refreshing anyway";
     }
-    await loadPage(currentPage, { silent: true });
+    await loadPage(formatApexHash(currentPage, currentSub, currentQuery), { silent: true });
     const meta = metaEl();
     if (meta && syncNote) {
       meta.textContent = `${meta.textContent} · ${syncNote}`;
@@ -3189,7 +5064,8 @@
     }
     window.addEventListener("hashchange", () => {
       const hash = (location.hash || "").replace(/^#/, "").trim();
-      if (hash && hash !== currentPage) loadPage(hash);
+      const next = routeKey(currentPage, currentSub, currentQuery);
+      if (hash && hash !== next) loadPage(hash);
     });
   }
 
@@ -3214,6 +5090,8 @@
     openClaimDrawer,
     closeClaimDrawer,
     focusClaimTile,
+    parseApexHash,
+    formatApexHash,
   };
 
   if (document.readyState === "loading") {

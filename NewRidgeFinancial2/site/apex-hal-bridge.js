@@ -5,8 +5,8 @@
 (function () {
   "use strict";
 
-  const POLL_MS = 45000;
-  const SUGGEST_AUTO_MS = 14000;
+  const POLL_MS = 120000;
+  const SUGGEST_AUTO_MS = 0; // no auto popup — sidebar text still updates
 
   let pollTimer = null;
   let dismissTimer = null;
@@ -154,8 +154,9 @@
   function start() {
     ensurePanel();
     if (pollTimer) clearInterval(pollTimer);
-    pollOnce({ showSuggest: true, forceSuggest: true });
-    pollTimer = setInterval(() => pollOnce({ showSuggest: true }), POLL_MS);
+    // Sidebar suggestion text only — do not slam the floating panel (looked like page refresh).
+    pollOnce({ showSuggest: false });
+    pollTimer = setInterval(() => pollOnce({ showSuggest: false }), POLL_MS);
   }
 
   function stop() {

@@ -3314,6 +3314,16 @@ const HalCore = (function () {
       }
       if (runtime.storageMode === "sqlite" || runtime.desktopBridgeOk === true) {
         results.push(readinessItem("storage", "Desktop SQLite storage", "Pass", "pywebview bridge active; SQLite-backed persistence available", null));
+      } else if (runtime.storageMode === "indexedDB" || runtime.indexedDbOk === true) {
+        results.push(
+          readinessItem(
+            "storage",
+            "Browser IndexedDB cache",
+            "Warning",
+            "IndexedDB client cache active; SQLite imports/SideNotes hub sync still require the NR2 server",
+            "Launch NR2 with StartProgram.bat (https://127.0.0.1:8765/).",
+          ),
+        );
       } else if (runtime.storageMode === "sessionStorage") {
         results.push(
           readinessItem(
@@ -3321,7 +3331,7 @@ const HalCore = (function () {
             "Browser preview storage",
             "Warning",
             "sessionStorage fallback only; imports, SQLite storage, SideNotes hub files, and import sync are unavailable",
-            "Launch NR2 with StartProgram.bat (http://127.0.0.1:8765/).",
+            "Launch NR2 with StartProgram.bat (https://127.0.0.1:8765/).",
           ),
         );
       } else if (runtime.sessionStorageOk === true) {
