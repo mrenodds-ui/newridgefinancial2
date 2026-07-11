@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10360"
+BUILD_ID = "hal-10464"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -3105,7 +3105,11 @@ def _hal_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[s
             "hal-mosaic-coll",
             "Collections",
             coll,
-            hint="SoftDent dashboard." if coll is not None else "Collections pending/missing.",
+            hint=(
+                "SoftDent dashboard."
+                if coll is not None
+                else "Collections pending/missing — import SoftDent daysheet / Register for a Period, then Sync."
+            ),
         )
     )
 
@@ -3223,7 +3227,9 @@ def summarize_widget_census(widgets: list[dict[str, Any]]) -> dict[str, Any]:
         if not isinstance(w, dict):
             continue
         wid = str(w.get("id") or "")
-        if not wid or wid.startswith("hal-chat"):
+        wtype = str(w.get("type") or "").strip().lower()
+        # Skip chat surface — id is often "hal-ask", not "hal-chat*"
+        if not wid or wid.startswith("hal-chat") or wtype == "hal-chat":
             continue
         label = str(w.get("label") or wid)
         hint = str(w.get("hint") or w.get("emptyMessage") or "")
@@ -3241,6 +3247,45 @@ def summarize_widget_census(widgets: list[dict[str, Any]]) -> dict[str, Any]:
         "emptyWidgets": empty[:12],
         "populatedWidgets": populated[:12],
     }
+
+
+def census_has_collections_pending(census: dict[str, Any] | None) -> bool:
+    """True when Collections KPI is empty because SoftDent period is pending/missing."""
+    if not isinstance(census, dict):
+        return False
+    empties = census.get("emptyWidgets") if isinstance(census.get("emptyWidgets"), list) else []
+    for row in empties:
+        if not isinstance(row, dict):
+            continue
+        wid = str(row.get("id") or "").strip().lower()
+        label = str(row.get("label") or "").strip().lower()
+        hint = str(row.get("hint") or "").strip().lower()
+        if wid in {"hal-mosaic-coll", "sd-collections"} or label == "collections":
+            if "pending" in hint or "missing" in hint:
+                return True
+    return False
+
+
+def append_collections_pending_board_actions(actions: list[dict[str, Any]]) -> None:
+    """Guide staff to SoftDent Collections KPI — honesty: never invent $."""
+    actions.append(
+        {
+            "type": "set_status_banner",
+            "message": "Collections pending: import SoftDent daysheet / Register for a Period, then Sync.",
+            "hint": "Not $0 — production exists without reported collections for the latest period.",
+            "tone": "warn",
+        }
+    )
+    if not any(a.get("type") == "navigate" and a.get("page") == "softdent" for a in actions):
+        actions.append({"type": "navigate", "page": "softdent"})
+    actions.append({"type": "focus_widget", "widgetId": "sd-collections"})
+    actions.append({"type": "highlight_widget", "widgetId": "sd-collections", "ms": 4500})
+
+
+COLLECTIONS_PENDING_FIX = (
+    "Fix: Import SoftDent daysheet or complete Register for a Period, then Sync imports "
+    "(or ask HAL to refresh SoftDent period). Collections stay empty until reported — not $0."
+)
 
 
 def build_page_widget_census(page_id: str) -> dict[str, Any]:
@@ -3350,11 +3395,13 @@ def format_page_inventory_reply(page_id: str) -> str:
         lines.append(
             "Empty: "
             + " · ".join(
-                f"{e.get('label') or e.get('id')}" + (f" ({str(e.get('hint') or '')[:60]})" if e.get("hint") else "")
+                f"{e.get('label') or e.get('id')}" + (f" ({str(e.get('hint') or '')[:80]})" if e.get("hint") else "")
                 for e in empties[:8]
                 if isinstance(e, dict)
             )
         )
+    if census_has_collections_pending(census):
+        lines.append(COLLECTIONS_PENDING_FIX)
     return " ".join(lines)
 
 
@@ -3405,7 +3452,13 @@ def format_census_reply(page: str, census: dict[str, Any]) -> str:
             hint = str(row.get("hint") or "").strip()
             bits.append(f"{label}" + (f" — {hint}" if hint else ""))
         lines.append("Empty: " + " · ".join(bits))
-        lines.append("Fix: place SoftDent/QB exports in the inbox (or refresh ODBC), then Sync imports. Ask: how do I get SoftDent/QuickBooks exports?")
+        if census_has_collections_pending(census):
+            lines.append(COLLECTIONS_PENDING_FIX)
+        else:
+            lines.append(
+                "Fix: place SoftDent/QB exports in the inbox (or refresh ODBC), then Sync imports. "
+                "Ask: how do I get SoftDent/QuickBooks exports?"
+            )
     else:
         lines.append("All listed instruments on this page currently show data from the import cache.")
     return " ".join(lines)
@@ -4190,32 +4243,40 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
                 page = page_in_query
             if wants_inventory and not wants_census:
                 reply_txt = format_page_inventory_reply(target)
-                actions.append(
-                    {
-                        "type": "set_status_banner",
-                        "message": f"Widget inventory · {target}",
-                        "hint": "Import-backed page map.",
-                        "tone": "ok",
-                    }
-                )
+                inv_census = build_page_widget_census(target).get("census")
+                inv_census = inv_census if isinstance(inv_census, dict) else {}
+                if census_has_collections_pending(inv_census):
+                    append_collections_pending_board_actions(actions)
+                else:
+                    actions.append(
+                        {
+                            "type": "set_status_banner",
+                            "message": f"Widget inventory · {target}",
+                            "hint": "Import-backed page map.",
+                            "tone": "ok",
+                        }
+                    )
             else:
                 census_payload = build_page_widget_census(target)
                 census = census_payload.get("census") if isinstance(census_payload.get("census"), dict) else {}
                 reply_txt = format_census_reply(str(census_payload.get("page") or target), census)
                 empty_n = int(census.get("empty") or 0)
-                actions.append(
-                    {
-                        "type": "set_status_banner",
-                        "message": f"{target}: {census.get('withData', 0)}/{census.get('total', 0)} with data"
-                        + (f" · {empty_n} empty" if empty_n else ""),
-                        "hint": "Import-backed census — HAL does not invent values.",
-                        "tone": "warn" if empty_n else "ok",
-                    }
-                )
-                empty_ids = census.get("emptyIds") if isinstance(census.get("emptyIds"), list) else []
-                if empty_ids:
-                    actions.append({"type": "focus_widget", "widgetId": str(empty_ids[0])})
-                    actions.append({"type": "highlight_widget", "widgetId": str(empty_ids[0]), "ms": 4000})
+                if census_has_collections_pending(census):
+                    append_collections_pending_board_actions(actions)
+                else:
+                    actions.append(
+                        {
+                            "type": "set_status_banner",
+                            "message": f"{target}: {census.get('withData', 0)}/{census.get('total', 0)} with data"
+                            + (f" · {empty_n} empty" if empty_n else ""),
+                            "hint": "Import-backed census — HAL does not invent values.",
+                            "tone": "warn" if empty_n else "ok",
+                        }
+                    )
+                    empty_ids = census.get("emptyIds") if isinstance(census.get("emptyIds"), list) else []
+                    if empty_ids:
+                        actions.append({"type": "focus_widget", "widgetId": str(empty_ids[0])})
+                        actions.append({"type": "highlight_widget", "widgetId": str(empty_ids[0]), "ms": 4000})
             notes.append(reply_txt)
             handled = True
 

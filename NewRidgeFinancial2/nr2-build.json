@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10463",
-  "assetVersion": "hal-10463",
-  "schemaVersion": "hal-10463",
-  "notes": "hal-10463: Apex HAL Console chat box v2 (auto-resize, copy, receipts, empty state).",
-  "builtAt": "2026-07-11T12:09:06.147Z"
+  "BUILD_ID": "hal-10464",
+  "assetVersion": "hal-10464",
+  "schemaVersion": "hal-10464",
+  "notes": "hal-10464: HAL census skips hal-chat by type; Collections pending actionable SoftDent navigate.",
+  "builtAt": "2026-07-11T12:25:00.000Z"
 }
