@@ -1,6 +1,6 @@
 # HAL Model Warmup Automation
 
-Keeps HAL's local Ollama models loaded in memory **always** — at logon, on a
+Keeps HAL's local Ollama model loaded in memory **always** — at logon, on a
 short recurring interval, and independent of whether the NewRidgeFinancial 2.0
 program is open or closed. Models are pinned with `keep_alive = -1`, so Ollama
 holds them resident with no time-based eviction.
@@ -10,34 +10,35 @@ memory. It never writes to SoftDent, QuickBooks, payers, or any external service
 
 ## What stays resident
 
-The always-on default for **32 GB VRAM** (R9700) is the **Moonshot hybrid** layout:
+The always-on default for **32 GB VRAM** (R9700) is the **single 24B** layout
+(2026-07-11):
 
-- `hal-chat:8b` (DeepSeek-R1 8B — staff chat) — GPU-pinned
-- `hal-escalate:30b` (Qwen3 30B — escalation / insurance reasoning) — GPU-pinned
-- `qwen2.5-coder:32b` — **on demand** for agent programming / patch / debug (not pinned; may briefly unload escalate)
+- `hal-local:24b` (FROM `mistral-small3.1:24b` **Q4_K_M**, `num_ctx` 8192) — GPU-pinned
+- `OLLAMA_MAX_LOADED_MODELS=1` — no automatic concurrent 8B/30B/coder loads
+- Prior `hal-chat:8b`, `hal-escalate:30b`, `qwen2.5-coder:32b` **retained on disk** only
 
-Install or refresh both pinned tags:
+Install or refresh:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Apply-HAL-GPU-Performance.ps1
 ```
 
-Or install lanes only:
+Rollback to dual 8B+30B:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Install-HAL-GPU-Chat-Escalate-Lanes.ps1
+powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Rollback-HAL-Dual-8B-30B.ps1
 ```
+
+See `docs/HAL_LOCAL_24B_SINGLE_GPU_2026-07-11.md` for VRAM budget, routing policy, and validation.
 
 **16 GB VRAM** workstations: use `Install-HAL-GPU-Dual-Lanes.ps1` (8B+14B) or
 `Install-HAL-GPU-Chat-Lane.ps1 -UnpinHelper` (8B only).
 
-Reasoning and escalation both use **GPU-pinned `hal-escalate:30b`** on R9700 (no Mistral 24B load — avoids evicting pins). Agent-loop coding prefers **`qwen2.5-coder:32b` on demand** when installed (`preferCoderForAgentLoop` in `hal-models.json`).
-
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Apply-HAL-GPU-Performance.ps1
 ```
 
-Optional legacy 24B (16 GB workstations only — will evict pins on 32 GB):
+Optional legacy text-only 24B-fast (not the active single-24B pin):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\NewRidgeFinancial2\model-automation\Install-HAL-Mistral-24B-Fast.ps1
@@ -48,11 +49,12 @@ tags stay in sync with the program config.
 
 ### GPU reality (32 GB R9700)
 
-**Hybrid (validated Moonshot 2026-07-09):** `hal-chat:8b` + `hal-escalate:30b` co-reside (~23 GB, ctx 3072/4096). Staff chat and insurance escalation stay fast. `qwen2.5-coder:32b` loads on demand for agent/programming and may briefly unload the 30B pin. Never pin `qwen3:235b` or `gpt-oss:120b` on 32 GB.
+**Single 24B (2026-07-11):** one Q4_K_M 24B resident (~15–18 GB @ 8K). No dual pin.
+Future: external 12 GB GPU may host a separate 8B without reloading two models on the internal card.
+Never pin `qwen3:235b` or `gpt-oss:120b` on 32 GB.
 
 On **16 GB** VRAM, all configured models cannot co-reside on GPU at once. Legacy dual-lane
-pins `hal-chat:8b` + `hal-helper:14b` (~14 GB). The 24B reasoning lane loads on demand
-and may evict one GPU lane briefly while active.
+pins `hal-chat:8b` + `hal-helper:14b` (~14 GB).
 
 ## Run once
 

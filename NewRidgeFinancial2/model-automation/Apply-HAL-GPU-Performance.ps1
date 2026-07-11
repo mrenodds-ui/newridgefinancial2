@@ -1,10 +1,11 @@
 <#
 .SYNOPSIS
-  Apply Ollama GPU performance settings for R9700 32 GB HAL workstation.
+  Apply Ollama GPU performance settings for single 24B on R9700 32 GB.
 
 .DESCRIPTION
-  Sets recommended user-level Ollama environment variables, creates hal-escalate:30b
-  (capped 4096 ctx), pins hal-chat:8b + hal-escalate:30b, and verifies GPU load.
+  Sets Ollama env for one loaded model on the discrete AMD GPU, creates
+  hal-local:24b (Q4_K_M), pins only that model, and verifies GPU load.
+  OpenAI/cloud settings are not changed by this script.
 #>
 [CmdletBinding()]
 param(
@@ -14,7 +15,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$installScript = Join-Path $scriptRoot "Install-HAL-GPU-Chat-Escalate-Lanes.ps1"
+$installScript = Join-Path $scriptRoot "Install-HAL-GPU-Single-24B.ps1"
 $registerScript = Join-Path $scriptRoot "Register-HAL-Model-Automation.ps1"
 
 $ollamaRoot = "$env:LOCALAPPDATA\Programs\Ollama"
@@ -33,7 +34,27 @@ function Set-UserEnv {
     Write-Host "  $Name = $Value" -ForegroundColor Green
 }
 
-Write-Host "`n=== HAL GPU performance setup (R9700 32 GB) ===" -ForegroundColor Cyan
+function Get-R9700GpuIndex {
+    # Enumerate display adapters; prefer AMD discrete (R9700 / Radeon AI PRO).
+    # With OLLAMA_IGPU_ENABLE=0, ROCm sees discrete AMD as device 0.
+    $adapters = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue)
+    $amd = @($adapters | Where-Object {
+        $_.Name -match "AMD|Radeon" -and $_.Name -notmatch "Intel"
+    })
+    if ($amd.Count -eq 0) {
+        Write-Host "  WARNING: No AMD discrete adapter found via WMI; defaulting HIP_VISIBLE_DEVICES=0" -ForegroundColor DarkYellow
+        return 0
+    }
+    $r9700 = $amd | Where-Object { $_.Name -match "R9700|AI PRO" } | Select-Object -First 1
+    $chosen = if ($r9700) { $r9700 } else { $amd[0] }
+    # Among AMD adapters only, first match is index 0 for ROCm after iGPU disable.
+    $index = [array]::IndexOf($amd, $chosen)
+    if ($index -lt 0) { $index = 0 }
+    Write-Host ("  Detected GPU: {0} → HIP/ROCm index {1}" -f $chosen.Name, $index) -ForegroundColor Green
+    return $index
+}
+
+Write-Host "`n=== HAL GPU performance setup (single 24B · R9700 32 GB) ===" -ForegroundColor Cyan
 
 if (-not $SkipEnv) {
     Write-Host "`nUser environment (Ollama):" -ForegroundColor Yellow
@@ -43,18 +64,21 @@ if (-not $SkipEnv) {
     } else {
         Write-Host "  ROCBLAS_TENSILE_LIBPATH skipped (path not found)" -ForegroundColor DarkYellow
     }
-    # Keep exactly two GPU lanes resident; avoid loading a third model that evicts pins.
-    Set-UserEnv "OLLAMA_MAX_LOADED_MODELS" "2"
-    # One request at a time — safer VRAM on dual-resident 8B+30B layout.
+    # One model only — no concurrent 8B+30B or coder loads.
+    Set-UserEnv "OLLAMA_MAX_LOADED_MODELS" "1"
     Set-UserEnv "OLLAMA_NUM_PARALLEL" "1"
-    # Do not route work to Intel iGPU.
     Set-UserEnv "OLLAMA_IGPU_ENABLE" "0"
+    # Local-only listener (do not expose to LAN).
+    Set-UserEnv "OLLAMA_HOST" "127.0.0.1:11434"
+    $gpuIndex = Get-R9700GpuIndex
+    Set-UserEnv "HIP_VISIBLE_DEVICES" "$gpuIndex"
+    Set-UserEnv "ROCR_VISIBLE_DEVICES" "$gpuIndex"
 }
 
 if (-not $SkipPin) {
-    Write-Host "`nPinning GPU models (8B chat + 30B escalation, capped ctx)..." -ForegroundColor Yellow
+    Write-Host "`nPinning single GPU model (hal-local:24b Q4_K_M)..." -ForegroundColor Yellow
     & $installScript
-    if ($LASTEXITCODE -ne 0) { throw "Install-HAL-GPU-Chat-Escalate-Lanes failed" }
+    if ($LASTEXITCODE -ne 0) { throw "Install-HAL-GPU-Single-24B failed" }
 
     Write-Host "`nRegistering warmup automation..." -ForegroundColor Yellow
     & $registerScript
@@ -73,4 +97,5 @@ if ($active -match "High performance|8c5e7fda") {
 }
 
 Write-Host "`nDone. Restart Ollama app if env vars were new (or log off/on)." -ForegroundColor Green
+Write-Host "Rollback: .\Rollback-HAL-Dual-8B-30B.ps1" -ForegroundColor DarkGray
 Write-Host "Re-open NR2 if the program is already running." -ForegroundColor Green

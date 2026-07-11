@@ -39,14 +39,28 @@
         "vendor documentation"
       ]
     },
-    "activeLane": "chat8b+escalate30b+coder32b-ondemand",
+    "activeLane": "local24b-single",
     "preferReasoning": true,
     "hybridGpuLayout": {
+      "enabled": false,
+      "policy": "2026-07-11 single-24B: pin only hal-local:24b (Q4_K_M) on R9700 32 GB. No automatic 8B/30B/coder concurrent loads. OpenAI cloud remains optional/off unless explicitly enabled.",
+      "gpuPinned": ["hal-local:24b"],
+      "onDemandCoder": null,
+      "neverPin": ["hal-chat:8b", "hal-escalate:30b", "qwen2.5-coder:32b", "qwen3:235b", "gpt-oss:120b", "qwen3-coder:30b", "llama3.3:latest"]
+    },
+    "singleGpuLayout": {
       "enabled": true,
-      "policy": "Moonshot hybrid 2026-07-09: pin chat8b+escalate30b for staff speed; route agent/coding to qwen2.5-coder:32b on demand (may briefly unload escalate pin).",
-      "gpuPinned": ["hal-chat:8b", "hal-escalate:30b"],
-      "onDemandCoder": "qwen2.5-coder:32b",
-      "neverPin": ["qwen3:235b", "gpt-oss:120b", "qwen3-coder:30b", "llama3.3:latest"]
+      "policy": "One quantized 24B on internal R9700 only. External 12 GB GPU reserved for a future separate 8B — not configured yet.",
+      "approvedModel": "hal-local:24b",
+      "baseModel": "mistral-small3.1:24b",
+      "quantization": "Q4_K_M",
+      "numCtx": 8192,
+      "maxLoadedModels": 1,
+      "numParallel": 1,
+      "gpuDevice": "AMD Radeon AI PRO R9700",
+      "vramGiB": 32,
+      "vramSafetyMarginGiB": 5,
+      "keepAlive": -1
     },
     "cursorParity": {
       "enabled": true,
@@ -66,8 +80,9 @@
       "taskCompletion": true,
       "agentToolLoop": true,
       "agentLoopUseReasoning": true,
-      "preferCoderForAgentLoop": true,
+      "preferCoderForAgentLoop": false,
       "coderLane": "coder32b",
+
       "agentAutoTools": true,
       "autoApplyPatches": true,
       "clarifyAmbiguous": true,
@@ -174,13 +189,13 @@
     "localModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "hal-chat:8b",
-      "timeoutMs": 60000,
+      "model": "hal-local:24b",
+      "timeoutMs": 90000,
       "temperature": 0.2,
       "think": false,
       "options": {
         "num_predict": 1536,
-        "num_ctx": 3072
+        "num_ctx": 8192
       }
     },
     "fastModel": {
@@ -191,23 +206,21 @@
       "temperature": 0.2
     },
     "gpuPinnedModels": [
-      "hal-chat:8b",
-      "hal-escalate:30b"
+      "hal-local:24b"
     ],
     "gpuPinOptions": {
-      "hal-chat:8b": { "num_ctx": 3072 },
-      "hal-escalate:30b": { "num_ctx": 4096 }
+      "hal-local:24b": { "num_ctx": 8192 }
     },
     "reasoningModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "hal-escalate:30b",
+      "model": "hal-local:24b",
       "timeoutMs": 210000,
       "temperature": 0.25,
       "think": false,
       "options": {
         "num_predict": 1280,
-        "num_ctx": 4096,
+        "num_ctx": 8192,
         "repeat_penalty": 1.08,
         "top_p": 0.92
       }
@@ -215,32 +228,32 @@
     "escalationModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "hal-escalate:30b",
+      "model": "hal-local:24b",
       "timeoutMs": 180000,
       "temperature": 0.2,
       "think": false,
       "options": {
         "num_predict": 1280,
-        "num_ctx": 4096
+        "num_ctx": 8192
       }
     },
     "coderModel": {
       "enabled": true,
-      "onDemand": true,
+      "onDemand": false,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "qwen2.5-coder:32b",
+      "model": "hal-local:24b",
       "timeoutMs": 180000,
       "temperature": 0.25,
       "think": false,
       "options": {
         "num_predict": 1536,
-        "num_ctx": 4096,
+        "num_ctx": 8192,
         "repeat_penalty": 1.05,
         "top_p": 0.9
       },
-      "note": "Hybrid on-demand: agent programming / patch / debug. Not GPU-pinned; may briefly unload escalate30b while loaded."
+      "note": "Single-24B layout: coder lane maps to hal-local:24b (no second model load). qwen2.5-coder:32b retained on disk only."
     },
-    "note": "Hybrid (Moonshot 2026-07-09): GPU pins hal-chat:8b + hal-escalate:30b on R9700 32 GB. Staff chat/escalation stay dual-resident. Agent programming prefers qwen2.5-coder:32b on demand. 14B helper on demand. Optional cloud when NR2_CLOUD_API_KEY is set (PHI sanitized).",
+    "note": "Single 24B (2026-07-11): GPU pin only hal-local:24b (mistral-small3.1:24b Q4_K_M, num_ctx 8192) on R9700 32 GB. OLLAMA_MAX_LOADED_MODELS=1. Prior 8B/30B/coder tags retained on disk but not auto-routed. Cloud reasoning remains disabled unless explicitly enabled with NR2_CLOUD_API_KEY (PHI sanitized). Rollback: model-automation/Rollback-HAL-Dual-8B-30B.ps1.",
     "naturalVoice": {
       "instructions": [
         "Write like a sharp office teammate: clear, direct, collaborative — not a film computer or dashboard narrator.",
@@ -314,8 +327,8 @@
     }
   },
   "readinessDisplay": {
-    "label": "Operator-verified local inventory",
-    "verifiedAt": "2026-07-08",
+    "label": "Operator-verified local inventory — single 24B",
+    "verifiedAt": "2026-07-11",
     "localAiService": {
       "status": "Detected",
       "name": "Ollama",
@@ -327,35 +340,48 @@
       "endpoint": "http://127.0.0.1:11434/api/version",
       "version": "0.31.1"
     },
-    "activeLane": "chat8b+escalate30b+coder32b-ondemand",
-    "laneExecution": "Enabled · GPU-pinned 8B chat + 30B escalation · coder 32B on demand for agent/programming · loopback only",
-    "runningModel": "hal-chat:8b + hal-escalate:30b pinned · qwen2.5-coder:32b on demand (hybrid)",
-    "gpuStatus": "AMD Radeon AI PRO R9700 · 32 GB VRAM · hybrid: 8B+30B pin, coder32b on demand",
-    "bindingStatus": "Ollama server binds 0.0.0.0:11434 (LAN access enabled by operator) · HAL client connects 127.0.0.1 only",
+    "activeLane": "local24b-single",
+    "laneExecution": "Enabled · single GPU-pinned 24B (hal-local:24b Q4_K_M) · loopback only · OpenAI cloud off unless explicitly enabled",
+    "runningModel": "hal-local:24b (FROM mistral-small3.1:24b Q4_K_M)",
+    "quantization": "Q4_K_M",
+    "contextSize": 8192,
+    "localEndpoint": "http://127.0.0.1:11434/api/chat",
+    "activeProvider": "local-ollama",
+    "fallbackStatus": "cloudReasoning.enabled=false · no unrestricted local production routing",
+    "gpuStatus": "AMD Radeon AI PRO R9700 · index via HIP_VISIBLE_DEVICES · 32 GB VRAM · single 24B pin",
+    "bindingStatus": "OLLAMA_HOST=127.0.0.1:11434 · HAL client 127.0.0.1 only · not LAN-exposed",
     "dataPolicy": "No patient or sensitive practice data sent to models or the web. Web research uses sanitized generic queries for public reference material.",
-    "allModelsEnabled": true,
+    "allModelsEnabled": false,
     "gpu": {
       "verified": true,
-      "verifiedAt": "2026-07-09",
+      "verifiedAt": "2026-07-11",
       "device": "AMD Radeon AI PRO R9700",
+      "gpuIndex": 0,
       "vendor": "AMD",
       "library": "ROCm",
       "compute": "gfx1201",
       "vramGiB": 32,
-      "layerOffload": "Hybrid: hal-chat:8b + hal-escalate:30b dual resident (~23 GB); qwen2.5-coder:32b on demand for agent loop",
-      "integratedGpu": "Intel Graphics present; OLLAMA_IGPU_ENABLE=0 (disabled for performance)",
-      "resolvedWarning": "rocblaslt TensileLibrary via ROCBLAS_TENSILE_LIBPATH; OLLAMA_MAX_LOADED_MODELS=2",
-      "lastVerifiedLoad": "hybrid layout validated with Moonshot 2026-07-09 — pins unchanged; coder32b routed on demand"
+      "vramTotalGiB": 32,
+      "vramSafetyMarginGiB": 5,
+      "layerOffload": "Target: 100% GPU residency for hal-local:24b; fail readiness if substantial CPU offload",
+      "fullyGpuResidentRequired": true,
+      "integratedGpu": "Intel Graphics present; OLLAMA_IGPU_ENABLE=0 (disabled)",
+      "resolvedWarning": "ROCBLAS_TENSILE_LIBPATH; OLLAMA_MAX_LOADED_MODELS=1; HIP_VISIBLE_DEVICES set to R9700 index",
+      "lastVerifiedLoad": "2026-07-11 controlled test: 100% GPU, size_vram=size (~14.84 GiB), ctx 8192, CPU offload 0%, loopback-only listener"
     },
     "runtime": {
       "ollamaVersion": "0.31.1",
       "modelsPath": "D:\\LocalAI\\ActiveModels",
-      "host": "0.0.0.0:11434",
-      "lanAccess": "enabled (operator choice; not loopback-restricted)",
+      "host": "127.0.0.1:11434",
+      "lanAccess": "disabled (loopback-only)",
+      "maxLoadedModels": 1,
+      "numParallel": 1,
       "tensileLibPath": "C:\\Users\\mreno\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\rocm_v7_1\\rocblas\\library",
       "keepAlive": "-1 via HAL model warmup automation"
     },
     "availableModels": [
+      "hal-local:24b",
+      "mistral-small3.1:24b",
       "hal-chat:8b",
       "hal-escalate:30b",
       "hal-helper:14b",
@@ -370,19 +396,18 @@
       "gpt-oss:120b",
       "qwen3:30b",
       "mistral-small3.1:24b-fast",
-      "mistral-small3.1:24b",
       "llama3.3:latest"
     ],
     "configuredModels": {
-      "local": { "lane": "chat8b", "model": "hal-chat:8b", "available": true },
-      "helper": { "lane": "helper14b", "model": "hal-helper:14b", "available": true, "onDemand": true, "gpuResidentWithLocal": false },
-      "reasoning": { "lane": "reason24b", "model": "hal-escalate:30b", "available": true, "gpuPinnedWithLocal": true, "sharedWithEscalation": true },
-      "escalation": { "lane": "escalate30b", "model": "hal-escalate:30b", "available": true, "gpuPinnedWithLocal": true },
-      "general": { "lane": "general14b", "model": "qwen3:14b", "available": true },
-      "coder": { "lane": "coder30b", "model": "qwen3-coder:30b", "available": true, "onDemand": true, "deprecatedPrefer": "coder32b" },
-      "coderHeavy": { "lane": "coder32b", "model": "qwen2.5-coder:32b", "available": true, "onDemand": true, "hybridAgentPreferred": true },
-      "deep": { "lane": "deep235b", "model": "qwen3:235b", "available": true, "onDemand": true, "neverPin": true },
-      "oss": { "lane": "oss120b", "model": "gpt-oss:120b", "available": true, "onDemand": true, "neverPin": true }
+      "local": { "lane": "chat8b", "model": "hal-local:24b", "available": true, "quantization": "Q4_K_M" },
+      "helper": { "lane": "helper14b", "model": "hal-helper:14b", "available": true, "onDemand": true, "autoRoute": false },
+      "reasoning": { "lane": "reason24b", "model": "hal-local:24b", "available": true, "gpuPinnedWithLocal": true },
+      "escalation": { "lane": "escalate30b", "model": "hal-local:24b", "available": true, "gpuPinnedWithLocal": true },
+      "general": { "lane": "general14b", "model": "qwen3:14b", "available": true, "autoRoute": false },
+      "coder": { "lane": "coder30b", "model": "qwen3-coder:30b", "available": true, "onDemand": true, "autoRoute": false },
+      "coderHeavy": { "lane": "coder32b", "model": "hal-local:24b", "available": true, "onDemand": false, "sharedWithLocal24b": true },
+      "deep": { "lane": "deep235b", "model": "qwen3:235b", "available": true, "onDemand": true, "neverPin": true, "autoRoute": false },
+      "oss": { "lane": "oss120b", "model": "gpt-oss:120b", "available": true, "onDemand": true, "neverPin": true, "autoRoute": false }
     }
   },
   "lanes": [
@@ -423,25 +448,25 @@
     },
     {
       "id": "chat8b",
-      "name": "8B chat lane",
-      "model": "hal-chat:8b",
-      "role": "GPU-pinned staff conversation, program monitoring summaries, and plain-language recommendations (dual-resident with hal-escalate:30b)",
+      "name": "24B chat lane (legacy id chat8b)",
+      "model": "hal-local:24b",
+      "role": "Staff conversation on single GPU-pinned 24B (lane id preserved; model is 24B not 8B)",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "hal-chat:8b",
-        "timeoutMs": 60000,
+        "model": "hal-local:24b",
+        "timeoutMs": 90000,
         "temperature": 0.2
       },
       "gpuFit": {
         "verified": true,
-        "processor": "100% GPU",
-        "residentSize": "~5 GB",
-        "context": 3072,
-        "quantization": "deepseek-r1:8b base"
+        "processor": "100% GPU target",
+        "residentSize": "~15–18 GB at 8K ctx",
+        "context": 8192,
+        "quantization": "Q4_K_M (mistral-small3.1:24b)"
       },
       "willAllow": [
         "Explain pages in plain language",
@@ -458,25 +483,25 @@
     },
     {
       "id": "reason24b",
-      "name": "30B reasoning lane",
-      "model": "hal-escalate:30b",
-      "role": "GPU-pinned reasoning (shared with escalation) for plans, accounting review, insurance narratives, and structured recommendations",
+      "name": "24B reasoning lane",
+      "model": "hal-local:24b",
+      "role": "Reasoning on shared single 24B pin for plans, accounting review, insurance narratives, and structured recommendations",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "hal-escalate:30b",
+        "model": "hal-local:24b",
         "timeoutMs": 180000,
         "temperature": 0.25,
         "think": false
       },
       "gpuFit": {
         "verified": true,
-        "processor": "100% GPU",
-        "residentSize": "~18 GB (shared pin with escalate30b)",
-        "context": 4096,
+        "processor": "100% GPU target",
+        "residentSize": "~15–18 GB (shared single pin)",
+        "context": 8192,
         "quantization": "Q4_K_M"
       },
       "willAllow": [
@@ -493,16 +518,16 @@
     },
     {
       "id": "reason21b",
-      "name": "30B reasoning lane (alias)",
-      "model": "hal-escalate:30b",
-      "role": "Alias for reason24b — gateway reason21b maps to hal-escalate:30b on R9700",
+      "name": "24B reasoning lane (alias)",
+      "model": "hal-local:24b",
+      "role": "Alias for reason24b — gateway reason21b maps to hal-local:24b",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "hal-escalate:30b",
+        "model": "hal-local:24b",
         "timeoutMs": 180000,
         "temperature": 0.25,
         "think": false
@@ -519,25 +544,25 @@
     },
     {
       "id": "escalate30b",
-      "name": "30B escalation lane",
-      "model": "hal-escalate:30b",
-      "role": "GPU-pinned escalation for complex or high-risk accounting, data, and recommendation questions",
+      "name": "24B escalation lane (legacy id escalate30b)",
+      "model": "hal-local:24b",
+      "role": "Escalation on shared single 24B pin (lane id preserved; model is 24B not 30B)",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "hal-escalate:30b",
+        "model": "hal-local:24b",
         "timeoutMs": 180000,
         "temperature": 0.2,
         "think": false
       },
       "gpuFit": {
         "verified": true,
-        "processor": "100% GPU",
-        "residentSize": "~18 GB",
-        "context": 4096,
+        "processor": "100% GPU target",
+        "residentSize": "~15–18 GB",
+        "context": 8192,
         "quantization": "Q4_K_M",
         "thinkMode": "disabled for visible staff-facing replies"
       },
@@ -603,31 +628,31 @@
     },
     {
       "id": "coder32b",
-      "name": "32B coder lane (hybrid on-demand)",
-      "model": "qwen2.5-coder:32b",
-      "role": "On-demand agent programming / patch / debug (hybrid). Not GPU-pinned; may briefly unload escalate30b.",
+      "name": "24B coder lane (legacy id coder32b)",
+      "model": "hal-local:24b",
+      "role": "Agent programming / patch / debug on shared single 24B pin (no second model). qwen2.5-coder:32b retained on disk only.",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "qwen2.5-coder:32b",
+        "model": "hal-local:24b",
         "timeoutMs": 180000,
         "temperature": 0.25,
         "options": {
           "num_predict": 1536,
-          "num_ctx": 4096,
+          "num_ctx": 8192,
           "repeat_penalty": 1.05,
           "top_p": 0.9
         }
       },
       "gpuFit": {
         "verified": true,
-        "onDemand": true,
-        "processor": "on demand",
-        "residentSize": "~19–20 GB when loaded",
-        "context": 4096,
+        "onDemand": false,
+        "processor": "100% GPU target (shared pin)",
+        "residentSize": "~15–18 GB",
+        "context": 8192,
         "quantization": "Q4_K_M"
       },
       "willAllow": [
