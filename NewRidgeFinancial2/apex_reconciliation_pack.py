@@ -1,17 +1,22 @@
 """
 Phase U2 — Reconciliation engine (Moonshot REAUDIT3 SHOULD).
+Phase V2 — Optional 30B explanation LRU cache (Moonshot REAUDIT4 NICE).
 
 Detect SoftDent×QB variances from v_production_vs_payroll / v_collection_vs_ap.
 Default thresholds: 5% or $500 (overridable via env). Optional 30B explainer.
 Honesty: never invent dollars; gap codes when views empty. No SoftDent write-back.
 Flag: NR2_RECONCILIATION (default ON).
+Flag: NR2_EXPLAIN_CACHE (default OFF until burn-in — invalidate on import).
 """
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import os
 import re
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,6 +26,7 @@ GAP_RECON_VARIANCE = "RECON_VARIANCE"
 
 DEFAULT_VARIANCE_PCT = 0.05
 DEFAULT_VARIANCE_ABS = 500.0
+EXPLAIN_CACHE_MAXSIZE = 128
 
 EXPLAIN_SYSTEM = (
     "You are a dental practice CFO AI. Explain the SoftDent vs QuickBooks variance "
@@ -28,6 +34,12 @@ EXPLAIN_SYSTEM = (
     "widget_type='alert-banner' with data.value null or the provided delta, "
     "confidence, and source_refs. Never invent dollars. No PHI. No prose outside JSON."
 )
+
+# V2 — period+delta_hash LRU; cleared on import completion (generation bump + clear).
+_EXPLAIN_CACHE: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
+_EXPLAIN_CACHE_GEN = 0
+_EXPLAIN_CACHE_HITS = 0
+_EXPLAIN_CACHE_MISSES = 0
 
 
 def _utc_now() -> str:
@@ -37,6 +49,142 @@ def _utc_now() -> str:
 def reconciliation_enabled() -> bool:
     raw = str(os.getenv("NR2_RECONCILIATION") or "1").strip().lower()
     return raw not in {"0", "false", "no", "off"}
+
+
+def explain_cache_enabled() -> bool:
+    """V2 — 30B variance explainer LRU. Default OFF until burn-in."""
+    raw = str(os.getenv("NR2_EXPLAIN_CACHE") or "0").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
+def variance_delta_hash(finding: dict[str, Any]) -> str:
+    """Stable hash of mirrored variance fields used as explain cache key."""
+    payload = {
+        "kind": finding.get("kind"),
+        "period": finding.get("period"),
+        "gapCode": finding.get("gapCode"),
+        "reasons": finding.get("reasons"),
+        "deltas": finding.get("deltas"),
+        "thresholds": finding.get("thresholds"),
+        "production": finding.get("production"),
+        "payroll": finding.get("payroll"),
+        "ratio": finding.get("ratio"),
+        "collections": finding.get("collections"),
+        "totalAp": finding.get("totalAp"),
+        "netProfit": finding.get("netProfit"),
+    }
+    raw = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def invalidate_explain_cache(*, reason: str = "import") -> dict[str, Any]:
+    """Clear 30B explanation cache (call on any import completion)."""
+    global _EXPLAIN_CACHE_GEN, _EXPLAIN_CACHE_HITS, _EXPLAIN_CACHE_MISSES
+    _EXPLAIN_CACHE.clear()
+    _EXPLAIN_CACHE_GEN += 1
+    _EXPLAIN_CACHE_HITS = 0
+    _EXPLAIN_CACHE_MISSES = 0
+    return {
+        "ok": True,
+        "phase": "V2",
+        "reason": str(reason or "import"),
+        "generation": _EXPLAIN_CACHE_GEN,
+        "size": 0,
+    }
+
+
+def explain_cache_stats() -> dict[str, Any]:
+    return {
+        "enabled": explain_cache_enabled(),
+        "flag": "NR2_EXPLAIN_CACHE",
+        "generation": _EXPLAIN_CACHE_GEN,
+        "size": len(_EXPLAIN_CACHE),
+        "maxsize": EXPLAIN_CACHE_MAXSIZE,
+        "hits": _EXPLAIN_CACHE_HITS,
+        "misses": _EXPLAIN_CACHE_MISSES,
+    }
+
+
+def explain_variance(
+    finding: dict[str, Any],
+    *,
+    classify_only: bool = False,
+    force_orchestrator: bool | None = None,
+) -> dict[str, Any]:
+    """
+    Optional 30B (orchestrator) explanation for a variance finding.
+    Cache key: (period, delta_hash, classify_only, force) when NR2_EXPLAIN_CACHE=1.
+    """
+    global _EXPLAIN_CACHE_HITS, _EXPLAIN_CACHE_MISSES
+
+    period = _normalize_period(str(finding.get("period") or ""))
+    delta_hash = variance_delta_hash(finding)
+    force_flag = None if force_orchestrator is None else bool(force_orchestrator)
+    cache_key = (period, delta_hash, bool(classify_only), force_flag, _EXPLAIN_CACHE_GEN)
+
+    if explain_cache_enabled() and cache_key in _EXPLAIN_CACHE:
+        _EXPLAIN_CACHE.move_to_end(cache_key)
+        _EXPLAIN_CACHE_HITS += 1
+        hit = copy.deepcopy(_EXPLAIN_CACHE[cache_key])
+        hit["cacheHit"] = True
+        hit["period"] = period
+        hit["deltaHash"] = delta_hash
+        hit["cacheGeneration"] = _EXPLAIN_CACHE_GEN
+        return hit
+
+    if explain_cache_enabled():
+        _EXPLAIN_CACHE_MISSES += 1
+
+    try:
+        from apex_orchestrator_pack import orchestrate, orchestrator_enabled
+
+        enabled = orchestrator_enabled() if force_orchestrator is None else bool(force_orchestrator)
+        if not enabled:
+            result: dict[str, Any] = {
+                "ok": False,
+                "reason": "orchestrator_disabled",
+                "cacheHit": False,
+                "period": period,
+                "deltaHash": delta_hash,
+            }
+        else:
+            query = (
+                f"Explain SoftDent vs QuickBooks reconciliation variance for {finding.get('period')} "
+                f"kind={finding.get('kind')} reasons={finding.get('reasons')} "
+                f"deltas={finding.get('deltas')} thresholds={finding.get('thresholds')}. "
+                "Output structured alert-banner JSON only."
+            )
+            result = orchestrate(
+                query,
+                classify_only=classify_only,
+                force_enabled=True,
+                require_structured=True,
+                system_prompt=EXPLAIN_SYSTEM,
+                context={"reconciliation": {"findings": [finding]}},
+            )
+            if not isinstance(result, dict):
+                result = {"ok": False, "error": "orchestrator_non_dict"}
+            result = dict(result)
+            result["cacheHit"] = False
+            result["period"] = period
+            result["deltaHash"] = delta_hash
+    except Exception as exc:  # noqa: BLE001
+        result = {
+            "ok": False,
+            "error": str(exc),
+            "cacheHit": False,
+            "period": period,
+            "deltaHash": delta_hash,
+        }
+
+    if explain_cache_enabled() and result.get("ok"):
+        _EXPLAIN_CACHE[cache_key] = copy.deepcopy(result)
+        _EXPLAIN_CACHE.move_to_end(cache_key)
+        while len(_EXPLAIN_CACHE) > EXPLAIN_CACHE_MAXSIZE:
+            _EXPLAIN_CACHE.popitem(last=False)
+        result["cacheGeneration"] = _EXPLAIN_CACHE_GEN
+
+    return result
 
 
 def variance_threshold_pct() -> float:
@@ -413,32 +561,18 @@ def run_reconciliation(
 
     orchestrator_result = None
     if explain and alerts:
-        try:
-            from apex_orchestrator_pack import orchestrate, orchestrator_enabled
-
-            enabled = orchestrator_enabled() if force_orchestrator is None else bool(force_orchestrator)
-            if enabled:
-                top = alerts[0]
-                query = (
-                    f"Explain SoftDent vs QuickBooks reconciliation variance for {top.get('period')} "
-                    f"kind={top.get('kind')} reasons={top.get('reasons')} "
-                    f"deltas={top.get('deltas')} thresholds={top.get('thresholds')}. "
-                    "Output structured alert-banner JSON only."
-                )
-                orchestrator_result = orchestrate(
-                    query,
-                    classify_only=classify_only,
-                    force_enabled=True,
-                    require_structured=True,
-                    system_prompt=EXPLAIN_SYSTEM,
-                    context={"reconciliation": {"findings": alerts}},
-                )
-                if not classify_only and orchestrator_result.get("insightWidget"):
-                    insight_widget = orchestrator_result.get("insightWidget")
-            else:
-                orchestrator_result = {"ok": False, "reason": "orchestrator_disabled"}
-        except Exception as exc:  # noqa: BLE001
-            orchestrator_result = {"ok": False, "error": str(exc)}
+        top = alerts[0]
+        orchestrator_result = explain_variance(
+            top,
+            classify_only=classify_only,
+            force_orchestrator=force_orchestrator,
+        )
+        if (
+            isinstance(orchestrator_result, dict)
+            and not classify_only
+            and orchestrator_result.get("insightWidget")
+        ):
+            insight_widget = orchestrator_result.get("insightWidget")
 
     # Persist lightweight log
     try:
@@ -497,6 +631,7 @@ def reconciliation_status() -> dict[str, Any]:
             "envPct": "NR2_VARIANCE_PCT",
             "envAbs": "NR2_VARIANCE_ABS",
         },
+        "explainCache": explain_cache_stats(),
         "endpoints": {
             "run": "POST /api/apex/hal/reconciliation",
             "status": "GET /api/apex/hal/reconciliation-status",

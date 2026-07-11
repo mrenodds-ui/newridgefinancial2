@@ -1,13 +1,13 @@
 /**
  * NR2-Apex Core — Bridge mosaic, silent refresh, print, session-aware fetch
- * Build: hal-10486 (IndexedDB widget cache + browser storage fallback)
+ * Build: hal-10489 (V2 explain cache + mobile polish)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10486";
+  const ASSET_V = "hal-10489";
   const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
   const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
   const PARENT_PAGES = new Set([
@@ -415,8 +415,8 @@
             )
             .join("")}</ul>`;
         } else if (insight.widget_type === "alert-banner") {
-          body = `<div class="apex-kpi-value">${this.escape(String(data.severity || "info").toUpperCase())}</div>
-            <div class="apex-kpi-hint">${this.escape(String(data.message || ""))}</div>`;
+          body = `<div class="hal-insight-banner"><div class="apex-kpi-value">${this.escape(String(data.severity || "info").toUpperCase())}</div>
+            <div class="apex-kpi-hint">${this.escape(String(data.message || ""))}</div></div>`;
         }
         const cta =
           insight.action_cta && insight.action_cta.route

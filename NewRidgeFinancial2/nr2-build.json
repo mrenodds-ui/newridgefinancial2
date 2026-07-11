@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10486",
-  "assetVersion": "hal-10486",
-  "schemaVersion": "hal-10486",
-  "notes": "hal-10486: Moonshot U3 dashboard layout schema + mosaic ordering (starship-bridge).",
-  "builtAt": "2026-07-11T18:42:02.000Z"
+  "BUILD_ID": "hal-10489",
+  "assetVersion": "hal-10489",
+  "schemaVersion": "hal-10489",
+  "notes": "hal-10489: Moonshot V2 30B explain cache + mobile viewport polish.",
+  "builtAt": "2026-07-11T19:00:00.000Z"
 }

@@ -203,6 +203,18 @@ def orchestrate(
         }
 
     if classify_only:
+        try:
+            from apex_ai_telemetry_pack import record_lane_event
+
+            record_lane_event(
+                lane=lane,
+                ok=True,
+                latency_ms=0.0,
+                classify_only=True,
+                query=query,
+            )
+        except Exception:
+            pass
         return {**base, "classifyOnly": True, "text": ""}
 
     from nr2_hal_gateway import evaluate_query, resolve_lane
@@ -230,6 +242,9 @@ def orchestrate(
             )
         sys_prompt = (sys_prompt + "\n\n" + "\n".join(lines)).strip()
 
+    import time as _time
+
+    _t0 = _time.perf_counter()
     result = evaluate_query(
         query=query,
         readiness=ready,
@@ -241,6 +256,7 @@ def orchestrate(
         requested_lane=lane,
         store=store,
     )
+    _latency_ms = (_time.perf_counter() - _t0) * 1000.0
     out = {**base, **(result if isinstance(result, dict) else {})}
     out["orchestrator"] = True
     out["lane"] = result.get("resolvedLane") or lane
@@ -259,4 +275,19 @@ def orchestrate(
     except Exception as exc:  # noqa: BLE001
         out["structured"] = False
         out["insightError"] = str(exc)
+
+    try:
+        from apex_ai_telemetry_pack import maybe_emit_telemetry_alert, record_lane_event
+
+        record_lane_event(
+            lane=str(out.get("lane") or lane),
+            ok=bool(out.get("ok")),
+            latency_ms=_latency_ms,
+            classify_only=False,
+            query=query,
+            error=str(out.get("error") or out.get("insightError") or "") or None,
+        )
+        maybe_emit_telemetry_alert()
+    except Exception:
+        pass
     return out
