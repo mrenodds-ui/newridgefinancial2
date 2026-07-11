@@ -1,7 +1,7 @@
 {
-  "BUILD_ID": "hal-10481",
-  "assetVersion": "hal-10481",
-  "schemaVersion": "hal-10481",
-  "notes": "hal-10481: Moonshot T0-T5 SoftDent/QB unified metrics, import poll, orchestrator default ON.",
-  "builtAt": "2026-07-11T17:55:54.000Z"
+  "BUILD_ID": "hal-10482",
+  "assetVersion": "hal-10482",
+  "schemaVersion": "hal-10482",
+  "notes": "hal-10482: Moonshot U0 deep audit & forecast pack (30B monthly health audit \u2192 SSE).",
+  "builtAt": "2026-07-11T18:32:00.000Z"
 }

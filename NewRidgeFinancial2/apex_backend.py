@@ -28,7 +28,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10481"
+BUILD_ID = "hal-10482"
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · payer appeal templates · which widgets empty on all pages? · SoftDent sync"
@@ -1829,6 +1829,12 @@ def _financial_widgets_from_reports(
         widgets.extend(aging_schedule_widgets(bundle))
         widgets.append(net_profit_widget(bundle))
         widgets.append(production_vs_payroll_widget(bundle))
+    except Exception:
+        pass
+    try:
+        from apex_deep_audit_pack import deep_audit_widget
+
+        widgets.append(deep_audit_widget(bundle))
     except Exception:
         pass
 
@@ -3949,6 +3955,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(scheduling (gap|metrics)|fill rate|broken appointments)\b", "softdent-scheduling-gap", "softdent"),
         (r"\b(net profit|qb net profit)\b", "qb-net-profit-gap", "quickbooks"),
         (r"\b(production vs payroll|payroll.?to.?production)\b", "production-vs-payroll", "financial"),
+        (r"\b(deep audit|monthly (practice )?health audit|quarter forecast)\b", "deep-audit-status", "financial"),
     )
     if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
         re.search(pat, q) for pat, _wid, _pg in focus_rules
@@ -5178,6 +5185,70 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
             result = run_scheduled_health_audit(classify_only=classify_only)
             result["buildId"] = BUILD_ID
             status = 200 if result.get("ok") or result.get("reason") == "orchestrator_disabled" else 400
+            return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/hal/deep-audit-status")
+    def apex_deep_audit_status():
+        """Phase U0 — deep audit / forecast status."""
+        try:
+            from apex_deep_audit_pack import deep_audit_status
+
+            result = deep_audit_status()
+            result["buildId"] = BUILD_ID
+            return json_response_fn(result)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/deep-audit")
+    def apex_deep_audit():
+        """Phase U0 — monthly practice health audit (30B / classify-only)."""
+        try:
+            import bottle
+            from apex_deep_audit_pack import generate_monthly_audit
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            classify_only = bool(payload.get("classifyOnly") or payload.get("classify_only"))
+            period = payload.get("period")
+            result = generate_monthly_audit(
+                period=str(period) if period else None,
+                classify_only=classify_only,
+            )
+            result["buildId"] = BUILD_ID
+            status = (
+                200
+                if result.get("ok")
+                or result.get("reason") in {"orchestrator_disabled", "deep_audit_disabled"}
+                else 400
+            )
+            return json_response_fn(result, status=status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/hal/deep-forecast")
+    def apex_deep_forecast():
+        """Phase U0 — quarter forecast scaffold (null future $ until 30B)."""
+        try:
+            import bottle
+            from apex_deep_audit_pack import forecast_next_quarter
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            classify_only = bool(payload.get("classifyOnly") or payload.get("classify_only"))
+            period = payload.get("period")
+            result = forecast_next_quarter(
+                period=str(period) if period else None,
+                classify_only=classify_only,
+            )
+            result["buildId"] = BUILD_ID
+            status = (
+                200
+                if result.get("ok")
+                or result.get("reason") in {"orchestrator_disabled", "deep_audit_disabled"}
+                else 400
+            )
             return json_response_fn(result, status=status)
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)

@@ -577,6 +577,28 @@ def list_production_vs_payroll(*, limit: int = 12, db_path: Path | None = None) 
         ]
 
 
+def list_collection_vs_ap(*, limit: int = 12, db_path: Path | None = None) -> list[dict[str, Any]]:
+    with open_unified(path=db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT period, collections, total_ap, net_profit
+            FROM v_collection_vs_ap
+            ORDER BY period DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit), 36)),),
+        ).fetchall()
+        return [
+            {
+                "period": r["period"],
+                "collections": r["collections"],
+                "totalAp": r["total_ap"],
+                "netProfit": r["net_profit"],
+            }
+            for r in rows
+        ]
+
+
 def production_vs_payroll_widget(bundle: dict[str, Any] | None = None) -> dict[str, Any]:
     del bundle
     rows = list_production_vs_payroll(limit=5)
