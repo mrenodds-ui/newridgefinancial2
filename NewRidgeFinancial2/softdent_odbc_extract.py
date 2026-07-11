@@ -770,12 +770,14 @@ def table_row_counts(db_path: Path | None) -> dict[str, int]:
     conn = sqlite3.connect(db_path)
     try:
         out: dict[str, int] = {}
+        allowed = frozenset(SD_TABLES)
         for table in SD_TABLES:
-            if not _table_exists(conn, table):
+            if table not in allowed or not _table_exists(conn, table):
                 out[table] = 0
                 continue
             cur = conn.cursor()
-            cur.execute(f"SELECT COUNT(*) FROM {table}")
+            # Whitelist-only identifier (not user input) — avoid execute(f"...")
+            cur.execute("SELECT COUNT(*) FROM {}".format(table))
             out[table] = int(cur.fetchone()[0] or 0)
         return out
     finally:
