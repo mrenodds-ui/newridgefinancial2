@@ -217,6 +217,16 @@ def assess_import_health(bundle: dict[str, Any] | None = None) -> dict[str, Any]
     except Exception:
         pass
 
+    # DEF-001 SoftDent Collections/Daysheet gap (Phase I2)
+    try:
+        from apex_softdent_hardening_pack import import_health_collections_alert
+
+        alert = import_health_collections_alert(b)
+        if alert:
+            alerts.append(alert)
+    except Exception:
+        pass
+
     tone = "ok"
     if any(a.get("severity") == "warn" for a in alerts):
         tone = "warn"

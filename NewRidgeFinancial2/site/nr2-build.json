@@ -1,9 +1,9 @@
 {
-  "BUILD_ID": "hal-10471",
-  "assetVersion": "hal-10471",
-  "schemaVersion": "hal-10471",
+  "BUILD_ID": "hal-10475",
+  "assetVersion": "hal-10475",
+  "schemaVersion": "hal-10475",
   "epoch": "nr2-apex",
   "releasedAt": "2026-07-10",
-  "notes": "hal-10471: Restore IndexedDB client cache for Apex widgets + browser storage fallback.",
-  "builtAt": "2026-07-11T17:24:53.000Z"
+  "notes": "Mirror of ../nr2-build.json — served to the UI over the local HTTP server.",
+  "builtAt": "2026-07-11T17:25:17.000Z"
 }
