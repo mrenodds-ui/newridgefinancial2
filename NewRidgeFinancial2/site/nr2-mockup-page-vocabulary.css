@@ -1,0 +1,2134 @@
+/**
+ * Canonical mockup vocabulary from page_mockups/*.html — scoped to staff page bodies.
+ * Replaces legacy ms-* bridge classes inside .ms-page.
+ */
+.app--moonshot-mockup .ms-page .chart-container {
+  height: 200px;
+  position: relative;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .chart-container.tall {
+  height: 260px;
+}
+
+.app--moonshot-mockup .ms-page .chart-container .trend-chart-svg,
+.app--moonshot-mockup .ms-page .chart-container svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .kpi-grid {
+  display: grid;
+  gap: 16px;
+  grid-column: span 12;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .kpi-tile {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 16px;
+  position: relative;
+}
+
+.app--moonshot-mockup .ms-page .kpi-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .kpi-tile > .kpi-value {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.app--moonshot-mockup .ms-page .kpi-delta {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.app--moonshot-mockup .ms-page .kpi-positive {
+  color: var(--accent-sage, #7cb88a);
+}
+
+.app--moonshot-mockup .ms-page .kpi-negative {
+  color: #f43f5e;
+}
+
+.app--moonshot-mockup .ms-page .stats-bar {
+  display: grid;
+  gap: 12px;
+  grid-column: span 12;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 4px;
+}
+
+.app--moonshot-mockup .ms-page .stat-item {
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.app--moonshot-mockup .ms-page .stat-icon {
+  align-items: center;
+  background: rgba(124, 184, 138, 0.12);
+  border-radius: 8px;
+  display: flex;
+  font-size: 18px;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.app--moonshot-mockup .ms-page .stat-info h4 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+
+.app--moonshot-mockup .ms-page .stat-info span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page .heatmap-grid {
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+  grid-template-columns: minmax(88px, 1fr) repeat(4, minmax(0, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .heatmap-cell {
+  border-radius: 4px;
+  font-weight: 500;
+  min-height: 32px;
+  padding: 8px;
+  text-align: center;
+}
+
+.app--moonshot-mockup .ms-page .heatmap-cell.heatmap-header {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.app--moonshot-mockup .ms-page .queue-list {
+  list-style: none;
+  margin: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.app--moonshot-mockup .ms-page .queue-item {
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+  transition: background 0.2s;
+}
+
+.app--moonshot-mockup .ms-page .queue-item:hover {
+  background: var(--bg-elevated);
+}
+
+.app--moonshot-mockup .ms-page .queue-patient {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.app--moonshot-mockup .ms-page .queue-meta {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.app--moonshot-mockup .ms-page .queue-amount {
+  color: var(--accent-gold, #d4a853);
+  font-weight: 600;
+}
+
+.app--moonshot-mockup .ms-page .provider-list {
+  display: grid;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page .provider-item {
+  align-items: center;
+  display: grid;
+  font-size: 12px;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto auto;
+}
+
+.app--moonshot-mockup .ms-page .provider-bar-bg {
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .provider-bar-fill {
+  background: var(--accent-gold, #d4a853);
+  display: block;
+  height: 100%;
+}
+
+.app--moonshot-mockup .ms-page .provider-pct {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page .kanban-board {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  overflow-x: auto;
+}
+
+.app--moonshot-mockup .ms-page .kanban-column {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+}
+
+.app--moonshot-mockup .ms-page .column-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  font-size: 12px;
+  font-weight: 600;
+  justify-content: space-between;
+  letter-spacing: 0.05em;
+  padding: 12px;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .column-count {
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.app--moonshot-mockup .ms-page .column-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .ms-page .claim-card {
+  background: var(--bg-card, var(--bg-surface));
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 12px;
+  overflow: hidden;
+  padding: 12px;
+  position: relative;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.app--moonshot-mockup .ms-page .claim-card::before {
+  background: var(--accent-cyan, #22d3ee);
+  bottom: 0;
+  content: "";
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 3px;
+}
+
+.app--moonshot-mockup .ms-page .claim-card.risk-high::before {
+  background: #ef4444;
+}
+
+.app--moonshot-mockup .ms-page .claim-card.risk-medium::before {
+  background: #f97316;
+}
+
+.app--moonshot-mockup .ms-page .claim-card.risk-low::before,
+.app--moonshot-mockup .ms-page .claim-card.matched::before {
+  background: var(--accent-sage, #7cb88a);
+}
+
+.app--moonshot-mockup .ms-page .claim-card:hover {
+  border-color: var(--accent-cyan, #22d3ee);
+  transform: translateY(-1px);
+}
+
+.app--moonshot-mockup .ms-page .claim-header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.app--moonshot-mockup .ms-page .claim-id {
+  color: var(--accent-cyan, #22d3ee);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.app--moonshot-mockup .ms-page .risk-badge {
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .risk-badge.risk-high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.app--moonshot-mockup .ms-page .risk-badge.risk-medium {
+  background: rgba(249, 115, 22, 0.2);
+  color: #f97316;
+}
+
+.app--moonshot-mockup .ms-page .risk-badge.risk-low {
+  background: rgba(124, 184, 138, 0.2);
+  color: var(--accent-sage, #7cb88a);
+}
+
+.app--moonshot-mockup .ms-page .claim-patient {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.app--moonshot-mockup .ms-page .claim-procedure {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.app--moonshot-mockup .ms-page .claim-meta {
+  align-items: center;
+  display: flex;
+  font-size: 11px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.app--moonshot-mockup .ms-page .claim-amount {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .claim-payer {
+  color: var(--text-secondary);
+}
+
+.app--moonshot-mockup .ms-page .side-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.app--moonshot-mockup .ms-page .panel-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.app--moonshot-mockup .ms-page .panel-card h4 {
+  font-size: 12px;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .panel-card p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.app--moonshot-mockup .ms-page .composer-grid {
+  display: grid;
+  gap: 16px;
+  grid-column: span 12;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 6fr) minmax(0, 3fr);
+}
+
+.app--moonshot-mockup .ms-page .panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .panel-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.app--moonshot-mockup .ms-page .panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.app--moonshot-mockup .ms-page .composer-toolbar {
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page .claim-actions {
+  margin-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page .claim-actions .chip {
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-draft-controls {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 12px 14px 8px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-field {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-field select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-draft-panel {
+  margin-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page .composer-textarea {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  flex: 1;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  min-height: 280px;
+  padding: 16px;
+  resize: vertical;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .search-box {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .cdt-list {
+  display: grid;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page .cdt-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page .cdt-item.active {
+  border-color: var(--accent-cyan, #22d3ee);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.25);
+}
+
+.app--moonshot-mockup .ms-page .cdt-code {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.app--moonshot-mockup .ms-page .cdt-desc {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page .confidence-bar {
+  align-items: center;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  font-size: 12px;
+  gap: 10px;
+  padding: 10px 16px;
+}
+
+.app--moonshot-mockup .ms-page .confidence-meter {
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .confidence-fill {
+  background: linear-gradient(90deg, var(--accent-sage, #7cb88a), var(--accent-cyan, #22d3ee));
+  display: block;
+  height: 100%;
+}
+
+.app--moonshot-mockup .ms-page .data-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .table-wrap {
+  overflow-x: auto;
+}
+
+.app--moonshot-mockup .ms-page .data-table th,
+.app--moonshot-mockup .ms-page .data-table td {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.app--moonshot-mockup .ms-page .data-table th {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .data-table--striped tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.app--moonshot-mockup .ms-page .document-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .doc-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .ms-page .doc-preview {
+  background: var(--bg-elevated);
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  min-height: 180px;
+  padding: 20px;
+}
+
+.app--moonshot-mockup .ms-page .gauge-container {
+  margin: 0 auto;
+  max-width: 160px;
+  text-align: center;
+}
+
+.app--moonshot-mockup .ms-page .gauge-value {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .gauge-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page .funnel-chart {
+  display: grid;
+  gap: 10px;
+}
+
+.app--moonshot-mockup .ms-page .funnel-step {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 100px 1fr 48px;
+}
+
+.app--moonshot-mockup .ms-page .funnel-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .ms-page .funnel-bar {
+  background: linear-gradient(90deg, var(--accent-sage, #7cb88a), var(--accent-gold, #d4a853));
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  min-height: 28px;
+  padding: 6px 10px;
+}
+
+.app--moonshot-mockup .ms-page .funnel-value {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: right;
+}
+
+.app--moonshot-mockup .ms-page .operatory-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .operatory-column {
+  background: var(--bg-elevated, #252525);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .ms-page .operatory-column__head {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .operatory-slot {
+  border-left: 3px solid var(--accent-cyan, #22d3ee);
+  margin-bottom: 8px;
+  padding: 6px 8px;
+}
+
+.app--moonshot-mockup .ms-page .dashboard-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(12, 1fr);
+  margin-bottom: 24px;
+}
+
+.app--moonshot-mockup .ms-page .kpi-card {
+  grid-column: span 3;
+}
+
+.app--moonshot-mockup .ms-page .chart-large {
+  grid-column: span 7;
+  min-height: 320px;
+}
+
+.app--moonshot-mockup .ms-page .chart-medium {
+  grid-column: span 5;
+  min-height: 320px;
+}
+
+.app--moonshot-mockup .ms-page .chart-full {
+  grid-column: span 12;
+}
+
+.app--moonshot-mockup .ms-page .card {
+  background: var(--bg-secondary, #1f1f1f);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.app--moonshot-mockup .ms-page .card-header {
+  margin-bottom: 12px;
+}
+
+.app--moonshot-mockup .ms-page .card-title {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .card-value {
+  font-family: var(--font-mono, "Courier New", monospace);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .trend {
+  background: rgba(0, 212, 170, 0.1);
+  border-radius: 4px;
+  color: var(--accent-teal, #00d4aa);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 8px;
+  padding: 4px 8px;
+}
+
+.app--moonshot-mockup .ms-page .trend.negative {
+  background: rgba(255, 71, 87, 0.1);
+  color: var(--accent-rose, #ff4757);
+}
+
+.app--moonshot-mockup .ms-page-chrome .sync-badge,
+.app--moonshot-mockup .page-header-tools .sync-badge {
+  align-items: center;
+  background: var(--bg-secondary, #1f1f1f);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 8px 16px;
+}
+
+.app--moonshot-mockup .sync-indicator {
+  animation: nr2-sync-pulse 2s infinite;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+  height: 8px;
+  width: 8px;
+}
+
+.app--moonshot-mockup .prompt-chips--page {
+  margin: 0 0 16px;
+}
+
+@keyframes nr2-sync-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.app--moonshot-mockup .ms-page .waterfall-chart {
+  align-items: flex-end;
+  display: flex;
+  gap: 8px;
+  height: 140px;
+  padding-top: 8px;
+}
+
+@media (max-width: 1200px) {
+  .app--moonshot-mockup .ms-page .kpi-card {
+    grid-column: span 6;
+  }
+
+  .app--moonshot-mockup .ms-page .chart-large,
+  .app--moonshot-mockup .ms-page .chart-medium,
+  .app--moonshot-mockup .ms-page .chart-full {
+    grid-column: span 12;
+  }
+
+  .app--moonshot-mockup .ms-page .kpi-grid,
+  .app--moonshot-mockup .ms-page .stats-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app--moonshot-mockup .ms-page .composer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.app--moonshot-mockup .ms-page .bar-chart {
+  align-items: stretch;
+  display: flex;
+  gap: 8px;
+  height: 200px;
+  padding-top: 8px;
+}
+
+.app--moonshot-mockup .ms-page .bar-chart-column {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.app--moonshot-mockup .ms-page .bar-chart-fill {
+  border-radius: 6px 6px 0 0;
+  display: block;
+  min-height: 8px;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .bar-chart-label {
+  color: var(--text-secondary);
+  font-size: 9px;
+  text-align: center;
+}
+
+.app--moonshot-mockup .ms-page .donut-wrap {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+}
+
+.app--moonshot-mockup .ms-page .donut-chart {
+  border-radius: 50%;
+  position: relative;
+}
+
+.app--moonshot-mockup .ms-page .donut-hole {
+  align-items: center;
+  background: var(--bg-surface);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  height: 58%;
+  justify-content: center;
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 58%;
+}
+
+.app--moonshot-mockup .ms-page .chart-legend {
+  display: grid;
+  gap: 6px;
+  min-width: 120px;
+}
+
+.app--moonshot-mockup .ms-page .legend-row {
+  align-items: center;
+  display: grid;
+  font-size: 11px;
+  gap: 8px;
+  grid-template-columns: 10px 1fr auto;
+}
+
+.app--moonshot-mockup .ms-page .legend-dot {
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+}
+
+.app--moonshot-mockup .ms-page .focus-list {
+  display: grid;
+  gap: 10px;
+}
+
+.app--moonshot-mockup .ms-page .focus-item {
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.app--moonshot-mockup .ms-page .schedule-timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .ms-page .schedule-row {
+  align-items: baseline;
+  display: grid;
+  font-size: 12px;
+  gap: 10px;
+  grid-template-columns: 56px 1fr;
+}
+
+.app--moonshot-mockup .ms-page .schedule-row time {
+  color: var(--accent-cyan, #22d3ee);
+  font-weight: 600;
+}
+
+.app--moonshot-mockup .ms-page .search-container {
+  display: flex;
+  gap: 10px;
+  grid-column: span 12;
+  margin-bottom: 4px;
+}
+
+.app--moonshot-mockup .ms-page .search-action {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 14px;
+}
+
+.app--moonshot-mockup .ms-page .action-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+.app--moonshot-mockup .ms-page .action-btn--sm {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.app--moonshot-mockup .ms-page .action-btn--ghost {
+  background: transparent;
+}
+
+.app--moonshot-mockup .ms-page .queue-action {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.app--moonshot-mockup .ms-page .hal-widget-status {
+  position: relative;
+}
+
+.app--moonshot-mockup .ms-page .provider-amount {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app--moonshot-mockup .ms-page .nr2-chart-overlay {
+  inset: 0;
+  min-height: 100px;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  z-index: 2;
+}
+
+.app--moonshot-mockup .ms-page .nr2-chart-overlay canvas {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas .trend-chart-svg,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > svg,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .bar-chart,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .heatmap-grid,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .tax-split-chart,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .donut-chart,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas > .waterfall-chart,
+.app--moonshot-mockup .ms-page .chart-container.chart-mount--canvas .conic-donut {
+  display: none;
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile {
+  background: var(--bg-elevated, #1a1a1a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile strong {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile--ok {
+  border-color: rgba(46, 204, 113, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile--warn,
+.app--moonshot-mockup .ms-page .kpi-ribbon-tile--alert {
+  border-color: rgba(255, 184, 0, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .stat-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .stat-box {
+  background: var(--bg-elevated, #1a1a1a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+}
+
+.app--moonshot-mockup .ms-page .stat-box strong {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .stat-box span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page .stat-box--success {
+  border-color: rgba(46, 204, 113, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .tax-split-chart {
+  display: grid;
+  gap: 10px;
+}
+
+.app--moonshot-mockup .ms-page .tax-split-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .tax-split-seg {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+}
+
+.app--moonshot-mockup .ms-page .tax-split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.app--moonshot-mockup .ms-page .tax-split-key {
+  align-items: center;
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.app--moonshot-mockup .ms-page .tax-split-key i {
+  border-radius: 999px;
+  display: inline-block;
+  height: 8px;
+  width: 8px;
+}
+
+.app--moonshot-mockup .ms-page .wizard-steps {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app--moonshot-mockup .ms-page .wizard-step {
+  align-items: center;
+  background: var(--bg-elevated, #1a1a1a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page .wizard-step--done {
+  border-color: rgba(46, 204, 113, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .wizard-step--active {
+  border-color: rgba(0, 212, 255, 0.45);
+}
+
+.app--moonshot-mockup .ms-page .recall-calendar {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.app--moonshot-mockup .ms-page .recall-day {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  min-height: 44px;
+  padding: 6px;
+  text-align: center;
+}
+
+.app--moonshot-mockup .ms-page .recall-day--hot {
+  background: rgba(251, 146, 60, 0.35);
+  border: 1px solid #fb923c;
+}
+
+.app--moonshot-mockup .ms-page .recall-day--warm {
+  background: rgba(214, 177, 94, 0.25);
+}
+
+.app--moonshot-mockup .ms-page .compare-strip {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-top: 12px;
+}
+
+.app--moonshot-mockup .ms-page .compare-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page .compare-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .compare-value {
+  font-size: 16px;
+}
+
+.app--moonshot-mockup .ms-page .compare-delta--ok {
+  color: var(--accent-green, #2ecc71);
+}
+
+.app--moonshot-mockup .ms-page .compare-delta--warn,
+.app--moonshot-mockup .ms-page .compare-delta--alert {
+  color: var(--accent-amber, #ffb800);
+}
+
+.app--moonshot-mockup .ms-page .total-row {
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker {
+  grid-column: span 12;
+}
+
+.app--moonshot-mockup .ms-page .dashboard-grid-host {
+  background: transparent;
+  border: none;
+  grid-column: span 12;
+  padding: 0;
+}
+
+/* Tier S2 — period scrubber, scenario sliders, compare mode (hal-10083) */
+.app--moonshot-mockup .filter-bar .chip {
+  cursor: pointer;
+  font: inherit;
+}
+
+.app--moonshot-mockup .filter-bar .chip:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+.app--moonshot-mockup .period-scrubber {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -12px 0 20px;
+}
+
+.app--moonshot-mockup .period-scrubber__label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .period-scrubber__track {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app--moonshot-mockup .period-scrubber__pill {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 12px;
+}
+
+.app--moonshot-mockup .period-scrubber__pill.active {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.app--moonshot-mockup .nr2-scenario-panel {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.08), rgba(96, 165, 250, 0.06));
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  border-radius: 10px;
+  grid-column: span 12;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+}
+
+.app--moonshot-mockup .nr2-scenario-panel__head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.app--moonshot-mockup .nr2-scenario-panel__hint {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .nr2-scenario-sliders {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.app--moonshot-mockup .nr2-scenario-slider {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 110px 1fr auto;
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .nr2-scenario-slider input[type="range"] {
+  width: 100%;
+}
+
+.app--moonshot-mockup .nr2-scenario-narrative {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+
+.app--moonshot-mockup .compare-mode-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+/* Tier S3 — semantic zoom, HAL presence, hero mirror, stream citations (hal-10085) */
+.app--moonshot-mockup .semantic-zoom-btn {
+  background: rgba(124, 184, 138, 0.1);
+  border: 1px solid rgba(124, 184, 138, 0.35);
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  padding: 6px 12px;
+}
+
+.app--moonshot-mockup .ms-page-body[data-nr2-semantic-zoom="executive"] .widget-card.nr2-zoom-hidden {
+  display: none !important;
+}
+
+.app--moonshot-mockup .ms-page-body[data-nr2-semantic-zoom="executive"] .widget-card.nr2-zoom-hero {
+  grid-column: span 6;
+}
+
+.app--moonshot-mockup .hal-presence-orb {
+  border-radius: 50%;
+  display: inline-block;
+  height: 10px;
+  margin-right: 8px;
+  vertical-align: middle;
+  width: 10px;
+}
+
+.app--moonshot-mockup .hal-presence-orb--idle {
+  background: var(--accent-sage, #7cb88a);
+  box-shadow: 0 0 6px rgba(124, 184, 138, 0.5);
+}
+
+.app--moonshot-mockup .hal-presence-orb--thinking {
+  animation: nr2-presence-pulse 1.2s ease-in-out infinite;
+  background: var(--accent-cyan, #22d3ee);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
+}
+
+.app--moonshot-mockup .hal-presence-orb--alert {
+  animation: nr2-presence-pulse 0.8s ease-in-out infinite;
+  background: var(--accent-amber, #ffb800);
+  box-shadow: 0 0 8px rgba(255, 184, 0, 0.6);
+}
+
+@keyframes nr2-presence-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app--moonshot-mockup .hal-presence-orb--thinking,
+  .app--moonshot-mockup .hal-presence-orb--alert {
+    animation: none;
+  }
+}
+
+.app--moonshot-mockup .hal-stream-citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+
+.app--moonshot-mockup .hal-citation-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 3px 10px;
+}
+
+.app--moonshot-mockup .hal-citation-chip--widget {
+  color: var(--accent-cyan);
+  cursor: pointer;
+}
+
+.app--moonshot-mockup .nr2-hero-mirror {
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.08), rgba(124, 184, 138, 0.08));
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+}
+
+.app--moonshot-mockup .nr2-hero-mirror__badge {
+  color: var(--accent-cyan);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .nr2-hero-mirror__tiles {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.app--moonshot-mockup .nr2-hero-mirror__tile {
+  display: grid;
+  gap: 2px;
+  min-width: 100px;
+}
+
+.app--moonshot-mockup .nr2-hero-mirror__value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.app--moonshot-mockup .nr2-hero-mirror__label {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .nr2-odbc-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .nr2-odbc-strip--green {
+  border-color: rgba(76, 175, 80, 0.35);
+}
+
+.app--moonshot-mockup .nr2-odbc-strip--blue {
+  border-color: rgba(33, 150, 243, 0.35);
+}
+
+.app--moonshot-mockup .nr2-odbc-strip--orange {
+  border-color: rgba(255, 152, 0, 0.35);
+}
+
+.app--moonshot-mockup .nr2-odbc-strip__badge {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+
+.app--moonshot-mockup .nr2-odbc-strip__meta,
+.app--moonshot-mockup .nr2-odbc-strip__counts {
+  color: var(--text-secondary);
+}
+
+/* nr2-mockup-page-vocabulary.css */
+
+/* --- Taxes: kpi-card / kpi-grid --- */
+.taxes-kpi-section .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+}
+.kpi-card h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.kpi-card .metric {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* --- Narratives: composer-grid x4 --- */
+.composer-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+.composer-grid > .composer-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  min-height: 12rem;
+}
+
+/* --- Narratives: payer + eligibility panel --- */
+.narrative-payer-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+}
+.npp-disclaimer {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+.npp-section {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.65rem;
+}
+.npp-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.npp-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+.npp-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+.npp-input {
+  flex: 1;
+  min-width: 0;
+}
+.npp-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 9rem;
+  overflow-y: auto;
+  margin-top: 0.4rem;
+}
+.npp-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  padding: 0.45rem 0.55rem;
+  background: #f8fafc;
+}
+.npp-card strong {
+  display: block;
+  font-size: 0.8125rem;
+  color: #0f172a;
+}
+.npp-meta {
+  display: block;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+.npp-tag {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  font-size: 0.6875rem;
+  color: #334155;
+}
+.npp-tag--warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+.npp-denial {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #475569;
+  font-style: normal;
+}
+.npp-muted {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+.npp-badge {
+  font-size: 0.6875rem;
+  color: #64748b;
+}
+.npp-details {
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.375rem;
+  padding: 0.35rem 0.5rem;
+}
+.npp-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.8125rem;
+}
+.npp-form {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+.npp-form label {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  color: #475569;
+}
+.npp-form input,
+.npp-form select {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.25rem;
+}
+.npp-form--inline {
+  grid-template-columns: 1fr auto;
+  align-items: end;
+}
+.npp-status {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+}
+.npp-status--ok {
+  color: #15803d;
+}
+.npp-status--err {
+  color: #b91c1c;
+}
+
+/* --- Documents: widget-grid x3 --- */
+.widget-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+.widget-grid > .widget-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  min-height: 8rem;
+}
+
+/* --- Shared layout helpers --- */
+.chart-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.chart-container {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  min-height: 16rem;
+}
+.chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.claims-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.claim-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.dashboard-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  min-height: 6rem;
+}
+
+/* Elite mission-control — financial / taxes (no legacy pv-* overlay) */
+.app--moonshot-mockup .ms-page .kpi-hero-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  grid-column: span 12;
+}
+
+.app--moonshot-mockup .ms-page .kpi-hero-tile {
+  background: rgba(20, 20, 24, 0.72);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.app--moonshot-mockup .ms-page .kpi-hero-tile:hover {
+  border-color: rgba(34, 211, 238, 0.25);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+.app--moonshot-mockup .ms-page .kpi-hero-tile .kpi-label {
+  color: var(--text-secondary);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .kpi-hero-tile .kpi-value {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.app--moonshot-mockup .ms-page .kpi-hero-tile .kpi-hint {
+  color: var(--accent-green, #78a86b);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker__track,
+.app--moonshot-mockup .ms-page .nr2-alert-ticker {
+  display: flex;
+  gap: 28px;
+  white-space: nowrap;
+}
+
+.app--moonshot-mockup .ms-page .nr2-alert-ticker__item {
+  animation: ms-elite-ticker 28s linear infinite;
+  font-size: 12px;
+}
+
+@keyframes ms-elite-ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-gauge-svg .ms-elite-gauge-arc {
+  animation: ms-elite-dash-draw 1.2s ease-out forwards;
+}
+
+@keyframes ms-elite-dash-draw {
+  from { stroke-dashoffset: 157; }
+  to { stroke-dashoffset: var(--arc-offset, 40); }
+}
+
+.app--moonshot-mockup .ms-page .chart-container .bar-chart-fill,
+.app--moonshot-mockup .ms-page .vbar-fill {
+  animation: ms-elite-bar-grow 0.8s ease-out forwards;
+  transform-origin: bottom;
+  transform: scaleY(0);
+}
+
+@keyframes ms-elite-bar-grow {
+  to { transform: scaleY(1); }
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-stat-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-waterfall {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-waterfall-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 72px 1fr 72px;
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-waterfall-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-waterfall-track {
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-waterfall-fill {
+  animation: ms-elite-bar-grow-h 0.9s ease-out forwards;
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.55), rgba(96, 165, 250, 0.95));
+  border-radius: 4px;
+  height: 100%;
+  transform-origin: left;
+  transform: scaleX(0);
+  width: var(--w, 50%);
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-stat-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 90px 1fr 64px;
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-stat-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-stat-bar-bg {
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-stat-bar-fill {
+  animation: ms-elite-bar-grow-h 0.9s ease-out forwards;
+  border-radius: 999px;
+  height: 100%;
+  transform-origin: left;
+  transform: scaleX(0);
+  width: var(--w, 50%);
+}
+
+@keyframes ms-elite-bar-grow-h {
+  to { transform: scaleX(1); }
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-stat-num {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  text-align: right;
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-stat-tile .kpi-value {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.app--moonshot-mockup .ms-page .ms-elite-dso-gauge .gauge-center {
+  left: 50%;
+  position: absolute;
+  text-align: center;
+  top: 55%;
+  transform: translate(-50%, -50%);
+}
+
+.app--moonshot-mockup .ms-page .financial-moonshot .widget-card,
+.app--moonshot-mockup .ms-page .taxes-moonshot .widget-card {
+  backdrop-filter: blur(12px);
+}
+
+@media (max-width: 1100px) {
+  .app--moonshot-mockup .ms-page .kpi-hero-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.app--moonshot-mockup .ms-page .softdent-moonshot .widget-card,
+.app--moonshot-mockup .ms-page .narratives-moonshot .widget-card,
+.app--moonshot-mockup .ms-page .claims-moonshot .widget-card {
+  backdrop-filter: blur(12px);
+}
+
+.app--moonshot-mockup .ms-page .kanban-board--narratives {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-height: 360px;
+}
+
+.app--moonshot-mockup .ms-page .kanban-board--claims {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  min-height: calc(100vh - 320px);
+}
+
+.app--moonshot-mockup .ms-page .kanban-lane-empty {
+  color: var(--muted, #71717a);
+  font-size: 11px;
+  margin: 8px 0 0;
+  opacity: 0.75;
+}
+
+.app--moonshot-mockup .ms-page .claims-moonshot .kpi-hero-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.app--moonshot-mockup .ms-page .qb-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.app--moonshot-mockup .ms-page .qb-dashboard-grid > .qb-span {
+  min-width: 0;
+}
+
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .qb-span-3 { grid-column: span 3; }
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .qb-span-4 { grid-column: span 4; }
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .qb-span-6 { grid-column: span 6; }
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .qb-span-8 { grid-column: span 8; }
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .qb-span-12 { grid-column: span 12; }
+
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .card {
+  height: 100%;
+  min-height: 180px;
+}
+
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .chart-large,
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .chart-medium,
+.app--moonshot-mockup .ms-page .qb-dashboard-grid .kpi-card {
+  grid-column: auto;
+}
+
+.app--moonshot-mockup .ms-page .narrative-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.app--moonshot-mockup .ms-page .narrative-card__title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app--moonshot-mockup .ms-page .narrative-card__meta {
+  color: var(--muted, #9ca3af);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.app--moonshot-mockup .ms-page .claims-moonshot .kanban-board {
+  min-height: calc(100vh - 320px);
+}
+
+/* Boot / fatal errors — mockup vocabulary (replaces legacy pv-state) */
+.ms-boot-error {
+  align-items: center;
+  border: 1px dashed rgba(224, 88, 79, 0.35);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  margin: 24px auto;
+  max-width: 560px;
+  padding: 28px 20px;
+  text-align: center;
+}
+.ms-boot-error__title { font-size: 15px; letter-spacing: 0.04em; }
+.ms-boot-error__msg { color: var(--muted, #9ca3af); font-size: 13px; margin: 0; max-width: 420px; }
+.ms-boot-error__list { color: var(--muted, #9ca3af); font-size: 12px; margin: 8px 0 0; max-width: 480px; text-align: left; }
+.nr2-boot-error { margin: 24px auto; max-width: 560px; }
+.sidebar__boot-error { color: var(--muted, #9ca3af); font-size: 12px; padding: 16px; }
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-gate {
+  border: 1px dashed rgba(214, 177, 94, 0.45);
+  min-height: 12rem;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  grid-column: 1 / -1;
+  min-height: 720px;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-banner {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-banner__title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-banner {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-open {
+  color: var(--cyan, #22d3ee);
+  font-size: 12px;
+  margin-left: auto;
+  text-decoration: none;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-open:hover {
+  text-decoration: underline;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-missing {
+  background: rgba(20, 20, 24, 0.72);
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  color: var(--text-secondary, #8b8b96);
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 20px 24px;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-missing strong {
+  color: var(--text, #f0f0f2);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-page-chrome--mock-embed {
+  margin-bottom: 8px;
+}
+
+html[data-nr2-staff-render="mock-embed"] .app--moonshot-mockup {
+  grid-template-columns: 1fr;
+}
+
+html[data-nr2-staff-render="mock-embed"] #sidebar {
+  display: none !important;
+}
+
+html[data-nr2-staff-render="mock-embed"] .mock-embed-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0 10px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+html[data-nr2-staff-render="mock-embed"] .mock-embed-nav__link {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary, #a3a3a3);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+html[data-nr2-staff-render="mock-embed"] .mock-embed-nav__link:hover {
+  color: var(--text-primary, #f5f5f5);
+  border-color: rgba(34, 211, 238, 0.35);
+}
+
+html[data-nr2-staff-render="mock-embed"] .mock-embed-nav__link--active {
+  color: var(--accent-cyan, #22d3ee);
+  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.app--moonshot-mockup .ms-page .ms-page-chrome--mock-embed .page-header-tools {
+  margin-bottom: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-frame--solo {
+  margin-top: 0;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-frame--solo .ms-mockup-preview-iframe {
+  min-height: calc(100vh - 120px);
+  border-radius: 8px;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-iframe {
+  background: #0a0a0c;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  flex: 1;
+  min-height: 680px;
+  width: 100%;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-gate__lead {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0 0 10px;
+}
+
+.app--moonshot-mockup .ms-page .ms-mockup-preview-gate__path code {
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.app--moonshot-mockup .ms-page .ms-live-wire-pilot-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  background: rgba(34, 211, 238, 0.08);
+  color: var(--text-primary, #f0f0f2);
+  font-size: 13px;
+}
+
+.app--moonshot-mockup .ms-page .ms-live-wire-pilot-banner strong {
+  color: #22d3ee;
+  font-weight: 600;
+}
