@@ -90,6 +90,20 @@ def main() -> int:
             sync_imports()
         except Exception as exc:
             print(f"Startup import sync failed: {exc}", file=sys.stderr)
+        # DEF-004: warm import + widget caches so first page open is not multi-second.
+        try:
+            from apex_backend import build_apex_widgets
+            from import_loader import load_import_bundle
+
+            load_import_bundle(sync=False, deep=False)
+            for page in ("financial", "hal", "claims", "taxes"):
+                try:
+                    build_apex_widgets(page)
+                except Exception as page_exc:
+                    print(f"Cache warm {page} skipped: {page_exc}", file=sys.stderr)
+            print("NR2 cache warm complete (import bundle + key pages).", file=sys.stderr)
+        except Exception as exc:
+            print(f"Startup cache warm failed: {exc}", file=sys.stderr)
 
     threading.Thread(target=_startup_import_sync, daemon=True, name="nr2-import-sync").start()
 

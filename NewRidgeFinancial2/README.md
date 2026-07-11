@@ -90,7 +90,7 @@ Default upstream source folders (override in repo `.env`):
 
 After files are copied, ask HAL **"refresh imports"** or restart Start Program. HAL reads only — nothing is posted or written back to SoftDent or QuickBooks.
 
-In direct-first mode (`NR2_DIRECT_FIRST_IMPORTS=1`, default), **refresh imports** re-scans upstream exports instead of copying into cache. Optional `NR2_DIRECT_FIRST_WRITE_CACHE=1` mirrors direct reads into document-inbox on refresh.
+In direct-first mode (`NR2_DIRECT_FIRST_IMPORTS=1`, default), **refresh imports** re-scans upstream exports and also refreshes the document-inbox cache so widget hot-path reads stay live. `NR2_DIRECT_FIRST_WRITE_CACHE=1` (default) mirrors direct reads into document-inbox on refresh; set `=0` to disable the mirror.
 
 HAL's top priority is to monitor the program, place correct import data into the right financial and accounting views, apply accounting and Excel-style review, and recommend the next safe staff action.
 
