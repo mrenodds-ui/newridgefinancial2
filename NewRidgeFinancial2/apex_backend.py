@@ -3666,6 +3666,45 @@ def _widget_has_data(w: dict[str, Any]) -> bool:
     return status != "empty"
 
 
+COLLECTIONS_PENDING_FIX = (
+    "Fix: Import SoftDent daysheet or complete Register for a Period, then Sync imports "
+    "(or ask HAL to refresh SoftDent period). Collections stay empty until reported — not $0."
+)
+
+
+def census_has_collections_pending(census: dict[str, Any] | None) -> bool:
+    """True when Collections KPI is empty because SoftDent period is pending/missing."""
+    if not isinstance(census, dict):
+        return False
+    empties = census.get("emptyWidgets") if isinstance(census.get("emptyWidgets"), list) else []
+    for row in empties:
+        if not isinstance(row, dict):
+            continue
+        wid = str(row.get("id") or "").strip().lower()
+        label = str(row.get("label") or "").strip().lower()
+        hint = str(row.get("hint") or "").strip().lower()
+        if wid in {"hal-mosaic-coll", "sd-collections"} or label == "collections":
+            if "pending" in hint or "missing" in hint:
+                return True
+    return False
+
+
+def append_collections_pending_board_actions(actions: list[dict[str, Any]]) -> None:
+    """Guide staff to SoftDent Collections KPI — honesty: never invent $."""
+    actions.append(
+        {
+            "type": "set_status_banner",
+            "message": "Collections pending: import SoftDent daysheet / Register for a Period, then Sync.",
+            "hint": "Not $0 — production exists without reported collections for the latest period.",
+            "tone": "warn",
+        }
+    )
+    if not any(a.get("type") == "navigate" and a.get("page") == "softdent" for a in actions):
+        actions.append({"type": "navigate", "page": "softdent"})
+    actions.append({"type": "focus_widget", "widgetId": "sd-collections"})
+    actions.append({"type": "highlight_widget", "widgetId": "sd-collections", "ms": 4500})
+
+
 def summarize_widget_census(widgets: list[dict[str, Any]]) -> dict[str, Any]:
     populated: list[dict[str, str]] = []
     empty: list[dict[str, str]] = []
@@ -3673,7 +3712,9 @@ def summarize_widget_census(widgets: list[dict[str, Any]]) -> dict[str, Any]:
         if not isinstance(w, dict):
             continue
         wid = str(w.get("id") or "")
-        if not wid or wid.startswith("hal-chat"):
+        wtype = str(w.get("type") or "").strip().lower()
+        # Skip chat surfaces by type or id prefix (hal-ask is type=hal-chat).
+        if not wid or wid.startswith("hal-chat") or wtype in {"hal-chat", "chat"}:
             continue
         label = str(w.get("label") or wid)
         hint = str(w.get("hint") or w.get("emptyMessage") or "")
@@ -3855,7 +3896,13 @@ def format_census_reply(page: str, census: dict[str, Any]) -> str:
             hint = str(row.get("hint") or "").strip()
             bits.append(f"{label}" + (f" — {hint}" if hint else ""))
         lines.append("Empty: " + " · ".join(bits))
-        lines.append("Fix: place SoftDent/QB exports in the inbox (or refresh ODBC), then Sync imports. Ask: how do I get SoftDent/QuickBooks exports?")
+        if census_has_collections_pending(census):
+            lines.append(COLLECTIONS_PENDING_FIX)
+        else:
+            lines.append(
+                "Fix: place SoftDent/QB exports in the inbox (or refresh ODBC), then Sync imports. "
+                "Ask: how do I get SoftDent/QuickBooks exports?"
+            )
     else:
         lines.append("All listed instruments on this page currently show data from the import cache.")
     return " ".join(lines)
@@ -4205,6 +4252,47 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
             notes.append(f"Focusing widget `{ctx_widget}` for explanation (import-backed display only).")
         handled = True
 
+    # Advisory / ethics questions must reach chat — do not hijack on topic keywords
+    # like "categorize", "import health", or "ebitda" embedded in a longer ask.
+    advisory_chat = bool(
+        re.search(
+            r"\b("
+            r"prioritize|ranked|action list|what should (i|we|front desk|staff)|"
+            r"how (do|should|can) (i|we)|why (is|are|do|does)|explain|"
+            r"compare|draft|outline|advise|recommend|give (me )?(a )?(ranked|priority)|"
+            r"if i ask|invent|fabricate|make up|look better|what (exact|do you) do|"
+            r"refuse|should you|would you"
+            r")\b",
+            q,
+        )
+    ) or (len(q.split()) >= 12 and "?" in query)
+    explicit_board = bool(
+        re.search(
+            r"\b("
+            r"focus|highlight|point (me )?to|look at|open widget|"
+            r"show me (the )?(widget|scrubber|board|kanban|table|categorize|ebitda)|"
+            r"open (the )?(categorize|ebitda|claims workbench|import health)|"
+            r"go to|switch to|take me to|navigate"
+            r")\b",
+            q,
+        )
+    )
+    allow_topic_focus = explicit_board or not advisory_chat
+
+    # --- Ethics: never invent dollars / write-offs (deterministic refusal) ---
+    if re.search(
+        r"\b(invent|fabricate|fake|make up)\b.{0,80}\b(write-?off|\$|dollar|ebitda|revenue|collections|kpi)\b",
+        q,
+    ) or re.search(
+        r"\b(write-?off|ebitda).{0,60}\b(invent|fake|fabricate|look better|make .{0,20} better)\b",
+        q,
+    ):
+        notes.append(
+            "I will not invent write-offs or dollar amounts to make EBITDA (or any KPI) look better. "
+            "Books stay import-backed; staff posts real adjustments in SoftDent/QuickBooks with approval."
+        )
+        handled = True
+
     # --- Sync / populate from imports ---
     if re.search(
         r"\b(sync|refresh imports|reload imports|pull (softdent|quickbooks|qb)|update (the )?board|populate (the )?(widgets|board)|refill widgets)\b",
@@ -4380,8 +4468,9 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         (r"\b(ai lane health|lane telemetry|model latency)\b", "ai-lane-health", "financial"),
         (r"\b(data freshness|sync status|import age)\b", "data-freshness-status", "financial"),
     )
-    if re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q) or any(
-        re.search(pat, q) for pat, _wid, _pg in focus_rules
+    if (not handled) and allow_topic_focus and (
+        re.search(r"\b(focus|highlight|show me|point (me )?to|look at|open widget)\b", q)
+        or any(re.search(pat, q) for pat, _wid, _pg in focus_rules)
     ):
         for pat, wid, pg in focus_rules:
             if re.search(pat, q):
@@ -4521,7 +4610,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         handled = True
 
     # --- Surface categorize suggestions (already computed from imports; not inventing $) ---
-    if re.search(r"\b(categorize|suggest categor|expense categor|remap categor)\b", q):
+    if allow_topic_focus and re.search(r"\b(categorize|suggest categor|expense categor|remap categor)\b", q):
         _reports, bundle, _err = _load_reports_and_bundle()
         cat = build_categorize_assist(bundle)
         n = len(cat.get("suggestions") or [])

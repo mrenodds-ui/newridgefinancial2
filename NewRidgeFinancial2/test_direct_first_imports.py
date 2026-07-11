@@ -6,10 +6,12 @@ import os
 import unittest
 from unittest.mock import patch
 
-from import_loader import direct_first_imports_enabled, load_import_bundle
+from import_loader import clear_import_bundle_cache_for_tests, direct_first_imports_enabled, load_import_bundle
 
 
 class DirectFirstImportTests(unittest.TestCase):
+    def setUp(self) -> None:
+        clear_import_bundle_cache_for_tests()
     def test_direct_first_enabled_by_default(self) -> None:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("NR2_DIRECT_FIRST_IMPORTS", None)

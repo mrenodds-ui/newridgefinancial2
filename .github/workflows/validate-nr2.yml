@@ -22,6 +22,12 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install Python test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install requests jsonschema pywebview keyring
+        working-directory: NewRidgeFinancial2
+
       - name: Seed CI import fixtures
         run: |
           mkdir -p ../app_data/nr2/document_inbox/softdent ../app_data/nr2/document_inbox/quickbooks
@@ -29,6 +35,8 @@ jobs:
           cp ci-fixtures/imports/quickbooks/* ../app_data/nr2/document_inbox/quickbooks/
 
       - name: Python accounting and import tests
+        env:
+          NR2_DB_ENCRYPTION: "0"
         run: python -m unittest discover -s . -p "test_*.py"
 
       - name: Import loader accounting tests
@@ -44,6 +52,8 @@ jobs:
         run: node import-automation/_accounting_check_snapshot.mjs
 
       - name: Python accounting bridge tests
+        env:
+          NR2_DB_ENCRYPTION: "0"
         run: python -m unittest test_accounting_bridge.py
 
       - name: Validate HAL
@@ -59,9 +69,13 @@ jobs:
         run: node smoke_desktop_pages.mjs
 
       - name: Integration health CLI
+        env:
+          NR2_DB_ENCRYPTION: "0"
         run: python integration_health.py
 
       - name: Program self-heal (documents only)
+        env:
+          NR2_DB_ENCRYPTION: "0"
         run: python program_self_heal.py --documents-only --json
 
       - name: Install browser HAL API test dependencies

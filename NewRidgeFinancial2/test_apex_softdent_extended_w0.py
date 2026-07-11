@@ -100,7 +100,7 @@ class SoftDentExtendedW0Tests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10493")
+        self.assertEqual(BUILD_ID, "hal-10498")
 
     def test_helpers_honesty(self):
         empty = calculate_case_acceptance(None, None)

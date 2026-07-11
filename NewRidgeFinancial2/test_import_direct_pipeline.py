@@ -75,8 +75,9 @@ class ImportDirectPipelineTests(unittest.TestCase):
                 with patch("import_direct_pipeline.build_ar_pipeline_dataset", return_value=pipeline_ar):
                     with patch("import_loader._load_direct_sections") as mock_direct:
                         with patch("import_loader.softdent_import_dir", return_value=cache_dir):
-                            from import_loader import load_import_bundle
+                            from import_loader import clear_import_bundle_cache_for_tests, load_import_bundle
 
+                            clear_import_bundle_cache_for_tests()
                             mock_direct.return_value = {"softdent": {"ar": pipeline_ar}, "quickbooks": {}}
                             bundle = load_import_bundle(sync=False, deep=False)
 

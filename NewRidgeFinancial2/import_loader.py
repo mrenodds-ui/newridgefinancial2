@@ -423,6 +423,12 @@ _BUNDLE_CACHE_LOCK = threading.Lock()
 _BUNDLE_CACHE_TTL_SEC = 90.0
 
 
+def clear_import_bundle_cache_for_tests() -> None:
+    """Drop in-process import bundle cache (unit tests only)."""
+    with _BUNDLE_CACHE_LOCK:
+        _BUNDLE_CACHE.clear()
+
+
 def _load_import_bundle_uncached(*, sync: bool, deep: bool, direct_first: bool) -> dict[str, Any]:
     sync_status: dict[str, Any] = {
         "attempted": sync and not direct_first,

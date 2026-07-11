@@ -100,7 +100,7 @@ class ReconciliationPhaseU2Tests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10493")
+        self.assertEqual(BUILD_ID, "hal-10498")
 
     def test_thresholds_default(self):
         prev_p = os.environ.pop("NR2_VARIANCE_PCT", None)
