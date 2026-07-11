@@ -1,7 +1,6 @@
 {
-  "BUILD_ID": "hal-10471",
-  "assetVersion": "hal-10471",
-  "schemaVersion": "hal-10471",
-  "notes": "Mirror of ../nr2-build.json \u2014 served to the UI over the local HTTP server.",
-  "builtAt": "2026-07-11T17:24:53.000Z"
+  "BUILD_ID": "hal-10441",
+  "assetVersion": "hal-10441",
+  "schemaVersion": "hal-10441",
+  "notes": "hal-10441: Fix HAL HTTP 403 — apexFetch recovers session via X-NR2-Refresh-Token after restart/rotation; Origin Referer fallback; vault register preserves issued_at; cache-only readiness."
 }

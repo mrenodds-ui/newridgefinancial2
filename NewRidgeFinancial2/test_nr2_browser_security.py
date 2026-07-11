@@ -53,6 +53,24 @@ class NR2BrowserSecurityTests(unittest.TestCase):
         with mock.patch.object(sec.bottle, "request") as req:
             req.headers = {"Origin": "null", "Host": "127.0.0.1:8765"}
             self.assertFalse(origin_allowed_for_mutation())
+        with mock.patch.object(sec.bottle, "request") as req:
+            req.headers = {
+                "Host": "127.0.0.1:8765",
+                "Referer": "https://127.0.0.1:8765/index.html",
+            }
+            self.assertTrue(origin_allowed_for_mutation())
+        with mock.patch.object(sec.bottle, "request") as req:
+            req.headers = {"Host": "127.0.0.1:8765"}
+            self.assertFalse(origin_allowed_for_mutation())
+
+    def test_register_preserves_issued_at(self) -> None:
+        vault = SessionVault()
+        vault.register("tok", ua="ua-1")
+        issued = vault._by_token["tok"]["issued_at"]
+        time.sleep(0.01)
+        vault.register("tok", ua="ua-2")
+        self.assertEqual(vault._by_token["tok"]["ua"], "ua-2")
+        self.assertEqual(vault._by_token["tok"]["issued_at"], issued)
 
     def test_mutation_auth_failure_reason(self) -> None:
         token = "abc123"

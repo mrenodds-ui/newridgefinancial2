@@ -1,7 +1,6 @@
 {
-  "BUILD_ID": "hal-10471",
-  "assetVersion": "hal-10471",
-  "schemaVersion": "hal-10471",
-  "notes": "hal-10471: Restore IndexedDB client cache for Apex widgets + browser storage fallback.",
-  "builtAt": "2026-07-11T17:24:53.000Z"
+  "BUILD_ID": "hal-10441",
+  "assetVersion": "hal-10441",
+  "schemaVersion": "hal-10441",
+  "notes": "hal-10441: Fix HAL HTTP 403 — session refresh recovery + fast cache-only readiness so app-info/mutations are not wedged behind direct-first scans."
 }

@@ -1,13 +1,13 @@
 /**
  * NR2-Apex Core — Bridge mosaic, silent refresh, print, session-aware fetch
- * Build: hal-10471 (IndexedDB widget cache + browser storage fallback)
+ * Build: hal-10441 (HAL session 403 recovery via refresh token)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10471";
+  const ASSET_V = "hal-10441";
   const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
   const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
   const PARENT_PAGES = new Set([
@@ -206,8 +206,7 @@
   }
 
   const config = {
-    // 0 = no automatic page reload. Sync button / HAL refresh_page still reload.
-    refreshInterval: 0,
+    refreshInterval: 30 * 60 * 1000, // 30 minutes — avoid page flicker from silent widget polls
     apiBase: "/api/apex",
     halChatEndpoint: "/api/hal/evaluate-query",
     animStagger: 50,
@@ -225,38 +224,62 @@
   let refreshTimer = null;
   const widgets = new Map();
   let lastHalStatus = null;
+  let halChatBusy = false;
+  /** Persist HAL chat across remounts so hover/silent refresh cannot wipe replies. */
+  const halTranscript = [];
+  const HAL_TRANSCRIPT_MAX = 80;
 
   const stage = () => document.getElementById("apex-stage");
   const metaEl = () => document.getElementById("apex-meta");
 
-  async function ensureSessionToken() {
-    if (sessionToken) return sessionToken;
+  async function ensureSessionToken(forceRefresh) {
+    if (sessionToken && !forceRefresh) return sessionToken;
     try {
       const res = await fetch("/api/app-info", {
         cache: "no-store",
         credentials: "same-origin",
       });
-      if (!res.ok) return "";
+      const refresh = res.headers.get(REFRESH_HEADER);
+      if (refresh) sessionToken = refresh.trim();
+      if (!res.ok) return sessionToken || "";
       const info = await res.json();
-      sessionToken = String((info && (info.sessionToken || info.csrfToken)) || "").trim();
+      sessionToken = String((info && (info.sessionToken || info.csrfToken)) || sessionToken || "").trim();
     } catch (_err) {
-      sessionToken = "";
+      if (!sessionToken) sessionToken = "";
     }
     return sessionToken;
   }
 
-  async function apexFetch(url, options) {
+  function captureSessionRefresh(res) {
+    if (!res || !res.headers) return "";
+    const rotated =
+      res.headers.get(REFRESH_HEADER) ||
+      res.headers.get(SESSION_HEADER) ||
+      res.headers.get("X-NR2-Session") ||
+      "";
+    if (rotated) sessionToken = rotated.trim();
+    return rotated.trim();
+  }
+
+  async function apexFetch(url, options, _retried) {
     const opts = Object.assign({ credentials: "same-origin", cache: "no-store" }, options || {});
     opts.headers = Object.assign({}, opts.headers || {});
-    const token = await ensureSessionToken();
+    const token = await ensureSessionToken(Boolean(_retried));
     if (token) opts.headers[SESSION_HEADER] = token;
     const isForm = typeof FormData !== "undefined" && opts.body instanceof FormData;
     if (opts.body && !isForm && !opts.headers["Content-Type"]) {
       opts.headers["Content-Type"] = "application/json";
     }
     const res = await fetch(url, opts);
-    const rotated = res.headers.get(SESSION_HEADER) || res.headers.get("X-NR2-Session");
-    if (rotated) sessionToken = rotated.trim();
+    const refreshed = captureSessionRefresh(res);
+    if (res.status === 403 && !_retried) {
+      // Stale token / binding after NR2 restart — always re-bind via app-info and retry once.
+      sessionToken = refreshed || "";
+      await ensureSessionToken(true);
+      if (sessionToken) {
+        return apexFetch(url, options, true);
+      }
+    }
     return res;
   }
 
@@ -4164,12 +4187,9 @@
     recalc();
   }
 
-  function appendHalMessage(logEl, role, text) {
+  function appendHalMessage(logEl, role, text, opts) {
     if (!logEl) return;
     const persist = !(opts && opts.skipPersist);
-    const empty = logEl.querySelector("[data-hal-empty]");
-    if (empty) empty.remove();
-
     const row = document.createElement("div");
     row.className = `apex-hal-chat__msg apex-hal-chat__msg--${role}`;
 
@@ -4217,62 +4237,16 @@
   }
 
   function restoreHalTranscript(logEl) {
-    if (!logEl) return;
-    logEl.innerHTML = "";
-    if (!halTranscript.length) {
-      const empty = document.createElement("div");
-      empty.className = "apex-hal-chat__empty";
-      empty.dataset.halEmpty = "1";
-      const title = document.createElement("div");
-      title.className = "apex-hal-chat__empty-title";
-      title.textContent = "Command surface ready";
-      const hint = document.createElement("div");
-      hint.className = "apex-hal-chat__empty-hint";
-      hint.textContent = 'Try: "Sync imports", "Focus claims", or "Explain EBITDA"';
-      empty.appendChild(title);
-      empty.appendChild(hint);
-      logEl.appendChild(empty);
-      return;
-    }
+    if (!logEl || !halTranscript.length) return;
+    if (logEl.childElementCount) return;
     halTranscript.forEach((entry) => {
       appendHalMessage(logEl, entry.role, entry.text, { skipPersist: true });
     });
   }
 
-  function setHalChatBusyUi(root, busy) {
-    const panel = root && root.querySelector ? root : document;
-    const live = panel.querySelector && panel.querySelector("[data-hal-live]");
-    const indicator = panel.querySelector && panel.querySelector("[data-hal-indicator]");
-    if (live) live.classList.toggle("is-busy", !!busy);
-    if (indicator) {
-      if (busy) indicator.removeAttribute("hidden");
-      else indicator.setAttribute("hidden", "");
-    }
-  }
-
   function finalizeHalPending(pending, reply) {
     const text = String(reply == null ? "" : reply);
-    if (pending) {
-      const textEl = pending.querySelector(".apex-hal-chat__msg-text");
-      if (textEl) textEl.textContent = text;
-      else pending.textContent = text;
-      // Refresh copy button target if present
-      const copyBtn = pending.querySelector(".apex-hal-chat__copy");
-      if (copyBtn) {
-        copyBtn.onclick = null;
-        copyBtn.addEventListener("click", async () => {
-          try {
-            await navigator.clipboard.writeText(text);
-            copyBtn.textContent = "Copied";
-            setTimeout(() => {
-              copyBtn.textContent = "Copy";
-            }, 2000);
-          } catch (_err) {
-            /* ignore */
-          }
-        });
-      }
-    }
+    if (pending) pending.textContent = text;
     // Replace the trailing "Thinking…" transcript entry with the real reply.
     for (let i = halTranscript.length - 1; i >= 0; i -= 1) {
       if (halTranscript[i].role === "hal" && halTranscript[i].text === "Thinking…") {
@@ -4282,23 +4256,8 @@
     }
     halTranscript.push({ role: "hal", text });
     if (halTranscript.length > HAL_TRANSCRIPT_MAX) {
-      halTranscript.splice(0, halTranscript.length - HAL_TRANSCRIPT_MAX);
+      halTranscript.splice(0,halTranscript.length - HAL_TRANSCRIPT_MAX);
     }
-  }
-
-  function appendHalReceipt(logEl, actions, results) {
-    if (!logEl) return;
-    const list = Array.isArray(actions) ? actions : [];
-    if (!list.length) return;
-    const res = Array.isArray(results) ? results : [];
-    const summary = list
-      .map((a, i) => {
-        const r = String(res[i] || "");
-        const ok = r && !r.startsWith("fail");
-        return `${ok ? "✓" : "⚠"} ${a && a.type ? a.type : "action"}`;
-      })
-      .join(" · ");
-    appendHalMessage(logEl, "system", `HAL executed: ${summary}`, { skipPersist: true });
   }
 
   async function runHalBoardActions(actions) {
@@ -4437,6 +4396,7 @@
       window.ApexHalBrain.setState("thinking");
     }
     const t0 = Date.now();
+    halChatBusy = true;
     try {
       // 1) Deterministic board control (sync/focus/navigate) — never invents $
       let board = null;
@@ -4458,11 +4418,7 @@
         }
         const reply = String(board.reply || "Board updated from imports.");
         if (pending) {
-          if (window.ApexMotion && typeof window.ApexMotion.decodeText === "function") {
-            window.ApexMotion.decodeText(pending, reply);
-          } else {
-            pending.textContent = reply;
-          }
+          finalizeHalPending(pending, reply);
         } else appendHalMessage(logEl, "hal", reply);
         if (boardResults) appendHalReceipt(logEl, board.actions, boardResults);
         if (window.ApexHalBrain && typeof window.ApexHalBrain.setState === "function") {
@@ -4489,9 +4445,16 @@
       if (data && (data.text || data.answer || data.reply)) {
         reply = String(data.text || data.answer || data.reply);
       } else if (data && data.error) {
-        reply = `HAL unavailable: ${data.error}`;
+        const reason = data.reason ? ` (${data.reason})` : "";
+        reply = `HAL unavailable: ${data.error}${reason}`;
       } else if (!res.ok) {
-        reply = `HAL request failed (HTTP ${res.status}).`;
+        let reason = "";
+        try {
+          reason = data && data.reason ? ` · ${data.reason}` : "";
+        } catch (_e) {
+          /* ignore */
+        }
+        reply = `HAL request failed (HTTP ${res.status}${reason}). Hard-refresh the page if this persists.`;
       } else {
         reply = "HAL returned no text for that query.";
       }
@@ -4530,11 +4493,7 @@
         reply = reply.replace(/<!--HAL_ACTIONS:\[[\s\S]*?\]-->/, "").trim();
       }
       if (pending) {
-        if (window.ApexMotion && typeof window.ApexMotion.decodeText === "function") {
-          window.ApexMotion.decodeText(pending, reply);
-        } else {
-          pending.textContent = reply;
-        }
+        finalizeHalPending(pending, reply);
       } else appendHalMessage(logEl, "hal", reply);
       if (markerActions && markerResults) appendHalReceipt(logEl, markerActions, markerResults);
       if (window.ApexHalBrain && typeof window.ApexHalBrain.setState === "function") {
@@ -4542,14 +4501,13 @@
       }
     } catch (err) {
       const msg = `HAL bridge error: ${String((err && err.message) || err)}`;
-      if (pending) pending.textContent = msg;
+      if (pending) finalizeHalPending(pending, msg);
       else appendHalMessage(logEl, "hal", msg);
       if (window.ApexHalBrain && typeof window.ApexHalBrain.setState === "function") {
         window.ApexHalBrain.setState("idle");
       }
     } finally {
       halChatBusy = false;
-      setHalChatBusyUi(chatRoot, false);
       if (window.ApexHal && typeof window.ApexHal.setHeaderStatus === "function") {
         const st = (lastHalStatus && lastHalStatus.status) || "idle";
         window.ApexHal.setHeaderStatus(st, (lastHalStatus && lastHalStatus.statusLabel) || undefined);
@@ -4641,6 +4599,7 @@
     const form = panel.querySelector("[data-hal-form]");
     const input = panel.querySelector("[data-hal-input]");
     const chips = panel.querySelector("[data-hal-chips]");
+    restoreHalTranscript(logEl);
     loadHalSuggestionChips(chips, logEl);
     wireHalChatAutoResize(input);
 
@@ -4703,6 +4662,50 @@
     return true;
   }
 
+  function softRenderHalMain(list) {
+    const root = stage();
+    if (!root) return false;
+    const main = root.querySelector(".apex-hal-main");
+    const rail = root.querySelector(".apex-hal-rail");
+    const chatHost = rail && rail.querySelector(".apex-widget--hal-chat, .apex-inst--hal-chat");
+    if (!main || !rail || !chatHost) return false;
+
+    const specs = list || [];
+    const chatSpec = specs.find((s) => s && s.type === "hal-chat");
+    const mainSpecs = chatSpec ? specs.filter((s) => s !== chatSpec) : specs;
+
+    // Drop non-chat widgets from the registry; keep chat DOM + history.
+    Array.from(widgets.entries()).forEach(([id, w]) => {
+      if (w && w.type !== "hal-chat") widgets.delete(id);
+    });
+
+    if (window.ApexHalBrain && typeof window.ApexHalBrain.destroy === "function") {
+      window.ApexHalBrain.destroy();
+    }
+    main.innerHTML = "";
+    if (window.ApexHalBrain && typeof window.ApexHalBrain.mount === "function") {
+      window.ApexHalBrain.mount(main);
+    }
+    mainSpecs.forEach((spec, idx) => {
+      const widget = new Widget(spec);
+      widgets.set(widget.id, widget);
+      main.appendChild(widget.render(idx));
+    });
+    if (chatSpec) {
+      const existing = Array.from(widgets.values()).find((w) => w && w.type === "hal-chat");
+      if (existing) {
+        existing.spec = chatSpec;
+        if (existing.element) existing.element.classList.remove("is-updating");
+      } else {
+        widgets.set(String(chatSpec.id || "hal-chat"), Object.assign(new Widget(chatSpec), { element: chatHost }));
+      }
+    }
+    if (window.ApexMotion && typeof window.ApexMotion.enableHoloTilt === "function") {
+      window.ApexMotion.enableHoloTilt(main);
+    }
+    return true;
+  }
+
   function renderWidgets(list) {
     const root = stage();
     if (!root) return;
@@ -4746,6 +4749,7 @@
     }
 
     root.className = "apex-stage apex-mosaic";
+    root.dataset.page = currentPage;
     specs.forEach((spec, idx) => {
       const widget = new Widget(spec);
       widgets.set(widget.id, widget);
@@ -4878,17 +4882,13 @@
     }
   }
 
-  async function loadPage(pageIdOrHash, opts) {
+  async function loadPage(pageId, opts) {
     let silent = Boolean(opts && opts.silent);
-    const parsed = parseApexHash(pageIdOrHash || formatApexHash(currentPage, currentSub, currentQuery));
-    currentPage = parsed.parent || currentPage || "financial";
-    currentSub = parsed.sub;
-    currentQuery = parsed.query && typeof parsed.query === "object" ? parsed.query : {};
+    currentPage = pageId || currentPage || "financial";
     // Never wipe HAL chat while a reply is in flight (auto-refresh / nav race).
     if (halChatBusy && currentPage === "hal") silent = true;
-    setHash(currentPage, currentSub, currentQuery);
-    setPageTitle(currentPage, currentSub, { silent });
-    if (!silent) renderSubnav(currentPage, currentSub);
+    setHash(currentPage);
+    setPageTitle(currentPage);
     const root = stage();
     if (!root) return;
 
@@ -4928,53 +4928,15 @@
 
     if (!silent) {
       root.className = currentPage === "hal" ? "apex-stage apex-stage--hal" : "apex-stage apex-mosaic";
+      root.dataset.page = currentPage;
       root.innerHTML = '<div class="apex-status-msg">Loading bridge instruments…</div>';
     } else {
       root.dataset.page = currentPage;
-      if (currentSub) root.dataset.sub = currentSub;
-      else delete root.dataset.sub;
-      // Do not add is-updating (breathe animation) on silent polls — that flickered the mosaic.
-    }
-
-    const idb = typeof window !== "undefined" ? window.Nr2IndexedDb : null;
-    let paintedFromCache = false;
-
-    function applyWidgetPayload(payload, { fromCache }) {
-      const list = (payload && payload.widgets) || [];
-      if (silent && widgets.size && patchWidgets(list)) {
-        /* in-place — no flash */
-      } else if (silent && currentPage === "hal" && !currentSub) {
-        // Never full-remount HAL on silent refresh — that wiped chat history on hover/timer races.
-        softRenderHalMain(list);
-      } else if (silent) {
-        // Silent poll must never wipe the mosaic (instBoot looked like a full page refresh).
-        // Keep current widgets; Sync / navigation still remount intentionally.
-      } else {
-        renderWidgets(list);
-        if (currentPage === "hal" && !currentSub) {
-          restoreHalTranscript(document.querySelector("[data-hal-messages]"));
-        }
-        root.classList.add("is-entering");
-        setTimeout(() => root.classList.remove("is-entering"), 400);
-      }
-      const metaPayload = Object.assign({}, payload || {});
-      if (fromCache) {
-        metaPayload.sourceNote = (metaPayload.sourceNote ? metaPayload.sourceNote + " · " : "") + "IndexedDB cache";
-      }
-      setMeta(metaPayload, { silent });
-    }
-
-    // Stale-while-revalidate: paint IndexedDB cache immediately on cold navigations.
-    if (!silent && idb && idb.loadWidgets) {
-      try {
-        const cached = await idb.loadWidgets(currentPage, currentSub, currentQuery);
-        if (cached && cached.payload && Array.isArray(cached.payload.widgets)) {
-          applyWidgetPayload(cached.payload, { fromCache: true });
-          paintedFromCache = true;
-        }
-      } catch (_err) {
-        /* cache optional */
-      }
+      root.querySelectorAll(".apex-inst, .apex-widget").forEach((el) => {
+        // Keep HAL chat interactive during silent refresh (it is not re-patched).
+        if (el.classList.contains("apex-widget--hal-chat")) return;
+        el.classList.add("is-updating");
+      });
     }
 
     try {
@@ -4988,9 +4950,23 @@
       const res = await apexFetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
-      applyWidgetPayload(payload, { fromCache: false });
-      if (idb && idb.cacheWidgets) {
-        idb.cacheWidgets(currentPage, currentSub, currentQuery, payload).catch(() => {});
+      const list = payload.widgets || [];
+      if (silent && widgets.size && patchWidgets(list)) {
+        /* in-place — no flash */
+      } else if (silent && currentPage === "hal") {
+        // Never full-remount HAL on silent refresh — that wiped chat history on hover/timer races.
+        if (!softRenderHalMain(list)) {
+          root.querySelectorAll(".apex-inst, .apex-widget").forEach((el) => el.classList.remove("is-updating"));
+        }
+      } else {
+        renderWidgets(list);
+        if (currentPage === "hal") {
+          restoreHalTranscript(document.querySelector("[data-hal-messages]"));
+        }
+        if (!silent) {
+          root.classList.add("is-entering");
+          setTimeout(() => root.classList.remove("is-entering"), 400);
+        }
       }
       startAutoRefresh();
     } catch (err) {
