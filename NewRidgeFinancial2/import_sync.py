@@ -16,9 +16,11 @@ from pathlib import Path
 from typing import Any
 
 from import_contract import (
+    QUICKBOOKS_AP_NAMES,
     QUICKBOOKS_AR_NAMES,
     QUICKBOOKS_EXPENSE_CATEGORY_NAMES,
     QUICKBOOKS_EXPENSE_NAMES,
+    QUICKBOOKS_PAYROLL_NAMES,
     QUICKBOOKS_REVENUE_NAMES,
     SOFTDENT_AR_NAMES,
     SOFTDENT_CASE_ACCEPTANCE_NAMES,
@@ -268,18 +270,25 @@ def _read_claims_csv_rows(path: Path) -> list[dict[str, Any]]:
         return []
 
 
-def _write_json(path: Path, payload: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+def _write_json(path: Path, payload: object) -> bool:
+    """Write JSON only when bytes change. Returns True if mutated."""
+    from import_cache_ttl import write_text_if_changed
+
+    text = json.dumps(payload, indent=2)
+    return write_text_if_changed(path, text)
 
 
-def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
+def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> bool:
+    """Write CSV only when bytes change. Returns True if mutated."""
+    from import_cache_ttl import write_bytes_if_changed
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({key: row.get(key, "") for key in fieldnames})
+    buf = __import__("io").StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({key: row.get(key, "") for key in fieldnames})
+    return write_bytes_if_changed(path, buf.getvalue().encode("utf-8"))
 
 
 def _write_csv_json_sidecar(csv_path: Path) -> None:
@@ -454,6 +463,44 @@ def _build_ar_rows_from_normalized(normalized: dict[str, Any]) -> list[dict[str,
     ]
 
 
+def _build_ar_rows_from_account_aging_csv() -> list[dict[str, Any]]:
+    """Map SoftDent Account Aging CSV totals into softdent_ar_aging rows (empty ≠ $0)."""
+    try:
+        from softdent_outstanding_claims_bridge import (
+            find_account_aging_export,
+            parse_account_aging_export,
+        )
+    except Exception:
+        return []
+    path = find_account_aging_export()
+    if not path:
+        return []
+    parsed = parse_account_aging_export(path)
+    if not isinstance(parsed, dict) or not parsed.get("ok"):
+        return []
+    rows: list[dict[str, Any]] = []
+    buckets = parsed.get("buckets") if isinstance(parsed.get("buckets"), dict) else {}
+    for label, bal in buckets.items():
+        if bal is None or bal == "":
+            continue
+        rows.append({"Bucket": str(label), "Balance": bal})
+    if not rows:
+        total = parsed.get("trueReceivablesTotal")
+        if total is None:
+            total = parsed.get("balanceTotal")
+        if total is not None:
+            rows.append({"Bucket": "Total", "Balance": total})
+        ins = parsed.get("outstandingInsuranceTotal")
+        if ins is None:
+            ins = parsed.get("insAmtTotal")
+        if ins is not None:
+            rows.append({"Bucket": "Insurance", "Balance": ins})
+        due = parsed.get("amtDueTotal")
+        if due is not None:
+            rows.append({"Bucket": "Amt Due", "Balance": due})
+    return rows
+
+
 def _trim_rows_to_relevant_periods(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     from import_cache_ttl import relevant_period_labels
 
@@ -490,13 +537,50 @@ def _sync_softdent_pipeline_exports(destination: Path) -> dict[str, Any]:
     aging_jsonl = _find_newest(destination, ("account_aging.jsonl",))
     if not aging_jsonl and _auto_pull_exports_enabled():
         aging_jsonl = _find_newest(SOFTDENT_FINANCIAL_EXPORTS, ("account_aging.jsonl",))
-    if aging_jsonl:
+    ar_rows: list[dict[str, Any]] = []
+    ar_source = ""
+    jsonl_mtime = aging_jsonl.stat().st_mtime if aging_jsonl and aging_jsonl.is_file() else 0.0
+    csv_path = None
+    csv_mtime = 0.0
+    try:
+        from softdent_outstanding_claims_bridge import find_account_aging_export
+
+        csv_path = find_account_aging_export()
+        if csv_path and csv_path.is_file():
+            csv_mtime = csv_path.stat().st_mtime
+    except Exception:
+        csv_path = None
+    # Prefer the newer SoftDent aging artifact (CSV ReportExports vs pipeline jsonl)
+    prefer_csv = bool(csv_path) and (csv_mtime >= jsonl_mtime or not aging_jsonl)
+    source_mtime = 0.0
+    if prefer_csv:
+        ar_rows = _build_ar_rows_from_account_aging_csv()
+        ar_source = "account_aging.csv"
+        source_mtime = csv_mtime
+    if not ar_rows and aging_jsonl:
         normalized = _jsonl_practice_total(aging_jsonl)
         if normalized:
             ar_rows = _build_ar_rows_from_normalized(normalized)
-            ar_path = destination / "softdent_ar_aging.csv"
-            _write_csv(ar_path, ar_rows, ["Bucket", "Balance"])
-            written.append(ar_path.name)
+            ar_source = "account_aging.jsonl"
+            source_mtime = jsonl_mtime
+    if not ar_rows and csv_path:
+        ar_rows = _build_ar_rows_from_account_aging_csv()
+        ar_source = "account_aging.csv"
+        source_mtime = csv_mtime
+    # Freshness clock for softdent.ar softGap must follow SoftDent OPS export mtime,
+    # even when bucket dollars are unchanged (write_bytes_if_changed would leave mtime stale).
+    source_mtime = max(float(source_mtime or 0.0), float(csv_mtime or 0.0), float(jsonl_mtime or 0.0))
+    if ar_rows:
+        ar_path = destination / "softdent_ar_aging.csv"
+        mutated = _write_csv(ar_path, ar_rows, ["Bucket", "Balance"])
+        if ar_path.is_file() and source_mtime and ar_path.stat().st_mtime < float(source_mtime) - 0.5:
+            os.utime(ar_path, (float(source_mtime), float(source_mtime)))
+            mutated = True
+        written.append(
+            ar_path.name
+            if not ar_source
+            else f"{ar_path.name}:{ar_source}{'' if mutated else ':unchanged'}"
+        )
     try:
         from softdent_dashboard_period_sync import sync_dashboard_period_rows
 
@@ -660,6 +744,14 @@ def _sync_quickbooks_sdk_summary(destination: Path) -> list[str]:
     written: list[str] = []
     revenue_path = destination / "quickbooks_revenue.csv"
     expense_path = destination / "quickbooks_expenses.csv"
+    # Do not thrash Period-based monthly expenses with probe TotalExpense-only shape.
+    if expense_path.is_file() and expense_path.stat().st_size > 10:
+        try:
+            head = expense_path.read_text(encoding="utf-8-sig", errors="ignore")[:120].lower()
+            if "period" in head and "totalexpense" in head:
+                return _recover_expense_categories_csv(destination)
+        except OSError:
+            pass
     _write_csv(revenue_path, [{"TotalIncome": revenue}], ["TotalIncome"])
     _write_csv(expense_path, [{"TotalExpense": expenses}], ["TotalExpense"])
     written.extend([revenue_path.name, expense_path.name])
@@ -799,6 +891,7 @@ def _sync_quickbooks_report_cache_derived(destination: Path) -> list[str]:
 
 def _purge_sample_cache(destination: Path) -> list[str]:
     removed: list[str] = []
+    # Never unlink AR criticals here (Moonshot inbox coherence).
     dashboard = destination / "softdent_dashboard_data.json"
     if dashboard.is_file():
         try:
@@ -838,6 +931,59 @@ def _purge_sample_cache(destination: Path) -> list[str]:
         except Exception:
             pass
     return removed
+
+
+def _scrub_void_and_dupe_ledgers(destination: Path) -> dict[str, Any]:
+    """Drop void-code ledgers and exact duplicate txn fingerprints when SoftDent exposes them."""
+    summary: dict[str, Any] = {
+        "voidDropped": 0,
+        "dupDropped": 0,
+        "files": [],
+        "note": "Scrub markers only — empty ≠ $0; no invented amounts.",
+    }
+    try:
+        from apex_32b_program_fixes_pack import scrub_import_rows
+    except Exception as exc:  # noqa: BLE001
+        summary["error"] = str(exc)
+        return summary
+
+    targets = [
+        destination / "softdent_dashboard_data.json",
+        destination / "softdent_claims_export.csv",
+        destination / "softdent_transactions_export.csv",
+        destination / "softdent_account_transactions.csv",
+    ]
+    for path in targets:
+        if not path.is_file():
+            continue
+        try:
+            if path.suffix.lower() == ".json":
+                payload = _read_json(path)
+                rows = payload if isinstance(payload, list) else None
+                if not isinstance(rows, list):
+                    continue
+                kept, part = scrub_import_rows([r for r in rows if isinstance(r, dict)])
+                if part["voidDropped"] or part["dupDropped"]:
+                    _write_json(path, kept)
+                    summary["voidDropped"] += int(part["voidDropped"])
+                    summary["dupDropped"] += int(part["dupDropped"])
+                    summary["files"].append({"name": path.name, **part})
+            elif path.suffix.lower() == ".csv":
+                with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                    reader = csv.DictReader(handle)
+                    fieldnames = list(reader.fieldnames or [])
+                    rows = list(reader)
+                if not rows or not fieldnames:
+                    continue
+                kept, part = scrub_import_rows(rows)
+                if part["voidDropped"] or part["dupDropped"]:
+                    _write_csv(path, kept, fieldnames)
+                    summary["voidDropped"] += int(part["voidDropped"])
+                    summary["dupDropped"] += int(part["dupDropped"])
+                    summary["files"].append({"name": path.name, **part})
+        except Exception as exc:  # noqa: BLE001
+            summary.setdefault("errors", []).append(f"{path.name}: {exc}")
+    return summary
 
 
 def _load_dataset_for_diag(directory: Path, names: tuple[str, ...]) -> dict[str, Any] | None:
@@ -915,6 +1061,15 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
         result["warnings"].append("Full HAL pull — skipped sample-cache purge so bridge exports can load.")
     else:
         result["softdent"]["removed"] = _purge_sample_cache(softdent_dest)
+
+    scrub = _scrub_void_and_dupe_ledgers(softdent_dest)
+    result["filterSummary"] = scrub
+    if int(scrub.get("voidDropped") or 0) or int(scrub.get("dupDropped") or 0):
+        result["warnings"].append(
+            "Import scrub dropped "
+            f"{scrub.get('voidDropped') or 0} void-marker row(s) and "
+            f"{scrub.get('dupDropped') or 0} exact duplicate fingerprint(s)."
+        )
     migrated = _migrate_legacy_import_dirs()
     if migrated:
         result["warnings"].append(
@@ -1040,6 +1195,193 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
         }
         for warning in tp.get("warnings") or []:
             result["warnings"].append(f"SoftDent treatment planning: {warning}")
+        try:
+            from softdent_prodbyada_xls_ingest import ingest_prodbyada_xls
+
+            prod_ada = ingest_prodbyada_xls()
+            result["softdent"]["prodByAdaXls"] = {
+                "ok": bool(prod_ada.get("ok")),
+                "rowsIngested": int(prod_ada.get("rowsIngested") or 0),
+                "periodStart": prod_ada.get("periodStart"),
+                "periodEnd": prod_ada.get("periodEnd"),
+                "path": prod_ada.get("path"),
+                "inventedGold": False,
+                "writesPaymentLines": False,
+                "error": prod_ada.get("error"),
+            }
+            if not prod_ada.get("ok") and prod_ada.get("error") not in {
+                None,
+                "PRODBYADA_XLS_MISSING",
+            }:
+                result["warnings"].append(
+                    f"PRODBYADA.xls ingest: {prod_ada.get('error')}"
+                )
+        except Exception as prod_ada_exc:  # noqa: BLE001
+            result["warnings"].append(f"PRODBYADA.xls ingest skipped: {prod_ada_exc}")
+        try:
+            from softdent_insco_ada_probabilistic import run_insco_ada_probabilistic_report
+
+            prob = run_insco_ada_probabilistic_report()
+            result["softdent"]["inscoAdaProbabilistic"] = {
+                "ok": bool(prob.get("ok")),
+                "publishedCells": ((prob.get("export") or {}).get("publishedCount")),
+                "buildPublished": ((prob.get("build") or {}).get("publishedCells")),
+                "jsonPath": ((prob.get("export") or {}).get("jsonPath")),
+            }
+            for warning in (prob.get("build") or {}).get("warnings") or []:
+                result["warnings"].append(f"InsCo×ADA probabilistic: {warning}")
+        except Exception as prob_exc:  # noqa: BLE001
+            result["warnings"].append(f"InsCo×ADA probabilistic skipped: {prob_exc}")
+        try:
+            from softdent_insco_ada_pct_variance import run_insco_ada_pct_variance_report
+
+            pct = run_insco_ada_pct_variance_report(years=5)
+            result["softdent"]["inscoAdaPctVariance"] = {
+                "ok": bool(pct.get("ok")),
+                "exactCount": ((pct.get("export") or {}).get("exactCount")),
+                "allCount": ((pct.get("export") or {}).get("allCount")),
+                "episodes": ((pct.get("build") or {}).get("episodes")),
+                "jsonPath": ((pct.get("export") or {}).get("jsonPath")),
+            }
+            for warning in (pct.get("build") or {}).get("warnings") or []:
+                result["warnings"].append(f"InsCo×ADA pct variance: {warning}")
+        except Exception as pct_exc:  # noqa: BLE001
+            result["warnings"].append(f"InsCo×ADA pct variance skipped: {pct_exc}")
+        try:
+            from softdent_insco_ada_catalog_matrix import run_insco_ada_catalog_matrix_report
+
+            cat = run_insco_ada_catalog_matrix_report()
+            result["softdent"]["inscoAdaCatalog"] = {
+                "ok": bool(cat.get("ok")),
+                "totalCells": ((cat.get("status") or {}).get("totalCells")),
+                "exactUsable": ((cat.get("status") or {}).get("exactUsableCells")),
+                "insufficient": ((cat.get("status") or {}).get("insufficientCells")),
+                "ledgerCdtUniverse": ((cat.get("export") or {}).get("ledgerCdtUniverse")),
+                "jsonPath": ((cat.get("export") or {}).get("jsonPath")),
+            }
+        except Exception as cat_exc:  # noqa: BLE001
+            result["warnings"].append(f"InsCo×ADA catalog skipped: {cat_exc}")
+        try:
+            from softdent_gold_payment_pipeline import run_gold_payment_pipeline_repair
+
+            gold = run_gold_payment_pipeline_repair()
+            result["softdent"]["goldPaymentPipeline"] = {
+                "ok": bool(gold.get("ok")),
+                "gapCode": ((gold.get("audit") or {}).get("gapCode")),
+                "paymentLines": ((gold.get("audit") or {}).get("paymentLines")),
+                "exactPass": ((gold.get("export") or {}).get("exactPass")),
+                "jsonPath": ((gold.get("export") or {}).get("jsonPath")),
+            }
+            gap = ((gold.get("audit") or {}).get("gapCode")) or ""
+            if gap and gap != "GOLD_OK":
+                result["warnings"].append(
+                    f"Gold payment pipeline: {gap} — {((gold.get('audit') or {}).get('rootCause'))}"
+                )
+        except Exception as gold_exc:  # noqa: BLE001
+            result["warnings"].append(f"Gold payment pipeline skipped: {gold_exc}")
+        try:
+            from softdent_gold_csv_drop_ops import run_ops_10589_gold_csv_drop
+
+            # Sync path: verify/ingest only — SoftDent GUI owned by desktop OPS
+            ops = run_ops_10589_gold_csv_drop(attempt_gui_export=False)
+            result["softdent"]["goldCsvDropOps"] = {
+                "ok": bool(ops.get("ok")),
+                "gapCode": ((ops.get("post") or {}).get("audit") or {}).get("gapCode"),
+                "paymentLines": ((ops.get("post") or {}).get("audit") or {}).get("paymentLines"),
+                "postPass": ((ops.get("post") or {}).get("passCount")),
+                "jsonPath": ((ops.get("export") or {}).get("jsonPath")),
+            }
+            if not ops.get("ok"):
+                gap = ((ops.get("post") or {}).get("audit") or {}).get("gapCode") or ""
+                result["warnings"].append(
+                    f"Gold CSV drop OPS: gap={gap} — SoftDent Insurance Payment Analysis "
+                    r"→ C:\SoftDentFinancialExports\insurance_payments_YYYYMMDD.csv (empty != $0)"
+                )
+        except Exception as ops_exc:  # noqa: BLE001
+            result["warnings"].append(f"Gold CSV drop OPS skipped: {ops_exc}")
+        try:
+            from softdent_gold_drop_facilitation_hal10606 import (
+                run_ops_10606_gold_drop_facilitation,
+            )
+
+            fac = run_ops_10606_gold_drop_facilitation(attempt_gui_export=False)
+            acc = fac.get("acceptance") or {}
+            result["softdent"]["goldDropFacilitationHal10606"] = {
+                "ok": bool(fac.get("ok")),
+                "gapCode": acc.get("gapCode"),
+                "paymentLines": acc.get("paymentLines"),
+                "matrixCells": acc.get("matrixCells"),
+                "cellsNge10": acc.get("cellsNge10"),
+                "acceptanceGateMet": acc.get("acceptanceGateMet"),
+                "jsonPath": ((fac.get("export") or {}).get("jsonPath")),
+            }
+            if not acc.get("acceptanceGateMet"):
+                result["warnings"].append(
+                    "HAL-10606 gold drop facilitation: "
+                    f"{acc.get('blockedReason') or acc.get('gapCode')} "
+                    r"— drop insurance_payments_YYYYMMDD.csv under SoftDentFinancialExports "
+                    "(Print Preview ≠ gold; empty != $0)"
+                )
+        except Exception as fac_exc:  # noqa: BLE001
+            result["warnings"].append(f"HAL-10606 gold drop facilitation skipped: {fac_exc}")
+        try:
+            from softdent_print_preview_audit import run_ops_10590_print_preview_audit
+
+            # Sync: status snapshot only — recording totals is staff/API driven
+            ppa = run_ops_10590_print_preview_audit()
+            result["softdent"]["printPreviewAudit"] = {
+                "ok": bool(ppa.get("ok")),
+                "visualAuditAvailable": ppa.get("visualAuditAvailable"),
+                "visualAuditLastPageTotal": ppa.get("visualAuditLastPageTotal"),
+                "gapCode": ppa.get("gapCode"),
+                "paymentLines": ppa.get("paymentLines"),
+                "triggersGoldIngest": False,
+            }
+        except Exception as ppa_exc:  # noqa: BLE001
+            result["warnings"].append(f"Print Preview audit skipped: {ppa_exc}")
+        try:
+            from ui_honesty_policy import audit_ui_honesty_surfaces
+
+            hon = audit_ui_honesty_surfaces()
+            result["softdent"]["uiHonesty"] = {
+                "ok": bool(hon.get("ok")),
+                "passCount": hon.get("passCount"),
+                "failCount": hon.get("failCount"),
+                "def": hon.get("def"),
+            }
+            if not hon.get("ok"):
+                result["warnings"].append(
+                    f"UI honesty audit failCount={hon.get('failCount')} — empty must not render as $0.00"
+                )
+        except Exception as hon_exc:  # noqa: BLE001
+            result["warnings"].append(f"UI honesty audit skipped: {hon_exc}")
+        try:
+            from softdent_visual_ledger_recon import run_ops_10593_visual_ledger_recon
+
+            recon = run_ops_10593_visual_ledger_recon(persist_history=True)
+            cmp_ = recon.get("comparison") if isinstance(recon.get("comparison"), dict) else {}
+            result["softdent"]["visualLedgerRecon"] = {
+                "ok": bool(recon.get("ok")),
+                "result": recon.get("result") or cmp_.get("result"),
+                "thresholdViolated": recon.get("thresholdViolated") or cmp_.get("thresholdViolated"),
+                "period": recon.get("period"),
+                "visualTotal": recon.get("visualTotal"),
+                "ledgerTotal": recon.get("ledgerTotal"),
+                "clampedLedgerTotal": recon.get("clampedLedgerTotal"),
+                "scopeMismatch": recon.get("scopeMismatch"),
+                "topCarrierCode": recon.get("topCarrierCode"),
+                "carrierBreakdown": (recon.get("carrierBreakdown") or [])[:5],
+                "triggersGoldIngest": False,
+                "gapCode": recon.get("gapCode"),
+                "paymentLines": recon.get("paymentLines"),
+            }
+            if cmp_.get("thresholdViolated"):
+                result["warnings"].append(
+                    f"Visual×ledger variance exceeds threshold "
+                    f"(delta={cmp_.get('delta')}) — flag only; empty != $0"
+                )
+        except Exception as recon_exc:  # noqa: BLE001
+            result["warnings"].append(f"Visual×ledger recon skipped: {recon_exc}")
     except Exception as exc:
         result["warnings"].append(f"SoftDent transaction/CSV extract skipped: {exc}")
     if pipeline.get("practiceSync") and not (pipeline["practiceSync"].get("written") or []):
@@ -1054,6 +1396,13 @@ def sync_imports(full_pull: bool | None = None) -> dict[str, Any]:
     result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_EXPENSE_NAMES))
     result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_EXPENSE_CATEGORY_NAMES))
     result["quickbooks"]["copied"].extend(_sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_AR_NAMES))
+    # Optional payroll/AP — close live gap when upstream exports exist
+    result["quickbooks"]["copied"].extend(
+        _sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_PAYROLL_NAMES)
+    )
+    result["quickbooks"]["copied"].extend(
+        _sync_named_exports(quickbooks_external, quickbooks_dest, QUICKBOOKS_AP_NAMES)
+    )
     probe_payload = _resolve_qb_probe_payload(quickbooks_dest)
     probe_dict = probe_payload if isinstance(probe_payload, dict) else None
     qb_fresh = ensure_quickbooks_fresh(quickbooks_dest, probe_payload=probe_dict)

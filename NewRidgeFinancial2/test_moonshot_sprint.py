@@ -21,7 +21,7 @@ from nr2_browser_security import (
     maybe_rotate_session_token,
     session_vault,
 )
-from nr2_rate_limit import classify_route, is_allowed, reset_for_tests
+from nr2_rate_limit import classify_route, is_allowed, is_rate_limit_exempt, reset_for_tests
 import nr2_browser_security as sec
 
 
@@ -61,6 +61,14 @@ class RateLimitTests(unittest.TestCase):
 
     def test_hal_route_class(self) -> None:
         self.assertEqual(classify_route("/api/hal/evaluate-query", "POST"), "hal")
+
+    def test_widgets_prefix_rate_limit_exempt(self) -> None:
+        """Moonshot page-smoke repairs: widget mosaic must not 429 under warm poll."""
+        self.assertTrue(is_rate_limit_exempt("/api/apex/widgets"))
+        self.assertTrue(is_rate_limit_exempt("/api/apex/widgets/financial"))
+        self.assertTrue(is_rate_limit_exempt("/api/apex/widgets/softdent?sub=register"))
+        self.assertTrue(is_rate_limit_exempt("/api/apex/hal/orchestrate"))
+        self.assertFalse(is_rate_limit_exempt("/api/apex/sync/trigger"))
 
 
 class ImportThresholdDefaultsTests(unittest.TestCase):

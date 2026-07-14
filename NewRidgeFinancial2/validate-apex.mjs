@@ -22,8 +22,6 @@ const requiredAssets = [
   "apex-tokens.css",
   "apex-animations.css",
   "apex-bridge.css",
-  "apex-theme.css",
-  "apex-chrome-flash.css",
   "apex-hal-brain.css",
   "apex-core.js",
   "apex-ticker.js",
@@ -34,10 +32,51 @@ const requiredAssets = [
   "apex-motion-helper.js",
 ];
 
+const bannedLegacyCss = [
+  "apex-theme.css",
+  "apex-chrome-flash.css",
+  "apex-mobile-polish.css",
+  "styles.css",
+  "nr2-moonshot-mockup-theme.css",
+  "hal-mockup-overrides.css",
+  "nr2-mockup-page-vocabulary.css",
+  "nr2-moonshot-glow.css",
+  "nr2-mission-control-extreme.css",
+  "nr2-mission-control-glass.css",
+  "workstation-moonshot-bridge.css",
+];
+
+const bannedLegacyJs = [
+  "nr2-moonshot-ui.js",
+  "nr2-moonshot-mockup-chrome.js",
+  "moonshot-page-registry.js",
+  "page-canvas.js",
+  "page-views.js",
+  "page-canvas-data.js",
+  "moonshot-kimi-wire-hal.js",
+  "nr2-page-filters.js",
+  "nr2-analytics.js",
+  "nr2-qb-reports.js",
+];
+
 for (const name of requiredAssets) {
   assert.ok(existsSync(join(siteDir, name)), `missing Apex asset: ${name}`);
   assert.ok(indexHtml.includes(`${name}?v=${expected}`), `index must load ${name}?v=${expected}`);
 }
+
+for (const name of bannedLegacyCss) {
+  assert.ok(!indexHtml.includes(name), `index must not load legacy CSS: ${name}`);
+  assert.ok(!existsSync(join(siteDir, name)), `legacy CSS must be removed from site/: ${name}`);
+}
+
+for (const name of bannedLegacyJs) {
+  assert.ok(!indexHtml.includes(name), `index must not load leftover JS: ${name}`);
+  assert.ok(!existsSync(join(siteDir, name)), `leftover JS must be removed from site/: ${name}`);
+}
+assert.ok(!existsSync(join(siteDir, "deferred-live-wire")), "deferred-live-wire must be removed");
+assert.ok(!existsSync(join(siteDir, "data", "mockup-elite-pages.js")), "mockup-elite-pages.js must be removed");
+assert.ok(!existsSync(join(siteDir, "apex-zero-scroll.css")), "apex-zero-scroll.css must be removed");
+assert.ok(!indexHtml.includes("apex-zero-scroll.css"), "index must not load apex-zero-scroll.css");
 
 const pages = [
   "financial",
@@ -46,9 +85,7 @@ const pages = [
   "quickbooks",
   "ar",
   "claims",
-  "narratives",
-  "documents",
-  "library",
+  "content",
   "office-manager",
   "hal",
 ];

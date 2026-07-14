@@ -1,0 +1,778 @@
+{
+  "inventory": {
+    "root": "C:\\SoftDent\\PWImages",
+    "patient_category_folders": {
+      "Other": 153117
+    },
+    "extension_counts": {
+      ".jpg": 91000,
+      ".mht": 62007,
+      ".htm": 2307,
+      ".ann": 248,
+      ".pdf": 201,
+      ".sc": 3,
+      ".ini": 1,
+      ".db": 1
+    },
+    "nonpatient": {
+      "account_jpgs": 2641,
+      "claim_jpgs": 5
+    }
+  },
+  "htm": {
+    "count": 2307,
+    "forms": [
+      [
+        "unknown",
+        2307
+      ]
+    ],
+    "eob_keyword_hits": 2057,
+    "eob_samples": [
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\0\\Other\\SDPatientDoc_0_07_19_2021_13_04_29.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\0\\Other\\SDPatientDoc_0_08_05_2021_15_24_39.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\0\\Other\\SDPatientDoc_0_10_11_2021_11_03_04.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\0\\Other\\SDPatientDoc_0_10_19_2021_07_34_01.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\0\\Other\\SDPatientDoc_0_10_28_2021_10_39_08.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\0\\Other\\SDPatientDoc_0_11_15_2021_09_41_45.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\0\\Other\\SDPatientDoc_0_11_15_2021_09_54_56.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\574800\\Other\\SDPatientDoc_574800_03_08_2023_10_19_01.HTM",
+        "hits": [
+          "guardian"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\574900\\Other\\SDPatientDoc_574900_04_18_2022_12_13_58.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\574900\\Other\\SDPatientDoc_574900_04_18_2022_12_22_52.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\574900\\Other\\SDPatientDoc_574900_04_19_2022_06_58_49.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\574900\\Other\\SDPatientDoc_574900_04_19_2022_07_14_07.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\576400\\Other\\SDPatientDoc_576400_08_02_2022_09_52_19.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\576400\\Other\\SDPatientDoc_576400_08_02_2022_09_53_20.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\576400\\Other\\SDPatientDoc_576400_08_02_2022_09_53_33.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\578800\\Other\\SDPatientDoc_578800_10_12_2022_10_06_34.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\578900\\Other\\SDPatientDoc_578900_08_03_2022_14_06_07.HTM",
+        "hits": [
+          "cigna"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\578900\\Other\\SDPatientDoc_578900_08_03_2022_14_42_43.HTM",
+        "hits": [
+          "cigna"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\578900\\Other\\SDPatientDoc_578900_08_09_2022_08_23_44.HTM",
+        "hits": [
+          "cigna"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\578900\\Other\\SDPatientDoc_578900_11_14_2022_15_42_03.HTM",
+        "hits": [
+          "cigna"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\101501\\Other\\SDPatientDoc_101501_01_19_2022_08_07_13.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\107101\\Other\\SDPatientDoc_107101_03_14_2023_12_20_55.HTM",
+        "hits": [
+          "delta dental",
+          "group number",
+          "subscriber id"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\108601\\Other\\SDPatientDoc_108601_12_16_2021_09_42_06.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\108601\\Other\\SDPatientDoc_108601_12_17_2025_15_50_25.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\120901\\Other\\SDPatientDoc_120901_12_17_2025_12_57_33.HTM",
+        "hits": [
+          "aetna"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\124601\\Other\\SDPatientDoc_124601_02_23_2022_08_45_57.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\124601\\Other\\SDPatientDoc_124601_12_16_2025_09_01_17.HTM",
+        "hits": [
+          "aetna"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\133001\\Other\\SDPatientDoc_133001_04_06_2022_08_36_29.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\136301\\Other\\SDPatientDoc_136301_03_14_2022_07_29_43.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\136301\\Other\\SDPatientDoc_136301_03_17_2022_07_30_44.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\136301\\Other\\SDPatientDoc_136301_03_17_2022_10_18_56.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\136301\\Other\\SDPatientDoc_136301_04_13_2022_06_57_05.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\141601\\Other\\SDPatientDoc_141601_08_09_2022_09_23_15.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\144301\\Other\\SDPatientDoc_144301_08_23_2023_07_04_49.HTM",
+        "hits": [
+          "metlife"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\144301\\Other\\SDPatientDoc_144301_08_23_2023_08_37_07.HTM",
+        "hits": [
+          "metlife"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\144301\\Other\\SDPatientDoc_144301_08_23_2023_11_14_11.HTM",
+        "hits": [
+          "metlife"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\144301\\Other\\SDPatientDoc_144301_08_23_2023_11_44_16.HTM",
+        "hits": [
+          "metlife"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\144301\\Other\\SDPatientDoc_144301_08_23_2023_14_17_35.HTM",
+        "hits": [
+          "metlife"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\16101\\Other\\SDPatientDoc_16101_04_06_2022_07_28_34.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\16101\\Other\\SDPatientDoc_16101_04_07_2022_08_52_23.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\171101\\Other\\SDPatientDoc_171101_01_12_2022_09_18_33.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\171101\\Other\\SDPatientDoc_171101_01_12_2022_10_18_41.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\188501\\Other\\SDPatientDoc_188501_01_27_2022_08_09_26.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\188501\\Other\\SDPatientDoc_188501_03_23_2022_09_39_35.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\196801\\Other\\SDPatientDoc_196801_04_19_2023_07_43_55.HTM",
+        "hits": [
+          "cigna"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\203901\\Other\\SDPatientDoc_203901_05_11_2022_09_25_05.HTM",
+        "hits": [
+          "metlife"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\206001\\Other\\SDPatientDoc_206001_12_14_2022_08_36_17.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\21201\\Other\\SDPatientDoc_21201_05_20_2021_09_39_12.HTM",
+        "hits": [
+          "aetna"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\21201\\Other\\SDPatientDoc_21201_12_13_2021_10_37_54.HTM",
+        "hits": [
+          "aetna"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\214101\\Other\\SDPatientDoc_214101_04_06_2022_07_11_42.HTM",
+        "hits": [
+          "delta dental"
+        ],
+        "title": "",
+        "form": "",
+        "loc": ""
+      }
+    ]
+  },
+  "mht_sample": {
+    "total_mht": 62007,
+    "sampled": 2584,
+    "step": 24,
+    "forms": [
+      [
+        "SoftDent/Patient.aspx",
+        963
+      ],
+      [
+        "SoftDent/MedicalHistory2.aspx",
+        823
+      ],
+      [
+        "Consent.aspx",
+        274
+      ],
+      [
+        "PrivacyNotice",
+        270
+      ],
+      [
+        "SoftDent/FinancialPolicy.aspx",
+        160
+      ],
+      [
+        "SoftDent/InformedConsent.aspx",
+        90
+      ],
+      [
+        "unknown",
+        2
+      ],
+      [
+        "SoftDent/Patient2.aspx",
+        1
+      ],
+      [
+        "SoftDent/Insurance.aspx",
+        1
+      ]
+    ],
+    "eob_keyword_hits": 6,
+    "eob_samples": [
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\09\\578709\\Other\\SDPatientDoc_578709_10_02_2023_09_55_14.mht",
+        "hits": [
+          "uhc"
+        ],
+        "title": "\r\n\r\n",
+        "form": "SoftDent/MedicalHistory2.aspx",
+        "loc": "http://SERVER:19560/eForms/EForms/SoftDent/MedicalHistory2.aspx?e=a19502fe-48e0-4742-b2b8-1daed5b0ed63&dpms=9&db=SoftDent_DatabaseSet&Mode=Archive"
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\11\\577311\\Other\\SDPatientDoc_577311_08_03_2016_06_53_12.mht",
+        "hits": [
+          "bcbs"
+        ],
+        "title": "\r\n\r\n",
+        "form": "SoftDent/Patient.aspx",
+        "loc": "http://SERVER:19560/eForms/EForms/SoftDent/Patient.aspx?e=82455887-28ab-4f2d-9736-ddda9481b096&dpms=9&db=SoftDent_DatabaseSet&Mode=Archive"
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\36\\576736\\Other\\SDPatientDoc_576736_10_19_2015_07_55_08.mht",
+        "hits": [
+          "group number"
+        ],
+        "title": "\r\n\r\n",
+        "form": "SoftDent/Insurance.aspx",
+        "loc": "http://SERVER:19560/eForms/EForms/SoftDent/Insurance.aspx?e=dbda9246-85ec-4024-96ec-bb9c3b3bfab4&dpms=9&db=SoftDent_DatabaseSet&Mode=Archive"
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\37\\577537\\Other\\SDPatientDoc_577537_01_22_2025_05_51_20.mht",
+        "hits": [
+          "uhc"
+        ],
+        "title": "\r\n\r\n",
+        "form": "SoftDent/MedicalHistory2.aspx",
+        "loc": "http://SERVER:19560/eForms/EForms/SoftDent/MedicalHistory2.aspx?e=0f9ad5ff-55d1-4348-a927-1e08890c1167&dpms=9&db=SoftDent_DatabaseSet&Mode=Archive"
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\77\\576377\\Other\\SDPatientDoc_576377_04_13_2022_06_28_38.mht",
+        "hits": [
+          "uhc"
+        ],
+        "title": "\r\n\r\n",
+        "form": "SoftDent/Patient.aspx",
+        "loc": "http://SERVER:19560/eForms/EForms/SoftDent/Patient.aspx?e=defce5e2-8e78-4df5-968d-b04d4083a400&dpms=9&db=SoftDent_DatabaseSet&Mode=Archive"
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\87\\576787\\Other\\SDPatientDoc_576787_10_14_2019_08_36_33.mht",
+        "hits": [
+          "uhc"
+        ],
+        "title": "\r\n\r\n",
+        "form": "SoftDent/MedicalHistory2.aspx",
+        "loc": "http://SERVER:19560/eForms/EForms/SoftDent/MedicalHistory2.aspx?e=320a8158-83f9-41bb-9f6e-2c81870d64b9&dpms=9&db=SoftDent_DatabaseSet&Mode=Archive"
+      }
+    ]
+  },
+  "pdfs": {
+    "count": 201,
+    "eobish_names": [],
+    "other_name_samples": [
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\578700\\Other\\SDPatientDoc_578700_03_20_2026_11_28_08.Check-In_Package__Ted_Tatone_.pdf",
+        "name": "SDPatientDoc_578700_03_20_2026_11_28_08.Check-In_Package__Ted_Tatone_.pdf",
+        "size": 280489,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\580200\\Other\\SDPatientDoc_580200_03_12_2026_14_52_38.Check-In_Package__Tonya_Luu_.pdf",
+        "name": "SDPatientDoc_580200_03_12_2026_14_52_38.Check-In_Package__Tonya_Luu_.pdf",
+        "size": 291607,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\580300\\Other\\SDPatientDoc_580300_03_18_2026_11_02_19.Check-In_Package__Stan_McIntosh_.pdf",
+        "name": "SDPatientDoc_580300_03_18_2026_11_02_19.Check-In_Package__Stan_McIntosh_.pdf",
+        "size": 293391,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\580300\\Other\\SDPatientDoc_580300_03_30_2026_11_12_46.Check-In_Package__Stan_Mcintosh_.pdf",
+        "name": "SDPatientDoc_580300_03_30_2026_11_12_46.Check-In_Package__Stan_Mcintosh_.pdf",
+        "size": 283061,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\00\\580400\\Other\\SDPatientDoc_580400_06_07_2026_12_54_07.Check-In_Package__Raquel_Moeder_.pdf",
+        "name": "SDPatientDoc_580400_06_07_2026_12_54_07.Check-In_Package__Raquel_Moeder_.pdf",
+        "size": 284126,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\141601\\Other\\SDPatientDoc_141601_03_17_2026_08_54_20.Check-In_Package__Miranda_Lomurno_.pdf",
+        "name": "SDPatientDoc_141601_03_17_2026_08_54_20.Check-In_Package__Miranda_Lomurno_.pdf",
+        "size": 283329,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\149901\\Other\\SDPatientDoc_149901_06_17_2026_15_38_00.Check-In_Package__Valerie_Wise_.pdf",
+        "name": "SDPatientDoc_149901_06_17_2026_15_38_00.Check-In_Package__Valerie_Wise_.pdf",
+        "size": 283821,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\155501\\Other\\SDPatientDoc_155501_04_17_2026_12_43_48.Check-In_Package__Tracy_Sullivan_.pdf",
+        "name": "SDPatientDoc_155501_04_17_2026_12_43_48.Check-In_Package__Tracy_Sullivan_.pdf",
+        "size": 285063,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\16301\\Other\\SDPatientDoc_16301_03_24_2026_14_42_40.Check-In_Package__Trudy_Shryock_.pdf",
+        "name": "SDPatientDoc_16301_03_24_2026_14_42_40.Check-In_Package__Trudy_Shryock_.pdf",
+        "size": 304347,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\171101\\Other\\Check-In_Package__Elizabeth_Snow_.pdf",
+        "name": "Check-In_Package__Elizabeth_Snow_.pdf",
+        "size": 311938,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\171101\\Other\\SDPatientDoc_171101_03_12_2026_14_52_33.Check-In_Package__Elizabeth_Snow_.pdf",
+        "name": "SDPatientDoc_171101_03_12_2026_14_52_33.Check-In_Package__Elizabeth_Snow_.pdf",
+        "size": 312387,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\203901\\Other\\SDPatientDoc_203901_05_05_2026_19_05_06.Check-In_Package__Debra_Henrichs_.pdf",
+        "name": "SDPatientDoc_203901_05_05_2026_19_05_06.Check-In_Package__Debra_Henrichs_.pdf",
+        "size": 284793,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\227001\\Other\\SDPatientDoc_227001_04_08_2026_17_51_29.Check-In_Package__Debra_Eaton_.pdf",
+        "name": "SDPatientDoc_227001_04_08_2026_17_51_29.Check-In_Package__Debra_Eaton_.pdf",
+        "size": 307951,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\235201\\Other\\SDPatientDoc_235201_04_05_2026_14_36_12.Check-In_Package__Elizabeth_Linn_.pdf",
+        "name": "SDPatientDoc_235201_04_05_2026_14_36_12.Check-In_Package__Elizabeth_Linn_.pdf",
+        "size": 310240,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\298601\\Other\\SDPatientDoc_298601_05_02_2026_11_34_37.Check-In_Package__Shila_Boomsma_.pdf",
+        "name": "SDPatientDoc_298601_05_02_2026_11_34_37.Check-In_Package__Shila_Boomsma_.pdf",
+        "size": 287214,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\298701\\Other\\SDPatientDoc_298701_03_15_2026_22_17_37.Check-In_Package__Kimberly_Montiel_.pdf",
+        "name": "SDPatientDoc_298701_03_15_2026_22_17_37.Check-In_Package__Kimberly_Montiel_.pdf",
+        "size": 314550,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\427801\\Other\\SDPatientDoc_427801_05_26_2026_15_20_05.Check-In_Package__Jill_Drummond_.pdf",
+        "name": "SDPatientDoc_427801_05_26_2026_15_20_05.Check-In_Package__Jill_Drummond_.pdf",
+        "size": 282999,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\437501\\Other\\SDPatientDoc_437501_05_04_2026_14_10_42.Check-In_Package__Terrel_Rowland_.pdf",
+        "name": "SDPatientDoc_437501_05_04_2026_14_10_42.Check-In_Package__Terrel_Rowland_.pdf",
+        "size": 284713,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\477901\\Other\\SDPatientDoc_477901_05_18_2026_11_22_09.Check-In_Package__Scott_Taliaferro_.pdf",
+        "name": "SDPatientDoc_477901_05_18_2026_11_22_09.Check-In_Package__Scott_Taliaferro_.pdf",
+        "size": 285405,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\480801\\Other\\SDPatientDoc_480801_06_22_2026_09_14_49.Check-In_Package__Kori_Turney_.pdf",
+        "name": "SDPatientDoc_480801_06_22_2026_09_14_49.Check-In_Package__Kori_Turney_.pdf",
+        "size": 302916,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\491901\\Other\\SDPatientDoc_491901_04_14_2026_05_09_52.Check-In_Package__Barbara_Stover_.pdf",
+        "name": "SDPatientDoc_491901_04_14_2026_05_09_52.Check-In_Package__Barbara_Stover_.pdf",
+        "size": 287461,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\52001\\Other\\SDPatientDoc_52001_03_12_2026_14_52_30.Check-In_Package__Patricia_Wirth_.pdf",
+        "name": "SDPatientDoc_52001_03_12_2026_14_52_30.Check-In_Package__Patricia_Wirth_.pdf",
+        "size": 284018,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\52001\\Other\\SDPatientDoc_52001_03_12_2026_14_52_35.Check-In_Package__Patricia_Wirth_.pdf",
+        "name": "SDPatientDoc_52001_03_12_2026_14_52_35.Check-In_Package__Patricia_Wirth_.pdf",
+        "size": 284996,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\52001\\Other\\SDPatientDoc_52001_05_26_2026_14_33_40.Check-In_Package__Patricia_Wirth_.pdf",
+        "name": "SDPatientDoc_52001_05_26_2026_14_33_40.Check-In_Package__Patricia_Wirth_.pdf",
+        "size": 284471,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\534101\\Other\\SDPatientDoc_534101_06_18_2026_11_36_31.Check-In_Package__James_Steger_.pdf",
+        "name": "SDPatientDoc_534101_06_18_2026_11_36_31.Check-In_Package__James_Steger_.pdf",
+        "size": 285651,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\570401\\Other\\SDPatientDoc_570401_05_13_2026_17_18_52.Check-In_Package__MAHENDRA_RATHI_.pdf",
+        "name": "SDPatientDoc_570401_05_13_2026_17_18_52.Check-In_Package__MAHENDRA_RATHI_.pdf",
+        "size": 288202,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\574501\\Other\\SDPatientDoc_574501_04_23_2026_22_31_32.Check-In_Package__RITA_FUQUA_.pdf",
+        "name": "SDPatientDoc_574501_04_23_2026_22_31_32.Check-In_Package__RITA_FUQUA_.pdf",
+        "size": 288090,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\574501\\Other\\SDPatientDoc_574501_04_29_2026_16_38_35.Check-In_Package__Rita_Fuqua_.pdf",
+        "name": "SDPatientDoc_574501_04_29_2026_16_38_35.Check-In_Package__Rita_Fuqua_.pdf",
+        "size": 291357,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\577901\\Other\\SDPatientDoc_577901_03_12_2026_14_52_40.Check-In_Package__Patricia_Jackson_.pdf",
+        "name": "SDPatientDoc_577901_03_12_2026_14_52_40.Check-In_Package__Patricia_Jackson_.pdf",
+        "size": 285268,
+        "eobish": false
+      },
+      {
+        "path": "C:\\SoftDent\\PWImages\\Patient\\01\\579801\\Other\\SDPatientDoc_579801_03_30_2026_09_59_06.Check-In_Package__Lisa_Tatone_.pdf",
+        "name": "SDPatientDoc_579801_03_30_2026_09_59_06.Check-In_Package__Lisa_Tatone_.pdf",
+        "size": 309303,
+        "eobish": false
+      }
+    ]
+  },
+  "likely_eob_lanes": {
+    "note": "SoftDent stores all patient docs under category 'Other'. MHTs are mostly Carestream eForms. Scanned EOBs typically live as JPGs under NonPatient/Account (account-level) and sometimes Patient JPGs / Claim JPGs.",
+    "account_jpgs": 2641,
+    "claim_jpgs": 5,
+    "patient_jpgs": 91000
+  }
+}

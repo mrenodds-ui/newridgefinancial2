@@ -23,10 +23,18 @@ function Get-ConfiguredModels {
     )
 
     if (-not (Test-Path $modelsConfigPath)) {
-        return @("hal-chat:8b")
+        return @("hal-local:30b-a3b")
     }
 
     $config = Get-Content $modelsConfigPath -Raw | ConvertFrom-Json
+
+    $approved = $config.config.singleGpuLayout.approvedModel
+    if ($approved) {
+        # Hard single-GPU policy: only warm the approved MoE pin (ignore inventory extras).
+        if (-not $All) {
+            return @([string]$approved)
+        }
+    }
 
     if ($All) {
         # Every configured model. NOTE: these cannot all co-reside on a 16 GB

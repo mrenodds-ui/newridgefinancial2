@@ -1,15 +1,22 @@
 /**
- * NR2-Apex Core — Bridge mosaic, silent refresh, print, session-aware fetch
- * Build: hal-10497 (Availity eligibility in patient dossier)
+ * NR2-Apex Core — stacked stage, silent refresh, print, session-aware fetch
+ * Build: hal-10628 (HAL spine ↔ HAL chat wire harden)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10497";
+  const ASSET_V = "hal-10628";
+  if (typeof window !== "undefined") {
+    window.NR2_BUILD_ID = ASSET_V;
+  }
+  /** Consecutive warming stub polls before hard reload (Moonshot cache pack). */
+  let warmingPollStreak = 0;
+  const WARMING_POLL_MAX = 5;
   const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
   const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
+  const DENSITY_KEY = "nr2-apex-density";
   const PARENT_PAGES = new Set([
     "financial",
     "taxes",
@@ -17,37 +24,50 @@
     "quickbooks",
     "ar",
     "claims",
+    "content",
     "narratives",
     "documents",
     "library",
     "office-manager",
     "hal",
   ]);
+  const CONTENT_ALIASES = {
+    narratives: { parent: "content", sub: "narratives" },
+    documents: { parent: "content", sub: "documents" },
+    library: { parent: "content", sub: "library" },
+  };
   const SUBPAGE_LINKS = {
     financial: [
       { sub: null, label: "Overview" },
+      { sub: "ops", label: "Ops" },
       { sub: "workpapers", label: "Workpapers" },
       { sub: "providers", label: "Providers" },
       { sub: "periods", label: "Periods" },
     ],
     taxes: [
       { sub: null, label: "Overview" },
+      { sub: "ops", label: "Ops" },
+      { sub: "planning", label: "Planning" },
       { sub: "entities", label: "Entities" },
       { sub: "calendar", label: "Calendar" },
       { sub: "workpapers", label: "Workpapers" },
     ],
     softdent: [
       { sub: null, label: "Overview" },
+      { sub: "ops", label: "Ops" },
       { sub: "register", label: "Register" },
       { sub: "schedule", label: "Schedule" },
     ],
     quickbooks: [
       { sub: null, label: "Overview" },
+      { sub: "ops", label: "Ops" },
       { sub: "coa", label: "COA" },
       { sub: "vendors", label: "Vendors" },
     ],
     claims: [
-      { sub: null, label: "Workbench" },
+      { sub: null, label: "Overview" },
+      { sub: "ops", label: "Ops" },
+      { sub: "kanban", label: "Kanban" },
       { sub: "detail", label: "Detail" },
       { sub: "batch", label: "Batch" },
       { sub: "era", label: "ERA" },
@@ -55,33 +75,50 @@
     ],
     ar: [
       { sub: null, label: "Overview" },
+      { sub: "ops", label: "Ops" },
       { sub: "collections", label: "Collections" },
       { sub: "aging-detail", label: "Aging Detail" },
       { sub: "forecast", label: "Forecast" },
     ],
+    content: [
+      { sub: null, label: "Overview" },
+      { sub: "ops", label: "Ops" },
+      { sub: "documents", label: "Documents" },
+      { sub: "narratives", label: "Narratives" },
+      { sub: "library", label: "Library" },
+      { sub: "templates", label: "Templates" },
+      { sub: "tax-docs", label: "Tax Docs" },
+      { sub: "codes", label: "Codes" },
+    ],
     narratives: [
       { sub: null, label: "Workspace" },
+      { sub: "ops", label: "Ops" },
       { sub: "templates", label: "Templates" },
       { sub: "history", label: "History" },
       { sub: "audit", label: "Audit" },
     ],
     documents: [
       { sub: null, label: "Overview" },
+      { sub: "ops", label: "Ops" },
       { sub: "claim-docs", label: "Claim Docs" },
       { sub: "tax-docs", label: "Tax Docs" },
     ],
     library: [
       { sub: null, label: "Overview" },
+      { sub: "ops", label: "Ops" },
       { sub: "payers", label: "Payers" },
       { sub: "codes", label: "Codes" },
     ],
     "office-manager": [
       { sub: null, label: "Overview" },
+      { sub: "ops", label: "Ops" },
       { sub: "huddle", label: "Huddle" },
       { sub: "tasks", label: "Tasks" },
+      { sub: "operatory", label: "Operatory" },
     ],
     hal: [
       { sub: null, label: "Chat" },
+      { sub: "ops", label: "Ops" },
       { sub: "history", label: "History" },
       { sub: "system-logs", label: "System Logs" },
     ],
@@ -92,6 +129,8 @@
     periods: "Periods",
     entities: "Entities",
     calendar: "Calendar",
+    planning: "Planning",
+    ops: "Ops",
     register: "Register",
     schedule: "Schedule",
     coa: "COA",
@@ -100,6 +139,7 @@
     batch: "Batch",
     era: "ERA",
     attachments: "Attachments",
+    kanban: "Kanban",
     collections: "Collections",
     "aging-detail": "Aging Detail",
     forecast: "Forecast",
@@ -112,6 +152,7 @@
     codes: "Codes",
     huddle: "Huddle",
     tasks: "Tasks",
+    operatory: "Operatory",
     "system-logs": "System Logs",
   };
 
@@ -173,6 +214,7 @@
     quickbooks: "QuickBooks",
     ar: "A/R",
     claims: "Claims",
+    content: "Content",
     narratives: "Narratives",
     documents: "Documents",
     library: "Library",
@@ -191,7 +233,16 @@
       return "strip";
     }
     if (spec && spec.size) return String(spec.size);
-    if (type === "hal-chat") return "hal-chat";
+    // Zero-scroll: tall defaults demoted unless size explicitly set
+    if (spec && spec.zeroScroll === true) {
+      if (type === "hal-chat") return "m";
+      if (type === "chart" || type === "bar" || type === "line") return "m";
+      if (type === "heatmap" || type === "calculator" || type === "categorize" || type === "tax-library")
+        return "m";
+      if (type === "claims-kanban" || type === "claims-workbench") return "m";
+      if (type === "ai-insight") return "m";
+    }
+    if (type === "hal-chat") return "m";
     if (type === "chart" || type === "bar" || type === "line") return "l";
     if (
       type === "pulse" ||
@@ -222,7 +273,12 @@
       return "full";
     if (type === "claims-kanban" || type === "claims-workbench" || type === "claims-header-stats" || type === "daily-huddle")
       return "full";
-    if (type === "claims-executive-strip" || type === "executive-strip" || type === "financial-command-strip")
+    if (
+      type === "claims-executive-strip" ||
+      type === "executive-strip" ||
+      type === "financial-command-strip" ||
+      type === "hal-sub-strip"
+    )
       return "strip";
     if (type === "claims-aging-exposure") return "xl";
     if (type === "claims-critical-actions") return "m";
@@ -235,6 +291,7 @@
     if (type === "era-matching-table" || type === "forecast-trend-line" || type === "period-variance-chart")
       return "full";
     if (type === "data-table" || type === "tax-calendar" || type === "task-board") return "full";
+    if (type === "hal-history-feed" || type === "hal-sys-console") return "full";
     if (type === "status") return "s";
     if (type === "quarantine-panel") return "full";
     if (type === "ai-insight") return "l";
@@ -246,7 +303,7 @@
     refreshInterval: 0,
     apiBase: "/api/apex",
     halChatEndpoint: "/api/hal/evaluate-query",
-    animStagger: 50,
+    animStagger: 40,
   };
 
   const ICONS = {
@@ -352,14 +409,33 @@
       const el = document.createElement("article");
       const size = instrumentSize(this.spec);
       el.className = `apex-widget apex-inst apex-inst--${size}`;
+      const tileClass = String((this.spec && this.spec.tileClass) || "").trim();
+      if (tileClass) el.classList.add(tileClass);
+      const band = String((this.spec && (this.spec.band || this.spec.mosaicBand)) || "").trim();
+      if (band) el.dataset.band = band;
       el.dataset.widgetId = this.id;
       if (Array.isArray(this.spec.aliasIds) && this.spec.aliasIds.length) {
         el.dataset.aliasIds = this.spec.aliasIds.map(String).join(" ");
       }
-      el.style.animationDelay = `${index * config.animStagger}ms`;
+      el.style.animationDelay = `${Math.min(index, 2) * config.animStagger}ms`;
+      if (this.spec.navHash) {
+        el.dataset.navHash = String(this.spec.navHash);
+        el.classList.add("apex-widget--nav");
+        el.style.cursor = "pointer";
+        el.title = el.title || `Open #${this.spec.navHash}`;
+      }
       if (this.type === "hal-chat") {
         el.classList.add("apex-widget--hal-chat", "apex-inst--hal-chat");
       }
+      if (this.spec.chrome === "hal-medium") {
+        el.classList.add("apex-chrome--hal-medium");
+      }
+      const layoutRole = String((this.spec && this.spec.layoutRole) || "").trim();
+      if (layoutRole) {
+        el.classList.add(`apex-layout--${layoutRole}`);
+        el.dataset.layoutRole = layoutRole;
+      }
+      const badge = String((this.spec && this.spec.badge) || "").trim();
       if (this.spec.alert) {
         el.classList.add("apex-alert-pulse");
         if (this.spec.alertReason) el.title = String(this.spec.alertReason);
@@ -369,6 +445,14 @@
         el.dataset.empty = "true";
       }
       el.innerHTML = this.getTemplate();
+      if (badge) {
+        el.dataset.badge = badge;
+        el.classList.add("apex-has-badge");
+        const badgeEl = document.createElement("span");
+        badgeEl.className = `apex-badge apex-badge--${badge.replace(/[^a-z0-9_-]/gi, "")}`;
+        badgeEl.textContent = badge;
+        el.appendChild(badgeEl);
+      }
       this.element = el;
       this.attachEvents();
       this.mountChart();
@@ -384,15 +468,30 @@
         return `
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
+            <span class="apex-hal-chat__live-indicator" data-hal-live aria-hidden="true"></span>
           </header>
           <div class="apex-hal-chat" data-hal-chat>
-            <div class="apex-hal-chat__messages" data-hal-messages aria-live="polite"></div>
-            <div class="apex-hal-chat__chips" data-hal-chips></div>
-            <form class="apex-hal-chat__form" data-hal-form>
-              <textarea class="apex-hal-chat__input" data-hal-input rows="2" placeholder="Ask HAL…" aria-label="Ask HAL"></textarea>
-              <button type="submit" class="apex-hal-chat__send" data-hal-send>Send</button>
+            <div class="apex-hal-chat__messages" data-hal-messages role="log" aria-live="polite" aria-label="HAL conversation history"></div>
+            <div class="apex-hal-chat__chips-wrap">
+              <div class="apex-hal-chat__chips" data-hal-chips role="list" aria-label="Suggested commands"></div>
+            </div>
+            <form class="apex-hal-chat__composer" data-hal-form action="#" method="get" aria-label="Ask HAL">
+              <div class="apex-hal-chat__input-sizer" data-input-sizer>
+                <textarea class="apex-hal-chat__input" data-hal-input rows="1" enterkeyhint="send" placeholder="Ask HAL… (Enter to send · Shift+Enter for new line)" aria-label="Ask HAL" maxlength="2000"></textarea>
+              </div>
+              <button type="submit" class="apex-hal-chat__send" data-hal-send aria-label="Send command">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </button>
             </form>
-            <div class="apex-kpi-hint">${this.escape(this.spec.hint || "Local HAL command surface")}</div>
+            <div class="apex-hal-chat__meta">
+              <span class="apex-hal-chat__hint">${this.escape(this.spec.hint || "Local HAL command surface")}</span>
+              <span class="apex-hal-chat__indicator" data-hal-indicator hidden>
+                <span class="apex-hal-chat__dot"></span> Thinking…
+              </span>
+            </div>
           </div>
         `;
       }
@@ -522,7 +621,39 @@
               .join("")}</ol>`
           : "";
         const refreshBtn = this.spec.refreshUrl
-          ? `<button type="button" class="apex-btn apex-btn--small" data-c0-refresh>Refresh SoftDent period imports</button>`
+          ? `<button type="button" class="apex-btn apex-btn--small" data-c0-refresh>${this.escape(
+              this.spec.refreshLabel || "Refresh SoftDent period imports"
+            )}</button>`
+          : "";
+        const eraInboxBtn = this.spec.eraInboxIngestUrl
+          ? `<button type="button" class="apex-btn apex-btn--small" data-era-inbox-refresh>${this.escape(
+              this.spec.eraInboxIngestLabel || "Refresh Inbox"
+            )}</button>`
+          : "";
+        const eraDiscoverBtn = this.spec.eraDiscoverUrl
+          ? `<button type="button" class="apex-btn apex-btn--small" data-era-discover>${this.escape(
+              this.spec.eraDiscoverLabel || "Scan for ERA Files"
+            )}</button>`
+          : "";
+        const fillPct = Number(this.spec.fillProgress);
+        const showFill =
+          this.spec.showFillProgress === true ||
+          (Number.isFinite(fillPct) && fillPct > 0 && fillPct < 100) ||
+          this.id === "warming-bridge";
+        const fillBar = showFill
+          ? `<div class="apex-fill-progress" role="progressbar" aria-valuenow="${Math.max(
+              0,
+              Math.min(100, Number.isFinite(fillPct) ? fillPct : 0)
+            )}" aria-valuemin="0" aria-valuemax="100" data-fill-progress>
+              <div class="apex-fill-progress__bar" style="width:${Math.max(
+                0,
+                Math.min(100, Number.isFinite(fillPct) ? fillPct : 0)
+              )}%"></div>
+              <span class="apex-fill-progress__label">${Math.max(
+                0,
+                Math.min(100, Number.isFinite(fillPct) ? fillPct : 0)
+              )}%</span>
+            </div>`
           : "";
         return `
           <header class="apex-widget-header">
@@ -530,11 +661,14 @@
             ${printBtn}
           </header>
           <div class="apex-kpi-value is-empty" data-kpi-value>${this.escape(this.spec.message || "Awaiting migration")}</div>
+          ${fillBar}
           ${checkHtml}
           ${actionHtml}
           ${refreshBtn}
+          ${eraInboxBtn}
+          ${eraDiscoverBtn}
           <div class="apex-kpi-hint" data-kpi-hint>${this.escape(this.spec.hint || "Phased Apex migration.")}</div>
-        `;
+`;
       }
 
       if (this.type === "chart" || this.type === "bar" || this.type === "line") {
@@ -543,7 +677,6 @@
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
             <div class="apex-widget-actions">
-              <button type="button" class="apex-icon-btn" data-action="focus" title="Focus">⛶</button>
               ${printBtn}
             </div>
           </header>
@@ -691,7 +824,6 @@
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
             <div class="apex-widget-actions">
-              <button type="button" class="apex-icon-btn" data-action="focus" title="Focus">⛶</button>
               ${printBtn}
             </div>
           </header>
@@ -825,7 +957,6 @@
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
             <div class="apex-widget-actions">
-              <button type="button" class="apex-icon-btn" data-action="focus" title="Focus">⛶</button>
               ${printBtn}
             </div>
           </header>
@@ -896,7 +1027,6 @@
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
             <div class="apex-widget-actions">
-              <button type="button" class="apex-icon-btn" data-action="focus" title="Focus">⛶</button>
               ${printBtn}
             </div>
           </header>
@@ -939,7 +1069,6 @@
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
             <div class="apex-widget-actions">
-              <button type="button" class="apex-icon-btn" data-action="focus" title="Focus">⛶</button>
               ${printBtn}
             </div>
           </header>
@@ -976,7 +1105,6 @@
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
             <div class="apex-widget-actions">
-              <button type="button" class="apex-icon-btn" data-action="focus" title="Focus">⛶</button>
               ${printBtn}
             </div>
           </header>
@@ -1228,7 +1356,11 @@
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
             <div class="apex-widget-actions">
-              <button type="button" class="apex-btn apex-btn--primary" data-batch-seed>Seed Narratives</button>
+              <label class="apex-claim-act apex-claim-act--check" title="Required for batch generate">
+                <input type="checkbox" data-batch-consent /> Consent
+              </label>
+              <button type="button" class="apex-btn" data-batch-seed>Seed Narratives</button>
+              <button type="button" class="apex-btn apex-btn--primary" data-batch-generate>Batch Generate</button>
               ${printBtn}
             </div>
           </header>
@@ -1448,6 +1580,146 @@
                   this.spec.emptyMessage || "Awaiting multi-period imports"
                 )}</div>`
               : `<div class="apex-period-variance" data-period-variance>${rows}</div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "hal-sub-strip") {
+        const metrics = Array.isArray(this.spec.metrics) ? this.spec.metrics : [];
+        const cells = metrics
+          .map((m) => {
+            const key = String((m && m.key) || "");
+            const tone =
+              key === "missing" || key === "posture"
+                ? String((m && m.value) || "").toLowerCase().includes("degrad") ||
+                  key === "missing"
+                  ? " is-alert"
+                  : ""
+                : "";
+            return `<div class="apex-hal-substrip__cell${tone}">
+              <span class="apex-hal-substrip__label">${this.escape(String((m && m.label) || ""))}</span>
+              <span class="apex-hal-substrip__value">${this.escape(String((m && m.value) ?? "—"))}</span>
+            </div>`;
+          })
+          .join("");
+        return `
+          <div class="apex-hal-substrip">
+            <div class="apex-hal-substrip__head">
+              <div>
+                <div class="apex-hal-substrip__title">${this.escape(this.spec.title || label)}</div>
+                <div class="apex-hal-substrip__sub">${this.escape(this.spec.subtitle || "")}</div>
+              </div>
+            </div>
+            <div class="apex-hal-substrip__metrics">${cells}</div>
+          </div>
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "hal-history-feed") {
+        const entries = Array.isArray(this.spec.entries) ? this.spec.entries : [];
+        const filters = Array.isArray(this.spec.filters) ? this.spec.filters : ["all", "operator", "hal", "system"];
+        const counts = this.spec.counts && typeof this.spec.counts === "object" ? this.spec.counts : {};
+        const empty = this.spec.status === "empty" || !entries.length;
+        const chips = filters
+          .map((f, i) => {
+            const n = counts[f] != null ? counts[f] : f === "all" ? entries.length : "";
+            const active = i === 0 ? " is-active" : "";
+            return `<button type="button" class="apex-hal-filter${active}" data-hal-hist-filter="${this.escape(
+              f
+            )}">${this.escape(f)}${n === "" ? "" : ` · ${this.escape(String(n))}`}</button>`;
+          })
+          .join("");
+        const rows = entries
+          .map((e) => {
+            const role = String((e && e.role) || "hal");
+            const text = String((e && (e.text || e.preview)) || "");
+            const at = String((e && e.at) || "—");
+            const actions =
+              role === "operator"
+                ? `<button type="button" class="apex-hal-feed__replay" data-hal-replay="${this.escape(
+                    text
+                  )}">Ask again</button>`
+                : `<button type="button" class="apex-hal-feed__replay" data-hal-ask="${this.escape(
+                    text
+                  )}">Ask HAL</button>
+                   <button type="button" class="apex-hal-feed__replay" data-hal-copy="${this.escape(
+                     text
+                   )}">Copy</button>`;
+            return `<article class="apex-hal-feed__row apex-hal-feed__row--${this.escape(
+              role
+            )}" data-hal-hist-role="${this.escape(role)}">
+              <div class="apex-hal-feed__meta">
+                <span class="apex-hal-feed__role">${this.escape(role)}</span>
+                <time class="apex-hal-feed__at">${this.escape(at)}</time>
+                <div class="apex-hal-feed__actions">${actions}</div>
+              </div>
+              <p class="apex-hal-feed__text">${this.escape(text)}</p>
+            </article>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header apex-widget-header--plain">
+            <span class="apex-widget-label">${label}</span>
+          </header>
+          <div class="apex-hal-filters" data-hal-hist-filters>${chips}</div>
+          ${
+            empty
+              ? `<div class="apex-hal-feed apex-hal-feed--empty">
+                   <div class="apex-kpi-value is-empty">${this.escape(
+                     this.spec.emptyMessage || "No history yet"
+                   )}</div>
+                 </div>`
+              : `<div class="apex-hal-feed" data-hal-hist-feed>${rows}</div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+      if (this.type === "hal-sys-console") {
+        const lines = Array.isArray(this.spec.lines) ? this.spec.lines : [];
+        const filters = Array.isArray(this.spec.filters) ? this.spec.filters : ["all", "error", "warn", "info"];
+        const empty = this.spec.status === "empty" || !lines.length;
+        const chips = filters
+          .map((f, i) => {
+            const n =
+              f === "all" ? lines.length : lines.filter((ln) => String((ln && ln.level) || "") === f).length;
+            const active = i === 0 ? " is-active" : "";
+            return `<button type="button" class="apex-hal-filter${active}" data-hal-log-filter="${this.escape(
+              f
+            )}">${this.escape(f)} · ${this.escape(String(n))}</button>`;
+          })
+          .join("");
+        const rows = lines
+          .map((ln) => {
+            const level = String((ln && ln.level) || "info");
+            const source = String((ln && ln.source) || "—");
+            const message = String((ln && ln.message) || "");
+            const askQ = `Explain this system log and the safest next staff action: [${level}] ${source} — ${message}`;
+            return `<div class="apex-hal-console__line apex-hal-console__line--${this.escape(
+              level
+            )}" data-hal-log-level="${this.escape(level)}">
+              <span class="apex-hal-console__lvl">${this.escape(level)}</span>
+              <span class="apex-hal-console__src">${this.escape(source)}</span>
+              <span class="apex-hal-console__msg">${this.escape(message)}</span>
+              <button type="button" class="apex-hal-console__ask" data-hal-ask="${this.escape(
+                askQ
+              )}">Ask HAL</button>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header apex-widget-header--plain">
+            <span class="apex-widget-label">${label}</span>
+          </header>
+          <div class="apex-hal-filters" data-hal-log-filters>${chips}</div>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No log lines"
+                )}</div>`
+              : `<div class="apex-hal-console" data-hal-log-console>${rows}</div>`
           }
           <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
         `;
@@ -1814,7 +2086,6 @@
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
             <div class="apex-widget-actions">
-              <button type="button" class="apex-icon-btn" data-action="focus" title="Focus">⛶</button>
               ${printBtn}
             </div>
           </header>
@@ -2012,6 +2283,11 @@
           if (s === "failed" || s === "fail" || s === "no") return "failed";
           return "unknown";
         };
+        const headers =
+          Array.isArray(data.headers) && data.headers.length >= 4
+            ? data.headers
+            : ["", "Elig", "Ben", "Break"];
+        const headHtml = headers.map((h) => `<span>${this.escape(h)}</span>`).join("");
         const rows = patients
           .map((p) => {
             return `<div class="apex-matrix-row">
@@ -2035,7 +2311,7 @@
               : ""
           }
           <div class="apex-matrix${empty ? " apex-matrix--empty" : ""}">
-            <div class="apex-matrix-head"><span></span><span>Elig</span><span>Ben</span><span>Break</span></div>
+            <div class="apex-matrix-head">${headHtml}</div>
             ${rows}
             <div class="apex-matrix-legend">●Verified ○Pending ◉Failed</div>
           </div>
@@ -2275,19 +2551,30 @@
       if (this.type === "radial-gauge") {
         const data = this.spec.data && typeof this.spec.data === "object" ? this.spec.data : {};
         const empty = this.spec.status === "empty" || data.due == null;
+        const isCollections = data.mode === "collections" || (data.production != null && data.target === 98);
         const pct = data.pctScheduled != null && Number.isFinite(Number(data.pctScheduled))
           ? Math.max(0, Math.min(100, Number(data.pctScheduled)))
           : null;
-        const target = 80;
+        // Support configurable target (default 80 for recall, 98 for collections)
+        const target = Number.isFinite(Number(data.target)) ? Number(data.target) : 80;
         const r = 42;
         const c = 2 * Math.PI * r;
         const fill = pct == null ? 0 : (pct / 100) * c * 0.75;
         const track = c * 0.75;
-        // Amber target marker at 80% along 270° arc (starts at 135°)
+        // Target marker angle calculation (135° start, 270° sweep)
         const targetAngle = 135 + (target / 100) * 270;
         const rad = (targetAngle * Math.PI) / 180;
         const tx = 60 + r * Math.cos(rad);
         const ty = 58 + r * Math.sin(rad);
+
+        // Label sets based on mode
+        const labelDue = isCollections ? "Target" : "Due";
+        const labelSched = isCollections ? "Collected" : "Sch";
+        const labelContact = isCollections ? "Production" : "Contacted";
+        const metaDue = isCollections ? `${target}%` : (data.due != null ? String(data.due) : "—");
+        const metaSched = data.scheduled != null ? String(data.scheduled) : "—";
+        const metaContact = data.contacted != null ? String(data.contacted) : "—";
+
         return `
           <header class="apex-widget-header">
             <span class="apex-widget-label">${label}</span>
@@ -2296,7 +2583,7 @@
           ${
             empty
               ? `<div class="apex-kpi-value is-empty">${this.escape(
-                  data.emptyMessage || "Recall tracking unavailable"
+                  data.emptyMessage || (isCollections ? "Collections data unavailable" : "Recall tracking unavailable")
                 )}</div>
                  <div class="apex-gauge apex-gauge--empty">
                    <svg viewBox="0 0 120 100" class="apex-gauge-svg" aria-hidden="true">
@@ -2316,12 +2603,8 @@
                        pct != null ? `${pct}%` : "—%"
                      )}</text>
                    </svg>
-                   <div class="apex-gauge-meta">Due: ${this.escape(
-                     data.due != null ? String(data.due) : "—"
-                   )} · Target: 80% · Sch: ${this.escape(
-                     data.scheduled != null ? String(data.scheduled) : "—"
-                   )}${
-                     data.contacted != null ? ` · Contacted: ${this.escape(String(data.contacted))}` : ""
+                   <div class="apex-gauge-meta">${labelDue}: ${this.escape(metaDue)} · Target: ${target}% · ${labelSched}: ${this.escape(metaSched)}${
+                     data.contacted != null ? ` · ${labelContact}: ${this.escape(metaContact)}` : ""
                    }</div>
                  </div>`
           }
@@ -2530,7 +2813,205 @@
             .join("")}</div>`
         : "";
 
-      return `
+if (this.type === "claims-kanban" || this.type === "claims-workbench") {
+        const columns = this.spec.columns && typeof this.spec.columns === "object" ? this.spec.columns : {};
+        const labels = this.spec.columnLabels && typeof this.spec.columnLabels === "object" ? this.spec.columnLabels : {};
+        const counts = this.spec.counts && typeof this.spec.counts === "object" ? this.spec.counts : {};
+        const rows = Array.isArray(this.spec.rows) ? this.spec.rows : [];
+        const order = ["submitted", "pendingReview", "eraMatched", "denied", "paid"];
+        const empty = this.spec.status === "empty";
+        const defaultView = preferredWorkbenchView(String(this.spec.defaultView || "table"));
+        const rowCapRaw = Number(this.spec.rowCap);
+        // Zero-scroll: default 5, hard cap 7 on parent pages; subpage may pass higher
+        const rowCap =
+          Number.isFinite(rowCapRaw) && rowCapRaw > 0
+            ? this.spec.internalScroll === true
+              ? Math.max(rowCapRaw, 1)
+              : Math.min(rowCapRaw, 7)
+            : 5;
+        const flatRows = rows.length
+          ? rows
+          : order.flatMap((key) =>
+              Array.isArray(columns[key]) ? columns[key].map((c) => Object.assign({ column: key }, c || {})) : []
+            );
+        const visibleRows = flatRows.slice(0, rowCap);
+        const moreCount = Math.max(0, flatRows.length - visibleRows.length);
+        const tableRows = visibleRows
+          .map((c) => {
+            const id = String((c && c.claimId) || "");
+            const risk = c && c.risk ? String(c.risk) : "";
+            const amount =
+              c && c.billedAmount != null && Number.isFinite(Number(c.billedAmount))
+                ? formatMoney(c.billedAmount)
+                : "—";
+            const age = c && typeof c.ageDays === "number" ? `${c.ageDays}d` : "—";
+            const patient = formatPatientDisplay((c && c.patientName) || "");
+            const attHtml = attachmentDotHtml(c && c.attachments);
+            return `<tr class="apex-wb-row" data-claim-id="${this.escape(id)}" data-claim-row data-risk="${this.escape(
+              risk
+            )}" data-column="${this.escape(String((c && c.column) || ""))}" data-bucket="${this.escape(
+              String((c && c.bucket) || "")
+            )}" data-has-era="${c && c.eraStatus ? "1" : "0"}" data-has-att="${
+              c && c.attachments ? "1" : "0"
+            }" data-patient="${this.escape(String((c && c.patientName) || ""))}">
+              <td><input type="checkbox" data-batch-claim value="${this.escape(id)}" /></td>
+              <td class="apex-wb-id">${this.escape(id)}</td>
+              <td>${this.escape(patient)}</td>
+              <td>${this.escape(String((c && c.payer) || "—"))}</td>
+              <td>${this.escape(age)}</td>
+              <td><span class="apex-wb-status">${this.escape(String((c && c.status) || "—"))}</span></td>
+              <td class="apex-wb-amt">${this.escape(amount)}</td>
+              <td class="apex-wb-att-cell">${attHtml}</td>
+              <td class="apex-wb-acts">
+                <button type="button" class="apex-claim-act" data-claim-act="open" title="Open detail">›</button>
+              </td>
+            </tr>`;
+          })
+          .join("");
+        const colHtml = order
+          .map((key) => {
+            const cards = Array.isArray(columns[key]) ? columns[key] : [];
+            const count = typeof counts[key] === "number" ? counts[key] : cards.length;
+            const cardHtml = cards
+              .map((c) => {
+                const id = String((c && c.claimId) || "");
+                const risk = c && c.risk ? String(c.risk) : "";
+                const procs = Array.isArray(c && c.procedures) ? c.procedures.join(", ") : "";
+                const procLine = procs
+                  ? procs + (c && c.procedureDesc ? " · " + c.procedureDesc : "")
+                  : c && c.procedureDesc
+                    ? String(c.procedureDesc)
+                    : "";
+                const amount =
+                  c && c.billedAmount != null && Number.isFinite(Number(c.billedAmount))
+                    ? formatMoney(c.billedAmount)
+                    : "";
+                const payer = String((c && c.payer) || "");
+                let att = "";
+                if (c && c.attachments && typeof c.attachments === "object") {
+                  const cur = c.attachments.current;
+                  const req = c.attachments.required;
+                  if (req != null) {
+                    const complete = Number(cur) >= Number(req);
+                    att = `<span class="apex-claim-card__att ${complete ? "is-complete" : "is-missing"}">📎 ${this.escape(
+                      String(cur)
+                    )}/${this.escape(String(req))}</span>`;
+                  } else if (cur != null) {
+                    att = `<span class="apex-claim-card__att">📎 ${this.escape(String(cur))}</span>`;
+                  }
+                }
+                let era = "";
+                if (c && c.denialCode) {
+                  era = `<span class="apex-claim-card__era is-denied">${this.escape(String(c.denialCode))}</span>`;
+                } else if (c && c.eraStatus) {
+                  era = `<span class="apex-claim-card__era">${this.escape(String(c.eraStatus))}</span>`;
+                } else if (key === "eraMatched") {
+                  era = `<span class="apex-claim-card__era is-matched">ERA Match</span>`;
+                } else if (key === "paid") {
+                  era = `<span class="apex-claim-card__era is-matched">Paid</span>`;
+                }
+                const riskClass = risk
+                  ? ` risk-${this.escape(risk)}`
+                  : key === "eraMatched" || key === "paid"
+                    ? " matched"
+                    : "";
+                const riskBadge = risk
+                  ? `<span class="apex-claim-card__risk risk-${this.escape(risk)}">${this.escape(
+                      risk === "high" ? "High" : risk === "medium" ? "Med" : "Low"
+                    )}</span>`
+                  : "";
+                return `<div class="apex-claim-card${riskClass}" data-claim-id="${this.escape(
+                  id
+                )}" data-claim-card data-risk="${this.escape(risk)}" data-column="${this.escape(key)}" data-bucket="${this.escape(
+                  String((c && c.bucket) || "")
+                )}" data-has-era="${c && c.eraStatus ? "1" : "0"}" data-has-att="${
+                  c && c.attachments ? "1" : "0"
+                }" data-patient="${this.escape(String((c && c.patientName) || ""))}">
+                  <div class="apex-claim-card__head">
+                    <span class="apex-claim-card__id">${this.escape(id)}</span>
+                    ${riskBadge}
+                  </div>
+                  <div class="apex-claim-card__patient">${this.escape(formatPatientDisplay((c && c.patientName) || ""))}</div>
+                  ${
+                    procLine
+                      ? `<div class="apex-claim-card__proc">${this.escape(procLine)}</div>`
+                      : `<div class="apex-claim-card__proc is-muted">Procedure not on import</div>`
+                  }
+                  <div class="apex-claim-card__meta">
+                    <span>${this.escape(payer || "Payer —")}</span>
+                    <span class="apex-claim-card__amt">${this.escape(amount || "—")}</span>
+                  </div>
+                  <div class="apex-claim-card__foot">${att}${era}</div>
+                  <div class="apex-claim-card__actions" data-claim-actions>
+                    <button type="button" class="apex-claim-act" data-claim-act="generate-narrative">Narrative</button>
+                    <button type="button" class="apex-claim-act" data-claim-act="follow-up-note">Note</button>
+                    <button type="button" class="apex-claim-act" data-claim-act="schedule-callback">Callback</button>
+                    <label class="apex-claim-act apex-claim-act--check"><input type="checkbox" data-batch-claim value="${this.escape(
+                      id
+                    )}" /> Batch</label>
+                  </div>
+                </div>`;
+              })
+              .join("");
+            return `<div class="apex-claims-kanban__col" data-kanban-col="${this.escape(key)}">
+              <div class="apex-claims-kanban__col-head">
+                <span>${this.escape(labels[key] || key)}</span>
+                <span class="apex-claims-kanban__count">${this.escape(String(count))}</span>
+              </div>
+              <div class="apex-claims-kanban__col-body">${
+                cardHtml || `<div class="apex-claims-kanban__empty">No claims</div>`
+              }</div>
+            </div>`;
+          })
+          .join("");
+        return `
+          <header class="apex-widget-header">
+            <span class="apex-widget-label">${label}</span>
+            <div class="apex-widget-actions">
+              <div class="apex-wb-views" data-wb-views>
+                <button type="button" class="apex-filter-btn${defaultView === "table" ? " is-active" : ""}" data-wb-view="table">Table</button>
+                <button type="button" class="apex-filter-btn${defaultView === "kanban" ? " is-active" : ""}" data-wb-view="kanban">Kanban</button>
+              </div>
+              <div class="apex-claims-kanban__filters" data-kanban-filters>
+                <button type="button" class="apex-filter-btn is-active" data-kanban-filter="all">All</button>
+                <button type="button" class="apex-filter-btn" data-kanban-filter="high-risk">High Risk</button>
+                <button type="button" class="apex-filter-btn" data-kanban-filter="unmatched">Unmatched</button>
+                <button type="button" class="apex-filter-btn" data-kanban-filter="missing-attachments">Missing Att</button>
+              </div>
+              <button type="button" class="apex-btn apex-btn--small" data-action="batch-narratives">Batch narratives</button>
+              ${printBtn}
+            </div>
+          </header>
+          ${
+            empty
+              ? `<div class="apex-kpi-value is-empty">${this.escape(
+                  this.spec.emptyMessage || "No claims for workbench"
+                )}</div>`
+              : `<div class="apex-claims-workbench" data-claims-workbench data-view="${this.escape(defaultView)}">
+                  <div class="apex-claims-kanban__note">Table + Kanban · SoftDent read-only · NR2 actions only</div>
+                  <div class="apex-wb-table-wrap" data-wb-panel="table">
+                    <table class="apex-wb-table apex-wb-table--dense">
+                      <thead><tr>
+                        <th></th><th>Claim</th><th>Patient</th><th>Payer</th><th>Age</th><th>Status</th><th>Amount</th><th>Att</th><th></th>
+                      </tr></thead>
+                      <tbody>${tableRows || `<tr><td colspan="9">No rows</td></tr>`}</tbody>
+                    </table>
+                    ${
+                      moreCount
+                        ? `<div class="apex-wb-more">Showing ${this.escape(String(visibleRows.length))} of ${this.escape(
+                            String(flatRows.length)
+                          )} · use filters to focus</div>`
+                        : ""
+                    }
+                  </div>
+                  <div class="apex-claims-kanban__board" data-wb-panel="kanban">${colHtml}</div>
+                </div>`
+          }
+          <div class="apex-kpi-hint">${this.escape(this.spec.hint || "")}</div>
+        `;
+      }
+
+            return `
         <header class="apex-widget-header">
           <span class="apex-widget-label">${label}</span>
           ${printBtn}
@@ -2715,8 +3196,22 @@
     }
 
     attachEvents() {
+      if (this.spec.navHash && this.element && this.element.dataset.navWired !== "1") {
+        this.element.dataset.navWired = "1";
+        this.element.addEventListener("click", (ev) => {
+          if (ev.target.closest("button, a, input, textarea, select")) return;
+          const hash = String(this.spec.navHash || "").replace(/^#/, "");
+          if (hash) loadPage(hash);
+        });
+      }
+      const skipChromeAsk =
+        this.type === "hal-chat" ||
+        this.type === "hal-sub-strip" ||
+        this.type === "hal-history-feed" ||
+        this.type === "hal-sys-console" ||
+        (currentPage === "hal" && currentSub);
       const header = this.element.querySelector(".apex-widget-header");
-      if (header && this.type !== "hal-chat" && !header.querySelector('[data-action="ask-hal"]')) {
+      if (header && !skipChromeAsk && !header.querySelector('[data-action="ask-hal"]')) {
         const ask = document.createElement("button");
         ask.type = "button";
         ask.className = "apex-icon-btn apex-ask-hal-btn";
@@ -2735,10 +3230,6 @@
       const askBtn = this.element.querySelector('[data-action="ask-hal"]');
       if (askBtn) {
         askBtn.addEventListener("click", () => askHalAboutWidget(this.spec));
-      }
-      const focusBtn = this.element.querySelector('[data-action="focus"]');
-      if (focusBtn) {
-        focusBtn.addEventListener("click", () => toggleFocus(this.element));
       }
       if (this.type === "waterfall") {
         this.element.querySelectorAll("[data-cite-key]").forEach((btn) => {
@@ -2815,9 +3306,109 @@
             }
           });
         }
+        const eraRefreshBtn = this.element.querySelector("[data-era-inbox-refresh]");
+        if (eraRefreshBtn && eraRefreshBtn.dataset.wired !== "1") {
+          eraRefreshBtn.dataset.wired = "1";
+          eraRefreshBtn.addEventListener("click", async () => {
+            const label = String(this.spec.eraInboxIngestLabel || "Refresh Inbox");
+            const url = String(this.spec.eraInboxIngestUrl || "/api/apex/hal/era-inbox/ingest");
+            eraRefreshBtn.disabled = true;
+            eraRefreshBtn.textContent = "Refreshing…";
+            try {
+              const res = await apexFetch(url, {
+                method: "POST",
+                body: JSON.stringify({}),
+              });
+              const data = await res.json().catch(() => ({}));
+              const meta = metaEl();
+              const chip = data.chipLabel || (data.inbox && data.inbox.chipLabel) || "";
+              const count = data.fileCount != null ? data.fileCount : (data.inbox && data.inbox.fileCount);
+              if (meta) {
+                if (res.status === 403) {
+                  meta.textContent =
+                    "HAL · ERA inbox ingest blocked (session token) — retry Refresh Inbox or use CLI";
+                } else if (data.ok) {
+                  meta.textContent = data.empty
+                    ? `HAL · ERA inbox empty — ${chip || "Awaiting first 835 drop"} (empty ≠ $0)`
+                    : `HAL · ERA inbox ingest — ${chip || "ready"} · files=${count != null ? count : "—"}`;
+                } else {
+                  meta.textContent = `HAL · ERA inbox issue — ${data.error || data.reason || res.status}`;
+                }
+                meta.classList.add("is-live");
+              }
+              const hintEl = this.element.querySelector("[data-kpi-hint]");
+              if (hintEl && data.hint) hintEl.textContent = String(data.hint);
+              eraRefreshBtn.disabled = false;
+              eraRefreshBtn.textContent = label;
+              await loadPage(currentPage, { silent: true });
+            } catch (err) {
+              window.alert(String((err && err.message) || err));
+              eraRefreshBtn.disabled = false;
+              eraRefreshBtn.textContent = label;
+            }
+          });
+        }
+        const eraDiscoverBtn = this.element.querySelector("[data-era-discover]");
+        if (eraDiscoverBtn && eraDiscoverBtn.dataset.wired !== "1") {
+          eraDiscoverBtn.dataset.wired = "1";
+          eraDiscoverBtn.addEventListener("click", async () => {
+            const label = String(this.spec.eraDiscoverLabel || "Scan for ERA Files");
+            const url = String(this.spec.eraDiscoverUrl || "/api/apex/hal/era-inbox/discover");
+            eraDiscoverBtn.disabled = true;
+            eraDiscoverBtn.textContent = "Scanning…";
+            try {
+              const res = await apexFetch(url, {
+                method: "POST",
+                body: JSON.stringify({}),
+              });
+              const data = await res.json().catch(() => ({}));
+              const meta = metaEl();
+              const count = data.candidateCount != null ? data.candidateCount : 0;
+              const chip = data.chipLabel || "";
+              if (meta) {
+                if (res.status === 403) {
+                  meta.textContent =
+                    "HAL · ERA discovery blocked (session token) — retry Scan for ERA Files";
+                } else if (data.ok) {
+                  meta.textContent = count
+                    ? `HAL · ${chip} — verify paths, copy into era inbox, then Refresh Inbox`
+                    : `HAL · ${chip || "No local ERA files detected"} (empty ≠ $0)`;
+                } else {
+                  meta.textContent = `HAL · ERA discovery issue — ${data.error || res.status}`;
+                }
+                meta.classList.add("is-live");
+              }
+              const hintEl = this.element.querySelector("[data-kpi-hint]");
+              if (hintEl) {
+                const paths = Array.isArray(data.candidates)
+                  ? data.candidates
+                      .slice(0, 3)
+                      .map((c) => c && c.path)
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "";
+                hintEl.textContent = paths
+                  ? `${data.hint || chip} · ${paths}`
+                  : String(data.hint || this.spec.hint || "");
+              }
+              eraDiscoverBtn.disabled = false;
+              eraDiscoverBtn.textContent = label;
+            } catch (err) {
+              window.alert(String((err && err.message) || err));
+              eraDiscoverBtn.disabled = false;
+              eraDiscoverBtn.textContent = label;
+            }
+          });
+        }
       }
       if (this.type === "hal-chat") {
         wireHalChat(this.element);
+      }
+      if (this.type === "hal-history-feed") {
+        wireHalHistoryFeed(this.element);
+      }
+      if (this.type === "hal-sys-console") {
+        wireHalSysConsole(this.element);
       }
       if (this.type === "calculator") {
         wireCalculator(this.element);
@@ -2948,6 +3539,13 @@
       if (this.type === "ai-insight") {
         wireAiInsight(this.element);
       }
+      if (
+        this.id === "hal-import-health" ||
+        this.id === "hal-program-posture" ||
+        this.id === "hal-ai-insight"
+      ) {
+        wireHalSpineTile(this.element, this.spec);
+      }
     }
   }
 
@@ -3051,6 +3649,34 @@
           cols.map((c) => `${(c && c.bucket) || "?"}:${(c && c.count) || 0}`).join(",")
       );
       parts.push(`Ask: focus 30/60/90 day claims to filter the workbench.`);
+    }
+    // HAL spine tiles — deterministic context for health / posture / insight
+    if (widgetId === "hal-import-health") {
+      parts.push(`delta=${s.delta_label || s.deltaLabel || ""}`);
+      parts.push(
+        "Ask: which SoftDent/QB datasets are missing, what Sync to run next, and how Import Health becomes Operational. Never invent connection counts."
+      );
+    }
+    if (widgetId === "hal-program-posture") {
+      parts.push(`posture=${s.message || ""}`);
+      parts.push(`badge=${s.badge || ""}`);
+      parts.push(
+        "Ask: why posture is Operational/Degraded/Standby, what blocks grounded HAL answers, and the next import fix. Never invent system health."
+      );
+    }
+    if (widgetId === "hal-ai-insight" || s.type === "ai-insight") {
+      const insight = s.insight && typeof s.insight === "object" ? s.insight : null;
+      if (insight) {
+        parts.push(`insightType=${insight.widget_type || ""}`);
+        parts.push(`confidence=${insight.confidence || ""}`);
+        if (insight.explanation) parts.push(`explanation=${String(insight.explanation).slice(0, 400)}`);
+        const refs = Array.isArray(insight.source_refs) ? insight.source_refs.slice(0, 8) : [];
+        if (refs.length) parts.push(`source_refs=${refs.join(",")}`);
+      } else {
+        parts.push("insightStatus=EMPTY");
+        parts.push("Ask: generate a schema-validated structured insight with source_refs; do not invent dollars.");
+      }
+      parts.push("Ask: summarize this insight, cite sources, and name the next staff action.");
     }
     if (s.hint) parts.push(`hint=${s.hint}`);
     if (s.message) parts.push(`message=${s.message}`);
@@ -3580,20 +4206,14 @@
       draft.addEventListener("click", () => {
         const claim = (spec && spec.claim) || {};
         const cid = String((claim && claim.claimId) || (spec && spec.claimId) || "");
-        try {
-          sessionStorage.setItem(
-            "nr2-apex-narrative-seed",
-            JSON.stringify({
-              claimId: cid,
-              patientName: "",
-              payer: (claim && claim.payer) || "",
-              date: (claim && claim.date) || "",
-            })
-          );
-          sessionStorage.setItem("nr2-apex-focused-claim", cid);
-        } catch (_err) {
-          /* ignore */
-        }
+        writeNarrativeVoiceSeed({
+          claimId: cid,
+          patientName: "",
+          payer: (claim && claim.payer) || "",
+          date: (claim && claim.date) || "",
+          page: "claims",
+          topic: "narrative_generation",
+        });
         loadPage("narratives");
       });
     }
@@ -3696,34 +4316,99 @@
   function wireBatchSelector(root) {
     if (!root || root.dataset.wiredBatch === "1") return;
     root.dataset.wiredBatch = "1";
+    const selectedIds = () =>
+      Array.from(root.querySelectorAll("[data-batch-claim]:checked")).map((el) => el.value).filter(Boolean);
+
     const seedBtn = root.querySelector("[data-batch-seed]");
-    if (!seedBtn) return;
-    seedBtn.addEventListener("click", async () => {
-      const ids = Array.from(root.querySelectorAll("[data-batch-claim]:checked")).map((el) => el.value);
-      if (!ids.length) {
-        window.alert("Select at least one claim.");
-        return;
-      }
-      try {
-        const res = await apexFetch(`${config.apiBase}/narratives/batch-seed`, {
-          method: "POST",
-          body: JSON.stringify({ claimIds: ids }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || data.ok === false) {
-          window.alert(data.error || `Batch seed failed (HTTP ${res.status})`);
+    if (seedBtn) {
+      seedBtn.addEventListener("click", async () => {
+        const ids = selectedIds();
+        if (!ids.length) {
+          window.alert("Select at least one claim.");
           return;
         }
         try {
-          sessionStorage.setItem("nr2-apex-narrative-seed", JSON.stringify(data.seed || { claimIds: ids }));
-        } catch (_err) {
-          /* ignore */
+          const res = await apexFetch(`${config.apiBase}/narratives/batch-seed`, {
+            method: "POST",
+            body: JSON.stringify({ claimIds: ids }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || `Batch seed failed (HTTP ${res.status})`);
+            return;
+          }
+          try {
+            sessionStorage.setItem("nr2-apex-narrative-seed", JSON.stringify(data.seed || { claimIds: ids }));
+          } catch (_err) {
+            /* ignore */
+          }
+          loadPage("narratives");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
         }
-        loadPage("narratives");
-      } catch (err) {
-        window.alert(String((err && err.message) || err));
-      }
-    });
+      });
+    }
+
+    const genBtn = root.querySelector("[data-batch-generate]");
+    if (genBtn) {
+      genBtn.addEventListener("click", async () => {
+        const ids = selectedIds();
+        if (!ids.length) {
+          window.alert("Select at least one claim.");
+          return;
+        }
+        const consentEl = root.querySelector("[data-batch-consent]");
+        if (!consentEl || !consentEl.checked) {
+          window.alert("Check Consent before batch generating appeal drafts.");
+          return;
+        }
+        genBtn.disabled = true;
+        try {
+          const res = await apexFetch(`${config.apiBase}/narratives/batch-generate`, {
+            method: "POST",
+            body: JSON.stringify({
+              claimIds: ids,
+              type: "appeal",
+              operatorConsent: true,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || `Batch generate failed (HTTP ${res.status})`);
+            return;
+          }
+          const okN = Number(data.successCount || 0);
+          const failN = Number(data.failCount || 0);
+          const packetUrl = data.packet && data.packet.url ? String(data.packet.url) : "";
+          window.alert(
+            `Batch narratives: ${okN} draft(s) ok, ${failN} failed. Drafts need human review before payer submit.`
+          );
+          try {
+            sessionStorage.setItem(
+              "nr2-apex-narrative-seed",
+              JSON.stringify({
+                claimIds: ids,
+                claimId: ids[0],
+                bulkAppeal: true,
+                batchNarrative: true,
+                batchResults: data.results || [],
+                packetUrl,
+              })
+            );
+          } catch (_err) {
+            /* ignore */
+          }
+          if (packetUrl) {
+            window.open(packetUrl, "_blank", "noopener");
+          }
+          loadPage("narratives");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
+        } finally {
+          genBtn.disabled = false;
+        }
+      });
+    }
   }
 
   function wireAttachmentDropzone(root) {
@@ -3921,14 +4606,80 @@
     document.body.classList.remove("apex-claim-drawer-open");
   }
 
-  async function openClaimDrawer(claimId) {
+  /** REC-009: push focused claim into HAL session context (DesktopBridge or HTTP). */
+  function syncHalVoiceSessionContext(payload) {
+    const body = payload && typeof payload === "object" ? payload : {};
+    try {
+      const bridge = typeof DesktopBridge !== "undefined" ? DesktopBridge : null;
+      if (bridge && typeof bridge.updateHalSessionContext === "function") {
+        bridge.updateHalSessionContext(body).catch(() => {});
+        return;
+      }
+    } catch (_err) {
+      /* fall through to HTTP */
+    }
+    apexFetch("/api/hal-learning/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => {});
+  }
+
+  /** REC-009: focus claim for voice/narrative carry without requiring manual lock. */
+  function setFocusedClaimForVoice(claimId, extras) {
     const id = String(claimId || "").trim();
     if (!id) return;
+    const extra = extras && typeof extras === "object" ? extras : {};
     try {
       sessionStorage.setItem("nr2-apex-focused-claim", id);
+      sessionStorage.setItem(
+        "nr2-apex-voice-carry",
+        JSON.stringify({
+          claimId: id,
+          voiceCarry: true,
+          timestamp: Date.now(),
+          payer: String(extra.payer || ""),
+          patientName: String(extra.patientName || ""),
+        })
+      );
     } catch (_err) {
       /* ignore */
     }
+    syncHalVoiceSessionContext({
+      claimId: id,
+      page: String(extra.page || currentPage || ""),
+      topic: String(extra.topic || "voice_carry"),
+      payer: String(extra.payer || ""),
+    });
+  }
+
+  function writeNarrativeVoiceSeed(seed) {
+    const base = seed && typeof seed === "object" ? seed : {};
+    const claimId = String(base.claimId || "").trim();
+    const payload = Object.assign({}, base, {
+      claimId,
+      voiceCarry: true,
+      timestamp: Date.now(),
+    });
+    try {
+      sessionStorage.setItem("nr2-apex-narrative-seed", JSON.stringify(payload));
+    } catch (_err) {
+      /* ignore */
+    }
+    if (claimId) {
+      setFocusedClaimForVoice(claimId, {
+        page: String(base.page || "claims"),
+        topic: String(base.topic || "narrative_generation"),
+        payer: String(base.payer || ""),
+        patientName: String(base.patientName || ""),
+      });
+    }
+  }
+
+  async function openClaimDrawer(claimId) {
+    const id = String(claimId || "").trim();
+    if (!id) return;
+    setFocusedClaimForVoice(id, { page: "claims", topic: "claim_focus" });
     closeClaimDrawer();
     const drawer = document.createElement("aside");
     drawer.id = "apex-claim-drawer";
@@ -4219,15 +4970,14 @@
           } catch (_err) {
             /* continue to narratives */
           }
-          try {
-            sessionStorage.setItem(
-              "nr2-apex-narrative-seed",
-              JSON.stringify({ claimId, patientName, voiceCarry: true })
-            );
-            sessionStorage.setItem("nr2-apex-focused-claim", claimId);
-          } catch (_err) {
-            /* ignore */
-          }
+          const payer = (card && card.getAttribute("data-payer")) || "";
+          writeNarrativeVoiceSeed({
+            claimId,
+            patientName,
+            payer,
+            page: "claims",
+            topic: "narrative_generation",
+          });
           loadPage("narratives");
           return;
         }
@@ -4260,19 +5010,48 @@
     });
     const batch = root.querySelector('[data-action="batch-narratives"]');
     if (batch) {
-      batch.addEventListener("click", () => {
+      batch.addEventListener("click", async () => {
         const ids = Array.from(root.querySelectorAll("[data-batch-claim]:checked")).map((el) => el.value);
-        if (ids.length) {
+        if (!ids.length) {
+          window.alert("Select at least one claim.");
+          return;
+        }
+        const consent = window.confirm(
+          `Generate appeal drafts for ${ids.length} selected claim(s)? Requires operator consent. Drafts need human review — no SoftDent write-back.`
+        );
+        if (!consent) return;
+        try {
+          const res = await apexFetch(`${config.apiBase}/narratives/batch-generate`, {
+            method: "POST",
+            body: JSON.stringify({ claimIds: ids, type: "appeal", operatorConsent: true }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            window.alert(data.error || `Batch generate failed (HTTP ${res.status})`);
+            return;
+          }
           try {
             sessionStorage.setItem(
               "nr2-apex-narrative-seed",
-              JSON.stringify({ claimIds: ids, claimId: ids[0], bulkAppeal: true, batchNarrative: true })
+              JSON.stringify({
+                claimIds: ids,
+                claimId: ids[0],
+                bulkAppeal: true,
+                batchNarrative: true,
+                batchResults: data.results || [],
+                packetUrl: (data.packet && data.packet.url) || "",
+              })
             );
           } catch (_err) {
             /* ignore */
           }
+          if (data.packet && data.packet.url) {
+            window.open(String(data.packet.url), "_blank", "noopener");
+          }
+          loadPage("narratives");
+        } catch (err) {
+          window.alert(String((err && err.message) || err));
         }
-        loadPage("claims/batch");
       });
     }
   }
@@ -4397,6 +5176,53 @@
     });
   }
 
+  const HAL_SPINE_IDS = new Set(["hal-import-health", "hal-program-posture", "hal-ai-insight"]);
+
+  function wireHalSpineTile(root, spec) {
+    if (!root || root.dataset.wiredHalSpine === "1") return;
+    root.dataset.wiredHalSpine = "1";
+    root.classList.add("apex-hal-spine-tile");
+    root.setAttribute("tabindex", "0");
+    root.setAttribute("role", "button");
+    const label = String((spec && (spec.label || spec.id)) || "widget");
+    root.setAttribute("aria-label", `Ask HAL about ${label}`);
+    let foot = root.querySelector("[data-hal-spine-actions]");
+    if (!foot) {
+      foot = document.createElement("div");
+      foot.className = "apex-hal-spine-actions";
+      foot.setAttribute("data-hal-spine-actions", "1");
+      foot.innerHTML = `<button type="button" class="apex-btn apex-btn--small apex-btn--primary" data-hal-spine-ask>Ask HAL</button>
+        <button type="button" class="apex-btn apex-btn--small" data-hal-spine-focus>Highlight</button>`;
+      root.appendChild(foot);
+    }
+    const ask = () => askHalAboutWidget(spec || {});
+    const focusOnly = () =>
+      runHalBoardActions([
+        { type: "focus_widget", widgetId: String((spec && spec.id) || "") },
+        { type: "highlight_widget", widgetId: String((spec && spec.id) || ""), ms: 4000 },
+        {
+          type: "set_status_banner",
+          message: String((spec && (spec.message || spec.label)) || label),
+          hint: String((spec && spec.hint) || "HAL spine"),
+          tone: String((spec && spec.status) || "") === "empty" ? "warn" : "ok",
+        },
+      ]);
+    foot.querySelector("[data-hal-spine-ask]")?.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      ask();
+    });
+    foot.querySelector("[data-hal-spine-focus]")?.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      focusOnly();
+    });
+    root.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        ask();
+      }
+    });
+  }
+
   function wireHalSaidRemember(root) {
     if (!root || root.dataset.wiredRemember === "1") return;
     const form = root.querySelector("[data-hal-remember-form]");
@@ -4432,11 +5258,7 @@
     if (!id) return;
     const tile = document.querySelector(`[data-claim-id="${CSS.escape ? CSS.escape(id) : id.replace(/"/g, "")}"]`);
     if (tile) {
-      try {
-        sessionStorage.setItem("nr2-apex-focused-claim", id);
-      } catch (_err) {
-        /* ignore */
-      }
+      setFocusedClaimForVoice(id, { page: "claims", topic: "focus_claim_tile" });
       tile.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       tile.classList.add("apex-hal-highlight");
       setTimeout(() => tile.classList.remove("apex-hal-highlight"), 4000);
@@ -4446,24 +5268,6 @@
         shelf.classList.add("apex-hal-highlight");
         setTimeout(() => shelf.classList.remove("apex-hal-highlight"), 4000);
       }
-    }
-  }
-
-  function toggleFocus(el) {
-    if (!el) return;
-    const open = document.querySelector(".apex-widget.is-focused");
-    if (open && open !== el) open.classList.remove("is-focused");
-    const on = el.classList.toggle("is-focused");
-    document.body.classList.toggle("apex-focus-open", on);
-    if (on) {
-      const esc = (ev) => {
-        if (ev.key === "Escape") {
-          el.classList.remove("is-focused");
-          document.body.classList.remove("apex-focus-open");
-          document.removeEventListener("keydown", esc);
-        }
-      };
-      document.addEventListener("keydown", esc);
     }
   }
 
@@ -4494,6 +5298,105 @@
     recalc();
   }
 
+  function persistHalHistoryEntry(role, text) {
+    const body = String(text == null ? "" : text).trim();
+    if (!body || body === "Thinking…") return;
+    const cleaned = role === "user" ? "operator" : String(role || "hal");
+    apexFetch(`${config.apiBase}/hal/history-append`, {
+      method: "POST",
+      body: JSON.stringify({ role: cleaned, text: body }),
+    }).catch(() => {});
+  }
+
+  function halSubChatLogEl() {
+    const stageEl = stage();
+    return (
+      (stageEl && stageEl.querySelector(".apex-hal-rail [data-hal-messages]")) ||
+      document.querySelector(".apex-stage--hal-sub [data-hal-messages]") ||
+      document.querySelector("[data-hal-messages]")
+    );
+  }
+
+  function askHalOnSubpage(query) {
+    const q = String(query || "").trim();
+    if (!q) return;
+    const logEl = halSubChatLogEl();
+    if (logEl && currentPage === "hal" && currentSub) {
+      askHal(q, logEl);
+      const rail = logEl.closest(".apex-hal-rail");
+      if (rail && typeof rail.scrollIntoView === "function") {
+        rail.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+      return;
+    }
+    try {
+      sessionStorage.setItem("nr2-apex-hal-seed", q);
+    } catch (_err) {
+      /* optional */
+    }
+    loadPage("hal");
+  }
+
+  function wireHalHistoryFeed(root) {
+    if (!root || root.dataset.halHistWired === "1") return;
+    root.dataset.halHistWired = "1";
+    const feed = root.querySelector("[data-hal-hist-feed]");
+    root.querySelectorAll("[data-hal-hist-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const filter = btn.getAttribute("data-hal-hist-filter") || "all";
+        root.querySelectorAll("[data-hal-hist-filter]").forEach((b) => b.classList.toggle("is-active", b === btn));
+        if (!feed) return;
+        feed.querySelectorAll("[data-hal-hist-role]").forEach((row) => {
+          const role = row.getAttribute("data-hal-hist-role") || "";
+          row.hidden = filter !== "all" && role !== filter;
+        });
+      });
+    });
+    root.querySelectorAll("[data-hal-replay]").forEach((btn) => {
+      btn.addEventListener("click", () => askHalOnSubpage(btn.getAttribute("data-hal-replay") || ""));
+    });
+    root.querySelectorAll("[data-hal-ask]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const text = btn.getAttribute("data-hal-ask") || "";
+        askHalOnSubpage(`Follow up on this HAL reply: ${text}`);
+      });
+    });
+    root.querySelectorAll("[data-hal-copy]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const text = btn.getAttribute("data-hal-copy") || "";
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.textContent = "Copied";
+          setTimeout(() => {
+            btn.textContent = "Copy";
+          }, 1600);
+        } catch (_err) {
+          /* ignore */
+        }
+      });
+    });
+  }
+
+  function wireHalSysConsole(root) {
+    if (!root || root.dataset.halLogWired === "1") return;
+    root.dataset.halLogWired = "1";
+    const consoleEl = root.querySelector("[data-hal-log-console]");
+    root.querySelectorAll("[data-hal-log-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const filter = btn.getAttribute("data-hal-log-filter") || "all";
+        root.querySelectorAll("[data-hal-log-filter]").forEach((b) => b.classList.toggle("is-active", b === btn));
+        if (!consoleEl) return;
+        consoleEl.querySelectorAll("[data-hal-log-level]").forEach((row) => {
+          const level = row.getAttribute("data-hal-log-level") || "";
+          row.hidden = filter !== "all" && level !== filter;
+        });
+      });
+    });
+    root.querySelectorAll("[data-hal-ask]").forEach((btn) => {
+      btn.addEventListener("click", () => askHalOnSubpage(btn.getAttribute("data-hal-ask") || ""));
+    });
+  }
+
   function appendHalMessage(logEl, role, text, opts) {
     if (!logEl) return;
     const persist = !(opts && opts.skipPersist);
@@ -4506,6 +5409,13 @@
     const content = document.createElement("div");
     content.className = "apex-hal-chat__msg-text";
     content.textContent = text == null ? "" : String(text);
+    if (
+      typeof HalCore !== "undefined" &&
+      typeof HalCore.applyCarcBriefDomStyle === "function" &&
+      HalCore.applyCarcBriefDomStyle(content, text, opts && opts.intent)
+    ) {
+      /* monospace CARC brief applied */
+    }
     row.appendChild(content);
 
     if (role === "hal" || role === "system") {
@@ -4554,6 +5464,7 @@
       if (halTranscript.length > HAL_TRANSCRIPT_MAX) {
         halTranscript.splice(0, halTranscript.length - HAL_TRANSCRIPT_MAX);
       }
+      persistHalHistoryEntry(role, text);
     }
   }
 
@@ -4618,6 +5529,7 @@
     for (let i = halTranscript.length - 1; i >= 0; i -= 1) {
       if (halTranscript[i].role === "hal" && halTranscript[i].text === "Thinking…") {
         halTranscript[i] = { role: "hal", text };
+        persistHalHistoryEntry("hal", text);
         return;
       }
     }
@@ -4625,6 +5537,7 @@
     if (halTranscript.length > HAL_TRANSCRIPT_MAX) {
       halTranscript.splice(0, halTranscript.length - HAL_TRANSCRIPT_MAX);
     }
+    persistHalHistoryEntry("hal", text);
   }
 
   function appendHalReceipt(logEl, actions, results) {
@@ -4692,20 +5605,43 @@
           }
           results.push(id ? `refresh_widget:${id}` : "refresh_widget");
         } else if (type === "focus_widget" || type === "highlight_widget") {
+          // Scroll+highlight only — widget focus/enlarge mode removed.
           const id = String(action.widgetId || "").trim();
           if (!id) continue;
-          // Allow navigate to settle
+          // HAL spine alias: stay on HAL and use live tile ids
+          const spineAlias =
+            id === "import-health-monitor"
+              ? "hal-import-health"
+              : id === "hal-structured-remember"
+                ? "hal-program-posture"
+                : id;
+          const targetId = HAL_SPINE_IDS.has(id) || HAL_SPINE_IDS.has(spineAlias) ? spineAlias : id;
+          if (HAL_SPINE_IDS.has(targetId) && currentPage !== "hal") {
+            // Silent: never wipe an in-flight HAL composer with a full remount.
+            await loadPage("hal", { silent: true });
+            await new Promise((r) => setTimeout(r, 120));
+          }
           await new Promise((r) => setTimeout(r, 80));
-          const el = findWidgetEl(id);
+          const el = findWidgetEl(targetId);
           if (el) {
             el.scrollIntoView({ behavior: "smooth", block: "center" });
-            if (type === "focus_widget") toggleFocus(el);
-            el.classList.add("apex-hal-highlight");
+            el.classList.add("apex-hal-highlight", "apex-hal-spine-active");
+            document.querySelectorAll(".apex-hal-spine-active").forEach((node) => {
+              if (node !== el) node.classList.remove("apex-hal-spine-active");
+            });
             const ms = Number(action.ms) || 3500;
             setTimeout(() => el.classList.remove("apex-hal-highlight"), ms);
-            results.push(`${type}:${id}`);
+            results.push(`${type}:${targetId}`);
+            if (type === "focus_widget" && HAL_SPINE_IDS.has(targetId)) {
+              const meta = metaEl();
+              if (meta) {
+                const label = el.querySelector(".apex-widget-label")?.textContent || targetId;
+                meta.textContent = `HAL · focused ${label.trim()}`;
+                meta.classList.add("is-live");
+              }
+            }
           }
-          const bucketAlias = id.match(/^claims-aging-(30|60|90)$/);
+          const bucketAlias = targetId.match(/^claims-aging-(30|60|90)$/);
           if (bucketAlias && type === "focus_widget") {
             const board = findWidgetEl("claims-kanban-board");
             if (board) applyKanbanFilter(board, `bucket-${bucketAlias[1]}`);
@@ -4793,7 +5729,6 @@
           const el = findWidgetEl("claims-aging-exposure") || findWidgetEl(`claims-aging-${bucket}`);
           if (el) {
             el.scrollIntoView({ behavior: "smooth", block: "center" });
-            toggleFocus(el);
             el.classList.add("apex-hal-highlight");
             setTimeout(() => el.classList.remove("apex-hal-highlight"), 4000);
           }
@@ -4832,14 +5767,11 @@
           const focused = document.querySelector(".apex-claim-card.apex-hal-highlight, [data-claim-card].is-focused");
           if (!cid && focused) cid = focused.getAttribute("data-claim-id") || "";
           if (cid) {
-            try {
-              sessionStorage.setItem(
-                "nr2-apex-narrative-seed",
-                JSON.stringify({ claimId: cid, voiceCarry: true })
-              );
-            } catch (_err) {
-              /* ignore */
-            }
+            writeNarrativeVoiceSeed({
+              claimId: cid,
+              page: "narratives",
+              topic: "voice_carry",
+            });
             if (currentPage !== "narratives") await loadPage("narratives");
             results.push(`narrative_carry:${cid}`);
           } else {
@@ -4878,14 +5810,21 @@
     const q = String(query || "").trim();
     if (!q) return;
     if (!logEl) {
-      await loadPage("hal");
-      const chat = document.querySelector("[data-hal-messages]");
+      // Prefer the live composer — remounting HAL here wiped mid-ask (looked like refresh).
+      let chat = document.querySelector("[data-hal-messages]");
+      if (!chat) {
+        await loadPage("hal");
+        chat = document.querySelector("[data-hal-messages]");
+      }
       if (chat) askHal(q, chat);
       return;
     }
+    const chatRoot =
+      logEl.closest(".apex-widget--hal-chat") || logEl.closest("[data-hal-chat]") || document;
     appendHalMessage(logEl, "user", q);
     appendHalMessage(logEl, "hal", "Thinking…");
     const pending = logEl.lastElementChild;
+    setHalChatBusyUi(chatRoot, true);
     if (window.ApexHal && typeof window.ApexHal.setHeaderStatus === "function") {
       window.ApexHal.setHeaderStatus("busy", "HAL Busy");
     }
@@ -4907,74 +5846,134 @@
         board = null;
       }
 
-      if (board && board.handled && Array.isArray(board.actions) && board.actions.length) {
-        await runHalBoardActions(board.actions);
+      // Deterministic board reply wins over LLM — including replies with no actions.
+      if (board && board.handled) {
+        let boardResults = null;
+        let actions = Array.isArray(board.actions) ? board.actions.slice() : [];
+        // Chat box must not leave the HAL page unless the user explicitly asked to navigate.
+        // (Board heuristics like "are imports…" used to force #financial and felt like a refresh.)
+        const wantsNav = /\b(open|go to|navigate|switch to|take me to|show (?:me )?(?:the )?(?:page|financial|softdent|claims|taxes|a\/?r|quickbooks))\b/i.test(
+          q
+        );
+        if (!wantsNav) {
+          // Stay on HAL chat: no navigate / remount / widget-wide refresh wiping the composer.
+          actions = actions.filter(
+            (a) =>
+              !(
+                a &&
+                (a.type === "navigate" ||
+                  a.type === "refresh_page" ||
+                  a.type === "refresh_widget")
+              )
+          );
+        }
+        if (actions.length) {
+          boardResults = await runHalBoardActions(actions);
+        }
         const reply = String(board.reply || "Board updated from imports.");
         if (pending) {
           finalizeHalPending(pending, reply);
         } else appendHalMessage(logEl, "hal", reply);
+        if (boardResults) appendHalReceipt(logEl, actions, boardResults);
         if (window.ApexHalBrain && typeof window.ApexHalBrain.setState === "function") {
           window.ApexHalBrain.setState("reply");
         }
         return;
       }
 
-      // 2) Conversational HAL — Phase I0 orchestrator when flagged; else evaluate-query
+      // 2) Conversational HAL — Phase I0 orchestrator when flagged; else stream evaluate-query
       const useOrch = await refreshOrchestratorEnabled();
-      const chatUrl = useOrch ? `${config.apiBase}/hal/orchestrate` : config.halChatEndpoint;
-      const chatBody = useOrch
-        ? {
-            query: q,
-            page: currentPage,
-            shiftContext: {
-              page: currentPage,
-              boardHint: board && board.reply ? board.reply : undefined,
-              honesty: "Do not invent financial dollar amounts. Prefer import-backed facts.",
-            },
-          }
-        : {
-            query: q,
-            lane: "chat8b",
-            shiftContext: {
-              page: currentPage,
-              boardHint: board && board.reply ? board.reply : undefined,
-              honesty: "Do not invent financial dollar amounts. Prefer import-backed facts.",
-            },
-          };
-      const res = await apexFetch(chatUrl, {
-        method: "POST",
-        body: JSON.stringify(chatBody),
-      });
-      const data = await res.json().catch(() => ({}));
       let reply = "";
-      if (data && (data.text || data.answer || data.reply)) {
-        reply = String(data.text || data.answer || data.reply);
-        if (useOrch && data.lane) {
-          reply = `${reply}\n\n— lane: ${data.lane}${data.classification && data.classification.reason ? ` (${data.classification.reason})` : ""}${
-            data.structured ? " · structured insight" : data.insightError ? ` · insight: ${data.insightError}` : ""
-          }`;
-        }
-        if (useOrch && data.structured && data.insight && currentPage === "hal") {
+      const streamAbort = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const pendingTextEl = pending && pending.querySelector ? pending.querySelector(".apex-hal-chat__msg-text") : null;
+      if (pendingTextEl) {
+        pendingTextEl.classList.add("apex-hal-chat__msg-text--streaming");
+        pendingTextEl.textContent = "HAL is typing…";
+      }
+
+      if (!useOrch && window.DesktopBridge && typeof DesktopBridge.evaluateHalQuery === "function") {
+        // Phase 3 TTFT: progressive SSE via /api/v1/hal/stream-sse
+        let streamRenderAt = 0;
+        const data = await DesktopBridge.evaluateHalQuery({
+          query: q,
+          lane: "chat8b",
+          stream: true,
+          signal: streamAbort ? streamAbort.signal : undefined,
+          shiftContext: {
+            page: currentPage,
+            boardHint: board && board.reply ? board.reply : undefined,
+            honesty: "Do not invent financial dollar amounts. Prefer import-backed facts.",
+          },
+          onToken: (partial) => {
+            if (!pendingTextEl || !partial) return;
+            const now = Date.now();
+            if (now - streamRenderAt < 40) {
+              pendingTextEl.textContent = partial;
+              return;
+            }
+            streamRenderAt = now;
+            pendingTextEl.textContent = partial;
+            if (logEl && logEl.scrollTop != null) logEl.scrollTop = logEl.scrollHeight;
+          },
+        });
+        reply = String((data && (data.text || (data.message && data.message.content))) || "");
+        if (!reply && data && data.error) reply = `HAL unavailable: ${data.error}`;
+        if (!reply) reply = "HAL returned no text for that query.";
+      } else {
+        const chatUrl = useOrch ? `${config.apiBase}/hal/orchestrate` : config.halChatEndpoint;
+        const chatBody = useOrch
+          ? {
+              query: q,
+              page: currentPage,
+              shiftContext: {
+                page: currentPage,
+                boardHint: board && board.reply ? board.reply : undefined,
+                honesty: "Do not invent financial dollar amounts. Prefer import-backed facts.",
+              },
+            }
+          : {
+              query: q,
+              lane: "chat8b",
+              shiftContext: {
+                page: currentPage,
+                boardHint: board && board.reply ? board.reply : undefined,
+                honesty: "Do not invent financial dollar amounts. Prefer import-backed facts.",
+              },
+            };
+        const res = await apexFetch(chatUrl, {
+          method: "POST",
+          body: JSON.stringify(chatBody),
+          signal: streamAbort ? streamAbort.signal : undefined,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data && (data.text || data.answer || data.reply)) {
+          reply = String(data.text || data.answer || data.reply);
+          if (useOrch && data.lane) {
+            reply = `${reply}\n\n— lane: ${data.lane}${data.classification && data.classification.reason ? ` (${data.classification.reason})` : ""}${
+              data.structured ? " · structured insight" : data.insightError ? ` · insight: ${data.insightError}` : ""
+            }`;
+          }
+          if (useOrch && data.structured && data.insight && currentPage === "hal") {
+            try {
+              sessionStorage.setItem("nr2-apex-last-insight", JSON.stringify(data.insight));
+            } catch (_e) {
+              /* ignore */
+            }
+          }
+        } else if (data && data.error) {
+          const reason = data.reason ? ` (${data.reason})` : "";
+          reply = `HAL unavailable: ${data.error}${reason}`;
+        } else if (!res.ok) {
+          let reason = "";
           try {
-            // Soft-refresh HAL page so ai-insight widget can pick up last insight via session
-            sessionStorage.setItem("nr2-apex-last-insight", JSON.stringify(data.insight));
+            reason = data && data.reason ? ` · ${data.reason}` : "";
           } catch (_e) {
             /* ignore */
           }
+          reply = `HAL request failed (HTTP ${res.status}${reason}). Hard-refresh the page if this persists.`;
+        } else {
+          reply = "HAL returned no text for that query.";
         }
-      } else if (data && data.error) {
-        const reason = data.reason ? ` (${data.reason})` : "";
-        reply = `HAL unavailable: ${data.error}${reason}`;
-      } else if (!res.ok) {
-        let reason = "";
-        try {
-          reason = data && data.reason ? ` · ${data.reason}` : "";
-        } catch (_e) {
-          /* ignore */
-        }
-        reply = `HAL request failed (HTTP ${res.status}${reason}). Hard-refresh the page if this persists.`;
-      } else {
-        reply = "HAL returned no text for that query.";
       }
       // Optional trailing action marker from model (ignored if invents dollars — we only allow known types)
       const marker = reply.match(/<!--HAL_ACTIONS:(\[[\s\S]*?\])-->/);
@@ -5004,12 +6003,25 @@
               "run_tool",
             ].includes(a.type)
           );
-          if (safe.length) await runHalBoardActions(safe);
+          const wantsNav = /\b(open|go to|navigate|switch to|take me to)\b/i.test(q);
+          const chatSafe = wantsNav
+            ? safe
+            : safe.filter(
+                (a) =>
+                  !(
+                    a &&
+                    (a.type === "navigate" ||
+                      a.type === "refresh_page" ||
+                      a.type === "refresh_widget")
+                  )
+              );
+          if (chatSafe.length) await runHalBoardActions(chatSafe);
         } catch (_err) {
           /* ignore bad marker */
         }
         reply = reply.replace(/<!--HAL_ACTIONS:\[[\s\S]*?\]-->/, "").trim();
       }
+      if (pendingTextEl) pendingTextEl.classList.remove("apex-hal-chat__msg-text--streaming");
       if (pending) {
         finalizeHalPending(pending, reply);
       } else appendHalMessage(logEl, "hal", reply);
@@ -5018,8 +6030,11 @@
       }
     } catch (err) {
       const msg = `HAL bridge error: ${String((err && err.message) || err)}`;
-      if (pending) finalizeHalPending(pending, msg);
-      else appendHalMessage(logEl, "hal", msg);
+      if (pending) {
+        const textEl = pending.querySelector && pending.querySelector(".apex-hal-chat__msg-text");
+        if (textEl) textEl.classList.remove("apex-hal-chat__msg-text--streaming");
+        finalizeHalPending(pending, msg);
+      } else appendHalMessage(logEl, "hal", msg);
       if (window.ApexHalBrain && typeof window.ApexHalBrain.setState === "function") {
         window.ApexHalBrain.setState("idle");
       }
@@ -5044,6 +6059,11 @@
       { label: "What should HAL learn?", query: "What would you like to learn?" },
       { label: "Tx plan data status", query: "Treatment planning data status" },
       { label: "Delta pay for D0274?", query: "How much will Delta Dental typically pay for D0274?" },
+      { label: "InsCo×ADA estimate status", query: "InsCo ADA estimate status" },
+      {
+        label: "Delta KS pay for D1110?",
+        query: "How much does Delta Dental of KS typically pay for D1110?",
+      },
       { label: "Dictate to findings", query: "dictate findings: clinical exam supports the billed procedure" },
       { label: "How to get SoftDent exports", query: "How do I get SoftDent exports?" },
       { label: "How to get QuickBooks exports", query: "How do I get QuickBooks exports?" },
@@ -5105,6 +6125,16 @@
       .replace(/</g, "&lt;");
   }
 
+  function wireHalChatAutoResize(input) {
+    if (!input) return;
+    const resize = () => {
+      input.style.height = "auto";
+      input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
+    };
+    input.addEventListener("input", resize);
+    resize();
+  }
+
   function wireHalChat(root) {
     const panel = root.querySelector("[data-hal-chat]");
     if (!panel || panel.dataset.wired === "1") return;
@@ -5115,13 +6145,69 @@
     const chips = panel.querySelector("[data-hal-chips]");
     restoreHalTranscript(logEl);
     loadHalSuggestionChips(chips, logEl);
+    wireHalChatAutoResize(input);
+
+    const submitAsk = () => {
+      if (!input) return;
+      const q = input.value;
+      input.value = "";
+      wireHalChatAutoResize(input);
+      askHal(q, logEl);
+      try {
+        input.focus();
+      } catch (_err) {
+        /* ignore */
+      }
+    };
+
     if (form && input) {
-      form.addEventListener("submit", (ev) => {
-        ev.preventDefault();
-        const q = input.value;
-        input.value = "";
-        askHal(q, logEl);
-      });
+      // Always preventDefault on form submit — Enter in WebView/IME can otherwise reload the page.
+      form.addEventListener(
+        "submit",
+        (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          submitAsk();
+        },
+        true
+      );
+      const sendBtn = panel.querySelector("[data-hal-send]");
+      if (sendBtn) {
+        sendBtn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          // Form submit handler also fires for type=submit; avoid double-send.
+          if (form.tagName === "FORM") return;
+          submitAsk();
+        });
+      }
+      // Enter sends; Shift+Enter inserts a newline; Ctrl/Cmd+Enter also sends
+      input.addEventListener(
+        "keydown",
+        (ev) => {
+          if (ev.key !== "Enter" || ev.isComposing) return;
+          if (ev.shiftKey) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          // Prefer native form submit so one path owns send (and preventDefault).
+          if (form.tagName === "FORM" && typeof form.requestSubmit === "function") {
+            form.requestSubmit();
+            return;
+          }
+          submitAsk();
+        },
+        true
+      );
+      try {
+        const seed = sessionStorage.getItem("nr2-apex-hal-seed");
+        if (seed) {
+          sessionStorage.removeItem("nr2-apex-hal-seed");
+          input.value = seed;
+          input.focus();
+        }
+      } catch (_err) {
+        /* optional */
+      }
     }
   }
 
@@ -5149,6 +6235,27 @@
     return true;
   }
 
+  function mountSpecsStacked(host, specs) {
+    if (!host) return;
+    host.classList.add("apex-stage-stack");
+    (specs || []).forEach((spec, idx) => {
+      if (!spec) return;
+      const widget = new Widget(spec);
+      widgets.set(widget.id, widget);
+      const el = widget.render(idx);
+      if (!el) return;
+      el.classList.remove("tile-100", "tile-50", "tile-33");
+      el.classList.add("apex-widget--stack");
+      if (spec.layout && el.style) {
+        const w = Number(spec.layout.w);
+        if (w >= 12) el.classList.add("apex-inst--full");
+        else if (w >= 8) el.classList.add("apex-inst--xl");
+        else if (w >= 6) el.classList.add("apex-inst--l");
+      }
+      host.appendChild(el);
+    });
+  }
+
   function softRenderHalMain(list) {
     const root = stage();
     if (!root) return false;
@@ -5173,11 +6280,7 @@
     if (window.ApexHalBrain && typeof window.ApexHalBrain.mount === "function") {
       window.ApexHalBrain.mount(main);
     }
-    mainSpecs.forEach((spec, idx) => {
-      const widget = new Widget(spec);
-      widgets.set(widget.id, widget);
-      main.appendChild(widget.render(idx));
-    });
+    mountSpecsStacked(main, mainSpecs);
     if (chatSpec) {
       const existing = Array.from(widgets.values()).find((w) => w && w.type === "hal-chat");
       if (existing) {
@@ -5203,39 +6306,45 @@
     widgets.clear();
 
     const isHal = currentPage === "hal";
+    const isHalChat = isHal && !currentSub;
+    const isHalSub = isHal && !!currentSub;
     const specs = list || [];
-    const chatSpec = isHal ? specs.find((s) => s && s.type === "hal-chat") : null;
+    const chatSpec =
+      isHalChat || isHalSub ? specs.find((s) => s && s.type === "hal-chat") : null;
     const mainSpecs = chatSpec ? specs.filter((s) => s !== chatSpec) : specs;
 
-    if (isHal && chatSpec) {
-      root.className = "apex-stage apex-stage--hal";
+    if ((isHalChat || isHalSub) && chatSpec) {
+      root.className = isHalSub
+        ? "apex-stage apex-stage--hal apex-stage--hal-sub"
+        : "apex-stage apex-stage--hal";
+      root.dataset.page = "hal";
+      if (currentSub) root.dataset.sub = currentSub;
+      else delete root.dataset.sub;
       const main = document.createElement("div");
-      main.className = "apex-mosaic apex-hal-main";
+      main.className = isHalSub
+        ? "apex-hal-main apex-stage-stack apex-hal-main--sub"
+        : "apex-hal-main apex-stage-stack";
       const rail = document.createElement("aside");
       rail.className = "apex-hal-rail";
       root.appendChild(main);
       root.appendChild(rail);
 
-      if (window.ApexHalBrain && typeof window.ApexHalBrain.mount === "function") {
+      if (isHalChat && window.ApexHalBrain && typeof window.ApexHalBrain.mount === "function") {
         window.ApexHalBrain.mount(main);
       }
 
-      mainSpecs.forEach((spec, idx) => {
-        const widget = new Widget(spec);
-        widgets.set(widget.id, widget);
-        main.appendChild(widget.render(idx));
-      });
+      mountSpecsStacked(main, mainSpecs);
       const chatWidget = new Widget(chatSpec);
       widgets.set(chatWidget.id, chatWidget);
       rail.appendChild(chatWidget.render(mainSpecs.length));
-      if (window.ApexMotion && typeof window.ApexMotion.enableHoloTilt === "function") {
-        window.ApexMotion.enableHoloTilt(main);
-      }
+      // No holo-tilt on HAL surfaces — tilt read as wobble/refresh.
       return;
     }
 
-    root.className = "apex-stage apex-mosaic";
+    root.className = "apex-stage apex-stage-stack";
     root.dataset.page = currentPage;
+    if (currentSub) root.dataset.sub = currentSub;
+    else delete root.dataset.sub;
     let orderedSpecs = specs;
     try {
       if (window.Nr2DashboardLayout && typeof window.Nr2DashboardLayout.orderSpecs === "function") {
@@ -5250,18 +6359,7 @@
         }
       }
     } catch (_) {}
-    orderedSpecs.forEach((spec, idx) => {
-      const widget = new Widget(spec);
-      widgets.set(widget.id, widget);
-      const el = widget.render(idx);
-      if (spec && spec.layout && el && el.style) {
-        const w = Number(spec.layout.w);
-        if (w >= 12) el.classList.add("apex-inst--full");
-        else if (w >= 8) el.classList.add("apex-inst--xl");
-        else if (w >= 6) el.classList.add("apex-inst--l");
-      }
-      root.appendChild(el);
-    });
+    mountSpecsStacked(root, orderedSpecs);
     if (window.ApexMotion && typeof window.ApexMotion.enableHoloTilt === "function") {
       window.ApexMotion.enableHoloTilt(root);
     }
@@ -5294,6 +6392,12 @@
           .toLowerCase()
           .replace(/[^a-z0-9\-]/g, "")
       : null;
+    // hal-10621: Narratives/Documents/Library → Content hub (keep legacy hashes)
+    if (CONTENT_ALIASES[parent] && !sub) {
+      const alias = CONTENT_ALIASES[parent];
+      parent = alias.parent;
+      sub = alias.sub;
+    }
     if (!PARENT_PAGES.has(parent)) {
       parent = "financial";
       sub = null;
@@ -5360,7 +6464,8 @@
         window.ApexMotion.triggerGlitch(el);
       }
     }
-    if (window.ApexMotion && typeof window.ApexMotion.flashStage === "function") {
+    // Silent polls must not flash the stage — that felt like a full page refresh on HAL chat.
+    if (!silent && window.ApexMotion && typeof window.ApexMotion.flashStage === "function") {
       window.ApexMotion.flashStage();
     }
   }
@@ -5391,6 +6496,15 @@
     currentQuery = parsed.query && typeof parsed.query === "object" ? parsed.query : {};
     // Never wipe HAL chat while a reply is in flight (auto-refresh / nav race).
     if (halChatBusy && currentPage === "hal") silent = true;
+    // Once Ask HAL is mounted, never hard-remount the stage (looked like a full page refresh).
+    if (
+      currentPage === "hal" &&
+      !currentSub &&
+      !(opts && opts.force) &&
+      document.querySelector("[data-hal-chat]")
+    ) {
+      silent = true;
+    }
     setHash(currentPage, currentSub, currentQuery);
     setPageTitle(currentPage, currentSub, { silent });
     if (!silent) renderSubnav(currentPage, currentSub);
@@ -5401,14 +6515,17 @@
       btn.classList.toggle("active", btn.dataset.page === currentPage);
     });
 
-    // Interactive narratives workspace (not KPI mosaic)
-    if (currentPage === "narratives" && !currentSub) {
+    // Interactive narratives workspace (not KPI mosaic) — also Content → Narratives
+    if (
+      (currentPage === "narratives" && !currentSub) ||
+      (currentPage === "content" && currentSub === "narratives")
+    ) {
       if (refreshTimer) clearInterval(refreshTimer);
       if (window.ApexHalBrain && typeof window.ApexHalBrain.destroy === "function") {
         window.ApexHalBrain.destroy();
       }
       if (!silent || !window.ApexNarratives || !window.ApexNarratives.isActive()) {
-        root.className = "apex-stage apex-mosaic";
+        root.className = "apex-stage apex-stage-stack";
         root.innerHTML = '<div class="apex-status-msg">Loading narratives bridge…</div>';
         if (window.ApexNarratives && typeof window.ApexNarratives.mount === "function") {
           await window.ApexNarratives.mount(root);
@@ -5422,8 +6539,13 @@
     }
 
     if (!silent) {
-      root.className =
-        currentPage === "hal" && !currentSub ? "apex-stage apex-stage--hal" : "apex-stage apex-mosaic";
+      if (currentPage === "hal" && currentSub) {
+        root.className = "apex-stage apex-stage--hal apex-stage--hal-sub";
+      } else if (currentPage === "hal") {
+        root.className = "apex-stage apex-stage--hal";
+      } else {
+        root.className = "apex-stage apex-stage-stack";
+      }
       root.dataset.page = currentPage;
       if (currentSub) root.dataset.sub = currentSub;
       else delete root.dataset.sub;
@@ -5440,17 +6562,34 @@
 
     function applyWidgetPayload(payload, { fromCache }) {
       const list = (payload && payload.widgets) || [];
+      const chatComposerActive = (() => {
+        try {
+          if (halChatBusy) return true;
+          const ae = document.activeElement;
+          return !!(ae && ae.getAttribute && ae.getAttribute("data-hal-input") != null);
+        } catch (_err) {
+          return !!halChatBusy;
+        }
+      })();
+      const halChatMounted = currentPage === "hal" && !currentSub && !!document.querySelector("[data-hal-chat]");
       if (silent && widgets.size && patchWidgets(list)) {
         /* in-place — no flash */
+      } else if (silent && halChatMounted) {
+        // HAL chat is live: never softRenderHalMain (destroys neural core + spine and feels
+        // like a page refresh). Best-effort patch only; keep the composer DOM intact.
+        patchWidgets(list);
       } else if (silent && currentPage === "hal" && !currentSub) {
         // Never full-remount HAL on silent refresh — that wiped chat history on hover/timer races.
-        softRenderHalMain(list);
+        if (!chatComposerActive) softRenderHalMain(list);
+      } else if (silent && currentPage === "hal" && currentSub) {
+        // Keep History/System Logs + live rail; silent polls must not remount chat.
+        patchWidgets(list);
       } else if (silent) {
-        // Silent poll must never wipe the mosaic (instBoot looked like a full page refresh).
+        // Silent poll must never wipe the stage (instBoot looked like a full page refresh).
         // Keep current widgets; Sync / navigation still remount intentionally.
       } else {
         renderWidgets(list);
-        if (currentPage === "hal" && !currentSub) {
+        if (currentPage === "hal") {
           restoreHalTranscript(document.querySelector("[data-hal-messages]"));
         }
         root.classList.add("is-entering");
@@ -5463,13 +6602,26 @@
       setMeta(metaPayload, { silent });
     }
 
-    // Stale-while-revalidate: paint IndexedDB cache immediately on cold navigations.
-    if (!silent && idb && idb.loadWidgets) {
+    // Stale-while-revalidate: paint IndexedDB only when buildId matches live build
+    // (Moonshot cache coherence hal-10563 — drop pre-density crowded mosaics).
+    if (!silent && idb && (idb.loadWidgetsIfBuild || idb.loadWidgets)) {
       try {
-        const cached = await idb.loadWidgets(currentPage, currentSub, currentQuery);
+        const liveBuild =
+          ASSET_V ||
+          (typeof document !== "undefined" &&
+            document.documentElement.getAttribute("data-apex-version")) ||
+          "";
+        const cached = idb.loadWidgetsIfBuild
+          ? await idb.loadWidgetsIfBuild(currentPage, currentSub, currentQuery, liveBuild)
+          : await idb.loadWidgets(currentPage, currentSub, currentQuery);
         if (cached && cached.payload && Array.isArray(cached.payload.widgets)) {
-          applyWidgetPayload(cached.payload, { fromCache: true });
-          paintedFromCache = true;
+          const got = String((cached.payload && cached.payload.buildId) || "");
+          if (liveBuild && got && got !== liveBuild) {
+            if (idb.clearWidgets) await idb.clearWidgets(currentPage, currentSub, currentQuery);
+          } else {
+            applyWidgetPayload(cached.payload, { fromCache: true });
+            paintedFromCache = true;
+          }
         }
       } catch (_err) {
         /* cache optional */
@@ -5477,18 +6629,118 @@
     }
 
     try {
-      const res = await apexFetch(`${config.apiBase}/widgets/${encodeURIComponent(currentPage)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const payload = await res.json();
-      applyWidgetPayload(payload, { fromCache: false });
-      if (idb && idb.cacheWidgets) {
-        idb.cacheWidgets(currentPage, currentSub, currentQuery, payload).catch(() => {});
+      const widgetQs = new URLSearchParams();
+      if (currentSub) widgetQs.set("sub", currentSub);
+      if (currentQuery && currentQuery.id) widgetQs.set("id", String(currentQuery.id));
+      const widgetUrl = `${config.apiBase}/widgets/${encodeURIComponent(currentPage)}${
+        widgetQs.toString() ? `?${widgetQs.toString()}` : ""
+      }`;
+      const res = await apexFetch(widgetUrl);
+      if (!res.ok) {
+        const err = new Error(`HTTP ${res.status}`);
+        err.status = res.status;
+        throw err;
       }
-      setMeta(payload);
-      startAutoRefresh();
+      const payload = await res.json();
+      if (payload && payload.warming) {
+        // Moonshot import-cache KPIs SHOULD: progress + Retry-After-aware backoff
+        const fillPct = Number(payload.fillProgress || 0);
+        if (fillPct > 0 && fillPct < 100) {
+          console.info(
+            `[NR2] Fill progress for ${payload.fillPage || currentPage}: ${fillPct}%`
+          );
+        }
+        const metaWarm = metaEl();
+        if (metaWarm) {
+          metaWarm.textContent = `Warming · ${Number.isFinite(fillPct) ? fillPct : 0}% · empty ≠ $0`;
+          metaWarm.classList.add("is-live");
+        }
+        if (window.ApexHal && typeof window.ApexHal.setHeaderStatus === "function") {
+          window.ApexHal.setHeaderStatus(
+            "syncing",
+            `Warming ${Number.isFinite(fillPct) ? fillPct : 0}%`
+          );
+        }
+        // BuildId skew guard: if server build differs from UI chrome, nuke IDB and reload
+        if (
+          payload.buildId &&
+          window.NR2_BUILD_ID &&
+          payload.buildId !== window.NR2_BUILD_ID
+        ) {
+          console.warn(
+            `[NR2] Build skew detected: UI=${window.NR2_BUILD_ID} Server=${payload.buildId}. Purging cache.`
+          );
+          if (idb && idb.clearWidgets) {
+            idb
+              .clearWidgets(currentPage, currentSub, currentQuery)
+              .catch(() => {})
+              .finally(() => window.location.reload());
+          } else {
+            window.location.reload();
+          }
+          return; // Stop processing stale payload
+        }
+
+        // If we already have a live mosaic (esp. HAL chat), do not remount a warming stub —
+        // that wiped the composer and looked like a full page refresh on every Ask.
+        const hasLiveMosaic =
+          widgets.size > 0 &&
+          !Array.from(widgets.keys()).every((id) => String(id) === "warming-bridge");
+        if (hasLiveMosaic || paintedFromCache) {
+          // Keep current DOM; only schedule another silent poll.
+        } else if (!silent) {
+          applyWidgetPayload(payload, { fromCache: false });
+        }
+
+        warmingPollStreak += 1;
+
+        // Moonshot: base on server retryAfter (default 1s), 1→2→4… capped at 8s
+        const baseSec = Math.max(1, Number(payload.retryAfter) || 1);
+        const backoffMs = Math.min(baseSec * 1000 * Math.pow(2, warmingPollStreak - 1), 8000);
+
+        // Never hard-reload on warming streak — that refreshed the whole app mid-HAL chat.
+        // Cap the streak counter so backoff stays at 8s instead of growing forever.
+        if (warmingPollStreak >= WARMING_POLL_MAX) {
+          warmingPollStreak = WARMING_POLL_MAX;
+          console.warn("[NR2] Still warming after max polls; continuing soft retry (no reload)");
+        }
+        setTimeout(() => {
+          loadPage(formatApexHash(currentPage, currentSub, currentQuery), { silent: true }).catch(
+            (err) => {
+              if (err && err.status === 429) {
+                console.warn("[NR2] Widget 429; backoff active");
+              }
+            }
+          );
+        }, backoffMs);
+        return;
+      } else {
+        // Reset streak when warming resolves
+        warmingPollStreak = 0;
+        applyWidgetPayload(payload, { fromCache: false });
+        if (payload && !payload.fillFailed) {
+          if (idb && idb.cacheWidgets) {
+            idb.cacheWidgets(currentPage, currentSub, currentQuery, payload).catch(() => {});
+          }
+        }
+        setMeta(payload);
+        startAutoRefresh();
+      }
     } catch (err) {
+      const status = Number((err && err.status) || 0);
+      const msg = String((err && err.message) || err || "");
+      if (status === 429 || /HTTP 429/.test(msg)) {
+        warmingPollStreak += 1;
+        const backoffMs = Math.min(1000 * Math.pow(2, warmingPollStreak), 30000);
+        console.warn("[NR2] Widget 429; backoff active");
+        setTimeout(() => {
+          loadPage(formatApexHash(currentPage, currentSub, currentQuery), { silent: true });
+        }, backoffMs);
+        return;
+      }
+      warmingPollStreak = 0;
       if (!silent) {
-        root.className = "apex-stage apex-mosaic";
+        root.className = "apex-stage apex-stage-stack";
         root.innerHTML = `<div class="apex-status-msg is-error">Error loading data: ${String(
           (err && err.message) || err
         )}</div>`;
@@ -5541,8 +6793,13 @@
   async function triggerSync() {
     const header = document.getElementById("apex-header");
     if (header) header.classList.add("is-syncing");
+    const metaSync = metaEl();
+    if (metaSync) {
+      metaSync.textContent = "Sync · starting…";
+      metaSync.classList.add("is-live");
+    }
     if (window.ApexHal && typeof window.ApexHal.setHeaderStatus === "function") {
-      window.ApexHal.setHeaderStatus("syncing", "Syncing…");
+      window.ApexHal.setHeaderStatus("syncing", "Sync 5%…");
     }
     let syncNote = "";
     try {
@@ -5551,10 +6808,18 @@
         body: JSON.stringify({ page: currentPage, fullSync: true }),
       });
       const data = await res.json().catch(() => ({}));
+      const fillPct = Number(data && data.fillProgress);
+      if (Number.isFinite(fillPct) && fillPct >= 0) {
+        if (metaSync) metaSync.textContent = `Sync · ${fillPct}%`;
+        if (window.ApexHal && typeof window.ApexHal.setHeaderStatus === "function") {
+          window.ApexHal.setHeaderStatus("syncing", `Sync ${fillPct}%`);
+        }
+      }
       const fresh = data && data.freshness;
       if (fresh && fresh.message) syncNote = String(fresh.message);
       else if (data && data.loadedAt) syncNote = `Synced · ${data.loadedAt}`;
       if (data && data.ok === false) syncNote = data.error || "Sync error";
+      else if (!syncNote && data && data.status === "ok") syncNote = "Sync complete";
     } catch (_err) {
       syncNote = "Sync request failed — refreshing anyway";
     }
@@ -5568,26 +6833,50 @@
     if (window.ApexHal && typeof window.ApexHal.pollOnce === "function") {
       window.ApexHal.pollOnce({ showSuggest: true, forceSuggest: true });
     } else if (window.ApexHal && typeof window.ApexHal.setHeaderStatus === "function") {
-      window.ApexHal.setHeaderStatus("idle", "HAL Standby");
+      // Moonshot: do not force false Standby after sync — restore last known HAL status.
+      const st = (lastHalStatus && lastHalStatus.status) || "degraded";
+      const label =
+        (lastHalStatus && lastHalStatus.statusLabel) ||
+        (st === "degraded" ? "HAL Ready · Import Degraded" : "HAL Ready");
+      window.ApexHal.setHeaderStatus(st, label);
     }
   }
 
   function askHalFromBridge(text) {
     const q = String(text || "").trim();
     if (!q) return;
-    if (currentPage !== "hal") {
-      loadPage("hal").then(() => {
-        const logEl = document.querySelector("[data-hal-messages]");
-        askHal(q, logEl);
-      });
+    const logEl = document.querySelector("[data-hal-messages]");
+    if (currentPage === "hal" && logEl) {
+      askHal(q, logEl);
       return;
     }
-    const logEl = document.querySelector("[data-hal-messages]");
-    askHal(q, logEl);
+    // Navigate once when HAL chat is not mounted; do not remount over a live composer.
+    loadPage("hal").then(() => {
+      askHal(q, document.querySelector("[data-hal-messages]"));
+    });
   }
 
   function onHalStatus(data) {
     lastHalStatus = data;
+  }
+
+  function applyDensity(mode) {
+    const next = mode === "comfortable" ? "comfortable" : "compact";
+    document.documentElement.setAttribute("data-apex-density", next);
+    try {
+      localStorage.setItem(DENSITY_KEY, next);
+    } catch (_err) {
+      /* ignore */
+    }
+    const btn = document.getElementById("btn-density");
+    if (btn) {
+      btn.textContent = next === "comfortable" ? "Compact" : "Comfortable";
+      btn.title =
+        next === "comfortable"
+          ? "Switch to Compact density (default)"
+          : "Switch to Comfortable density";
+      btn.setAttribute("aria-pressed", next === "comfortable" ? "true" : "false");
+    }
   }
 
   function wireUi() {
@@ -5597,6 +6886,32 @@
     const printBtn = document.getElementById("btn-print");
     const refreshBtn = document.getElementById("btn-refresh");
     const askHal = document.getElementById("btn-ask-hal");
+    const densityBtn = document.getElementById("btn-density");
+    let savedDensity = "compact";
+    try {
+      // Density: compact default; comfortable is explicit opt-in
+      const stored = localStorage.getItem(DENSITY_KEY);
+      savedDensity = stored === "comfortable" ? "comfortable" : "compact";
+    } catch (_err) {
+      savedDensity = "compact";
+    }
+    applyDensity(savedDensity);
+    if (typeof window !== "undefined") {
+      window.__nr2AssertZeroScroll = function assertZeroScroll() {
+        // Mosaic/zero-scroll retired (hal-10622) — scrolling stages are allowed.
+        return { ok: true, skipped: "stack-layout" };
+      };
+      window.__nr2AssertKpiBudget = function assertKpiBudget(max) {
+        // KPI budget retired with free-stack redesign (hal-10623).
+        return { ok: true, skipped: "free-stack", count: 0, max: Number(max) || 0 };
+      };
+    }
+    if (densityBtn) {
+      densityBtn.addEventListener("click", () => {
+        const cur = document.documentElement.getAttribute("data-apex-density") || "compact";
+        applyDensity(cur === "comfortable" ? "compact" : "comfortable");
+      });
+    }
     if (printBtn) {
       printBtn.innerHTML = ICONS.print;
       printBtn.addEventListener("click", () => printPage());
@@ -5618,6 +6933,20 @@
       const hash = (location.hash || "").replace(/^#/, "").trim();
       const next = routeKey(currentPage, currentSub, currentQuery);
       if (hash && hash !== next) loadPage(hash);
+    });
+    // Optional keyboard j/k between strip widgets (Phase 5)
+    window.addEventListener("keydown", (ev) => {
+      if (ev.target && /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return;
+      if (ev.key !== "j" && ev.key !== "k") return;
+      const strips = Array.from(document.querySelectorAll("#apex-stage .apex-inst--strip, #apex-stage .apex-inst--s"));
+      if (!strips.length) return;
+      const active = document.activeElement;
+      let idx = strips.findIndex((el) => el === active || el.contains(active));
+      if (idx < 0) idx = ev.key === "j" ? -1 : 0;
+      const next = ev.key === "j" ? Math.min(strips.length - 1, idx + 1) : Math.max(0, idx - 1);
+      strips[next].setAttribute("tabindex", "-1");
+      strips[next].focus();
+      ev.preventDefault();
     });
   }
 

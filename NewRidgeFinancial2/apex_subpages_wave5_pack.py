@@ -128,6 +128,240 @@ def build_tax_calendar(reports: dict[str, Any], bundle: dict[str, Any]) -> list[
     return widgets
 
 
+def build_taxes_planning(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """Taxes · Planning subpage (hal-10562) — quarantined planning KPIs off main cockpit."""
+    del reports
+    widgets: list[dict[str, Any]] = [
+        _nav(
+            "Taxes · Planning",
+            "Owner / K-1 / quarterly / federal+KS estimates",
+            "Hash #taxes/planning · planning only · CPA review · never invent dollars.",
+        )
+    ]
+    try:
+        from tax_engine import build_tax_plan_from_bundle
+
+        plan = build_tax_plan_from_bundle(bundle) or {}
+    except Exception as exc:  # noqa: BLE001
+        widgets.append(
+            {
+                "id": "tax-planning-engine-error",
+                "type": "status",
+                "label": "Tax engine",
+                "size": "strip",
+                "status": "empty",
+                "message": "Unavailable",
+                "hint": str(exc)[:160],
+            }
+        )
+        return widgets
+
+    has_book = bool(plan.get("hasBookData"))
+    period = str(plan.get("periodLabel") or "")
+
+    def _pm(value: Any) -> float | None:
+        return _parse_money(value)
+
+    def _money(wid: str, label: str, value: float | None, hint: str) -> dict[str, Any]:
+        if value is None:
+            return {
+                "id": wid,
+                "type": "kpi",
+                "label": label,
+                "value": None,
+                "status": "empty",
+                "emptyMessage": "No data",
+                "hint": hint,
+                "collapseWhenEmpty": True,
+                "omitWhenEmpty": False,  # subpage may show honest empties as chips
+                "size": "s",
+                "keepEmpty": True,
+            }
+        return {
+            "id": wid,
+            "type": "kpi",
+            "label": label,
+            "value": float(value),
+            "unit": "money",
+            "hint": hint,
+            "size": "s",
+        }
+
+    if has_book:
+        widgets.append(
+            _money(
+                "tax-book-net",
+                "Book Net Income",
+                _pm(plan.get("bookNetIncome")),
+                f"From QuickBooks P&L import ({period or 'period unknown'}).",
+            )
+        )
+        widgets.append(
+            _money(
+                "tax-est-owner",
+                "Est. Owner Tax (planning)",
+                _pm(plan.get("totalOwnerTaxEstimate")),
+                str(plan.get("disclaimer") or "Planning estimate — CPA review required."),
+            )
+        )
+        widgets.append(
+            _money(
+                "tax-k1-ordinary",
+                "Est. K-1 Ordinary",
+                _pm(plan.get("k1Ordinary")),
+                "Derived from book net after book-to-tax bridge lines.",
+            )
+        )
+        widgets.append(
+            {
+                "id": "tax-modeled-w2",
+                "type": "kpi",
+                "label": "Modeled Officer W-2",
+                "value": None,
+                "status": "empty",
+                "emptyMessage": "No payroll W-2",
+                "hint": "No payroll W-2 import — planning salary scenarios are notes only (not shown as $).",
+                "collapseWhenEmpty": True,
+                "keepEmpty": True,
+                "size": "s",
+            }
+        )
+        quarterly = plan.get("quarterlyEstimates") if isinstance(plan.get("quarterlyEstimates"), list) else []
+        if quarterly:
+            q1 = quarterly[0] if isinstance(quarterly[0], dict) else {}
+            fed = _pm(q1.get("federal"))
+            ks = _pm(q1.get("kansas"))
+            if fed is not None and ks is not None:
+                widgets.append(
+                    _money(
+                        "tax-q-estimate",
+                        "Quarterly Estimate (Q1 split)",
+                        fed + ks,
+                        f"Federal {fed:,.0f} + Kansas {ks:,.0f} · planning only.",
+                    )
+                )
+        fed = _pm(plan.get("federalTaxEstimate"))
+        ks = _pm(plan.get("kansasTaxEstimate"))
+        if fed is not None:
+            widgets.append(
+                _money(
+                    "tax-federal-est",
+                    "Federal Tax (planning)",
+                    fed,
+                    str(plan.get("federalRateLabel") or "Federal planning rate") + " — CPA review required.",
+                )
+            )
+        if ks is not None:
+            widgets.append(
+                _money(
+                    "tax-kansas-est",
+                    "Kansas Tax (planning)",
+                    ks,
+                    str(plan.get("kansasRateLabel") or "Kansas planning rate") + " — CPA review required.",
+                )
+            )
+        try:
+            from apex_backend import (
+                build_ebitda_scrubber,
+                build_ebitda_waterfall,
+                build_filing_workflow_widget,
+                build_scenario_manager_widget,
+                build_variance_alert_widget,
+                build_workpaper_widget,
+                _visual_boost_taxes,
+            )
+
+            widgets.append(build_ebitda_waterfall(bundle))
+            widgets.append(build_ebitda_scrubber(bundle))
+            widgets.append(build_scenario_manager_widget())
+            widgets.append(build_filing_workflow_widget())
+            widgets.append(build_workpaper_widget(plan, bundle))
+            widgets.append(build_variance_alert_widget(bundle))
+            widgets.extend(_visual_boost_taxes(plan))
+        except Exception:
+            pass
+        scenarios = plan.get("compScenarios") if isinstance(plan.get("compScenarios"), list) else []
+        if scenarios:
+            notes = [
+                str(s.get("note") or "").strip()
+                for s in scenarios
+                if isinstance(s, dict) and str(s.get("note") or "").strip()
+            ]
+            widgets.append(
+                {
+                    "id": "tax-comp-note",
+                    "type": "status",
+                    "label": "Compensation scenario",
+                    "size": "strip",
+                    "status": "ok",
+                    "message": f"{len(scenarios)} planning scenarios",
+                    "hint": (notes[0] if notes else "Document with BLS/MGMA · CPA review.")
+                    + " — salary dollars not shown (not from payroll import).",
+                }
+            )
+    else:
+        for wid, label, hint in (
+            ("tax-book-net", "Book Net Income", "QuickBooks P&L net income not imported — tax KPIs stay empty."),
+            ("tax-est-owner", "Est. Owner Tax (planning)", "S-corp estimates require QuickBooks book net income."),
+            ("tax-k1-ordinary", "Est. K-1 Ordinary", "Import QuickBooks P&L to unlock book-to-tax planning KPIs."),
+            ("tax-modeled-w2", "Modeled Officer W-2", "No book income — W-2 scenarios not shown (would invent dollars)."),
+            ("tax-q-estimate", "Quarterly Estimate", "Estimated tax quarters appear after QB net income is available."),
+        ):
+            widgets.append(
+                {
+                    "id": wid,
+                    "type": "kpi",
+                    "label": label,
+                    "value": None,
+                    "status": "empty",
+                    "emptyMessage": "No data",
+                    "hint": hint,
+                    "collapseWhenEmpty": True,
+                    "keepEmpty": True,
+                    "size": "s",
+                }
+            )
+        widgets.append(
+            {
+                "id": "tax-comp-note",
+                "type": "status",
+                "label": "Compensation scenario",
+                "size": "strip",
+                "status": "empty",
+                "message": "Awaiting book data",
+                "hint": "S-corp reasonable-comp scenarios unlock after QuickBooks P&L import.",
+            }
+        )
+
+    if plan.get("disclaimer"):
+        widgets.insert(
+            1,
+            {
+                "id": "tax-disclaimer",
+                "type": "status",
+                "label": "TAX PLANNING — CPA REVIEW",
+                "size": "strip",
+                "status": "ok",
+                "message": "PLANNING ESTIMATES ONLY — NOT FOR FILING",
+                "hint": str(plan.get("disclaimer")),
+            },
+        )
+    # hal-10610: planning data-table + calendar live on this subpage (moved off taxes main)
+    try:
+        from apex_better_backend_widgets_pack import (
+            build_tax_calendar_main,
+            build_tax_planning_data_table,
+        )
+
+        planning_table = build_tax_planning_data_table(bundle)
+        if planning_table:
+            widgets.append(planning_table)
+        widgets.append(build_tax_calendar_main(bundle))
+    except Exception:
+        pass
+    return widgets
+
+
 def build_tax_workpapers(reports: dict[str, Any], bundle: dict[str, Any], **kwargs: Any) -> list[dict[str, Any]]:
     """Reuse financial workpaper scrubber pattern under taxes."""
     from apex_subpages_pack import build_financial_workpapers
@@ -561,117 +795,415 @@ def build_om_tasks(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict
     return widgets
 
 
-def build_hal_history(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
-    del reports, bundle
-    widgets = [
-        _nav(
-            "HAL · History",
-            "Operator / HAL interaction log",
-            "Hash #hal/history · local audit when present.",
-        )
-    ]
+STORE_KEY_HAL_HISTORY = "nr2:v2:hal:history"
+
+
+def _hal_history_entries(limit: int = 80) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     try:
         from apex_program_improve_pack import _load_json
 
-        data = _load_json("nr2:v2:hal:history")
+        data = _load_json(STORE_KEY_HAL_HISTORY)
         raw = data.get("entries") if isinstance(data.get("entries"), list) else []
-        for e in raw[-40:]:
-            if isinstance(e, dict):
-                entries.append(
-                    {
-                        "at": str(e.get("at") or "")[:19],
-                        "role": str(e.get("role") or "")[:12],
-                        "preview": str(e.get("text") or e.get("query") or "")[:100],
-                    }
-                )
+        for e in raw[-limit:]:
+            if not isinstance(e, dict):
+                continue
+            role = str(e.get("role") or "hal").strip().lower()[:16] or "hal"
+            if role not in {"user", "operator", "hal", "system"}:
+                role = "hal"
+            if role == "user":
+                role = "operator"
+            text = str(e.get("text") or e.get("query") or e.get("preview") or "").strip()
+            if not text:
+                continue
+            entries.append(
+                {
+                    "id": str(e.get("id") or "")[:40],
+                    "at": str(e.get("at") or "")[:19],
+                    "role": role,
+                    "text": text[:2000],
+                    "preview": text[:140],
+                }
+            )
     except Exception:
+        return []
+    return entries
+
+
+def append_hal_history_entry(
+    role: str,
+    text: str,
+    *,
+    entry_id: str | None = None,
+) -> dict[str, Any]:
+    """Persist one HAL chat turn to local store (loopback audit — never invents content)."""
+    from apex_program_improve_pack import _load_json, _save_json, _utc_now
+
+    cleaned_role = str(role or "hal").strip().lower()[:16] or "hal"
+    if cleaned_role == "user":
+        cleaned_role = "operator"
+    if cleaned_role not in {"operator", "hal", "system"}:
+        cleaned_role = "hal"
+    body = str(text or "").strip()
+    if not body or body == "Thinking…":
+        return {"ok": False, "error": "empty"}
+    data = _load_json(STORE_KEY_HAL_HISTORY)
+    entries = data.get("entries") if isinstance(data.get("entries"), list) else []
+    if not isinstance(entries, list):
         entries = []
-    widgets.append(
+    entry = {
+        "id": str(entry_id or f"h-{_utc_now()}")[:48],
+        "at": _utc_now()[:19],
+        "role": cleaned_role,
+        "text": body[:2000],
+    }
+    entries.append(entry)
+    payload = {"entries": entries[-200:], "updatedAt": _utc_now()}
+    _save_json(STORE_KEY_HAL_HISTORY, payload)
+    return {"ok": True, "entry": entry, "count": len(payload["entries"])}
+
+
+def _hal_ask_widget() -> dict[str, Any]:
+    """Live Ask HAL rail — same chat surface as #hal, mounted on History/System Logs."""
+    return {
+        "id": "hal-ask",
+        "type": "hal-chat",
+        "label": "Ask HAL",
+        "status": "ok",
+        "hint": "Live HAL — asks here persist to History.",
+    }
+
+
+def build_hal_history(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """HAL History — conversation log + live Ask HAL rail (#hal/history)."""
+    del reports, bundle
+    entries = _hal_history_entries(80)
+    op_n = sum(1 for e in entries if e.get("role") == "operator")
+    hal_n = sum(1 for e in entries if e.get("role") == "hal")
+    sys_n = sum(1 for e in entries if e.get("role") == "system")
+    last_at = entries[-1]["at"] if entries else "—"
+    return [
         {
-            "id": "hal-history-table",
-            "type": "data-table",
-            "label": "HAL history",
+            "id": "hal-history-strip",
+            "type": "hal-sub-strip",
+            "label": "History",
+            "size": "strip",
+            "status": "ok" if entries else "empty",
+            "title": "HAL · History",
+            "subtitle": "Local audit of asks, replies, and board actions",
+            "metrics": [
+                {"key": "operator", "label": "Asks", "value": op_n},
+                {"key": "hal", "label": "Replies", "value": hal_n},
+                {"key": "system", "label": "System", "value": sys_n},
+                {"key": "last", "label": "Last", "value": last_at if entries else "—"},
+            ],
+            "hint": "Replay sends the ask to the HAL rail on this page.",
+        },
+        {
+            "id": "hal-history-feed",
+            "type": "hal-history-feed",
+            "label": "Conversation log",
             "size": "full",
             "status": "ok" if entries else "empty",
-            "emptyMessage": "No persisted HAL history yet — chat stays in-session until logged",
-            "columns": ["at", "role", "preview"],
-            "rows": entries,
-            "hint": "Optional local key nr2:v2:hal:history — never invents replies.",
-        }
-    )
-    return widgets
+            "emptyMessage": "No history yet — ask HAL in the rail; turns land here.",
+            "hint": "Filter by role · Replay asks HAL here · Copy for replies.",
+            "entries": list(reversed(entries)),
+            "filters": ["all", "operator", "hal", "system"],
+            "counts": {"all": len(entries), "operator": op_n, "hal": hal_n, "system": sys_n},
+        },
+        _hal_ask_widget(),
+    ]
 
 
 def build_hal_system_logs(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """HAL System Logs — diagnostic console + live Ask HAL rail (#hal/system-logs)."""
     del reports
-    widgets = [
-        _nav(
-            "HAL · System Logs",
-            "Import telemetry & freshness",
-            "Hash #hal/system-logs · diagnostics from import_loader.",
-        )
-    ]
     diag = bundle.get("diagnostics") if isinstance(bundle.get("diagnostics"), dict) else {}
     summary = diag.get("summary") if isinstance(diag.get("summary"), dict) else {}
-    alerts = []
+    connected = int(summary.get("connected") or 0) if summary else 0
+    partial = int(summary.get("partial") or 0) if summary else 0
+    missing = int(summary.get("missing") or 0) if summary else 0
+    stale = int(summary.get("stale") or 0) if summary else 0
+    total = int(summary.get("total") or 0) if summary else 0
+
+    if total > 0 and missing == 0 and partial == 0 and stale == 0:
+        posture = "Operational"
+        posture_hint = "All tracked datasets connected."
+    elif total > 0:
+        posture = "Degraded"
+        posture_hint = "Missing or partial imports — refresh Sync before posting."
+    else:
+        posture = "Standby"
+        posture_hint = "Awaiting import diagnostics."
+
+    alerts: list[dict[str, Any]] = []
     try:
         from apex_program_improve_pack import assess_import_health
 
         health = assess_import_health(bundle)
         for a in health.get("alerts") or []:
             if isinstance(a, dict) and a.get("message"):
-                alerts.append({"level": str(a.get("level") or "info"), "message": str(a["message"])[:120]})
+                level = str(a.get("level") or "info").lower()
+                if level not in {"error", "warn", "warning", "info", "ok"}:
+                    level = "info"
+                if level == "warning":
+                    level = "warn"
+                alerts.append(
+                    {
+                        "level": level,
+                        "at": str(a.get("at") or a.get("ts") or "")[:19],
+                        "source": str(a.get("source") or a.get("datasetKey") or "import")[:40],
+                        "message": str(a["message"])[:180],
+                    }
+                )
     except Exception:
         pass
-    widgets.append(
+
+    datasets = diag.get("datasets") if isinstance(diag.get("datasets"), list) else []
+    gap_n = 0
+    for row in datasets:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("severity") or "") == "optional":
+            continue
+        if row.get("automated") is False:
+            continue
+        status = str(row.get("status") or "")
+        if status in {"missing", "stale", "partial"} or int(row.get("rowCount") or 0) <= 0:
+            gap_n += 1
+            if len(alerts) < 40:
+                alerts.append(
+                    {
+                        "level": "error" if status == "missing" else "warn",
+                        "at": "",
+                        "source": str(row.get("datasetKey") or "dataset")[:40],
+                        "message": str(row.get("detail") or f"{status} · rows={row.get('rowCount') or 0}")[:180],
+                    }
+                )
+
+    log_lines = alerts[:60]
+    return [
         {
-            "id": "hal-sys-summary",
-            "type": "status",
-            "label": "Import diagnostics",
-            "size": "m",
+            "id": "hal-sys-strip",
+            "type": "hal-sub-strip",
+            "label": "System Logs",
+            "size": "strip",
             "status": "ok" if summary else "empty",
-            "message": (
-                f"connected={summary.get('connected')} partial={summary.get('partial')} "
-                f"missing={summary.get('missing')} stale={summary.get('stale')}"
-                if summary
-                else "Diagnostics unavailable"
-            ),
-            "hint": "From bundle diagnostics — refresh Sync to update.",
-        }
-    )
-    widgets.append(
+            "title": "HAL · System Logs",
+            "subtitle": posture_hint,
+            "metrics": [
+                {"key": "posture", "label": "Posture", "value": posture},
+                {"key": "connected", "label": "Connected", "value": f"{connected}/{total}" if total else "—"},
+                {"key": "partial", "label": "Partial", "value": partial if summary else "—"},
+                {"key": "missing", "label": "Missing", "value": missing if summary else "—"},
+                {"key": "stale", "label": "Stale", "value": stale if summary else "—"},
+                {"key": "gaps", "label": "Gaps", "value": gap_n},
+            ],
+            "hint": "Ask HAL about a console line from the Ask button on each row.",
+        },
         {
-            "id": "hal-sys-alerts",
-            "type": "data-table",
-            "label": "Freshness alerts",
+            "id": "hal-sys-console",
+            "type": "hal-sys-console",
+            "label": "Diagnostic console",
             "size": "full",
-            "status": "ok" if alerts else "empty",
-            "emptyMessage": "No import health alerts",
-            "columns": ["level", "message"],
-            "rows": alerts,
-            "hint": "Import-backed alerts only.",
+            "status": "ok" if log_lines else "empty",
+            "emptyMessage": "No import health alerts — Sync looks quiet.",
+            "hint": "Import-backed lines only · Ask HAL about a row · Sync to refresh.",
+            "lines": log_lines,
+            "filters": ["all", "error", "warn", "info"],
+        },
+        _hal_ask_widget(),
+    ]
+
+
+def build_claims_kanban_subpage(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """Full Claims workbench — moved off main page (Moonshot compact Phase 4)."""
+    del reports
+    widgets: list[dict[str, Any]] = [
+        _nav(
+            "Claims · Kanban",
+            "Full table + kanban workbench",
+            "Hash #claims/kanban · SoftDent read-only · NR2 actions only.",
+        )
+    ]
+    try:
+        from apex_claims_narratives_pack import build_status_columns, kanban_widget
+        from apex_program_improve_pack import apply_era_to_kanban_columns, attachment_counts
+
+        claim_rows = _section_rows(bundle, "softdent", "claims") or _section_rows(
+            bundle, "softdent", "claimStatus"
+        )
+        kanban_payload = build_status_columns(claim_rows if isinstance(claim_rows, list) else [])
+        cols = kanban_payload.get("columns") if isinstance(kanban_payload.get("columns"), dict) else {}
+        kanban_payload["columns"] = apply_era_to_kanban_columns(cols)
+        kanban_payload["counts"] = {
+            k: len(v) if isinstance(v, list) else 0 for k, v in (kanban_payload.get("columns") or {}).items()
         }
-    )
+        att_counts = attachment_counts()
+        for _col, cards in (kanban_payload.get("columns") or {}).items():
+            if not isinstance(cards, list):
+                continue
+            for card in cards:
+                if not isinstance(card, dict):
+                    continue
+                cid = str(card.get("claimId") or "")
+                n = int(att_counts.get(cid) or 0)
+                if n and not card.get("attachments"):
+                    card["attachments"] = {"current": n, "required": None}
+        widgets.append(kanban_widget(kanban_payload))
+    except Exception as exc:
+        widgets.append(
+            {
+                "id": "claims-kanban-error",
+                "type": "status",
+                "label": "Kanban",
+                "size": "strip",
+                "status": "empty",
+                "emptyMessage": f"Kanban unavailable: {exc}",
+            }
+        )
     return widgets
 
 
+def build_om_operatory_subpage(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """Operatory detail drill-down (Moonshot compact Phase 4)."""
+    widgets = build_softdent_schedule(reports, bundle)
+    if widgets and isinstance(widgets[0], dict) and widgets[0].get("type") == "status":
+        widgets[0]["label"] = "Office Mgr · Operatory"
+        widgets[0]["hint"] = "Hash #office-manager/operatory · from operatoryChairs import."
+    try:
+        from apex_bar_trend_page_org_pack import build_operatory_util_chart
+        from apex_financial_console_pack import collapse_empty_large
+
+        util = build_operatory_util_chart(bundle)
+        if util.get("status") == "empty":
+            util = collapse_empty_large(util)
+        else:
+            util["size"] = "m"
+        widgets.insert(1, util)
+    except Exception:
+        pass
+    return widgets
+
+
+def _build_ops_via_parent(page: str, reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """Reuse parent page builders; surface only demoted widgets on #{page}/ops."""
+    from apex_backend import _PAGE_BUILDERS
+    from apex_compact_pages_pack import select_demoted_widgets
+
+    builder = _PAGE_BUILDERS.get(str(page or "").strip().lower())
+    if not callable(builder):
+        return select_demoted_widgets([], page=page)
+    try:
+        widgets = builder(reports or {}, bundle or {})
+    except Exception:
+        widgets = []
+    return select_demoted_widgets(widgets if isinstance(widgets, list) else [], page=page)
+
+
+def build_financial_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("financial", reports, bundle)
+
+
+def build_claims_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("claims", reports, bundle)
+
+
+def build_taxes_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("taxes", reports, bundle)
+
+
+def build_hal_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("hal", reports, bundle)
+
+
+def build_softdent_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("softdent", reports, bundle)
+
+
+def build_ar_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("ar", reports, bundle)
+
+
+def build_qb_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("quickbooks", reports, bundle)
+
+
+def build_om_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("office-manager", reports, bundle)
+
+
+def build_content_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("content", reports, bundle)
+
+
+def build_documents_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("documents", reports, bundle)
+
+
+def build_narratives_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("narratives", reports, bundle)
+
+
+def build_library_ops(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return _build_ops_via_parent("library", reports, bundle)
+
+
+def build_content_documents(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    from apex_backend import _documents_widgets
+
+    return _documents_widgets(reports or {}, bundle or {})
+
+
+def build_content_narratives(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    from apex_backend import _narratives_widgets
+
+    return _narratives_widgets(reports or {}, bundle or {})
+
+
+def build_content_library(reports: dict[str, Any], bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    from apex_backend import _library_widgets
+
+    return _library_widgets(reports or {}, bundle or {})
+
+
 WAVE5_BUILDERS: dict[tuple[str, str], Any] = {
-    ("taxes", "entities"): build_tax_entities,
-    ("taxes", "calendar"): build_tax_calendar,
-    ("taxes", "workpapers"): build_tax_workpapers,
+        ("taxes", "entities"): build_tax_entities,
+        ("taxes", "calendar"): build_tax_calendar,
+        ("taxes", "planning"): build_taxes_planning,
+        ("taxes", "workpapers"): build_tax_workpapers,
+        ("taxes", "ops"): build_taxes_ops,
     ("softdent", "register"): build_softdent_register,
     ("softdent", "schedule"): build_softdent_schedule,
+    ("softdent", "ops"): build_softdent_ops,
     ("quickbooks", "coa"): build_qb_coa,
     ("quickbooks", "vendors"): build_qb_vendors,
+    ("quickbooks", "ops"): build_qb_ops,
     ("ar", "aging-detail"): build_ar_aging_detail,
+    ("ar", "ops"): build_ar_ops,
     ("claims", "attachments"): build_claims_attachments,
+    ("claims", "kanban"): build_claims_kanban_subpage,
+    ("claims", "ops"): build_claims_ops,
     ("narratives", "templates"): build_narrative_templates,
     ("narratives", "history"): build_narrative_history,
     ("narratives", "audit"): build_narrative_audit,
+    ("narratives", "ops"): build_narratives_ops,
     ("documents", "tax-docs"): build_tax_docs,
+    ("documents", "ops"): build_documents_ops,
     ("library", "codes"): build_library_codes,
+    ("library", "ops"): build_library_ops,
+    ("content", "ops"): build_content_ops,
+    ("content", "documents"): build_content_documents,
+    ("content", "narratives"): build_content_narratives,
+    ("content", "library"): build_content_library,
+    ("content", "templates"): build_narrative_templates,
+    ("content", "tax-docs"): build_tax_docs,
+    ("content", "codes"): build_library_codes,
     ("office-manager", "tasks"): build_om_tasks,
+    ("office-manager", "operatory"): build_om_operatory_subpage,
+    ("office-manager", "ops"): build_om_ops,
+    ("financial", "ops"): build_financial_ops,
     ("hal", "history"): build_hal_history,
     ("hal", "system-logs"): build_hal_system_logs,
+    ("hal", "ops"): build_hal_ops,
 }

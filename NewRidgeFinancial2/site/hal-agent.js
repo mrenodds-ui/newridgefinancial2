@@ -736,6 +736,71 @@ const HalAgent = (function () {
         return { ok: true, summary: HalSkills.formatSoftdentExtractStatus(resp).slice(0, 2800), status: resp };
       },
     },
+    softdent_signon_status: {
+      label: "SoftDent Sign On env status",
+      run: async () => {
+        try {
+          const bridge = window.HalBridge || window.NR2Bridge;
+          const data =
+            bridge && typeof bridge.loopbackJson === "function"
+              ? await bridge.loopbackJson("/api/apex/hal/softdent-signon", { method: "GET" })
+              : typeof Services !== "undefined" && typeof Services.fetchSoftdentSignOnStatus === "function"
+                ? await Services.fetchSoftdentSignOnStatus()
+                : null;
+          if (!data || data.ok === false) {
+            return {
+              ok: false,
+              summary:
+                "SoftDent Sign On uses env SOFTDENT_SIGNON_USER / SOFTDENT_SIGNON_PASSWORD. Prefer DB/ODBC; data that cannot be reached by the database requires Sign On + SoftDent UI export (HAL never prints the password).",
+            };
+          }
+          const doctrine = String(data.dataAccessDoctrine || data.softdentSignOn?.dataAccessDoctrine || "").slice(0, 500);
+          const reply = String(data.reply || data.softdentSignOn?.knowledge || "").slice(0, 1200);
+          return {
+            ok: true,
+            summary: (reply || doctrine || "SoftDent Sign On credentials are in environment variables.").slice(0, 1600),
+            status: data,
+          };
+        } catch {
+          return {
+            ok: false,
+            summary:
+              "Prefer SoftDent DB/ODBC when available. SoftDent data that cannot be reached by the database requires Sign On + SoftDent UI export. Credentials: SOFTDENT_SIGNON_USER / SOFTDENT_SIGNON_PASSWORD.",
+          };
+        }
+      },
+    },
+    softdent_report_pull: {
+      label: "SoftDent report pull playbook",
+      run: async (ctx) => {
+        try {
+          const bridge = window.HalBridge || window.NR2Bridge;
+          const q = encodeURIComponent(String(ctx?.query || ctx?.rawQuery || "how to pull SoftDent reports"));
+          const data =
+            bridge && typeof bridge.loopbackJson === "function"
+              ? await bridge.loopbackJson(`/api/apex/hal/softdent-report-pull?q=${q}`, { method: "GET" })
+              : null;
+          if (!data || data.ok === false) {
+            return {
+              ok: false,
+              summary:
+                "SoftDent report pull: Launch CS SoftDent Software.lnk → Sign On → Reports → report → Output Options → Excel or Print Preview (never Printer) → save to C:\\SoftDentReportExports → Sync.",
+            };
+          }
+          return {
+            ok: true,
+            summary: String(data.reply || "").slice(0, 2800),
+            status: data,
+          };
+        } catch {
+          return {
+            ok: false,
+            summary:
+              "SoftDent report pull: Output Options → Excel or Print Preview only — never Printer. Save to C:\\SoftDentReportExports then Sync.",
+          };
+        }
+      },
+    },
     read_tasks: {
       label: "Read local office tasks",
       run: async (ctx) => {
@@ -3277,6 +3342,21 @@ const HalAgent = (function () {
     ) {
       tools.push("softdent_extract_status");
     }
+    if (
+      /\b(sign\s*on|sign-on|change login|softdent\s+(login|password|credential)|SOFTDENT_SIGNON)\b/i.test(query) ||
+      (/\bsoftdent\b/i.test(query) && /\b(password|credential|login|env)\b/i.test(query)) ||
+      /\b(cannot be reached|not in (the )?(database|db|odbc)|only (way|via).{0,20}(ui|gui)|sign on and use (the )?ui)\b/i.test(query)
+    ) {
+      if (!tools.includes("softdent_signon_status")) tools.push("softdent_signon_status");
+    }
+    if (
+      /\b(how|teach|show).{0,40}(pull|export|run).{0,40}softdent|\bpull\s+softdent|\bsoftdent\s+(report\s+)?(pull|export)|\bsoftdent\s+output\s+options\b/i.test(
+        query
+      ) ||
+      (/\bsoftdent\b/i.test(query) && /\b(pull|export|run).{0,20}(report|register|daysheet|aging|collections)\b/i.test(query))
+    ) {
+      if (!tools.includes("softdent_report_pull")) tools.push("softdent_report_pull");
+    }
     if (/\b(shift|tier|employee level|standing consent)\b/i.test(query)) {
       tools.push("read_shift_context");
     }
@@ -4245,45 +4325,13 @@ const HalAgent = (function () {
       return { text, lane: "escalate30b" };
     }
     if (route.useOss) {
-      if (!ctx.ossModelReady()) return { text: ctx.offlineModelMessage("oss120b"), lane: "oss120b · offline" };
-      const om = ctx.ossModelConfig();
-      const text = await ctx.runModel(om, combinedPrompt, userText, "Local OSS draft", onToken);
-      return { text, lane: "oss120b" };
+      // Hard 32B-only: OSS/120B path remapped to shared local pin.
+      if (!ctx.reasoningModelReady()) return { text: ctx.offlineModelMessage("reason21b"), lane: "reason21b · offline" };
+      const om = Object.assign({ reasoningLane: true }, ctx.reasoningModelConfig());
+      const text = await ctx.runModel(om, combinedPrompt, userText, "Local 32B draft", onToken);
+      return { text, lane: "hal-local:30b-a3b" };
     }
-    const useCloudAgent =
-      plan &&
-      plan.agentToolLoop &&
-      cloudAgentEligible(plan, ctx) &&
-      (!browserCloudHalBlocked() || (await cloudHalEnabledAsync(ctx)));
-    if (useCloudAgent && browserCloudHalBlocked() && !(await cloudHalEnabledAsync(ctx))) {
-      return {
-        text: "Cloud HAL is disabled. Enable it from server settings with operator confirmation (ENABLE CLOUD HAL).",
-        lane: "cloud · blocked",
-      };
-    }
-    if (useCloudAgent) {
-      const cloudPolicy = (ctx.halModels && ctx.halModels.config && ctx.halModels.config.cloudReasoning) || {};
-      const shouldSanitize = cloudPolicy.sanitizeBeforeCloud !== false;
-      let sysPrompt = combinedPrompt;
-      let usrText = userText;
-      if (shouldSanitize && typeof ctx.sanitizeForCloud === "function") {
-        sysPrompt = ctx.sanitizeForCloud(sysPrompt);
-        usrText = ctx.sanitizeForCloud(usrText);
-      }
-      const cm = Object.assign({ cloud: true, agentLoop: true, structuredAgent: true }, ctx.cloudModelConfig());
-      cm.options = Object.assign({}, cm.options || {}, { max_tokens: 2048, temperature: 0.2 });
-      cm.cloudTools = buildCloudToolSchemas(agentLoopToolIds(plan));
-      const raw = await ctx.runModel(cm, sysPrompt, usrText, "Cloud agent", onToken);
-      if (raw && typeof raw === "object" && (raw.toolCalls || raw.text != null)) {
-        return {
-          text: String(raw.text || ""),
-          toolCalls: raw.toolCalls || [],
-          lane: "cloud",
-        };
-      }
-      const text = typeof raw === "string" ? raw : String((raw && raw.text) || "");
-      return { text, lane: "cloud" };
-    }
+    // Cloud AI deliberately removed — office program is local hal-local:30b-a3b MoE only.
     const wantAgentReasoning =
       plan &&
       plan.agentToolLoop &&
@@ -4569,6 +4617,9 @@ const HalAgent = (function () {
 
   function finalizeOutcome(outcome, trimmed, route, plan, ctx, toolResults) {
     if (!outcome || !outcome.text || !HalCore.polishChatReply) return outcome;
+    if (typeof HalCore.formatStructuredDeliverable === "function" && isDeliverableRequest(trimmed)) {
+      outcome.text = HalCore.formatStructuredDeliverable(outcome.text) || outcome.text;
+    }
     const toolSummary = summarizeToolEvidenceOnly(toolResults || {});
     let actionLabel = "";
     const navMatch = route && route.intent ? String(route.intent).match(/^navigate:\s*(.+)$/) : null;
@@ -4588,6 +4639,7 @@ const HalAgent = (function () {
       actionLabel,
       toolsUsed: plan && plan.tools ? plan.tools : [],
       hadSourceTools: !!(plan && plan.tools && plan.tools.some((t) => /grep_program|read_program_file|list_program_files|explain_route/.test(t))),
+      allowMarkdown: isDeliverableRequest(trimmed),
     });
     outcome.followUpChips = HalCore.buildFollowUpChips(
       Object.assign({}, outcome, { _pages: ctx.pages }),
@@ -5118,6 +5170,22 @@ const HalAgent = (function () {
     });
   }
 
+  function isDeliverableRequest(query) {
+    if (typeof HalCore !== "undefined" && typeof HalCore.isDeliverableRequest === "function") {
+      return HalCore.isDeliverableRequest(query);
+    }
+    return /\b(next\s+steps?|ordered\s+steps?|step[\s-]?by[\s-]?step|checklist|procedure|how\s+(?:do|to|can)\s+(?:i|we)|walk\s+me\s+through|what\s+(?:are|is)\s+the\s+(?:steps?|path)|provide\s+(?:the\s+)?(?:steps?|path|checklist)|action\s+items?|paths?\s+to\b)\b/i.test(
+      String(query || ""),
+    );
+  }
+
+  function renderStructuredDeliverable(text) {
+    if (typeof HalCore !== "undefined" && typeof HalCore.formatStructuredDeliverable === "function") {
+      return HalCore.formatStructuredDeliverable(text);
+    }
+    return String(text || "");
+  }
+
   function updatePreferences(patch, persistFn) {
     longTermMemory.preferences = Object.assign({}, longTermMemory.preferences, patch || {});
     longTermMemory.updatedAt = new Date().toISOString();
@@ -5181,6 +5249,8 @@ const HalAgent = (function () {
     expandGatherToolsForRound,
     toolResultLooksEmpty,
     needsMoreGather,
+    isDeliverableRequest,
+    renderStructuredDeliverable,
   };
 })();
 

@@ -1,0 +1,21 @@
+{
+  "generatedAt": "20260713T140106Z",
+  "root": "C:\\SoftDent\\PWImages",
+  "tesseract": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+  "countsByCategory": {
+    "ELIGIBILITY_BENEFITS": 2276,
+    "INSURANCE_RELATED": 2198,
+    "OTHER": 451,
+    "REMITTANCE_EOB": 8,
+    "REMITTANCE_EOB_CANDIDATE": 8,
+    "CLAIM_OR_LEDGER": 7,
+    "INSURANCE_CARD": 5
+  },
+  "remittanceEobs": 8,
+  "remittanceCandidates": 8,
+  "eligibilityBenefits": 2276,
+  "totalClassified": 4953,
+  "note": "REMITTANCE_EOB = claim payment / provider remittance EOB. ELIGIBILITY_BENEFITS = portal/fax benefit summaries (often mislabeled 'EOB' in offices). Patient MHTs are Carestream eForms (consent/history) and were excluded from OCR.",
+  "copiedTo": "C:\\NewRidgeFamilyFinancial\\NewRidgeFinancial2\\docs\\_pwimages_eob_mine\\remittance_eobs",
+  "copiedCount": 16
+}

@@ -294,7 +294,10 @@ def build_denial_pareto(bundle: dict[str, Any]) -> dict[str, Any]:
         "bars": bars,
         "cumulative": cumulative,
         "threshold": 80,
-        "emptyMessage": "No denials recorded",
+        "emptyMessage": (
+            "No denial reason codes in SoftDent claims import — configure claims "
+            "export to include DenialCode/CARC/ReasonCode (empty ≠ $0)"
+        ),
     }
     return _wrap(
         widget_id="denial-pareto",
@@ -304,9 +307,12 @@ def build_denial_pareto(bundle: dict[str, Any]) -> dict[str, Any]:
         size="l",
         status=status,
         data=data,
-        hint="Denial codes from SoftDent/ERA when present — never invented.",
+        hint="Denial codes from SoftDent/ERA when present — never invented. waiting_for=SoftDent.DenialCode",
         collapse_when_empty=status == "empty",
-        extra={"denialCodes": [b["code"] for b in bars]},
+        extra={
+            "denialCodes": [b["code"] for b in bars],
+            **({"gapCode": "ZERO_VOLUME", "waitingFor": "SoftDent.DenialCode"} if status == "empty" else {}),
+        },
     )
 
 
@@ -450,6 +456,7 @@ def build_preauth_lanes(bundle: dict[str, Any]) -> dict[str, Any]:
         data=data,
         hint="Pre-authorization aging by procedure code — empty without SoftDent pre-auth export.",
         collapse_when_empty=status == "empty",
+        extra={"gapCode": "ZERO_VOLUME"} if status == "empty" else None,
     )
 
 
@@ -619,7 +626,10 @@ def build_verification_matrix(bundle: dict[str, Any], *, page: str = "claims") -
         "patients": patients if has_tracking else [],
         "columns": ["Elig", "Ben", "Breakdown"],
         "nextDays": 3,
-        "emptyMessage": "Verification tracking disabled",
+        "emptyMessage": (
+            "Verification tracking disabled — SoftDent schedule export needs "
+            "elig/ben/breakdown fields (empty ≠ $0)"
+        ),
     }
     return _wrap(
         widget_id="verification-matrix",
@@ -629,7 +639,7 @@ def build_verification_matrix(bundle: dict[str, Any], *, page: str = "claims") -
         size="m",
         status=status,
         data=data,
-        hint="Eligibility/benefits flags from SoftDent — initials only.",
+        hint="Eligibility/benefits flags from SoftDent — initials only. waiting_for=SoftDent.elig/ben/breakdown",
         collapse_when_empty=status == "empty",
     )
 
@@ -1208,9 +1218,26 @@ def append_office_manager_missing(widgets: list[dict[str, Any]], bundle: dict[st
     widgets.append(build_verification_matrix(bundle, page="office-manager"))
     widgets.append(build_claims_needing_narrative(bundle))
     widgets.append(build_provider_utilization_trend(util))
-    widgets.append(build_patient_dossier_card(None))
-    widgets.append(build_eligibility_card_widget(None))
-    widgets.append(build_patient_dossier_mini(None))
-    widgets.append(build_active_treatment_plans(None))
-    widgets.append(build_claims_review_detail(None))
-    widgets.append(build_clinical_notes_summary(None))
+    selected = bundle.get("selectedPatient") if isinstance(bundle.get("selectedPatient"), dict) else None
+    widgets.append(build_patient_dossier_card(selected))
+    elig = None
+    if selected and isinstance(selected.get("eligibility"), dict):
+        elig = selected.get("eligibility")
+    widgets.append(build_eligibility_card_widget(elig))
+    widgets.append(build_patient_dossier_mini(selected))
+    estimates = None
+    if selected and isinstance(selected.get("treatmentEstimates"), list):
+        estimates = selected.get("treatmentEstimates")
+    widgets.append(build_active_treatment_plans(estimates))
+    claim_detail = None
+    if selected:
+        claims = selected.get("claims") if isinstance(selected.get("claims"), list) else []
+        claim_detail = {
+            "items": claims,
+            "patientHash": selected.get("patientHash"),
+        }
+    widgets.append(build_claims_review_detail(claim_detail))
+    notes = None
+    if selected and isinstance(selected.get("clinicalNotes"), list):
+        notes = selected.get("clinicalNotes")
+    widgets.append(build_clinical_notes_summary(notes))

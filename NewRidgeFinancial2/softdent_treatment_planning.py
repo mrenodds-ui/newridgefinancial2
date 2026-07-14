@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import os
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,8 @@ _PAYMENT_GLOBS = (
     "insurance_payment_analysis*.csv",
     "insurance_payment_distribution*.csv",
     "InsurancePayment*.csv",
+    "Insurance*Payment*Analysis*.csv",
+    "*Payment*Analysis*.csv",
 )
 _CODE_GLOBS = (
     "procedure_codes*.csv",
@@ -178,17 +181,14 @@ def resolve_analytics_db() -> Path | None:
 
 
 def parse_money(value: Any) -> float | None:
-    if value is None or value == "":
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    text = str(value).strip().replace("$", "").replace(",", "").replace("(", "-").replace(")", "")
-    if not text or text in {"-", "—", "N/A", "n/a"}:
-        return None
-    try:
-        return float(text)
-    except ValueError:
-        return None
+    """Parse money via Decimal (cent-quantized); return float for SQLite REAL storage.
+
+    Never invents 0 from blank. Rejects NaN/Inf. Accounting parentheses → negative.
+    CSV string zeros (e.g. Paid Amount 0.00) are kept as 0.0 (observed zero).
+    """
+    from money_cents import money_as_sqlite_real, to_money_from_csv
+
+    return money_as_sqlite_real(to_money_from_csv(value))
 
 
 def normalize_ada_code(raw: Any) -> str:
@@ -262,6 +262,8 @@ def find_newest_csv(globs: tuple[str, ...], *, search_dir: Path | None = None) -
             continue
         for pattern in globs:
             candidates.extend(root.glob(pattern))
+            # HAL-10588: recursive drop folders / nested SoftDent exports
+            candidates.extend(root.rglob(pattern))
     files = [p for p in candidates if p.is_file()]
     if not files:
         return None
@@ -313,6 +315,17 @@ def ensure_treatment_planning_schema(conn: sqlite3.Connection) -> None:
             updated_at TEXT,
             PRIMARY KEY (insurance_company, ada_code)
         );
+
+        CREATE TABLE IF NOT EXISTS sd_insurance_payment_ingest_audit (
+            ingest_id TEXT PRIMARY KEY,
+            source_file TEXT NOT NULL,
+            extracted_at TEXT NOT NULL,
+            rows_accepted INTEGER NOT NULL DEFAULT 0,
+            rows_skipped_incomplete INTEGER NOT NULL DEFAULT 0,
+            paid_sum REAL,
+            prior_row_count INTEGER,
+            note TEXT
+        );
         """
     )
 
@@ -323,9 +336,14 @@ def ingest_insurance_payment_csv(
     *,
     extracted_at: str | None = None,
 ) -> int:
+    from decimal import Decimal
+
+    from money_cents import money_as_sqlite_real, money_sub, to_money_from_csv
+
     extracted_at = extracted_at or _utc_now()
     ensure_treatment_planning_schema(conn)
     rows: list[dict[str, Any]] = []
+    skipped_incomplete = 0
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         if not reader.fieldnames:
@@ -335,20 +353,32 @@ def ingest_insurance_payment_csv(
             company = _pick(raw, field_lookup, _PAYMENT_COLMAP["insurance_company"])
             ada_raw = _pick(raw, field_lookup, _PAYMENT_COLMAP["ada_code"])
             ada = normalize_ada_code(ada_raw)
-            submitted = parse_money(_pick(raw, field_lookup, _PAYMENT_COLMAP["submitted_fee"]))
-            allowed = parse_money(_pick(raw, field_lookup, _PAYMENT_COLMAP["allowed_amount"]))
-            paid = parse_money(_pick(raw, field_lookup, _PAYMENT_COLMAP["paid_amount"]))
-            write_off = parse_money(_pick(raw, field_lookup, _PAYMENT_COLMAP["write_off_amount"]))
-            patient = parse_money(_pick(raw, field_lookup, _PAYMENT_COLMAP["patient_portion"]))
+            submitted_d = to_money_from_csv(_pick(raw, field_lookup, _PAYMENT_COLMAP["submitted_fee"]))
+            allowed_d = to_money_from_csv(_pick(raw, field_lookup, _PAYMENT_COLMAP["allowed_amount"]))
+            paid_d = to_money_from_csv(_pick(raw, field_lookup, _PAYMENT_COLMAP["paid_amount"]))
+            write_off_d = to_money_from_csv(
+                _pick(raw, field_lookup, _PAYMENT_COLMAP["write_off_amount"])
+            )
+            patient_d = to_money_from_csv(_pick(raw, field_lookup, _PAYMENT_COLMAP["patient_portion"]))
             claim = _pick(raw, field_lookup, _PAYMENT_COLMAP["claim_number"])
             check = _pick(raw, field_lookup, _PAYMENT_COLMAP["check_number"])
             pay_date = _pick(raw, field_lookup, _PAYMENT_COLMAP["payment_date"])
             desc = _pick(raw, field_lookup, _PAYMENT_COLMAP["description"])
-            if not company and not ada and paid is None and submitted is None:
+            # Skip blank CSV noise
+            if not company and not ada and paid_d is None and submitted_d is None:
                 continue
-            # Derive patient portion when missing but allowed+paid present
-            if patient is None and allowed is not None and paid is not None:
-                patient = round(allowed - paid, 2)
+            # Gold line requires InsCo + ADA + Paid (observed; may be 0.00)
+            if not company or not ada or paid_d is None:
+                skipped_incomplete += 1
+                continue
+            # Derive patient portion when missing but allowed+paid present (cent-exact)
+            if patient_d is None and allowed_d is not None and paid_d is not None:
+                patient_d = money_sub(allowed_d, paid_d)
+            submitted = money_as_sqlite_real(submitted_d)
+            allowed = money_as_sqlite_real(allowed_d)
+            paid = money_as_sqlite_real(paid_d)
+            write_off = money_as_sqlite_real(write_off_d)
+            patient = money_as_sqlite_real(patient_d)
             line_id = _sha(company, ada, claim, check, pay_date, paid, submitted, path.name, idx)
             rows.append(
                 {
@@ -370,24 +400,60 @@ def ingest_insurance_payment_csv(
             )
     if not rows:
         return 0
-    conn.execute("DELETE FROM sd_insurance_payment_lines WHERE source_file = ?", (path.name,))
-    # Full replace when ingesting newest file of this type
-    conn.execute("DELETE FROM sd_insurance_payment_lines")
-    conn.executemany(
-        """
-        INSERT OR REPLACE INTO sd_insurance_payment_lines (
-            line_id, insurance_company, ada_code, description, submitted_fee, allowed_amount,
-            paid_amount, write_off_amount, patient_portion, claim_number, check_number,
-            payment_date, source_file, extracted_at
-        ) VALUES (
-            :line_id, :insurance_company, :ada_code, :description, :submitted_fee, :allowed_amount,
-            :paid_amount, :write_off_amount, :patient_portion, :claim_number, :check_number,
-            :payment_date, :source_file, :extracted_at
+
+    # Atomic replace: avoid empty-table window for concurrent Sync/readers
+    prior_count = 0
+    try:
+        prior_count = int(
+            conn.execute("SELECT COUNT(*) FROM sd_insurance_payment_lines").fetchone()[0] or 0
         )
-        """,
-        rows,
-    )
-    _rollup_into_importer_aggregate(conn, rows, path.name, extracted_at)
+    except sqlite3.Error:
+        prior_count = 0
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute("DELETE FROM sd_insurance_payment_lines")
+        conn.executemany(
+            """
+            INSERT INTO sd_insurance_payment_lines (
+                line_id, insurance_company, ada_code, description, submitted_fee, allowed_amount,
+                paid_amount, write_off_amount, patient_portion, claim_number, check_number,
+                payment_date, source_file, extracted_at
+            ) VALUES (
+                :line_id, :insurance_company, :ada_code, :description, :submitted_fee, :allowed_amount,
+                :paid_amount, :write_off_amount, :patient_portion, :claim_number, :check_number,
+                :payment_date, :source_file, :extracted_at
+            )
+            """,
+            rows,
+        )
+        paid_sum = sum(
+            (to_money_from_csv(r["paid_amount"]) or Decimal("0.00") for r in rows),
+            Decimal("0.00"),
+        )
+        conn.execute(
+            """
+            INSERT INTO sd_insurance_payment_ingest_audit (
+                ingest_id, source_file, extracted_at, rows_accepted, rows_skipped_incomplete,
+                paid_sum, prior_row_count, note
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                _sha("ingest", path.name, extracted_at, len(rows)),
+                path.name,
+                extracted_at,
+                len(rows),
+                skipped_incomplete,
+                float(paid_sum),
+                prior_count,
+                "full replace of sd_insurance_payment_lines; empty != invent",
+            ),
+        )
+        _rollup_into_importer_aggregate(conn, rows, path.name, extracted_at)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     return len(rows)
 
 
@@ -573,6 +639,19 @@ def run_treatment_planning_ingest(
                 "No procedure_codes*.csv found — optional SoftDent Procedure Code Listing crosswalk."
             )
         result["estimates"] = rebuild_treatment_planning_estimates(conn)
+        try:
+            from softdent_settlement_matrix import hydrate_settlement_matrix
+
+            matrix = hydrate_settlement_matrix(db_path=Path(db_path), conn=conn)
+            result["settlementMatrix"] = {
+                "matrixCells": matrix.get("matrixCells"),
+                "cellsNge10": matrix.get("cellsNge10"),
+                "gapCode": matrix.get("gapCode"),
+            }
+        except Exception as mx_exc:  # noqa: BLE001
+            result.setdefault("warnings", []).append(
+                f"settlement_matrix hydrate: {type(mx_exc).__name__}:{mx_exc}"
+            )
         conn.commit()
         result["ok"] = True
     except Exception as exc:  # noqa: BLE001
@@ -622,6 +701,71 @@ def lookup_treatment_estimate(
         out["message"] = "Need a specific insurance company and ADA/CDT code (e.g. Delta Dental + D0274)."
         return out
 
+    # HAL-10605: viaGold (settlement_matrix) before gold estimates / alias / ledger
+    try:
+        from softdent_settlement_matrix import lookup_settlement_matrix
+
+        gold_cell = lookup_settlement_matrix(
+            payer=payer, ada_code=ada, db_path=Path(db_path), min_sample=min_sample
+        )
+    except Exception as exc:  # noqa: BLE001
+        gold_cell = {"found": False, "error": f"{type(exc).__name__}:{exc}"}
+
+    if gold_cell.get("blockedPending"):
+        # Fall through to alias pending handler below via normal path
+        pass
+    elif gold_cell.get("found"):
+        n = int(gold_cell.get("sampleSize") or 0)
+        sufficient = bool(gold_cell.get("sufficient"))
+        estimate = {
+            "insuranceCompany": payer.strip(),
+            "adaCode": ada,
+            "submittedFeeAvg": None,
+            "allowedAmountAvg": None,
+            "paidAmountAvg": gold_cell.get("avgPaid"),
+            "writeOffAvg": None,
+            "patientPortionAvg": None,
+            "sampleSize": n,
+            "updatedAt": gold_cell.get("lastUpdated"),
+            "source": "viaGold",
+            "credibility": "gold" if sufficient else "insufficient",
+            "tier": "exact",
+            "isInferred": False,
+            "goldAvailable": True,
+            "spineCarrierName": gold_cell.get("spineCarrierName"),
+            "stdDev": gold_cell.get("stdDev"),
+            "viaAlias": bool(gold_cell.get("viaAlias")),
+        }
+        out.update(
+            {
+                "ok": True,
+                "found": True,
+                "sampleSize": n,
+                "estimate": estimate,
+                "source": "viaGold",
+                "viaGold": True,
+                "viaAlias": bool(gold_cell.get("viaAlias")),
+                "spineCarrierName": gold_cell.get("spineCarrierName"),
+                "sufficient": sufficient,
+                "credibility": estimate["credibility"],
+                "tier": "exact",
+                "emptyIsNotZero": True,
+                "def": "HAL-10605",
+                "honesty": (
+                    "Estimate from SoftDent gold payment lines (settlement_matrix). "
+                    "Not a guarantee of benefits. empty != $0."
+                ),
+            }
+        )
+        if not sufficient:
+            out["message"] = (
+                f"Only {n} gold payment line(s) for "
+                f"{gold_cell.get('spineCarrierName') or payer} × {ada} "
+                f"(need >={min_sample}). empty != $0."
+            )
+        out["chip"] = build_tp_estimate_chip(out)
+        return out
+
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
@@ -648,86 +792,583 @@ def lookup_treatment_estimate(
                 (ada, f"%{payer_q}%"),
             ).fetchone()
         if row is None:
-            # Any payer for this ADA (informational)
-            any_row = conn.execute(
-                """
-                SELECT insurance_company, sample_size FROM treatment_planning_estimates
-                WHERE upper(ada_code) = upper(?)
-                ORDER BY sample_size DESC LIMIT 3
-                """,
-                (ada,),
-            ).fetchall()
+            # Gold path empty for this InsCo×ADA — fall through to unified ledger spine
+            pass
+        else:
+            sample = int(row["sample_size"] or 0)
+            estimate = {
+                "insuranceCompany": row["insurance_company"],
+                "adaCode": row["ada_code"],
+                "submittedFeeAvg": row["submitted_fee_avg"],
+                "allowedAmountAvg": row["allowed_amount_avg"],
+                "paidAmountAvg": row["paid_amount_avg"],
+                "writeOffAvg": row["write_off_avg"],
+                "patientPortionAvg": row["patient_portion_avg"],
+                "sampleSize": sample,
+                "updatedAt": row["updated_at"],
+                "source": "viaGold",
+                "credibility": "gold" if sample >= min_sample else "insufficient",
+                "tier": "exact",
+                "isInferred": False,
+                "goldAvailable": True,
+            }
             out["ok"] = True
-            out["message"] = (
-                f"No historical payment lines for {payer.strip()} × {ada}. "
-                + (
-                    "Other payers with data: "
-                    + ", ".join(f"{r['insurance_company']} (n={r['sample_size']})" for r in any_row)
-                    if any_row
-                    else "Export SoftDent Insurance Payment Analysis CSV to build estimates."
+            out["found"] = True
+            out["sampleSize"] = sample
+            out["estimate"] = estimate
+            out["source"] = "viaGold"
+            out["viaGold"] = True
+            out["sufficient"] = sample >= min_sample
+            out["credibility"] = estimate["credibility"]
+            out["tier"] = "exact"
+            out["emptyIsNotZero"] = True
+            out["chip"] = build_tp_estimate_chip(out)
+            out["def"] = "HAL-10605"
+            if not out["sufficient"]:
+                out["message"] = (
+                    f"Only {sample} historical line(s) for {estimate['insuranceCompany']} × {ada} "
+                    f"(need >={min_sample} for a reliable estimate). Contact payer for pre-auth / benefits."
                 )
-            )
             return out
-
-        sample = int(row["sample_size"] or 0)
-        estimate = {
-            "insuranceCompany": row["insurance_company"],
-            "adaCode": row["ada_code"],
-            "submittedFeeAvg": row["submitted_fee_avg"],
-            "allowedAmountAvg": row["allowed_amount_avg"],
-            "paidAmountAvg": row["paid_amount_avg"],
-            "writeOffAvg": row["write_off_avg"],
-            "patientPortionAvg": row["patient_portion_avg"],
-            "sampleSize": sample,
-            "updatedAt": row["updated_at"],
-        }
-        out["ok"] = True
-        out["found"] = True
-        out["sampleSize"] = sample
-        out["estimate"] = estimate
-        out["sufficient"] = sample >= min_sample
-        if not out["sufficient"]:
-            out["message"] = (
-                f"Only {sample} historical line(s) for {estimate['insuranceCompany']} × {ada} "
-                f"(need >={min_sample} for a reliable estimate). Contact payer for pre-auth / benefits."
-            )
-        return out
     finally:
         conn.close()
 
-
-def _fmt_money(value: Any) -> str:
-    if value is None:
-        return "unknown"
+    # HAL-10601: resolve accepted carrier_alias before spine fallback.
+    # Pending manuals never auto-resolve.
+    alias_meta: dict[str, Any] = {}
     try:
-        return f"${float(value):,.2f}"
-    except (TypeError, ValueError):
-        return "unknown"
+        from softdent_carrier_alias import resolve_accepted_alias_for_tp
+
+        alias_meta = resolve_accepted_alias_for_tp(payer, db_path=Path(db_path))
+    except Exception as exc:  # noqa: BLE001
+        alias_meta = {"viaAlias": False, "resolveError": f"{type(exc).__name__}:{exc}"}
+
+    if alias_meta.get("blockedPending"):
+        pend = alias_meta.get("pending") if isinstance(alias_meta.get("pending"), dict) else {}
+        blocked = {
+            "ok": True,
+            "found": True,
+            "sufficient": False,
+            "payer": payer.strip(),
+            "adaCode": ada,
+            "minSample": min_sample,
+            "sampleSize": 0,
+            "estimate": {
+                "insuranceCompany": payer.strip(),
+                "adaCode": ada,
+                "submittedFeeAvg": None,
+                "allowedAmountAvg": None,
+                "paidAmountAvg": None,
+                "writeOffAvg": None,
+                "patientPortionAvg": None,
+                "sampleSize": 0,
+                "credibility": "insufficient",
+                "tier": None,
+                "source": "carrier_alias_pending",
+                "goldAvailable": False,
+                "masterCompanyId": alias_meta.get("masterCompanyId"),
+                "spineCarrierName": alias_meta.get("spineCarrierName"),
+                "pendingAlias": True,
+            },
+            "credibility": "insufficient",
+            "source": "carrier_alias_pending",
+            "viaAlias": False,
+            "blockedPending": True,
+            "pendingAlias": pend,
+            "tpCodeUsesCarrierAlias": True,
+            "emptyIsNotZero": True,
+            "message": (
+                f"Carrier alias for {payer.strip()} is pending HAL review "
+                f"(proposed spine={alias_meta.get('spineCarrierName') or '?'}). "
+                "Not auto-resolved — empty != $0. "
+                "Confirm with: python scripts/reconcile_carrier_aliases.py "
+                f"--accept-pending \"{payer.strip()}\""
+            ),
+            "honesty": (
+                "Pending carrier aliases never auto-resolve into treatment estimates. "
+                "empty != $0."
+            ),
+            "def": "HAL-10601",
+        }
+        blocked["chip"] = build_tp_estimate_chip(blocked)
+        return blocked
+
+    spine_payer = str(alias_meta.get("spineCarrierName") or payer)
+    result = _ledger_spine_treatment_fallback(
+        payer=spine_payer,
+        ada_code=ada,
+        db_path=Path(db_path),
+        include_inferred=False,
+    )
+    result["tpCodeUsesCarrierAlias"] = True
+    result["emptyIsNotZero"] = True
+    result["def"] = "HAL-10601"
+    if alias_meta.get("viaAlias"):
+        result["viaAlias"] = True
+        result["masterCompanyId"] = alias_meta.get("masterCompanyId")
+        result["spineCarrierName"] = alias_meta.get("spineCarrierName")
+        result["payer"] = payer.strip()
+        if result.get("found"):
+            result["source"] = "ledger_episode_5yr_via_alias"
+            est = result.get("estimate") if isinstance(result.get("estimate"), dict) else None
+            if est is not None:
+                est["source"] = "ledger_episode_5yr_via_alias"
+                est["insuranceCompany"] = payer.strip()
+                est["spineCarrierName"] = alias_meta.get("spineCarrierName")
+                est["masterCompanyId"] = alias_meta.get("masterCompanyId")
+                result["estimate"] = est
+            result["honesty"] = (
+                "Estimate from SoftDent ledger episodes via accepted carrier alias "
+                f"({payer.strip()} → {alias_meta.get('spineCarrierName')}). "
+                "Not a guarantee of benefits. empty != $0."
+            )
+    else:
+        result["viaAlias"] = False
+    result["chip"] = build_tp_estimate_chip(result)
+    return result
+
+
+def build_tp_estimate_chip(result: dict[str, Any] | None) -> dict[str, Any]:
+    """Staff-facing TP estimate chip (HAL-10587). Never invents $0 for empty."""
+    r = result if isinstance(result, dict) else {}
+    est = r.get("estimate") if isinstance(r.get("estimate"), dict) else {}
+    cred = str(est.get("credibility") or r.get("credibility") or "insufficient")
+    tier = str(est.get("tier") or r.get("tier") or "")
+    n = int(est.get("sampleSize") or r.get("sampleSize") or 0)
+    source = str(est.get("source") or r.get("source") or "")
+    ada = str(est.get("adaCode") or r.get("adaCode") or "")
+    payer = str(est.get("insuranceCompany") or r.get("payer") or "")
+    paid = est.get("paidAmountAvg")
+    wo = est.get("writeOffAvg")
+    pay_pct = est.get("paidPctMedian")
+    pay_sd = est.get("paidPctStdev")
+
+    if not r.get("ok"):
+        return {
+            "badge": "error",
+            "label": "Unavailable",
+            "tone": "danger",
+            "display": str(r.get("message") or "Estimate unavailable"),
+            "showDollars": False,
+            "emptyIsNotZero": True,
+        }
+    if not r.get("found") or cred == "insufficient" or (
+        not r.get("sufficient") and source in ("gold_payment_lines", "viaGold")
+    ) or (
+        not r.get("sufficient")
+        and n < 10
+        and tier == "exact"
+        and source not in ("gold_payment_lines", "viaGold")
+    ):
+        # Honest insufficient — never show $0.00 as a fake estimate
+        if source in ("gold_payment_lines", "viaGold") and r.get("found") and n > 0:
+            display = str(
+                r.get("message")
+                or (
+                    f"Only {n} historical line(s) for {payer or '?'} × {ada or '?'} "
+                    f"(need >=10 for a reliable estimate). Contact payer for pre-auth / benefits."
+                )
+            )
+        else:
+            display = (
+                f"No credible data for {payer or '?'} × {ada or '?'} "
+                f"(n={n}). empty != $0 — verify with payer."
+            )
+        return {
+            "badge": "insufficient",
+            "label": "Insufficient data",
+            "tone": "muted",
+            "display": display,
+            "showDollars": False,
+            "paidMedian": None,
+            "writeOffMedian": None,
+            "sampleSize": n,
+            "credibility": "insufficient" if cred != "gold" else "insufficient",
+            "tier": tier or None,
+            "source": source or None,
+            "emptyIsNotZero": True,
+            "adaCode": ada,
+            "insuranceCompany": payer,
+            "masterCompanyId": est.get("masterCompanyId") or r.get("masterCompanyId"),
+            "spineCarrierName": est.get("spineCarrierName") or r.get("spineCarrierName"),
+            "viaAlias": bool(r.get("viaAlias") or source == "ledger_episode_5yr_via_alias"),
+        }
+
+    if cred == "high":
+        badge, label, tone = "high", "Exact high", "ok"
+    elif cred == "usable":
+        badge, label, tone = "usable", "Exact usable", "warn"
+    elif "inferred" in cred or tier == "inferred":
+        badge, label, tone = "inferred", "Inferred", "danger"
+    elif cred == "gold":
+        badge, label, tone = "gold", "Payment lines", "ok"
+    else:
+        badge, label, tone = cred or "published", "Published", "warn"
+
+    variance = None
+    if pay_pct is not None:
+        variance = f"pay% {pay_pct}"
+        if pay_sd is not None:
+            variance += f" +/-{pay_sd}"
+
+    # Never show dollars when paid avg is empty (HON-001)
+    paid_txt = _fmt_money(paid, source_tag=source or "ledger_episode_5yr")
+    if paid is None or paid_txt in {"unknown", "—", "No data"}:
+        return {
+            "badge": "insufficient",
+            "label": "Insufficient data",
+            "tone": "muted",
+            "display": (
+                f"No dollar estimate for {payer or '?'} × {ada or '?'} "
+                f"(n={n}). empty != $0 — verify with payer."
+            ),
+            "showDollars": False,
+            "paidMedian": None,
+            "writeOffMedian": None,
+            "sampleSize": n,
+            "credibility": "insufficient",
+            "tier": tier or None,
+            "source": source or None,
+            "emptyIsNotZero": True,
+            "adaCode": ada,
+            "insuranceCompany": payer,
+            "masterCompanyId": est.get("masterCompanyId") or r.get("masterCompanyId"),
+            "spineCarrierName": est.get("spineCarrierName") or r.get("spineCarrierName"),
+            "viaAlias": bool(r.get("viaAlias") or source == "ledger_episode_5yr_via_alias"),
+            "honestyDef": "HAL-10591",
+        }
+
+    display_bits = [paid_txt]
+    if wo is not None:
+        display_bits.append(f"WO {_fmt_money(wo, source_tag=source or 'ledger_episode_5yr')}")
+    if variance:
+        display_bits.append(f"({variance})")
+    display_bits.append(f"n={n}")
+
+    return {
+        "badge": badge,
+        "label": label,
+        "tone": tone,
+        "display": " · ".join(display_bits),
+        "showDollars": True,
+        "paidMedian": paid,
+        "writeOffMedian": wo,
+        "paidPctMedian": pay_pct,
+        "paidPctStdev": pay_sd,
+        "writeOffPctMedian": est.get("writeOffPctMedian"),
+        "writeOffPctStdev": est.get("writeOffPctStdev"),
+        "varianceBand": variance,
+        "sampleSize": n,
+        "credibility": cred,
+        "tier": tier,
+        "source": source,
+        "adaCode": ada,
+        "insuranceCompany": payer,
+        "masterCompanyId": est.get("masterCompanyId") or r.get("masterCompanyId"),
+        "spineCarrierName": est.get("spineCarrierName") or r.get("spineCarrierName"),
+        "viaAlias": bool(r.get("viaAlias") or source == "ledger_episode_5yr_via_alias"),
+        "emptyIsNotZero": True,
+        "def": "HAL-10601" if (r.get("viaAlias") or source == "ledger_episode_5yr_via_alias") else "HAL-10587",
+        "honestyDef": "HAL-10591",
+    }
+
+
+def _ledger_spine_treatment_fallback(
+    *,
+    payer: str,
+    ada_code: str,
+    db_path: Path,
+    include_inferred: bool = False,
+) -> dict[str, Any]:
+    """When gold payment lines empty, use unified InsCo×ADA spine ($ + %)."""
+    out: dict[str, Any] = {
+        "ok": True,
+        "found": False,
+        "sufficient": False,
+        "payer": payer.strip(),
+        "adaCode": ada_code,
+        "sampleSize": 0,
+        "estimate": None,
+        "source": "ledger_episode_5yr",
+        "goldAvailable": False,
+        "honesty": (
+            "Estimate from SoftDent ledger episodes (code 2 pay / 51 write-off) over ~5 years — "
+            "not a guarantee of benefits. Gold payment-line path empty. empty != $0. "
+            "Verify deductible, annual max, and plan limits."
+        ),
+    }
+    try:
+        from softdent_insco_ada_probabilistic import lookup_probabilistic_estimate
+        from softdent_insco_ada_pct_variance import lookup_pct_variance
+        from softdent_insco_ada_spine import normalize_cdt
+
+        ada = normalize_cdt(ada_code) or normalize_ada_code(ada_code)
+        out["adaCode"] = ada
+        if not ada:
+            out["message"] = "Need a CDT/ADA code (D####)."
+            return out
+
+        dollar = lookup_probabilistic_estimate(
+            payer=payer,
+            ada_code=ada,
+            db_path=db_path,
+            include_inferred=include_inferred,
+        )
+        pct = lookup_pct_variance(
+            payer=payer,
+            ada_code=ada,
+            include_inferred=include_inferred,
+            db_path=db_path,
+        )
+        if not dollar and not pct:
+            # Catalog may still have an insufficient cell — surface honest empty chip
+            try:
+                from softdent_insco_ada_catalog_matrix import list_catalog_matrix_rows
+
+                cat_rows = list_catalog_matrix_rows(
+                    db_path=db_path,
+                    include_insufficient=True,
+                    include_inferred=True,
+                    payer=payer,
+                    ada=ada,
+                    limit=3,
+                )
+            except Exception:
+                cat_rows = []
+            if cat_rows:
+                row0 = cat_rows[0]
+                n0 = int(row0.get("sampleSize") or 0)
+                out["found"] = True
+                out["sampleSize"] = n0
+                out["credibility"] = "insufficient"
+                out["tier"] = str(row0.get("tier") or "")
+                out["estimate"] = {
+                    "insuranceCompany": row0.get("insuranceCompany") or payer.strip(),
+                    "adaCode": ada,
+                    "submittedFeeAvg": None,
+                    "allowedAmountAvg": None,
+                    "paidAmountAvg": None,  # never invent dollars for insufficient UX
+                    "writeOffAvg": None,
+                    "patientPortionAvg": None,
+                    "sampleSize": n0,
+                    "credibility": "insufficient",
+                    "tier": row0.get("tier"),
+                    "isInferred": str(row0.get("tier") or "") == "inferred",
+                    "source": "ledger_episode_5yr",
+                    "goldAvailable": False,
+                }
+                out["sufficient"] = False
+                out["message"] = (
+                    f"Insufficient catalog data for {payer.strip()} × {ada} (n={n0}). "
+                    "empty != $0 — verify with payer / benefits."
+                )
+                return out
+            out["message"] = (
+                f"No publishable ledger estimate for {payer.strip()} × {ada}. "
+                "empty != $0 — run Sync / InsCo×ADA rebuild, or export Insurance Payment Analysis."
+            )
+            return out
+
+        n = int((dollar or {}).get("sample_size") or (pct or {}).get("sampleSize") or 0)
+        cred = str(
+            (dollar or {}).get("credibility")
+            or (pct or {}).get("credibility")
+            or "insufficient"
+        )
+        tier = str((dollar or {}).get("tier") or (pct or {}).get("tier") or "exact")
+        billed = (dollar or {}).get("billed_avg") or (pct or {}).get("billedAvg")
+        paid = (dollar or {}).get("paid_median") or (dollar or {}).get("paid_avg")
+        wo = (dollar or {}).get("write_off_median") or (dollar or {}).get("write_off_avg")
+        estimate = {
+            "insuranceCompany": (dollar or {}).get("insurance_company")
+            or (pct or {}).get("insuranceCompany")
+            or payer.strip(),
+            "adaCode": ada,
+            "submittedFeeAvg": billed,
+            "allowedAmountAvg": None,
+            "paidAmountAvg": paid if paid is not None else (pct or {}).get("paidAvg"),
+            "writeOffAvg": wo if wo is not None else (pct or {}).get("writeOffAvg"),
+            "patientPortionAvg": None,
+            "paidPctMedian": (pct or {}).get("paidPctMedian"),
+            "paidPctStdev": (pct or {}).get("paidPctStdev"),
+            "writeOffPctMedian": (pct or {}).get("writeOffPctMedian"),
+            "writeOffPctStdev": (pct or {}).get("writeOffPctStdev"),
+            "sampleSize": n,
+            "credibility": cred,
+            "tier": tier,
+            "isInferred": tier == "inferred",
+            "source": "ledger_episode_5yr",
+            "goldAvailable": False,
+            "updatedAt": (dollar or {}).get("period_end") or (pct or {}).get("periodEnd"),
+        }
+        out["found"] = True
+        out["sampleSize"] = n
+        out["estimate"] = estimate
+        out["sufficient"] = cred in {"high", "usable"} and tier == "exact"
+        out["credibility"] = cred
+        out["tier"] = tier
+        if not out["sufficient"]:
+            out["message"] = (
+                f"Ledger spine has {cred}/{tier} data for {estimate['insuranceCompany']} × {ada} "
+                f"(n={n}). Prefer exact usable+ for treatment quotes; inferred needs opt-in."
+            )
+        return out
+    except Exception as exc:  # noqa: BLE001
+        out["ok"] = False
+        out["message"] = f"Ledger spine fallback failed: {type(exc).__name__}:{exc}"
+        return out
+
+
+def _fmt_money(value: Any, *, source_tag: str = "ledger_episode_5yr") -> str:
+    """Format money honestly — empty/null never becomes ``$0.00`` (HAL-10591)."""
+    try:
+        from ui_honesty_policy import format_display_money
+
+        return format_display_money(value, source_tag=source_tag, empty_display="unknown")
+    except Exception:  # noqa: BLE001
+        if value is None:
+            return "unknown"
+        try:
+            return f"${float(value):,.2f}"
+        except (TypeError, ValueError):
+            return "unknown"
 
 
 def format_treatment_estimate_reply(result: dict[str, Any]) -> str:
     if not result.get("ok"):
         return str(result.get("message") or "Treatment estimate lookup failed.")
-    if not result.get("found"):
-        return str(result.get("message") or "No estimate found.")
-    if not result.get("sufficient"):
-        return str(result.get("message") or "Insufficient sample size.")
+    chip = result.get("chip") if isinstance(result.get("chip"), dict) else build_tp_estimate_chip(result)
+    if not result.get("found") or not chip.get("showDollars"):
+        return str(
+            chip.get("display")
+            or result.get("message")
+            or "No credible treatment-plan estimate (empty != $0)."
+        )
     est = result.get("estimate") if isinstance(result.get("estimate"), dict) else {}
     co = est.get("insuranceCompany") or result.get("payer")
     ada = est.get("adaCode") or result.get("adaCode")
+    source = str(est.get("source") or result.get("source") or "")
+    badge = f"[{chip.get('label') or chip.get('badge')}]"
+    if source == "ledger_episode_5yr" or source.startswith("ledger"):
+        lines = [
+            f"Treatment plan estimate {badge}: {co} × {ada} — {chip.get('display')}.",
+            f"Source={source}.",
+            str(result.get("honesty") or ""),
+        ]
+        if not result.get("sufficient"):
+            lines.insert(1, str(result.get("message") or "Below exact usable+ — verify with payer."))
+        return " ".join(x for x in lines if x).strip()
+    if not result.get("sufficient"):
+        return str(result.get("message") or chip.get("display") or "Insufficient sample size.")
     n = est.get("sampleSize") or result.get("sampleSize")
     lines = [
-        f"Based on {n} historical SoftDent insurance payment line(s), "
+        f"Treatment plan estimate {badge} from {n} SoftDent insurance payment line(s): "
         f"{co} typically allows {_fmt_money(est.get('allowedAmountAvg'))} for {ada}, "
-        f"paying {_fmt_money(est.get('paidAmountAvg'))} after contractual write-off "
-        f"of {_fmt_money(est.get('writeOffAvg'))}. "
-        f"Patient portion averages {_fmt_money(est.get('patientPortionAvg'))} "
-        f"(submitted avg {_fmt_money(est.get('submittedFeeAvg'))}).",
+        f"paying {_fmt_money(est.get('paidAmountAvg'))} after write-off "
+        f"{_fmt_money(est.get('writeOffAvg'))}. "
+        f"Patient portion averages {_fmt_money(est.get('patientPortionAvg'))}.",
         str(result.get("honesty") or ""),
     ]
     if est.get("allowedAmountAvg") is None:
-        lines.append("Allowed amount unknown in historical data — verify with payer before quoting the patient.")
+        lines.append("Allowed amount unknown — verify with payer before quoting the patient.")
     return " ".join(x for x in lines if x).strip()
+
+
+def treatment_plan_estimate_widget() -> dict[str, Any]:
+    """SoftDent-page TP estimate surface (HAL-10587) — catalog/spine chips."""
+    from softdent_insco_ada_catalog_matrix import catalog_matrix_status, list_catalog_matrix_rows
+
+    st = treatment_planning_status()
+    cat = catalog_matrix_status()
+    exact_rows = list_catalog_matrix_rows(
+        include_insufficient=False, include_inferred=False, limit=8
+    )
+    chips: list[dict[str, Any]] = []
+    for row in exact_rows:
+        est = lookup_treatment_estimate(
+            payer=str(row.get("insuranceCompany") or ""),
+            ada_code=str(row.get("adaCode") or ""),
+        )
+        chip = est.get("chip") if isinstance(est.get("chip"), dict) else build_tp_estimate_chip(est)
+        chips.append(chip)
+
+    exact_n = int(cat.get("exactUsableCells") or st.get("ledgerSpineExactUsable") or 0)
+    gold_n = int(st.get("estimatesWithMinSample") or 0)
+    if exact_n <= 0 and gold_n <= 0:
+        status = "empty"
+        message = "No credible treatment-plan estimates yet — run Sync / InsCo×ADA rebuild."
+    else:
+        status = "ok"
+        message = (
+            f"Tx plan estimates · spine exact usable={exact_n} · "
+            f"gold ready={gold_n} · catalog cells={cat.get('totalCells') or 0}"
+        )
+    return {
+        "id": "softdent-tp-estimate-chips",
+        "type": "status",
+        "label": "Treatment Plan Estimates (HAL-10587)",
+        "size": "strip",
+        "compact": True,
+        "maxHeight": 80,
+        "status": status,
+        "message": message,
+        "hint": (
+            "Catalog-enriched InsCo×ADA chips (pay$/WO$ + % +/-). "
+            "Gold payment lines win when present; else ledger_episode_5yr. "
+            "Insufficient never shows $0.00. empty != $0."
+        ),
+        "chips": chips,
+        "exactUsable": exact_n,
+        "goldReady": gold_n,
+        "fallbackSource": st.get("fallbackSource"),
+        "halChips": [
+            {
+                "label": "Delta KS D1110 tx estimate?",
+                "query": "How much will Delta Dental of KS typically pay for D1110?",
+            },
+            {
+                "label": "Treatment planning status",
+                "query": "treatment planning estimates status",
+            },
+            {
+                "label": "InsCo ADA catalog status",
+                "query": "InsCo ADA catalog matrix status",
+            },
+        ],
+        "honesty": (
+            "Historical SoftDent ledger / payment-line averages — not a benefits guarantee. empty != $0."
+        ),
+        "def": "HAL-10587",
+    }
+
+
+def log_tp_estimate_audit(result: dict[str, Any], *, source: str = "api") -> None:
+    """Best-effort debug audit for TP estimate lookups."""
+    try:
+        root = resolve_exports_dir()
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / f"tp_estimate_audit_{date.today().isoformat()}.jsonl"
+        chip = result.get("chip") if isinstance(result.get("chip"), dict) else {}
+        line = json.dumps(
+            {
+                "at": _utc_now(),
+                "source": source,
+                "payer": result.get("payer"),
+                "adaCode": result.get("adaCode"),
+                "found": result.get("found"),
+                "sufficient": result.get("sufficient"),
+                "credibility": result.get("credibility") or chip.get("credibility"),
+                "tier": result.get("tier") or chip.get("tier"),
+                "estimateSource": result.get("source") or chip.get("source"),
+                "showDollars": chip.get("showDollars"),
+                "def": "HAL-10587",
+            },
+            ensure_ascii=True,
+        )
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except Exception:
+        pass
 
 
 def parse_treatment_estimate_query(query: str) -> dict[str, str] | None:
@@ -817,6 +1458,33 @@ def treatment_planning_status(db_path: Path | None = None) -> dict[str, Any]:
             ).fetchone()[0]
             or 0
         )
+        # Spine fallback availability (HAL-10585) when gold path empty
+        try:
+            if out["estimates"] == 0:
+                spine_n = int(
+                    conn.execute(
+                        """
+                        SELECT COUNT(*) FROM insco_ada_probabilistic_estimates
+                        WHERE tier='exact' AND credibility IN ('high','usable')
+                        """
+                    ).fetchone()[0]
+                    or 0
+                )
+                out["ledgerSpineExactUsable"] = spine_n
+                out["fallbackSource"] = "ledger_episode_5yr" if spine_n else None
+                if spine_n:
+                    out["hint"] = (
+                        "Gold payment lines empty — treatment estimates fall back to unified "
+                        "InsCo×ADA ledger spine (code 2/51, 5yr), resolving accepted carrier "
+                        "aliases (HAL-10601). Pending manuals never auto-resolve. empty != $0."
+                    )
+                    out["tpCodeUsesCarrierAlias"] = True
+                    out["fallbackSource"] = "ledger_episode_5yr_via_alias"
+        except Exception:
+            pass
+        out["tpCodeUsesCarrierAlias"] = True
+        out["emptyIsNotZero"] = True
+        out["def"] = "HAL-10601"
     finally:
         conn.close()
     return out

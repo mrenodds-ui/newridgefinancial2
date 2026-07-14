@@ -311,7 +311,37 @@ def ingest_era_835(
             "patientName": m.get("patientName"),
             "confidence": m.get("confidence"),
             "paidAmount": m.get("paidAmount"),
-            "denialCode": (m.get("segment") or {}).get("status") if isinstance(m.get("segment"), dict) else None,
+            # Prefer CAS denial (e.g. CO-45); never store bare CLP status digits as denialCode.
+            "denialCode": (
+                (m.get("segment") or {}).get("denialCode")
+                if isinstance(m.get("segment"), dict)
+                else None
+            )
+            or (
+                ((m.get("segment") or {}).get("casCodes") or [None])[0]
+                if isinstance(m.get("segment"), dict)
+                else None
+            ),
+            "casCodes": (
+                list((m.get("segment") or {}).get("casCodes") or [])
+                if isinstance(m.get("segment"), dict)
+                else []
+            ),
+            "rarcCodes": (
+                list((m.get("segment") or {}).get("rarcCodes") or [])
+                if isinstance(m.get("segment"), dict)
+                else []
+            ),
+            "denialFlag": bool(
+                (m.get("segment") or {}).get("denialFlag")
+                if isinstance(m.get("segment"), dict)
+                else False
+            ),
+            "serviceLines": (
+                list((m.get("segment") or {}).get("serviceLines") or [])
+                if isinstance(m.get("segment"), dict)
+                else []
+            ),
             "matchedAt": _utc_now(),
             "sourceFile": filename or None,
             "source": "era-835",
@@ -338,6 +368,22 @@ def ingest_era_835(
         "matches": matched[:40],
         "byClaimCount": len(by_claim),
     }
+    try:
+        from era835_parser import summarize_835_for_hal
+
+        result["remittanceSummary"] = summarize_835_for_hal(parsed)
+    except Exception as exc:  # noqa: BLE001
+        result["remittanceSummary"] = {"ok": False, "error": str(exc)}
+    # REC-007: selective HAL warm for CAS codes seen on this 835 (background).
+    try:
+        from apex_hal_cache_warm_pack import selective_warm_from_era_summary
+
+        result["halCacheWarm"] = selective_warm_from_era_summary(
+            result.get("remittanceSummary") if isinstance(result.get("remittanceSummary"), dict) else None,
+            background=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        result["halCacheWarm"] = {"ok": False, "error": str(exc)}
     # HAL-said improve: denial→Steve + EOB backlog (NR2-local only)
     try:
         from apex_hal_said_improve_pack import process_era_workflow
@@ -385,13 +431,19 @@ def apply_era_to_kanban_columns(columns: dict[str, list[dict[str, Any]]]) -> dic
                 enriched = dict(card)
                 m = matches[cid]
                 enriched["eraStatus"] = "ERA Matched"
-                if m.get("denialCode") and str(m.get("denialCode")) not in {"1", "2", "3", "4", "19", "20", "21", "22"}:
-                    # Keep SoftDent denial column if already denied; else mark matched
-                    pass
+                denial = str(m.get("denialCode") or "").strip()
+                # Moonshot REC-005: copy real CAS codes (CO-45) onto the card — not CLP status digits.
+                if denial and denial not in {"1", "2", "3", "4", "19", "20", "21", "22"}:
+                    enriched["denialCode"] = denial
+                if m.get("casCodes"):
+                    enriched["casCodes"] = list(m.get("casCodes") or [])
                 if col != "denied":
                     enriched["column"] = "eraMatched"
                     moved.append(enriched)
                     continue
+                # Already denied: keep in denied column but stamp ERA match + denial code.
+                keep.append(enriched)
+                continue
             keep.append(card)
         out[col] = keep
     # Don't duplicate if already in eraMatched/paid
@@ -648,13 +700,17 @@ def build_daily_huddle_widget(reports: dict[str, Any], bundle: dict[str, Any]) -
     }
 
 
-# ——— IMP-008 Batch narratives ———
+# ——— IMP-008 / REC-008 Batch narratives ———
+
+BATCH_NARRATIVE_MAX = 20
 
 
 def batch_narrative_seed(claim_ids: list[str], *, payer: str | None = None) -> dict[str, Any]:
     ids = [str(x).strip() for x in claim_ids if str(x).strip()]
     if not ids:
         return {"ok": False, "error": "Select at least one claim ID"}
+    if len(ids) > BATCH_NARRATIVE_MAX:
+        return {"ok": False, "error": f"Select at most {BATCH_NARRATIVE_MAX} claims for one batch."}
     return {
         "ok": True,
         "seed": {
@@ -665,6 +721,32 @@ def batch_narrative_seed(claim_ids: list[str], *, payer: str | None = None) -> d
             "batchNarrative": True,
         },
         "count": len(ids),
+    }
+
+
+def shared_batch_context(body: dict[str, Any] | None) -> dict[str, Any]:
+    """Shared denial/payer/note context applied to every claim in a batch."""
+    raw = body if isinstance(body, dict) else {}
+    shared = raw.get("sharedContext") if isinstance(raw.get("sharedContext"), dict) else {}
+    note_ids = raw.get("clinicalNoteIds")
+    if note_ids is None:
+        note_ids = shared.get("clinicalNoteIds")
+    if not isinstance(note_ids, list):
+        note_ids = []
+    return {
+        "type": str(raw.get("type") or raw.get("narrativeType") or shared.get("type") or "appeal").strip().lower()
+        or "appeal",
+        "denialReason": str(
+            raw.get("denialReason") or shared.get("denialReason") or ""
+        ).strip()
+        or None,
+        "payerId": str(raw.get("payerId") or raw.get("payerName") or shared.get("payerId") or "").strip()
+        or None,
+        "templateId": str(raw.get("templateId") or shared.get("templateId") or "").strip() or None,
+        "clinicalNoteIds": [str(x).strip() for x in note_ids if str(x).strip()],
+        "attachments": raw.get("attachments")
+        if isinstance(raw.get("attachments"), list)
+        else (shared.get("attachments") if isinstance(shared.get("attachments"), list) else None),
     }
 
 

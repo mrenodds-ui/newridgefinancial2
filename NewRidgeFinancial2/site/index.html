@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-apex-version="hal-10498" data-nr2-epoch="nr2-apex">
+<html lang="en" data-apex-version="hal-10628" data-nr2-epoch="nr2-apex">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,13 +11,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="apex-tokens.css?v=hal-10498">
-  <link rel="stylesheet" href="apex-animations.css?v=hal-10498">
-  <link rel="stylesheet" href="apex-bridge.css?v=hal-10498">
-  <link rel="stylesheet" href="apex-theme.css?v=hal-10498">
-  <link rel="stylesheet" href="apex-chrome-flash.css?v=hal-10498">
-  <link rel="stylesheet" href="apex-hal-brain.css?v=hal-10498">
-  <link rel="stylesheet" href="apex-mobile-polish.css?v=hal-10498">
+  <link rel="stylesheet" href="apex-tokens.css?v=hal-10628">
+  <link rel="stylesheet" href="apex-animations.css?v=hal-10628">
+  <link rel="stylesheet" href="apex-bridge.css?v=hal-10628">
+  <link rel="stylesheet" href="apex-hal-brain.css?v=hal-10628">
 </head>
 <body class="apex-bridge">
   <div id="apex-ticker" class="apex-ticker" aria-live="polite" aria-label="Financial ticker">
@@ -34,7 +31,7 @@
   <aside id="apex-sidebar" class="apex-sidebar">
     <div class="apex-sidebar__brand">
       <div class="apex-brand">NR2 APEX</div>
-      <div class="apex-version">hal-10498 · bridge</div>
+      <div class="apex-version">hal-10628 · bridge</div>
     </div>
 
     <nav class="apex-sidebar__nav" aria-label="Bridge navigation">
@@ -44,9 +41,7 @@
       <button type="button" class="apex-nav-btn" data-page="quickbooks"><span class="apex-nav-icon" aria-hidden="true">◇</span><span class="apex-nav-label">QuickBooks</span></button>
       <button type="button" class="apex-nav-btn" data-page="ar"><span class="apex-nav-icon" aria-hidden="true">▣</span><span class="apex-nav-label">A/R</span></button>
       <button type="button" class="apex-nav-btn" data-page="claims"><span class="apex-nav-icon" aria-hidden="true">▤</span><span class="apex-nav-label">Claims</span></button>
-      <button type="button" class="apex-nav-btn" data-page="narratives"><span class="apex-nav-icon" aria-hidden="true">▧</span><span class="apex-nav-label">Narratives</span></button>
-      <button type="button" class="apex-nav-btn" data-page="documents"><span class="apex-nav-icon" aria-hidden="true">▨</span><span class="apex-nav-label">Documents</span></button>
-      <button type="button" class="apex-nav-btn" data-page="library"><span class="apex-nav-icon" aria-hidden="true">▦</span><span class="apex-nav-label">Library</span></button>
+      <button type="button" class="apex-nav-btn" data-page="content"><span class="apex-nav-icon" aria-hidden="true">▦</span><span class="apex-nav-label">Content</span></button>
       <button type="button" class="apex-nav-btn" data-page="office-manager"><span class="apex-nav-icon" aria-hidden="true">▩</span><span class="apex-nav-label">Office Mgr</span></button>
       <button type="button" class="apex-nav-btn" data-page="hal"><span class="apex-nav-icon" aria-hidden="true">◐</span><span class="apex-nav-label">HAL</span></button>
     </nav>
@@ -64,6 +59,7 @@
     </div>
 
     <div class="apex-sidebar__actions">
+      <button type="button" class="apex-ticker-mute" id="btn-density" title="Toggle Compact / Comfortable density">Comfortable</button>
       <button type="button" class="apex-icon-btn" id="btn-refresh" title="Force sync / refresh" aria-label="Sync"></button>
       <button type="button" class="apex-icon-btn" id="btn-print" title="Print current view" aria-label="Print"></button>
       <button type="button" class="apex-ticker-mute" id="btn-ticker-mute" title="Pause or resume ticker">Mute Ticker</button>
@@ -78,7 +74,7 @@
       </div>
       <nav id="apex-subnav" class="apex-subnav" aria-label="Page subpages" hidden></nav>
     </header>
-    <div id="apex-stage" class="apex-stage apex-mosaic" data-page="financial" aria-live="polite"></div>
+    <div id="apex-stage" class="apex-stage apex-stage-stack" data-page="financial" aria-live="polite"></div>
   </main>
 
   <div id="apex-ticker-bottom" class="apex-ticker apex-ticker--bottom" aria-live="off" aria-label="Secondary telemetry">
@@ -90,20 +86,20 @@
     </div>
   </div>
 
-  <script src="indexeddb-store.js?v=hal-10498"></script>
-  <script src="apex-chart-widget.js?v=hal-10498"></script>
-  <script src="nr2-dashboard-layout.js?v=hal-10498"></script>
-  <script src="apex-core.js?v=hal-10498"></script>
-  <script src="nr2-insight-sse.js?v=hal-10498"></script>
-  <script src="nr2-data-freshness.js?v=hal-10498"></script>
-  <script src="apex-quarantine-panel.js?v=hal-10498"></script>
-  <script src="apex-motion-helper.js?v=hal-10498"></script>
-  <script src="apex-ticker.js?v=hal-10498"></script>
-  <script src="apex-hal-bridge.js?v=hal-10498"></script>
-  <script src="apex-hal-brain.js?v=hal-10498"></script>
-  <script src="apex-narratives.js?v=hal-10498"></script>
-  <script src="hal-voice.js?v=hal-10498"></script>
-  <script src="hal-reports.js?v=hal-10498"></script>
+  <script src="indexeddb-store.js?v=hal-10628"></script>
+  <script src="apex-chart-widget.js?v=hal-10628"></script>
+  <script src="nr2-dashboard-layout.js?v=hal-10628"></script>
+  <script src="apex-core.js?v=hal-10628"></script>
+  <script src="nr2-insight-sse.js?v=hal-10628"></script>
+  <script src="nr2-data-freshness.js?v=hal-10628"></script>
+  <script src="apex-quarantine-panel.js?v=hal-10628"></script>
+  <script src="apex-motion-helper.js?v=hal-10628"></script>
+  <script src="apex-ticker.js?v=hal-10628"></script>
+  <script src="apex-hal-bridge.js?v=hal-10628"></script>
+  <script src="apex-hal-brain.js?v=hal-10628"></script>
+  <script src="apex-narratives.js?v=hal-10628"></script>
+  <script src="hal-voice.js?v=hal-10628"></script>
+  <script src="hal-reports.js?v=hal-10628"></script>
 </body>
 </html>
 

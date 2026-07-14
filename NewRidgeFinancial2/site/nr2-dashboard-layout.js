@@ -85,7 +85,7 @@
 
   function markStage(root, page) {
     if (!root || !root.classList) return;
-    root.classList.add("apex-mosaic--u3");
+    root.classList.add("apex-stage-stack");
     root.dataset.layoutPhase = "U3";
     root.dataset.layoutPage = String(page || "");
   }

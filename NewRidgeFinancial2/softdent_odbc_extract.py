@@ -4,6 +4,10 @@ When ``SOFTDENT_ODBC_DSN`` / ``NR2_SOFTDENT_ODBC_DSN`` is configured and optiona
 env SQL queries are present, rows are pulled via pyodbc. When Sensei Gateway DataSync
 JSON is present on the SoftDent server, ``sensei-datasync`` populates sd_* from live
 Carestream sync files. Otherwise the JSON/daysheet/claims fallback lane fills gaps.
+
+Program doctrine: prefer this database/extract lane when the needed SoftDent data is
+reachable here. SoftDent data that cannot be reached by the database requires SoftDent
+Sign On + SoftDent UI export (see softdent_signon / softdent_gui_export), then file ingest.
 """
 
 from __future__ import annotations
@@ -232,6 +236,8 @@ def ensure_sd_schema(conn: sqlite3.Connection) -> None:
             claim_status TEXT,
             practice_id TEXT NOT NULL DEFAULT '',
             extracted_at TEXT,
+            total_fee REAL,
+            balance REAL,
             PRIMARY KEY (practice_id, claim_id)
         );
         CREATE TABLE IF NOT EXISTS sd_payments (
@@ -298,15 +304,23 @@ def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
 
 _REL_CODE_MAP = {
     "1": "SELF",
+    "01": "SELF",
     "2": "SPOUSE",
+    "02": "SPOUSE",
     "3": "CHILD",
+    "03": "CHILD",
     "4": "OTHER",
+    "04": "OTHER",
+    "21": "OTHER",
     "S": "SELF",
     "SELF": "SELF",
     "SPOUSE": "SPOUSE",
     "CHILD": "CHILD",
     "OTHER": "OTHER",
 }
+
+# Daysheet/claim ids: DS-YYYYMMDD-{chart}-{proc}-{seq}
+_CLAIM_CHART_RE = re.compile(r"^DS-\d{8}-(\d+)(?:-|$)", re.IGNORECASE)
 
 DEFAULT_INSURANCE_ODBC_QUERY = """
 SELECT
@@ -992,11 +1006,23 @@ def _populate_from_claims_csv(conn: sqlite3.Connection, path: Path, *, extracted
                 amount = float(amount_raw)
             except ValueError:
                 amount = 0.0
+            try:
+                from softdent_outstanding_claims_bridge import ensure_sd_claims_bridge_columns
+
+                ensure_sd_claims_bridge_columns(conn)
+            except Exception:
+                pass
+            bal_raw = str(row.get("Balance") or row.get("balance") or "").replace(",", "").replace("$", "").strip()
+            try:
+                balance = float(bal_raw) if bal_raw else None
+            except ValueError:
+                balance = None
             conn.execute(
                 """
                 INSERT OR REPLACE INTO sd_claims
-                (claim_id, patient_name, payer, service_date, claim_amount, claim_status, practice_id, extracted_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (claim_id, patient_name, payer, service_date, claim_amount, claim_status,
+                 practice_id, extracted_at, total_fee, balance)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     claim_id,
@@ -1007,6 +1033,8 @@ def _populate_from_claims_csv(conn: sqlite3.Connection, path: Path, *, extracted
                     str(row.get("ClaimStatus") or row.get("claim_status") or "").strip(),
                     "",
                     extracted_at,
+                    amount,
+                    balance,
                 ),
             )
             count += 1
@@ -1106,21 +1134,41 @@ def _populate_from_odbc(conn: sqlite3.Connection, *, extracted_at: str) -> dict[
                     )
                     inserted += 1
                 elif table == "sd_claims":
+                    try:
+                        from softdent_outstanding_claims_bridge import ensure_sd_claims_bridge_columns
+
+                        ensure_sd_claims_bridge_columns(conn)
+                    except Exception:
+                        pass
+                    amount = float(mapping.get("claim_amount") or mapping.get("ClaimAmount") or 0)
+                    total_fee_raw = mapping.get("total_fee") or mapping.get("TotalFee") or mapping.get("Fee")
+                    balance_raw = mapping.get("balance") or mapping.get("Balance") or mapping.get("AmountDue")
+                    try:
+                        total_fee = float(total_fee_raw) if total_fee_raw not in (None, "") else amount
+                    except (TypeError, ValueError):
+                        total_fee = amount
+                    try:
+                        balance = float(balance_raw) if balance_raw not in (None, "") else None
+                    except (TypeError, ValueError):
+                        balance = None
                     conn.execute(
                         """
                         INSERT OR REPLACE INTO sd_claims
-                        (claim_id, patient_name, payer, service_date, claim_amount, claim_status, practice_id, extracted_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        (claim_id, patient_name, payer, service_date, claim_amount, claim_status,
+                         practice_id, extracted_at, total_fee, balance)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             str(mapping.get("claim_id") or mapping.get("ClaimID") or mapping.get("ClaimId") or ""),
                             str(mapping.get("patient_name") or mapping.get("PatientName") or ""),
                             str(mapping.get("payer") or mapping.get("Payer") or ""),
                             str(mapping.get("service_date") or mapping.get("ServiceDate") or ""),
-                            float(mapping.get("claim_amount") or mapping.get("ClaimAmount") or 0),
+                            amount,
                             str(mapping.get("claim_status") or mapping.get("ClaimStatus") or ""),
                             str(mapping.get("practice_id") or mapping.get("PracticeID") or ""),
                             extracted_at,
+                            total_fee,
+                            balance,
                         ),
                     )
                     inserted += 1
@@ -1523,6 +1571,384 @@ def _sensei_appt_status(entity: dict[str, Any]) -> str:
     return "scheduled"
 
 
+def _sensei_plan_array(insco_entity: dict[str, Any]) -> list[dict[str, Any]]:
+    plan_array = insco_entity.get("PlanArray")
+    if not isinstance(plan_array, dict):
+        return []
+    raw = plan_array.get("ArrayOfPLAN")
+    if isinstance(raw, dict):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return []
+    plans: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        plan = item.get("PLAN") if isinstance(item.get("PLAN"), dict) else item
+        if isinstance(plan, dict):
+            plans.append(plan)
+    return plans
+
+
+def load_sensei_plan_carrier_map(root: Path) -> dict[str, dict[str, str | None]]:
+    """Map InsurancePlanKey → carrier fields from Sensei Reference insco_*.json (read-only)."""
+    out: dict[str, dict[str, str | None]] = {}
+    for path in _iter_sensei_entity_files(root, "insco"):
+        entity = _load_sensei_entity(path, "INSURCO")
+        if not entity:
+            continue
+        carrier_code = _norm_empty(entity.get("Id") or entity.get("InsCo"))
+        carrier_name = _norm_empty(entity.get("Name") or entity.get("InsCoName"))
+        for plan in _sensei_plan_array(entity):
+            plan_id = _norm_empty(plan.get("Id") or plan.get("PlanId"))
+            if not plan_id:
+                continue
+            plan_name = _norm_empty(plan.get("Name"))
+            plan_insco = _norm_empty(plan.get("InsCo")) or carrier_code
+            # Prefer InsCo display name; fall back to plan product name. Never invent.
+            insurance_name = carrier_name or plan_name
+            out[plan_id] = {
+                "carrier_code": plan_insco or carrier_code,
+                "insurance_name": insurance_name,
+                "payer_id": None,  # honest: no invented EDI/Availity IDs
+                "group_number": _norm_empty(plan.get("GroupNo")),
+                "plan_name": plan_name,
+            }
+    return out
+
+
+def _sensei_coverage_priority(policy: dict[str, Any]) -> int:
+    raw = policy.get("CoverageType")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = 1
+    if value < 1:
+        return 1
+    if value > 3:
+        return 3
+    return value
+
+
+def _sensei_patient_chart_ids(entity: dict[str, Any]) -> list[str]:
+    """SoftDent chart / interface ids used in daysheet claim MRNs (distinct from UniqueID)."""
+    ids: list[str] = []
+    for key in ("Id", "InterfaceId", "ChartNo", "ulAccountId"):
+        value = _norm_empty(entity.get(key))
+        if value and value not in ids:
+            ids.append(value)
+    return ids
+
+
+def _upsert_patient_insurance_row(
+    conn: sqlite3.Connection,
+    *,
+    practice_id: str,
+    patient_id: str,
+    priority: int,
+    member_id: str | None,
+    subscriber_id: str | None,
+    relationship_code: str | None,
+    carrier_code: str | None,
+    insurance_name: str | None,
+    payer_id: str | None,
+    group_number: str | None,
+    extracted_at: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO sd_patient_insurance (
+            practice_id, patient_id, priority, member_id, subscriber_id,
+            subscriber_name, relationship_code, carrier_code, insurance_name,
+            payer_id, group_number, group_name, effective_date, termination_date, extracted_at
+        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?)
+        ON CONFLICT(practice_id, patient_id, priority) DO UPDATE SET
+            member_id=excluded.member_id,
+            subscriber_id=excluded.subscriber_id,
+            relationship_code=excluded.relationship_code,
+            carrier_code=excluded.carrier_code,
+            insurance_name=excluded.insurance_name,
+            payer_id=excluded.payer_id,
+            group_number=excluded.group_number,
+            extracted_at=excluded.extracted_at
+        """,
+        (
+            practice_id or "",
+            patient_id,
+            priority,
+            member_id,
+            subscriber_id,
+            relationship_code,
+            carrier_code,
+            insurance_name,
+            payer_id,
+            group_number,
+            extracted_at,
+        ),
+    )
+
+
+def populate_sensei_patient_insurance(
+    conn: sqlite3.Connection,
+    root: Path,
+    *,
+    extracted_at: str | None = None,
+    practice_id: str = "",
+) -> dict[str, int]:
+    """Populate sd_patient_insurance (+ carrier map names) from Sensei patient policies.
+
+    Keys rows by UniqueID and by chart Id so daysheet claim MRNs can resolve payers.
+    Never invents member/payer IDs — empty Sensei fields stay NULL.
+    """
+    ensure_sd_schema(conn)
+    at = extracted_at or _utc_now()
+    plan_map = load_sensei_plan_carrier_map(root)
+    insurance_rows = 0
+    carriers_named = 0
+    policies_seen = 0
+    policies_resolved = 0
+
+    for path in _iter_sensei_entity_files(root, "patient"):
+        entity = _load_sensei_entity(path, SENSEI_ENTITY_WRAPPERS["patient"])
+        if not entity:
+            continue
+        unique_id = _sensei_patient_id(entity)
+        if not unique_id:
+            continue
+        policies = entity.get("InsurancePolicies")
+        if not isinstance(policies, list) or not policies:
+            continue
+
+        patient_keys = [unique_id]
+        for chart in _sensei_patient_chart_ids(entity):
+            if chart not in patient_keys:
+                patient_keys.append(chart)
+
+        # One row per priority; primary dental first.
+        by_priority: dict[int, dict[str, Any]] = {}
+        for policy in policies:
+            if not isinstance(policy, dict):
+                continue
+            policies_seen += 1
+            plan_key = _norm_empty(policy.get("InsurancePlanKey") or policy.get("PlanId"))
+            if not plan_key:
+                continue
+            carrier = plan_map.get(plan_key) or {}
+            insurance_name = _norm_empty(carrier.get("insurance_name"))
+            if not insurance_name:
+                continue
+            policies_resolved += 1
+            priority = _sensei_coverage_priority(policy)
+            if priority in by_priority:
+                continue
+            member_id = _norm_empty(policy.get("MemberId") or policy.get("MemberID"))
+            subscriber_id = _norm_empty(policy.get("PolicyHolderKey"))
+            relationship_code = _normalize_relationship_code(
+                policy.get("RelationshipToPolicyHolderType") or policy.get("Relationship")
+            )
+            carrier_code = _norm_empty(carrier.get("carrier_code"))
+            group_number = _norm_empty(policy.get("GroupNo") or carrier.get("group_number"))
+            by_priority[priority] = {
+                "member_id": member_id,
+                "subscriber_id": subscriber_id,
+                "relationship_code": relationship_code,
+                "carrier_code": carrier_code,
+                "insurance_name": insurance_name,
+                "group_number": group_number,
+            }
+
+        for priority, row in by_priority.items():
+            for patient_key in patient_keys:
+                _upsert_patient_insurance_row(
+                    conn,
+                    practice_id=practice_id,
+                    patient_id=patient_key,
+                    priority=priority,
+                    member_id=row["member_id"],
+                    subscriber_id=row["subscriber_id"],
+                    relationship_code=row["relationship_code"],
+                    carrier_code=row["carrier_code"],
+                    insurance_name=row["insurance_name"],
+                    payer_id=None,
+                    group_number=row["group_number"],
+                    extracted_at=at,
+                )
+                insurance_rows += 1
+            if row.get("carrier_code") and row.get("insurance_name"):
+                # Name-only map entry; payer_id stays unset (no invented EDI).
+                carriers_named += 1
+
+    conn.commit()
+    _set_meta(conn, "sensei_insurance_at", at)
+    _set_meta(conn, "sensei_insurance_rows", str(insurance_rows))
+    _set_meta(conn, "sensei_insurance_policies_seen", str(policies_seen))
+    _set_meta(conn, "sensei_insurance_policies_resolved", str(policies_resolved))
+    _set_meta(conn, "sensei_plan_map_size", str(len(plan_map)))
+    return {
+        "sd_patient_insurance": insurance_rows,
+        "policies_seen": policies_seen,
+        "policies_resolved": policies_resolved,
+        "plan_map_size": len(plan_map),
+        "carriers_touched": carriers_named,
+    }
+
+
+def _normalize_patient_name_key(name: str | None) -> str:
+    text = str(name or "").strip().lower()
+    if not text:
+        return ""
+    if "," in text:
+        last, _, rest = text.partition(",")
+        first = rest.strip().split()[0] if rest.strip() else ""
+        return f"{last.strip()}|{first}"
+    parts = text.split()
+    if len(parts) >= 2:
+        return f"{parts[-1]}|{parts[0]}"
+    return text
+
+
+def extract_claim_chart_from_id(claim_id: str | None) -> str | None:
+    match = _CLAIM_CHART_RE.match(str(claim_id or "").strip())
+    return match.group(1) if match else None
+
+
+def attribute_sd_claims_payers_from_insurance(
+    conn: sqlite3.Connection,
+    *,
+    practice_id: str = "",
+) -> dict[str, int]:
+    """Set sd_claims.payer from sd_patient_insurance when payer is generic Insurance.
+
+    Match order: claim chart (DS-…-{chart}-…) → patient_id; else patient_name key via
+    sd_patients → insurance. Does not overwrite already-named payers. No invented carriers.
+    """
+    ensure_sd_schema(conn)
+    if not _table_exists(conn, "sd_claims") or not _table_exists(conn, "sd_patient_insurance"):
+        return {"updated": 0, "skipped_named": 0, "unmatched": 0}
+
+    practice = practice_id or ""
+    ins_rows = conn.execute(
+        """
+        SELECT patient_id, priority, insurance_name
+        FROM sd_patient_insurance
+        WHERE practice_id = ? AND insurance_name IS NOT NULL AND TRIM(insurance_name) != ''
+        ORDER BY patient_id, priority
+        """,
+        (practice,),
+    ).fetchall()
+    primary_by_patient: dict[str, str] = {}
+    for patient_id, _priority, insurance_name in ins_rows:
+        pid = str(patient_id or "").strip()
+        name = str(insurance_name or "").strip()
+        if not pid or not name or pid in primary_by_patient:
+            continue
+        primary_by_patient[pid] = name
+
+    name_to_patient: dict[str, str] = {}
+    if _table_exists(conn, "sd_patients"):
+        for pid, pname in conn.execute(
+            "SELECT patient_id, patient_name FROM sd_patients WHERE practice_id = ?",
+            (practice,),
+        ).fetchall():
+            key = _normalize_patient_name_key(str(pname or ""))
+            if key and key not in name_to_patient:
+                name_to_patient[key] = str(pid or "").strip()
+
+    updated = 0
+    skipped_named = 0
+    unmatched = 0
+    claims = conn.execute(
+        """
+        SELECT claim_id, patient_name, payer, practice_id
+        FROM sd_claims
+        WHERE practice_id = ?
+        """,
+        (practice,),
+    ).fetchall()
+    for claim_id, patient_name, payer, claim_practice in claims:
+        if not _is_generic_payer_label(str(payer or "")):
+            skipped_named += 1
+            continue
+        carrier = None
+        chart = extract_claim_chart_from_id(str(claim_id or ""))
+        if chart and chart in primary_by_patient:
+            carrier = primary_by_patient[chart]
+        if not carrier:
+            name_key = _normalize_patient_name_key(str(patient_name or ""))
+            patient_id = name_to_patient.get(name_key, "")
+            if patient_id and patient_id in primary_by_patient:
+                carrier = primary_by_patient[patient_id]
+        if not carrier:
+            unmatched += 1
+            continue
+        conn.execute(
+            """
+            UPDATE sd_claims
+            SET payer = ?
+            WHERE practice_id = ? AND claim_id = ?
+            """,
+            (carrier, claim_practice or practice, claim_id),
+        )
+        updated += 1
+    conn.commit()
+    _set_meta(conn, "claims_payer_attribution_at", _utc_now())
+    _set_meta(conn, "claims_payer_attribution_updated", str(updated))
+    _set_meta(conn, "claims_payer_attribution_unmatched", str(unmatched))
+    return {"updated": updated, "skipped_named": skipped_named, "unmatched": unmatched}
+
+
+def refresh_claims_payer_attribution(
+    *,
+    db_path: Path | str | None = None,
+    sensei_root: Path | str | None = None,
+) -> dict[str, Any]:
+    """Sensei insurance populate (when available) + attribute generic sd_claims payers."""
+    target = Path(db_path) if db_path else resolve_sd_sqlite_db()
+    result: dict[str, Any] = {
+        "ok": False,
+        "dbPath": str(target) if target else None,
+        "insurance": {},
+        "attribution": {},
+    }
+    if not target:
+        result["error"] = "no_sqlite_target"
+        return result
+    root = Path(sensei_root) if sensei_root else resolve_sensei_datasync_root()
+    conn = sqlite3.connect(str(target))
+    try:
+        ensure_sd_schema(conn)
+        if root and root.is_dir():
+            result["insurance"] = populate_sensei_patient_insurance(conn, root)
+            result["senseiRoot"] = str(root)
+        else:
+            result["warnings"] = ["sensei_datasync_root_missing"]
+        result["attribution"] = attribute_sd_claims_payers_from_insurance(conn)
+        try:
+            result["claimsExport"] = export_sd_claims_to_inbox_csv(conn)
+        except Exception as exc:  # noqa: BLE001
+            result["claimsExport"] = {"ok": False, "error": str(exc)}
+        ins_count = int(
+            conn.execute("SELECT COUNT(*) FROM sd_patient_insurance").fetchone()[0] or 0
+        )
+        named = int(
+            conn.execute(
+                """
+                SELECT COUNT(*) FROM sd_claims
+                WHERE payer IS NOT NULL AND TRIM(payer) != ''
+                  AND LOWER(TRIM(payer)) NOT IN ('insurance', 'unknown', 'n/a', '-', '—')
+                """
+            ).fetchone()[0]
+            or 0
+        )
+        result["sd_patient_insurance_count"] = ins_count
+        result["namedPayerClaimCount"] = named
+        result["ok"] = ins_count > 0 and int(result["attribution"].get("updated") or 0) >= 0
+        conn.commit()
+    finally:
+        conn.close()
+    return result
+
+
 def _populate_from_sensei_datasync(
     conn: sqlite3.Connection,
     root: Path,
@@ -1613,6 +2039,12 @@ def _populate_from_sensei_datasync(
             )
             counts["sd_procedures"] += 1
 
+    try:
+        ins = populate_sensei_patient_insurance(conn, root, extracted_at=extracted_at)
+        counts["sd_patient_insurance"] = int(ins.get("sd_patient_insurance") or 0)
+    except Exception:
+        counts["sd_patient_insurance"] = 0
+
     conn.commit()
     return counts
 
@@ -1699,6 +2131,13 @@ def extract_softdent_odbc(*, db_path: Path | None = None, force: bool = False) -
         except Exception as csv_exc:
             _set_meta(conn, "insurance_csv_error", str(csv_exc)[:400])
             result["warnings"].append(f"insurance_csv:{csv_exc}")
+
+        # Attribute generic "Insurance" claim payers from sd_patient_insurance (Sensei/ODBC/CSV).
+        try:
+            result["payerAttribution"] = attribute_sd_claims_payers_from_insurance(conn)
+        except Exception as attr_exc:  # noqa: BLE001
+            result["payerAttribution"] = {"ok": False, "error": str(attr_exc)}
+            result["warnings"].append(f"payer_attribution:{attr_exc}")
 
         result["fallback"] = fallback_counts
 

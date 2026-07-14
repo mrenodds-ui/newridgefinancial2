@@ -43,7 +43,10 @@ CSP_BROWSER = (
     "form-action 'self'"
 )
 
-FINANCIAL_READ_PREFIXES = (
+# Moonshot Expert SE Phase 1 (hal-10499): split money/PHI reads from system telemetry.
+# FINANCIAL_DATA_* require import readiness level "fresh".
+# SYSTEM_STATUS_* require only "connected" (system up — allow degraded/stale).
+FINANCIAL_DATA_PREFIXES = (
     "/api/import-bundle",
     "/api/financial-reports",
     "/api/apex/widgets",
@@ -53,7 +56,6 @@ FINANCIAL_READ_PREFIXES = (
     "/api/apex/claims",
     "/api/apex/claims-aging",
     "/api/apex/claims-kanban",
-    "/api/apex/import-health",
     "/api/apex/tax-returns",
     "/api/apex/scenarios",
     "/api/apex/filing",
@@ -67,6 +69,30 @@ FINANCIAL_READ_PREFIXES = (
     "/api/integration-health",
     "/api/documents-state",
 )
+
+# Exact telemetry / meta paths — no dollar amounts or PHI in handlers.
+SYSTEM_STATUS_PREFIXES = (
+    "/api/apex/hal/status",
+    "/api/apex/hal/cache-warm-status",
+    "/api/apex/hal/cache-warm",
+    "/api/apex/import-health",
+    "/api/apex/hal/sync-status",
+    "/api/apex/hal/ai-lane-health",
+    "/api/apex/hal/orchestrator",
+    "/api/apex/hal/insight-sse-status",
+    "/api/apex/hal/import-watcher-status",
+    "/api/apex/hal/import-cron-status",
+    "/api/apex/hal/import-dq-status",
+    # hal-10576 — ERA inbox status is telemetry (empty ≠ $0); ingest POST still needs session token.
+    "/api/apex/hal/era-inbox/status",
+    # 10575 — remittance discovery is read-only telemetry (never invents $0).
+    "/api/apex/hal/era-inbox/discover",
+    # 10576 — Collections Excel-temp health (read-only; no invent $0).
+    "/api/apex/hal/collections-export/health",
+)
+
+# Backward-compatible alias (tests / callers).
+FINANCIAL_READ_PREFIXES = FINANCIAL_DATA_PREFIXES
 
 FINANCIAL_INTENT_PATTERNS = (
     "revenue",
@@ -306,6 +332,48 @@ def mutation_auth_failure_reason(session_token: str | None) -> str | None:
     return None
 
 
+ERA_INBOX_INGEST_URL = "/api/apex/hal/era-inbox/ingest"
+ERA_INBOX_STATUS_URL = "/api/apex/hal/era-inbox/status"
+MUTATION_HEADER = "X-NR2-Session-Token"
+
+
+def era_inbox_mutation_contract(*, mutation_token: str | None = None) -> dict[str, Any]:
+    """hal-10576 — browser CSRF contract for ERA inbox ingest (session token = mutation token).
+
+    POST /api/apex/hal/era-inbox/ingest requires X-NR2-Session-Token (same as other Apex mutations).
+    UI acquires via GET /api/app-info → sessionToken / X-NR2-Refresh-Token.
+    """
+    out: dict[str, Any] = {
+        "mutationAuthRequired": True,
+        "mutationHeader": MUTATION_HEADER,
+        "mutationAcquireVia": "/api/app-info",
+        "mutationTtlHintSec": int(_TOKEN_ROTATE_SECONDS),
+        "ingestUrl": ERA_INBOX_INGEST_URL,
+        "ingestMethod": "POST",
+        "statusUrl": ERA_INBOX_STATUS_URL,
+        "cliFallback": "scripts/run_era_inbox_ingest_ops.py",
+    }
+    token = str(mutation_token or "").strip()
+    if token:
+        out["mutationToken"] = token
+        out["sessionToken"] = token
+    return out
+
+
+def request_mutation_token_if_bound(expected_session: str | None = None) -> str | None:
+    """Return the request's session token when it matches the vault / expected session."""
+    hdr = str(bottle.request.headers.get(MUTATION_HEADER) or "").strip()
+    if not hdr:
+        return None
+    if expected_session and hdr != str(expected_session).strip():
+        return None
+    if not _session_vault.has_session(hdr):
+        return None
+    if not user_agent_binding_valid(hdr):
+        return None
+    return hdr
+
+
 def maybe_rotate_session_token(current: str) -> tuple[str, bool]:
     new_token = _session_vault.rotate(current)
     if new_token:
@@ -331,11 +399,28 @@ FINANCIAL_READ_EXEMPT = frozenset(
 )
 
 
+def system_status_path(path: str) -> bool:
+    """True for HAL/system telemetry that must stay reachable when imports are degraded."""
+    p = path or ""
+    if not p:
+        return False
+    for prefix in SYSTEM_STATUS_PREFIXES:
+        if p == prefix or p.startswith(prefix + "/"):
+            return True
+    return False
+
+
 def financial_read_path(path: str) -> bool:
+    """True for money/PHI financial data reads that require fresh imports.
+
+    System-status telemetry paths are excluded (tier-2 connected gate).
+    """
     p = path or ""
     if p in FINANCIAL_READ_EXEMPT:
         return False
-    return any(p == prefix or p.startswith(prefix + "/") for prefix in FINANCIAL_READ_PREFIXES)
+    if system_status_path(p):
+        return False
+    return any(p == prefix or p.startswith(prefix + "/") for prefix in FINANCIAL_DATA_PREFIXES)
 
 
 def classify_financial_query(query: str) -> bool:

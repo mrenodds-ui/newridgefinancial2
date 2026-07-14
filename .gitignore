@@ -64,6 +64,9 @@ app/tests/.endpoint_test_runtime/
 # Local import cache and dev import drops (not canonical repo data)
 app/data/
 
+# Moonshot crash/perf singleton pidfile (browser_app.py)
+NewRidgeFinancial2/.nr2_browser_app.pid
+
 # Root local report/export artifacts
 frontend_vitest_quickbooks_route.txt
 softdent_claims_export.csv

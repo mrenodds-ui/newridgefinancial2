@@ -24,7 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 NR2_ROOT = Path(__file__).resolve().parent
 DATA_DIR = REPO_ROOT / "app_data" / "nr2"
 HAL_MODELS_PATH = NR2_ROOT / "site" / "data" / "hal-models.json"
-APPROVED_LOCAL_MODEL = "hal-local:24b"
+APPROVED_LOCAL_MODEL = "hal-local:30b-a3b"
 APPROVED_QUANT = "Q4_K_M"
 VRAM_TOTAL_GIB = 32.0
 VRAM_SAFETY_MARGIN_GIB = 5.0
@@ -53,7 +53,7 @@ def probe_local_24b_readiness(
     base: str = "http://127.0.0.1:11434",
     timeout: float = 5.0,
 ) -> dict[str, Any]:
-    """Readiness gate for single-24B R9700 layout. Fail closed on policy violations."""
+    """Readiness gate for single-32B R9700 layout. Fail closed on policy violations."""
     failures: list[str] = []
     base = base.rstrip("/")
     host_env = os.environ.get("OLLAMA_HOST", "127.0.0.1:11434")
@@ -153,6 +153,10 @@ def probe_local_24b_readiness(
         "hipVisibleDevices": hip,
         "maxLoadedModelsEnv": max_loaded or None,
     }
+
+
+# Alias: single-GPU layout is now 32B (qwen3); keep 24b name for older callers.
+probe_local_32b_readiness = probe_local_24b_readiness
 
 
 def _document_queue_count(store: Any | None, *, heal: bool = False) -> dict[str, Any]:
@@ -329,7 +333,7 @@ def integration_health_snapshot(
             ok=ollama_ok,
             status=ollama_status,
             detail=ollama_detail,
-            action_hint="Run Apply-HAL-GPU-Performance.ps1 and validate_hal_local_24b.py; expect only hal-local:24b loaded.",
+            action_hint="Run Apply-HAL-GPU-Performance.ps1; expect only hal-local:30b-a3b (MoE) loaded.",
         )
     )
 

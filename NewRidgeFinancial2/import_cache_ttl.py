@@ -3,6 +3,9 @@
 Imported SoftDent / QuickBooks files are replaced each sync (never accumulated).
 After NR2_IMPORT_RETENTION_DAYS (default 7) the cache is cleared so stale
 multi-period totals cannot keep stacking in widgets.
+
+Moonshot inbox coherence: never wipe SoftDent AR/dashboard (or QB expenses) when
+those critical files are present; prefer content-hash no-op writes for no-op syncs.
 """
 
 from __future__ import annotations
@@ -18,6 +21,20 @@ from import_loader import quickbooks_import_dir, softdent_import_dir
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_NAME = "import_cache_manifest.json"
+
+# Protected from retention empty-wipes (Moonshot inbox sync coherence).
+CRITICAL_INBOX_FILENAMES: frozenset[str] = frozenset(
+    {
+        "softdent_ar_aging.csv",
+        "softdent_ar_aging.json",
+        "softdent_accounts_receivable.csv",
+        "softdent_dashboard_data.json",
+        "softdent_dashboard_export.json",
+        "quickbooks_expenses.csv",
+        "quickbooks_expenses.json",
+        "quickbooks_expense_detail.csv",
+    }
+)
 
 
 def retention_days() -> int:
@@ -80,6 +97,47 @@ def sha256_file(path: Path) -> str | None:
         for chunk in iter(lambda: handle.read(65536), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def write_bytes_if_changed(path: Path, data: bytes) -> bool:
+    """Write only when content differs. Returns True if the file was mutated."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_file():
+        try:
+            if path.read_bytes() == data:
+                return False
+        except OSError:
+            pass
+    path.write_bytes(data)
+    return True
+
+
+def write_text_if_changed(path: Path, text: str, *, encoding: str = "utf-8") -> bool:
+    return write_bytes_if_changed(path, text.encode(encoding))
+
+
+def critical_inbox_files_present() -> dict[str, bool]:
+    softdent = softdent_import_dir()
+    qb = quickbooks_import_dir()
+    return {
+        "softdent.ar": any(
+            (softdent / name).is_file() and (softdent / name).stat().st_size > 10
+            for name in ("softdent_ar_aging.csv", "softdent_ar_aging.json", "softdent_accounts_receivable.csv")
+        ),
+        "softdent.dashboard": any(
+            (softdent / name).is_file() and (softdent / name).stat().st_size > 10
+            for name in ("softdent_dashboard_data.json", "softdent_dashboard_export.json")
+        ),
+        "quickbooks.expenses": any(
+            (qb / name).is_file() and (qb / name).stat().st_size > 10
+            for name in ("quickbooks_expenses.csv", "quickbooks_expenses.json", "quickbooks_expense_detail.csv")
+        ),
+    }
+
+
+def has_usable_critical_inbox() -> bool:
+    present = critical_inbox_files_present()
+    return bool(present.get("softdent.ar") and present.get("softdent.dashboard"))
 
 
 def collect_dataset_checksums(softdent_dir: Path, quickbooks_dir: Path) -> dict[str, dict[str, str]]:
@@ -152,7 +210,12 @@ def purge_expired_ocr_files(reference: datetime | None = None) -> list[str]:
     return removed
 
 
-def purge_import_cache() -> list[str]:
+def purge_import_cache(*, preserve_criticals: bool = True) -> list[str]:
+    """Clear SoftDent/QB inbox files.
+
+    Default preserves AR / dashboard / QB expenses so retention cannot empty-wipe
+    money-critical datasets (Moonshot inbox sync coherence).
+    """
     removed: list[str] = []
     for directory in _import_dirs():
         if not directory.is_dir():
@@ -161,6 +224,8 @@ def purge_import_cache() -> list[str]:
             if not path.is_file():
                 continue
             if path.name.startswith("."):
+                continue
+            if preserve_criticals and path.name in CRITICAL_INBOX_FILENAMES:
                 continue
             path.unlink(missing_ok=True)
             removed.append(path.name)
@@ -172,11 +237,19 @@ def purge_import_cache() -> list[str]:
 
 
 def purge_if_expired() -> dict[str, Any]:
+    """Retention purge with soft-skip when SoftDent critical inbox files exist."""
     manifest = load_manifest()
     if not manifest_expired(manifest):
         return {"purged": False, "removed": [], "reason": "cache-current"}
-    removed = purge_import_cache()
-    return {"purged": True, "removed": removed, "reason": "retention-expired"}
+    if has_usable_critical_inbox():
+        return {
+            "purged": False,
+            "removed": [],
+            "reason": "retention-soft-skip-criticals-present",
+            "criticals": critical_inbox_files_present(),
+        }
+    removed = purge_import_cache(preserve_criticals=True)
+    return {"purged": bool(removed), "removed": removed, "reason": "retention-expired"}
 
 
 def write_manifest(

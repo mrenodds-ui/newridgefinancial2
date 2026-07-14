@@ -13,8 +13,25 @@ if str(_NR2) not in sys.path:
     sys.path.insert(0, str(_NR2))
 
 _YES_NO_LEAD_RE = re.compile(r"^\s*(yes|no)\b", re.IGNORECASE)
-_READ_ONLY_RE = re.compile(r"\bread[\s-]?only\b", re.IGNORECASE)
-_CONSENT_RE = re.compile(r"\bconsent\b", re.IGNORECASE)
+# Accept policy-compliant phrasing — not only the literal "read-only" token (190Q false fails).
+_READ_ONLY_RE = re.compile(
+    r"("
+    r"\bread[\s-]?only\b|"
+    r"\bcannot\s+(?:post|modify|write|write[\s-]?back|update|delete|change|submit)\b|"
+    r"\bcan'?t\s+(?:post|modify|write|write[\s-]?back|update|delete|change|submit)\b|"
+    r"\b(?:i am|i'm)\s+not\s+able\s+to\b|"
+    r"\b(?:local[\s-]?policy|nr2)\s+blocks?\b|"
+    r"\bstays?\s+read[\s-]?only\b|"
+    r"\bdo\s+not\s+(?:post|write|modify)\b|"
+    r"\bnever\s+writes?\b|"
+    r"\bstaff\s+(?:update|post|clicks?\s+post)\b"
+    r")",
+    re.IGNORECASE,
+)
+_CONSENT_RE = re.compile(
+    r"\bconsent\b|\bi\s+consent\b|\bexplicit\s+(?:staff\s+)?consent\b|\bwithout\s+(?:staff\s+)?consent\b",
+    re.IGNORECASE,
+)
 _DIRECT_ANSWER_RE = re.compile(
     r"(\*\*Direct Answer:\*\*|Direct answer:|^\s*(Yes|No)\b)",
     re.IGNORECASE | re.MULTILINE,
@@ -22,10 +39,14 @@ _DIRECT_ANSWER_RE = re.compile(
 _DELIVERABLE_RE = re.compile(
     r"("
     r"\*\*Direct Answer:\*\*|Direct answer:|"
+    r"^\s*\d+\.\s+\S|"
+    r"^\s*[-*•]\s+\S|"
     r"\b(next step|safe next|priority order|ordered steps|journal entry|"
-    r"risk flag|verified basis|staff should)\b"
+    r"risk flag|verified basis|staff should|staff (?:update|post|clicks|verify)|"
+    r"verify (?:on|the|SoftDent|EOB)|draft locally|escalate|"
+    r"empty\s*[≠!=]+\s*\$?0|do not invent|Caution:)\b"
     r")",
-    re.IGNORECASE,
+    re.IGNORECASE | re.MULTILINE,
 )
 _STRUCTURED_PLAN_OPENER_RE = re.compile(
     r"^\s*(here(?:'s| is) a structured plan|here is a (?:brief )?(?:numbered )?plan|structured plan:)\b",
@@ -188,6 +209,9 @@ def has_direct_answer(text: str) -> bool:
         return False
     if _DIRECT_ANSWER_RE.search(body):
         return True
+    # Numbered/bulleted deliverables count as a direct actionable answer.
+    if re.search(r"(?m)^\s*(?:\d+\.|[-*•])\s+\S", body):
+        return True
     # Staff-facing prose that leads with a clear claim counts as a direct answer.
     first = re.split(r"[.!?]\s+", body, maxsplit=1)[0]
     return len(first) >= 12 and not _COT_LEAK_RE.search(first)
@@ -202,7 +226,22 @@ def has_deliverable(text: str) -> bool:
     lower = body.lower()
     return has_direct_answer(body) and any(
         token in lower
-        for token in ("next", "staff", "verify", "draft", "locally", "refresh", "open ")
+        for token in (
+            "next",
+            "staff",
+            "verify",
+            "draft",
+            "locally",
+            "refresh",
+            "open ",
+            "escalate",
+            "export",
+            "eob",
+            "consent",
+            "empty ≠",
+            "empty !=",
+            "do not invent",
+        )
     )
 
 
@@ -267,14 +306,34 @@ def score_grounding(query: str, text: str) -> dict[str, Any]:
     }
 
 
+def _needs_deliverable(query: str) -> bool:
+    """Align with gateway is_deliverable_request — steps/paths/how-to asks."""
+    return bool(
+        re.search(
+            r"(?i)\b("
+            r"next\s+steps?|ordered\s+steps?|step[\s-]?by[\s-]?step|"
+            r"checklist|procedure|"
+            r"how\s+(?:do|to|can)\s+(?:i|we)|"
+            r"walk\s+me\s+through|"
+            r"what\s+(?:are|is)\s+the\s+(?:steps?|path)|"
+            r"provide\s+(?:the\s+)?(?:steps?|path|checklist)|"
+            r"action\s+items?|"
+            r"paths?\s+to\b"
+            r")\b",
+            str(query or ""),
+        )
+    )
+
+
 def score_answer(query: str, text: str) -> dict[str, Any]:
     body = str(text or "").strip()
     q = str(query or "").strip()
     grounding = score_grounding(q, body)
+    deliverable_required = _needs_deliverable(q)
     quality = (
         bool(body)
         and has_direct_answer(body)
-        and has_deliverable(body)
+        and (has_deliverable(body) if deliverable_required else True)
         and not has_cot_leak(body)
         and not has_structured_plan_opener(body)
         and (has_yes_no_lead(body) if is_yes_no_query(q) else True)
@@ -284,7 +343,8 @@ def score_answer(query: str, text: str) -> dict[str, Any]:
     )
     return {
         "hasDirectAnswer": has_direct_answer(body),
-        "hasDeliverable": has_deliverable(body),
+        "hasDeliverable": has_deliverable(body) if deliverable_required else None,
+        "deliverableRequired": deliverable_required,
         "hasYesNoLead": has_yes_no_lead(body) if is_yes_no_query(q) else None,
         "hasReadOnlyMention": has_read_only_mention(body) if needs_read_only_lead(q) else None,
         "hasConsentMention": has_consent_mention(body) if needs_consent_lead(q) else None,

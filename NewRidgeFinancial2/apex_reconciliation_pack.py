@@ -211,10 +211,12 @@ def _normalize_period(period: str | None) -> str:
     raw = str(period or "").strip()
     if re.fullmatch(r"\d{4}-\d{2}", raw):
         return raw
+    # Unified DB sometimes stores QB rollups as "current" / "curr" — map to calendar month.
     return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
 def _prior_period(period: str) -> str:
+    period = _normalize_period(period)
     y, m = int(period[:4]), int(period[5:7])
     m -= 1
     if m <= 0:
@@ -256,13 +258,17 @@ def check_production_payroll_variance(
     period = _normalize_period(period)
     prior = _prior_period(period)
     rows = list_production_vs_payroll(limit=24, db_path=db_path)
-    by_p = {str(r.get("period")): r for r in rows if isinstance(r, dict)}
+    by_p = {
+        _normalize_period(str(r.get("period") or "")): r
+        for r in rows
+        if isinstance(r, dict)
+    }
     cur = by_p.get(period)
     if not cur:
         # try latest if exact period missing
         if rows:
             cur = rows[0]
-            period = str(cur.get("period") or period)
+            period = _normalize_period(str(cur.get("period") or period))
             prior = _prior_period(period)
         else:
             return {
@@ -371,12 +377,16 @@ def check_collection_ap_variance(
     period = _normalize_period(period)
     prior = _prior_period(period)
     rows = list_collection_vs_ap(limit=24, db_path=db_path)
-    by_p = {str(r.get("period")): r for r in rows if isinstance(r, dict)}
+    by_p = {
+        _normalize_period(str(r.get("period") or "")): r
+        for r in rows
+        if isinstance(r, dict)
+    }
     cur = by_p.get(period)
     if not cur:
         if rows:
             cur = rows[0]
-            period = str(cur.get("period") or period)
+            period = _normalize_period(str(cur.get("period") or period))
             prior = _prior_period(period)
         else:
             return {

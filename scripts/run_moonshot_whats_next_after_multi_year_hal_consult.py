@@ -1,0 +1,242 @@
+"""Moonshot AI — What's next after HAL multi-year account-tx wiring.
+
+CONSULT ONLY. Operator: next / proceed (keep going).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import ssl
+import sys
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+OUT = REPO / ".local_logs" / "moonshot_financial_eval"
+DOCS = REPO / "NewRidgeFinancial2" / "docs"
+OUT.mkdir(parents=True, exist_ok=True)
+DOCS.mkdir(parents=True, exist_ok=True)
+DATE = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+HELPER = (
+    REPO
+    / "_archive"
+    / "2026-07-10"
+    / ".local_logs"
+    / "moonshot_financial_eval"
+    / "_run_moonshot_eval.py"
+)
+sys.path.insert(0, str(HELPER.parent))
+from _run_moonshot_eval import extract_message_content, resolve_api_and_endpoint  # noqa: E402
+
+OPERATOR_REQUEST_VERBATIM = "proceed"
+
+SYSTEM = """You are Moonshot AI — principal engineer for NR2 Apex HAL.
+
+Operator asked if more programming remains, then said "proceed" — produce the
+SINGLE best next local work package. Prefer CODE if any high-ROI programming
+remains; otherwise say OPS with concrete steps (not vague).
+CONSULT ONLY in this script output — DO NOT claim you applied code.
+Avoid GitHub/PR as the primary package.
+Do not invent fictional file trees — only real paths listed below.
+empty != $0. Never invent SoftDent write-back or dollars.
+
+JUST SHIPPED (2906b0e — HAL multi-year account-tx):
+- HAL routes account history to sd_account_transactions (549564 rows, 1996–2026)
+- Coverage honesty in replies: account_tx_multi_year_available, db_total, available_range
+- Year/span filters; account_num + patient_name scoping (~15k distinct accounts)
+- Donna 27002 Feb=5; live smoke PASS for 2018 / 2018–2019 account queries
+- Prior: year-chunk pull + ingest (6843a9c); Collections Excel-temp 10576; ERA discovery 10575 candidates=0
+
+OPEN CANDIDATES (pick ONE highest leverage NOW):
+1) CODE: Small SoftDent-page / HAL coverage chip or transaction-ledger widget
+   hint that multi-year DB is live (cite REAL widget pack paths) — only if
+   additive and empty≠$0 preserved
+2) CODE: Browser smoke of HAL multi-year policy replies — only if REAL smoke
+   harness exists in repo
+3) OPS: Concrete payer-portal / clearinghouse 835 acquisition — only with
+   REAL repo evidence; discovery already proved local candidates=0
+4) OPS: July Register/Collections with Ins Plan Collections > 0 SoftDent export
+   — DEF-001 ingest ready; data missing
+5) CODE: Deduplicate cross-source account-tx rows if any REAL duplicate risk
+   remains after TXN260201 purge — only if evidence shows duplicates today
+6) If NO high-ROI CODE remains, say so clearly and recommend the single best OPS
+
+What NOT to redo: year-chunk pull/ingest, multi-year HAL wiring, 10575/10576,
+widgets MUST/SHOULD/NICE, invent Ins Plan/ERA dollars, SoftDent write-back.
+
+REAL PATHS:
+- NewRidgeFinancial2/nr2_hal_gateway.py
+- NewRidgeFinancial2/softdent_transaction_extract.py
+- NewRidgeFinancial2/apex_better_backend_widgets_pack.py
+- C:\\SoftDentFinancialExports\\softdent_financial_analytics.db
+- C:\\SoftDentFinancialExports\\softdent_account_tx_year_chunks_ingest.json
+- NewRidgeFinancial2/docs/MOONSHOT_ACCOUNT_TX_MULTI_YEAR_HAL_APPLIED_2026-07-13.md
+
+OUTPUT (strict markdown):
+# Verdict (one sentence — THE next package)
+## 0. Operator Intent (verbatim: proceed)
+## 1. Recommended NEXT (name, why now, effort, REAL files, validation gate)
+## 2. Runner-ups (2–3, why not now)
+## 3. What NOT to redo
+## 4. Acceptance criteria
+## 5. Executive Summary (5 bullets)
+## 6. Approval checklist
+Prefer one clear next. If programming is exhausted, verdict must say OPS.
+"""
+
+
+def _live_snapshot() -> str:
+    live: dict = {}
+    try:
+        sys.path.insert(0, str(REPO / "NewRidgeFinancial2"))
+        from apex_backend import BUILD_ID, _load_reports_and_bundle  # noqa: E402
+        from apex_softdent_hardening_pack import assess_collections_gap  # noqa: E402
+        from apex_era835_pack import discover_era_candidates  # noqa: E402
+        from softdent_transaction_extract import (  # noqa: E402
+            account_tx_ledger_coverage,
+            query_account_transactions,
+        )
+        from nr2_hal_gateway import try_local_policy_reply  # noqa: E402
+
+        live["buildId"] = BUILD_ID
+        live["prior"] = "2906b0e multi-year HAL; 549564 rows"
+        live["coverage"] = account_tx_ledger_coverage()
+        live["donnaFeb"] = {
+            k: query_account_transactions(
+                account_num="27002", date_range="2026-02", prefer_db=True, limit=10
+            ).get(k)
+            for k in ("ok", "matchCount", "source")
+        }
+        hit = try_local_policy_reply("Show account 27002 transactions in 2018")
+        live["hal2018"] = {
+            "intent": (hit or {}).get("intent"),
+            "hasCoverage": "account_tx_multi_year_available=true"
+            in ((hit or {}).get("text") or ""),
+        }
+        _r, bundle, _e = _load_reports_and_bundle()
+        gap = assess_collections_gap(bundle)
+        live["gap"] = {
+            k: gap.get(k)
+            for k in ("collectionsGapCode", "registerInsPlanZero", "insurance", "period")
+        }
+        disc = discover_era_candidates(limit=20, max_depth=4)
+        live["discovery"] = {
+            k: disc.get(k) for k in ("candidateCount", "chipStatus", "chipLabel")
+        }
+        try:
+            ctx = ssl._create_unverified_context()
+            with urllib.request.urlopen(
+                "https://127.0.0.1:8765/api/apex/hal/era-inbox/discover",
+                timeout=15,
+                context=ctx,
+            ) as resp:
+                live["liveDiscoverApi"] = {
+                    k: json.loads(resp.read().decode("utf-8")).get(k)
+                    for k in ("ok", "candidateCount", "buildId")
+                }
+        except Exception as exc:  # noqa: BLE001
+            live["liveDiscoverApiError"] = f"{type(exc).__name__}:{exc}"
+    except Exception as exc:  # noqa: BLE001
+        live["error"] = f"{type(exc).__name__}:{exc}"
+    return json.dumps(live, indent=2, default=str)[:8000]
+
+
+def main() -> int:
+    key_name, api_key, base_url = resolve_api_and_endpoint()
+    if not api_key:
+        print("No API key", file=sys.stderr)
+        return 1
+    if "moonshot" in (base_url or "").lower():
+        model = str(os.getenv("MOONSHOT_MODEL") or "kimi-k2.5").strip()
+    else:
+        model = str(
+            os.getenv("MOONSHOT_MODEL") or os.getenv("KIMI_K2_MODEL") or "moonshotai/kimi-k2"
+        ).strip()
+    print(f"Using {key_name} @ {base_url} model={model}")
+
+    excerpts = []
+    for name, lim in (
+        ("MOONSHOT_ACCOUNT_TX_MULTI_YEAR_HAL_APPLIED_2026-07-13.md", 2000),
+        ("MOONSHOT_ACCOUNT_TX_YEAR_CHUNKS_INGEST_APPLIED_2026-07-13.md", 1200),
+        ("MOONSHOT_WHATS_NEXT_AFTER_ERA_10575_DISCOVERY_2026-07-13.md", 1200),
+    ):
+        p = DOCS / name
+        if p.is_file():
+            excerpts.append(f"--- {name} ---\n{p.read_text(encoding='utf-8')[:lim]}")
+
+    live = _live_snapshot()
+    user = (
+        f"OPERATOR REQUEST (VERBATIM):\n{OPERATOR_REQUEST_VERBATIM}\n\n"
+        "Operator asked whether more programming remains after multi-year HAL. "
+        "Pick THE next package. Prefer CODE if any remains; else best OPS.\n\n"
+        f"## LIVE SNAPSHOT\n{live}\n\n"
+        + "\n\n".join(excerpts)
+    )
+    payload = {
+        "model": model,
+        "temperature": 1.0,
+        "max_tokens": 7000,
+        "messages": [
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": user},
+        ],
+    }
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    if "openrouter" in base_url.lower():
+        headers["HTTP-Referer"] = "https://github.com/NewRidgeFamilyFinancial"
+        headers["X-Title"] = "NR2 Whats Next After Multi-Year HAL"
+    print("Calling Moonshot AI...")
+
+    req = urllib.request.Request(
+        base_url, data=json.dumps(payload).encode(), headers=headers, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=900) as resp:
+            raw = json.loads(resp.read().decode("utf-8"))
+        content = extract_message_content(raw)
+        status = "ok"
+    except Exception as exc:  # noqa: BLE001
+        content = str(exc)
+        status = "error"
+        raw = {"error": content}
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    (OUT / f"moonshot_whats_next_after_multi_year_hal_{stamp}.json").write_text(
+        json.dumps(raw, indent=2), encoding="utf-8"
+    )
+    build = "hal-10576"
+    try:
+        build = json.loads(live).get("buildId") or build
+    except Exception:
+        pass
+
+    header = (
+        f"# Moonshot AI — What's Next After Multi-Year HAL (CONSULT)\n\n"
+        f"**Date:** {DATE}  \n"
+        f"**Model:** {model}  \n"
+        f"**Key:** {key_name}  \n"
+        f"**Status:** {status}  \n"
+        f"**Build:** {build}  \n"
+        f"**Prior:** multi-year HAL shipped (`2906b0e`)  \n"
+        f"**Script:** `scripts/run_moonshot_whats_next_after_multi_year_hal_consult.py`  \n"
+        f"**Operator:** proceed (after 'any more programming')\n\n"
+        f"## Operator request (verbatim)\n\n"
+        f"> {OPERATOR_REQUEST_VERBATIM}\n\n"
+        f"---\n\n"
+    )
+    full = header + (content or "(empty)").strip() + "\n"
+    doc = DOCS / f"MOONSHOT_WHATS_NEXT_AFTER_MULTI_YEAR_HAL_{DATE}.md"
+    out = OUT / f"MOONSHOT_WHATS_NEXT_AFTER_MULTI_YEAR_HAL_{DATE}.md"
+    doc.write_text(full, encoding="utf-8")
+    out.write_text(full, encoding="utf-8")
+    print(doc)
+    print(f"chars={len(content or '')} status={status}")
+    sys.stdout.buffer.write(((content or "")[:5000] + "\n").encode("utf-8", errors="replace"))
+    return 0 if status == "ok" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

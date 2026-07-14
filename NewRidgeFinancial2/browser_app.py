@@ -8,6 +8,7 @@ Staff open https://127.0.0.1:8765/ in a browser.
 
 from __future__ import annotations
 
+import atexit
 import os
 import sys
 import threading
@@ -19,8 +20,81 @@ REPO_ROOT = ROOT.parent
 SITE_DIR = ROOT / "site"
 DATA_DIR = REPO_ROOT / "app_data" / "nr2"
 INDEX_HTML = SITE_DIR / "index.html"
+# Moonshot crash/perf MUST: prevent dual browser_app launches (port/cache contention).
+PIDFILE = ROOT / ".nr2_browser_app.pid"
 
 from desktop_app import ASSET_VERSION, DESIGN_SCHEMA_VERSION  # noqa: E402
+
+
+def _pid_alive(pid: int) -> bool:
+    """True if pid is a live process (Windows-safe; Moonshot singleton intent)."""
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+
+        # PROCESS_QUERY_LIMITED_INFORMATION — os.kill(pid, 0) is not portable on Windows.
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))
+        if handle:
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return True
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, ProcessLookupError):
+        return False
+
+
+def _port_available(host: str, port: int) -> bool:
+    """Probe if host:port is free to bind (stdlib only; no psutil)."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind((host, port))
+            return True
+        except (OSError, socket.error):
+            return False
+
+
+def ensure_singleton(host: str = "127.0.0.1", port: int = 8765) -> None:
+    """Moonshot MUST: exit if another browser_app.py is already running."""
+    # Stale PID cleanup and cross-check
+    if PIDFILE.is_file():
+        old_raw = PIDFILE.read_text(encoding="utf-8", errors="replace").strip()
+        try:
+            old_pid = int(old_raw)
+        except ValueError:
+            old_pid = 0
+        if old_pid and old_pid != os.getpid() and _pid_alive(old_pid):
+            print(
+                f"ERROR: browser_app.py already running (PID {old_pid}). Exiting.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+
+    # Port-aware probe: ensure we can bind before claiming PID
+    if not _port_available(host, port):
+        print(
+            f"ERROR: Port {port} already in use on {host} (another instance running?). Exiting.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    PIDFILE.write_text(str(os.getpid()), encoding="utf-8")
+
+    def _cleanup_pidfile() -> None:
+        try:
+            if PIDFILE.is_file() and PIDFILE.read_text(encoding="utf-8").strip() == str(
+                os.getpid()
+            ):
+                PIDFILE.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    atexit.register(_cleanup_pidfile)
 
 
 def main() -> int:
@@ -40,6 +114,10 @@ def main() -> int:
     startup = run_browser_production_checks(REPO_ROOT, DATA_DIR)
     tls_cert = startup.get("tlsCert") or ""
     tls_key = startup.get("tlsKey") or ""
+    bind_host = str(startup.get("bindHost") or "127.0.0.1")
+
+    ensure_singleton(bind_host, http_port)
+
     bind_host = str(startup.get("bindHost") or "127.0.0.1")
     os.environ["NR2_BIND_HOST"] = bind_host
 
@@ -104,6 +182,18 @@ def main() -> int:
             print("NR2 cache warm complete (import bundle + key pages).", file=sys.stderr)
         except Exception as exc:
             print(f"Startup cache warm failed: {exc}", file=sys.stderr)
+        # REC-007 HAL: keep-alive + prompt prime for local qwen3:32b (background).
+        try:
+            from apex_hal_cache_warm_pack import warm_hal_cache
+
+            warm = warm_hal_cache(background=True)
+            print(
+                f"NR2 HAL model warm: ok={warm.get('ok')} background={warm.get('background')} "
+                f"prompts={warm.get('promptCount')} keepAlive={warm.get('keepAlive')}",
+                file=sys.stderr,
+            )
+        except Exception as exc:
+            print(f"HAL model cache warm failed: {exc}", file=sys.stderr)
 
     threading.Thread(target=_startup_import_sync, daemon=True, name="nr2-import-sync").start()
 
@@ -143,13 +233,29 @@ def main() -> int:
                 except Exception as exc:
                     print(f"EOD handoff tick failed: {exc}", file=sys.stderr)
 
+            def _health_monitor_tick() -> None:
+                """Moonshot Expert SE Phase 2 REC-004 — proactive import/health audit (no PHI)."""
+                try:
+                    from apex_health_monitor_pack import run_scheduled_health_audit
+
+                    # classify_only avoids long Ollama holds on the scheduler thread.
+                    result = run_scheduled_health_audit(classify_only=True)
+                    print(
+                        f"Health monitor tick: ok={result.get('ok')} reason={result.get('reason') or result.get('lane')}",
+                        file=sys.stderr,
+                    )
+                except Exception as exc:
+                    print(f"Health monitor tick failed: {exc}", file=sys.stderr)
+
             sched = BackgroundScheduler(daemon=True)
             sched.add_job(_alert_tick, IntervalTrigger(minutes=15), id="nr2-alerts")
             sched.add_job(_morning_tick, CronTrigger(hour=6, minute=30), id="nr2-morning")
             sched.add_job(_eod_tick, CronTrigger(hour=22, minute=0), id="nr2-eod")
+            # Proactive health every 6 hours (Moonshot REC-004).
+            sched.add_job(_health_monitor_tick, IntervalTrigger(hours=6), id="nr2-health-monitor")
             sched.start()
             print(
-                "NR2 background scheduler: alerts every 15m, morning 06:30 UTC, EOD handoff 22:00 UTC",
+                "NR2 background scheduler: alerts every 15m, health every 6h, morning 06:30 UTC, EOD handoff 22:00 UTC",
                 file=sys.stderr,
             )
         except ImportError:

@@ -329,6 +329,8 @@ def _load_direct_sections() -> dict[str, Any]:
 
 def _write_direct_sections_to_cache(sections: dict[str, Any]) -> dict[str, Any]:
     """Optional cache mirror for external tools that still read document-inbox files."""
+    from import_cache_ttl import CRITICAL_INBOX_FILENAMES, write_text_if_changed
+
     written: list[str] = []
     errors: list[str] = []
     softdent_dir = softdent_import_dir()
@@ -341,10 +343,15 @@ def _write_direct_sections_to_cache(sections: dict[str, Any]) -> dict[str, Any]:
             return
         source_path = str(dataset.get("sourcePath") or "").strip()
         source_file = str(dataset.get("sourceFile") or "").strip()
+        # Do not reshape critical inbox files from direct-first (avoids array vs {rows} thrash).
+        if source_file in CRITICAL_INBOX_FILENAMES and (directory / source_file).is_file():
+            return
         if source_path:
             src = Path(source_path)
             dest_name = source_file or src.name
             dest = directory / dest_name
+            if dest_name in CRITICAL_INBOX_FILENAMES and dest.is_file():
+                return
             same_export = src.is_file() and src.name == dest_name
             if same_export:
                 try:
@@ -358,6 +365,8 @@ def _write_direct_sections_to_cache(sections: dict[str, Any]) -> dict[str, Any]:
                 return
         if source_file.endswith(".json"):
             dest = directory / source_file
+            if dest.name in CRITICAL_INBOX_FILENAMES and dest.is_file():
+                return
             try:
                 payload = {
                     "rows": dataset.get("rows") or [],
@@ -365,22 +374,27 @@ def _write_direct_sections_to_cache(sections: dict[str, Any]) -> dict[str, Any]:
                     "modifiedAt": dataset.get("modifiedAt"),
                     "sha256": dataset.get("sha256"),
                 }
-                dest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-                written.append(_repo_relative(dest))
+                if write_text_if_changed(dest, json.dumps(payload, indent=2)):
+                    written.append(_repo_relative(dest))
             except OSError as exc:
                 errors.append(f"{dest.name}: {exc}")
         elif source_file.endswith(".csv") and _dataset_has_rows(dataset):
             dest = directory / source_file
+            if dest.name in CRITICAL_INBOX_FILENAMES and dest.is_file():
+                return
             try:
                 rows = dataset.get("rows") or []
                 if rows and isinstance(rows[0], dict):
-                    with dest.open("w", encoding="utf-8", newline="") as handle:
-                        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
-                        writer.writeheader()
-                        writer.writerows(rows)
-                    sidecar = dest.with_suffix(".json")
-                    sidecar.write_text(json.dumps(rows, indent=2), encoding="utf-8")
-                    written.append(_repo_relative(dest))
+                    from import_cache_ttl import write_bytes_if_changed
+
+                    buf = __import__("io").StringIO()
+                    writer = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+                    writer.writeheader()
+                    writer.writerows(rows)
+                    if write_bytes_if_changed(dest, buf.getvalue().encode("utf-8")):
+                        sidecar = dest.with_suffix(".json")
+                        write_text_if_changed(sidecar, json.dumps(rows, indent=2))
+                        written.append(_repo_relative(dest))
             except OSError as exc:
                 errors.append(f"{dest.name}: {exc}")
 
@@ -563,6 +577,11 @@ def _load_import_bundle_uncached(*, sync: bool, deep: bool, direct_first: bool) 
             sync_status["result"].setdefault("diagnostics", bundle["diagnostics"])
             if bundle["upstreamHealth"] is not None:
                 sync_status["result"].setdefault("upstreamHealth", bundle["upstreamHealth"])
+            filt = sync_status["result"].get("filterSummary")
+            if isinstance(filt, dict):
+                bundle["filterSummary"] = filt
+                if isinstance(bundle.get("diagnostics"), dict):
+                    bundle["diagnostics"]["filterSummary"] = filt
     except Exception as exc:
         sync_status.setdefault("warnings", [])
         if isinstance(sync_status["warnings"], list):

@@ -155,6 +155,30 @@
     return entry;
   }
 
+  /** Drop one page's widget mosaic (Moonshot cache coherence — BUILD_ID drift). */
+  async function clearWidgets(page, sub, query) {
+    const key = widgetCacheKey(page, sub, query);
+    if (!key) return false;
+    return del(key);
+  }
+
+  /**
+   * Keep entry only when payload.buildId matches liveBuild.
+   * Returns entry or null (and deletes stale keys).
+   */
+  async function loadWidgetsIfBuild(page, sub, query, liveBuild) {
+    const entry = await loadWidgets(page, sub, query);
+    if (!entry || !entry.payload) return null;
+    const want = String(liveBuild || "").trim();
+    if (!want) return entry;
+    const got = String(entry.payload.buildId || entry.buildId || "").trim();
+    if (got && got !== want) {
+      await clearWidgets(page, sub, query);
+      return null;
+    }
+    return entry;
+  }
+
   const api = {
     DB_NAME,
     isAvailable: canUseIndexedDb,
@@ -166,6 +190,8 @@
     widgetCacheKey,
     cacheWidgets,
     loadWidgets,
+    clearWidgets,
+    loadWidgetsIfBuild,
   };
 
   if (typeof module !== "undefined" && module.exports) {

@@ -390,34 +390,85 @@ def evaluate_bundle(
 IMPORT_COMPLETENESS_MIN_PCT = float(os.environ.get("NR2_IMPORT_COMPLETENESS_MIN_PCT", "85"))
 
 
+def list_dataset_gaps(diagnostics: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Named missing/stale datasets for HAL honesty (includes optional/warning).
+
+    Critical completeness may still be 100% while optional payroll/AP are missing —
+    staff replies must name those keys instead of inventing generic checklists.
+    """
+    if not isinstance(diagnostics, dict):
+        return []
+    gaps: list[dict[str, Any]] = []
+    for row in diagnostics.get("datasets") or []:
+        if not isinstance(row, dict):
+            continue
+        status = str(row.get("status") or "")
+        if status not in {STATUS_MISSING, STATUS_STALE}:
+            continue
+        key = str(row.get("datasetKey") or row.get("bundleKey") or "").strip()
+        if not key:
+            continue
+        gaps.append(
+            {
+                "datasetKey": key,
+                "system": row.get("system"),
+                "status": status,
+                "severity": str(row.get("severity") or "warning"),
+                "detail": row.get("detail"),
+                "rowCount": int(row.get("rowCount") or 0),
+            }
+        )
+    gaps.sort(key=lambda g: (str(g.get("severity") or ""), str(g.get("datasetKey") or "")))
+    return gaps
+
+
 def assess_import_completeness(diagnostics: dict[str, Any] | None) -> dict[str, Any]:
-    """Score required (non-optional) datasets for row presence and connection status."""
+    """Score required datasets for row presence and connection status.
+
+    Only ``critical`` severity datasets count toward the hard completeness gate.
+    ``warning`` / ``optional`` gaps stay visible for honesty widgets but must not
+    403 the Apex shell (payroll/AP/expense categories pending ≠ whole app offline).
+
+    Critical + ``stale`` with rows still counts as connected for the gate: freshness
+    chips show honesty; a 2h SoftDent TTL must not 403 the whole shell.
+    """
     if not isinstance(diagnostics, dict):
         return {"ok": False, "scorePct": 0.0, "required": 0, "connected": 0, "gaps": []}
     required: list[dict[str, Any]] = []
     connected = 0
     gaps: list[dict[str, Any]] = []
+    soft_gaps: list[dict[str, Any]] = []
     for row in diagnostics.get("datasets") or []:
         if not isinstance(row, dict):
             continue
-        if str(row.get("severity") or "") == "optional":
+        severity = str(row.get("severity") or "warning")
+        if severity == "optional":
             continue
         if row.get("automated") is False:
             continue
-        required.append(row)
         status = str(row.get("status") or "")
         row_count = int(row.get("rowCount") or 0)
+        gap_item = {
+            "datasetKey": row.get("datasetKey"),
+            "status": status,
+            "rowCount": row_count,
+            "detail": row.get("detail"),
+            "severity": severity,
+        }
+        # Warning = soft honesty gap only (does not fail the read gate).
+        if severity == "warning":
+            if status in {STATUS_MISSING, STATUS_STALE} or row_count <= 0:
+                soft_gaps.append(gap_item)
+            continue
+        required.append(row)
         if status == STATUS_CONNECTED and row_count > 0:
             connected += 1
-        elif status in {STATUS_MISSING, STATUS_STALE} or row_count <= 0:
-            gaps.append(
-                {
-                    "datasetKey": row.get("datasetKey"),
-                    "status": status,
-                    "rowCount": row_count,
-                    "detail": row.get("detail"),
-                }
-            )
+        elif status == STATUS_STALE and row_count > 0:
+            # Present but aged — soft honesty gap; still counts toward completeness.
+            connected += 1
+            soft_gaps.append(gap_item)
+        elif status == STATUS_MISSING or row_count <= 0:
+            gaps.append(gap_item)
     total = len(required) or 1
     score = round((connected / total) * 100.0, 1)
     min_pct = IMPORT_COMPLETENESS_MIN_PCT
@@ -428,11 +479,16 @@ def assess_import_completeness(diagnostics: dict[str, Any] | None) -> dict[str, 
         "required": len(required),
         "connected": connected,
         "gaps": gaps,
+        "softGaps": soft_gaps,
     }
 
 
 def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Datasets whose missing/stale state should degrade integration health imports."""
+    """Critical datasets that are missing (not merely stale) block money-read freshness.
+
+    Stale-with-rows is honesty/soft health — freshness chips surface age without 403ing
+    the Apex shell when SoftDent TTLs (e.g. 120 min) expire between syncs.
+    """
     if not isinstance(diagnostics, dict):
         return []
     blocking: list[dict[str, Any]] = []
@@ -440,14 +496,13 @@ def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str,
         if not isinstance(row, dict):
             continue
         severity = str(row.get("severity") or "warning")
-        if severity == "optional":
+        if severity in {"optional", "warning"}:
             continue
         status = row.get("status")
-        if severity == "warning" and status in {STATUS_MISSING, STATUS_STALE}:
-            continue
-        if status in {STATUS_MISSING, STATUS_STALE}:
+        row_count = int(row.get("rowCount") or 0)
+        if status == STATUS_MISSING or (severity == "critical" and row_count <= 0 and status != STATUS_CONNECTED):
             blocking.append(row)
-        elif status != STATUS_CONNECTED and severity == "critical":
+        elif status != STATUS_CONNECTED and status != STATUS_STALE and severity == "critical":
             blocking.append(row)
     return blocking
 
@@ -591,6 +646,7 @@ def assess_import_readiness(
     blocking = blocking_import_issues(diagnostics)
     summary = diagnostics.get("summary") or {}
     completeness = assess_import_completeness(diagnostics)
+    dataset_gaps = list_dataset_gaps(diagnostics)
 
     base = {
         "loadedAt": bundle.get("loadedAt"),
@@ -598,6 +654,7 @@ def assess_import_readiness(
         "summary": summary,
         "blocking": blocking,
         "completeness": completeness,
+        "datasetGaps": dataset_gaps,
         "thresholds": thresholds,
         "operationContext": operation_context,
         "syncState": sync_state,

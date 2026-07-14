@@ -197,9 +197,7 @@ def build_financial_command_strip(bundle: dict[str, Any], reports: dict[str, Any
 
 
 def build_financial_vital_signs(reports: dict[str, Any], bundle: dict[str, Any]) -> dict[str, Any]:
-    """Strip 2: Production / Collections / A/R / Efficiency — dense exec pills."""
-    from apex_backend import build_collection_bullet
-
+    """Strip 2: Production / Collections / A/R — Efficiency lives on collections radial-gauge (hal-10610)."""
     rows = _dashboard_rows(bundle)
     latest = _latest_period_row(rows)
     period = ""
@@ -219,9 +217,7 @@ def build_financial_vital_signs(reports: dict[str, Any], bundle: dict[str, Any])
     ar_total = ar.get("totalOutstanding")
     ninety_pct = ar.get("ninetyPlusPct")
 
-    bullet = build_collection_bullet(bundle)
-    eff = bullet.get("value") if bullet.get("status") == "ok" else None
-
+    # Efficiency / collection ratio shown by build_collections_radial_gauge — avoid duplicate pill.
     pills = [
         {
             "id": "prod-mtd",
@@ -255,15 +251,6 @@ def build_financial_vital_signs(reports: dict[str, Any], bundle: dict[str, Any])
             if isinstance(ninety_pct, (int, float))
             else "",
         },
-        {
-            "id": "collection-bullet",
-            "label": "Efficiency",
-            "value": eff,
-            "format": "pct_points",
-            "tone": "success" if isinstance(eff, (int, float)) and float(eff) >= 85 else "warning",
-            "empty": eff is None,
-            "sub": bullet.get("hint", "")[:48] if eff is None else "",
-        },
     ]
     any_data = any(not p.get("empty") for p in pills)
     return {
@@ -274,8 +261,8 @@ def build_financial_vital_signs(reports: dict[str, Any], bundle: dict[str, Any])
         "pills": pills,
         "status": "ok" if any_data else "empty",
         "emptyMessage": "Import SoftDent dashboard for vital signs",
-        "hint": "Dense financial vitals · never invents dollars.",
-        "aliasIds": ["prod-mtd", "collections-mtd", "ar-outstanding", "collection-bullet"],
+        "hint": "Dense financial vitals · efficiency on radial-gauge · never invents dollars.",
+        "aliasIds": ["prod-mtd", "collections-mtd", "ar-outstanding"],
     }
 
 
@@ -315,6 +302,32 @@ def build_revenue_composition(bundle: dict[str, Any]) -> dict[str, Any]:
         gap_meta = assess_collections_gap(bundle)
     except Exception:
         gap_meta = {}
+    period = gap_meta.get("period") or "current period"
+    gap_code = gap_meta.get("gapCode")
+    inbox = gap_meta.get("exportInbox") if isinstance(gap_meta.get("exportInbox"), dict) else {}
+    inbox_n = int(inbox.get("matchCount") or 0)
+    if gap_code and gap_code != "OK":
+        if gap_code in {"DAYSHEET_WITHOUT_SPLIT", "COLLECTIONS_EXPORT_REQUIRED", "COLLECTIONS_FORMAT_REQUIRED"} or gap_meta.get(
+            "daysheetWithoutSplit"
+        ):
+            empty_msg = (
+                f"{gap_code} · {period}: Collections export required for ins/patient split — empty ≠ $0. "
+                r"Export SoftDent Collections / Register for a Period to C:\SoftDentReportExports, then Sync."
+            )
+        else:
+            empty_msg = (
+                f"{gap_code} · {period}: Collections/Daysheet gap — empty ≠ $0. "
+                r"Export SoftDent Collections/Daysheet (Reports → Accounting) to C:\SoftDentReportExports, then Sync."
+            )
+        if inbox_n:
+            empty_msg += f" Inbox has {inbox_n} matching file(s) — try Refresh SoftDent period."
+        else:
+            empty_msg += " Export inbox has no Collections/Daysheet-named files yet."
+    else:
+        empty_msg = (
+            "Collections pending for current period — export SoftDent Collections/Daysheet "
+            "(Reports > Accounting) into C:\\SoftDent\\softdentexportreports or C:\\SoftDentReportExports"
+        )
     return {
         "id": "revenue-composition",
         "type": "revenue-composition",
@@ -324,13 +337,7 @@ def build_revenue_composition(bundle: dict[str, Any]) -> dict[str, Any]:
         "segments": [],
         "slices": [],
         "status": "empty",
-        "emptyMessage": (
-            f"{gap_meta.get('gapCode')}: Collections/Daysheet gap — export SoftDent Collections/Daysheet "
-            "(Reports > Accounting) then Sync"
-            if gap_meta.get("gapCode") and gap_meta.get("gapCode") != "OK"
-            else "Collections pending for current period — export SoftDent Collections/Daysheet "
-            "(Reports > Accounting) into C:\\SoftDent\\softdentexportreports or C:\\SoftDentReportExports"
-        ),
+        "emptyMessage": empty_msg,
         "hint": (gap_meta.get("fixHint") if gap_meta.get("fixHint") else None)
         or split.get("hint")
         or donut.get("hint")
@@ -340,6 +347,7 @@ def build_revenue_composition(bundle: dict[str, Any]) -> dict[str, Any]:
         "collectionsPending": pending or bool(gap_meta.get("collectionsPending")),
         "gapCode": gap_meta.get("gapCode"),
         "def": "DEF-001",
+        "exportInboxMatchCount": inbox_n,
         "aliasIds": ["ins-patient-split", "payer-donut"],
     }
 
@@ -400,7 +408,7 @@ def build_dual_axis_trend(bundle: dict[str, Any]) -> dict[str, Any]:
         "id": "financial-dual-trend",
         "type": "dual-axis-trend",
         "label": "Production & Collections Trend",
-        "size": "m",
+        "size": "l",
         "production": series_prod,
         "collections": series_coll,
         "status": "ok",
@@ -460,21 +468,10 @@ def build_ebitda_station(bundle: dict[str, Any]) -> dict[str, Any]:
 
 
 def collapse_empty_large(widget: dict[str, Any]) -> dict[str, Any]:
-    """FIN-002: empty l/xl widgets become strip-sized compact cards."""
-    if not isinstance(widget, dict):
-        return widget
-    if widget.get("status") != "empty":
-        return widget
-    size = str(widget.get("size") or "")
-    if size not in {"l", "xl", "full", "large"}:
-        return widget
-    if widget.get("collapseWhenEmpty") is False:
-        return widget
-    out = dict(widget)
-    out["collapseWhenEmpty"] = True
-    out["size"] = "strip"
-    out["compact"] = True
-    return out
+    """FIN-002 / Moonshot compact: empty l/xl → strip. Skip loading/skeleton (R3)."""
+    from apex_compact_pages_pack import collapse_empty_large as _collapse
+
+    return _collapse(widget)
 
 
 def format_hal_morning_financial_reply(brief: dict[str, Any]) -> str:

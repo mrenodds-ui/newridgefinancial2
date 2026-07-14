@@ -16,6 +16,7 @@ const halManagerPath = join(siteDir, "data", "hal-manager.json");
 const halModelsPath = join(siteDir, "data", "hal-models.json");
 const buildManifest = loadJson(join(__dirname, "nr2-build.json"));
 const staffRenderMode = buildManifest.staffRenderMode || "mock-embed";
+const staffApex = staffRenderMode === "apex";
 const staffMockEmbed = staffRenderMode === "mock-embed";
 const staffLiveWirePilot = staffRenderMode === "live-wire-pilot";
 const staffUsesDeferredBundles = staffMockEmbed || staffLiveWirePilot;
@@ -494,21 +495,24 @@ async function main() {
   execSync("node --check site/app.js", { cwd: __dirname, stdio: "pipe" });
   execSync("node --check site/hal-core.js", { cwd: __dirname, stdio: "pipe" });
   execSync("node --check site/hal-page.js", { cwd: __dirname, stdio: "pipe" });
-  execSync("node --check site/moonshot-page-registry.js", { cwd: __dirname, stdio: "pipe" });
+  if (!staffApex) {
+    execSync("node --check site/moonshot-page-registry.js", { cwd: __dirname, stdio: "pipe" });
+  }
   execSync("node --check site/hal-agent-loop.js", { cwd: __dirname, stdio: "pipe" });
   passed++;
 
   // HAL page surfaces required manager signals (no backend, local data only)
   require(join(siteDir, "icons.js"));
   globalThis.AppIcons = require(join(siteDir, "icons.js"));
-  require(join(siteDir, "moonshot-page-registry.js"));
-  require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
+  if (!staffApex) {
+    require(join(siteDir, "moonshot-page-registry.js"));
+    require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
+    require(join(siteDir, "page-views.js"));
+  }
   require(join(siteDir, "hal-page-canvas.js"));
   require(join(siteDir, "components.js"));
   require(join(siteDir, "hal-pilot-widgets.js"));
   require(join(siteDir, "hal-page-widgets.js"));
-  require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
-  require(join(siteDir, "page-views.js"));
   const HalPageMod = require(join(siteDir, "hal-page.js"));
   let halHtml = "";
   const halRoot = {
@@ -649,7 +653,7 @@ async function main() {
     assert(runtime.enabled === true, "model lane must be enabled for local execution");
     assert(HalCore.isLocalModelEndpoint(runtime.endpoint), `model endpoint must be loopback-only: ${runtime.endpoint}`);
     if (singleGpu) {
-      assert(runtime.model === "hal-local:24b", "single-GPU layout must pin all active runtimes to hal-local:24b");
+      assert(runtime.model === "hal-local:32b", "single-GPU layout must pin all active runtimes to hal-local:32b");
     }
   }
   for (const lane of halModels.lanes) {
@@ -664,10 +668,10 @@ async function main() {
     assert(runtime && HalCore.isLocalModelEndpoint(runtime.endpoint), `lane ${lane.id} runtime must be loopback-only`);
   }
   if (singleGpu) {
-    assert(halModels.config.singleGpuLayout.approvedModel === "hal-local:24b", "approved single-GPU model must be hal-local:24b");
+    assert(halModels.config.singleGpuLayout.approvedModel === "hal-local:32b", "approved single-GPU model must be hal-local:32b");
     assert(halModels.readinessDisplay.allModelsEnabled === false, "single-GPU layout keeps standby lanes disabled");
-    assert(halModels.readinessDisplay.configuredModels.local.model === "hal-local:24b", "local model must be hal-local:24b");
-    assert(halHtml.includes("hal-local:24b"), "HAL page must show single 24B model inventory");
+    assert(halModels.readinessDisplay.configuredModels.local.model === "hal-local:32b", "local model must be hal-local:32b");
+    assert(halHtml.includes("hal-local:32b"), "HAL page must show single 32B model inventory");
   } else {
     assert(halModels.readinessDisplay.allModelsEnabled === true, "readiness display must reflect all models enabled");
     assert(halModels.readinessDisplay.configuredModels.local.model === "hal-chat:8b", "local model must use the GPU 8B chat lane");
@@ -690,7 +694,7 @@ async function main() {
   const chatRuntime = HalCore.laneRuntime(halModels, "chat8b");
   const localRuntime = halModels.config.localModel || {};
   if (singleGpu) {
-    assert(chatRuntime && chatRuntime.model === "hal-local:24b", "chat lane model must be hal-local:24b under single-GPU layout");
+    assert(chatRuntime && chatRuntime.model === "hal-local:32b", "chat lane model must be hal-local:32b under single-GPU layout");
     assert(localRuntime.think === false, "localModel must disable thinking tokens");
     assert(localRuntime.options && Number(localRuntime.options.num_ctx) === 8192, "single-GPU chat context must be 8192");
   } else {
@@ -733,17 +737,19 @@ async function main() {
   });
   assert(typeof halHtml === "string" && halHtml.length > 0, "HAL page must render with empty program context");
   assert(halHtml.includes("HAL STATUS"), "HAL page empty render must still show status toolbar");
-  const MockupChrome = require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
-  const emptyShell = MockupChrome.canvasShell({ pageId: "financial", halData: {}, halWidgetFeed: null });
-  assert(
-    emptyShell.includes("ms-page-chrome") || emptyShell.includes("top-header"),
-    "page chrome must render financial mockup shell with empty feed",
-  );
-  const missingShell = MockupChrome.canvasShell({ pageId: "not-a-real-page", halData: {} });
-  assert(
-    missingShell.includes("ms-page-chrome--missing"),
-    "page chrome must degrade when schema is missing",
-  );
+  if (!staffApex) {
+    const MockupChrome = require(join(siteDir, "nr2-moonshot-mockup-chrome.js"));
+    const emptyShell = MockupChrome.canvasShell({ pageId: "financial", halData: {}, halWidgetFeed: null });
+    assert(
+      emptyShell.includes("ms-page-chrome") || emptyShell.includes("top-header"),
+      "page chrome must render financial mockup shell with empty feed",
+    );
+    const missingShell = MockupChrome.canvasShell({ pageId: "not-a-real-page", halData: {} });
+    assert(
+      missingShell.includes("ms-page-chrome--missing"),
+      "page chrome must degrade when schema is missing",
+    );
+  }
   passed++;
 
   // Full program read access
@@ -930,8 +936,6 @@ async function main() {
   assert(feed.localOnly === true && feed.runId && feed.generatedAt, "widget feed must use program-style runId/generatedAt/localOnly fields");
   assert(feed.jobs.widgetPublish && feed.jobs.widgetPublish.validation && feed.sources.quickbooks.lastStatus, "widget feed jobs/sources must use camelCase fields");
 
-  const PageCanvasData = require(join(siteDir, "page-canvas-data.js"));
-
   const crossSourceFeed = HalSkills.buildWidgetFeed({
     dashboards: {
       financial: { dataSource: "import", productionMtd: { value: 123456 } },
@@ -962,22 +966,25 @@ async function main() {
     pendingOverview.metrics.collectionsTotal === WidgetContract.MISSING || pendingOverview.metrics.collectionsTotal === null,
     "collections must stay missing when SoftDent collections export is pending",
   );
-  PageCanvasData.bind(pendingCollectionsFeed, {
-    dashboards: {
-      financial: { dataSource: "import", collectionsPending: true },
-      softdent: { dataSource: "import", collectionsPending: true },
-    },
-  });
-  const pendingFinancialKpis = PageCanvasData.financialKpis();
-  const pendingSoftdentKpis = PageCanvasData.softdentKpis();
-  assert(
-    pendingFinancialKpis.some((row) => row.label === "Collections MTD" && row.value === "Pending export"),
-    "financial page KPIs must label pending collections as Pending export",
-  );
-  assert(
-    pendingSoftdentKpis.some((row) => row.label === "Collections" && row.value === "Pending export"),
-    "SoftDent page KPIs must label pending collections as Pending export",
-  );
+  if (!staffApex) {
+    const PageCanvasData = require(join(siteDir, "page-canvas-data.js"));
+    PageCanvasData.bind(pendingCollectionsFeed, {
+      dashboards: {
+        financial: { dataSource: "import", collectionsPending: true },
+        softdent: { dataSource: "import", collectionsPending: true },
+      },
+    });
+    const pendingFinancialKpis = PageCanvasData.financialKpis();
+    const pendingSoftdentKpis = PageCanvasData.softdentKpis();
+    assert(
+      pendingFinancialKpis.some((row) => row.label === "Collections MTD" && row.value === "Pending export"),
+      "financial page KPIs must label pending collections as Pending export",
+    );
+    assert(
+      pendingSoftdentKpis.some((row) => row.label === "Collections" && row.value === "Pending export"),
+      "SoftDent page KPIs must label pending collections as Pending export",
+    );
+  }
   assert(
     WidgetContract.widgetStatusFromStates(["ok", "ok", "ok", "pending"]) === "DEGRADED",
     "pending metric state must degrade widget contract status",
@@ -1042,65 +1049,68 @@ async function main() {
       quickbooks: { syncStatus: "ok" },
     },
   };
-  PageCanvasData.bind(noArFeed, noArSnapshot);
-  const noArGlance = PageCanvasData.softdentGlanceStats();
-  const patientArGlance = noArGlance.find((row) => row.label === "Patient A/R");
-  assert(patientArGlance && patientArGlance.value === "—", "SoftDent page canvas must not show sd.hero A/R when widget feed withholds verified A/R");
+  if (!staffApex) {
+    const PageCanvasData = require(join(siteDir, "page-canvas-data.js"));
+    PageCanvasData.bind(noArFeed, noArSnapshot);
+    const noArGlance = PageCanvasData.softdentGlanceStats();
+    const patientArGlance = noArGlance.find((row) => row.label === "Patient A/R");
+    assert(patientArGlance && patientArGlance.value === "—", "SoftDent page canvas must not show sd.hero A/R when widget feed withholds verified A/R");
 
-  const staleArSnapshot = {
-    dashboards: {
-      ar: { kpis: [{ label: "Total Outstanding", value: "$5,000", tone: "gold" }] },
-      softdent: { aging: [{ bucket: "0-30", amount: "$1,000", pct: 50 }], responsibility: { insurance: { amount: "500" }, patient: { amount: "300" } } },
-    },
-  };
-  PageCanvasData.bind(noArFeed, staleArSnapshot);
-  const staleArKpis = PageCanvasData.arKpis();
-  assert(
-    staleArKpis.every((row) => row.value === "—" || row.value === "0"),
-    "A/R page canvas must not show stale dashboard KPIs when widget feed withholds verified A/R",
-  );
-  assert(PageCanvasData.softdentAgingBars() === null, "SoftDent aging chart must hide when verified A/R is unavailable");
-  assert(PageCanvasData.softdentResponsibilityDonut() === null, "SoftDent responsibility chart must hide when verified A/R is unavailable");
-
-  const claimsTableSnapshot = {
-    dashboards: {
-      ar: {
-        topClaims: [{ patient: "Jane Doe", claim: "CLM-1", outstanding: "$500.00", days: 45 }],
+    const staleArSnapshot = {
+      dashboards: {
+        ar: { kpis: [{ label: "Total Outstanding", value: "$5,000", tone: "gold" }] },
+        softdent: { aging: [{ bucket: "0-30", amount: "$1,000", pct: 50 }], responsibility: { insurance: { amount: "500" }, patient: { amount: "300" } } },
       },
-      softdent: {},
-      quickbooks: { syncStatus: "ok" },
-    },
-    claims: { total: 3 },
-  };
-  const claimsTableFeed = HalSkills.buildWidgetFeed(claimsTableSnapshot);
-  PageCanvasData.bind(claimsTableFeed, claimsTableSnapshot);
-  const claimsTableRows = PageCanvasData.arTopClaimsTable();
-  assert(
-    claimsTableRows.length === 1 && claimsTableRows[0][3] === "—",
-    "A/R claims table must withhold per-claim outstanding amounts without verified A/R export",
-  );
+    };
+    PageCanvasData.bind(noArFeed, staleArSnapshot);
+    const staleArKpis = PageCanvasData.arKpis();
+    assert(
+      staleArKpis.every((row) => row.value === "—" || row.value === "0"),
+      "A/R page canvas must not show stale dashboard KPIs when widget feed withholds verified A/R",
+    );
+    assert(PageCanvasData.softdentAgingBars() === null, "SoftDent aging chart must hide when verified A/R is unavailable");
+    assert(PageCanvasData.softdentResponsibilityDonut() === null, "SoftDent responsibility chart must hide when verified A/R is unavailable");
 
-  const followUpSnapshot = {
-    dashboards: { softdent: {}, quickbooks: { syncStatus: "ok" } },
-    claims: {
-      total: 2,
-      claims: [
-        { patient: "Jane Doe", amount: "$1,200.00", status: "Denied" },
-        { patient: "John Smith", amount: "$800.00", status: "Ready" },
-      ],
-    },
-  };
-  const followUpFeed = HalSkills.buildWidgetFeed(followUpSnapshot);
-  PageCanvasData.bind(followUpFeed, followUpSnapshot);
-  const followUpKanban = PageCanvasData.arFollowUpKanban();
-  assert(
-    followUpKanban.some((lane) => lane.items.some((item) => item.includes("$") === false)),
-    "A/R follow-up kanban must omit claim amounts without verified A/R export",
-  );
-  assert(
-    followUpKanban.flatMap((lane) => lane.items).every((item) => !/\$\d/.test(item)),
-    "A/R follow-up kanban must not display dollar amounts without verified A/R export",
-  );
+    const claimsTableSnapshot = {
+      dashboards: {
+        ar: {
+          topClaims: [{ patient: "Jane Doe", claim: "CLM-1", outstanding: "$500.00", days: 45 }],
+        },
+        softdent: {},
+        quickbooks: { syncStatus: "ok" },
+      },
+      claims: { total: 3 },
+    };
+    const claimsTableFeed = HalSkills.buildWidgetFeed(claimsTableSnapshot);
+    PageCanvasData.bind(claimsTableFeed, claimsTableSnapshot);
+    const claimsTableRows = PageCanvasData.arTopClaimsTable();
+    assert(
+      claimsTableRows.length === 1 && claimsTableRows[0][3] === "—",
+      "A/R claims table must withhold per-claim outstanding amounts without verified A/R export",
+    );
+
+    const followUpSnapshot = {
+      dashboards: { softdent: {}, quickbooks: { syncStatus: "ok" } },
+      claims: {
+        total: 2,
+        claims: [
+          { patient: "Jane Doe", amount: "$1,200.00", status: "Denied" },
+          { patient: "John Smith", amount: "$800.00", status: "Ready" },
+        ],
+      },
+    };
+    const followUpFeed = HalSkills.buildWidgetFeed(followUpSnapshot);
+    PageCanvasData.bind(followUpFeed, followUpSnapshot);
+    const followUpKanban = PageCanvasData.arFollowUpKanban();
+    assert(
+      followUpKanban.some((lane) => lane.items.some((item) => item.includes("$") === false)),
+      "A/R follow-up kanban must omit claim amounts without verified A/R export",
+    );
+    assert(
+      followUpKanban.flatMap((lane) => lane.items).every((item) => !/\$\d/.test(item)),
+      "A/R follow-up kanban must not display dollar amounts without verified A/R export",
+    );
+  }
 
   const staleDiagSnapshot = {
     dashboards: {
@@ -1910,15 +1920,33 @@ async function main() {
   assert(workstationPageSrc.includes("data-ws-sync=\"qb\""), "workstation must expose QuickBooks sync trigger");
   assert(workstationPageSrc.includes("data-ws-sync=\"softdent\""), "workstation must expose SoftDent sync trigger");
   assert(workstationPageSrc.includes("data-ws-open-hal"), "workstation must link to HAL hub");
-  const mockupChromeSrc = readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8");
-  assert(mockupChromeSrc.includes('data-nr2-export="cpa-packet"'), "financial page must expose CPA export button");
-  assert(mockupChromeSrc.includes("renderPageHeaderTools"), "mockup chrome must unify page-header-tools");
-  assert(mockupChromeSrc.includes("data-page-command"), "mockup chrome must render HAL command chips");
-  assert(mockupChromeSrc.includes("STAFF_HEADER_TOOL_PAGES"), "mockup chrome must expose sync badges on staff pages");
-  assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes(".kpi-ribbon"), "vocabulary css must style kpi-ribbon");
-  assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-theme.css"), "utf8").includes(".widget-card.col-9"), "theme must define col-9 span");
-  const pageCanvasSrc = readFileSync(join(siteDir, "page-canvas.js"), "utf8");
-  if (staffMockEmbed) {
+  if (staffApex) {
+    assert(
+      !existsSync(join(siteDir, "nr2-moonshot-mockup-theme.css")),
+      "apex mode must not keep Moonshot mockup theme CSS in site/",
+    );
+    assert(
+      !existsSync(join(siteDir, "styles.css")),
+      "apex mode must not keep legacy styles.css in site/",
+    );
+  }
+  const mockupChromeSrc = staffApex
+    ? ""
+    : readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8");
+  if (!staffApex) {
+    assert(mockupChromeSrc.includes('data-nr2-export="cpa-packet"'), "financial page must expose CPA export button");
+    assert(mockupChromeSrc.includes("renderPageHeaderTools"), "mockup chrome must unify page-header-tools");
+    assert(mockupChromeSrc.includes("data-page-command"), "mockup chrome must render HAL command chips");
+    assert(mockupChromeSrc.includes("STAFF_HEADER_TOOL_PAGES"), "mockup chrome must expose sync badges on staff pages");
+    assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes(".kpi-ribbon"), "vocabulary css must style kpi-ribbon");
+    assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-theme.css"), "utf8").includes(".widget-card.col-9"), "theme must define col-9 span");
+  }
+  const pageCanvasSrc = existsSync(join(siteDir, "page-canvas.js"))
+    ? readFileSync(join(siteDir, "page-canvas.js"), "utf8")
+    : "";
+  if (staffApex) {
+    assert(true, "apex mode skips mockup page-canvas layout asserts");
+  } else if (staffMockEmbed) {
     assert(pageCanvasSrc.includes("mockupPreviewGate"), "mock-embed staff pages must use elite mock preview gate");
     assert(pageCanvasSrc.includes("ms-mockup-preview-frame"), "mock-embed staff pages must render iframe gate");
     assert(pageCanvasSrc.includes("/mockup-elite-embed/"), "mock-embed staff pages must point at elite embed route");
@@ -1943,57 +1971,59 @@ async function main() {
     assert(pageCanvasSrc.includes("data-narrative-draft"), "claims kanban must expose Draft with HAL per row");
     assert(pageCanvasSrc.includes("nr2-odbc-strip"), "SoftDent page must render ODBC extract strip");
   }
-  assert(readFileSync(join(siteDir, "nr2-moonshot-ui.js"), "utf8").includes("chart-mount--canvas"), "chart overlays must replace inline chart mounts");
-  assert(readFileSync(join(siteDir, "hal-mockup-overrides.css"), "utf8").includes(".span-2"), "HAL mosaic must define span-2");
+  if (!staffApex) {
+    assert(readFileSync(join(siteDir, "nr2-moonshot-ui.js"), "utf8").includes("chart-mount--canvas"), "chart overlays must replace inline chart mounts");
+    assert(readFileSync(join(siteDir, "hal-mockup-overrides.css"), "utf8").includes(".span-2"), "HAL mosaic must define span-2");
+    const glowCss = readFileSync(join(siteDir, "nr2-moonshot-glow.css"), "utf8");
+    assert(glowCss.includes("@media print"), "moonshot glow css must include print-safe mode");
+    assert(glowCss.includes(".nr2-alert-ticker"), "moonshot glow css must style alert ticker");
+    const halOverridesCss = readFileSync(join(siteDir, "hal-mockup-overrides.css"), "utf8");
+    assert(halOverridesCss.includes("prefers-reduced-motion"), "hal mockup overrides must respect reduced motion");
+    assert(existsSync(join(siteDir, "nr2-page-filters.js")), "nr2-page-filters.js must exist for Tier S2");
+    assert(readFileSync(join(siteDir, "nr2-page-filters.js"), "utf8").includes("data-nr2-filter-chip"), "filter chips must be wired");
+    assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes("data-nr2-filter-chip"), "mockup chrome must render wired filter chips");
+    assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes("period-scrubber"), "period scrubber CSS must exist");
+    assert(readFileSync(join(siteDir, "nr2-moonshot-ui.js"), "utf8").includes(staffUsesDeferredBundles ? "ms-mockup-preview" : "chartMountPolicy"), staffUsesDeferredBundles ? "moonshot UI must skip live enhancement inside mock iframe gate" : "unified chart mount policy must merge with NR2Charts");
+    assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes('data-nr2-export="page-storyboard"'), "staff pages must expose storyboard export");
+    if (!staffUsesDeferredBundles) {
+      assert(existsSync(join(siteDir, "nr2-tier3.js")), "nr2-tier3.js must exist for Tier S3");
+      assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("semantic-zoom"), "Tier S3 semantic zoom must be wired");
+      assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("hal-presence-orb"), "Tier S3 HAL presence must be wired");
+      assert(readFileSync(join(siteDir, "nr2-qb-reports.js"), "utf8").includes("Awaiting QuickBooks sync"), "QB reports must expose cold empty-state copy");
+      assert(readFileSync(join(siteDir, "nr2-analytics.js"), "utf8").includes("collectionDepositVariance"), "browser analytics must expose deposit variance");
+      assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("hubAuthHeadersForNotify"), "hero metrics publish must attach hub token");
+      assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("fetchLastBroadcast"), "hero mirror must poll via HalHubClient");
+    } else {
+      const indexHtml = readFileSync(join(siteDir, "index.html"), "utf8");
+      assert(indexHtml.includes("NR2_STAFF_MOCK_ONLY"), "index must enable staff mock-only mode");
+      assert(!/<script[^>]+src=["']nr2-tier3\.js/i.test(indexHtml), "mock-embed index must not load tier-3 bundle");
+      assert(!/<script[^>]+src=["']nr2-analytics\.js/i.test(indexHtml), "mock-embed index must not load analytics bundle");
+      assert(existsSync(join(deferredDir, "nr2-tier3.js")), "deferred-live-wire must retain tier-3 bundle for sign-off");
+      assert(existsSync(join(deferredDir, "nr2-analytics.js")), "deferred-live-wire must retain analytics bundle for sign-off");
+      assert(readFileSync(join(deferredDir, "nr2-qb-reports.js"), "utf8").includes("Awaiting QuickBooks sync"), "deferred QB reports must expose cold empty-state copy");
+      assert(readFileSync(join(deferredDir, "nr2-analytics.js"), "utf8").includes("collectionDepositVariance"), "deferred analytics must expose deposit variance");
+    }
+    assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes("renderSemanticZoomToggle"), "mockup chrome must expose semantic zoom toggle");
+    assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes("nr2-hero-mirror"), "hero mirror CSS must exist");
+    if (!staffUsesDeferredBundles) {
+      assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("No operatory schedule available"), "operatory empty state must be visible");
+      assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("data-narrative-draft"), "claims kanban must expose Draft with HAL per row");
+    }
+  }
   assert(readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8").includes("slice(-20)"), "HAL chat must keep scrollback");
   assert(readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8").includes("hal-situational-hero"), "HAL must render situational hero");
   assert(readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8").includes("data-hal-scroll-widget"), "HAL mosaic tiles must deep-link to staff widgets");
-  const glowCss = readFileSync(join(siteDir, "nr2-moonshot-glow.css"), "utf8");
-  assert(glowCss.includes("@media print"), "moonshot glow css must include print-safe mode");
-  assert(glowCss.includes(".nr2-alert-ticker"), "moonshot glow css must style alert ticker");
   assert(readFileSync(join(__dirname, "nr2_analytics.py"), "utf8").includes("def goal_scorecard"), "nr2_analytics must expose goal_scorecard");
   assert(readFileSync(join(__dirname, "cpa_packet_export.py"), "utf8").includes("WIDGET_KEYS"), "cpa_packet_export module must exist");
   const halCanvasSrc = readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8");
   assert(halCanvasSrc.includes("widget-mosaic-tile") && halCanvasSrc.includes("aria-label="), "HAL mosaic tiles must expose aria-label");
-  const halOverridesCss = readFileSync(join(siteDir, "hal-mockup-overrides.css"), "utf8");
-  assert(halOverridesCss.includes("prefers-reduced-motion"), "hal mockup overrides must respect reduced motion");
   const completeDoc = readFileSync(join(__dirname, "docs", "MOONSHOT_FULLEST_EXTENT_COMPLETE_2026-07-09.md"), "utf8");
-  assert(existsSync(join(siteDir, "nr2-page-filters.js")), "nr2-page-filters.js must exist for Tier S2");
-  assert(readFileSync(join(siteDir, "nr2-page-filters.js"), "utf8").includes("data-nr2-filter-chip"), "filter chips must be wired");
-  assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes("data-nr2-filter-chip"), "mockup chrome must render wired filter chips");
-  assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes("period-scrubber"), "period scrubber CSS must exist");
-  assert(readFileSync(join(siteDir, "nr2-moonshot-ui.js"), "utf8").includes(staffUsesDeferredBundles ? "ms-mockup-preview" : "chartMountPolicy"), staffUsesDeferredBundles ? "moonshot UI must skip live enhancement inside mock iframe gate" : "unified chart mount policy must merge with NR2Charts");
   assert(existsSync(join(__dirname, "page_storyboard_export.py")), "page_storyboard_export module must exist");
-  assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes('data-nr2-export="page-storyboard"'), "staff pages must expose storyboard export");
-  if (!staffUsesDeferredBundles) {
-    assert(existsSync(join(siteDir, "nr2-tier3.js")), "nr2-tier3.js must exist for Tier S3");
-    assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("semantic-zoom"), "Tier S3 semantic zoom must be wired");
-    assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("hal-presence-orb"), "Tier S3 HAL presence must be wired");
-    assert(readFileSync(join(siteDir, "nr2-qb-reports.js"), "utf8").includes("Awaiting QuickBooks sync"), "QB reports must expose cold empty-state copy");
-    assert(readFileSync(join(siteDir, "nr2-analytics.js"), "utf8").includes("collectionDepositVariance"), "browser analytics must expose deposit variance");
-    assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("hubAuthHeadersForNotify"), "hero metrics publish must attach hub token");
-    assert(readFileSync(join(siteDir, "nr2-tier3.js"), "utf8").includes("fetchLastBroadcast"), "hero mirror must poll via HalHubClient");
-  } else {
-    const indexHtml = readFileSync(join(siteDir, "index.html"), "utf8");
-    assert(indexHtml.includes("NR2_STAFF_MOCK_ONLY"), "index must enable staff mock-only mode");
-    assert(!/<script[^>]+src=["']nr2-tier3\.js/i.test(indexHtml), "mock-embed index must not load tier-3 bundle");
-    assert(!/<script[^>]+src=["']nr2-analytics\.js/i.test(indexHtml), "mock-embed index must not load analytics bundle");
-    assert(existsSync(join(deferredDir, "nr2-tier3.js")), "deferred-live-wire must retain tier-3 bundle for sign-off");
-    assert(existsSync(join(deferredDir, "nr2-analytics.js")), "deferred-live-wire must retain analytics bundle for sign-off");
-    assert(readFileSync(join(deferredDir, "nr2-qb-reports.js"), "utf8").includes("Awaiting QuickBooks sync"), "deferred QB reports must expose cold empty-state copy");
-    assert(readFileSync(join(deferredDir, "nr2-analytics.js"), "utf8").includes("collectionDepositVariance"), "deferred analytics must expose deposit variance");
-  }
-  assert(readFileSync(join(siteDir, "nr2-moonshot-mockup-chrome.js"), "utf8").includes("renderSemanticZoomToggle"), "mockup chrome must expose semantic zoom toggle");
   assert(readFileSync(join(siteDir, "hal-page-canvas.js"), "utf8").includes("hal-presence-orb"), "HAL chat must render presence orb");
-  assert(readFileSync(join(siteDir, "nr2-mockup-page-vocabulary.css"), "utf8").includes("nr2-hero-mirror"), "hero mirror CSS must exist");
   assert(readFileSync(join(__dirname, "hal_hub.py"), "utf8").includes("heroMetrics"), "hub broadcast must store hero metrics");
   assert(readFileSync(join(__dirname, "import-manifest.json"), "utf8").includes("softdent.procedures"), "import manifest must define procedures export");
   assert(readFileSync(join(__dirname, "import-manifest.json"), "utf8").includes("softdent.claimStatus"), "import manifest must define claim status export");
   assert(readFileSync(join(__dirname, "softdent_operational_pipeline.py"), "utf8").includes("build_procedures_rows"), "operational pipeline must export procedures rows");
-  if (!staffUsesDeferredBundles) {
-    assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("No operatory schedule available"), "operatory empty state must be visible");
-    assert(readFileSync(join(siteDir, "page-canvas.js"), "utf8").includes("data-narrative-draft"), "claims kanban must expose Draft with HAL per row");
-  }
   assert(existsSync(join(siteDir, "narrative-review.js")), "narrative-review.js must exist for Phase D");
   assert(readFileSync(join(siteDir, "narrative-review.js"), "utf8").includes("validateDraftPayload"), "narrative review must validate drafts before save");
   assert(readFileSync(join(siteDir, "hal-agent.js"), "utf8").includes("draft_insurance_narrative"), "HAL agent must expose draft_insurance_narrative tool");
@@ -2505,12 +2535,14 @@ print(out["text"])`,
     assert(tools.includes(expectTool), `Phase 2A-2C tool ${expectTool} for: ${q} got ${tools.join(",")}`);
     passed++;
   }
-  const NR2MoonshotUI = require(join(siteDir, "nr2-moonshot-ui.js"));
-  assert(typeof NR2MoonshotUI.renderEraMatchCard === "function", "ERA match UI export");
-  assert(typeof NR2MoonshotUI.renderPilotPhaseBanner === "function", "pilot phase banner export");
-  assert(typeof NR2MoonshotUI.enhanceCanvasPanels === "function", "canvas panel enhancement export");
-  assert(typeof NR2MoonshotUI.enhanceCanvasCharts === "function", "canvas chart enhancement export");
-  passed += 2;
+  if (!staffApex) {
+    const NR2MoonshotUI = require(join(siteDir, "nr2-moonshot-ui.js"));
+    assert(typeof NR2MoonshotUI.renderEraMatchCard === "function", "ERA match UI export");
+    assert(typeof NR2MoonshotUI.renderPilotPhaseBanner === "function", "pilot phase banner export");
+    assert(typeof NR2MoonshotUI.enhanceCanvasPanels === "function", "canvas panel enhancement export");
+    assert(typeof NR2MoonshotUI.enhanceCanvasCharts === "function", "canvas chart enhancement export");
+    passed += 2;
+  }
   if (typeof NR2AlertsUI !== "undefined") {
     assert(typeof NR2AlertsUI.install === "function", "Alerts SSE UI export");
   }

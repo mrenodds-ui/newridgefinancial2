@@ -1485,6 +1485,10 @@ const Services = (function () {
     return loopbackPostJson("/api/softdent/odbc-status", { method: "GET" });
   }
 
+  async function fetchSoftdentSignOnStatus() {
+    return loopbackPostJson("/api/apex/hal/softdent-signon", { method: "GET" });
+  }
+
   let softdentPrefetchPromise = null;
 
   async function prefetchSoftdentDaily() {
@@ -1586,6 +1590,7 @@ const Services = (function () {
     syncQuickBooks,
     syncSoftdentOdbc,
     fetchSoftdentOdbcStatus,
+    fetchSoftdentSignOnStatus,
     prefetchSoftdentDaily,
     exportCpaPacket,
     exportPageStoryboard,

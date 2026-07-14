@@ -1232,7 +1232,12 @@ async function handleWorkstationHalSubmit(query) {
     workstationAskLoading = false;
     globalThis._halWorkstationQaMode = false;
     renderWorkstationScreen();
-    requestAnimationFrame(() => typewriteWorkstationHalReply());
+    requestAnimationFrame(() => {
+      const lastHal = [...workstationChatHistory].reverse().find((m) => m && m.role === "hal");
+      // Phase 3: skip fake typewriter when tokens already painted live.
+      if (lastHal && lastHal.streamedLive) return;
+      typewriteWorkstationHalReply();
+    });
   }
 }
 
@@ -2961,7 +2966,8 @@ function coderModelReady() {
 }
 
 function ossModelConfig() {
-  return HalCore.laneRuntime(halModels, "oss120b");
+  // Hard 32B-only — never return gpt-oss:120b.
+  return HalCore.laneRuntime(halModels, "reason21b") || HalCore.laneRuntime(halModels, "chat8b");
 }
 
 const ollamaModelCache = { at: 0, names: null, loading: null };
@@ -3470,6 +3476,9 @@ function formatHalMessageHtml(text) {
     let s = escapeHtml(segment);
     s = s.replace(/`([^`\n]+)`/g, "<code class=\"hal-msg__code\">$1</code>");
     s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/^\s*Caution:\s*(.+)$/gim, '<div class="hal-msg__caution"><strong>Caution:</strong> $1</div>');
+    s = s.replace(/^\s*References:\s*(.+)$/gim, '<div class="hal-msg__refs"><strong>References:</strong> $1</div>');
+    s = s.replace(/^\s*(\d+)\.\s+(.+)$/gm, '<div class="hal-msg__step"><span class="hal-msg__step-n">$1.</span> $2</div>');
     s = s.replace(/^\s*[-*•]\s+(.+)$/gm, "<span class=\"hal-msg__bullet\">• $1</span>");
     return s;
   }
@@ -4091,6 +4100,7 @@ async function handleHalSubmit(query) {
     ? (partial) => {
         if (!partial) return;
         placeholder.text = partial;
+        placeholder.streamedLive = true;
         if (typeof NR2Tier3 !== "undefined") {
           NR2Tier3.syncPresence({ loading: true, alert: false });
           NR2Tier3.updateStreamCitations(placeholder.tools, placeholder.citationWidgets);
@@ -4961,6 +4971,7 @@ function setInlineHalStreamingText(text) {
     halTypeTimer = null;
   }
   p.classList.remove("message-typing");
+  p.classList.add("hal-msg--streaming");
   p.textContent = text;
   box.scrollTop = box.scrollHeight;
 }
@@ -5509,11 +5520,12 @@ function select(id, options) {
 function assertDesignSchemaLoaded() {
   if (NR2_WORKSTATION_ONLY) {
     if (typeof NR2Boot !== "undefined" && !NR2Boot.ready) return false;
-    if (typeof WorkstationSchema !== "undefined" && typeof MoonshotMockupChrome !== "undefined") return true;
+    // Mockup chrome retired — workstation boots on WorkstationSchema alone.
+    if (typeof WorkstationSchema !== "undefined") return true;
     const frame = document.getElementById("pageFrame");
     if (frame) {
       frame.innerHTML =
-        '<div class="ms-boot-error" role="alert"><strong class="ms-boot-error__title">Workstation failed to load</strong><p class="ms-boot-error__msg">workstation-schema.js and mockup chrome are required. Launch Start Workstation.bat and reload.</p></div>';
+        '<div class="ms-boot-error" role="alert"><strong class="ms-boot-error__title">Workstation failed to load</strong><p class="ms-boot-error__msg">workstation-schema.js is required. Launch Start Workstation.bat and reload.</p></div>';
     }
     return false;
   }
@@ -5523,7 +5535,7 @@ function assertDesignSchemaLoaded() {
   const frame = document.getElementById("pageFrame");
   if (frame) {
     frame.innerHTML =
-      '<div class="ms-boot-error" role="alert"><strong class="ms-boot-error__title">Page registry failed to load</strong><p class="ms-boot-error__msg">moonshot-page-registry.js and nr2-moonshot-mockup-chrome.js are required. Run StartProgram.bat and reload http://127.0.0.1:8765/.</p></div>';
+      '<div class="ms-boot-error" role="alert"><strong class="ms-boot-error__title">Legacy mock-embed unavailable</strong><p class="ms-boot-error__msg">Use Apex at https://127.0.0.1:8765/ (staffRenderMode=apex). Mockup registry/chrome were removed.</p></div>';
   }
   return false;
 }

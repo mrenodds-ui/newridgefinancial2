@@ -47,13 +47,20 @@ RATE_LIMIT_EXEMPT_PATHS = frozenset(
         "/api/import-sync-reset",
         "/api/webhooks/website-appointment",
         "/nr2-build.json",
+        "/api/apex/widgets",  # Moonshot: prevent 429 warming stall
+        "/api/apex/hal/orchestrate",  # Ensure HAL token auth never 429s
     }
 )
 
 
 def is_rate_limit_exempt(path: str) -> bool:
     p = str(path or "").split("?", 1)[0]
-    return p in RATE_LIMIT_EXEMPT_PATHS
+    if p in RATE_LIMIT_EXEMPT_PATHS:
+        return True
+    # Prefix match for all widget sub-endpoints (e.g., /api/apex/widgets/financial)
+    if p.startswith("/api/apex/widgets"):
+        return True
+    return False
 
 
 def is_allowed(token_fingerprint: str, route_class: str, *, window_sec: int = 60) -> tuple[bool, int]:

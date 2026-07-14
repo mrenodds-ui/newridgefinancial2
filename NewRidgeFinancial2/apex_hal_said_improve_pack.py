@@ -772,7 +772,7 @@ def payer_alerts_widget() -> dict[str, Any]:
         for a in alerts
     ]
     n = len(alerts)
-    return {
+    out = {
         "id": "payer-change-alerts",
         "type": "claim-attachments",
         "label": "Payer Change Alerts",
@@ -783,6 +783,9 @@ def payer_alerts_widget() -> dict[str, Any]:
         "emptyMessage": "No payer reference change alerts yet",
         "hint": "Fired when payer_reference contacts/sync updates. Steve notified for fee/eligibility changes.",
     }
+    if not n:
+        out["gapCode"] = "ZERO_VOLUME"
+    return out
 
 
 # ——— Huddle enrichment + page append ———

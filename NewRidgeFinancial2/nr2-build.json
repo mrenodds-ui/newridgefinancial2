@@ -1,8 +1,9 @@
 {
-  "schemaVersion": "hal-10498",
-  "BUILD_ID": "hal-10498",
-  "assetVersion": "hal-10498",
-  "builtAt": "2026-07-11T22:30:00Z",
-  "notes": "hal-10498: SoftDent sd_patient_insurance extract for dossier Availity auto-eligibility.",
-  "staffRenderMode": "apex"
+  "schemaVersion": "hal-10628",
+  "BUILD_ID": "hal-10628",
+  "assetVersion": "hal-10628",
+  "builtAt": "2026-07-14T13:52:00.000Z",
+  "notes": "hal-10628: lock HAL stage while Ask HAL chat is mounted; form submit cannot reload page.",
+  "staffRenderMode": "apex",
+  "package": "HAL-10628"
 }

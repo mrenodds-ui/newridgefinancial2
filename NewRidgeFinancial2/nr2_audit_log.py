@@ -31,6 +31,12 @@ FINANCIAL_MUTATION_ACTIONS = frozenset(
         "qb_journal_post",
         "patient_payment_webhook",
         "collections_adjustment",
+        # 32B program fixes — unify consent / Sync / override kinds
+        "financial_override",
+        "consent_action",
+        "sync",
+        "claim_action",
+        "hal_outbound_consent",
     }
 )
 

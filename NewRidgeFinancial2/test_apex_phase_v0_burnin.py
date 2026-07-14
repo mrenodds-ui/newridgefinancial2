@@ -41,7 +41,7 @@ class PhaseV0BurnInTests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10498")
+        self.assertEqual(BUILD_ID, "hal-10576")
 
     def test_telemetry_default_off(self):
         os.environ.pop("NR2_AI_TELEMETRY", None)
@@ -69,9 +69,12 @@ class PhaseV0BurnInTests(unittest.TestCase):
         self.assertEqual(lane.get("errors_1h"), 1)
         self.assertEqual(lane.get("calls_1h"), 1)
 
-    def test_freshness_default_off(self):
+    def test_freshness_default_on(self):
         os.environ.pop("NR2_DATA_FRESHNESS", None)
+        self.assertTrue(freshness_enabled())
+        os.environ["NR2_DATA_FRESHNESS"] = "0"
         self.assertFalse(freshness_enabled())
+        os.environ.pop("NR2_DATA_FRESHNESS", None)
 
     def test_sync_status_chips(self):
         os.environ["NR2_DATA_FRESHNESS"] = "1"

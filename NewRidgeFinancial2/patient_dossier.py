@@ -724,7 +724,7 @@ def format_dossier_markdown(dossier: dict[str, Any]) -> str:
 
 
 def summarize_dossier_with_local_ai(dossier: dict[str, Any]) -> dict[str, Any]:
-    """Prompt local hal-local:24b with DOSSIER_SUMMARY_PROMPT. Falls back to markdown."""
+    """Prompt local hal-local:30b-a3b with DOSSIER_SUMMARY_PROMPT. Falls back to markdown."""
     from patient_dossier_prompts import DOSSIER_SUMMARY_PROMPT
 
     import json
@@ -737,7 +737,7 @@ def summarize_dossier_with_local_ai(dossier: dict[str, Any]) -> dict[str, Any]:
         from nr2_hal_gateway import call_ollama_chat
 
         result = call_ollama_chat(
-            model="hal-local:24b",
+            model="hal-local:30b-a3b",
             messages=[
                 {"role": "system", "content": "You are NR2-HAL. Follow the user rules exactly."},
                 {"role": "user", "content": prompt},
@@ -759,13 +759,13 @@ def summarize_dossier_with_local_ai(dossier: dict[str, Any]) -> dict[str, Any]:
                         "ok": True,
                         "summary": deterministic,
                         "source": "deterministic_after_zero_guard",
-                        "model": "hal-local:24b",
+                        "model": "hal-local:30b-a3b",
                     }
                 return {
                     "ok": True,
                     "summary": cleaned[:4000],
-                    "source": "hal-local:24b",
-                    "model": "hal-local:24b",
+                    "source": "hal-local:30b-a3b",
+                    "model": "hal-local:30b-a3b",
                 }
         return {
             "ok": True,

@@ -1,15 +1,16 @@
 # Local Quantized AI (AMD Radeon AI PRO R9700 32GB)
 
-> **Current workstation layout (2026-07-11):** single GPU-pinned `hal-local:24b` (`mistral-small3.1:24b` **Q4_K_M**, `num_ctx` 8192) via Ollama on `127.0.0.1:11434`.
+> **Current workstation layout (2026-07-11):** single GPU-pinned `hal-local:32b` (`qwen3:32b` **Q4_K_M**, `num_ctx` 8192) via Ollama on `127.0.0.1:11434`.
 > `OLLAMA_MAX_LOADED_MODELS=1` · loopback-only · Intel iGPU disabled (`OLLAMA_IGPU_ENABLE=0`).
 > Install/refresh: `NewRidgeFinancial2/model-automation/Apply-HAL-GPU-Performance.ps1`
 > Loopback serve: `NewRidgeFinancial2/model-automation/Start-HAL-Ollama-Local.ps1`
-> Detail / tests / rollback: `NewRidgeFinancial2/docs/HAL_LOCAL_24B_SINGLE_GPU_2026-07-11.md`
+> Detail / tests / rollback: `NewRidgeFinancial2/docs/HAL_LOCAL_32B_SINGLE_GPU_2026-07-11.md`
+> Prior 24B pin docs: `NewRidgeFinancial2/docs/HAL_LOCAL_24B_SINGLE_GPU_2026-07-11.md`
 > Architecture overview: repo-root `ARCHITECTURE.md`
 
-NR2 routes HAL through **one** local 24B model. Lane keys (`chat8b`, `reason21b`, `escalate30b`, `coder32b`) are preserved for policy/routing but all map to `hal-local:24b`. The browser never loads models; the site calls loopback Ollama / HAL APIs.
+NR2 routes HAL through **one** local 32B model. Lane keys (`chat8b`, `reason21b`, `escalate30b`, `coder32b`) are preserved for policy/routing but all map to `hal-local:32b`. The browser never loads models; the site calls loopback Ollama / HAL APIs.
 
-**Evolution:** Replaced the prior dual pin (`hal-chat:8b` + `hal-escalate:30b`) to avoid concurrent dual-load and VRAM thrashing on the internal 32 GB card. 8B/30B/coder files remain on disk (not auto-routed). **Future:** external ~12 GB GPU may host a separate 8B while 24B stays on the R9700.
+**Evolution:** Replaced single `hal-local:24b` (`mistral-small3.1:24b`) with `hal-local:32b` (`qwen3:32b`) for stronger reasoning while keeping one-model residency on the R9700. 8B/30B/coder/24B files remain on disk (not auto-routed).
 
 ## Runtime selection
 

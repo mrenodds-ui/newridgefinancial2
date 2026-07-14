@@ -89,6 +89,29 @@ class SoftdentDashboardPeriodSyncTests(unittest.TestCase):
         self.assertEqual(row.get("collections"), 71414.88)
         self.assertTrue(row.get("collectionsReported"))
         self.assertNotIn("collectionsPending", row)
+        # Honesty: all-patient dump (ins=0, patient=collections) is not a real mix
+        self.assertEqual(row.get("patient"), 0.0)
+        self.assertEqual(row.get("insurance"), 0.0)
+        self.assertTrue(row.get("collectionsFormatRequired"))
+
+    def test_daysheet_without_insurance_split_marks_format_required(self) -> None:
+        row = _build_period_row(
+            "2026-05",
+            [
+                {
+                    "_source": "daysheet",
+                    "production": 128475.0,
+                    "collections": 71414.88,
+                    "insurance": 0.0,
+                    "patient": 0.0,
+                    "insuranceSplitReported": False,
+                },
+            ],
+        )
+        self.assertEqual(row.get("collections"), 71414.88)
+        self.assertTrue(row.get("collectionsReported"))
+        self.assertEqual(row.get("patient"), 0.0)
+        self.assertTrue(row.get("collectionsFormatRequired"))
 
     def test_diagnose_collections_gap_reports_zero_daysheet(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

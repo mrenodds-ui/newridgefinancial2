@@ -10,12 +10,16 @@ import csv
 import json
 import logging
 import os
+import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Moonshot WHY-ERRORS Phase 2: concurrency lock pressure metric (not PHI).
+direct_import_lock_rejection_count = 0
 
 from import_contract import (
     QUICKBOOKS_AR_NAMES,
@@ -245,6 +249,16 @@ def assemble_direct_import_sections() -> dict[str, Any]:
                     "ar": load_upstream_export_dataset("quickbooks", QUICKBOOKS_AR_NAMES),
                 },
             }
+    except sqlite3.OperationalError as exc:
+        global direct_import_lock_rejection_count
+        direct_import_lock_rejection_count += 1
+        logger.warning(
+            "Direct import pipeline unavailable (database locked); "
+            "falling back to legacy fetch metric=direct_import_lock_rejection_count count=%s error=%s",
+            direct_import_lock_rejection_count,
+            exc,
+        )
+        pipeline_error = str(exc)
     except Exception as exc:
         logger.exception("Direct import pipeline unavailable; falling back to legacy fetch")
         pipeline_error = str(exc)

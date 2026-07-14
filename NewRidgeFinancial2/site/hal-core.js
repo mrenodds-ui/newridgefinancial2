@@ -392,8 +392,79 @@ const HalCore = (function () {
     if (isCodeDiscussionQuery(query, route, meta)) return true;
     if (route && (route.useReasoning || route.useEscalation || route.useOss)) return true;
     if (wantsDetailedReply(query)) return true;
+    if (isDeliverableRequest(query)) return true;
     if (/\b(list|steps|checklist|bullet)\b/i.test(String(query || ""))) return true;
     return false;
+  }
+
+  function isDeliverableRequest(query) {
+    return /\b(next\s+steps?|ordered\s+steps?|step[\s-]?by[\s-]?step|checklist|procedure|how\s+(?:do|to|can)\s+(?:i|we)|walk\s+me\s+through|what\s+(?:are|is)\s+the\s+(?:steps?|path)|provide\s+(?:the\s+)?(?:steps?|path|checklist)|action\s+items?|paths?\s+to\b)\b/i.test(
+      String(query || ""),
+    );
+  }
+
+  function formatStructuredDeliverable(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return "";
+    let candidate = raw;
+    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) candidate = fenced[1].trim();
+    const blob = candidate.match(/\{[\s\S]*\}/);
+    if (!blob) return raw;
+    try {
+      const obj = JSON.parse(blob[0]);
+      if (!obj || !Array.isArray(obj.steps) || !obj.steps.length) return raw;
+      const lines = obj.steps
+        .map((s) => String(s || "").trim())
+        .filter(Boolean)
+        .slice(0, 12)
+        .map((s, i) => `${i + 1}. ${s}`);
+      const caution = String(obj.caution || "").trim();
+      if (caution) lines.push(`Caution: ${caution}`);
+      const refs = Array.isArray(obj.references)
+        ? obj.references.map((r) => String(r || "").trim()).filter(Boolean).slice(0, 6)
+        : [];
+      if (refs.length) lines.push(`References: ${refs.join("; ")}`);
+      return lines.join("\n");
+    } catch (_exc) {
+      return raw;
+    }
+  }
+
+  /** Moonshot Phase 4 — CARC/CAS whitelist briefs render as monospace/code blocks. */
+  function isCarcBriefIntent(intent) {
+    return /^policy:carc-/i.test(String(intent || ""));
+  }
+
+  function isCarcBriefText(text) {
+    const t = String(text || "");
+    if (!t) return false;
+    if (/\bStaff Action:\b/.test(t)) return true;
+    if (/^Contractual obligation; do not bill patient\.?$/i.test(t.trim())) return true;
+    if (/^[A-Z]{2}-\d{1,4}:\s/.test(t.trim())) return true;
+    if (/cannot interpret this code; escalate to posting supervisor/i.test(t)) return true;
+    return false;
+  }
+
+  function formatCarcBriefReply(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return "";
+    // Keep body intact; wrap as a single fenced code block for monospace distinction.
+    if (/^```/.test(raw)) return raw;
+    return "```carc\n" + raw + "\n```";
+  }
+
+  function applyCarcBriefDomStyle(el, text, intent) {
+    if (!el) return false;
+    const body = String(text || "");
+    if (!isCarcBriefIntent(intent) && !isCarcBriefText(body)) return false;
+    el.classList.add("hal-carc-brief");
+    el.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    el.style.whiteSpace = "pre-wrap";
+    // Prefer plain brief text (strip fence if present) for the visible node.
+    const unfenced = body.replace(/^```(?:carc)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    el.textContent = unfenced || body;
+    return true;
   }
 
   function compressThreadForPrompt(turns, maxRecent) {
@@ -642,6 +713,7 @@ const HalCore = (function () {
   }
 
   function hasUnrequestedList(text, query) {
+    if (isDeliverableRequest(query)) return false;
     if (/\b(list|step-by-step|numbered|bullet|checklist|show all|full briefing|everything)\b/i.test(String(query || ""))) {
       return false;
     }
@@ -1360,9 +1432,22 @@ const HalCore = (function () {
       meta = HalCursorParity.enrichPolishMeta(meta, query, route, meta.halModels);
     }
     let out = cleanModelText(String(text || "").trim());
+    if (isDeliverableRequest(query)) {
+      out = formatStructuredDeliverable(out) || out;
+      meta = Object.assign({}, meta, { allowMarkdown: true, skipMinSentences: true });
+    }
     if (!wantsStructuredPlan(query)) out = stripStructuredPlanOpener(out);
     out = stripInstructionLeaks(stripChainOfThoughtProse(out));
     const intent = route && route.intent ? String(route.intent) : "";
+    if (isCarcBriefIntent(intent) || isCarcBriefText(out)) {
+      out = formatCarcBriefReply(out) || out;
+      meta = Object.assign({}, meta, {
+        allowMarkdown: true,
+        skipMinSentences: true,
+        carcBrief: true,
+        synthesize: false,
+      });
+    }
     if (/^capability:/.test(intent)) {
       meta = Object.assign({}, meta, { synthesize: false });
       if (wantsBriefReply(query) || intent === "capability:brief-followup") {
@@ -3924,7 +4009,16 @@ const HalCore = (function () {
     }
 
     if (/\b(120b|gpt-oss|oss120b)\b/i.test(query) || /\brun\b.*\b120b\b/i.test(query)) {
-      return { intent: "oss", lane: "oss120b", text: "", useOss: true, prompt: rawQuery, actions: [] };
+      // Hard 32B-only: never route to gpt-oss / 120B on the office GPU.
+      return {
+        intent: "reasoning",
+        lane: "reason21b",
+        text: "",
+        useReasoning: true,
+        prompt: rawQuery,
+        actions: [],
+        note: "120B disabled — using local 32B only",
+      };
     }
 
     if (/second opinion|escalat|double[\s-]?check|high[\s-]?risk|complex case|deep review|review carefully|sanity check|scrutin/.test(query)) {
@@ -4310,6 +4404,12 @@ const HalCore = (function () {
     isFollowUpQuery,
     isCorrectionQuery,
     wantsBriefReply,
+    isDeliverableRequest,
+    formatStructuredDeliverable,
+    isCarcBriefIntent,
+    isCarcBriefText,
+    formatCarcBriefReply,
+    applyCarcBriefDomStyle,
     textSimilarity,
     buildThreadContextBlock,
     pageAwareClause,

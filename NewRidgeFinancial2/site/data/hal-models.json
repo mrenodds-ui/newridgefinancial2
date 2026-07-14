@@ -6,20 +6,20 @@
     "cloudReasoning": {
       "enabled": false,
       "autoEnableWhenKeySet": false,
-      "preferForTaskCompletion": true,
-      "preferForAllAgentLoops": true,
+      "preferForTaskCompletion": false,
+      "preferForAllAgentLoops": false,
       "searchIndex": {
-        "enabled": true,
+        "enabled": false,
         "maxAgeHours": 36,
         "path": "app_data/nr2/program_search_index.json"
       },
       "endpoint": "https://api.openai.com/v1/chat/completions",
       "model": "gpt-4o-mini",
       "timeoutMs": 120000,
-      "useForAgentLoop": true,
+      "useForAgentLoop": false,
       "sanitizeBeforeCloud": true,
       "apiKeyEnv": "NR2_CLOUD_API_KEY",
-      "note": "Optional cloud agent lane when enabled and NR2_CLOUD_API_KEY is set (HAL page or sessionStorage). PHI is redacted before send."
+      "note": "DISABLED — office HAL is local MoE hal-local:30b-a3b only (R9700). No cloud AI."
     },
     "webResearch": {
       "enabled": true,
@@ -39,20 +39,33 @@
         "vendor documentation"
       ]
     },
-    "activeLane": "local24b-single",
+    "activeLane": "local-moe-30b-a3b",
     "preferReasoning": true,
     "hybridGpuLayout": {
       "enabled": false,
-      "policy": "2026-07-11 single-24B: pin only hal-local:24b (Q4_K_M) on R9700 32 GB. No automatic 8B/30B/coder concurrent loads. OpenAI cloud remains optional/off unless explicitly enabled.",
-      "gpuPinned": ["hal-local:24b"],
+      "policy": "2026-07-13 hard MoE-only: pin only hal-local:30b-a3b. No other local or cloud AI models.",
+      "gpuPinned": [
+        "hal-local:30b-a3b"
+      ],
       "onDemandCoder": null,
-      "neverPin": ["hal-chat:8b", "hal-escalate:30b", "qwen2.5-coder:32b", "qwen3:235b", "gpt-oss:120b", "qwen3-coder:30b", "llama3.3:latest"]
+      "neverPin": [
+        "hal-chat:8b",
+        "hal-escalate:30b",
+        "qwen2.5-coder:32b",
+        "qwen3:235b",
+        "gpt-oss:120b",
+        "qwen3-coder:30b",
+        "llama3.3:latest",
+        "falcon:180b",
+        "hal-local:32b",
+        "qwen3:32b"
+      ]
     },
     "singleGpuLayout": {
       "enabled": true,
-      "policy": "One quantized 24B on internal R9700 only. External 12 GB GPU reserved for a future separate 8B — not configured yet.",
-      "approvedModel": "hal-local:24b",
-      "baseModel": "mistral-small3.1:24b",
+      "policy": "One quantized MoE Instruct (Qwen3 30B-A3B) on R9700 only. Not the thinking-only alias.",
+      "approvedModel": "hal-local:30b-a3b",
+      "baseModel": "qwen3:30b-a3b-instruct-2507-q4_K_M",
       "quantization": "Q4_K_M",
       "numCtx": 8192,
       "maxLoadedModels": 1,
@@ -60,7 +73,8 @@
       "gpuDevice": "AMD Radeon AI PRO R9700",
       "vramGiB": 32,
       "vramSafetyMarginGiB": 5,
-      "keepAlive": -1
+      "keepAlive": -1,
+      "architecture": "MoE (~30.5B total / ~3.3B active)"
     },
     "cursorParity": {
       "enabled": true,
@@ -82,7 +96,6 @@
       "agentLoopUseReasoning": true,
       "preferCoderForAgentLoop": false,
       "coderLane": "coder32b",
-
       "agentAutoTools": true,
       "autoApplyPatches": true,
       "clarifyAmbiguous": true,
@@ -109,13 +122,13 @@
       "defaultReasoning": true,
       "alwaysAgentLoop": true,
       "alwaysGatherTools": true,
-      "cloudForOpenChat": true,
+      "cloudForOpenChat": false,
       "orchestratorContext": true,
       "maxToolsPerTurn": 12,
       "multiGatherRounds": 4,
       "agentLoopMaxTurns": 8,
       "minSentences": 5,
-      "policy": "Chat tier 9000: reasoning default, parallel gather, agent loop, optional cloud, Cursor Auto colleague voice."
+      "policy": "Chat tier 9000 on local MoE hal-local:30b-a3b only — no cloud, no alternate Ollama tags."
     },
     "employee": {
       "enabled": true,
@@ -184,13 +197,18 @@
         "join_claim_payers",
         "softdent_extract_status"
       ],
-      "localWrites": ["remember_fact", "local office tasks", "journal drafts for review", "apply_program_patch (site bundle only, backed up)"],
+      "localWrites": [
+        "remember_fact",
+        "local office tasks",
+        "journal drafts for review",
+        "apply_program_patch (site bundle only, backed up)"
+      ],
       "externalBlocked": false
     },
     "localModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "hal-local:24b",
+      "model": "hal-local:30b-a3b",
       "timeoutMs": 90000,
       "temperature": 0.2,
       "think": false,
@@ -207,15 +225,17 @@
       "temperature": 0.2
     },
     "gpuPinnedModels": [
-      "hal-local:24b"
+      "hal-local:30b-a3b"
     ],
     "gpuPinOptions": {
-      "hal-local:24b": { "num_ctx": 8192 }
+      "hal-local:30b-a3b": {
+        "num_ctx": 8192
+      }
     },
     "reasoningModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "hal-local:24b",
+      "model": "hal-local:30b-a3b",
       "timeoutMs": 210000,
       "temperature": 0.25,
       "think": false,
@@ -229,7 +249,7 @@
     "escalationModel": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "hal-local:24b",
+      "model": "hal-local:30b-a3b",
       "timeoutMs": 180000,
       "temperature": 0.2,
       "think": false,
@@ -242,7 +262,7 @@
       "enabled": true,
       "onDemand": false,
       "endpoint": "http://127.0.0.1:11434/api/chat",
-      "model": "hal-local:24b",
+      "model": "hal-local:30b-a3b",
       "timeoutMs": 180000,
       "temperature": 0.25,
       "think": false,
@@ -252,9 +272,9 @@
         "repeat_penalty": 1.05,
         "top_p": 0.9
       },
-      "note": "Single-24B layout: coder lane maps to hal-local:24b (no second model load). qwen2.5-coder:32b retained on disk only."
+      "note": "Single-MoE layout: coder lane maps to hal-local:30b-a3b (no second model load)."
     },
-    "note": "Single 24B (2026-07-11): GPU pin only hal-local:24b (mistral-small3.1:24b Q4_K_M, num_ctx 8192) on R9700 32 GB. OLLAMA_MAX_LOADED_MODELS=1. Prior 8B/30B/coder tags retained on disk but not auto-routed. Cloud reasoning remains disabled unless explicitly enabled with NR2_CLOUD_API_KEY (PHI sanitized). Rollback: model-automation/Rollback-HAL-Dual-8B-30B.ps1.",
+    "note": "Single MoE Instruct (2026-07-13): GPU pin only hal-local:30b-a3b (FROM qwen3:30b-a3b-instruct-2507-q4_K_M, num_ctx 8192) on R9700 32 GB. Not the thinking-only qwen3:30b-a3b alias. OLLAMA_MAX_LOADED_MODELS=1. Rollback: Install-HAL-GPU-Single-32B.ps1 + restore APPROVED_LOCAL_MODEL.",
     "naturalVoice": {
       "instructions": [
         "Write like a sharp office teammate: clear, direct, collaborative — not a film computer or dashboard narrator.",
@@ -271,52 +291,82 @@
         "No sarcasm, no dismissals, no 'happy to help' filler. Accurate on consent policy and missing-data limits."
       ],
       "fewShotMessages": [
-        { "role": "user", "content": "Can you post to QuickBooks?" },
+        {
+          "role": "user",
+          "content": "Can you post to QuickBooks?"
+        },
         {
           "role": "assistant",
           "content": "No — I cannot click Post inside QuickBooks from NR2. I can draft journal entries locally or export approved IIF after you say \"I consent\"; staff still post inside QuickBooks. Nothing writes back without explicit consent and review."
         },
-        { "role": "user", "content": "Are you allowed to refresh imports?" },
+        {
+          "role": "user",
+          "content": "Are you allowed to refresh imports?"
+        },
         {
           "role": "assistant",
           "content": "Yes. Refresh reloads SoftDent and QuickBooks exports into the local import bundle only — nothing writes back to either system. If widgets still look empty after refresh, the export files or paths are the likely issue, not the dashboard layout. Staff should confirm the export landed in the inbox before re-asking. I can show import status and diagnostics from the local bundle. This stays entirely on-machine."
         },
-        { "role": "user", "content": "What can you do on the Claims page?" },
+        {
+          "role": "user",
+          "content": "What can you do on the Claims page?"
+        },
         {
           "role": "assistant",
           "content": "On Claims I can open the workbench, walk denied and needs-review lanes, and check packet readiness against local imports. I can build a claim submission packet zip after consent — staff upload it to the payer portal. I do not submit to payer portals directly. I can flag missing narrative or attachment gaps before staff sends anything outbound. Name a specific claim or lane if you want detail instead of a general walkthrough."
         },
-        { "role": "user", "content": "What happens if I ask you to email the payer?" },
+        {
+          "role": "user",
+          "content": "What happens if I ask you to email the payer?"
+        },
         {
           "role": "assistant",
           "content": "No — I won't email the payer without explicit consent. I can prepare the draft locally, show what would be sent, and wait for you to say \"I consent.\" Without consent I only prepare notes and readiness checklists — nothing is delivered externally."
         },
-        { "role": "user", "content": "That's wrong — I meant imports, not widgets." },
+        {
+          "role": "user",
+          "content": "That's wrong — I meant imports, not widgets."
+        },
         {
           "role": "assistant",
           "content": "Understood — imports, not widgets. Refresh reloads SoftDent and QuickBooks files locally; nothing writes back to those systems. Widgets only reflect what landed in the import bundle. If you saw empty tiles, check import status first, then the export path. I can walk either surface if you name which page you are on."
         },
-        { "role": "user", "content": "Keep it brief — can you open claims?" },
+        {
+          "role": "user",
+          "content": "Keep it brief — can you open claims?"
+        },
         {
           "role": "assistant",
           "content": "Yes. I can open the claims workbench from here. It loads the local claims import view — denied lanes, needs-review, and packet readiness. I do not submit claims to payers. Tell me if you want a specific lane once the page is open."
         },
-        { "role": "user", "content": "Can you see SoftDent production right now?" },
+        {
+          "role": "user",
+          "content": "Can you see SoftDent production right now?"
+        },
         {
           "role": "assistant",
           "content": "Not from live SoftDent — I only see production that arrived in the local imports. If production looks empty, refresh imports and verify the SoftDent export path first. I can explain what the Financial dashboard shows once data is loaded. Live SoftDent write-back and real-time reads are outside this program."
         },
-        { "role": "user", "content": "Same question — still read-only?" },
+        {
+          "role": "user",
+          "content": "Same question — still read-only?"
+        },
         {
           "role": "assistant",
           "content": "Yes — still read-only, same as before. I open pages and explain status from local imports; staff handles anything external. The firewall has not changed. Outbound submit, email, fax, upload, and post remain blocked from this program."
         },
-        { "role": "user", "content": "Random english word" },
+        {
+          "role": "user",
+          "content": "Random english word"
+        },
         {
           "role": "assistant",
           "content": "Random word: diligent — adjective, careful and persistent in work or effort. It fits office review tasks where attention to detail matters. Ask for another word or a definition in context if you need one."
         },
-        { "role": "user", "content": "Define ability" },
+        {
+          "role": "user",
+          "content": "Define ability"
+        },
         {
           "role": "assistant",
           "content": "Ability — noun, the skill or power to do something. In this program it usually refers to what HAL can do locally versus what staff must do outside the firewall. I can list page capabilities if you name a surface like Claims or QuickBooks."
@@ -328,8 +378,8 @@
     }
   },
   "readinessDisplay": {
-    "label": "Operator-verified local inventory — single 24B",
-    "verifiedAt": "2026-07-11",
+    "label": "Operator-verified local inventory — single MoE 30B-A3B",
+    "verifiedAt": "2026-07-13",
     "localAiService": {
       "status": "Detected",
       "name": "Ollama",
@@ -341,21 +391,21 @@
       "endpoint": "http://127.0.0.1:11434/api/version",
       "version": "0.31.1"
     },
-    "activeLane": "local24b-single",
-    "laneExecution": "Enabled · single GPU-pinned 24B (hal-local:24b Q4_K_M) · loopback only · OpenAI cloud off unless explicitly enabled",
-    "runningModel": "hal-local:24b (FROM mistral-small3.1:24b Q4_K_M)",
+    "activeLane": "local-moe-30b-a3b",
+    "laneExecution": "Enabled · single GPU-pinned MoE (hal-local:30b-a3b Q4_K_M) · loopback only · cloud AI refused",
+    "runningModel": "hal-local:30b-a3b (FROM qwen3:30b-a3b-instruct-2507-q4_K_M MoE Instruct)",
     "quantization": "Q4_K_M",
     "contextSize": 8192,
     "localEndpoint": "http://127.0.0.1:11434/api/chat",
     "activeProvider": "local-ollama",
-    "fallbackStatus": "cloudReasoning.enabled=false · no unrestricted local production routing",
-    "gpuStatus": "AMD Radeon AI PRO R9700 · index via HIP_VISIBLE_DEVICES · 32 GB VRAM · single 24B pin",
+    "fallbackStatus": "cloud refused · no alternate local models",
+    "gpuStatus": "AMD Radeon AI PRO R9700 · index via HIP_VISIBLE_DEVICES · 32 GB VRAM · single MoE pin",
     "bindingStatus": "OLLAMA_HOST=127.0.0.1:11434 · HAL client 127.0.0.1 only · not LAN-exposed",
     "dataPolicy": "No patient or sensitive practice data sent to models or the web. Web research uses sanitized generic queries for public reference material.",
     "allModelsEnabled": false,
     "gpu": {
       "verified": true,
-      "verifiedAt": "2026-07-11",
+      "verifiedAt": "2026-07-13",
       "device": "AMD Radeon AI PRO R9700",
       "gpuIndex": 0,
       "vendor": "AMD",
@@ -364,11 +414,11 @@
       "vramGiB": 32,
       "vramTotalGiB": 32,
       "vramSafetyMarginGiB": 5,
-      "layerOffload": "Target: 100% GPU residency for hal-local:24b; fail readiness if substantial CPU offload",
+      "layerOffload": "Target: 100% GPU residency for MoE pin; fail readiness if substantial CPU offload",
       "fullyGpuResidentRequired": true,
       "integratedGpu": "Intel Graphics present; OLLAMA_IGPU_ENABLE=0 (disabled)",
       "resolvedWarning": "ROCBLAS_TENSILE_LIBPATH; OLLAMA_MAX_LOADED_MODELS=1; HIP_VISIBLE_DEVICES set to R9700 index",
-      "lastVerifiedLoad": "2026-07-11 controlled test: 100% GPU, size_vram=size (~14.84 GiB), ctx 8192, CPU offload 0%, loopback-only listener"
+      "lastVerifiedLoad": "pending post-pull verify"
     },
     "runtime": {
       "ollamaVersion": "0.31.1",
@@ -381,93 +431,60 @@
       "keepAlive": "-1 via HAL model warmup automation"
     },
     "availableModels": [
-      "hal-local:24b",
-      "mistral-small3.1:24b",
-      "hal-chat:8b",
-      "hal-escalate:30b",
-      "hal-helper:14b",
-      "deepseek-r1:8b",
-      "deepseek-r1:14b",
-      "queen3:14b",
-      "qwen3:14b",
-      "qwen3:4b",
-      "qwen3-coder:30b",
-      "qwen2.5-coder:32b",
-      "qwen3:235b",
-      "gpt-oss:120b",
-      "qwen3:30b",
-      "mistral-small3.1:24b-fast",
-      "llama3.3:latest"
+      "hal-local:30b-a3b",
+      "qwen3:30b-a3b-instruct-2507-q4_K_M"
     ],
     "configuredModels": {
-      "local": { "lane": "chat8b", "model": "hal-local:24b", "available": true, "quantization": "Q4_K_M" },
-      "helper": { "lane": "helper14b", "model": "hal-helper:14b", "available": true, "onDemand": true, "autoRoute": false },
-      "reasoning": { "lane": "reason24b", "model": "hal-local:24b", "available": true, "gpuPinnedWithLocal": true },
-      "escalation": { "lane": "escalate30b", "model": "hal-local:24b", "available": true, "gpuPinnedWithLocal": true },
-      "general": { "lane": "general14b", "model": "qwen3:14b", "available": true, "autoRoute": false },
-      "coder": { "lane": "coder30b", "model": "qwen3-coder:30b", "available": true, "onDemand": true, "autoRoute": false },
-      "coderHeavy": { "lane": "coder32b", "model": "hal-local:24b", "available": true, "onDemand": false, "sharedWithLocal24b": true },
-      "deep": { "lane": "deep235b", "model": "qwen3:235b", "available": true, "onDemand": true, "neverPin": true, "autoRoute": false },
-      "oss": { "lane": "oss120b", "model": "gpt-oss:120b", "available": true, "onDemand": true, "neverPin": true, "autoRoute": false }
+      "local": {
+        "lane": "chat8b",
+        "model": "hal-local:30b-a3b",
+        "available": true,
+        "quantization": "Q4_K_M"
+      },
+      "reasoning": {
+        "lane": "reason21b",
+        "model": "hal-local:30b-a3b",
+        "available": true,
+        "gpuPinnedWithLocal": true
+      },
+      "escalation": {
+        "lane": "escalate30b",
+        "model": "hal-local:30b-a3b",
+        "available": true,
+        "gpuPinnedWithLocal": true
+      },
+      "coderHeavy": {
+        "lane": "coder32b",
+        "model": "hal-local:30b-a3b",
+        "available": true,
+        "onDemand": false,
+        "sharedWithLocal32b": false,
+        "sharedWithLocalMoe": true
+      }
     }
   },
   "lanes": [
     {
-      "id": "helper14b",
-      "name": "14B helper lane",
-      "model": "hal-helper:14b",
-      "role": "Optional on-demand helper (not GPU-pinned; 8B+30B dual-pin layout)",
-      "state": "Standby",
-      "inventoryAvailable": true,
-      "executionEnabled": false,
-      "runtime": {
-        "enabled": false,
-        "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "hal-helper:14b",
-        "timeoutMs": 60000,
-        "temperature": 0.2
-      },
-      "gpuFit": {
-        "verified": true,
-        "onDemand": true,
-        "processor": "on demand",
-        "residentSize": "~9 GB when loaded",
-        "context": 2048,
-        "quantization": "queen3:14b base"
-      },
-      "willAllow": [
-        "Fast local summaries",
-        "Classification and routing checks",
-        "Quick staff helper answers"
-      ],
-      "stillBlocked": [
-        "No external actions",
-        "QuickBooks read-only",
-        "SoftDent read-only",
-        "No payer contact or submission"
-      ]
-    },
-    {
       "id": "chat8b",
-      "name": "24B chat lane (legacy id chat8b)",
-      "model": "hal-local:24b",
-      "role": "Staff conversation on single GPU-pinned 24B (lane id preserved; model is 24B not 8B)",
+      "name": "MoE chat lane (legacy id chat8b)",
+      "model": "hal-local:30b-a3b",
+      "role": "Staff conversation on single GPU-pinned MoE (lane id preserved; model is MoE not 8B)",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "hal-local:24b",
+        "model": "hal-local:30b-a3b",
         "timeoutMs": 90000,
         "temperature": 0.2
       },
       "gpuFit": {
         "verified": true,
         "processor": "100% GPU target",
-        "residentSize": "~15–18 GB at 8K ctx",
+        "residentSize": "~18–22 GB at 8K ctx (all experts resident)",
         "context": 8192,
-        "quantization": "Q4_K_M (mistral-small3.1:24b)"
+        "quantization": "Q4_K_M (qwen3:30b-a3b MoE)"
       },
       "willAllow": [
         "Explain pages in plain language",
@@ -483,17 +500,17 @@
       ]
     },
     {
-      "id": "reason24b",
-      "name": "24B reasoning lane",
-      "model": "hal-local:24b",
-      "role": "Reasoning on shared single 24B pin for plans, accounting review, insurance narratives, and structured recommendations",
+      "id": "reason32b",
+      "name": "MoE reasoning lane",
+      "model": "hal-local:30b-a3b",
+      "role": "Reasoning on shared single MoE pin for plans, accounting review, insurance narratives, and structured recommendations",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "hal-local:24b",
+        "model": "hal-local:30b-a3b",
         "timeoutMs": 180000,
         "temperature": 0.25,
         "think": false
@@ -501,9 +518,9 @@
       "gpuFit": {
         "verified": true,
         "processor": "100% GPU target",
-        "residentSize": "~15–18 GB (shared single pin)",
+        "residentSize": "~18–22 GB at 8K ctx (all experts resident)",
         "context": 8192,
-        "quantization": "Q4_K_M"
+        "quantization": "Q4_K_M (qwen3:30b-a3b MoE)"
       },
       "willAllow": [
         "Prioritize work across pages",
@@ -519,16 +536,16 @@
     },
     {
       "id": "reason21b",
-      "name": "24B reasoning lane (alias)",
-      "model": "hal-local:24b",
-      "role": "Alias for reason24b — gateway reason21b maps to hal-local:24b",
+      "name": "MoE reasoning lane (alias)",
+      "model": "hal-local:30b-a3b",
+      "role": "Alias for reason32b — gateway reason21b maps to hal-local:30b-a3b",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "hal-local:24b",
+        "model": "hal-local:30b-a3b",
         "timeoutMs": 180000,
         "temperature": 0.25,
         "think": false
@@ -545,16 +562,16 @@
     },
     {
       "id": "escalate30b",
-      "name": "24B escalation lane (legacy id escalate30b)",
-      "model": "hal-local:24b",
-      "role": "Escalation on shared single 24B pin (lane id preserved; model is 24B not 30B)",
+      "name": "MoE escalation lane (legacy id escalate30b)",
+      "model": "hal-local:30b-a3b",
+      "role": "Escalation on shared single MoE pin (lane id preserved; model is MoE not 30B)",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "hal-local:24b",
+        "model": "hal-local:30b-a3b",
         "timeoutMs": 180000,
         "temperature": 0.2,
         "think": false
@@ -562,9 +579,9 @@
       "gpuFit": {
         "verified": true,
         "processor": "100% GPU target",
-        "residentSize": "~15–18 GB",
+        "residentSize": "~18–22 GB at 8K ctx (all experts resident)",
         "context": 8192,
-        "quantization": "Q4_K_M",
+        "quantization": "Q4_K_M (qwen3:30b-a3b MoE)",
         "thinkMode": "disabled for visible staff-facing replies"
       },
       "willAllow": [
@@ -578,67 +595,17 @@
       ]
     },
     {
-      "id": "general14b",
-      "name": "14B general lane",
-      "model": "qwen3:14b",
-      "role": "Alternate staff-facing conversation lane (base tag, not GPU-pinned)",
-      "state": "Configured",
-      "inventoryAvailable": true,
-      "executionEnabled": true,
-      "runtime": {
-        "enabled": true,
-        "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "qwen3:14b",
-        "timeoutMs": 60000,
-        "temperature": 0.2
-      },
-      "willAllow": [
-        "Plain-language answers",
-        "Summarize local read-only status"
-      ],
-      "stillBlocked": [
-        "No external actions",
-        "QuickBooks read-only",
-        "SoftDent read-only"
-      ]
-    },
-    {
-      "id": "coder30b",
-      "name": "30B coder lane",
-      "model": "qwen3-coder:30b",
-      "role": "Legacy coder (prefer coder32b in hybrid layout)",
-      "state": "Standby",
-      "inventoryAvailable": true,
-      "executionEnabled": false,
-      "runtime": {
-        "enabled": false,
-        "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "qwen3-coder:30b",
-        "timeoutMs": 120000,
-        "temperature": 0.2
-      },
-      "willAllow": [
-        "Draft local code and structured notes",
-        "Explain configuration in plain language"
-      ],
-      "stillBlocked": [
-        "No external actions",
-        "QuickBooks read-only",
-        "SoftDent read-only"
-      ]
-    },
-    {
       "id": "coder32b",
-      "name": "24B coder lane (legacy id coder32b)",
-      "model": "hal-local:24b",
-      "role": "Agent programming / patch / debug on shared single 24B pin (no second model). qwen2.5-coder:32b retained on disk only.",
+      "name": "MoE coder lane (legacy id coder32b)",
+      "model": "hal-local:30b-a3b",
+      "role": "Agent programming / patch / debug on shared single MoE pin (no second model). qwen2.5-coder:32b retained on disk only.",
       "state": "Configured",
       "inventoryAvailable": true,
       "executionEnabled": true,
       "runtime": {
         "enabled": true,
         "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "hal-local:24b",
+        "model": "hal-local:30b-a3b",
         "timeoutMs": 180000,
         "temperature": 0.25,
         "options": {
@@ -652,67 +619,14 @@
         "verified": true,
         "onDemand": false,
         "processor": "100% GPU target (shared pin)",
-        "residentSize": "~15–18 GB",
+        "residentSize": "~18–22 GB at 8K ctx (all experts resident)",
         "context": 8192,
-        "quantization": "Q4_K_M"
+        "quantization": "Q4_K_M (qwen3:30b-a3b MoE)"
       },
       "willAllow": [
         "Agent tool loop and apply_program_patch",
         "Draft larger local code/structured output",
         "Detailed local review notes"
-      ],
-      "stillBlocked": [
-        "No external actions",
-        "QuickBooks read-only",
-        "SoftDent read-only"
-      ]
-    },
-    {
-      "id": "deep235b",
-      "name": "235B deep reasoning lane",
-      "model": "qwen3:235b",
-      "role": "Deep reasoning for complex review (local, heavy)",
-      "note": "Never pin on 32 GB. On-demand only; exceeds dual-resident budget. Prefer escalate30b or coder32b.",
-      "state": "Standby",
-      "inventoryAvailable": true,
-      "executionEnabled": false,
-      "runtime": {
-        "enabled": false,
-        "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "qwen3:235b",
-        "timeoutMs": 240000,
-        "temperature": 0.2,
-        "think": true
-      },
-      "willAllow": [
-        "Deep multi-step reasoning on complex questions",
-        "Cross-page synthesis (local, read-only)"
-      ],
-      "stillBlocked": [
-        "No external actions",
-        "QuickBooks read-only",
-        "SoftDent read-only"
-      ]
-    },
-    {
-      "id": "oss120b",
-      "name": "120B open-source lane",
-      "model": "gpt-oss:120b",
-      "role": "Open-source generalist lane (local)",
-      "note": "Never pin on 32 GB. Exceeds VRAM alone; keep inventory only.",
-      "state": "Standby",
-      "inventoryAvailable": true,
-      "executionEnabled": false,
-      "runtime": {
-        "enabled": false,
-        "endpoint": "http://127.0.0.1:11434/api/chat",
-        "model": "gpt-oss:120b",
-        "timeoutMs": 240000,
-        "temperature": 0.2
-      },
-      "willAllow": [
-        "Generalist local answers",
-        "Alternate second-opinion review"
       ],
       "stillBlocked": [
         "No external actions",

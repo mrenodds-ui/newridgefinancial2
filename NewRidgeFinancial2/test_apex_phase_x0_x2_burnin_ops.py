@@ -24,7 +24,7 @@ REPO = _repo_root()
 
 class BurnInOpsX0X2Tests(unittest.TestCase):
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10498")
+        self.assertEqual(BUILD_ID, "hal-10576")
 
     def test_runbook_and_scripts_exist(self):
         doc = NR2 / "docs" / "MOONSHOT_AI_PM_PHASE_X0_X2_APPLIED_2026-07-11.md"

@@ -69,11 +69,11 @@ class HalGatewayTests(unittest.TestCase):
     def test_resolve_lane_mapping(self) -> None:
         from nr2_hal_gateway import resolve_lane, route_by_complexity
 
-        self.assertEqual(resolve_lane("chat8b")["model"], "hal-local:24b")
+        self.assertEqual(resolve_lane("chat8b")["model"], "hal-local:30b-a3b")
         self.assertEqual(resolve_lane("reason21b")["lane"], "reason21b")
-        self.assertEqual(resolve_lane("reason21b")["model"], "hal-local:24b")
-        self.assertEqual(resolve_lane("escalate30b")["model"], "hal-local:24b")
-        self.assertEqual(resolve_lane("coder32b")["model"], "hal-local:24b")
+        self.assertEqual(resolve_lane("reason21b")["model"], "hal-local:30b-a3b")
+        self.assertEqual(resolve_lane("escalate30b")["model"], "hal-local:30b-a3b")
+        self.assertEqual(resolve_lane("coder32b")["model"], "hal-local:30b-a3b")
         lane = route_by_complexity("simple hello", shift_context={"tier": 1})
         self.assertEqual(lane, "chat8b")
         lane_esc = route_by_complexity("deep root cause investigation", shift_context={"tier": 5})
@@ -99,6 +99,67 @@ class HalGatewayTests(unittest.TestCase):
         result = evaluate_query(query="What is our revenue?", readiness=readiness)
         self.assertFalse(result.get("ok"))
         self.assertEqual(result.get("error"), "HAL_UNAVAILABLE_STALE_DATA")
+
+    def test_import_gap_reply_names_optional_qb_datasets(self) -> None:
+        from nr2_hal_gateway import evaluate_query, try_import_gap_reply
+
+        readiness = {
+            "level": "fresh",
+            "ok": True,
+            "summary": {"connected": 17, "missing": 2, "stale": 0, "missingOptional": 2},
+            "completeness": {"ok": True, "scorePct": 100.0, "required": 4, "connected": 4},
+            "datasetGaps": [
+                {
+                    "datasetKey": "quickbooks.ap",
+                    "severity": "optional",
+                    "status": "missing",
+                    "detail": "Dataset file not found in import cache.",
+                },
+                {
+                    "datasetKey": "quickbooks.payroll",
+                    "severity": "optional",
+                    "status": "missing",
+                    "detail": "Dataset file not found in import cache.",
+                },
+            ],
+            "blocking": [],
+        }
+        local = try_import_gap_reply(
+            "To address the issue of missing import datasets and ensure KPIs are reliable",
+            readiness,
+        )
+        self.assertIsNotNone(local)
+        assert local is not None
+        self.assertIn("quickbooks.payroll", local["text"])
+        self.assertIn("quickbooks.ap", local["text"])
+        self.assertIn("optional", local["text"].lower())
+        self.assertNotIn("firewall", local["text"].lower())
+
+        result = evaluate_query(
+            query="Which import datasets are missing?",
+            readiness=readiness,
+            store=_FakeStore(),
+        )
+        self.assertTrue(result.get("ok"))
+        self.assertEqual(result.get("model"), "local-import-gaps")
+        self.assertIn("quickbooks.payroll", result.get("text") or "")
+
+    def test_import_readiness_context_lists_named_gaps(self) -> None:
+        from nr2_hal_gateway import build_import_readiness_context
+
+        ctx = build_import_readiness_context(
+            {
+                "level": "fresh",
+                "ok": True,
+                "summary": {"connected": 17, "missing": 2, "stale": 0, "missingOptional": 2},
+                "completeness": {"ok": True, "scorePct": 100.0, "required": 4, "connected": 4},
+                "datasetGaps": [
+                    {"datasetKey": "quickbooks.payroll", "severity": "optional", "status": "missing"},
+                ],
+            }
+        )
+        self.assertIn("quickbooks.payroll", ctx)
+        self.assertIn("Named gaps", ctx)
 
     @mock.patch("nr2_hal_gateway.call_ollama_chat")
     def test_soft_stale_analytical_watermark(self, mock_chat: mock.MagicMock) -> None:

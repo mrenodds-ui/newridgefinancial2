@@ -43,6 +43,85 @@ class ImportCompletenessTests(unittest.TestCase):
         self.assertEqual(result["scorePct"], 100.0)
         self.assertTrue(result["ok"])
 
+    def test_warning_gaps_do_not_fail_completeness(self) -> None:
+        from import_diagnostics import STATUS_CONNECTED, STATUS_MISSING, assess_import_completeness
+
+        diag = {
+            "datasets": [
+                {"severity": "critical", "automated": True, "status": STATUS_CONNECTED, "rowCount": 10, "datasetKey": "a"},
+                {
+                    "severity": "warning",
+                    "automated": True,
+                    "status": STATUS_MISSING,
+                    "rowCount": 0,
+                    "datasetKey": "quickbooks.expenseCategories",
+                },
+                {
+                    "severity": "optional",
+                    "automated": True,
+                    "status": STATUS_MISSING,
+                    "rowCount": 0,
+                    "datasetKey": "quickbooks.payroll",
+                },
+            ]
+        }
+        result = assess_import_completeness(diag)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["required"], 1)
+        self.assertEqual(result["gaps"], [])
+        self.assertEqual(len(result.get("softGaps") or []), 1)
+
+    def test_list_dataset_gaps_includes_optional_missing(self) -> None:
+        from import_diagnostics import STATUS_CONNECTED, STATUS_MISSING, list_dataset_gaps
+
+        diag = {
+            "datasets": [
+                {"severity": "critical", "automated": True, "status": STATUS_CONNECTED, "rowCount": 10, "datasetKey": "a"},
+                {
+                    "severity": "optional",
+                    "automated": True,
+                    "status": STATUS_MISSING,
+                    "rowCount": 0,
+                    "datasetKey": "quickbooks.payroll",
+                    "system": "quickbooks",
+                    "detail": "Dataset file not found in import cache.",
+                },
+                {
+                    "severity": "optional",
+                    "automated": True,
+                    "status": STATUS_MISSING,
+                    "rowCount": 0,
+                    "datasetKey": "quickbooks.ap",
+                    "system": "quickbooks",
+                },
+            ]
+        }
+        gaps = list_dataset_gaps(diag)
+        keys = {g["datasetKey"] for g in gaps}
+        self.assertEqual(keys, {"quickbooks.payroll", "quickbooks.ap"})
+        self.assertTrue(all(g["severity"] == "optional" for g in gaps))
+
+    def test_stale_critical_with_rows_counts_connected(self) -> None:
+        from import_diagnostics import STATUS_CONNECTED, STATUS_STALE, assess_import_completeness
+
+        diag = {
+            "datasets": [
+                {"severity": "critical", "automated": True, "status": STATUS_CONNECTED, "rowCount": 10, "datasetKey": "a"},
+                {
+                    "severity": "critical",
+                    "automated": True,
+                    "status": STATUS_STALE,
+                    "rowCount": 4,
+                    "datasetKey": "softdent.ar",
+                },
+            ]
+        }
+        result = assess_import_completeness(diag)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["connected"], 2)
+        self.assertEqual(result["gaps"], [])
+        self.assertEqual(len(result.get("softGaps") or []), 1)
+
 
 class RbacWriteoffTests(unittest.TestCase):
     def test_tier1_office_manager(self) -> None:

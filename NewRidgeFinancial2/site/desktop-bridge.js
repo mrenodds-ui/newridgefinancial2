@@ -380,19 +380,27 @@ const DesktopBridge = (function () {
         } catch {
           continue;
         }
-        if (eventType === "meta" && obj.lane) {
+        if eventType === "meta" && obj.lane) {
           resolvedLane = obj.lane;
           if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("nr2-hal-lane-used", { detail: { lane: obj.lane, routingReason: obj.routingReason } }));
+            window.dispatchEvent(
+              new CustomEvent("nr2-hal-lane-used", {
+                detail: { lane: obj.lane, routingReason: obj.routingReason, status: obj.status || "", ttft: !!obj.ttft },
+              }),
+            );
+            if (obj.status === "typing" || obj.ttft) {
+              window.dispatchEvent(new CustomEvent("nr2-hal-stream-typing", { detail: { lane: obj.lane } }));
+            }
           }
           continue;
         }
         if (eventType === "error" && obj.error) {
           throw new Error(obj.error);
         }
-        if (obj.token) {
+        // Pass accumulated text to onToken (matches cloud stream contract / app.js placeholder).
+        if (Object.prototype.hasOwnProperty.call(obj, "token") && obj.token) {
           full += obj.token;
-          if (typeof onToken === "function") onToken(obj.token);
+          if (typeof onToken === "function") onToken(full);
         }
         if (obj.done) break;
       }

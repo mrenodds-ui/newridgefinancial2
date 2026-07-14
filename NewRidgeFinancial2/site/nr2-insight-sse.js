@@ -1,6 +1,7 @@
 /**
  * N0 — Live AI insight SSE client (hal-ai-insight widget).
  * EventSource → /api/apex/hal/insight-stream; 5s poll fallback on insight-latest.
+ * Never hard-remounts #hal — that wiped the Ask HAL composer (looked like a full page refresh).
  */
 const NR2InsightSSE = (function () {
   let source = null;
@@ -18,6 +19,38 @@ const NR2InsightSSE = (function () {
     return "/api/apex";
   }
 
+  function dataMessage(insight) {
+    const data = insight && insight.data && typeof insight.data === "object" ? insight.data : null;
+    return data && data.message != null ? String(data.message) : "";
+  }
+
+  function patchInsightCard(card, insight, gen) {
+    if (!card || !insight) return false;
+    const title = card.querySelector(".apex-kpi-label, .apex-widget-label");
+    const value = card.querySelector(".apex-kpi-value");
+    const hints = card.querySelectorAll(".apex-kpi-hint");
+    if (title) title.textContent = String(insight.title || "AI Insight");
+    if (value) {
+      value.classList.remove("is-empty");
+      const data = insight.data || {};
+      value.textContent =
+        data.value != null
+          ? String(data.value) + (data.unit && data.unit !== "text" ? ` ${data.unit}` : "")
+          : String(insight.explanation || insight.title || "Updated");
+    }
+    if (hints && hints.length) {
+      const explanation = String(insight.explanation || dataMessage(insight) || "");
+      // Prefer a body hint when present; keep badge hint (type · confidence) alone.
+      if (hints.length >= 2 && explanation) {
+        hints[hints.length - 2].textContent = explanation;
+      } else if (explanation) {
+        hints[hints.length - 1].textContent = explanation;
+      }
+    }
+    card.setAttribute("data-insight-gen", gen);
+    return true;
+  }
+
   function applyInsight(payload) {
     if (!payload || !payload.ok) return;
     const gen = String(payload.generation || "");
@@ -32,35 +65,15 @@ const NR2InsightSSE = (function () {
       }
     }
     window.dispatchEvent(new CustomEvent("nr2-insight-updated", { detail: payload }));
-    // Patch visible ai-insight card without full page reload when present
     const card = document.querySelector('[data-widget-id="hal-ai-insight"]');
-    if (card && payload.widget && payload.widget.status === "ok" && insight) {
-      const title = card.querySelector(".apex-kpi-label, .apex-widget-label");
-      const value = card.querySelector(".apex-kpi-value");
-      const hint = card.querySelector(".apex-kpi-hint");
-      if (title) title.textContent = String(insight.title || "AI Insight");
-      if (value) {
-        value.classList.remove("is-empty");
-        const data = insight.data || {};
-        value.textContent =
-          data.value != null
-            ? String(data.value) + (data.unit && data.unit !== "text" ? ` ${data.unit}` : "")
-            : String(insight.explanation || insight.title || "Updated");
-      }
-      if (hint) hint.textContent = String(insight.explanation || "");
-      card.setAttribute("data-insight-gen", gen);
-    } else if (
-      typeof window.Apex === "object" &&
-      typeof window.Apex.loadPage === "function" &&
-      String(window.location.hash || "").includes("hal")
-    ) {
-      try {
-        window.Apex.loadPage("hal");
-      } catch (_e) {
-        /* ignore */
-      }
+    if (card && insight) {
+      patchInsightCard(card, insight, gen);
+      return;
     }
+    // Card not mounted yet or empty insight — wait for next poll / normal page paint.
+    // Never remount HAL from this client (hal-10626).
   }
+
   async function pollLatest() {
     try {
       const url = `${apiBase()}/hal/insight-latest`;

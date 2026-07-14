@@ -16,11 +16,13 @@ if "bottle" not in sys.modules:
 from nr2_browser_security import (
     SessionVault,
     classify_financial_query,
+    financial_read_path,
     host_allowed,
     maybe_rotate_session_token,
     mutation_auth_failure_reason,
     normalize_host,
     origin_allowed_for_mutation,
+    system_status_path,
 )
 import nr2_browser_security as sec
 
@@ -183,6 +185,20 @@ class HalHubSecurityTests(unittest.TestCase):
         self.assertTrue(status.get("ok"))
         self.assertIn("workstationReachable", status)
         self.assertIn("lastBroadcast", status)
+
+    def test_system_status_path_hal_status(self) -> None:
+        self.assertTrue(system_status_path("/api/apex/hal/status"))
+        self.assertTrue(system_status_path("/api/apex/import-health"))
+        self.assertFalse(system_status_path("/api/apex/widgets/financial"))
+        self.assertFalse(system_status_path("/api/financial-reports"))
+
+    def test_financial_read_excludes_system_status(self) -> None:
+        # Moonshot Phase 1: status is connected-tier, not money/fresh-tier.
+        self.assertFalse(financial_read_path("/api/apex/hal/status"))
+        self.assertFalse(financial_read_path("/api/apex/import-health"))
+        self.assertTrue(financial_read_path("/api/apex/widgets/financial"))
+        self.assertTrue(financial_read_path("/api/apex/hal/board-actions"))
+        self.assertTrue(financial_read_path("/api/financial-reports"))
 
 
 class ImportReadinessOperationTests(unittest.TestCase):

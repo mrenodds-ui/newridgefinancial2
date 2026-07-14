@@ -78,34 +78,55 @@ def assess_payroll_ap_gap(bundle: dict[str, Any] | None = None) -> dict[str, Any
     has_payroll = bool(payroll_rows)
     has_ap = bool(ap_rows)
 
-    if has_payroll and has_ap:
+    empty_payroll = False
+    empty_ap = False
+    try:
+        from apex_qb_export_inbox_pack import batch_empty_status
+
+        empty = batch_empty_status()
+        empty_payroll = bool((empty.get("payroll") or {}).get("batchEmpty"))
+        empty_ap = bool((empty.get("ap") or {}).get("batchEmpty"))
+    except Exception:
+        pass
+
+    # Header-only empty batch counts as "present" for optional gap (still empty ≠ $0).
+    payroll_present = has_payroll or empty_payroll
+    ap_present = has_ap or empty_ap
+
+    if payroll_present and ap_present:
         gap = GAP_OK
-    elif not has_payroll and not has_ap:
+    elif not payroll_present and not ap_present:
         gap = GAP_PAYROLL_AND_AP_PENDING
-    elif not has_payroll:
+    elif not payroll_present:
         gap = GAP_PAYROLL_PENDING
     else:
         gap = GAP_AP_PENDING
 
     issues: list[str] = []
-    if not has_payroll:
+    if not payroll_present:
         issues.append("Payroll detail export not in import bundle.")
-    if not has_ap:
+    elif empty_payroll and not has_payroll:
+        issues.append("Payroll export present but empty period (empty ≠ $0).")
+    if not ap_present:
         issues.append("AP / unpaid bills export not in import bundle.")
+    elif empty_ap and not has_ap:
+        issues.append("AP export present but empty period (empty ≠ $0).")
 
     return {
         "ok": True,
         "gapCode": gap,
         "healthy": gap == GAP_OK,
-        "payrollPending": not has_payroll,
-        "apPending": not has_ap,
+        "payrollPending": not payroll_present,
+        "apPending": not ap_present,
+        "payrollEmptyBatch": empty_payroll and not has_payroll,
+        "apEmptyBatch": empty_ap and not has_ap,
         "payrollRowCount": len(payroll_rows),
         "apRowCount": len(ap_rows),
         "fixHint": None
         if gap == GAP_OK
-        else (FIX_HINT_PAYROLL if not has_payroll else FIX_HINT_AP),
+        else (FIX_HINT_PAYROLL if not payroll_present else FIX_HINT_AP),
         "issues": issues,
-        "honesty": "empty_not_zero" if gap != GAP_OK else "reported",
+        "honesty": "empty_not_zero" if (gap != GAP_OK or empty_payroll or empty_ap) else "reported",
         "checkedAt": _utc_now(),
     }
 

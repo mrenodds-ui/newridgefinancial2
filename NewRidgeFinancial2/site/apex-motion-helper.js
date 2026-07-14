@@ -80,7 +80,9 @@
   }
 
   function enableHoloTilt(root) {
+    // Moonshot M-1: disable card tilt (wobble). Ambient opt-in only.
     if (prefersReducedMotion || !root) return;
+    if (!document.body.classList.contains("apex-ambient-enabled")) return;
     const cards = root.querySelectorAll(".apex-widget.apex-inst");
     cards.forEach((card) => {
       if (card.dataset.holoBound) return;
@@ -105,9 +107,8 @@
   }
 
   function boot() {
-    if (!prefersReducedMotion) {
-      document.body.classList.add("apex-scan-sweep");
-    } else {
+    // Moonshot M-1: ambient sweep OFF by default (opt-in via apex-ambient-enabled).
+    if (prefersReducedMotion) {
       document.querySelectorAll(".apex-grid-floor").forEach((el) => el.remove());
     }
   }

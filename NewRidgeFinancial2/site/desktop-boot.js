@@ -207,15 +207,16 @@
     htmlVersion ||
     null;
 
+  // Mockup registry/chrome retired with Apex staff shell — only required for legacy mock-embed.
   if (!schemaVersion && !isWorkstationApp()) {
-    errors.push("moonshot-page-registry.js did not define PageSchema.SCHEMA_VERSION.");
+    errors.push("PageSchema.SCHEMA_VERSION missing (legacy mock-embed registry not loaded).");
   }
-  if (typeof MoonshotMockupChrome === "undefined") {
-    errors.push("nr2-moonshot-mockup-chrome.js failed to load (MoonshotMockupChrome is undefined).");
+  if (typeof MoonshotMockupChrome === "undefined" && !isWorkstationApp()) {
+    errors.push("MoonshotMockupChrome missing (legacy mock-embed chrome not loaded).");
   }
   if (typeof PageSchema === "undefined" || typeof PageSchema.navPages !== "function") {
-    if (typeof WorkstationSchema === "undefined") {
-      errors.push("moonshot-page-registry.js failed to load (PageSchema.navPages missing).");
+    if (typeof WorkstationSchema === "undefined" && !isWorkstationApp()) {
+      errors.push("PageSchema.navPages missing (legacy mock-embed registry not loaded).");
     }
   }
 

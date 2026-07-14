@@ -62,7 +62,8 @@ def queue_import(path: str | Path) -> dict[str, Any]:
             from apex_unified_db_pack import ingest_from_bundle
             from import_loader import load_import_bundle
 
-            bundle = load_import_bundle(sync=False, deep=False, read_only=True)
+            # sync=False is the read-only path (load_import_bundle has no read_only kwarg).
+            bundle = load_import_bundle(sync=False, deep=False)
             result = ingest_from_bundle(bundle)
             ok = bool(result.get("ok"))
             out = {

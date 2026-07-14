@@ -16,13 +16,15 @@ SOFT_STALE_TTL_HOURS = float(os.environ.get("NR2_SOFT_STALE_TTL_HOURS", "24"))
 SOFT_STALE_WATERMARK = (
     "[DATA SOFT-STALE — analytical guidance only; verify amounts against fresh imports before acting]"
 )
+# Hard single-GPU policy: the office program may only call this local model.
+APPROVED_LOCAL_MODEL = "hal-local:30b-a3b"
 LANE_MODELS = {
-    # R9700 32 GB single-model layout: all approved local lanes → hal-local:24b (Q4_K_M).
-    # Lane keys preserved for routing policy; do not load 8B/30B/coder concurrently.
-    "chat8b": "hal-local:24b",
-    "reason21b": "hal-local:24b",
-    "escalate30b": "hal-local:24b",
-    "coder32b": "hal-local:24b",
+    # R9700 32 GB single-model layout: all approved local lanes → MoE pin
+    # (qwen3:30b-a3b Q4_K_M). Lane keys preserved; do not load dense 32B concurrently.
+    "chat8b": APPROVED_LOCAL_MODEL,
+    "reason21b": APPROVED_LOCAL_MODEL,
+    "escalate30b": APPROVED_LOCAL_MODEL,
+    "coder32b": APPROVED_LOCAL_MODEL,
 }
 LANE_HISTORY_KEY = "nr2:hal:lane-history"
 LANE_OVERRIDE_KEY = "nr2:hal:lane-override-log"
@@ -122,6 +124,51 @@ _WANTS_PLAN_RE = re.compile(
     r"\b(step[\s-]?by[\s-]?step plan|numbered plan|work plan|action plan)\b",
     re.IGNORECASE,
 )
+_SENTENCE_LIMIT_RE = re.compile(
+    r"\b(?:in|with|using)?\s*(one|two|three|1|2|3)\s+sentences?\b|"
+    r"\b(one|two|three|1|2|3)\s+sentences?\b|"
+    r"\bin one sentence\b|\bin two sentences\b|\ba single sentence\b",
+    re.IGNORECASE,
+)
+_PLAIN_LANGUAGE_RE = re.compile(r"\bplain(?:\s|-)?language\b|\bin plain english\b", re.IGNORECASE)
+_DELIVERABLE_REQUEST_RE = re.compile(
+    r"(?i)\b("
+    r"next\s+steps?|ordered\s+steps?|step[\s-]?by[\s-]?step|"
+    r"checklist|procedure|"
+    r"how\s+(?:do|to|can)\s+(?:i|we)|"
+    r"walk\s+me\s+through|"
+    r"what\s+(?:are|is)\s+the\s+(?:steps?|path)|"
+    r"provide\s+(?:the\s+)?(?:steps?|path|checklist)|"
+    r"action\s+items?|"
+    r"paths?\s+to\b"
+    r")\b"
+)
+_DELIVERABLE_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "steps": {"type": "array", "items": {"type": "string"}},
+        "caution": {"type": "string"},
+        "references": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["steps"],
+}
+_WRITE_INTENT_RE = re.compile(
+    r"(?i)\b("
+    r"(?:can|could|will|would|may|should)\s+(?:hal|you)\s+(?:please\s+)?"
+    r"(?:post|write|write[\s-]?back|modify|delete|update|change|edit|submit)|"
+    r"(?:post|write|write[\s-]?back|modify|delete|update)\b.{0,40}\b"
+    r"(?:quickbooks|qb\b|softdent|fee\s*schedule|patient\s*record|ledger|journal)|"
+    r"(?:quickbooks|softdent|fee\s*schedule).{0,40}\b"
+    r"(?:post|write|write[\s-]?back|modify|delete|update)\b"
+    r")\b"
+)
+_CARC_CODE_RE = re.compile(
+    r"\b(?:CARC|CAS|adjustment\s+code|denial\s+code)\s*"
+    r"(?:code\s*)?([A-Z]{2})[-\s]?(\d{1,4}|[A-Z]\d{1,3})\b|"
+    r"\b([A-Z]{2})-(\d{1,4}|[A-Z]\d{1,3})\b",
+    re.IGNORECASE,
+)
+_WORD_TO_N = {"one": 1, "two": 2, "three": 3, "1": 1, "2": 2, "3": 3}
 _MEMORY_GUIDANCE_MARKERS = (
     "Governed memory matches:",
     "Durable HAL knowledge (guidance only",
@@ -221,6 +268,116 @@ def strip_chain_of_thought_prose(text: str) -> str:
     return out.strip()
 
 
+def sentence_limit_from_query(query: str) -> int | None:
+    m = _SENTENCE_LIMIT_RE.search(str(query or ""))
+    if not m:
+        return None
+    raw = next((g for g in m.groups() if g), None)
+    if not raw:
+        return None
+    return _WORD_TO_N.get(str(raw).lower())
+
+
+def _split_sentences(text: str) -> list[str]:
+    parts = re.split(r"(?<=[.!?])\s+", str(text or "").strip())
+    parts = [p.strip() for p in parts if p.strip()]
+    # Keep leading Yes./No. attached so a 1–2 sentence cap is not "No." alone.
+    if len(parts) >= 2 and re.fullmatch(r"(?i)(?:yes|no)\.?", parts[0]):
+        parts = [f"{parts[0]} {parts[1]}"] + parts[2:]
+    return parts
+
+
+def apply_response_constraints(query: str | None, text: str) -> str:
+    """Post-generation hard filters: sentence caps, plain-language strip, no plan openers."""
+    out = str(text or "").strip()
+    if not out:
+        return out
+    q = str(query or "")
+    # Structured deliverables keep list shape — do not collapse to a sentence cap.
+    if is_deliverable_request(q):
+        if not _WANTS_PLAN_RE.search(q):
+            out = _STRUCTURED_PLAN_OPENER_RE.sub("", out).strip()
+        return out.strip()
+    limit = sentence_limit_from_query(q)
+    if limit:
+        # Drop markdown headings that inflate "sentence" dumps
+        out = re.sub(r"(?m)^\s{0,3}#{1,6}\s+", "", out)
+        out = re.sub(r"(?m)^\s*[-*]\s+", "", out)
+        sents = _split_sentences(out)
+        if len(sents) > limit:
+            out = " ".join(sents[:limit])
+            if out and out[-1] not in ".!?":
+                out += "."
+    elif _PLAIN_LANGUAGE_RE.search(q):
+        out = re.sub(r"(?m)^\s{0,3}#{1,6}\s+.*$", "", out)
+        out = re.sub(r"(?m)^\s*\d+\.\s+", "", out)
+        out = re.sub(r"\n{3,}", "\n\n", out).strip()
+    if not (q and _WANTS_PLAN_RE.search(q)):
+        out = _STRUCTURED_PLAN_OPENER_RE.sub("", out).strip()
+    return out.strip()
+
+
+def is_deliverable_request(query: str) -> bool:
+    """True when staff asked for actionable steps/paths (Phase 2 structured output)."""
+    return bool(_DELIVERABLE_REQUEST_RE.search(str(query or "")))
+
+
+def deliverable_system_instruction() -> str:
+    return (
+        "Staff asked for actionable steps. Reply with JSON only using keys: "
+        'steps (array of short action strings), caution (read-only/consent warning when relevant), '
+        "references (optional existing page/file names — never invent paths or dollars). "
+        "Do not invent CARC meanings or PHI. Empty ≠ $0. One sentence per step."
+    )
+
+
+def format_deliverable_markdown(data: dict[str, Any]) -> str:
+    steps_raw = data.get("steps") if isinstance(data, dict) else None
+    steps: list[str] = []
+    if isinstance(steps_raw, list):
+        steps = [str(s).strip() for s in steps_raw if str(s).strip()]
+    elif isinstance(steps_raw, str) and steps_raw.strip():
+        steps = [steps_raw.strip()]
+    lines: list[str] = [f"{i}. {step}" for i, step in enumerate(steps[:12], 1)]
+    caution = str((data or {}).get("caution") or "").strip()
+    if caution:
+        lines.append(f"Caution: {caution}")
+    refs = (data or {}).get("references") if isinstance(data, dict) else None
+    if isinstance(refs, list):
+        cleaned = [str(r).strip() for r in refs if str(r).strip()]
+        if cleaned:
+            lines.append("References: " + "; ".join(cleaned[:6]))
+    return "\n".join(lines).strip()
+
+
+def normalize_deliverable_reply(query: str | None, text: str) -> str:
+    """JSON schema → numbered steps; prose fallback to bullets when ask is deliverable."""
+    q = str(query or "")
+    out = str(text or "").strip()
+    if not out or not is_deliverable_request(q):
+        return out
+    candidate = out
+    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", out, re.IGNORECASE)
+    if fenced:
+        candidate = fenced.group(1).strip()
+    blob = re.search(r"\{[\s\S]*\}", candidate)
+    if blob:
+        try:
+            obj = json.loads(blob.group(0))
+            if isinstance(obj, dict) and obj.get("steps") is not None:
+                formatted = format_deliverable_markdown(obj)
+                if formatted:
+                    return formatted
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    if re.search(r"(?m)^\s*(?:\d+\.|[-*•])\s+\S", out):
+        return out
+    sents = _split_sentences(out)
+    if len(sents) >= 2:
+        return "\n".join(f"{i}. {s}" for i, s in enumerate(sents[:8], 1))
+    return out
+
+
 def clean_gateway_text(text: str, *, query: str | None = None) -> str:
     out = str(text or "").strip()
     out = re.sub(r"<think>[\s\S]*?</think>", "", out, flags=re.IGNORECASE)
@@ -237,18 +394,205 @@ def clean_gateway_text(text: str, *, query: str | None = None) -> str:
         out,
         flags=re.IGNORECASE,
     )
+    out = apply_response_constraints(query, out)
+    out = normalize_deliverable_reply(query, out)
     return out.strip()
 
 
-def extract_ollama_message_text(message: dict[str, Any] | None) -> str:
+def extract_ollama_message_text(message: dict[str, Any] | None, *, query: str | None = None) -> str:
     msg = message or {}
     content = str(msg.get("content") or "").strip()
     # Prefer visible content only — never surface raw thinking as the staff reply.
     # DeepSeek-R1 often fills `thinking` and leaves `content` empty; CoT strip then
     # yields "" — callers should fall back to try_local_policy_reply, not thinking.
     if content:
-        return clean_gateway_text(content)
+        return clean_gateway_text(content, query=query)
     return ""
+
+
+def options_for_query(query: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Cap generation for short / constrained asks to cut cold latency."""
+    opts = dict(options or {})
+    q = str(query or "")
+    limit = sentence_limit_from_query(q)
+    yes_no = bool(
+        re.match(
+            r"(?i)^(can you|are you|do you|does |is |yes or no|short answer:|short:)\b",
+            q.strip(),
+        )
+    )
+    if is_deliverable_request(q):
+        opts.setdefault("num_predict", 384)
+    elif limit is not None and limit <= 2:
+        opts.setdefault("num_predict", 96)
+    elif yes_no or _WRITE_INTENT_RE.search(q):
+        opts.setdefault("num_predict", 128)
+    elif len(q) < 80 and not _WANTS_PLAN_RE.search(q):
+        opts.setdefault("num_predict", 160)
+    return opts
+
+
+def inject_deliverable_messages(messages: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    if not is_deliverable_request(query):
+        return messages
+    out = list(messages or [])
+    instruction = {"role": "system", "content": deliverable_system_instruction()}
+    # Insert after the first system prompt when present.
+    if out and out[0].get("role") == "system":
+        out.insert(1, instruction)
+    else:
+        out.insert(0, instruction)
+    return out
+
+
+def query_account_transactions(
+    account_num: str | int | None = None,
+    patient_name: str | None = None,
+    date_range: Any = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """HAL gateway: query parsed SoftDent TXN Excel (fallback: data not yet exported)."""
+    from softdent_transaction_extract import (
+        query_account_transactions as _query_account_transactions,
+    )
+
+    return _query_account_transactions(
+        account_num=account_num,
+        patient_name=patient_name,
+        date_range=date_range,
+        **kwargs,
+    )
+
+
+def _extract_account_tx_query_filters(query: str) -> dict[str, Any] | None:
+    """Detect patient-ledger asks (Donna-style / multi-year) and extract filters; else None."""
+    q = str(query or "").strip()
+    if not q:
+        return None
+    low = q.lower()
+    wants_ledger = bool(
+        re.search(
+            r"\b("
+            r"account\s+transactions?|patient\s+transactions?|patient\s+ledger|"
+            r"account\s+history|ledger\s+for|history\s+for\s+account|"
+            r"transactions?\s+for|"
+            r"(what|show|list|pull|get).{0,40}transactions?"
+            r")\b",
+            low,
+        )
+    )
+    if not wants_ledger:
+        return None
+    # How-to / export playbook asks stay on Excel doctrine, not ledger data
+    if re.search(
+        r"\b(how (do|to)|export|excel path|output options|trans for a period|print transactions)\b",
+        low,
+    ) and not re.search(r"\b(donna|nickel|\d{4,})\b", low):
+        return None
+    filters: dict[str, Any] = {}
+    acct = re.search(r"\b(?:account|acct|id)\s*[#: ]?\s*(\d{4,})\b", low)
+    if not acct:
+        acct = re.search(r"\b(27002)\b", low)
+    if acct:
+        filters["account_num"] = acct.group(1)
+    # "Donna Nickel" / "Nickel, Donna" — skip command verbs / ledger nouns
+    _name_stop = {
+        "show",
+        "list",
+        "what",
+        "pull",
+        "get",
+        "are",
+        "account",
+        "accounts",
+        "history",
+        "transaction",
+        "transactions",
+        "patient",
+        "ledger",
+        "softdent",
+        "from",
+        "for",
+        "with",
+        "the",
+        "and",
+        "in",
+        "to",
+    }
+    name = re.search(
+        r"\b([A-Za-z]{2,})\s+([A-Za-z]{2,})(?:'s)?\b(?=.*\btransactions?\b)|"
+        r"\b([A-Za-z]{2,})\s*,\s*([A-Za-z]{2,})\b",
+        q,
+    )
+    if name:
+        if name.group(1) and name.group(2):
+            a, b = name.group(1).lower(), name.group(2).lower()
+            if a not in _name_stop and b not in _name_stop:
+                filters["patient_name"] = f"{name.group(2)}, {name.group(1)}"
+        elif name.group(3) and name.group(4):
+            a, b = name.group(3).lower(), name.group(4).lower()
+            if a not in _name_stop and b not in _name_stop:
+                filters["patient_name"] = f"{name.group(3)}, {name.group(4)}"
+    if "donna" in low and "nickel" in low:
+        filters["patient_name"] = "Nickel, Donna"
+        filters.setdefault("account_num", "27002")
+    # February 2026 / 2026-02 / Feb 2026
+    month = re.search(
+        r"\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+        r"jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|"
+        r"dec(?:ember)?)\s+(20\d{2})\b",
+        low,
+    )
+    if month:
+        mon_map = {
+            "jan": "01",
+            "january": "01",
+            "feb": "02",
+            "february": "02",
+            "mar": "03",
+            "march": "03",
+            "apr": "04",
+            "april": "04",
+            "may": "05",
+            "jun": "06",
+            "june": "06",
+            "jul": "07",
+            "july": "07",
+            "aug": "08",
+            "august": "08",
+            "sep": "09",
+            "sept": "09",
+            "september": "09",
+            "oct": "10",
+            "october": "10",
+            "nov": "11",
+            "november": "11",
+            "dec": "12",
+            "december": "12",
+        }
+        filters["date_range"] = f"{month.group(2)}-{mon_map[month.group(1)]}"
+    else:
+        span = re.search(
+            r"\b((?:19|20)\d{2})\s*(?:to|-|–|—|/)\s*((?:19|20)\d{2})\b",
+            low,
+        )
+        if span:
+            filters["date_range"] = f"{span.group(1)}:{span.group(2)}"
+        else:
+            ym = re.search(r"\b(20\d{2})-(\d{2})\b", low)
+            if ym:
+                filters["date_range"] = f"{ym.group(1)}-{ym.group(2)}"
+            else:
+                year_only = re.search(
+                    r"\b(?:in|for|during|year)\s+((?:19|20)\d{2})\b|\b((?:19|20)\d{2})\b(?!\s*-\d{2})",
+                    low,
+                )
+                if year_only:
+                    filters["date_range"] = year_only.group(1) or year_only.group(2)
+    if not filters.get("account_num") and not filters.get("patient_name"):
+        return None
+    filters["prefer_db"] = True
+    return filters
 
 
 def try_local_policy_reply(query: str) -> dict[str, str] | None:
@@ -273,6 +617,774 @@ def try_local_policy_reply(query: str) -> dict[str, str] | None:
                 "intent": f"navigate:{page}",
             }
 
+    # Parsed SoftDent TXN Excel / sd_account_transactions patient-ledger — prefer DB
+    ledger_filters = _extract_account_tx_query_filters(raw)
+    if ledger_filters is not None:
+        try:
+            from softdent_transaction_extract import format_account_transactions_hal_reply
+
+            result = query_account_transactions(**ledger_filters)
+            return {
+                "text": format_account_transactions_hal_reply(result),
+                "intent": "policy:softdent-account-tx-ledger",
+            }
+        except Exception:
+            return {
+                "text": "Account transaction data not yet exported.",
+                "intent": "policy:softdent-account-tx-ledger",
+            }
+
+    # Teach SoftDent desktop report pulls (Output Options Excel/Preview) — before
+    # generic product KB so “how do I pull SoftDent reports?” gets the playbook.
+    # Account-tx Excel asks stay on softdent-signon-env (Format 1 Trans playbook).
+    try:
+        from softdent_report_pull import (
+            format_softdent_report_pull_hal_reply,
+            query_touches_softdent_report_pull,
+        )
+        from softdent_signon import _query_touches_softdent_account_tx
+
+        if query_touches_softdent_report_pull(raw) and not _query_touches_softdent_account_tx(raw):
+            return {
+                "text": format_softdent_report_pull_hal_reply(raw),
+                "intent": "policy:softdent-report-pull",
+            }
+    except Exception:
+        pass
+
+    # SoftDent full product KB (Carestream Help TOC + topic bodies) — before
+    # InsCo×ADA "catalog" and other SoftDent ops policies that share keywords.
+    # Skip account-tx Excel playbook asks (those stay on softdent-signon-env).
+    try:
+        from softdent_product_kb import (
+            format_softdent_product_kb_hal_reply,
+            query_touches_softdent_product,
+        )
+        from softdent_signon import _query_touches_softdent_account_tx
+
+        if query_touches_softdent_product(raw) and not _query_touches_softdent_account_tx(raw):
+            # Credential-only Sign On questions stay on sign-on policy
+            if not re.search(
+                r"\b(sign\s*on|sign-on|password|credential|change login)\b",
+                q,
+            ) or re.search(
+                r"\b(product|help|manual|module|report|charting|era|how\s+(does|do)|inside)\b",
+                q,
+            ):
+                return {
+                    "text": format_softdent_product_kb_hal_reply(raw),
+                    "intent": "policy:softdent-product-kb",
+                }
+    except Exception:
+        pass
+
+    # Outstanding Claims by Carrier ↔ Account Aging bridge (HAL-10580)
+    if re.search(
+        r"\b("
+        r"outstanding\s+claims?\s+by\s+(carrier|payer|co)|"
+        r"claims?\s+by\s+(carrier|payer)|"
+        r"claims?\s*/?\s*a/?r\s+bridge|"
+        r"account\s+aging\s+total|"
+        r"aging\s+outstanding\s+insurance"
+        r")\b",
+        q,
+    ):
+        try:
+            from softdent_outstanding_claims_bridge import (
+                build_outstanding_claims_by_carrier_bridge,
+                format_outstanding_claims_hal_reply,
+            )
+
+            bridge = build_outstanding_claims_by_carrier_bridge(write_inbox=True)
+            return {
+                "text": format_outstanding_claims_hal_reply(bridge),
+                "intent": "policy:outstanding-claims-by-carrier",
+                "suggestedAction": str(bridge.get("suggestedAction") or ""),
+                "gapCode": str(bridge.get("gapCode") or ""),
+            }
+        except Exception:
+            return {
+                "text": (
+                    "Outstanding Claims by Carrier bridge unavailable. "
+                    "Ensure softdent_financial_analytics.db has sd_claims and "
+                    r"Account Aging Excel is in C:\SoftDentReportExports. Empty != $0."
+                ),
+                "intent": "policy:outstanding-claims-by-carrier",
+            }
+
+    # InsCo × ADA probabilistic ledger estimates (HAL-10582/83) — exact default
+    try:
+        from softdent_insco_ada_probabilistic import (
+            format_probabilistic_estimate_reply,
+            format_probabilistic_status_reply,
+            log_inferred_view_audit,
+            lookup_probabilistic_estimate,
+            parse_probabilistic_estimate_query,
+            probabilistic_report_status,
+        )
+
+        parsed_p = parse_probabilistic_estimate_query(raw)
+        if parsed_p and parsed_p.get("kind") == "status":
+            return {
+                "text": format_probabilistic_status_reply(probabilistic_report_status()),
+                "intent": "policy:insco-ada-estimates",
+            }
+        if parsed_p and parsed_p.get("kind") == "lookup":
+            include_inf = bool(parsed_p.get("includeInferred"))
+            if include_inf:
+                log_inferred_view_audit(
+                    payer=str(parsed_p.get("payer") or ""),
+                    ada=str(parsed_p.get("adaCode") or ""),
+                    source="hal-gateway",
+                )
+            est = lookup_probabilistic_estimate(
+                payer=str(parsed_p.get("payer") or ""),
+                ada_code=str(parsed_p.get("adaCode") or ""),
+                include_inferred=include_inf,
+            )
+            return {
+                "text": format_probabilistic_estimate_reply(
+                    est,
+                    payer=str(parsed_p.get("payer") or ""),
+                    ada=str(parsed_p.get("adaCode") or ""),
+                    include_inferred=include_inf,
+                ),
+                "intent": "policy:insco-ada-estimates",
+                "includeInferred": include_inf,
+                "credibility": (est or {}).get("credibility"),
+                "tier": (est or {}).get("tier"),
+            }
+    except Exception:
+        pass
+
+    # InsCo × ADA pay/write-off % +/- variance (HAL-10584) — 5yr code 2/51 pairing
+    try:
+        from softdent_insco_ada_pct_variance import (
+            format_pct_variance_reply,
+            format_pct_variance_status_reply,
+            lookup_pct_variance,
+            pct_variance_status,
+        )
+
+        raw_l = raw.lower()
+        if re.search(
+            r"\b(pay|paid|write[\s-]?off|wo)\s*%|percent(age)?\s*(pay|write)|"
+            r"insco.{0,20}(pct|percent|variance)|"
+            r"(ada|code).{0,30}(pay|write).{0,20}%|"
+            r"5\s*year.{0,40}(insurance|insco|pay|write)",
+            raw_l,
+        ):
+            if re.search(r"\bstatus\b|how many|summary|report", raw_l):
+                return {
+                    "text": format_pct_variance_status_reply(pct_variance_status()),
+                    "intent": "policy:insco-ada-pct-variance",
+                }
+            # crude payer + ADA extract
+            ada_m = re.search(r"\b(d?\d{3,5})\b", raw_l, re.I)
+            ada = (ada_m.group(1) if ada_m else "").upper()
+            payer = ""
+            for name in (
+                "DELTA DENTAL OF KS",
+                "METLIFE DENTAL",
+                "CIGNA DENTAL",
+                "BCBS OF KS",
+                "GUARDIAN",
+                "AETNA",
+            ):
+                if name.lower() in raw_l or name.split()[0].lower() in raw_l:
+                    payer = name
+                    break
+            if payer and ada:
+                include_inf = bool(re.search(r"infer|uncertain|multi", raw_l))
+                row = lookup_pct_variance(
+                    payer=payer, ada_code=ada, include_inferred=include_inf
+                )
+                return {
+                    "text": format_pct_variance_reply(row, payer=payer, ada=ada),
+                    "intent": "policy:insco-ada-pct-variance",
+                    "tier": (row or {}).get("tier"),
+                    "credibility": (row or {}).get("credibility"),
+                }
+            return {
+                "text": format_pct_variance_status_reply(pct_variance_status()),
+                "intent": "policy:insco-ada-pct-variance",
+            }
+    except Exception:
+        pass
+
+    # InsCo × ADA full catalog matrix (HAL-10586) — includes insufficient
+    try:
+        from softdent_insco_ada_catalog_matrix import (
+            format_catalog_status_reply,
+            catalog_matrix_status,
+            list_catalog_matrix_rows,
+            uncovered_ledger_cdts,
+        )
+
+        raw_l = raw.lower()
+        if re.search(
+            r"\b(catalog|full\s+matrix|matrix\s+catalog|insco.{0,20}catalog|"
+            r"every\s+(ada|cdt|code)|insufficient\s+cells|"
+            r"uncovered\s+(ledger\s+)?(cdt|ada)|catalog\s+csv|"
+            r"where\s+is\s+the\s+catalog)",
+            raw_l,
+        ):
+            if re.search(r"csv|export|where\s+is\s+the\s+catalog", raw_l):
+                from softdent_insco_ada_catalog_matrix import insco_ada_catalog_widget
+
+                w = insco_ada_catalog_widget()
+                return {
+                    "text": (
+                        f"InsCo×ADA catalog CSV ({w.get('def')}): "
+                        f"csvPath={w.get('csvPath') or '—'}; "
+                        f"inboxCsvPath={w.get('inboxCsvPath') or '—'}; "
+                        f"cells={w.get('totalCells')}; exact usable={w.get('exactUsableCells')}; "
+                        f"uncovered={w.get('uncoveredCount')}. "
+                        "Ledger-inferred only — does not invent gold payment lines. empty≠$0."
+                    ),
+                    "intent": "policy:insco-ada-catalog-matrix",
+                    "csvPath": w.get("csvPath"),
+                    "inboxCsvPath": w.get("inboxCsvPath"),
+                }
+            if re.search(r"uncovered|no spine|without settlement", raw_l):
+                uncovered = uncovered_ledger_cdts()
+                return {
+                    "text": (
+                        f"Ledger CDTs with no InsCo×ADA spine settlement cell yet "
+                        f"({len(uncovered)}): "
+                        + (", ".join(uncovered[:40]) + ("…" if len(uncovered) > 40 else ""))
+                        + ". empty≠$0 — not the same as $0 write-off."
+                    ),
+                    "intent": "policy:insco-ada-catalog-matrix",
+                    "uncoveredCount": len(uncovered),
+                }
+            if re.search(r"insufficient", raw_l):
+                rows = list_catalog_matrix_rows(
+                    include_insufficient=True,
+                    credibility="insufficient",
+                    limit=15,
+                )
+                lines = [
+                    f"InsCo×ADA insufficient sample (showing {len(rows)}; empty≠$0):",
+                ]
+                for r in rows:
+                    lines.append(
+                        f"- {r['insuranceCompany']} × {r['adaCode']} "
+                        f"n={r['sampleSize']} tier={r['tier']}"
+                    )
+                return {
+                    "text": "\n".join(lines),
+                    "intent": "policy:insco-ada-catalog-matrix",
+                }
+            return {
+                "text": format_catalog_status_reply(catalog_matrix_status()),
+                "intent": "policy:insco-ada-catalog-matrix",
+            }
+    except Exception:
+        pass
+
+    # Print Preview visual audit (HAL-10590)
+    try:
+        from softdent_print_preview_audit import (
+            format_print_preview_audit_reply,
+            list_print_preview_audits,
+            print_preview_audit_playbook,
+        )
+
+        raw_l = raw.lower()
+        if re.search(
+            r"\b(print\s+preview\s+audit|visual\s+audit|ops-?10590|"
+            r"record.{0,30}(insurance\s+income|last\s+page)|"
+            r"how.{0,40}record.{0,40}print\s+preview)",
+            raw_l,
+        ):
+            st = list_print_preview_audits()
+            play = print_preview_audit_playbook()
+            text = format_print_preview_audit_reply(st)
+            text += (
+                f" When Print Preview only: {play.get('f10')} → Print Preview → "
+                f"{play.get('pages')}."
+            )
+            return {
+                "text": text,
+                "intent": "policy:print-preview-audit",
+                "gapCode": st.get("gapCode"),
+                "visualAuditLastPageTotal": st.get("visualAuditLastPageTotal"),
+                "playbook": play,
+            }
+    except Exception:
+        pass
+
+    # UI honesty empty≠$0 (HAL-10591 / HON-001)
+    try:
+        from ui_honesty_policy import (
+            audit_ui_honesty_surfaces,
+            format_honesty_audit_reply,
+        )
+
+        raw_l = raw.lower()
+        if re.search(
+            r"\b(empty\s*(!=|≠|not)\s*\$?0|hon-?001|ops-?10591|hal-?10591|"
+            r"ui\s+honesty|honesty\s+audit|"
+            r"what\s+does\s+empty.{0,20}\$?0)",
+            raw_l,
+        ):
+            result = audit_ui_honesty_surfaces()
+            return {
+                "text": format_honesty_audit_reply(result),
+                "intent": "policy:empty-not-zero",
+                "passCount": result.get("passCount"),
+                "failCount": result.get("failCount"),
+                "ok": result.get("ok"),
+            }
+    except Exception:
+        pass
+
+    # Visual×ledger reconciliation (HAL-10592 / HON-002)
+    try:
+        from softdent_visual_ledger_recon import (
+            format_visual_ledger_recon_reply,
+            reconcile_visual_vs_ledger,
+        )
+
+        raw_l = raw.lower()
+        if re.search(
+            r"\b(visual\s*(x|×|\-| )?ledger|hon-?002|ops-?10592|hal-?10592|"
+            r"visual\s+ledger\s+recon|"
+            r"visual\s+audit\s+vs\s+ledger|"
+            r"what\s+does\s+visual.{0,40}reconcil)",
+            raw_l,
+        ):
+            result = reconcile_visual_vs_ledger()
+            return {
+                "text": format_visual_ledger_recon_reply(result),
+                "intent": "policy:visual-ledger-recon",
+                "result": result.get("result")
+                or (result.get("comparison") or {}).get("result"),
+                "thresholdViolated": result.get("thresholdViolated")
+                or (result.get("comparison") or {}).get("thresholdViolated"),
+                "gapCode": result.get("gapCode"),
+            }
+    except Exception:
+        pass
+
+    # Gold CSV drop OPS (HAL-10589) — prefer before generic gold pipeline for drop asks
+    try:
+        from softdent_gold_csv_drop_ops import (
+            checklist_post_ingest,
+            format_gold_csv_drop_ops_reply,
+            gold_csv_drop_playbook,
+        )
+
+        raw_l = raw.lower()
+        if re.search(
+            r"\b(gold\s+csv\s+drop|ops-?10589|csv\s+drop\s+ops|"
+            r"drop.{0,20}insurance\s+payment|"
+            r"how.{0,40}export.{0,40}insurance\s+payment\s+analysis)",
+            raw_l,
+        ):
+            st = checklist_post_ingest()
+            play = gold_csv_drop_playbook()
+            text = format_gold_csv_drop_ops_reply({"post": st})
+            try:
+                from apex_32b_program_fixes_pack import gold_csv_ops_staff_reply
+
+                text = gold_csv_ops_staff_reply()
+            except Exception:
+                text += f" Steps: {play.get('softDentMenu')} → {play.get('saveAs')} → Sync."
+            return {
+                "text": text,
+                "intent": "policy:gold-csv-drop-ops",
+                "gapCode": (st.get("audit") or {}).get("gapCode"),
+                "playbook": play,
+            }
+    except Exception:
+        pass
+
+    # Gold payment pipeline (HAL-10588)
+    try:
+        from softdent_gold_payment_pipeline import (
+            audit_gold_payment_pipeline,
+            format_gold_pipeline_reply,
+        )
+
+        raw_l = raw.lower()
+        if re.search(
+            r"\b(gold\s+payment|payment\s+pipeline|insurance\s+payment\s+analysis|"
+            r"why.{0,20}payment\s+lines|export.{0,40}insurance\s+payment)",
+            raw_l,
+        ):
+            st = audit_gold_payment_pipeline()
+            return {
+                "text": format_gold_pipeline_reply(st),
+                "intent": "policy:gold-payment-pipeline",
+                "gapCode": st.get("gapCode"),
+            }
+    except Exception:
+        pass
+
+    # SoftDent GUI Sign On — credentials in env vars (never echo password)
+    # Also: data not in DB → Sign On + UI; widget data paths; period $ drift;
+    # account transactions → Excel playbook
+    if re.search(
+        r"\b("
+        r"sign\s*on|sign-on|change login|"
+        r"softdent\s+(login|password|credential|sign\s*on)|"
+        r"log\s*in\s+(to\s+)?softdent|"
+        r"where.{0,30}(softdent|sign\s*on).{0,30}(password|credential|env)|"
+        r"(password|credential).{0,30}softdent|"
+        r"(cannot be reached|can'?t (be )?reach|not in (the )?(database|db|odbc)|"
+        r"only (way|via|through).{0,24}(ui|gui|sign\s*on)|"
+        r"softdent.{0,40}(ui|gui).{0,20}(export|report)|"
+        r"how.{0,40}softdent.{0,40}(not|without).{0,20}(database|odbc|db)|"
+        r"source of truth|"
+        r"(where|how).{0,40}(vital signs|ins.?patient|collections gap|widget).{0,40}(data|from|get)|"
+        r"softdent.{0,30}widget.{0,30}(data|path|source)|"
+        r"(register|daysheet).{0,24}(drift|disagree|mismatch)|"
+        r"account\s+transactions?|patient\s+transactions?|"
+        r"trans(actions?)?\s+for\s+(a\s+)?period|"
+        r"print\s+transactions?|"
+        r"(pull|export|get).{0,40}(account|patient|transaction).{0,30}(excel|softdent|ledger)|"
+        r"softdent.{0,40}(transaction|ledger).{0,30}(excel|export|pull)|"
+        r"list\s+each\s+transaction\s+separately|"
+        r"account\s+(mode|transaction)\s+tab)"
+        r")\b",
+        q,
+    ):
+        try:
+            from softdent_signon import (
+                format_softdent_account_tx_excel_hal_reply,
+                format_softdent_signon_hal_reply,
+                format_softdent_widget_path_hal_reply,
+                softdent_signon_status,
+            )
+
+            text = format_softdent_signon_hal_reply(softdent_signon_status())
+            if re.search(
+                r"\b(widget|vital signs|ins.?patient|drift|mismatch|data path|where.{0,20}data)\b",
+                q,
+            ):
+                text = text + " " + format_softdent_widget_path_hal_reply()
+                try:
+                    from softdent_period_money_drift import (
+                        compare_register_to_daysheet_totals,
+                        format_drift_hal_reply,
+                    )
+
+                    text = text + " " + format_drift_hal_reply(compare_register_to_daysheet_totals())
+                except Exception:
+                    pass
+            if re.search(
+                r"\b("
+                r"account\s+transactions?|patient\s+transactions?|"
+                r"trans(actions?)?\s+for\s+(a\s+)?period|print\s+transactions?|"
+                r"(pull|export|get).{0,40}(account|patient|transaction).{0,30}(excel|softdent|ledger)|"
+                r"softdent.{0,40}(transaction|ledger).{0,30}(excel|export|pull)|"
+                r"list\s+each\s+transaction|account\s+(mode|transaction)\s+tab"
+                r")\b",
+                q,
+            ):
+                text = text + " " + format_softdent_account_tx_excel_hal_reply()
+            return {
+                "text": text,
+                "intent": "policy:softdent-signon-env",
+            }
+        except Exception:
+            return {
+                "text": (
+                    "SoftDent GUI Sign On credentials live in environment variables "
+                    "SOFTDENT_SIGNON_USER / SOFTDENT_SIGNON_PASSWORD "
+                    r"(also C:\New folder\.env). "
+                    "Desktop SoftDent Excel is the source of truth for period financial totals; "
+                    "sd_*/Sensei is faster for operational detail. "
+                    "Account txs: Reports → Accounting → Trans for a Period → Excel "
+                    "(Format 1 = List Each Transaction Separately); save into "
+                    r"C:\SoftDentReportExports (SoftDent may open temp SDWIN*.csv in Excel). "
+                    "HAL will not print the password."
+                ),
+                "intent": "policy:softdent-signon-env",
+            }
+
+    # CARC/CAS whitelist (Phase 4) — known briefs only; unknown hard-refuse (no LLM).
+    if re.search(r"\b(what|signify|mean|explain)\b", q) and (
+        "carc" in q or "cas" in q or "adjustment code" in q or "denial code" in q
+    ):
+        from era835_parser import (
+            carc_unknown_refusal,
+            extract_carc_codes_from_text,
+            format_carc_brief_reply,
+            is_known_carc_code,
+            lookup_carc_brief,
+        )
+
+        codes = extract_carc_codes_from_text(raw)
+        if codes:
+            unknown = [c for c in codes if not is_known_carc_code(c)]
+            if unknown:
+                return {
+                    "text": carc_unknown_refusal(unknown),
+                    "intent": "policy:carc-unknown",
+                }
+            code = codes[0]
+            brief = format_carc_brief_reply(code) or lookup_carc_brief(code)
+            if brief:
+                return {"text": brief, "intent": f"policy:carc-{code.lower()}"}
+            return {
+                "text": carc_unknown_refusal([code]),
+                "intent": "policy:carc-unknown",
+            }
+    # Empty payroll/AP honesty
+    if re.search(r"\bempty\b", q) and re.search(r"\b(payroll|wages|ap\b|unpaid bills)\b", q):
+        if re.search(r"\b(\$0|0\$|zero|same as)\b", q) or "empty" in q:
+            return {
+                "text": (
+                    "No. An empty payroll/AP export is not the same as $0 wages or balances — "
+                    "empty ≠ $0. Drop a real QuickBooks export or mark an empty-batch sidecar; "
+                    "do not invent amounts."
+                ),
+                "intent": "policy:empty-not-zero",
+            }
+
+    # DEF-001 — empty revenue-composition / collections ≠ $0 (local, no LLM)
+    # Also: Register Ins Plan $0 → ERA-835 honesty (hal-10571)
+    # Also: Refresh Inbox / ERA inbox ingest guidance (hal-10576)
+    # Also: remittance discovery scan (hal-10576)
+    # Also: Collections Excel-temp health (hal-10576)
+    if re.search(
+        r"\b("
+        r"collections?\s+export\s+(health|ready|status)|"
+        r"excel[- ]?temp|"
+        r"temp_file_locked|"
+        r"(sdwin|excel).{0,20}(lock|locked|sharing)"
+        r")\b",
+        q,
+    ):
+        try:
+            from softdent_excel_temp import collections_export_health
+
+            health = collections_export_health()
+            ready = bool(health.get("collectionsExportReady"))
+            code = health.get("errorCode") or "ok"
+            return {
+                "text": (
+                    f"Collections Excel-temp health: ready={ready} · errorCode=`{code}`.\n"
+                    f"{health.get('hint') or ''}\n"
+                    "Reliability only — empty ≠ $0; do not re-export Register hoping Ins Plan > 0; "
+                    "ERA-835 still required for insurance detail when Ins Plan is $0."
+                ),
+                "intent": "policy:collections-excel-temp",
+            }
+        except Exception:
+            return {
+                "text": (
+                    "Collections Excel-temp uses retry/backoff when SoftDent holds SDWIN* locks. "
+                    "Check GET /api/apex/hal/collections-export/health. Empty ≠ $0."
+                ),
+                "intent": "policy:collections-excel-temp",
+            }
+
+    if re.search(
+        r"\b("
+        r"scan\s+for\s+(era|835|remit)|"
+        r"discover\s+(era|835|remit)|"
+        r"find\s+(era|835|remittance)|"
+        r"era\s+files?\s+on\s+disk|"
+        r"local\s+era"
+        r")\b",
+        q,
+    ):
+        try:
+            from apex_era835_pack import discover_era_candidates
+
+            found = discover_era_candidates(limit=8)
+            count = int(found.get("candidateCount") or 0)
+            chip = found.get("chipLabel") or ""
+            lines = [
+                f"ERA remittance discovery (read-only): {chip} (empty ≠ $0).",
+                f"Scanned roots: {', '.join((found.get('scannedRoots') or [])[:4]) or '—'}.",
+            ]
+            for row in list(found.get("candidates") or [])[:5]:
+                lines.append(
+                    f"- {row.get('path')} · {row.get('sizeBytes')}B · {row.get('matchReason')}"
+                    f"{' · in-inbox' if row.get('inInbox') else ''}"
+                )
+            if count == 0:
+                lines.append(
+                    "No local candidates — staff must procure real payer 835 files into "
+                    r"C:\SoftDentFinancialExports\era. Do not invent dollars or re-export Register."
+                )
+            else:
+                lines.append(
+                    "Verify candidates, copy into the ERA inbox, then Refresh Inbox. "
+                    "Discovery does not move files or write SoftDent."
+                )
+            return {"text": "\n".join(lines), "intent": "policy:era-discover"}
+        except Exception:
+            return {
+                "text": (
+                    "Use Collections Gap → Scan for ERA Files (read-only discovery across "
+                    r"SoftDent/export roots). Empty ≠ $0; no SoftDent write-back."
+                ),
+                "intent": "policy:era-discover",
+            }
+
+    if re.search(
+        r"\b("
+        r"refresh\s+(era|835|inbox)|"
+        r"(era|835)\s+inbox\s+(ingest|refresh|status)|"
+        r"ingest\s+(era|835)|"
+        r"awaiting\s+first\s+835"
+        r")\b",
+        q,
+    ):
+        try:
+            from apex_era835_pack import scan_era_inbox
+
+            scanned = scan_era_inbox(ensure_dirs=True)
+            chip = scanned.get("chipLabel") or "Awaiting first 835 drop"
+            files = scanned.get("fileCount") or 0
+            return {
+                "text": (
+                    f"ERA inbox: {chip} (files={files}; empty ≠ $0). "
+                    "Use Collections Gap → Refresh Inbox (session token / CSRF) or "
+                    "`scripts/run_era_inbox_ingest_ops.py` after dropping real payer 835 files "
+                    "into C:\\SoftDentFinancialExports\\era. No SoftDent write-back; "
+                    "do not re-export Register hoping Ins Plan > 0."
+                ),
+                "intent": "policy:era-inbox-refresh",
+            }
+        except Exception:
+            return {
+                "text": (
+                    "ERA inbox Refresh Inbox uses the browser session token "
+                    "(X-NR2-Session-Token). Drop real 835 files, then click Refresh Inbox "
+                    "or run scripts/run_era_inbox_ingest_ops.py. Empty ≠ $0."
+                ),
+                "intent": "policy:era-inbox-refresh",
+            }
+
+    if re.search(
+        r"\b("
+        r"re[- ]?export\s+(?:the\s+)?(?:july\s+)?register|"
+        r"export\s+(?:the\s+)?(?:july\s+)?register\s+again|"
+        r"(hope|hoping|want|need).{0,40}ins\s*plan.{0,20}(>\s*0|greater|positive)|"
+        r"register.{0,30}ins\s*plan.{0,20}(>\s*0|again)"
+        r")\b",
+        q,
+    ):
+        try:
+            from apex_softdent_hardening_pack import (
+                SUGGESTED_ACTION_ERA_835_PROCURE,
+                assess_collections_gap,
+                format_collections_gap_reply,
+                register_ins_plan_zero_blocks_reexport,
+            )
+
+            bundle = None
+            try:
+                from apex_backend import _load_reports_and_bundle
+
+                _reports, bundle, _err = _load_reports_and_bundle()
+            except Exception:
+                bundle = None
+            gap = assess_collections_gap(bundle)
+            if register_ins_plan_zero_blocks_reexport(gap):
+                return {
+                    "text": (
+                        format_collections_gap_reply(gap)
+                        + "\nRefused: Register re-export for Ins Plan > 0 is blocked "
+                        f"(suggestedAction=`{gap.get('suggestedAction') or SUGGESTED_ACTION_ERA_835_PROCURE}`)."
+                    ),
+                    "intent": "policy:forbid-register-reexport",
+                    "suggestedAction": str(
+                        gap.get("suggestedAction") or SUGGESTED_ACTION_ERA_835_PROCURE
+                    ),
+                }
+        except Exception:
+            return {
+                "text": (
+                    "Do not re-export SoftDent Register hoping Ins Plan Collections > 0 — "
+                    "July Register already reported Ins Plan $0.00 (SoftDent truth). "
+                    "Procure ERA-835 for insurance detail. Empty ≠ $0."
+                ),
+                "intent": "policy:forbid-register-reexport",
+                "suggestedAction": "era_835_procure",
+            }
+
+    if re.search(
+        r"\b("
+        r"revenue.?composition|payer mix|insurance.?patient|"
+        r"collections?\s+(empty|pending|missing|gap)|"
+        r"why .{0,40}(collections|revenue.?composition)|"
+        r"def-?001|daysheet|"
+        r"(july|open.?month).{0,30}(insurance|ins.?plan).{0,20}collections?|"
+        r"ins.?plan\s+collections?|"
+        r"era.?835|"
+        r"regular\s+collections"
+        r")\b",
+        q,
+    ) and re.search(
+        r"\b(empty|pending|missing|gap|\$0|zero|why|july|insurance|ins.?plan|era|collections?|regular)\b",
+        q,
+    ):
+        try:
+            from apex_softdent_hardening_pack import assess_collections_gap, format_collections_gap_reply
+
+            bundle = None
+            try:
+                from apex_backend import _load_reports_and_bundle
+
+                _reports, bundle, _err = _load_reports_and_bundle()
+            except Exception:
+                bundle = None
+            gap = assess_collections_gap(bundle)
+            return {
+                "text": format_collections_gap_reply(gap),
+                "intent": "policy:def-001-collections",
+                "suggestedAction": str(gap.get("suggestedAction") or "era_835_procure"),
+            }
+        except Exception:
+            return {
+                "text": (
+                    "SoftDent Register reports Ins Plan Collections $0.00; proceed with ERA-835 "
+                    "for insurance detail. Empty ≠ $0; do not re-export Register hoping Ins Plan > 0."
+                ),
+                "intent": "policy:def-001-collections",
+                "suggestedAction": "era_835_procure",
+            }
+
+    # Two-sentence HAL summary (constraint-friendly local answer)
+    if re.search(r"\bwhat hal does\b", q) or (
+        re.search(r"\bsummarize\b", q) and re.search(r"\bhal\b", q) and re.search(r"\b(program|does|do)\b", q)
+    ):
+        if sentence_limit_from_query(raw) == 2 or "two sentence" in q:
+            return {
+                "text": (
+                    "HAL is the local read-only office assistant in NR2 Apex for imports, claims, and narratives. "
+                    "It never writes SoftDent/QuickBooks or submits to payers without explicit staff consent."
+                ),
+                "intent": "policy:hal-summary",
+            }
+
+    # Hard write-intent preflight (P1) — block before LLM.
+    if _WRITE_INTENT_RE.search(raw) or _WRITE_INTENT_RE.search(q):
+        if re.search(r"\b(softdent|patient|fee\s*schedule|chart)\b", q):
+            return {
+                "text": (
+                    "No. HAL cannot modify SoftDent, fee schedules, or patient records — "
+                    "NR2 stays read-only; staff update SoftDent directly."
+                ),
+                "intent": "consent:writeback-blocked",
+            }
+        if re.search(r"\b(quickbooks|qb\b|journal|ledger|iif)\b", q):
+            return {
+                "text": (
+                    "No — I cannot post or write inside QuickBooks from NR2 (read-only). "
+                    'I can draft locally or export IIF after you say "I consent"; staff still post in QuickBooks.'
+                ),
+                "intent": "consent:qb-post-blocked",
+            }
+
     hyp = re.match(r"^what happens if i ask you to (.+?)\??$", q)
     if hyp:
         action = hyp.group(1).strip()
@@ -285,7 +1397,7 @@ def try_local_policy_reply(query: str) -> dict[str, str] | None:
                 "intent": "consent:required",
             }
 
-    can = re.match(r"^(?:are you allowed to|can you) (.+?)(?:\s+without (?:staff approval|consent))?\??$", q)
+    can = re.match(r"^(?:are you allowed to|can you|can hal) (.+?)(?:\s+without (?:staff approval|consent))?\??$", q)
     if can:
         action = can.group(1).strip()
         without_consent = "without consent" in q or "without staff approval" in q
@@ -301,7 +1413,7 @@ def try_local_policy_reply(query: str) -> dict[str, str] | None:
             if re.search(r"\bpost\b", action) and re.search(r"\bquickbooks\b", action):
                 return {
                     "text": (
-                        "No — I cannot click Post inside QuickBooks from NR2. "
+                        "No — I cannot click Post inside QuickBooks from NR2 (read-only). "
                         'I can draft entries locally or export IIF after you say "I consent"; staff still post inside QuickBooks.'
                     ),
                     "intent": "consent:qb-post-blocked",
@@ -352,11 +1464,128 @@ def build_import_readiness_context(readiness: dict[str, Any]) -> str:
         f"AgeHours: {readiness.get('ageHours') if readiness.get('ageHours') is not None else 'unknown'}",
         f"Ok: {'yes' if readiness.get('ok') else 'no'}",
     ]
+    summary = readiness.get("summary") if isinstance(readiness.get("summary"), dict) else {}
+    if summary:
+        lines.append(
+            "Counts: connected={c} missing={m} stale={s} (missingOptional={mo})".format(
+                c=summary.get("connected"),
+                m=summary.get("missing"),
+                s=summary.get("stale"),
+                mo=summary.get("missingOptional"),
+            )
+        )
+    gaps = readiness.get("datasetGaps") if isinstance(readiness.get("datasetGaps"), list) else []
+    if gaps:
+        lines.append("Named gaps (use these exact keys — do not invent a generic checklist):")
+        for g in gaps[:12]:
+            if not isinstance(g, dict):
+                continue
+            lines.append(
+                f"- {g.get('datasetKey')} [{g.get('severity')}/{g.get('status')}]"
+                + (f" — {g.get('detail')}" if g.get("detail") else "")
+            )
+    else:
+        lines.append("Named gaps: none — do not claim datasets are missing.")
+    blocking = readiness.get("blocking") if isinstance(readiness.get("blocking"), list) else []
+    if blocking:
+        lines.append("Blocking critical gaps:")
+        for b in blocking[:8]:
+            if isinstance(b, dict):
+                lines.append(f"- {b.get('datasetKey') or b.get('detail') or b}")
+    comp = readiness.get("completeness") if isinstance(readiness.get("completeness"), dict) else {}
+    if comp:
+        lines.append(
+            f"Critical completeness: {comp.get('scorePct')}% "
+            f"(required={comp.get('required')} connected={comp.get('connected')} ok={comp.get('ok')})"
+        )
     if readiness.get("error"):
         lines.append(f"Error: {readiness['error']}")
     lines.append("You must not provide numeric projections or financial advice when Status is not FRESH.")
+    lines.append(
+        "When staff ask about missing imports or KPI reliability: name exact datasetKey values "
+        "from Named gaps; say optional gaps do not fail the money-read gate; never invent dollars."
+    )
     lines.append("[END_IMPORT_CONTEXT]")
     return "\n".join(lines)
+
+
+def try_import_gap_reply(query: str, readiness: dict[str, Any] | None) -> dict[str, str] | None:
+    """Deterministic import-gap answers — name live dataset keys, no generic checklists."""
+    raw = str(query or "").strip()
+    if not raw:
+        return None
+    q = re.sub(r"^hal[,:]\s+", "", raw, flags=re.IGNORECASE).lower().strip()
+    if not re.search(
+        r"\b("
+        r"missing\s+import|import\s+datasets?\s+missing|datasets?\s+missing|"
+        r"missing\s+datasets?|import\s+health|why\s+.*\bmissing\b|"
+        r"kpi[s]?\s+(are\s+)?reliable|reliable\s+kpi|widgets?\s+empty|"
+        r"which\s+(?:import\s+)?datasets?\s+(?:are\s+)?missing|"
+        r"which\s+imports?\s+(?:are\s+)?missing|"
+        r"address\s+the\s+issue\s+of\s+.*\bmissing\b"
+        r")\b",
+        q,
+    ):
+        return None
+
+    ready = readiness if isinstance(readiness, dict) else {}
+    gaps = [g for g in (ready.get("datasetGaps") or []) if isinstance(g, dict)]
+    summary = ready.get("summary") if isinstance(ready.get("summary"), dict) else {}
+    comp = ready.get("completeness") if isinstance(ready.get("completeness"), dict) else {}
+    level = str(ready.get("level") or "unknown")
+
+    if not gaps:
+        text = (
+            f"No named import gaps right now (readiness {level}). "
+            f"Connected={summary.get('connected')} missing={summary.get('missing') or 0}. "
+            "Critical completeness is fine — do not treat old sync log 'missing=4' lines as current."
+        )
+        if comp.get("ok") is True:
+            text += " Money-read KPIs are not blocked."
+        return {"text": text, "intent": "import:gaps-none"}
+
+    critical = [g for g in gaps if str(g.get("severity") or "") == "critical"]
+    warning = [g for g in gaps if str(g.get("severity") or "") == "warning"]
+    optional = [g for g in gaps if str(g.get("severity") or "") == "optional"]
+
+    def _fmt(items: list[dict[str, Any]]) -> str:
+        return ", ".join(
+            f"{g.get('datasetKey')} ({g.get('status')})" for g in items if g.get("datasetKey")
+        )
+
+    parts: list[str] = []
+    parts.append(
+        f"Live import gaps ({len(gaps)}): "
+        + "; ".join(
+            f"{g.get('datasetKey')} [{g.get('severity')}/{g.get('status')}]" for g in gaps[:12]
+        )
+        + "."
+    )
+    if critical:
+        parts.append(f"Critical (blocks money reads until fixed): {_fmt(critical)}.")
+    else:
+        parts.append("No critical gaps — money-read completeness is not failed by these.")
+    if warning:
+        parts.append(f"Warning (honesty chips only): {_fmt(warning)}.")
+    if optional:
+        parts.append(
+            f"Optional (widgets stay empty — not $0): {_fmt(optional)}. "
+            "Drop matching CSV/JSON into the QuickBooks/SoftDent import inbox and sync."
+        )
+    if optional and not critical:
+        # Concrete file hints for known optional QB gaps
+        hints: list[str] = []
+        keys = {str(g.get("datasetKey") or "") for g in optional}
+        if "quickbooks.payroll" in keys:
+            hints.append("quickbooks_payroll.csv (or payroll_detail.csv)")
+        if "quickbooks.ap" in keys:
+            hints.append("quickbooks_ap.csv (or unpaid_bills.csv)")
+        if hints:
+            parts.append("Expected filenames: " + "; ".join(hints) + ".")
+    parts.append(
+        "Ignore stale Jul-log 'missing=4' narratives unless those counts match live Named gaps."
+    )
+    return {"text": " ".join(parts), "intent": "import:gaps-named"}
 
 
 def is_financial_query(query: str) -> bool:
@@ -484,7 +1713,54 @@ def resolve_lane(lane_key: str) -> dict[str, str]:
     key = str(lane_key or "chat8b").lower()
     if key not in LANE_MODELS:
         key = "chat8b"
-    return {"lane": key, "model": LANE_MODELS[key]}
+    return {"lane": key, "model": APPROVED_LOCAL_MODEL}
+
+
+def is_approved_local_model(model: str | None) -> bool:
+    return str(model or "").strip().lower() == APPROVED_LOCAL_MODEL.lower()
+
+
+def enforce_approved_local_model(
+    model: str | None = None,
+    *,
+    override_header: str | None = None,
+    allow_missing: bool = True,
+) -> dict[str, Any]:
+    """Hard allowlist: only hal-local:30b-a3b (MoE) may run on the office GPU.
+
+    Explicit payload.model / X-HAL-Model-Override that name another model → reject.
+    Missing override → force APPROVED_LOCAL_MODEL.
+    """
+    explicit = str(model or "").strip()
+    header = str(override_header or "").strip()
+    # Header historically carried a *lane* id (e.g. chat8b); treat known lanes as non-model.
+    if header and header.lower() not in LANE_MODELS and ":" in header:
+        if not is_approved_local_model(header):
+            return {
+                "ok": False,
+                "error": "model_not_allowed",
+                "approvedModel": APPROVED_LOCAL_MODEL,
+                "requestedModel": header,
+                "source": "X-HAL-Model-Override",
+            }
+    if explicit:
+        if not is_approved_local_model(explicit):
+            return {
+                "ok": False,
+                "error": "model_not_allowed",
+                "approvedModel": APPROVED_LOCAL_MODEL,
+                "requestedModel": explicit,
+                "source": "payload.model",
+            }
+        return {"ok": True, "model": APPROVED_LOCAL_MODEL}
+    if not allow_missing:
+        return {
+            "ok": False,
+            "error": "model_not_allowed",
+            "approvedModel": APPROVED_LOCAL_MODEL,
+            "requestedModel": "",
+        }
+    return {"ok": True, "model": APPROVED_LOCAL_MODEL}
 
 
 def redact_financial_numbers(text: str) -> str:
@@ -738,6 +2014,31 @@ def build_chat_messages(
     claim_payer_guidance = compile_claim_payer_guidance(query, system_prompt)
     if claim_payer_guidance:
         chat_messages.append({"role": "system", "content": claim_payer_guidance})
+    try:
+        ledger_filters = _extract_account_tx_query_filters(query)
+        if ledger_filters is not None:
+            from softdent_transaction_extract import format_account_transactions_hal_reply
+
+            ledger = query_account_transactions(**ledger_filters)
+            ledger_text = format_account_transactions_hal_reply(ledger)
+            if ledger_text:
+                chat_messages.append(
+                    {
+                        "role": "system",
+                        "content": "SOFTDENT ACCOUNT TX LEDGER (parsed TXN Excel; empty != $0):\n"
+                        + ledger_text,
+                    }
+                )
+    except Exception:
+        pass
+    try:
+        from softdent_signon import compile_softdent_signon_guidance
+
+        signon_guidance = compile_softdent_signon_guidance(query, system_prompt)
+        if signon_guidance:
+            chat_messages.append({"role": "system", "content": signon_guidance})
+    except ImportError:
+        pass
     if level != "fresh":
         chat_messages.append({"role": "system", "content": build_import_readiness_context(readiness)})
         if soft_stale and intent in ("analytical", "clinical", "insurance_ops"):
@@ -756,6 +2057,7 @@ def iter_ollama_sse_tokens(
     lane: str,
     options: dict[str, Any] | None = None,
     timeout: float = 120.0,
+    format: Any | None = None,
 ):
     """Yield SSE frames: meta event first, then token data events."""
     yield f"event: meta\ndata: {json.dumps({'lane': lane, 'model': model, 'done': False})}\n\n"
@@ -765,6 +2067,8 @@ def iter_ollama_sse_tokens(
         payload["think"] = think
     if options:
         payload["options"] = options
+    if format is not None:
+        payload["format"] = format
     req = urllib.request.Request(
         OLLAMA_CHAT,
         data=json.dumps(payload).encode("utf-8"),
@@ -791,7 +2095,12 @@ def iter_ollama_sse_tokens(
 def _ollama_think_flag(model: str) -> bool | None:
     """Staff-facing lanes disable hidden reasoning (DeepSeek-R1 / Qwen3)."""
     name = str(model or "").lower()
-    if name.startswith("hal-escalate") or name.startswith("qwen3:"):
+    # hal-local:* Qwen3 aliases — must disable think or content stays empty.
+    if (
+        name.startswith("hal-escalate")
+        or name.startswith("hal-local")
+        or name.startswith("qwen3:")
+    ):
         return False
     if name.startswith("hal-chat") or name.startswith("deepseek"):
         return False
@@ -804,14 +2113,38 @@ def call_ollama_chat(
     messages: list[dict[str, Any]],
     stream: bool = False,
     options: dict[str, Any] | None = None,
-    timeout: float = 120.0,
+    timeout: float = 180.0,
+    keep_alive: int | str | None = None,
+    format: Any | None = None,
 ) -> dict[str, Any]:
+    gate = enforce_approved_local_model(model)
+    if not gate.get("ok"):
+        return {
+            "ok": False,
+            "error": "model_not_allowed",
+            "detail": f"only {APPROVED_LOCAL_MODEL} is permitted",
+            "approvedModel": APPROVED_LOCAL_MODEL,
+            "requestedModel": str(model or ""),
+        }
+    model = APPROVED_LOCAL_MODEL
     payload: dict[str, Any] = {"model": model, "messages": messages, "stream": bool(stream)}
     think = _ollama_think_flag(model)
     if think is not None:
         payload["think"] = think
     if options:
         payload["options"] = options
+    if format is not None:
+        payload["format"] = format
+    # REC-007 HAL keep-alive: default forever (-1) so MoE stays GPU-resident.
+    if keep_alive is None:
+        raw = str(os.environ.get("NR2_OLLAMA_KEEP_ALIVE") or "-1").strip()
+        if raw.lstrip("-").isdigit():
+            keep_alive = int(raw)
+        elif raw:
+            keep_alive = raw
+        else:
+            keep_alive = -1
+    payload["keep_alive"] = keep_alive
     req = urllib.request.Request(
         OLLAMA_CHAT,
         data=json.dumps(payload).encode("utf-8"),
@@ -840,7 +2173,18 @@ def call_ollama_chat(
             body = dict(body)
             body["message"] = dict(message)
             body["message"]["content"] = text
-            return {"ok": True, "body": body}
+            # Preserve raw thinking length for diagnostics (never staff-facing).
+            thinking_len = len(str(message.get("thinking") or ""))
+            return {
+                "ok": True,
+                "body": body,
+                "diag": {
+                    "contentChars": len(text),
+                    "thinkingChars": thinking_len,
+                    "thinkFlag": think,
+                    "stream": False,
+                },
+            }
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         return {"ok": False, "error": f"ollama_http_{exc.code}", "detail": detail[:2000]}
@@ -869,7 +2213,17 @@ def evaluate_query_stream(
         requested_lane or route_by_complexity(query, shift_context=shift_context, store=store)
     )
     resolved = resolve_lane(lane_key)
-    model = str(model or resolved["model"])
+    model_gate = enforce_approved_local_model(model)
+    if not model_gate.get("ok"):
+        return {
+            "ok": False,
+            "error": "model_not_allowed",
+            "approvedModel": APPROVED_LOCAL_MODEL,
+            "requestedModel": model_gate.get("requestedModel"),
+            "resolvedLane": resolved["lane"],
+            "blocked": True,
+        }
+    model = APPROVED_LOCAL_MODEL
     routing_reason = "financial_math_policy" if requires_financial_reasoning(query) else ""
 
     if financial and level != "fresh":
@@ -900,6 +2254,29 @@ def evaluate_query_stream(
             "streamed": False,
         }
 
+    import_gap = try_import_gap_reply(query, readiness)
+    if import_gap:
+        text = import_gap["text"]
+        append_lane_history(
+            store,
+            lane="local",
+            model="import-gaps",
+            query=query,
+            intent=import_gap.get("intent", "import:gaps"),
+        )
+        return {
+            "ok": True,
+            "text": text,
+            "message": {"content": text},
+            "model": "local-import-gaps",
+            "readinessLevel": level,
+            "intent": import_gap.get("intent", "import:gaps"),
+            "softStale": soft_stale,
+            "resolvedLane": "local",
+            "routingReason": "import_gap_policy",
+            "streamed": False,
+        }
+
     chat_messages, intent, soft_stale, level = build_chat_messages(
         query=query,
         readiness=readiness,
@@ -907,7 +2284,12 @@ def evaluate_query_stream(
         messages=messages,
     )
 
-    result = call_ollama_chat(model=model, messages=chat_messages, stream=True, options=options)
+    chat_messages = inject_deliverable_messages(chat_messages, query)
+    opts = options_for_query(query, options)
+    fmt = _DELIVERABLE_JSON_SCHEMA if is_deliverable_request(query) else None
+    result = call_ollama_chat(
+        model=model, messages=chat_messages, stream=True, options=opts, format=fmt
+    )
     if not result.get("ok"):
         return {
             "ok": False,
@@ -917,7 +2299,7 @@ def evaluate_query_stream(
         }
 
     body = result.get("body") or {}
-    text = extract_ollama_message_text(body.get("message") or {})
+    text = extract_ollama_message_text(body.get("message") or {}, query=query)
     if level != "fresh" and intent == "transactional":
         text = redact_financial_numbers(text)
     elif level != "fresh" and soft_stale and intent in ("analytical", "clinical", "insurance_ops"):
@@ -961,11 +2343,18 @@ def evaluate_query_sse_frames(
         requested_lane or route_by_complexity(query, shift_context=shift_context, store=store)
     )
     resolved = resolve_lane(lane_key)
-    model = str(model or resolved["model"])
+    model_gate = enforce_approved_local_model(model)
+    if not model_gate.get("ok"):
+        yield f"event: error\ndata: {json.dumps({'error': 'model_not_allowed', 'approvedModel': APPROVED_LOCAL_MODEL, 'requestedModel': model_gate.get('requestedModel'), 'done': True})}\n\n"
+        return
+    model = APPROVED_LOCAL_MODEL
 
     if financial and level != "fresh" and (intent == "transactional" or not soft_stale):
         yield f"event: error\ndata: {json.dumps({'error': 'HAL_UNAVAILABLE_STALE_DATA', 'blocked': True, 'done': True})}\n\n"
         return
+
+    # Phase 3 TTFT: emit typing meta before local policy / Ollama so clients can paint immediately.
+    yield f"event: meta\ndata: {json.dumps({'lane': resolved['lane'], 'model': model, 'done': False, 'status': 'typing', 'ttft': True})}\n\n"
 
     local = try_local_policy_reply(query)
     if local:
@@ -976,18 +2365,55 @@ def evaluate_query_sse_frames(
         yield f"data: {json.dumps({'token': '', 'done': True})}\n\n"
         return
 
+    import_gap = try_import_gap_reply(query, readiness)
+    if import_gap:
+        text = import_gap["text"]
+        append_lane_history(
+            store,
+            lane="local",
+            model="import-gaps",
+            query=query,
+            intent=import_gap.get("intent", "import:gaps"),
+        )
+        yield f"event: meta\ndata: {json.dumps({'lane': 'local', 'model': 'local-import-gaps', 'done': False})}\n\n"
+        yield f"data: {json.dumps({'token': text, 'done': False})}\n\n"
+        yield f"data: {json.dumps({'token': '', 'done': True})}\n\n"
+        return
+
     chat_messages, intent, soft_stale, level = build_chat_messages(
         query=query,
         readiness=readiness,
         system_prompt=system_prompt,
         messages=messages,
     )
+    # Deliverable asks: aggregate first so JSON→markdown normalize runs before SSE emit.
+    if is_deliverable_request(query):
+        result = evaluate_query(
+            query=query,
+            readiness=readiness,
+            model=model,
+            system_prompt=system_prompt,
+            messages=messages,
+            options=options,
+            shift_context=shift_context,
+            requested_lane=requested_lane,
+            store=store,
+        )
+        if not result.get("ok"):
+            yield f"event: error\ndata: {json.dumps({'error': result.get('error'), 'done': True})}\n\n"
+            return
+        text = str(result.get("text") or "")
+        yield f"event: meta\ndata: {json.dumps({'lane': result.get('resolvedLane') or resolved['lane'], 'model': result.get('model') or model, 'done': False, 'deliverable': True})}\n\n"
+        yield f"data: {json.dumps({'token': text, 'done': False})}\n\n"
+        yield f"data: {json.dumps({'token': '', 'done': True})}\n\n"
+        return
+
     append_lane_history(store, lane=resolved["lane"], model=model, query=query, intent=intent)
     yield from iter_ollama_sse_tokens(
         model=model,
         messages=chat_messages,
         lane=resolved["lane"],
-        options=options,
+        options=options_for_query(query, options),
     )
 
 
@@ -1011,7 +2437,17 @@ def evaluate_query(
         requested_lane or route_by_complexity(query, shift_context=shift_context, store=store)
     )
     resolved = resolve_lane(lane_key)
-    model = str(model or resolved["model"])
+    model_gate = enforce_approved_local_model(model)
+    if not model_gate.get("ok"):
+        return {
+            "ok": False,
+            "error": "model_not_allowed",
+            "approvedModel": APPROVED_LOCAL_MODEL,
+            "requestedModel": model_gate.get("requestedModel"),
+            "resolvedLane": resolved["lane"],
+            "blocked": True,
+        }
+    model = APPROVED_LOCAL_MODEL
     routing_reason = "financial_math_policy" if requires_financial_reasoning(query) else ""
 
     if financial and level != "fresh":
@@ -1050,6 +2486,24 @@ def evaluate_query(
             "routingReason": "local_policy",
         }
 
+    import_gap = try_import_gap_reply(query, readiness)
+    if import_gap:
+        text = import_gap["text"]
+        append_lane_history(
+            store, lane="local", model="import-gaps", query=query, intent=import_gap.get("intent", "import:gaps")
+        )
+        return {
+            "ok": True,
+            "text": text,
+            "message": {"content": text},
+            "model": "local-import-gaps",
+            "readinessLevel": level,
+            "intent": import_gap.get("intent", "import:gaps"),
+            "softStale": soft_stale,
+            "resolvedLane": "local",
+            "routingReason": "import_gap_policy",
+        }
+
     chat_messages, intent, soft_stale, level = build_chat_messages(
         query=query,
         readiness=readiness,
@@ -1057,18 +2511,70 @@ def evaluate_query(
         messages=messages,
     )
 
-    result = call_ollama_chat(model=model, messages=chat_messages, stream=False, options=options)
+    chat_messages = inject_deliverable_messages(chat_messages, query)
+    opts = options_for_query(query, options)
+    fmt = _DELIVERABLE_JSON_SCHEMA if is_deliverable_request(query) else None
+    # Phase 5: 180s ceiling — analytical reason21b prompts can exceed 60s on Q4_K_M.
+    timeout = float(os.environ.get("NR2_OLLAMA_CHAT_TIMEOUT") or "180")
+    result = call_ollama_chat(
+        model=model,
+        messages=chat_messages,
+        stream=False,
+        options=opts,
+        format=fmt,
+        timeout=timeout,
+    )
     if not result.get("ok"):
         return {
             "ok": False,
             "error": result.get("error"),
             "detail": result.get("detail"),
             "resolvedLane": resolved["lane"],
+            "model": model,
+            "intent": intent,
+            "routingReason": routing_reason or None,
         }
 
     body = result.get("body") or {}
     message = body.get("message") or {}
-    text = extract_ollama_message_text(message)
+    text = extract_ollama_message_text(message, query=query)
+    diag = dict(result.get("diag") or {})
+
+    # Qwen3 / think-only race: non-stream sometimes returns empty content — retry once via stream.
+    if not str(text or "").strip():
+        retry = call_ollama_chat(
+            model=model,
+            messages=chat_messages,
+            stream=True,
+            options=opts,
+            format=fmt,
+            timeout=timeout,
+        )
+        diag["emptyRetryStream"] = True
+        diag["retryOk"] = bool(retry.get("ok"))
+        if retry.get("ok"):
+            body = retry.get("body") or {}
+            message = body.get("message") or {}
+            text = extract_ollama_message_text(message, query=query)
+            diag["retryContentChars"] = len(str(text or ""))
+        else:
+            diag["retryError"] = retry.get("error")
+
+    if not str(text or "").strip():
+        return {
+            "ok": False,
+            "error": "empty_response",
+            "detail": diag,
+            "text": "",
+            "message": {"content": ""},
+            "model": model,
+            "readinessLevel": level,
+            "intent": intent,
+            "softStale": soft_stale,
+            "resolvedLane": resolved["lane"],
+            "routingReason": routing_reason or None,
+        }
+
     if level != "fresh" and intent == "transactional":
         text = redact_financial_numbers(text)
     elif level != "fresh" and soft_stale and intent in ("analytical", "clinical", "insurance_ops"):
@@ -1090,4 +2596,5 @@ def evaluate_query(
         "softStale": soft_stale,
         "resolvedLane": resolved["lane"],
         "routingReason": routing_reason or None,
+        "diag": diag or None,
     }

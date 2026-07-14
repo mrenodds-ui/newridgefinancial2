@@ -1,5 +1,6 @@
 # Phase X1 — Register NR2 Task Scheduler jobs (Moonshot REAUDIT6).
-# Prefer Run as Administrator. Resolves python + repo paths automatically.
+# Prefer Run as Administrator. Resolves pythonw + repo paths automatically.
+# Uses pythonw.exe (not python.exe) so Task Scheduler does not flash a console.
 #
 # Usage:
 #   .\scripts\nr2_register_scheduled_tasks.ps1 -WhatIf
@@ -13,14 +14,43 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Resolve-HiddenPythonExe {
+    param([string]$Preferred = "")
+
+    if ($Preferred) {
+        if ($Preferred -match '(?i)[\\/]python\.exe$') {
+            $asW = $Preferred -replace '(?i)python\.exe$', 'pythonw.exe'
+            if (Test-Path -LiteralPath $asW) { return $asW }
+        }
+        if (Test-Path -LiteralPath $Preferred) { return $Preferred }
+    }
+
+    $candidates = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python312\pythonw.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python313\pythonw.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python311\pythonw.exe"
+    )
+    foreach ($exe in $candidates) {
+        if (Test-Path -LiteralPath $exe) { return $exe }
+    }
+
+    $cmdW = Get-Command pythonw -ErrorAction SilentlyContinue
+    if ($cmdW) { return $cmdW.Source }
+
+    $cmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($cmd) {
+        $asW = $cmd.Source -replace '(?i)python\.exe$', 'pythonw.exe'
+        if (Test-Path -LiteralPath $asW) { return $asW }
+        return $cmd.Source
+    }
+
+    return "pythonw.exe"
+}
+
 if (-not $RepoRoot) {
     $RepoRoot = Split-Path -Parent $PSScriptRoot
 }
-if (-not $PythonExe) {
-    $cmd = Get-Command python -ErrorAction SilentlyContinue
-    if ($cmd) { $PythonExe = $cmd.Source }
-    else { $PythonExe = "python.exe" }
-}
+$PythonExe = Resolve-HiddenPythonExe -Preferred $PythonExe
 
 $importScript = Join-Path $RepoRoot "scripts\run_nr2_import_cron.py"
 $auditScript = Join-Path $RepoRoot "scripts\run_nr2_scheduled_audit.py"

@@ -1,0 +1,2208 @@
+{
+  "pages": {
+    "financial": {
+      "n": 35,
+      "by": {
+        "working": 31,
+        "gap": 4
+      },
+      "widgets": [
+        {
+          "id": "deep-audit-status",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Ready \u00b7 period=2026-07 \u00b7 prod rows=1 \u00b7 flag=ON",
+          "title": ""
+        },
+        {
+          "id": "production-vs-payroll",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "current: prod=7759.0 payroll=0 ratio=0.0",
+          "title": ""
+        },
+        {
+          "id": "unified-db-snapshot",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "2026-07: prod=44735.0 coll=30626.42 qbExp=0",
+          "title": ""
+        },
+        {
+          "id": "import-quarantine-panel",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "No quarantined imports",
+          "title": ""
+        },
+        {
+          "id": "financial-command-strip",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "financial-vital-signs",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "collections-gauge",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "financial-dual-trend",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "provider-hbar",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ar-aging-chart",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "revenue-composition",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "financial-ops-strip",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "collections-note",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Guidance",
+          "title": ""
+        },
+        {
+          "id": "ebitda-station",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ebitda-variance-bar",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "expense-treemap",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": "Expense Concentration"
+        },
+        {
+          "id": "procedure-profitability-scatter",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Procedure Profitability"
+        },
+        {
+          "id": "treatment-conversion-pipeline",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Treatment Conversion"
+        },
+        {
+          "id": "cash-flow-bridge",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Cash Flow Bridge \u2014 30 Day"
+        },
+        {
+          "id": "qb-payroll-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "0 payroll row(s) imported (SSN redacted)",
+          "title": ""
+        },
+        {
+          "id": "qb-ap-aging",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "0 AP row(s)",
+          "title": ""
+        },
+        {
+          "id": "softdent-production-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "62 production row(s) imported",
+          "title": ""
+        },
+        {
+          "id": "softdent-case-acceptance-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "1 case acceptance row(s)",
+          "title": ""
+        },
+        {
+          "id": "softdent-aging-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "4 aging row(s) \u2192 bucket totals",
+          "title": ""
+        },
+        {
+          "id": "softdent-scheduling-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "1 schedule row(s)",
+          "title": ""
+        },
+        {
+          "id": "qb-net-profit-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "Net profit source available for unified ingest",
+          "title": ""
+        },
+        {
+          "id": "v-case-acceptance",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "2026-07: rate=1.0 planned=2.0 accepted=2.0 (low)",
+          "title": ""
+        },
+        {
+          "id": "v-patient-aging",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "current: totalAR=49111.03 0-30=42965.29 31-60=3028.43 61-90=0.0 90+=3117.31",
+          "title": ""
+        },
+        {
+          "id": "v-scheduling-efficiency",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "current: fill=None accuracy=\u2014 appts=28",
+          "title": ""
+        },
+        {
+          "id": "import-dq-status",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Bundle DQ clean (or empty \u2014 empty \u2260 $0)",
+          "title": ""
+        },
+        {
+          "id": "import-cron-status",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Enabled \u00b7 interval 300.0s",
+          "title": ""
+        },
+        {
+          "id": "dashboard-layout-status",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Layout ON \u00b7 financial grid=6 \u00b7 theme=starship-bridge",
+          "title": ""
+        },
+        {
+          "id": "ai-lane-health",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "escalate30b: p50=0.0ms err=0/1 \u00b7 chat8b: p50=8761.2ms err=0/1",
+          "title": ""
+        },
+        {
+          "id": "data-freshness-status",
+          "status": "warn",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "softdent=fresh \u00b7 quickbooks=fresh \u00b7 era=stale \u00b7 unified=fresh",
+          "title": ""
+        },
+        {
+          "id": "ar-aging-pareto",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        }
+      ]
+    },
+    "taxes": {
+      "n": 9,
+      "by": {
+        "working": 8,
+        "gap": 1
+      },
+      "widgets": [
+        {
+          "id": "taxes-period-scrubber",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "tax-year-status",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "2026-06 \u00b7 Book connected \u00b7 $18,046",
+          "title": ""
+        },
+        {
+          "id": "tax-open-planning",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Open planning estimates",
+          "title": ""
+        },
+        {
+          "id": "tax-disclaimer",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "PLANNING ESTIMATES ONLY \u2014 NOT FOR FILING",
+          "title": ""
+        },
+        {
+          "id": "tax-bridge-waterfall",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "c0-import-guidance",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "2/3 checks OK",
+          "title": ""
+        },
+        {
+          "id": "ebitda-variance-bar",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "tax-planning-table",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "tax-calendar-main",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        }
+      ]
+    },
+    "softdent": {
+      "n": 31,
+      "by": {
+        "gap": 7,
+        "working": 24
+      },
+      "widgets": [
+        {
+          "id": "softdent-collections-gap",
+          "status": "empty",
+          "gapCode": "ERA_835_REQUIRED",
+          "state": "gap",
+          "msg": "Ins Plan $0 (SoftDent truth) \u00b7 Insurance Collections: ERA Required \u00b7 2026-07",
+          "title": ""
+        },
+        {
+          "id": "softdent-production-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "62 production row(s) imported",
+          "title": ""
+        },
+        {
+          "id": "softdent-aging-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "4 aging row(s) \u2192 bucket totals",
+          "title": ""
+        },
+        {
+          "id": "era835-ingest-gap",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "2026-07: UNKNOWN_PAYER paid=None claims=1",
+          "title": ""
+        },
+        {
+          "id": "softdent-outstanding-claims-bridge",
+          "status": "empty",
+          "gapCode": "CLAIMS_AR_RECONCILE_MISMATCH",
+          "state": "gap",
+          "msg": "CLAIMS_AR_RECONCILE_MISMATCH \u00b7 claims=61 \u00b7 unnamed=0",
+          "title": ""
+        },
+        {
+          "id": "softdent-insco-ada-estimates",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "InsCo x ADA estimates \u00b7 published=163 \u00b7 high=14 \u00b7 default=exact only",
+          "title": ""
+        },
+        {
+          "id": "softdent-insco-ada-catalog",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Catalog \u00b7 staff grid=10008 (72 cos \u00d7 139 ADAs) \u00b7 spine=2274 \u00b7 exact usable=46 \u00b7 no_settlement pad=8637 \u00b7 company master likely_active=0",
+          "title": ""
+        },
+        {
+          "id": "softdent-tp-estimate-chips",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Tx plan estimates \u00b7 spine exact usable=46 \u00b7 gold ready=0 \u00b7 catalog cells=2274",
+          "title": ""
+        },
+        {
+          "id": "softdent-gold-payment-pipeline",
+          "status": "empty",
+          "gapCode": "GOLD_CSV_MISSING",
+          "state": "gap",
+          "msg": "Gold CSV missing \u2014 SoftDent Insurance Payment Analysis not dropped (empty != $0; display=\u2014 not $0.00)",
+          "title": ""
+        },
+        {
+          "id": "softdent-gold-csv-drop-ops",
+          "status": "empty",
+          "gapCode": "GOLD_CSV_MISSING",
+          "state": "gap",
+          "msg": "v19: Print Preview only for Insurance Income \u2014 visual audit does not create gold lines (gapCode=GOLD_CSV_MISSING; empty != $0)",
+          "title": ""
+        },
+        {
+          "id": "softdent-gold-drop-facilitation-hal10606",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": "Gold CSV drop facilitation (HAL-10606)"
+        },
+        {
+          "id": "softdent-pwimages-eligibility-hal10607",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": "PWImages eligibility / remittance warehouse (HAL-10607)"
+        },
+        {
+          "id": "softdent-gold-era-settlement-hal10608",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": "Gold \u222a ERA settlement hydration (HAL-10608)"
+        },
+        {
+          "id": "softdent-print-preview-audit",
+          "status": "ok",
+          "gapCode": "GOLD_CSV_MISSING",
+          "state": "gap",
+          "msg": "Visual audit recorded \u00b7 last-page total [visual] $641,566.92 \u00b7 gap still GOLD_CSV_MISSING (not gold lines; gold=\u2014)",
+          "title": ""
+        },
+        {
+          "id": "softdent-ui-honesty",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Honesty audit pass=9 fail=0",
+          "title": ""
+        },
+        {
+          "id": "softdent-visual-ledger-recon",
+          "status": "warn",
+          "gapCode": "GOLD_CSV_MISSING",
+          "state": "gap",
+          "msg": "Variance $52,389.57 (100.00%) exceeds threshold \u2014 flag only; do not invent gold lines",
+          "title": ""
+        },
+        {
+          "id": "stale-import-alert",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Fresh enough",
+          "title": ""
+        },
+        {
+          "id": "sd-vitals-strip",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "sd-operatory-status",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Schedule loaded",
+          "title": ""
+        },
+        {
+          "id": "sd-prod-trend",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "import-health-timeline",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "operatory-util-trend",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "provider-hbar",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "softdent-case-acceptance-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "1 case acceptance row(s)",
+          "title": ""
+        },
+        {
+          "id": "softdent-scheduling-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "1 schedule row(s)",
+          "title": ""
+        },
+        {
+          "id": "v-case-acceptance",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "2026-07: rate=1.0 planned=2.0 accepted=2.0 (low)",
+          "title": ""
+        },
+        {
+          "id": "v-patient-aging",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "current: totalAR=49111.03 0-30=42965.29 31-60=3028.43 61-90=0.0 90+=3117.31",
+          "title": ""
+        },
+        {
+          "id": "v-scheduling-efficiency",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "current: fill=None accuracy=\u2014 appts=28",
+          "title": ""
+        },
+        {
+          "id": "softdent-patient-dossier",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "softdent-account-tx-coverage",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "549,564 account transactions (1996\u20132026) \u00b7 multi-year ledger live",
+          "title": ""
+        },
+        {
+          "id": "softdent-transaction-ledger",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        }
+      ]
+    },
+    "quickbooks": {
+      "n": 9,
+      "by": {
+        "working": 9
+      },
+      "widgets": [
+        {
+          "id": "qb-net-profit-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "Net profit source available for unified ingest",
+          "title": ""
+        },
+        {
+          "id": "qb-payroll-gap",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "0 payroll row(s) imported (SSN redacted)",
+          "title": ""
+        },
+        {
+          "id": "qb-vitals-strip",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "qb-pl-summary",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "2026-06 \u00b7 Net $18,046",
+          "title": ""
+        },
+        {
+          "id": "qb-expense-breakdown",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "qb-expense-hbar",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-categorize-assist",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "expense-treemap",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": "Expense Concentration"
+        },
+        {
+          "id": "qb-ap-aging",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "0 AP row(s)",
+          "title": ""
+        }
+      ]
+    },
+    "ar": {
+      "n": 13,
+      "by": {
+        "working": 11,
+        "gap": 2
+      },
+      "widgets": [
+        {
+          "id": "collectible-remainder",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ar-heatmap-grid",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ar-vitals-strip",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ar-aging-chart",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ar-follow-up",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Guidance",
+          "title": ""
+        },
+        {
+          "id": "ar-waterfall",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ar-aging-outlook",
+          "status": "partial",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ar-forecast-trend",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "collection-bullet",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "collections-gauge",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "unapplied-credit-float",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Unapplied Float"
+        },
+        {
+          "id": "ar-collection-task-list",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ar-aging-pareto",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        }
+      ]
+    },
+    "claims": {
+      "n": 18,
+      "by": {
+        "gap": 6,
+        "working": 12
+      },
+      "widgets": [
+        {
+          "id": "import-health-monitor",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "DEF-001 ERA_835_REQUIRED: SoftDent collections/daysheet gap (2026-07)",
+          "title": ""
+        },
+        {
+          "id": "claims-executive-strip",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "claims-status-bar",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "claims-aging-mini-trend",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "claims-aging-exposure",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "claims-critical-actions",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "claims-top-critical",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "claims-pipeline-summary",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "claims-open-kanban",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Open full Kanban / table workbench",
+          "title": ""
+        },
+        {
+          "id": "claims-risk-analytics",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "claims-era-gauge",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ins-patient-split",
+          "status": "empty",
+          "gapCode": "ERA_835_REQUIRED",
+          "state": "gap",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "denial-pareto",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Denial Pareto"
+        },
+        {
+          "id": "preauth-aging-lanes",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Pre-Auth Lanes"
+        },
+        {
+          "id": "verification-matrix",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Verification Matrix \u2014 Next 3D"
+        },
+        {
+          "id": "eob-posting-backlog",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "clinical-signoff-queue",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "claim-status-lanes",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        }
+      ]
+    },
+    "narratives": {
+      "n": 5,
+      "by": {
+        "working": 3,
+        "gap": 2
+      },
+      "widgets": [
+        {
+          "id": "narr-clinical-notes",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "narr-template-library",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "narr-workflow",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "Empty",
+          "title": ""
+        },
+        {
+          "id": "kpi-data-pending",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "1 module(s) pending",
+          "title": ""
+        },
+        {
+          "id": "narratives-ai-insight",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        }
+      ]
+    },
+    "documents": {
+      "n": 5,
+      "by": {
+        "working": 4,
+        "gap": 1
+      },
+      "widgets": [
+        {
+          "id": "docs-queue",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "docs-previews",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "docs-intake-status",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Queue active",
+          "title": ""
+        },
+        {
+          "id": "tax-returns-library",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "claim-status-lanes",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        }
+      ]
+    },
+    "library": {
+      "n": 3,
+      "by": {
+        "working": 1,
+        "gap": 2
+      },
+      "widgets": [
+        {
+          "id": "lib-previews",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "lib-storage",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "Not indexed",
+          "title": ""
+        },
+        {
+          "id": "kpi-data-pending",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "1 module(s) pending",
+          "title": ""
+        }
+      ]
+    },
+    "office-manager": {
+      "n": 34,
+      "by": {
+        "working": 22,
+        "gap": 12
+      },
+      "widgets": [
+        {
+          "id": "om-daily-huddle",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "operatory-util-trend",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "om-open-operatory",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Open operatory detail",
+          "title": ""
+        },
+        {
+          "id": "import-health-monitor",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "DEF-001 ERA_835_REQUIRED: SoftDent collections/daysheet gap (2026-07)",
+          "title": ""
+        },
+        {
+          "id": "import-freshness",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Imports fresh \u00b7 17/19",
+          "title": ""
+        },
+        {
+          "id": "om-vitals-strip",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "om-readiness",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Partial",
+          "title": ""
+        },
+        {
+          "id": "om-priorities",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "3 item(s)",
+          "title": ""
+        },
+        {
+          "id": "om-import-mode",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "direct-first",
+          "title": ""
+        },
+        {
+          "id": "patient-responsibility-calc",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "payer-donut",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "ins-patient-split",
+          "status": "empty",
+          "gapCode": "ERA_835_REQUIRED",
+          "state": "gap",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "eob-posting-backlog",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "clinical-signoff-queue",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "payer-change-alerts",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "policy-changelog",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "payer-contact-admin",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-structured-remember",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Remember with category",
+          "title": ""
+        },
+        {
+          "id": "operatory-util-board",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": "Operatory Board"
+        },
+        {
+          "id": "weekly-schedule-list",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": "This Week's Schedule (Mon\u2013Thu)"
+        },
+        {
+          "id": "recall-gauge",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Recall Status"
+        },
+        {
+          "id": "treatment-conversion-pipeline",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Treatment Conversion"
+        },
+        {
+          "id": "verification-matrix",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Verification Matrix \u2014 Next 3D"
+        },
+        {
+          "id": "claims-narrative-queue",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": "Claims Needing Narratives"
+        },
+        {
+          "id": "provider-util-7d",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": "Provider Appointments \u2014 7 Day"
+        },
+        {
+          "id": "patient-dossier-card",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Patient Dossier"
+        },
+        {
+          "id": "eligibility-card",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Insurance Eligibility"
+        },
+        {
+          "id": "patient-dossier-mini",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Patient Info"
+        },
+        {
+          "id": "active-treatment-plans",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Treatment Plan Estimates"
+        },
+        {
+          "id": "claim-review-detail",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Claim Review Detail"
+        },
+        {
+          "id": "clinical-notes-summary",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": "Clinical Notes"
+        },
+        {
+          "id": "system-health-matrix",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "office-manager-account-tx-coverage",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "549,564 account transactions (1996\u20132026) \u00b7 multi-year ledger live",
+          "title": ""
+        },
+        {
+          "id": "office-manager-transaction-ledger",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        }
+      ]
+    },
+    "hal": {
+      "n": 15,
+      "by": {
+        "working": 13,
+        "gap": 2
+      },
+      "widgets": [
+        {
+          "id": "hal-import-health",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-ask",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-full-log",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Open full HAL audit / message history",
+          "title": ""
+        },
+        {
+          "id": "hal-program-posture",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Operational",
+          "title": ""
+        },
+        {
+          "id": "hal-suggestion",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Ready",
+          "title": ""
+        },
+        {
+          "id": "hal-mosaic-prod",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-mosaic-coll",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-mosaic-ar",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-mosaic-claims",
+          "status": null,
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-categorize-assist",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-structured-remember",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "Remember with category",
+          "title": ""
+        },
+        {
+          "id": "payer-change-alerts",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-ai-insight",
+          "status": "ok",
+          "gapCode": null,
+          "state": "working",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "hal-recommended-actions",
+          "status": "empty",
+          "gapCode": null,
+          "state": "gap",
+          "msg": "",
+          "title": ""
+        },
+        {
+          "id": "unified-db-snapshot",
+          "status": "ok",
+          "gapCode": "OK",
+          "state": "working",
+          "msg": "2026-07: prod=44735.0 coll=30626.42 qbExp=0",
+          "title": ""
+        }
+      ]
+    }
+  },
+  "broken": [],
+  "gap": [
+    {
+      "page": "financial",
+      "id": "procedure-profitability-scatter",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Procedure Profitability"
+    },
+    {
+      "page": "financial",
+      "id": "treatment-conversion-pipeline",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Treatment Conversion"
+    },
+    {
+      "page": "financial",
+      "id": "cash-flow-bridge",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Cash Flow Bridge \u2014 30 Day"
+    },
+    {
+      "page": "financial",
+      "id": "data-freshness-status",
+      "status": "warn",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "softdent=fresh \u00b7 quickbooks=fresh \u00b7 era=stale \u00b7 unified=fresh",
+      "title": ""
+    },
+    {
+      "page": "taxes",
+      "id": "c0-import-guidance",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "2/3 checks OK",
+      "title": ""
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-collections-gap",
+      "status": "empty",
+      "gapCode": "ERA_835_REQUIRED",
+      "state": "gap",
+      "msg": "Ins Plan $0 (SoftDent truth) \u00b7 Insurance Collections: ERA Required \u00b7 2026-07",
+      "title": ""
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-outstanding-claims-bridge",
+      "status": "empty",
+      "gapCode": "CLAIMS_AR_RECONCILE_MISMATCH",
+      "state": "gap",
+      "msg": "CLAIMS_AR_RECONCILE_MISMATCH \u00b7 claims=61 \u00b7 unnamed=0",
+      "title": ""
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-gold-payment-pipeline",
+      "status": "empty",
+      "gapCode": "GOLD_CSV_MISSING",
+      "state": "gap",
+      "msg": "Gold CSV missing \u2014 SoftDent Insurance Payment Analysis not dropped (empty != $0; display=\u2014 not $0.00)",
+      "title": ""
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-gold-csv-drop-ops",
+      "status": "empty",
+      "gapCode": "GOLD_CSV_MISSING",
+      "state": "gap",
+      "msg": "v19: Print Preview only for Insurance Income \u2014 visual audit does not create gold lines (gapCode=GOLD_CSV_MISSING; empty != $0)",
+      "title": ""
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-print-preview-audit",
+      "status": "ok",
+      "gapCode": "GOLD_CSV_MISSING",
+      "state": "gap",
+      "msg": "Visual audit recorded \u00b7 last-page total [visual] $641,566.92 \u00b7 gap still GOLD_CSV_MISSING (not gold lines; gold=\u2014)",
+      "title": ""
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-visual-ledger-recon",
+      "status": "warn",
+      "gapCode": "GOLD_CSV_MISSING",
+      "state": "gap",
+      "msg": "Variance $52,389.57 (100.00%) exceeds threshold \u2014 flag only; do not invent gold lines",
+      "title": ""
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-patient-dossier",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": ""
+    },
+    {
+      "page": "ar",
+      "id": "ar-forecast-trend",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": ""
+    },
+    {
+      "page": "ar",
+      "id": "unapplied-credit-float",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Unapplied Float"
+    },
+    {
+      "page": "claims",
+      "id": "import-health-monitor",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "DEF-001 ERA_835_REQUIRED: SoftDent collections/daysheet gap (2026-07)",
+      "title": ""
+    },
+    {
+      "page": "claims",
+      "id": "claims-era-gauge",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": ""
+    },
+    {
+      "page": "claims",
+      "id": "ins-patient-split",
+      "status": "empty",
+      "gapCode": "ERA_835_REQUIRED",
+      "state": "gap",
+      "msg": "",
+      "title": ""
+    },
+    {
+      "page": "claims",
+      "id": "denial-pareto",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Denial Pareto"
+    },
+    {
+      "page": "claims",
+      "id": "preauth-aging-lanes",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Pre-Auth Lanes"
+    },
+    {
+      "page": "claims",
+      "id": "verification-matrix",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Verification Matrix \u2014 Next 3D"
+    },
+    {
+      "page": "narratives",
+      "id": "narr-workflow",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "Empty",
+      "title": ""
+    },
+    {
+      "page": "narratives",
+      "id": "kpi-data-pending",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "1 module(s) pending",
+      "title": ""
+    },
+    {
+      "page": "documents",
+      "id": "tax-returns-library",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": ""
+    },
+    {
+      "page": "library",
+      "id": "lib-storage",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "Not indexed",
+      "title": ""
+    },
+    {
+      "page": "library",
+      "id": "kpi-data-pending",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "1 module(s) pending",
+      "title": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "import-health-monitor",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "DEF-001 ERA_835_REQUIRED: SoftDent collections/daysheet gap (2026-07)",
+      "title": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "ins-patient-split",
+      "status": "empty",
+      "gapCode": "ERA_835_REQUIRED",
+      "state": "gap",
+      "msg": "",
+      "title": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "payer-change-alerts",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "recall-gauge",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Recall Status"
+    },
+    {
+      "page": "office-manager",
+      "id": "treatment-conversion-pipeline",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Treatment Conversion"
+    },
+    {
+      "page": "office-manager",
+      "id": "verification-matrix",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Verification Matrix \u2014 Next 3D"
+    },
+    {
+      "page": "office-manager",
+      "id": "patient-dossier-card",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Patient Dossier"
+    },
+    {
+      "page": "office-manager",
+      "id": "eligibility-card",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Insurance Eligibility"
+    },
+    {
+      "page": "office-manager",
+      "id": "patient-dossier-mini",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Patient Info"
+    },
+    {
+      "page": "office-manager",
+      "id": "active-treatment-plans",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Treatment Plan Estimates"
+    },
+    {
+      "page": "office-manager",
+      "id": "claim-review-detail",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Claim Review Detail"
+    },
+    {
+      "page": "office-manager",
+      "id": "clinical-notes-summary",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": "Clinical Notes"
+    },
+    {
+      "page": "hal",
+      "id": "payer-change-alerts",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": ""
+    },
+    {
+      "page": "hal",
+      "id": "hal-recommended-actions",
+      "status": "empty",
+      "gapCode": null,
+      "state": "gap",
+      "msg": "",
+      "title": ""
+    }
+  ],
+  "working": 138,
+  "gap_n": 39,
+  "broken_n": 0,
+  "apis": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "http": 200,
+      "ok": true,
+      "snip": "{\"ok\": true, \"db\": true, \"ollama\": true, \"importPipeline\": true, \"readinessLevel\": \"fresh\", \"backupLastAt\": \"2026-07-13T16:23:28.887541+00:00\", \"encryptionEnabled\": true, \"lastOdbcExtract\": \"2026-07-13T16:13:09+00:00\", \"softdentOdbcMode\": \"sensei+json-fallback"
+    },
+    {
+      "method": "GET",
+      "path": "/api/hal/status",
+      "http": null,
+      "ok": false,
+      "snip": "{\"error\": \"HTTP Error 404: Not Found\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/apex/prodbyada/status",
+      "http": 200,
+      "ok": true,
+      "snip": "{\"ok\": true, \"def\": \"HAL-10609\", \"found\": true, \"path\": \"D:\\\\PRODBYADA.xls\", \"inventedGold\": false, \"writesPaymentLines\": false, \"honesty\": \"PRODBYADA.xls = SoftDent CODE rollups; NOT InsCo\\u00d7ADA gold; empty != $0\", \"reply\": \"PRODBYADA: found D:\\\\PRODBYADA."
+    },
+    {
+      "method": "GET",
+      "path": "/api/apex/print-preview-audit/status",
+      "http": 200,
+      "ok": true,
+      "snip": "{\"ok\": true, \"def\": \"HAL-10590\", \"packageBuildId\": \"hal-10590\", \"logPath\": \"C:\\\\SoftDentFinancialExports\\\\print_preview_audit_log.jsonl\", \"count\": 2, \"rows\": [{\"def\": \"HAL-10590\", \"packageBuildId\": \"hal-10590\", \"reportType\": \"InsuranceIncome\", \"dateRange\": \"20"
+    },
+    {
+      "method": "GET",
+      "path": "/api/apex/pwimages-eligibility/status",
+      "http": 200,
+      "ok": true,
+      "snip": "{\"ok\": true, \"def\": \"HAL-10607\", \"packageBuildId\": \"hal-10607\", \"mineJsonExists\": true, \"mineJson\": \"C:\\\\NewRidgeFamilyFinancial\\\\NewRidgeFinancial2\\\\docs\\\\_pwimages_eob_mine\\\\eob_mine_all.json\", \"eligibilityRows\": 2276, \"remittanceRows\": 16, \"matchedRows\": 21"
+    },
+    {
+      "method": "GET",
+      "path": "/api/apex/import/status",
+      "http": null,
+      "ok": false,
+      "snip": "{\"error\": \"HTTP Error 404: Not Found\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/apex/gold-era-settlement/status",
+      "http": 200,
+      "ok": true,
+      "snip": "{\"ok\": true, \"def\": \"HAL-10608\", \"packageBuildId\": \"hal-10608\", \"gold\": {\"gapCode\": \"GOLD_CSV_MISSING\", \"paymentLines\": 0, \"newestPaymentCsv\": null, \"candidates\": 0, \"matrixCells\": 0, \"cellsNge10\": 0, \"acceptanceGateMet\": false, \"exportPath\": {\"ok\": true, \"pat"
+    },
+    {
+      "method": "GET",
+      "path": "/api/apex/softdent/gold-csv-drop/status",
+      "http": null,
+      "ok": false,
+      "snip": "{\"error\": \"HTTP Error 404: Not Found\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/apex/settlement-matrix/status",
+      "http": null,
+      "ok": false,
+      "snip": "{\"error\": \"HTTP Error 404: Not Found\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/apex/hal/orchestrate",
+      "http": 200,
+      "ok": true,
+      "snip": "{\"ok\": true, \"orchestrator\": true, \"enabled\": true, \"phase\": \"S3\", \"lane\": \"chat8b\", \"classification\": {\"lane\": \"chat8b\", \"reason\": \"program_manager_fast\", \"timeoutMs\": 2000, \"ok\": true}, \"structured\": false, \"requireStructured\": false, \"unifiedContext\": null,"
+    },
+    {
+      "method": "POST",
+      "path": "/api/apex/hal/orchestrate",
+      "http": 200,
+      "ok": true,
+      "snip": "{\"ok\": true, \"orchestrator\": true, \"enabled\": true, \"phase\": \"S3\", \"lane\": \"reason21b\", \"classification\": {\"lane\": \"reason21b\", \"reason\": \"gateway_route_by_complexity\", \"timeoutMs\": 8000, \"model\": \"hal-local:32b\", \"ok\": true}, \"structured\": false, \"requireStru"
+    },
+    {
+      "method": "POST",
+      "path": "/api/apex/prodbyada/run",
+      "http": 200,
+      "ok": true,
+      "snip": "{\"ok\": true, \"def\": \"HAL-10609\", \"packageBuildId\": \"hal-10609\", \"inventedGold\": false, \"writesPaymentLines\": false, \"settlementMatrixHydrated\": false, \"emptyIsNotZero\": true, \"sourceTag\": \"softdent_prodbyada_xls\", \"honesty\": \"SoftDent Production/Transactions b"
+    }
+  ],
+  "app": {
+    "version": "2.0",
+    "schemaVersion": "hal-10576",
+    "importReadiness": {
+      "loadedAt": "2026-07-13T16:22:40.408472+00:00",
+      "ageHours": 0.0,
+      "summary": {
+        "total": 19,
+        "connected": 16,
+        "partial": 2,
+        "stale": 1,
+        "missing": 0,
+        "missingOptional": 0,
+        "notConfigured": 0
+      },
+      "blocking": [],
+      "completeness": {
+        "ok": true,
+        "scorePct": 100.0,
+        "minPct": 85.0,
+        "required": 4,
+        "connected": 4,
+        "gaps": [],
+        "softGaps": [
+          {
+            "datasetKey": "softdent.ar",
+            "status": "stale",
+            "rowCount": 4,
+            "detail": "Dataset is stale (1080 min old; max 120 min).",
+            "severity": "critical"
+          }
+        ]
+      },
+      "datasetGaps": [
+        {
+          "datasetKey": "softdent.ar",
+          "system": "softdent",
+          "status": "stale",
+          "severity": "critical",
+          "detail": "Dataset is stale (1080 min old; max 120 min).",
+          "rowCount": 4
+        }
+      ],
+      "thresholds": {
+        "amberHours": 24,
+        "dailyOpsHours": 24,
+        "taxOpsHours": 168,
+        "postingMaxHours": 24,
+        "operationStaleHours": 24.0
+      },
+      "operationContext": {
+        "dailyOps": {
+          "maxAgeHours": 24,
+          "appliesTo": [
+            "financial",
+            "quickbooks",
+            "claims"
+          ]
+        },
+        "ar": {
+          "maxAgeHours": 24,
+          "appliesTo": [
+            "ar"
+          ]
+        },
+        "tax": {
+          "maxAgeHours": 168,
+          "appliesTo": [
+            "taxes"
+          ]
+        },
+        "posting": {
+          "maxAgeHours": 24,
+          "appliesTo": [
+            "posting_queue",
+            "documents"
+          ]
+        },
+        "activeOperation": null,
+        "effectiveStaleHours": 24.0
+      },
+      "syncState": {
+        "status": "idle",
+        "startedAt": null,
+        "completedAt": null,
+        "error": null,
+        "result": null
+      },
+      "sources": [
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-13T16:22:19.471294+00:00",
+          "level": "fresh",
+          "recordCount": 2,
+          "status": "connected"
+        },
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-13T01:53:08.396875+00:00",
+          "level": "fresh",
+          "recordCount": 60,
+          "status": "connected"
+        },
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-13T16:22:22.959460+00:00",
+          "level": "fresh",
+          "recordCount": 69,
+          "status": "connected"
+        },
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-12T22:23:02.776745+00:00",
+          "level": "stale",
+          "recordCount": 4,
+          "status": "stale"
+        },
+        {
+          "id": "quickbooks",
+          "name": "quickbooks",
+          "lastSyncAt": "2026-07-12T22:13:13.492015+00:00",
+          "level": "fresh",
+          "recordCount": 1,
+          "status": "connected"
+        },
+        {
+          "id": "quickbooks",
+          "name": "quickbooks",
+          "lastSyncAt": "2026-07-12T22:18:29.458274+00:00",
+          "level": "fresh",
+          "recordCount": 1,
+          "status": "connected"
+        },
+        {
+          "id": "quickbooks",
+          "name": "quickbooks",
+          "lastSyncAt": "2026-07-12T22:13:13.493533+00:00",
+          "level": "fresh",
+          "recordCount": 1,
+          "status": "connected"
+        },
+        {
+          "id": "quickbooks",
+          "name": "quickbooks",
+          "lastSyncAt": "2026-07-13T16:21:22.189931+00:00",
+          "level": "fresh",
+          "recordCount": 8,
+          "status": "connected"
+        },
+        {
+          "id": "quickbooks",
+          "name": "quickbooks",
+          "lastSyncAt": "2026-07-12T22:18:40.644313+00:00",
+          "level": "fresh",
+          "recordCount": 1,
+          "status": "connected"
+        },
+        {
+          "id": "quickbooks",
+          "name": "quickbooks",
+          "lastSyncAt": "2026-07-12T22:28:43.312997+00:00",
+          "level": "degraded",
+          "recordCount": 0,
+          "status": "partial"
+        },
+        {
+          "id": "quickbooks",
+          "name": "quickbooks",
+          "lastSyncAt": "2026-07-12T22:28:43.315199+00:00",
+          "level": "degraded",
+          "recordCount": 0,
+          "status": "partial"
+        },
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-13T16:22:19.853873+00:00",
+          "level": "fresh",
+          "recordCount": 1,
+          "status": "connected"
+        },
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-13T15:49:08.970963+00:00",
+          "level": "fresh",
+          "recordCount": 2,
+          "status": "connected"
+        },
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-13T15:49:08.972483+00:00",
+          "level": "fresh",
+          "recordCount": 2,
+          "status": "connected"
+        },
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-13T16:22:20.235375+00:00",
+          "level": "fresh",
+          "recordCount": 1,
+          "status": "connected"
+        },
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-13T16:22:22.171965+00:00",
+          "level": "fresh",
+          "recordCount": 5,
+          "status": "connected"
+        },
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-12T22:18:10.955349+00:00",
+          "level": "fresh",
+          "recordCount": 62,
+          "status": "connected"
+        },
+        {
+          "id": "unknown",
+          "name": "Import source",
+          "lastSyncAt": "2026-07-12T22:18:10.952330+00:00",
+          "level": "fresh",
+          "recordCount": 62,
+          "status": "connected"
+        },
+        {
+          "id": "softdent",
+          "name": "softdent",
+          "lastSyncAt": "2026-07-13T01:53:08.768706+00:00",
+          "level": "fresh",
+          "recordCount": 60,
+          "status": "connected"
+        }
+      ],
+      "ok": true,
+      "level": "fresh",
+      "codes": []
+    }
+  }
+}

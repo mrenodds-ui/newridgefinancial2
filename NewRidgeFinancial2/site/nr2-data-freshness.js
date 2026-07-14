@@ -33,29 +33,90 @@
 
   function render(status) {
     const bar = ensureBar();
-    if (!status || !status.enabled) {
+    if (!status) {
       bar.hidden = true;
       bar.innerHTML = "";
       return;
     }
-    const chips = Array.isArray(status.chips) ? status.chips : [];
+    const chips = Array.isArray(status.chips) ? status.chips.slice() : [];
+    // Moonshot Phase 2 REC-004: surface SoftDent/QB age when stale/critical or import degraded.
+    if (status.importDegraded) {
+      chips.unshift({
+        source: "imports",
+        level: "stale",
+        ageHours: null,
+        label: "Import Degraded",
+      });
+    }
+    const force =
+      status.forceShow ||
+      status.importDegraded ||
+      chips.some((c) => c && (c.level === "critical" || c.level === "stale"));
+    if (!status.enabled && !force) {
+      bar.hidden = true;
+      bar.innerHTML = "";
+      return;
+    }
+    if (!chips.length) {
+      bar.hidden = true;
+      bar.innerHTML = "";
+      return;
+    }
     bar.hidden = false;
     bar.innerHTML = chips
       .map((c) => {
         const level = String((c && c.level) || "unknown");
-        const src = String((c && c.source) || "?");
-        const age = c && c.ageHours != null ? `${Number(c.ageHours).toFixed(1)}h` : "n/a";
-        return `<span class="nr2-freshness-chip nr2-freshness-chip--${level}" title="${src} last import age">${src}: ${age}</span>`;
+        const src = String((c && (c.label || c.source)) || "?");
+        const age =
+          c && c.ageHours != null
+            ? `${Number(c.ageHours).toFixed(1)}h`
+            : c && c.label
+              ? ""
+              : "n/a";
+        const ageBit = age ? `: ${age}` : "";
+        const title =
+          (c && c.alert) ||
+          (level === "critical"
+            ? `${src} older than 7 days — refresh SoftDent/QuickBooks`
+            : `${src} last import age`);
+        return `<span class="nr2-freshness-chip nr2-freshness-chip--${level}" title="${title}">${src}${ageBit}</span>`;
       })
       .join("");
+  }
+
+  function currentPageId() {
+    try {
+      const stage = document.getElementById("apex-stage");
+      if (stage && stage.dataset && stage.dataset.page) return String(stage.dataset.page);
+      const hash = String(location.hash || "").replace(/^#/, "");
+      return String(hash.split("/")[0] || "").toLowerCase();
+    } catch (_) {
+      return "";
+    }
   }
 
   async function refresh() {
     try {
       const res = await fetch(`${apiBase()}/hal/sync-status`, { credentials: "same-origin" });
-      if (!res.ok) return;
-      const body = await res.json();
-      render(body);
+      let body = null;
+      if (res.ok) body = await res.json();
+      // Merge HAL status importDegraded (Phase 1+2 honesty).
+      try {
+        const hs = await fetch(`${apiBase()}/hal/status`, { credentials: "same-origin" });
+        if (hs.ok) {
+          const hal = await hs.json();
+          body = body || { enabled: true, chips: [] };
+          body.importDegraded = !!(hal && hal.importDegraded);
+          if (hal && hal.importDegraded) body.forceShow = true;
+        }
+      } catch (_) {}
+      // hal-10619: always surface freshness strip on Financial / SoftDent money pages
+      const page = currentPageId();
+      if (body && (page === "financial" || page === "softdent")) {
+        body.forceShow = true;
+        body.enabled = true;
+      }
+      if (body) render(body);
     } catch (_) {}
   }
 

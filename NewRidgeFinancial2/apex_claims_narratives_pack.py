@@ -528,7 +528,9 @@ def claims_aging_exposure_widget(
         "id": "claims-aging-exposure",
         "type": "claims-aging-exposure",
         "label": "Claims Aging Exposure",
-        "size": "xl",
+        "size": "m",
+        "maxHeight": 320,
+        "compact": True,
         "columns": cols,
         "showDollars": any_dollars,
         "status": status,
@@ -764,7 +766,11 @@ def claims_era_gauge_widget(meta: dict[str, Any], *, available: bool) -> dict[st
         "value": float(era) if has else None,
         "unmatchedCount": unmatched,
         "status": "ok" if available and has else "empty",
-        "emptyMessage": "ERA match % appears when ERA status is on the SoftDent import (or after NR2 ERA ingest)",
+        "emptyMessage": (
+            "ERA not detected in SoftDent import — drop real .835 under "
+            r"C:\SoftDentFinancialExports\era or enable ERA status on claims export "
+            "(empty ≠ $0; never invent match %)"
+        ),
         "hint": "Import-backed only — never invents match rates."
         + ((" Hidden fields: " + ", ".join(str(m) for m in missing[:4])) if missing else ""),
     }

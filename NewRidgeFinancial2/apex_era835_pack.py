@@ -123,11 +123,15 @@ def _parse_x12_835(raw: str) -> dict[str, Any]:
             current_paid = _parse_money(fields[4] if len(fields) > 4 else None) or 0.0
             total_paid += current_paid
         elif tag == "CAS" and len(fields) > 2:
-            # CAS*GROUP*REASON*AMOUNT...
-            group = fields[1]
-            reason = fields[2]
-            code = f"{group}{reason}" if group and reason else (reason or group or "UNK")
-            adj[str(code)[:16]] += 1
+            # CAS*GROUP*REASON*AMOUNT... → CO-45 style (REC-005 depth)
+            group = str(fields[1] or "").strip().upper()
+            i = 2
+            while i < len(fields):
+                reason = str(fields[i] or "").strip()
+                if group and reason and (reason.isdigit() or re.fullmatch(r"[A-Z0-9]+", reason)):
+                    code = f"{group}-{reason}"
+                    adj[str(code)[:16]] += 1
+                i += 2
         elif tag == "SVC" and len(fields) > 1:
             # SVC*AD:D1110*charge*paid  or HC:D1110
             proc_raw = fields[1]
@@ -453,6 +457,9 @@ def ingest_era835_to_unified(
         "rowsInserted": inserted,
         "format": parsed.get("format"),
         "adjustmentReasons": parsed.get("adjustment_reasons"),
+        "carcBriefs": _enrich_adjustment_reasons_for_hal(
+            parsed.get("adjustment_reasons") if isinstance(parsed.get("adjustment_reasons"), dict) else {}
+        ),
         "phiNote": parsed.get("phiNote"),
         "localOnly": True,
         "softDentWriteBack": False,
@@ -484,6 +491,24 @@ def attach_u1_to_era_ingest(
     return out
 
 
+def _enrich_adjustment_reasons_for_hal(reasons: dict[str, Any] | None) -> dict[str, Any]:
+    """Inject whitelist CARC briefs into ERA pack context; absent codes hard-refuse."""
+    from era835_parser import enrich_codes_with_briefs
+
+    counts: dict[str, Any] = {}
+    if isinstance(reasons, dict):
+        counts = {str(k): v for k, v in reasons.items() if k}
+    pack = enrich_codes_with_briefs(list(counts.keys()))
+    return {
+        "counts": counts,
+        "briefs": pack.get("briefs") or {},
+        "refused": pack.get("refused") or [],
+        "refuseNote": pack.get("refuseNote"),
+        "knownOnly": True,
+        "emptyNotZero": True,
+    }
+
+
 def list_era835_payments(*, limit: int = 24, db_path: Path | None = None) -> list[dict[str, Any]]:
     from apex_unified_db_pack import open_unified
 
@@ -505,6 +530,7 @@ def list_era835_payments(*, limit: int = 24, db_path: Path | None = None) -> lis
                 reasons = json.loads(r["adjustment_reasons"] or "{}")
             except Exception:
                 reasons = {}
+            enriched = _enrich_adjustment_reasons_for_hal(reasons if isinstance(reasons, dict) else {})
             out.append(
                 {
                     "period": r["period"],
@@ -513,6 +539,7 @@ def list_era835_payments(*, limit: int = 24, db_path: Path | None = None) -> lis
                     "totalPaid": r["total_paid"],
                     "claimCount": r["claim_count"],
                     "adjustmentReasons": reasons,
+                    "carcBriefs": enriched,
                     "sourceFile": r["source_file"],
                     "ingestedAt": r["ingested_at"],
                 }
@@ -573,17 +600,619 @@ def era835_widget(bundle: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 def era835_status() -> dict[str, Any]:
+    inbox = scan_era_inbox(ensure_dirs=True)
+    gap = assess_era835_gap()
     return {
         "ok": True,
         "phase": "U1",
+        "buildHint": "hal-10576",
         "enabled": era835_enabled(),
         "flag": "NR2_ERA835",
-        "gapCode": GAP_ERA835_PENDING,
+        "gapCode": gap.get("gapCode") or GAP_ERA835_PENDING,
+        "inbox": inbox,
+        "chipStatus": inbox.get("chipStatus"),
+        "chipLabel": inbox.get("chipLabel"),
         "endpoints": {
             "ingest": "POST /api/apex/hal/era835-ingest",
+            "inboxIngest": "POST /api/apex/hal/era-inbox/ingest",
             "status": "GET /api/apex/hal/era835-status",
+            "inbox": "GET /api/apex/hal/era-inbox/status",
             "list": "GET /api/apex/hal/era835-payments",
         },
-        "note": "Aggregates only (payer/proc/CAS codes). Patient NM1*QC discarded.",
+        "note": "Aggregates only (payer/proc/CAS codes). Patient NM1*QC discarded. Empty inbox ≠ $0.",
+        "honesty": "empty_not_zero",
+        "writeBack": False,
         "refreshedAt": _utc_now(),
     }
+
+
+_ERA_INBOX_SUFFIXES = {".835", ".edi", ".x12", ".txt", ".csv"}
+_ERA_INBOX_NAME_HINTS = ("835", "era", "remit", "eob", "payment")
+
+
+def era_inbox_candidate_roots() -> list[Path]:
+    """Canonical ERA-835 drop-box roots (plus optional NR2_ERA835_INBOX)."""
+    candidates = [
+        Path(r"C:\SoftDentFinancialExports\era"),
+        Path(r"C:\SoftDentReportExports\era"),
+    ]
+    env_inbox = str(os.environ.get("NR2_ERA835_INBOX") or "").strip()
+    if env_inbox:
+        candidates.append(Path(env_inbox).expanduser())
+    # de-dupe while preserving order
+    out: list[Path] = []
+    seen: set[str] = set()
+    for p in candidates:
+        key = str(p).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
+def ensure_era_inbox_dirs(roots: list[Path] | None = None) -> list[dict[str, Any]]:
+    """Create ERA inbox directories when missing (scaffold only — no invented dollars)."""
+    created: list[dict[str, Any]] = []
+    for root in roots or era_inbox_candidate_roots():
+        existed = root.is_dir()
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+            created.append(
+                {
+                    "path": str(root),
+                    "existed": existed,
+                    "ok": root.is_dir(),
+                }
+            )
+        except OSError as exc:
+            created.append(
+                {
+                    "path": str(root),
+                    "existed": existed,
+                    "ok": False,
+                    "error": str(exc),
+                }
+            )
+    return created
+
+
+def _looks_like_era_file(path: Path) -> bool:
+    name = path.name.lower()
+    suf = path.suffix.lower()
+    if suf in _ERA_INBOX_SUFFIXES:
+        return True
+    return any(h in name for h in _ERA_INBOX_NAME_HINTS)
+
+
+def scan_era_inbox(
+    roots: list[Path] | None = None,
+    *,
+    ensure_dirs: bool = True,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """List ERA-835 drop-box files without inventing payment dollars.
+
+    Empty inbox → empty=true, honesty=empty_not_zero (never treat as $0).
+    """
+    candidate_roots = list(roots) if roots is not None else era_inbox_candidate_roots()
+    dir_meta: list[dict[str, Any]] = []
+    if ensure_dirs:
+        dir_meta = ensure_era_inbox_dirs(candidate_roots)
+
+    files: list[dict[str, Any]] = []
+    existing_roots: list[str] = []
+    for root in candidate_roots:
+        if not root.is_dir():
+            continue
+        existing_roots.append(str(root))
+        try:
+            children = sorted(root.iterdir(), key=lambda p: p.stat().st_mtime if p.is_file() else 0, reverse=True)
+        except OSError:
+            continue
+        for child in children:
+            if not child.is_file():
+                continue
+            if not _looks_like_era_file(child):
+                continue
+            try:
+                st = child.stat()
+                files.append(
+                    {
+                        "name": child.name,
+                        "path": str(child),
+                        "sizeBytes": int(st.st_size),
+                        "mtime": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc)
+                        .replace(microsecond=0)
+                        .isoformat()
+                        .replace("+00:00", "Z"),
+                    }
+                )
+            except OSError:
+                continue
+            if len(files) >= max(1, min(int(limit), 200)):
+                break
+        if len(files) >= max(1, min(int(limit), 200)):
+            break
+
+    empty = len(files) == 0
+    if empty:
+        chip_status = "awaiting"
+        chip_label = "Awaiting first 835 drop"
+    else:
+        chip_status = "ready"
+        chip_label = "Ready to ingest"
+
+    return {
+        "ok": True,
+        "mode": "scaffold",
+        "readOnly": True,
+        "localOnly": True,
+        "writeBack": False,
+        "empty": empty,
+        "honesty": "empty_not_zero",
+        "fileCount": len(files),
+        "files": files,
+        "readyToIngest": not empty,
+        "chipStatus": chip_status,
+        "chipLabel": chip_label,
+        "candidateRoots": [str(p) for p in candidate_roots],
+        "existingRoots": existing_roots,
+        "dirs": dir_meta,
+        "hint": (
+            "Drop ERA 835 EDI/CSV into the ERA inbox. "
+            "Empty inbox ≠ $0 insurance; Apex never invents dollars or posts SoftDent."
+        ),
+        "refreshedAt": _utc_now(),
+    }
+
+
+def era_inbox_status(*, ensure_dirs: bool = True) -> dict[str, Any]:
+    """Read-only ERA inbox status for HAL chips / API (hal-10576)."""
+    inbox = scan_era_inbox(ensure_dirs=ensure_dirs)
+    out: dict[str, Any] = {
+        "ok": True,
+        "phase": "hal-10576",
+        "inbox": inbox,
+        "chipStatus": inbox.get("chipStatus"),
+        "chipLabel": inbox.get("chipLabel"),
+        "empty": inbox.get("empty"),
+        "fileCount": inbox.get("fileCount") or 0,
+        "honesty": "empty_not_zero",
+        "writeBack": False,
+        "refreshedAt": _utc_now(),
+    }
+    try:
+        from nr2_browser_security import era_inbox_mutation_contract
+
+        out.update(era_inbox_mutation_contract())
+    except Exception:
+        out.update(
+            {
+                "mutationAuthRequired": True,
+                "mutationHeader": "X-NR2-Session-Token",
+                "mutationAcquireVia": "/api/app-info",
+                "ingestUrl": "/api/apex/hal/era-inbox/ingest",
+                "ingestMethod": "POST",
+                "cliFallback": "scripts/run_era_inbox_ingest_ops.py",
+            }
+        )
+    return out
+
+
+def ingest_era_inbox(
+    roots: list[Path] | None = None,
+    *,
+    db_path: Path | None = None,
+    limit: int = 20,
+    ensure_dirs: bool = True,
+) -> dict[str, Any]:
+    """Scan ERA drop-box and ingest files into unified aggregates (read-only SoftDent).
+
+    Empty inbox → awaiting chip, honesty=empty_not_zero, no invented dollars.
+    Never posts SoftDent / never invents Ins Plan > 0 from Register.
+    """
+    scanned = scan_era_inbox(roots=roots, ensure_dirs=ensure_dirs, limit=limit)
+    if scanned.get("empty"):
+        return {
+            "ok": True,
+            "empty": True,
+            "honesty": "empty_not_zero",
+            "chipStatus": "awaiting",
+            "chipLabel": "Awaiting first 835 drop",
+            "readyToIngest": False,
+            "ingested": [],
+            "fileCount": 0,
+            "writeBack": False,
+            "softDentWriteBack": False,
+            "localOnly": True,
+            "inbox": scanned,
+            "hint": scanned.get("hint"),
+            "refreshedAt": _utc_now(),
+        }
+
+    ingested: list[dict[str, Any]] = []
+    for meta in list(scanned.get("files") or [])[: max(1, min(int(limit), 50))]:
+        path = Path(str(meta.get("path") or ""))
+        if not path.is_file():
+            ingested.append(
+                {
+                    "name": meta.get("name"),
+                    "ok": False,
+                    "error": "missing_file",
+                    "chipStatus": "processing",
+                }
+            )
+            continue
+        result = ingest_era835_to_unified(path=path, db_path=db_path)
+        # Legacy attach hook (aggregate proposal only — no SoftDent write-back).
+        # Skip when U1 already mirrored softdent_era_aggregates (no matches shape).
+        if result.get("ok") and isinstance(result.get("matches"), list):
+            try:
+                from apex_softdent_era_pack import attach_era_to_ingest
+
+                result = attach_era_to_ingest(result, filename=path.name)
+            except Exception as exc:  # noqa: BLE001
+                result = dict(result)
+                result["attachError"] = f"{type(exc).__name__}:{exc}"
+        ingested.append(
+            {
+                "name": path.name,
+                "path": str(path),
+                "ok": bool(result.get("ok")),
+                "period": result.get("period"),
+                "totalPaid": result.get("totalPaid"),
+                "claimCount": result.get("claimCount"),
+                "rowsInserted": result.get("rowsInserted"),
+                "gap": result.get("gap"),
+                "softDentWriteBack": False,
+                "chipStatus": "ready" if result.get("ok") else "processing",
+            }
+        )
+
+    any_ok = any(bool(row.get("ok")) for row in ingested)
+    return {
+        "ok": True,
+        "empty": False,
+        "honesty": "empty_not_zero",
+        "chipStatus": "ready" if any_ok else "processing",
+        "chipLabel": (
+            "ERA inbox ingested (proposal only)"
+            if any_ok
+            else "Processing ERA inbox — parse pending"
+        ),
+        "readyToIngest": True,
+        "ingested": ingested,
+        "fileCount": len(ingested),
+        "writeBack": False,
+        "softDentWriteBack": False,
+        "localOnly": True,
+        "inbox": scanned,
+        "hint": (
+            "ERA 835 ingested to unified aggregates only — staff post in SoftDent. "
+            "Empty ≠ $0; no SoftDent write-back; do not re-export Register hoping Ins Plan > 0."
+        ),
+        "refreshedAt": _utc_now(),
+    }
+
+
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# 10575 — read-only remittance discovery (locate misplaced 835/EDI; never invent $)
+# ---------------------------------------------------------------------------
+
+_ERA_DISCOVERY_SKIP_DIR_NAMES = frozenset(
+    {
+        ".git",
+        ".venv",
+        "venv",
+        "node_modules",
+        "__pycache__",
+        "dashboard_logs",
+        "run_logs",
+        "_derived_archive",
+        "quarantine",
+        "fixtures",
+        "test",
+        "tests",
+        "retired_vite_dashboard_2026-07-09",
+    }
+)
+_ERA_DISCOVERY_SNIFF_MARKERS = (
+    "ST*835",
+    "GS*HP*",
+    "ELECTRONIC REMITTANCE",
+    "HEALTH CARE CLAIM PAYMENT",
+    "835 TRANSACTION",
+)
+_ERA_DISCOVERY_EXCLUDE_NAMES = frozenset(
+    {
+        "daysheet.csv",
+        "daysheet.xls",
+        "daysheet.xlsx",
+        "register.csv",
+        "register.xls",
+        "register.xlsx",
+        "collections.csv",
+        "collections.xls",
+        "operatory_schedule.json",
+    }
+)
+_ERA_DISCOVERY_FALSE_EXTS = frozenset(
+    {
+        ".json",
+        ".tsx",
+        ".ts",
+        ".jsx",
+        ".js",
+        ".py",
+        ".md",
+        ".log",
+        ".html",
+        ".htm",
+        ".css",
+        ".map",
+        ".lock",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".sqlite",
+        ".db",
+        ".pyc",
+        ".xls",
+        ".xlsx",
+        ".doc",
+        ".docx",
+        ".pdf",
+    }
+)
+
+
+def era_discovery_roots() -> list[Path]:
+    """Broad SoftDent/export roots for remittance discovery (read-only)."""
+    candidates = [
+        Path(r"C:\SoftDentFinancialExports"),
+        Path(r"C:\SoftDentReportExports"),
+        Path(r"C:\SoftDent"),
+        Path(r"C:\SoftDent Data"),
+        Path(r"C:\CS SoftDent Software"),
+    ]
+    env_extra = str(os.environ.get("NR2_ERA_DISCOVERY_ROOTS") or "").strip()
+    if env_extra:
+        for part in re.split(r"[;|]", env_extra):
+            part = part.strip()
+            if part:
+                candidates.append(Path(part).expanduser())
+    out: list[Path] = []
+    seen: set[str] = set()
+    for p in candidates:
+        key = str(p).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
+def _inbox_root_keys() -> set[str]:
+    return {str(p).lower() for p in era_inbox_candidate_roots()}
+
+
+def _path_under_inbox(path: Path) -> bool:
+    try:
+        resolved = str(path.resolve()).lower()
+    except OSError:
+        resolved = str(path).lower()
+    for inbox in _inbox_root_keys():
+        if resolved == inbox or resolved.startswith(inbox + os.sep) or resolved.startswith(inbox + "/"):
+            return True
+    return False
+
+
+def _name_has_era_token(name: str) -> bool:
+    """True when remittance tokens appear as path tokens, not UUID/word substrings."""
+    return bool(
+        re.search(
+            r"(?i)(^|[^a-z0-9])(835|era|remit|remittance|eob|x12)([^a-z0-9]|$)",
+            name,
+        )
+    )
+
+
+def _sniff_era_content(path: Path, *, max_bytes: int = 4096) -> str | None:
+    """Return match reason if file head looks like X12 835 / remittance text."""
+    try:
+        if path.stat().st_size <= 0:
+            return None
+        raw = path.read_bytes()[: max(256, min(int(max_bytes), 16384))]
+    except OSError:
+        return None
+    try:
+        text = raw.decode("utf-8", errors="ignore")
+    except Exception:
+        text = raw.decode("latin-1", errors="ignore")
+    upper = text.upper()
+    # Prefer ST*835 / remittance phrases — bare ISA alone is too common in SoftDent CSVs.
+    for marker in _ERA_DISCOVERY_SNIFF_MARKERS:
+        needle = marker.upper().rstrip("*")
+        if needle in upper:
+            return f"sniff:{marker}"
+    if "ISA" in upper and ("ST*835" in upper or "ST835" in upper.replace("*", "") or "GS*HP" in upper):
+        return "sniff:ISA+835"
+    return None
+
+
+def _candidate_match_reason(path: Path) -> str | None:
+    name = path.name.lower()
+    if "synthetic" in name or name.startswith("sample"):
+        return None
+    if "fixture" in str(path).lower():
+        return None
+    if name in _ERA_DISCOVERY_EXCLUDE_NAMES or name.startswith("daysheet") or name.startswith("register_for"):
+        return None
+    if name.startswith("manifest_"):
+        return None
+    suf = path.suffix.lower()
+    if suf in _ERA_DISCOVERY_FALSE_EXTS:
+        return None
+    if suf in {".835", ".edi", ".x12"}:
+        return f"suffix:{suf}"
+    if suf in {".txt", ".csv"}:
+        if _name_has_era_token(name):
+            sniffed = _sniff_era_content(path)
+            return sniffed or f"name+suffix:{suf}"
+        sniffed = _sniff_era_content(path)
+        if sniffed:
+            return sniffed
+        return None
+    if _name_has_era_token(name):
+        sniffed = _sniff_era_content(path)
+        if sniffed:
+            return sniffed
+    return None
+
+def discover_era_candidates(
+    roots: list[Path] | None = None,
+    *,
+    limit: int = 40,
+    max_depth: int = 5,
+    max_files_visited: int = 8000,
+) -> dict[str, Any]:
+    """Read-only walk of SoftDent/export roots for misplaced ERA remittances.
+
+    Does not move/copy/create files, invent dollars, or write SoftDent.
+    Empty result → procurement still required (honesty=empty_not_zero).
+    """
+    candidate_roots = list(roots) if roots is not None else era_discovery_roots()
+    limit_n = max(1, min(int(limit), 200))
+    depth_n = max(1, min(int(max_depth), 8))
+    visit_cap = max(100, min(int(max_files_visited), 50000))
+
+    scanned_roots: list[str] = []
+    missing_roots: list[str] = []
+    candidates: list[dict[str, Any]] = []
+    visited = 0
+    errors: list[str] = []
+
+    for root in candidate_roots:
+        if not root.exists():
+            missing_roots.append(str(root))
+            continue
+        if not root.is_dir():
+            missing_roots.append(str(root))
+            continue
+        scanned_roots.append(str(root))
+        root_depth = len(root.parts)
+        try:
+            for dirpath, dirnames, filenames in os.walk(root):
+                # Prune noisy / huge trees
+                dirnames[:] = [
+                    d
+                    for d in dirnames
+                    if d.lower() not in _ERA_DISCOVERY_SKIP_DIR_NAMES and not d.startswith(".")
+                ]
+                try:
+                    rel_depth = len(Path(dirpath).parts) - root_depth
+                except Exception:
+                    rel_depth = 0
+                if rel_depth > depth_n:
+                    dirnames[:] = []
+                    continue
+                for fname in filenames:
+                    if len(candidates) >= limit_n or visited >= visit_cap:
+                        break
+                    visited += 1
+                    path = Path(dirpath) / fname
+                    if not path.is_file():
+                        continue
+                    reason = _candidate_match_reason(path)
+                    if not reason:
+                        continue
+                    try:
+                        st = path.stat()
+                        size = int(st.st_size)
+                        mtime = (
+                            datetime.fromtimestamp(st.st_mtime, tz=timezone.utc)
+                            .replace(microsecond=0)
+                            .isoformat()
+                            .replace("+00:00", "Z")
+                        )
+                    except OSError as exc:
+                        errors.append(f"{path}: {exc}")
+                        continue
+                    # Skip empty / huge blobs (likely not staff remittances)
+                    if size <= 0 or size > 50 * 1024 * 1024:
+                        continue
+                    candidates.append(
+                        {
+                            "name": path.name,
+                            "path": str(path),
+                            "root": str(root),
+                            "sizeBytes": size,
+                            "mtime": mtime,
+                            "matchReason": reason,
+                            "inInbox": _path_under_inbox(path),
+                        }
+                    )
+                if len(candidates) >= limit_n or visited >= visit_cap:
+                    break
+        except OSError as exc:
+            errors.append(f"{root}: {exc}")
+        if len(candidates) >= limit_n or visited >= visit_cap:
+            break
+
+    # Prefer non-inbox finds first (misplaced), then newest
+    candidates.sort(
+        key=lambda row: (
+            1 if row.get("inInbox") else 0,
+            str(row.get("mtime") or ""),
+        ),
+        reverse=True,
+    )
+    outside = [c for c in candidates if not c.get("inInbox")]
+    in_inbox = [c for c in candidates if c.get("inInbox")]
+    count = len(candidates)
+    if count == 0:
+        chip_status = "none_found"
+        chip_label = "No local ERA files detected; procurement required"
+        hint = (
+            "Scanned SoftDent/export roots — no .835/.edi remittance candidates. "
+            "Staff must download real payer ERA files into C:\\SoftDentFinancialExports\\era. "
+            "Empty ≠ $0; no SoftDent write-back."
+        )
+    else:
+        chip_status = "candidates"
+        chip_label = f"Found {count} candidate remittance{'s' if count != 1 else ''}"
+        hint = (
+            f"Found {count} candidate ERA file(s) "
+            f"({len(outside)} outside inbox, {len(in_inbox)} already in inbox). "
+            "Verify paths, then copy into C:\\SoftDentFinancialExports\\era and Refresh Inbox. "
+            "Discovery is read-only — Apex does not move files or invent dollars."
+        )
+
+    return {
+        "ok": True,
+        "phase": "hal-10576",
+        "mode": "discovery",
+        "readOnly": True,
+        "writeBack": False,
+        "softDentWriteBack": False,
+        "honesty": "empty_not_zero",
+        "empty": count == 0,
+        "candidateCount": count,
+        "outsideInboxCount": len(outside),
+        "inInboxCount": len(in_inbox),
+        "candidates": candidates[:limit_n],
+        "chipStatus": chip_status,
+        "chipLabel": chip_label,
+        "scannedRoots": scanned_roots,
+        "missingRoots": missing_roots,
+        "filesVisited": visited,
+        "errors": errors[:12],
+        "hint": hint,
+        "refreshedAt": _utc_now(),
+    }
+

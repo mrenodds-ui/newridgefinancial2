@@ -152,7 +152,7 @@ class SafeMoneyTests(unittest.TestCase):
 
 class PatientDossierTests(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10498")
+        self.assertEqual(BUILD_ID, "hal-10576")
 
     def test_dossier_empty_money_unknown(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

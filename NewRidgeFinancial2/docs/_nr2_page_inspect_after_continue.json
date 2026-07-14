@@ -1,0 +1,340 @@
+{
+  "summary": {
+    "active": 142,
+    "faulty": 22,
+    "honest": 13
+  },
+  "pages": {
+    "financial": {
+      "active": 32,
+      "faulty": 3
+    },
+    "taxes": {
+      "active": 8,
+      "faulty": 1
+    },
+    "softdent": {
+      "honest": 7,
+      "active": 24
+    },
+    "quickbooks": {
+      "active": 9
+    },
+    "ar": {
+      "active": 11,
+      "faulty": 2
+    },
+    "claims": {
+      "faulty": 3,
+      "active": 12,
+      "honest": 3
+    },
+    "narratives": {
+      "active": 3,
+      "faulty": 2
+    },
+    "documents": {
+      "active": 4,
+      "faulty": 1
+    },
+    "library": {
+      "active": 3
+    },
+    "office-manager": {
+      "active": 22,
+      "faulty": 10,
+      "honest": 2
+    },
+    "hal": {
+      "active": 14,
+      "honest": 1
+    }
+  },
+  "non_active": [
+    {
+      "page": "financial",
+      "id": "procedure-profitability-scatter",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "financial",
+      "id": "treatment-conversion-pipeline",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "financial",
+      "id": "cash-flow-bridge",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "taxes",
+      "id": "c0-import-guidance",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": "2/3 checks OK"
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-collections-gap",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "ERA_835_REQUIRED",
+      "msg": "Ins Plan $0 (SoftDent truth) \u00b7 Insurance Collections: ERA Required \u00b7 2026-07"
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-outstanding-claims-bridge",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "CLAIMS_AR_RECONCILE_MISMATCH",
+      "msg": "CLAIMS_AR_RECONCILE_MISMATCH \u00b7 claims=61 \u00b7 unnamed=0"
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-gold-payment-pipeline",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "GOLD_CSV_MISSING",
+      "msg": "Gold CSV missing \u2014 SoftDent Insurance Payment Analysis not dropped (empty != $0; display=\u2014 not $0.00)"
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-gold-csv-drop-ops",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "GOLD_CSV_MISSING",
+      "msg": "v19: Print Preview only for Insurance Income \u2014 visual audit does not create gold lines (gapCode=GOLD_CSV_MISSING; empty "
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-print-preview-audit",
+      "state": "honest",
+      "status": "ok",
+      "gapCode": "GOLD_CSV_MISSING",
+      "msg": "Visual audit recorded \u00b7 last-page total [visual] $641,566.92 \u00b7 gap still GOLD_CSV_MISSING (not gold lines; gold=\u2014)"
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-visual-ledger-recon",
+      "state": "honest",
+      "status": "warn",
+      "gapCode": "GOLD_CSV_MISSING",
+      "msg": "Variance $52,389.57 (100.00%) exceeds threshold \u2014 flag only; do not invent gold lines"
+    },
+    {
+      "page": "softdent",
+      "id": "softdent-patient-dossier",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "NO_PATIENT_CONTEXT",
+      "msg": ""
+    },
+    {
+      "page": "ar",
+      "id": "ar-forecast-trend",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "ar",
+      "id": "unapplied-credit-float",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "claims",
+      "id": "import-health-monitor",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": "DEF-001 ERA_835_REQUIRED: SoftDent collections/daysheet gap (2026-07)"
+    },
+    {
+      "page": "claims",
+      "id": "claims-era-gauge",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "claims",
+      "id": "ins-patient-split",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "ERA_835_REQUIRED",
+      "msg": ""
+    },
+    {
+      "page": "claims",
+      "id": "denial-pareto",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "ZERO_VOLUME",
+      "msg": ""
+    },
+    {
+      "page": "claims",
+      "id": "preauth-aging-lanes",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "ZERO_VOLUME",
+      "msg": ""
+    },
+    {
+      "page": "claims",
+      "id": "verification-matrix",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "narratives",
+      "id": "narr-workflow",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": "Empty"
+    },
+    {
+      "page": "narratives",
+      "id": "kpi-data-pending",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": "1 module(s) pending"
+    },
+    {
+      "page": "documents",
+      "id": "tax-returns-library",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "import-health-monitor",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": "DEF-001 ERA_835_REQUIRED: SoftDent collections/daysheet gap (2026-07)"
+    },
+    {
+      "page": "office-manager",
+      "id": "ins-patient-split",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "ERA_835_REQUIRED",
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "payer-change-alerts",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "ZERO_VOLUME",
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "recall-gauge",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "treatment-conversion-pipeline",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "verification-matrix",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "patient-dossier-card",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "eligibility-card",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "patient-dossier-mini",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "active-treatment-plans",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "claim-review-detail",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "office-manager",
+      "id": "clinical-notes-summary",
+      "state": "faulty",
+      "status": "empty",
+      "gapCode": null,
+      "msg": ""
+    },
+    {
+      "page": "hal",
+      "id": "payer-change-alerts",
+      "state": "honest",
+      "status": "empty",
+      "gapCode": "ZERO_VOLUME",
+      "msg": ""
+    }
+  ],
+  "app": {
+    "schemaVersion": "hal-10608",
+    "importReadiness": "fresh",
+    "arGaps": []
+  }
+}

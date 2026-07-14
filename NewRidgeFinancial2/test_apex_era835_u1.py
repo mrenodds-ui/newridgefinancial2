@@ -52,7 +52,7 @@ class Era835PhaseU1Tests(unittest.TestCase):
             pass
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10498")
+        self.assertEqual(BUILD_ID, "hal-10576")
 
     def test_flag_default_on(self):
         prev = os.environ.pop("NR2_ERA835", None)
@@ -70,7 +70,7 @@ class Era835PhaseU1Tests(unittest.TestCase):
         self.assertNotIn("JANE", blob)
         self.assertEqual(parsed.get("payer_name"), "DELTA DENTAL OF KANSAS")
         self.assertGreaterEqual(int(parsed.get("claim_count") or 0), 2)
-        self.assertIn("CO45", parsed.get("adjustment_reasons") or {})
+        self.assertIn("CO-45", parsed.get("adjustment_reasons") or {})
 
     def test_parse_csv_discards_patient_column(self):
         parsed = parse_era835_text(SAMPLE_CSV)

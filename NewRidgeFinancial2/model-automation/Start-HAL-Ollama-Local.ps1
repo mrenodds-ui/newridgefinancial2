@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-  Start Ollama bound to 127.0.0.1 only with single-24B GPU env.
+  Start Ollama bound to 127.0.0.1 only with single-32B GPU env.
 
 .DESCRIPTION
   Stops the Ollama tray app / serve processes and starts `ollama serve` with
-  loopback host, MAX_LOADED_MODELS=1, and R9700 visibility. Then pins hal-local:24b.
+  loopback host, MAX_LOADED_MODELS=1, and R9700 visibility. Then pins hal-local:32b.
 #>
 [CmdletBinding()]
 param(
@@ -55,7 +55,7 @@ if ($listen -match "0\.0\.0\.0:11434") {
 }
 
 if (-not $SkipPin) {
-    & (Join-Path $scriptRoot "Keep-HAL-Models-Warm.ps1") -Models @("hal-local:24b")
+    & (Join-Path $scriptRoot "Keep-HAL-Models-Warm.ps1") -Models @("hal-local:32b")
     & $ollama ps
 }
 

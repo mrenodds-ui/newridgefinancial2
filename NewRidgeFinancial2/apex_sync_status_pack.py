@@ -19,8 +19,10 @@ def _utc_now() -> str:
 
 
 def freshness_enabled() -> bool:
-    raw = str(os.getenv("NR2_DATA_FRESHNESS") or "0").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
+    # Moonshot Expert SE Phase 2 (REC-004): default ON so SoftDent/QB age chips surface.
+    # Set NR2_DATA_FRESHNESS=0 to hide the bar when all imports are fresh.
+    raw = str(os.getenv("NR2_DATA_FRESHNESS") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
 
 
 def _parse_ts(raw: Any) -> datetime | None:
@@ -52,11 +54,12 @@ def _age_hours(ts: datetime | None, *, now: datetime | None = None) -> float | N
 
 
 def _level(hours: float | None) -> str:
+    """Import age bands — Moonshot Phase 2: critical when SoftDent/QB age > 7 days."""
     if hours is None:
         return "unknown"
     if hours < 24:
         return "fresh"
-    if hours < 48:
+    if hours < 168:  # 7 days
         return "stale"
     return "critical"
 
@@ -135,10 +138,19 @@ def build_sync_status(*, bundle: dict[str, Any] | None = None, db_path: Path | N
         if order.get(c["level"], 0) > order.get(worst, 0):
             worst = c["level"]
 
+    # Moonshot REC-004: force-enable bar when SoftDent/QB is stale or >7d critical.
+    force_show = worst in ("stale", "critical")
+    softdent_chip = chips[0] if chips else {}
+    softdent_hours = softdent_chip.get("ageHours")
+    if isinstance(softdent_hours, (int, float)) and softdent_hours >= 168:
+        force_show = True
+        softdent_chip["alert"] = "SoftDent export older than 7 days — refresh imports."
+
     return {
         "ok": True,
         "phase": "V0",
-        "enabled": freshness_enabled(),
+        "enabled": bool(freshness_enabled() or force_show),
+        "forceShow": force_show,
         "flag": "NR2_DATA_FRESHNESS",
         "softdent_last_import": chips[0]["lastImport"],
         "qb_last_import": chips[1]["lastImport"],
@@ -148,7 +160,8 @@ def build_sync_status(*, bundle: dict[str, Any] | None = None, db_path: Path | N
         "worstLevel": worst,
         "bundleLoadedAt": loaded.isoformat().replace("+00:00", "Z") if loaded else None,
         "refreshedAt": _utc_now(),
-        "note": "Timestamps only — empty imports stay empty (≠ $0).",
+        "note": "Timestamps only — empty imports stay empty (≠ $0). Critical = age ≥7 days.",
+        "hint": "green <24h · yellow 24h–7d · red ≥7d",
     }
 
 
@@ -161,8 +174,8 @@ def freshness_widget(bundle: dict[str, Any] | None = None) -> dict[str, Any]:
             "size": "full",
             "status": "empty",
             "message": "Freshness OFF",
-            "emptyMessage": "Set NR2_DATA_FRESHNESS=1 to show import age chips.",
-            "hint": "Default OFF per Moonshot V0 until burn-in.",
+            "emptyMessage": "Set NR2_DATA_FRESHNESS=1 (default) to show import age chips.",
+            "hint": "Default ON per Moonshot Expert SE Phase 2; set 0 to hide when fresh.",
         }
     st = build_sync_status(bundle=bundle)
     chips = st.get("chips") or []
@@ -179,7 +192,7 @@ def freshness_widget(bundle: dict[str, Any] | None = None) -> dict[str, Any]:
         "size": "full",
         "status": "ok" if level == "fresh" else ("warn" if level != "unknown" else "empty"),
         "message": msg or "No import timestamps",
-        "hint": "green <24h · yellow 24–48h · red >48h",
+        "hint": "green <24h · yellow 24h–7d · red ≥7d",
         "chips": chips,
         "worstLevel": level,
     }

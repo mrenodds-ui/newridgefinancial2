@@ -180,14 +180,15 @@
       "sourceOwner": "qb_sdk_summary",
       "generatedBy": ["qb_sdk_summary", "qb_sdk_expense_categories"],
       "freshnessMaxMinutes": 1440,
-      "severity": "critical",
+      "severity": "warning",
       "automated": true,
       "requiredFields": ["TotalExpense"],
       "optionalFields": ["Amount", "Expenses", "Expense", "Month", "Period"],
       "fieldAliases": {
         "TotalExpense": ["TotalExpense", "Expenses", "Expense", "total_expense", "Amount", "amount"],
         "Month": ["Month", "month", "Period", "period"]
-      }
+      },
+      "note": "Warning — missing QB expenses shows pending honesty widgets; must not 403 Apex money reads when SoftDent criticals are present."
     },
     "quickbooks.expenseCategories": {
       "system": "quickbooks",
@@ -228,6 +229,51 @@
         "AccountsReceivable": ["AccountsReceivable", "accountsReceivable", "TotalAR", "total_ar"]
       },
       "note": "Generated from QuickBooks SDK probe summary when accounts_receivable or ar_aging is present; manual CSV still accepted."
+    },
+    "quickbooks.payroll": {
+      "system": "quickbooks",
+      "bundleKey": "payroll",
+      "filenames": [
+        "quickbooks_payroll.csv",
+        "quickbooks_payroll_detail.csv",
+        "qb_payroll_detail.csv",
+        "payroll_detail.csv"
+      ],
+      "sourceOwner": null,
+      "generatedBy": [],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": true,
+      "requiredFields": ["Period"],
+      "optionalFields": ["Amount", "GrossPay", "Employee", "Department"],
+      "fieldAliases": {
+        "Period": ["Period", "period", "PayPeriod", "Month"],
+        "Amount": ["Amount", "amount", "GrossPay", "NetPay", "Total"]
+      },
+      "note": "Phase S0 — optional. Missing payroll shows pending honesty widgets (empty ≠ $0); must not fail import completeness / 403 the Apex shell."
+    },
+    "quickbooks.ap": {
+      "system": "quickbooks",
+      "bundleKey": "ap",
+      "filenames": [
+        "quickbooks_ap.csv",
+        "quickbooks_ap_aging.csv",
+        "quickbooks_unpaid_bills.csv",
+        "unpaid_bills.csv",
+        "unpaid_bills_detail.csv"
+      ],
+      "sourceOwner": null,
+      "generatedBy": [],
+      "freshnessMaxMinutes": 1440,
+      "severity": "optional",
+      "automated": true,
+      "requiredFields": ["Vendor"],
+      "optionalFields": ["Balance", "Amount", "DueDate", "BillDate"],
+      "fieldAliases": {
+        "Vendor": ["Vendor", "vendor", "Name", "Payee"],
+        "Balance": ["Balance", "balance", "Amount", "OpenBalance"]
+      },
+      "note": "Phase S0 — optional. Missing AP/unpaid bills shows pending honesty widgets (empty ≠ $0); must not fail import completeness / 403 the Apex shell."
     },
     "softdent.newPatients": {
       "system": "softdent",

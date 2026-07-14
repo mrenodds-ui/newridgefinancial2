@@ -174,7 +174,15 @@ def enrich_collections_gap_with_era(
     """
     out = dict(gap) if isinstance(gap, dict) else {}
     code = str(out.get("gapCode") or "")
-    if code not in {"COLLECTIONS_PENDING", "COLLECTIONS_UNREPORTED", "REGISTER_ONLY", "NO_PERIOD_ROW"}:
+    if code not in {
+        "COLLECTIONS_PENDING",
+        "COLLECTIONS_UNREPORTED",
+        "REGISTER_ONLY",
+        "NO_PERIOD_ROW",
+        "COLLECTIONS_FORMAT_REQUIRED",
+        "ERA_835_REQUIRED",
+        "COLLECTIONS_EXPORT_REQUIRED",
+    }:
         return out
     period = out.get("period")
     era = era_available_for_period(str(period) if period else None, db_path=db_path)
@@ -184,7 +192,13 @@ def enrich_collections_gap_with_era(
     out["eraPaymentTotal"] = era.get("paymentTotal")
     out["eraClaimCount"] = era.get("claimCount")
     out["eraGapCode"] = GAP_ERA_835_AVAILABLE
-    out["gapCode"] = GAP_ERA_835_AVAILABLE
+    # Moonshot hal-10572 — Register Ins Plan $0: keep visible gapCode as REQUIRED
+    # (ERA aggregate presence is eraGapCode=AVAILABLE / eraAvailable only).
+    if out.get("registerInsPlanZero") or str(out.get("collectionsGapCode") or "") == "ERA_835_REQUIRED":
+        out["collectionsGapCode"] = "ERA_835_REQUIRED"
+        out["gapCode"] = "ERA_835_REQUIRED"
+    else:
+        out["gapCode"] = GAP_ERA_835_AVAILABLE
     issues = list(out.get("issues") or [])
     issues.insert(
         0,
@@ -193,7 +207,33 @@ def enrich_collections_gap_with_era(
         "proposal only; post in SoftDent.",
     )
     out["issues"] = issues[:12]
-    out["fixHint"] = FIX_HINT_ERA
+    if out.get("registerInsPlanZero"):
+        out["fixHint"] = (
+            "SoftDent Register reports Ins Plan Collections $0.00 is SoftDent truth — "
+            "proceed with ERA-835 for insurance detail. Do not re-export Register hoping Ins Plan > 0. "
+            "ERA aggregate is proposal-only — staff post in SoftDent. Empty ≠ $0; no SoftDent write-back."
+        )
+        # Moonshot hal-10576 — attach empty-inbox scaffold status (never invents $)
+        try:
+            from apex_era835_pack import scan_era_inbox
+
+            inbox = scan_era_inbox(ensure_dirs=True)
+            out["eraInbox"] = {
+                "empty": inbox.get("empty"),
+                "chipStatus": inbox.get("chipStatus"),
+                "chipLabel": inbox.get("chipLabel"),
+                "fileCount": inbox.get("fileCount") or 0,
+                "honesty": "empty_not_zero",
+                "existingRoots": inbox.get("existingRoots") or [],
+            }
+            # Empty drop-box must not flip REQUIRED → AVAILABLE
+            if inbox.get("empty"):
+                out["gapCode"] = "ERA_835_REQUIRED"
+                out["collectionsGapCode"] = "ERA_835_REQUIRED"
+        except Exception:
+            pass
+    else:
+        out["fixHint"] = FIX_HINT_ERA
     out["honesty"] = "empty_not_zero"
     out["healthy"] = False
     # Never invent SoftDent collections from ERA
@@ -203,8 +243,11 @@ def enrich_collections_gap_with_era(
 
 def format_era_gap_reply(gap: dict[str, Any] | None = None) -> str:
     g = gap or {}
+    code = g.get("collectionsGapCode") or g.get("gapCode")
+    if g.get("registerInsPlanZero"):
+        code = "ERA_835_REQUIRED"
     lines = [
-        f"Collections/ERA status: `{g.get('gapCode')}` — empty ≠ $0; no SoftDent write-back.",
+        f"Collections/ERA status: `{code}` — empty ≠ $0; no SoftDent write-back.",
     ]
     if g.get("eraAvailable"):
         lines.append(
