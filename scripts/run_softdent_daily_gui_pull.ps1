@@ -3,7 +3,13 @@
 # Requires: user logged on (interactive desktop). Do NOT use Session-0 / S4U-only.
 $ErrorActionPreference = 'Stop'
 
-$RepoRoot = if ($env:NEWRIDGE_FINANCIAL_REPO) { $env:NEWRIDGE_FINANCIAL_REPO } else { 'C:\NewRidgeFamilyFinancial' }
+$RepoRoot = if ($env:NEWRIDGE_FINANCIAL_REPO) {
+    $env:NEWRIDGE_FINANCIAL_REPO
+} elseif (Test-Path -LiteralPath 'C:\Users\mreno\newridgefamilyfinancial') {
+    'C:\Users\mreno\newridgefamilyfinancial'
+} else {
+    'C:\NewRidgeFamilyFinancial'
+}
 $Python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
 if (!(Test-Path -LiteralPath $Python)) {
     $Python = 'python.exe'
