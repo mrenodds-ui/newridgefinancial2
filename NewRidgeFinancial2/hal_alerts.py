@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-ALERT_TYPES = ("soft_stale", "high_value_batch", "import_failure")
+ALERT_TYPES = ("soft_stale", "high_value_batch", "import_failure", "period_close")
 
 
 def _utc_now() -> str:
@@ -178,4 +178,40 @@ class AlertMonitor:
                         meta={"level": level},
                     )
                 )
+        try:
+            from daily_closeout import period_close_status
+            from period_close_ops_notify import classify_period_close_trouble, period_close_trouble_line
+
+            close = period_close_status()
+            # Poll path: state stalled/blocked, or last close used attest_only.
+            poll_result = {
+                "status": close.get("status"),
+                "completedAt": close.get("completedAt"),
+                "beamHash": close.get("beamHash"),
+                "fallback": (close.get("lastClose") or {}).get("fallback")
+                if isinstance(close.get("lastClose"), dict)
+                else None,
+                "actor": "alert-monitor",
+            }
+            kind = classify_period_close_trouble(poll_result)
+            if kind:
+                titles = {
+                    "stalled": "Period close stalled",
+                    "blocked": "Period close blocked",
+                    "attest_only": "Period close attest-only",
+                }
+                title = titles[kind]
+                if not _has_active_alert(conn, alert_type="period_close", title=title):
+                    created.append(
+                        create_alert(
+                            conn,
+                            alert_type="period_close",
+                            severity="high" if kind in ("stalled", "blocked") else "medium",
+                            title=title,
+                            body=period_close_trouble_line(kind, poll_result),
+                            meta={"kind": kind, "emptyNotZero": True, "beamHash": close.get("beamHash")},
+                        )
+                    )
+        except Exception:
+            pass
         return created

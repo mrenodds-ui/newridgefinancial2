@@ -301,6 +301,19 @@ def _laser_blocked(readiness: dict[str, Any] | None) -> tuple[bool, str]:
     return False, ""
 
 
+def _maybe_notify_period_close(result: dict[str, Any], store: Any | None = None) -> dict[str, Any]:
+    """Desk HAL hub alert for stalled/blocked/attest_only — never invent dollars."""
+    try:
+        from period_close_ops_notify import notify_period_close_trouble
+
+        note = notify_period_close_trouble(result, store=store)
+        if isinstance(note, dict) and not note.get("skipped"):
+            result = {**result, "opsNotify": note}
+    except Exception as exc:  # noqa: BLE001
+        result = {**result, "opsNotify": {"ok": False, "error": str(exc)[:160]}}
+    return result
+
+
 def period_close_status() -> dict[str, Any]:
     """HAL/tool status for 'Did we close today?' — never invents dollars."""
     state = _read_state()
@@ -548,7 +561,10 @@ def run_period_close(
                 }
             )
             _write_state(state)
-            return {"ok": False, "error": "laser_blocked", "status": "blocked", **entry}
+            return _maybe_notify_period_close(
+                {"ok": False, "error": "laser_blocked", "status": "blocked", **entry},
+                store=store,
+            )
 
         export_result: dict[str, Any] | None = None
         import_refresh: dict[str, Any] | None = None
@@ -611,12 +627,15 @@ def run_period_close(
                             }
                         )
                         _write_state(state)
-                        return {
-                            "ok": False,
-                            "error": "laser_blocked_after_pull",
-                            "status": "blocked",
-                            **entry,
-                        }
+                        return _maybe_notify_period_close(
+                            {
+                                "ok": False,
+                                "error": "laser_blocked_after_pull",
+                                "status": "blocked",
+                                **entry,
+                            },
+                            store=store,
+                        )
                 except Exception:
                     pass
 
@@ -680,7 +699,10 @@ def run_period_close(
             }
         )
         _write_state(state)
-        return {"ok": True, "status": "completed", "activeOperation": "completed", **entry}
+        return _maybe_notify_period_close(
+            {"ok": True, "status": "completed", "activeOperation": "completed", **entry},
+            store=store,
+        )
 
 
 def try_deterministic_period_close_reply(query: str) -> dict[str, Any] | None:
