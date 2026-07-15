@@ -1,4 +1,4 @@
-/* Office Manager — readiness + SoftDent ops · no fake board actions */
+/* Office Manager — readiness + SoftDent ops · Force Close · no fake board actions */
 (function () {
   const W = window.NR2OpticalWire;
   if (!W) return;
@@ -36,6 +36,64 @@
     return keys;
   }
 
+  function wireForceClose(readyData, readyOk) {
+    const btn = document.getElementById("btn-force-close");
+    if (!btn || btn._nr2ForceBound) return;
+    btn._nr2ForceBound = true;
+    btn.addEventListener("click", async function () {
+      if (btn.disabled || btn.classList.contains("busy")) return;
+      btn.classList.add("busy");
+      btn.disabled = true;
+      btn.textContent = "CLOSING…";
+      W.setBanner("partial", "OM FORCE CLOSE · SoftDent pull if lasers red / stalled · empty ≠ $0");
+      try {
+        await W.ensureSession();
+        const res = await W.forcePeriodClose({ actor: "optical-om" });
+        const data = res && res.data ? res.data : {};
+        const ok = !!(res && res.ok && data.ok);
+        const status = String(data.status || (ok ? "completed" : "failed")).toUpperCase();
+        const pull =
+          data.pullSoftdentDecided === true
+            ? " · SoftDent pull"
+            : data.pullSoftdentDecided === false
+              ? " · attest-only"
+              : "";
+        const hash = data.beamHash ? " · hash " + String(data.beamHash).slice(0, 8) : "";
+        const fallback = data.fallback ? " · " + String(data.fallback) : "";
+        W.setBanner(
+          ok ? "live" : "partial",
+          "OM FORCE CLOSE · " +
+            status +
+            pull +
+            fallback +
+            hash +
+            (ok ? "" : " · " + String(data.error || "failed")) +
+            " · empty ≠ $0"
+        );
+        if (ok) {
+          W.setText("val-close", status);
+          const el = document.getElementById("val-close");
+          if (el) el.classList.remove("stale");
+        } else if (String(data.status || "").toLowerCase() === "blocked") {
+          W.setText("val-close", "BLOCKED");
+          const el = document.getElementById("val-close");
+          if (el) el.classList.add("stale");
+        }
+      } catch (err) {
+        W.setBanner(
+          "partial",
+          "OM FORCE CLOSE fault · " + String(err && err.message ? err.message : err)
+        );
+      } finally {
+        btn.classList.remove("busy");
+        btn.textContent = "FORCE CLOSE";
+        setTimeout(function () {
+          boot();
+        }, 400);
+      }
+    });
+  }
+
   async function boot() {
     W.setBanner("partial", "OM wiring readiness + SoftDent day pulse · empty ≠ $0");
     W.setText("val-close", null, "—");
@@ -55,20 +113,24 @@
     let blocked = false;
     let closeTrouble = false;
     let readyData = null;
+    let pc = null;
 
     if (ready.ok && ready.data) {
       readyData = ready.data;
       const blocking = Array.isArray(readyData.blocking) ? readyData.blocking.length : 0;
       blocked = W.lasersRed ? W.lasersRed(readyData) : blocking > 0;
       closeTrouble = W.periodCloseIsTrouble ? W.periodCloseIsTrouble(readyData) : false;
-      const pc = W.periodCloseStatus ? W.periodCloseStatus(readyData) : null;
+      pc = W.periodCloseStatus ? W.periodCloseStatus(readyData) : null;
       const closeBit = W.periodCloseBannerBit
         ? W.periodCloseBannerBit(readyData)
         : "CLOSE · UNKNOWN";
       if (pc) {
         W.setText("val-close", String(pc.status || "unknown").toUpperCase());
         const ch = document.getElementById("hint-close");
-        if (ch) ch.textContent = closeBit + " · empty ≠ $0";
+        if (ch) {
+          ch.textContent =
+            closeBit + " · FORCE CLOSE pulls SoftDent when lasers red / stalled · empty ≠ $0";
+        }
         if (closeTrouble) {
           const el = document.getElementById("val-close");
           if (el) el.classList.add("stale");
@@ -115,6 +177,15 @@
       W.setText("val-gaps", "NO SIGNAL");
     }
 
+    wireForceClose(readyData, ready.ok);
+    const btn = document.getElementById("btn-force-close");
+    if (btn && !btn.classList.contains("busy")) {
+      const available = W.forceCloseAvailable
+        ? W.forceCloseAvailable(readyData)
+        : false;
+      btn.disabled = !ready.ok || !available;
+    }
+
     const opsBits = [];
     if (np.ok && np.data && np.data.hasData && np.data.count != null) {
       opsBits.push(String(np.data.count) + " NP");
@@ -153,12 +224,12 @@
     W.setBanner(
       blocked || closeTrouble ? "partial" : live ? "live" : "partial",
       blocked
-        ? "OM · lasers STALE · re-export SoftDent aging (keep SoftDent save folder) · sync via main"
+        ? "OM · lasers STALE · FORCE CLOSE pulls SoftDent aging · empty ≠ $0"
         : closeTrouble
-          ? "OM · " + closeBit + " · SoftDent morning pull may need retry · empty ≠ $0"
+          ? "OM · " + closeBit + " · FORCE CLOSE available · empty ≠ $0"
           : "OM · SoftDent day pulse + readiness · " +
             (closeBit || "CLOSE · idle") +
-            " · board-actions NAVIGATE · empty ≠ $0"
+            " · FORCE CLOSE · empty ≠ $0"
     );
   }
 
@@ -166,3 +237,4 @@
     W.setBanner("partial", "OM wire fault · " + String(err && err.message ? err.message : err));
   });
 })();
+

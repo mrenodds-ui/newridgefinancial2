@@ -261,6 +261,74 @@
       hash
     );
   }
+  function forceCloseAvailable(ready) {
+    const pc = periodCloseStatus(ready);
+    const status = pc ? String(pc.status || "").toLowerCase() : "";
+    if (status === "running" || status === "daily_close") return false;
+    if (status === "stalled" || status === "blocked") return true;
+    return lasersRed(ready);
+  }
+  async function forcePeriodClose(opts) {
+    const o = opts || {};
+    const body = {
+      actor: o.actor || "optical-force-close",
+    };
+    if (typeof o.pullSoftdent === "boolean") body.pullSoftdent = o.pullSoftdent;
+    return postJson("/api/period-close/force", body, o.timeoutMs || 180000);
+  }
+  function bindForceCloseButton(btnId, opts) {
+    const btn = document.getElementById(btnId || "btn-force-close");
+    if (!btn) return null;
+    const o = opts || {};
+    const ready = o.ready || null;
+    const available = forceCloseAvailable(ready);
+    btn.disabled = !available;
+    btn.title = available
+      ? "FORCE CLOSE · SoftDent pull when lasers red or close stalled; else attest-only · empty ≠ $0"
+      : "FORCE CLOSE · available when lasers red or period-close stalled/blocked";
+    if (btn._nr2ForceBound) return btn;
+    btn._nr2ForceBound = true;
+    btn.addEventListener("click", function () {
+      if (btn.disabled || btn.classList.contains("busy")) return;
+      btn.classList.add("busy");
+      btn.disabled = true;
+      const label = btn.textContent;
+      btn.textContent = "CLOSING…";
+      forcePeriodClose({ actor: o.actor || "optical-force-close" })
+        .then(function (res) {
+          const data = (res && res.data) || {};
+          const hash = data.beamHash ? String(data.beamHash).slice(0, 12) : "n/a";
+          const ok = !!(res && res.ok && data.ok);
+          const bit =
+            (ok ? "FORCE CLOSE · OK · hash " : "FORCE CLOSE · FAIL · ") +
+            hash +
+            (data.laserOverride ? " · laserOverride" : "") +
+            " · empty ≠ $0";
+          if (typeof o.onDone === "function") {
+            o.onDone({ ok: ok, res: res, bit: bit, data: data });
+          } else if (typeof setBanner === "function") {
+            setBanner(ok ? "live" : "partial", bit);
+          }
+          if (o.hintId) {
+            const hint = document.getElementById(o.hintId);
+            if (hint) hint.textContent = bit;
+          }
+        })
+        .catch(function (err) {
+          if (typeof setBanner === "function") {
+            setBanner("partial", "FORCE CLOSE · fault · " + String(err && err.message ? err.message : err));
+          }
+        })
+        .finally(function () {
+          btn.classList.remove("busy");
+          btn.textContent = label || "FORCE CLOSE";
+          // Re-enable only if still available after refresh callers handle re-boot.
+          if (typeof o.onFinally === "function") o.onFinally();
+          else btn.disabled = !forceCloseAvailable(o.ready);
+        });
+    });
+    return btn;
+  }
   global.NR2OpticalWire = {
     money: money,
     fmtMoney: fmtMoney,
@@ -281,5 +349,8 @@
     periodCloseStatus: periodCloseStatus,
     periodCloseIsTrouble: periodCloseIsTrouble,
     periodCloseBannerBit: periodCloseBannerBit,
+    forceCloseAvailable: forceCloseAvailable,
+    forcePeriodClose: forcePeriodClose,
+    bindForceCloseButton: bindForceCloseButton,
   };
 })(window);

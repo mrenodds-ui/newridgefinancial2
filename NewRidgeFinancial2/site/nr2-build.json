@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12033-softdent-export-harden",
-  "BUILD_ID": "nr2-12033-softdent-export-harden",
-  "assetVersion": "nr2-12033-softdent-export-harden",
-  "builtAt": "2026-07-15T22:55:00.000Z",
-  "notes": "nr2-12033-softdent-export-harden: SoftDent GUI Excel retries + min-bytes validate; period-close falls back to attest-only instead of stalling on export failure. SoftDent write-back still forbidden. empty ≠ $0.",
+  "schemaVersion": "nr2-12034-force-close-optical",
+  "BUILD_ID": "nr2-12034-force-close-optical",
+  "assetVersion": "nr2-12034-force-close-optical",
+  "builtAt": "2026-07-15T23:00:00.000Z",
+  "notes": "nr2-12034-force-close-optical: Hub/OM laser-gated FORCE CLOSE → POST /api/period-close/force; SoftDent pull when lasers red or close stalled; attest-only when clear; dual JSONL (daily_close + force_close) with laserOverride; HAL cites manual vs auto. SoftDent write-back still forbidden. empty ≠ $0.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12033-SOFTDENT-EXPORT-HARDEN",
+  "package": "NR2-12034-FORCE-CLOSE-OPTICAL",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

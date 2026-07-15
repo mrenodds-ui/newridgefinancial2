@@ -87,6 +87,11 @@ a:hover { color: var(--hal); }
   font-family: var(--mono); font-size: 13px; cursor: pointer;
 }
 .card button:hover, .actions a.btn:hover { border-color: var(--sd); color: var(--sd); }
+.card button:disabled {
+  opacity: 0.45; cursor: not-allowed; border-color: #2a3340; color: #6a7585;
+}
+.card button:disabled:hover { border-color: #2a3340; color: #6a7585; }
+.card button.busy { border-color: var(--hal); color: var(--hal); }
 .hal-chip {
   display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
   border: 1px solid rgba(224,230,237,0.35); border-radius: 999px;

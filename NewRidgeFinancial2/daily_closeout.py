@@ -19,6 +19,7 @@ from integration_health import integration_health_snapshot
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OPS_DIR = REPO_ROOT / "app_data" / "nr2" / "ops"
 CLOSE_LOG_PATH = OPS_DIR / "daily_close_log.jsonl"
+FORCE_CLOSE_LOG_PATH = OPS_DIR / "force_close_log.jsonl"
 CLOSE_STATE_PATH = OPS_DIR / "period_close_state.json"
 
 _LOCK = threading.RLock()
@@ -65,6 +66,35 @@ def _append_close_log(entry: dict[str, Any]) -> None:
     _ensure_ops_dir()
     with CLOSE_LOG_PATH.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, default=str) + "\n")
+
+
+def _append_force_close_log(entry: dict[str, Any]) -> None:
+    """Append-only Force Close attest ledger (distinct from daily_close_log)."""
+    _ensure_ops_dir()
+    with FORCE_CLOSE_LOG_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry, default=str) + "\n")
+
+
+def last_force_close_record() -> dict[str, Any] | None:
+    """Most recent Force Close row from force_close_log.jsonl."""
+    if not FORCE_CLOSE_LOG_PATH.is_file():
+        return None
+    try:
+        lines = [
+            ln.strip()
+            for ln in FORCE_CLOSE_LOG_PATH.read_text(encoding="utf-8", errors="replace").splitlines()
+            if ln.strip()
+        ]
+    except OSError:
+        return None
+    for raw in reversed(lines):
+        try:
+            row = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            return row
+    return None
 
 
 def last_close_record(*, limit: int = 1) -> dict[str, Any] | None:
@@ -275,8 +305,12 @@ def period_close_status() -> dict[str, Any]:
     """HAL/tool status for 'Did we close today?' — never invents dollars."""
     state = _read_state()
     last = last_close_record()
+    last_force = last_force_close_record()
     sd_total = (last or {}).get("softdentTotal")
     qb_rev = (last or {}).get("qbRevenue")
+    force_close = bool((last or {}).get("forceClose")) or bool(
+        last_force and str((last or {}).get("completedAt") or "") == str(last_force.get("completedAt") or "")
+    )
     return {
         "ok": True,
         "emptyNotZero": True,
@@ -284,6 +318,9 @@ def period_close_status() -> dict[str, Any]:
         "activeOperation": (period_close_operation_context() or {}).get("activeOperation"),
         "completedAt": state.get("completedAt") or (last or {}).get("completedAt"),
         "lastClose": last,
+        "lastForceClose": last_force,
+        "forceClose": force_close,
+        "auto": None if last is None else bool((last or {}).get("auto")),
         "beamHash": (last or {}).get("beamHash") or state.get("beamHash"),
         "softdentTotal": sd_total,
         "qbRevenue": qb_rev,
@@ -294,8 +331,144 @@ def period_close_status() -> dict[str, Any]:
         "systemOfRecord": bool(state.get("systemOfRecord")),
         "buildStamp": (last or {}).get("buildStamp") or state.get("buildStamp"),
         "logPath": str(CLOSE_LOG_PATH),
+        "forceCloseLogPath": str(FORCE_CLOSE_LOG_PATH),
         "at": _iso_now(),
     }
+
+
+def force_close_should_pull_softdent(
+    readiness: dict[str, Any] | None = None,
+    *,
+    status: str | None = None,
+) -> bool:
+    """Optical Force Close: SoftDent aging pull when lasers red or close stalled/blocked.
+
+    Attest-only when lasers clear and period-close is idle/completed (not inventing $0).
+    """
+    ready = readiness if isinstance(readiness, dict) else {}
+    close_status = str(status or "").strip().lower()
+    if not close_status:
+        close_status = str((ready.get("periodClose") or {}).get("status") or "").strip().lower()
+    if not close_status:
+        close_status = str((_read_state() or {}).get("status") or "idle").lower()
+    if close_status in ("stalled", "blocked"):
+        return True
+    lasers = ready.get("alignmentLasers") if isinstance(ready.get("alignmentLasers"), dict) else {}
+    if lasers.get("red") is True:
+        return True
+    blocking = ready.get("blocking") if isinstance(ready.get("blocking"), list) else []
+    if blocking:
+        return True
+    return False
+
+
+def force_close_available(
+    readiness: dict[str, Any] | None = None,
+    *,
+    status: str | None = None,
+) -> bool:
+    """Laser-gated desk control: enable when lasers red or close stalled/blocked (not while running)."""
+    close_status = str(status or "").strip().lower()
+    if not close_status:
+        ready = readiness if isinstance(readiness, dict) else {}
+        close_status = str((ready.get("periodClose") or {}).get("status") or "").strip().lower()
+    if not close_status:
+        close_status = str((_read_state() or {}).get("status") or "idle").lower()
+    if close_status == "running":
+        return False
+    if close_status in ("stalled", "blocked"):
+        return True
+    ready = readiness if isinstance(readiness, dict) else {}
+    lasers = ready.get("alignmentLasers") if isinstance(ready.get("alignmentLasers"), dict) else {}
+    if lasers.get("red") is True:
+        return True
+    blocking = ready.get("blocking") if isinstance(ready.get("blocking"), list) else []
+    return bool(blocking)
+
+
+def force_period_close(
+    store: Any | None = None,
+    *,
+    actor: str = "optical-force-close",
+    readiness: dict[str, Any] | None = None,
+    pull_softdent: bool | None = None,
+) -> dict[str, Any]:
+    """Operator Force Close from Hub/OM — laser-aware SoftDent pull + dual JSONL attest.
+
+    Does not override a running close. SoftDent write-back remains forbidden.
+    Appends force_close_log.jsonl in addition to daily_close_log.jsonl.
+    """
+    ready = readiness
+    if not isinstance(ready, dict):
+        try:
+            from import_diagnostics import assess_import_readiness
+
+            ready = assess_import_readiness()
+            try:
+                ready = merge_period_close_into_readiness(ready)
+            except Exception:
+                pass
+        except Exception as exc:  # noqa: BLE001
+            ready = {"ok": False, "error": str(exc)[:240], "blocking": [], "alignmentLasers": {"red": True}}
+
+    state = _read_state()
+    status_now = str(state.get("status") or "idle").lower()
+    if status_now == "running":
+        return {
+            "ok": False,
+            "error": "period_close_already_running",
+            "status": "running",
+            "activeOperation": "daily_close",
+            "forceClose": True,
+            "emptyNotZero": True,
+        }
+
+    lasers = ready.get("alignmentLasers") if isinstance(ready.get("alignmentLasers"), dict) else {}
+    blocking = ready.get("blocking") if isinstance(ready.get("blocking"), list) else []
+    laser_override = bool(lasers.get("red") is True or blocking or status_now in ("stalled", "blocked"))
+    do_pull = (
+        bool(pull_softdent)
+        if pull_softdent is not None
+        else force_close_should_pull_softdent(ready, status=status_now)
+    )
+    result = run_period_close(
+        store=store,
+        actor=actor,
+        auto=False,
+        pull_softdent=do_pull,
+        readiness=ready,
+        force_close=True,
+    )
+    force_row = {
+        "timestamp": _iso_now(),
+        "completedAt": result.get("completedAt") or _iso_now(),
+        "actor": actor,
+        "beamHash": result.get("beamHash"),
+        "laserOverride": laser_override,
+        "shadowMode": True,
+        "systemOfRecord": False,
+        "ok": bool(result.get("ok")),
+        "status": result.get("status"),
+        "pullSoftdent": do_pull,
+        "fallback": result.get("fallback"),
+        "emptyNotZero": True,
+        "error": result.get("error"),
+    }
+    try:
+        _append_force_close_log(force_row)
+    except OSError:
+        pass
+    result = {
+        **result,
+        "forceClose": True,
+        "laserOverride": laser_override,
+        "pullSoftdentDecided": do_pull,
+        "shadowMode": True,
+        "systemOfRecord": False,
+        "emptyNotZero": True,
+        "forceCloseLogPath": str(FORCE_CLOSE_LOG_PATH),
+    }
+    return result
 
 
 def run_period_close(
@@ -306,6 +479,7 @@ def run_period_close(
     pull_softdent: bool = False,
     auto: bool = False,
     readiness: dict[str, Any] | None = None,
+    force_close: bool = False,
 ) -> dict[str, Any]:
     """Execute one shadow period-close cycle.
 
@@ -333,6 +507,7 @@ def run_period_close(
             "startedAt": started,
             "actor": actor,
             "auto": bool(auto),
+            "forceClose": bool(force_close),
             "buildStamp": build_stamp,
             "systemOfRecord": False,
         }
@@ -356,6 +531,7 @@ def run_period_close(
                 "startedAt": started,
                 "actor": actor,
                 "auto": bool(auto),
+                "forceClose": bool(force_close),
                 "laserClear": False,
                 "blockReason": block_reason,
                 "buildStamp": build_stamp,
@@ -415,6 +591,7 @@ def run_period_close(
                             "startedAt": started,
                             "actor": actor,
                             "auto": bool(auto),
+                            "forceClose": bool(force_close),
                             "laserClear": False,
                             "blockReason": block_reason,
                             "buildStamp": build_stamp,
@@ -462,6 +639,7 @@ def run_period_close(
             "startedAt": started,
             "actor": actor,
             "auto": bool(auto),
+            "forceClose": bool(force_close),
             "laserClear": True,
             "beamHash": attest.get("beamHash"),
             "beamTimestamp": attest.get("beamTimestamp") or attest.get("at"),
@@ -520,7 +698,7 @@ def try_deterministic_period_close_reply(query: str) -> dict[str, Any] | None:
     if not completed:
         text = (
             "No period close on record yet (shadow OPS). "
-            "Run daily close or wait for the morning attest — empty ≠ $0."
+            "Use FORCE CLOSE on Pages Hub / Office Manager, or wait for morning attest — empty ≠ $0."
         )
         return {
             "ok": True,
@@ -529,10 +707,21 @@ def try_deterministic_period_close_reply(query: str) -> dict[str, Any] | None:
             "periodClose": status,
         }
     laser = "clear" if status.get("laserClear") else "blocked/unknown"
+    last = status.get("lastClose") if isinstance(status.get("lastClose"), dict) else {}
+    actor = str((last or {}).get("actor") or "").strip()
+    if status.get("forceClose") or (last or {}).get("forceClose"):
+        mode = "manual Force Close"
+        cite = "Cited from daily_close_log.jsonl + force_close_log.jsonl — not invented."
+    elif (last or {}).get("auto") is True:
+        mode = "auto/morning close"
+        cite = "Cited from daily_close_log.jsonl — not invented."
+    else:
+        mode = f"operator close ({actor or 'manual'})"
+        cite = "Cited from daily_close_log.jsonl — not invented."
     text = (
-        f"Last period close completed at {completed} "
+        f"Last period close completed at {completed} via {mode} "
         f"(beamHash={beam}, SoftDent {sd}, QB {qb}, lasers {laser}). "
-        "Cited from daily_close_log.jsonl — not invented."
+        f"{cite}"
     )
     return {
         "ok": True,
@@ -540,6 +729,7 @@ def try_deterministic_period_close_reply(query: str) -> dict[str, Any] | None:
         "routingReason": "period_close_status",
         "periodClose": status,
         "beamHash": beam,
+        "forceClose": bool(status.get("forceClose") or (last or {}).get("forceClose")),
     }
 
 
@@ -566,15 +756,22 @@ if __name__ == "__main__":
     parser.add_argument("--auto", action="store_true", help="Attest-only close (no SoftDent GUI)")
     parser.add_argument("--pull-softdent", action="store_true", help="Also SoftDent aging export (consent-free)")
     parser.add_argument("--consent", action="store_true", help="Ignored — SoftDent export is consent-free")
+    parser.add_argument("--force", action="store_true", help="Optical Force Close path (force_close_log.jsonl)")
     parser.add_argument("--status", action="store_true", help="Print period_close_status JSON")
     args = parser.parse_args()
     if args.status:
         print(json.dumps(period_close_status(), indent=2))
         raise SystemExit(0)
-    result = run_period_close(
-        actor="CLI",
-        auto=bool(args.auto),
-        pull_softdent=bool(args.pull_softdent),
-    )
+    if args.force:
+        result = force_period_close(
+            actor="CLI-force-close",
+            pull_softdent=True if args.pull_softdent else None,
+        )
+    else:
+        result = run_period_close(
+            actor="CLI",
+            auto=bool(args.auto),
+            pull_softdent=bool(args.pull_softdent),
+        )
     print(json.dumps(result, indent=2, default=str))
     raise SystemExit(0 if result.get("ok") else 2)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from automation_registry import list_automation_jobs, record_job_run
 from daily_closeout import build_daily_closeout, format_daily_closeout_text
 from financial_reports import build_financial_reports, format_financial_reports_text
@@ -278,6 +280,173 @@ def test_period_close_softdent_pull_fallback_attest(tmp_path, monkeypatch):
     assert result["guiExport"] is False
     assert result["softdentTotal"] == 7714.0
     assert (result.get("export") or {}).get("fallback") == "attest_only"
+
+
+def test_force_close_decides_pull_on_red_or_stalled():
+    from daily_closeout import force_close_available, force_close_should_pull_softdent
+
+    assert force_close_should_pull_softdent(
+        {"alignmentLasers": {"red": False}, "blocking": [], "periodClose": {"status": "completed"}},
+        status="completed",
+    ) is False
+    assert force_close_should_pull_softdent(
+        {"alignmentLasers": {"red": True}, "blocking": [], "periodClose": {"status": "idle"}},
+        status="idle",
+    ) is True
+    assert force_close_should_pull_softdent(
+        {"alignmentLasers": {"red": False}, "blocking": [], "periodClose": {"status": "stalled"}},
+        status="stalled",
+    ) is True
+    assert force_close_should_pull_softdent(
+        {
+            "alignmentLasers": {"red": False},
+            "blocking": [{"datasetKey": "softdent.ar"}],
+            "periodClose": {"status": "idle"},
+        },
+        status="idle",
+    ) is True
+    assert force_close_available(
+        {"alignmentLasers": {"red": False}, "blocking": [], "periodClose": {"status": "completed"}},
+        status="completed",
+    ) is False
+    assert force_close_available(
+        {"alignmentLasers": {"red": True}, "blocking": [], "periodClose": {"status": "idle"}},
+        status="idle",
+    ) is True
+    assert force_close_available(
+        {"alignmentLasers": {"red": False}, "blocking": [], "periodClose": {"status": "stalled"}},
+        status="stalled",
+    ) is True
+    assert force_close_available(
+        {"alignmentLasers": {"red": False}, "blocking": [], "periodClose": {"status": "running"}},
+        status="running",
+    ) is False
+
+
+def test_force_period_close_pulls_when_stalled(tmp_path, monkeypatch):
+    from daily_closeout import force_period_close, try_deterministic_period_close_reply
+    import daily_closeout as dc
+
+    monkeypatch.setattr(dc, "OPS_DIR", tmp_path)
+    monkeypatch.setattr(dc, "CLOSE_LOG_PATH", tmp_path / "daily_close_log.jsonl")
+    monkeypatch.setattr(dc, "FORCE_CLOSE_LOG_PATH", tmp_path / "force_close_log.jsonl")
+    monkeypatch.setattr(dc, "CLOSE_STATE_PATH", tmp_path / "period_close_state.json")
+    dc._write_state({"status": "stalled", "activeOperation": "stalled", "laserClear": True})
+
+    calls = {"pull": None, "force_close": None}
+
+    def fake_run(*, pull_softdent=False, force_close=False, **kwargs):
+        calls["pull"] = pull_softdent
+        calls["force_close"] = force_close
+        return {
+            "ok": True,
+            "status": "completed",
+            "completedAt": "2026-07-15T23:10:00+00:00",
+            "beamHash": "forcehash2222",
+            "pullSoftdent": pull_softdent,
+            "forceClose": force_close,
+            "softdentTotal": 100.0,
+            "softdentDisplay": "$100",
+            "qbDisplay": "$1",
+            "laserClear": True,
+            "auto": False,
+            "actor": "optical-hub",
+        }
+
+    monkeypatch.setattr(dc, "run_period_close", fake_run)
+    ready = {
+        "ok": True,
+        "level": "fresh",
+        "blocking": [],
+        "alignmentLasers": {"red": False, "green": True},
+        "periodClose": {"status": "stalled"},
+    }
+    result = force_period_close(store=None, actor="optical-hub", readiness=ready)
+    assert result["ok"] is True
+    assert result["forceClose"] is True
+    assert result["laserOverride"] is True
+    assert result["pullSoftdentDecided"] is True
+    assert calls["pull"] is True
+    assert calls["force_close"] is True
+    force_log = tmp_path / "force_close_log.jsonl"
+    assert force_log.is_file()
+    row = json.loads(force_log.read_text(encoding="utf-8").strip().splitlines()[-1])
+    assert row["laserOverride"] is True
+    assert row["shadowMode"] is True
+    assert row["systemOfRecord"] is False
+    assert row["beamHash"] == "forcehash2222"
+
+    # Make lastClose look like Force Close for HAL cite.
+    (tmp_path / "daily_close_log.jsonl").write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "completedAt": "2026-07-15T23:10:00+00:00",
+                "beamHash": "forcehash2222",
+                "forceClose": True,
+                "auto": False,
+                "actor": "optical-hub",
+                "softdentDisplay": "$100",
+                "qbDisplay": "$1",
+                "laserClear": True,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    dc._write_state(
+        {
+            "status": "completed",
+            "completedAt": "2026-07-15T23:10:00+00:00",
+            "beamHash": "forcehash2222",
+            "laserClear": True,
+        }
+    )
+    det = try_deterministic_period_close_reply("Did we close today?")
+    assert det and "Force Close" in det["text"]
+    assert det.get("forceClose") is True
+
+
+def test_force_period_close_attest_only_when_clear(tmp_path, monkeypatch):
+    from daily_closeout import force_period_close
+    import daily_closeout as dc
+
+    monkeypatch.setattr(dc, "OPS_DIR", tmp_path)
+    monkeypatch.setattr(dc, "CLOSE_LOG_PATH", tmp_path / "daily_close_log.jsonl")
+    monkeypatch.setattr(dc, "FORCE_CLOSE_LOG_PATH", tmp_path / "force_close_log.jsonl")
+    monkeypatch.setattr(dc, "CLOSE_STATE_PATH", tmp_path / "period_close_state.json")
+    dc._write_state({"status": "completed", "activeOperation": "completed"})
+
+    calls = {"pull": None}
+
+    def fake_run(*, pull_softdent=False, **kwargs):
+        calls["pull"] = pull_softdent
+        return {
+            "ok": True,
+            "status": "completed",
+            "completedAt": "2026-07-15T23:11:00+00:00",
+            "beamHash": "clearhash3333",
+            "pullSoftdent": False,
+        }
+
+    monkeypatch.setattr(dc, "run_period_close", fake_run)
+    ready = {
+        "ok": True,
+        "level": "fresh",
+        "blocking": [],
+        "alignmentLasers": {"red": False},
+        "periodClose": {"status": "completed"},
+    }
+    result = force_period_close(store=None, actor="optical-om", readiness=ready)
+    assert result["ok"] is True
+    assert result["pullSoftdentDecided"] is False
+    assert result["laserOverride"] is False
+    assert calls["pull"] is False
+    force_log = tmp_path / "force_close_log.jsonl"
+    assert force_log.is_file()
+    row = json.loads(force_log.read_text(encoding="utf-8").strip().splitlines()[-1])
+    assert row["laserOverride"] is False
+    assert row["systemOfRecord"] is False
 
 
 def test_memory_index_search():

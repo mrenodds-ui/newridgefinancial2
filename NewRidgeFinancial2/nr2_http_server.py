@@ -1416,6 +1416,46 @@ class NR2BottleServer(BottleServer):
                 status = 403
             return _json_response(result, status=status)
 
+        @app.post("/api/period-close/force")
+        def period_close_force_api():
+            """Optical Force Close: SoftDent pull when lasers red or close stalled; else attest-only."""
+            from daily_closeout import force_period_close
+
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            actor = str(payload.get("actor") or "optical-force-close").strip() or "optical-force-close"
+            pull_override = payload.get("pullSoftdent")
+            if pull_override is None:
+                pull_override = payload.get("pull_softdent")
+            pull_arg = None if pull_override is None else bool(pull_override)
+            result = force_period_close(
+                store=_local_store(),
+                actor=actor,
+                readiness=_get_import_readiness(),
+                pull_softdent=pull_arg,
+            )
+            try:
+                _audit_mutation(
+                    "period_close_force",
+                    detail={
+                        "ok": bool(result.get("ok")),
+                        "status": result.get("status"),
+                        "pullSoftdent": result.get("pullSoftdentDecided"),
+                        "laserOverride": result.get("laserOverride"),
+                        "beamHash": result.get("beamHash"),
+                        "fallback": result.get("fallback"),
+                    },
+                    actor=actor,
+                )
+            except Exception:
+                pass
+            status = 200 if result.get("ok") else 409
+            if result.get("status") == "blocked":
+                status = 403
+            if result.get("error") == "period_close_already_running":
+                status = 409
+            return _json_response(result, status=status)
+
         @app.post("/api/hal/tools/qb-sync")
         def hal_qb_sync_api():
             from hal_brain_tools import qb_sync
