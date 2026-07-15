@@ -3,47 +3,49 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NR2 Optical · QuickBooks Bench — nr2-12010-pages</title>
+  <title>NR2 Optical · QuickBooks Bench — live wire</title>
   <link rel="stylesheet" href="/nr2-optical-theme.css" />
 </head>
 <body>
   <div class="banner">
-    Mockup · QuickBooks Bench · nr2-12010-pages · empty ≠ $0 · no SoftDent write-back
-    <span class="bind">Optical theme · SoftDent · QuickBooks · HAL binds only</span>
+    LIVE · QuickBooks Bench · empty ≠ $0 · no SoftDent write-back
+    <span class="bind">Revenue + aging · payroll export UNAVAILABLE</span>
   </div>
   <div class="shell">
     <nav class="nav" id="nav"></nav>
     <main class="main">
       <div class="hal-chip">HAL · SPECTRAL · same theme as main</div>
       <h1>QUICKBOOKS BENCH</h1>
-      <p class="kicker">P&L · cash · payroll/AP export · empty-OK</p>
+      <p class="kicker">Revenue · AR/AP aging · payroll export status</p>
       <div class="beam"></div>
-      <div class="honesty">Honesty: empty ≠ $0 · no SoftDent write-back · widgets must bind SoftDent / QuickBooks / HAL</div>
+      <div class="honesty">Honesty: empty ≠ $0 · never invent $ · payroll pack removed = UNAVAILABLE</div>
       <div class="grid">
         <div class="card">
-          <h3>Cash / P&L</h3>
-          <div class="val qb">$48,100</div>
-          <p class="hint">QB snapshot · live when import present</p>
+          <h3>Monthly revenue</h3>
+          <div class="val qb" id="val-pl">—</div>
+          <p class="hint" id="hint-pl">GET qb/monthly-revenue</p>
         </div>
         <div class="card">
-          <h3>Payroll / AP</h3>
-          <div class="val hal">∅</div>
-          <p class="hint">Empty OK · POST qb-payroll-ap-export</p>
+          <h3>Payroll / AP export</h3>
+          <div class="val" id="val-payroll">—</div>
+          <p class="hint" id="hint-payroll">Clean-slate · UNAVAILABLE</p>
         </div>
         <div class="card">
-          <h3>Tax handoff</h3>
-          <div class="val qb">→</div>
-          <p class="hint">Scenario beams to Taxes page · not posted</p>
+          <h3>QB A/R aging</h3>
+          <div class="val qb" id="val-ar">—</div>
+          <p class="hint">GET qb/ar-aging</p>
         </div>
         <div class="card">
-          <h3>Subpages</h3>
-          <div class="val hal">2</div>
-          <p class="hint">Expense map · Citations</p>
+          <h3>QB A/P aging</h3>
+          <div class="val" id="val-ap">—</div>
+          <p class="hint">GET qb/ap-aging</p>
         </div>
       </div>
-      <p class="kicker" style="margin-top:24px"><a href="/nr2-optical-beam-touch-mockup.html">← Main interferometer bench</a> · <a href="/nr2-optical-pages-hub.html">Pages hub</a></p>
+      <p class="kicker" style="margin-top:24px"><a href="/nr2-optical-beam-touch-mockup.html">← Main interferometer bench</a> · <a href="/nr2-optical-pages-hub.html">Pages hub</a> · <a href="/nr2-optical-beam-touch-mockup.html">Tax Prism on main</a></p>
     </main>
   </div>
   <script src="/nr2-optical-nav.js"></script>
+  <script src="/nr2-optical-page-wire.js"></script>
+  <script src="/nr2-optical-page-quickbooks.js"></script>
 </body>
 </html>

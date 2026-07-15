@@ -1,4 +1,4 @@
-/* HAL chat — live wire POST /api/hal/evaluate-query (CSP script-src 'self') */
+/* HAL chat — live wire POST /api/hal/evaluate-query + money honesty (CSP script-src 'self') */
 (function () {
   const stream = document.getElementById("stream");
   const form = document.getElementById("compose");
@@ -20,6 +20,10 @@
     stream.scrollTop = stream.scrollHeight;
   }
 
+  function looksMoney(q) {
+    return /\$|claim|claims|revenue|outstanding|aging|\bar\b|dollar|total/i.test(q || "");
+  }
+
   async function ensureSession() {
     try {
       const res = await fetch("/api/browser-session", { cache: "no-store" });
@@ -30,6 +34,20 @@
       }
     } catch (_) {}
     return false;
+  }
+
+  async function prefetchClaimsHint() {
+    try {
+      const res = await fetch("/api/softdent/claims-outstanding", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok || !data) return "";
+      if (!data.hasData) return " [beam: SoftDent claims ∅ · empty≠$0]";
+      const total = data.totalOutstanding;
+      if (total == null || !Number.isFinite(Number(total))) return " [beam: SoftDent claims LIVE]";
+      return " [beam: SoftDent claims live $" + Number(total).toLocaleString("en-US", { maximumFractionDigits: 0 }) + "]";
+    } catch (_) {
+      return " [beam: SoftDent claims NO SIGNAL]";
+    }
   }
 
   ensureSession().then((ok) => {
@@ -52,6 +70,11 @@
     input.value = "";
     busy = true;
     if (!sessionToken) await ensureSession();
+    let queryOut = q;
+    if (looksMoney(q)) {
+      const hint = await prefetchClaimsHint();
+      if (hint) queryOut = q + hint;
+    }
     try {
       const res = await fetch("/api/hal/evaluate-query", {
         method: "POST",
@@ -61,7 +84,7 @@
           Accept: "application/json",
           ...(sessionToken ? { "X-NR2-Session-Token": sessionToken } : {}),
         },
-        body: JSON.stringify({ query: q, stream: false }),
+        body: JSON.stringify({ query: queryOut, stream: false }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -76,7 +99,7 @@
           data.reply ||
           data.response ||
           data.text ||
-          data.message ||
+          (data.message && (data.message.content || data.message)) ||
           (data.result && (data.result.reply || data.result.text)) ||
           JSON.stringify(data).slice(0, 800);
         addMsg("hal", String(reply));

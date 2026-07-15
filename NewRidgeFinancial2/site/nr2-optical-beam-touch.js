@@ -46,7 +46,18 @@
       headers["X-NR2-Session-Token"] = sessionToken;
       headers["Content-Type"] = headers["Content-Type"] || "application/json";
     }
-    const res = await fetch(path, Object.assign({ cache: "no-store" }, init || {}, { headers }));
+    let res;
+    try {
+      res = await fetch(path, Object.assign({ cache: "no-store" }, init || {}, { headers }));
+    } catch (err) {
+      const aborted = err && (err.name === "AbortError" || err.code === 20);
+      return {
+        ok: false,
+        status: aborted ? 408 : 0,
+        data: { error: aborted ? "request_aborted" : String(err && err.message ? err.message : err) },
+        aborted: !!aborted,
+      };
+    }
     let data = null;
     try {
       data = await res.json();
@@ -182,12 +193,28 @@
     }
     const ready = r.data;
     const blocking = Array.isArray(ready.blocking) ? ready.blocking : [];
-    const ok = ready.ok !== false && blocking.length === 0;
+    const gaps = Array.isArray(ready.datasetGaps) ? ready.datasetGaps : [];
+    const softGaps =
+      ready.completeness && Array.isArray(ready.completeness.softGaps)
+        ? ready.completeness.softGaps
+        : [];
+    const criticalSoft = gaps
+      .concat(softGaps)
+      .filter((g) => g && String(g.severity || "") === "critical");
+    const staleCritical = criticalSoft.filter((g) =>
+      /stale|missing/i.test(String(g.status || ""))
+    );
+    const ok =
+      ready.ok !== false && blocking.length === 0 && staleCritical.length === 0;
     if (align) {
       align.classList.toggle("bad", !ok);
       align.title = ok
         ? "Import readiness coherent · lasers green-path"
-        : "Import gaps / stale · lasers red (" + blocking.length + " blocking)";
+        : "Import gaps / stale · lasers red (blocking=" +
+          blocking.length +
+          ", criticalSoft=" +
+          staleCritical.length +
+          ")";
     }
     const state = document.getElementById("hal-state");
     if (state) {
@@ -312,10 +339,18 @@
 
   async function doRefreshPeriod() {
     toast("Period Wheel → POST /api/apex/softdent/refresh-period · " + selectedPeriod + "d …");
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
     const r = await api("/api/apex/softdent/refresh-period", {
       method: "POST",
       body: JSON.stringify({ periodDays: Number(selectedPeriod) || 60 }),
+      signal: ctrl ? ctrl.signal : undefined,
     });
+    if (timer) clearTimeout(timer);
+    if (r.aborted || r.status === 408 || r.status === 504) {
+      toast("Refresh stalled — check SoftDent ODBC / sign-on (timeout)");
+      return;
+    }
     if (!r.ok) {
       toast("Refresh-period failed · " + (r.data && r.data.error || r.status));
       return;
@@ -333,12 +368,12 @@
       method: "POST",
       body: JSON.stringify({ classifyOnly: false, explain: false }),
     });
-    if (!r.ok) {
+    if (!r.ok || (r.data && r.data.available === false)) {
       if (state) state.textContent = "RECON · UNAVAILABLE";
       toast(
-        "Reconciliation unavailable · " +
-          (r.data && (r.data.error || r.data.reason) || r.status) +
-          " (pack may be archived)"
+        "Reconciliation UNAVAILABLE · " +
+          ((r.data && (r.data.reason || r.data.error)) || r.status) +
+          " · clean-slate (no pack)"
       );
       return;
     }

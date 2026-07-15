@@ -34,6 +34,28 @@ APEX_PAGES = (
 
 BUILD_ID = "nr2-11000-clean"
 
+def _clean_slate_unavailable(feature: str = "pack") -> dict[str, Any]:
+    """Honest payload when Apex packs / nr2_contracts were removed in cutover."""
+    return {
+        "ok": False,
+        "available": False,
+        "reason": "removed_in_nr2_11000_clean",
+        "feature": feature,
+        "buildId": BUILD_ID,
+    }
+
+
+def _is_removed_module_exc(exc: BaseException) -> bool:
+    msg = str(exc)
+    if isinstance(exc, ModuleNotFoundError):
+        name = getattr(exc, "name", "") or ""
+        if name.startswith("nr2_contracts") or name.startswith("apex_"):
+            return True
+    return "No module named" in msg and (
+        "nr2_contracts" in msg or "apex_" in msg and "_pack" in msg
+    )
+
+
 
 def _apex_blank_all_widgets() -> bool:
     """Operator blank-stage: every Apex page returns zero widgets.
@@ -957,7 +979,7 @@ def build_ins_patient_split(bundle: dict[str, Any]) -> dict[str, Any]:
     if not segs:
         gap_code = None
         try:
-            from nr2_contracts.softdent_hardening import assess_collections_gap
+            raise ModuleNotFoundError("nr2_contracts.softdent_hardening removed_in_nr2_11000_clean")  # clean-slate strip
 
             gap_code = assess_collections_gap(bundle).get("gapCode")
         except Exception:
@@ -1836,7 +1858,7 @@ def _financial_widgets_from_reports(
         # DEF-001 — surface Collections gap strip on Financial when revenue is empty
         if revenue.get("status") == "empty":
             try:
-                from nr2_contracts.softdent_hardening import collections_gap_widget
+                raise ModuleNotFoundError("nr2_contracts.softdent_hardening removed_in_nr2_11000_clean")  # clean-slate strip
 
                 gap_w = collections_gap_widget(bundle)
                 if gap_w.get("status") == "empty":
@@ -1972,22 +1994,22 @@ def _financial_widgets_from_reports(
     except Exception:
         pass
     try:
-        from nr2_contracts.unified_db import unified_db_widget
+        raise ModuleNotFoundError("nr2_contracts.unified_db removed_in_nr2_11000_clean")  # clean-slate strip
 
         widgets.append(unified_db_widget(bundle))
     except Exception:
         pass
     try:
-        from nr2_contracts.qb_payroll import payroll_ap_widgets
+        raise ModuleNotFoundError("nr2_contracts.qb_payroll removed_in_nr2_11000_clean")  # clean-slate strip
 
         widgets.extend(payroll_ap_widgets(bundle))
     except Exception:
         pass
     try:
-        from nr2_contracts.softdent_production import production_widgets
-        from nr2_contracts.softdent_aging_schedule import aging_schedule_widgets
+        raise ModuleNotFoundError("nr2_contracts.softdent_production removed_in_nr2_11000_clean")  # clean-slate strip
+        raise ModuleNotFoundError("nr2_contracts.softdent_aging_schedule removed_in_nr2_11000_clean")  # clean-slate strip
         from apex_qb_net_profit_pack import net_profit_widget
-        from nr2_contracts.unified_db import production_vs_payroll_widget
+        raise ModuleNotFoundError("nr2_contracts.unified_db removed_in_nr2_11000_clean")  # clean-slate strip
 
         widgets.extend(production_widgets(bundle))
         widgets.extend(aging_schedule_widgets(bundle))
@@ -1996,7 +2018,7 @@ def _financial_widgets_from_reports(
     except Exception:
         pass
     try:
-        from nr2_contracts.softdent_extended import extended_metrics_widgets
+        raise ModuleNotFoundError("nr2_contracts.softdent_extended removed_in_nr2_11000_clean")  # clean-slate strip
 
         widgets.extend(extended_metrics_widgets(bundle))
     except Exception:
@@ -2331,7 +2353,7 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
         elif "collections" in latest:
             coll = _parse_money(latest.get("collections"))
     try:
-        from nr2_contracts.softdent_hardening import assess_collections_gap
+        raise ModuleNotFoundError("nr2_contracts.softdent_hardening removed_in_nr2_11000_clean")  # clean-slate strip
 
         coll_gap = assess_collections_gap(bundle)
     except Exception:
@@ -2496,7 +2518,7 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
 
     widgets.append(build_provider_horizontal_bars(bundle))
     try:
-        from nr2_contracts.softdent_hardening import collections_gap_widget
+        raise ModuleNotFoundError("nr2_contracts.softdent_hardening removed_in_nr2_11000_clean")  # clean-slate strip
 
         widgets.insert(0, collections_gap_widget(bundle))
     except Exception:
@@ -2598,8 +2620,8 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
     except Exception:
         pass
     try:
-        from nr2_contracts.softdent_production import production_widgets
-        from nr2_contracts.softdent_aging_schedule import aging_schedule_widgets
+        raise ModuleNotFoundError("nr2_contracts.softdent_production removed_in_nr2_11000_clean")  # clean-slate strip
+        raise ModuleNotFoundError("nr2_contracts.softdent_aging_schedule removed_in_nr2_11000_clean")  # clean-slate strip
         from apex_financial_console_pack import collapse_empty_large
 
         for w in production_widgets(bundle):
@@ -2609,7 +2631,7 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
     except Exception:
         pass
     try:
-        from nr2_contracts.softdent_extended import extended_metrics_widgets
+        raise ModuleNotFoundError("nr2_contracts.softdent_extended removed_in_nr2_11000_clean")  # clean-slate strip
         from apex_financial_console_pack import collapse_empty_large
 
         for w in extended_metrics_widgets(bundle):
@@ -2748,7 +2770,7 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
         except Exception:
             pass
         try:
-            from nr2_contracts.qb_payroll import payroll_ap_widgets
+            raise ModuleNotFoundError("nr2_contracts.qb_payroll removed_in_nr2_11000_clean")  # clean-slate strip
 
             widgets.extend(payroll_ap_widgets(bundle))
         except Exception:
@@ -2886,7 +2908,7 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
     except Exception:
         pass
     try:
-        from nr2_contracts.qb_payroll import payroll_ap_widgets
+        raise ModuleNotFoundError("nr2_contracts.qb_payroll removed_in_nr2_11000_clean")  # clean-slate strip
 
         widgets.extend(payroll_ap_widgets(bundle))
     except Exception:
@@ -4766,7 +4788,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
                 ],
                 capture_output=True,
                 text=True,
-                timeout=180,
+                timeout=25,
                 check=False,
             )
             result["steps"].append(
@@ -4782,7 +4804,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
                 [sys.executable, str(auto_py)],
                 capture_output=True,
                 text=True,
-                timeout=180,
+                timeout=25,
                 check=False,
             )
             result["steps"].append(
@@ -4801,7 +4823,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
     # 2) DEF-001 inbox period stub ingest + dashboard sync (force when unprocessed exports present)
     force_reimport = False
     try:
-        from nr2_contracts.softdent_hardening import scan_collections_export_inbox
+        raise ModuleNotFoundError("nr2_contracts.softdent_hardening removed_in_nr2_11000_clean")  # clean-slate strip
 
         pre_inbox = scan_collections_export_inbox()
         force_reimport = bool(pre_inbox.get("matchCount"))
@@ -4862,7 +4884,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
 
     # 4) DEF-001 — scan SoftDent export inbox for Collections/Daysheet files (presence only)
     try:
-        from nr2_contracts.softdent_hardening import scan_collections_export_inbox
+        raise ModuleNotFoundError("nr2_contracts.softdent_hardening removed_in_nr2_11000_clean")  # clean-slate strip
 
         inbox = scan_collections_export_inbox()
         result["steps"].append(
@@ -4892,7 +4914,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
     result["completedAt"] = _utc_now()
     inbox = result.get("exportInbox") if isinstance(result.get("exportInbox"), dict) else {}
     try:
-        from nr2_contracts.softdent_hardening import assess_collections_gap, FORMAT_HINT
+        raise ModuleNotFoundError("nr2_contracts.softdent_hardening removed_in_nr2_11000_clean")  # clean-slate strip
 
         _reports, bundle, _err = _load_reports_and_bundle()
         gap = assess_collections_gap(bundle)
@@ -5751,7 +5773,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         q,
     ):
         try:
-            from nr2_contracts.softdent_hardening import assess_collections_gap, format_collections_gap_reply
+            raise ModuleNotFoundError("nr2_contracts.softdent_hardening removed_in_nr2_11000_clean")  # clean-slate strip
 
             _reports, bundle, _err = _load_reports_and_bundle()
             gap = assess_collections_gap(bundle)
@@ -5784,7 +5806,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         q,
     ):
         try:
-            from nr2_contracts.qb_payroll import assess_payroll_ap_gap, format_payroll_ap_reply
+            raise ModuleNotFoundError("nr2_contracts.qb_payroll removed_in_nr2_11000_clean")  # clean-slate strip
 
             _reports, bundle, _err = _load_reports_and_bundle()
             gap = assess_payroll_ap_gap(bundle)
@@ -6210,7 +6232,7 @@ def apex_sync_trigger(payload: dict[str, Any] | None = None) -> dict[str, Any]:
                 result["filterSummary"] = scrub
             # Phase I3 — mirror import bundle into additive unified SQLite
             try:
-                from nr2_contracts.unified_db import ingest_from_bundle
+                raise ModuleNotFoundError("nr2_contracts.unified_db removed_in_nr2_11000_clean")  # clean-slate strip
 
                 result["unifiedIngest"] = ingest_from_bundle(bundle)
             except Exception as exc:  # noqa: BLE001
@@ -6781,8 +6803,8 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
         """Drop QB payroll/AP CSVs into document-inbox (optional gap). No invented dollars."""
         try:
             import bottle
-            from nr2_contracts.qb_export_inbox import write_qb_payroll_ap_exports
-            from nr2_contracts.qb_payroll import assess_payroll_ap_gap
+            raise ModuleNotFoundError("nr2_contracts.qb_export_inbox removed_in_nr2_11000_clean")  # clean-slate strip
+            raise ModuleNotFoundError("nr2_contracts.qb_payroll removed_in_nr2_11000_clean")  # clean-slate strip
 
             raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
             try:
@@ -6940,7 +6962,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
     @app.get("/api/apex/hal/collections-gap")
     def apex_hal_collections_gap():
         try:
-            from nr2_contracts.softdent_hardening import assess_collections_gap
+            raise ModuleNotFoundError("nr2_contracts.softdent_hardening removed_in_nr2_11000_clean")  # clean-slate strip
 
             _reports, bundle, _err = _load_reports_and_bundle()
             result = assess_collections_gap(bundle)
@@ -7086,7 +7108,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
     @app.get("/api/apex/unified/snapshot")
     def apex_unified_snapshot():
         try:
-            from nr2_contracts.unified_db import orchestrator_context_snapshot
+            raise ModuleNotFoundError("nr2_contracts.unified_db removed_in_nr2_11000_clean")  # clean-slate strip
 
             result = orchestrator_context_snapshot(limit=12)
             result["buildId"] = BUILD_ID
@@ -7393,55 +7415,18 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
 
     @app.get("/api/apex/hal/reconciliation-status")
     def apex_reconciliation_status():
-        try:
-            from apex_reconciliation_pack import reconciliation_status
-
-            result = reconciliation_status()
-            result["buildId"] = BUILD_ID
-            return json_response_fn(result)
-        except Exception as exc:  # noqa: BLE001
-            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+        # Clean-slate: pack removed — honest UNAVAILABLE (never ImportError 500).
+        return json_response_fn(_clean_slate_unavailable("hal_reconciliation"), status=503)
 
     @app.get("/api/apex/hal/extended-metrics-status")
     def apex_extended_metrics_status():
-        """Phase W0 — SoftDent case acceptance / aging / scheduling views."""
-        try:
-            from nr2_contracts.softdent_extended import extended_metrics_status
-
-            result = extended_metrics_status()
-            result["buildId"] = BUILD_ID
-            return json_response_fn(result)
-        except Exception as exc:  # noqa: BLE001
-            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+        """Phase W0 — SoftDent extended metrics pack removed in clean-slate."""
+        return json_response_fn(_clean_slate_unavailable("softdent_extended_metrics"), status=503)
 
     @app.post("/api/apex/hal/reconciliation")
     def apex_reconciliation_run():
-        """Phase U2 — SoftDent×QB variance scan (+ optional 30B explainer)."""
-        try:
-            import bottle
-            from apex_reconciliation_pack import run_reconciliation
-
-            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
-            payload = json.loads(raw or "{}")
-            classify_only = bool(payload.get("classifyOnly") or payload.get("classify_only"))
-            explain = payload.get("explain")
-            if explain is None:
-                explain = True
-            period = payload.get("period")
-            result = run_reconciliation(
-                period=str(period) if period else None,
-                classify_only=classify_only,
-                explain=bool(explain),
-            )
-            result["buildId"] = BUILD_ID
-            status = (
-                200
-                if result.get("ok") or result.get("reason") == "reconciliation_disabled"
-                else 400
-            )
-            return json_response_fn(result, status=status)
-        except Exception as exc:  # noqa: BLE001
-            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+        """Clean-slate: SoftDent×QB recon pack removed — honest 503 UNAVAILABLE."""
+        return json_response_fn(_clean_slate_unavailable("hal_reconciliation"), status=503)
 
     @app.get("/api/apex/hal/import-quarantine-status")
     def apex_import_quarantine_status():
@@ -7665,7 +7650,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
     @app.post("/api/apex/unified/ingest")
     def apex_unified_ingest():
         try:
-            from nr2_contracts.unified_db import ingest_from_bundle
+            raise ModuleNotFoundError("nr2_contracts.unified_db removed_in_nr2_11000_clean")  # clean-slate strip
 
             _reports, bundle, _err = _load_reports_and_bundle()
             result = ingest_from_bundle(bundle)
@@ -9066,8 +9051,26 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
 
     @app.post("/api/apex/softdent/refresh-period")
     def apex_softdent_refresh_period():
+        """Fail-fast refresh — never hang the optical UI (30s hard cap)."""
+        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import TimeoutError as FuturesTimeout
+
         try:
-            return json_response_fn(refresh_softdent_period_imports())
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(refresh_softdent_period_imports)
+                result = fut.result(timeout=30)
+            return json_response_fn(result)
+        except FuturesTimeout:
+            return json_response_fn(
+                {
+                    "ok": False,
+                    "error": "refresh_period_timeout",
+                    "available": True,
+                    "reason": "exceeded_30s",
+                    "buildId": BUILD_ID,
+                },
+                status=504,
+            )
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
 

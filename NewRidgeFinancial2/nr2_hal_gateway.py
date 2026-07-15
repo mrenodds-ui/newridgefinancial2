@@ -1456,6 +1456,104 @@ def try_local_policy_reply(query: str) -> dict[str, str] | None:
     return None
 
 
+def build_live_claims_money_context() -> str:
+    """Inject live SoftDent claims totals so HAL cannot invent $0 against real signal."""
+    try:
+        from nr2_softdent_daily import claims_outstanding
+
+        raw = claims_outstanding(limit=50)
+    except Exception as exc:  # noqa: BLE001
+        return (
+            "[LIVE_CLAIMS_CONTEXT]\n"
+            f"signal=NO_SIGNAL error={exc}\n"
+            "If asked for claims dollars: say NO SIGNAL — do not invent $0.\n"
+            "[END_LIVE_CLAIMS_CONTEXT]"
+        )
+    if not isinstance(raw, dict) or not raw.get("hasData"):
+        return (
+            "[LIVE_CLAIMS_CONTEXT]\n"
+            "hasData=false · empty ≠ $0 · say ∅ / NO SIGNAL, never invent dollars.\n"
+            "[END_LIVE_CLAIMS_CONTEXT]"
+        )
+    total = raw.get("totalOutstanding")
+    claims = raw.get("claims") if isinstance(raw.get("claims"), list) else []
+    count = len(claims)
+    try:
+        total_n = float(total) if total is not None else None
+    except (TypeError, ValueError):
+        total_n = None
+    if total_n is None and claims:
+        total_n = 0.0
+        for c in claims:
+            if isinstance(c, dict) and c.get("amount") is not None:
+                try:
+                    total_n += float(c.get("amount") or 0)
+                except (TypeError, ValueError):
+                    pass
+    lines = [
+        "[LIVE_CLAIMS_CONTEXT]",
+        f"hasData=true count={count}",
+        f"totalOutstanding={total_n if total_n is not None else 'unknown'}",
+        "Authority: use this total for SoftDent claims/outstanding questions.",
+        "Never say $0 or 0 when totalOutstanding > 0. empty ≠ $0.",
+        "HAL estimates — verify against live SoftDent claims beam.",
+        "[END_LIVE_CLAIMS_CONTEXT]",
+    ]
+    return "\n".join(lines)
+
+
+def try_live_claims_total_reply(query: str) -> dict[str, str] | None:
+    """Deterministic claims-total honesty — prefer live API over model guess."""
+    q = re.sub(r"^hal[,:]\s+", "", str(query or ""), flags=re.IGNORECASE).lower().strip()
+    if not re.search(
+        r"\b("
+        r"outstanding\s+claims?\s*(total|sum|amount)?|"
+        r"claims?\s+outstanding|"
+        r"total\s+(softdent\s+)?claims?|"
+        r"how\s+much\s+.*\bclaims?\b|"
+        r"claims?\s+total"
+        r")\b",
+        q,
+    ):
+        return None
+    try:
+        from nr2_softdent_daily import claims_outstanding
+
+        raw = claims_outstanding(limit=200)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "text": f"SoftDent claims signal unavailable ({exc}). empty ≠ $0 — do not invent a total.",
+            "intent": "policy:claims-total-nosignal",
+        }
+    if not isinstance(raw, dict) or not raw.get("hasData"):
+        return {
+            "text": "No SoftDent claims signal (∅). empty ≠ $0 — not $0.00.",
+            "intent": "policy:claims-total-empty",
+        }
+    total = raw.get("totalOutstanding")
+    claims = raw.get("claims") if isinstance(raw.get("claims"), list) else []
+    try:
+        total_n = float(total) if total is not None else None
+    except (TypeError, ValueError):
+        total_n = None
+    if total_n is None:
+        total_n = 0.0
+        for c in claims:
+            if isinstance(c, dict) and c.get("amount") is not None:
+                try:
+                    total_n += float(c.get("amount") or 0)
+                except (TypeError, ValueError):
+                    pass
+    return {
+        "text": (
+            f"Live SoftDent claims outstanding: ${total_n:,.0f} "
+            f"across {len(claims)} claim(s) (read-only API). "
+            "empty ≠ $0 · verify against SoftDent beam · HAL does not invent dollars."
+        ),
+        "intent": "policy:claims-total-live",
+    }
+
+
 def build_import_readiness_context(readiness: dict[str, Any]) -> str:
     lines = [
         "[IMPORT_CONTEXT]",
@@ -2470,6 +2568,28 @@ def evaluate_query(
                 "resolvedLane": resolved["lane"],
             }
 
+    claims_total = try_live_claims_total_reply(query)
+    if claims_total:
+        text = claims_total["text"]
+        append_lane_history(
+            store,
+            lane="local",
+            model="claims-live",
+            query=query,
+            intent=claims_total.get("intent", "policy:claims-total-live"),
+        )
+        return {
+            "ok": True,
+            "text": text,
+            "message": {"content": text},
+            "model": "local-claims-live",
+            "readinessLevel": level,
+            "intent": claims_total.get("intent", "policy:claims-total-live"),
+            "softStale": soft_stale,
+            "resolvedLane": "local",
+            "routingReason": "live_claims_money_gate",
+        }
+
     local = try_local_policy_reply(query)
     if local:
         text = local["text"]
@@ -2504,10 +2624,14 @@ def evaluate_query(
             "routingReason": "import_gap_policy",
         }
 
+    money_sys = system_prompt or ""
+    if financial or re.search(r"(?i)\b(claim|claims|revenue|ar\b|dollar|\$)\b", query or ""):
+        money_sys = (money_sys + "\n\n" + build_live_claims_money_context()).strip()
+
     chat_messages, intent, soft_stale, level = build_chat_messages(
         query=query,
         readiness=readiness,
-        system_prompt=system_prompt,
+        system_prompt=money_sys,
         messages=messages,
     )
 
