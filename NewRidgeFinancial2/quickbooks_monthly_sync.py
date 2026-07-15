@@ -56,6 +56,69 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) ->
     return write_bytes_if_changed(path, buf.getvalue().encode("utf-8"))
 
 
+def _touch_export_freshness(path: Path) -> None:
+    """Bump mtime after a successful QB refresh even when CSV bytes are unchanged.
+
+    SoftGap age follows file mtime; write_bytes_if_changed can leave yesterday's
+    stamp when June/July dollars match analytics — that falsely keeps
+    quickbooks.revenue / P&L critical-stale.
+    """
+    import os
+    import time
+
+    if path.is_file():
+        now = time.time()
+        os.utime(path, (now, now))
+
+
+def _write_monthly_exports(destination: Path, monthly_rows: list[dict[str, Any]]) -> list[str]:
+    if not monthly_rows:
+        return []
+    written: list[str] = []
+    revenue_rows = [{"Period": row["Period"], "TotalIncome": row["TotalIncome"]} for row in monthly_rows]
+    expense_rows = [{"Period": row["Period"], "TotalExpense": row["TotalExpense"]} for row in monthly_rows]
+    pl_rows = [
+        {
+            "Period": row["Period"],
+            "TotalIncome": row["TotalIncome"],
+            "TotalExpense": row["TotalExpense"],
+            "NetIncome": row["NetIncome"],
+        }
+        for row in monthly_rows
+    ]
+    revenue_path = destination / "quickbooks_revenue.csv"
+    expense_path = destination / "quickbooks_expenses.csv"
+    pl_path = destination / "quickbooks_profit_and_loss.csv"
+    _write_csv(revenue_path, revenue_rows, ["Period", "TotalIncome"])
+    _write_csv(expense_path, expense_rows, ["Period", "TotalExpense"])
+    _write_csv(pl_path, pl_rows, ["Period", "TotalIncome", "TotalExpense", "NetIncome"])
+    for path in (revenue_path, expense_path, pl_path):
+        _touch_export_freshness(path)
+    written.extend([revenue_path.name, expense_path.name, pl_path.name])
+    return written
+
+
+def _newest_quickbooks_export_mtime(destination: Path) -> float | None:
+    """Age gate for monthly money CSVs only — ignore categories/cache mtimes.
+
+    expense_categories or qb_report_cache can be fresh while revenue/P&L stay
+    day-old; using those would skip SDK/analytics refresh and leave criticals stale.
+    """
+    best: float | None = None
+    for name in (
+        "quickbooks_profit_and_loss.csv",
+        "quickbooks_revenue.csv",
+        "quickbooks_expenses.csv",
+    ):
+        path = destination / name
+        if not path.is_file():
+            continue
+        mtime = path.stat().st_mtime
+        if best is None or mtime > best:
+            best = mtime
+    return best
+
+
 def _coerce_float(value: Any) -> float | None:
     if value in (None, ""):
         return None
@@ -305,48 +368,6 @@ def _should_fetch_sdk_monthly(existing_months: int, *, force: bool = False) -> b
                 return False
             break
     return existing_months < 2
-
-
-def _write_monthly_exports(destination: Path, monthly_rows: list[dict[str, Any]]) -> list[str]:
-    if not monthly_rows:
-        return []
-    written: list[str] = []
-    revenue_rows = [{"Period": row["Period"], "TotalIncome": row["TotalIncome"]} for row in monthly_rows]
-    expense_rows = [{"Period": row["Period"], "TotalExpense": row["TotalExpense"]} for row in monthly_rows]
-    pl_rows = [
-        {
-            "Period": row["Period"],
-            "TotalIncome": row["TotalIncome"],
-            "TotalExpense": row["TotalExpense"],
-            "NetIncome": row["NetIncome"],
-        }
-        for row in monthly_rows
-    ]
-    revenue_path = destination / "quickbooks_revenue.csv"
-    expense_path = destination / "quickbooks_expenses.csv"
-    pl_path = destination / "quickbooks_profit_and_loss.csv"
-    _write_csv(revenue_path, revenue_rows, ["Period", "TotalIncome"])
-    _write_csv(expense_path, expense_rows, ["Period", "TotalExpense"])
-    _write_csv(pl_path, pl_rows, ["Period", "TotalIncome", "TotalExpense", "NetIncome"])
-    written.extend([revenue_path.name, expense_path.name, pl_path.name])
-    return written
-
-
-def _newest_quickbooks_export_mtime(destination: Path) -> float | None:
-    best: float | None = None
-    for name in (
-        "quickbooks_profit_and_loss.csv",
-        "quickbooks_revenue.csv",
-        "quickbooks_expenses.csv",
-        "quickbooks_expense_categories.csv",
-    ):
-        path = destination / name
-        if not path.is_file():
-            continue
-        mtime = path.stat().st_mtime
-        if best is None or mtime > best:
-            best = mtime
-    return best
 
 
 def quickbooks_cache_stale(destination: Path, max_age_minutes: int = 60) -> bool:
