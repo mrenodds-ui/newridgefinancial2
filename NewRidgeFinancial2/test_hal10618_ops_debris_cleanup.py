@@ -14,7 +14,7 @@ from apex_compact_pages_pack import (
 
 class Hal10618OpsDebrisCleanupTests(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "hal-10629")
 
     def test_claims_build_has_executive_strip(self) -> None:
         _WIDGETS_CACHE.clear()
@@ -42,7 +42,7 @@ class Hal10618OpsDebrisCleanupTests(unittest.TestCase):
     def test_content_hub_main(self) -> None:
         _WIDGETS_CACHE.clear()
         out = build_apex_widgets("content", _fill=True)
-        self.assertEqual(out.get("buildId"), "hal-10628")
+        self.assertEqual(out.get("buildId"), "hal-10629")
         ids = [w.get("id") for w in (out.get("widgets") or []) if isinstance(w, dict)]
         self.assertIn("content-hub-strip", ids)
         self.assertNotIn("unknown-subpage", ids)

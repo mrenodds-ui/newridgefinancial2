@@ -34,7 +34,7 @@ class PhaseV2PolishTests(unittest.TestCase):
         invalidate_explain_cache(reason="test_teardown")
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "hal-10629")
 
     def test_explain_cache_default_off(self):
         os.environ.pop("NR2_EXPLAIN_CACHE", None)
@@ -131,7 +131,7 @@ class PhaseV2PolishTests(unittest.TestCase):
         self.assertEqual(explain_cache_stats().get("size"), 0)
 
     def test_legacy_polish_css_removed(self):
-        """hal-10628: strip theme / mobile-polish / chrome-flash and pre-Apex CSS."""
+        """hal-10629: page-widget CSS stripped; legacy polish sheets remain absent."""
         html = (SITE / "index.html").read_text(encoding="utf-8")
         for name in (
             "apex-mobile-polish.css",
@@ -142,6 +142,12 @@ class PhaseV2PolishTests(unittest.TestCase):
         ):
             self.assertNotIn(name, html)
             self.assertFalse((SITE / name).is_file(), name)
+        bridge = (SITE / "apex-bridge.css").read_text(encoding="utf-8")
+        self.assertIn("BLANK STAGE", bridge)
+        self.assertNotIn("Visual boost instruments", bridge)
+        self.assertNotIn("More-widgets pack", bridge)
+        tokens = (SITE / "apex-tokens.css").read_text(encoding="utf-8")
+        self.assertNotIn(".apex-widget {", tokens)
 
 
 if __name__ == "__main__":

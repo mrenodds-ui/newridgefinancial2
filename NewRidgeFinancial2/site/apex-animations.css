@@ -1,6 +1,6 @@
 /**
  * NR2-Apex P5 — Motion layer (entrance, sync, HAL pulse, suggestion panel)
- * Build: hal-10220
+ * Build: hal-10629 — page widget motion removed
  */
 
 :root {
@@ -25,30 +25,6 @@
   }
 }
 
-/* Silent refresh: soft pulse, no layout flash */
-.apex-widget.is-updating {
-  animation: apexBreathe 1.6s ease-in-out infinite;
-  pointer-events: none;
-}
-
-/* HAL chat must stay clickable; it is skipped during silent patch */
-.apex-widget--hal-chat.is-updating {
-  pointer-events: auto;
-  animation: none;
-}
-
-.apex-widget.is-patched {
-  animation: apexPatchFlash 480ms ease-out;
-}
-
-@keyframes apexPatchFlash {
-  0% {
-    box-shadow: 0 0 0 1px var(--apex-cyan-dim), 0 0 12px rgba(0, 240, 255, 0.15);
-  }
-  100% {
-    box-shadow: none;
-  }
-}
 
 /* Sync / refresh header feedback */
 #apex-header.is-syncing {
@@ -192,10 +168,7 @@ body.is-printing #apex-stage {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .apex-widget,
   .apex-stage.is-entering,
-  .apex-widget.is-updating,
-  .apex-widget.is-patched,
   #apex-header.is-syncing #btn-refresh,
   #apex-hal-suggest,
   .hal-orb {

@@ -128,7 +128,7 @@ def _seed_spine(path: Path) -> None:
 class GoldPaymentPipelineHal10588Tests(unittest.TestCase):
     def test_build_id_coupled_to_package(self) -> None:
         self.assertEqual(PACKAGE_BUILD_ID, "hal-10588")
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "hal-10629")
 
     def test_audit_diagnoses_missing_csv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

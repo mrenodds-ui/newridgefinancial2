@@ -1,13 +1,13 @@
 /**
  * NR2-Apex Core — stacked stage, silent refresh, print, session-aware fetch
- * Build: hal-10628 (HAL spine ↔ HAL chat wire harden)
+ * Build: hal-10629 (page widgets blanked; instrument CSS removed)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10628";
+  const ASSET_V = "hal-10629";
   if (typeof window !== "undefined") {
     window.NR2_BUILD_ID = ASSET_V;
   }
@@ -6296,6 +6296,32 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
     return true;
   }
 
+  function renderBlankStage(note) {
+    const root = stage();
+    if (!root) return;
+    if (window.ApexHalBrain && typeof window.ApexHalBrain.destroy === "function") {
+      window.ApexHalBrain.destroy();
+    }
+    root.innerHTML = "";
+    widgets.clear();
+    root.className = "apex-stage apex-stage-stack";
+    root.dataset.page = currentPage;
+    if (currentSub) root.dataset.sub = currentSub;
+    else delete root.dataset.sub;
+    const hint = note
+      ? String(note)
+      : "Page widgets and instrument CSS were removed. Stage is blank for redesign.";
+    root.innerHTML = `<div class="apex-blank-stage" role="status">
+      <p class="apex-blank-stage__kicker">NR2 Apex</p>
+      <h2 class="apex-blank-stage__title">Blank stage</h2>
+      <p class="apex-blank-stage__hint">${String(hint)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")}</p>
+    </div>`;
+  }
+
   function renderWidgets(list) {
     const root = stage();
     if (!root) return;
@@ -6309,6 +6335,10 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
     const isHalChat = isHal && !currentSub;
     const isHalSub = isHal && !!currentSub;
     const specs = list || [];
+    if (!specs.length) {
+      renderBlankStage();
+      return;
+    }
     const chatSpec =
       isHalChat || isHalSub ? specs.find((s) => s && s.type === "hal-chat") : null;
     const mainSpecs = chatSpec ? specs.filter((s) => s !== chatSpec) : specs;
@@ -6562,6 +6592,18 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
 
     function applyWidgetPayload(payload, { fromCache }) {
       const list = (payload && payload.widgets) || [];
+      if (payload && payload.blankWidgets) {
+        if (!silent) {
+          renderBlankStage(payload.sourceNote || "blank-stage — all widgets removed");
+        }
+        const metaPayload = Object.assign({}, payload || {});
+        if (fromCache) {
+          metaPayload.sourceNote =
+            (metaPayload.sourceNote ? metaPayload.sourceNote + " · " : "") + "IndexedDB cache";
+        }
+        setMeta(metaPayload);
+        return;
+      }
       const chatComposerActive = (() => {
         try {
           if (halChatBusy) return true;

@@ -10,7 +10,7 @@ from apex_backend import BUILD_ID, build_apex_widgets, _WIDGETS_CACHE
 
 class Hal10617StackNoMosaicTests(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "hal-10629")
 
     def test_pages_emit_no_mosaic_layout(self) -> None:
         prev = os.environ.get("NR2_APEX_BLANK_WIDGETS")
@@ -29,7 +29,7 @@ class Hal10617StackNoMosaicTests(unittest.TestCase):
             )
             for page in pages:
                 payload = build_apex_widgets(page, _fill=True)
-                self.assertEqual(payload.get("buildId"), "hal-10628", page)
+                self.assertEqual(payload.get("buildId"), "hal-10629", page)
                 self.assertIsNone(payload.get("mosaicLayout"), page)
                 widgets = payload.get("widgets") or []
                 tiled = [

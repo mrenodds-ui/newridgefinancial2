@@ -1,9 +1,9 @@
 {
-  "schemaVersion": "hal-10628",
-  "BUILD_ID": "hal-10628",
-  "assetVersion": "hal-10628",
+  "schemaVersion": "hal-10629",
+  "BUILD_ID": "hal-10629",
+  "assetVersion": "hal-10629",
   "builtAt": "2026-07-14T13:52:00.000Z",
-  "notes": "hal-10628: lock HAL stage while Ask HAL chat is mounted; form submit cannot reload page.",
+  "notes": "hal-10629: blank all page widgets by default; strip instrument/widget CSS from Apex shell.",
   "staffRenderMode": "apex",
-  "package": "HAL-10628"
+  "package": "HAL-10629"
 }

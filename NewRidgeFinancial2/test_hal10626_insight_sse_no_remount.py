@@ -14,7 +14,7 @@ SSE_JS = ROOT / "site" / "nr2-insight-sse.js"
 
 class Hal10626InsightSseNoRemountTests(unittest.TestCase):
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "hal-10629")
 
     def test_sse_client_never_hard_remounts_hal(self):
         text = SSE_JS.read_text(encoding="utf-8")

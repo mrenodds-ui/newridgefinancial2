@@ -32,18 +32,19 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10628"
+BUILD_ID = "hal-10629"
 
 
 def _apex_blank_all_widgets() -> bool:
-    """Operator blank-stage: every Apex page returns zero widgets.
+    """Blank every Apex page stage (no page widgets).
 
-    Opt-in only via NR2_APEX_BLANK_WIDGETS=1 (default off for redesign freedom).
+    Default ON — page widgets and their CSS were removed for redesign.
+    Set NR2_APEX_BLANK_WIDGETS=0 to restore builder payloads (tests/CI).
     """
     raw = os.getenv("NR2_APEX_BLANK_WIDGETS")
     if raw is None or str(raw).strip() == "":
-        return False
-    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+        return True
+    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
 
 HAL_STATUS_SUGGESTION = (
     "Dictate findings: … · morning financial brief · which widgets empty on all pages? · SoftDent sync"
