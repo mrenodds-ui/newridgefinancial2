@@ -75,7 +75,7 @@
         ? prod.data.points.length === 0
         : prod.data.hasData === false;
       W.setText("val-prod", shown, empty ? "∅" : "—");
-      const hint = document.getElementById("hint-coll");
+      const hint = document.getElementById("hint-prod");
       if (hint && shown) {
         hint.textContent =
           "GET softdent/production-daily" + (last.label ? " · " + last.label : "") + " · empty ≠ $0";
@@ -100,6 +100,24 @@
           periodHint.textContent =
             "collections latest" + (lbl ? " · " + lbl : "") + " · period refresh on main";
         }
+      }
+      live = true;
+    }
+
+    const util = await W.getJson("/api/softdent/provider-utilization-7d", 10000);
+    if (util.ok && util.data && util.data.hasData && Array.isArray(util.data.providers) && util.data.providers.length) {
+      const top = util.data.providers[0];
+      const appts = top && top.appointments != null ? Number(top.appointments) : null;
+      const code = top && top.providerCode != null ? String(top.providerCode) : "?";
+      const ch = document.getElementById("hint-claims");
+      if (ch && appts != null) {
+        ch.textContent =
+          (ch.textContent || "claims") +
+          " · 7d util P" +
+          code +
+          " " +
+          appts +
+          " appts";
       }
       live = true;
     }

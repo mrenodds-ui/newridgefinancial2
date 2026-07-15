@@ -38,7 +38,7 @@
 
   async function prefetchClaimsHint() {
     try {
-      const res = await fetch("/api/softdent/claims-outstanding", { cache: "no-store" });
+      const res = await fetch("/api/softdent/claims-outstanding?limit=1", { cache: "no-store" });
       const data = await res.json();
       if (!res.ok || !data) return "";
       if (!data.hasData) return " [beam: SoftDent claims ∅ · empty≠$0]";
