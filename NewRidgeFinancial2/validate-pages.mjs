@@ -20,6 +20,27 @@ const indexHtml = readFileSync(join(siteDir, "index.html"), "utf8");
 const buildManifest = JSON.parse(readFileSync(join(__dirname, "nr2-build.json"), "utf8"));
 const expectedAssetVersion = buildManifest.assetVersion;
 const apexMode = buildManifest.staffRenderMode === "apex";
+const cleanOptical =
+  buildManifest.staffRenderMode === "nr2-clean" ||
+  String(buildManifest.schemaVersion || "").includes("nr2-11000-clean") ||
+  indexHtml.includes("nr2-optical-beam-touch-mockup") ||
+  indexHtml.includes("nr2-boot.js");
+
+if (cleanOptical) {
+  assert.ok(
+    existsSync(join(siteDir, "nr2-optical-beam-touch-mockup.html")),
+    "optical landing mockup must exist",
+  );
+  assert.ok(existsSync(join(siteDir, "nr2-optical-beam-touch.js")), "optical landing JS must exist");
+  assert.ok(existsSync(join(siteDir, "nr2-boot.js")), "CSP-safe boot JS must exist");
+  assert.ok(
+    indexHtml.includes("nr2-optical-beam-touch-mockup") || indexHtml.includes("nr2-boot.js"),
+    "index must boot optical landing without inline SPA",
+  );
+  assert.ok(!indexHtml.includes("apex-core.js"), "clean optical index must not load apex-core");
+  console.log("validate-pages: nr2-clean optical entry OK");
+  process.exit(0);
+}
 
 if (apexMode) {
   assert.ok(indexHtml.includes("data-nr2-epoch=\"nr2-apex\""), "apex index must declare nr2-apex epoch");

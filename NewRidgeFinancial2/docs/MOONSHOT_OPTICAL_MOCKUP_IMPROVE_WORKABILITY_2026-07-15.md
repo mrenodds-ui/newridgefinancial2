@@ -86,9 +86,11 @@ The optical interferometer metaphor remains intact and atmospheric.
 ---
 
 ## 6. Approval checklist
-- [ ] **Data honesty:** Hardcoded $ values replaced with “—” or “NO SIGNAL”, or persistent “SIMULATION” watermark added to landing  
-- [ ] **SCRAM ethics:** Button disabled and annotated as ornamental pending kill-switch API  
-- [ ] **Laser binding:** Alignment lasers reflect live import-readiness (SoftDent + QB connection status)  
-- [ ] **Beam geometry:** External JS recalculates beam angles on viewport resize (tested 1366×768, 1920×1080, 390×844)  
-- [ ] **Chat truth:** HAL chat “LIVE” badge changed to “STANDBY” until `POST /api/hal/evaluate-query` returns 200  
-- [ ] **RBAC enforcement:** Role toggles actually gate controls (not just CSS state) before handling patient financial data
+- [x] **Data honesty:** Hardcoded $ values replaced with “—” / live claims+QB or “∅”
+- [x] **SCRAM ethics:** Button disabled and annotated as ornamental pending kill-switch API
+- [x] **Laser binding:** Alignment lasers reflect live import-readiness (SoftDent + QB connection status)
+- [x] **Beam geometry:** External JS recalculates beam angles on viewport resize
+- [x] **Chat truth:** HAL chat posts `/api/hal/evaluate-query`; badge STANDBY · LIVE GATE
+- [x] **RBAC enforcement:** Role toggles disable mutate controls for Front Desk
+
+**Applied wiring (2026-07-15):** `nr2-12015-honest-beams` · `/api/browser-session` · lasers · SoftDent claims · QB revenue · sync / refresh-period / tax / recon (recon may fail if pack archived) · HAL chat

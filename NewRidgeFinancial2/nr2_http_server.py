@@ -769,6 +769,29 @@ class NR2BottleServer(BottleServer):
                         pass
                 return _json_response(payload)
 
+        @app.get("/api/browser-session")
+        def browser_session_api():
+            """Lightweight session token for optical UI mutations (no import-bundle load)."""
+            if not _browser_app():
+                return _json_response({"ok": True, "sessionToken": None, "browser": False})
+            token = ensure_browser_session_token()
+            try:
+                from nr2_browser_security import bind_session_user_agent, register_browser_session
+
+                bind_session_user_agent(token)
+                register_browser_session(token)
+            except Exception:
+                pass
+            return _json_response(
+                {
+                    "ok": True,
+                    "browser": True,
+                    "sessionToken": token,
+                    "csrfToken": token,
+                    "mutationHeader": "X-NR2-Session-Token",
+                }
+            )
+
         @app.get("/api/import-readiness")
         def import_readiness_api():
             operation = str(bottle.request.params.get("operation") or "").strip() or None
@@ -3454,26 +3477,29 @@ class NR2BottleServer(BottleServer):
             payload = json.loads(body or "{}")
             return _json_response(parse_era_import(_local_store(), payload))
 
+        def _optical_landing_redirect():
+            # Relative Location avoids Bottle rewriting to http:// when TLS is terminated locally.
+            bottle.response.status = 303
+            bottle.response.set_header("Location", "/nr2-optical-beam-touch-mockup.html")
+            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            bottle.response.set_header("Pragma", "no-cache")
+            bottle.response.set_header("Expires", 0)
+            return ""
+
         @app.get("/")
         def index():
             if not _desktop_access_ok():
                 bottle.abort(403, _desktop_only_html())
             _maybe_set_desktop_cookie()
-            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            bottle.response.set_header("Pragma", "no-cache")
-            bottle.response.set_header("Expires", 0)
             # Optical landing — no legacy SPA / overlay entry
-            bottle.redirect("/nr2-optical-beam-touch-mockup.html")
+            return _optical_landing_redirect()
 
         @app.get("/index.html")
         def index_html():
             if not _desktop_access_ok():
                 bottle.abort(403, _desktop_only_html())
             _maybe_set_desktop_cookie()
-            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            bottle.response.set_header("Pragma", "no-cache")
-            bottle.response.set_header("Expires", 0)
-            bottle.redirect("/nr2-optical-beam-touch-mockup.html")
+            return _optical_landing_redirect()
 
         @app.get("/deferred-live-wire/<file:path>")
         def deferred_live_wire(file):

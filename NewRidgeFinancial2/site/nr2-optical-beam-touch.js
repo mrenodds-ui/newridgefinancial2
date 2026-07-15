@@ -1,12 +1,60 @@
-/* nr2-12014-lower-ctrl-beam — external (CSP script-src 'self') */
+/* nr2-12015-honest-beams — live wire (CSP script-src 'self') */
 (function () {
   const toast = (msg) => {
     const el = document.getElementById("toast");
     if (!el) return;
     el.textContent = msg;
     el.classList.add("show");
-    setTimeout(() => el.classList.remove("show"), 2400);
+    setTimeout(() => el.classList.remove("show"), 2800);
   };
+
+  let sessionToken = "";
+  let role = "om";
+  let syncBusy = false;
+  let selectedPeriod = "60";
+
+  function money(n) {
+    if (n == null || !Number.isFinite(Number(n))) return null;
+    return Number(n);
+  }
+  function fmtMoney(n) {
+    const v = money(n);
+    if (v == null) return null;
+    return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  }
+  function setMetric(id, value, opts) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (value == null || value === "") {
+      el.textContent = opts && opts.emptyLabel ? opts.emptyLabel : "—";
+      el.classList.add("empty");
+      return;
+    }
+    el.textContent = value;
+    el.classList.remove("empty");
+  }
+  function setWireMark(live, text) {
+    const el = document.getElementById("wire-mark");
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle("live", !!live);
+  }
+
+  async function api(path, init) {
+    const headers = Object.assign({ Accept: "application/json" }, (init && init.headers) || {});
+    if (init && init.method && init.method.toUpperCase() !== "GET" && sessionToken) {
+      headers["X-NR2-Session-Token"] = sessionToken;
+      headers["Content-Type"] = headers["Content-Type"] || "application/json";
+    }
+    const res = await fetch(path, Object.assign({ cache: "no-store" }, init || {}, { headers }));
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (_) {
+      data = null;
+    }
+    return { ok: res.ok, status: res.status, data: data };
+  }
 
   function tick() {
     const clock = document.getElementById("clock");
@@ -15,25 +63,42 @@
   tick();
   setInterval(tick, 1000);
 
-  let role = "om";
   function applyRole() {
     const locked = role === "fd";
     document.querySelectorAll(".inst, .ctrl").forEach((n) => n.classList.toggle("locked", locked));
+    document.querySelectorAll("[data-act], #wheel button").forEach((n) => {
+      if (n.id === "scram") return;
+      n.disabled = locked;
+    });
     const om = document.getElementById("role-om");
     const fd = document.getElementById("role-fd");
     if (om) om.classList.toggle("on", role === "om");
     if (fd) fd.classList.toggle("on", role === "fd");
-    toast(locked ? "RBAC shutters closed — capabilities required" : "RBAC: office_manager keys inserted");
   }
   const roleOm = document.getElementById("role-om");
   const roleFd = document.getElementById("role-fd");
-  if (roleOm) roleOm.onclick = () => { role = "om"; applyRole(); };
-  if (roleFd) roleFd.onclick = () => { role = "fd"; applyRole(); };
+  if (roleOm) roleOm.onclick = () => {
+    role = "om";
+    applyRole();
+    toast("RBAC: office_manager keys inserted");
+  };
+  if (roleFd) roleFd.onclick = () => {
+    role = "fd";
+    applyRole();
+    toast("RBAC shutters closed — Front Desk view-only");
+  };
   applyRole();
 
   const scram = document.getElementById("scram");
-  if (scram) scram.onclick = () => location.reload();
+  if (scram) {
+    scram.disabled = true;
+    scram.onclick = (e) => {
+      e.preventDefault();
+      toast("SCRAM demoted: no emergency halt API — ornamental only");
+    };
+  }
 
+  /* —— beams —— */
   function localPoint(bench, clientX, clientY) {
     const br = bench.getBoundingClientRect();
     return { x: clientX - br.left, y: clientY - br.top };
@@ -95,55 +160,236 @@
     if (bench) new ResizeObserver(snapBeams).observe(bench);
   }
 
+  /* —— live wires —— */
+  async function ensureSession() {
+    const r = await api("/api/browser-session");
+    if (r.data && r.data.sessionToken) {
+      sessionToken = String(r.data.sessionToken);
+      return true;
+    }
+    return false;
+  }
+
+  async function refreshLasers() {
+    const align = document.getElementById("align");
+    const r = await api("/api/import-readiness");
+    if (!r.ok || !r.data) {
+      if (align) {
+        align.classList.add("bad");
+        align.title = "Import readiness unavailable";
+      }
+      return null;
+    }
+    const ready = r.data;
+    const blocking = Array.isArray(ready.blocking) ? ready.blocking : [];
+    const ok = ready.ok !== false && blocking.length === 0;
+    if (align) {
+      align.classList.toggle("bad", !ok);
+      align.title = ok
+        ? "Import readiness coherent · lasers green-path"
+        : "Import gaps / stale · lasers red (" + blocking.length + " blocking)";
+    }
+    const state = document.getElementById("hal-state");
+    if (state) {
+      state.textContent = ok ? "RECON · STANDBY" : "RECON · INCOHERENT";
+      state.style.color = ok ? "" : "var(--fringe)";
+    }
+    return ready;
+  }
+
+  async function refreshMetrics() {
+    const sdStatus = document.getElementById("sd-status");
+    const qbStatus = document.getElementById("qb-status");
+    const sdSub = document.getElementById("sd-sub");
+
+    const claims = await api("/api/softdent/claims-outstanding");
+    if (claims.ok && claims.data && claims.data.hasData) {
+      const list = Array.isArray(claims.data.claims) ? claims.data.claims : [];
+      const total =
+        money(claims.data.totalOutstanding) != null
+          ? money(claims.data.totalOutstanding)
+          : list.length
+            ? list.reduce((s, c) => s + (money(c.amount) || 0), 0)
+            : null;
+      const shown = total != null ? fmtMoney(total) : null;
+      if (shown) {
+        setMetric("metric-sd", shown);
+        if (sdStatus) sdStatus.textContent = "CLAIMS · LIVE";
+        if (sdSub) sdSub.textContent = "claims outstanding (read-only) · empty ≠ $0 · no write-back";
+      } else {
+        setMetric("metric-sd", null);
+        if (sdStatus) sdStatus.textContent = "∅ EMPTY";
+      }
+    } else {
+      setMetric("metric-sd", null, { emptyLabel: "∅" });
+      if (sdStatus) sdStatus.textContent = "NO SIGNAL";
+      if (sdSub) sdSub.textContent = "no claims signal · empty ≠ $0 · no SoftDent write-back";
+    }
+
+    const qb = await api("/api/qb/monthly-revenue");
+    if (qb.ok && qb.data && qb.data.hasData && Array.isArray(qb.data.values) && qb.data.values.length) {
+      const last = qb.data.values[qb.data.values.length - 1];
+      const shown = fmtMoney(last);
+      if (shown) {
+        setMetric("metric-qb", shown);
+        if (qbStatus) qbStatus.textContent = "LIVE";
+        const lbl = Array.isArray(qb.data.labels) ? qb.data.labels[qb.data.labels.length - 1] : "";
+        const qbSub = document.getElementById("qb-sub");
+        if (qbSub) qbSub.textContent = "monthly revenue" + (lbl ? " · " + lbl : "") + " · empty ≠ $0";
+      } else {
+        setMetric("metric-qb", null, { emptyLabel: "∅" });
+        if (qbStatus) qbStatus.textContent = "∅ EMPTY";
+      }
+    } else {
+      setMetric("metric-qb", null, { emptyLabel: "∅" });
+      if (qbStatus) qbStatus.textContent = "NO SIGNAL";
+    }
+  }
+
+  async function bootWire() {
+    setWireMark(false, "CONNECTING · SESSION + READINESS");
+    try {
+      const okSession = await ensureSession();
+      const ready = await refreshLasers();
+      await refreshMetrics();
+      if (okSession && ready) {
+        setWireMark(true, "LIVE SIGNAL · empty ≠ $0 · no SoftDent write-back");
+        toast("Optical wires live · lasers + SoftDent claims + QB revenue");
+      } else if (ready) {
+        setWireMark(false, "READINESS OK · SESSION WEAK — mutations may 403");
+      } else {
+        setWireMark(false, "PARTIAL WIRE · CHECK IMPORT-READINESS");
+      }
+    } catch (err) {
+      setWireMark(false, "WIRE FAILED · " + String(err && err.message ? err.message : err));
+    }
+  }
+
   const wheel = document.getElementById("wheel");
   if (wheel) {
-    wheel.onclick = (e) => {
+    wheel.onclick = async (e) => {
       const b = e.target.closest("button[data-period]");
       if (!b || role === "fd") return;
       document.querySelectorAll("#wheel button").forEach((x) => x.classList.remove("on"));
       b.classList.add("on");
-      toast("Period Wheel → POST softdent/refresh-period · " + b.dataset.period + "d (mock bind)");
+      selectedPeriod = b.dataset.period || selectedPeriod;
+      toast("Period " + selectedPeriod + "d selected · pressing REFRESH-PERIOD posts SoftDent refresh");
     };
   }
 
-  let syncBusy = false;
+  async function doSync(btn) {
+    if (syncBusy) return;
+    syncBusy = true;
+    if (btn) btn.classList.add("busy");
+    const led = document.getElementById("pulse-led");
+    if (led) {
+      led.classList.remove("idle");
+      led.classList.add("on");
+    }
+    toast("SYNC → POST /api/apex/sync/trigger …");
+    const r = await api("/api/apex/sync/trigger", {
+      method: "POST",
+      body: JSON.stringify({ page: "financial", fullSync: true, actor: "optical-bench" }),
+    });
+    syncBusy = false;
+    if (btn) btn.classList.remove("busy");
+    if (led) {
+      led.classList.remove("on");
+      led.classList.add("idle");
+    }
+    if (r.status === 423) {
+      toast("Sync locked — already in progress (423)");
+      return;
+    }
+    if (!r.ok) {
+      toast("Sync failed · " + (r.data && (r.data.error || r.data.status) || r.status));
+      return;
+    }
+    toast("Sync ok · refreshing lasers + metrics");
+    await refreshLasers();
+    await refreshMetrics();
+  }
+
+  async function doRefreshPeriod() {
+    toast("Period Wheel → POST /api/apex/softdent/refresh-period · " + selectedPeriod + "d …");
+    const r = await api("/api/apex/softdent/refresh-period", {
+      method: "POST",
+      body: JSON.stringify({ periodDays: Number(selectedPeriod) || 60 }),
+    });
+    if (!r.ok) {
+      toast("Refresh-period failed · " + (r.data && r.data.error || r.status));
+      return;
+    }
+    toast(r.data && r.data.ok ? "SoftDent period refresh ok" : "Refresh returned · check SoftDent sign-on");
+    await refreshLasers();
+    await refreshMetrics();
+  }
+
+  async function doRecon() {
+    const state = document.getElementById("hal-state");
+    if (state) state.textContent = "RECON · RUNNING";
+    toast("HAL → POST /api/apex/hal/reconciliation …");
+    const r = await api("/api/apex/hal/reconciliation", {
+      method: "POST",
+      body: JSON.stringify({ classifyOnly: false, explain: false }),
+    });
+    if (!r.ok) {
+      if (state) state.textContent = "RECON · UNAVAILABLE";
+      toast(
+        "Reconciliation unavailable · " +
+          (r.data && (r.data.error || r.data.reason) || r.status) +
+          " (pack may be archived)"
+      );
+      return;
+    }
+    const ok = !!(r.data && r.data.ok);
+    if (state) state.textContent = ok ? "RECON · COHERENT" : "RECON · INCOHERENT";
+    toast(ok ? "Reconciliation ok" : "Reconciliation completed with gaps");
+  }
+
+  async function doTax() {
+    toast("Tax Prism → POST /api/apex/tax/calculate-planning …");
+    const r = await api("/api/apex/tax/calculate-planning", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    const metric = document.getElementById("metric-tax");
+    if (!r.ok) {
+      toast("Tax planning failed · " + (r.data && r.data.error || r.status));
+      if (metric) metric.textContent = "ERR";
+      return;
+    }
+    const plan = r.data || {};
+    const label =
+      plan.effective_rate != null
+        ? (Number(plan.effective_rate) * 100).toFixed(1) + "% EFF"
+        : plan.taxable_income != null
+          ? fmtMoney(plan.taxable_income) || "PLAN"
+          : "PLAN OK";
+    if (metric) {
+      metric.textContent = label;
+      metric.classList.remove("empty");
+    }
+    toast((plan.disclaimer || "PLANNING ONLY — CPA REVIEW") + "");
+  }
+
   const benchEl = document.getElementById("bench");
   if (benchEl) {
     benchEl.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-act]");
       if (!btn) return;
       if (role === "fd") {
-        toast("Shutter locked — insufficient capability");
+        toast("Shutter locked — Front Desk cannot mutate");
         return;
       }
       const act = btn.dataset.act;
-      if (act === "sync") {
-        if (syncBusy) return;
-        syncBusy = true;
-        btn.classList.add("busy");
-        const led = document.getElementById("pulse-led");
-        if (led) {
-          led.classList.remove("idle");
-          led.classList.add("on");
-        }
-        toast("HAL Core · SoftDent+QB sync → POST /api/apex/sync/trigger");
-        setTimeout(() => {
-          syncBusy = false;
-          btn.classList.remove("busy");
-          if (led) {
-            led.classList.remove("on");
-            led.classList.add("idle");
-          }
-          toast("Sync complete (mock) · SoftDent AR still stale / blocking HAL recon");
-        }, 1600);
-        return;
-      }
-      const map = {
-        refresh: "SoftDent · Period Wheel → POST softdent/refresh-period → HAL context",
-        recon: "HAL Core · POST hal/reconciliation (SoftDent+QB+Tax beams)",
-        tax: "Tax Prism emitter · POST tax/calculate-planning · rolling beam → HAL",
-      };
-      toast(map[act] || act);
+      if (act === "sync") return void doSync(btn);
+      if (act === "refresh") return void doRefreshPeriod();
+      if (act === "recon") return void doRecon();
+      if (act === "tax") return void doTax();
     });
   }
+
+  bootWire();
+  setInterval(refreshLasers, 60000);
 })();

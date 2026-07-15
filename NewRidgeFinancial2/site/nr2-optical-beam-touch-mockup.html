@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NR2 Optical Bench — Lower + Ctrl Beam (nr2-12014-lower-ctrl-beam)</title>
+  <title>NR2 Optical Bench — Honest Beams (nr2-12015-honest-beams)</title>
   <link rel="stylesheet" href="/nr2-optical-theme.css" />
   <style>
     :root {
@@ -388,29 +388,46 @@
       max-width: min(720px, 92vw); text-align: center;
     }
     .toast.show { display: block; }
+    .wire-mark {
+      position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%);
+      z-index: 25; pointer-events: none;
+      font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 6px 14px; border: 1px solid rgba(201,162,39,0.55);
+      background: rgba(16,14,8,0.88); color: #c9a227;
+      max-width: min(720px, 92vw); text-align: center;
+    }
+    .wire-mark.live {
+      border-color: rgba(0,212,170,0.45); color: var(--sd);
+      background: rgba(8,16,14,0.88);
+    }
+    .metric.empty { color: var(--stale) !important; font-size: clamp(16px, 1.8vw, 22px); }
+    .scram[disabled] {
+      opacity: 0.55; cursor: not-allowed; border-style: dashed;
+    }
   </style>
 </head>
 <body>
   <div class="banner">
-    Mockup · Lower + Ctrl Beam · nr2-12014-lower-ctrl-beam · empty ≠ $0 · no SoftDent write-back
-    <span class="bind">SD+QB down &amp; inward on beams · teal CTRL beam from upper-left · Tax upper-right</span>
+    Optical landing · nr2-12015-honest-beams · empty ≠ $0 · no SoftDent write-back
+    <span class="bind" id="banner-bind">Wiring live APIs · lasers ← import-readiness · money honesty</span>
   </div>
 
   <div class="bench" id="bench">
     <div class="mode-strip">
-      <div><b>NR2-12014-LOWER-CTRL-BEAM</b> <span class="muted">· SD+QB on beams · CTRL beam upper-left</span>
+      <div><b>NR2-12015-HONEST-BEAMS</b> <span class="muted">· live wire · no legacy overlays</span>
         <a href="/nr2-optical-pages-hub.html" style="margin-left:12px;color:var(--sd);font-size:13px;letter-spacing:0.04em">PAGES HUB →</a>
       </div>
       <div class="muted" id="clock">--:--:-- UTC</div>
       <div style="display:flex;gap:8px;align-items:center">
         <button type="button" class="role on" id="role-om" data-role="om">ROLE: OM</button>
         <button type="button" class="role" id="role-fd" data-role="fd">ROLE: FRONT DESK</button>
-        <button type="button" class="scram" id="scram">SCRAM</button>
+        <button type="button" class="scram" id="scram" disabled title="No emergency halt API — demo only">SCRAM (DEMO · NO HALT API)</button>
       </div>
     </div>
 
     <div class="align bad" id="align" title="Import readiness lasers — red = blocking critical gap"></div>
     <div class="toast" id="toast"></div>
+    <div class="wire-mark" id="wire-mark">CONNECTING · APIs NOT CONFIRMED</div>
 
     <div class="beam-layer" id="beam-layer" aria-hidden="true">
       <div class="beam-ray ctrl" id="ray-ctrl"></div>
@@ -420,26 +437,26 @@
     </div>
 
     <article class="emitter sd" id="emitter-sd">
-      <div class="lbl"><span>SoftDent</span><span style="color:#e0e6ed">STALE · PULSE</span></div>
-      <div class="metric">$35,842</div>
+      <div class="lbl"><span>SoftDent</span><span id="sd-status" style="color:#e0e6ed">NO SIGNAL</span></div>
+      <div class="metric empty" id="metric-sd">—</div>
       <div class="wells"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-      <div class="sub">AR beam honesty · money reads blocked · white pulse out</div>
-      <div class="meter" title="AR Power Meter → GET softdent/ar-aging (read-only)">
+      <div class="sub" id="sd-sub">claims outstanding · read-only · empty ≠ $0</div>
+      <div class="meter" title="SoftDent claims outstanding (read-only)">
         <div class="face"><div class="needle"></div></div>
-        <div class="cap">Power Meter<br>filament dim · stale</div>
+        <div class="cap">Power Meter<br>filament · live wire</div>
       </div>
-      <span class="bind-hint">SoftDent · down+inward · white pulse → HAL</span>
+      <span class="bind-hint">SoftDent · GET claims-outstanding · no write-back</span>
     </article>
     <article class="emitter qb" id="emitter-qb">
-      <div class="lbl"><span>QuickBooks</span><span style="color:var(--qb)">LIVE</span></div>
-      <div class="metric">$48,100</div>
-      <div class="sub">cash · payroll/AP empty-OK · right side</div>
-      <span class="bind-hint">QuickBooks · beam → HAL core</span>
+      <div class="lbl"><span>QuickBooks</span><span id="qb-status" style="color:var(--qb)">NO SIGNAL</span></div>
+      <div class="metric empty" id="metric-qb">—</div>
+      <div class="sub" id="qb-sub">monthly revenue · empty ≠ $0</div>
+      <span class="bind-hint">QuickBooks · GET monthly-revenue → HAL</span>
     </article>
 
     <article class="emitter tax" id="tax">
       <div class="lbl"><span>Tax Prism</span><span style="color:#ff66cc">SCENARIO</span></div>
-      <div class="metric">PLANS</div>
+      <div class="metric" id="metric-tax">PLANS</div>
       <div class="paths">
         <span>CUR</span>
         <span class="a">A</span>
@@ -456,7 +473,7 @@
         <div class="k">HAL</div>
         <div class="ai">AI MODEL CORE</div>
         <div class="v">SPECTRAL</div>
-        <div class="state">RECON · INCOHERENT</div>
+        <div class="state" id="hal-state">RECON · STANDBY</div>
         <span class="bind-hint">HAL core · SoftDent+QB+Tax beams · recon</span>
       </div>
     </div>
