@@ -111,6 +111,36 @@
       });
     }
   }
+  function lasersRed(ready) {
+    if (!ready || typeof ready !== "object") return false;
+    const lasers = ready.alignmentLasers || {};
+    const blocking = Array.isArray(ready.blocking) ? ready.blocking : [];
+    if (lasers.red === true) return true;
+    if (lasers.red === false) return false;
+    return blocking.length > 0 || ready.ok === false;
+  }
+  function laserKeys(ready) {
+    const lasers = ready && ready.alignmentLasers;
+    if (lasers && Array.isArray(lasers.datasetKeys) && lasers.datasetKeys.length) {
+      return lasers.datasetKeys.map(String);
+    }
+    return (ready && Array.isArray(ready.blocking) ? ready.blocking : [])
+      .map(function (b) {
+        return b && b.datasetKey ? String(b.datasetKey) : "";
+      })
+      .filter(Boolean);
+  }
+  function keysHit(keys, prefixes) {
+    return (keys || []).some(function (k) {
+      return prefixes.some(function (p) {
+        return k === p || k.indexOf(p) === 0;
+      });
+    });
+  }
+  function bannerModeFromReady(ready, hasLiveSignal) {
+    if (lasersRed(ready)) return "partial";
+    return hasLiveSignal ? "live" : "partial";
+  }
   global.NR2OpticalWire = {
     money: money,
     fmtMoney: fmtMoney,
@@ -120,5 +150,9 @@
     ensureSession: ensureSession,
     setBanner: setBanner,
     resolveBuildId: resolveBuildId,
+    lasersRed: lasersRed,
+    laserKeys: laserKeys,
+    keysHit: keysHit,
+    bannerModeFromReady: bannerModeFromReady,
   };
 })(window);

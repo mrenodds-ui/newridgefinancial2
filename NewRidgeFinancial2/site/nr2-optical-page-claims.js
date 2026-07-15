@@ -13,6 +13,11 @@
     const claims = await W.getJson("/api/softdent/claims-outstanding?limit=50", 12000);
     const aging = await W.getJson("/api/claims/aging-summary", 12000);
     const adj = await W.getJson("/api/softdent/adjustment-log", 12000);
+    const ready = await W.getJson("/api/import-readiness", 12000);
+    const readyData = ready.ok ? ready.data : null;
+    const claimsStale = readyData
+      ? W.keysHit(W.laserKeys(readyData), ["softdent.claims", "softdent."])
+      : false;
 
     let live = false;
     if (claims.ok && claims.data && claims.data.hasData) {
@@ -69,7 +74,12 @@
       if (eraHint) eraHint.textContent = "ERA ingest pack removed · no SoftDent write-back";
     }
 
-    W.setBanner(live ? "live" : "partial", "Claims full total LIVE · ERA UNAVAILABLE · empty ≠ $0");
+    W.setBanner(
+      claimsStale ? "partial" : live ? "live" : "partial",
+      claimsStale
+        ? "Claims STALE · lasers red on softdent · ERA UNAVAILABLE · empty ≠ $0"
+        : "Claims full total LIVE · ERA UNAVAILABLE · empty ≠ $0"
+    );
   }
 
   boot().catch((err) => {

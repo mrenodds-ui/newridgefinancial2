@@ -154,7 +154,19 @@
       const data = await res.json();
       const level = String((data && data.level) || "unknown");
       const blocking = (data && data.blocking) || [];
-      if (level === "fresh") {
+      const lasers = (data && data.alignmentLasers) || {};
+      const red = lasers.red === true || blocking.length > 0;
+      if (red) {
+        setTruth(
+          importReady,
+          "stale",
+          "STALE · lasers red" +
+            (blocking.length ? " · " + blocking.length + " gap(s)" : "") +
+            (level === "fresh" ? " · level fresh overruled" : " · " + level)
+        );
+        setTruth(systemTruth, "stale", "SYSTEM: DEGRADED");
+        staleBanner.classList.add("show");
+      } else if (level === "fresh") {
         setTruth(importReady, "live", "LIVE · imports fresh");
         setTruth(systemTruth, "live", "SYSTEM: LIVE");
         if (staleBanner && !staleBanner.classList.contains("danger")) {

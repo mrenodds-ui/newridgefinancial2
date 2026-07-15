@@ -124,29 +124,22 @@
 
     let stale = !!(arAging.ok && arAging.data && arAging.data.stale);
     const ready = await W.getJson("/api/import-readiness", 12000);
-    if (ready.ok && ready.data) {
-      const gaps = (ready.data.datasetGaps || []).concat(
-        (ready.data.completeness && ready.data.completeness.softGaps) || []
-      );
-      stale =
-        stale ||
-        gaps.some(
-          (g) =>
-            g &&
-            String(g.severity || "") === "critical" &&
-            /softdent\.ar|softdent/i.test(String(g.datasetKey || "")) &&
-            /stale/i.test(String(g.status || ""))
-        );
+    const readyData = ready.ok ? ready.data : null;
+    if (readyData) {
+      stale = stale || W.keysHit(W.laserKeys(readyData), ["softdent."]);
     }
     if (stale) {
       const ar = document.getElementById("val-ar");
       if (ar) ar.classList.add("stale");
       W.setBanner(
         "partial",
-        "SoftDent AR stale · re-export Account Aging Report to SoftDentReportExports · empty ≠ $0"
+        "SoftDent lasers STALE · re-export Account Aging (keep SoftDent save folder) · empty ≠ $0"
       );
     } else {
-      W.setBanner(live ? "live" : "partial", "SoftDent read-only · claims + production · no write-back");
+      W.setBanner(
+        live ? "live" : "partial",
+        "SoftDent read-only · claims + production · no write-back"
+      );
     }
   }
 

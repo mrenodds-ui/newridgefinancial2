@@ -13,6 +13,56 @@
   let syncBusy = false;
   let selectedPeriod = "60";
   let reconAvailable = false;
+  let lastReady = null;
+  let lastSessionOk = false;
+
+  function lasersRed(ready) {
+    if (!ready || typeof ready !== "object") return true;
+    const lasers = ready.alignmentLasers || {};
+    const blocking = Array.isArray(ready.blocking) ? ready.blocking : [];
+    if (lasers.red === true) return true;
+    if (lasers.red === false) return false;
+    return ready.ok === false || blocking.length > 0;
+  }
+
+  function laserKeys(ready) {
+    const lasers = ready && ready.alignmentLasers;
+    if (lasers && Array.isArray(lasers.datasetKeys) && lasers.datasetKeys.length) {
+      return lasers.datasetKeys.map(String);
+    }
+    return (ready && Array.isArray(ready.blocking) ? ready.blocking : [])
+      .map(function (b) {
+        return b && b.datasetKey ? String(b.datasetKey) : "";
+      })
+      .filter(Boolean);
+  }
+
+  function keysHit(keys, prefixes) {
+    return (keys || []).some(function (k) {
+      return prefixes.some(function (p) {
+        return k === p || k.indexOf(p) === 0;
+      });
+    });
+  }
+
+  function applyWireHonesty(ready, sessionOk) {
+    lastReady = ready || null;
+    if (sessionOk != null) lastSessionOk = !!sessionOk;
+    if (!ready) {
+      setWireMark(false, "PARTIAL WIRE · CHECK IMPORT-READINESS");
+      return;
+    }
+    if (lasersRed(ready)) {
+      const keys = laserKeys(ready).slice(0, 3).join(",") || "blocking";
+      setWireMark(false, "STALE · lasers red · " + keys + " · empty ≠ $0");
+      return;
+    }
+    if (!lastSessionOk) {
+      setWireMark(false, "READINESS OK · SESSION WEAK — mutations may 403");
+      return;
+    }
+    setWireMark(true, "LIVE SIGNAL · empty ≠ $0 · no SoftDent write-back");
+  }
 
   function setReconUi(mode, detail) {
     const state = document.getElementById("hal-state");
@@ -238,17 +288,13 @@
         align.classList.add("bad");
         align.title = "Import readiness unavailable";
       }
+      applyWireHonesty(null);
       return null;
     }
     const ready = r.data;
     const blocking = Array.isArray(ready.blocking) ? ready.blocking : [];
     const lasers = ready.alignmentLasers || {};
-    const red =
-      lasers.red === true ||
-      (lasers.red !== false &&
-        ready.ok === false &&
-        blocking.length > 0) ||
-      (lasers.red == null && (ready.ok === false || blocking.length > 0));
+    const red = lasersRed(ready);
     // Canonical server lasers — do not re-compute softGaps client-side (brief soft stale must stay soft).
     if (align) {
       align.classList.toggle("bad", !!red);
@@ -261,11 +307,29 @@
           ")"
         : "Import readiness coherent · lasers green-path";
     }
+    applyWireHonesty(ready);
+    applyMetricLaserHonesty(ready);
     // Import alignment only — recon status from refreshReconHonesty (never fake COHERENT).
     return ready;
   }
 
-  async function refreshMetrics() {
+  function applyMetricLaserHonesty(ready) {
+    const keys = laserKeys(ready);
+    const sdStatus = document.getElementById("sd-status");
+    const qbStatus = document.getElementById("qb-status");
+    if (sdStatus && /LIVE/.test(sdStatus.textContent || "")) {
+      if (keysHit(keys, ["softdent."])) sdStatus.textContent = "CLAIMS · STALE";
+    }
+    if (qbStatus && (qbStatus.textContent || "") === "LIVE") {
+      if (keysHit(keys, ["quickbooks."])) qbStatus.textContent = "STALE";
+    }
+  }
+
+  async function refreshMetrics(readyHint) {
+    const ready = readyHint || lastReady;
+    const keys = laserKeys(ready);
+    const sdStale = keysHit(keys, ["softdent."]);
+    const qbStale = keysHit(keys, ["quickbooks."]);
     const sdStatus = document.getElementById("sd-status");
     const qbStatus = document.getElementById("qb-status");
     const sdSub = document.getElementById("sd-sub");
@@ -278,11 +342,12 @@
       const shown = total != null ? fmtMoney(total) : null;
       if (shown) {
         setMetric("metric-sd", shown);
-        if (sdStatus) sdStatus.textContent = "CLAIMS · LIVE";
+        if (sdStatus) sdStatus.textContent = sdStale ? "CLAIMS · STALE" : "CLAIMS · LIVE";
         if (sdSub) {
           sdSub.textContent =
             "claims outstanding" +
             (count ? " · " + count + " open" : "") +
+            (sdStale ? " · lasers red" : "") +
             " · empty ≠ $0 · no write-back";
         }
       } else {
@@ -303,10 +368,16 @@
       const shown = fmtMoney(last);
       if (shown) {
         setMetric("metric-qb", shown);
-        if (qbStatus) qbStatus.textContent = "LIVE";
+        if (qbStatus) qbStatus.textContent = qbStale ? "STALE" : "LIVE";
         const lbl = Array.isArray(qb.data.labels) ? qb.data.labels[qb.data.labels.length - 1] : "";
         const qbSub = document.getElementById("qb-sub");
-        if (qbSub) qbSub.textContent = "monthly revenue" + (lbl ? " · " + lbl : "") + " · empty ≠ $0";
+        if (qbSub) {
+          qbSub.textContent =
+            "monthly revenue" +
+            (lbl ? " · " + lbl : "") +
+            (qbStale ? " · lasers red" : "") +
+            " · empty ≠ $0";
+        }
       } else {
         setMetric("metric-qb", null, { emptyLabel: "∅" });
         if (qbStatus) qbStatus.textContent = "∅ EMPTY";
@@ -352,16 +423,15 @@
     setWireMark(false, "CONNECTING · SESSION + READINESS");
     try {
       const okSession = await ensureSession();
+      lastSessionOk = !!okSession;
       const ready = await refreshLasers();
-    await refreshReconHonesty();
-      await refreshMetrics();
-      if (okSession && ready) {
-        setWireMark(true, "LIVE SIGNAL · empty ≠ $0 · no SoftDent write-back");
-        toast("Optical wires live · lasers + SoftDent claims + QB revenue");
-      } else if (ready) {
-        setWireMark(false, "READINESS OK · SESSION WEAK — mutations may 403");
-      } else {
-        setWireMark(false, "PARTIAL WIRE · CHECK IMPORT-READINESS");
+      await refreshReconHonesty();
+      await refreshMetrics(ready);
+      applyWireHonesty(ready, okSession);
+      if (okSession && ready && !lasersRed(ready)) {
+        toast("Optical wires live · lasers green-path · SoftDent + QB");
+      } else if (ready && lasersRed(ready)) {
+        toast("Lasers red · money reads STALE until critical imports refresh");
       }
     } catch (err) {
       setWireMark(false, "WIRE FAILED · " + String(err && err.message ? err.message : err));

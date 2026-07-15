@@ -26,20 +26,13 @@
 
     let live = false;
     let stale = false;
+    const readyData = ready.ok ? ready.data : null;
 
-    if (ready.ok && ready.data) {
-      const gaps = (ready.data.datasetGaps || []).concat(
-        (ready.data.completeness && ready.data.completeness.softGaps) || []
-      );
-      const arGap = gaps.find(
-        (g) => g && /softdent\.ar/i.test(String(g.datasetKey || "")) && String(g.severity || "") === "critical"
-      );
-      if (arGap) {
-        stale = /stale|missing/i.test(String(arGap.status || ""));
-        W.setText("val-status", stale ? "STALE · " + (arGap.status || "gap") : String(arGap.status || "GAP"));
-      } else {
-        W.setText("val-status", "READY");
-      }
+    if (readyData) {
+      const keys = W.laserKeys(readyData);
+      const arHit = W.keysHit(keys, ["softdent.ar"]);
+      stale = arHit;
+      W.setText("val-status", arHit ? "STALE · softdent.ar" : "READY");
     } else {
       W.setText("val-status", "NO SIGNAL");
     }
@@ -93,11 +86,11 @@
       if (el) el.classList.add("stale");
       W.setBanner(
         "partial",
-        "softdent.ar STALE · re-export SoftDent Account Aging Report · empty ≠ $0 · no SoftDent write-back"
+        "softdent.ar STALE · re-export Account Aging (keep SoftDent save folder) · empty ≠ $0 · no SoftDent write-back"
       );
     } else {
       W.setBanner(
-        live ? "live" : "partial",
+        W.bannerModeFromReady(readyData, live),
         "SoftDent A/R buckets · no SoftDent write-back · empty ≠ $0"
       );
     }

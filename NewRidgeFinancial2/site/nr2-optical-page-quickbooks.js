@@ -27,6 +27,9 @@
     const ni = await W.getJson("/api/qb/net-income", 12000);
     const ar = await W.getJson("/api/qb/ar-aging", 12000);
     const ap = await W.getJson("/api/qb/ap-aging", 12000);
+    const ready = await W.getJson("/api/import-readiness", 12000);
+    const readyData = ready.ok ? ready.data : null;
+    const qbStale = readyData ? W.keysHit(W.laserKeys(readyData), ["quickbooks."]) : false;
 
     let live = false;
 
@@ -110,10 +113,19 @@
       if (hint) hint.textContent = "QB AR/AP aging empty · payroll export UNAVAILABLE · empty ≠ $0";
     }
 
-    W.setBanner(
-      live ? "live" : "partial",
-      "QB revenue + cash + net income · aging vacuum if empty · empty ≠ $0"
-    );
+    if (qbStale) {
+      const pl = document.getElementById("val-pl");
+      if (pl) pl.classList.add("stale");
+      W.setBanner(
+        "partial",
+        "QB lasers STALE · refresh QuickBooks imports · empty ≠ $0"
+      );
+    } else {
+      W.setBanner(
+        live ? "live" : "partial",
+        "QB revenue + cash + net income · aging vacuum if empty · empty ≠ $0"
+      );
+    }
   }
 
   boot().catch((err) => {

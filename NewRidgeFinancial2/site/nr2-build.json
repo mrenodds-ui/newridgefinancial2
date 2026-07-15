@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12024-laser-softgap-unify",
-  "BUILD_ID": "nr2-12024-laser-softgap-unify",
-  "assetVersion": "nr2-12024-laser-softgap-unify",
-  "builtAt": "2026-07-15T20:50:00.000Z",
-  "notes": "nr2-12024-laser-softgap-unify: critical softGaps past TTL enter blocking + alignmentLasers; landing lasers use server signal; Pages Hub LIVE/STALE from readiness; optical banners stamp from /api/app-info. SoftDent write-back still forbidden.",
+  "schemaVersion": "nr2-12025-wire-stale-honesty",
+  "BUILD_ID": "nr2-12025-wire-stale-honesty",
+  "assetVersion": "nr2-12025-wire-stale-honesty",
+  "builtAt": "2026-07-15T21:05:00.000Z",
+  "notes": "nr2-12025-wire-stale-honesty: LIVE chrome respects alignmentLasers.red — main wire-mark + SoftDent/QB chips + subpage banners never claim LIVE when critical imports block. SoftDent write-back still forbidden.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12024-LASER-SOFTGAP-UNIFY",
+  "package": "NR2-12025-WIRE-STALE-HONESTY",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"
