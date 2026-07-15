@@ -229,20 +229,21 @@
     const qbStatus = document.getElementById("qb-status");
     const sdSub = document.getElementById("sd-sub");
 
-    const claims = await api("/api/softdent/claims-outstanding");
+    const claims = await api("/api/softdent/claims-outstanding?limit=25");
     if (claims.ok && claims.data && claims.data.hasData) {
       const list = Array.isArray(claims.data.claims) ? claims.data.claims : [];
-      const total =
-        money(claims.data.totalOutstanding) != null
-          ? money(claims.data.totalOutstanding)
-          : list.length
-            ? list.reduce((s, c) => s + (money(c.amount) || 0), 0)
-            : null;
+      const count = claims.data.count != null ? Number(claims.data.count) : list.length;
+      const total = money(claims.data.totalOutstanding);
       const shown = total != null ? fmtMoney(total) : null;
       if (shown) {
         setMetric("metric-sd", shown);
         if (sdStatus) sdStatus.textContent = "CLAIMS · LIVE";
-        if (sdSub) sdSub.textContent = "claims outstanding (read-only) · empty ≠ $0 · no write-back";
+        if (sdSub) {
+          sdSub.textContent =
+            "claims outstanding" +
+            (count ? " · " + count + " open" : "") +
+            " · empty ≠ $0 · no write-back";
+        }
       } else {
         setMetric("metric-sd", null);
         if (sdStatus) sdStatus.textContent = "∅ EMPTY";

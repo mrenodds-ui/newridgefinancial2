@@ -481,38 +481,66 @@ def provider_utilization_last_7d() -> dict[str, Any]:
 
 
 def claims_outstanding(*, limit: int = 10) -> dict[str, Any]:
+    """Open SoftDent claims sample + full outstanding total (empty ≠ $0).
+
+    ``limit`` caps the returned claim *list* only — totalOutstanding/count
+    always cover the full open set so UI dollars are not understated.
+    """
     conn, db_path = _connect()
     if not conn:
-        return {"hasData": False, "claims": [], "totalOutstanding": 0}
+        return {
+            "hasData": False,
+            "claims": [],
+            "totalOutstanding": None,
+            "count": 0,
+            "honesty": "empty != $0",
+        }
     try:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT claim_id, patient_name, payer, service_date, claim_amount, claim_status
-            FROM sd_claims
-            WHERE COALESCE(claim_amount, 0) > 0
+        source = "sd_claims"
+        open_where = """
+            COALESCE(claim_amount, 0) > 0
               AND UPPER(COALESCE(claim_status, '')) NOT IN ('PAID', 'CLOSED', 'DENIED')
-            ORDER BY claim_amount DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
-        claims = []
-        total = 0.0
-        for claim_id, patient, payer, service_date, amount, status in cur.fetchall():
-            amt = float(amount or 0)
-            total += amt
-            claims.append(
-                {
-                    "claimId": str(claim_id or ""),
-                    "patientName": str(patient or ""),
-                    "payer": str(payer or ""),
-                    "serviceDate": str(service_date or ""),
-                    "amount": round(amt, 2),
-                    "status": str(status or ""),
-                }
+        """
+        total = None
+        count = 0
+        if _table_exists(conn, "sd_claims"):
+            cur.execute(
+                "SELECT COUNT(*), SUM(COALESCE(claim_amount, 0)) FROM sd_claims WHERE " + open_where
             )
-        if not claims and _table_exists(conn, "outstanding_claims"):
+            row = cur.fetchone() or (0, None)
+            count = int(row[0] or 0)
+            if row[1] is not None:
+                total = round(float(row[1]), 2)
+            cur.execute(
+                """
+                SELECT claim_id, patient_name, payer, service_date, claim_amount, claim_status
+                FROM sd_claims
+                WHERE """
+                + open_where
+                + """
+                ORDER BY claim_amount DESC
+                LIMIT ?
+                """,
+                (max(1, int(limit)),),
+            )
+            rows = cur.fetchall()
+        else:
+            rows = []
+
+        if not rows and _table_exists(conn, "outstanding_claims"):
+            source = "outstanding_claims"
+            cur.execute(
+                """
+                SELECT COUNT(*), SUM(COALESCE(claim_amount, 0))
+                FROM outstanding_claims
+                WHERE COALESCE(claim_amount, 0) > 0
+                """
+            )
+            row = cur.fetchone() or (0, None)
+            count = int(row[0] or 0)
+            if row[1] is not None:
+                total = round(float(row[1]), 2)
             cur.execute(
                 """
                 SELECT claim_id, patient_name, payer, service_date, claim_amount, claim_status
@@ -521,29 +549,33 @@ def claims_outstanding(*, limit: int = 10) -> dict[str, Any]:
                 ORDER BY claim_amount DESC
                 LIMIT ?
                 """,
-                (limit,),
+                (max(1, int(limit)),),
             )
-            for claim_id, patient, payer, service_date, amount, status in cur.fetchall():
-                amt = float(amount or 0)
-                total += amt
-                claims.append(
-                    {
-                        "claimId": str(claim_id or ""),
-                        "patientName": str(patient or ""),
-                        "payer": str(payer or ""),
-                        "serviceDate": str(service_date or ""),
-                        "amount": round(amt, 2),
-                        "status": str(status or ""),
-                    }
-                )
+            rows = cur.fetchall()
+
+        claims = []
+        for claim_id, patient, payer, service_date, amount, status in rows:
+            claims.append(
+                {
+                    "claimId": str(claim_id or ""),
+                    "patientName": str(patient or ""),
+                    "payer": str(payer or ""),
+                    "serviceDate": str(service_date or ""),
+                    "amount": round(float(amount or 0), 2),
+                    "status": str(status or ""),
+                }
+            )
     finally:
         conn.close()
     return {
-        "hasData": bool(claims),
+        "hasData": count > 0 or bool(claims),
         "claims": claims,
-        "totalOutstanding": round(total, 2),
-        "source": "sd_claims",
+        "totalOutstanding": total,
+        "count": count,
+        "sampleLimit": max(1, int(limit)),
+        "source": source,
         "dbPath": str(db_path),
+        "honesty": "empty != $0",
     }
 
 

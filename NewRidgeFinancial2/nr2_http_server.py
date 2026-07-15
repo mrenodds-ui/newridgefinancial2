@@ -2822,9 +2822,15 @@ class NR2BottleServer(BottleServer):
 
         @app.get("/api/softdent/claims-outstanding")
         def softdent_claims_outstanding_api():
+            import bottle
             from nr2_softdent_daily import claims_outstanding
 
-            return _json_response(claims_outstanding())
+            try:
+                limit = int(bottle.request.query.get("limit") or 25)
+            except (TypeError, ValueError):
+                limit = 25
+            limit = max(1, min(limit, 500))
+            return _json_response(claims_outstanding(limit=limit))
 
         @app.get("/api/softdent/ar-aging")
         def softdent_ar_aging_api():

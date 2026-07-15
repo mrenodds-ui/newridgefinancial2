@@ -48,15 +48,14 @@
       }
     }
 
-    const claims = await W.getJson("/api/softdent/claims-outstanding", 12000);
+    const claims = await W.getJson("/api/softdent/claims-outstanding?limit=50", 12000);
     if (claims.ok && claims.data && claims.data.hasData) {
-      const total =
-        W.money(claims.data.totalOutstanding) != null
-          ? W.money(claims.data.totalOutstanding)
-          : (claims.data.claims || []).reduce((s, c) => s + (W.money(c.amount) || 0), 0);
+      const list = Array.isArray(claims.data.claims) ? claims.data.claims : [];
+      const count = claims.data.count != null ? Number(claims.data.count) : list.length;
+      const total = W.money(claims.data.totalOutstanding);
       const shown = W.fmtMoney(total);
       if (shown) {
-        W.setText("val-claims", shown);
+        W.setText("val-claims", shown + (count ? " · " + count : ""));
         if (!arFromAging) W.setText("val-ar", shown);
         live = true;
       } else {
