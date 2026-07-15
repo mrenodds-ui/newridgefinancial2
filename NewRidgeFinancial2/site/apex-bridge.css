@@ -1,5 +1,5 @@
 /* NR2-Apex Bridge — shell chrome only (page widgets + instrument CSS removed)
- * Build: hal-10629
+ * Build: hal-10630
  */
 :root {
   --sidebar-width: 240px;
@@ -418,41 +418,10 @@ body.apex-ticker-muted .apex-ticker__track {
   align-content: stretch;
 }
 
-/* ——— BLANK STAGE (hal-10629 — page widgets + instrument CSS removed) ——— */
-.apex-blank-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 8px;
+/* ——— EMPTY STAGE (hal-10630 — leave #apex-stage clear for new page placement) ——— */
+.apex-stage[data-blank="1"],
+html[data-apex-blank="1"] #apex-stage {
   min-height: min(42vh, 360px);
-  padding: 28px 8px 48px;
-  color: var(--apex-text-secondary);
-}
-
-.apex-blank-stage__kicker {
-  font-family: "Orbitron", "JetBrains Mono", monospace;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--apex-cyan);
-  margin: 0;
-}
-
-.apex-blank-stage__title {
-  font-family: "Orbitron", "JetBrains Mono", monospace;
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--apex-text-primary);
-  margin: 0;
-}
-
-.apex-blank-stage__hint {
-  font-size: 12px;
-  line-height: 1.45;
-  max-width: 42rem;
-  margin: 0;
 }
 
 .apex-ticker--bottom {

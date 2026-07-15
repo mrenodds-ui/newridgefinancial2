@@ -21,6 +21,7 @@
 
   function flashStage() {
     if (prefersReducedMotion) return;
+    if (document.documentElement.getAttribute("data-apex-blank") === "1") return;
     const main = document.getElementById("apex-main");
     if (!main) return;
     main.classList.add("is-glitching");
@@ -82,6 +83,7 @@
   function enableHoloTilt(root) {
     // Moonshot M-1: disable card tilt (wobble). Ambient opt-in only.
     if (prefersReducedMotion || !root) return;
+    if (document.documentElement.getAttribute("data-apex-blank") === "1") return;
     if (!document.body.classList.contains("apex-ambient-enabled")) return;
     const cards = root.querySelectorAll(".apex-widget.apex-inst");
     cards.forEach((card) => {

@@ -1,13 +1,13 @@
 /**
  * NR2-Apex Core — stacked stage, silent refresh, print, session-aware fetch
- * Build: hal-10629 (page widgets blanked; instrument CSS removed)
+ * Build: hal-10630 (blank stage stays empty for new page placement)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10629";
+  const ASSET_V = "hal-10630";
   if (typeof window !== "undefined") {
     window.NR2_BUILD_ID = ASSET_V;
   }
@@ -17,6 +17,38 @@
   const WB_VIEW_KEY = "nr2-apex-claims-wb-view";
   const CPA_FLAG_KEY = "nr2-apex-cpa-flags";
   const DENSITY_KEY = "nr2-apex-density";
+
+  /** Match server default: blank ON unless explicitly opted out. */
+  function blankWidgetsMode() {
+    try {
+      const raw =
+        typeof window !== "undefined" && window.NR2_APEX_BLANK_WIDGETS != null
+          ? window.NR2_APEX_BLANK_WIDGETS
+          : typeof document !== "undefined"
+            ? document.documentElement.getAttribute("data-apex-blank-widgets")
+            : null;
+      if (raw === false || raw === 0 || raw === "0" || raw === "false" || raw === "off" || raw === "no") {
+        return false;
+      }
+      if (raw === true || raw === 1 || raw === "1" || raw === "true" || raw === "on" || raw === "yes") {
+        return true;
+      }
+    } catch (_err) {}
+    return true;
+  }
+
+  function markBlankStage(root, on) {
+    try {
+      if (typeof document !== "undefined") {
+        if (on) document.documentElement.setAttribute("data-apex-blank", "1");
+        else document.documentElement.removeAttribute("data-apex-blank");
+      }
+      if (root) {
+        if (on) root.dataset.blank = "1";
+        else delete root.dataset.blank;
+      }
+    } catch (_err) {}
+  }
   const PARENT_PAGES = new Set([
     "financial",
     "taxes",
@@ -6296,30 +6328,20 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
     return true;
   }
 
-  function renderBlankStage(note) {
+  function renderBlankStage(_note) {
     const root = stage();
     if (!root) return;
     if (window.ApexHalBrain && typeof window.ApexHalBrain.destroy === "function") {
       window.ApexHalBrain.destroy();
     }
+    // Empty stage only — no placeholder copy fighting new page placement.
     root.innerHTML = "";
     widgets.clear();
     root.className = "apex-stage apex-stage-stack";
     root.dataset.page = currentPage;
     if (currentSub) root.dataset.sub = currentSub;
     else delete root.dataset.sub;
-    const hint = note
-      ? String(note)
-      : "Page widgets and instrument CSS were removed. Stage is blank for redesign.";
-    root.innerHTML = `<div class="apex-blank-stage" role="status">
-      <p class="apex-blank-stage__kicker">NR2 Apex</p>
-      <h2 class="apex-blank-stage__title">Blank stage</h2>
-      <p class="apex-blank-stage__hint">${String(hint)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")}</p>
-    </div>`;
+    markBlankStage(root, true);
   }
 
   function renderWidgets(list) {
@@ -6330,6 +6352,7 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
     }
     root.innerHTML = "";
     widgets.clear();
+    markBlankStage(root, false);
 
     const isHal = currentPage === "hal";
     const isHalChat = isHal && !currentSub;
@@ -6490,12 +6513,22 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
       const next = subLabel ? `${base} · ${subLabel}` : base;
       if (el.textContent !== next) el.textContent = next;
       // Never glitch/flash on silent polls — that looked like a full page refresh.
-      if (!silent && window.ApexMotion && typeof window.ApexMotion.triggerGlitch === "function") {
+      if (
+        !silent &&
+        !blankWidgetsMode() &&
+        window.ApexMotion &&
+        typeof window.ApexMotion.triggerGlitch === "function"
+      ) {
         window.ApexMotion.triggerGlitch(el);
       }
     }
     // Silent polls must not flash the stage — that felt like a full page refresh on HAL chat.
-    if (!silent && window.ApexMotion && typeof window.ApexMotion.flashStage === "function") {
+    if (
+      !silent &&
+      !blankWidgetsMode() &&
+      window.ApexMotion &&
+      typeof window.ApexMotion.flashStage === "function"
+    ) {
       window.ApexMotion.flashStage();
     }
   }
@@ -6545,10 +6578,11 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
       btn.classList.toggle("active", btn.dataset.page === currentPage);
     });
 
-    // Interactive narratives workspace (not KPI mosaic) — also Content → Narratives
+    // Interactive narratives workspace — skipped while blank so it cannot seize #apex-stage.
     if (
-      (currentPage === "narratives" && !currentSub) ||
-      (currentPage === "content" && currentSub === "narratives")
+      !blankWidgetsMode() &&
+      ((currentPage === "narratives" && !currentSub) ||
+        (currentPage === "content" && currentSub === "narratives"))
     ) {
       if (refreshTimer) clearInterval(refreshTimer);
       if (window.ApexHalBrain && typeof window.ApexHalBrain.destroy === "function") {
@@ -6565,6 +6599,24 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
         }
       }
       setMeta({ page: "narratives", refreshedAt: new Date().toISOString(), sourceNote: "interactive narratives bridge" });
+      return;
+    }
+
+    if (blankWidgetsMode()) {
+      // Leave stage empty for placement — no loading tombstone, no IDB mosaic flash.
+      if (!silent) {
+        renderBlankStage("blank-stage — ready for placement");
+        setMeta({
+          page: routeKey(currentPage, currentSub, currentQuery),
+          refreshedAt: new Date().toISOString(),
+          sourceNote: "blank-stage — all widgets removed",
+          blankWidgets: true,
+        });
+      }
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
       return;
     }
 
@@ -6593,8 +6645,11 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
     function applyWidgetPayload(payload, { fromCache }) {
       const list = (payload && payload.widgets) || [];
       if (payload && payload.blankWidgets) {
+        // Silent polls must not wipe manually placed stage content.
         if (!silent) {
           renderBlankStage(payload.sourceNote || "blank-stage — all widgets removed");
+        } else {
+          markBlankStage(root, true);
         }
         const metaPayload = Object.assign({}, payload || {});
         if (fromCache) {
@@ -7004,6 +7059,8 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
     loadPage,
     config,
     assetVersion: ASSET_V,
+    blankWidgetsMode,
+    apiBase: () => config.apiBase,
     printPage,
     triggerSync,
     apexFetch,
@@ -7016,6 +7073,7 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
     parseApexHash,
     formatApexHash,
   };
+  window.ApexCore = window.Apex;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

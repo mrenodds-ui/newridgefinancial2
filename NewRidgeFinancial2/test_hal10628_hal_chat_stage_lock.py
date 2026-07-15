@@ -14,7 +14,7 @@ CORE = ROOT / "site" / "apex-core.js"
 
 class Hal10628ChatStageLockTests(unittest.TestCase):
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10629")
+        self.assertEqual(BUILD_ID, "hal-10630")
 
     def test_composer_is_form_with_submit_guard(self):
         text = CORE.read_text(encoding="utf-8")

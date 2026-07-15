@@ -1,4 +1,4 @@
-"""hal-10629 — blank widgets default ON; set NR2_APEX_BLANK_WIDGETS=0 to restore."""
+"""hal-10630 — blank widgets default ON; set NR2_APEX_BLANK_WIDGETS=0 to restore."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from apex_backend import APEX_PAGES, BUILD_ID, build_apex_widgets, _WIDGETS_CACH
 
 class Hal10619BlankWidgetsTests(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10629")
+        self.assertEqual(BUILD_ID, "hal-10630")
 
     def test_blank_default_on(self) -> None:
         prev = os.environ.get("NR2_APEX_BLANK_WIDGETS")
@@ -30,7 +30,7 @@ class Hal10619BlankWidgetsTests(unittest.TestCase):
             _WIDGETS_CACHE.clear()
             for page in APEX_PAGES:
                 out = build_apex_widgets(page, _fill=True)
-                self.assertEqual(out.get("buildId"), "hal-10629", page)
+                self.assertEqual(out.get("buildId"), "hal-10630", page)
                 self.assertTrue(out.get("blankWidgets"), page)
                 self.assertEqual(out.get("widgets"), [], page)
                 self.assertIsNone(out.get("mosaicLayout"), page)

@@ -97,6 +97,17 @@
 
   async function refresh() {
     try {
+      if (
+        document.documentElement.getAttribute("data-apex-blank") === "1" ||
+        (window.ApexCore && typeof window.ApexCore.blankWidgetsMode === "function" && window.ApexCore.blankWidgetsMode())
+      ) {
+        const bar = document.getElementById("nr2-freshness-bar");
+        if (bar) {
+          bar.hidden = true;
+          bar.innerHTML = "";
+        }
+        return;
+      }
       const res = await fetch(`${apiBase()}/hal/sync-status`, { credentials: "same-origin" });
       let body = null;
       if (res.ok) body = await res.json();

@@ -10,7 +10,7 @@ from apex_compact_pages_pack import PAGE_FIRST_VIEW_KEEP, partition_first_viewpo
 
 class Hal10612DemoteOpsTests(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10629")
+        self.assertEqual(BUILD_ID, "hal-10630")
 
     def test_partition_keeps_only_allowlist(self) -> None:
         widgets = [

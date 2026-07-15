@@ -1,9 +1,9 @@
 {
-  "schemaVersion": "hal-10629",
-  "BUILD_ID": "hal-10629",
-  "assetVersion": "hal-10629",
+  "schemaVersion": "hal-10630",
+  "BUILD_ID": "hal-10630",
+  "assetVersion": "hal-10630",
   "builtAt": "2026-07-14T13:52:00.000Z",
-  "notes": "hal-10629: blank all page widgets by default; strip instrument/widget CSS from Apex shell.",
+  "notes": "hal-10630: empty blank stage for placement; skip narratives/IDB/motion interference.",
   "staffRenderMode": "apex",
-  "package": "HAL-10629"
+  "package": "HAL-10630"
 }
