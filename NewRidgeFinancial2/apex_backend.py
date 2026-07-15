@@ -32,7 +32,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "nr2-12028-export-consent-teach"
+BUILD_ID = "nr2-12029-softdent-path-hygiene"
 
 def _clean_slate_unavailable(feature: str = "pack") -> dict[str, Any]:
     """Honest payload when Apex packs / nr2_contracts were removed in cutover.
@@ -4645,7 +4645,9 @@ def build_export_playbook() -> dict[str, Any]:
             "TEACHING: Desktop SoftDent report pull — Launch CS SoftDent Software.lnk (-sus) → Sign On "
             "COMPUTE/computer → Reports → <report> → Output Options → click Excel then Enter "
             "(or Print Preview then Enter) — NEVER Printer. Setup dates / doctor 999 → OK. "
-            r"Save Excel into C:\SoftDentReportExports (temp SDWIN*.csv → SaveCopyAs). "
+            "NEVER type SoftDentReportExports or C:\\SOFTDE~1 into SoftDent Select File Name — "
+            "keep SoftDent's folder (e.g. OneDrive\\Documents). Temp SDWIN*.csv → Excel SaveCopyAs OK; "
+            "NR2 copies into C:\\SoftDentReportExports after SoftDent saves. "
             "Preview: last page for totals. Then NR2 SoftDent → Sync. "
             "Ask HAL: how do I pull SoftDent reports? (policy softdent-report-pull).",
             "Phase-1 menus: Accounting→Registers/Period; Practice Management→Collection Reports→Summary; "
@@ -4658,7 +4660,8 @@ def build_export_playbook() -> dict[str, Any]:
             "SoftDent GUI Sign On: SOFTDENT_SIGNON_USER / SOFTDENT_SIGNON_PASSWORD "
             r"(aliases SOFTDENT_GUI_USER / SOFTDENT_GUI_PASSWORD; also C:\New folder\.env). "
             "HAL never prints the password.",
-            "File path: SoftDent Excel/CSV into C:\\SoftDentReportExports then Sync into "
+            "Land path after SoftDent saves: NR2 inbox under C:\\SoftDentReportExports "
+            "(never as SoftDent Select File Name) then Sync into "
             "app_data/nr2/document_inbox/softdent/ (or configured SoftDent import dir).",
             "Claims aging shelves need ClaimId, PatientName, ServiceDate, and Age/Days (or DOS so age can be computed).",
             "Then tell HAL: Sync imports and populate the widgets — or click Apex Sync.",
@@ -4684,7 +4687,8 @@ def build_export_playbook() -> dict[str, Any]:
         "honesty": (
             "Prefer SoftDent DB/ODBC when available. "
             "Data that cannot be reached by the database requires Sign On + SoftDent UI export only. "
-            "SoftDent Sign On user/password live in env vars (SOFTDENT_SIGNON_*); "
+            "NEVER type SoftDentReportExports into SoftDent Select File Name — keep SoftDent's folder; "
+            "NR2 copies after save. SoftDent Sign On user/password live in env vars (SOFTDENT_SIGNON_*); "
             "HAL/refresh may use them for GUI Sign On assist only. "
             "HAL never invents dollars and never writes SoftDent clinical/financial data."
         ),
@@ -4964,7 +4968,9 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
             result["nextStep"] = (
                 f"DEF-001: period {gap.get('period') or 'open'} still collectionsPending. "
                 "SoftDent → Reports → Accounting → Register for a Period (open month start → today) "
-                r"or Collections/Daysheet with Ins/Patient split → C:\SoftDentReportExports → Sync. "
+                "or Collections/Daysheet with Ins/Patient split. "
+                "NEVER type SoftDentReportExports into SoftDent Select File Name — keep SoftDent folder; "
+                "NR2 lands under C:\\SoftDentReportExports → Sync. "
                 "DaySheet presence alone is not enough. Empty ≠ $0."
             )
         elif inbox.get("matchCount"):
@@ -4976,8 +4982,9 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
         else:
             result["nextStep"] = (
                 "DEF-001: SoftDent → Reports → Accounting → Collections or Daysheet "
-                "(or Register for a Period for the open month) → export CSV to "
-                r"C:\SoftDentReportExports, then Sync / Refresh SoftDent period. "
+                "(or Register for a Period for the open month) → Excel/Print Preview only. "
+                "NEVER type SoftDentReportExports into SoftDent Select File Name — keep SoftDent folder; "
+                "NR2 lands under C:\\SoftDentReportExports, then Sync / Refresh SoftDent period. "
                 "Empty revenue-composition is not $0."
             )
     except Exception:
@@ -4990,8 +4997,9 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
         else:
             result["nextStep"] = (
                 "DEF-001: SoftDent → Reports → Accounting → Collections or Daysheet "
-                "(or Register for a Period for the open month) → export CSV to "
-                r"C:\SoftDentReportExports, then Sync / Refresh SoftDent period. "
+                "(or Register for a Period for the open month) → Excel/Print Preview only. "
+                "NEVER type SoftDentReportExports into SoftDent Select File Name — keep SoftDent folder; "
+                "NR2 lands under C:\\SoftDentReportExports, then Sync / Refresh SoftDent period. "
                 "Empty revenue-composition is not $0."
             )
     return result

@@ -1098,8 +1098,10 @@ def try_local_policy_reply(query: str) -> dict[str, str] | None:
                     "Desktop SoftDent Excel is the source of truth for period financial totals; "
                     "sd_*/Sensei is faster for operational detail. "
                     "Account txs: Reports → Accounting → Trans for a Period → Excel "
-                    "(Format 1 = List Each Transaction Separately); save into "
-                    r"C:\SoftDentReportExports (SoftDent may open temp SDWIN*.csv in Excel). "
+                    "(Format 1 = List Each Transaction Separately). "
+                    "NEVER type SoftDentReportExports into SoftDent Select File Name — "
+                    "keep SoftDent's folder; SoftDent may open temp SDWIN*.csv in Excel; "
+                    "NR2 copies into C:\\SoftDentReportExports after SoftDent saves. "
                     "HAL will not print the password."
                 ),
                 "intent": "policy:softdent-signon-env",

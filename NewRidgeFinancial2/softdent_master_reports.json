@@ -5,7 +5,7 @@
   "doctrine": [
     "Hybrid: SoftDent desktop app is the source of truth for period financial totals (you can get all correct data there).",
     "Database / ODBC / Sensei / sd_* is faster for operational detail when populated — use it for patients/procedures/claims/payments, not as primary period-close until it matches desktop Register side-by-side.",
-    "Desktop Excel path: click Excel prompt → Enter → Setup → save C:\\SoftDentReportExports → NR2 parses (never invent dollars).",
+    "Desktop Excel path: click Excel prompt → Enter → Setup → keep SoftDent Select File Name folder (NEVER type SoftDentReportExports / C:\\SOFTDE~1 there) → SoftDent saves → NR2 copies to C:\\SoftDentReportExports and parses (never invent dollars).",
     "Desktop Print Preview path: click Print Preview prompt → Enter → go to LAST page for exact totals (visual read).",
     "HARD RULE: Output Options = Excel prompt OR Print Preview prompt only — never click Printer.",
     "No SoftDent write-back."
@@ -34,7 +34,7 @@
     ],
     "howToGetInfo": {
       "database": "Prefer sd_* / ODBC / Sensei when rows exist.",
-      "excel": "Click Excel prompt → Enter → Setup (dates, provider 999) → save C:\\SoftDentReportExports → NR2 parses XLS.",
+      "excel": "Click Excel prompt → Enter → Setup (dates, provider 999) → keep SoftDent folder in Select File Name (never SoftDentReportExports) → NR2 copies to C:\\SoftDentReportExports and parses XLS.",
       "printPreview": "Click Print Preview prompt → Enter → Setup if shown → go to LAST page for exact totals (visual read).",
       "avoid": "Never leave Printer selected."
     },

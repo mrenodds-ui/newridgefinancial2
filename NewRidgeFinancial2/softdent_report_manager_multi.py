@@ -123,7 +123,8 @@ def report_manager_playbook() -> dict[str, Any]:
             "Launch via CS SoftDent Software.lnk (-sus); Sign On COMPUTE / computer.",
             "Never Esc on SoftDent main.",
             "Date macros avoid rewriting dates each run: MM/01/YY … MM/99/YY for MTD.",
-            "Save Excel / SDWIN*.csv into C:\\SoftDentReportExports.",
+            "Save Excel / SDWIN*.csv: NEVER type SoftDentReportExports into SoftDent Select File Name — "
+            "keep SoftDent's folder; NR2 copies into C:\\SoftDentReportExports after SoftDent saves.",
             "empty ≠ $0 — never invent SoftDent dollars.",
         ],
         "dateMacros": DATE_MACROS,

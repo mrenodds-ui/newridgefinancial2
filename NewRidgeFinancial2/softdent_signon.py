@@ -232,7 +232,9 @@ def format_softdent_widget_path_hal_reply() -> str:
         "Period money widgets (Vital Signs, Ins/Patient split, collection efficiency, "
         "DEF-001 collections gap, production trends) read analytics dashboard / "
         "daysheet_totals rows that are filled by SoftDent desktop Excel "
-        "(Register/Daysheet → C:\\SoftDentReportExports → refresh_softdent_period_imports). "
+        "(Register/Daysheet → SoftDent keeps its save folder → NR2 copies into "
+        "C:\\SoftDentReportExports → refresh_softdent_period_imports). "
+        "NEVER type SoftDentReportExports into SoftDent Select File Name. "
         "Register Excel is the source of truth for period $ — if it drifts from "
         "daysheet_totals, re-export Register and refresh. "
         "Claims / A/R aging / provider production charts read SoftDent CSV/JSON inbox imports. "
@@ -246,6 +248,8 @@ def format_softdent_account_tx_excel_hal_reply() -> str:
 
     Validated live on SoftDent v19.1.4 (2026-07-12). Desktop UI only — not DB/sd_*.
     """
+    from softdent_report_pull import SOFTDENT_SELECT_FILE_PATH_HYGIENE
+
     return (
         "SOFTDENT ACCOUNT TRANSACTIONS → EXCEL (desktop SoftDent only; not database/sd_*): "
         "Sign On with COMPUTE / computer (keyboard or mouse). Never Printer. Never Esc on SoftDent main. "
@@ -253,8 +257,9 @@ def format_softdent_account_tx_excel_hal_reply() -> str:
         "Output Options → click Excel then Enter → Transactions For A Period setup: set Start/End dates, "
         "Format 1 = List Each Transaction Separately (line-level), Doctors 999 for all, then OK. "
         "Live note: SoftDent often skips Select File Name and opens Excel on a temp file "
-        r"(%LOCALAPPDATA%\Temp\SDWIN*.csv, window title like SDWIN3 - Excel) — SaveCopyAs / save a copy "
-        r"into C:\SoftDentReportExports (short path C:\SOFTDE~1). "
+        r"(%LOCALAPPDATA%\Temp\SDWIN*.csv, window title like SDWIN3 - Excel). "
+        + SOFTDENT_SELECT_FILE_PATH_HYGIENE
+        + " "
         "ONE ACCOUNT / PATIENT: F3 or Ctrl+A List Account (or F5 Patient) → find the patient → "
         "Transactions (Account Mode / Account Transaction tab) → Print Transactions → Output Options → "
         "Excel if offered (else Print Preview; never Printer). "
@@ -371,7 +376,8 @@ def compile_softdent_signon_guidance(query: str, system_prompt: str = "") -> str
         except Exception:
             parts.append(
                 "SoftDent report pull: Output Options → Excel or Print Preview only "
-                r"(never Printer); save to C:\SoftDentReportExports; then Sync."
+                "(never Printer). NEVER type SoftDentReportExports into SoftDent Select File Name — "
+                "keep SoftDent's folder; NR2 copies after save; then Sync."
             )
     if touches_signon or touches_account_tx:
         if "SOFTDENT_SIGNON_USER" in prompt and not touches_account_tx:

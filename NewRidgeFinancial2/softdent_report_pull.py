@@ -17,6 +17,14 @@ MENU_MAP_PATH = ROOT / "softdent_gui_menu_map.json"
 MASTER_PATH = ROOT / "softdent_master_reports.json"
 EXPORT_DIR = r"C:\SoftDentReportExports"
 
+# Permanent SoftDent Select File Name rule (never contradict this in HAL teach).
+SOFTDENT_SELECT_FILE_PATH_HYGIENE = (
+    "NEVER type SoftDentReportExports or C:\\SOFTDE~1 into SoftDent Select File Name — "
+    "keep SoftDent's own folder (e.g. OneDrive\\Documents). "
+    f"After SoftDent saves, NR2 lands/copies Excel under {EXPORT_DIR} "
+    "(temp %LOCALAPPDATA%\\Temp\\SDWIN*.csv → Excel SaveCopyAs is OK)."
+)
+
 
 def _ascii_menu(path: str) -> str:
     return (
@@ -65,8 +73,7 @@ def universal_report_pull_steps() -> list[str]:
         "Output Options appears: click Excel then Enter — OR click Print Preview then Enter. NEVER Printer.",
         "If SoftDent shows Waiting for printer connection… → Cancel (Alt+C) and choose Excel or Print Preview.",
         "Setup window: set Start/End (or as-of) dates; Doctors/Providers 999 = all unless filtering; OK.",
-        "Excel path: SoftDent may open temp %LOCALAPPDATA%\\Temp\\SDWIN*.csv in Excel — "
-        f"Save / SaveCopyAs into {EXPORT_DIR}.",
+        SOFTDENT_SELECT_FILE_PATH_HYGIENE,
         "Print Preview path: page to the LAST page for exact totals (page 1 is often incomplete).",
         "NR2: https://127.0.0.1:8765 → SoftDent page → Sync (or refresh_softdent_period_imports). "
         "Never invent SoftDent dollars; empty ≠ $0.",
@@ -149,7 +156,8 @@ def format_softdent_report_pull_hal_reply(query: str = "") -> str:
         "HOW TO PULL SOFTDENT REPORTS (desktop SoftDent — this office):",
         " ".join(f"{i}) {s}" for i, s in enumerate(steps, 1)),
         "Hard rules: Excel or Print Preview only — never Printer; never Esc on SoftDent main; "
-        "never Alt+R for Reports (AMD Instant Replay steals it); SoftDent is 32-bit — prefer F10.",
+        "never Alt+R for Reports (AMD Instant Replay steals it); SoftDent is 32-bit — prefer F10. "
+        + SOFTDENT_SELECT_FILE_PATH_HYGIENE,
     ]
     catalog = office_report_catalog()
     phase1 = [r for r in catalog if str(r.get("phase")) == "1" or r.get("phase") == 1]
@@ -181,8 +189,8 @@ def format_softdent_report_pull_hal_reply(query: str = "") -> str:
     if re.search(r"\b(transaction|account\s+tx|ledger|trans\s+for)\b", q):
         lines.append(
             "Transactions detail: Reports → Accounting → Trans for a Period → Excel → "
-            "Format 1 = List Each Transaction Separately; Doctors 999; save to "
-            f"{EXPORT_DIR} (temp SDWIN*.csv SaveCopyAs OK)."
+            "Format 1 = List Each Transaction Separately; Doctors 999. "
+            + SOFTDENT_SELECT_FILE_PATH_HYGIENE
         )
     if re.search(r"\b(insurance income|gold|write.?off)\b", q):
         lines.append(

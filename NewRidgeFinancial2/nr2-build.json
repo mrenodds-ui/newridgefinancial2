@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12028-export-consent-teach",
-  "BUILD_ID": "nr2-12028-export-consent-teach",
-  "assetVersion": "nr2-12028-export-consent-teach",
-  "builtAt": "2026-07-15T22:30:00.000Z",
-  "notes": "nr2-12028-export-consent-teach: HAL doctrine + optical UI teach SoftDent Excel export is consent-free; QB sync/navigate/write-back still consent-gated. SoftDent write-back still forbidden.",
+  "schemaVersion": "nr2-12029-softdent-path-hygiene",
+  "BUILD_ID": "nr2-12029-softdent-path-hygiene",
+  "assetVersion": "nr2-12029-softdent-path-hygiene",
+  "builtAt": "2026-07-15T22:35:00.000Z",
+  "notes": "nr2-12029-softdent-path-hygiene: HAL teach NEVER types SoftDentReportExports into SoftDent Select File Name — keep SoftDent folder; NR2 copies after save. SoftDent write-back still forbidden.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12028-EXPORT-CONSENT-TEACH",
+  "package": "NR2-12029-SOFTDENT-PATH-HYGIENE",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

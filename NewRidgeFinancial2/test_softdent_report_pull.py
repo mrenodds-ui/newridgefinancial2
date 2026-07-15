@@ -24,6 +24,18 @@ class SoftDentReportPullTests(unittest.TestCase):
         self.assertIn("aging", ids)
         self.assertIn("daysheet", ids)
 
+    def test_select_file_name_never_softdent_report_exports(self):
+        from softdent_report_pull import SOFTDENT_SELECT_FILE_PATH_HYGIENE
+
+        self.assertIn("NEVER type SoftDentReportExports", SOFTDENT_SELECT_FILE_PATH_HYGIENE)
+        self.assertIn("Select File Name", SOFTDENT_SELECT_FILE_PATH_HYGIENE)
+        steps = " ".join(universal_report_pull_steps())
+        self.assertIn("NEVER type SoftDentReportExports", steps)
+        self.assertNotRegex(
+            steps,
+            r"Save / SaveCopyAs into C:\\SoftDentReportExports",
+        )
+
     def test_hal_reply_teaches_pull(self):
         text = format_softdent_report_pull_hal_reply("How do I pull SoftDent reports?")
         self.assertIn("HOW TO PULL SOFTDENT REPORTS", text)
@@ -33,6 +45,8 @@ class SoftDentReportPullTests(unittest.TestCase):
         self.assertIn("NEVER Printer", text)
         self.assertIn("Registers", text)
         self.assertIn("SoftDentReportExports", text)
+        self.assertIn("NEVER type SoftDentReportExports", text)
+        self.assertIn("Select File Name", text)
         self.assertTrue(
             "run_softdent_report_manager_multi_pull" in text
             or "run_softdent_money_widget_pull" in text
