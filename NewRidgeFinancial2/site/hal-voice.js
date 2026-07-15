@@ -5,7 +5,7 @@
   "use strict";
 
   const HAL_CHAT = {
-    rate: 1.12,
+    rate: 0.86,
     pitch: 1.0,
     volume: 1,
     voiceHints: [
@@ -18,11 +18,11 @@
       "en-us",
       "english united states",
     ],
-    charsPerSecondAtRate1: 15,
+    charsPerSecondAtRate1: 13,
     maxReplyChars: 480,
     chatSpeechChars: 320,
-    chunkPauseMs: 55,
-    voiceMaxSentences: 3,
+    chunkPauseMs: 90,
+    voiceMaxSentences: 2,
   };
 
   const HAL9000_TEMPLATES = {
@@ -209,12 +209,12 @@
   function tuneForVoice(profile, voice) {
     if (!voice) return profile;
     const name = String(voice.name || "").toLowerCase();
-    // Keep David/Mark near the conversational profile — do not slow them down.
+    // Keep David/Mark calm — do not force a fast rate.
     if (/david|mark/.test(name)) {
       return {
         ...profile,
-        pitch: Math.max(profile.pitch || 1.0, 0.98),
-        rate: Math.max(profile.rate || 1.12, 1.08),
+        pitch: Math.min(profile.pitch || 1.0, 1.0),
+        rate: Math.min(profile.rate || 0.86, 0.9),
       };
     }
     return profile;
@@ -417,7 +417,7 @@
       if (url && speechGenerationAlive(gen)) {
         const played = await playNeuralAudio(url, gen);
         if (played.ok) {
-          return { ...result, engine: "edge-neural", voiceName: "en-US-GuyNeural" };
+          return { ...result, engine: "edge-neural", voiceName: "en-US-ChristopherNeural" };
         }
       }
     }
@@ -446,10 +446,10 @@
 
   function announceSidenote(sender, broadcast) {
     const name = sender || "a station";
-    const line = broadcast
-      ? `Broadcast from ${name}. Check SideNotes when you can.`
-      : `Message from ${name}. Check SideNotes when you can.`;
-    return speak(line, { interrupt: true });
+    const openers = ["BlueNote.", "Heads up.", "Quick note.", "Incoming.", "Office message."];
+    const opener = openers[Math.floor(Math.random() * openers.length)];
+    const body = broadcast ? `Broadcast from ${name}.` : `Message from ${name}.`;
+    return speak(`${opener} ${body}`, { interrupt: true });
   }
 
   function speakOfficeAnnounce(text) {
@@ -656,7 +656,7 @@
         if (played.ok) {
           return {
             ok: true,
-            voiceName: "en-US-GuyNeural",
+            voiceName: "en-US-ChristopherNeural",
             engine: "edge-neural",
             profile: voiceProfile,
           };

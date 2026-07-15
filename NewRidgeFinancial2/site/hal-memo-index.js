@@ -177,7 +177,7 @@ const HalMemoIndex = (function () {
   },
   "nr2-practice-sidenotes-hub": {
     "title": "Nr2 Practice Sidenotes Hub",
-    "detail": "Operatory and front-desk SideNotes route through NR2_SIDENOTES_HUB_DATA shared folder. HAL monitors routing metadata and voice announcements — not message bodies. Use sidenotes for hygiene recall and same-day handoffs.",
+    "detail": "Operatory and front-desk BlueNote route through NR2_SIDENOTES_HUB_DATA / HAL-BlueNote-Workstation shared folder. HAL monitors routing metadata and voice announcements — not message bodies. Use BlueNote for hygiene recall and same-day handoffs.",
     "source": "hal-manager sidenotes program",
     "category": "operator_playbooks"
   },

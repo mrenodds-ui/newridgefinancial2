@@ -1,0 +1,53 @@
+{
+  "myStation": "",
+  "pollSeconds": 1.5,
+  "announce": true,
+  "voiceStyle": "hal9000",
+  "processedAudio": false,
+  "neuralTts": true,
+  "neuralPython": "",
+  "announceConversations": true,
+  "announceLights": false,
+  "announceInboxBump": true,
+  "quietBootstrap": true,
+  "announceVaried": true,
+  "announceOpeners": [
+    "BlueNote.",
+    "Heads up.",
+    "Quick note.",
+    "Office message.",
+    "New BlueNote.",
+    "Incoming."
+  ],
+  "announceVariants": [
+    "Message from {sender}.",
+    "From {sender}.",
+    "{sender} messaged you."
+  ],
+  "announceBroadcastVariants": [
+    "Broadcast from {sender}.",
+    "{sender} to everyone.",
+    "Office broadcast from {sender}."
+  ],
+  "announceTemplate": "Message from {sender}.",
+  "announceBroadcastTemplate": "Broadcast from {sender}.",
+  "duckMusic": true,
+  "duckMusicProcesses": ["Pandora.exe"],
+  "duckMusicLevel": 0.14,
+  "voiceHint": "David",
+  "voiceRate": -2,
+  "voiceVolume": 100,
+  "inboxPath": "",
+  "stationInboxPath": "",
+  "inboxMax": 50,
+  "stationPeople": {
+    "frontdesk 1": "Andrea and Jeannie",
+    "frontdesk 2": "Andrea and Jeannie",
+    "office manager": "Steve",
+    "room 2": "Mayci",
+    "room 3": "Nicole",
+    "room 4": "Nicole",
+    "room 5": "Nicole",
+    "dr. reno": "Dr. Reno"
+  }
+}

@@ -39,13 +39,104 @@ HAL9000_VARIANTS = {
     ],
 }
 
-# Conversational HAL — brisk office pace (SAPI -10..+10).
+# Conversational HAL — calm office pace (SAPI -10..+10). Neural SSML rate is separate in hal_tts.py.
 HAL_VOICE_PRESET = {
-    "rate": 3,
+    "rate": -2,
     "volume": 100,
     "voice_hint": "David",
     "processed_audio": False,
 }
+
+# Short random openers — keep the spoken line brief (opener + message only).
+BLUENOTE_OPENERS = [
+    "BlueNote.",
+    "Heads up.",
+    "Quick note.",
+    "Office message.",
+    "New BlueNote.",
+    "Incoming.",
+]
+
+BLUENOTE_DIRECT_BODIES = [
+    "Message from {sender}.",
+    "From {sender}.",
+    "{sender} messaged you.",
+]
+
+BLUENOTE_BROADCAST_BODIES = [
+    "Broadcast from {sender}.",
+    "{sender} to everyone.",
+    "Office broadcast from {sender}.",
+]
+
+
+def clip_spoken_message(text: str, *, max_words: int = 6, max_chars: int = 48) -> str:
+    """Keep spoken BlueNote body short — never read a long UI script."""
+    raw = " ".join(str(text or "").replace("\n", " ").split()).strip()
+    if not raw:
+        return ""
+    low = raw.lower()
+    # Settings / option chrome — never speak.
+    script_markers = (
+        "options",
+        "settings",
+        "popup alert",
+        "clicking",
+        "activating",
+        "disable",
+        "maximize",
+        "aging color",
+        "light tags",
+        "trial",
+        "xmlns",
+        "textblock",
+        "open the",
+        "show the",
+        "how to use",
+        "updated version",
+    )
+    if any(m in low for m in script_markers):
+        return ""
+    words = raw.split(" ")
+    if len(words) > max_words:
+        raw = " ".join(words[:max_words])
+    if len(raw) > max_chars:
+        raw = raw[: max_chars - 1].rstrip(" ,.;:") + "."
+    if raw and raw[-1] not in ".!?":
+        raw += "."
+    return raw
+
+
+def pick_bluenote_announcement(
+    sender: str,
+    *,
+    broadcast: bool = False,
+    message: str = "",
+    cfg: dict[str, Any] | None = None,
+) -> str:
+    """Random short opener + short message body only (never UI script text)."""
+    openers = BLUENOTE_OPENERS
+    if cfg and isinstance(cfg.get("announceOpeners"), list):
+        custom = [str(x).strip() for x in cfg["announceOpeners"] if str(x).strip()]
+        if custom:
+            openers = custom
+    opener = random.choice(openers)
+
+    # Prefer sender-routed body. Ignore long/message UI chrome even if passed in.
+    body = clip_spoken_message(message, max_words=5, max_chars=40)
+    if not body:
+        key_pool = BLUENOTE_BROADCAST_BODIES if broadcast else BLUENOTE_DIRECT_BODIES
+        if cfg:
+            cfg_key = "announceBroadcastVariants" if broadcast else "announceVariants"
+            cfg_pool = cfg.get(cfg_key)
+            if isinstance(cfg_pool, list):
+                custom_bodies = [str(p).strip() for p in cfg_pool if str(p).strip()]
+                if custom_bodies:
+                    key_pool = custom_bodies
+        body = random.choice(key_pool).replace("{sender}", sender or "a station")
+        body = clip_spoken_message(body, max_words=8, max_chars=56)
+    return f"{opener} {body}".strip()
+
 
 SPEAK_LOCK_PATH = Path(__file__).resolve().parent / "sidenotes-speak.lock"
 
@@ -258,6 +349,15 @@ class Announcer:
             pass
 
     def speak(self, text: str, asynchronous: bool = False) -> None:
+        # Hard clamp — never speak long BlueNote/UI scripts.
+        phrase = clip_spoken_message(str(text or ""), max_words=12, max_chars=96)
+        if not phrase:
+            # Fall back to whole text only if it was already a short opener line.
+            cleaned = " ".join(str(text or "").split())
+            if len(cleaned.split()) <= 12 and len(cleaned) <= 96:
+                phrase = cleaned
+            else:
+                return
         with AnnounceSpeakLock() as lock:
             if not lock.acquired:
                 return
@@ -265,10 +365,10 @@ class Announcer:
                 asynchronous = False
                 self._music_ducker.duck()
             try:
-                if self._neural_tts and self._speak_neural(text):
+                if self._neural_tts and self._speak_neural(phrase):
                     return
                 self._last_engine = "sapi"
-                self._speak_sapi(text, asynchronous=asynchronous)
+                self._speak_sapi(phrase, asynchronous=asynchronous)
             finally:
                 if self._music_ducker is not None:
                     self._music_ducker.restore()

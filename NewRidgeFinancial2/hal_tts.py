@@ -7,10 +7,11 @@ import html
 import json
 from typing import Any
 
-VOICE = "en-US-GuyNeural"
+VOICE = "en-US-ChristopherNeural"
 VOICE_FALLBACK = "en-US-AriaNeural"
+VOICE_LEGACY = "en-US-GuyNeural"
 PROFILE = "hal-conversational-v2"
-SENTENCE_BREAK_MS = 140
+SENTENCE_BREAK_MS = 320
 
 TEST_LINE = "HAL is online and ready."
 
@@ -43,10 +44,18 @@ def resolve_voice_name(payload: dict[str, Any] | None) -> str:
     requested = str(payload.get("voice") or "").strip().lower()
     if requested in ("aria", "aria-neural", "jenny", "jenny-neural"):
         return VOICE_FALLBACK
-    if requested in ("hal9000", "guy", "guy-neural", "hal", "david"):
+    if requested in ("guy", "guy-neural", "david"):
+        return VOICE_LEGACY
+    if requested in (
+        "hal9000",
+        "hal",
+        "christopher",
+        "christopher-neural",
+        "chris",
+    ):
         return VOICE
     explicit = str(payload.get("voice") or "").strip()
-    if explicit in (VOICE, VOICE_FALLBACK):
+    if explicit in (VOICE, VOICE_FALLBACK, VOICE_LEGACY):
         return explicit
     return VOICE
 
@@ -60,7 +69,7 @@ def segments_to_ssml(segments: list[dict[str, Any]], *, voice: str | None = None
         text = _escape_ssml(str(seg["text"]).strip())
         if not text:
             continue
-        body.append(f'<prosody rate="+12%" pitch="+0%" volume="medium">{text}</prosody>')
+        body.append(f'<prosody rate="-28%" pitch="-2%" volume="medium">{text}</prosody>')
         body.append(f'<break time="{SENTENCE_BREAK_MS}ms"/>')
     if body and body[-1].startswith("<break"):
         body.pop()
@@ -75,7 +84,7 @@ async def _stream_ssml(ssml: str) -> bytes:
     import edge_tts
 
     audio = b""
-    for voice in (VOICE, VOICE_FALLBACK):
+    for voice in (VOICE, VOICE_FALLBACK, VOICE_LEGACY):
         try:
             communicate = edge_tts.Communicate(ssml, voice)
             audio = b""

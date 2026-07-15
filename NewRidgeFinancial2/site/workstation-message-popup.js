@@ -83,7 +83,7 @@ const WorkstationMessagePopup = (function () {
   function present(item) {
     showToast(item);
     showNativeBalloon(item);
-    // Same HAL neural voice as program/SideNotes (sender only — never speak message body).
+    // Same HAL neural voice as program/BlueNote (sender only — never speak message body).
     try {
       const mute =
         window.NR2_WORKSTATION_MUTE_HAL_VOICE === true ||

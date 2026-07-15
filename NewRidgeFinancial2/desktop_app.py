@@ -20,7 +20,11 @@ ROOT = Path(__file__).resolve().parent
 REPO_ROOT = ROOT.parent
 SITE_DIR = ROOT / "site"
 DATA_DIR = REPO_ROOT / "app_data" / "nr2"
-SIDENOTES_HUB_DATA_DIR = Path(os.environ.get("NR2_SIDENOTES_HUB_DATA", r"C:\softdent\HAL-SideNotes-Workstation\data"))
+SIDENOTES_HUB_DATA_DIR = Path(
+    os.environ.get("NR2_SIDENOTES_HUB_DATA")
+    or os.environ.get("NR2_BLUENOTE_HUB_DATA")
+    or r"C:\softdent\HAL-BlueNote-Workstation\data"
+)
 INDEX_HTML = SITE_DIR / "index.html"
 BUILD_MANIFEST = ROOT / "nr2-build.json"
 
@@ -81,6 +85,7 @@ class DesktopApi:
             "documentInbox": str(resolve_inbox_path()),
             "documentArchive": str(resolve_archive_path()),
             "sidenotesHub": str(SIDENOTES_HUB_DATA_DIR),
+            "bluenoteHub": str(SIDENOTES_HUB_DATA_DIR),
             "dataDir": str(self.store.data_dir),
             "directFirstImports": self._direct_first_imports_enabled(),
             "halHubUrl": resolve_hal_hub_url(),

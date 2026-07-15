@@ -211,8 +211,8 @@ const HalPage = (function () {
               station.nr2Workstation || String(station.source || "").startsWith("nr2")
                 ? "NR2 workstation"
                 : station.announce
-                  ? "SideNotes voice"
-                  : "SideNotes silent",
+                  ? "BlueNote voice"
+                  : "BlueNote silent",
               station.announce ? "voice" : "silent",
               station.bellSuppressed ? "bell muted" : "bell on",
             ]
@@ -243,7 +243,7 @@ const HalPage = (function () {
 
   function sideNotesHubFootnote(hubPath, online) {
     const hub = hubPath ? `<code>${esc(hubPath)}</code>` : "<code>NR2_SIDENOTES_HUB_DATA</code> (not configured)";
-    return `<p class="sidenote-foot">Shared hub: ${hub} · external SideNotesIM helper · routing metadata only · ${online ? "network feed active" : "waiting for watchers"}</p>`;
+    return `<p class="sidenote-foot">Shared hub: ${hub} · BlueNote Communicator Lights · routing metadata only · ${online ? "network feed active" : "waiting for watchers"}</p>`;
   }
 
   function liveSideNotesHtml(inbox, opts) {
@@ -275,8 +275,8 @@ const HalPage = (function () {
     let listHtml;
     if (!online) {
       listHtml = staff
-        ? '<li class="sidenote-empty">SideNotesIM watcher offline on this PC. Open SideNotesIM to read message text.</li>'
-        : '<li class="sidenote-empty">SideNotesIM watcher offline. Run <code>run-sidenotes-helper.bat</code> to let HAL announce incoming messages.</li>';
+        ? '<li class="sidenote-empty">BlueNote watcher offline on this PC. Open BlueNote to read message text.</li>'
+        : '<li class="sidenote-empty">BlueNote watcher offline. Run <code>Start-HAL-BlueNote.bat</code> to let HAL announce incoming messages.</li>';
     } else if (!items.length) {
       listHtml = '<li class="sidenote-empty">No new messages.</li>';
     } else {
@@ -299,9 +299,9 @@ const HalPage = (function () {
         })
         .join("");
     }
-    const title = staff ? "SIDENOTESIM ALERTS" : "SIDENOTESIM MONITOR";
+    const title = staff ? "BLUENOTE ALERTS" : "BLUENOTE MONITOR";
     const footnote = staff
-      ? '<p class="sidenote-foot ws-feed-note">Routing only — open SideNotesIM to read message text. HAL announces the sender name only.</p>'
+      ? '<p class="sidenote-foot ws-feed-note">Routing only — open BlueNote to read message text. HAL announces the sender name only.</p>'
       : '<p class="sidenote-foot">HAL voice (neural) announces sender only · message text is never read</p>';
     return `<div class="sidenote-live">
       <div class="sidenote-head">
@@ -384,7 +384,7 @@ const HalPage = (function () {
         <button type="button" class="prompt-chip prompt-chip--icon" data-hal-cmd="Show sidenotes">${navIcon("sidenotes")} Show notes</button>
         ${showSideNotesIm ? `<button type="button" class="prompt-chip prompt-chip--icon" data-hal-drawer="sidenotes">${uiIcon("info")} Setup</button>` : ""}
       </div>
-      ${showSideNotesIm ? sideNotesHubFootnote(hubPath, isSideNotesInboxLive(halSideNotesInbox)) : '<p class="sidenote-foot">Local staff notes only — office messaging uses NR2 Workstation, not SideNotesIM.</p>'}`
+      ${showSideNotesIm ? sideNotesHubFootnote(hubPath, isSideNotesInboxLive(halSideNotesInbox)) : '<p class="sidenote-foot">Local staff notes only — office messaging uses NR2 Workstation / BlueNote.</p>'}`
       }
     </div>`;
   }
@@ -406,10 +406,10 @@ const HalPage = (function () {
         : '<span class="sidenote-badge sidenote-badge--off">WATCHERS OFFLINE</span>'
       : `<span class="sidenote-badge sidenote-badge--ok">${activeNotes} LOCAL</span>`;
     const cardTitle = showSideNotesIm
-      ? `SIDENOTES PROGRAM <span class="text-muted">(SIDENOTESIM · EXTERNAL)</span>`
+      ? `BLUENOTE PROGRAM <span class="text-muted">(COMMUNICATOR LIGHTS · EXTERNAL)</span>`
       : "STAFF NOTES";
     const cardHint = showSideNotesIm
-      ? "Open SideNotes program setup and station detail"
+      ? "Open BlueNote program setup and station detail"
       : "Local HAL scratch notes — use NR2 Workstation for office messaging";
     return `<section class="widget-card hal-panel--sidenotes" data-panel="sidenotes">
       ${cardHead(cardTitle, "sidenotes", cardHint, cardIconRaw("nav", "sidenotes"))}
@@ -604,7 +604,7 @@ const HalPage = (function () {
         <div><dt>Self-Check</dt><dd class="${selfCheckClass}">${esc(h.lastSelfCheck || "none")}</dd></div>
         <div><dt>Repairs</dt><dd class="${h.repairCount ? "stress-fail-num" : ""}">${esc(String(h.repairCount || 0))}</dd></div>
         <div><dt>Latency</dt><dd>${esc(h.lastLatencyMs ? h.lastLatencyMs + " ms" : "—")}</dd></div>
-        <div><dt>SideNotes</dt><dd>${esc(inboxLive)}</dd></div>
+        <div><dt>BlueNote</dt><dd>${esc(inboxLive)}</dd></div>
       </dl>
       <p class="widget-footer text-muted">Agent uses cached snapshots, bounded tools, local memory, and self-check before final answers.</p>
     </div>`;
