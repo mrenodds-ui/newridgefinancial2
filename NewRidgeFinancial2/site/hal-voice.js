@@ -481,7 +481,7 @@
   }
 
   function announceSidenote(sender, broadcast, message) {
-    // Random HAL intro + message box text. Silent if empty/chrome/script.
+    // Short cue + message box text. Silent if empty/chrome/script.
     const cleaned = String(message || "")
       .replace(/\s+/g, " ")
       .trim()
@@ -491,15 +491,8 @@
     }
     let body = cleaned;
     if (body && !/[.!?]$/.test(body)) body += ".";
-    const intros = [
-      "Hello ladies, this is HAL. You have a new message.",
-      "Hi ladies — HAL here. New message for you.",
-      "Good day ladies. This is HAL. You've got a new message.",
-      "Hello ladies. HAL speaking. There's a new message.",
-      "Hey ladies, it's HAL. New message coming in.",
-      "Hello ladies, HAL here with a new message.",
-    ];
-    if (/^(hello ladies|hi ladies|hey ladies|good day ladies|hal[.,])/i.test(body)) {
+    const intros = ["BlueNote.", "Heads up.", "Quick note.", "Incoming.", "Office message."];
+    if (/^(bluenote|heads up|quick note|incoming|office message|hello ladies|hi ladies|hal[.,])\b/i.test(body)) {
       return speak(body, { interrupt: true });
     }
     const intro = intros[Math.floor(Math.random() * intros.length)];

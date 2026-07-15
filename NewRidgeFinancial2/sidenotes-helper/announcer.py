@@ -48,18 +48,13 @@ HAL_VOICE_PRESET = {
     "processed_audio": False,
 }
 
-# Funny desk intros — HAL names himself, then reads the message box.
+# Short cue openers only — then the real message box text.
 BLUENOTE_OPENERS = [
-    "Hello ladies, this is HAL — and I've got tea, I mean, a message.",
-    "Knock knock. It's HAL. You've got a new message.",
-    "Hi ladies — HAL here. Don't shoot the messenger… wait, I am the messenger.",
-    "Hello ladies. HAL speaking. Plot twist: there's a new message.",
-    "Hey ladies, it's HAL. Incoming message — I only read the fun parts.",
-    "Hello ladies, this is HAL. Breaking news from BlueNote.",
-    "Attention ladies: HAL has gossip… professionally known as a new message.",
-    "Hi ladies. Your favorite computerized gossip columnist — new message.",
-    "Hello ladies, HAL here. Another thrilling episode of Who Pinged Us Now.",
-    "Good day ladies. This is HAL. Yes, again. New message for you.",
+    "BlueNote.",
+    "Heads up.",
+    "Quick note.",
+    "Incoming.",
+    "Office message.",
 ]
 
 BLUENOTE_DIRECT_BODIES = [
@@ -74,10 +69,11 @@ BLUENOTE_BROADCAST_BODIES = [
 
 
 def pick_hal_intro(cfg: dict[str, Any] | None = None) -> str:
-    """Random 'hello ladies / this is HAL / new message' style intro."""
+    """Random short cue (≤3 words) before the message box."""
     openers = list(BLUENOTE_OPENERS)
     if cfg and isinstance(cfg.get("announceOpeners"), list):
         custom = [str(x).strip() for x in cfg["announceOpeners"] if str(x).strip()]
+        custom = [o for o in custom if len(o.split()) <= 3 and len(o) <= 24]
         if custom:
             openers = custom
     return random.choice(openers)
@@ -225,9 +221,9 @@ def pick_bluenote_announcement(
     body = clip_spoken_message(message, max_words=40, max_chars=220)
     if not body:
         return ""
-    # Avoid double-intros if the box already starts with HAL.
+    # Avoid double-intros if the box already starts with a cue/HAL line.
     if re.match(
-        r"(?i)^(hello ladies|hi ladies|hey ladies|good day ladies|knock knock|attention ladies|hal[.,])",
+        r"(?i)^(bluenote|heads up|quick note|incoming|office message|hello ladies|hi ladies|hey ladies|hal[.,])\b",
         body,
     ):
         return body
@@ -446,26 +442,36 @@ class Announcer:
             pass
 
     def speak(self, text: str, asynchronous: bool = False) -> None:
-        # Allow short cue+body lines; reject long scripts.
+        # Speak short cue + message-box text. Reject joke intros / UI chrome.
         cleaned = " ".join(str(text or "").split()).strip()
         if not cleaned:
             return
         low = cleaned.lower()
-        if any(
-            m in low
-            for m in (
-                "hope you're",
-                "take care",
-                "happy to help",
-                "options window",
-                "popup alert",
-                "i have a message for you",
-            )
+        joke_or_chrome = (
+            "hope you're",
+            "take care",
+            "happy to help",
+            "options window",
+            "popup alert",
+            "i have a message for you",
+            "hello ladies",
+            "gossip",
+            "plot twist",
+            "don't shoot the messenger",
+            "thrilling episode",
+            "computerized gossip",
+            "got tea",
+            "breaking news from bluenote",
+            "who pinged us",
+        )
+        if any(m in low for m in joke_or_chrome) and is_ui_script_text(
+            re.sub(r"(?i)^(bluenote|heads up|quick note|incoming|office message)\.\s*", "", cleaned)
         ):
-            # Strip nicety / UI scripts down to a safe BlueNote cue.
-            cleaned = pick_bluenote_announcement("a station", message="")
-        if len(cleaned.split()) > 10 or len(cleaned) > 72:
-            cleaned = " ".join(cleaned.split()[:8])
+            # Whole line is chrome/joke — refuse.
+            return
+        # Cap to message-box size, not an 8-word telegram.
+        if len(cleaned.split()) > 48 or len(cleaned) > 260:
+            cleaned = " ".join(cleaned.split()[:40])
             if cleaned[-1] not in ".!?":
                 cleaned += "."
         phrase = cleaned

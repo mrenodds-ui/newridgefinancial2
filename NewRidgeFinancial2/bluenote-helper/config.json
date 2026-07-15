@@ -12,12 +12,11 @@
   "quietBootstrap": true,
   "announceVaried": true,
   "announceOpeners": [
-    "Hello ladies, this is HAL. You have a new message.",
-    "Hi ladies — HAL here. New message for you.",
-    "Good day ladies. This is HAL. You've got a new message.",
-    "Hello ladies. HAL speaking. There's a new message.",
-    "Hey ladies, it's HAL. New message coming in.",
-    "Hello ladies, HAL here with a new message."
+    "BlueNote.",
+    "Heads up.",
+    "Quick note.",
+    "Incoming.",
+    "Office message."
   ],
   "announceGreeting": true,
   "announceVariants": [
