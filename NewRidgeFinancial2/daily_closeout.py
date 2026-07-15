@@ -1,8 +1,8 @@
 """Daily closeout checklist + period-close OPS loop for NR2 operators.
 
-Shadow pilot rhythm: laser-check → beam attest → (optional consent SoftDent pull)
-→ immutable JSONL log → HAL-citable status. SoftDent write-back forbidden;
-Excel/Print Preview only when pulls are consented. empty ≠ $0.
+Shadow pilot rhythm: laser-check → beam attest → (optional SoftDent GUI pull,
+consent-free Excel/Print Preview) → immutable JSONL log → HAL-citable status.
+SoftDent write-back forbidden. empty ≠ $0.
 """
 
 from __future__ import annotations

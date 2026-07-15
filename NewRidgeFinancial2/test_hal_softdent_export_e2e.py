@@ -7,6 +7,31 @@ from unittest.mock import patch
 
 
 class HalSoftdentExportConsentTests(unittest.TestCase):
+    def test_session_doctrine_teaches_export_consent_free(self) -> None:
+        from hal_session_store import HAL_9000_BRAIN_SYSTEM
+
+        doctrine = HAL_9000_BRAIN_SYSTEM
+        self.assertIn("consent-free", doctrine.lower())
+        self.assertIn("SoftDent Excel/Print Preview GUI export does NOT require consent", doctrine)
+        self.assertNotIn("Outbound and GUI exports require explicit operator consent.", doctrine)
+        self.assertIn("QB sync", doctrine)
+        self.assertIn("write-back", doctrine.lower())
+
+    def test_propose_softdent_export_marks_consent_not_required(self) -> None:
+        from hal_brain_tools import propose_action
+
+        out = propose_action(kind="softdent_export", label="Aging Excel")
+        self.assertTrue(out.get("ok"))
+        self.assertFalse(out.get("consentRequired"))
+        self.assertFalse((out.get("action") or {}).get("consentRequired"))
+
+    def test_propose_qb_sync_still_requires_consent(self) -> None:
+        from hal_brain_tools import propose_action
+
+        out = propose_action(kind="qb_sync", label="QB sync")
+        self.assertTrue(out.get("ok"))
+        self.assertTrue(out.get("consentRequired"))
+
     def test_export_runs_without_consent_flag(self) -> None:
         from hal_brain_tools import softdent_export
 

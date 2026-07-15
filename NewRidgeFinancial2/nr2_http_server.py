@@ -506,7 +506,7 @@ def _json_response(payload, status=200):
 
 
 def _start_import_refresh(*, store=None) -> dict:
-    """Kick background import sync if idle (HAL SoftDent/QB E2E after consent)."""
+    """Kick background import sync if idle (HAL SoftDent export / QB sync E2E)."""
     global _sync_state
     with _sync_lock:
         if _sync_state.get("status") == "running":
@@ -1399,7 +1399,7 @@ class NR2BottleServer(BottleServer):
 
         @app.post("/api/period-close/run")
         def period_close_run_api():
-            """Run one shadow period-close cycle (attest; SoftDent pull needs consent)."""
+            """Run one shadow period-close cycle (attest; SoftDent pull is consent-free)."""
             from daily_closeout import run_period_close
 
             body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"

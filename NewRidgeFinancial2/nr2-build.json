@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12028-optical-beam-bind",
-  "BUILD_ID": "nr2-12028-optical-beam-bind",
-  "assetVersion": "nr2-12028-optical-beam-bind",
+  "schemaVersion": "nr2-12028-export-consent-teach",
+  "BUILD_ID": "nr2-12028-export-consent-teach",
+  "assetVersion": "nr2-12028-export-consent-teach",
   "builtAt": "2026-07-15T22:30:00.000Z",
-  "notes": "nr2-12028-optical-beam-bind: AR/SoftDent/QB optical benches bind headlines to /api/hal/tools/money-beams with laser gate (empty ≠ $0); money-beams GET injects import-readiness. SoftDent write-back still forbidden.",
+  "notes": "nr2-12028-export-consent-teach: HAL doctrine + optical UI teach SoftDent Excel export is consent-free; QB sync/navigate/write-back still consent-gated. SoftDent write-back still forbidden.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12028-OPTICAL-BEAM-BIND",
+  "package": "NR2-12028-EXPORT-CONSENT-TEACH",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"
