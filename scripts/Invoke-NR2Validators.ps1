@@ -24,12 +24,12 @@ $isOpticalClean = $false
 if (Test-Path $indexPath) {
     $indexHead = (Get-Content -Path $indexPath -TotalCount 40 -ErrorAction SilentlyContinue) -join "`n"
     $isApex = $indexHead -match 'nr2-apex|apex-bridge'
-    $isOpticalClean = $indexHead -match 'nr2-boot\.js|nr2-optical-beam-touch|nr2-11000-clean'
+    $isOpticalClean = $indexHead -match 'nr2-boot\.js|nr2-optical-beam-touch|nr2-11000-clean|nr2-12016'
 }
 $buildPath = Join-Path $Nr2Dir 'nr2-build.json'
 if (Test-Path $buildPath) {
     $buildRaw = Get-Content $buildPath -Raw -ErrorAction SilentlyContinue
-    if ($buildRaw -match 'nr2-clean|nr2-11000-clean') { $isOpticalClean = $true }
+    if ($buildRaw -match 'nr2-clean|nr2-11000-clean|nr2-12016|honest-subpages') { $isOpticalClean = $true }
 }
 
 Push-Location $Nr2Dir

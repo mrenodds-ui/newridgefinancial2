@@ -50,7 +50,7 @@
     banner.childNodes[0] && banner.childNodes[0].nodeType === 3
       ? (banner.childNodes[0].textContent =
           label +
-          " · optical · nr2-11000-clean · empty ≠ $0 · no SoftDent write-back ")
+          " · optical · nr2-12016-honest-subpages · empty ≠ $0 · no SoftDent write-back ")
       : null;
     const bind = banner.querySelector(".bind");
     if (bind && detail) bind.textContent = detail;

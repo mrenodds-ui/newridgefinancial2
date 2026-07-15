@@ -1,11 +1,12 @@
 {
-  "schemaVersion": "nr2-11000-clean",
-  "BUILD_ID": "nr2-11000-clean",
-  "assetVersion": "nr2-11000-clean",
-  "builtAt": "2026-07-15T10:00:00.000Z",
-  "notes": "nr2-11000-clean: Moonshot clean-slate cutover — apex packs/overlays removed; SoftDent/QB contracts in nr2_contracts; new pages place against this stamp only.",
+  "schemaVersion": "nr2-12016-honest-subpages",
+  "BUILD_ID": "nr2-12016-honest-subpages",
+  "assetVersion": "nr2-12016-honest-subpages",
+  "builtAt": "2026-07-15T17:47:00.000Z",
+  "notes": "nr2-12016-honest-subpages: P0–P2 done — live SoftDent/QB/Claims/AR wires, SoftDent AR stale blocks lasers, film stubs, recon UNAVAILABLE, Narratives/Content UNAVAILABLE, OM partial.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-11000-CLEAN",
+  "package": "NR2-12016-HONEST-SUBPAGES",
   "compat": false,
-  "packsAllowed": false
+  "packsAllowed": false,
+  "baseCleanStamp": "nr2-11000-clean"
 }
