@@ -293,12 +293,13 @@ def _load_dataset(directory: Path, names: tuple[str, ...]) -> dict[str, Any] | N
             fallback_path = candidate
             fallback_rows = candidate_rows
         sample = bool(is_sample_claims and is_sample_claims(candidate_rows))
-        # Prefer non-sample, then most rows, then JSON over CSV, then newest mtime.
+        # Prefer non-sample, then most rows, then newest mtime, then JSON over CSV.
+        # Freshest cache wins over stale JSON sidecars (age drives softGap honesty).
         key = (
             0 if sample else 1,
             len(candidate_rows),
-            1 if candidate.suffix.lower() == ".json" else 0,
             candidate.stat().st_mtime,
+            1 if candidate.suffix.lower() == ".json" else 0,
         )
         if best_key is None or key > best_key:
             best_key = key

@@ -279,7 +279,7 @@ def _write_json(path: Path, payload: object) -> bool:
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> bool:
-    """Write CSV only when bytes change. Returns True if mutated."""
+    """Write CSV only when bytes change. Touch mtime so softGap age stays honest."""
     from import_cache_ttl import write_bytes_if_changed
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -288,10 +288,17 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) ->
     writer.writeheader()
     for row in rows:
         writer.writerow({key: row.get(key, "") for key in fieldnames})
-    return write_bytes_if_changed(path, buf.getvalue().encode("utf-8"))
+    mutated = write_bytes_if_changed(path, buf.getvalue().encode("utf-8"))
+    if path.is_file():
+        import os
+        import time
+
+        now = time.time()
+        os.utime(path, (now, now))
+    return mutated
 
 
-def _write_csv_json_sidecar(csv_path: Path) -> None:
+def _write_csv_json_sidecar(csv_path: Path, *, force: bool = False) -> None:
     """Normalize CSV rows to JSON sidecar for consistent JS/Python reads."""
     if not csv_path.is_file() or csv_path.suffix.lower() != ".csv":
         return
@@ -300,9 +307,19 @@ def _write_csv_json_sidecar(csv_path: Path) -> None:
     except Exception:
         return
     sidecar = csv_path.with_suffix(".json")
-    if sidecar.is_file() and sidecar.stat().st_mtime >= csv_path.stat().st_mtime:
+    if (
+        not force
+        and sidecar.is_file()
+        and sidecar.stat().st_mtime >= csv_path.stat().st_mtime
+    ):
         return
     _write_json(sidecar, rows)
+    if sidecar.is_file():
+        import os
+        import time
+
+        now = time.time()
+        os.utime(sidecar, (now, now))
 
 
 def _copy_if_newer(source: Path, destination: Path) -> bool:
@@ -676,15 +693,22 @@ def _sync_operational_softdent_exports(destination: Path) -> list[str]:
             daysheet_sidecar = destination / "softdent_claims_daysheet_derived.csv"
             fieldnames = list(claim_rows[0].keys())
             _write_csv(daysheet_sidecar, claim_rows, fieldnames)
-            _write_csv_json_sidecar(daysheet_sidecar)
+            _write_csv_json_sidecar(daysheet_sidecar, force=True)
             written.append(daysheet_sidecar.name)
 
             if preserve_named:
-                # SoftDent/ODBC export wins for carrier join; do not clobber.
-                pass
+                # SoftDent/ODBC export wins for carrier join; do not clobber dollars,
+                # but refresh JSON sidecar + mtime so readiness age is honest.
+                _write_csv_json_sidecar(claims_path, force=True)
+                if claims_path.is_file():
+                    import os
+                    import time
+
+                    now = time.time()
+                    os.utime(claims_path, (now, now))
             else:
                 _write_csv(claims_path, claim_rows, fieldnames)
-                _write_csv_json_sidecar(claims_path)
+                _write_csv_json_sidecar(claims_path, force=True)
                 written.append(claims_path.name)
 
             status = build_daysheet_claim_status_dataset()
@@ -695,11 +719,18 @@ def _sync_operational_softdent_exports(destination: Path) -> list[str]:
                 if preserve_named and status_path.is_file():
                     existing_status = _read_claims_csv_rows(status_path)
                     if existing_status and _claims_have_named_payers(existing_status):
+                        _write_csv_json_sidecar(status_path, force=True)
+                        if status_path.is_file():
+                            import os
+                            import time
+
+                            now = time.time()
+                            os.utime(status_path, (now, now))
                         status_rows = []
                 if status_rows:
                     status_fields = list(status_rows[0].keys())
                     _write_csv(status_path, status_rows, status_fields)
-                    _write_csv_json_sidecar(status_path)
+                    _write_csv_json_sidecar(status_path, force=True)
                     written.append(status_path.name)
 
         procedures = build_daysheet_procedures_dataset()
@@ -708,9 +739,8 @@ def _sync_operational_softdent_exports(destination: Path) -> list[str]:
             proc_path = destination / "softdent_procedures_export.csv"
             proc_fields = list(proc_rows[0].keys())
             _write_csv(proc_path, proc_rows, proc_fields)
-            _write_csv_json_sidecar(proc_path)
+            _write_csv_json_sidecar(proc_path, force=True)
             written.append(proc_path.name)
-
         clinical = build_daysheet_clinical_dataset()
         clinical_rows = (clinical or {}).get("rows") or []
         if clinical_rows and not _is_sample_clinical(clinical_rows):
