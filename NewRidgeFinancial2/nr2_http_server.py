@@ -2826,6 +2826,13 @@ class NR2BottleServer(BottleServer):
 
             return _json_response(claims_outstanding())
 
+        @app.get("/api/softdent/ar-aging")
+        def softdent_ar_aging_api():
+            """SoftDent A/R buckets from softdent_ar_aging.csv — empty ≠ $0 · read-only."""
+            from nr2_softdent_daily import ar_aging
+
+            return _json_response(ar_aging())
+
         @app.get("/api/softdent/provider-production")
         def softdent_provider_production_api():
             from nr2_softdent_daily import provider_production

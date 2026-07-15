@@ -743,3 +743,112 @@ def production_daily(*, limit: int = 30) -> dict[str, Any]:
         "source": source,
         "dbPath": str(db_path),
     }
+
+
+def _parse_ar_money(value: Any) -> float | None:
+    raw = str(value or "").replace("$", "").replace(",", "").strip()
+    if not raw or raw in {"—", "-", "N/A", "na", "null"}:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _normalize_ar_bucket_label(label: str) -> str:
+    low = label.strip().lower().replace("–", "-")
+    if low in {"current", "0-30", "net 30", "current balance"}:
+        return "0-30"
+    if low in {"31-60", "30-60"} or low.startswith("31") or "31-60" in low:
+        return "31-60"
+    if low in {"61-90", "60-90"} or low.startswith("61") or "61-90" in low:
+        return "61-90"
+    if low in {"90+", "91+", "90-plus", "120+"} or low.startswith("90") or low.startswith("120"):
+        return "90+"
+    return label.strip() or "Unknown"
+
+
+def ar_aging() -> dict[str, Any]:
+    """SoftDent A/R bucket totals from import cache CSV (empty ≠ $0 · read-only)."""
+    import csv
+    from pathlib import Path
+
+    from import_loader import softdent_import_dir
+
+    empty: dict[str, Any] = {
+        "hasData": False,
+        "buckets": [],
+        "source": "softdent_ar_aging.csv",
+        "honesty": "empty != $0",
+    }
+    candidates = [
+        softdent_import_dir() / "softdent_ar_aging.csv",
+        softdent_import_dir() / "softdent_ar_aging.json",
+    ]
+    path: Path | None = next((p for p in candidates if p.is_file()), None)
+    if path is None:
+        empty["error"] = "missing"
+        return empty
+
+    buckets: list[dict[str, Any]] = []
+    try:
+        if path.suffix.lower() == ".json":
+            import json
+
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+            rows = payload if isinstance(payload, list) else (payload.get("rows") if isinstance(payload, dict) else [])
+            for row in rows if isinstance(rows, list) else []:
+                if not isinstance(row, dict):
+                    continue
+                amt = _parse_ar_money(row.get("Balance") or row.get("balance") or row.get("amount"))
+                if amt is None:
+                    continue
+                label = _normalize_ar_bucket_label(str(row.get("Bucket") or row.get("bucket") or "Unknown"))
+                buckets.append({"bucket": label, "amount": round(amt, 2)})
+        else:
+            with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                reader = csv.DictReader(handle)
+                for row in reader:
+                    if not isinstance(row, dict):
+                        continue
+                    amt = _parse_ar_money(row.get("Balance") or row.get("balance") or row.get("Amount"))
+                    if amt is None:
+                        continue
+                    label = _normalize_ar_bucket_label(str(row.get("Bucket") or row.get("bucket") or "Unknown"))
+                    buckets.append({"bucket": label, "amount": round(amt, 2)})
+    except Exception as exc:
+        empty["error"] = str(exc)
+        return empty
+
+    if not buckets:
+        empty["error"] = "empty_file"
+        empty["path"] = str(path)
+        return empty
+
+    # Merge duplicate labels (Current + 0-30) without inventing missing buckets.
+    merged: dict[str, float] = {}
+    order: list[str] = []
+    for item in buckets:
+        key = str(item["bucket"])
+        if key not in merged:
+            order.append(key)
+            merged[key] = 0.0
+        merged[key] += float(item["amount"])
+    preferred = ["0-30", "31-60", "61-90", "90+"]
+    ordered = [b for b in preferred if b in merged] + [b for b in order if b not in preferred]
+    out_buckets = [{"bucket": b, "amount": round(merged[b], 2)} for b in ordered]
+    total = round(sum(merged.values()), 2)
+    mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    age_hours = round((datetime.now(timezone.utc) - mtime).total_seconds() / 3600.0, 2)
+    stale = age_hours > 24.0
+    return {
+        "hasData": True,
+        "buckets": out_buckets,
+        "total": total,
+        "source": path.name,
+        "path": str(path),
+        "mtime": mtime.replace(microsecond=0).isoformat(),
+        "ageHours": age_hours,
+        "stale": stale,
+        "honesty": "empty != $0",
+    }

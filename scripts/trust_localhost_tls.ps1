@@ -12,8 +12,12 @@ if (-not (Test-Path $pfxPath)) {
 }
 
 $securePwd = ConvertTo-SecureString -String $pfxPassword -Force -AsPlainText
-$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-$cert.Import($pfxPath, $pfxPassword, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+# Constructor form — X509Certificate2.Import is immutable/unavailable on modern .NET
+$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
+    $pfxPath,
+    $pfxPassword,
+    [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
+)
 $thumbprint = $cert.Thumbprint
 
 $rootStore = New-Object System.Security.Cryptography.X509Certificates.X509Store('Root', 'CurrentUser')

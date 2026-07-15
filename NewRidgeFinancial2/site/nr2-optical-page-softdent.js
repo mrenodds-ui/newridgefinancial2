@@ -34,6 +34,19 @@
     W.setBanner("partial", "Wiring SoftDent claims + production · empty ≠ $0");
 
     let live = false;
+    let arFromAging = false;
+
+    const arAging = await W.getJson("/api/softdent/ar-aging", 12000);
+    if (arAging.ok && arAging.data && arAging.data.hasData) {
+      const shown = W.fmtMoney(arAging.data.total);
+      if (shown) {
+        W.setText("val-ar", shown);
+        arFromAging = true;
+        live = true;
+      } else {
+        W.setText("val-ar", null, "∅");
+      }
+    }
 
     const claims = await W.getJson("/api/softdent/claims-outstanding", 12000);
     if (claims.ok && claims.data && claims.data.hasData) {
@@ -44,15 +57,15 @@
       const shown = W.fmtMoney(total);
       if (shown) {
         W.setText("val-claims", shown);
-        W.setText("val-ar", shown);
+        if (!arFromAging) W.setText("val-ar", shown);
         live = true;
       } else {
         W.setText("val-claims", null, "∅");
-        W.setText("val-ar", null, "∅");
+        if (!arFromAging) W.setText("val-ar", null, "∅");
       }
     } else {
       W.setText("val-claims", null, "NO SIGNAL");
-      W.setText("val-ar", null, "NO SIGNAL");
+      if (!arFromAging) W.setText("val-ar", null, "NO SIGNAL");
     }
 
     const prod = await W.getJson("/api/softdent/production-daily", 12000);
@@ -92,19 +105,21 @@
       live = true;
     }
 
-    let stale = false;
+    let stale = !!(arAging.ok && arAging.data && arAging.data.stale);
     const ready = await W.getJson("/api/import-readiness", 12000);
     if (ready.ok && ready.data) {
       const gaps = (ready.data.datasetGaps || []).concat(
         (ready.data.completeness && ready.data.completeness.softGaps) || []
       );
-      stale = gaps.some(
-        (g) =>
-          g &&
-          String(g.severity || "") === "critical" &&
-          /softdent\.ar|softdent/i.test(String(g.datasetKey || "")) &&
-          /stale/i.test(String(g.status || ""))
-      );
+      stale =
+        stale ||
+        gaps.some(
+          (g) =>
+            g &&
+            String(g.severity || "") === "critical" &&
+            /softdent\.ar|softdent/i.test(String(g.datasetKey || "")) &&
+            /stale/i.test(String(g.status || ""))
+        );
     }
     if (stale) {
       const ar = document.getElementById("val-ar");
