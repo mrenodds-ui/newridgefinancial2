@@ -481,15 +481,14 @@
   }
 
   function announceSidenote(sender, broadcast, message) {
-    // Short cue + message box text. Silent if empty/chrome/script.
+    // Short cue + message box when available; else cue + sender only.
+    const name = String(sender || "a station").replace(/\s+/g, " ").trim() || "a station";
     const cleaned = String(message || "")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 220);
-    if (!cleaned || looksLikeScript(cleaned)) {
-      return { started: false, durationMs: 0, skipped: true, reason: "no-message-box" };
-    }
-    let body = cleaned;
+    let body = cleaned && !looksLikeScript(cleaned) ? cleaned : "";
+    if (!body) body = broadcast ? `Broadcast from ${name}.` : `Message from ${name}.`;
     if (body && !/[.!?]$/.test(body)) body += ".";
     const intros = ["BlueNote.", "Heads up.", "Quick note.", "Incoming.", "Office message."];
     if (/^(bluenote|heads up|quick note|incoming|office message|hello ladies|hi ladies|hal[.,])\b/i.test(body)) {

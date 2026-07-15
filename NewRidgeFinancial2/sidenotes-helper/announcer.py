@@ -216,11 +216,16 @@ def pick_bluenote_announcement(
     message: str = "",
     cfg: dict[str, Any] | None = None,
 ) -> str:
-    """Random HAL intro + message-box text. Empty if no real message (never scripts)."""
-    _ = (sender, broadcast)  # routing kept for callers; message box is spoken
+    """Short cue + message-box text when available; else cue + sender only."""
     body = clip_spoken_message(message, max_words=40, max_chars=220)
     if not body:
-        return ""
+        who = " ".join(str(sender or "").split()).strip()
+        if not who or who.lower() in ("bluenote", "a station", "station", "unknown"):
+            body = "New message."
+        elif broadcast:
+            body = f"Broadcast from {who}."
+        else:
+            body = f"Message from {who}."
     # Avoid double-intros if the box already starts with a cue/HAL line.
     if re.match(
         r"(?i)^(bluenote|heads up|quick note|incoming|office message|hello ladies|hi ladies|hey ladies|hal[.,])\b",
