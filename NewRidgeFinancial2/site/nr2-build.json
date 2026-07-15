@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12017-optical-ops",
-  "BUILD_ID": "nr2-12017-optical-ops",
-  "assetVersion": "nr2-12017-optical-ops",
-  "builtAt": "2026-07-15T18:48:00.000Z",
-  "notes": "nr2-12017-optical-ops: post-12016 wires — SoftDent AR buckets + claims full totals + 7d util, QB cash/NI, OM SoftDent day pulse, Documents inbox/extract, hub honesty map. Narratives/ERA/recon remain UNAVAILABLE. SoftDent Account Aging re-export clears AR laser block.",
+  "schemaVersion": "nr2-12018-hal-brains",
+  "BUILD_ID": "nr2-12018-hal-brains",
+  "assetVersion": "nr2-12018-hal-brains",
+  "builtAt": "2026-07-15T19:40:00.000Z",
+  "notes": "nr2-12018-hal-brains: Moonshot HAL-as-brains P0–P3 — multi-turn /api/hal/chat + session store, SoftDent/QB/MemoAI/web tools, consent actions, optical command-center page. SoftDent write-back still forbidden; empty ≠ $0.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12017-OPTICAL-OPS",
+  "package": "NR2-12018-HAL-BRAINS",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

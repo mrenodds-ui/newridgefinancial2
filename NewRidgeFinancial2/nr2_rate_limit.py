@@ -18,7 +18,7 @@ def _limit_for_class(route_class: str) -> int:
         "mutation": "NR2_RATE_MUTATION_PER_MIN",
         "hal": "NR2_RATE_HAL_PER_MIN",
     }
-    defaults = {"read": 300, "mutation": 20, "hal": 5}
+    defaults = {"read": 300, "mutation": 20, "hal": 60}
     raw = os.environ.get(env_map.get(route_class, "NR2_RATE_READ_PER_MIN"), str(defaults.get(route_class, 100)))
     try:
         return max(1, int(raw))
@@ -49,6 +49,10 @@ RATE_LIMIT_EXEMPT_PATHS = frozenset(
         "/nr2-build.json",
         "/api/apex/widgets",  # Moonshot: prevent 429 warming stall
         "/api/apex/hal/orchestrate",  # Ensure HAL token auth never 429s
+        "/api/browser-session",
+        "/api/hal/tools/softdent-status",
+        "/api/hal/tools/qb-summary",
+        "/api/hal/actions/pending",
     }
 )
 
@@ -59,6 +63,9 @@ def is_rate_limit_exempt(path: str) -> bool:
         return True
     # Prefix match for all widget sub-endpoints (e.g., /api/apex/widgets/financial)
     if p.startswith("/api/apex/widgets"):
+        return True
+    # HAL brains session history reads must not 429 the command center
+    if p.startswith("/api/hal/session/") and p.endswith("/history"):
         return True
     return False
 

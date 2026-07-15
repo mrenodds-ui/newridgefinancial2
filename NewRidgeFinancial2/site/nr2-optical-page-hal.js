@@ -355,7 +355,40 @@
     const typing = addMsg("hal", "", { typing: true });
     let full = "";
     const persona = personaPrefix();
+
+    async function chatJson() {
+      const res = await fetch("/api/hal/chat", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...(browserToken ? { "X-NR2-Session-Token": browserToken } : {}),
+        },
+        body: JSON.stringify({
+          query: query,
+          sessionId: chatSessionId,
+          stream: false,
+          messages: messages.slice(-20),
+          systemPrompt: persona || undefined,
+        }),
+      });
+      const data = await res.json().catch(function () {
+        return {};
+      });
+      if (!res.ok) {
+        throw new Error(data.error || data.detail || String(res.status));
+      }
+      return String(
+        data.text ||
+          data.reply ||
+          (data.message && (data.message.content || data.message)) ||
+          ""
+      );
+    }
+
     try {
+      // Prefer SSE; fall back to multi-turn JSON if SSL/wsgiref streaming faults.
       const res = await fetch("/api/hal/chat", {
         method: "POST",
         cache: "no-store",
@@ -372,55 +405,54 @@
           systemPrompt: persona || undefined,
         }),
       });
-      if (!res.ok || !res.body) {
-        const errJson = await res.json().catch(function () {
-          return {};
-        });
+      const ctype = String(res.headers.get("Content-Type") || "");
+      if (!res.ok || !res.body || ctype.indexOf("text/event-stream") < 0) {
+        full = await chatJson();
         typing.el.classList.remove("typing");
         typing.body.textContent =
-          "Transmit blocked · " +
-          (errJson.error || errJson.detail || res.status) +
-          ". Money answers gated by import-readiness; empty is not zero.";
-        setOrb("error");
-        return;
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        buf += decoder.decode(chunk.value, { stream: true });
-        const parts = buf.split("\n\n");
-        buf = parts.pop() || "";
-        parts.forEach(function (block) {
-          const lines = block.split("\n");
-          let dataLine = "";
-          lines.forEach(function (line) {
-            if (line.indexOf("data:") === 0) dataLine = line.slice(5).trim();
+          full || "No reply · empty is not zero if this was a money ask.";
+      } else {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          buf += decoder.decode(chunk.value, { stream: true });
+          const parts = buf.split("\n\n");
+          buf = parts.pop() || "";
+          parts.forEach(function (block) {
+            const lines = block.split("\n");
+            let dataLine = "";
+            lines.forEach(function (line) {
+              if (line.indexOf("data:") === 0) dataLine = line.slice(5).trim();
+            });
+            if (!dataLine) return;
+            try {
+              const obj = JSON.parse(dataLine);
+              if (obj.sessionId) rememberSession(obj.sessionId);
+              if (obj.token) {
+                full += String(obj.token);
+                typing.el.classList.remove("typing");
+                typing.body.textContent = full;
+                stream.scrollTop = stream.scrollHeight;
+              }
+              if (obj.error) {
+                typing.el.classList.remove("typing");
+                typing.body.textContent = "Link fault · " + String(obj.error);
+                setOrb("error");
+              }
+            } catch (_) {}
           });
-          if (!dataLine) return;
-          try {
-            const obj = JSON.parse(dataLine);
-            if (obj.sessionId) rememberSession(obj.sessionId);
-            if (obj.token) {
-              full += String(obj.token);
-              typing.el.classList.remove("typing");
-              typing.body.textContent = full;
-              stream.scrollTop = stream.scrollHeight;
-            }
-            if (obj.error) {
-              typing.el.classList.remove("typing");
-              typing.body.textContent = "Link fault · " + String(obj.error);
-              setOrb("error");
-            }
-          } catch (_) {}
-        });
-      }
-      typing.el.classList.remove("typing");
-      if (!full) {
-        typing.body.textContent =
-          "No reply tokens · empty is not zero if this was a money ask.";
+        }
+        typing.el.classList.remove("typing");
+        if (!full) {
+          full = await chatJson();
+          typing.body.textContent =
+            full || "No reply tokens · empty is not zero if this was a money ask.";
+        } else {
+          typing.body.textContent = full;
+        }
       }
       messages.push({ role: "user", content: query });
       if (full) messages.push({ role: "assistant", content: full });
@@ -429,9 +461,21 @@
       }
       setOrb("idle");
     } catch (err) {
-      typing.el.classList.remove("typing");
-      typing.body.textContent = "Link fault · " + String(err && err.message ? err.message : err);
-      setOrb("error");
+      try {
+        full = await chatJson();
+        typing.el.classList.remove("typing");
+        typing.body.textContent = full || "No reply.";
+        messages.push({ role: "user", content: query });
+        if (full) messages.push({ role: "assistant", content: full });
+        setOrb("idle");
+      } catch (err2) {
+        typing.el.classList.remove("typing");
+        typing.body.textContent =
+          "Transmit blocked · " +
+          String(err2 && err2.message ? err2.message : err2) +
+          ". Money answers gated by import-readiness; empty is not zero.";
+        setOrb("error");
+      }
     }
   }
 

@@ -1023,28 +1023,39 @@ class NR2BottleServer(BottleServer):
             use_stream = bool(payload.get("stream", True))
 
             if use_stream:
+                # Emit SSE as a single string body (SSL/wsgiref generator streaming is flaky
+                # on this adapter — both /api/hal/chat and /api/v1/hal/stream-sse hit critical).
                 bottle.response.content_type = "text/event-stream; charset=utf-8"
                 bottle.response.set_header("Cache-Control", "no-cache")
-                bottle.response.set_header("Connection", "keep-alive")
                 bottle.response.set_header("X-Accel-Buffering", "no")
                 bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
                 bottle.response.set_header("X-HAL-Lane-Used", str(resolved["lane"]))
                 bottle.response.set_header("X-HAL-Session-Id", session_id)
-
-                def _gen():
-                    buf: list[str] = []
-                    yield f"event: meta\ndata: {json.dumps({'sessionId': session_id, 'status': 'typing', 'done': False})}\n\n"
+                parts: list[str] = [
+                    "event: meta\ndata: "
+                    + json.dumps(
+                        {"sessionId": session_id, "status": "typing", "done": False, "buffered": True}
+                    )
+                    + "\n\n"
+                ]
+                buf: list[str] = []
+                try:
                     for frame in evaluate_query_sse_frames(
                         query=query,
                         readiness=readiness,
                         model=APPROVED_LOCAL_MODEL,
                         system_prompt=persona,
                         messages=chat_messages,
-                        options=payload.get("options") if isinstance(payload.get("options"), dict) else None,
+                        options=payload.get("options")
+                        if isinstance(payload.get("options"), dict)
+                        else None,
                         shift_context=shift_context,
                         requested_lane=lane_key,
                         store=store,
                     ):
+                        if isinstance(frame, bytes):
+                            frame = frame.decode("utf-8", errors="replace")
+                        parts.append(frame)
                         if frame.startswith("data:"):
                             try:
                                 data_line = frame.split("data:", 1)[1].strip()
@@ -1054,38 +1065,48 @@ class NR2BottleServer(BottleServer):
                                     buf.append(str(tok))
                             except Exception:
                                 pass
-                        yield frame
                     full = "".join(buf)
                     if full:
                         append_turn(session_id, role="assistant", text=full)
-                    yield f"event: session\ndata: {json.dumps({'sessionId': session_id, 'done': True})}\n\n"
+                    parts.append(
+                        "event: session\ndata: "
+                        + json.dumps({"sessionId": session_id, "done": True})
+                        + "\n\n"
+                    )
+                    return "".join(parts)
+                except Exception as exc:  # noqa: BLE001
+                    # Fall back to multi-turn JSON so chat never hard-fails.
+                    use_stream = False
+                    bottle.response.content_type = "application/json"
+                    bottle.response.set_header("X-HAL-Stream-Fallback", str(exc)[:160])
 
-                return _gen()
+            if not use_stream:
+                result = evaluate_query(
+                    query=query,
+                    readiness=readiness,
+                    model=APPROVED_LOCAL_MODEL,
+                    system_prompt=persona,
+                    messages=chat_messages,
+                    options=payload.get("options") if isinstance(payload.get("options"), dict) else None,
+                    shift_context=shift_context,
+                    requested_lane=lane_key,
+                    store=store,
+                )
+                result["resolvedLane"] = result.get("resolvedLane") or resolved["lane"]
+                result["sessionId"] = session_id
+                reply = str(result.get("text") or (result.get("message") or {}).get("content") or "")
+                if reply:
+                    append_turn(session_id, role="assistant", text=reply)
+                bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
+                bottle.response.set_header("X-HAL-Lane-Used", str(result.get("resolvedLane") or resolved["lane"]))
+                bottle.response.set_header("X-HAL-Session-Id", session_id)
+                if result.get("blocked") or result.get("error") == "HAL_UNAVAILABLE_STALE_DATA":
+                    return _json_response(result, status=503)
+                if not result.get("ok"):
+                    return _json_response(result, status=502)
+                return _json_response(result)
 
-            result = evaluate_query(
-                query=query,
-                readiness=readiness,
-                model=APPROVED_LOCAL_MODEL,
-                system_prompt=persona,
-                messages=chat_messages,
-                options=payload.get("options") if isinstance(payload.get("options"), dict) else None,
-                shift_context=shift_context,
-                requested_lane=lane_key,
-                store=store,
-            )
-            result["resolvedLane"] = result.get("resolvedLane") or resolved["lane"]
-            result["sessionId"] = session_id
-            reply = str(result.get("text") or (result.get("message") or {}).get("content") or "")
-            if reply:
-                append_turn(session_id, role="assistant", text=reply)
-            bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
-            bottle.response.set_header("X-HAL-Lane-Used", str(result.get("resolvedLane") or resolved["lane"]))
-            bottle.response.set_header("X-HAL-Session-Id", session_id)
-            if result.get("blocked") or result.get("error") == "HAL_UNAVAILABLE_STALE_DATA":
-                return _json_response(result, status=503)
-            if not result.get("ok"):
-                return _json_response(result, status=502)
-            return _json_response(result)
+            return _json_response({"ok": False, "error": "stream_unavailable"}, status=502)
 
         @app.get("/api/hal/tools/softdent-status")
         def hal_softdent_status_api():
