@@ -1,4 +1,4 @@
-"""hal-10628 — Ask HAL paths must not hard-remount a live HAL composer."""
+"""nr2-11000-clean — Ask HAL paths must not hard-remount a live HAL composer."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ CORE = ROOT / "site" / "apex-core.js"
 
 class Hal10627AskNoRemountTests(unittest.TestCase):
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "nr2-11000-clean")
 
     def test_bridge_ask_fallback_silent_when_on_hal(self):
         text = BRIDGE.read_text(encoding="utf-8")

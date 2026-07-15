@@ -6,7 +6,7 @@ import re
 import unittest
 from unittest import mock
 
-from apex_softdent_hardening_pack import (
+from nr2_contracts.softdent_hardening import (
     GAP_ERA_835_REQUIRED,
     SUGGESTED_ACTION_ERA_835_PROCURE,
     SUGGESTED_ACTION_RE_EXPORT_REGISTER,

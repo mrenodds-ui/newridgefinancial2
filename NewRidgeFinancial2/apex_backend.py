@@ -32,7 +32,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "hal-10628"
+BUILD_ID = "nr2-11000-clean"
 
 
 def _apex_blank_all_widgets() -> bool:
@@ -957,7 +957,7 @@ def build_ins_patient_split(bundle: dict[str, Any]) -> dict[str, Any]:
     if not segs:
         gap_code = None
         try:
-            from apex_softdent_hardening_pack import assess_collections_gap
+            from nr2_contracts.softdent_hardening import assess_collections_gap
 
             gap_code = assess_collections_gap(bundle).get("gapCode")
         except Exception:
@@ -1836,7 +1836,7 @@ def _financial_widgets_from_reports(
         # DEF-001 — surface Collections gap strip on Financial when revenue is empty
         if revenue.get("status") == "empty":
             try:
-                from apex_softdent_hardening_pack import collections_gap_widget
+                from nr2_contracts.softdent_hardening import collections_gap_widget
 
                 gap_w = collections_gap_widget(bundle)
                 if gap_w.get("status") == "empty":
@@ -1972,22 +1972,22 @@ def _financial_widgets_from_reports(
     except Exception:
         pass
     try:
-        from apex_unified_db_pack import unified_db_widget
+        from nr2_contracts.unified_db import unified_db_widget
 
         widgets.append(unified_db_widget(bundle))
     except Exception:
         pass
     try:
-        from apex_qb_payroll_pack import payroll_ap_widgets
+        from nr2_contracts.qb_payroll import payroll_ap_widgets
 
         widgets.extend(payroll_ap_widgets(bundle))
     except Exception:
         pass
     try:
-        from apex_softdent_production_pack import production_widgets
-        from apex_softdent_aging_schedule_pack import aging_schedule_widgets
+        from nr2_contracts.softdent_production import production_widgets
+        from nr2_contracts.softdent_aging_schedule import aging_schedule_widgets
         from apex_qb_net_profit_pack import net_profit_widget
-        from apex_unified_db_pack import production_vs_payroll_widget
+        from nr2_contracts.unified_db import production_vs_payroll_widget
 
         widgets.extend(production_widgets(bundle))
         widgets.extend(aging_schedule_widgets(bundle))
@@ -1996,7 +1996,7 @@ def _financial_widgets_from_reports(
     except Exception:
         pass
     try:
-        from apex_softdent_extended_pack import extended_metrics_widgets
+        from nr2_contracts.softdent_extended import extended_metrics_widgets
 
         widgets.extend(extended_metrics_widgets(bundle))
     except Exception:
@@ -2331,7 +2331,7 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
         elif "collections" in latest:
             coll = _parse_money(latest.get("collections"))
     try:
-        from apex_softdent_hardening_pack import assess_collections_gap
+        from nr2_contracts.softdent_hardening import assess_collections_gap
 
         coll_gap = assess_collections_gap(bundle)
     except Exception:
@@ -2496,7 +2496,7 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
 
     widgets.append(build_provider_horizontal_bars(bundle))
     try:
-        from apex_softdent_hardening_pack import collections_gap_widget
+        from nr2_contracts.softdent_hardening import collections_gap_widget
 
         widgets.insert(0, collections_gap_widget(bundle))
     except Exception:
@@ -2598,8 +2598,8 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
     except Exception:
         pass
     try:
-        from apex_softdent_production_pack import production_widgets
-        from apex_softdent_aging_schedule_pack import aging_schedule_widgets
+        from nr2_contracts.softdent_production import production_widgets
+        from nr2_contracts.softdent_aging_schedule import aging_schedule_widgets
         from apex_financial_console_pack import collapse_empty_large
 
         for w in production_widgets(bundle):
@@ -2609,7 +2609,7 @@ def _softdent_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list[d
     except Exception:
         pass
     try:
-        from apex_softdent_extended_pack import extended_metrics_widgets
+        from nr2_contracts.softdent_extended import extended_metrics_widgets
         from apex_financial_console_pack import collapse_empty_large
 
         for w in extended_metrics_widgets(bundle):
@@ -2748,7 +2748,7 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
         except Exception:
             pass
         try:
-            from apex_qb_payroll_pack import payroll_ap_widgets
+            from nr2_contracts.qb_payroll import payroll_ap_widgets
 
             widgets.extend(payroll_ap_widgets(bundle))
         except Exception:
@@ -2886,7 +2886,7 @@ def _quickbooks_widgets(reports: dict[str, Any], bundle: dict[str, Any]) -> list
     except Exception:
         pass
     try:
-        from apex_qb_payroll_pack import payroll_ap_widgets
+        from nr2_contracts.qb_payroll import payroll_ap_widgets
 
         widgets.extend(payroll_ap_widgets(bundle))
     except Exception:
@@ -4801,7 +4801,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
     # 2) DEF-001 inbox period stub ingest + dashboard sync (force when unprocessed exports present)
     force_reimport = False
     try:
-        from apex_softdent_hardening_pack import scan_collections_export_inbox
+        from nr2_contracts.softdent_hardening import scan_collections_export_inbox
 
         pre_inbox = scan_collections_export_inbox()
         force_reimport = bool(pre_inbox.get("matchCount"))
@@ -4862,7 +4862,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
 
     # 4) DEF-001 — scan SoftDent export inbox for Collections/Daysheet files (presence only)
     try:
-        from apex_softdent_hardening_pack import scan_collections_export_inbox
+        from nr2_contracts.softdent_hardening import scan_collections_export_inbox
 
         inbox = scan_collections_export_inbox()
         result["steps"].append(
@@ -4892,7 +4892,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
     result["completedAt"] = _utc_now()
     inbox = result.get("exportInbox") if isinstance(result.get("exportInbox"), dict) else {}
     try:
-        from apex_softdent_hardening_pack import assess_collections_gap, FORMAT_HINT
+        from nr2_contracts.softdent_hardening import assess_collections_gap, FORMAT_HINT
 
         _reports, bundle, _err = _load_reports_and_bundle()
         gap = assess_collections_gap(bundle)
@@ -5751,7 +5751,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         q,
     ):
         try:
-            from apex_softdent_hardening_pack import assess_collections_gap, format_collections_gap_reply
+            from nr2_contracts.softdent_hardening import assess_collections_gap, format_collections_gap_reply
 
             _reports, bundle, _err = _load_reports_and_bundle()
             gap = assess_collections_gap(bundle)
@@ -5784,7 +5784,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         q,
     ):
         try:
-            from apex_qb_payroll_pack import assess_payroll_ap_gap, format_payroll_ap_reply
+            from nr2_contracts.qb_payroll import assess_payroll_ap_gap, format_payroll_ap_reply
 
             _reports, bundle, _err = _load_reports_and_bundle()
             gap = assess_payroll_ap_gap(bundle)
@@ -6210,7 +6210,7 @@ def apex_sync_trigger(payload: dict[str, Any] | None = None) -> dict[str, Any]:
                 result["filterSummary"] = scrub
             # Phase I3 — mirror import bundle into additive unified SQLite
             try:
-                from apex_unified_db_pack import ingest_from_bundle
+                from nr2_contracts.unified_db import ingest_from_bundle
 
                 result["unifiedIngest"] = ingest_from_bundle(bundle)
             except Exception as exc:  # noqa: BLE001
@@ -6781,8 +6781,8 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
         """Drop QB payroll/AP CSVs into document-inbox (optional gap). No invented dollars."""
         try:
             import bottle
-            from apex_qb_export_inbox_pack import write_qb_payroll_ap_exports
-            from apex_qb_payroll_pack import assess_payroll_ap_gap
+            from nr2_contracts.qb_export_inbox import write_qb_payroll_ap_exports
+            from nr2_contracts.qb_payroll import assess_payroll_ap_gap
 
             raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
             try:
@@ -6940,7 +6940,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
     @app.get("/api/apex/hal/collections-gap")
     def apex_hal_collections_gap():
         try:
-            from apex_softdent_hardening_pack import assess_collections_gap
+            from nr2_contracts.softdent_hardening import assess_collections_gap
 
             _reports, bundle, _err = _load_reports_and_bundle()
             result = assess_collections_gap(bundle)
@@ -7086,7 +7086,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
     @app.get("/api/apex/unified/snapshot")
     def apex_unified_snapshot():
         try:
-            from apex_unified_db_pack import orchestrator_context_snapshot
+            from nr2_contracts.unified_db import orchestrator_context_snapshot
 
             result = orchestrator_context_snapshot(limit=12)
             result["buildId"] = BUILD_ID
@@ -7406,7 +7406,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
     def apex_extended_metrics_status():
         """Phase W0 — SoftDent case acceptance / aging / scheduling views."""
         try:
-            from apex_softdent_extended_pack import extended_metrics_status
+            from nr2_contracts.softdent_extended import extended_metrics_status
 
             result = extended_metrics_status()
             result["buildId"] = BUILD_ID
@@ -7665,7 +7665,7 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
     @app.post("/api/apex/unified/ingest")
     def apex_unified_ingest():
         try:
-            from apex_unified_db_pack import ingest_from_bundle
+            from nr2_contracts.unified_db import ingest_from_bundle
 
             _reports, bundle, _err = _load_reports_and_bundle()
             result = ingest_from_bundle(bundle)

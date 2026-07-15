@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from apex_backend import BUILD_ID
-from apex_softdent_hardening_pack import classify_daysheet_inbox_periods
+from nr2_contracts.softdent_hardening import classify_daysheet_inbox_periods
 from softdent_dashboard_period_sync import ingest_daysheet_to_period
 from softdent_practice_exports import (
     detect_daysheet_export_schema,

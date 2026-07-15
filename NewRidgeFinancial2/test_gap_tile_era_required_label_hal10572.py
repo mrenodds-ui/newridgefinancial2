@@ -6,13 +6,13 @@ import unittest
 from unittest import mock
 
 from apex_backend import BUILD_ID
-from apex_softdent_hardening_pack import (
+from nr2_contracts.softdent_hardening import (
     GAP_ERA_835_REQUIRED,
     assess_collections_gap,
     collections_gap_widget,
     display_collections_gap_code,
 )
-from apex_softdent_era_pack import GAP_ERA_835_AVAILABLE, enrich_collections_gap_with_era
+from nr2_contracts.softdent_era import GAP_ERA_835_AVAILABLE, enrich_collections_gap_with_era
 
 
 def _bundle_register_ins_plan_zero() -> dict:
@@ -66,7 +66,7 @@ class GapTileEraRequiredLabelTests(unittest.TestCase):
             "issues": [],
         }
         with mock.patch(
-            "apex_softdent_era_pack.era_available_for_period",
+            "nr2_contracts.softdent_era.era_available_for_period",
             return_value={"available": True, "paymentTotal": None, "claimCount": 4},
         ):
             enriched = enrich_collections_gap_with_era(gap)

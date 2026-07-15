@@ -142,7 +142,7 @@ class HonestyCiGateHal10603Tests(unittest.TestCase):
 
     def test_build_id_coupled(self) -> None:
         self.assertEqual(PACKAGE_BUILD_ID, "hal-10603")
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "nr2-11000-clean")
 
     def test_empty_is_not_zero_policy_surfaces(self) -> None:
         for value in (None, "", "null", "n/a"):

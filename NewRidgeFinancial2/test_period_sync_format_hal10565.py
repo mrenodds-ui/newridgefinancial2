@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from apex_backend import BUILD_ID
-from apex_softdent_hardening_pack import (
+from nr2_contracts.softdent_hardening import (
     GAP_COLLECTIONS_FORMAT_REQUIRED,
     GAP_COLLECTIONS_PENDING,
     assess_collections_gap,
@@ -63,7 +63,7 @@ class PeriodSyncFormatHal10565Tests(unittest.TestCase):
                 encoding="utf-8",
             )
             with mock.patch(
-                "apex_softdent_hardening_pack.scan_collections_export_inbox",
+                "nr2_contracts.softdent_hardening.scan_collections_export_inbox",
                 return_value={
                     "ok": True,
                     "matchCount": 1,
@@ -76,7 +76,7 @@ class PeriodSyncFormatHal10565Tests(unittest.TestCase):
                 },
             ):
                 with mock.patch(
-                    "apex_softdent_era_pack.enrich_collections_gap_with_era",
+                    "nr2_contracts.softdent_era.enrich_collections_gap_with_era",
                     side_effect=lambda g, **kw: g,
                 ):
                     gap = assess_collections_gap(_bundle_pending())

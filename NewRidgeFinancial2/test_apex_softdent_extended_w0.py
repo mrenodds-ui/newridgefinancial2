@@ -8,16 +8,16 @@ import unittest
 from pathlib import Path
 
 from apex_backend import BUILD_ID, build_apex_widgets
-from apex_softdent_aging_schedule_pack import assess_aging_schedule_gap, ingest_aging_schedule_into_conn
-from apex_softdent_extended_pack import (
+from nr2_contracts.softdent_aging_schedule import assess_aging_schedule_gap, ingest_aging_schedule_into_conn
+from nr2_contracts.softdent_extended import (
     GAP_CASE_ACCEPT_DATA_PENDING,
     build_scheduling_efficiency,
     calculate_case_acceptance,
     extended_metrics_enabled,
     extended_metrics_widgets,
 )
-from apex_softdent_production_pack import ingest_softdent_production_into_conn
-from apex_unified_db_pack import (
+from nr2_contracts.softdent_production import ingest_softdent_production_into_conn
+from nr2_contracts.unified_db import (
     ingest_from_bundle,
     list_case_acceptance,
     list_patient_aging,

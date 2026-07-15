@@ -6,12 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from apex_softdent_era_pack import (
+from nr2_contracts.softdent_era import (
     GAP_ERA_835_AVAILABLE,
     enrich_collections_gap_with_era,
     record_era_aggregate,
 )
-from apex_softdent_hardening_pack import assess_collections_gap
+from nr2_contracts.softdent_hardening import assess_collections_gap
 
 
 class EraHardenPhaseS1Tests(unittest.TestCase):

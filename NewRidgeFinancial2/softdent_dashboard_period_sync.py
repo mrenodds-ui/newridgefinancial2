@@ -500,7 +500,7 @@ def _aggregate_inbox_daysheet(periods: list[str]) -> dict[str, dict[str, Any]]:
 
     # Presence-only stub: inbox classifies open periods but JSONL had no usable totals.
     try:
-        from apex_softdent_hardening_pack import classify_daysheet_inbox_periods, scan_collections_export_inbox
+        from nr2_contracts.softdent_hardening import classify_daysheet_inbox_periods, scan_collections_export_inbox
 
         inbox = scan_collections_export_inbox()
         classified = classify_daysheet_inbox_periods(inbox.get("matches") if isinstance(inbox, dict) else None)
@@ -659,7 +659,7 @@ def ingest_daysheet_to_period(*, force_reimport: bool = False) -> dict[str, Any]
     Triggered when inbox has daysheet/register files. Never invents insurance/patient
     dollars. Production-only daysheet → collectionsPending / daysheetWithoutSplit.
     """
-    from apex_softdent_hardening_pack import scan_collections_export_inbox
+    from nr2_contracts.softdent_hardening import scan_collections_export_inbox
     from softdent_practice_exports import summarize_daysheet_export
 
     periods = relevant_period_labels()

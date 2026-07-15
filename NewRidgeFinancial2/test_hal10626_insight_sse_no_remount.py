@@ -1,4 +1,4 @@
-"""hal-10628 — insight SSE client must not hard-remount HAL chat."""
+"""nr2-11000-clean — insight SSE client must not hard-remount HAL chat."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ SSE_JS = ROOT / "site" / "nr2-insight-sse.js"
 
 class Hal10626InsightSseNoRemountTests(unittest.TestCase):
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "nr2-11000-clean")
 
     def test_sse_client_never_hard_remounts_hal(self):
         text = SSE_JS.read_text(encoding="utf-8")

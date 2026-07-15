@@ -1,4 +1,4 @@
-"""hal-10628 — HAL chat mount locks stage against remount / form reload."""
+"""nr2-11000-clean — HAL chat mount locks stage against remount / form reload."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ CORE = ROOT / "site" / "apex-core.js"
 
 class Hal10628ChatStageLockTests(unittest.TestCase):
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "nr2-11000-clean")
 
     def test_composer_is_form_with_submit_guard(self):
         text = CORE.read_text(encoding="utf-8")

@@ -7,13 +7,13 @@ import unittest
 from pathlib import Path
 
 from apex_backend import build_apex_widgets, resolve_hal_board_actions
-from apex_qb_payroll_pack import (
+from nr2_contracts.qb_payroll import (
     GAP_PAYROLL_PENDING,
     assess_payroll_ap_gap,
     normalize_payroll_row,
     redact_phi,
 )
-from apex_unified_db_pack import ingest_from_bundle, list_practice_health_snapshots
+from nr2_contracts.unified_db import ingest_from_bundle, list_practice_health_snapshots
 
 
 def _bundle_with_payroll() -> dict:

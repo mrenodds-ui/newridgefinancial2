@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from apex_softdent_hardening_pack import (
+from nr2_contracts.softdent_hardening import (
     assess_collections_gap,
     collections_gap_widget,
 )

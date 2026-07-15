@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from apex_qb_export_inbox_pack import (
+from nr2_contracts.qb_export_inbox import (
     batch_empty_status,
     write_ap_export,
     write_payroll_export,
     write_qb_payroll_ap_exports,
 )
-import apex_qb_payroll_pack as payroll_pack
+import nr2_contracts.qb_payroll as payroll_pack
 
 
 def test_write_payroll_and_ap_rows(tmp_path: Path):
@@ -50,7 +50,7 @@ def test_empty_batch_honesty(tmp_path: Path, monkeypatch):
     assert "Staff" not in payroll_csv
 
     monkeypatch.setattr(
-        "apex_qb_export_inbox_pack.quickbooks_import_dir",
+        "nr2_contracts.qb_export_inbox.quickbooks_import_dir",
         lambda: tmp_path,
     )
     monkeypatch.setattr(payroll_pack, "_section_rows", lambda bundle, key: [])

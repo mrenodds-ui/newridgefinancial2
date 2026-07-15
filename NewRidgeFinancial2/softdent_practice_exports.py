@@ -1578,7 +1578,7 @@ def stub_era835_ingestion_path() -> dict[str, Any]:
                 "apex_era835_pack.scan_era_inbox",
                 "apex_era835_pack.ingest_era_inbox",
                 "apex_era835_pack.discover_era_candidates",
-                "apex_softdent_era_pack.attach_era_to_ingest",
+                "nr2_contracts.softdent_era.attach_era_to_ingest",
             ],
             "inbox": inbox,
         }
@@ -1615,7 +1615,7 @@ def stub_era835_ingestion_path() -> dict[str, Any]:
             "error": f"{type(exc).__name__}:{exc}",
             "ingestHooks": [
                 "apex_era835_pack.ingest_era835_to_unified",
-                "apex_softdent_era_pack.attach_era_to_ingest",
+                "nr2_contracts.softdent_era.attach_era_to_ingest",
             ],
         }
 

@@ -1,9 +1,11 @@
 {
-  "schemaVersion": "hal-10628",
-  "BUILD_ID": "hal-10628",
-  "assetVersion": "hal-10628",
-  "builtAt": "2026-07-14T13:52:00.000Z",
-  "notes": "hal-10628: lock HAL stage while Ask HAL chat is mounted; form submit cannot reload page.",
-  "staffRenderMode": "apex",
-  "package": "HAL-10628"
+  "schemaVersion": "nr2-11000-clean",
+  "BUILD_ID": "nr2-11000-clean",
+  "assetVersion": "nr2-11000-clean",
+  "builtAt": "2026-07-15T10:00:00.000Z",
+  "notes": "nr2-11000-clean: Moonshot clean-slate cutover — apex packs/overlays removed; SoftDent/QB contracts in nr2_contracts; new pages place against this stamp only.",
+  "staffRenderMode": "nr2-clean",
+  "package": "NR2-11000-CLEAN",
+  "compat": false,
+  "packsAllowed": false
 }

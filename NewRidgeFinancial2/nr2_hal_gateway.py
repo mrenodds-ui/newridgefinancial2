@@ -1273,7 +1273,7 @@ def try_local_policy_reply(query: str) -> dict[str, str] | None:
         q,
     ):
         try:
-            from apex_softdent_hardening_pack import (
+            from nr2_contracts.softdent_hardening import (
                 SUGGESTED_ACTION_ERA_835_PROCURE,
                 assess_collections_gap,
                 format_collections_gap_reply,
@@ -1328,7 +1328,7 @@ def try_local_policy_reply(query: str) -> dict[str, str] | None:
         q,
     ):
         try:
-            from apex_softdent_hardening_pack import assess_collections_gap, format_collections_gap_reply
+            from nr2_contracts.softdent_hardening import assess_collections_gap, format_collections_gap_reply
 
             bundle = None
             try:

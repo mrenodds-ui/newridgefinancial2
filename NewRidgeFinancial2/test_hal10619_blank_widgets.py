@@ -1,4 +1,4 @@
-"""hal-10628 — blank widgets is opt-in only (NR2_APEX_BLANK_WIDGETS=1)."""
+"""nr2-11000-clean — blank widgets is opt-in only (NR2_APEX_BLANK_WIDGETS=1)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from apex_backend import APEX_PAGES, BUILD_ID, build_apex_widgets, _WIDGETS_CACH
 
 class Hal10619BlankWidgetsTests(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "nr2-11000-clean")
 
     def test_blank_default_off(self) -> None:
         prev = os.environ.get("NR2_APEX_BLANK_WIDGETS")
@@ -30,7 +30,7 @@ class Hal10619BlankWidgetsTests(unittest.TestCase):
             _WIDGETS_CACHE.clear()
             for page in APEX_PAGES:
                 out = build_apex_widgets(page, _fill=True)
-                self.assertEqual(out.get("buildId"), "hal-10628", page)
+                self.assertEqual(out.get("buildId"), "nr2-11000-clean", page)
                 self.assertTrue(out.get("blankWidgets"), page)
                 self.assertEqual(out.get("widgets"), [], page)
                 self.assertIsNone(out.get("mosaicLayout"), page)

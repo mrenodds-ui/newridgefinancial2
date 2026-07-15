@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 
 from apex_backend import BUILD_ID
-from apex_softdent_hardening_pack import (
+from nr2_contracts.softdent_hardening import (
     GAP_ERA_835_REQUIRED,
     assess_collections_gap,
     format_collections_gap_reply,

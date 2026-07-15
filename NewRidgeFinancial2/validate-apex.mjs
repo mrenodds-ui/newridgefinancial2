@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Apex Bridge launch validators (replaces mockup-era validate-pages/hal for Start Program).
+ * NR2 clean-slate launch validators (nr2-11000-clean).
+ * Proves overlays/packs/legacy apex shell are gone before Start Program.
  */
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,11 +15,21 @@ const buildManifest = JSON.parse(readFileSync(join(__dirname, "nr2-build.json"),
 const expected = String(buildManifest.assetVersion || buildManifest.BUILD_ID || "");
 
 assert.ok(expected, "nr2-build.json must declare assetVersion or BUILD_ID");
-assert.ok(indexHtml.includes('data-nr2-epoch="nr2-apex"'), "index must declare nr2-apex epoch");
-assert.ok(indexHtml.includes('class="apex-bridge"') || indexHtml.includes("apex-bridge"), "index must use Apex bridge shell");
-assert.ok(indexHtml.includes(`data-apex-version="${expected}"`), `index data-apex-version must be ${expected}`);
+assert.equal(expected, "nr2-11000-clean", "clean-slate build stamp must be nr2-11000-clean");
+assert.equal(String(buildManifest.staffRenderMode || ""), "nr2-clean");
+assert.equal(buildManifest.compat, false);
+assert.equal(buildManifest.packsAllowed, false);
 
-const requiredAssets = [
+assert.ok(indexHtml.includes('data-nr2-epoch="nr2-clean"'), "index must declare nr2-clean epoch");
+assert.ok(indexHtml.includes('data-build-id="nr2-11000-clean"'), "index must declare clean build id");
+assert.ok(indexHtml.includes('name="build-id" content="nr2-11000-clean"'), "index meta build-id required");
+assert.ok(indexHtml.includes("NR2_CLEAN_SLATE"), "index must set clean-slate guard");
+assert.ok(indexHtml.includes(`nr2-entry.js?v=${expected}`), `index must load nr2-entry.js?v=${expected}`);
+assert.ok(indexHtml.includes(`nr2-tokens.css?v=${expected}`), `index must load nr2-tokens.css?v=${expected}`);
+assert.ok(existsSync(join(siteDir, "nr2-entry.js")), "missing nr2-entry.js");
+assert.ok(existsSync(join(siteDir, "nr2-tokens.css")), "missing nr2-tokens.css");
+
+const bannedApexAssets = [
   "apex-tokens.css",
   "apex-animations.css",
   "apex-bridge.css",
@@ -30,73 +41,32 @@ const requiredAssets = [
   "apex-narratives.js",
   "apex-chart-widget.js",
   "apex-motion-helper.js",
+  "apex-quarantine-panel.js",
+  "sw.js",
+  "app.js",
+  "desktop-boot.js",
+  "desktop-bridge.js",
+  "widget-contract.js",
+  "import-loader.js",
 ];
 
-const bannedLegacyCss = [
-  "apex-theme.css",
-  "apex-chrome-flash.css",
-  "apex-mobile-polish.css",
-  "styles.css",
-  "nr2-moonshot-mockup-theme.css",
-  "hal-mockup-overrides.css",
-  "nr2-mockup-page-vocabulary.css",
-  "nr2-moonshot-glow.css",
-  "nr2-mission-control-extreme.css",
-  "nr2-mission-control-glass.css",
-  "workstation-moonshot-bridge.css",
-];
-
-const bannedLegacyJs = [
-  "nr2-moonshot-ui.js",
-  "nr2-moonshot-mockup-chrome.js",
-  "moonshot-page-registry.js",
-  "page-canvas.js",
-  "page-views.js",
-  "page-canvas-data.js",
-  "moonshot-kimi-wire-hal.js",
-  "nr2-page-filters.js",
-  "nr2-analytics.js",
-  "nr2-qb-reports.js",
-];
-
-for (const name of requiredAssets) {
-  assert.ok(existsSync(join(siteDir, name)), `missing Apex asset: ${name}`);
-  assert.ok(indexHtml.includes(`${name}?v=${expected}`), `index must load ${name}?v=${expected}`);
+for (const name of bannedApexAssets) {
+  assert.ok(!indexHtml.includes(name), `index must not load cremated asset: ${name}`);
+  assert.ok(!existsSync(join(siteDir, name)), `cremated asset must be absent from site/: ${name}`);
 }
 
-for (const name of bannedLegacyCss) {
-  assert.ok(!indexHtml.includes(name), `index must not load legacy CSS: ${name}`);
-  assert.ok(!existsSync(join(siteDir, name)), `legacy CSS must be removed from site/: ${name}`);
-}
+assert.ok(!indexHtml.includes("apex-bridge"), "index must not use apex-bridge shell");
+assert.ok(!indexHtml.includes("data-apex-version"), "index must not declare data-apex-version");
+assert.ok(!indexHtml.includes('data-nr2-epoch="nr2-apex"'), "index must not keep nr2-apex epoch");
 
-for (const name of bannedLegacyJs) {
-  assert.ok(!indexHtml.includes(name), `index must not load leftover JS: ${name}`);
-  assert.ok(!existsSync(join(siteDir, name)), `leftover JS must be removed from site/: ${name}`);
-}
-assert.ok(!existsSync(join(siteDir, "deferred-live-wire")), "deferred-live-wire must be removed");
-assert.ok(!existsSync(join(siteDir, "data", "mockup-elite-pages.js")), "mockup-elite-pages.js must be removed");
-assert.ok(!existsSync(join(siteDir, "apex-zero-scroll.css")), "apex-zero-scroll.css must be removed");
-assert.ok(!indexHtml.includes("apex-zero-scroll.css"), "index must not load apex-zero-scroll.css");
-
-const pages = [
-  "financial",
-  "taxes",
-  "softdent",
-  "quickbooks",
-  "ar",
-  "claims",
-  "content",
-  "office-manager",
-  "hal",
-];
-for (const page of pages) {
-  assert.ok(indexHtml.includes(`data-page="${page}"`), `index nav must include ${page}`);
-}
-
-assert.ok(indexHtml.includes('id="apex-subnav"'), "index must include Apex subnav");
-assert.ok(indexHtml.includes('id="apex-stage"'), "index must include Apex stage");
+const packs = readdirSync(__dirname).filter((n) => /^apex_.*_pack\.py$/.test(n));
+assert.equal(packs.length, 0, `apex_*_pack.py must be zero on runtime path; found: ${packs.join(",")}`);
 
 const siteManifest = JSON.parse(readFileSync(join(siteDir, "nr2-build.json"), "utf8"));
-assert.equal(String(siteManifest.assetVersion || siteManifest.BUILD_ID || ""), expected, "site/nr2-build.json must match root nr2-build.json");
+assert.equal(
+  String(siteManifest.assetVersion || siteManifest.BUILD_ID || ""),
+  expected,
+  "site/nr2-build.json must match root nr2-build.json"
+);
 
 console.log(`validate-apex.mjs ok (${expected})`);

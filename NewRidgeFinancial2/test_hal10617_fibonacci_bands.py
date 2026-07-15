@@ -1,4 +1,4 @@
-"""hal-10628 — mosaic / Fibonacci band packing retired; stacked stage only."""
+"""nr2-11000-clean — mosaic / Fibonacci band packing retired; stacked stage only."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from apex_backend import BUILD_ID, build_apex_widgets, _WIDGETS_CACHE
 
 class Hal10617StackNoMosaicTests(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10628")
+        self.assertEqual(BUILD_ID, "nr2-11000-clean")
 
     def test_pages_emit_no_mosaic_layout(self) -> None:
         prev = os.environ.get("NR2_APEX_BLANK_WIDGETS")
@@ -29,7 +29,7 @@ class Hal10617StackNoMosaicTests(unittest.TestCase):
             )
             for page in pages:
                 payload = build_apex_widgets(page, _fill=True)
-                self.assertEqual(payload.get("buildId"), "hal-10628", page)
+                self.assertEqual(payload.get("buildId"), "nr2-11000-clean", page)
                 self.assertIsNone(payload.get("mosaicLayout"), page)
                 widgets = payload.get("widgets") or []
                 tiled = [
