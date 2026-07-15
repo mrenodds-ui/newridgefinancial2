@@ -42,6 +42,44 @@
       if (timer) clearTimeout(timer);
     }
   }
+  let sessionToken = "";
+  async function ensureSession() {
+    const r = await getJson("/api/browser-session", 8000);
+    if (r.ok && r.data && r.data.sessionToken) {
+      sessionToken = String(r.data.sessionToken);
+      return true;
+    }
+    return false;
+  }
+  async function postJson(path, body, timeoutMs) {
+    if (!sessionToken) await ensureSession();
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl && timeoutMs ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+    try {
+      const res = await fetch(path, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...(sessionToken ? { "X-NR2-Session-Token": sessionToken } : {}),
+        },
+        body: JSON.stringify(body || {}),
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (_) {
+        data = null;
+      }
+      return { ok: res.ok, status: res.status, data: data };
+    } catch (err) {
+      return { ok: false, status: 0, data: { error: String(err && err.message ? err.message : err) } };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
   function setBanner(mode, detail) {
     const banner = document.querySelector(".banner");
     if (!banner) return;
@@ -55,5 +93,13 @@
     const bind = banner.querySelector(".bind");
     if (bind && detail) bind.textContent = detail;
   }
-  global.NR2OpticalWire = { money: money, fmtMoney: fmtMoney, setText: setText, getJson: getJson, setBanner: setBanner };
+  global.NR2OpticalWire = {
+    money: money,
+    fmtMoney: fmtMoney,
+    setText: setText,
+    getJson: getJson,
+    postJson: postJson,
+    ensureSession: ensureSession,
+    setBanner: setBanner,
+  };
 })(window);

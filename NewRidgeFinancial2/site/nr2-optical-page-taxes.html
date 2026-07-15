@@ -8,42 +8,44 @@
 </head>
 <body>
   <div class="banner">
-    PARTIAL · Tax Prism · use main landing Tax control · empty ≠ $0
-    <span class="bind">POST /api/apex/tax/calculate-planning on main bench · no fake $ here</span>
+    LIVE · Tax Prism · nr2-12016-honest-subpages · empty ≠ $0 · no SoftDent write-back
+    <span class="bind">POST /api/apex/tax/calculate-planning · PLANNING ONLY — CPA REVIEW</span>
   </div>
   <div class="shell">
     <nav class="nav" id="nav"></nav>
     <main class="main">
       <div class="hal-chip">HAL · SPECTRAL · same theme as main</div>
       <h1>TAX PRISM</h1>
-      <p class="kicker">Planning only — run from main interferometer Tax Prism · never posted to QB</p>
+      <p class="kicker">Planning only — never posted to QuickBooks · empty ≠ $0</p>
       <div class="beam"></div>
-      <div class="honesty">Honesty: empty ≠ $0 · no SoftDent write-back · no invent effective rates here</div>
+      <div class="honesty">Honesty: empty ≠ $0 · no SoftDent write-back · disclaimer from API · no invent rates</div>
       <div class="grid">
         <div class="card">
-          <h3>Status</h3>
-          <div class="val qb">→ MAIN</div>
-          <p class="hint">Open main bench and press Tax Prism</p>
+          <h3>Effective / status</h3>
+          <div class="val qb" id="val-rate">—</div>
+          <p class="hint" id="hint-rate">Waiting for calculate-planning</p>
         </div>
         <div class="card">
-          <h3>API</h3>
-          <div class="val hal">LIVE</div>
-          <p class="hint">POST /api/apex/tax/calculate-planning</p>
+          <h3>Period / entity</h3>
+          <div class="val" id="val-period">—</div>
+          <p class="hint">From planning payload</p>
         </div>
         <div class="card">
-          <h3>Returns lib</h3>
-          <div class="val">UNAVAILABLE</div>
-          <p class="hint">Subpage wire deferred · empty ≠ $0</p>
+          <h3>Taxable / book</h3>
+          <div class="val" id="val-book">—</div>
+          <p class="hint">Live fields only · ∅ when missing</p>
         </div>
         <div class="card">
-          <h3>Open</h3>
-          <div class="val sd"><a class="btn" href="/nr2-optical-beam-touch-mockup.html">MAIN BENCH</a></div>
-          <p class="hint">CPA review required</p>
+          <h3>Run</h3>
+          <div class="val sd"><button type="button" class="btn" id="btn-plan">CALCULATE</button></div>
+          <p class="hint" id="hint-disc">CPA review required</p>
         </div>
       </div>
       <p class="kicker" style="margin-top:24px"><a href="/nr2-optical-beam-touch-mockup.html">← Main interferometer bench</a> · <a href="/nr2-optical-pages-hub.html">Pages hub</a></p>
     </main>
   </div>
   <script src="/nr2-optical-nav.js"></script>
+  <script src="/nr2-optical-page-wire.js"></script>
+  <script src="/nr2-optical-page-taxes.js"></script>
 </body>
 </html>
