@@ -237,8 +237,9 @@ const HalPage = (function () {
   }
 
   function sideNotesImIntegration(opts) {
+    // SideNotesIM retired for HAL announce — BlueNote only.
     if (opts && Object.prototype.hasOwnProperty.call(opts, "sideNotesIm")) return !!opts.sideNotesIm;
-    return typeof globalThis !== "undefined" && !!globalThis.NR2_WORKSTATION_ONLY;
+    return false;
   }
 
   function sideNotesHubFootnote(hubPath, online) {

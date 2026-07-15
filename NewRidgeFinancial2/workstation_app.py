@@ -263,14 +263,12 @@ def _start_background_services(api: WorkstationApi, hal_hub_url: str) -> None:
     """Defer BlueNote + hub watchers so pywebview can open the UI first."""
 
     def _run() -> None:
-        # BlueNote is the office messaging app (successor to SideNotesIM).
+        # BlueNote only — SideNotesIM HAL announce path is retired.
+        os.environ["NR2_SIDENOTES_WATCHER"] = "0"
+        os.environ["NR2_SIDENOTES_POPUP_WATCHER"] = "0"
+        os.environ.setdefault("NR2_BLUENOTE_WATCHER", "1")
         if _env_flag("NR2_BLUENOTE_WATCHER", True):
             _start_bluenote_watcher()
-        elif _env_flag("NR2_SIDENOTES_WATCHER", False):
-            _start_sidenotes_watcher()
-        # SideNotes VDB popups are off by default — BlueNote bodies are encrypted.
-        if _env_flag("NR2_SIDENOTES_POPUP_WATCHER", False):
-            _start_sidenotes_popup_watcher()
         _start_hub_popup_watcher(api, hal_hub_url)
 
     threading.Thread(
@@ -286,20 +284,8 @@ def _start_background_services(api: WorkstationApi, hal_hub_url: str) -> None:
 
 
 def _start_sidenotes_popup_watcher() -> None:
-    if not _env_flag("NR2_SIDENOTES_POPUP_WATCHER", False):
-        return
-    from sidenotes_popup_watcher import run_sidenotes_popup_watcher
-
-    threading.Thread(
-        target=run_sidenotes_popup_watcher,
-        kwargs={
-            "enqueue_popup": enqueue_message_popup,
-            "data_dir": DATA_DIR,
-        },
-        daemon=True,
-        name="nr2-sidenotes-popup-watcher",
-    ).start()
-    print("NR2 workstation: SideNotes popup watcher started (vdb → desktop balloon).", file=sys.stderr)
+    # Retired: SideNotesIM VDB popups are never started (BlueNote announce only).
+    return
 
 
 def _start_bluenote_watcher() -> None:
@@ -327,24 +313,8 @@ def _start_bluenote_watcher() -> None:
 
 
 def _start_sidenotes_watcher() -> None:
-    global _watcher_proc
-    if not _env_flag("NR2_SIDENOTES_WATCHER", False):
-        return
-    from sidenotes_bridge import ensure_sidenotes_watcher, sidenotes_watcher_pid
-
-    station = os.environ.get("NR2_SIDENOTES_MY_STATION", "").strip() or None
-    result = ensure_sidenotes_watcher(station)
-    pid = result.get("pid") or sidenotes_watcher_pid()
-    if pid:
-        print(
-            f"NR2 workstation: SideNotes watcher {result.get('action', 'ready')} (PID {pid}).",
-            file=sys.stderr,
-        )
-    elif not result.get("ok"):
-        print(
-            f"NR2 workstation: SideNotes watcher not started — {result.get('error', 'unknown')}.",
-            file=sys.stderr,
-        )
+    # Retired: SideNotesIM watcher is never started (BlueNote announce only).
+    return
 
 
 def _run_bluenote_watcher_supervisor() -> None:
@@ -380,31 +350,8 @@ def _run_bluenote_watcher_supervisor() -> None:
 
 
 def _run_sidenotes_watcher_supervisor() -> None:
-    if not _env_flag("NR2_SIDENOTES_WATCHER", False):
-        return
-    if not _env_flag("NR2_SIDENOTES_WATCHER_SUPERVISOR", True):
-        return
-    import time
-    from sidenotes_bridge import ensure_sidenotes_watcher, sidenotes_watcher_health
-
-    interval = max(15, int(os.environ.get("NR2_SIDENOTES_WATCHER_INTERVAL_SEC", "20")))
-    station = os.environ.get("NR2_SIDENOTES_MY_STATION", "").strip() or None
-    fail_streak = 0
-    while True:
-        try:
-            health = sidenotes_watcher_health()
-            if not health.get("watcherRunning"):
-                fail_streak += 1
-                result = ensure_sidenotes_watcher(station)
-                print(
-                    f"NR2 workstation: watcher supervisor restart attempt #{fail_streak} → {result.get('action')}",
-                    file=sys.stderr,
-                )
-            else:
-                fail_streak = 0
-        except Exception as exc:
-            print(f"NR2 workstation: watcher supervisor error: {exc}", file=sys.stderr)
-        time.sleep(interval)
+    # Retired with SideNotesIM announce path.
+    return
 
 
 def main() -> int:
