@@ -124,6 +124,112 @@ def test_period_close_laser_blocks(tmp_path, monkeypatch):
     assert result["status"] == "blocked"
 
 
+def test_period_close_softdent_pull(tmp_path, monkeypatch):
+    from daily_closeout import run_period_close
+    import daily_closeout as dc
+
+    monkeypatch.setattr(dc, "OPS_DIR", tmp_path)
+    monkeypatch.setattr(dc, "CLOSE_LOG_PATH", tmp_path / "daily_close_log.jsonl")
+    monkeypatch.setattr(dc, "CLOSE_STATE_PATH", tmp_path / "period_close_state.json")
+
+    # Pre-pull readiness is red (stale SoftDent) — pull must still run to clear it.
+    stale_ready = {
+        "ok": False,
+        "level": "fresh",
+        "blocking": [{"datasetKey": "softdent.ar", "blockingReason": "critical_dataset_stale_exceeds_freshness"}],
+        "alignmentLasers": {"red": True, "green": False, "reason": "critical_import_gaps"},
+    }
+    fresh_ready = {
+        "ok": True,
+        "level": "fresh",
+        "blocking": [],
+        "alignmentLasers": {"red": False, "green": True, "reason": "clear"},
+    }
+    fake_attest = {
+        "ok": True,
+        "beamHash": "pullhash87654321",
+        "beamTimestamp": "2026-07-15T22:00:00+00:00",
+        "softdent": {"hasData": True, "display": "$7,714", "totalOutstanding": 7714.0},
+        "quickbooks": {"hasData": True, "display": "$78,399", "monthlyRevenue": 78399.0},
+    }
+    monkeypatch.setattr(
+        "hal_brain_tools.softdent_export",
+        lambda **kwargs: {"ok": True, "path": r"C:\SoftDentReportExports\AG260715.XLS", "consentRequired": False},
+    )
+    monkeypatch.setattr(
+        "import_healing.heal_import_pipeline",
+        lambda force=False: {"ok": True, "forced": force},
+    )
+    # Post-pull assess returns clear lasers
+    monkeypatch.setattr(
+        "import_diagnostics.assess_import_readiness",
+        lambda **kwargs: fresh_ready,
+    )
+    monkeypatch.setattr(
+        "hal_brain_tools.money_beam_attestation",
+        lambda readiness=None: fake_attest,
+    )
+
+    result = run_period_close(
+        store=None,
+        actor="scheduler",
+        auto=True,
+        pull_softdent=True,
+        readiness=stale_ready,
+    )
+    assert result["ok"] is True
+    assert result["pullSoftdent"] is True
+    assert result["softdentTotal"] == 7714.0
+    assert (result.get("export") or {}).get("ok") is True
+    assert (result.get("importRefresh") or {}).get("ok") is True
+
+
+def test_period_close_softdent_pull_blocked_after_heal(tmp_path, monkeypatch):
+    from daily_closeout import run_period_close
+    import daily_closeout as dc
+
+    monkeypatch.setattr(dc, "OPS_DIR", tmp_path)
+    monkeypatch.setattr(dc, "CLOSE_LOG_PATH", tmp_path / "daily_close_log.jsonl")
+    monkeypatch.setattr(dc, "CLOSE_STATE_PATH", tmp_path / "period_close_state.json")
+
+    ready_ok = {
+        "ok": True,
+        "level": "fresh",
+        "blocking": [],
+        "alignmentLasers": {"red": False, "green": True, "reason": "clear"},
+    }
+    ready_still_red = {
+        "ok": False,
+        "level": "stale",
+        "blocking": [{"datasetKey": "quickbooks.revenue"}],
+        "alignmentLasers": {"red": True, "green": False, "reason": "critical_import_gaps"},
+    }
+    monkeypatch.setattr(
+        "hal_brain_tools.softdent_export",
+        lambda **kwargs: {"ok": True, "path": r"C:\SoftDentReportExports\AG260715.XLS"},
+    )
+    monkeypatch.setattr(
+        "import_healing.heal_import_pipeline",
+        lambda force=False: {"ok": True, "forced": force},
+    )
+    monkeypatch.setattr(
+        "import_diagnostics.assess_import_readiness",
+        lambda **kwargs: ready_still_red,
+    )
+
+    result = run_period_close(
+        store=None,
+        actor="scheduler",
+        auto=True,
+        pull_softdent=True,
+        readiness=ready_ok,
+    )
+    assert result["ok"] is False
+    assert result["status"] == "blocked"
+    assert result["error"] == "laser_blocked_after_pull"
+    assert result.get("pullSoftdent") is True
+
+
 def test_memory_index_search():
     index = build_memory_index([])
     assert index == []

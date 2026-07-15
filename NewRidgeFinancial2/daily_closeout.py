@@ -1,7 +1,7 @@
 """Daily closeout checklist + period-close OPS loop for NR2 operators.
 
-Shadow pilot rhythm: laser-check → beam attest → (optional SoftDent GUI pull,
-consent-free Excel/Print Preview) → immutable JSONL log → HAL-citable status.
+Shadow pilot rhythm: optional SoftDent GUI aging pull (consent-free Excel/Print Preview)
+→ heal imports → laser-check → beam attest → immutable JSONL log → HAL-citable status.
 SoftDent write-back forbidden. empty ≠ $0.
 """
 
@@ -309,9 +309,9 @@ def run_period_close(
 ) -> dict[str, Any]:
     """Execute one shadow period-close cycle.
 
-    Default (auto/morning): attest checklist + live money beams + laser gate.
-    SoftDent GUI export when pull_softdent=True — no operator consent required
-    (Excel/Print Preview only via softdent_export; SoftDent write-back forbidden).
+    Default (auto/morning): SoftDent aging pull when pull_softdent=True (scheduler),
+    then heal imports, laser gate, money-beam attest, JSONL log.
+    SoftDent GUI export is consent-free (Excel/Print Preview only; write-back forbidden).
     """
     _ = consent_export  # SoftDent export no longer gated; kept for API compatibility
     with _LOCK:
@@ -346,7 +346,10 @@ def run_period_close(
             ready = {"ok": False, "error": str(exc)[:240], "blocking": [], "alignmentLasers": {"red": True}}
 
         blocked, block_reason = _laser_blocked(ready)
-        if blocked:
+        # When SoftDent GUI pull is requested, skip the *pre*-pull laser gate — stale SoftDent
+        # AR is the usual reason lasers are red, and the aging export is how we clear it.
+        # Laser gate still applies after export+heal (and for attest-only closes).
+        if blocked and not pull_softdent:
             entry = {
                 "status": "blocked",
                 "completedAt": _iso_now(),
@@ -372,6 +375,7 @@ def run_period_close(
             return {"ok": False, "error": "laser_blocked", "status": "blocked", **entry}
 
         export_result: dict[str, Any] | None = None
+        import_refresh: dict[str, Any] | None = None
         if pull_softdent:
             try:
                 from hal_brain_tools import softdent_export
@@ -390,6 +394,7 @@ def run_period_close(
                     "laserClear": True,
                     "buildStamp": build_stamp,
                     "emptyNotZero": True,
+                    "pullSoftdent": True,
                 }
                 _append_close_log(entry)
                 state.update(
@@ -402,6 +407,47 @@ def run_period_close(
                 )
                 _write_state(state)
                 return {"ok": False, "error": "softdent_export_failed", "status": "stalled", **entry}
+            # Re-ingest after Excel lands so money beams reflect the pull.
+            try:
+                from import_healing import heal_import_pipeline
+
+                import_refresh = heal_import_pipeline(force=True)
+            except Exception as exc:  # noqa: BLE001
+                import_refresh = {"ok": False, "error": str(exc)[:240]}
+            try:
+                from import_diagnostics import assess_import_readiness as _assess
+
+                ready = _assess()
+                blocked, block_reason = _laser_blocked(ready)
+                if blocked:
+                    entry = {
+                        "status": "blocked",
+                        "completedAt": _iso_now(),
+                        "startedAt": started,
+                        "actor": actor,
+                        "auto": bool(auto),
+                        "laserClear": False,
+                        "blockReason": block_reason,
+                        "buildStamp": build_stamp,
+                        "emptyNotZero": True,
+                        "export": export_result,
+                        "importRefresh": import_refresh,
+                        "pullSoftdent": True,
+                    }
+                    _append_close_log(entry)
+                    state.update(
+                        {
+                            "activeOperation": "blocked",
+                            "status": "blocked",
+                            "completedAt": entry["completedAt"],
+                            "laserClear": False,
+                            "blockReason": block_reason,
+                        }
+                    )
+                    _write_state(state)
+                    return {"ok": False, "error": "laser_blocked_after_pull", "status": "blocked", **entry}
+            except Exception:
+                pass
 
         try:
             from hal_brain_tools import money_beam_attestation
@@ -432,6 +478,8 @@ def run_period_close(
             "checklistOverall": checklist.get("overall"),
             "checklistSummary": checklist.get("summary"),
             "export": export_result,
+            "importRefresh": import_refresh,
+            "pullSoftdent": bool(pull_softdent),
             "buildStamp": build_stamp,
             "shadowStartedAt": shadow_started,
             "systemOfRecord": False,

@@ -479,19 +479,31 @@ def morning_routine_tick(store, *, force: bool = False) -> dict[str, Any]:
     heal = heal_import_pipeline(force=False)
     actions.append({"action": "heal_import_pipeline", "result": heal})
 
-    # Shadow period-close attest (SoftDent GUI pull is on-demand / consent-free when requested)
+    # Shadow period-close with SoftDent aging auto-pull (consent-free Excel; no write-back).
+    # Skipped earlier when a human shift is active (same as rest of morning tick).
     try:
         from daily_closeout import run_period_close
 
-        close_result = run_period_close(store=store, actor="scheduler", auto=True)
-        actions.append({"action": "period_close_attest", "result": {
+        close_result = run_period_close(
+            store=store,
+            actor="scheduler",
+            auto=True,
+            pull_softdent=True,
+        )
+        actions.append({"action": "period_close_softdent_pull", "result": {
             "ok": close_result.get("ok"),
             "status": close_result.get("status"),
             "beamHash": close_result.get("beamHash"),
+            "softdentTotal": close_result.get("softdentTotal"),
+            "softdentDisplay": close_result.get("softdentDisplay"),
+            "exportOk": bool((close_result.get("export") or {}).get("ok"))
+            if isinstance(close_result.get("export"), dict)
+            else close_result.get("export") is not None and close_result.get("ok"),
             "completedAt": close_result.get("completedAt"),
+            "pullSoftdent": True,
         }})
     except Exception as close_exc:
-        actions.append({"action": "period_close_attest", "error": str(close_exc)[:240]})
+        actions.append({"action": "period_close_softdent_pull", "error": str(close_exc)[:240]})
 
     collections_result: dict[str, Any] | None = None
     month_end: dict[str, Any] | None = None
