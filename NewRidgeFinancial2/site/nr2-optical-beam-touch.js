@@ -45,6 +45,25 @@
     });
   }
 
+  function periodCloseTrouble(ready) {
+    const W = window.NR2OpticalWire;
+    if (W && typeof W.periodCloseIsTrouble === "function") {
+      return !!W.periodCloseIsTrouble(ready);
+    }
+    const close = ready && ready.periodClose;
+    const status = close && close.status ? String(close.status) : "";
+    return /^(stalled|blocked|running|daily_close)$/i.test(status);
+  }
+
+  function periodCloseBit(ready) {
+    const W = window.NR2OpticalWire;
+    if (W && typeof W.periodCloseBannerBit === "function") {
+      return W.periodCloseBannerBit(ready);
+    }
+    if (!ready || !ready.periodClose) return "CLOSE · NO SIGNAL";
+    return "CLOSE · " + String(ready.periodClose.status || "unknown").toUpperCase();
+  }
+
   function applyWireHonesty(ready, sessionOk) {
     lastReady = ready || null;
     if (sessionOk != null) lastSessionOk = !!sessionOk;
@@ -55,6 +74,10 @@
     if (lasersRed(ready)) {
       const keys = laserKeys(ready).slice(0, 3).join(",") || "blocking";
       setWireMark(false, "STALE · lasers red · " + keys + " · empty ≠ $0");
+      return;
+    }
+    if (periodCloseTrouble(ready)) {
+      setWireMark(false, periodCloseBit(ready) + " · empty ≠ $0 · no SoftDent write-back");
       return;
     }
     if (!lastSessionOk) {
@@ -315,77 +338,181 @@
 
   function applyMetricLaserHonesty(ready) {
     const keys = laserKeys(ready);
+    const closeTrouble = periodCloseTrouble(ready);
     const sdStatus = document.getElementById("sd-status");
     const qbStatus = document.getElementById("qb-status");
     if (sdStatus && /LIVE/.test(sdStatus.textContent || "")) {
-      if (keysHit(keys, ["softdent."])) sdStatus.textContent = "CLAIMS · STALE";
+      if (keysHit(keys, ["softdent."]) || closeTrouble) {
+        sdStatus.textContent = closeTrouble ? "CLAIMS · CLOSE STALL" : "CLAIMS · STALE";
+      }
     }
     if (qbStatus && (qbStatus.textContent || "") === "LIVE") {
-      if (keysHit(keys, ["quickbooks."])) qbStatus.textContent = "STALE";
+      if (keysHit(keys, ["quickbooks."]) || closeTrouble) {
+        qbStatus.textContent = closeTrouble ? "CLOSE STALL" : "STALE";
+      }
+    }
+    const bind = document.getElementById("banner-bind");
+    if (bind && ready) {
+      bind.textContent =
+        periodCloseBit(ready) +
+        " · lasers " +
+        (lasersRed(ready) ? "RED" : "green-path") +
+        " · money-beams · empty ≠ $0";
     }
   }
 
   async function refreshMetrics(readyHint) {
     const ready = readyHint || lastReady;
     const keys = laserKeys(ready);
-    const sdStale = keysHit(keys, ["softdent."]);
-    const qbStale = keysHit(keys, ["quickbooks."]);
+    const closeTrouble = periodCloseTrouble(ready);
+    const lasersBlock = lasersRed(ready);
+    const sdStale = keysHit(keys, ["softdent."]) || closeTrouble || lasersBlock;
+    const qbStale = keysHit(keys, ["quickbooks."]) || closeTrouble || lasersBlock;
     const sdStatus = document.getElementById("sd-status");
     const qbStatus = document.getElementById("qb-status");
     const sdSub = document.getElementById("sd-sub");
+    const qbSub = document.getElementById("qb-sub");
 
-    const claims = await api("/api/softdent/claims-outstanding?limit=25");
-    if (claims.ok && claims.data && claims.data.hasData) {
-      const list = Array.isArray(claims.data.claims) ? claims.data.claims : [];
-      const count = claims.data.count != null ? Number(claims.data.count) : list.length;
-      const total = money(claims.data.totalOutstanding);
-      const shown = total != null ? fmtMoney(total) : null;
+    const beamsRes = await api("/api/hal/tools/money-beams");
+    const beams = beamsRes.ok ? beamsRes.data : null;
+    const beamHash = beams && beams.beamHash ? String(beams.beamHash).slice(0, 8) : "";
+    const importStale = !!(beams && beams.importStale);
+    const gateMoney = lasersBlock || importStale || closeTrouble;
+
+    let sdFilled = false;
+    const sdBeam = beams && beams.softdent;
+    if (gateMoney) {
+      setMetric("metric-sd", null, { emptyLabel: "STALE / ∅" });
+      if (sdStatus) {
+        sdStatus.textContent = closeTrouble
+          ? "CLAIMS · CLOSE STALL"
+          : lasersBlock
+            ? "CLAIMS · STALE"
+            : "CLAIMS · NO SIGNAL";
+      }
+      if (sdSub) {
+        sdSub.textContent =
+          "money-beams gated · " +
+          periodCloseBit(ready) +
+          (beamHash ? " · hash " + beamHash : "") +
+          " · empty ≠ $0 · no write-back";
+      }
+      sdFilled = true;
+    } else if (sdBeam && sdBeam.hasData && (sdBeam.display || sdBeam.totalOutstanding != null)) {
+      const shown =
+        sdBeam.display ||
+        (sdBeam.totalOutstanding != null ? fmtMoney(sdBeam.totalOutstanding) : null);
       if (shown) {
         setMetric("metric-sd", shown);
         if (sdStatus) sdStatus.textContent = sdStale ? "CLAIMS · STALE" : "CLAIMS · LIVE";
         if (sdSub) {
           sdSub.textContent =
-            "claims outstanding" +
-            (count ? " · " + count + " open" : "") +
+            "money-beams SoftDent" +
+            (beamHash ? " · hash " + beamHash : "") +
             (sdStale ? " · lasers red" : "") +
             " · empty ≠ $0 · no write-back";
         }
-      } else {
-        setMetric("metric-sd", null);
-        if (sdStatus) sdStatus.textContent = "∅ EMPTY";
+        sdFilled = true;
       }
-      await refreshFilm(claims.data);
-    } else {
-      setMetric("metric-sd", null, { emptyLabel: "∅" });
-      if (sdStatus) sdStatus.textContent = "NO SIGNAL";
-      if (sdSub) sdSub.textContent = "no claims signal · empty ≠ $0 · no SoftDent write-back";
-      await refreshFilm(null);
     }
 
-    const qb = await api("/api/qb/monthly-revenue");
-    if (qb.ok && qb.data && qb.data.hasData && Array.isArray(qb.data.values) && qb.data.values.length) {
-      const last = qb.data.values[qb.data.values.length - 1];
-      const shown = fmtMoney(last);
+    if (!sdFilled) {
+      const claims = await api("/api/softdent/claims-outstanding?limit=25");
+      if (claims.ok && claims.data && claims.data.hasData) {
+        const list = Array.isArray(claims.data.claims) ? claims.data.claims : [];
+        const count = claims.data.count != null ? Number(claims.data.count) : list.length;
+        const total = money(claims.data.totalOutstanding);
+        const shown = total != null ? fmtMoney(total) : null;
+        if (shown) {
+          setMetric("metric-sd", shown);
+          if (sdStatus) sdStatus.textContent = sdStale ? "CLAIMS · STALE" : "CLAIMS · LIVE";
+          if (sdSub) {
+            sdSub.textContent =
+              "claims outstanding" +
+              (count ? " · " + count + " open" : "") +
+              (sdStale ? " · lasers red" : "") +
+              " · empty ≠ $0 · no write-back";
+          }
+        } else {
+          setMetric("metric-sd", null);
+          if (sdStatus) sdStatus.textContent = "∅ EMPTY";
+        }
+        await refreshFilm(claims.data);
+      } else {
+        setMetric("metric-sd", null, { emptyLabel: "∅" });
+        if (sdStatus) sdStatus.textContent = "NO SIGNAL";
+        if (sdSub) sdSub.textContent = "no claims signal · empty ≠ $0 · no SoftDent write-back";
+        await refreshFilm(null);
+      }
+    } else {
+      const claims = await api("/api/softdent/claims-outstanding?limit=25");
+      await refreshFilm(claims.ok && claims.data ? claims.data : null);
+    }
+
+    let qbFilled = false;
+    const qbBeam = beams && beams.quickbooks;
+    if (gateMoney) {
+      setMetric("metric-qb", null, { emptyLabel: "STALE / ∅" });
+      if (qbStatus) {
+        qbStatus.textContent = closeTrouble
+          ? "CLOSE STALL"
+          : lasersBlock
+            ? "STALE"
+            : "NO SIGNAL";
+      }
+      if (qbSub) {
+        qbSub.textContent =
+          "money-beams gated · " +
+          periodCloseBit(ready) +
+          (beamHash ? " · hash " + beamHash : "") +
+          " · empty ≠ $0";
+      }
+      qbFilled = true;
+    } else if (qbBeam && qbBeam.hasData && (qbBeam.display || qbBeam.monthlyRevenue != null)) {
+      const shown =
+        qbBeam.display ||
+        (qbBeam.monthlyRevenue != null ? fmtMoney(qbBeam.monthlyRevenue) : null);
       if (shown) {
         setMetric("metric-qb", shown);
         if (qbStatus) qbStatus.textContent = qbStale ? "STALE" : "LIVE";
-        const lbl = Array.isArray(qb.data.labels) ? qb.data.labels[qb.data.labels.length - 1] : "";
-        const qbSub = document.getElementById("qb-sub");
         if (qbSub) {
           qbSub.textContent =
-            "monthly revenue" +
-            (lbl ? " · " + lbl : "") +
+            "money-beams QuickBooks" +
+            (beamHash ? " · hash " + beamHash : "") +
             (qbStale ? " · lasers red" : "") +
             " · empty ≠ $0";
         }
+        qbFilled = true;
+      }
+    }
+
+    if (!qbFilled) {
+      const qb = await api("/api/qb/monthly-revenue");
+      if (qb.ok && qb.data && qb.data.hasData && Array.isArray(qb.data.values) && qb.data.values.length) {
+        const last = qb.data.values[qb.data.values.length - 1];
+        const shown = fmtMoney(last);
+        if (shown) {
+          setMetric("metric-qb", shown);
+          if (qbStatus) qbStatus.textContent = qbStale ? "STALE" : "LIVE";
+          const lbl = Array.isArray(qb.data.labels) ? qb.data.labels[qb.data.labels.length - 1] : "";
+          if (qbSub) {
+            qbSub.textContent =
+              "monthly revenue" +
+              (lbl ? " · " + lbl : "") +
+              (qbStale ? " · lasers red" : "") +
+              " · empty ≠ $0";
+          }
+        } else {
+          setMetric("metric-qb", null, { emptyLabel: "∅ EMPTY" });
+          if (qbStatus) qbStatus.textContent = "∅ EMPTY";
+        }
       } else {
         setMetric("metric-qb", null, { emptyLabel: "∅" });
-        if (qbStatus) qbStatus.textContent = "∅ EMPTY";
+        if (qbStatus) qbStatus.textContent = "NO SIGNAL";
       }
-    } else {
-      setMetric("metric-qb", null, { emptyLabel: "∅" });
-      if (qbStatus) qbStatus.textContent = "NO SIGNAL";
     }
+
+    applyMetricLaserHonesty(ready);
   }
 
   async function refreshFilm(claimsData) {
@@ -428,8 +555,10 @@
       await refreshReconHonesty();
       await refreshMetrics(ready);
       applyWireHonesty(ready, okSession);
-      if (okSession && ready && !lasersRed(ready)) {
-        toast("Optical wires live · lasers green-path · SoftDent + QB");
+      if (okSession && ready && !lasersRed(ready) && !periodCloseTrouble(ready)) {
+        toast("Optical wires live · money-beams · lasers green-path · SoftDent + QB");
+      } else if (ready && periodCloseTrouble(ready)) {
+        toast(periodCloseBit(ready) + " · money faces gated · empty ≠ $0");
       } else if (ready && lasersRed(ready)) {
         toast("Lasers red · money reads STALE until critical imports refresh");
       }
