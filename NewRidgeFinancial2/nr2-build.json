@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12020-softdent-export-e2e",
-  "BUILD_ID": "nr2-12020-softdent-export-e2e",
-  "assetVersion": "nr2-12020-softdent-export-e2e",
-  "builtAt": "2026-07-15T20:30:00.000Z",
-  "notes": "nr2-12020-softdent-export-e2e: HAL SoftDent GUI export/QB sync consent auto-starts import refresh; SoftDent path hygiene (never SoftDentReportExports in Select File Name); optical wait/poll beams. SoftDent write-back still forbidden.",
+  "schemaVersion": "nr2-12021-recon-unavailable",
+  "BUILD_ID": "nr2-12021-recon-unavailable",
+  "assetVersion": "nr2-12021-recon-unavailable",
+  "builtAt": "2026-07-15T20:40:00.000Z",
+  "notes": "nr2-12021-recon-unavailable: SoftDent×QB reconciliation honesty — 503 UNAVAILABLE (never fake COHERENT/500), optical RECONCILE disabled, financial UNAVAILABLE widget when packs missing. SoftDent write-back still forbidden.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12020-SOFTDENT-EXPORT-E2E",
+  "package": "NR2-12021-RECON-UNAVAILABLE",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

@@ -1,4 +1,4 @@
-/* nr2-12018-hal-brains — live wire + P2 honesty (CSP script-src 'self') */
+/* nr2-12021-recon-unavailable — recon honesty (CSP script-src 'self') */
 (function () {
   const toast = (msg) => {
     const el = document.getElementById("toast");
@@ -12,6 +12,52 @@
   let role = "om";
   let syncBusy = false;
   let selectedPeriod = "60";
+  let reconAvailable = false;
+
+  function setReconUi(mode, detail) {
+    const state = document.getElementById("hal-state");
+    const btn = document.querySelector('.plunger[data-act="recon"]');
+    const label =
+      mode === "unavailable"
+        ? "RECON · UNAVAILABLE"
+        : mode === "running"
+          ? "RECON · RUNNING"
+          : mode === "coherent"
+            ? "RECON · COHERENT"
+            : mode === "incoherent"
+              ? "RECON · INCOHERENT"
+              : "RECON · STANDBY";
+    if (state) {
+      state.textContent = label;
+      state.style.color =
+        mode === "unavailable" || mode === "incoherent" ? "var(--fringe)" : "";
+    }
+    if (btn) {
+      const off = mode === "unavailable";
+      btn.disabled = off;
+      btn.classList.toggle("unavailable", off);
+      btn.setAttribute("aria-disabled", off ? "true" : "false");
+      btn.title = off
+        ? "SoftDent×QB recon pack removed (clean-slate) — never COHERENT · empty ≠ $0"
+        : detail || "Run SoftDent×QB reconciliation";
+    }
+    reconAvailable = mode !== "unavailable";
+  }
+
+  async function refreshReconHonesty() {
+    const r = await api("/api/apex/hal/reconciliation-status");
+    const unavailable =
+      !r.ok ||
+      r.status === 503 ||
+      (r.data &&
+        (r.data.available === false || r.data.status === "UNAVAILABLE"));
+    if (unavailable) {
+      setReconUi("unavailable", (r.data && (r.data.detail || r.data.reason)) || "");
+      return false;
+    }
+    setReconUi("standby");
+    return true;
+  }
 
   function money(n) {
     if (n == null || !Number.isFinite(Number(n))) return null;
@@ -80,6 +126,9 @@
     document.querySelectorAll("[data-act], #wheel button").forEach((n) => {
       if (n.id === "scram") return;
       n.disabled = locked;
+      if (!locked && n.getAttribute("data-act") === "recon" && !reconAvailable) {
+        n.disabled = true;
+      }
     });
     const om = document.getElementById("role-om");
     const fd = document.getElementById("role-fd");
@@ -216,11 +265,7 @@
           staleCritical.length +
           ")";
     }
-    const state = document.getElementById("hal-state");
-    if (state) {
-      state.textContent = ok ? "RECON · STANDBY" : "RECON · INCOHERENT";
-      state.style.color = ok ? "" : "var(--fringe)";
-    }
+    // Import alignment only — recon status from refreshReconHonesty (never fake COHERENT).
     return ready;
   }
 
@@ -312,6 +357,7 @@
     try {
       const okSession = await ensureSession();
       const ready = await refreshLasers();
+    await refreshReconHonesty();
       await refreshMetrics();
       if (okSession && ready) {
         setWireMark(true, "LIVE SIGNAL · empty ≠ $0 · no SoftDent write-back");
@@ -368,6 +414,7 @@
     }
     toast("Sync ok · refreshing lasers + metrics");
     await refreshLasers();
+    await refreshReconHonesty();
     await refreshMetrics();
   }
 
@@ -391,28 +438,37 @@
     }
     toast(r.data && r.data.ok ? "SoftDent period refresh ok" : "Refresh returned · check SoftDent sign-on");
     await refreshLasers();
+    await refreshReconHonesty();
     await refreshMetrics();
   }
 
   async function doRecon() {
-    const state = document.getElementById("hal-state");
-    if (state) state.textContent = "RECON · RUNNING";
+    if (!reconAvailable) {
+      setReconUi("unavailable");
+      toast("Reconciliation UNAVAILABLE · pack removed (clean-slate) · never COHERENT · empty ≠ $0");
+      return;
+    }
+    setReconUi("running");
     toast("HAL → POST /api/apex/hal/reconciliation …");
     const r = await api("/api/apex/hal/reconciliation", {
       method: "POST",
       body: JSON.stringify({ classifyOnly: false, explain: false }),
     });
-    if (!r.ok || (r.data && r.data.available === false)) {
-      if (state) state.textContent = "RECON · UNAVAILABLE";
+    if (
+      !r.ok ||
+      r.status === 503 ||
+      (r.data && (r.data.available === false || r.data.status === "UNAVAILABLE"))
+    ) {
+      setReconUi("unavailable", (r.data && (r.data.detail || r.data.reason)) || "");
       toast(
         "Reconciliation UNAVAILABLE · " +
-          ((r.data && (r.data.reason || r.data.error)) || r.status) +
-          " · clean-slate (no pack)"
+          ((r.data && (r.data.detail || r.data.reason || r.data.error)) || r.status) +
+          " · never COHERENT without pack"
       );
       return;
     }
-    const ok = !!(r.data && r.data.ok);
-    if (state) state.textContent = ok ? "RECON · COHERENT" : "RECON · INCOHERENT";
+    const ok = !!(r.data && r.data.ok && r.data.coherent !== false);
+    setReconUi(ok ? "coherent" : "incoherent");
     toast(ok ? "Reconciliation ok" : "Reconciliation completed with gaps");
   }
 

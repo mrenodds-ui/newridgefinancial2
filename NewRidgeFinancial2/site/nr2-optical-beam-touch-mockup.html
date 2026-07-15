@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NR2 Optical Bench — Honest Subpages (nr2-12018-hal-brains)</title>
+  <title>NR2 Optical Bench — Honest Subpages (nr2-12021-recon-unavailable)</title>
   <link rel="stylesheet" href="/nr2-optical-theme.css" />
   <style>
     :root {
@@ -338,6 +338,10 @@
       width: 100%; min-height: var(--hit); border: 1px solid #556; background: #12161c;
       color: #cfd8e3; font-family: var(--mono); font-size: var(--text-sm); cursor: pointer;
     }
+    .plunger.unavailable,
+    .plunger:disabled {
+      opacity: 0.45; cursor: not-allowed; border-color: #553; color: var(--stale, #4a5059);
+    }
     .wheel {
       display: flex; gap: 4px; justify-content: center;
     }
@@ -473,8 +477,8 @@
         <div class="k">HAL</div>
         <div class="ai">AI MODEL CORE</div>
         <div class="v">SPECTRAL</div>
-        <div class="state" id="hal-state">RECON · STANDBY</div>
-        <span class="bind-hint">HAL core · SoftDent+QB+Tax beams · recon</span>
+        <div class="state" id="hal-state">RECON · UNAVAILABLE</div>
+        <span class="bind-hint">HAL core · SoftDent+QB+Tax beams · recon pack clean-slate UNAVAILABLE</span>
       </div>
     </div>
 
@@ -500,8 +504,8 @@
       </div>
       <div class="cell">
         <h4>Phase Comp</h4>
-        <button type="button" class="plunger" data-act="recon">RECONCILE</button>
-        <span class="bind-hint">SoftDent+QB+HAL · recon</span>
+        <button type="button" class="plunger unavailable" data-act="recon" disabled aria-disabled="true" title="SoftDent×QB recon pack removed — never COHERENT · empty ≠ $0">RECONCILE · UNAVAILABLE</button>
+        <span class="bind-hint">SoftDent+QB+HAL · recon UNAVAILABLE (clean-slate)</span>
       </div>
       <div class="shutter" style="position:absolute;inset:0">FRONT DESK — CONTROLS LOCKED</div>
     </div>

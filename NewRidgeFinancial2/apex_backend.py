@@ -32,15 +32,41 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "nr2-12018-hal-brains"
+BUILD_ID = "nr2-12021-recon-unavailable"
 
 def _clean_slate_unavailable(feature: str = "pack") -> dict[str, Any]:
-    """Honest payload when Apex packs / nr2_contracts were removed in cutover."""
+    """Honest payload when Apex packs / nr2_contracts were removed in cutover.
+
+    Never report COHERENT — empty ≠ $0; SoftDent×QB recon pack is gone.
+    """
     return {
         "ok": False,
         "available": False,
+        "status": "UNAVAILABLE",
+        "coherent": False,
         "reason": "removed_in_nr2_11000_clean",
+        "detail": (
+            f"{feature} removed in clean-slate cutover — SoftDent×QB recon pack not installed. "
+            "Never invent COHERENT; empty ≠ $0."
+        ),
         "feature": feature,
+        "buildId": BUILD_ID,
+        "emptyNotZero": True,
+    }
+
+
+def _reconciliation_unavailable_widget() -> dict[str, Any]:
+    """Financial board tile when apex_reconciliation_pack / 32b pack is missing."""
+    return {
+        "id": "reconciliation-unavailable",
+        "type": "status",
+        "label": "SoftDent×QB reconciliation",
+        "status": "unavailable",
+        "message": "UNAVAILABLE",
+        "hint": "Recon pack removed (clean-slate) — never COHERENT · empty ≠ $0",
+        "available": False,
+        "coherent": False,
+        "emptyNotZero": True,
         "buildId": BUILD_ID,
     }
 
@@ -2030,6 +2056,7 @@ def _financial_widgets_from_reports(
     except Exception:
         pass
     # 32B program fixes — import-cache / bridge errors / SoftDent×QB recon / Gold ticket OPS
+    recon_inserted = False
     try:
         from apex_32b_program_fixes_pack import (
             bridge_errors_widget,
@@ -2053,13 +2080,18 @@ def _financial_widgets_from_reports(
         ))
         widgets.insert(2, reconciliation_surface_widget(bundle))
         widgets.insert(3, gold_ticket_hint_widget())
+        recon_inserted = True
     except Exception:
         try:
             from apex_reconciliation_pack import reconciliation_widget
 
             widgets.append(reconciliation_widget(bundle))
+            recon_inserted = True
         except Exception:
             pass
+    if not recon_inserted:
+        # Honest UNAVAILABLE tile — never silent omit that looks like COHERENT board
+        widgets.insert(0, _reconciliation_unavailable_widget())
     try:
         from apex_import_quarantine_pack import quarantine_widget
 
