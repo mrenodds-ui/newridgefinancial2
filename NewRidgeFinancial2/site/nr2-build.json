@@ -1,9 +1,9 @@
 {
-  "schemaVersion": "hal-10630",
-  "BUILD_ID": "hal-10630",
-  "assetVersion": "hal-10630",
+  "schemaVersion": "hal-10631",
+  "BUILD_ID": "hal-10631",
+  "assetVersion": "hal-10631",
   "builtAt": "2026-07-14T13:52:00.000Z",
-  "notes": "hal-10630: empty blank stage for placement; skip narratives/IDB/motion interference.",
+  "notes": "hal-10631: Apex.registerPage placement host; strip widget scripts from blank shell.",
   "staffRenderMode": "apex",
-  "package": "HAL-10630"
+  "package": "HAL-10631"
 }

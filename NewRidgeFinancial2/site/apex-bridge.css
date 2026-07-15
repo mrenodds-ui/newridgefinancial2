@@ -1,5 +1,5 @@
 /* NR2-Apex Bridge — shell chrome only (page widgets + instrument CSS removed)
- * Build: hal-10630
+ * Build: hal-10631
  */
 :root {
   --sidebar-width: 240px;
@@ -418,10 +418,17 @@ body.apex-ticker-muted .apex-ticker__track {
   align-content: stretch;
 }
 
-/* ——— EMPTY STAGE (hal-10630 — leave #apex-stage clear for new page placement) ——— */
+/* ——— EMPTY STAGE + PLACEMENT HOST (hal-10631) ——— */
 .apex-stage[data-blank="1"],
 html[data-apex-blank="1"] #apex-stage {
   min-height: min(42vh, 360px);
+}
+
+#apex-placement,
+.apex-placement {
+  display: block;
+  width: 100%;
+  min-height: inherit;
 }
 
 .apex-ticker--bottom {

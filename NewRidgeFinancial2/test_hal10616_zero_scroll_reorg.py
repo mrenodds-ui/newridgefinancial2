@@ -14,7 +14,7 @@ from apex_compact_pages_pack import (
 
 class Hal10616ZeroScrollReorgTests(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10630")
+        self.assertEqual(BUILD_ID, "hal-10631")
 
     def test_optional_softDent_omitted_by_helper(self) -> None:
         widgets = [

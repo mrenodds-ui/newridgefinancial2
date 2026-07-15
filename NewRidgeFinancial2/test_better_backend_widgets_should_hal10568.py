@@ -16,7 +16,7 @@ from apex_better_backend_widgets_pack import (
 
 class BetterBackendWidgetsShouldTests(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10630")
+        self.assertEqual(BUILD_ID, "hal-10631")
 
     def test_hal_action_list(self) -> None:
         with mock.patch(

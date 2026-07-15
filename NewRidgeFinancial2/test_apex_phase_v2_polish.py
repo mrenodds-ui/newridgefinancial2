@@ -34,7 +34,7 @@ class PhaseV2PolishTests(unittest.TestCase):
         invalidate_explain_cache(reason="test_teardown")
 
     def test_build_id(self):
-        self.assertEqual(BUILD_ID, "hal-10630")
+        self.assertEqual(BUILD_ID, "hal-10631")
 
     def test_explain_cache_default_off(self):
         os.environ.pop("NR2_EXPLAIN_CACHE", None)
@@ -131,7 +131,7 @@ class PhaseV2PolishTests(unittest.TestCase):
         self.assertEqual(explain_cache_stats().get("size"), 0)
 
     def test_legacy_polish_css_removed(self):
-        """hal-10630: page-widget CSS stripped; legacy polish sheets remain absent."""
+        """hal-10631: page-widget CSS stripped; legacy polish sheets remain absent."""
         html = (SITE / "index.html").read_text(encoding="utf-8")
         for name in (
             "apex-mobile-polish.css",
@@ -151,8 +151,24 @@ class PhaseV2PolishTests(unittest.TestCase):
         self.assertNotIn(".apex-widget {", tokens)
         core = (SITE / "apex-core.js").read_text(encoding="utf-8")
         self.assertIn("blankWidgetsMode", core)
-        self.assertIn("Empty stage only", core)
-        self.assertIn("data-apex-blank", (SITE / "index.html").read_text(encoding="utf-8"))
+        self.assertIn("registerPage", core)
+        self.assertIn("apex-placement", core)
+        html_text = (SITE / "index.html").read_text(encoding="utf-8")
+        self.assertIn("data-apex-blank", html_text)
+        self.assertIn('id="apex-placement"', html_text)
+        for banned in (
+            "apex-chart-widget.js",
+            "nr2-dashboard-layout.js",
+            "nr2-insight-sse.js",
+            "nr2-data-freshness.js",
+            "apex-quarantine-panel.js",
+            "apex-motion-helper.js",
+            "apex-hal-brain.js",
+            "apex-narratives.js",
+            "apex-hal-brain.css",
+            "indexeddb-store.js",
+        ):
+            self.assertNotIn(banned, html_text, banned)
 
 
 if __name__ == "__main__":

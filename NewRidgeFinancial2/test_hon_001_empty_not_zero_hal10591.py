@@ -22,7 +22,7 @@ from ui_honesty_policy import (
 class Hon001EmptyNotZeroHal10591Tests(unittest.TestCase):
     def test_build_id_coupled(self) -> None:
         self.assertEqual(PACKAGE_BUILD_ID, "hal-10591")
-        self.assertEqual(BUILD_ID, "hal-10630")
+        self.assertEqual(BUILD_ID, "hal-10631")
 
     def test_null_never_renders_as_zero_dollars(self) -> None:
         for src in (SOURCE_GOLD_PAYMENT_LINES, SOURCE_PRINT_PREVIEW_VISUAL, "kpi"):

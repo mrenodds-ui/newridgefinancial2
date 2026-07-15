@@ -1,13 +1,13 @@
 /**
  * NR2-Apex Core — stacked stage, silent refresh, print, session-aware fetch
- * Build: hal-10630 (blank stage stays empty for new page placement)
+ * Build: hal-10631 (blank stage placement host for new pages)
  */
 (function () {
   "use strict";
 
   const SESSION_HEADER = "X-NR2-Session-Token";
   const REFRESH_HEADER = "X-NR2-Refresh-Token";
-  const ASSET_V = "hal-10630";
+  const ASSET_V = "hal-10631";
   if (typeof window !== "undefined") {
     window.NR2_BUILD_ID = ASSET_V;
   }
@@ -6328,20 +6328,101 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
     return true;
   }
 
+  const pagePlacers = new Map();
+  let activePlacerKey = "";
+
+  function placementHost(root) {
+    const stageEl = root || stage();
+    if (!stageEl) return null;
+    let host = stageEl.querySelector("#apex-placement");
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "apex-placement";
+      host.className = "apex-placement";
+      host.setAttribute("data-apex-placement", "1");
+      stageEl.appendChild(host);
+    }
+    return host;
+  }
+
+  function placerKey(page, sub) {
+    return sub ? `${page}/${sub}` : String(page || "");
+  }
+
+  function invokePagePlacer(page, sub, query) {
+    const host = placementHost();
+    if (!host) return false;
+    const key = placerKey(page, sub);
+    const parentKey = placerKey(page, null);
+    const entry = pagePlacers.get(key) || pagePlacers.get(parentKey) || pagePlacers.get("*");
+    if (activePlacerKey && activePlacerKey !== (entry && (entry._key || key))) {
+      const prev = pagePlacers.get(activePlacerKey);
+      if (prev && typeof prev.unmount === "function") {
+        try {
+          prev.unmount(host, { page: currentPage, sub: currentSub });
+        } catch (_err) {}
+      }
+    }
+    // Clear only the placement host — never leave old page DOM behind.
+    host.innerHTML = "";
+    host.dataset.page = page || "";
+    if (sub) host.dataset.sub = sub;
+    else delete host.dataset.sub;
+    activePlacerKey = "";
+    if (!entry) return false;
+    activePlacerKey = entry._key || key;
+    if (typeof entry.mount === "function") {
+      entry.mount(host, { page, sub: sub || null, query: query || {} });
+      return true;
+    }
+    return false;
+  }
+
+  function registerPage(pageId, handlers) {
+    const key = String(pageId || "").trim() || "*";
+    if (!handlers || typeof handlers !== "object") {
+      pagePlacers.delete(key);
+      return;
+    }
+    pagePlacers.set(key, {
+      _key: key,
+      mount: handlers.mount,
+      unmount: handlers.unmount,
+    });
+  }
+
   function renderBlankStage(_note) {
     const root = stage();
     if (!root) return;
     if (window.ApexHalBrain && typeof window.ApexHalBrain.destroy === "function") {
       window.ApexHalBrain.destroy();
     }
-    // Empty stage only — no placeholder copy fighting new page placement.
-    root.innerHTML = "";
     widgets.clear();
     root.className = "apex-stage apex-stage-stack";
     root.dataset.page = currentPage;
     if (currentSub) root.dataset.sub = currentSub;
     else delete root.dataset.sub;
     markBlankStage(root, true);
+    // Keep a stable placement host; page placers own its contents.
+    // Remove any non-placement siblings left from legacy widget mounts.
+    Array.from(root.children).forEach((child) => {
+      if (child.id !== "apex-placement") child.remove();
+    });
+    placementHost(root);
+    invokePagePlacer(currentPage, currentSub, currentQuery);
+    try {
+      root.dispatchEvent(
+        new CustomEvent("apex:pagechange", {
+          bubbles: true,
+          detail: {
+            page: currentPage,
+            sub: currentSub || null,
+            query: currentQuery || {},
+            blank: true,
+          },
+        })
+      );
+    } catch (_err) {}
   }
 
   function renderWidgets(list) {
@@ -7060,6 +7141,8 @@ if (this.type === "claims-kanban" || this.type === "claims-workbench") {
     config,
     assetVersion: ASSET_V,
     blankWidgetsMode,
+    registerPage,
+    placementHost,
     apiBase: () => config.apiBase,
     printPage,
     triggerSync,

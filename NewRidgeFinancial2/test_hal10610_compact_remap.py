@@ -17,7 +17,7 @@ from apex_subpages_wave5_pack import build_taxes_planning
 
 class Hal10610CompactRemapTests(unittest.TestCase):
     def test_build_id(self) -> None:
-        self.assertEqual(BUILD_ID, "hal-10630")
+        self.assertEqual(BUILD_ID, "hal-10631")
 
     def test_taxes_main_moves_planning_to_subpage(self) -> None:
         out = build_apex_widgets("taxes", _fill=True)

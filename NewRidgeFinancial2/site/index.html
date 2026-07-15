@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-apex-version="hal-10630" data-nr2-epoch="nr2-apex" data-apex-blank-widgets="1" data-apex-blank="1">
+<html lang="en" data-apex-version="hal-10631" data-nr2-epoch="nr2-apex" data-apex-blank-widgets="1" data-apex-blank="1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,10 +11,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="apex-tokens.css?v=hal-10630">
-  <link rel="stylesheet" href="apex-animations.css?v=hal-10630">
-  <link rel="stylesheet" href="apex-bridge.css?v=hal-10630">
-  <link rel="stylesheet" href="apex-hal-brain.css?v=hal-10630">
+  <link rel="stylesheet" href="apex-tokens.css?v=hal-10631">
+  <link rel="stylesheet" href="apex-animations.css?v=hal-10631">
+  <link rel="stylesheet" href="apex-bridge.css?v=hal-10631">
 </head>
 <body class="apex-bridge">
   <div id="apex-ticker" class="apex-ticker" aria-live="polite" aria-label="Financial ticker">
@@ -26,12 +25,10 @@
     </div>
   </div>
 
-  <div class="apex-grid-floor" aria-hidden="true"></div>
-
   <aside id="apex-sidebar" class="apex-sidebar">
     <div class="apex-sidebar__brand">
       <div class="apex-brand">NR2 APEX</div>
-      <div class="apex-version">hal-10630 · bridge</div>
+      <div class="apex-version">hal-10631 · bridge</div>
     </div>
 
     <nav class="apex-sidebar__nav" aria-label="Bridge navigation">
@@ -74,7 +71,9 @@
       </div>
       <nav id="apex-subnav" class="apex-subnav" aria-label="Page subpages" hidden></nav>
     </header>
-    <div id="apex-stage" class="apex-stage apex-stage-stack" data-page="financial" aria-live="polite"></div>
+    <div id="apex-stage" class="apex-stage apex-stage-stack" data-page="financial" data-blank="1" aria-live="polite">
+      <div id="apex-placement" class="apex-placement" data-apex-placement="1" data-page="financial"></div>
+    </div>
   </main>
 
   <div id="apex-ticker-bottom" class="apex-ticker apex-ticker--bottom" aria-live="off" aria-label="Secondary telemetry">
@@ -86,20 +85,11 @@
     </div>
   </div>
 
-  <script src="indexeddb-store.js?v=hal-10630"></script>
-  <script src="apex-chart-widget.js?v=hal-10630"></script>
-  <script src="nr2-dashboard-layout.js?v=hal-10630"></script>
-  <script src="apex-core.js?v=hal-10630"></script>
-  <script src="nr2-insight-sse.js?v=hal-10630"></script>
-  <script src="nr2-data-freshness.js?v=hal-10630"></script>
-  <script src="apex-quarantine-panel.js?v=hal-10630"></script>
-  <script src="apex-motion-helper.js?v=hal-10630"></script>
-  <script src="apex-ticker.js?v=hal-10630"></script>
-  <script src="apex-hal-bridge.js?v=hal-10630"></script>
-  <script src="apex-hal-brain.js?v=hal-10630"></script>
-  <script src="apex-narratives.js?v=hal-10630"></script>
-  <script src="hal-voice.js?v=hal-10630"></script>
-  <script src="hal-reports.js?v=hal-10630"></script>
+  <!-- Blank redesign shell: only chrome + placement host. Widget/mosaic scripts stay off the path. -->
+  <script src="apex-core.js?v=hal-10631"></script>
+  <script src="apex-ticker.js?v=hal-10631"></script>
+  <script src="apex-hal-bridge.js?v=hal-10631"></script>
+  <script src="hal-voice.js?v=hal-10631"></script>
+  <script src="hal-reports.js?v=hal-10631"></script>
 </body>
 </html>
-
