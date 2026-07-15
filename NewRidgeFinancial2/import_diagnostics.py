@@ -486,13 +486,14 @@ def assess_import_completeness(diagnostics: dict[str, Any] | None) -> dict[str, 
 def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Critical gaps that must block money-read freshness / red alignment lasers.
 
-    Missing critical datasets always block. SoftDent AR that is critical+stale past
-    its freshness TTL (or AR_OPS_HOURS, whichever is sooner) also blocks — otherwise
-    lasers stay green while SoftDent itself already marks AR stale (Moonshot P2).
+    Missing critical datasets always block. Any **critical** dataset that is stale
+    past its freshness TTL (or AR_OPS_HOURS, whichever is sooner) also blocks —
+    SoftDent AR, QuickBooks revenue/P&L, etc. SoftGaps alone must not leave lasers
+    green while money beams are aged (Moonshot laser-softgap unify).
     """
     if not isinstance(diagnostics, dict):
         return []
-    ar_ops_minutes = max(1, int(AR_OPS_HOURS) * 60)
+    critical_ops_minutes = max(1, int(AR_OPS_HOURS) * 60)
     blocking: list[dict[str, Any]] = []
     for row in diagnostics.get("datasets") or []:
         if not isinstance(row, dict):
@@ -520,32 +521,53 @@ def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str,
             ):
                 continue
             blocking.append(row)
-        elif (
-            status == STATUS_STALE
-            and severity == "critical"
-            and (
-                dataset_key == "softdent.ar"
-                or dataset_key.startswith("softdent.ar")
-            )
-            and age_n is not None
-        ):
+        elif status == STATUS_STALE and severity == "critical" and age_n is not None:
             try:
                 freshness_max = int(row.get("freshnessMaxMinutes") or 0) or None
             except (TypeError, ValueError):
                 freshness_max = None
-            # Block at SoftDent's own TTL when present; never wait longer than AR_OPS_HOURS.
-            threshold = ar_ops_minutes
+            # Block at dataset TTL when present; never wait longer than critical ops hours.
+            threshold = critical_ops_minutes
             if freshness_max is not None and freshness_max > 0:
-                threshold = min(ar_ops_minutes, freshness_max)
+                threshold = min(critical_ops_minutes, freshness_max)
             if age_n > threshold:
                 blocking.append(
                     {
                         **row,
-                        "blockingReason": "softdent_ar_stale_exceeds_freshness",
+                        "blockingReason": "critical_dataset_stale_exceeds_freshness",
                         "blockingThresholdMinutes": threshold,
                     }
                 )
     return blocking
+
+
+def alignment_laser_state(
+    *,
+    diagnostics: dict[str, Any] | None = None,
+    blocking: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Canonical red/green laser signal for optical landing + Pages Hub."""
+    rows = blocking if isinstance(blocking, list) else blocking_import_issues(diagnostics)
+    keys = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        key = str(row.get("datasetKey") or "").strip()
+        if key and key not in keys:
+            keys.append(key)
+    red = bool(keys)
+    return {
+        "red": red,
+        "green": not red,
+        "blockingCount": len(keys),
+        "datasetKeys": keys[:12],
+        "emptyNotZero": True,
+        "reason": (
+            "critical_import_gaps"
+            if red
+            else "imports_ready_for_money_reads"
+        ),
+    }
 
 
 POSTING_MAX_AGE_HOURS = int(os.environ.get("NR2_IMPORT_POSTING_MAX_HOURS", "24"))
@@ -660,6 +682,15 @@ def assess_import_readiness(
                 "level": "syncing",
                 "codes": ["import_sync_running"],
                 "error": "Import sync is running; wait for completion.",
+                "blocking": [],
+                "alignmentLasers": {
+                    "red": True,
+                    "green": False,
+                    "blockingCount": 0,
+                    "datasetKeys": [],
+                    "emptyNotZero": True,
+                    "reason": "import_sync_running",
+                },
                 "thresholds": thresholds,
                 "operationContext": operation_context,
             }
@@ -669,6 +700,15 @@ def assess_import_readiness(
             "codes": ["import_sync_stalled"],
             "error": "Import sync appears stalled; reset sync before financial work.",
             "syncState": sync_state,
+            "blocking": [],
+            "alignmentLasers": {
+                "red": True,
+                "green": False,
+                "blockingCount": 0,
+                "datasetKeys": [],
+                "emptyNotZero": True,
+                "reason": "import_sync_stalled",
+            },
             "thresholds": thresholds,
             "operationContext": operation_context,
         }
@@ -688,12 +728,14 @@ def assess_import_readiness(
     summary = diagnostics.get("summary") or {}
     completeness = assess_import_completeness(diagnostics)
     dataset_gaps = list_dataset_gaps(diagnostics)
+    lasers = alignment_laser_state(diagnostics=diagnostics, blocking=blocking)
 
     base = {
         "loadedAt": bundle.get("loadedAt"),
         "ageHours": round(age_hours, 1) if age_hours is not None else None,
         "summary": summary,
         "blocking": blocking,
+        "alignmentLasers": lasers,
         "completeness": completeness,
         "datasetGaps": dataset_gaps,
         "thresholds": thresholds,

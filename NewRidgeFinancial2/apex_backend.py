@@ -32,7 +32,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "nr2-12023-refresh-period-timeout"
+BUILD_ID = "nr2-12024-laser-softgap-unify"
 
 def _clean_slate_unavailable(feature: str = "pack") -> dict[str, Any]:
     """Honest payload when Apex packs / nr2_contracts were removed in cutover.

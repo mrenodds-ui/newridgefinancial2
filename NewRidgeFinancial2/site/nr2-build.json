@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12023-refresh-period-timeout",
-  "BUILD_ID": "nr2-12023-refresh-period-timeout",
-  "assetVersion": "nr2-12023-refresh-period-timeout",
-  "builtAt": "2026-07-15T21:00:00.000Z",
-  "notes": "nr2-12023-refresh-period-timeout: SoftDent refresh-period fail-fast — ThreadPool shutdown(wait=False) so optical UI never hangs; honest 504 STALLED; shorter SoftDent sign-on/automation caps. SoftDent write-back still forbidden.",
+  "schemaVersion": "nr2-12024-laser-softgap-unify",
+  "BUILD_ID": "nr2-12024-laser-softgap-unify",
+  "assetVersion": "nr2-12024-laser-softgap-unify",
+  "builtAt": "2026-07-15T20:50:00.000Z",
+  "notes": "nr2-12024-laser-softgap-unify: critical softGaps past TTL enter blocking + alignmentLasers; landing lasers use server signal; Pages Hub LIVE/STALE from readiness; optical banners stamp from /api/app-info. SoftDent write-back still forbidden.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12023-REFRESH-PERIOD-TIMEOUT",
+  "package": "NR2-12024-LASER-SOFTGAP-UNIFY",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

@@ -242,28 +242,24 @@
     }
     const ready = r.data;
     const blocking = Array.isArray(ready.blocking) ? ready.blocking : [];
-    const gaps = Array.isArray(ready.datasetGaps) ? ready.datasetGaps : [];
-    const softGaps =
-      ready.completeness && Array.isArray(ready.completeness.softGaps)
-        ? ready.completeness.softGaps
-        : [];
-    const criticalSoft = gaps
-      .concat(softGaps)
-      .filter((g) => g && String(g.severity || "") === "critical");
-    const staleCritical = criticalSoft.filter((g) =>
-      /stale|missing/i.test(String(g.status || ""))
-    );
-    const ok =
-      ready.ok !== false && blocking.length === 0 && staleCritical.length === 0;
+    const lasers = ready.alignmentLasers || {};
+    const red =
+      lasers.red === true ||
+      (lasers.red !== false &&
+        ready.ok === false &&
+        blocking.length > 0) ||
+      (lasers.red == null && (ready.ok === false || blocking.length > 0));
+    // Canonical server lasers — do not re-compute softGaps client-side (brief soft stale must stay soft).
     if (align) {
-      align.classList.toggle("bad", !ok);
-      align.title = ok
-        ? "Import readiness coherent · lasers green-path"
-        : "Import gaps / stale · lasers red (blocking=" +
+      align.classList.toggle("bad", !!red);
+      align.title = red
+        ? "Import gaps / stale · lasers red (blocking=" +
           blocking.length +
-          ", criticalSoft=" +
-          staleCritical.length +
-          ")";
+          (lasers.datasetKeys && lasers.datasetKeys.length
+            ? " · " + lasers.datasetKeys.slice(0, 4).join(",")
+            : "") +
+          ")"
+        : "Import readiness coherent · lasers green-path";
     }
     // Import alignment only — recon status from refreshReconHonesty (never fake COHERENT).
     return ready;

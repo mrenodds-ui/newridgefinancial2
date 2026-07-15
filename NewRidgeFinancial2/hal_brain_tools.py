@@ -210,9 +210,14 @@ def money_beam_attestation(*, readiness: dict[str, Any] | None = None) -> dict[s
         age_h = float(age_hours) if age_hours is not None else None
     except (TypeError, ValueError):
         age_h = None
-    # Import soft-stale / stale blocks trusting inventable money; live tool fetch is still OK
-    import_stale = level in ("stale", "degraded", "missing", "error", "unknown") or (
-        age_h is not None and age_h * 3600 > MONEY_BEAM_STALE_SECONDS and level != "fresh"
+    # Import soft-stale / stale / critical blocking → prefer UNAVAILABLE over invent
+    blocking = ready.get("blocking") if isinstance(ready.get("blocking"), list) else []
+    lasers = ready.get("alignmentLasers") if isinstance(ready.get("alignmentLasers"), dict) else {}
+    import_stale = (
+        level in ("stale", "degraded", "missing", "error", "unknown")
+        or bool(blocking)
+        or lasers.get("red") is True
+        or (age_h is not None and age_h * 3600 > MONEY_BEAM_STALE_SECONDS and level != "fresh")
     )
 
     hash_src = "|".join(

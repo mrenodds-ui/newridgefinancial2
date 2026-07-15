@@ -103,7 +103,26 @@ class ImportDiagnosticsBlockingTests(unittest.TestCase):
         got = blocking_import_issues({"datasets": [row]})
         self.assertEqual(len(got), 1)
         self.assertEqual(got[0]["datasetKey"], "softdent.ar")
-        self.assertEqual(got[0].get("blockingReason"), "softdent_ar_stale_exceeds_freshness")
+        self.assertEqual(got[0].get("blockingReason"), "critical_dataset_stale_exceeds_freshness")
+
+    def test_blocking_import_issues_blocks_qb_revenue_stale_past_ttl(self) -> None:
+        """Laser-softgap unify — critical QB revenue stale past TTL blocks lasers."""
+        from import_diagnostics import alignment_laser_state
+
+        row = {
+            "datasetKey": "quickbooks.revenue",
+            "severity": "critical",
+            "status": "stale",
+            "rowCount": 12,
+            "ageMinutes": 200,
+            "freshnessMaxMinutes": 90,
+            "detail": "Dataset is stale",
+        }
+        got = blocking_import_issues({"datasets": [row]})
+        self.assertEqual(len(got), 1)
+        lasers = alignment_laser_state(blocking=got)
+        self.assertTrue(lasers.get("red"))
+        self.assertIn("quickbooks.revenue", lasers.get("datasetKeys") or [])
 
     def test_blocking_import_issues_keeps_brief_softdent_ar_stale_soft(self) -> None:
         """Stale SoftDent AR under SoftDent freshness TTL stays soft (not blocking)."""

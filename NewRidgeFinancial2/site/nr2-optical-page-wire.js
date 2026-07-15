@@ -80,18 +80,36 @@
       if (timer) clearTimeout(timer);
     }
   }
+  let cachedBuildId = "";
+  async function resolveBuildId() {
+    if (cachedBuildId) return cachedBuildId;
+    const r = await getJson("/api/app-info", 6000);
+    const id =
+      r.ok && r.data
+        ? String(r.data.buildId || r.data.BUILD_ID || r.data.assetVersion || "").trim()
+        : "";
+    cachedBuildId = id || "nr2-optical";
+    return cachedBuildId;
+  }
   function setBanner(mode, detail) {
     const banner = document.querySelector(".banner");
     if (!banner) return;
     const label =
       mode === "live" ? "LIVE" : mode === "partial" ? "PARTIAL" : mode === "unavailable" ? "UNAVAILABLE" : "WIRE";
+    const stamp = cachedBuildId || "nr2-optical";
     banner.childNodes[0] && banner.childNodes[0].nodeType === 3
       ? (banner.childNodes[0].textContent =
-          label +
-          " · optical · nr2-12018-hal-brains · empty ≠ $0 · no SoftDent write-back ")
+          label + " · optical · " + stamp + " · empty ≠ $0 · no SoftDent write-back ")
       : null;
     const bind = banner.querySelector(".bind");
     if (bind && detail) bind.textContent = detail;
+    if (!cachedBuildId) {
+      resolveBuildId().then(function (id) {
+        if (!banner.childNodes[0] || banner.childNodes[0].nodeType !== 3) return;
+        banner.childNodes[0].textContent =
+          label + " · optical · " + id + " · empty ≠ $0 · no SoftDent write-back ";
+      });
+    }
   }
   global.NR2OpticalWire = {
     money: money,
@@ -101,5 +119,6 @@
     postJson: postJson,
     ensureSession: ensureSession,
     setBanner: setBanner,
+    resolveBuildId: resolveBuildId,
   };
 })(window);

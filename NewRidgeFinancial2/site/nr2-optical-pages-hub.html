@@ -3,80 +3,80 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NR2 Optical Pages Hub — nr2-12022-board-navigate</title>
+  <title>NR2 Optical Pages Hub — nr2-12024-laser-softgap-unify</title>
   <link rel="stylesheet" href="/nr2-optical-theme.css" />
 </head>
 <body>
   <div class="banner">
-    LIVE / PARTIAL · Pages Hub · nr2-12022-board-navigate · empty ≠ $0 · recon UNAVAILABLE · board navigate LIVE · no SoftDent write-back
-    <span class="bind">HAL brains LIVE · SoftDent·QB·Claims·AR·Taxes·Docs LIVE · board-actions NAVIGATE · SoftDent×QB recon UNAVAILABLE · OM PARTIAL · Narratives UNAVAILABLE</span>
+    WIRE · Pages Hub · nr2-optical · empty ≠ $0 · lasers ← import-readiness · no SoftDent write-back
+    <span class="bind">Fetching readiness + build stamp…</span>
   </div>
   <div class="shell">
     <nav class="nav" id="nav"></nav>
     <main class="main">
       <div class="hal-chip">HAL · SPECTRAL CORE · theme lock</div>
       <h1>NR2 PROGRAM PAGES</h1>
-      <p class="kicker">Main interferometer bench + sub-benches — statuses match live optical wires.</p>
+      <p class="kicker">Main interferometer bench + sub-benches — LIVE/STALE from server lasers, not static copy.</p>
       <div class="beam"></div>
-      <div class="honesty">Honesty: empty ≠ $0 · no SoftDent write-back · no invent $ · critical import gaps block money reads</div>
+      <div class="honesty">Honesty: empty ≠ $0 · no SoftDent write-back · no invent $ · critical import gaps (past TTL) block money reads</div>
       <div class="grid">
         <div class="card">
           <h3>Main Bench</h3>
-          <div class="val hal">LIVE</div>
+          <div class="val hal" id="hub-main">—</div>
           <p class="hint">SoftDent left · QB right · Tax Prism · Sync / Period · Recon 503</p>
           <a class="btn" href="/nr2-optical-beam-touch-mockup.html">OPEN MAIN</a>
         </div>
         <div class="card">
           <h3>SoftDent</h3>
-          <div class="val sd">LIVE</div>
+          <div class="val sd" id="hub-softdent">—</div>
           <p class="hint">AR buckets · production · collections · claims full total · read-only</p>
           <a class="btn" href="/nr2-optical-page-softdent.html">OPEN</a>
         </div>
         <div class="card">
           <h3>QuickBooks</h3>
-          <div class="val qb">LIVE</div>
+          <div class="val qb" id="hub-quickbooks">—</div>
           <p class="hint">Revenue · cash flow · net income · AR/AP ∅ when empty</p>
           <a class="btn" href="/nr2-optical-page-quickbooks.html">OPEN</a>
         </div>
         <div class="card">
           <h3>HAL</h3>
-          <div class="val hal">LIVE</div>
+          <div class="val hal" id="hub-hal">—</div>
           <p class="hint">Chat · money gate from claims beam · empty ≠ $0</p>
           <a class="btn" href="/nr2-optical-page-hal.html">OPEN</a>
         </div>
         <div class="card">
           <h3>Claims</h3>
-          <div class="val sd">LIVE</div>
+          <div class="val sd" id="hub-claims">—</div>
           <p class="hint">Full outstanding total · aging counts · ERA UNAVAILABLE</p>
           <a class="btn" href="/nr2-optical-page-claims.html">OPEN</a>
         </div>
         <div class="card">
           <h3>Taxes</h3>
-          <div class="val qb">LIVE</div>
+          <div class="val qb" id="hub-taxes">—</div>
           <p class="hint">Planning prism · not posted to QB</p>
           <a class="btn" href="/nr2-optical-page-taxes.html">OPEN</a>
         </div>
         <div class="card">
           <h3>A/R</h3>
-          <div class="val sd">LIVE</div>
-          <p class="hint">SoftDent AR buckets · STALE watermark when aged</p>
+          <div class="val sd" id="hub-ar">—</div>
+          <p class="hint">SoftDent AR buckets · STALE watermark when aged past TTL</p>
           <a class="btn" href="/nr2-optical-page-ar.html">OPEN</a>
         </div>
         <div class="card">
           <h3>Narratives</h3>
-          <div class="val">UNAVAILABLE</div>
+          <div class="val" id="hub-narratives">UNAVAILABLE</div>
           <p class="hint">Packs removed · no invent drafts · ask HAL for prose</p>
           <a class="btn" href="/nr2-optical-page-narratives.html">OPEN</a>
         </div>
         <div class="card">
           <h3>Office Manager</h3>
-          <div class="val">PARTIAL</div>
+          <div class="val" id="hub-om">—</div>
           <p class="hint">Readiness · SoftDent day pulse · board-actions NAVIGATE</p>
           <a class="btn" href="/nr2-optical-page-office-manager.html">OPEN</a>
         </div>
         <div class="card">
           <h3>Documents / Library</h3>
-          <div class="val">LIVE</div>
+          <div class="val" id="hub-docs">—</div>
           <p class="hint">Inbox file counts · SoftDent extract · codes UNAVAILABLE</p>
           <a class="btn" href="/nr2-optical-page-content.html">OPEN</a>
         </div>
@@ -84,5 +84,7 @@
     </main>
   </div>
   <script src="/nr2-optical-nav.js"></script>
+  <script src="/nr2-optical-page-wire.js"></script>
+  <script src="/nr2-optical-pages-hub.js"></script>
 </body>
 </html>

@@ -75,7 +75,7 @@
       if (hint) {
         hint.textContent = blocked
           ? "Blocking critical gaps · lasers red on main"
-          : "No blocking array · soft stale may still dim AR";
+          : "No blocking · brief soft stale under TTL stays green lasers";
       }
       live = true;
     } else {
