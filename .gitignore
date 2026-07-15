@@ -205,3 +205,7 @@ app_data/nr2/document_library/tax_returns/**/*.jpg
 
 # Moonshot consult scratch snapshots (local only; never commit)
 NewRidgeFinancial2/docs/_consult_scratch/
+
+# Local SoftDent export drops (never commit)
+NewRidgeFinancial2/C\SoftDentFinancialExports/
+**/SoftDentFinancialExports/
