@@ -3,7 +3,7 @@
   "BUILD_ID": "nr2-12018-hal-brains",
   "assetVersion": "nr2-12018-hal-brains",
   "builtAt": "2026-07-15T19:40:00.000Z",
-  "notes": "nr2-12018-hal-brains: Moonshot HAL-as-brains P0–P3 — multi-turn /api/hal/chat + session store, SoftDent/QB/MemoAI/web tools, consent actions, optical command-center page. SoftDent write-back still forbidden; empty ≠ $0.",
+  "notes": "nr2-12018-hal-brains: Moonshot HAL-as-brains P0–P3 — multi-turn /api/hal/chat + session store, SoftDent/QB/MemoAI/web tools, consent actions, live money-beam attestation in chat (empty ≠ $0), optical command-center page. SoftDent write-back still forbidden.",
   "staffRenderMode": "nr2-clean",
   "package": "NR2-12018-HAL-BRAINS",
   "compat": false,

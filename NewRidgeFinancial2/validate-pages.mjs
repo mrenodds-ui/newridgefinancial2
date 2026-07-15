@@ -25,6 +25,7 @@ const cleanOptical =
   String(buildManifest.schemaVersion || "").includes("nr2-11000-clean") ||
   String(buildManifest.schemaVersion || "").includes("nr2-12016") ||
   String(buildManifest.schemaVersion || "").includes("nr2-12017") ||
+  String(buildManifest.schemaVersion || "").includes("nr2-12018") ||
   String(buildManifest.baseCleanStamp || "").includes("nr2-11000-clean") ||
   indexHtml.includes("nr2-optical-beam-touch-mockup") ||
   indexHtml.includes("nr2-boot.js");

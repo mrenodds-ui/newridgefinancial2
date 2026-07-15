@@ -128,6 +128,41 @@ def qb_summary() -> dict[str, Any]:
     return out
 
 
+def money_beam_attestation() -> dict[str, Any]:
+    """Attest SoftDent + QB money beams for HAL chat (empty ≠ $0 · no invented currency).
+
+    Injected into the chat system prompt so HAL must cite live beam state and
+    never fill ∅ with $0.
+    """
+    sd = softdent_status()
+    qb = qb_summary()
+    lines = [
+        "LIVE MONEY BEAMS (cite these; never invent other dollars):",
+        f"- SoftDent claims: {sd.get('display')} · hasData={bool(sd.get('hasData'))} · {sd.get('hint') or ''}",
+        f"- QuickBooks revenue: {qb.get('display')} · hasData={bool(qb.get('hasData'))} · {qb.get('hint') or ''}",
+    ]
+    if sd.get("display") == "∅ NO SIGNAL" or qb.get("display") == "∅ NO SIGNAL":
+        lines.append(
+            "HONESTY: At least one money beam is empty — say NO SIGNAL / no data for that beam; never $0."
+        )
+    return {
+        "ok": True,
+        "emptyNotZero": True,
+        "at": _utc_now(),
+        "softdent": {
+            "hasData": sd.get("hasData"),
+            "display": sd.get("display"),
+            "totalOutstanding": sd.get("totalOutstanding"),
+        },
+        "quickbooks": {
+            "hasData": qb.get("hasData"),
+            "display": qb.get("display"),
+            "monthlyRevenue": qb.get("monthlyRevenue"),
+        },
+        "promptBlock": "\n".join(lines),
+    }
+
+
 def qb_sync(*, consent: bool, store) -> dict[str, Any]:
     if not consent:
         return {

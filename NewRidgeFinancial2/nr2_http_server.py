@@ -1007,6 +1007,18 @@ class NR2BottleServer(BottleServer):
                 persona = HAL_9000_BRAIN_SYSTEM
             elif "HAL" not in persona[:80]:
                 persona = HAL_9000_BRAIN_SYSTEM + "\n\n" + persona
+            try:
+                from hal_brain_tools import money_beam_attestation
+
+                attest = money_beam_attestation()
+                block = str((attest or {}).get("promptBlock") or "").strip()
+                if block:
+                    persona = persona + "\n\n" + block
+            except Exception:
+                persona = (
+                    persona
+                    + "\n\nLIVE MONEY BEAMS unavailable — say NO SIGNAL for SoftDent/QB dollars; never invent $0."
+                )
 
             append_turn(session_id, role="user", text=query)
             store = _local_store()
@@ -1134,6 +1146,13 @@ class NR2BottleServer(BottleServer):
             from hal_brain_tools import qb_summary
 
             return _json_response(qb_summary())
+
+        @app.get("/api/hal/tools/money-beams")
+        def hal_money_beams_api():
+            """SoftDent + QB money attestation (empty ≠ $0 · no invented currency)."""
+            from hal_brain_tools import money_beam_attestation
+
+            return _json_response(money_beam_attestation())
 
         @app.post("/api/hal/tools/qb-sync")
         def hal_qb_sync_api():
