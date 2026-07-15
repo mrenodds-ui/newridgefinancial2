@@ -229,6 +229,38 @@
     ].filter(Boolean);
     return parts.join(" · ");
   }
+  function periodCloseStatus(ready) {
+    const close = ready && ready.periodClose;
+    if (!close || typeof close !== "object") {
+      const op = ready && ready.operationContext;
+      if (op && op.activeOperation) {
+        return { status: String(op.activeOperation), completedAt: null, lastBeamHash: null };
+      }
+      return null;
+    }
+    return {
+      status: String(close.status || "unknown").toLowerCase(),
+      completedAt: close.completedAt || null,
+      lastBeamHash: close.lastBeamHash || null,
+    };
+  }
+  function periodCloseIsTrouble(ready) {
+    const pc = periodCloseStatus(ready);
+    if (!pc) return false;
+    return /^(stalled|blocked|running|daily_close)$/i.test(pc.status);
+  }
+  function periodCloseBannerBit(ready) {
+    const pc = periodCloseStatus(ready);
+    if (!pc) return "CLOSE · NO SIGNAL";
+    const stamp = pc.completedAt ? String(pc.completedAt).slice(0, 16).replace("T", " ") : "";
+    const hash = pc.lastBeamHash ? " · hash " + String(pc.lastBeamHash).slice(0, 8) : "";
+    return (
+      "CLOSE · " +
+      String(pc.status || "unknown").toUpperCase() +
+      (stamp ? " · " + stamp : "") +
+      hash
+    );
+  }
   global.NR2OpticalWire = {
     money: money,
     fmtMoney: fmtMoney,
@@ -246,5 +278,8 @@
     getMoneyBeams: getMoneyBeams,
     applyBeamHeadline: applyBeamHeadline,
     beamProvenanceLine: beamProvenanceLine,
+    periodCloseStatus: periodCloseStatus,
+    periodCloseIsTrouble: periodCloseIsTrouble,
+    periodCloseBannerBit: periodCloseBannerBit,
   };
 })(window);

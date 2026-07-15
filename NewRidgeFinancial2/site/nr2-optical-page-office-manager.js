@@ -38,6 +38,7 @@
 
   async function boot() {
     W.setBanner("partial", "OM wiring readiness + SoftDent day pulse · empty ≠ $0");
+    W.setText("val-close", null, "—");
     W.setText("val-ready", null, "—");
     W.setText("val-ops", null, "—");
     W.setText("val-gaps", null, "—");
@@ -52,12 +53,29 @@
 
     let live = false;
     let blocked = false;
+    let closeTrouble = false;
     let readyData = null;
 
     if (ready.ok && ready.data) {
       readyData = ready.data;
       const blocking = Array.isArray(readyData.blocking) ? readyData.blocking.length : 0;
       blocked = W.lasersRed ? W.lasersRed(readyData) : blocking > 0;
+      closeTrouble = W.periodCloseIsTrouble ? W.periodCloseIsTrouble(readyData) : false;
+      const pc = W.periodCloseStatus ? W.periodCloseStatus(readyData) : null;
+      const closeBit = W.periodCloseBannerBit
+        ? W.periodCloseBannerBit(readyData)
+        : "CLOSE · UNKNOWN";
+      if (pc) {
+        W.setText("val-close", String(pc.status || "unknown").toUpperCase());
+        const ch = document.getElementById("hint-close");
+        if (ch) ch.textContent = closeBit + " · empty ≠ $0";
+        if (closeTrouble) {
+          const el = document.getElementById("val-close");
+          if (el) el.classList.add("stale");
+        }
+      } else {
+        W.setText("val-close", "NO SIGNAL");
+      }
       const level = String(readyData.level || "unknown").toUpperCase();
       const sum = readyData.summary || {};
       const laserKeys = W.laserKeys ? W.laserKeys(readyData) : [];
@@ -86,10 +104,13 @@
       if (hint) {
         hint.textContent = blocked
           ? "Blocking / lasers red · money reads STALE on main"
-          : "No laser block · brief soft stale under TTL stays green";
+          : closeTrouble
+            ? "Lasers clear but period-close " + String((pc && pc.status) || "trouble") + " — not LIVE OPS"
+            : "No laser block · brief soft stale under TTL stays green";
       }
       live = true;
     } else {
+      W.setText("val-close", "NO SIGNAL");
       W.setText("val-ready", "NO SIGNAL");
       W.setText("val-gaps", "NO SIGNAL");
     }
@@ -128,11 +149,16 @@
       W.setText("val-health", "NO SIGNAL");
     }
 
+    const closeBit = readyData && W.periodCloseBannerBit ? W.periodCloseBannerBit(readyData) : "";
     W.setBanner(
-      blocked ? "partial" : live ? "live" : "partial",
+      blocked || closeTrouble ? "partial" : live ? "live" : "partial",
       blocked
         ? "OM · lasers STALE · re-export SoftDent aging (keep SoftDent save folder) · sync via main"
-        : "OM · SoftDent day pulse + readiness · board-actions NAVIGATE · empty ≠ $0"
+        : closeTrouble
+          ? "OM · " + closeBit + " · SoftDent morning pull may need retry · empty ≠ $0"
+          : "OM · SoftDent day pulse + readiness · " +
+            (closeBit || "CLOSE · idle") +
+            " · board-actions NAVIGATE · empty ≠ $0"
     );
   }
 

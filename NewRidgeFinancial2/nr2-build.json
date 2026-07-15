@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12030-period-close-softdent-pull",
-  "BUILD_ID": "nr2-12030-period-close-softdent-pull",
-  "assetVersion": "nr2-12030-period-close-softdent-pull",
-  "builtAt": "2026-07-15T22:40:00.000Z",
-  "notes": "nr2-12030-period-close-softdent-pull: morning scheduler SoftDent aging auto-pull (consent-free Excel) then heal + post-pull laser gate + beam attest; pre-pull red lasers do not block the pull. SoftDent write-back still forbidden.",
+  "schemaVersion": "nr2-12031-optical-period-close-status",
+  "BUILD_ID": "nr2-12031-optical-period-close-status",
+  "assetVersion": "nr2-12031-optical-period-close-status",
+  "builtAt": "2026-07-15T22:45:00.000Z",
+  "notes": "nr2-12031-optical-period-close-status: Pages Hub + OM surface periodClose from import-readiness; stalled/blocked/running close demotes LIVE chrome. SoftDent write-back still forbidden.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12030-PERIOD-CLOSE-SOFTDENT-PULL",
+  "package": "NR2-12031-OPTICAL-PERIOD-CLOSE-STATUS",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

@@ -32,7 +32,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "nr2-12029-period-close-softdent-pull"
+BUILD_ID = "nr2-12031-optical-period-close-status"
 
 def _clean_slate_unavailable(feature: str = "pack") -> dict[str, Any]:
     """Honest payload when Apex packs / nr2_contracts were removed in cutover.
