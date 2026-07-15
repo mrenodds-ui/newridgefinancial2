@@ -2,16 +2,47 @@
 
 Invoked only from /api/hal/tools/* and /api/hal/actions/* routes.
 SoftDent write-back forbidden; GUI export and QB sync require consent=true.
+
+Money honesty (nr2-12019): monetary chat must cite live SoftDent/QB beams
+or explicit UNAVAILABLE — never invent dollars; empty ≠ $0.
 """
 
 from __future__ import annotations
 
+import hashlib
+import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 # In-process pending consent actions (operator must click Approve)
 _PENDING: dict[str, dict[str, Any]] = {}
+
+# Beam attestation considered stale for optical banner / gate after this many seconds
+MONEY_BEAM_STALE_SECONDS = 300
+
+_MONEY_QUERY_RE = re.compile(
+    r"(?i)("
+    r"\$|usd\b|dollar|balance|outstanding|revenue|receivable|aging|"
+    r"\bAR\b|a/?r\b|accounts?\s*receivable|\bAP\b|how\s+much|"
+    r"amount\s*(due|owed)?|owed|owing|collections|net\s*income|"
+    r"profit|expense|production|deposit|claim(?:s)?\s*(?:total|sum|amount)|"
+    r"total\s+(?:outstanding|claims|revenue|income)"
+    r")"
+)
+_DOLLAR_AMOUNT_RE = re.compile(r"\$\s*([\d,]+(?:\.\d{1,2})?)")
+_AR_QUERY_RE = re.compile(
+    r"(?i)\b("
+    r"AR\b|a/?r\b|accounts?\s*receivable|outstanding(?:\s+claims?)?|"
+    r"claims?\s+outstanding|aging|collections?\s*(?:total|balance)?"
+    r")\b"
+)
+_QB_REVENUE_RE = re.compile(
+    r"(?i)\b("
+    r"revenue|sales|income|quickbooks|QB\b|P\s*&\s*L|profit\s*and\s*loss|"
+    r"monthly\s+revenue|last\s+month(?:'s)?\s+revenue"
+    r")\b"
+)
 
 
 def _utc_now() -> str:
@@ -24,6 +55,32 @@ def _finite(val: Any) -> bool:
         return f == f and abs(f) != float("inf")
     except (TypeError, ValueError):
         return False
+
+
+def is_money_query(query: str) -> bool:
+    """True when the operator ask implies currency or financial totals."""
+    q = str(query or "").strip()
+    if not q:
+        return False
+    return bool(_MONEY_QUERY_RE.search(q))
+
+
+def _parse_dollars_in_text(text: str) -> list[float]:
+    out: list[float] = []
+    for m in _DOLLAR_AMOUNT_RE.finditer(str(text or "")):
+        raw = m.group(1).replace(",", "")
+        try:
+            out.append(float(raw))
+        except ValueError:
+            continue
+    return out
+
+
+def _amount_allowed(amount: float, allowed: list[float], *, tol: float = 1.0) -> bool:
+    for a in allowed:
+        if abs(float(a) - float(amount)) <= tol:
+            return True
+    return False
 
 
 def softdent_status() -> dict[str, Any]:
@@ -128,38 +185,324 @@ def qb_summary() -> dict[str, Any]:
     return out
 
 
-def money_beam_attestation() -> dict[str, Any]:
+def money_beam_attestation(*, readiness: dict[str, Any] | None = None) -> dict[str, Any]:
     """Attest SoftDent + QB money beams for HAL chat (empty ≠ $0 · no invented currency).
 
     Injected into the chat system prompt so HAL must cite live beam state and
-    never fill ∅ with $0.
+    never fill ∅ with $0. Includes beamHash + allowedAmounts for reply validation.
     """
     sd = softdent_status()
     qb = qb_summary()
+    at = _utc_now()
+    allowed: list[float] = []
+    for key_src, key in ((sd, "totalOutstanding"), (qb, "monthlyRevenue")):
+        val = key_src.get(key)
+        if val is not None and _finite(val):
+            allowed.append(float(val))
+            # Also permit common display rounding (whole dollars)
+            allowed.append(float(round(float(val))))
+            allowed.append(float(round(float(val), 2)))
+
+    ready = readiness if isinstance(readiness, dict) else {}
+    level = str(ready.get("level") or "").lower()
+    age_hours = ready.get("ageHours")
+    try:
+        age_h = float(age_hours) if age_hours is not None else None
+    except (TypeError, ValueError):
+        age_h = None
+    # Import soft-stale / stale blocks trusting inventable money; live tool fetch is still OK
+    import_stale = level in ("stale", "degraded", "missing", "error", "unknown") or (
+        age_h is not None and age_h * 3600 > MONEY_BEAM_STALE_SECONDS and level != "fresh"
+    )
+
+    hash_src = "|".join(
+        [
+            str(sd.get("display")),
+            str(sd.get("totalOutstanding")),
+            str(qb.get("display")),
+            str(qb.get("monthlyRevenue")),
+            at,
+        ]
+    )
+    beam_hash = hashlib.sha256(hash_src.encode("utf-8")).hexdigest()[:16]
+
     lines = [
-        "LIVE MONEY BEAMS (cite these; never invent other dollars):",
+        "LIVE MONEY BEAMS (cite ONLY these SoftDent/QB displays for currency; never invent other dollars):",
         f"- SoftDent claims: {sd.get('display')} · hasData={bool(sd.get('hasData'))} · {sd.get('hint') or ''}",
         f"- QuickBooks revenue: {qb.get('display')} · hasData={bool(qb.get('hasData'))} · {qb.get('hint') or ''}",
+        f"- beamTimestamp={at} · beamHash={beam_hash}",
+        "If a beam is ∅ NO SIGNAL / hasData=false: say Financial data unavailable for that source — never $0.",
     ]
     if sd.get("display") == "∅ NO SIGNAL" or qb.get("display") == "∅ NO SIGNAL":
         lines.append(
             "HONESTY: At least one money beam is empty — say NO SIGNAL / no data for that beam; never $0."
         )
+    if import_stale:
+        lines.append(
+            f"IMPORT READINESS {level or 'unknown'} — prefer UNAVAILABLE over invented dollars when unsure."
+        )
+
     return {
         "ok": True,
         "emptyNotZero": True,
-        "at": _utc_now(),
+        "at": at,
+        "beamTimestamp": at,
+        "beamHash": beam_hash,
+        "staleMaxSeconds": MONEY_BEAM_STALE_SECONDS,
+        "importStale": bool(import_stale),
+        "importLevel": level or None,
+        "allowedAmounts": allowed,
         "softdent": {
             "hasData": sd.get("hasData"),
             "display": sd.get("display"),
             "totalOutstanding": sd.get("totalOutstanding"),
+            "at": sd.get("at") or at,
+            "hint": sd.get("hint"),
         },
         "quickbooks": {
             "hasData": qb.get("hasData"),
             "display": qb.get("display"),
             "monthlyRevenue": qb.get("monthlyRevenue"),
+            "at": qb.get("at") or at,
+            "hint": qb.get("hint"),
         },
         "promptBlock": "\n".join(lines),
+    }
+
+
+def try_deterministic_money_reply(query: str, attest: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Beam-grounded answer for clear AR / revenue asks — skip LLM invent risk."""
+    q = str(query or "").strip()
+    if not q or not is_money_query(q):
+        return None
+    att = attest if isinstance(attest, dict) else money_beam_attestation()
+    sd = att.get("softdent") if isinstance(att.get("softdent"), dict) else {}
+    qb = att.get("quickbooks") if isinstance(att.get("quickbooks"), dict) else {}
+    ts = str(att.get("beamTimestamp") or att.get("at") or _utc_now())
+    beam_hash = str(att.get("beamHash") or "")
+
+    ar_ask = bool(_AR_QUERY_RE.search(q))
+    rev_ask = bool(_QB_REVENUE_RE.search(q)) and not ar_ask
+
+    if ar_ask:
+        if not sd.get("hasData") or sd.get("totalOutstanding") is None:
+            text = (
+                "Financial data unavailable (source: SoftDent). "
+                "empty ≠ $0 — SoftDent claims beam has no live total."
+            )
+            return {
+                "ok": True,
+                "text": text,
+                "moneyGrounded": True,
+                "beamTimestamp": ts,
+                "beamHash": beam_hash,
+                "routingReason": "money_honesty_deterministic_softdent_unavailable",
+                "source": "SoftDent",
+                "unavailable": True,
+            }
+        total = float(sd["totalOutstanding"])
+        text = (
+            f"${total:,.0f} outstanding (SoftDent live, synced {ts}). "
+            "Grounded to SoftDent claims beam — empty ≠ $0."
+        )
+        return {
+            "ok": True,
+            "text": text,
+            "moneyGrounded": True,
+            "beamTimestamp": ts,
+            "beamHash": beam_hash,
+            "routingReason": "money_honesty_deterministic_softdent",
+            "source": "SoftDent",
+            "amount": total,
+        }
+
+    if rev_ask:
+        if not qb.get("hasData") or qb.get("monthlyRevenue") is None:
+            text = (
+                "Financial data unavailable (source: QuickBooks). "
+                "empty ≠ $0 — QB revenue beam has no live total."
+            )
+            return {
+                "ok": True,
+                "text": text,
+                "moneyGrounded": True,
+                "beamTimestamp": ts,
+                "beamHash": beam_hash,
+                "routingReason": "money_honesty_deterministic_qb_unavailable",
+                "source": "QuickBooks",
+                "unavailable": True,
+            }
+        rev = float(qb["monthlyRevenue"])
+        text = (
+            f"${rev:,.0f} (QuickBooks latest-month revenue, synced {ts}). "
+            "Grounded to QB beam — empty ≠ $0."
+        )
+        return {
+            "ok": True,
+            "text": text,
+            "moneyGrounded": True,
+            "beamTimestamp": ts,
+            "beamHash": beam_hash,
+            "routingReason": "money_honesty_deterministic_qb",
+            "source": "QuickBooks",
+            "amount": rev,
+        }
+    return None
+
+
+def validate_money_reply(
+    text: str,
+    *,
+    query: str = "",
+    attest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Validate / rewrite assistant text so $ amounts match live beams.
+
+    Returns moneyGrounded, optional rewrite, and money_honesty_violation flag.
+    """
+    att = attest if isinstance(attest, dict) else money_beam_attestation()
+    ts = str(att.get("beamTimestamp") or att.get("at") or _utc_now())
+    beam_hash = str(att.get("beamHash") or "")
+    money_ask = is_money_query(query)
+    body = str(text or "")
+    dollars = _parse_dollars_in_text(body)
+    allowed = [float(a) for a in (att.get("allowedAmounts") or []) if _finite(a)]
+
+    # Non-money replies without $ — pass through
+    if not money_ask and not dollars:
+        return {
+            "ok": True,
+            "text": body,
+            "moneyGrounded": None,
+            "beamTimestamp": ts,
+            "beamHash": beam_hash,
+            "rewritten": False,
+            "violation": False,
+        }
+
+    # Money ask with no $ and no explicit unavailable — try deterministic; else require honesty phrase
+    unavailable_ok = bool(
+        re.search(
+            r"(?i)\b(unavailable|no\s+signal|∅|no\s+data|empty\s*[≠!]=?\s*\$?0)\b",
+            body,
+        )
+    )
+
+    invented = [d for d in dollars if not _amount_allowed(d, allowed)]
+    # Explicit $0 while beams empty is a violation (empty ≠ $0)
+    sd = att.get("softdent") if isinstance(att.get("softdent"), dict) else {}
+    qb = att.get("quickbooks") if isinstance(att.get("quickbooks"), dict) else {}
+    zero_while_empty = any(abs(d) < 0.005 for d in dollars) and (
+        not sd.get("hasData") or not qb.get("hasData")
+    )
+
+    if invented or zero_while_empty:
+        det = try_deterministic_money_reply(query, att)
+        if det and det.get("text"):
+            return {
+                "ok": True,
+                "text": str(det["text"]),
+                "moneyGrounded": True,
+                "beamTimestamp": ts,
+                "beamHash": beam_hash,
+                "rewritten": True,
+                "violation": True,
+                "error": "money_honesty_violation",
+                "inventedAmounts": invented,
+                "routingReason": det.get("routingReason"),
+            }
+        grounded = (
+            "Financial data unavailable — HAL refused an ungrounded dollar figure. "
+            "empty ≠ $0. Refresh SoftDent/QB beams, then ask again."
+        )
+        sd_d = sd.get("display") or "∅ NO SIGNAL"
+        qb_d = qb.get("display") or "∅ NO SIGNAL"
+        grounded += f" Live beams: SoftDent {sd_d}; QuickBooks {qb_d}."
+        return {
+            "ok": True,
+            "text": grounded,
+            "moneyGrounded": True,
+            "beamTimestamp": ts,
+            "beamHash": beam_hash,
+            "rewritten": True,
+            "violation": True,
+            "error": "money_honesty_violation",
+            "inventedAmounts": invented,
+            "staleBanner": True,
+        }
+
+    if money_ask and not dollars and not unavailable_ok:
+        det = try_deterministic_money_reply(query, att)
+        if det and det.get("text"):
+            return {
+                "ok": True,
+                "text": str(det["text"]),
+                "moneyGrounded": True,
+                "beamTimestamp": ts,
+                "beamHash": beam_hash,
+                "rewritten": True,
+                "violation": False,
+                "routingReason": det.get("routingReason"),
+            }
+
+    grounded_flag = True if (money_ask or bool(dollars)) else None
+    if money_ask and dollars and not invented:
+        grounded_flag = True
+    return {
+        "ok": True,
+        "text": body,
+        "moneyGrounded": grounded_flag,
+        "beamTimestamp": ts,
+        "beamHash": beam_hash,
+        "rewritten": False,
+        "violation": False,
+        "staleBanner": bool(att.get("importStale")),
+    }
+
+
+def money_honesty_session_extra(gate: dict[str, Any] | None) -> dict[str, Any]:
+    """Fields appended to session JSONL turns for money audit trail."""
+    g = gate if isinstance(gate, dict) else {}
+    out: dict[str, Any] = {}
+    if g.get("moneyGrounded") is not None:
+        out["moneyGrounded"] = bool(g.get("moneyGrounded"))
+    if g.get("beamTimestamp"):
+        out["beamTimestamp"] = str(g.get("beamTimestamp"))
+    if g.get("beamHash"):
+        out["beamHash"] = str(g.get("beamHash"))
+    if g.get("violation"):
+        out["moneyHonestyViolation"] = True
+    if g.get("rewritten"):
+        out["moneyRewritten"] = True
+    if g.get("routingReason"):
+        out["routingReason"] = str(g.get("routingReason"))
+    return out
+
+
+# Back-compat aliases used by earlier chat wire-up
+query_touches_money = is_money_query
+
+
+def enforce_money_grounding(
+    reply: str,
+    attest: dict[str, Any] | None,
+    *,
+    money_query: bool = False,
+    query: str = "",
+) -> dict[str, Any]:
+    """Adapter over validate_money_reply for /api/hal/chat grounding."""
+    q = query if query else ("AR outstanding" if money_query else "")
+    gate = validate_money_reply(str(reply or ""), query=q, attest=attest)
+    return {
+        "text": gate.get("text") or reply,
+        "moneyGrounded": gate.get("moneyGrounded"),
+        "moneyQuery": money_query or is_money_query(q),
+        "beamTimestamp": gate.get("beamTimestamp") or (attest or {}).get("beamTimestamp") or (attest or {}).get("at"),
+        "beamHash": gate.get("beamHash") or (attest or {}).get("beamHash"),
+        "honestyViolation": "money_honesty_violation" if gate.get("violation") else None,
+        "rewritten": bool(gate.get("rewritten")),
+        "staleBanner": bool(gate.get("staleBanner")),
+        "routingReason": gate.get("routingReason"),
     }
 
 

@@ -934,8 +934,19 @@ class NR2BottleServer(BottleServer):
 
         @app.post("/api/hal/chat")
         def hal_chat_api():
-            """Multi-turn HAL chat (Moonshot P0). stream:true → SSE; else JSON."""
+            """Multi-turn HAL chat (Moonshot P0). stream:true → SSE; else JSON.
+
+            Money honesty (nr2-12019): AR/revenue cite SoftDent/QB beams; invented $ rewritten;
+            session JSONL records moneyGrounded / beamHash / beamTimestamp.
+            """
             from employee_actions import get_current_shift_context
+            from hal_brain_tools import (
+                is_money_query,
+                money_beam_attestation,
+                money_honesty_session_extra,
+                try_deterministic_money_reply,
+                validate_money_reply,
+            )
             from hal_session_store import (
                 HAL_9000_BRAIN_SYSTEM,
                 append_turn,
@@ -988,7 +999,6 @@ class NR2BottleServer(BottleServer):
                 created = create_session(meta={"source": "optical-hal-chat"})
                 session_id = str(created.get("sessionId") or "")
 
-            # Sliding window: last 10 turns from store (+ optional client messages)
             prior = messages_for_chat(session_id, limit=20)
             client_msgs = payload.get("messages") if isinstance(payload.get("messages"), list) else None
             if client_msgs and not prior:
@@ -1007,10 +1017,15 @@ class NR2BottleServer(BottleServer):
                 persona = HAL_9000_BRAIN_SYSTEM
             elif "HAL" not in persona[:80]:
                 persona = HAL_9000_BRAIN_SYSTEM + "\n\n" + persona
-            try:
-                from hal_brain_tools import money_beam_attestation
 
-                attest = money_beam_attestation()
+            store = _local_store()
+            readiness = _get_import_readiness()
+            money_query = is_money_query(query)
+            attest = {}
+            try:
+                attest = money_beam_attestation(
+                    readiness=readiness if isinstance(readiness, dict) else None
+                )
                 block = str((attest or {}).get("promptBlock") or "").strip()
                 if block:
                     persona = persona + "\n\n" + block
@@ -1020,9 +1035,105 @@ class NR2BottleServer(BottleServer):
                     + "\n\nLIVE MONEY BEAMS unavailable — say NO SIGNAL for SoftDent/QB dollars; never invent $0."
                 )
 
-            append_turn(session_id, role="user", text=query)
-            store = _local_store()
-            readiness = _get_import_readiness()
+            append_turn(
+                session_id,
+                role="user",
+                text=query,
+                extra={
+                    "moneyQuery": money_query,
+                    "beamTimestamp": (attest or {}).get("beamTimestamp") or (attest or {}).get("at"),
+                    "beamHash": (attest or {}).get("beamHash"),
+                },
+            )
+
+            def _ground_and_store_assistant(raw_reply: str) -> dict:
+                grounded = validate_money_reply(raw_reply, query=query, attest=attest)
+                extra = money_honesty_session_extra(grounded)
+                extra["moneyQuery"] = money_query
+                text_out = str(grounded.get("text") or raw_reply or "")
+                if text_out:
+                    append_turn(session_id, role="assistant", text=text_out, extra=extra or None)
+                return grounded
+
+            def _honesty_meta(grounded: dict, *, deterministic: bool = False, unavailable: bool = False) -> dict:
+                return {
+                    "grounded": bool(grounded.get("moneyGrounded")),
+                    "deterministic": deterministic,
+                    "staleBanner": bool(grounded.get("staleBanner"))
+                    or bool((attest or {}).get("importStale"))
+                    or unavailable,
+                    "violation": bool(grounded.get("violation")),
+                    "rewritten": bool(grounded.get("rewritten")),
+                }
+
+            try:
+                det = try_deterministic_money_reply(query, attest or None)
+            except Exception:
+                det = None
+            if det and det.get("text"):
+                grounded = _ground_and_store_assistant(str(det.get("text")))
+                reply = str(grounded.get("text") or det.get("text") or "")
+                honesty = _honesty_meta(
+                    grounded, deterministic=True, unavailable=bool(det.get("unavailable"))
+                )
+                bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
+                bottle.response.set_header("X-HAL-Session-Id", session_id)
+                bottle.response.set_header("X-HAL-Money-Grounded", "1")
+                beam_hash = str(grounded.get("beamHash") or (attest or {}).get("beamHash") or "")
+                if beam_hash:
+                    bottle.response.set_header("X-HAL-Beam-Hash", beam_hash)
+                out = {
+                    "ok": True,
+                    "text": reply,
+                    "message": {"content": reply},
+                    "sessionId": session_id,
+                    "moneyGrounded": True,
+                    "beamTimestamp": grounded.get("beamTimestamp") or (attest or {}).get("beamTimestamp"),
+                    "beamHash": beam_hash or None,
+                    "moneyHonesty": honesty,
+                    "routingReason": det.get("routingReason") or "money_honesty_deterministic",
+                    "model": "money-beam-live",
+                    "resolvedLane": "local",
+                }
+                if not bool(payload.get("stream", True)):
+                    return _json_response(out)
+                bottle.response.content_type = "text/event-stream; charset=utf-8"
+                bottle.response.set_header("Cache-Control", "no-cache")
+                bottle.response.set_header("X-Accel-Buffering", "no")
+                return (
+                    "event: meta\ndata: "
+                    + json.dumps(
+                        {
+                            "sessionId": session_id,
+                            "status": "typing",
+                            "done": False,
+                            "moneyDeterministic": True,
+                        }
+                    )
+                    + "\n\n"
+                    + "data: "
+                    + json.dumps(
+                        {
+                            "token": reply,
+                            "done": True,
+                            "sessionId": session_id,
+                            "moneyGrounded": True,
+                            "moneyHonesty": honesty,
+                        }
+                    )
+                    + "\n\n"
+                    + "event: session\ndata: "
+                    + json.dumps(
+                        {
+                            "sessionId": session_id,
+                            "done": True,
+                            "moneyGrounded": True,
+                            "moneyHonesty": honesty,
+                        }
+                    )
+                    + "\n\n"
+                )
+
             shift_context = payload.get("shiftContext") if isinstance(payload.get("shiftContext"), dict) else None
             if not shift_context:
                 shift_context = get_current_shift_context(store)
@@ -1035,22 +1146,20 @@ class NR2BottleServer(BottleServer):
             use_stream = bool(payload.get("stream", True))
 
             if use_stream:
-                # Emit SSE as a single string body (SSL/wsgiref generator streaming is flaky
-                # on this adapter — both /api/hal/chat and /api/v1/hal/stream-sse hit critical).
                 bottle.response.content_type = "text/event-stream; charset=utf-8"
                 bottle.response.set_header("Cache-Control", "no-cache")
                 bottle.response.set_header("X-Accel-Buffering", "no")
                 bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
                 bottle.response.set_header("X-HAL-Lane-Used", str(resolved["lane"]))
                 bottle.response.set_header("X-HAL-Session-Id", session_id)
-                parts: list[str] = [
+                parts = [
                     "event: meta\ndata: "
                     + json.dumps(
                         {"sessionId": session_id, "status": "typing", "done": False, "buffered": True}
                     )
                     + "\n\n"
                 ]
-                buf: list[str] = []
+                buf = []
                 try:
                     for frame in evaluate_query_sse_frames(
                         query=query,
@@ -1078,16 +1187,50 @@ class NR2BottleServer(BottleServer):
                             except Exception:
                                 pass
                     full = "".join(buf)
+                    money_meta = {}
                     if full:
-                        append_turn(session_id, role="assistant", text=full)
+                        grounded = _ground_and_store_assistant(full)
+                        full_g = str(grounded.get("text") or full)
+                        honesty = _honesty_meta(grounded)
+                        money_meta = {
+                            "moneyGrounded": grounded.get("moneyGrounded"),
+                            "moneyHonesty": honesty,
+                            "beamHash": grounded.get("beamHash") or (attest or {}).get("beamHash"),
+                            "beamTimestamp": grounded.get("beamTimestamp"),
+                        }
+                        if grounded.get("moneyGrounded"):
+                            bottle.response.set_header("X-HAL-Money-Grounded", "1")
+                        if grounded.get("rewritten") or grounded.get("violation"):
+                            parts = [
+                                "event: meta\ndata: "
+                                + json.dumps(
+                                    {
+                                        "sessionId": session_id,
+                                        "status": "typing",
+                                        "done": False,
+                                        "buffered": True,
+                                        "moneyRewritten": True,
+                                    }
+                                )
+                                + "\n\n",
+                                "data: "
+                                + json.dumps(
+                                    {
+                                        "token": full_g,
+                                        "done": True,
+                                        "sessionId": session_id,
+                                        **money_meta,
+                                    }
+                                )
+                                + "\n\n",
+                            ]
                     parts.append(
                         "event: session\ndata: "
-                        + json.dumps({"sessionId": session_id, "done": True})
+                        + json.dumps({"sessionId": session_id, "done": True, **money_meta})
                         + "\n\n"
                     )
                     return "".join(parts)
                 except Exception as exc:  # noqa: BLE001
-                    # Fall back to multi-turn JSON so chat never hard-fails.
                     use_stream = False
                     bottle.response.content_type = "application/json"
                     bottle.response.set_header("X-HAL-Stream-Fallback", str(exc)[:160])
@@ -1108,9 +1251,27 @@ class NR2BottleServer(BottleServer):
                 result["sessionId"] = session_id
                 reply = str(result.get("text") or (result.get("message") or {}).get("content") or "")
                 if reply:
-                    append_turn(session_id, role="assistant", text=reply)
+                    grounded = _ground_and_store_assistant(reply)
+                    reply = str(grounded.get("text") or reply)
+                    result["text"] = reply
+                    if isinstance(result.get("message"), dict):
+                        result["message"]["content"] = reply
+                    else:
+                        result["message"] = {"content": reply}
+                    result["moneyGrounded"] = grounded.get("moneyGrounded")
+                    result["beamTimestamp"] = grounded.get("beamTimestamp")
+                    result["beamHash"] = grounded.get("beamHash") or (attest or {}).get("beamHash")
+                    result["moneyHonesty"] = _honesty_meta(grounded)
+                    if grounded.get("violation"):
+                        result["moneyHonestyViolation"] = True
+                        result["moneyHonestyRewritten"] = True
+                        bottle.response.set_header("X-HAL-Money-Honesty", "rewritten")
+                    if grounded.get("moneyGrounded"):
+                        bottle.response.set_header("X-HAL-Money-Grounded", "1")
                 bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
-                bottle.response.set_header("X-HAL-Lane-Used", str(result.get("resolvedLane") or resolved["lane"]))
+                bottle.response.set_header(
+                    "X-HAL-Lane-Used", str(result.get("resolvedLane") or resolved["lane"])
+                )
                 bottle.response.set_header("X-HAL-Session-Id", session_id)
                 if result.get("blocked") or result.get("error") == "HAL_UNAVAILABLE_STALE_DATA":
                     return _json_response(result, status=503)

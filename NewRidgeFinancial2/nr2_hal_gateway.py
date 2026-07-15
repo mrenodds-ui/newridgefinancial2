@@ -2590,6 +2590,37 @@ def evaluate_query(
             "routingReason": "live_claims_money_gate",
         }
 
+    # Money honesty pre-flight — SoftDent AR / QB revenue from live beams (nr2-12019)
+    try:
+        from hal_brain_tools import try_deterministic_money_reply
+
+        money_det = try_deterministic_money_reply(query)
+    except Exception:
+        money_det = None
+    if money_det and money_det.get("text"):
+        text = str(money_det["text"])
+        append_lane_history(
+            store,
+            lane="local",
+            model="money-beam-live",
+            query=query,
+            intent=str(money_det.get("routingReason") or "money_honesty_deterministic"),
+        )
+        return {
+            "ok": True,
+            "text": text,
+            "message": {"content": text},
+            "model": "money-beam-live",
+            "readinessLevel": level,
+            "intent": money_det.get("routingReason") or "money_honesty_deterministic",
+            "softStale": soft_stale,
+            "resolvedLane": "local",
+            "routingReason": money_det.get("routingReason") or "money_honesty_deterministic",
+            "moneyGrounded": True,
+            "beamHash": money_det.get("beamHash"),
+            "beamTimestamp": money_det.get("beamTimestamp"),
+        }
+
     local = try_local_policy_reply(query)
     if local:
         text = local["text"]
@@ -2706,6 +2737,27 @@ def evaluate_query(
             text = f"{SOFT_STALE_WATERMARK}\n\n{text}"
         text = redact_financial_numbers(text)
 
+    money_meta: dict[str, Any] = {}
+    try:
+        from hal_brain_tools import validate_money_reply
+
+        gate = validate_money_reply(text, query=query)
+        if gate.get("rewritten") or gate.get("violation") or gate.get("moneyGrounded"):
+            text = str(gate.get("text") or text)
+            money_meta = {
+                "moneyGrounded": gate.get("moneyGrounded"),
+                "beamHash": gate.get("beamHash"),
+                "beamTimestamp": gate.get("beamTimestamp"),
+                "moneyHonesty": {
+                    "grounded": bool(gate.get("moneyGrounded")),
+                    "violation": bool(gate.get("violation")),
+                    "rewritten": bool(gate.get("rewritten")),
+                    "staleBanner": bool(gate.get("staleBanner")),
+                },
+            }
+    except Exception:
+        pass
+
     append_lane_history(store, lane=resolved["lane"], model=model, query=query, intent=intent)
 
     out_message = dict(message)
@@ -2721,4 +2773,5 @@ def evaluate_query(
         "resolvedLane": resolved["lane"],
         "routingReason": routing_reason or None,
         "diag": diag or None,
+        **money_meta,
     }

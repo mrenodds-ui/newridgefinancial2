@@ -7,6 +7,7 @@
   const systemTruth = document.getElementById("systemTruth");
   const sessionChip = document.getElementById("sessionChip");
   const staleBanner = document.getElementById("staleBanner");
+  const moneyHonestyBanner = document.getElementById("moneyHonestyBanner");
   const importReady = document.getElementById("importReady");
   const memoList = document.getElementById("memoList");
   const actionQueue = document.getElementById("actionQueue");
@@ -20,11 +21,13 @@
   if (!stream || !form || !input) return;
 
   const SS_KEY = "nr2.hal.chatSessionId";
+  const BEAM_STALE_MS = 5 * 60 * 1000;
   let browserToken = "";
   let chatSessionId = sessionStorage.getItem(SS_KEY) || "";
   let busy = false;
   let voiceOn = false;
   let pendingConsent = null;
+  let lastBeamAt = 0;
   const messages = [];
 
   function setOrb(state) {
@@ -154,7 +157,9 @@
       if (level === "fresh") {
         setTruth(importReady, "live", "LIVE · imports fresh");
         setTruth(systemTruth, "live", "SYSTEM: LIVE");
-        staleBanner.classList.remove("show");
+        if (staleBanner && !staleBanner.classList.contains("danger")) {
+          staleBanner.classList.remove("show");
+        }
         setOrb("idle");
       } else if (level === "soft_stale" || level === "stale" || level === "degraded") {
         setTruth(
@@ -177,28 +182,69 @@
     }
   }
 
+  function showMoneyBanner(msg, isDanger) {
+    const el = moneyHonestyBanner || staleBanner;
+    if (!el) return;
+    el.textContent = msg || el.textContent;
+    el.classList.add("show");
+    if (el === staleBanner) el.classList.toggle("danger", !!isDanger);
+  }
+
+  function hideMoneyBanner() {
+    if (moneyHonestyBanner) moneyHonestyBanner.classList.remove("show");
+  }
+
+  function applyMoneyHonestyMeta(meta) {
+    if (!meta) return;
+    if (meta.staleBanner || meta.violation || meta.unavailable) {
+      showMoneyBanner(
+        meta.violation
+          ? "[MONEY HONESTY] — ungrounded dollars rewritten · live beams only · empty ≠ $0"
+          : "[MONEY HONESTY] — beams stale or unavailable · empty ≠ $0 · refresh SoftDent/QB",
+        true
+      );
+    } else if (meta.grounded || meta.deterministic) {
+      hideMoneyBanner();
+    }
+  }
+
   async function refreshBeams() {
     try {
-      const res = await fetch("/api/hal/tools/softdent-status", { cache: "no-store" });
+      const res = await fetch("/api/hal/tools/money-beams", { cache: "no-store" });
       const data = await res.json();
-      const h = honestyMoney(!!data.hasData, data.display);
-      beamSd.textContent = h.text;
-      beamSd.classList.toggle("empty", h.empty);
-      beamSdHint.textContent = data.hint || "";
+      lastBeamAt = Date.now();
+      const sd = (data && data.softdent) || {};
+      const qb = (data && data.quickbooks) || {};
+      const hSd = honestyMoney(!!sd.hasData, sd.display);
+      const hQb = honestyMoney(!!qb.hasData, qb.display);
+      beamSd.textContent = hSd.text;
+      beamSd.classList.toggle("empty", hSd.empty);
+      beamSdHint.textContent =
+        sd.hint || (sd.at ? "synced " + String(sd.at).slice(0, 19) : "");
+      beamQb.textContent = hQb.text;
+      beamQb.classList.toggle("empty", hQb.empty);
+      beamQbHint.textContent =
+        qb.hint || (qb.at ? "synced " + String(qb.at).slice(0, 19) : "");
+      const bothEmpty = hSd.empty && hQb.empty;
+      if (data && data.importStale) {
+        showMoneyBanner(
+          "[MONEY BEAMS STALE] — refresh SoftDent/QB imports before trusting dollar answers",
+          true
+        );
+      } else if (bothEmpty) {
+        showMoneyBanner(
+          "[MONEY BEAMS EMPTY] — NO SIGNAL · empty ≠ $0 · sync SoftDent/QB before money answers",
+          true
+        );
+      } else {
+        hideMoneyBanner();
+      }
     } catch (_) {
       beamSd.textContent = "NO SIGNAL";
       beamSd.classList.add("empty");
-    }
-    try {
-      const res = await fetch("/api/hal/tools/qb-summary", { cache: "no-store" });
-      const data = await res.json();
-      const h = honestyMoney(!!data.hasData, data.display);
-      beamQb.textContent = h.text;
-      beamQb.classList.toggle("empty", h.empty);
-      beamQbHint.textContent = data.hint || "";
-    } catch (_) {
       beamQb.textContent = "NO SIGNAL";
       beamQb.classList.add("empty");
+      showMoneyBanner("[MONEY BEAMS NO SIGNAL] — attestation unreachable", true);
     }
   }
 
@@ -379,6 +425,8 @@
       if (!res.ok) {
         throw new Error(data.error || data.detail || String(res.status));
       }
+      if (data.moneyHonesty) applyMoneyHonestyMeta(data.moneyHonesty);
+      else if (data.moneyGrounded) hideMoneyBanner();
       return String(
         data.text ||
           data.reply ||
@@ -437,6 +485,20 @@
                 typing.body.textContent = full;
                 stream.scrollTop = stream.scrollHeight;
               }
+              // Money honesty rewrite — replace streamed invent with grounded beam text
+              if (obj.rewritten && obj.text) {
+                full = String(obj.text);
+                typing.el.classList.remove("typing");
+                typing.body.textContent = full;
+                stream.scrollTop = stream.scrollHeight;
+                if (obj.violation || (obj.moneyHonesty && obj.moneyHonesty.staleBanner)) {
+                  showMoneyBanner(
+                    "[MONEY HONESTY] — reply rewritten to live SoftDent/QB beams (empty ≠ $0)",
+                    true
+                  );
+                }
+              }
+              if (obj.moneyHonesty) applyMoneyHonestyMeta(obj.moneyHonesty);
               if (obj.error) {
                 typing.el.classList.remove("typing");
                 typing.body.textContent = "Link fault · " + String(obj.error);
@@ -521,6 +583,9 @@
     busy = true;
     if (!browserToken) await ensureBrowserSession();
     await ensureChatSession();
+    if (!lastBeamAt || Date.now() - lastBeamAt > BEAM_STALE_MS) {
+      await refreshBeams();
+    }
     await streamChat(q);
     busy = false;
     refreshBeams();

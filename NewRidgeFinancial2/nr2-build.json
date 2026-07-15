@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12018-hal-brains",
-  "BUILD_ID": "nr2-12018-hal-brains",
-  "assetVersion": "nr2-12018-hal-brains",
-  "builtAt": "2026-07-15T19:40:00.000Z",
-  "notes": "nr2-12018-hal-brains: Moonshot HAL-as-brains P0–P3 — multi-turn /api/hal/chat + session store, SoftDent/QB/MemoAI/web tools, consent actions, live money-beam attestation in chat (empty ≠ $0), optical command-center page. SoftDent write-back still forbidden.",
+  "schemaVersion": "nr2-12019-hal-money-honesty",
+  "BUILD_ID": "nr2-12019-hal-money-honesty",
+  "assetVersion": "nr2-12019-hal-money-honesty",
+  "builtAt": "2026-07-15T20:20:00.000Z",
+  "notes": "nr2-12019-hal-money-honesty: HAL money honesty gate — SoftDent/QB beam grounding for AR/revenue, invent-$ rewrite, session moneyGrounded/beamHash, optical honesty banner. SoftDent write-back still forbidden.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12018-HAL-BRAINS",
+  "package": "NR2-12019-HAL-MONEY-HONESTY",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"
