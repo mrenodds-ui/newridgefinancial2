@@ -52,30 +52,41 @@
 
     let live = false;
     let blocked = false;
+    let readyData = null;
 
     if (ready.ok && ready.data) {
-      const blocking = Array.isArray(ready.data.blocking) ? ready.data.blocking.length : 0;
-      blocked = blocking > 0;
-      const level = String(ready.data.level || "unknown").toUpperCase();
-      const sum = ready.data.summary || {};
+      readyData = ready.data;
+      const blocking = Array.isArray(readyData.blocking) ? readyData.blocking.length : 0;
+      blocked = W.lasersRed ? W.lasersRed(readyData) : blocking > 0;
+      const level = String(readyData.level || "unknown").toUpperCase();
+      const sum = readyData.summary || {};
+      const laserKeys = W.laserKeys ? W.laserKeys(readyData) : [];
       W.setText(
         "val-ready",
-        level + (blocking ? " · block " + blocking : " · clear") +
+        level +
+          (blocked ? " · lasers red" : " · lasers clear") +
+          (blocking ? " · block " + blocking : "") +
           (sum.stale != null ? " · stale " + sum.stale : "")
       );
-      const keys = gapKeys(ready.data);
+      const keys = laserKeys.length ? laserKeys : gapKeys(readyData);
       if (keys.length) {
         W.setText("val-gaps", keys.slice(0, 3).join(" · ") + (keys.length > 3 ? " +" + (keys.length - 3) : ""));
         const gh = document.getElementById("hint-gaps");
-        if (gh) gh.textContent = keys.length + " gap key(s) · lasers may red · empty ≠ $0";
+        if (gh) {
+          gh.textContent =
+            keys.length +
+            " key(s)" +
+            (blocked ? " · lasers RED" : " · soft gaps") +
+            " · empty ≠ $0";
+        }
       } else {
         W.setText("val-gaps", "NONE");
       }
       const hint = document.getElementById("hint-ready");
       if (hint) {
         hint.textContent = blocked
-          ? "Blocking critical gaps · lasers red on main"
-          : "No blocking · brief soft stale under TTL stays green lasers";
+          ? "Blocking / lasers red · money reads STALE on main"
+          : "No laser block · brief soft stale under TTL stays green";
       }
       live = true;
     } else {
@@ -120,8 +131,8 @@
     W.setBanner(
       blocked ? "partial" : live ? "live" : "partial",
       blocked
-        ? "OM · import BLOCKED · re-export SoftDent Account Aging if softdent.ar stale · sync via main"
-        : "OM · SoftDent day pulse + readiness · board-actions NAVIGATE live · empty ≠ $0"
+        ? "OM · lasers STALE · re-export SoftDent aging (keep SoftDent save folder) · sync via main"
+        : "OM · SoftDent day pulse + readiness · board-actions NAVIGATE · empty ≠ $0"
     );
   }
 

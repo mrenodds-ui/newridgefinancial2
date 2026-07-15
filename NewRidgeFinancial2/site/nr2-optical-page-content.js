@@ -79,9 +79,17 @@
       W.setText("val-census", null, retention.ok ? "∅" : "NO SIGNAL");
     }
 
+    const ready = await W.getJson("/api/import-readiness", 12000);
+    const readyData = ready.ok ? ready.data : null;
+    const mode = W.bannerModeFromReady ? W.bannerModeFromReady(readyData, live) : live ? "live" : "partial";
+    const red = W.lasersRed ? W.lasersRed(readyData) : false;
     W.setBanner(
-      live ? "live" : "partial",
-      "Documents · inbox + extract LIVE · codes/payers UNAVAILABLE · empty ≠ $0"
+      mode,
+      red
+        ? "Documents · inbox wired · lasers STALE · codes/payers UNAVAILABLE · empty ≠ $0"
+        : live
+          ? "Documents · inbox + extract LIVE · codes/payers UNAVAILABLE · empty ≠ $0"
+          : "Documents · partial wire · codes/payers UNAVAILABLE · empty ≠ $0"
     );
   }
 

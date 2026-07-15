@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12026-period-close-ops",
-  "BUILD_ID": "nr2-12026-period-close-ops",
-  "assetVersion": "nr2-12026-period-close-ops",
-  "builtAt": "2026-07-15T21:15:00.000Z",
-  "notes": "nr2-12026-period-close-ops: shadow period-close OPS loop — laser gate, money-beam attest, daily_close_log.jsonl, HAL period-close-status; SoftDent GUI pull consent-only; empty ≠ $0; SoftDent write-back still forbidden.",
+  "schemaVersion": "nr2-12027-wire-subpage-honesty",
+  "BUILD_ID": "nr2-12027-wire-subpage-honesty",
+  "assetVersion": "nr2-12027-wire-subpage-honesty",
+  "builtAt": "2026-07-15T22:20:00.000Z",
+  "notes": "nr2-12027-wire-subpage-honesty: Tax/OM/Documents LIVE gates on alignment lasers; Claims ADJ LOG not ADJ LIVE; drop hardcoded nr2-12018 stamps. SoftDent write-back still forbidden.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12026-PERIOD-CLOSE-OPS",
+  "package": "NR2-12027-WIRE-SUBPAGE-HONESTY",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

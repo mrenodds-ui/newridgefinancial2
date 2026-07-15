@@ -59,7 +59,7 @@
     if (adj.ok && adj.data && adj.data.hasData && Array.isArray(adj.data.adjustments) && adj.data.adjustments.length) {
       const tip = adj.data.adjustments[0];
       const amt = W.fmtMoney(W.money(tip && tip.amount));
-      W.setText("val-era", amt ? "ADJ " + amt : "ADJ LIVE");
+      W.setText("val-era", amt ? "ADJ LOG " + amt : "ADJ LOG");
       const eraHint = document.getElementById("hint-era");
       if (eraHint) {
         eraHint.textContent =

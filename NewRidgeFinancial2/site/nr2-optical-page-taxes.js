@@ -53,7 +53,15 @@
       rateHint.textContent =
         (plan.memoAiTopics != null ? plan.memoAiTopics + " memo topics · " : "") + "never posted to QB";
     }
-    W.setBanner("live", "Tax planning LIVE · PLANNING ONLY — CPA REVIEW · empty ≠ $0");
+    const ready = await W.getJson("/api/import-readiness", 12000);
+    const readyData = ready.ok ? ready.data : null;
+    const lasersBlocked = W.lasersRed(readyData);
+    W.setBanner(
+      lasersBlocked ? "partial" : "live",
+      lasersBlocked
+        ? "Tax plan OK · imports STALE (lasers red) · PLANNING ONLY — CPA REVIEW · empty ≠ $0"
+        : "Tax planning LIVE · PLANNING ONLY — CPA REVIEW · empty ≠ $0"
+    );
   }
 
   const btn = document.getElementById("btn-plan");
