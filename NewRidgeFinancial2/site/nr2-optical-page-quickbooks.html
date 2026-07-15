@@ -9,16 +9,16 @@
 <body>
   <div class="banner">
     LIVE · QuickBooks Bench · empty ≠ $0 · no SoftDent write-back
-    <span class="bind">Revenue + aging · payroll export UNAVAILABLE</span>
+    <span class="bind">Revenue · cash flow · net income · aging vacuum if empty</span>
   </div>
   <div class="shell">
     <nav class="nav" id="nav"></nav>
     <main class="main">
       <div class="hal-chip">HAL · SPECTRAL · same theme as main</div>
       <h1>QUICKBOOKS BENCH</h1>
-      <p class="kicker">Revenue · AR/AP aging · payroll export status</p>
+      <p class="kicker">Revenue · cash · net income · AR/AP aging</p>
       <div class="beam"></div>
-      <div class="honesty">Honesty: empty ≠ $0 · never invent $ · payroll pack removed = UNAVAILABLE</div>
+      <div class="honesty">Honesty: empty ≠ $0 · never invent $ · payroll export pack removed</div>
       <div class="grid">
         <div class="card">
           <h3>Monthly revenue</h3>
@@ -26,19 +26,19 @@
           <p class="hint" id="hint-pl">GET qb/monthly-revenue</p>
         </div>
         <div class="card">
-          <h3>Payroll / AP export</h3>
-          <div class="val" id="val-payroll">—</div>
-          <p class="hint" id="hint-payroll">Clean-slate · UNAVAILABLE</p>
+          <h3>Cash flow (net)</h3>
+          <div class="val qb" id="val-cash">—</div>
+          <p class="hint" id="hint-cash">GET qb/cash-flow · latest month</p>
         </div>
         <div class="card">
-          <h3>QB A/R aging</h3>
-          <div class="val qb" id="val-ar">—</div>
-          <p class="hint">GET qb/ar-aging</p>
+          <h3>Net income</h3>
+          <div class="val qb" id="val-ni">—</div>
+          <p class="hint" id="hint-ni">GET qb/net-income · YTD when present</p>
         </div>
         <div class="card">
-          <h3>QB A/P aging</h3>
-          <div class="val" id="val-ap">—</div>
-          <p class="hint">GET qb/ap-aging</p>
+          <h3>QB aging</h3>
+          <div class="val" id="val-aging">—</div>
+          <p class="hint" id="hint-aging">GET qb/ar-aging · ap-aging · ∅ if empty</p>
         </div>
       </div>
       <p class="kicker" style="margin-top:24px"><a href="/nr2-optical-beam-touch-mockup.html">← Main interferometer bench</a> · <a href="/nr2-optical-pages-hub.html">Pages hub</a> · <a href="/nr2-optical-beam-touch-mockup.html">Tax Prism on main</a></p>
