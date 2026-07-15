@@ -419,17 +419,31 @@
   }
 
   async function doRefreshPeriod() {
+    const btn = document.querySelector('[data-act="refresh"]');
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add("busy");
+    }
     toast("Period Wheel → POST /api/apex/softdent/refresh-period · " + selectedPeriod + "d …");
     const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
+    // Client aborts before server 22s hard cap so UI never waits forever.
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 18000) : null;
     const r = await api("/api/apex/softdent/refresh-period", {
       method: "POST",
       body: JSON.stringify({ periodDays: Number(selectedPeriod) || 60 }),
       signal: ctrl ? ctrl.signal : undefined,
     });
     if (timer) clearTimeout(timer);
+    if (btn) {
+      btn.disabled = role === "fd";
+      btn.classList.remove("busy");
+    }
     if (r.aborted || r.status === 408 || r.status === 504) {
-      toast("Refresh stalled — check SoftDent ODBC / sign-on (timeout)");
+      toast(
+        "Refresh stalled — check SoftDent Sign On (COMPUTE) / Excel path · " +
+          ((r.data && (r.data.detail || r.data.error || r.data.reason)) || "timeout") +
+          " · empty ≠ $0"
+      );
       return;
     }
     if (!r.ok) {

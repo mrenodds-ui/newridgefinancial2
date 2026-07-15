@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12022-board-navigate",
-  "BUILD_ID": "nr2-12022-board-navigate",
-  "assetVersion": "nr2-12022-board-navigate",
-  "builtAt": "2026-07-15T20:50:00.000Z",
-  "notes": "nr2-12022-board-navigate: HAL board-actions navigate/director — SoftDent/QB/AR/Claims optical href enrichment + consent open from HAL chat/palette. SoftDent write-back still forbidden · recon remains UNAVAILABLE.",
+  "schemaVersion": "nr2-12023-refresh-period-timeout",
+  "BUILD_ID": "nr2-12023-refresh-period-timeout",
+  "assetVersion": "nr2-12023-refresh-period-timeout",
+  "builtAt": "2026-07-15T21:00:00.000Z",
+  "notes": "nr2-12023-refresh-period-timeout: SoftDent refresh-period fail-fast — ThreadPool shutdown(wait=False) so optical UI never hangs; honest 504 STALLED; shorter SoftDent sign-on/automation caps. SoftDent write-back still forbidden.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12022-BOARD-NAVIGATE",
+  "package": "NR2-12023-REFRESH-PERIOD-TIMEOUT",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

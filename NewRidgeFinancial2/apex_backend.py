@@ -32,7 +32,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "nr2-12022-board-navigate"
+BUILD_ID = "nr2-12023-refresh-period-timeout"
 
 def _clean_slate_unavailable(feature: str = "pack") -> dict[str, Any]:
     """Honest payload when Apex packs / nr2_contracts were removed in cutover.
@@ -4783,7 +4783,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
         from softdent_signon import ensure_softdent_signed_on, softdent_signon_status
 
         sign_status = softdent_signon_status()
-        sign_assist = ensure_softdent_signed_on(timeout_s=20.0, force_change_login=False)
+        sign_assist = ensure_softdent_signed_on(timeout_s=8.0, force_change_login=False)
         result["steps"].append(
             {
                 "step": "softdent_signon",
@@ -4820,7 +4820,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
                 ],
                 capture_output=True,
                 text=True,
-                timeout=25,
+                timeout=12,
                 check=False,
             )
             result["steps"].append(
@@ -4836,7 +4836,7 @@ def refresh_softdent_period_imports() -> dict[str, Any]:
                 [sys.executable, str(auto_py)],
                 capture_output=True,
                 text=True,
-                timeout=25,
+                timeout=12,
                 check=False,
             )
             result["steps"].append(
@@ -9091,14 +9091,34 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
 
     @app.post("/api/apex/softdent/refresh-period")
     def apex_softdent_refresh_period():
-        """Fail-fast refresh — never hang the optical UI (30s hard cap)."""
+        """Fail-fast SoftDent period refresh — never hang optical UI.
+
+        ThreadPoolExecutor context-manager shutdown(wait=True) used to block forever
+        after FutResult timeout while SoftDent GUI/sign-on kept running. Always
+        shutdown(wait=False, cancel_futures=True) and return honest 504.
+        """
         from concurrent.futures import ThreadPoolExecutor
         from concurrent.futures import TimeoutError as FuturesTimeout
 
+        period_days = 60
         try:
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                fut = pool.submit(refresh_softdent_period_imports)
-                result = fut.result(timeout=30)
+            import bottle
+
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            if isinstance(payload, dict):
+                period_days = int(payload.get("periodDays") or payload.get("days") or 60)
+        except Exception:
+            period_days = 60
+        period_days = max(1, min(period_days, 366))
+
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            fut = pool.submit(refresh_softdent_period_imports)
+            result = fut.result(timeout=22)
+            if isinstance(result, dict):
+                result.setdefault("periodDays", period_days)
+                result.setdefault("emptyNotZero", True)
             return json_response_fn(result)
         except FuturesTimeout:
             return json_response_fn(
@@ -9106,11 +9126,23 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
                     "ok": False,
                     "error": "refresh_period_timeout",
                     "available": True,
-                    "reason": "exceeded_30s",
+                    "status": "STALLED",
+                    "reason": "exceeded_22s",
+                    "detail": (
+                        "SoftDent period refresh exceeded 22s — check SoftDent desktop "
+                        "sign-on (COMPUTE) and Excel export path. Empty ≠ $0; no invent."
+                    ),
+                    "periodDays": period_days,
+                    "emptyNotZero": True,
                     "buildId": BUILD_ID,
                 },
                 status=504,
             )
         except Exception as exc:  # noqa: BLE001
-            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+            return json_response_fn(
+                {"ok": False, "error": str(exc), "periodDays": period_days, "buildId": BUILD_ID},
+                status=500,
+            )
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
