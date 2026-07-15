@@ -499,6 +499,32 @@ def _json_response(payload, status=200):
     return json.dumps(payload)
 
 
+def _start_import_refresh(*, store=None) -> dict:
+    """Kick background import sync if idle (HAL SoftDent/QB E2E after consent)."""
+    global _sync_state
+    with _sync_lock:
+        if _sync_state.get("status") == "running":
+            out = dict(_sync_state)
+            out["alreadyRunning"] = True
+            out["ok"] = True
+            return out
+        _sync_state = {
+            "status": "running",
+            "startedAt": datetime.now(timezone.utc).isoformat(),
+            "completedAt": None,
+            "error": None,
+            "result": None,
+        }
+        state = dict(_sync_state)
+    store = store if store is not None else _local_store()
+    thread = threading.Thread(target=_run_import_sync_http, args=(store,), daemon=True)
+    thread.start()
+    _audit_mutation("refresh_imports", detail={**state, "source": "hal_consent_e2e"})
+    state["ok"] = True
+    state["alreadyRunning"] = False
+    return state
+
+
 def _run_import_sync_http(store) -> None:
     global _sync_state
     try:
@@ -1386,11 +1412,22 @@ class NR2BottleServer(BottleServer):
 
             body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
             payload = json.loads(body or "{}")
+            store = _local_store()
             result = execute_action(
                 action_id=str(payload.get("actionId") or payload.get("action_id") or ""),
                 consent=bool(payload.get("consent")),
-                store=_local_store(),
+                store=store,
             )
+            # SoftDent GUI export / QB sync E2E — auto-start import refresh so beams update.
+            if result.get("ok"):
+                action = result.get("action") if isinstance(result.get("action"), dict) else {}
+                kind = str(action.get("kind") or "")
+                action_payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
+                money_kinds = ("softdent_export", "softdent-export", "qb_sync", "qb-sync")
+                want_refresh = action_payload.get("refreshImports", True) is not False
+                if kind in money_kinds and want_refresh:
+                    result["importRefresh"] = _start_import_refresh(store=store)
+                    result["e2e"] = "export_or_sync→SoftDentReportExports→refresh-imports"
             status = 200 if result.get("ok") else (403 if result.get("error") == "consent_required" else 400)
             return _json_response(result, status=status)
 
@@ -1841,23 +1878,7 @@ class NR2BottleServer(BottleServer):
 
         @app.post("/api/refresh-imports")
         def refresh_imports_api():
-            global _sync_state
-            with _sync_lock:
-                if _sync_state.get("status") == "running":
-                    return _json_response(dict(_sync_state))
-                _sync_state = {
-                    "status": "running",
-                    "startedAt": datetime.now(timezone.utc).isoformat(),
-                    "completedAt": None,
-                    "error": None,
-                    "result": None,
-                }
-                state = dict(_sync_state)
-            store = _local_store()
-            thread = threading.Thread(target=_run_import_sync_http, args=(store,), daemon=True)
-            thread.start()
-            _audit_mutation("refresh_imports", detail=state)
-            return _json_response(state)
+            return _json_response(_start_import_refresh())
 
         @app.get("/api/practice-source-catalog")
         def practice_source_catalog_api():

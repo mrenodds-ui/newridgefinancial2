@@ -523,7 +523,13 @@ def qb_sync(*, consent: bool, store) -> dict[str, Any]:
 
 
 def softdent_export(*, consent: bool, report_id: str = "aging", days: int = 30) -> dict[str, Any]:
-    """Consent-gated SoftDent GUI Excel export → C:\\SoftDentReportExports."""
+    """Consent-gated SoftDent GUI Excel export → SoftDent folder, then copy to exports.
+
+    SoftDent Select File Name keeps SoftDent's own folder (e.g. OneDrive\\Documents).
+    Never type SoftDentReportExports / C:\\SOFTDE~1 into SoftDent — invalid directory.
+    NR2 copies the XLS into C:\\SoftDentReportExports after SoftDent saves. Excel/Print
+    Preview only — never Printer. No SoftDent write-back.
+    """
     if not consent:
         return {
             "ok": False,
@@ -541,6 +547,7 @@ def softdent_export(*, consent: bool, report_id: str = "aging", days: int = 30) 
                 "detail": "SoftDent desktop not running. Launch CS SoftDent Software.lnk, then retry export.",
                 "fallback": "Teach mode — open SoftDent → Reports → Accounting for the requested report; Output Options Excel only.",
                 "exportRoot": r"C:\SoftDentReportExports",
+                "pathHygiene": "Keep SoftDent folder; never SoftDentReportExports in Select File Name.",
             }
         end = date.today()
         start = end - timedelta(days=max(1, min(int(days), 366)))
@@ -575,6 +582,9 @@ def softdent_export(*, consent: bool, report_id: str = "aging", days: int = 30) 
             "end": end.isoformat(),
             "path": str(path),
             "exportRoot": r"C:\SoftDentReportExports",
+            "refreshImportsSuggested": True,
+            "pathHygiene": "SoftDent kept its own folder; NR2 copied into SoftDentReportExports.",
+            "emptyNotZero": True,
             "at": _utc_now(),
         }
     except Exception as exc:  # noqa: BLE001
@@ -584,6 +594,7 @@ def softdent_export(*, consent: bool, report_id: str = "aging", days: int = 30) 
             "detail": str(exc)[:600],
             "fallback": "GUI unreachable or report unsupported — showing cached imports only; empty ≠ $0.",
             "exportRoot": r"C:\SoftDentReportExports",
+            "pathHygiene": "Keep SoftDent folder; never SoftDentReportExports in Select File Name.",
         }
 
 

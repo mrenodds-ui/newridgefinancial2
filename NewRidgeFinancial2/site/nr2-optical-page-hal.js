@@ -289,6 +289,24 @@
     consentModal.classList.remove("open");
   }
 
+  async function waitForImportSync(maxMs) {
+    const deadline = Date.now() + (maxMs || 120000);
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch("/api/import-sync-status", { cache: "no-store" });
+        const data = await res.json();
+        const status = String((data && data.status) || "");
+        if (status !== "running") {
+          return data || { status: status || "unknown" };
+        }
+      } catch (_) {}
+      await new Promise(function (r) {
+        setTimeout(r, 1500);
+      });
+    }
+    return { status: "timeout", error: "import refresh still running" };
+  }
+
   async function executeConsent(approve) {
     const action = pendingConsent;
     closeConsent();
@@ -309,21 +327,77 @@
         window.location.href = String(result.navigate);
         return;
       }
-      addMsg(
-        "hal",
-        data.ok
-          ? "Action executed · " + (action.label || action.kind) + (result.path ? " → " + result.path : "")
-          : "Action failed · " + (result.detail || result.error || data.error || res.status)
-      );
-      if (typeof HalVoice !== "undefined" && voiceOn && HalVoice.speakHalReply && data.ok) {
+      if (!data.ok) {
+        addMsg(
+          "hal",
+          "Action failed · " + (result.detail || result.error || data.error || res.status)
+        );
+        setOrb("error");
+        refreshActions();
+        return;
+      }
+      const pathNote = result.path ? " → " + result.path : "";
+      const hygiene = result.pathHygiene ? " · " + result.pathHygiene : "";
+      let line =
+        "Action executed · " + (action.label || action.kind) + pathNote + hygiene;
+      const kind = String((action && action.kind) || "");
+      const moneyOp =
+        kind === "softdent_export" ||
+        kind === "softdent-export" ||
+        kind === "qb_sync" ||
+        kind === "qb-sync";
+      if (moneyOp) {
+        const ir = data.importRefresh || result.importRefresh;
+        if (ir && ir.status === "running") {
+          line +=
+            ir.alreadyRunning
+              ? " · import refresh already running"
+              : " · import refresh started (E2E)";
+          addMsg("hal", line);
+          addMsg("hal", "Waiting for SoftDent/QB imports… empty ≠ $0 while syncing.");
+          const sync = await waitForImportSync(180000);
+          if (sync.status === "success") {
+            addMsg("hal", "Import refresh complete · beams updating.");
+          } else if (sync.status === "timeout") {
+            addMsg("hal", "Import refresh still running — check Import readiness.");
+          } else {
+            addMsg(
+              "hal",
+              "Import refresh " +
+                (sync.status || "ended") +
+                (sync.error ? " · " + sync.error : "")
+            );
+          }
+        } else {
+          addMsg("hal", line);
+          // Fallback if server did not attach importRefresh
+          try {
+            await fetch("/api/refresh-imports", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(browserToken ? { "X-NR2-Session-Token": browserToken } : {}),
+              },
+              body: "{}",
+            });
+            addMsg("hal", "Import refresh requested · waiting…");
+            await waitForImportSync(180000);
+          } catch (_) {}
+        }
+      } else {
+        addMsg("hal", line);
+      }
+      if (typeof HalVoice !== "undefined" && voiceOn && HalVoice.speakHalReply) {
         HalVoice.speakHalReply("Action complete.");
       }
     } catch (err) {
       addMsg("hal", "Action fault · " + String(err && err.message ? err.message : err));
+      setOrb("error");
     }
     setOrb("idle");
     refreshActions();
-    refreshBeams();
+    await refreshImportTruth();
+    await refreshBeams();
   }
 
   document.getElementById("consentApprove").addEventListener("click", function () {
@@ -542,13 +616,20 @@
   }
 
   document.getElementById("btnSdExport").addEventListener("click", function () {
-    proposeAndConsent("softdent_export", "Export SoftDent Account Aging to Excel (GUI)", {
-      reportId: "aging",
-      days: 30,
-    });
+    proposeAndConsent(
+      "softdent_export",
+      "Export SoftDent Account Aging to Excel (GUI) → then refresh imports",
+      {
+        reportId: "aging",
+        days: 30,
+        refreshImports: true,
+      }
+    );
   });
   document.getElementById("btnQbSync").addEventListener("click", function () {
-    proposeAndConsent("qb_sync", "Sync QuickBooks read-only", {});
+    proposeAndConsent("qb_sync", "Sync QuickBooks read-only → then refresh imports", {
+      refreshImports: true,
+    });
   });
   document.getElementById("btnMemoSearch").addEventListener("click", function () {
     const q = (document.getElementById("memoQuery").value || "").trim();
@@ -559,7 +640,11 @@
     if (q) webResearch(q);
   });
   document.getElementById("btnSyncAll").addEventListener("click", function () {
-    proposeAndConsent("qb_sync", "SYNC ALL — QuickBooks read sync (consent)", {});
+    proposeAndConsent(
+      "softdent_export",
+      "SYNC ALL — SoftDent Account Aging Excel export (consent) → import refresh",
+      { reportId: "aging", days: 30, refreshImports: true }
+    );
   });
   document.getElementById("btnRefreshBeams").addEventListener("click", function () {
     refreshBeams();
