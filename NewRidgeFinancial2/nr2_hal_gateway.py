@@ -2590,6 +2590,36 @@ def evaluate_query(
             "routingReason": "live_claims_money_gate",
         }
 
+    # Period-close OPS — cite daily_close_log.jsonl only (nr2-12025)
+    try:
+        from daily_closeout import try_deterministic_period_close_reply
+
+        close_det = try_deterministic_period_close_reply(query)
+    except Exception:
+        close_det = None
+    if close_det and close_det.get("text"):
+        text = str(close_det["text"])
+        append_lane_history(
+            store,
+            lane="local",
+            model="period-close-ops",
+            query=query,
+            intent=str(close_det.get("routingReason") or "period_close_status"),
+        )
+        return {
+            "ok": True,
+            "text": text,
+            "message": {"content": text},
+            "model": "period-close-ops",
+            "readinessLevel": level,
+            "intent": close_det.get("routingReason") or "period_close_status",
+            "softStale": soft_stale,
+            "resolvedLane": "local",
+            "routingReason": close_det.get("routingReason") or "period_close_status",
+            "beamHash": close_det.get("beamHash"),
+            "periodClose": close_det.get("periodClose"),
+        }
+
     # Money honesty pre-flight — SoftDent AR / QB revenue from live beams (nr2-12019)
     try:
         from hal_brain_tools import try_deterministic_money_reply

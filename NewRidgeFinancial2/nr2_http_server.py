@@ -183,6 +183,12 @@ def _get_import_readiness(*, operation: str | None = None) -> dict:
             "overrideReasonHash": override.get("reason_hash"),
             "overrideExpires": override.get("expires"),
         }
+    try:
+        from daily_closeout import merge_period_close_into_readiness
+
+        readiness = merge_period_close_into_readiness(readiness)
+    except Exception:
+        pass
     return readiness
 
 
@@ -1093,6 +1099,42 @@ class NR2BottleServer(BottleServer):
                 }
 
             try:
+                from daily_closeout import try_deterministic_period_close_reply
+
+                close_det = try_deterministic_period_close_reply(query)
+            except Exception:
+                close_det = None
+            if close_det and close_det.get("text"):
+                reply = str(close_det.get("text") or "")
+                append_turn(
+                    session_id,
+                    role="assistant",
+                    text=reply,
+                    extra={
+                        "periodClose": True,
+                        "routingReason": close_det.get("routingReason"),
+                        "beamHash": close_det.get("beamHash"),
+                    },
+                )
+                bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
+                bottle.response.set_header("X-HAL-Session-Id", session_id)
+                bottle.response.set_header("X-HAL-Period-Close", "1")
+                beam_hash = str(close_det.get("beamHash") or "")
+                if beam_hash:
+                    bottle.response.set_header("X-HAL-Beam-Hash", beam_hash)
+                return _json_response(
+                    {
+                        "ok": True,
+                        "text": reply,
+                        "reply": reply,
+                        "sessionId": session_id,
+                        "routingReason": close_det.get("routingReason"),
+                        "periodClose": close_det.get("periodClose"),
+                        "beamHash": beam_hash or None,
+                    }
+                )
+
+            try:
                 det = try_deterministic_money_reply(query, attest or None)
             except Exception:
                 det = None
@@ -1340,6 +1382,33 @@ class NR2BottleServer(BottleServer):
             from hal_brain_tools import money_beam_attestation
 
             return _json_response(money_beam_attestation())
+
+        @app.get("/api/hal/tools/period-close-status")
+        def hal_period_close_status_api():
+            """Shadow period-close status — cites daily_close_log.jsonl only."""
+            from daily_closeout import period_close_status
+
+            return _json_response(period_close_status())
+
+        @app.post("/api/period-close/run")
+        def period_close_run_api():
+            """Run one shadow period-close cycle (attest; SoftDent pull needs consent)."""
+            from daily_closeout import run_period_close
+
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            result = run_period_close(
+                store=_local_store(),
+                actor=str(payload.get("actor") or "Operator"),
+                auto=bool(payload.get("auto")),
+                pull_softdent=bool(payload.get("pullSoftdent") or payload.get("pull_softdent")),
+                consent_export=bool(payload.get("consent")),
+                readiness=_get_import_readiness(),
+            )
+            status = 200 if result.get("ok") else (403 if result.get("error") == "consent_required" else 409)
+            if result.get("status") == "blocked":
+                status = 403
+            return _json_response(result, status=status)
 
         @app.post("/api/hal/tools/qb-sync")
         def hal_qb_sync_api():

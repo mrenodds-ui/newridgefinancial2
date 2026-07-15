@@ -479,6 +479,20 @@ def morning_routine_tick(store, *, force: bool = False) -> dict[str, Any]:
     heal = heal_import_pipeline(force=False)
     actions.append({"action": "heal_import_pipeline", "result": heal})
 
+    # Shadow period-close attest (no SoftDent GUI without consent)
+    try:
+        from daily_closeout import run_period_close
+
+        close_result = run_period_close(store=store, actor="scheduler", auto=True)
+        actions.append({"action": "period_close_attest", "result": {
+            "ok": close_result.get("ok"),
+            "status": close_result.get("status"),
+            "beamHash": close_result.get("beamHash"),
+            "completedAt": close_result.get("completedAt"),
+        }})
+    except Exception as close_exc:
+        actions.append({"action": "period_close_attest", "error": str(close_exc)[:240]})
+
     collections_result: dict[str, Any] | None = None
     month_end: dict[str, Any] | None = None
     era_count = 0

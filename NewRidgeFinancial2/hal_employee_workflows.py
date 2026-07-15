@@ -2083,7 +2083,7 @@ def generate_month_end_tasks(store, *, period: str | None = None) -> dict[str, A
         from daily_closeout import build_daily_closeout
 
         closeout = build_daily_closeout(store)
-        if closeout.get("overall") != "green":
+        if closeout.get("overall") != "ok":
             tasks.append(
                 {
                     "id": "closeout-review",
@@ -2093,7 +2093,7 @@ def generate_month_end_tasks(store, *, period: str | None = None) -> dict[str, A
                     "source": "daily_closeout",
                 }
             )
-            signals.append("closeout_not_green")
+            signals.append("closeout_not_ok")
     except Exception:
         pass
 

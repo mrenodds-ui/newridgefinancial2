@@ -56,6 +56,74 @@ def test_daily_closeout_build():
     assert "Daily closeout" in text
 
 
+def test_period_close_attest_and_status(tmp_path, monkeypatch):
+    from daily_closeout import (
+        period_close_status,
+        run_period_close,
+        try_deterministic_period_close_reply,
+    )
+    import daily_closeout as dc
+
+    monkeypatch.setattr(dc, "OPS_DIR", tmp_path)
+    monkeypatch.setattr(dc, "CLOSE_LOG_PATH", tmp_path / "daily_close_log.jsonl")
+    monkeypatch.setattr(dc, "CLOSE_STATE_PATH", tmp_path / "period_close_state.json")
+
+    fake_ready = {
+        "ok": True,
+        "level": "fresh",
+        "blocking": [],
+        "alignmentLasers": {"red": False, "green": True, "reason": "clear"},
+    }
+    fake_attest = {
+        "ok": True,
+        "beamHash": "testhash12345678",
+        "beamTimestamp": "2026-07-15T21:00:00+00:00",
+        "softdent": {"hasData": True, "display": "$7,714", "totalOutstanding": 7714.0},
+        "quickbooks": {"hasData": True, "display": "$78,399", "monthlyRevenue": 78399.0},
+    }
+    monkeypatch.setattr(
+        "import_diagnostics.assess_import_readiness",
+        lambda **kwargs: fake_ready,
+    )
+    monkeypatch.setattr(
+        "hal_brain_tools.money_beam_attestation",
+        lambda readiness=None: fake_attest,
+    )
+
+    result = run_period_close(store=None, actor="test", auto=True, readiness=fake_ready)
+    assert result["ok"] is True
+    assert result["status"] == "completed"
+    assert result["beamHash"] == "testhash12345678"
+    assert (tmp_path / "daily_close_log.jsonl").is_file()
+
+    status = period_close_status()
+    assert status["status"] == "completed"
+    assert status["beamHash"] == "testhash12345678"
+    assert status["shadowStartedAt"]
+
+    det = try_deterministic_period_close_reply("Did we close today?")
+    assert det and "beamHash=testhash12345678" in det["text"]
+
+
+def test_period_close_laser_blocks(tmp_path, monkeypatch):
+    from daily_closeout import run_period_close
+    import daily_closeout as dc
+
+    monkeypatch.setattr(dc, "OPS_DIR", tmp_path)
+    monkeypatch.setattr(dc, "CLOSE_LOG_PATH", tmp_path / "daily_close_log.jsonl")
+    monkeypatch.setattr(dc, "CLOSE_STATE_PATH", tmp_path / "period_close_state.json")
+
+    blocked = {
+        "ok": False,
+        "level": "stale",
+        "blocking": [{"key": "softdent_claims"}],
+        "alignmentLasers": {"red": True, "green": False, "reason": "critical_softgap"},
+    }
+    result = run_period_close(store=None, actor="test", auto=True, readiness=blocked)
+    assert result["ok"] is False
+    assert result["status"] == "blocked"
+
+
 def test_memory_index_search():
     index = build_memory_index([])
     assert index == []
