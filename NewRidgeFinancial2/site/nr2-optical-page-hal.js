@@ -323,8 +323,8 @@
       });
       const data = await res.json();
       const result = data.result || data;
-      if (result && result.clientMustNavigate && result.navigate) {
-        window.location.href = String(result.navigate);
+      if (result && result.clientMustNavigate && (result.navigate || result.href)) {
+        window.location.href = String(result.navigate || result.href);
         return;
       }
       if (!data.ok) {
@@ -615,6 +615,61 @@
     }
   }
 
+  async function fetchBoardActions(query) {
+    try {
+      const res = await fetch("/api/apex/hal/board-actions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(browserToken ? { "X-NR2-Session-Token": browserToken } : {}),
+        },
+        body: JSON.stringify({ query: query, page: "hal" }),
+      });
+      return await res.json();
+    } catch (_) {
+      return { ok: false, actions: [], handled: false };
+    }
+  }
+
+  async function proposeOpticalNavigate(pageKey, label) {
+    const Nav = window.NR2OpticalBoardNav;
+    const href = Nav ? Nav.hrefForPage(pageKey) : "";
+    if (!href) {
+      addMsg("hal", "Unknown optical page · " + pageKey + " · empty ≠ invent a route.");
+      return;
+    }
+    await proposeAndConsent(
+      "navigate",
+      label || ("Open optical · " + pageKey + " → " + href),
+      { page: pageKey, href: href }
+    );
+  }
+
+  async function tryBoardNavigateFromChat(query) {
+    const Nav = window.NR2OpticalBoardNav;
+    if (!Nav || !Nav.looksLikeNavAsk(query)) return { navigated: false };
+    const board = await fetchBoardActions(query);
+    const nav = Nav.firstNavigate(board.actions || []);
+    if (!nav || !nav.href) return { navigated: false, board: board };
+    if (board.reply) {
+      addMsg("hal", String(board.reply));
+    } else {
+      addMsg(
+        "hal",
+        "Board navigate ready · " +
+          (nav.page || "page") +
+          " → " +
+          nav.href +
+          " · approve consent to open (empty ≠ $0 on that bench)."
+      );
+    }
+    await proposeAndConsent("navigate", "Open optical · " + (nav.page || nav.href), {
+      page: nav.page,
+      href: nav.href,
+    });
+    return { navigated: true, navOnly: Nav.navOnlyAsk(query), board: board };
+  }
+
   document.getElementById("btnSdExport").addEventListener("click", function () {
     proposeAndConsent(
       "softdent_export",
@@ -646,6 +701,17 @@
       { reportId: "aging", days: 30, refreshImports: true }
     );
   });
+  const navBtn = function (id, page, label) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("click", function () {
+      proposeOpticalNavigate(page, label);
+    });
+  };
+  navBtn("btnNavSd", "softdent", "Open SoftDent optical bench");
+  navBtn("btnNavQb", "quickbooks", "Open QuickBooks optical bench");
+  navBtn("btnNavAr", "ar", "Open A/R aging optical bench");
+  navBtn("btnNavClaims", "claims", "Open Claims + ERA optical bench");
   document.getElementById("btnRefreshBeams").addEventListener("click", function () {
     refreshBeams();
     refreshImportTruth();
@@ -670,6 +736,12 @@
     await ensureChatSession();
     if (!lastBeamAt || Date.now() - lastBeamAt > BEAM_STALE_MS) {
       await refreshBeams();
+    }
+    const navTry = await tryBoardNavigateFromChat(q);
+    if (navTry && navTry.navigated && navTry.navOnly) {
+      busy = false;
+      refreshActions();
+      return;
     }
     await streamChat(q);
     busy = false;

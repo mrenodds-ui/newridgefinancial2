@@ -32,7 +32,7 @@ APEX_PAGES = (
     "hal",
 )
 
-BUILD_ID = "nr2-12021-recon-unavailable"
+BUILD_ID = "nr2-12022-board-navigate"
 
 def _clean_slate_unavailable(feature: str = "pack") -> dict[str, Any]:
     """Honest payload when Apex packs / nr2_contracts were removed in cutover.
@@ -6152,6 +6152,13 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
             "I never invent dollar amounts or claim facts — values come from SoftDent/QuickBooks imports only."
         )
 
+    try:
+        from nr2_optical_routes import enrich_navigate_actions
+
+        actions = enrich_navigate_actions(actions)
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "handled": handled,
@@ -6161,6 +6168,7 @@ def resolve_hal_board_actions(payload: dict[str, Any] | None = None) -> dict[str
         "actions": actions,
         "buildId": BUILD_ID,
         "honesty": "Board actions never invent financial dollar amounts.",
+        "opticalNavigate": True,
         "exportPlaybook": build_export_playbook() if handled and (export_sd or export_qb or export_both) else None,
     }
 

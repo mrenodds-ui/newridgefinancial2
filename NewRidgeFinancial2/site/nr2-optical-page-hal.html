@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NR2 Optical · HAL Brains Command Center — nr2-12020-softdent-export-e2e</title>
+  <title>NR2 Optical · HAL Brains Command Center — nr2-12022-board-navigate</title>
   <link rel="stylesheet" href="/nr2-optical-theme.css" />
   <link rel="stylesheet" href="/nr2-optical-hal-command.css" />
 </head>
 <body>
   <div class="banner">
-    HAL AI Core · nr2-12020-softdent-export-e2e · empty ≠ $0 · SoftDent export→refresh · no SoftDent write-back · consent-gated hands
+    HAL AI Core · nr2-12022-board-navigate · empty ≠ $0 · board navigate · SoftDent export→refresh · no SoftDent write-back · consent-gated hands
     <span class="bind">Chat → POST /api/hal/chat · multi-turn · stream · local 32B</span>
   </div>
   <div class="shell">
@@ -86,6 +86,12 @@
           <div class="tool-palette">
             <button type="button" id="btnSdExport" data-hal-action="softdent-export">SOFTDENT EXPORT</button>
             <button type="button" id="btnQbSync" data-hal-action="qb-sync">QB SYNC</button>
+            <div class="tool-row" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+              <button type="button" id="btnNavSd" data-hal-nav="softdent">OPEN SoftDent</button>
+              <button type="button" id="btnNavQb" data-hal-nav="quickbooks">OPEN QB</button>
+              <button type="button" id="btnNavAr" data-hal-nav="ar">OPEN A/R</button>
+              <button type="button" id="btnNavClaims" data-hal-nav="claims">OPEN Claims</button>
+            </div>
             <div class="tool-row">
               <input id="memoQuery" type="text" placeholder="Memo search…" />
               <button type="button" class="tool-go" id="btnMemoSearch">GO</button>
@@ -121,6 +127,7 @@
 
   <!-- Mount order per Moonshot: persona / voice / memo / route-exec / director / loops / canvas / page -->
   <script src="/nr2-optical-nav.js"></script>
+  <script src="/nr2-optical-board-nav.js"></script>
   <script src="/hal-chat-9000.js"></script>
   <script src="/hal-memo-index.js"></script>
   <script src="/hal-voice.js"></script>

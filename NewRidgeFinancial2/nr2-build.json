@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12021-recon-unavailable",
-  "BUILD_ID": "nr2-12021-recon-unavailable",
-  "assetVersion": "nr2-12021-recon-unavailable",
-  "builtAt": "2026-07-15T20:40:00.000Z",
-  "notes": "nr2-12021-recon-unavailable: SoftDent×QB reconciliation honesty — 503 UNAVAILABLE (never fake COHERENT/500), optical RECONCILE disabled, financial UNAVAILABLE widget when packs missing. SoftDent write-back still forbidden.",
+  "schemaVersion": "nr2-12022-board-navigate",
+  "BUILD_ID": "nr2-12022-board-navigate",
+  "assetVersion": "nr2-12022-board-navigate",
+  "builtAt": "2026-07-15T20:50:00.000Z",
+  "notes": "nr2-12022-board-navigate: HAL board-actions navigate/director — SoftDent/QB/AR/Claims optical href enrichment + consent open from HAL chat/palette. SoftDent write-back still forbidden · recon remains UNAVAILABLE.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12021-RECON-UNAVAILABLE",
+  "package": "NR2-12022-BOARD-NAVIGATE",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

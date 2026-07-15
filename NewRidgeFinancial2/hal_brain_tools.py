@@ -685,8 +685,26 @@ def execute_action(*, action_id: str, consent: bool, store=None) -> dict[str, An
     elif kind in ("qb_sync", "qb-sync"):
         result = qb_sync(consent=True, store=store)
     elif kind == "navigate":
-        href = str(payload.get("href") or payload.get("page") or "")
-        result = {"ok": True, "navigate": href, "clientMustNavigate": True}
+        from nr2_optical_routes import resolve_optical_href
+
+        href = str(payload.get("href") or "").strip()
+        if not href:
+            href = resolve_optical_href(str(payload.get("page") or payload.get("target") or ""))
+        if not href:
+            result = {
+                "ok": False,
+                "error": "unknown_optical_page",
+                "detail": "No optical href for that page key — empty ≠ invent a route.",
+            }
+        else:
+            result = {
+                "ok": True,
+                "navigate": href,
+                "href": href,
+                "page": payload.get("page"),
+                "clientMustNavigate": True,
+                "emptyNotZero": True,
+            }
     elif kind == "web_research":
         result = web_research_tool(query=str(payload.get("query") or ""))
     elif kind == "memo_write":
