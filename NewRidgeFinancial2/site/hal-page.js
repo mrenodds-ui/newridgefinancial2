@@ -302,7 +302,7 @@ const HalPage = (function () {
     const title = staff ? "SIDENOTESIM ALERTS" : "SIDENOTESIM MONITOR";
     const footnote = staff
       ? '<p class="sidenote-foot ws-feed-note">Routing only — open SideNotesIM to read message text. HAL announces the sender name only.</p>'
-      : '<p class="sidenote-foot">HAL 9000 voice announces sender only · message text is never read</p>';
+      : '<p class="sidenote-foot">HAL voice (neural) announces sender only · message text is never read</p>';
     return `<div class="sidenote-live">
       <div class="sidenote-head">
         <h4>${title}</h4>

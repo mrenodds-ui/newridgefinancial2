@@ -129,13 +129,17 @@ def maybe_announce(message: dict) -> None:
 
             if str(helper) not in sys.path:
                 sys.path.insert(0, str(helper))
-        from announcer import Announcer
+        from announcer import Announcer, pick_announcement
 
         sender = str(message.get("from") or "Office").strip() or "Office"
         targets = _normalize_targets(message)
         broadcast = any(t.lower() in ("all", "everyone") for t in targets)
-        phrase = f"New broadcast from {sender}." if broadcast else f"New message from {sender}."
-        Announcer(voice_style=os.environ.get("NR2_HUB_POPUP_VOICE_STYLE", "hal9000")).speak(phrase)
+        phrase = pick_announcement(sender, broadcast)
+        Announcer(
+            voice_style=os.environ.get("NR2_HUB_POPUP_VOICE_STYLE", "hal9000"),
+            neural_tts=True,
+            processed_audio=False,
+        ).speak(phrase)
     except Exception:
         pass
 

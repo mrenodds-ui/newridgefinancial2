@@ -30,11 +30,12 @@ New-Item -ItemType Directory -Path $pkg -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $pkg "work") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $pkg "data") -Force | Out-Null
 
-# 1. Core watcher files.
+# 1. Core watcher files (include neural bridge so desks use program HAL voice).
 $coreFiles = @(
   "sidenotes_watcher.py",
   "vdb_reader.py",
   "announcer.py",
+  "neural_tts_bridge.py",
   "config.json"
 )
 foreach ($f in $coreFiles) {
@@ -72,6 +73,16 @@ Set-Prop $cfg "myStation" ""           # set by Setup-Station.ps1
 Set-Prop $cfg "inboxPath" ""           # set by Setup-Station.ps1 (kept local)
 Set-Prop $cfg "stationInboxPath" ""    # set by Setup-Station.ps1 (shared folder)
 Set-Prop $cfg "announceScope" "all"
+# HAL program voice (GuyNeural via neural bridge) — never ship film-HAL defaults.
+Set-Prop $cfg "voiceStyle" "hal9000"
+Set-Prop $cfg "voiceHint" "David"
+Set-Prop $cfg "voiceRate" 3
+Set-Prop $cfg "voiceVolume" 100
+Set-Prop $cfg "processedAudio" $false
+Set-Prop $cfg "neuralTts" $true
+Set-Prop $cfg "neuralPython" ""
+Set-Prop $cfg "announceTemplate" "Message from {sender}."
+Set-Prop $cfg "announceBroadcastTemplate" "Broadcast from {sender}."
 ($cfg | ConvertTo-Json -Depth 6) | Set-Content -Path $cfgPath -Encoding UTF8
 
 $sizeMB = [math]::Round((Get-ChildItem $pkg -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)

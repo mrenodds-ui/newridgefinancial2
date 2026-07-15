@@ -83,6 +83,20 @@ const WorkstationMessagePopup = (function () {
   function present(item) {
     showToast(item);
     showNativeBalloon(item);
+    // Same HAL neural voice as program/SideNotes (sender only — never speak message body).
+    try {
+      const mute =
+        window.NR2_WORKSTATION_MUTE_HAL_VOICE === true ||
+        (item && item.muteHalVoice === true);
+      if (!mute && typeof HalVoice !== "undefined" && HalVoice.announceSidenote) {
+        const from = String((item && item.from) || "Office");
+        const route = targetsLabel(item);
+        const broadcast = /everyone/i.test(route) || /^(all|everyone)$/i.test(String((item && item.target) || ""));
+        HalVoice.announceSidenote(from, broadcast);
+      }
+    } catch (_err) {
+      /* ignore TTS failures — popup still shows */
+    }
   }
 
   return { present, targetsLabel, truncate };

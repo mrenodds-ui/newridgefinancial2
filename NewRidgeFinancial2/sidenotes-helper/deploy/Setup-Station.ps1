@@ -132,10 +132,26 @@ Set-Prop $cfg "announceScope" "all"
 # Keep the legacy combined file LOCAL so stations never clobber a shared one.
 Set-Prop $cfg "inboxPath" (Join-Path $helperDir "work\sidenotes-inbox.json")
 Set-Prop $cfg "stationInboxPath" $stationInboxPath
+# Force HAL program voice on every station install (override stale film-HAL settings).
+Set-Prop $cfg "voiceStyle" "hal9000"
+Set-Prop $cfg "voiceHint" "David"
+Set-Prop $cfg "voiceRate" 3
+Set-Prop $cfg "voiceVolume" 100
+Set-Prop $cfg "processedAudio" $false
+Set-Prop $cfg "neuralTts" $true
+Set-Prop $cfg "announce" $true
+if (-not $cfg.neuralPython) { Set-Prop $cfg "neuralPython" "" }
+if (-not $cfg.announceTemplate -or $cfg.announceTemplate -match 'Good afternoon|I have a message for you') {
+  Set-Prop $cfg "announceTemplate" "Message from {sender}."
+}
+if (-not $cfg.announceBroadcastTemplate -or $cfg.announceBroadcastTemplate -match 'I should inform you') {
+  Set-Prop $cfg "announceBroadcastTemplate" "Broadcast from {sender}."
+}
 
 ($cfg | ConvertTo-Json -Depth 6) | Set-Content -Path $configPath -Encoding UTF8
 Write-Info ""
 Write-Info "Wrote config: $configPath"
+Write-Info "Voice: HAL neural (GuyNeural) with SAPI fallback — same as NR2 program."
 
 # --- 4. Shortcuts -------------------------------------------------------------
 function New-Shortcut($linkPath, $target) {

@@ -329,10 +329,18 @@ def _get_announcer():
                 duck_level=float(os.environ.get("NR2_HAL_HUB_DUCK_LEVEL", "0.14")),
             )
         style = os.environ.get("NR2_HAL_HUB_VOICE_STYLE", "hal9000").strip()
+        neural = os.environ.get("NR2_HAL_HUB_NEURAL_TTS", "1").strip().lower() not in (
+            "0",
+            "false",
+            "no",
+            "off",
+        )
         _announcer = Announcer(
             voice_style=style,
             music_ducker=ducker,
-            processed_audio=True,
+            processed_audio=False,
+            neural_tts=neural,
+            neural_python=os.environ.get("NR2_NEURAL_PYTHON", "").strip(),
             rate=int(os.environ.get("NR2_HAL_HUB_VOICE_RATE", "3")),
             volume=int(os.environ.get("NR2_HAL_HUB_VOICE_VOLUME", "100")),
             voice_hint=os.environ.get("NR2_HAL_HUB_VOICE_HINT", "David"),

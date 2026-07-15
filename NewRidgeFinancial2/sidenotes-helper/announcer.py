@@ -110,19 +110,33 @@ def pick_announcement(sender: str, broadcast: bool, cfg: dict[str, Any] | None =
 
 
 def apply_voice_style(cfg: dict[str, Any]) -> dict[str, Any]:
-    """Apply conversational HAL defaults."""
+    """Force conversational HAL neural voice (overrides stale film-HAL desk configs)."""
     style = str(cfg.get("voiceStyle", "")).strip().lower()
     if style in ("hal9000", "hal", ""):
-        cfg.setdefault("voiceRate", HAL_VOICE_PRESET["rate"])
-        cfg.setdefault("voiceVolume", HAL_VOICE_PRESET["volume"])
-        cfg.setdefault("voiceHint", HAL_VOICE_PRESET["voice_hint"])
-        cfg.setdefault("processedAudio", HAL_VOICE_PRESET["processed_audio"])
-        cfg.setdefault("neuralTts", True)
+        cfg["voiceStyle"] = "hal9000"
+        # Assign (do not setdefault) — live desks still have voiceRate=-6 / processedAudio=true.
+        cfg["voiceRate"] = HAL_VOICE_PRESET["rate"]
+        cfg["voiceVolume"] = HAL_VOICE_PRESET["volume"]
+        cfg["voiceHint"] = HAL_VOICE_PRESET["voice_hint"]
+        cfg["processedAudio"] = False
+        cfg["neuralTts"] = True
         cfg.setdefault("neuralPython", "")
-        if cfg.get("announceTemplate") in ("", "New message from {sender}."):
+        if cfg.get("announceTemplate") in (
+            "",
+            "New message from {sender}.",
+            "Good afternoon. I have a message for you from {sender}.",
+        ):
             cfg["announceTemplate"] = HAL9000_TEMPLATES["direct"]
-        if cfg.get("announceBroadcastTemplate") in ("", "New broadcast from {sender}."):
+        if cfg.get("announceBroadcastTemplate") in (
+            "",
+            "New broadcast from {sender}.",
+            "I should inform you. A broadcast message has arrived from {sender}.",
+        ):
             cfg["announceBroadcastTemplate"] = HAL9000_TEMPLATES["broadcast"]
+        if not cfg.get("announceVariants"):
+            cfg["announceVariants"] = list(HAL9000_VARIANTS["direct"])
+        if not cfg.get("announceBroadcastVariants"):
+            cfg["announceBroadcastVariants"] = list(HAL9000_VARIANTS["broadcast"])
     return cfg
 
 

@@ -704,4 +704,18 @@
     isAvailable: () => !!global.speechSynthesis || neuralReady === true,
     profiles: { chat: HAL_CHAT, hal9000: HAL_CHAT },
   };
+
+  // Wire TEST VOICE / PTT chips wherever they appear (optical, HAL page, workstation).
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("click", (event) => {
+      const testBtn = event.target && event.target.closest
+        ? event.target.closest("[data-hal-voice-test]")
+        : null;
+      if (testBtn) {
+        event.preventDefault();
+        void testVoice();
+        return;
+      }
+    });
+  }
 })(typeof window !== "undefined" ? window : globalThis);

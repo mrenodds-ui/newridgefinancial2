@@ -10,12 +10,61 @@ from pathlib import Path
 from typing import Any
 
 HELPER_DIR = Path(__file__).resolve().parent
-NR2_ROOT = HELPER_DIR.parent
-REPO_ROOT = NR2_ROOT.parent
-CLI = NR2_ROOT / "hal_tts_cli.py"
 
 _CACHED_PYTHON: Path | None = None
 _CACHED_STATUS: dict[str, Any] | None = None
+_CACHED_NR2_ROOT: Path | None = None
+
+
+def resolve_nr2_root() -> Path:
+    """Find NewRidgeFinancial2 even when this helper is copied under C:\\softdent."""
+    global _CACHED_NR2_ROOT
+    if _CACHED_NR2_ROOT and (_CACHED_NR2_ROOT / "hal_tts_cli.py").is_file():
+        return _CACHED_NR2_ROOT
+
+    candidates: list[Path] = []
+    env_repo = str(os.environ.get("NEWRIDGE_FINANCIAL_REPO") or "").strip()
+    if env_repo:
+        candidates.append(Path(env_repo) / "NewRidgeFinancial2")
+    env_nr2 = str(os.environ.get("NR2_ROOT") or "").strip()
+    if env_nr2:
+        candidates.append(Path(env_nr2))
+
+    # Normal: .../NewRidgeFinancial2/sidenotes-helper/
+    candidates.append(HELPER_DIR.parent)
+    # SoftDent package copies often land under C:\softdent\HAL-SideNotes-Workstation\
+    candidates.extend(
+        [
+            Path(r"C:\Users\mreno\newridgefamilyfinancial\NewRidgeFinancial2"),
+            Path(r"C:\NewRidgeFamilyFinancial\NewRidgeFinancial2"),
+            Path(r"E:\NewRidgeFamilyFinancial\NewRidgeFinancial2"),
+        ]
+    )
+
+    seen: set[str] = set()
+    for path in candidates:
+        if not path:
+            continue
+        try:
+            resolved = path.resolve()
+        except OSError:
+            resolved = path
+        key = os.path.normcase(str(resolved))
+        if key in seen:
+            continue
+        seen.add(key)
+        if (resolved / "hal_tts_cli.py").is_file() and (resolved / "hal_tts.py").is_file():
+            _CACHED_NR2_ROOT = resolved
+            return resolved
+
+    # Last resort — caller will fail status/speak clearly.
+    fallback = HELPER_DIR.parent
+    _CACHED_NR2_ROOT = fallback
+    return fallback
+
+
+def _cli_path() -> Path:
+    return resolve_nr2_root() / "hal_tts_cli.py"
 
 
 def _subprocess_kwargs() -> dict:
@@ -61,6 +110,9 @@ def resolve_neural_python(explicit: str = "") -> Path | None:
     if _CACHED_PYTHON and _CACHED_PYTHON.is_file():
         return _CACHED_PYTHON
 
+    nr2_root = resolve_nr2_root()
+    repo_root = nr2_root.parent
+
     candidates: list[Path] = []
     for raw in (
         explicit,
@@ -70,15 +122,16 @@ def resolve_neural_python(explicit: str = "") -> Path | None:
         if raw:
             candidates.append(Path(raw))
 
-    # Prefer the workstation package's bundled 64-bit Python (sibling of NewRidgeFinancial2).
-    pkg_root = NR2_ROOT.parent
+    # Prefer workstation package / NR2 venv 64-bit Python (edge-tts lives here).
     candidates.extend(
         [
-            pkg_root / "python" / "Scripts" / "python.exe",
-            NR2_ROOT / "python" / "Scripts" / "python.exe",
-            REPO_ROOT / ".venv" / "Scripts" / "python.exe",
-            REPO_ROOT / ".venv-py313" / "Scripts" / "python.exe",
-            NR2_ROOT / ".venv" / "Scripts" / "python.exe",
+            repo_root / "python" / "Scripts" / "python.exe",
+            nr2_root / "python" / "Scripts" / "python.exe",
+            repo_root / ".venv" / "Scripts" / "python.exe",
+            repo_root / ".venv-py313" / "Scripts" / "python.exe",
+            nr2_root / ".venv" / "Scripts" / "python.exe",
+            Path(r"C:\Users\mreno\newridgefamilyfinancial\.venv\Scripts\python.exe"),
+            Path(r"C:\NewRidgeFamilyFinancial\.venv\Scripts\python.exe"),
         ]
     )
 
@@ -122,12 +175,13 @@ def _which_launcher(name: str) -> Path | None:
 
 
 def _python_has_neural(python: Path) -> bool:
-    if not CLI.is_file():
+    cli = _cli_path()
+    if not cli.is_file():
         return False
     try:
         proc = subprocess.run(
-            _python_cmd(python, str(CLI), "status"),
-            cwd=str(NR2_ROOT),
+            _python_cmd(python, str(cli), "status"),
+            cwd=str(resolve_nr2_root()),
             capture_output=True,
             text=True,
             timeout=20,
@@ -145,14 +199,20 @@ def neural_tts_status(explicit_python: str = "") -> dict[str, Any]:
     global _CACHED_STATUS
     python = resolve_neural_python(explicit_python)
     if not python:
-        return {"ok": False, "engine": "edge-neural", "error": "no 64-bit neural python"}
+        return {
+            "ok": False,
+            "engine": "edge-neural",
+            "error": "no 64-bit neural python",
+            "nr2Root": str(resolve_nr2_root()),
+            "cli": str(_cli_path()),
+        }
     if _CACHED_STATUS and _CACHED_STATUS.get("python") == str(python):
         return dict(_CACHED_STATUS)
 
     try:
         proc = subprocess.run(
-            _python_cmd(python, str(CLI), "status"),
-            cwd=str(NR2_ROOT),
+            _python_cmd(python, str(_cli_path()), "status"),
+            cwd=str(resolve_nr2_root()),
             capture_output=True,
             text=True,
             timeout=20,
@@ -163,10 +223,17 @@ def neural_tts_status(explicit_python: str = "") -> dict[str, Any]:
         if not data:
             data = {"ok": False, "error": "invalid status response"}
         data["python"] = str(python)
+        data["nr2Root"] = str(resolve_nr2_root())
         _CACHED_STATUS = data
         return dict(data)
     except Exception as exc:
-        return {"ok": False, "engine": "edge-neural", "python": str(python), "error": str(exc)}
+        return {
+            "ok": False,
+            "engine": "edge-neural",
+            "python": str(python),
+            "error": str(exc),
+            "nr2Root": str(resolve_nr2_root()),
+        }
 
 
 def speak_via_neural_python(
@@ -178,15 +245,18 @@ def speak_via_neural_python(
 ) -> bool:
     """Synthesize and play via external 64-bit Python. Returns True on success."""
     phrase = str(text or "").strip()
-    if not phrase or not CLI.is_file():
+    cli = _cli_path()
+    if not phrase or not cli.is_file():
         return False
     python = resolve_neural_python(explicit_python)
     if not python:
         return False
     try:
         proc = subprocess.run(
-            _python_cmd(python, str(CLI), "speak", "--text", phrase, "--voice", voice or "hal"),
-            cwd=str(NR2_ROOT),
+            _python_cmd(
+                python, str(cli), "speak", "--text", phrase, "--voice", voice or "hal"
+            ),
+            cwd=str(resolve_nr2_root()),
             capture_output=True,
             text=True,
             timeout=float(timeout),
