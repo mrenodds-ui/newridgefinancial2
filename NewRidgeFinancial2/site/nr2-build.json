@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12032-main-landing-beam-close-honesty",
-  "BUILD_ID": "nr2-12032-main-landing-beam-close-honesty",
-  "assetVersion": "nr2-12032-main-landing-beam-close-honesty",
-  "builtAt": "2026-07-15T22:50:00.000Z",
-  "notes": "nr2-12032-main-landing-beam-close-honesty: main interferometer cites money-beams + demotes LIVE when period-close stalled/blocked/running; SoftDent aging teach NEVER Select File Name SoftDentReportExports. SoftDent write-back still forbidden.",
+  "schemaVersion": "nr2-12033-softdent-export-harden",
+  "BUILD_ID": "nr2-12033-softdent-export-harden",
+  "assetVersion": "nr2-12033-softdent-export-harden",
+  "builtAt": "2026-07-15T22:55:00.000Z",
+  "notes": "nr2-12033-softdent-export-harden: SoftDent GUI Excel retries + min-bytes validate; period-close falls back to attest-only instead of stalling on export failure. SoftDent write-back still forbidden. empty ≠ $0.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12032-MAIN-LANDING-BEAM-CLOSE-HONESTY",
+  "package": "NR2-12033-SOFTDENT-EXPORT-HARDEN",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

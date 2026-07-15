@@ -230,6 +230,56 @@ def test_period_close_softdent_pull_blocked_after_heal(tmp_path, monkeypatch):
     assert result.get("pullSoftdent") is True
 
 
+def test_period_close_softdent_pull_fallback_attest(tmp_path, monkeypatch):
+    """GUI export failure after retries → attest-only close (no stall)."""
+    from daily_closeout import run_period_close
+    import daily_closeout as dc
+
+    monkeypatch.setattr(dc, "OPS_DIR", tmp_path)
+    monkeypatch.setattr(dc, "CLOSE_LOG_PATH", tmp_path / "daily_close_log.jsonl")
+    monkeypatch.setattr(dc, "CLOSE_STATE_PATH", tmp_path / "period_close_state.json")
+
+    fake_ready = {
+        "ok": True,
+        "level": "fresh",
+        "blocking": [],
+        "alignmentLasers": {"red": False, "green": True, "reason": "clear"},
+    }
+    fake_attest = {
+        "ok": True,
+        "beamHash": "fallbackhash1111",
+        "beamTimestamp": "2026-07-15T22:00:00+00:00",
+        "softdent": {"hasData": True, "display": "$7,714", "totalOutstanding": 7714.0},
+        "quickbooks": {"hasData": True, "display": "$78,399", "monthlyRevenue": 78399.0},
+    }
+    monkeypatch.setattr(
+        "hal_brain_tools.softdent_export",
+        lambda **kwargs: {"ok": False, "error": "softdent_gui_unreachable"},
+    )
+    monkeypatch.setattr(
+        "import_diagnostics.assess_import_readiness",
+        lambda **kwargs: fake_ready,
+    )
+    monkeypatch.setattr(
+        "hal_brain_tools.money_beam_attestation",
+        lambda readiness=None: fake_attest,
+    )
+
+    result = run_period_close(
+        store=None,
+        actor="scheduler",
+        auto=True,
+        pull_softdent=True,
+        readiness=fake_ready,
+    )
+    assert result["ok"] is True
+    assert result["status"] == "completed"
+    assert result["fallback"] == "attest_only"
+    assert result["guiExport"] is False
+    assert result["softdentTotal"] == 7714.0
+    assert (result.get("export") or {}).get("fallback") == "attest_only"
+
+
 def test_memory_index_search():
     index = build_memory_index([])
     assert index == []

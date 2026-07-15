@@ -14,6 +14,7 @@ import hashlib
 import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 # In-process pending consent actions (operator must click Approve)
@@ -575,6 +576,11 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
             if rid not in reports and "aging" in reports:
                 rid = "aging"
         path = export_report_by_id(rid, start=start, end=end)
+        file_size = 0
+        try:
+            file_size = int(Path(path).stat().st_size)
+        except OSError:
+            file_size = 0
         return {
             "ok": True,
             "consentRequired": False,
@@ -582,6 +588,7 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
             "start": start.isoformat(),
             "end": end.isoformat(),
             "path": str(path),
+            "fileSizeBytes": file_size,
             "exportRoot": r"C:\SoftDentReportExports",
             "refreshImportsSuggested": True,
             "pathHygiene": "SoftDent kept its own folder; NR2 copied into SoftDentReportExports.",

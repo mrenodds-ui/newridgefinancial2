@@ -29,6 +29,10 @@ MENU_MAP_PATH = Path(__file__).resolve().parent / "softdent_gui_menu_map.json"
 
 PHASE1_IDS = ("register", "collections", "transactions", "daysheet", "aging")
 
+# Post-export honesty: empty file ≠ valid SoftDent Excel (never invent $0 from ∅).
+EXPORT_MIN_BYTES = 64
+EXPORT_RETRY_DELAYS_SEC = (2.0, 5.0, 10.0)
+
 # Never send SoftDent hotkeys / clicks to these (AMD Adrenalin steals focus on this PC).
 _FOCUS_BLOCKLIST_SUBSTR = (
     "amd software",
@@ -570,6 +574,23 @@ def softdent_main_running() -> bool:
         return True
     except Exception:
         return False
+
+
+def _validate_export_file(path: Path, *, report_id: str = "") -> int:
+    """Require a real Excel drop — empty/missing must not become money truth."""
+    produced = Path(path)
+    if not produced.is_file():
+        raise RuntimeError(f"{report_id or 'export'}: exported file missing: {produced}")
+    try:
+        size = int(produced.stat().st_size)
+    except OSError as exc:
+        raise RuntimeError(f"{report_id or 'export'}: exported file unreadable: {exc}") from exc
+    if size < EXPORT_MIN_BYTES:
+        raise RuntimeError(
+            f"{report_id or 'export'}: exported file too small ({size} bytes < {EXPORT_MIN_BYTES}) "
+            f"at {produced} — empty ≠ $0; refuse."
+        )
+    return size
 
 
 def _main_softdent_hwnd() -> int:
@@ -1453,8 +1474,76 @@ def export_report_by_id(
     dest_root: Path | None = None,
     menu_keys: str | None = None,
     menu_map: dict[str, Any] | None = None,
+    retries: int | None = None,
 ) -> Path:
-    """Export one catalog report by id using softdent_gui_menu_map.json."""
+    """Export one catalog report with SoftDent GUI Excel path retries.
+
+    SoftDent Select File Name keeps SoftDent's folder — never SoftDentReportExports.
+    NR2 copies into EXPORT_ROOT after SoftDent saves. Retries transient dialog failures.
+    """
+    last_exc: BaseException | None = None
+    max_attempts = 1 + len(EXPORT_RETRY_DELAYS_SEC)
+    if retries is not None:
+        max_attempts = max(1, int(retries) + 1)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            if not softdent_main_running():
+                raise RuntimeError(
+                    "SoftDent desktop not running. Launch CS SoftDent Software.lnk (-sus), then retry."
+                )
+            if attempt > 1:
+                prepare_softdent_for_next_report()
+            out = _export_report_by_id_once(
+                report_id,
+                start=start,
+                end=end,
+                dest_root=dest_root,
+                menu_keys=menu_keys,
+                menu_map=menu_map,
+            )
+            size = _validate_export_file(out, report_id=report_id)
+            logger.info(
+                "SoftDent GUI export ok report=%s attempt=%s bytes=%s path=%s",
+                report_id,
+                attempt,
+                size,
+                out,
+            )
+            return out
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            logger.warning(
+                "SoftDent GUI export failed report=%s attempt=%s/%s: %s",
+                report_id,
+                attempt,
+                max_attempts,
+                exc,
+            )
+            try:
+                cancel_stale_report_dialogs(max_rounds=6)
+                cancel_printer_dialogs(max_rounds=3)
+            except Exception:
+                pass
+            if attempt >= max_attempts:
+                break
+            delay = EXPORT_RETRY_DELAYS_SEC[min(attempt - 1, len(EXPORT_RETRY_DELAYS_SEC) - 1)]
+            time.sleep(delay)
+    raise RuntimeError(
+        f"{report_id}: SoftDent GUI export failed after {max_attempts} attempts "
+        f"({type(last_exc).__name__}: {last_exc})"
+    ) from last_exc
+
+
+def _export_report_by_id_once(
+    report_id: str,
+    *,
+    start: date,
+    end: date,
+    dest_root: Path | None = None,
+    menu_keys: str | None = None,
+    menu_map: dict[str, Any] | None = None,
+) -> Path:
+    """Single SoftDent GUI Excel export attempt (no outer retries)."""
     catalog = menu_map or load_menu_map()
     reports = catalog.get("reports") or {}
     report = reports.get(report_id)

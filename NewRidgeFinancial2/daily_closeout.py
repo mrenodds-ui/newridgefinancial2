@@ -376,78 +376,72 @@ def run_period_close(
 
         export_result: dict[str, Any] | None = None
         import_refresh: dict[str, Any] | None = None
+        export_fallback_attest = False
         if pull_softdent:
             try:
                 from hal_brain_tools import softdent_export
 
-                # SoftDent GUI export is consent-free for HAL (Excel only; no write-back).
+                # SoftDent GUI export is consent-free; retries live in export_report_by_id.
                 export_result = softdent_export(report_id="aging", days=30)
             except Exception as exc:  # noqa: BLE001
                 export_result = {"ok": False, "error": str(exc)[:240]}
             if not export_result.get("ok"):
-                entry = {
-                    "status": "stalled",
-                    "completedAt": _iso_now(),
-                    "startedAt": started,
-                    "actor": actor,
-                    "export": export_result,
-                    "laserClear": True,
-                    "buildStamp": build_stamp,
+                # Circuit breaker: do not stall morning close — attest from existing beams.
+                export_fallback_attest = True
+                export_result = {
+                    **(export_result if isinstance(export_result, dict) else {}),
+                    "ok": False,
+                    "fallback": "attest_only",
+                    "guiExport": False,
                     "emptyNotZero": True,
-                    "pullSoftdent": True,
                 }
-                _append_close_log(entry)
-                state.update(
-                    {
-                        "activeOperation": "stalled",
-                        "status": "stalled",
-                        "completedAt": entry["completedAt"],
-                        "laserClear": True,
-                    }
-                )
-                _write_state(state)
-                return {"ok": False, "error": "softdent_export_failed", "status": "stalled", **entry}
-            # Re-ingest after Excel lands so money beams reflect the pull.
-            try:
-                from import_healing import heal_import_pipeline
+            else:
+                # Re-ingest after Excel lands so money beams reflect the pull.
+                try:
+                    from import_healing import heal_import_pipeline
 
-                import_refresh = heal_import_pipeline(force=True)
-            except Exception as exc:  # noqa: BLE001
-                import_refresh = {"ok": False, "error": str(exc)[:240]}
-            try:
-                from import_diagnostics import assess_import_readiness as _assess
+                    import_refresh = heal_import_pipeline(force=True)
+                except Exception as exc:  # noqa: BLE001
+                    import_refresh = {"ok": False, "error": str(exc)[:240]}
+                try:
+                    from import_diagnostics import assess_import_readiness as _assess
 
-                ready = _assess()
-                blocked, block_reason = _laser_blocked(ready)
-                if blocked:
-                    entry = {
-                        "status": "blocked",
-                        "completedAt": _iso_now(),
-                        "startedAt": started,
-                        "actor": actor,
-                        "auto": bool(auto),
-                        "laserClear": False,
-                        "blockReason": block_reason,
-                        "buildStamp": build_stamp,
-                        "emptyNotZero": True,
-                        "export": export_result,
-                        "importRefresh": import_refresh,
-                        "pullSoftdent": True,
-                    }
-                    _append_close_log(entry)
-                    state.update(
-                        {
-                            "activeOperation": "blocked",
+                    ready = _assess()
+                    blocked, block_reason = _laser_blocked(ready)
+                    if blocked:
+                        entry = {
                             "status": "blocked",
-                            "completedAt": entry["completedAt"],
+                            "completedAt": _iso_now(),
+                            "startedAt": started,
+                            "actor": actor,
+                            "auto": bool(auto),
                             "laserClear": False,
                             "blockReason": block_reason,
+                            "buildStamp": build_stamp,
+                            "emptyNotZero": True,
+                            "export": export_result,
+                            "importRefresh": import_refresh,
+                            "pullSoftdent": True,
                         }
-                    )
-                    _write_state(state)
-                    return {"ok": False, "error": "laser_blocked_after_pull", "status": "blocked", **entry}
-            except Exception:
-                pass
+                        _append_close_log(entry)
+                        state.update(
+                            {
+                                "activeOperation": "blocked",
+                                "status": "blocked",
+                                "completedAt": entry["completedAt"],
+                                "laserClear": False,
+                                "blockReason": block_reason,
+                            }
+                        )
+                        _write_state(state)
+                        return {
+                            "ok": False,
+                            "error": "laser_blocked_after_pull",
+                            "status": "blocked",
+                            **entry,
+                        }
+                except Exception:
+                    pass
 
         try:
             from hal_brain_tools import money_beam_attestation
@@ -480,6 +474,8 @@ def run_period_close(
             "export": export_result,
             "importRefresh": import_refresh,
             "pullSoftdent": bool(pull_softdent),
+            "guiExport": bool(export_result and export_result.get("ok")) if pull_softdent else None,
+            "fallback": "attest_only" if export_fallback_attest else None,
             "buildStamp": build_stamp,
             "shadowStartedAt": shadow_started,
             "systemOfRecord": False,

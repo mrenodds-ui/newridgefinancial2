@@ -99,6 +99,47 @@ class SoftDentGuiExportTests(unittest.TestCase):
         self.assertFalse(_is_softdent_excel_workbook_name("Budget.xlsx"))
         self.assertFalse(_is_softdent_excel_workbook_name("Book1"))
 
+    def test_validate_export_rejects_tiny_file(self):
+        from softdent_gui_export import EXPORT_MIN_BYTES, _validate_export_file
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            tiny = Path(td) / "tiny.xls"
+            tiny.write_bytes(b"x" * max(1, EXPORT_MIN_BYTES - 1))
+            with self.assertRaises(RuntimeError):
+                _validate_export_file(tiny, report_id="aging")
+            ok = Path(td) / "ok.xls"
+            ok.write_bytes(b"x" * EXPORT_MIN_BYTES)
+            self.assertEqual(_validate_export_file(ok, report_id="aging"), EXPORT_MIN_BYTES)
+
+    def test_export_report_by_id_retries_then_succeeds(self):
+        from softdent_gui_export import EXPORT_MIN_BYTES, export_report_by_id
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "out.xls"
+            dest.write_bytes(b"x" * EXPORT_MIN_BYTES)
+            calls = {"n": 0}
+
+            def once(*_a, **_k):
+                calls["n"] += 1
+                if calls["n"] < 2:
+                    raise RuntimeError("transient dialog")
+                return dest
+
+            with mock.patch("softdent_gui_export.softdent_main_running", return_value=True):
+                with mock.patch("softdent_gui_export.prepare_softdent_for_next_report", return_value={"ok": True}):
+                    with mock.patch("softdent_gui_export._export_report_by_id_once", side_effect=once):
+                        with mock.patch("softdent_gui_export.time.sleep", return_value=None):
+                            out = export_report_by_id(
+                                "aging",
+                                start=date(2026, 7, 1),
+                                end=date(2026, 7, 15),
+                                retries=2,
+                            )
+            self.assertEqual(out, dest)
+            self.assertEqual(calls["n"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
