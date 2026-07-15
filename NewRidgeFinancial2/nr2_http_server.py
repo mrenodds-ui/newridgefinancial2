@@ -1361,13 +1361,15 @@ class NR2BottleServer(BottleServer):
 
             body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
             payload = json.loads(body or "{}")
-            consent = bool(payload.get("consent"))
             result = softdent_export(
-                consent=consent,
                 report_id=str(payload.get("reportId") or payload.get("report_id") or "account_aging"),
                 days=int(payload.get("days") or 30),
             )
-            status = 200 if result.get("ok") else (403 if result.get("error") == "consent_required" else 502)
+            # Mirror action-execute: refresh imports so money beams update after Excel land.
+            if result.get("ok") and payload.get("refreshImports", True) is not False:
+                result["importRefresh"] = _start_import_refresh(store=_local_store())
+                result["e2e"] = "softdent-export→SoftDentReportExports→refresh-imports"
+            status = 200 if result.get("ok") else 502
             return _json_response(result, status=status)
 
         @app.get("/api/hal/tools/qb-summary")
@@ -1402,10 +1404,9 @@ class NR2BottleServer(BottleServer):
                 actor=str(payload.get("actor") or "Operator"),
                 auto=bool(payload.get("auto")),
                 pull_softdent=bool(payload.get("pullSoftdent") or payload.get("pull_softdent")),
-                consent_export=bool(payload.get("consent")),
                 readiness=_get_import_readiness(),
             )
-            status = 200 if result.get("ok") else (403 if result.get("error") == "consent_required" else 409)
+            status = 200 if result.get("ok") else 409
             if result.get("status") == "blocked":
                 status = 403
             return _json_response(result, status=status)

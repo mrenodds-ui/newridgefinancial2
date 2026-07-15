@@ -421,6 +421,11 @@
   });
 
   async function proposeAndConsent(kind, label, payload) {
+    // SoftDent Excel export is consent-free for HAL — run immediately.
+    if (kind === "softdent_export" || kind === "softdent-export") {
+      await runSoftdentExport(label, payload || {});
+      return;
+    }
     const res = await fetch("/api/hal/actions/propose", {
       method: "POST",
       headers: {
@@ -682,16 +687,66 @@
     return { navigated: true, navOnly: Nav.navOnlyAsk(query), board: board };
   }
 
-  document.getElementById("btnSdExport").addEventListener("click", function () {
-    proposeAndConsent(
-      "softdent_export",
-      "Export SoftDent Account Aging to Excel (GUI) → then refresh imports",
-      {
-        reportId: "aging",
-        days: 30,
-        refreshImports: true,
+  async function runSoftdentExport(label, payload) {
+    setOrb("busy");
+    try {
+      const res = await fetch("/api/hal/tools/softdent-export", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(browserToken ? { "X-NR2-Session-Token": browserToken } : {}),
+        },
+        body: JSON.stringify({
+          reportId: (payload && payload.reportId) || "aging",
+          days: (payload && payload.days) || 30,
+          refreshImports: (payload && payload.refreshImports) !== false,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        addMsg(
+          "hal",
+          "SoftDent export failed · " + (data.detail || data.error || res.status)
+        );
+        setOrb("error");
+        return;
       }
-    );
+      const pathNote = data.path ? " → " + data.path : "";
+      const hygiene = data.pathHygiene ? " · " + data.pathHygiene : "";
+      let line = (label || "SoftDent export") + pathNote + hygiene + " · no consent required";
+      const ir = data.importRefresh;
+      if (ir && ir.status === "running") {
+        line +=
+          ir.alreadyRunning
+            ? " · import refresh already running"
+            : " · import refresh started (E2E)";
+        addMsg("hal", line);
+        addMsg("hal", "Waiting for SoftDent/QB imports… empty ≠ $0 while syncing.");
+        const sync = await waitForImportSync(180000);
+        addMsg(
+          "hal",
+          "Import sync · " +
+            (sync.status || "done") +
+            (sync.error ? " · " + sync.error : "")
+        );
+      } else {
+        addMsg("hal", line);
+      }
+      setOrb("idle");
+      await refreshBeams();
+      await refreshActions();
+    } catch (err) {
+      addMsg("hal", "SoftDent export error · " + (err && err.message ? err.message : err));
+      setOrb("error");
+    }
+  }
+
+  document.getElementById("btnSdExport").addEventListener("click", function () {
+    runSoftdentExport("Export SoftDent Account Aging to Excel (GUI) → then refresh imports", {
+      reportId: "aging",
+      days: 30,
+      refreshImports: true,
+    });
   });
   document.getElementById("btnQbSync").addEventListener("click", function () {
     proposeAndConsent("qb_sync", "Sync QuickBooks read-only → then refresh imports", {
@@ -707,11 +762,11 @@
     if (q) webResearch(q);
   });
   document.getElementById("btnSyncAll").addEventListener("click", function () {
-    proposeAndConsent(
-      "softdent_export",
-      "SYNC ALL — SoftDent Account Aging Excel export (consent) → import refresh",
-      { reportId: "aging", days: 30, refreshImports: true }
-    );
+    runSoftdentExport("SYNC ALL — SoftDent Account Aging Excel export → import refresh", {
+      reportId: "aging",
+      days: 30,
+      refreshImports: true,
+    });
   });
   const navBtn = function (id, page, label) {
     const el = document.getElementById(id);

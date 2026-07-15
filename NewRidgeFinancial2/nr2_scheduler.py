@@ -479,7 +479,7 @@ def morning_routine_tick(store, *, force: bool = False) -> dict[str, Any]:
     heal = heal_import_pipeline(force=False)
     actions.append({"action": "heal_import_pipeline", "result": heal})
 
-    # Shadow period-close attest (no SoftDent GUI without consent)
+    # Shadow period-close attest (SoftDent GUI pull is on-demand / consent-free when requested)
     try:
         from daily_closeout import run_period_close
 

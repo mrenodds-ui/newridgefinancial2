@@ -302,7 +302,7 @@ def run_period_close(
     store: Any | None = None,
     *,
     actor: str = "Operator",
-    consent_export: bool = False,
+    consent_export: bool = True,
     pull_softdent: bool = False,
     auto: bool = False,
     readiness: dict[str, Any] | None = None,
@@ -310,9 +310,10 @@ def run_period_close(
     """Execute one shadow period-close cycle.
 
     Default (auto/morning): attest checklist + live money beams + laser gate.
-    SoftDent GUI export only when pull_softdent=True AND consent_export=True
-    (no write-back; Excel/Print Preview path inside existing softdent_export).
+    SoftDent GUI export when pull_softdent=True — no operator consent required
+    (Excel/Print Preview only via softdent_export; SoftDent write-back forbidden).
     """
+    _ = consent_export  # SoftDent export no longer gated; kept for API compatibility
     with _LOCK:
         started = _iso_now()
         state = _read_state()
@@ -372,32 +373,11 @@ def run_period_close(
 
         export_result: dict[str, Any] | None = None
         if pull_softdent:
-            if not consent_export:
-                entry = {
-                    "status": "stalled",
-                    "completedAt": _iso_now(),
-                    "startedAt": started,
-                    "actor": actor,
-                    "error": "consent_required_for_softdent_export",
-                    "laserClear": True,
-                    "buildStamp": build_stamp,
-                    "emptyNotZero": True,
-                }
-                _append_close_log(entry)
-                state.update(
-                    {
-                        "activeOperation": "stalled",
-                        "status": "stalled",
-                        "completedAt": entry["completedAt"],
-                        "laserClear": True,
-                    }
-                )
-                _write_state(state)
-                return {"ok": False, "error": "consent_required", "status": "stalled", **entry}
             try:
                 from hal_brain_tools import softdent_export
 
-                export_result = softdent_export(consent=True, report_id="aging", days=30)
+                # SoftDent GUI export is consent-free for HAL (Excel only; no write-back).
+                export_result = softdent_export(report_id="aging", days=30)
             except Exception as exc:  # noqa: BLE001
                 export_result = {"ok": False, "error": str(exc)[:240]}
             if not export_result.get("ok"):
@@ -540,8 +520,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="NR2 period-close OPS (shadow)")
     parser.add_argument("--auto", action="store_true", help="Attest-only close (no SoftDent GUI)")
-    parser.add_argument("--pull-softdent", action="store_true", help="Also SoftDent aging export")
-    parser.add_argument("--consent", action="store_true", help="Consent for SoftDent GUI export")
+    parser.add_argument("--pull-softdent", action="store_true", help="Also SoftDent aging export (consent-free)")
+    parser.add_argument("--consent", action="store_true", help="Ignored — SoftDent export is consent-free")
     parser.add_argument("--status", action="store_true", help="Print period_close_status JSON")
     args = parser.parse_args()
     if args.status:
@@ -551,7 +531,6 @@ if __name__ == "__main__":
         actor="CLI",
         auto=bool(args.auto),
         pull_softdent=bool(args.pull_softdent),
-        consent_export=bool(args.consent),
     )
     print(json.dumps(result, indent=2, default=str))
     raise SystemExit(0 if result.get("ok") else 2)

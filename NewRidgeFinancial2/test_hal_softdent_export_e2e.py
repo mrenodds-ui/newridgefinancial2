@@ -1,4 +1,4 @@
-"""HAL SoftDent export consent E2E — consent gate + refreshImportsSuggested (empty ≠ $0)."""
+"""HAL SoftDent export E2E — consent-free GUI Excel export + refreshImportsSuggested (empty ≠ $0)."""
 
 from __future__ import annotations
 
@@ -7,18 +7,21 @@ from unittest.mock import patch
 
 
 class HalSoftdentExportConsentTests(unittest.TestCase):
-    def test_consent_required(self) -> None:
+    def test_export_runs_without_consent_flag(self) -> None:
         from hal_brain_tools import softdent_export
 
-        out = softdent_export(consent=False, report_id="aging")
+        with patch("softdent_gui_export.softdent_main_running", return_value=False):
+            out = softdent_export(consent=False, report_id="aging")
+        # consent ignored — failure is SoftDent unreachable, not consent_required
         self.assertFalse(out.get("ok"))
-        self.assertEqual(out.get("error"), "consent_required")
+        self.assertEqual(out.get("error"), "softdent_gui_unreachable")
+        self.assertNotEqual(out.get("error"), "consent_required")
 
     def test_unreachable_when_softdent_not_running(self) -> None:
         from hal_brain_tools import softdent_export
 
         with patch("softdent_gui_export.softdent_main_running", return_value=False):
-            out = softdent_export(consent=True, report_id="aging")
+            out = softdent_export(report_id="aging")
         self.assertFalse(out.get("ok"))
         self.assertEqual(out.get("error"), "softdent_gui_unreachable")
         self.assertIn("SoftDentReportExports", out.get("pathHygiene") or "")
@@ -33,14 +36,15 @@ class HalSoftdentExportConsentTests(unittest.TestCase):
                 return_value=r"C:\SoftDentReportExports\AG260715.XLS",
             ),
         ):
-            out = softdent_export(consent=True, report_id="aging", days=30)
+            out = softdent_export(report_id="aging", days=30)
         self.assertTrue(out.get("ok"))
         self.assertEqual(out.get("reportId"), "aging")
         self.assertTrue(out.get("refreshImportsSuggested"))
+        self.assertFalse(out.get("consentRequired"))
         self.assertIn("AG260715", out.get("path") or "")
         self.assertTrue(out.get("emptyNotZero"))
 
-    def test_execute_action_softdent_export(self) -> None:
+    def test_execute_action_softdent_export_without_consent(self) -> None:
         from hal_brain_tools import execute_action, propose_action
 
         proposed = propose_action(
@@ -48,6 +52,7 @@ class HalSoftdentExportConsentTests(unittest.TestCase):
             label="Export aging",
             payload={"reportId": "aging", "days": 30, "refreshImports": True},
         )
+        self.assertFalse(proposed.get("consentRequired"))
         action_id = proposed["action"]["actionId"]
         with patch(
             "hal_brain_tools.softdent_export",
@@ -57,7 +62,7 @@ class HalSoftdentExportConsentTests(unittest.TestCase):
                 "refreshImportsSuggested": True,
             },
         ) as mocked:
-            out = execute_action(action_id=action_id, consent=True)
+            out = execute_action(action_id=action_id, consent=False)
         self.assertTrue(out.get("ok"))
         mocked.assert_called_once()
         self.assertEqual(out["action"]["status"], "executed")

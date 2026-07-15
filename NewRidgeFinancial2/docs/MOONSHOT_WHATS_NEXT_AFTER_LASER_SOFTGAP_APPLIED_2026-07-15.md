@@ -22,8 +22,9 @@ Shadow period-close OPS rhythm (pulls optional + consent-gated):
 ## SoftDent doctrine
 
 - Write-back still **FORBIDDEN**
-- SoftDent GUI aging export only when `pullSoftdent=true` **and** `consent=true`
-- Excel / Print Preview path only (via existing `softdent_export`)
+- SoftDent GUI aging export is **consent-free for HAL** (Excel / Print Preview only via `softdent_export`)
+- QB sync still requires operator consent
+- `pullSoftdent=true` on period-close runs export without a consent gate
 
 ## Real paths only
 

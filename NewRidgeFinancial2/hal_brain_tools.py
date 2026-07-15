@@ -1,7 +1,8 @@
 """HAL brains tool + consent action helpers (Moonshot P1/P2).
 
 Invoked only from /api/hal/tools/* and /api/hal/actions/* routes.
-SoftDent write-back forbidden; GUI export and QB sync require consent=true.
+SoftDent write-back forbidden; SoftDent GUI Excel export is consent-free for HAL.
+QB sync still requires consent=true.
 
 Money honesty (nr2-12019): monetary chat must cite live SoftDent/QB beams
 or explicit UNAVAILABLE — never invent dollars; empty ≠ $0.
@@ -527,21 +528,16 @@ def qb_sync(*, consent: bool, store) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)[:400], "consent": True}
 
 
-def softdent_export(*, consent: bool, report_id: str = "aging", days: int = 30) -> dict[str, Any]:
-    """Consent-gated SoftDent GUI Excel export → SoftDent folder, then copy to exports.
+def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int = 30) -> dict[str, Any]:
+    """SoftDent GUI Excel export → SoftDent folder, then copy to exports.
 
-    SoftDent Select File Name keeps SoftDent's own folder (e.g. OneDrive\\Documents).
+    HAL may run this without operator consent (read-only GUI export). SoftDent
+    Select File Name keeps SoftDent's own folder (e.g. OneDrive\\Documents).
     Never type SoftDentReportExports / C:\\SOFTDE~1 into SoftDent — invalid directory.
     NR2 copies the XLS into C:\\SoftDentReportExports after SoftDent saves. Excel/Print
     Preview only — never Printer. No SoftDent write-back.
     """
-    if not consent:
-        return {
-            "ok": False,
-            "error": "consent_required",
-            "detail": "SoftDent GUI export requires explicit operator consent (consent:true).",
-            "reportId": report_id,
-        }
+    _ = consent  # retained for API compatibility; SoftDent export is consent-free for HAL
     try:
         from softdent_gui_export import export_report_by_id, softdent_main_running
 
@@ -581,7 +577,7 @@ def softdent_export(*, consent: bool, report_id: str = "aging", days: int = 30) 
         path = export_report_by_id(rid, start=start, end=end)
         return {
             "ok": True,
-            "consent": True,
+            "consentRequired": False,
             "reportId": rid,
             "start": start.isoformat(),
             "end": end.isoformat(),
@@ -652,16 +648,20 @@ def web_research_tool(*, query: str) -> dict[str, Any]:
 
 def propose_action(*, kind: str, label: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     action_id = uuid.uuid4().hex
+    kind_s = str(kind or "custom")[:64]
+    # SoftDent GUI Excel export is consent-free for HAL (read-only; no write-back).
+    consent_required = kind_s not in ("softdent_export", "softdent-export")
     row = {
         "actionId": action_id,
-        "kind": str(kind or "custom")[:64],
+        "kind": kind_s,
         "label": str(label or kind)[:240],
         "payload": payload or {},
         "status": "pending",
         "createdAt": _utc_now(),
+        "consentRequired": consent_required,
     }
     _PENDING[action_id] = row
-    return {"ok": True, "action": row, "consentRequired": True}
+    return {"ok": True, "action": row, "consentRequired": consent_required}
 
 
 def list_pending_actions() -> dict[str, Any]:
@@ -670,8 +670,6 @@ def list_pending_actions() -> dict[str, Any]:
 
 
 def execute_action(*, action_id: str, consent: bool, store=None) -> dict[str, Any]:
-    if not consent:
-        return {"ok": False, "error": "consent_required"}
     row = _PENDING.get(str(action_id))
     if not row:
         return {"ok": False, "error": "action_not_found"}
@@ -679,11 +677,14 @@ def execute_action(*, action_id: str, consent: bool, store=None) -> dict[str, An
         return {"ok": False, "error": "action_not_pending", "action": row}
 
     kind = str(row.get("kind") or "")
+    softdent_export_kind = kind in ("softdent_export", "softdent-export")
+    if not consent and not softdent_export_kind:
+        return {"ok": False, "error": "consent_required"}
+
     payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
     result: dict[str, Any]
-    if kind in ("softdent_export", "softdent-export"):
+    if softdent_export_kind:
         result = softdent_export(
-            consent=True,
             report_id=str(payload.get("reportId") or "aging"),
             days=int(payload.get("days") or 30),
         )
