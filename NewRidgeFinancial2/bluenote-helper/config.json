@@ -12,22 +12,21 @@
   "quietBootstrap": true,
   "announceVaried": true,
   "announceOpeners": [
-    "BlueNote.",
-    "Heads up.",
-    "Quick note.",
-    "Office message.",
-    "New BlueNote.",
-    "Incoming."
+    "Hello ladies, this is HAL. You have a new message.",
+    "Hi ladies — HAL here. New message for you.",
+    "Good day ladies. This is HAL. You've got a new message.",
+    "Hello ladies. HAL speaking. There's a new message.",
+    "Hey ladies, it's HAL. New message coming in.",
+    "Hello ladies, HAL here with a new message."
   ],
+  "announceGreeting": true,
   "announceVariants": [
     "Message from {sender}.",
-    "From {sender}.",
-    "{sender} messaged you."
+    "From {sender}."
   ],
   "announceBroadcastVariants": [
     "Broadcast from {sender}.",
-    "{sender} to everyone.",
-    "Office broadcast from {sender}."
+    "From {sender} to everyone."
   ],
   "announceTemplate": "Message from {sender}.",
   "announceBroadcastTemplate": "Broadcast from {sender}.",

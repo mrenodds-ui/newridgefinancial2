@@ -151,7 +151,7 @@ if (-not $cfg.announceBroadcastTemplate -or $cfg.announceBroadcastTemplate -matc
 ($cfg | ConvertTo-Json -Depth 6) | Set-Content -Path $configPath -Encoding UTF8
 Write-Info ""
 Write-Info "Wrote config: $configPath"
-Write-Info "Voice: HAL neural (GuyNeural) with SAPI fallback — same as NR2 program."
+Write-Info "Voice: HAL neural (ChristopherNeural) with SAPI fallback — same as NR2 program."
 
 # --- 4. Shortcuts -------------------------------------------------------------
 function New-Shortcut($linkPath, $target) {

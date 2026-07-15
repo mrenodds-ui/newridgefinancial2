@@ -444,12 +444,34 @@
     return false;
   }
 
-  function announceSidenote(sender, broadcast) {
-    const name = sender || "a station";
-    const openers = ["BlueNote.", "Heads up.", "Quick note.", "Incoming.", "Office message."];
-    const opener = openers[Math.floor(Math.random() * openers.length)];
-    const body = broadcast ? `Broadcast from ${name}.` : `Message from ${name}.`;
-    return speak(`${opener} ${body}`, { interrupt: true });
+  function announceSidenote(sender, broadcast, message) {
+    // Random HAL intro + message box text. Silent if empty/chrome.
+    const cleaned = String(message || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 220);
+    const looksLikeScript =
+      /^(new conversation|message from|broadcast from|options|settings|search|bluenote)\b/i.test(
+        cleaned
+      );
+    if (!cleaned || looksLikeScript) {
+      return { started: false, durationMs: 0, skipped: true, reason: "no-message-box" };
+    }
+    let body = cleaned;
+    if (body && !/[.!?]$/.test(body)) body += ".";
+    const intros = [
+      "Hello ladies, this is HAL. You have a new message.",
+      "Hi ladies — HAL here. New message for you.",
+      "Good day ladies. This is HAL. You've got a new message.",
+      "Hello ladies. HAL speaking. There's a new message.",
+      "Hey ladies, it's HAL. New message coming in.",
+      "Hello ladies, HAL here with a new message.",
+    ];
+    if (/^(hello ladies|hi ladies|hey ladies|good day ladies|hal[.,])/i.test(body)) {
+      return speak(body, { interrupt: true });
+    }
+    const intro = intros[Math.floor(Math.random() * intros.length)];
+    return speak(`${intro} ${body}`.trim(), { interrupt: true });
   }
 
   function speakOfficeAnnounce(text) {

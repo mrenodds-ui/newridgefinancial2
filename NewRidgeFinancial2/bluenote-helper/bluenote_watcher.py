@@ -373,15 +373,25 @@ def run_watcher() -> int:
                     if announcer:
                         try:
                             from announcer import pick_bluenote_announcement
+                            from bluenote_reader import read_message_box_text
 
+                            # Message box only — skip announce when empty (no invented scripts).
+                            note = read_message_box_text(pids=snap.get("pids") or None) or str(
+                                snap.get("messageBox") or ""
+                            )
                             phrase = pick_bluenote_announcement(
                                 "BlueNote",
                                 broadcast=False,
-                                message="New message.",
+                                message=note,
                                 cfg=cfg,
                             )
-                            announcer.speak(phrase)
-                            log(f"announced inbox bump -> {cur_inbox} ({announcer.last_engine}): {phrase}")
+                            if phrase:
+                                announcer.speak(phrase)
+                                log(
+                                    f"announced inbox bump -> {cur_inbox} ({announcer.last_engine}): {phrase}"
+                                )
+                            else:
+                                log(f"inbox bump -> {cur_inbox} (no message box; silent)")
                         except Exception as exc:
                             log(f"announce failed: {exc}")
             if isinstance(cur_inbox, int):
@@ -421,15 +431,24 @@ def run_watcher() -> int:
                     try:
                         from announcer import pick_bluenote_announcement
 
-                        # Never speak BlueNote UI chrome / light scripts — opener + sender only.
+                        # Message box only. Lights: visible label is the note. Else: live messageBox scrape.
+                        label = str(ev.get("label") or "")
+                        note = ""
+                        if kind == "light":
+                            note = label
+                        else:
+                            note = str(snap.get("messageBox") or "")
                         phrase = pick_bluenote_announcement(
                             spoken_as,
                             broadcast=broadcast or kind == "light",
-                            message="",
+                            message=note,
                             cfg=cfg,
                         )
-                        announcer.speak(phrase)
-                        log(f"announced {kind}: {phrase} ({announcer.last_engine})")
+                        if phrase:
+                            announcer.speak(phrase)
+                            log(f"announced {kind}: {phrase} ({announcer.last_engine})")
+                        else:
+                            log(f"skip announce {kind} (no message box text)")
                     except Exception as exc:
                         log(f"announce failed: {exc}")
 

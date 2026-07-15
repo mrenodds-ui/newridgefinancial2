@@ -73,7 +73,7 @@ Set-Prop $cfg "myStation" ""           # set by Setup-Station.ps1
 Set-Prop $cfg "inboxPath" ""           # set by Setup-Station.ps1 (kept local)
 Set-Prop $cfg "stationInboxPath" ""    # set by Setup-Station.ps1 (shared folder)
 Set-Prop $cfg "announceScope" "all"
-# HAL program voice (GuyNeural via neural bridge) — never ship film-HAL defaults.
+# HAL program voice (ChristopherNeural via neural bridge) — never ship film-HAL defaults.
 Set-Prop $cfg "voiceStyle" "hal9000"
 Set-Prop $cfg "voiceHint" "David"
 Set-Prop $cfg "voiceRate" 3

@@ -69,7 +69,7 @@ def segments_to_ssml(segments: list[dict[str, Any]], *, voice: str | None = None
         text = _escape_ssml(str(seg["text"]).strip())
         if not text:
             continue
-        body.append(f'<prosody rate="-28%" pitch="-2%" volume="medium">{text}</prosody>')
+        body.append(f'<prosody rate="-28%" pitch="-2%" volume="+18%">{text}</prosody>')
         body.append(f'<break time="{SENTENCE_BREAK_MS}ms"/>')
     if body and body[-1].startswith("<break"):
         body.pop()

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import random
+import re
 import sys
 import tempfile
 import time
@@ -47,36 +48,43 @@ HAL_VOICE_PRESET = {
     "processed_audio": False,
 }
 
-# Short random openers — keep the spoken line brief (opener + message only).
+# Friendly desk intros — HAL names himself, then reads the message box.
 BLUENOTE_OPENERS = [
-    "BlueNote.",
-    "Heads up.",
-    "Quick note.",
-    "Office message.",
-    "New BlueNote.",
-    "Incoming.",
+    "Hello ladies, this is HAL. You have a new message.",
+    "Hi ladies — HAL here. New message for you.",
+    "Good day ladies. This is HAL. You've got a new message.",
+    "Hello ladies. HAL speaking. There's a new message.",
+    "Hey ladies, it's HAL. New message coming in.",
+    "Hello ladies, HAL here with a new message.",
 ]
 
 BLUENOTE_DIRECT_BODIES = [
     "Message from {sender}.",
     "From {sender}.",
-    "{sender} messaged you.",
 ]
 
 BLUENOTE_BROADCAST_BODIES = [
     "Broadcast from {sender}.",
-    "{sender} to everyone.",
-    "Office broadcast from {sender}.",
+    "From {sender} to everyone.",
 ]
 
 
-def clip_spoken_message(text: str, *, max_words: int = 6, max_chars: int = 48) -> str:
-    """Keep spoken BlueNote body short — never read a long UI script."""
+def pick_hal_intro(cfg: dict[str, Any] | None = None) -> str:
+    """Random 'hello ladies / this is HAL / new message' style intro."""
+    openers = list(BLUENOTE_OPENERS)
+    if cfg and isinstance(cfg.get("announceOpeners"), list):
+        custom = [str(x).strip() for x in cfg["announceOpeners"] if str(x).strip()]
+        if custom:
+            openers = custom
+    return random.choice(openers)
+
+
+def clip_spoken_message(text: str, *, max_words: int = 40, max_chars: int = 220) -> str:
+    """Message-box text only — never UI chrome / settings scripts."""
     raw = " ".join(str(text or "").replace("\n", " ").split()).strip()
     if not raw:
         return ""
     low = raw.lower()
-    # Settings / option chrome — never speak.
     script_markers = (
         "options",
         "settings",
@@ -94,8 +102,25 @@ def clip_spoken_message(text: str, *, max_words: int = 6, max_chars: int = 48) -
         "show the",
         "how to use",
         "updated version",
+        "new conversation",
+        "conversations for",
+        "innovasys",
+        "bluenotecl",
+        "dde link",
+        "cannot be created",
+        "clients currently online",
+        "electric communication will never",
+        "charles dickens",
+        "version 9.",
     )
     if any(m in low for m in script_markers):
+        return ""
+    if re.match(
+        r"(?i)^(new\s+conversation|message\s+from|broadcast\s+from|search|good\s+(morning|afternoon|evening))\b",
+        raw,
+    ):
+        return ""
+    if low in {"search", "min", "form1", "bluenotecl"}:
         return ""
     words = raw.split(" ")
     if len(words) > max_words:
@@ -114,28 +139,16 @@ def pick_bluenote_announcement(
     message: str = "",
     cfg: dict[str, Any] | None = None,
 ) -> str:
-    """Random short opener + short message body only (never UI script text)."""
-    openers = BLUENOTE_OPENERS
-    if cfg and isinstance(cfg.get("announceOpeners"), list):
-        custom = [str(x).strip() for x in cfg["announceOpeners"] if str(x).strip()]
-        if custom:
-            openers = custom
-    opener = random.choice(openers)
-
-    # Prefer sender-routed body. Ignore long/message UI chrome even if passed in.
-    body = clip_spoken_message(message, max_words=5, max_chars=40)
+    """Random HAL intro + message-box text. Empty if no real message."""
+    _ = (sender, broadcast)  # routing kept for callers; message box is spoken
+    body = clip_spoken_message(message, max_words=40, max_chars=220)
     if not body:
-        key_pool = BLUENOTE_BROADCAST_BODIES if broadcast else BLUENOTE_DIRECT_BODIES
-        if cfg:
-            cfg_key = "announceBroadcastVariants" if broadcast else "announceVariants"
-            cfg_pool = cfg.get(cfg_key)
-            if isinstance(cfg_pool, list):
-                custom_bodies = [str(p).strip() for p in cfg_pool if str(p).strip()]
-                if custom_bodies:
-                    key_pool = custom_bodies
-        body = random.choice(key_pool).replace("{sender}", sender or "a station")
-        body = clip_spoken_message(body, max_words=8, max_chars=56)
-    return f"{opener} {body}".strip()
+        return ""
+    # Avoid double-intros if the box already starts with HAL.
+    if re.match(r"(?i)^hello ladies|^hi ladies|^hey ladies|^good day ladies|^hal[.,]", body):
+        return body
+    intro = pick_hal_intro(cfg)
+    return f"{intro} {body}".strip()
 
 
 SPEAK_LOCK_PATH = Path(__file__).resolve().parent / "sidenotes-speak.lock"
@@ -349,15 +362,29 @@ class Announcer:
             pass
 
     def speak(self, text: str, asynchronous: bool = False) -> None:
-        # Hard clamp — never speak long BlueNote/UI scripts.
-        phrase = clip_spoken_message(str(text or ""), max_words=12, max_chars=96)
-        if not phrase:
-            # Fall back to whole text only if it was already a short opener line.
-            cleaned = " ".join(str(text or "").split())
-            if len(cleaned.split()) <= 12 and len(cleaned) <= 96:
-                phrase = cleaned
-            else:
-                return
+        # Allow short cue+body lines; reject long scripts.
+        cleaned = " ".join(str(text or "").split()).strip()
+        if not cleaned:
+            return
+        low = cleaned.lower()
+        if any(
+            m in low
+            for m in (
+                "hope you're",
+                "take care",
+                "happy to help",
+                "options window",
+                "popup alert",
+                "i have a message for you",
+            )
+        ):
+            # Strip nicety / UI scripts down to a safe BlueNote cue.
+            cleaned = pick_bluenote_announcement("a station", message="")
+        if len(cleaned.split()) > 10 or len(cleaned) > 72:
+            cleaned = " ".join(cleaned.split()[:8])
+            if cleaned[-1] not in ".!?":
+                cleaned += "."
+        phrase = cleaned
         with AnnounceSpeakLock() as lock:
             if not lock.acquired:
                 return

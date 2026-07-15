@@ -207,8 +207,94 @@ def _fingerprint(kind: str, sender: str, recipient: str, label: str) -> str:
     return re.sub(r"\s+", " ", base)[:180]
 
 
+def read_message_box_text(*, pids: list[int] | None = None) -> str:
+    """Best-effort visible BlueNote message-box text (never settings/chrome).
+
+    Prefers ThunderRT6TextBox / Edit / rich content that looks like a user note.
+    Returns empty string when nothing readable is on screen.
+    """
+
+    def _clip(text: str) -> str:
+        raw = " ".join(str(text or "").replace("\n", " ").split()).strip()
+        if not raw or len(raw) < 2:
+            return ""
+        low = raw.lower()
+        if low in {"search", "min", "form1", "bluenotecl", "dde link"}:
+            return ""
+        if re.match(r"(?i)^(search|options|settings|new conversation)\b", raw):
+            return ""
+        if any(
+            m in low
+            for m in (
+                "aging color",
+                "light color",
+                "xmlns",
+                "trial",
+                "charles dickens",
+                "cannot be created",
+            )
+        ):
+            return ""
+        # Reject tiny spinner/panel values
+        if re.fullmatch(r"\d{1,3}", raw):
+            return ""
+        if len(raw) > 220:
+            raw = raw[:219].rstrip(" ,.;:") + "."
+        return raw
+
+    target_pids = pids if pids is not None else find_bluenote_pids()
+    if not target_pids:
+        return ""
+    candidates: list[tuple[int, str]] = []
+    for cls, text, visible in _iter_bluenote_control_texts(target_pids):
+        if not visible:
+            continue
+        low_cls = cls.lower()
+        if not any(k in low_cls for k in ("edit", "rich", "textbox", "thunderrt6textbox")):
+            # Also accept short visible button texts as light "message boxes"
+            if low_cls == "button" and _looks_like_light_label(text):
+                clipped = _clip(text)
+                if clipped:
+                    candidates.append((60, clipped))
+            continue
+        clipped = _clip(text)
+        if not clipped:
+            continue
+        score = 100 if "textbox" in low_cls or "rich" in low_cls else 80
+        # Prefer longer note-like text
+        score += min(40, len(clipped) // 2)
+        candidates.append((score, clipped))
+
+    # XAML plains that look like a user note (substantial sentence, not routing chips)
+    for cls, text, visible in _iter_bluenote_control_texts(target_pids):
+        if not visible:
+            continue
+        if "AfxOle" not in cls and "<TextBlock" not in text:
+            continue
+        plains = _xaml_plain(text)
+        joined_low = " ".join(plains).lower()
+        # Routing chrome panels — never treat recipient chip as the message box.
+        if "new conversation" in joined_low or "conversations for" in joined_low:
+            continue
+        for plain in plains:
+            clipped = _clip(plain)
+            if not clipped:
+                continue
+            words = clipped.split()
+            if len(words) < 4:
+                continue
+            if re.match(r"(?i)^(new conversation to|new conversation from)\b", clipped):
+                continue
+            candidates.append((90 + min(30, len(clipped) // 3), clipped))
+
+    if not candidates:
+        return ""
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return candidates[0][1]
+
+
 def scan_events(*, my_panel: str = "") -> dict:
-    """Snapshot current BlueNote routing cues (no message bodies)."""
+    """Snapshot current BlueNote routing cues + optional visible message box."""
     now = datetime.now(timezone.utc).isoformat()
     pids = find_bluenote_pids()
     events: list[BlueNoteEvent] = []
@@ -223,6 +309,7 @@ def scan_events(*, my_panel: str = "") -> dict:
             "panelName": panel,
             "inboxCount": None,
             "events": [],
+            "messageBox": "",
             "error": "BlueNoteCL.exe not running",
             "econversationsMtime": _mtime(ECONVERSATIONS),
         }
@@ -324,6 +411,7 @@ def scan_events(*, my_panel: str = "") -> dict:
         "inboxCount": inbox_count,
         "pids": pids,
         "events": unique,
+        "messageBox": read_message_box_text(pids=pids),
         "econversationsMtime": _mtime(ECONVERSATIONS),
         "scannedAt": now,
     }

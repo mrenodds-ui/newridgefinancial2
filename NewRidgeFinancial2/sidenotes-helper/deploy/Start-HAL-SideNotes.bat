@@ -1,6 +1,6 @@
 @echo off
 REM HAL SideNotes watcher launcher (workstation package).
-REM Uses the same HAL neural voice as NR2 (Edge GuyNeural via 64-bit Python).
+REM Uses the same HAL neural voice as NR2 (Edge ChristopherNeural via 64-bit Python).
 REM Local only; message body is never read.
 setlocal
 cd /d "%~dp0"

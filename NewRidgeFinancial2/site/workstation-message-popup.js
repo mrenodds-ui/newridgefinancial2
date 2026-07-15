@@ -83,7 +83,7 @@ const WorkstationMessagePopup = (function () {
   function present(item) {
     showToast(item);
     showNativeBalloon(item);
-    // Same HAL neural voice as program/BlueNote (sender only — never speak message body).
+    // HAL neural voice: greeting + short message text (never UI chrome scripts).
     try {
       const mute =
         window.NR2_WORKSTATION_MUTE_HAL_VOICE === true ||
@@ -92,7 +92,8 @@ const WorkstationMessagePopup = (function () {
         const from = String((item && item.from) || "Office");
         const route = targetsLabel(item);
         const broadcast = /everyone/i.test(route) || /^(all|everyone)$/i.test(String((item && item.target) || ""));
-        HalVoice.announceSidenote(from, broadcast);
+        const note = truncate(item && item.text, 96);
+        HalVoice.announceSidenote(from, broadcast, note);
       }
     } catch (_err) {
       /* ignore TTS failures — popup still shows */
