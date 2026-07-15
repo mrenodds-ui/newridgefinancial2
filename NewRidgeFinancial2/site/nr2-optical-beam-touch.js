@@ -1,4 +1,4 @@
-/* nr2-12016-honest-subpages — live wire + P2 honesty (CSP script-src 'self') */
+/* nr2-12017-optical-ops — live wire + P2 honesty (CSP script-src 'self') */
 (function () {
   const toast = (msg) => {
     const el = document.getElementById("toast");

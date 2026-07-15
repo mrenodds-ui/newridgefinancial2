@@ -120,7 +120,7 @@
     W.setBanner(
       blocked ? "partial" : live ? "live" : "partial",
       blocked
-        ? "OM · import BLOCKED · SoftDent ops may still read · sync via main"
+        ? "OM · import BLOCKED · re-export SoftDent Account Aging if softdent.ar stale · sync via main"
         : "OM · SoftDent day pulse + readiness · board-actions UNAVAILABLE · empty ≠ $0"
     );
   }

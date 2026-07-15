@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12016-honest-subpages",
-  "BUILD_ID": "nr2-12016-honest-subpages",
-  "assetVersion": "nr2-12016-honest-subpages",
-  "builtAt": "2026-07-15T17:47:00.000Z",
-  "notes": "nr2-12016-honest-subpages: P0–P2 done — live SoftDent/QB/Claims/AR wires, SoftDent AR stale blocks lasers, film stubs, recon UNAVAILABLE, Narratives/Content UNAVAILABLE, OM partial.",
+  "schemaVersion": "nr2-12017-optical-ops",
+  "BUILD_ID": "nr2-12017-optical-ops",
+  "assetVersion": "nr2-12017-optical-ops",
+  "builtAt": "2026-07-15T18:48:00.000Z",
+  "notes": "nr2-12017-optical-ops: post-12016 wires — SoftDent AR buckets + claims full totals + 7d util, QB cash/NI, OM SoftDent day pulse, Documents inbox/extract, hub honesty map. Narratives/ERA/recon remain UNAVAILABLE. SoftDent Account Aging re-export clears AR laser block.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12016-HONEST-SUBPAGES",
+  "package": "NR2-12017-OPTICAL-OPS",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

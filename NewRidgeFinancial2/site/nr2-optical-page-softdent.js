@@ -141,7 +141,10 @@
     if (stale) {
       const ar = document.getElementById("val-ar");
       if (ar) ar.classList.add("stale");
-      W.setBanner("partial", "SoftDent AR stale · claims/production may still be live · empty ≠ $0");
+      W.setBanner(
+        "partial",
+        "SoftDent AR stale · re-export Account Aging Report to SoftDentReportExports · empty ≠ $0"
+      );
     } else {
       W.setBanner(live ? "live" : "partial", "SoftDent read-only · claims + production · no write-back");
     }

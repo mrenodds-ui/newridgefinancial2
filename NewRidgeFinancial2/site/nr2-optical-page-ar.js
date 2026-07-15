@@ -91,7 +91,10 @@
     if (stale) {
       const el = document.getElementById("val-total");
       if (el) el.classList.add("stale");
-      W.setBanner("partial", "softdent.ar STALE · buckets may lag · empty ≠ $0 · no SoftDent write-back");
+      W.setBanner(
+        "partial",
+        "softdent.ar STALE · re-export SoftDent Account Aging Report · empty ≠ $0 · no SoftDent write-back"
+      );
     } else {
       W.setBanner(
         live ? "live" : "partial",
