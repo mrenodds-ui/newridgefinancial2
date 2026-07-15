@@ -247,10 +247,12 @@
         setMetric("metric-sd", null);
         if (sdStatus) sdStatus.textContent = "∅ EMPTY";
       }
+      await refreshFilm(claims.data);
     } else {
       setMetric("metric-sd", null, { emptyLabel: "∅" });
       if (sdStatus) sdStatus.textContent = "NO SIGNAL";
       if (sdSub) sdSub.textContent = "no claims signal · empty ≠ $0 · no SoftDent write-back";
+      await refreshFilm(null);
     }
 
     const qb = await api("/api/qb/monthly-revenue");
@@ -271,6 +273,37 @@
       setMetric("metric-qb", null, { emptyLabel: "∅" });
       if (qbStatus) qbStatus.textContent = "NO SIGNAL";
     }
+  }
+
+  async function refreshFilm(claimsData) {
+    const slots = document.querySelectorAll("#film .slot");
+    if (!slots.length) return;
+    const list =
+      claimsData && claimsData.hasData && Array.isArray(claimsData.claims)
+        ? claimsData.claims.slice(0, slots.length)
+        : [];
+    slots.forEach((slot, i) => {
+      const c = list[i];
+      if (!c) {
+        slot.classList.add("empty");
+        slot.innerHTML = "∅";
+        slot.title = "No claim stub · empty ≠ $0";
+        return;
+      }
+      slot.classList.remove("empty");
+      const amt = money(c.amount);
+      const label =
+        String(c.claimId || c.patientName || "claim").slice(0, 14) +
+        (amt != null ? " · $" + Math.round(amt) : "");
+      slot.innerHTML = '<div class="mini"></div>' + label.replace(/</g, "");
+      slot.title =
+        String(c.payer || "") +
+        " · " +
+        String(c.serviceDate || "") +
+        " · " +
+        String(c.status || "") +
+        " · read-only";
+    });
   }
 
   async function bootWire() {

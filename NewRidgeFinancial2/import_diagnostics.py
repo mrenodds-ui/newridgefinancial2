@@ -484,13 +484,15 @@ def assess_import_completeness(diagnostics: dict[str, Any] | None) -> dict[str, 
 
 
 def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Critical datasets that are missing (not merely stale) block money-read freshness.
+    """Critical gaps that must block money-read freshness / red alignment lasers.
 
-    Stale-with-rows is honesty/soft health — freshness chips surface age without 403ing
-    the Apex shell when SoftDent TTLs (e.g. 120 min) expire between syncs.
+    Missing critical datasets always block. SoftDent AR that is critical+stale past
+    its freshness TTL (or AR_OPS_HOURS, whichever is sooner) also blocks — otherwise
+    lasers stay green while SoftDent itself already marks AR stale (Moonshot P2).
     """
     if not isinstance(diagnostics, dict):
         return []
+    ar_ops_minutes = max(1, int(AR_OPS_HOURS) * 60)
     blocking: list[dict[str, Any]] = []
     for row in diagnostics.get("datasets") or []:
         if not isinstance(row, dict):
@@ -500,10 +502,41 @@ def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str,
             continue
         status = row.get("status")
         row_count = int(row.get("rowCount") or 0)
+        dataset_key = str(row.get("datasetKey") or "")
+        age_minutes = row.get("ageMinutes")
+        try:
+            age_n = int(age_minutes) if age_minutes is not None else None
+        except (TypeError, ValueError):
+            age_n = None
         if status == STATUS_MISSING or (severity == "critical" and row_count <= 0 and status != STATUS_CONNECTED):
             blocking.append(row)
         elif status != STATUS_CONNECTED and status != STATUS_STALE and severity == "critical":
             blocking.append(row)
+        elif (
+            status == STATUS_STALE
+            and severity == "critical"
+            and (
+                dataset_key == "softdent.ar"
+                or dataset_key.startswith("softdent.ar")
+            )
+            and age_n is not None
+        ):
+            try:
+                freshness_max = int(row.get("freshnessMaxMinutes") or 0) or None
+            except (TypeError, ValueError):
+                freshness_max = None
+            # Block at SoftDent's own TTL when present; never wait longer than AR_OPS_HOURS.
+            threshold = ar_ops_minutes
+            if freshness_max is not None and freshness_max > 0:
+                threshold = min(ar_ops_minutes, freshness_max)
+            if age_n > threshold:
+                blocking.append(
+                    {
+                        **row,
+                        "blockingReason": "softdent_ar_stale_exceeds_freshness",
+                        "blockingThresholdMinutes": threshold,
+                    }
+                )
     return blocking
 
 

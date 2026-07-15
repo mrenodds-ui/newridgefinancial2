@@ -3,47 +3,49 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NR2 Optical · Office Manager — nr2-12010-pages</title>
+  <title>NR2 Optical · Office Manager — PARTIAL</title>
   <link rel="stylesheet" href="/nr2-optical-theme.css" />
 </head>
 <body>
   <div class="banner">
-    UNAVAILABLE · Office Manager · nr2-11000-clean · empty ≠ $0 · no SoftDent write-back
-    <span class="bind">Deferred P2 · no fake \$ · mark UNAVAILABLE</span>
+    PARTIAL · Office Manager · nr2-11000-clean · empty ≠ $0 · no SoftDent write-back
+    <span class="bind">Readiness + sync pulse only · board-actions UNAVAILABLE</span>
   </div>
   <div class="shell">
     <nav class="nav" id="nav"></nav>
     <main class="main">
       <div class="hal-chip">HAL · SPECTRAL · same theme as main</div>
       <h1>OFFICE MANAGER</h1>
-      <p class="kicker">Ops huddle · RBAC · board-actions from HAL</p>
+      <p class="kicker">Import health + sync · no fake huddle dollars</p>
       <div class="beam"></div>
-      <div class="honesty">Honesty: empty ≠ $0 · no SoftDent write-back · widgets must bind SoftDent / QuickBooks / HAL</div>
+      <div class="honesty">Honesty: empty ≠ $0 · overrides / quarantine packs removed · use main SYNC</div>
       <div class="grid">
         <div class="card">
-          <h3>Huddle</h3>
-          <div class="val hal">OM</div>
-          <p class="hint">Requires office_manager+ capabilities</p>
+          <h3>Import readiness</h3>
+          <div class="val" id="val-ready">—</div>
+          <p class="hint" id="hint-ready">GET /api/import-readiness</p>
         </div>
         <div class="card">
           <h3>Sync Pulse</h3>
-          <div class="val sd">SYNC</div>
-          <p class="hint">SoftDent+QB+HAL · POST sync/trigger</p>
+          <div class="val sd"><a class="btn" href="/nr2-optical-beam-touch-mockup.html">MAIN SYNC</a></div>
+          <p class="hint">POST /api/apex/sync/trigger on main bench</p>
         </div>
         <div class="card">
           <h3>Overrides</h3>
-          <div class="val stale">LOCK</div>
-          <p class="hint">override_import gated</p>
+          <div class="val" id="val-ov">UNAVAILABLE</div>
+          <p class="hint">Import override pack removed</p>
         </div>
         <div class="card">
-          <h3>Subpages</h3>
-          <div class="val qb">2</div>
-          <p class="hint">Tasks · Quarantine release</p>
+          <h3>Health</h3>
+          <div class="val" id="val-health">—</div>
+          <p class="hint">GET /api/health · db + ollama</p>
         </div>
       </div>
       <p class="kicker" style="margin-top:24px"><a href="/nr2-optical-beam-touch-mockup.html">← Main interferometer bench</a> · <a href="/nr2-optical-pages-hub.html">Pages hub</a></p>
     </main>
   </div>
   <script src="/nr2-optical-nav.js"></script>
+  <script src="/nr2-optical-page-wire.js"></script>
+  <script src="/nr2-optical-page-office-manager.js"></script>
 </body>
 </html>

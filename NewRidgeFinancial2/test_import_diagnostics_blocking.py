@@ -89,6 +89,35 @@ class ImportDiagnosticsBlockingTests(unittest.TestCase):
         self.assertEqual(stale["severity"], "warning")
         self.assertEqual(blocking_import_issues(diagnostics), [])
 
+    def test_blocking_import_issues_blocks_softdent_ar_stale_past_ar_ops(self) -> None:
+        """Moonshot P2 — critical SoftDent AR stale past freshness TTL blocks lasers."""
+        row = {
+            "datasetKey": "softdent.ar",
+            "severity": "critical",
+            "status": "stale",
+            "rowCount": 4,
+            "ageMinutes": 180,
+            "freshnessMaxMinutes": 120,
+            "detail": "Dataset is stale",
+        }
+        got = blocking_import_issues({"datasets": [row]})
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0]["datasetKey"], "softdent.ar")
+        self.assertEqual(got[0].get("blockingReason"), "softdent_ar_stale_exceeds_freshness")
+
+    def test_blocking_import_issues_keeps_brief_softdent_ar_stale_soft(self) -> None:
+        """Stale SoftDent AR under SoftDent freshness TTL stays soft (not blocking)."""
+        row = {
+            "datasetKey": "softdent.ar",
+            "severity": "critical",
+            "status": "stale",
+            "rowCount": 4,
+            "ageMinutes": 60,
+            "freshnessMaxMinutes": 120,
+            "detail": "Dataset is stale",
+        }
+        self.assertEqual(blocking_import_issues({"datasets": [row]}), [])
+
     def test_upstream_stale_keeps_connected_when_local_cache_fresh(self) -> None:
         import os
         import tempfile
