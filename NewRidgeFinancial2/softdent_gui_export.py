@@ -733,7 +733,11 @@ def _open_report_via_keys(keys_after_reports_accounting: str) -> None:
 
 
 def _open_accounting_report(report_id: str, menu_keys: str) -> None:
-    """Open SoftDent accounting report per Carestream docs; Win32 menu preferred, keyboard fallback."""
+    """Open SoftDent accounting report per Carestream docs.
+
+    SoftDent is 32-bit; 64-bit Python ``menu_select`` often hits ElementNotEnabled.
+    Prefer F10 keyboard for aging (and whenever win32 fails). Never Esc on SoftDent main.
+    """
     # Probed on CS SoftDent v19.1.4 (classic HMENU under Reports)
     win32_paths: dict[str, list[str]] = {
         "register": ["Reports->Accounting->Registers->Period"],
@@ -759,10 +763,23 @@ def _open_accounting_report(report_id: str, menu_keys: str) -> None:
             "Reports->Accounting->Insurance Payment Distribution",
         ],
     }
+    # F10-first for reports where 64-bit menu_select is flaky on this build.
+    prefer_f10 = report_id in {"aging", "daysheet", "writeoff_totals"}
+    if prefer_f10:
+        for keys in (menu_keys, *(report_id == "aging" and ["g", "aa", "n"] or [])):
+            if not keys:
+                continue
+            _open_report_via_keys(str(keys))
+            for _ in range(16):
+                cancel_printer_dialogs(max_rounds=1)
+                if find_dialog("Output Options"):
+                    return
+                time.sleep(0.25)
     for path in win32_paths.get(report_id) or []:
         if _open_report_via_win32_menu(path):
             return
-    _open_report_via_keys(menu_keys)
+    if not prefer_f10:
+        _open_report_via_keys(menu_keys)
     if not find_dialog("Output Options") and report_id in win32_paths:
         for path in win32_paths[report_id]:
             if _open_report_via_win32_menu(path):
@@ -806,6 +823,26 @@ def _format_stem(template: str, start: date, end: date) -> str:
     )
 
 
+def _softdent_file_stem(short_stem: str) -> str:
+    """SoftDent 'Select File Name' historically takes an 8.3-style name.
+
+    Blind ``[:8]`` truncation turns ``AGE260715`` into ``AGE26071`` (wrong day).
+    Prefer a lossless 8-char alias when the natural stem is longer.
+    """
+    cleaned = "".join(ch for ch in str(short_stem or "") if ch.isalnum()).upper()
+    if not cleaned:
+        return "EXPORT01"
+    if len(cleaned) <= 8:
+        return cleaned
+    # AGE / DAY / WOF / IPD / IPA + yymmdd (9) → drop one letter of prefix.
+    for prefix in ("AGE", "DAY", "WOF", "IPD", "IPA", "TRN", "REG", "COL"):
+        if cleaned.startswith(prefix) and len(cleaned) == len(prefix) + 6:
+            # AGyyMMdd / DAyyMMdd / etc. (8 chars) — keep full date.
+            return (prefix[:2] + cleaned[len(prefix) :])[:8]
+    # Last resort: keep head unique prefix + tail of date digits.
+    return cleaned[:2] + cleaned[-6:]
+
+
 def _format_canonical(template: str, start: date, end: date) -> str:
     return (
         template.replace("{start}", start.isoformat())
@@ -835,6 +872,88 @@ def _type_keys_clear_and_text(text: str, *, hwnd: int | None = None) -> None:
     if safe:
         _send_softdent_keys(safe, hwnd=hwnd, pause=0.03)
     time.sleep(0.08)
+
+
+def _set_edit_text_win32(edit_hwnd: int, text: str) -> None:
+    """Set an Edit control via WM_SETTEXT (safe for paths with ~)."""
+    import ctypes
+
+    WM_SETTEXT = 0x000C
+    buf = ctypes.create_unicode_buffer(str(text))
+    ctypes.windll.user32.SendMessageW(int(edit_hwnd), WM_SETTEXT, 0, buf)
+
+
+def _softdent_select_file_path(stem_only: str, current: str = "") -> str:
+    """Build SoftDent Select File Name value using SoftDent's own directory.
+
+    SoftDent v19 shows ONE edit (e.g. ``E:\\OneDrive\\Documents\\AcctAge``) plus
+    static ``.XLS``. That folder is SoftDent's valid export path for this office —
+    never replace it with ``C:\\SOFTDE~1`` / SoftDentReportExports (SoftDent
+    rejects those as invalid directory). Only swap the file stem; NR2 copies
+    into SoftDentReportExports after SoftDent writes the XLS.
+    """
+    stem = _softdent_file_stem(stem_only)
+    cur = str(current or "").strip().strip('"')
+    for suf in (".xls", ".XLS", ".xlsx", ".XLSX", ".csv", ".CSV"):
+        if cur.lower().endswith(suf.lower()):
+            cur = cur[: -len(suf)]
+            break
+    if not cur:
+        raise RuntimeError(
+            "SoftDent Select File Name has no path — refuse inventing a directory. "
+            "SoftDent must show its own folder (e.g. OneDrive\\Documents\\AcctAge)."
+        )
+    p = Path(cur)
+    folder = str(p.parent) if str(p.parent) not in {".", ""} else ""
+    # SoftDent must already have a real folder (drive/UNC). Do not invent one.
+    if not folder or folder in {".", ""} or not (
+        "\\" in cur or "/" in cur or (len(cur) >= 2 and cur[1] == ":")
+    ):
+        raise RuntimeError(
+            f"SoftDent Select File Name folder invalid/missing from {current!r}. "
+            "Do not substitute SoftDentReportExports — SoftDent rejects it."
+        )
+    # SoftDent File dialog: SoftDentFolder\STEM (no extension — UI shows .XLS)
+    return str(Path(folder) / stem)
+
+
+def _focus_select_file_name_filename_edit(dlg) -> tuple[int, str]:
+    """Focus SoftDent Select File Name edit; return (hwnd, current_text).
+
+    SoftDent Account Aging uses a single path edit (folder + stem), not a bare name.
+    """
+    _keyboard_activate_dialog(dlg)
+    try:
+        from pywinauto import Application
+
+        app = Application(backend="win32").connect(handle=int(dlg.handle))
+        win = app.window(handle=int(dlg.handle))
+        edits: list[Any] = []
+        for e in win.descendants(class_name="Edit"):
+            try:
+                if e.is_visible() and e.is_enabled():
+                    edits.append(e)
+            except Exception:
+                continue
+        if not edits:
+            raise RuntimeError("Select File Name has no Edit controls")
+        edit = edits[0]
+        try:
+            cur = str(edit.window_text() or "")
+        except Exception:
+            cur = ""
+        try:
+            edit.set_focus()
+        except Exception:
+            _softdent_click(edit)
+        time.sleep(0.12)
+        return int(edit.handle), cur
+    except Exception as exc:
+        logger.warning(
+            "Select File Name focus failed (%s)",
+            type(exc).__name__,
+        )
+        return int(dlg.handle), ""
 
 
 def _select_output_option_prompt(kind: str = "excel") -> None:
@@ -1176,66 +1295,115 @@ def _complete_output_setup_and_save(
             break
         time.sleep(0.25)
     if save:
-        # SoftDent File mode: "Takes only file name" — letters/numbers only (no path).
-        # Excel mode historically accepted C:\SOFTDE~1\STEM; File rejects \ and ~.
-        stem_only = "".join(ch for ch in str(short_stem) if ch.isalnum())[:8]
-        if not stem_only:
-            raise RuntimeError(f"SoftDent File export stem invalid: {short_stem!r}")
-        _keyboard_activate_dialog(save)
-        sh = int(save.handle)
-        _type_keys_clear_and_text(stem_only, hwnd=sh)
+        # SoftDent Select File Name: ONE path edit (SoftDentFolder\stem) + static .XLS.
+        # Keep SoftDent's folder verbatim (e.g. E:\OneDrive\Documents). Never
+        # substitute SoftDentReportExports / C:\SOFTDE~1 — SoftDent rejects those.
+        stem_only = _softdent_file_stem(short_stem)
+        if any(ch in stem_only for ch in (":", "\\", "/", " ")):
+            raise RuntimeError(
+                f"Refusing SoftDent File stem {stem_only!r} — alphanumeric only"
+            )
+        full_stem = "".join(ch for ch in str(short_stem) if ch.isalnum()).upper()
+        file_hwnd, current_path = _focus_select_file_name_filename_edit(save)
+        save_path = _softdent_select_file_path(stem_only, current_path)
+        logger.info(
+            "SoftDent Select File Name: keep SoftDent dir, current=%r → save=%r",
+            current_path,
+            save_path,
+        )
+        try:
+            _set_edit_text_win32(file_hwnd, save_path)
+        except Exception:
+            _type_keys_clear_and_text(save_path, hwnd=file_hwnd)
         time.sleep(0.15)
-        _keyboard_press_ok(hwnd=sh)
+        _keyboard_press_ok(hwnd=int(save.handle))
         time.sleep(1.0)
-        # SoftDent alert if path typed: dismiss + retry name-only once
+        # SoftDent alert: dismiss only — do not invent SoftDentReportExports as retry path
         for w in list(_desktop_dialogs()):
             try:
                 blob = _dialog_text_blob(w)
-                if "invalid character" in blob or "takes only file name" in blob:
-                    _force_foreground(int(w.handle))
-                    _send_softdent_keys("{ENTER}", hwnd=int(w.handle))
-                    time.sleep(0.35)
-                    if find_dialog("Select File Name"):
-                        _keyboard_activate_dialog(find_dialog("Select File Name"))
-                        sh2 = int(find_dialog("Select File Name").handle)
-                        _type_keys_clear_and_text(stem_only, hwnd=sh2)
-                        time.sleep(0.1)
-                        _keyboard_press_ok(hwnd=sh2)
-                        time.sleep(1.0)
-                    break
+                bad = (
+                    "invalid character" in blob
+                    or "takes only file name" in blob
+                    or "invalid directory" in blob
+                    or "directory name" in blob
+                )
+                if not bad:
+                    continue
+                _force_foreground(int(w.handle))
+                _send_softdent_keys("{ENTER}", hwnd=int(w.handle))
+                time.sleep(0.35)
+                raise RuntimeError(
+                    f"SoftDent rejected Select File Name path {save_path!r} "
+                    f"(from SoftDent field {current_path!r}). "
+                    "Keep SoftDent's own folder; do not use SoftDentReportExports here."
+                )
+            except RuntimeError:
+                raise
             except Exception:
                 continue
+        preferred_folder: Path | None = None
+        try:
+            preferred_folder = Path(save_path).parent
+        except Exception:
+            preferred_folder = None
         cancel_printer_dialogs()
         dismiss_softdent_alerts()
         time.sleep(2.0)
 
         dest_root.mkdir(parents=True, exist_ok=True)
-        search_roots = [
-            dest_root,
-            MIRROR_ROOT,
-            Path(r"C:\SoftDentFinancialExports"),
-            Path(r"C:\SoftDent"),
-            Path(r"C:\SoftDent\softdentexportreports"),
-        ]
+        # SoftDent writes into SoftDent's folder; NR2 then copies into dest_root.
+        min_mtime = time.time() - 180.0
+        search_roots: list[Path] = []
+        if preferred_folder and preferred_folder.is_dir():
+            search_roots.append(preferred_folder)
+        onedrive_docs = Path(r"E:\OneDrive\Documents")
+        if onedrive_docs.is_dir() and onedrive_docs not in search_roots:
+            search_roots.append(onedrive_docs)
+        search_roots.extend(
+            [
+                dest_root,
+                MIRROR_ROOT,
+                Path(r"C:\SoftDentFinancialExports"),
+                Path(r"C:\SoftDent"),
+                Path(r"C:\SoftDent\softdentexportreports"),
+            ]
+        )
         candidates: list[Path] = []
+        stem_patterns = {f"{stem_only}.*", f"{stem_only.upper()}.*"}
+        if full_stem and full_stem != stem_only:
+            stem_patterns.add(f"{full_stem}.*")
+        # SoftDent sometimes lands classic AGE*.XLS even when File stem was aliased.
+        if full_stem.startswith("AGE") or stem_only.startswith("AG"):
+            stem_patterns.add("AGE*.*")
+            stem_patterns.add("AG*.*")
         for root in search_roots:
             if not root.is_dir():
                 continue
-            for pattern in (f"{stem_only}.*", f"{stem_only.upper()}.*"):
+            for pattern in stem_patterns:
                 for cand in root.glob(pattern):
-                    if cand.is_file() and cand.suffix.lower() in {
+                    if not cand.is_file():
+                        continue
+                    if cand.suffix.lower() not in {
                         ".xls",
                         ".xlsx",
                         ".csv",
                         ".txt",
                         ".rep",
                     }:
-                        candidates.append(cand)
+                        continue
+                    try:
+                        if float(cand.stat().st_mtime) < min_mtime:
+                            continue
+                    except OSError:
+                        continue
+                    candidates.append(cand)
         if not candidates:
             raise RuntimeError(
-                f"Expected export not found for File stem {stem_only} under "
-                f"{dest_root}, {MIRROR_ROOT}, or SoftDent dirs"
+                f"Expected export not found for File stem {stem_only} "
+                f"(from {short_stem!r}) under {dest_root}, {MIRROR_ROOT}, or SoftDent dirs"
             )
+        # Prefer newest match; when AG* wildcards widen the net, still take mtime tip.
         produced = max(candidates, key=lambda p: p.stat().st_mtime)
     else:
         # Excel-on-temp path (validated on SoftDent v19.1.4 Trans/Register/Collections)

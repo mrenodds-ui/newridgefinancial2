@@ -10,7 +10,7 @@
     "HARD RULE: Excel or Print Preview only — never Printer (Waiting for printer connection…).",
     "NEVER Esc on SoftDent main (quit). Enter=OK, Tab=fields, Space=checkbox (Carestream KystrkSht).",
     "Launch only via desktop/Programs shortcut CS SoftDent Software.lnk (-sus).",
-    "Save with short 8.3 path C:\\SOFTDE~1\\… (tilde escaped when typing)."
+    "Select File Name: SoftDent uses ONE path edit (SoftDent's folder\\\\stem) + static .XLS. Keep SoftDent's folder (this office: E:\\\\OneDrive\\\\Documents). Never substitute SoftDentReportExports/C:\\\\SOFTDE~1 — SoftDent rejects those. NR2 copies the XLS into SoftDentReportExports after SoftDent saves."
   ],
   "pathPrefix": "{F10} r a",
   "reports": {
@@ -81,7 +81,7 @@
       "menu_keys": "g",
       "menu_keys_env": "SOFTDENT_AGING_MENU_KEYS",
       "date_mode": "as_of",
-      "short_stem_template": "AGE{yy}{mm}{dd}",
+      "short_stem_template": "AG{yy}{mm}{dd}",
       "canonical_template": "account_aging.xls",
       "also_copy_as": [],
       "required": true,
