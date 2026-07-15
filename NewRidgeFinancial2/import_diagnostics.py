@@ -511,6 +511,14 @@ def blocking_import_issues(diagnostics: dict[str, Any] | None) -> list[dict[str,
         if status == STATUS_MISSING or (severity == "critical" and row_count <= 0 and status != STATUS_CONNECTED):
             blocking.append(row)
         elif status != STATUS_CONNECTED and status != STATUS_STALE and severity == "critical":
+            # SoftDent dashboard "current month only / prior month missing" is a trend soft
+            # gap — dollars for the loaded month remain honest. Do not red-laser the bench.
+            if (
+                dataset_key == "softdent.dashboard"
+                and status == STATUS_PARTIAL
+                and row_count > 0
+            ):
+                continue
             blocking.append(row)
         elif (
             status == STATUS_STALE

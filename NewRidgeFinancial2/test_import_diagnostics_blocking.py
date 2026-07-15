@@ -118,6 +118,17 @@ class ImportDiagnosticsBlockingTests(unittest.TestCase):
         }
         self.assertEqual(blocking_import_issues({"datasets": [row]}), [])
 
+    def test_blocking_import_issues_ignores_dashboard_prior_month_partial(self) -> None:
+        """Current-month-only SoftDent dashboard is a soft trend gap, not a laser block."""
+        row = {
+            "datasetKey": "softdent.dashboard",
+            "severity": "critical",
+            "status": "partial",
+            "rowCount": 1,
+            "detail": "Current month only; prior month export missing for trend/YTD widgets.",
+        }
+        self.assertEqual(blocking_import_issues({"datasets": [row]}), [])
+
     def test_upstream_stale_keeps_connected_when_local_cache_fresh(self) -> None:
         import os
         import tempfile

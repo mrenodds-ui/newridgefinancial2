@@ -659,7 +659,19 @@ def ingest_daysheet_to_period(*, force_reimport: bool = False) -> dict[str, Any]
     Triggered when inbox has daysheet/register files. Never invents insurance/patient
     dollars. Production-only daysheet → collectionsPending / daysheetWithoutSplit.
     """
-    from nr2_contracts.softdent_hardening import scan_collections_export_inbox
+    try:
+        from nr2_contracts.softdent_hardening import scan_collections_export_inbox
+    except ModuleNotFoundError:
+        # Clean-slate cutover removed nr2_contracts — analytics DB path still fills
+        # prior/current months via sync_dashboard_period_rows._month_rows.
+        return {
+            "ok": True,
+            "skipped": "nr2_contracts_removed",
+            "created": [],
+            "updated": [],
+            "matches": 0,
+            "honesty": "empty != $0",
+        }
     from softdent_practice_exports import summarize_daysheet_export
 
     periods = relevant_period_labels()
