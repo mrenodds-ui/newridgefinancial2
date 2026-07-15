@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NR2 Optical Bench — Lower + Ctrl Beam (nr2-12014-lower-ctrl-beam)</title>
+  <link rel="stylesheet" href="/nr2-optical-theme.css" />
+  <style>
+    :root {
+      --vacuum: #050607;
+      --bench: #0a0f14;
+      --sd: #00d4aa;
+      --qb: #ffaa00;
+      --hal: #e0e6ed;
+      --fringe: #ff0044;
+      --stale: #4a5059;
+      --muted: #7a8494;
+      --lock: #c9a227;
+      --mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+      --sans: "Segoe UI", system-ui, sans-serif;
+      --text-sm: 14px;
+      --text-base: 16px;
+      --text-lg: 20px;
+      --text-val: 18px;
+      --hit: 48px;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%; overflow: hidden;
+      background: var(--vacuum); color: #e8e8f0; font-family: var(--sans);
+      font-size: var(--text-base);
+    }
+    .banner {
+      min-height: 36px; display: flex; align-items: center; justify-content: center; gap: 12px;
+      flex-wrap: wrap; padding: 6px 12px;
+      border-bottom: 1px solid #2a2410; background: #100e08; color: #c9a227;
+      font-family: var(--mono); font-size: var(--text-sm); letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .banner .bind {
+      color: #e8e8f0; letter-spacing: 0.04em; text-transform: none; font-size: 13px;
+    }
+    .bench {
+      position: relative; height: calc(100dvh - 36px); width: 100%; max-width: none;
+      margin: 0; overflow: hidden;
+      background:
+        radial-gradient(ellipse 65% 48% at 50% 44%, rgba(20,40,50,0.35), transparent 70%),
+        var(--vacuum);
+    }
+    .mode-strip {
+      position: absolute; inset: 0 0 auto 0; height: 44px; z-index: 20;
+      display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
+      font-family: var(--mono); font-size: var(--text-sm); letter-spacing: 0.06em;
+      background: linear-gradient(180deg, rgba(5,6,7,0.96), transparent);
+    }
+    .mode-strip b { color: #e8eef5; font-weight: 600; font-size: var(--text-base); }
+    .mode-strip .muted { color: var(--muted); }
+    .scram {
+      border: 1px solid var(--fringe); color: var(--fringe); background: transparent;
+      font-family: var(--mono); font-size: var(--text-sm); letter-spacing: 0.1em;
+      min-height: var(--hit); padding: 0 14px; cursor: pointer;
+    }
+    .role {
+      border: 1px solid #334; background: #0c1218; color: var(--muted);
+      font-family: var(--mono); font-size: var(--text-sm); min-height: var(--hit); padding: 0 12px; cursor: pointer;
+    }
+    .role.on { border-color: var(--sd); color: var(--sd); }
+
+    /* Alignment lasers */
+    .align {
+      position: absolute; inset: 44px 0 120px 0; pointer-events: none; z-index: 1;
+      background:
+        linear-gradient(90deg, transparent 49.6%, rgba(0,255,102,0.08) 49.6% 50.4%, transparent 50.4%),
+        linear-gradient(0deg, transparent 49.6%, rgba(0,255,102,0.06) 49.6% 50.4%, transparent 50.4%);
+    }
+    .align.bad {
+      background:
+        linear-gradient(90deg, transparent 49.6%, rgba(255,0,68,0.14) 49.6% 50.4%, transparent 50.4%),
+        linear-gradient(0deg, transparent 49.6%, rgba(255,0,68,0.1) 49.6% 50.4%, transparent 50.4%);
+    }
+
+    .optics { display: none; }
+    .beam-layer {
+      position: absolute; inset: 0; z-index: 6; pointer-events: none; overflow: hidden;
+    }
+    .beam-ray {
+      position: absolute; left: 0; top: 0;
+      height: 4px; transform-origin: 0 50%;
+      border-radius: 2px;
+      opacity: 0.9;
+    }
+    .beam-ray.sd {
+      height: 5px; background: repeating-linear-gradient(90deg, #e0e6ed 0 8px, transparent 8px 16px);
+      box-shadow: 0 0 8px rgba(224,230,237,0.55);
+      animation: beam-bright 2s ease-in-out infinite, flow-x 1.1s linear infinite;
+    }
+    .beam-ray.qb {
+      background: repeating-linear-gradient(90deg, #ffaa00 0 7px, transparent 7px 14px);
+      box-shadow: 0 0 8px rgba(255,170,0,0.45);
+      animation: flow-x 1.5s linear infinite;
+    }
+    .beam-ray.tax {
+      background: repeating-linear-gradient(90deg, #ff66cc 0 7px, transparent 7px 14px);
+      box-shadow: 0 0 8px rgba(255,102,204,0.45);
+      animation: flow-x 1.5s linear infinite;
+    }
+    .beam-ray.ctrl {
+      height: 3px;
+      background: repeating-linear-gradient(90deg, #00ced1 0 6px, transparent 6px 12px);
+      box-shadow: 0 0 8px rgba(0,206,209,0.5);
+      animation: flow-x 1.4s linear infinite;
+    }
+    @keyframes flow-x {
+      to { background-position: 32px 0; }
+    }
+    @keyframes led-pulse {
+      0%, 100% { opacity: 0.35; box-shadow: none; }
+      50% { opacity: 1; box-shadow: 0 0 12px #e0e6ed; }
+    }
+
+    .emitter {
+      position: absolute; z-index: 8; width: 240px; min-height: 120px;
+      background: var(--bench); border: 1px solid; padding: 12px 16px 12px 20px;
+      clip-path: polygon(7% 0, 100% 0, 93% 100%, 0 100%);
+      cursor: default;
+      overflow: visible;
+    }
+    /* SoftDent + QB low on bench (above film); beams snap via JS */
+    .emitter.sd {
+      left: 16%; top: auto; bottom: 68px;
+      border-color: rgba(224,230,237,0.55);
+      box-shadow: 0 0 28px rgba(224,230,237,0.22);
+      animation: qb-aperture-pulse 2s ease-in-out infinite;
+    }
+    .emitter.sd::after {
+      content: "";
+      position: absolute; right: -6px; top: 42%; width: 14px; height: 14px;
+      border-radius: 50%; background: #e0e6ed;
+      box-shadow: 0 0 16px #e0e6ed, 0 0 32px rgba(224,230,237,0.6);
+      animation: led-pulse 1.2s ease-in-out infinite;
+    }
+    .emitter.qb {
+      left: auto; right: 16%; bottom: 68px; top: auto;
+      border-color: rgba(255,170,0,0.55);
+      clip-path: polygon(0 0, 93% 0, 100% 100%, 7% 100%);
+      box-shadow: 0 0 18px rgba(255,170,0,0.14);
+      animation: none;
+    }
+    .emitter.qb::after {
+      content: "";
+      display: block;
+      position: absolute; left: -6px; top: 42%; width: 14px; height: 14px;
+      border-radius: 50%; background: #ffaa00;
+      box-shadow: 0 0 14px #ffaa00;
+    }
+    .emitter.tax {
+      right: 18%; top: 12%; border-color: rgba(255,102,204,0.55);
+      clip-path: polygon(0 0, 93% 0, 100% 100%, 7% 100%);
+      box-shadow: 0 0 18px rgba(255,102,204,0.16);
+    }
+    .emitter.tax::after {
+      content: "";
+      position: absolute; left: -6px; top: 48%; width: 12px; height: 12px;
+      border-radius: 50%; background: #ff66cc;
+      box-shadow: 0 0 14px #ff66cc;
+    }
+    .emitter.tax .metric { color: #ff66cc; font-size: clamp(16px, 1.8vw, 20px); }
+    .emitter.tax .paths {
+      display: flex; gap: 6px; margin: 6px 0; height: 40px; align-items: flex-end;
+    }
+    .emitter.tax .paths span {
+      flex: 1; height: 60%; border: 1px solid #334; writing-mode: vertical-rl;
+      transform: rotate(180deg); text-align: center; font-size: 11px; padding: 2px 0; color: var(--muted);
+    }
+    .emitter.tax .paths .a { border-color: #00d4aa55; color: #00d4aa; height: 80%; }
+    .emitter.tax .paths .b { border-color: #ff66cc55; color: #ff66cc; height: 70%; }
+    .emitter.tax button {
+      width: 100%; margin-top: 6px; border: 1px solid #334; background: #0c1218;
+      color: #cfd8e3; font-family: var(--mono); font-size: 13px;
+      min-height: var(--hit); padding: 8px; cursor: pointer;
+    }
+    .emitter.tax button:hover { border-color: #ff66cc; color: #ff66cc; }
+    .emitter.hal {
+      display: none; /* HAL relocated into center core circle */
+    }
+
+    /* Core = HAL AI model (spectral brain + recon) — white light pulse */
+    .core {
+      position: absolute; z-index: 7; left: 50%; top: 42%; transform: translate(-50%, -50%);
+      width: 220px; height: 220px; border-radius: 50%;
+      border: 3px solid rgba(224,230,237,0.55);
+      background:
+        conic-gradient(from 200deg, rgba(224,230,237,0.18), rgba(0,212,170,0.1), rgba(255,170,0,0.12), rgba(224,230,237,0.18)),
+        radial-gradient(circle at 50% 50%, #121820, #050607 72%);
+      display: grid; place-items: center; text-align: center; cursor: pointer;
+      box-shadow: 0 0 40px rgba(224,230,237,0.12), inset 0 0 28px rgba(224,230,237,0.06);
+      animation: core-white-pulse 2.2s ease-in-out infinite;
+    }
+    .core::before {
+      content: "";
+      position: absolute; inset: -18px; border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.2);
+      box-shadow: 0 0 24px rgba(255,255,255,0.15);
+      pointer-events: none;
+      animation: core-ring-pulse 2.2s ease-in-out infinite;
+    }
+    @keyframes core-white-pulse {
+      0%, 100% {
+        border-color: rgba(224,230,237,0.4);
+        box-shadow:
+          0 0 28px rgba(224,230,237,0.18),
+          inset 0 0 24px rgba(224,230,237,0.05);
+      }
+      50% {
+        border-color: rgba(255,255,255,0.95);
+        box-shadow:
+          0 0 48px rgba(255,255,255,0.55),
+          0 0 90px rgba(224,230,237,0.4),
+          inset 0 0 42px rgba(255,255,255,0.14);
+      }
+    }
+    @keyframes core-ring-pulse {
+      0%, 100% { opacity: 0.25; transform: scale(0.96); }
+      50% { opacity: 0.85; transform: scale(1.04); }
+    }
+    .core .k { font-size: var(--text-sm); letter-spacing: 0.14em; text-transform: uppercase; color: var(--hal); font-weight: 600; }
+    .core .ai { font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; color: var(--muted); margin-top: 2px; }
+    .core .v { font-family: var(--mono); font-size: clamp(20px, 2.4vw, 26px); font-weight: 600; margin: 8px 0 4px; color: var(--hal); }
+    .core .state { font-family: var(--mono); font-size: 13px; color: var(--fringe); letter-spacing: 0.08em; }
+    .core .bind-hint { margin-top: 6px; }
+    .lbl {
+      font-size: var(--text-sm); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+      display: flex; justify-content: space-between; margin-bottom: 6px; font-weight: 600;
+    }
+    .metric {
+      font-family: var(--mono); font-size: clamp(18px, 2.2vw, 26px); font-weight: 600; margin-bottom: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .sd .metric { color: #e0e6ed; }
+    .qb .metric { color: var(--qb); }
+    .beam-pulse {
+      stroke-dasharray: 8 10;
+      animation: flow 1.1s linear infinite, beam-bright 2s ease-in-out infinite;
+      filter: drop-shadow(0 0 4px #e0e6ed);
+    }
+    @keyframes beam-bright {
+      0%, 100% { opacity: 0.45; }
+      50% { opacity: 1; }
+    }
+    @keyframes qb-aperture-pulse {
+      0%, 100% { box-shadow: 0 0 12px rgba(224,230,237,0.15); border-color: rgba(224,230,237,0.4); }
+      50% { box-shadow: 0 0 36px rgba(224,230,237,0.45), inset 0 0 20px rgba(224,230,237,0.08); border-color: rgba(224,230,237,0.75); }
+    }
+    .hal .metric { color: var(--hal); font-size: clamp(16px, 1.8vw, 20px); }
+    .sub { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+    .wells { display: flex; gap: 3px; margin: 4px 0; }
+    .wells i { width: 8px; height: 8px; background: var(--stale); opacity: 0.6; }
+
+    .meter {
+      display: flex; align-items: center; gap: 8px; margin-top: 6px;
+    }
+    .meter .face {
+      width: 56px; height: 32px; border: 1px solid #445; border-radius: 28px 28px 0 0;
+      border-bottom: none; position: relative; background: #0c1218;
+    }
+    .meter .needle {
+      position: absolute; left: 50%; bottom: 2px; width: 2px; height: 24px;
+      background: var(--fringe); transform-origin: bottom center; transform: rotate(-35deg);
+      opacity: 0.55;
+    }
+    .meter .cap { font-size: 12px; color: var(--stale); line-height: 1.2; }
+
+    /* Instruments */
+    .inst {
+      position: absolute; z-index: 9; border: 1px solid #2a3340; background: rgba(10,15,20,0.94);
+      font-family: var(--mono); font-size: 13px; color: var(--muted); padding: 10px 12px;
+    }
+    .inst h4 {
+      margin: 0 0 6px; font-size: var(--text-sm); letter-spacing: 0.08em; text-transform: uppercase; color: #c8d0da;
+      font-weight: 600;
+    }
+    .bind-hint {
+      display: block; margin-top: 4px; font-size: 11px; color: #5a6575; letter-spacing: 0.02em;
+      text-transform: none;
+    }
+    /* Claims Etalon + Narrative Plate REMOVED per operator */
+
+    .ctrl button {
+      width: 100%; margin-top: 6px; border: 1px solid #334; background: #0c1218;
+      color: #cfd8e3; font-family: var(--mono); font-size: 13px;
+      min-height: var(--hit); padding: 8px; cursor: pointer;
+      letter-spacing: 0.04em;
+    }
+    .ctrl button:hover {
+      border-color: var(--sd); color: var(--sd);
+    }
+
+    .filing {
+      display: none;
+    }
+
+    /* Quarantine Dump / ERA / Claims / Narrative — do not reintroduce */
+
+    /* Control strip — upper-left; teal aperture → HAL */
+    .ctrl {
+      position: absolute; left: 12px; top: 52px; transform: none;
+      z-index: 12; width: min(360px, calc(100% - 280px));
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+      background: rgba(8,12,16,0.96); border: 1px solid #2a3340; padding: 12px;
+    }
+    .ctrl::after {
+      content: "";
+      position: absolute; right: -7px; top: 48%; width: 14px; height: 14px;
+      border-radius: 50%; background: #00ced1;
+      box-shadow: 0 0 14px #00ced1, 0 0 28px rgba(0,206,209,0.45);
+    }
+    .beam-ctrl {
+      stroke-dasharray: 6 8;
+      animation: flow 1.4s linear infinite;
+      filter: drop-shadow(0 0 3px #00ced1);
+    }
+    .ctrl .cell { text-align: center; }
+    .ctrl .cell h4 { margin: 0 0 8px; font-size: var(--text-sm); }
+    .lever {
+      width: 100%; min-height: var(--hit); border: 1px solid #622; background: #180808;
+      color: #ff8899; font-family: var(--mono); font-size: var(--text-sm); letter-spacing: 0.06em;
+      cursor: pointer; position: relative;
+    }
+    .lever.busy { opacity: 0.45; pointer-events: none; }
+    .lever .led {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      width: 12px; height: 12px; border-radius: 50%; background: #333;
+    }
+    .lever .led.on { background: var(--fringe); box-shadow: 0 0 8px var(--fringe); animation: strobe 0.25s linear infinite; }
+    .lever .led.idle { background: #334; animation: pulse-idle 1s ease-in-out infinite; }
+    @keyframes strobe { 50% { opacity: 0.35; } }
+    @keyframes pulse-idle { 50% { opacity: 0.55; } }
+    .plunger {
+      width: 100%; min-height: var(--hit); border: 1px solid #556; background: #12161c;
+      color: #cfd8e3; font-family: var(--mono); font-size: var(--text-sm); cursor: pointer;
+    }
+    .wheel {
+      display: flex; gap: 4px; justify-content: center;
+    }
+    .wheel button {
+      flex: 1; border: 1px solid #334; background: #0c1218; color: var(--muted);
+      font-family: var(--mono); font-size: 13px; min-height: var(--hit); padding: 0; cursor: pointer; margin: 0;
+    }
+    .wheel button.on { border-color: var(--sd); color: var(--sd); }
+
+    /* Film plate */
+    .film {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 64px; z-index: 11;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      background: linear-gradient(0deg, rgba(8,10,12,0.97), rgba(8,10,12,0.55));
+      border-top: 1px solid #1a222c;
+    }
+    .film .cap {
+      position: absolute; left: 14px; font-family: var(--mono); font-size: var(--text-sm); color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+    .slot {
+      width: min(160px, 14vw); height: 40px; border: 1px solid #2a3340; background: #12161c;
+      display: flex; align-items: center; gap: 8px; padding: 0 8px;
+      filter: grayscale(0.8) sepia(0.2); font-family: var(--mono); font-size: 13px; color: #9aa3ad;
+    }
+    .slot.empty { justify-content: center; filter: none; color: var(--stale); }
+    .slot .mini {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: repeating-conic-gradient(#555 0 10%, #222 0 20%);
+    }
+
+    /* RBAC shutter */
+    .shutter {
+      position: absolute; inset: 0; z-index: 15; display: none;
+      background: repeating-linear-gradient(
+        -45deg, rgba(120,20,20,0.12), rgba(120,20,20,0.12) 8px, transparent 8px 16px
+      );
+      border: 1px solid rgba(255,0,68,0.35);
+      align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: var(--text-sm); color: #ff8899; letter-spacing: 0.08em;
+      pointer-events: all; cursor: not-allowed;
+    }
+    .locked .shutter { display: flex; }
+    .toast {
+      position: absolute; left: 50%; top: 52px; transform: translateX(-50%);
+      z-index: 30; background: #121820; border: 1px solid #334; padding: 10px 14px;
+      font-family: var(--mono); font-size: var(--text-sm); color: #cfd8e3; display: none;
+      max-width: min(720px, 92vw); text-align: center;
+    }
+    .toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    Mockup · Lower + Ctrl Beam · nr2-12014-lower-ctrl-beam · empty ≠ $0 · no SoftDent write-back
+    <span class="bind">SD+QB down &amp; inward on beams · teal CTRL beam from upper-left · Tax upper-right</span>
+  </div>
+
+  <div class="bench" id="bench">
+    <div class="mode-strip">
+      <div><b>NR2-12014-LOWER-CTRL-BEAM</b> <span class="muted">· SD+QB on beams · CTRL beam upper-left</span>
+        <a href="/nr2-optical-pages-hub.html" style="margin-left:12px;color:var(--sd);font-size:13px;letter-spacing:0.04em">PAGES HUB →</a>
+      </div>
+      <div class="muted" id="clock">--:--:-- UTC</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button type="button" class="role on" id="role-om" data-role="om">ROLE: OM</button>
+        <button type="button" class="role" id="role-fd" data-role="fd">ROLE: FRONT DESK</button>
+        <button type="button" class="scram" id="scram">SCRAM</button>
+      </div>
+    </div>
+
+    <div class="align bad" id="align" title="Import readiness lasers — red = blocking critical gap"></div>
+    <div class="toast" id="toast"></div>
+
+    <div class="beam-layer" id="beam-layer" aria-hidden="true">
+      <div class="beam-ray ctrl" id="ray-ctrl"></div>
+      <div class="beam-ray sd" id="ray-sd"></div>
+      <div class="beam-ray qb" id="ray-qb"></div>
+      <div class="beam-ray tax" id="ray-tax"></div>
+    </div>
+
+    <article class="emitter sd" id="emitter-sd">
+      <div class="lbl"><span>SoftDent</span><span style="color:#e0e6ed">STALE · PULSE</span></div>
+      <div class="metric">$35,842</div>
+      <div class="wells"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="sub">AR beam honesty · money reads blocked · white pulse out</div>
+      <div class="meter" title="AR Power Meter → GET softdent/ar-aging (read-only)">
+        <div class="face"><div class="needle"></div></div>
+        <div class="cap">Power Meter<br>filament dim · stale</div>
+      </div>
+      <span class="bind-hint">SoftDent · down+inward · white pulse → HAL</span>
+    </article>
+    <article class="emitter qb" id="emitter-qb">
+      <div class="lbl"><span>QuickBooks</span><span style="color:var(--qb)">LIVE</span></div>
+      <div class="metric">$48,100</div>
+      <div class="sub">cash · payroll/AP empty-OK · right side</div>
+      <span class="bind-hint">QuickBooks · beam → HAL core</span>
+    </article>
+
+    <article class="emitter tax" id="tax">
+      <div class="lbl"><span>Tax Prism</span><span style="color:#ff66cc">SCENARIO</span></div>
+      <div class="metric">PLANS</div>
+      <div class="paths">
+        <span>CUR</span>
+        <span class="a">A</span>
+        <span class="b">B</span>
+      </div>
+      <button type="button" data-act="tax">PROJECT PLANS</button>
+      <div class="sub">planning only · not core $ · rolling beam</div>
+      <span class="bind-hint">QuickBooks+HAL · beam → HAL core</span>
+    </article>
+    <!-- HAL peripheral emitter removed — HAL lives in center core -->
+
+    <div class="core" id="core" title="HAL AI core · recon" data-act="recon">
+      <div>
+        <div class="k">HAL</div>
+        <div class="ai">AI MODEL CORE</div>
+        <div class="v">SPECTRAL</div>
+        <div class="state">RECON · INCOHERENT</div>
+        <span class="bind-hint">HAL core · SoftDent+QB+Tax beams · recon</span>
+      </div>
+    </div>
+
+    <!-- Claims Etalon removed · Narrative Plate removed -->
+
+    <!-- Action controls -->
+    <div class="ctrl" id="ctrl">
+      <div class="cell">
+        <h4>Master Pulse</h4>
+        <button type="button" class="lever" id="pulse" data-act="sync">SYNC<div class="led idle" id="pulse-led"></div></button>
+        <span class="bind-hint">SoftDent+QB+HAL · sync</span>
+      </div>
+      <div class="cell">
+        <h4>Period Wheel</h4>
+        <div class="wheel" id="wheel">
+          <button type="button" data-period="30">30</button>
+          <button type="button" class="on" data-period="60">60</button>
+          <button type="button" data-period="90">90</button>
+          <button type="button" data-period="120">120</button>
+        </div>
+        <button type="button" data-act="refresh" style="margin-top:6px;width:100%;min-height:48px;border:1px solid #334;background:#0c1218;color:#cfd8e3;font-family:var(--mono);font-size:13px;cursor:pointer">REFRESH-PERIOD</button>
+        <span class="bind-hint">SoftDent · refresh-period</span>
+      </div>
+      <div class="cell">
+        <h4>Phase Comp</h4>
+        <button type="button" class="plunger" data-act="recon">RECONCILE</button>
+        <span class="bind-hint">SoftDent+QB+HAL · recon</span>
+      </div>
+      <div class="shutter" style="position:absolute;inset:0">FRONT DESK — CONTROLS LOCKED</div>
+    </div>
+
+    <div class="film">
+      <span class="cap">FILM</span>
+      <div class="slot"><div class="mini"></div>t−1h broken</div>
+      <div class="slot"><div class="mini"></div>t−2h broken</div>
+      <div class="slot empty">∅</div>
+      <div class="slot empty">∅</div>
+      <div class="slot empty">∅</div>
+      <div class="slot empty">∅</div>
+    </div>
+  </div>
+
+  <script src="/nr2-boot.js" defer></script>
+  <script src="/nr2-optical-beam-touch.js"></script>
+</body>
+</html>

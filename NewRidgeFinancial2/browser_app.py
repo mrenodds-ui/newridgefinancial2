@@ -168,21 +168,15 @@ def main() -> int:
             sync_imports()
         except Exception as exc:
             print(f"Startup import sync failed: {exc}", file=sys.stderr)
-        # DEF-004: warm import + widget caches so first page open is not multi-second.
+        # Optical UI: do not warm legacy apex widget layout (packs removed).
         try:
-            from apex_backend import build_apex_widgets
             from import_loader import load_import_bundle
 
             load_import_bundle(sync=False, deep=False)
-            for page in ("financial", "hal", "claims", "taxes"):
-                try:
-                    build_apex_widgets(page)
-                except Exception as page_exc:
-                    print(f"Cache warm {page} skipped: {page_exc}", file=sys.stderr)
-            print("NR2 cache warm complete (import bundle + key pages).", file=sys.stderr)
+            print("NR2 cache warm complete (import bundle only; apex widgets skipped).", file=sys.stderr)
         except Exception as exc:
             print(f"Startup cache warm failed: {exc}", file=sys.stderr)
-        # REC-007 HAL: keep-alive + prompt prime for local qwen3:32b (background).
+        # HAL model keep-alive (optional; pack may be absent after clean slate).
         try:
             from apex_hal_cache_warm_pack import warm_hal_cache
 
@@ -193,8 +187,7 @@ def main() -> int:
                 file=sys.stderr,
             )
         except Exception as exc:
-            print(f"HAL model cache warm failed: {exc}", file=sys.stderr)
-
+            print(f"HAL model cache warm skipped: {exc}", file=sys.stderr)
     threading.Thread(target=_startup_import_sync, daemon=True, name="nr2-import-sync").start()
 
     def _background_scheduler() -> None:

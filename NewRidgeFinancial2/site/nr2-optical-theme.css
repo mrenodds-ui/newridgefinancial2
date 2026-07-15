@@ -1,0 +1,111 @@
+/* NR2 Optical theme — shared across main + subpage mockups (nr2-12010-pages) */
+:root {
+  --vacuum: #050607;
+  --bench: #0a0f14;
+  --sd: #00d4aa;
+  --qb: #ffaa00;
+  --hal: #e0e6ed;
+  --fringe: #ff0044;
+  --stale: #4a5059;
+  --muted: #7a8494;
+  --lock: #c9a227;
+  --mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+  --sans: "Segoe UI", system-ui, sans-serif;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --hit: 44px;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; min-height: 100%;
+  background: var(--vacuum); color: #e8e8f0; font-family: var(--sans);
+  font-size: var(--text-base);
+}
+a { color: var(--sd); text-decoration: none; }
+a:hover { color: var(--hal); }
+.banner {
+  min-height: 34px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  flex-wrap: wrap; padding: 6px 12px;
+  border-bottom: 1px solid #2a2410; background: #100e08; color: #c9a227;
+  font-family: var(--mono); font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase;
+}
+.banner .bind { color: #e8e8f0; text-transform: none; letter-spacing: 0.02em; }
+.shell {
+  display: grid; grid-template-columns: 220px 1fr; min-height: calc(100dvh - 34px);
+  background:
+    radial-gradient(ellipse 55% 40% at 60% 40%, rgba(20,40,50,0.4), transparent 70%),
+    var(--vacuum);
+}
+.nav {
+  border-right: 1px solid #1a222c; background: rgba(8,12,16,0.96);
+  padding: 14px 12px; font-family: var(--mono); overflow-y: auto;
+}
+.nav .brand {
+  font-size: 12px; letter-spacing: 0.12em; color: var(--hal); margin-bottom: 14px;
+}
+.nav a {
+  display: block; padding: 10px 12px; margin-bottom: 4px; border: 1px solid transparent;
+  color: var(--muted); font-size: 13px; letter-spacing: 0.04em;
+}
+.nav a:hover, .nav a.on {
+  border-color: #334; color: var(--sd); background: #0c1218;
+}
+.nav .group {
+  margin-top: 14px; margin-bottom: 6px; font-size: 11px; color: #556; letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.main { padding: 20px 24px 40px; overflow-y: auto; }
+.main h1 {
+  margin: 0 0 6px; font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--hal);
+  letter-spacing: 0.06em;
+}
+.main .kicker {
+  font-family: var(--mono); font-size: 13px; color: var(--muted); margin-bottom: 20px;
+}
+.grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;
+}
+.card {
+  border: 1px solid #2a3340; background: rgba(10,15,20,0.94); padding: 14px 16px;
+  font-family: var(--mono);
+}
+.card h3 {
+  margin: 0 0 8px; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #c8d0da;
+}
+.card .val {
+  font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin-bottom: 6px;
+}
+.card .val.sd { color: var(--sd); }
+.card .val.qb { color: var(--qb); }
+.card .val.hal { color: var(--hal); }
+.card .val.stale { color: var(--stale); }
+.card .hint { font-size: 12px; color: #5a6575; line-height: 1.35; }
+.card button, .actions a.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-top: 10px; min-height: var(--hit); padding: 0 14px;
+  border: 1px solid #334; background: #0c1218; color: #cfd8e3;
+  font-family: var(--mono); font-size: 13px; cursor: pointer;
+}
+.card button:hover, .actions a.btn:hover { border-color: var(--sd); color: var(--sd); }
+.hal-chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border: 1px solid rgba(224,230,237,0.35); border-radius: 999px;
+  font-family: var(--mono); font-size: 12px; color: var(--hal);
+  box-shadow: 0 0 18px rgba(224,230,237,0.12);
+}
+.beam {
+  height: 2px; margin: 18px 0; background: repeating-linear-gradient(
+    90deg, var(--hal) 0 8px, transparent 8px 16px
+  ); opacity: 0.35; animation: flow 1.2s linear infinite;
+}
+@keyframes flow { to { background-position: 32px 0; } }
+.sublist { list-style: none; margin: 0; padding: 0; }
+.sublist li {
+  border: 1px solid #243040; padding: 10px 12px; margin-bottom: 8px;
+  font-family: var(--mono); font-size: 13px; color: var(--muted);
+}
+.sublist li strong { color: #cfd8e3; display: block; margin-bottom: 2px; }
+.honesty {
+  border-left: 3px solid var(--lock); padding: 8px 12px; margin: 16px 0;
+  font-family: var(--mono); font-size: 12px; color: var(--lock);
+}

@@ -1,105 +1,21 @@
 <!DOCTYPE html>
-<html lang="en" data-apex-version="hal-10628" data-nr2-epoch="nr2-apex">
+<html lang="en" data-build-id="nr2-11000-clean" data-nr2-epoch="nr2-clean">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="build-id" content="nr2-11000-clean">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
+  <!-- CSP: no inline script — server also 302s / → optical landing -->
+  <meta http-equiv="refresh" content="0;url=/nr2-optical-beam-touch-mockup.html">
+  <title>NewRidgeFinancial 2.0 — Optical Landing</title>
   <link rel="icon" href="favicon.ico" type="image/x-icon">
-  <title>NewRidgeFinancial 2.0 — Apex Bridge</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="apex-tokens.css?v=hal-10628">
-  <link rel="stylesheet" href="apex-animations.css?v=hal-10628">
-  <link rel="stylesheet" href="apex-bridge.css?v=hal-10628">
-  <link rel="stylesheet" href="apex-hal-brain.css?v=hal-10628">
+  <link rel="stylesheet" href="nr2-tokens.css?v=nr2-11000-clean">
+  <script src="/nr2-boot.js" defer></script>
 </head>
-<body class="apex-bridge">
-  <div id="apex-ticker" class="apex-ticker" aria-live="polite" aria-label="Financial ticker">
-    <div class="apex-ticker__label">TELEMETRY</div>
-    <div class="apex-ticker__viewport">
-      <div class="apex-ticker__track" id="ticker-track">
-        <span class="apex-ticker__item apex-ticker__item--system">SYSTEM INITIALIZING…</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="apex-grid-floor" aria-hidden="true"></div>
-
-  <aside id="apex-sidebar" class="apex-sidebar">
-    <div class="apex-sidebar__brand">
-      <div class="apex-brand">NR2 APEX</div>
-      <div class="apex-version">hal-10628 · bridge</div>
-    </div>
-
-    <nav class="apex-sidebar__nav" aria-label="Bridge navigation">
-      <button type="button" class="apex-nav-btn active" data-page="financial"><span class="apex-nav-icon" aria-hidden="true">◈</span><span class="apex-nav-label">Financial</span></button>
-      <button type="button" class="apex-nav-btn" data-page="taxes"><span class="apex-nav-icon" aria-hidden="true">◉</span><span class="apex-nav-label">Taxes</span></button>
-      <button type="button" class="apex-nav-btn" data-page="softdent"><span class="apex-nav-icon" aria-hidden="true">◆</span><span class="apex-nav-label">SoftDent</span></button>
-      <button type="button" class="apex-nav-btn" data-page="quickbooks"><span class="apex-nav-icon" aria-hidden="true">◇</span><span class="apex-nav-label">QuickBooks</span></button>
-      <button type="button" class="apex-nav-btn" data-page="ar"><span class="apex-nav-icon" aria-hidden="true">▣</span><span class="apex-nav-label">A/R</span></button>
-      <button type="button" class="apex-nav-btn" data-page="claims"><span class="apex-nav-icon" aria-hidden="true">▤</span><span class="apex-nav-label">Claims</span></button>
-      <button type="button" class="apex-nav-btn" data-page="content"><span class="apex-nav-icon" aria-hidden="true">▦</span><span class="apex-nav-label">Content</span></button>
-      <button type="button" class="apex-nav-btn" data-page="office-manager"><span class="apex-nav-icon" aria-hidden="true">▩</span><span class="apex-nav-label">Office Mgr</span></button>
-      <button type="button" class="apex-nav-btn" data-page="hal"><span class="apex-nav-icon" aria-hidden="true">◐</span><span class="apex-nav-label">HAL</span></button>
-    </nav>
-
-    <div class="apex-sidebar__hal">
-      <div class="apex-hal-header">
-        <div class="hal-orb" id="sidebar-hal-orb" aria-hidden="true"></div>
-        <span class="apex-hal-status" id="sidebar-hal-status">HAL Standby</span>
-      </div>
-      <div class="apex-hal-suggestion" id="sidebar-hal-suggestion">
-        <span class="apex-hal-suggestion__label">SUGGESTION</span>
-        <p class="apex-hal-suggestion__text" id="hal-suggestion-text">Awaiting telemetry…</p>
-      </div>
-      <button type="button" class="apex-btn apex-btn--hal" id="btn-ask-hal">Ask HAL</button>
-    </div>
-
-    <div class="apex-sidebar__actions">
-      <button type="button" class="apex-ticker-mute" id="btn-density" title="Toggle Compact / Comfortable density">Comfortable</button>
-      <button type="button" class="apex-icon-btn" id="btn-refresh" title="Force sync / refresh" aria-label="Sync"></button>
-      <button type="button" class="apex-icon-btn" id="btn-print" title="Print current view" aria-label="Print"></button>
-      <button type="button" class="apex-ticker-mute" id="btn-ticker-mute" title="Pause or resume ticker">Mute Ticker</button>
-    </div>
-  </aside>
-
-  <main id="apex-main" class="apex-main">
-    <header class="apex-stage-header">
-      <div class="apex-stage-header__row">
-        <h1 class="apex-page-title" id="apex-page-title">Financial</h1>
-        <div class="apex-meta" id="apex-meta">Page: financial · Refreshed: —</div>
-      </div>
-      <nav id="apex-subnav" class="apex-subnav" aria-label="Page subpages" hidden></nav>
-    </header>
-    <div id="apex-stage" class="apex-stage apex-stage-stack" data-page="financial" aria-live="polite"></div>
-  </main>
-
-  <div id="apex-ticker-bottom" class="apex-ticker apex-ticker--bottom" aria-live="off" aria-label="Secondary telemetry">
-    <div class="apex-ticker__label">OPS</div>
-    <div class="apex-ticker__viewport">
-      <div class="apex-ticker__track" id="ticker-track-bottom">
-        <span class="apex-ticker__item apex-ticker__item--system">OPS LINK STANDBY…</span>
-      </div>
-    </div>
-  </div>
-
-  <script src="indexeddb-store.js?v=hal-10628"></script>
-  <script src="apex-chart-widget.js?v=hal-10628"></script>
-  <script src="nr2-dashboard-layout.js?v=hal-10628"></script>
-  <script src="apex-core.js?v=hal-10628"></script>
-  <script src="nr2-insight-sse.js?v=hal-10628"></script>
-  <script src="nr2-data-freshness.js?v=hal-10628"></script>
-  <script src="apex-quarantine-panel.js?v=hal-10628"></script>
-  <script src="apex-motion-helper.js?v=hal-10628"></script>
-  <script src="apex-ticker.js?v=hal-10628"></script>
-  <script src="apex-hal-bridge.js?v=hal-10628"></script>
-  <script src="apex-hal-brain.js?v=hal-10628"></script>
-  <script src="apex-narratives.js?v=hal-10628"></script>
-  <script src="hal-voice.js?v=hal-10628"></script>
-  <script src="hal-reports.js?v=hal-10628"></script>
+<body class="nr2-clean">
+  <p style="font-family:system-ui;color:#c9a227;padding:24px">
+    Loading optical bench…
+    <a href="/nr2-optical-beam-touch-mockup.html">Continue</a>
+  </p>
 </body>
 </html>
-

@@ -3458,25 +3458,22 @@ class NR2BottleServer(BottleServer):
         def index():
             if not _desktop_access_ok():
                 bottle.abort(403, _desktop_only_html())
-            if not server.root_path:
-                return ""
             _maybe_set_desktop_cookie()
             bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
             bottle.response.set_header("Pragma", "no-cache")
             bottle.response.set_header("Expires", 0)
-            return bottle.static_file("index.html", root=server.root_path)
+            # Optical landing — no legacy SPA / overlay entry
+            bottle.redirect("/nr2-optical-beam-touch-mockup.html")
 
         @app.get("/index.html")
         def index_html():
             if not _desktop_access_ok():
                 bottle.abort(403, _desktop_only_html())
-            if not server.root_path:
-                return ""
             _maybe_set_desktop_cookie()
             bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
             bottle.response.set_header("Pragma", "no-cache")
             bottle.response.set_header("Expires", 0)
-            return bottle.static_file("index.html", root=server.root_path)
+            bottle.redirect("/nr2-optical-beam-touch-mockup.html")
 
         @app.get("/deferred-live-wire/<file:path>")
         def deferred_live_wire(file):
@@ -3498,27 +3495,13 @@ class NR2BottleServer(BottleServer):
 
         @app.get("/mockup-elite-embed/<page_id>")
         def mockup_elite_embed(page_id):
-            if not _desktop_access_ok():
-                bottle.abort(403, _desktop_only_html())
-            from mockup_elite_embed import render_embed_html
-
-            html = render_embed_html(str(page_id or "").strip().lower())
-            if html is None:
-                bottle.abort(404, "Elite mock preview not found for this page.")
-            bottle.response.content_type = "text/html; charset=UTF-8"
-            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            bottle.response.set_header("Pragma", "no-cache")
-            return html
+            # Disabled — optical cutover forbids elite iframe/overlay embeds.
+            bottle.abort(410, "Elite mock embeds removed (optical entry only).")
 
         @app.get("/api/mockup-elite-pages")
         def mockup_elite_pages_api():
-            if not _desktop_access_ok():
-                bottle.abort(403, _desktop_only_html())
-            from mockup_elite_embed import list_mockup_page_ids
-
             bottle.response.content_type = "application/json; charset=UTF-8"
-            bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            return json.dumps({"pages": list_mockup_page_ids()}, ensure_ascii=False)
+            return json.dumps({"pages": [], "disabled": True, "reason": "optical-cutover"}, ensure_ascii=False)
 
         @app.route("/<file:path>")
         def asset(file):

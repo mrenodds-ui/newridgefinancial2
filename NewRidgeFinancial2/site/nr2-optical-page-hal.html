@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NR2 Optical · HAL AI Core + Chat — nr2-12011-landing-chat</title>
+  <link rel="stylesheet" href="/nr2-optical-theme.css" />
+  <style>
+    .hal-layout {
+      display: grid;
+      grid-template-columns: 1fr minmax(320px, 42%);
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 980px) {
+      .hal-layout { grid-template-columns: 1fr; }
+    }
+    .chat {
+      position: relative;
+      border: 1px solid rgba(224,230,237,0.35);
+      background:
+        radial-gradient(ellipse 80% 40% at 50% 0%, rgba(224,230,237,0.08), transparent 55%),
+        rgba(8,12,16,0.96);
+      min-height: calc(100dvh - 160px);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 40px rgba(224,230,237,0.08), inset 0 0 40px rgba(0,0,0,0.35);
+    }
+    .chat::before {
+      content: "";
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        linear-gradient(90deg, transparent 49.7%, rgba(0,212,170,0.07) 49.7% 50.3%, transparent 50.3%),
+        linear-gradient(0deg, transparent 49.7%, rgba(255,0,68,0.06) 49.7% 50.3%, transparent 50.3%);
+      opacity: 0.7;
+    }
+    .chat-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 12px 14px; border-bottom: 1px solid #243040;
+      font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; z-index: 1;
+    }
+    .chat-head .pulse {
+      width: 10px; height: 10px; border-radius: 50%; background: var(--hal);
+      box-shadow: 0 0 12px var(--hal); animation: chat-led 1.4s ease-in-out infinite;
+    }
+    @keyframes chat-led {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+    .chat-stream {
+      flex: 1; overflow-y: auto; padding: 14px; z-index: 1;
+      font-family: var(--mono); font-size: 13px; line-height: 1.45;
+    }
+    .msg {
+      margin-bottom: 12px; padding: 10px 12px; border: 1px solid #243040;
+      max-width: 95%;
+    }
+    .msg.hal {
+      border-color: rgba(224,230,237,0.35);
+      background: rgba(224,230,237,0.04);
+      color: #dbe4ee;
+    }
+    .msg.user {
+      margin-left: auto;
+      border-color: rgba(0,212,170,0.35);
+      background: rgba(0,212,170,0.06);
+      color: #c8fff0;
+    }
+    .msg .who {
+      display: block; font-size: 10px; letter-spacing: 0.14em; color: var(--muted);
+      margin-bottom: 4px; text-transform: uppercase;
+    }
+    .chat-compose {
+      display: grid; grid-template-columns: 1fr auto; gap: 8px;
+      padding: 12px; border-top: 1px solid #243040; z-index: 1;
+    }
+    .chat-compose textarea {
+      resize: none; min-height: 52px; max-height: 120px;
+      border: 1px solid #334; background: #05080c; color: #e8e8f0;
+      font-family: var(--mono); font-size: 13px; padding: 10px 12px;
+    }
+    .chat-compose textarea:focus {
+      outline: none; border-color: var(--hal);
+      box-shadow: 0 0 0 1px rgba(224,230,237,0.25);
+    }
+    .chat-compose button {
+      min-width: 96px; min-height: 52px; border: 1px solid var(--hal);
+      background: #0c1218; color: var(--hal); font-family: var(--mono);
+      font-size: 12px; letter-spacing: 0.12em; cursor: pointer;
+    }
+    .chat-compose button:hover {
+      background: rgba(224,230,237,0.08);
+      box-shadow: 0 0 18px rgba(224,230,237,0.2);
+    }
+    .chat-bind {
+      padding: 0 14px 10px; font-family: var(--mono); font-size: 11px; color: #5a6575; z-index: 1;
+    }
+    .scanlines {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0.04; z-index: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent 0 2px, rgba(255,255,255,0.4) 2px 3px
+      );
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    Mockup · HAL AI Core + Chat · nr2-12011-landing-chat · empty ≠ $0 · no SoftDent write-back
+    <span class="bind">High-tech chat → POST /api/hal/evaluate-query · local model · no invent $</span>
+  </div>
+  <div class="shell">
+    <nav class="nav" id="nav"></nav>
+    <main class="main">
+      <div class="hal-chip"><span class="pulse" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--hal);box-shadow:0 0 10px var(--hal)"></span> HAL · SPECTRAL CONSOLE</div>
+      <h1>HAL AI CORE</h1>
+      <p class="kicker">Recon · board-actions · import health · high-tech chat console</p>
+      <div class="beam"></div>
+      <div class="honesty">Honesty: empty ≠ $0 · no SoftDent write-back · chat will not invent dollars · money topics respect import-readiness</div>
+
+      <div class="hal-layout">
+        <div>
+          <div class="grid">
+            <div class="card">
+              <h3>Reconciliation</h3>
+              <div class="val hal">—</div>
+              <p class="hint">POST hal/reconciliation · incoherent until SoftDent+QB beams</p>
+            </div>
+            <div class="card">
+              <h3>Board Actions</h3>
+          <div class="val hal">HAL</div>
+          <p class="hint">POST board-actions · no invent $</p>
+            </div>
+            <div class="card">
+              <h3>Import Ready</h3>
+              <div class="val stale">GAP</div>
+              <p class="hint">GET import-readiness · red lasers on critical</p>
+            </div>
+            <div class="card">
+              <h3>Chat Bind</h3>
+              <div class="val sd">LIVE</div>
+              <p class="hint">POST /api/hal/evaluate-query · local 32B · cloud denied</p>
+            </div>
+          </div>
+          <p class="kicker" style="margin-top:20px">
+            <a href="/nr2-optical-beam-touch-mockup.html">← Main bench (landing)</a>
+            · <a href="/nr2-optical-pages-hub.html">Pages hub</a>
+          </p>
+        </div>
+
+        <section class="chat" aria-label="HAL spectral chat">
+          <div class="scanlines" aria-hidden="true"></div>
+          <div class="chat-head">
+            <span style="display:flex;align-items:center;gap:8px"><span class="pulse"></span> HAL SPECTRAL LINK</span>
+            <span style="color:var(--muted)">LOCAL · NO CLOUD</span>
+          </div>
+          <div class="chat-stream" id="stream">
+            <div class="msg hal">
+              <span class="who">HAL</span>
+              Spectral link online. SoftDent + QuickBooks beams feed this console.
+              I will not invent dollars. Ask about recon, imports, or ops.
+            </div>
+          </div>
+          <div class="chat-bind">bind → POST /api/hal/evaluate-query · mock replies below until live wire</div>
+          <form class="chat-compose" id="compose">
+            <textarea id="input" placeholder="Ask HAL…" rows="2" required></textarea>
+            <button type="submit">TRANSMIT</button>
+          </form>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="/nr2-optical-nav.js"></script>
+  <script src="/nr2-optical-page-hal.js"></script>
+</body>
+</html>
