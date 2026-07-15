@@ -432,20 +432,15 @@ def run_watcher() -> int:
                         from announcer import pick_bluenote_announcement
                         from bluenote_reader import read_message_box_text
 
-                        # Prefer live message-box text; fall back to sender cue only.
-                        label = str(ev.get("label") or "")
-                        note = ""
-                        if kind == "light":
-                            note = label
-                        else:
-                            note = (
-                                str(snap.get("messageBox") or "").strip()
-                                or read_message_box_text(pids=snap.get("pids") or None)
-                                or ""
-                            )
+                        # Message box text only — never origin/sender, never light/UI labels.
+                        note = (
+                            str(snap.get("messageBox") or "").strip()
+                            or read_message_box_text(pids=snap.get("pids") or None)
+                            or ""
+                        )
                         phrase = pick_bluenote_announcement(
                             spoken_as,
-                            broadcast=broadcast or kind == "light",
+                            broadcast=False,
                             message=note,
                             cfg=cfg,
                         )
@@ -453,7 +448,7 @@ def run_watcher() -> int:
                             announcer.speak(phrase)
                             log(f"announced {kind}: {phrase} ({announcer.last_engine})")
                         else:
-                            log(f"skip announce {kind} (empty phrase)")
+                            log(f"skip announce {kind} (no message-box text)")
                     except Exception as exc:
                         log(f"announce failed: {exc}")
 

@@ -12,11 +12,16 @@
   "quietBootstrap": true,
   "announceVaried": true,
   "announceOpeners": [
-    "BlueNote.",
-    "Heads up.",
-    "Quick note.",
-    "Incoming.",
-    "Office message."
+    "Knock knock.",
+    "Psst.",
+    "Plot twist.",
+    "Oh hey.",
+    "Got tea.",
+    "Hot tip.",
+    "Incoming charm.",
+    "Listen up.",
+    "Quick gossip.",
+    "Fun one."
   ],
   "announceGreeting": true,
   "announceVariants": [

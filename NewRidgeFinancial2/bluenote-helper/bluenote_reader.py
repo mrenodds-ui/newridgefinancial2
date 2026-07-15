@@ -209,10 +209,9 @@ def _fingerprint(kind: str, sender: str, recipient: str, label: str) -> str:
 
 
 def read_message_box_text(*, pids: list[int] | None = None) -> str:
-    """Best-effort visible BlueNote message-box text (never settings/chrome).
+    """Best-effort visible BlueNote message-box text (Edit/TextBox only).
 
-    Prefers ThunderRT6TextBox / Edit / rich content that looks like a user note.
-    Returns empty string when nothing readable is on screen.
+    Never uses Buttons, toolbars, or XAML routing chrome. Returns "" when no note.
     """
     helper = Path(__file__).resolve().parent.parent / "sidenotes-helper"
     if str(helper) not in sys.path:
@@ -229,42 +228,36 @@ def read_message_box_text(*, pids: list[int] | None = None) -> str:
     target_pids = pids if pids is not None else find_bluenote_pids()
     if not target_pids:
         return ""
+
     candidates: list[tuple[int, str]] = []
     for cls, text, visible in _iter_bluenote_control_texts(target_pids):
         if not visible:
             continue
         low_cls = cls.lower()
-        if not any(k in low_cls for k in ("edit", "rich", "textbox", "thunderrt6textbox")):
-            # Lights only if they pass script filter (not Options/Settings buttons).
-            if low_cls == "button" and _looks_like_light_label(text):
-                clipped = _clip(text)
-                if clipped:
-                    candidates.append((60, clipped))
+        # Strict: only real editable / rich note surfaces.
+        if not any(
+            k in low_cls
+            for k in (
+                "thunderrt6textbox",
+                "richedit",
+                "richtext",
+                "edit",
+            )
+        ):
             continue
-        clipped = _clip(text)
+        # Skip the Search edit boxes.
+        t = (text or "").strip()
+        if t.lower() in {"search", ""}:
+            continue
+        if low_cls == "edit" and len(t.split()) < 3:
+            # Bare Edit "Search"/filters — ignore short non-notes.
+            continue
+        clipped = _clip(t)
         if not clipped:
             continue
-        score = 100 if "textbox" in low_cls or "rich" in low_cls else 80
-        score += min(40, len(clipped) // 2)
+        score = 120 if "textbox" in low_cls or "rich" in low_cls else 80
+        score += min(50, len(clipped))
         candidates.append((score, clipped))
-
-    # XAML plains that look like a user note (substantial sentence, not routing chips)
-    for cls, text, visible in _iter_bluenote_control_texts(target_pids):
-        if not visible:
-            continue
-        if "AfxOle" not in cls and "<TextBlock" not in text:
-            continue
-        plains = _xaml_plain(text)
-        joined_low = " ".join(plains).lower()
-        if "new conversation" in joined_low or "conversations for" in joined_low:
-            continue
-        for plain in plains:
-            clipped = _clip(plain)
-            if not clipped:
-                continue
-            if len(clipped.split()) < 4:
-                continue
-            candidates.append((90 + min(30, len(clipped) // 3), clipped))
 
     if not candidates:
         return ""

@@ -48,32 +48,28 @@ HAL_VOICE_PRESET = {
     "processed_audio": False,
 }
 
-# Short cue openers only — then the real message box text.
+# Short funny/charming cues — then the real message-box text only.
 BLUENOTE_OPENERS = [
-    "BlueNote.",
-    "Heads up.",
-    "Quick note.",
-    "Incoming.",
-    "Office message.",
-]
-
-BLUENOTE_DIRECT_BODIES = [
-    "Message from {sender}.",
-    "From {sender}.",
-]
-
-BLUENOTE_BROADCAST_BODIES = [
-    "Broadcast from {sender}.",
-    "From {sender} to everyone.",
+    "Knock knock.",
+    "Psst.",
+    "Plot twist.",
+    "Oh hey.",
+    "Got tea.",
+    "Hot tip.",
+    "Incoming charm.",
+    "Listen up.",
+    "Quick gossip.",
+    "Fun one.",
 ]
 
 
 def pick_hal_intro(cfg: dict[str, Any] | None = None) -> str:
-    """Random short cue (≤3 words) before the message box."""
+    """Random short charming cue before the message box."""
     openers = list(BLUENOTE_OPENERS)
     if cfg and isinstance(cfg.get("announceOpeners"), list):
         custom = [str(x).strip() for x in cfg["announceOpeners"] if str(x).strip()]
-        custom = [o for o in custom if len(o.split()) <= 3 and len(o) <= 24]
+        # Keep cues short so they never sound like UI script.
+        custom = [o for o in custom if len(o.split()) <= 4 and len(o) <= 28]
         if custom:
             openers = custom
     return random.choice(openers)
@@ -100,16 +96,31 @@ def is_ui_script_text(text: str) -> bool:
         "newest",
         "messages",
         "inbox",
+        "users",
+        "groups",
+        "focused",
+        "conversations",
+        "ribbon",
+        "xtpbartop",
+        "xtpbarbottom",
+        "xtpbarleft",
+        "xtpbarright",
     }:
         return True
     if re.fullmatch(r"\d{1,3}", raw):
+        return True
+    # Clock / date chip on ribbon
+    if re.search(r"(?i)\b(am|pm)\b.*\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", low):
+        return True
+    if re.match(r"(?i)^inbox\s*\(\d+\)\s*$", raw):
         return True
 
     # Prefix routing / chrome
     if re.match(
         r"(?i)^("
         r"new\s+conversation|message\s+from|broadcast\s+from|conversation\s+from|"
-        r"conversations\s+for|search|options|settings|good\s+(morning|afternoon|evening)"
+        r"conversations\s+for|search|options|settings|good\s+(morning|afternoon|evening)|"
+        r"mark\s+all|hello\s+ladies|hi\s+ladies|hey\s+ladies"
         r")\b",
         raw,
     ):
@@ -120,11 +131,11 @@ def is_ui_script_text(text: str) -> bool:
         r"(?i)(dr\.?\s*)?[a-z][a-z .'-]{0,24}(\s+\d{1,2})?",
         raw,
     ) and len(raw.split()) <= 3 and not re.search(
-        r"(?i)\b(call|please|need|when|free|message|patient|ready|come|bring|check)\b",
+        r"(?i)\b(call|please|need|when|free|patient|ready|come|bring|check|assist|help|phone)\b",
         raw,
     ):
         # Allow real short notes that include action words; block bare names/rooms-as-chips.
-        if re.match(r"(?i)^(frontdesk|room|dr\.?|office\s*manager|everyone|all)\b", raw):
+        if re.match(r"(?i)^(frontdesk|room|dr\.?|office\s*manager|everyone|all|server)\b", raw):
             return True
 
     markers = (
@@ -153,8 +164,8 @@ def is_ui_script_text(text: str) -> bool:
         "conversations for",
         "innovasys",
         "bluenotecl",
-        "blue note",
         "bluenote communicator",
+        "communicator lights",
         "dde link",
         "cannot be created",
         "clients currently online",
@@ -177,6 +188,11 @@ def is_ui_script_text(text: str) -> bool:
         "double-click",
         "right-click",
         "press the",
+        "xtp",
+        "ribbon",
+        "do not disturb",
+        "lights activity",
+        "alert manager",
     )
     if any(m in low for m in markers):
         return True
@@ -216,19 +232,16 @@ def pick_bluenote_announcement(
     message: str = "",
     cfg: dict[str, Any] | None = None,
 ) -> str:
-    """Short cue + message-box text when available; else cue + sender only."""
+    """Short cue + message-box text only. Never speaker/origin; never UI chrome."""
+    _ = (sender, broadcast)  # routing kept for callers; not spoken
     body = clip_spoken_message(message, max_words=40, max_chars=220)
     if not body:
-        who = " ".join(str(sender or "").split()).strip()
-        if not who or who.lower() in ("bluenote", "a station", "station", "unknown"):
-            body = "New message."
-        elif broadcast:
-            body = f"Broadcast from {who}."
-        else:
-            body = f"Message from {who}."
-    # Avoid double-intros if the box already starts with a cue/HAL line.
+        # No readable message box — stay silent (do not invent origin/script).
+        return ""
+    # Avoid double-intros if the box already starts with a cue line.
     if re.match(
-        r"(?i)^(bluenote|heads up|quick note|incoming|office message|hello ladies|hi ladies|hey ladies|hal[.,])\b",
+        r"(?i)^(knock knock|psst|plot twist|oh hey|got tea|hot tip|incoming charm|"
+        r"listen up|quick gossip|fun one|bluenote|heads up|quick note|incoming|office message)\b",
         body,
     ):
         return body
@@ -447,34 +460,22 @@ class Announcer:
             pass
 
     def speak(self, text: str, asynchronous: bool = False) -> None:
-        # Speak short cue + message-box text. Reject joke intros / UI chrome.
+        # Speak short cue + message-box text only. Reject origin lines / UI chrome.
         cleaned = " ".join(str(text or "").split()).strip()
         if not cleaned:
             return
-        low = cleaned.lower()
-        joke_or_chrome = (
-            "hope you're",
-            "take care",
-            "happy to help",
-            "options window",
-            "popup alert",
-            "i have a message for you",
-            "hello ladies",
-            "gossip",
-            "plot twist",
-            "don't shoot the messenger",
-            "thrilling episode",
-            "computerized gossip",
-            "got tea",
-            "breaking news from bluenote",
-            "who pinged us",
-        )
-        if any(m in low for m in joke_or_chrome) and is_ui_script_text(
-            re.sub(r"(?i)^(bluenote|heads up|quick note|incoming|office message)\.\s*", "", cleaned)
-        ):
-            # Whole line is chrome/joke — refuse.
+        body = re.sub(
+            r"(?i)^(knock knock|psst|plot twist|oh hey|got tea|hot tip|incoming charm|"
+            r"listen up|quick gossip|fun one|bluenote|heads up|quick note|incoming|office message)\.\s*",
+            "",
+            cleaned,
+        ).strip()
+        if not body or is_ui_script_text(body):
             return
-        # Cap to message-box size, not an 8-word telegram.
+        if re.match(r"(?i)^(message|broadcast)\s+from\b", body):
+            # Origin-only lines are not message-box content.
+            return
+        # Cap to message-box size.
         if len(cleaned.split()) > 48 or len(cleaned) > 260:
             cleaned = " ".join(cleaned.split()[:40])
             if cleaned[-1] not in ".!?":

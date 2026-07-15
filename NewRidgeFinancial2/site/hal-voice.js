@@ -481,17 +481,35 @@
   }
 
   function announceSidenote(sender, broadcast, message) {
-    // Short cue + message box when available; else cue + sender only.
-    const name = String(sender || "a station").replace(/\s+/g, " ").trim() || "a station";
+    // Message box only — never origin/sender, never UI chrome.
+    void sender;
+    void broadcast;
     const cleaned = String(message || "")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 220);
-    let body = cleaned && !looksLikeScript(cleaned) ? cleaned : "";
-    if (!body) body = broadcast ? `Broadcast from ${name}.` : `Message from ${name}.`;
+    if (!cleaned || looksLikeScript(cleaned)) {
+      return { started: false, durationMs: 0, skipped: true, reason: "no-message-box" };
+    }
+    let body = cleaned;
     if (body && !/[.!?]$/.test(body)) body += ".";
-    const intros = ["BlueNote.", "Heads up.", "Quick note.", "Incoming.", "Office message."];
-    if (/^(bluenote|heads up|quick note|incoming|office message|hello ladies|hi ladies|hal[.,])\b/i.test(body)) {
+    const intros = [
+      "Knock knock.",
+      "Psst.",
+      "Plot twist.",
+      "Oh hey.",
+      "Got tea.",
+      "Hot tip.",
+      "Incoming charm.",
+      "Listen up.",
+      "Quick gossip.",
+      "Fun one.",
+    ];
+    if (
+      /^(knock knock|psst|plot twist|oh hey|got tea|hot tip|incoming charm|listen up|quick gossip|fun one|bluenote|heads up|quick note|incoming|office message)\b/i.test(
+        body
+      )
+    ) {
       return speak(body, { interrupt: true });
     }
     const intro = intros[Math.floor(Math.random() * intros.length)];
