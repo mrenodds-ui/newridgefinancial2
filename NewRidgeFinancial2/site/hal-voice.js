@@ -444,17 +444,49 @@
     return false;
   }
 
+  function looksLikeScript(text) {
+    const cleaned = String(text || "").replace(/\s+/g, " ").trim();
+    if (!cleaned) return true;
+    const low = cleaned.toLowerCase();
+    if (/^\d{1,3}$/.test(cleaned)) return true;
+    if (
+      /^(new conversation|message from|broadcast from|conversation from|conversations for|search|options|settings|bluenote)\b/i.test(
+        cleaned
+      )
+    ) {
+      return true;
+    }
+    if (
+      /(aging color|light tags|light color|how to use|click the|clicking|xmlns|textblock|innovasys|dde link|charles dickens|days remaining|mark all|create group|test popup|cannot be created)/i.test(
+        low
+      )
+    ) {
+      return true;
+    }
+    if (
+      /^(frontdesk|room|dr\.?|office manager|everyone|all)\b/i.test(cleaned) &&
+      cleaned.split(/\s+/).length <= 3 &&
+      !/\b(call|please|need|when|free|message|patient|ready|come|bring|check)\b/i.test(cleaned)
+    ) {
+      return true;
+    }
+    if (
+      /\b(to (enable|disable|open|close|change|configure)|you can (also )?(click|select|enable|disable)|for more information)\b/i.test(
+        low
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   function announceSidenote(sender, broadcast, message) {
-    // Random HAL intro + message box text. Silent if empty/chrome.
+    // Random HAL intro + message box text. Silent if empty/chrome/script.
     const cleaned = String(message || "")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 220);
-    const looksLikeScript =
-      /^(new conversation|message from|broadcast from|options|settings|search|bluenote)\b/i.test(
-        cleaned
-      );
-    if (!cleaned || looksLikeScript) {
+    if (!cleaned || looksLikeScript(cleaned)) {
       return { started: false, durationMs: 0, skipped: true, reason: "no-message-box" };
     }
     let body = cleaned;

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ctypes
 import re
+import sys
 import time
 from ctypes import wintypes
 from dataclasses import dataclass
@@ -213,34 +214,17 @@ def read_message_box_text(*, pids: list[int] | None = None) -> str:
     Prefers ThunderRT6TextBox / Edit / rich content that looks like a user note.
     Returns empty string when nothing readable is on screen.
     """
+    helper = Path(__file__).resolve().parent.parent / "sidenotes-helper"
+    if str(helper) not in sys.path:
+        sys.path.insert(0, str(helper))
 
     def _clip(text: str) -> str:
-        raw = " ".join(str(text or "").replace("\n", " ").split()).strip()
-        if not raw or len(raw) < 2:
+        try:
+            from announcer import clip_spoken_message
+
+            return clip_spoken_message(text, max_words=40, max_chars=220)
+        except Exception:
             return ""
-        low = raw.lower()
-        if low in {"search", "min", "form1", "bluenotecl", "dde link"}:
-            return ""
-        if re.match(r"(?i)^(search|options|settings|new conversation)\b", raw):
-            return ""
-        if any(
-            m in low
-            for m in (
-                "aging color",
-                "light color",
-                "xmlns",
-                "trial",
-                "charles dickens",
-                "cannot be created",
-            )
-        ):
-            return ""
-        # Reject tiny spinner/panel values
-        if re.fullmatch(r"\d{1,3}", raw):
-            return ""
-        if len(raw) > 220:
-            raw = raw[:219].rstrip(" ,.;:") + "."
-        return raw
 
     target_pids = pids if pids is not None else find_bluenote_pids()
     if not target_pids:
@@ -251,7 +235,7 @@ def read_message_box_text(*, pids: list[int] | None = None) -> str:
             continue
         low_cls = cls.lower()
         if not any(k in low_cls for k in ("edit", "rich", "textbox", "thunderrt6textbox")):
-            # Also accept short visible button texts as light "message boxes"
+            # Lights only if they pass script filter (not Options/Settings buttons).
             if low_cls == "button" and _looks_like_light_label(text):
                 clipped = _clip(text)
                 if clipped:
@@ -261,7 +245,6 @@ def read_message_box_text(*, pids: list[int] | None = None) -> str:
         if not clipped:
             continue
         score = 100 if "textbox" in low_cls or "rich" in low_cls else 80
-        # Prefer longer note-like text
         score += min(40, len(clipped) // 2)
         candidates.append((score, clipped))
 
@@ -273,17 +256,13 @@ def read_message_box_text(*, pids: list[int] | None = None) -> str:
             continue
         plains = _xaml_plain(text)
         joined_low = " ".join(plains).lower()
-        # Routing chrome panels — never treat recipient chip as the message box.
         if "new conversation" in joined_low or "conversations for" in joined_low:
             continue
         for plain in plains:
             clipped = _clip(plain)
             if not clipped:
                 continue
-            words = clipped.split()
-            if len(words) < 4:
-                continue
-            if re.match(r"(?i)^(new conversation to|new conversation from)\b", clipped):
+            if len(clipped.split()) < 4:
                 continue
             candidates.append((90 + min(30, len(clipped) // 3), clipped))
 

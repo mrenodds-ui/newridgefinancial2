@@ -48,14 +48,18 @@ HAL_VOICE_PRESET = {
     "processed_audio": False,
 }
 
-# Friendly desk intros — HAL names himself, then reads the message box.
+# Funny desk intros — HAL names himself, then reads the message box.
 BLUENOTE_OPENERS = [
-    "Hello ladies, this is HAL. You have a new message.",
-    "Hi ladies — HAL here. New message for you.",
-    "Good day ladies. This is HAL. You've got a new message.",
-    "Hello ladies. HAL speaking. There's a new message.",
-    "Hey ladies, it's HAL. New message coming in.",
-    "Hello ladies, HAL here with a new message.",
+    "Hello ladies, this is HAL — and I've got tea, I mean, a message.",
+    "Knock knock. It's HAL. You've got a new message.",
+    "Hi ladies — HAL here. Don't shoot the messenger… wait, I am the messenger.",
+    "Hello ladies. HAL speaking. Plot twist: there's a new message.",
+    "Hey ladies, it's HAL. Incoming message — I only read the fun parts.",
+    "Hello ladies, this is HAL. Breaking news from BlueNote.",
+    "Attention ladies: HAL has gossip… professionally known as a new message.",
+    "Hi ladies. Your favorite computerized gossip columnist — new message.",
+    "Hello ladies, HAL here. Another thrilling episode of Who Pinged Us Now.",
+    "Good day ladies. This is HAL. Yes, again. New message for you.",
 ]
 
 BLUENOTE_DIRECT_BODIES = [
@@ -79,25 +83,72 @@ def pick_hal_intro(cfg: dict[str, Any] | None = None) -> str:
     return random.choice(openers)
 
 
-def clip_spoken_message(text: str, *, max_words: int = 40, max_chars: int = 220) -> str:
-    """Message-box text only — never UI chrome / settings scripts."""
+def is_ui_script_text(text: str) -> bool:
+    """True for BlueNote help/options/routing chrome — never speak these."""
     raw = " ".join(str(text or "").replace("\n", " ").split()).strip()
     if not raw:
-        return ""
+        return True
     low = raw.lower()
-    script_markers = (
+
+    # Exact / near-exact chrome chips
+    if low in {
+        "search",
+        "min",
+        "form1",
+        "bluenotecl",
+        "dde link",
+        "options",
+        "settings",
+        "cancel",
+        "ok",
+        "newest",
+        "messages",
+        "inbox",
+    }:
+        return True
+    if re.fullmatch(r"\d{1,3}", raw):
+        return True
+
+    # Prefix routing / chrome
+    if re.match(
+        r"(?i)^("
+        r"new\s+conversation|message\s+from|broadcast\s+from|conversation\s+from|"
+        r"conversations\s+for|search|options|settings|good\s+(morning|afternoon|evening)"
+        r")\b",
+        raw,
+    ):
+        return True
+
+    # Station / panel name chips only (e.g. "Frontdesk 2", "Dr. Reno", "Room 4")
+    if re.fullmatch(
+        r"(?i)(dr\.?\s*)?[a-z][a-z .'-]{0,24}(\s+\d{1,2})?",
+        raw,
+    ) and len(raw.split()) <= 3 and not re.search(
+        r"(?i)\b(call|please|need|when|free|message|patient|ready|come|bring|check)\b",
+        raw,
+    ):
+        # Allow real short notes that include action words; block bare names/rooms-as-chips.
+        if re.match(r"(?i)^(frontdesk|room|dr\.?|office\s*manager|everyone|all)\b", raw):
+            return True
+
+    markers = (
         "options",
         "settings",
         "popup alert",
         "clicking",
+        "click the",
+        "clicking the",
         "activating",
         "disable",
         "maximize",
         "aging color",
+        "light color",
         "light tags",
+        "color tag",
         "trial",
         "xmlns",
         "textblock",
+        "stackpanel",
         "open the",
         "show the",
         "how to use",
@@ -106,21 +157,51 @@ def clip_spoken_message(text: str, *, max_words: int = 40, max_chars: int = 220)
         "conversations for",
         "innovasys",
         "bluenotecl",
+        "blue note",
+        "bluenote communicator",
         "dde link",
         "cannot be created",
         "clients currently online",
         "electric communication will never",
         "charles dickens",
         "version 9.",
+        "days remaining",
+        "mark all",
+        "save message",
+        "create group",
+        "test popup",
+        "reset",
+        "padding",
+        "foreground",
+        "background",
+        "copyright",
+        "check the box",
+        "uncheck",
+        "select the",
+        "double-click",
+        "right-click",
+        "press the",
     )
-    if any(m in low for m in script_markers):
-        return ""
-    if re.match(
-        r"(?i)^(new\s+conversation|message\s+from|broadcast\s+from|search|good\s+(morning|afternoon|evening))\b",
+    if any(m in low for m in markers):
+        return True
+
+    # Instructional / help cadence (script docs, not a desk note)
+    if re.search(
+        r"(?i)\b(to\s+(enable|disable|open|close|change|configure)|"
+        r"you\s+can\s+(also\s+)?(click|select|enable|disable)|"
+        r"use\s+the\s+\w+\s+(menu|button|window)|"
+        r"refer\s+to|see\s+also|for\s+more\s+information)\b",
         raw,
     ):
-        return ""
-    if low in {"search", "min", "form1", "bluenotecl"}:
+        return True
+
+    return False
+
+
+def clip_spoken_message(text: str, *, max_words: int = 40, max_chars: int = 220) -> str:
+    """Message-box text only — never UI chrome / settings scripts."""
+    raw = " ".join(str(text or "").replace("\n", " ").split()).strip()
+    if not raw or is_ui_script_text(raw):
         return ""
     words = raw.split(" ")
     if len(words) > max_words:
@@ -139,13 +220,16 @@ def pick_bluenote_announcement(
     message: str = "",
     cfg: dict[str, Any] | None = None,
 ) -> str:
-    """Random HAL intro + message-box text. Empty if no real message."""
+    """Random HAL intro + message-box text. Empty if no real message (never scripts)."""
     _ = (sender, broadcast)  # routing kept for callers; message box is spoken
     body = clip_spoken_message(message, max_words=40, max_chars=220)
     if not body:
         return ""
     # Avoid double-intros if the box already starts with HAL.
-    if re.match(r"(?i)^hello ladies|^hi ladies|^hey ladies|^good day ladies|^hal[.,]", body):
+    if re.match(
+        r"(?i)^(hello ladies|hi ladies|hey ladies|good day ladies|knock knock|attention ladies|hal[.,])",
+        body,
+    ):
         return body
     intro = pick_hal_intro(cfg)
     return f"{intro} {body}".strip()
