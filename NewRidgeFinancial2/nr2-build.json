@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12041-softdent-auto-ensure",
-  "BUILD_ID": "nr2-12041-softdent-auto-ensure",
-  "assetVersion": "nr2-12041-softdent-auto-ensure",
-  "builtAt": "2026-07-16T01:25:00.000Z",
-  "notes": "nr2-12041-softdent-auto-ensure: HAL/morning SoftDent Excel paths auto-launch CS SoftDent Software.lnk + Sign On when main is down before GUI export. SoftDent write-back forbidden. empty ≠ $0.",
+  "schemaVersion": "nr2-12042-optical-unify",
+  "BUILD_ID": "nr2-12042-optical-unify",
+  "assetVersion": "nr2-12042-optical-unify",
+  "builtAt": "2026-07-16T01:30:00.000Z",
+  "notes": "nr2-12042-optical-unify: all optical subpages share Hub money-face rhythm (mode eyebrow, honesty, metric-face strip, foot nav); staff sans / laser mono; quiet API path chrome; landing aligned. SoftDent write-back forbidden. empty ≠ $0.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12041-SOFTDENT-AUTO-ENSURE",
+  "package": "NR2-12042-OPTICAL-UNIFY",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

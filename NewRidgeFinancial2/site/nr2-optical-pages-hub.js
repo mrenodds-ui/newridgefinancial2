@@ -200,7 +200,7 @@
     paintMoneyFaces(beams, readyData);
     if (beams && W.beamProvenanceLine) {
       const hint = document.getElementById("hint-beam-proof");
-      if (hint && (!hint.textContent || hint.textContent.indexOf("GET /api") === 0)) {
+      if (hint && W.beamProvenanceLine) {
         hint.textContent = W.beamProvenanceLine(beams, readyData) + " · empty ≠ $0";
       }
     }

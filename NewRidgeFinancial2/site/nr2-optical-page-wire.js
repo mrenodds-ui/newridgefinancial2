@@ -190,8 +190,8 @@
         const hint = document.getElementById(hintId);
         if (hint) {
           hint.textContent =
-            "money-beams gated · lasers/import STALE · empty ≠ $0 · hash " +
-            String((beams && beams.beamHash) || "n/a");
+            "Lasers/import STALE · empty ≠ $0 · hash " +
+            String((beams && beams.beamHash) || "n/a").slice(0, 16);
         }
       }
       return { applied: true, live: false, blocked: true };
@@ -212,12 +212,12 @@
       const hint = document.getElementById(hintId);
       if (hint) {
         const ts = String(beams.beamTimestamp || beams.at || "").slice(0, 19);
+        const sideLabel = side === "quickbooks" ? "QuickBooks" : "SoftDent";
         hint.textContent =
-          "money-beams · " +
-          side +
+          sideLabel +
           (ts ? " · " + ts : "") +
           " · hash " +
-          String(beams.beamHash || "n/a") +
+          String(beams.beamHash || "n/a").slice(0, 16) +
           " · empty ≠ $0";
       }
     }

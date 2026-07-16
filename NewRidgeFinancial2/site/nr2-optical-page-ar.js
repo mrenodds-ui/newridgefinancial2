@@ -82,7 +82,7 @@
       const ageHint = document.getElementById("hint-buckets");
       if (ageHint) {
         ageHint.textContent =
-          "GET softdent/ar-aging" +
+          "SoftDent AR buckets" +
           (aging.data.ageHours != null ? " · age " + aging.data.ageHours + "h" : "") +
           " · empty ≠ $0";
       }

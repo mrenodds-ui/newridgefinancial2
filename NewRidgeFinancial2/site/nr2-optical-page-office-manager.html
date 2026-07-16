@@ -3,65 +3,68 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NR2 Optical · Office Manager — PARTIAL</title>
+  <title>NR2 Optical · Office Manager</title>
   <link rel="stylesheet" href="/nr2-optical-theme.css" />
 </head>
 <body>
   <div class="banner">
-    PARTIAL · Office Manager · nr2-optical · empty ≠ $0 · no SoftDent write-back
-    <span class="bind">Readiness · SoftDent ops · health · board-actions NAVIGATE</span>
+    Office Manager · empty ≠ $0 · no SoftDent write-back
+    <span class="bind">Wiring readiness…</span>
   </div>
   <div class="shell">
     <nav class="nav" id="nav"></nav>
     <main class="main">
-      <div class="hal-chip">HAL · SPECTRAL · same theme as main</div>
-      <h1>OFFICE MANAGER</h1>
-      <p class="kicker">Import health · SoftDent day pulse · no fake huddle dollars</p>
-      <div class="beam"></div>
-      <div class="honesty">Honesty: empty ≠ $0 · overrides / quarantine packs removed · sync on main bench</div>
-      <div class="grid">
-        <div class="card">
-          <h3>Period close</h3>
+      <p class="mode-eyebrow">Office Manager · OPS desk</p>
+      <h1>Office Manager</h1>
+      <p class="kicker">Period close · import health · SoftDent day pulse — no fake huddle dollars.</p>
+      <div class="beam" aria-hidden="true"></div>
+      <div class="honesty">Honesty: empty ≠ $0 · sync on main bench · no SoftDent write-back</div>
+      <section class="money-strip" aria-label="OPS and readiness">
+        <article class="metric-face ops">
+          <div class="face-lbl">Period close</div>
           <div class="val" id="val-close">—</div>
-          <p class="hint" id="hint-close">import-readiness · periodClose · morning SoftDent pull</p>
+          <p class="hint" id="hint-close">Morning SoftDent pull when lasers red / stalled</p>
           <div class="ops-row">
             <button type="button" class="mech-lock" id="btn-force-close" disabled title="SoftDent pull when lasers red or close stalled; else attest-only">FORCE CLOSE</button>
             <button type="button" class="mech-lock" id="btn-verify-beam" title="Compare live dataBeamHash vs period-close snapshot">VERIFY BEAM</button>
           </div>
-        </div>
-        <div class="card">
-          <h3>Beam desk proof</h3>
+        </article>
+        <article class="metric-face hal">
+          <div class="face-lbl">Beam proof</div>
           <div class="val" id="val-beam-proof">—</div>
-          <p class="hint" id="hint-beam-proof">GET /api/hal/tools/beam-verify · dataBeamHash</p>
-        </div>
-        <div class="card">
-          <h3>Desk smoke</h3>
+          <p class="hint" id="hint-beam-proof">Live vs period-close data hash</p>
+        </article>
+        <article class="metric-face hal">
+          <div class="face-lbl">Desk smoke</div>
           <div class="val" id="val-desk-smoke">—</div>
-          <p class="hint" id="hint-desk-smoke">GET /api/health/desk-smoke · close · beams · Force Close</p>
+          <p class="hint" id="hint-desk-smoke">Close · beams · Force Close check</p>
           <button type="button" class="mech-action" id="btn-desk-smoke" title="Run desk confidence loop">RUN SMOKE</button>
-        </div>
-        <div class="card">
-          <h3>Import readiness</h3>
+        </article>
+        <article class="metric-face">
+          <div class="face-lbl">Import readiness</div>
           <div class="val" id="val-ready">—</div>
-          <p class="hint" id="hint-ready">GET /api/import-readiness</p>
-        </div>
-        <div class="card">
-          <h3>SoftDent today</h3>
+          <p class="hint" id="hint-ready">Blocking gaps and laser path</p>
+        </article>
+        <article class="metric-face sd">
+          <div class="face-lbl">SoftDent today</div>
           <div class="val sd" id="val-ops">—</div>
-          <p class="hint" id="hint-ops">new patients MTD · appointments today</p>
-        </div>
-        <div class="card">
-          <h3>Critical gaps</h3>
+          <p class="hint" id="hint-ops">New patients MTD · appointments today</p>
+        </article>
+        <article class="metric-face">
+          <div class="face-lbl">Critical gaps</div>
           <div class="val" id="val-gaps">—</div>
-          <p class="hint" id="hint-gaps">blocking / stale dataset keys</p>
-        </div>
-        <div class="card">
-          <h3>Health · Sync</h3>
+          <p class="hint" id="hint-gaps">Stale or blocking datasets</p>
+        </article>
+        <article class="metric-face">
+          <div class="face-lbl">Health</div>
           <div class="val" id="val-health">—</div>
-          <p class="hint" id="hint-health">GET /api/health · <a class="btn" href="/nr2-optical-beam-touch-mockup.html">MAIN SYNC</a></p>
-        </div>
-      </div>
-      <p class="kicker" style="margin-top:24px"><a href="/nr2-optical-beam-touch-mockup.html">← Main interferometer bench</a> · <a href="/nr2-optical-pages-hub.html">Pages hub</a></p>
+          <p class="hint" id="hint-health"><a href="/nr2-optical-beam-touch-mockup.html">Open main sync →</a></p>
+        </article>
+      </section>
+      <p class="foot-nav">
+        <a href="/nr2-optical-pages-hub.html">← Alignment Bench</a>
+        <a href="/nr2-optical-beam-touch-mockup.html">Main bench</a>
+      </p>
     </main>
   </div>
   <script src="/nr2-optical-nav.js"></script>

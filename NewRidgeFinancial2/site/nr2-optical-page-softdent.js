@@ -107,7 +107,7 @@
       const hint = document.getElementById("hint-prod");
       if (hint && shown) {
         hint.textContent =
-          "GET softdent/production-daily" + (last.label ? " · " + last.label : "") + " · empty ≠ $0";
+          "Production" + (last.label ? " · " + last.label : "") + " · empty ≠ $0";
       }
       if (shown) live = true;
     } else {

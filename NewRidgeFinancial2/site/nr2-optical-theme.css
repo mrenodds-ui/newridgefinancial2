@@ -1,5 +1,5 @@
-/* NR2 Optical theme lock — nr2-12039-optical-theme-lock
-   Staff sans for chrome; mono reserved for hashes, currency, timestamps, laser status.
+/* NR2 Optical theme — nr2-12042-optical-unify
+   One instrument: Hub + subpages share banner, honesty, staff/laser type, money-face hierarchy.
    SoftDent write-back forbidden. empty ≠ $0. */
 :root {
   --vacuum: #050607;
@@ -95,6 +95,55 @@ a:hover { color: var(--hal); }
   font-family: var(--sans); font-size: var(--text-sm); color: var(--muted);
   margin-bottom: var(--space-4); line-height: 1.4; max-width: 52rem;
 }
+.mode-eyebrow {
+  margin: 0 0 var(--space-2); font-family: var(--sans); font-size: 12px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+}
+.foot-nav {
+  margin-top: var(--space-5); padding-top: var(--space-3);
+  border-top: 1px solid var(--border-soft);
+  font-family: var(--sans); font-size: 13px; color: var(--muted);
+}
+.foot-nav a { margin-right: 14px; }
+
+/* Subpage money face — same hierarchy as Alignment Bench */
+.money-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.metric-face {
+  border: 1px solid var(--border); background: rgba(8, 12, 16, 0.92);
+  padding: var(--space-4) var(--space-3);
+  display: flex; flex-direction: column; min-height: 168px;
+}
+.metric-face.sd { border-top: 3px solid var(--sd); }
+.metric-face.qb { border-top: 3px solid var(--qb); }
+.metric-face.hal { border-top: 3px solid var(--hal); }
+.metric-face.ops { border-top: 3px solid var(--lock); }
+.metric-face.stale-border { border-color: var(--fringe); }
+.metric-face .face-lbl {
+  font-family: var(--sans); font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.08em; color: #c8d0da; margin-bottom: var(--space-2);
+}
+.metric-face .face-val,
+.metric-face .val {
+  font-family: var(--mono); font-size: 24px; font-weight: 600;
+  font-variant-numeric: tabular-nums; line-height: 1.15; margin-bottom: var(--space-2);
+  word-break: break-word;
+}
+.metric-face .face-val.sd, .metric-face .val.sd { color: var(--sd); }
+.metric-face .face-val.qb, .metric-face .val.qb { color: var(--qb); }
+.metric-face .face-val.hal, .metric-face .val.hal { color: var(--hal); }
+.metric-face .face-val.stale, .metric-face .val.stale { color: var(--fringe); }
+.metric-face .face-hint,
+.metric-face .hint {
+  font-family: var(--sans); font-size: 12px; color: #5a6575; line-height: 1.35;
+  margin: 0 0 var(--space-2);
+}
+.metric-face .live-chip { margin-top: auto; }
+
 .grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: var(--space-3);

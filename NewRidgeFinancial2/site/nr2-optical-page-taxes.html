@@ -3,45 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NR2 Optical · Tax Prism — nr2-optical</title>
+  <title>NR2 Optical · Tax Prism</title>
   <link rel="stylesheet" href="/nr2-optical-theme.css" />
 </head>
 <body>
   <div class="banner">
-    WIRE · Tax Prism · empty ≠ $0 · no SoftDent write-back
-    <span class="bind">POST /api/apex/tax/calculate-planning · PLANNING ONLY — CPA REVIEW</span>
+    Tax Prism · empty ≠ $0 · planning only · CPA review
+    <span class="bind">Wiring tax planning…</span>
   </div>
   <div class="shell">
     <nav class="nav" id="nav"></nav>
     <main class="main">
-      <div class="hal-chip">HAL · SPECTRAL · same theme as main</div>
-      <h1>TAX PRISM</h1>
-      <p class="kicker">Planning only — never posted to QuickBooks · empty ≠ $0</p>
-      <div class="beam"></div>
-      <div class="honesty">Honesty: empty ≠ $0 · no SoftDent write-back · disclaimer from API · no invent rates</div>
-      <div class="grid">
-        <div class="card">
-          <h3>Effective / status</h3>
+      <p class="mode-eyebrow">Tax · planning only</p>
+      <h1>Tax Prism</h1>
+      <p class="kicker">Planning estimates — never posted to QuickBooks. CPA review required.</p>
+      <div class="beam" aria-hidden="true"></div>
+      <div class="honesty">Honesty: empty ≠ $0 · no SoftDent write-back · no invent rates</div>
+      <section class="money-strip" aria-label="Tax planning face">
+        <article class="metric-face qb">
+          <div class="face-lbl">Effective / status</div>
           <div class="val qb" id="val-rate">—</div>
-          <p class="hint" id="hint-rate">Waiting for calculate-planning</p>
-        </div>
-        <div class="card">
-          <h3>Period / entity</h3>
+          <p class="hint" id="hint-rate">Run calculate when ready</p>
+        </article>
+        <article class="metric-face">
+          <div class="face-lbl">Period / entity</div>
           <div class="val" id="val-period">—</div>
           <p class="hint">From planning payload</p>
-        </div>
-        <div class="card">
-          <h3>Taxable / book</h3>
+        </article>
+        <article class="metric-face">
+          <div class="face-lbl">Taxable / book</div>
           <div class="val" id="val-book">—</div>
           <p class="hint">Live fields only · ∅ when missing</p>
-        </div>
-        <div class="card">
-          <h3>Run</h3>
-          <div class="val sd"><button type="button" class="btn" id="btn-plan">CALCULATE</button></div>
+        </article>
+        <article class="metric-face ops">
+          <div class="face-lbl">Run</div>
+          <div class="val sd"><button type="button" class="mech-action" id="btn-plan">CALCULATE</button></div>
           <p class="hint" id="hint-disc">CPA review required</p>
-        </div>
-      </div>
-      <p class="kicker" style="margin-top:24px"><a href="/nr2-optical-beam-touch-mockup.html">← Main interferometer bench</a> · <a href="/nr2-optical-pages-hub.html">Pages hub</a></p>
+        </article>
+      </section>
+      <p class="foot-nav">
+        <a href="/nr2-optical-pages-hub.html">← Alignment Bench</a>
+        <a href="/nr2-optical-beam-touch-mockup.html">Main bench</a>
+      </p>
     </main>
   </div>
   <script src="/nr2-optical-nav.js"></script>
