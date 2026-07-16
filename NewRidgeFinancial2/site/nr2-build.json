@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12038-desk-smoke",
-  "BUILD_ID": "nr2-12038-desk-smoke",
-  "assetVersion": "nr2-12038-desk-smoke",
-  "builtAt": "2026-07-16T01:10:00.000Z",
-  "notes": "nr2-12038-desk-smoke: desk confidence loop (close status, money-beams/dataBeamHash, Force Close availability, VERIFY BEAM); GET /api/health/desk-smoke; Hub/OM RUN SMOKE. Restart server so /api/hal/tools/beam-verify loads. SoftDent write-back forbidden. empty ≠ $0.",
+  "schemaVersion": "nr2-12039-optical-theme-lock",
+  "BUILD_ID": "nr2-12039-optical-theme-lock",
+  "assetVersion": "nr2-12039-optical-theme-lock",
+  "builtAt": "2026-07-16T01:05:00.000Z",
+  "notes": "nr2-12039-optical-theme-lock: Hub Alignment Bench (no card soup); staff sans vs laser mono; mech-lock Force Close/VERIFY BEAM vs mech-action RUN SMOKE; shared honesty strip with landing. SoftDent write-back forbidden. empty ≠ $0. STALE/fringe preserved.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12038-DESK-SMOKE",
+  "package": "NR2-12039-OPTICAL-THEME-LOCK",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

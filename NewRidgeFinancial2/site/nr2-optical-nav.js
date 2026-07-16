@@ -1,7 +1,7 @@
 (() => {
   const pages = [
     { href: "/nr2-optical-beam-touch-mockup.html", label: "MAIN · LANDING" },
-    { href: "/nr2-optical-pages-hub.html", label: "PAGES HUB" },
+    { href: "/nr2-optical-pages-hub.html", label: "ALIGNMENT BENCH" },
     { group: "SOURCES" },
     { href: "/nr2-optical-page-softdent.html", label: "SoftDent" },
     { href: "/nr2-optical-page-quickbooks.html", label: "QuickBooks" },

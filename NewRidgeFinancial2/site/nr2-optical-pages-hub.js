@@ -1,4 +1,4 @@
-/* Pages Hub — LIVE/STALE from lasers + period-close OPS (never hide stalled close) */
+/* Pages Hub — Alignment Bench money face + OPS mech locks (nr2-12039) */
 (function () {
   const W = window.NR2OpticalWire;
   if (!W) return;
@@ -30,6 +30,13 @@
     el.textContent = label;
     el.classList.remove("empty", "bad", "stale", "sd", "qb", "hal");
     if (cls) el.classList.add(cls);
+  }
+
+  function setFaceTone(faceId, stale) {
+    const face = document.getElementById(faceId);
+    if (!face) return;
+    face.classList.toggle("stale-border", !!stale);
+    face.classList.toggle("fresh", !stale);
   }
 
   function wireForceClose(readyData, readyOk) {
@@ -88,10 +95,45 @@
     });
   }
 
+  function paintMoneyFaces(beams, readyData) {
+    if (W.applyBeamHeadline) {
+      const sd = W.applyBeamHeadline({
+        id: "hub-sd-amt",
+        hintId: "hint-sd-amt",
+        beams: beams,
+        ready: readyData,
+        side: "softdent",
+      });
+      const qb = W.applyBeamHeadline({
+        id: "hub-qb-amt",
+        hintId: "hint-qb-amt",
+        beams: beams,
+        ready: readyData,
+        side: "quickbooks",
+      });
+      const sdEl = document.getElementById("hub-sd-amt");
+      const qbEl = document.getElementById("hub-qb-amt");
+      if (sdEl) {
+        sdEl.classList.remove("sd", "qb", "hal", "stale", "empty");
+        sdEl.classList.add(sd && sd.live ? "sd" : "stale");
+      }
+      if (qbEl) {
+        qbEl.classList.remove("sd", "qb", "hal", "stale", "empty");
+        qbEl.classList.add(qb && qb.live ? "qb" : "stale");
+      }
+      setFaceTone("face-sd", !(sd && sd.live));
+      setFaceTone("face-qb", !(qb && qb.live));
+      return;
+    }
+    setVal("hub-sd-amt", "NO SIGNAL", "stale");
+    setVal("hub-qb-amt", "NO SIGNAL", "stale");
+  }
+
   async function boot() {
-    const [info, ready] = await Promise.all([
+    const [info, ready, beamsRes] = await Promise.all([
       W.getJson("/api/app-info", 8000),
       W.getJson("/api/import-readiness", 12000),
+      W.getMoneyBeams ? W.getMoneyBeams(12000) : W.getJson("/api/hal/tools/money-beams", 12000),
     ]);
 
     const stamp =
@@ -132,22 +174,34 @@
     );
 
     const title = document.querySelector("title");
-    if (title) title.textContent = "NR2 Optical Pages Hub — " + stamp;
+    if (title) title.textContent = "NR2 Alignment Bench — " + stamp;
 
     const closeChip = document.getElementById("hub-close");
     if (closeChip) {
       if (!ready.ok || !pc) {
         setVal("hub-close", "NO SIGNAL", "stale");
+        setFaceTone("face-hal", true);
       } else if (closeTrouble) {
         setVal("hub-close", String(pc.status || "trouble").toUpperCase(), "stale");
+        setFaceTone("face-hal", true);
       } else {
         setVal("hub-close", String(pc.status || "idle").toUpperCase(), "hal");
+        setFaceTone("face-hal", false);
       }
       const closeHint = document.getElementById("hint-close");
       if (closeHint) {
         closeHint.textContent =
           closeBit +
           " · FORCE CLOSE pulls SoftDent when lasers red / stalled · empty ≠ $0";
+      }
+    }
+
+    const beams = beamsRes && beamsRes.ok ? beamsRes.data : null;
+    paintMoneyFaces(beams, readyData);
+    if (beams && W.beamProvenanceLine) {
+      const hint = document.getElementById("hint-beam-proof");
+      if (hint && (!hint.textContent || hint.textContent.indexOf("GET /api") === 0)) {
+        hint.textContent = W.beamProvenanceLine(beams, readyData) + " · empty ≠ $0";
       }
     }
 
@@ -164,7 +218,6 @@
         valId: "hub-desk-smoke",
       });
     }
-    // Show last smoke without re-running.
     W.getJson("/api/health/desk-smoke?run=0", 8000).then(function (res) {
       if (!res || !res.ok || !res.data) return;
       const st = String(res.data.status || "NO SIGNAL").toUpperCase();
@@ -216,4 +269,3 @@
 
   boot();
 })();
-

@@ -3,24 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NR2 Optical Bench — Honest Subpages (nr2-12032-main-landing-beam-close-honesty)</title>
+  <title>NR2 Optical Bench — theme lock (nr2-12039-optical-theme-lock)</title>
   <link rel="stylesheet" href="/nr2-optical-theme.css" />
   <style>
+    /* Landing layout only — color/type tokens come from nr2-optical-theme.css */
     :root {
-      --vacuum: #050607;
-      --bench: #0a0f14;
-      --sd: #00d4aa;
-      --qb: #ffaa00;
-      --hal: #e0e6ed;
-      --fringe: #ff0044;
-      --stale: #4a5059;
-      --muted: #7a8494;
-      --lock: #c9a227;
-      --mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
-      --sans: "Segoe UI", system-ui, sans-serif;
-      --text-sm: 14px;
-      --text-base: 16px;
-      --text-lg: 20px;
       --text-val: 18px;
       --hit: 48px;
     }
@@ -40,13 +27,14 @@
       color: #e8e8f0; letter-spacing: 0.04em; text-transform: none; font-size: 13px;
     }
     .bench {
-      position: relative; height: calc(100dvh - 36px); width: 100%; max-width: none;
+      position: relative; height: calc(100dvh - 36px - 44px); width: 100%; max-width: none;
       margin: 0; overflow: hidden;
       background:
         radial-gradient(ellipse 65% 48% at 50% 44%, rgba(20,40,50,0.35), transparent 70%),
         var(--vacuum);
     }
-    .mode-strip {
+    /* Landing mode-strip is absolute over the bench — distinct from Hub .mode-strip */
+    .bench > .mode-strip {
       position: absolute; inset: 0 0 auto 0; height: 44px; z-index: 20;
       display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
       font-family: var(--mono); font-size: var(--text-sm); letter-spacing: 0.06em;
@@ -415,11 +403,15 @@
     Optical landing · empty ≠ $0 · money-beams · period-close · no SoftDent write-back
     <span class="bind" id="banner-bind">Wiring money-beams + lasers + period-close…</span>
   </div>
+  <div class="honesty-strip" style="margin:0;border-radius:0">
+    Honesty: empty ≠ $0 · no SoftDent write-back · no invent $ ·
+    <span class="laser-bit">shared theme tokens with Alignment Bench</span>
+  </div>
 
   <div class="bench" id="bench">
     <div class="mode-strip">
-      <div><b>NR2-12032-MAIN-LANDING</b> <span class="muted">· money-beams · period-close · no legacy overlays</span>
-        <a href="/nr2-optical-pages-hub.html" style="margin-left:12px;color:var(--sd);font-size:13px;letter-spacing:0.04em">PAGES HUB →</a>
+      <div><b>NR2-12039-THEME-LOCK</b> <span class="muted">· money-beams · period-close · Alignment Bench →</span>
+        <a href="/nr2-optical-pages-hub.html" style="margin-left:12px;color:var(--sd);font-size:13px;letter-spacing:0.04em">ALIGNMENT BENCH</a>
       </div>
       <div class="muted" id="clock">--:--:-- UTC</div>
       <div style="display:flex;gap:8px;align-items:center">

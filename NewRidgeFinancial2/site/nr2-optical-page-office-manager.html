@@ -24,8 +24,10 @@
           <h3>Period close</h3>
           <div class="val" id="val-close">—</div>
           <p class="hint" id="hint-close">import-readiness · periodClose · morning SoftDent pull</p>
-          <button type="button" id="btn-force-close" disabled title="SoftDent pull when lasers red or close stalled; else attest-only">FORCE CLOSE</button>
-          <button type="button" id="btn-verify-beam" title="Compare live dataBeamHash vs period-close snapshot">VERIFY BEAM</button>
+          <div class="ops-row">
+            <button type="button" class="mech-lock" id="btn-force-close" disabled title="SoftDent pull when lasers red or close stalled; else attest-only">FORCE CLOSE</button>
+            <button type="button" class="mech-lock" id="btn-verify-beam" title="Compare live dataBeamHash vs period-close snapshot">VERIFY BEAM</button>
+          </div>
         </div>
         <div class="card">
           <h3>Beam desk proof</h3>
@@ -36,7 +38,7 @@
           <h3>Desk smoke</h3>
           <div class="val" id="val-desk-smoke">—</div>
           <p class="hint" id="hint-desk-smoke">GET /api/health/desk-smoke · close · beams · Force Close</p>
-          <button type="button" id="btn-desk-smoke" title="Run desk confidence loop">RUN SMOKE</button>
+          <button type="button" class="mech-action" id="btn-desk-smoke" title="Run desk confidence loop">RUN SMOKE</button>
         </div>
         <div class="card">
           <h3>Import readiness</h3>

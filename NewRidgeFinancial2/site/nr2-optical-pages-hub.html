@@ -3,102 +3,73 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NR2 Optical Pages Hub</title>
+  <title>NR2 Optical Alignment Bench</title>
   <link rel="stylesheet" href="/nr2-optical-theme.css" />
 </head>
 <body>
   <div class="banner">
-    WIRE · Pages Hub · empty ≠ $0 · lasers + period-close ← import-readiness · no SoftDent write-back
+    WIRE · Alignment Bench · empty ≠ $0 · lasers + period-close · no SoftDent write-back
     <span class="bind">Fetching readiness + build stamp…</span>
   </div>
   <div class="shell">
     <nav class="nav" id="nav"></nav>
     <main class="main">
       <div class="hal-chip">HAL · SPECTRAL CORE · theme lock</div>
-      <h1>NR2 PROGRAM PAGES</h1>
-      <p class="kicker">LIVE/STALE from lasers; period-close status from readiness — never hide stalled SoftDent morning pulls.</p>
-      <div class="beam"></div>
-      <div class="honesty">Honesty: empty ≠ $0 · no SoftDent write-back · no invent $ · critical import gaps + stalled close block LIVE chrome</div>
-      <div class="grid">
-        <div class="card">
-          <h3>Period close</h3>
-          <div class="val hal" id="hub-close">—</div>
-          <p class="hint" id="hint-close">GET /api/import-readiness · periodClose</p>
-          <button type="button" id="btn-force-close" disabled title="SoftDent pull when lasers red or close stalled; else attest-only">FORCE CLOSE</button>
-          <button type="button" id="btn-verify-beam" title="Compare live dataBeamHash vs period-close snapshot">VERIFY BEAM</button>
-        </div>
-        <div class="card">
-          <h3>Beam desk proof</h3>
-          <div class="val" id="hub-beam-proof">—</div>
-          <p class="hint" id="hint-beam-proof">GET /api/hal/tools/beam-verify · dataBeamHash identity</p>
-        </div>
-        <div class="card">
-          <h3>Desk smoke</h3>
-          <div class="val" id="hub-desk-smoke">—</div>
-          <p class="hint" id="hint-desk-smoke">GET /api/health/desk-smoke · close · beams · Force Close · VERIFY</p>
-          <button type="button" id="btn-desk-smoke" title="Run desk confidence loop">RUN SMOKE</button>
-        </div>
-        <div class="card">
-          <h3>Main Bench</h3>
-          <div class="val hal" id="hub-main">—</div>
-          <p class="hint">SoftDent left · QB right · Tax Prism · Sync / Period · Recon 503</p>
-          <a class="btn" href="/nr2-optical-beam-touch-mockup.html">OPEN MAIN</a>
-        </div>
-        <div class="card">
-          <h3>SoftDent</h3>
-          <div class="val sd" id="hub-softdent">—</div>
-          <p class="hint">AR buckets · production · collections · claims full total · read-only</p>
-          <a class="btn" href="/nr2-optical-page-softdent.html">OPEN</a>
-        </div>
-        <div class="card">
-          <h3>QuickBooks</h3>
-          <div class="val qb" id="hub-quickbooks">—</div>
-          <p class="hint">Revenue · cash flow · net income · AR/AP ∅ when empty</p>
-          <a class="btn" href="/nr2-optical-page-quickbooks.html">OPEN</a>
-        </div>
-        <div class="card">
-          <h3>HAL</h3>
-          <div class="val hal" id="hub-hal">—</div>
-          <p class="hint">Chat · money gate from claims beam · empty ≠ $0</p>
-          <a class="btn" href="/nr2-optical-page-hal.html">OPEN</a>
-        </div>
-        <div class="card">
-          <h3>Claims</h3>
-          <div class="val sd" id="hub-claims">—</div>
-          <p class="hint">Full outstanding total · aging counts · ERA UNAVAILABLE</p>
-          <a class="btn" href="/nr2-optical-page-claims.html">OPEN</a>
-        </div>
-        <div class="card">
-          <h3>Taxes</h3>
-          <div class="val qb" id="hub-taxes">—</div>
-          <p class="hint">Planning prism · not posted to QB</p>
-          <a class="btn" href="/nr2-optical-page-taxes.html">OPEN</a>
-        </div>
-        <div class="card">
-          <h3>A/R</h3>
-          <div class="val sd" id="hub-ar">—</div>
-          <p class="hint">SoftDent AR buckets · STALE watermark when aged past TTL</p>
-          <a class="btn" href="/nr2-optical-page-ar.html">OPEN</a>
-        </div>
-        <div class="card">
-          <h3>Narratives</h3>
-          <div class="val" id="hub-narratives">UNAVAILABLE</div>
-          <p class="hint">Packs removed · no invent drafts · ask HAL for prose</p>
-          <a class="btn" href="/nr2-optical-page-narratives.html">OPEN</a>
-        </div>
-        <div class="card">
-          <h3>Office Manager</h3>
-          <div class="val" id="hub-om">—</div>
-          <p class="hint">Readiness · SoftDent day pulse · board-actions NAVIGATE</p>
-          <a class="btn" href="/nr2-optical-page-office-manager.html">OPEN</a>
-        </div>
-        <div class="card">
-          <h3>Documents / Library</h3>
-          <div class="val" id="hub-docs">—</div>
-          <p class="hint">Inbox file counts · SoftDent extract · codes UNAVAILABLE</p>
-          <a class="btn" href="/nr2-optical-page-content.html">OPEN</a>
-        </div>
+      <h1>Alignment Bench</h1>
+      <p class="kicker">SoftDent left · HAL / period-close center · QuickBooks right. Money face first — modes below, not a card collage.</p>
+      <div class="beam" aria-hidden="true"></div>
+      <div class="honesty">
+        Honesty: empty ≠ $0 · no SoftDent write-back · no invent $ ·
+        <span class="laser-bit">STALE / CLOSE stay high-contrast</span>
       </div>
+
+      <section class="align-bench" aria-label="Money face alignment">
+        <article class="beam-face sd" id="face-sd">
+          <div class="face-lbl">SoftDent</div>
+          <div class="face-val sd" id="hub-sd-amt">—</div>
+          <p class="face-hint" id="hint-sd-amt">claims / AR face · read-only · empty ≠ $0</p>
+          <a class="btn-quiet" href="/nr2-optical-page-softdent.html">Open SoftDent →</a>
+          <span class="live-chip" id="hub-softdent">—</span>
+        </article>
+
+        <article class="beam-face core" id="face-hal">
+          <div class="face-lbl">Period close · HAL core</div>
+          <div class="face-val hal" id="hub-close">—</div>
+          <p class="face-hint" id="hint-close">GET /api/import-readiness · periodClose</p>
+          <div class="ops-row">
+            <button type="button" class="mech-lock" id="btn-force-close" disabled title="SoftDent pull when lasers red or close stalled; else attest-only">FORCE CLOSE</button>
+            <button type="button" class="mech-lock" id="btn-verify-beam" title="Compare live dataBeamHash vs period-close snapshot">VERIFY BEAM</button>
+            <button type="button" class="mech-action" id="btn-desk-smoke" title="Run desk confidence loop">RUN SMOKE</button>
+          </div>
+          <div class="ops-status">
+            <span>Beam proof <b class="type-laser" id="hub-beam-proof">—</b></span>
+            <span>Desk smoke <b class="type-laser" id="hub-desk-smoke">—</b></span>
+          </div>
+          <p class="face-hint type-laser" id="hint-beam-proof">GET /api/hal/tools/beam-verify · dataBeamHash</p>
+          <p class="face-hint type-laser" id="hint-desk-smoke">GET /api/health/desk-smoke · close · beams · Force Close</p>
+          <a class="btn-quiet" href="/nr2-optical-page-hal.html">Open HAL →</a>
+          <span class="live-chip" id="hub-hal">—</span>
+        </article>
+
+        <article class="beam-face qb" id="face-qb">
+          <div class="face-lbl">QuickBooks</div>
+          <div class="face-val qb" id="hub-qb-amt">—</div>
+          <p class="face-hint" id="hint-qb-amt">revenue / cash face · ∅ when empty · empty ≠ $0</p>
+          <a class="btn-quiet" href="/nr2-optical-page-quickbooks.html">Open QuickBooks →</a>
+          <span class="live-chip" id="hub-quickbooks">—</span>
+        </article>
+      </section>
+
+      <nav class="mode-strip" aria-label="Program modes">
+        <span class="mode-lbl">Modes</span>
+        <a href="/nr2-optical-beam-touch-mockup.html"><span class="chip" id="hub-main">—</span> Main bench</a>
+        <a href="/nr2-optical-page-office-manager.html"><span class="chip" id="hub-om">—</span> Office Manager</a>
+        <a href="/nr2-optical-page-claims.html"><span class="chip" id="hub-claims">—</span> Claims</a>
+        <a href="/nr2-optical-page-ar.html"><span class="chip" id="hub-ar">—</span> A/R</a>
+        <a href="/nr2-optical-page-taxes.html"><span class="chip" id="hub-taxes">—</span> Taxes</a>
+        <a href="/nr2-optical-page-content.html"><span class="chip" id="hub-docs">—</span> Documents</a>
+        <a href="/nr2-optical-page-narratives.html"><span class="chip" id="hub-narratives">UNAVAILABLE</span> Narratives</a>
+      </nav>
     </main>
   </div>
   <script src="/nr2-optical-nav.js"></script>

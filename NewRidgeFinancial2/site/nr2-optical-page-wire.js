@@ -97,6 +97,10 @@
     const label =
       mode === "live" ? "LIVE" : mode === "partial" ? "PARTIAL" : mode === "unavailable" ? "UNAVAILABLE" : "WIRE";
     const stamp = cachedBuildId || "nr2-optical";
+    banner.classList.remove("live", "partial", "unavailable");
+    if (mode === "live" || mode === "partial" || mode === "unavailable") {
+      banner.classList.add(mode);
+    }
     banner.childNodes[0] && banner.childNodes[0].nodeType === 3
       ? (banner.childNodes[0].textContent =
           label + " · optical · " + stamp + " · empty ≠ $0 · no SoftDent write-back ")
