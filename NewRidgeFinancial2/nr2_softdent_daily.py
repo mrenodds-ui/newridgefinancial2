@@ -69,6 +69,12 @@ def _same_day_ada_map(
     out: dict[tuple[str, str], list[str]] = {}
     if not dates or not _table_exists(conn, "sd_procedures"):
         return out
+    try:
+        from softdent_treatment_planning import normalize_ada_code
+    except Exception:  # noqa: BLE001
+        def normalize_ada_code(raw: Any) -> str:  # type: ignore[misc]
+            return str(raw or "").strip().upper()
+
     placeholders = ",".join("?" * len(dates))
     cur = conn.cursor()
     cur.execute(
@@ -85,8 +91,8 @@ def _same_day_ada_map(
     for row in cur.fetchall():
         pid = str(row[0] or "").strip()
         day = str(row[1] or "").strip()[:10]
-        ada = str(row[2] or "").strip().upper()
-        if not pid or not day or not ada or ada in {"0", "0000"}:
+        ada = normalize_ada_code(row[2])
+        if not pid or not day or not ada or ada in {"0", "0000", "D0000"}:
             continue
         key = (pid, day)
         bucket = out.setdefault(key, [])
@@ -414,6 +420,16 @@ def appointments_range_snapshot(
                 "emptyMessage": "sd_appointments table missing — run SoftDent extract.",
             }
 
+        # Ensure appt_time exists on older caches (honest NULL until next extract fills it).
+        appt_cols = _table_columns(conn, "sd_appointments")
+        if "appt_time" not in appt_cols:
+            try:
+                conn.execute("ALTER TABLE sd_appointments ADD COLUMN appt_time TEXT")
+                conn.commit()
+                appt_cols = _table_columns(conn, "sd_appointments")
+            except Exception:
+                pass
+
         start_raw = str(start_iso or "")[:10]
         try:
             start_dt = datetime.fromisoformat(start_raw)
@@ -423,7 +439,6 @@ def appointments_range_snapshot(
         day_count = max(1, min(int(days or 4), 14))
         dates = [(start_dt + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(day_count)]
         placeholders = ",".join("?" * len(dates))
-        appt_cols = _table_columns(conn, "sd_appointments")
         has_appt_time = "appt_time" in appt_cols
         time_select = "a.appt_time" if has_appt_time else "NULL AS appt_time"
 

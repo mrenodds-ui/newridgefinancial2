@@ -97,6 +97,27 @@ def test_appointments_range_ada_and_time(monkeypatch, tmp_path):
     assert tue["slots"][0]["procedureHint"] == "—"
 
 
+def test_same_day_ada_normalizes_softdent_internal(monkeypatch, tmp_path):
+    import nr2_softdent_daily as daily
+
+    db = tmp_path / "sd.sqlite"
+    conn = sqlite3.connect(str(db))
+    _seed(conn)
+    conn.execute(
+        """
+        INSERT INTO sd_procedures
+        VALUES ('','P1','2026-07-15','111000','','','DR1','prophy',80,'t')
+        """
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(daily, "_open_db", lambda: (sqlite3.connect(str(db)), db))
+    snap = daily.appointments_range_snapshot("2026-07-15", days=1)
+    codes = snap["days"][0]["slots"][0]["adaCodes"]
+    assert "D1110" in codes
+    assert "111000" not in codes
+
+
 def test_format_appt_time_never_invents():
     import nr2_softdent_daily as daily
 
