@@ -85,20 +85,81 @@ def _load_rp(ref: str) -> dict:
     }
 
 
-def _append_result(rec: dict) -> None:
+def _benefits_complete(row: dict | None) -> bool:
+    """True when ClearCoverage scrape already succeeded for this result row."""
+    if not isinstance(row, dict):
+        return False
+    ben = row.get("benefits")
+    if not isinstance(ben, dict):
+        return False
+    if ben.get("scrapeOk") is True:
+        return True
+    cats = ben.get("categories") or {}
+    if any(cats.get(k) for k in ("preventive", "basic", "major", "ortho")):
+        return True
+    return any(
+        ben.get(k) is not None
+        for k in (
+            "deductibleRemaining",
+            "deductibleTotal",
+            "annualMaxRemaining",
+            "annualMaxTotal",
+            "planName",
+        )
+    )
+
+
+def _upsert_result(rec: dict) -> None:
+    """Append or replace by patient_name (used when re-scraping status-only rows)."""
     d = json.loads(RESULTS.read_text(encoding="utf-8"))
-    names = {r.get("patient_name") for r in d["results"]}
-    if rec["patient_name"] in names:
-        print("already", rec["patient_name"])
-        return
-    d["results"].append(rec)
+    rows = list(d.get("results") or [])
+    name = rec["patient_name"]
+    replaced = False
+    for i, row in enumerate(rows):
+        if row.get("patient_name") == name:
+            rows[i] = rec
+            replaced = True
+            break
+    if not replaced:
+        rows.append(rec)
+    d["results"] = rows
+    d["updatedAt"] = datetime.now(timezone.utc).isoformat()
     RESULTS.write_text(json.dumps(d, indent=2), encoding="utf-8")
-    print("appended", rec["patient_name"], rec["status"], "count", len(d["results"]))
+    print(
+        "upserted" if replaced else "appended",
+        name,
+        rec.get("status"),
+        "benefits",
+        bool((rec.get("benefits") or {}).get("scrapeOk")),
+        "count",
+        len(rows),
+    )
+
+
+def _append_result(rec: dict) -> None:
+    """Compat alias — always upsert so benefit re-scrapes replace status-only rows."""
+    _upsert_result(rec)
 
 
 def _remaining() -> list[dict]:
     pending = json.loads(PENDING.read_text(encoding="utf-8"))["patients"]
-    done = {r["patient_name"] for r in json.loads(RESULTS.read_text(encoding="utf-8"))["results"]}
+    prior = {
+        r["patient_name"]: r
+        for r in json.loads(RESULTS.read_text(encoding="utf-8"))["results"]
+        if r.get("patient_name")
+    }
+    # Status-only rows (no ClearCoverage scrape yet) stay in the queue.
+    force_all = str(os.environ.get("NR2_TRELLIS_FORCE_BENEFITS") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    done = {
+        name
+        for name, row in prior.items()
+        if (not force_all) and _benefits_complete(row)
+    }
     wl = {
         p["patient_name"]: p
         for p in json.loads(WORKLIST.read_text(encoding="utf-8"))["patients"]

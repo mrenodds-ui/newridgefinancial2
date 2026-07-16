@@ -47,6 +47,12 @@ Rebuild report only:
 .\.venv\Scripts\python.exe NewRidgeFinancial2\scripts\build_trellis_eligibility_report.py --date YYYY-MM-DD --open
 ```
 
+Status-only rows (Eligible but no `benefits.scrapeOk`) are **re-queued** on the next `--verify` so ClearCoverage can be scraped. To force a full re-scrape of everyone:
+```powershell
+$env:NR2_TRELLIS_FORCE_BENEFITS=1
+.\.venv\Scripts\python.exe scripts\run_trellis_nightly_verify.py --force --verify
+```
+
 Batch log (streamed): `app_data/nr2/vyne_pulls/trellis_verify_batch_YYYY-MM-DD.log`
 
 ## HAL chat
