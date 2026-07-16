@@ -105,8 +105,25 @@
       return;
     }
     const rows = [
+      ["Patient", String(data.patientName || (fallback && fallback.patientName) || "—")],
       ["Initials", String(data.initials || (fallback && fallback.initials) || "P—")],
       ["Hash", shortHash(data.patientHash || (fallback && fallback.patientHash))],
+      [
+        "Appt time",
+        (function () {
+          const t = String((fallback && fallback.time) || "—").trim() || "—";
+          if (t === "—" || (fallback && fallback.timeMissing)) {
+            return "— · pending SoftDent extract";
+          }
+          return t;
+        })(),
+      ],
+      [
+        "ADA",
+        Array.isArray(fallback && fallback.adaCodes) && fallback.adaCodes.length
+          ? fallback.adaCodes.join(", ")
+          : String((fallback && fallback.procedureHint) || "—"),
+      ],
       ["Carrier", data.primaryCarrier != null ? String(data.primaryCarrier) : "—"],
       ["Open claims", data.openClaims != null ? String(data.openClaims) : "—"],
       ["Last visit", data.lastVisit != null ? String(data.lastVisit) : "—"],
@@ -267,8 +284,18 @@
     attestBtn.title = "Requires VERIFY BEAM · MATCH · SoftDent READ-ONLY · empty ≠ $0";
     actions.appendChild(attestBtn);
     body.appendChild(actions);
-
     wirePatientAttestButton(attestBtn, pid, ph);
+
+    // SoftDent summary block (filled async by openPatientContext)
+    const sumHead = document.createElement("h4");
+    sumHead.className = "wk-dossier-sub";
+    sumHead.textContent = "Summary";
+    body.appendChild(sumHead);
+    const sumEl = document.createElement("div");
+    sumEl.className = "wk-dossier-summary";
+    sumEl.id = "wk-dossier-summary";
+    sumEl.textContent = "Loading SoftDent summary…";
+    body.appendChild(sumEl);
   }
 
   function wirePatientAttestButton(btn, patientId, patientHash) {
@@ -431,11 +458,50 @@
         return;
       }
       renderDossierMini(res.data, slot);
+      loadDossierSummary(pid);
     } catch (err) {
       setDossierMessage(
         "Mini dossier fault · " + String(err && err.message ? err.message : err),
         true
       );
+    }
+  }
+
+  async function loadDossierSummary(patientId) {
+    const pid = String(patientId || "").trim();
+    const el = document.getElementById("wk-dossier-summary");
+    if (!el || !pid) return;
+    try {
+      const res = await W.getJson(
+        "/api/hal/tools/patient-dossier-summary?patientId=" +
+          encodeURIComponent(pid) +
+          "&summarize=1",
+        45000
+      );
+      if (wkActivePatientId !== pid) return;
+      const data = (res && res.data) || {};
+      if (!res.ok || !data.ok) {
+        el.textContent =
+          "Summary NO SIGNAL · " +
+          String(data.error || res.status || "unavailable") +
+          " · SoftDent READ-ONLY · empty ≠ $0";
+        el.classList.add("d-fault");
+        return;
+      }
+      const md = String(data.summaryMarkdown || "").trim();
+      const ai = String(data.summary || data.aiSummary || data.summaryText || "").trim();
+      const text = (ai || md).trim();
+      el.classList.remove("d-fault");
+      if (!text) {
+        el.textContent = "No summary text · empty ≠ $0 · SoftDent READ-ONLY";
+        return;
+      }
+      el.textContent = text.length > 1200 ? text.slice(0, 1200) + "…" : text;
+    } catch (err) {
+      if (wkActivePatientId !== pid) return;
+      el.classList.add("d-fault");
+      el.textContent =
+        "Summary fault · " + String(err && err.message ? err.message : err);
     }
   }
 
@@ -505,6 +571,7 @@
           const phi = document.createElement("span");
           phi.className = "phi";
           const initials = String(slot.initials || "P—").trim() || "P—";
+          // Board stays initials + hash (PHI). Full name only in dossier panel.
           phi.textContent = initials + " · " + shortHash(slot.patientHash);
           const prov = document.createElement("span");
           prov.className = "prov";
@@ -514,12 +581,47 @@
           st.className = "st";
           st.textContent = String(slot.status || "scheduled");
           const tm = document.createElement("span");
-          tm.className = "tm";
-          tm.textContent = "time " + (String(slot.time || "—").trim() || "—");
+          tm.className = "tm" + (slot.timeMissing || String(slot.time || "—") === "—" ? " time-missing" : "");
+          const timeDisp = String(slot.time || "—").trim() || "—";
+          tm.textContent = "time " + timeDisp;
+          tm.title =
+            timeDisp === "—"
+              ? "Appt time not in SoftDent extract yet — empty ≠ invent 09:00"
+              : "Appointment time from SoftDent extract";
+          const ada = document.createElement("span");
+          ada.className = "ada";
+          const codes = Array.isArray(slot.adaCodes)
+            ? slot.adaCodes
+            : String(slot.procedureHint || "")
+                .split(",")
+                .map(function (x) {
+                  return String(x || "").trim();
+                })
+                .filter(Boolean);
+          if (codes.length && !(codes.length === 1 && codes[0] === "—")) {
+            codes.slice(0, 4).forEach(function (code) {
+              const badge = document.createElement("span");
+              badge.className = "ada-badge";
+              badge.textContent = String(code);
+              ada.appendChild(badge);
+            });
+            if (codes.length > 4) {
+              const more = document.createElement("span");
+              more.className = "ada-badge more";
+              more.textContent = "+" + String(codes.length - 4);
+              ada.appendChild(more);
+            }
+            ada.title = codes.join(", ");
+          } else {
+            ada.textContent = "ADA —";
+            ada.title = "No same-day SoftDent procedures — empty ≠ $0";
+            ada.classList.add("ada-empty");
+          }
           btn.appendChild(phi);
           btn.appendChild(prov);
           btn.appendChild(st);
           btn.appendChild(tm);
+          btn.appendChild(ada);
           btn.addEventListener("click", function () {
             btn.classList.add("is-active");
             openPatientContext(slot);

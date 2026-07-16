@@ -22,6 +22,79 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
     return cur.fetchone() is not None
 
 
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    if not _table_exists(conn, table):
+        return set()
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table})")
+    return {str(r[1] or "") for r in cur.fetchall()}
+
+
+def _format_appt_time(raw: Any) -> str:
+    """Return HH:MM (or short Sensei time) when real; otherwise '—' (never invent 09:00)."""
+    text = str(raw or "").strip()
+    if not text or text in {"—", "-", "n/a", "N/A", "null", "None"}:
+        return "—"
+    # SoftDent / Sensei often store HH:MM or HH:MM:SS or 0830
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if ":" in text:
+        parts = text.replace(".", ":").split(":")
+        try:
+            hh = int(parts[0])
+            mm = int(parts[1]) if len(parts) > 1 else 0
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                return f"{hh:02d}:{mm:02d}"
+        except ValueError:
+            pass
+    if len(digits) >= 3 and len(digits) <= 4:
+        padded = digits.zfill(4)
+        try:
+            hh = int(padded[:2])
+            mm = int(padded[2:4])
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                return f"{hh:02d}:{mm:02d}"
+        except ValueError:
+            pass
+    # Keep short non-numeric labels only if they look like times (e.g. 8:30 AM)
+    if len(text) <= 12 and any(ch.isdigit() for ch in text):
+        return text[:12]
+    return "—"
+
+
+def _same_day_ada_map(
+    conn: sqlite3.Connection,
+    dates: list[str],
+) -> dict[tuple[str, str], list[str]]:
+    """patient_id + appt/proc date → distinct ADA codes (SoftDent READ-ONLY)."""
+    out: dict[tuple[str, str], list[str]] = {}
+    if not dates or not _table_exists(conn, "sd_procedures"):
+        return out
+    placeholders = ",".join("?" * len(dates))
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        SELECT patient_id, substr(replace(proc_date, '/', '-'), 1, 10) AS d, ada_code
+        FROM sd_procedures
+        WHERE substr(replace(proc_date, '/', '-'), 1, 10) IN ({placeholders})
+          AND COALESCE(patient_id, '') != ''
+          AND COALESCE(ada_code, '') != ''
+        ORDER BY proc_date, ada_code
+        """,
+        list(dates),
+    )
+    for row in cur.fetchall():
+        pid = str(row[0] or "").strip()
+        day = str(row[1] or "").strip()[:10]
+        ada = str(row[2] or "").strip().upper()
+        if not pid or not day or not ada or ada in {"0", "0000"}:
+            continue
+        key = (pid, day)
+        bucket = out.setdefault(key, [])
+        if ada not in bucket:
+            bucket.append(ada)
+    return out
+
+
 def _open_db():
     db_path = resolve_sd_sqlite_db()
     if not db_path or not db_path.is_file():
@@ -319,10 +392,11 @@ def appointments_range_snapshot(
     *,
     provider_filter: str | None = None,
 ) -> dict[str, Any]:
-    """Multi-day appointment list for OM (Mon–Thu). PHI-safe hashes. SoftDent read-only.
+    """Multi-day appointment list for OM (Mon–Thu). SoftDent read-only.
 
-    Real sd_appointments columns only (no appt_time). sd_patients uses patient_name
-    (not first_name/last_name). Time displays as '—' honestly.
+    Board PHI: initials + hash. Full patientName returned for RBAC dossier panel only.
+    Time: real appt_time when column/data exists; otherwise honest '—'.
+    ADA: same-day sd_procedures join into procedureHint / adaCodes (empty → '—').
     """
     from datetime import datetime, timedelta
 
@@ -349,9 +423,12 @@ def appointments_range_snapshot(
         day_count = max(1, min(int(days or 4), 14))
         dates = [(start_dt + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(day_count)]
         placeholders = ",".join("?" * len(dates))
-        # Normalize date compare: SoftDent may store YYYY-MM-DD or with time suffix
+        appt_cols = _table_columns(conn, "sd_appointments")
+        has_appt_time = "appt_time" in appt_cols
+        time_select = "a.appt_time" if has_appt_time else "NULL AS appt_time"
+
         sql = f"""
-        SELECT a.appt_date, a.patient_id, a.provider_code, a.status, p.patient_name
+        SELECT a.appt_date, a.patient_id, a.provider_code, a.status, p.patient_name, {time_select}
         FROM sd_appointments a
         LEFT JOIN sd_patients p ON a.patient_id = p.patient_id
         WHERE substr(replace(a.appt_date, '/', '-'), 1, 10) IN ({placeholders})
@@ -369,6 +446,7 @@ def appointments_range_snapshot(
         cursor = conn.cursor()
         cursor.execute(sql, params)
         rows = cursor.fetchall()
+        ada_map = _same_day_ada_map(conn, dates)
 
         days_out: list[dict[str, Any]] = []
         for d in dates:
@@ -376,17 +454,31 @@ def appointments_range_snapshot(
             slots: list[dict[str, Any]] = []
             for r in day_rows:
                 patient_raw = str(r[4] or "").strip()
+                pid = str(r[1] or "")
+                adas = list(ada_map.get((pid, d), [])[:8])
+                procedure_hint = ", ".join(adas) if adas else "—"
+                time_disp = _format_appt_time(r[5] if len(r) > 5 else None)
                 slots.append(
                     {
-                        "patientId": str(r[1] or ""),
-                        "patientHash": _hash_patient_id(str(r[1] or "")),
+                        "patientId": pid,
+                        "patientHash": _hash_patient_id(pid),
                         "initials": _initials_from_name(patient_raw) if patient_raw else "P—",
+                        # Full name for RBAC dossier panel — OM board must not render this.
+                        "patientName": patient_raw or None,
                         "provider": str(r[2] or "") or "—",
                         "status": _normalize_appt_status(str(r[3] or "")),
-                        "time": "—",  # SoftDent schema lacks time; honest placeholder
-                        "procedureHint": "—",
+                        "time": time_disp,
+                        "timeMissing": time_disp == "—",
+                        "procedureHint": procedure_hint,
+                        "adaCodes": adas,
                     }
                 )
+            # Sort by real time when present, else provider
+            def _slot_sort_key(s: dict[str, Any]) -> tuple:
+                t = str(s.get("time") or "—")
+                return (t == "—", t, str(s.get("provider") or ""))
+
+            slots.sort(key=_slot_sort_key)
             days_out.append(
                 {
                     "date": d,
@@ -403,6 +495,8 @@ def appointments_range_snapshot(
             "dateRange": f"{dates[0]} to {dates[-1]}",
             "source": "sd_appointments",
             "dbPath": str(db_path),
+            "apptTimeColumn": has_appt_time,
+            "emptyNotZero": True,
             "emptyMessage": "No appointments found for Mon–Thu — verify SoftDent sync.",
         }
     finally:

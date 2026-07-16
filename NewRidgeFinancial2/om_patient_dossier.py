@@ -222,6 +222,8 @@ def get_patient_dossier_mini(patient_id: str) -> dict[str, Any]:
             "patientHash": _hash_patient_id(pid),
             "nameHash": name_hash(patient_name),
             "initials": _initials(patient_name),
+            # Full SoftDent name for RBAC mini-dossier panel only — never for hallway board.
+            "patientName": patient_name or None,
             "dobYear": dob_year,  # Schema gap: sd_patients has no DOB
             "schemaGap": "sd_patients has no DOB/gender/SSN columns in ODBC extract",
             "primaryCarrier": primary_carrier,

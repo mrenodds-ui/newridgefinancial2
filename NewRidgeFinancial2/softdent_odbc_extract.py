@@ -224,6 +224,7 @@ def ensure_sd_schema(conn: sqlite3.Connection) -> None:
             appt_date TEXT NOT NULL DEFAULT '',
             provider_code TEXT NOT NULL DEFAULT '',
             status TEXT,
+            appt_time TEXT,
             extracted_at TEXT,
             PRIMARY KEY (practice_id, patient_id, appt_date, provider_code)
         );
@@ -292,7 +293,41 @@ def ensure_sd_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    # Existing DBs created before appt_time — add column honestly (NULL until extract fills it).
+    try:
+        cols = {str(r[1] or "") for r in conn.execute("PRAGMA table_info(sd_appointments)").fetchall()}
+        if "appt_time" not in cols:
+            conn.execute("ALTER TABLE sd_appointments ADD COLUMN appt_time TEXT")
+    except sqlite3.Error:
+        pass
     conn.commit()
+
+
+def _normalize_appt_time_value(raw: Any) -> str:
+    """Store SoftDent/Sensei time as HH:MM or empty (never invent midnight)."""
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if ":" in text:
+        parts = text.replace(".", ":").split(":")
+        try:
+            hh = int(parts[0])
+            mm = int(parts[1]) if len(parts) > 1 else 0
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                return f"{hh:02d}:{mm:02d}"
+        except ValueError:
+            pass
+    if len(digits) >= 3 and len(digits) <= 4:
+        padded = digits.zfill(4)
+        try:
+            hh = int(padded[:2])
+            mm = int(padded[2:4])
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                return f"{hh:02d}:{mm:02d}"
+        except ValueError:
+            pass
+    return text[:12] if any(ch.isdigit() for ch in text) else ""
 
 
 def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
@@ -946,10 +981,10 @@ def _populate_from_daysheet(conn: sqlite3.Connection, path: Path, *, extracted_a
             conn.execute(
                 """
                 INSERT OR REPLACE INTO sd_appointments
-                (practice_id, patient_id, appt_date, provider_code, status, extracted_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (practice_id, patient_id, appt_date, provider_code, status, appt_time, extracted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                ("", patient_id, proc_date, provider_code, "seen", extracted_at),
+                ("", patient_id, proc_date, provider_code, "seen", "", extracted_at),
             )
             counts["sd_appointments"] += 1
 
@@ -1206,11 +1241,18 @@ def _populate_from_odbc(conn: sqlite3.Connection, *, extracted_at: str) -> dict[
                     )
                     inserted += 1
                 elif table == "sd_appointments":
+                    appt_time = _normalize_appt_time_value(
+                        mapping.get("appt_time")
+                        or mapping.get("ApptTime")
+                        or mapping.get("AppointmentTime")
+                        or mapping.get("Time")
+                        or ""
+                    )
                     conn.execute(
                         """
                         INSERT OR REPLACE INTO sd_appointments
-                        (practice_id, patient_id, appt_date, provider_code, status, extracted_at)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        (practice_id, patient_id, appt_date, provider_code, status, appt_time, extracted_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             str(mapping.get("practice_id") or mapping.get("PracticeID") or ""),
@@ -1218,6 +1260,7 @@ def _populate_from_odbc(conn: sqlite3.Connection, *, extracted_at: str) -> dict[
                             str(mapping.get("appt_date") or mapping.get("ApptDate") or mapping.get("AppointmentDate") or ""),
                             str(mapping.get("provider_code") or mapping.get("ProviderCode") or ""),
                             str(mapping.get("status") or mapping.get("Status") or ""),
+                            appt_time,
                             extracted_at,
                         ),
                     )
@@ -2007,13 +2050,14 @@ def _populate_from_sensei_datasync(
         if not patient_id or not appt_date:
             continue
         status = _sensei_appt_status(entity)
+        appt_time = _normalize_appt_time_value(entity.get("Time") or entity.get("ApptTime") or "")
         conn.execute(
             """
             INSERT OR REPLACE INTO sd_appointments
-            (practice_id, patient_id, appt_date, provider_code, status, extracted_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (practice_id, patient_id, appt_date, provider_code, status, appt_time, extracted_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            ("", patient_id, appt_date, provider_code, status, extracted_at),
+            ("", patient_id, appt_date, provider_code, status, appt_time, extracted_at),
         )
         counts["sd_appointments"] += 1
 
