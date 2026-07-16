@@ -3366,6 +3366,24 @@ class NR2BottleServer(BottleServer):
             force = bool((payload or {}).get("force"))
             return _json_response(eod_handoff_tick(_local_store(), force=force))
 
+        @app.post("/api/scheduler/insurance-verify-run")
+        def scheduler_insurance_verify_run_api():
+            """Mon–Thu next-day Trellis eligibility — build worklist; optionally Verify UI."""
+            from nr2_scheduler import insurance_verify_tick
+
+            payload = bottle.request.json or {}
+            force = bool((payload or {}).get("force"))
+            run_verify = (payload or {}).get("runVerify")
+            if run_verify is None:
+                run_verify = (payload or {}).get("run_verify")
+            return _json_response(
+                insurance_verify_tick(
+                    _local_store(),
+                    force=force,
+                    run_verify=bool(run_verify) if run_verify is not None else None,
+                )
+            )
+
         @app.get("/api/qb/auth-url")
         def qb_auth_url_api():
             from qb_connector import auth_url

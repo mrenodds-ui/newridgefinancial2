@@ -661,6 +661,21 @@ def try_local_policy_reply(query: str) -> dict[str, str] | None:
     except Exception:
         pass
 
+    # Nightly Trellis dental eligibility (Mon–Thu 10pm next clinical day)
+    try:
+        from nr2_trellis_nightly import (
+            format_hal_trellis_nightly_reply,
+            query_touches_trellis_nightly,
+        )
+
+        if query_touches_trellis_nightly(raw):
+            return {
+                "text": format_hal_trellis_nightly_reply(raw),
+                "intent": "policy:trellis-nightly-verify",
+            }
+    except Exception:
+        pass
+
     # SoftDent full product KB (Carestream Help TOC + topic bodies) — before
     # InsCo×ADA "catalog" and other SoftDent ops policies that share keywords.
     # Skip account-tx Excel playbook asks (those stay on softdent-signon-env).

@@ -226,6 +226,21 @@ def main() -> int:
                 except Exception as exc:
                     print(f"EOD handoff tick failed: {exc}", file=sys.stderr)
 
+            def _trellis_verify_tick() -> None:
+                """Mon–Thu 10pm local — next clinical day Trellis eligibility."""
+                try:
+                    from nr2_scheduler import insurance_verify_tick
+
+                    result = insurance_verify_tick(store)
+                    print(
+                        f"Trellis insurance verify tick: ok={result.get('ok')} "
+                        f"skipped={result.get('skipped')} target={result.get('targetDate')} "
+                        f"ready={result.get('worklistReady')}",
+                        file=sys.stderr,
+                    )
+                except Exception as exc:
+                    print(f"Trellis insurance verify tick failed: {exc}", file=sys.stderr)
+
             def _health_monitor_tick() -> None:
                 """Moonshot Expert SE Phase 2 REC-004 — proactive import/health audit (no PHI)."""
                 try:
@@ -257,11 +272,18 @@ def main() -> int:
             sched.add_job(_hal_autonomous_tick, IntervalTrigger(minutes=15), id="nr2-hal-autonomous")
             sched.add_job(_morning_tick, CronTrigger(hour=6, minute=30), id="nr2-morning")
             sched.add_job(_eod_tick, CronTrigger(hour=22, minute=0), id="nr2-eod")
+            # Next-day Trellis eligibility — Mon–Thu 22:00 local (chair days Mon–Thu).
+            sched.add_job(
+                _trellis_verify_tick,
+                CronTrigger(day_of_week="mon-thu", hour=22, minute=0),
+                id="nr2-trellis-verify",
+            )
             # Proactive health every 6 hours (Moonshot REC-004).
             sched.add_job(_health_monitor_tick, IntervalTrigger(hours=6), id="nr2-health-monitor")
             sched.start()
             print(
-                "NR2 background scheduler: alerts+HAL autonomy every 15m, health every 6h, morning 06:30 UTC, EOD handoff 22:00 UTC",
+                "NR2 background scheduler: alerts+HAL autonomy every 15m, health every 6h, "
+                "morning 06:30, EOD handoff 22:00, Trellis verify Mon–Thu 22:00",
                 file=sys.stderr,
             )
         except ImportError:

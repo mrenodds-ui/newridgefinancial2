@@ -16,7 +16,19 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "app_data" / "nr2" / "vyne_pulls"
 ENV_FILE = ROOT / ".env.vyne.local"
 REF = Path(r"C:\ProgramData\Sensei Gateway Client\DataSync\0000950863\Reference")
-DATE = "2026-07-16"
+
+
+def _target_date() -> str:
+    """ISO date for worklist/results — env NR2_TRELLIS_TARGET_DATE or tomorrow."""
+    from datetime import date, timedelta
+
+    raw = (os.environ.get("NR2_TRELLIS_TARGET_DATE") or "").strip()
+    if raw:
+        return raw
+    return (date.today() + timedelta(days=1)).isoformat()
+
+
+DATE = _target_date()
 PENDING = OUT_DIR / f"tomorrow_trellis_pending_batch_{DATE}.json"
 RESULTS = OUT_DIR / f"tomorrow_trellis_verify_results_{DATE}.json"
 WORKLIST = OUT_DIR / f"tomorrow_trellis_add_worklist_{DATE}.json"

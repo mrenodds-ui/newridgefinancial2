@@ -22,6 +22,7 @@ WORK_KINDS = frozenset(
         "posting_pending",
         "eod_handoff",
         "carrier_gap",
+        "insurance_verify",
     }
 )
 
@@ -760,6 +761,13 @@ def eod_handoff_tick(store, *, force: bool = False) -> dict[str, Any]:
         "openItemCount": handoff.get("openItemCount"),
         "reportMarkdown": handoff.get("reportMarkdown"),
     }
+
+
+def insurance_verify_tick(store, *, force: bool = False, run_verify: bool | None = None) -> dict[str, Any]:
+    """Mon–Thu 10pm: next-day SoftDent→Trellis eligibility worklist (+ optional Verify)."""
+    from nr2_trellis_nightly import insurance_verify_tick as _tick
+
+    return _tick(store, force=force, run_verify=run_verify)
 
 
 def hal_autonomous_ops_tick(store) -> dict[str, Any]:
