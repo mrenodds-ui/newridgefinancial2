@@ -102,6 +102,8 @@ def test_period_close_attest_and_status(tmp_path, monkeypatch):
     assert status["status"] == "completed"
     assert status["beamHash"] == "testhash12345678"
     assert status["shadowStartedAt"]
+    assert "morningBundle" in status
+    assert status.get("emptyNotZero") is True
 
     det = try_deterministic_period_close_reply("Did we close today?")
     assert det and "beamHash=testhash12345678" in det["text"]
