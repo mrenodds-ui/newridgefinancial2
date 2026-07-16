@@ -118,20 +118,65 @@ def _remaining() -> list[dict]:
 
 
 def _select_ant(page, combobox_locator, option_text: str, type_text: str | None = None) -> None:
-    combobox_locator.click()
-    page.wait_for_timeout(200)
+    # Ant Design span.ant-select-selection-item intercepts the search input — click wrapper.
+    wrapper = combobox_locator.locator("xpath=ancestor::*[contains(@class,'ant-select')][1]")
+    if wrapper.count():
+        wrapper.first.click(force=True)
+    else:
+        combobox_locator.click(force=True)
+    page.wait_for_timeout(250)
     if type_text is not None:
-        page.keyboard.type(type_text, delay=25)
-        page.wait_for_timeout(400)
+        page.keyboard.press("Control+A")
+        page.keyboard.press("Backspace")
+        page.keyboard.type(type_text, delay=30)
+        page.wait_for_timeout(600)
     # Prefer exact option in open dropdown
-    opt = page.locator(".ant-select-item-option-content", has_text=re.compile(f"^{re.escape(option_text)}$"))
+    opt = page.locator(
+        ".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content",
+        has_text=re.compile(f"^{re.escape(option_text)}$"),
+    )
     if opt.count() == 0:
-        opt = page.get_by_text(option_text, exact=True)
-    opt.first.click()
-    page.wait_for_timeout(200)
+        opt = page.locator(
+            ".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content",
+            has_text=option_text,
+        )
+    if opt.count() == 0:
+        opt = page.locator(".ant-select-item-option-content", has_text=re.compile(f"^{re.escape(option_text)}$"))
+    if opt.count() == 0:
+        # Keep dropdown open and pick first filtered hit via keyboard
+        page.keyboard.press("ArrowDown")
+        page.wait_for_timeout(150)
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(250)
+        return
+    opt.first.click(force=True)
+    page.wait_for_timeout(250)
+
+
+def _return_to_eligibility_list(page) -> None:
+    for _ in range(6):
+        if page.get_by_role("button", name="Add Patient").count():
+            return
+        clicked = False
+        for btn_name in ("close verification", "Back", "Close"):
+            btn = page.get_by_role("button", name=re.compile(re.escape(btn_name), re.I))
+            if btn.count() and btn.first.is_visible():
+                btn.first.click(force=True)
+                page.wait_for_timeout(1000)
+                clicked = True
+                break
+        if not clicked:
+            page.goto(
+                "https://app.vynetrellis.com/Eligibility",
+                wait_until="domcontentloaded",
+                timeout=60000,
+            )
+            page.wait_for_timeout(2500)
+    page.wait_for_selector("button:has-text('Add Patient')", timeout=60000)
 
 
 def _fill_patient(page, rec: dict) -> None:
+    _return_to_eligibility_list(page)
     page.get_by_role("button", name="Add Patient").click()
     page.wait_for_timeout(800)
     # Patient section fields (first of each label)
@@ -146,7 +191,7 @@ def _fill_patient(page, rec: dict) -> None:
     if rec.get("is_self"):
         sw = page.get_by_role("switch")
         if sw.get_attribute("aria-checked") != "true":
-            sw.click()
+            sw.click(force=True)
             page.wait_for_timeout(200)
     else:
         sub = rec.get("subscriber") or {}
@@ -201,10 +246,14 @@ def _fill_patient(page, rec: dict) -> None:
     # Close verification if present
     close_btn = page.get_by_role("button", name="close verification")
     if close_btn.count():
-        close_btn.first.click()
-        page.wait_for_timeout(400)
-    page.get_by_role("button", name="Back").click()
-    page.wait_for_timeout(1200)
+        close_btn.first.click(force=True)
+        page.wait_for_timeout(600)
+    back_btn = page.get_by_role("button", name="Back")
+    if back_btn.count() and back_btn.first.is_visible():
+        back_btn.first.click(force=True)
+        page.wait_for_timeout(1500)
+
+    _return_to_eligibility_list(page)
 
     _append_result(
         {
@@ -306,22 +355,54 @@ def main() -> int:
                         continue
                 page.wait_for_timeout(8000)
                 page.screenshot(path=str(OUT_DIR / "batch_login_state.png"))
+                # Second Trellis/Vyne Dental login (post org-picker)
+                if page.get_by_text("Username (Email)").count() or (
+                    page.locator("input[type='password']").count()
+                    and "authenticate" in page.url.lower()
+                ):
+                    print("second login detected")
+                    for inp in page.locator("input:visible").all():
+                        t = (inp.get_attribute("type") or "").lower()
+                        ph = (inp.get_attribute("placeholder") or "").lower()
+                        if t == "password":
+                            inp.fill("")
+                            inp.press_sequentially(password, delay=25)
+                        elif "email" in ph or t == "email" or "user" in ph:
+                            inp.fill("")
+                            inp.press_sequentially(user, delay=20)
+                    page.get_by_role(
+                        "button", name=re.compile(r"Log In|Continue|Sign In", re.I)
+                    ).first.click()
+                    page.wait_for_timeout(8000)
             for _ in range(40):
                 url = page.url
                 if "authenticate" not in url and "app.vynetrellis.com" in url:
                     break
                 page.wait_for_timeout(1000)
-            page.goto("https://app.vynetrellis.com/Eligibility", wait_until="domcontentloaded", timeout=90000)
-            page.wait_for_timeout(3000)
-            # Sidebar fallback if SPA didn't land on Eligibility
-            if page.get_by_role("button", name="Add Patient").count() == 0:
-                elig = page.get_by_role("link", name=re.compile("eligibility", re.I))
+            for attempt in range(4):
+                page.goto(
+                    "https://app.vynetrellis.com/Eligibility",
+                    wait_until="domcontentloaded",
+                    timeout=120000,
+                )
+                page.wait_for_timeout(2500)
+                if page.get_by_role("button", name="Add Patient").count():
+                    break
+                # Sidebar SPA link used by Trellis
+                elig = page.locator("a[href*='Eligibility'], a[href*='eligibility']")
                 if elig.count():
-                    elig.first.click()
+                    elig.first.click(timeout=10000)
+                    page.wait_for_timeout(2500)
                 else:
-                    page.get_by_text("Eligibility", exact=True).first.click()
-                page.wait_for_timeout(3000)
-            page.wait_for_selector("button:has-text('Add Patient')", timeout=60000)
+                    side = page.get_by_role("link", name=re.compile("eligibility-menu-option|Eligibility", re.I))
+                    if side.count():
+                        side.first.click(timeout=10000)
+                        page.wait_for_timeout(2500)
+                if page.get_by_role("button", name="Add Patient").count():
+                    break
+                print(f"eligibility wait attempt {attempt+1} url={page.url}")
+                page.screenshot(path=str(OUT_DIR / f"batch_elig_attempt_{attempt+1}.png"))
+            page.wait_for_selector("button:has-text('Add Patient')", timeout=90000)
             page.screenshot(path=str(OUT_DIR / "batch_eligibility.png"))
             print("at", page.url)
             # Refuse wrong office if header shows Emporia
