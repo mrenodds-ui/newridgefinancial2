@@ -74,7 +74,8 @@ def universal_report_pull_steps() -> list[str]:
         "Output Options appears: click Excel then Enter — OR click Print Preview then Enter. NEVER Printer. NEVER File.",
         "If Excel is GREYED OUT on Output Options: use Print Preview only (NR2 will not invent money from preview; empty ≠ $0 until Excel is enabled in SoftDent).",
         "OPERATOR — enable SoftDent Excel (money beams): SoftDent Help/setup → report Output Options must list Excel as enabled "
-        "(office SoftDent install / printer-driver / Carestream report export feature). Until Excel is clickable, morningBundle stays attest_only.",
+        "(office SoftDent install / printer-driver / Carestream report export feature). Until Excel is clickable, morningBundle stays attest_only. "
+        "Runbook: NewRidgeFinancial2/docs/runbooks/softdent_excel_enablement_nr2.md.",
         "If SoftDent shows Waiting for printer connection… → Cancel (Alt+C) and choose Excel or Print Preview.",
         "Setup window: set Start/End (or as-of) dates; Doctors/Providers 999 = all unless filtering; OK.",
         SOFTDENT_SELECT_FILE_PATH_HYGIENE,
@@ -163,6 +164,8 @@ def format_softdent_report_pull_hal_reply(query: str = "") -> str:
         "Hard rules: Excel or Print Preview only — never Printer; never File; never Esc on SoftDent main; "
         "never Alt+R for Reports (AMD Instant Replay steals it); SoftDent is 32-bit — prefer F10. "
         "If Excel is greyed out on Output Options → Print Preview only (empty ≠ $0 for money until Excel enabled). "
+        "Money-beam enablement runbook: NewRidgeFinancial2/docs/runbooks/softdent_excel_enablement_nr2.md "
+        "(then say approve for attended morning bundle). "
         "Minimize Chrome Claim Management / NR2 Optical Claims before unattended pulls (focus thieves). "
         + SOFTDENT_SELECT_FILE_PATH_HYGIENE,
     ]

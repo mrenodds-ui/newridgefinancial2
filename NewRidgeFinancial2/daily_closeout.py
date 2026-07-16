@@ -344,8 +344,19 @@ def period_close_status() -> dict[str, Any]:
             )[:400]
             or None,
             "ensure": export_blob.get("ensure"),
+            "excelDisabled": export_blob.get("excelDisabled"),
+            "excelEnablementRunbook": export_blob.get("excelEnablementRunbook")
+            or "NewRidgeFinancial2/docs/runbooks/softdent_excel_enablement_nr2.md",
+            "excelEnablementGate": export_blob.get("excelEnablementGate"),
             "emptyNotZero": True,
         }
+        if not morning_bundle.get("ok") and not morning_bundle.get("excelEnablementGate"):
+            morning_bundle["excelEnablementGate"] = (
+                "Money beams need SoftDent Excel enabled — follow "
+                f"{morning_bundle['excelEnablementRunbook']}; then say approve for "
+                "attended morning bundle. Preview-only stays attest_only · empty ≠ $0 · "
+                "forceCloseAvailable stays laser-gated."
+            )
     return {
         "ok": True,
         "emptyNotZero": True,

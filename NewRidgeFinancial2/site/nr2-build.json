@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12072-preview-harden-benefits-smoke",
-  "BUILD_ID": "nr2-12072-preview-harden-benefits-smoke",
-  "assetVersion": "nr2-12072-preview-harden-benefits-smoke",
-  "builtAt": "2026-07-16T13:45:00.000Z",
-  "notes": "nr2-12072: SoftDent Print Preview Date Wizard/setup harden + honest printPreviewOpen; collections Practice Management win32; desk-smoke morningConfidence.trellisBenefits withBenefits counts (no $). morningBundle.ok still needs SoftDent Excel enabled. SoftDent write-back forbidden; empty≠$0; Force Close laser-gated. Restart NR2.",
+  "schemaVersion": "nr2-12073-excel-gate-all-next",
+  "BUILD_ID": "nr2-12073-excel-gate-all-next",
+  "assetVersion": "nr2-12073-excel-gate-all-next",
+  "builtAt": "2026-07-16T14:05:00.000Z",
+  "notes": "nr2-12073: SoftDent Excel enablement runbook + morningBundle excelEnablementGate; Trellis withBenefits AM proof script; QB AP/payroll inbox drop runbook. SoftDent write-back forbidden; empty≠$0; Force Close laser-gated. Operator must enable SoftDent Excel then approve attended morning bundle for money beams.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12072-PREVIEW-HARDEN-BENEFITS-SMOKE",
+  "package": "NR2-12073-EXCEL-GATE-ALL-NEXT",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

@@ -838,6 +838,9 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
 
 # Morning period-close SoftDent Excel bundle (consent-free; write-back forbidden).
 MORNING_SOFTDENT_REPORT_IDS = ("aging", "register", "collections")
+SOFTDENT_EXCEL_ENABLEMENT_RUNBOOK = (
+    "NewRidgeFinancial2/docs/runbooks/softdent_excel_enablement_nr2.md"
+)
 
 
 def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
@@ -874,6 +877,11 @@ def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
             "exportRoot": r"C:\SoftDentReportExports",
             "refreshImportsSuggested": False,
             "pathHygiene": "SoftDent must be focused before Excel export.",
+            "excelEnablementRunbook": SOFTDENT_EXCEL_ENABLEMENT_RUNBOOK,
+            "excelEnablementGate": (
+                "SoftDent not ready — follow Excel enablement runbook after SoftDent is up; "
+                "never invent Select File Name directories; empty ≠ $0."
+            ),
             "emptyNotZero": True,
             "at": _utc_now(),
             "error": "softdent_not_ready",
@@ -918,6 +926,14 @@ def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
     )
     excel_disabled = any(bool(r.get("excelDisabled")) for r in reports.values())
     ok_count = sum(1 for r in reports.values() if r.get("ok"))
+    gate = None
+    if not aging_excel_ok:
+        gate = (
+            "Attended morning-bundle re-run blocked for money beams until SoftDent Output Options "
+            f"Excel is enabled (runbook: {SOFTDENT_EXCEL_ENABLEMENT_RUNBOOK}). "
+            "Preview-only keeps attest_only · empty ≠ $0 · never File · never invent directories. "
+            "After Excel is clickable, say approve for attended morning bundle."
+        )
     return {
         "ok": aging_excel_ok,
         "consentRequired": False,
@@ -942,6 +958,8 @@ def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
             if excel_disabled
             else "SoftDent kept its own folder; NR2 copied into SoftDentReportExports."
         ),
+        "excelEnablementRunbook": SOFTDENT_EXCEL_ENABLEMENT_RUNBOOK,
+        "excelEnablementGate": gate,
         "emptyNotZero": True,
         "at": _utc_now(),
         "error": None
