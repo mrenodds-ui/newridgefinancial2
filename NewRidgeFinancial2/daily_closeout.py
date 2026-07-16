@@ -327,6 +327,7 @@ def period_close_status() -> dict[str, Any]:
     export_blob = (last or {}).get("export") if isinstance(last, dict) else None
     morning_bundle: dict[str, Any] | None = None
     if isinstance(export_blob, dict):
+        aging_rep = (export_blob.get("reports") or {}).get("aging") or {}
         morning_bundle = {
             "ok": bool(export_blob.get("ok")),
             "partial": bool(export_blob.get("partial")),
@@ -335,6 +336,14 @@ def period_close_status() -> dict[str, Any]:
             "reportIds": list(export_blob.get("reportIds") or [])[:8],
             "fallback": export_blob.get("fallback"),
             "error": str(export_blob.get("error") or "")[:200] or None,
+            "detail": str(
+                export_blob.get("detail")
+                or aging_rep.get("detail")
+                or aging_rep.get("error")
+                or ""
+            )[:400]
+            or None,
+            "ensure": export_blob.get("ensure"),
             "emptyNotZero": True,
         }
     return {

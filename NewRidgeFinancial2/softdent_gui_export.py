@@ -590,10 +590,24 @@ def ensure_softdent_ready_for_gui_export(*, timeout_s: float = 60.0) -> dict[str
         "steps": [],
     }
     if softdent_main_running():
-        out["ok"] = True
         out["alreadyRunning"] = True
         out["signedOn"] = True
         out["steps"].append("already_running")
+        # Still force SoftDent foreground — Optical Bench / Cursor often steal focus
+        # and morning Excel export then refuses keys (empty ≠ invent path).
+        try:
+            hwnd = _main_softdent_hwnd()
+            _force_foreground(hwnd)
+            time.sleep(0.35)
+            _assert_softdent_foreground(hwnd)
+            out["ok"] = True
+            out["focused"] = True
+            out["steps"].append("focused_main")
+        except Exception as exc:  # noqa: BLE001
+            out["ok"] = False
+            out["focused"] = False
+            out["error"] = f"softDent_focus_failed: {exc}"[:240]
+            out["steps"].append("focus_failed")
         return out
     try:
         from softdent_signon import ensure_softdent_signed_on

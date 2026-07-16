@@ -806,17 +806,48 @@ def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
     """
     ensure = None
     try:
-        from softdent_gui_export import ensure_softdent_ready_for_gui_export, softdent_main_running
+        from softdent_gui_export import ensure_softdent_ready_for_gui_export
 
-        if not softdent_main_running():
-            ensure = ensure_softdent_ready_for_gui_export(timeout_s=90.0)
+        # Always prep SoftDent (launch if down; focus if up) — Optical Bench steals FG.
+        ensure = ensure_softdent_ready_for_gui_export(timeout_s=90.0)
     except Exception as exc:  # noqa: BLE001
         ensure = {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:240]}
+
+    if isinstance(ensure, dict) and not ensure.get("ok"):
+        return {
+            "ok": False,
+            "consentRequired": False,
+            "bundle": True,
+            "reportIds": list(MORNING_SOFTDENT_REPORT_IDS),
+            "reports": {},
+            "ensure": ensure,
+            "okCount": 0,
+            "failed": list(MORNING_SOFTDENT_REPORT_IDS),
+            "agingOk": False,
+            "partial": False,
+            "exportPartial": False,
+            "path": None,
+            "paths": [],
+            "exportRoot": r"C:\SoftDentReportExports",
+            "refreshImportsSuggested": False,
+            "pathHygiene": "SoftDent must be focused before Excel export.",
+            "emptyNotZero": True,
+            "at": _utc_now(),
+            "error": "softdent_not_ready",
+            "detail": str(ensure.get("error") or "SoftDent not ready for GUI export")[:600],
+        }
 
     reports: dict[str, Any] = {}
     failed: list[str] = []
     paths: list[str] = []
     for rid in MORNING_SOFTDENT_REPORT_IDS:
+        # Re-assert SoftDent focus between reports (Optical can steal mid-bundle).
+        try:
+            from softdent_gui_export import ensure_softdent_ready_for_gui_export
+
+            ensure_softdent_ready_for_gui_export(timeout_s=30.0)
+        except Exception:
+            pass
         one = softdent_export(report_id=rid, days=days)
         reports[rid] = one
         if one.get("ok"):

@@ -1544,6 +1544,11 @@ class NR2BottleServer(BottleServer):
                     "emptyNotZero": True,
                     "source": "last",
                     "thisPatientShortcutCovered": bool(last.get("thisPatientShortcutCovered")),
+                    "monThuApptTimeOk": last.get("monThuApptTimeOk"),
+                    "morningConfidence": last.get("morningConfidence"),
+                    "forceCloseAvailable": last.get("forceCloseAvailable"),
+                    "patientAttestEligible": last.get("patientAttestEligible"),
+                    "deskProof": last.get("deskProof"),
                 }
                 return _json_response(last)
             result = run_desk_smoke(
