@@ -841,10 +841,14 @@ def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
     failed: list[str] = []
     paths: list[str] = []
     for rid in MORNING_SOFTDENT_REPORT_IDS:
-        # Re-assert SoftDent focus between reports (Optical can steal mid-bundle).
+        # Re-assert SoftDent focus between reports (Optical/Chrome can steal mid-bundle).
         try:
-            from softdent_gui_export import ensure_softdent_ready_for_gui_export
+            from softdent_gui_export import (
+                ensure_softdent_ready_for_gui_export,
+                prepare_softdent_for_next_report,
+            )
 
+            prepare_softdent_for_next_report()
             ensure_softdent_ready_for_gui_export(timeout_s=30.0)
         except Exception:
             pass

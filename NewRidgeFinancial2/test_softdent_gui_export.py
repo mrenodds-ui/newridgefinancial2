@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from softdent_gui_export import (
+    _is_reclaimable_focus_title,
     _is_softdent_excel_workbook_name,
     load_menu_map,
     resolve_menu_keys,
@@ -18,6 +19,11 @@ from softdent_gui_export import (
 
 
 class SoftDentGuiExportTests(unittest.TestCase):
+    def test_reclaimable_focus_titles(self):
+        self.assertTrue(_is_reclaimable_focus_title("Claim Management - Google Chrome"))
+        self.assertTrue(_is_reclaimable_focus_title("nr2 — Cursor"))
+        self.assertFalse(_is_reclaimable_focus_title("AMD Software: Adrenalin Edition"))
+
     def test_menu_map_phase1_ids(self):
         catalog = load_menu_map()
         self.assertEqual(catalog.get("version"), 1)

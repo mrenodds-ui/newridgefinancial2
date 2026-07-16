@@ -42,6 +42,16 @@ _FOCUS_BLOCKLIST_SUBSTR = (
     "intel® graphics",
     "intel graphics",
 )
+# Browser / IDE titles — reclaim SoftDent foreground (do not refuse forever).
+_FOCUS_RECLAIM_SUBSTR = (
+    "cursor",
+    "google chrome",
+    "microsoft edge",
+    "firefox",
+    "claim management",
+    " - chrome",
+    " - edge",
+)
 
 
 def _softdent_pids() -> set[int]:
@@ -97,6 +107,11 @@ def _window_pid(hwnd: int) -> int | None:
 def _is_blocked_focus_title(title: str) -> bool:
     lower = (title or "").strip().lower()
     return any(s in lower for s in _FOCUS_BLOCKLIST_SUBSTR)
+
+
+def _is_reclaimable_focus_title(title: str) -> bool:
+    lower = (title or "").strip().lower()
+    return any(s in lower for s in _FOCUS_RECLAIM_SUBSTR)
 
 
 def _minimize_focus_thieves() -> int:
@@ -157,11 +172,13 @@ def _assert_softdent_foreground(hwnd: int | None = None) -> int:
     import win32gui
 
     target = int(hwnd or _main_softdent_hwnd())
-    for attempt in range(6):
+    last_title = ""
+    for attempt in range(12):
         _force_foreground(target)
         time.sleep(0.12 + 0.05 * attempt)
         fg = win32gui.GetForegroundWindow()
         fg_title = win32gui.GetWindowText(fg) or ""
+        last_title = fg_title
         if _is_blocked_focus_title(fg_title):
             raise RuntimeError(
                 f"Refusing SoftDent keys — AMD/other thief owns foreground: {fg_title!r}. "
@@ -175,12 +192,12 @@ def _assert_softdent_foreground(hwnd: int | None = None) -> int:
             return target
         if fg == target:
             return target
-        # Cursor / IDE often steals focus mid-automation — retry SoftDent only
-        if "cursor" in fg_title.lower():
+        # Cursor / Chrome / Edge often steal focus mid-automation — retry SoftDent only
+        if _is_reclaimable_focus_title(fg_title):
             continue
-        if attempt == 5:
+        if attempt >= 11:
             raise RuntimeError(
-                f"Refusing SoftDent keys — foreground not SoftDent: {fg_title!r}"
+                f"Refusing SoftDent keys — foreground not SoftDent: {last_title!r}"
             )
     return target
 
@@ -798,8 +815,15 @@ def _open_report_via_win32_menu(menu_path: str) -> bool:
     return bool(find_dialog("Output Options"))
 
 
-def _open_report_via_keys(keys_after_reports_accounting: str) -> None:
-    """Fallback: SoftDent menu via F10 + letters (never global Alt+R — AMD Instant Replay)."""
+def _open_report_via_keys(
+    keys_after_reports_branch: str,
+    *,
+    after_reports: str = "a",
+) -> None:
+    """Fallback: SoftDent menu via F10 + letters (never global Alt+R — AMD Instant Replay).
+
+    after_reports: letter under Reports — ``a`` Accounting, ``p`` Practice Management.
+    """
     _focus_main()
     cancel_printer_dialogs()
     _send_softdent_keys("{F10}")
@@ -807,9 +831,10 @@ def _open_report_via_keys(keys_after_reports_accounting: str) -> None:
     cancel_printer_dialogs(max_rounds=2)
     _send_softdent_keys("r")
     time.sleep(0.35)
-    _send_softdent_keys("a")
+    branch = str(after_reports or "a").strip()[:1] or "a"
+    _send_softdent_keys(branch)
     time.sleep(0.35)
-    for ch in keys_after_reports_accounting:
+    for ch in keys_after_reports_branch:
         if ch.isspace():
             continue
         cancel_printer_dialogs(max_rounds=1)
@@ -823,7 +848,7 @@ def _open_accounting_report(report_id: str, menu_keys: str) -> None:
     """Open SoftDent accounting report per Carestream docs.
 
     SoftDent is 32-bit; 64-bit Python ``menu_select`` often hits ElementNotEnabled.
-    Prefer F10 keyboard for aging (and whenever win32 fails). Never Esc on SoftDent main.
+    Prefer F10 keyboard for morning-bundle reports. Never Esc on SoftDent main.
     """
     # Probed on CS SoftDent v19.1.4 (classic HMENU under Reports)
     win32_paths: dict[str, list[str]] = {
@@ -850,23 +875,51 @@ def _open_accounting_report(report_id: str, menu_keys: str) -> None:
             "Reports->Accounting->Insurance Payment Distribution",
         ],
     }
-    # F10-first for reports where 64-bit menu_select is flaky on this build.
-    prefer_f10 = report_id in {"aging", "daysheet", "writeoff_totals"}
+    # Practice Management branch (F10 → r → p); everything else stays Accounting (a).
+    practice_mgmt = report_id in {
+        "collections",
+        "writeoff_totals",
+        "insurance_payment_analysis",
+    }
+    after_reports = "p" if practice_mgmt else "a"
+    # F10-first for morning bundle + flaky 64-bit menu_select reports.
+    prefer_f10 = report_id in {
+        "aging",
+        "daysheet",
+        "writeoff_totals",
+        "register",
+        "collections",
+        "transactions",
+    }
+    alt_keys: list[str] = []
+    if report_id == "aging":
+        alt_keys = ["g", "aa", "n"]
+    elif report_id == "collections":
+        alt_keys = ["c", "o", "l", "cs"]
+    elif report_id == "register":
+        alt_keys = ["rp", "r"]
     if prefer_f10:
-        for keys in (menu_keys, *(report_id == "aging" and ["g", "aa", "n"] or [])):
-            if not keys:
+        seen: set[str] = set()
+        for keys in (menu_keys, *alt_keys):
+            k = str(keys or "").strip()
+            if not k or k in seen:
                 continue
-            _open_report_via_keys(str(keys))
-            for _ in range(16):
+            seen.add(k)
+            _open_report_via_keys(k, after_reports=after_reports)
+            for _ in range(20):
                 cancel_printer_dialogs(max_rounds=1)
                 if find_dialog("Output Options"):
                     return
+                # Report Setup often precedes Output Options on aging/register.
+                if find_dialog("Report Setup") or find_dialog("Account Aging"):
+                    time.sleep(0.2)
+                    continue
                 time.sleep(0.25)
     for path in win32_paths.get(report_id) or []:
         if _open_report_via_win32_menu(path):
             return
     if not prefer_f10:
-        _open_report_via_keys(menu_keys)
+        _open_report_via_keys(menu_keys, after_reports=after_reports)
     if not find_dialog("Output Options") and report_id in win32_paths:
         for path in win32_paths[report_id]:
             if _open_report_via_win32_menu(path):
@@ -1009,38 +1062,45 @@ def _focus_select_file_name_filename_edit(dlg) -> tuple[int, str]:
 
     SoftDent Account Aging uses a single path edit (folder + stem), not a bare name.
     """
-    _keyboard_activate_dialog(dlg)
-    try:
-        from pywinauto import Application
+    last_exc: BaseException | None = None
+    for attempt in range(4):
+        _keyboard_activate_dialog(dlg)
+        try:
+            from pywinauto import Application
 
-        app = Application(backend="win32").connect(handle=int(dlg.handle))
-        win = app.window(handle=int(dlg.handle))
-        edits: list[Any] = []
-        for e in win.descendants(class_name="Edit"):
+            app = Application(backend="win32").connect(handle=int(dlg.handle))
+            win = app.window(handle=int(dlg.handle))
+            edits: list[Any] = []
+            for e in win.descendants(class_name="Edit"):
+                try:
+                    if e.is_visible() and e.is_enabled():
+                        edits.append(e)
+                except Exception:
+                    continue
+            if not edits:
+                raise RuntimeError("Select File Name has no Edit controls")
+            edit = edits[0]
             try:
-                if e.is_visible() and e.is_enabled():
-                    edits.append(e)
+                cur = str(edit.window_text() or "")
             except Exception:
+                cur = ""
+            try:
+                edit.set_focus()
+            except Exception:
+                _softdent_click(edit)
+            time.sleep(0.12)
+            if not str(cur or "").strip() and attempt < 3:
+                time.sleep(0.35)
                 continue
-        if not edits:
-            raise RuntimeError("Select File Name has no Edit controls")
-        edit = edits[0]
-        try:
-            cur = str(edit.window_text() or "")
-        except Exception:
-            cur = ""
-        try:
-            edit.set_focus()
-        except Exception:
-            _softdent_click(edit)
-        time.sleep(0.12)
-        return int(edit.handle), cur
-    except Exception as exc:
-        logger.warning(
-            "Select File Name focus failed (%s)",
-            type(exc).__name__,
-        )
-        return int(dlg.handle), ""
+            return int(edit.handle), cur
+        except Exception as exc:
+            last_exc = exc
+            time.sleep(0.25)
+    logger.warning(
+        "Select File Name focus failed (%s)",
+        type(last_exc).__name__ if last_exc else "empty",
+    )
+    return int(dlg.handle), ""
 
 
 def _select_output_option_prompt(kind: str = "excel") -> None:
