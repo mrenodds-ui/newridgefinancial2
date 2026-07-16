@@ -14,57 +14,57 @@
 ---
 
 # Verdict
-**Ship Sensei/ODBC `appt_time` extract now** to replace "—" placeholders with real HH:MM on the Mon–Thu OM board, completing the data pipeline initiated in bc0c8ff.
+Wire the Sensei/ODBC layer to extract `appt_time` so the Mon–Thu OM board renders real HH:MM instead of "—".
 
 ## 0. Operator Intent (verbatim)
 continue with all
 
 ## 1. Recommended NEXT (name, why now, effort, REAL files, validation gate)
-**Package:** NR2-12060-SENSEI-APPT-TIME-EXTRACT  
-**Why now:** The LIVE AUDIT confirms `apptTimeInDaily: true` and `odbcMentionsApptTime: true`, yet `timeSamples` shows 12 consecutive "—" tokens. The UI migration (bc0c8ff) is live but data-starved. This is the critical path to make the Mon–Thu board operationally useful for huddles.  
-**Effort:** Small–Medium (single ODBC field mapping + transform).  
-**REAL files to touch:**
-- `softdent_odbc_extract.py` – add `appt_time` to the SELECT/投影 for the appointments query (likely `SELECT appt_time FROM schedule...` or equivalent SoftDent column).
-- `nr2_softdent_daily.py` – ensure `appt_time` is parsed from ODBC result, cast to `HH:MM`, and merged into the daily JSON beam.
-- `desk_smoke.py` – extend smoke test to assert `appt_time` is non-null and matches regex `\d{2}:\d{2}` for today’s appointments.
-**Validation gate:** Run desk smoke; verify OM board renders "09:00" instead of "—" for at least one confirmed appointment; no PHI leakage in logs (hash/initials only).
+**Package:** Sensei/ODBC `appt_time` extract (OM Board Time Fix)  
+**Why now:** The LIVE AUDIT shows the Mon–Thu board UI is live (`apptTimeInDaily: true`, `monThuApptTimeOk: true`), yet every appointment displays "—" because the ODBC SELECT does not yet return the time column. This is a data-blocker that renders the board unusable for morning huddles and must be resolved before any grouping, filtering, or insurance worklist features can rely on appointment times.  
+**Effort:** Small (1 dev-day). Single column addition to existing read-only query; no schema migration (already shipped in bc0c8ff).  
+**REAL files:**
+- `softdent_odbc_extract.py` – add `appt_time` (or `ApptTime`/`StartTime` per SoftDent schema) to the SELECT projection and row mapper.
+- `nr2_softdent_daily.py` – ensure the daily ingest pipeline persists the new column to the office-hub dataset without coercion (NULL stays NULL).
+- `desk_smoke.py` – extend the smoke test to assert that at least one non-null `appt_time` exists in the latest beam when SoftDent reports fresh data.  
+**Validation gate:** Office Manager opens the Mon–Thu board and sees formatted times (e.g., "08:30", "14:00") next to patient initials; "—" appears only when the underlying SoftDent record truly lacks a time (empty ≠ "00:00").
 
 ## 2. Why this beats the other candidates now
-- **Candidate #2 (Tomorrow-insurance worklist):** Depends on the board being readable. If times are "—", the morning huddle cannot sequence the day.
-- **Candidate #3 (Provider/operatory grouping):** Cosmetic polish that should happen after the underlying data is complete.
-- **Candidate #4 (Apex 2B widget):** Legacy compatibility is optional; the current board is the primary interface.
-- **Data completion vs. new features:** The audit shows fresh SoftDent syncs (17 connected sources, level=fresh). The data is available in the DB; we just need to extract the column.
+- **Candidate #2 (Tomorrow-insurance worklist):** Requires accurate appointment times to sort the morning huddle; impossible while times are "—".  
+- **Candidate #3 (Provider/operatory grouping):** Needs real timestamps to group by time blocks; polishing the UI is premature when the data is missing.  
+- **Candidate #4 (Apex 2B widget):** Optional legacy feature with lower operational impact.  
+- **Candidate #5 (LIVE AUDIT gap):** The audit explicitly flags `timeSamples: ["—"]` and `odbcMentionsApptTime: true`, confirming the gap is exactly the ODBC extraction, not a new unknown.
 
 ## 3. Ordered backlog AFTER #1 (2–4 items operator can "continue with all")
-1. **NR2-12070-TRELLIS-MORNING-HUDDLE** – SoftDent/Trellis tomorrow-insurance worklist surface (eligibility & estimate alerts for next-day patients). Builds on the now-functional appt_time slots.
-2. **NR2-12080-OM-BOARD-POLISH** – Provider/operatory grouping + print CSS for the Mon–Thu board. UI-only once data is solid.
-3. **NR2-12090-HAL-SHORTCUT-HARDEN** – Edge-case hardening for the HAL this-patient shortcut (RBAC edge cases, empty-state handling) if desk smoke finds gaps.
-4. **NR2-12100-APEX-2B-WIDGET** (Optional) – Classic weekly widget for legacy users only if requested post-shadow.
+1. **SoftDent/Trellis tomorrow-insurance worklist / morning huddle surface** – surface appointments for tomorrow with insurance eligibility status (uses the now-working `appt_time` to sort chronologically).  
+2. **Provider/operatory grouping + print polish on Mon–Thu board** – group by provider/operatory and enable print-friendly CSS now that times are populated.  
+3. **Classic Apex 2B weekly widget (optional legacy only)** – port the legacy Apex 2B weekly summary view if staff request it during shadow phase.
 
 ## 4. What NOT to redo
-- Do not rebuild the Mon–Thu shell or ADA UI (already shipped in f1e8ccb/bc0c8ff).
-- Do not reimplement this-patient shortcut or desk smoke binding (shipped daa7ba2/17ba77e).
-- Do not modify Trellis nightly stagger logic (shipped c7da9de).
-- Do not create new integration directories; stay in existing `softdent_odbc_extract.py` and `nr2_softdent_daily.py` patterns.
+- Desk smoke this-patient bind (`daa7ba2`)  
+- HAL this-patient shortcut (`17ba77e`)  
+- OM Mon–Thu ADA + appt_time UI/migrate (`f1e8ccb` / `bc0c8ff`) – the UI shell is shipped; only the data pipe is missing.  
+- Trellis nightly verify harden (`c7da9de`)  
+- Mini-dossier clinical/estimates, context bind, Ask HAL (patient track)  
 
 ## 5. Acceptance criteria
-- [ ] `appointmentsRange.timeSamples` in LIVE AUDIT shows at least 80% populated HH:MM strings (e.g., "08:30", "14:15") instead of "—".
-- [ ] `softdent_odbc_extract.py` query includes the time column without breaking existing patient hash/initials projection.
-- [ ] `desk_smoke.py` asserts `appt_time` presence and format for today's appointments.
-- [ ] OM board renders times in local office timezone (no UTC drift).
-- [ ] No SoftDent write operations; read-only constraint preserved.
-- [ ] PHI compliance: logs show only hashed patient IDs, never full names with times.
+- [ ] `softdent_odbc_extract.py` SELECT statement includes the appointment time column (e.g., `SELECT ... ApptTime FROM Appointment ...`).  
+- [ ] Row mapper returns `appt_time` as ISO string or `None` (never "—" or "00:00").  
+- [ ] `nr2_softdent_daily.py` ingest completes without casting errors and stores the value in the existing `appt_time` field.  
+- [ ] LIVE AUDIT `timeSamples` array contains at least one valid "HH:MM" value when SoftDent has scheduled appointments.  
+- [ ] PHI protection maintained: patient names remain hashed/initials only on the OM board.  
+- [ ] Empty handling: appointments with NULL times in SoftDent render as blank (not "$0" or "—").  
 
 ## 6. Executive Summary (5 bullets)
-- **The Mon–Thu board is data-blind:** UI shipped but times show "—" because ODBC extract omits the `appt_time` column.
-- **One field unlocks operational value:** Adding the time extract completes the daily beam and enables sequence-aware huddles.
-- **Risk is low:** SoftDent schema for appointment times is stable; this is a projection addition, not a transform.
-- **Validation is automated:** Extend existing desk smoke to enforce the field presence, preventing regression.
-- **Backlog is sequenced:** Insurance worklist (#2) and UI polish (#3) wait for this data foundation; legacy widget (#4) remains optional.
+- **Unblock the board:** The Mon–Thu UI is live but showing "—"; wiring ODBC `appt_time` makes it operational for office managers.  
+- **Read-only safety:** Pure SELECT against SoftDent; no write-back, no PHI exposure beyond existing initials hash.  
+- **Enables downstream features:** Insurance worklist and provider grouping both depend on accurate timestamps.  
+- **Low risk, high visibility:** Single column extraction using existing proven files (`softdent_odbc_extract.py`, `nr2_softdent_daily.py`).  
+- **Validation is automatic:** Desk smoke already checks `monThuApptTimeOk`; extending it to verify non-null samples guarantees the fix.
 
 ## 7. Approval Checklist
-- [ ] Confirm `softdent_odbc_extract.py` path exists in repo and is the correct ODBC wrapper.
-- [ ] Confirm SoftDent column name for appointment time (e.g., `appt_time`, `start_time`, `apt_time`) with DBA or existing schema doc.
-- [ ] Verify no PII in the new column extract (time only, no patient name).
-- [ ] Staging environment shows real times on Mon–Thu board before prod deploy.
-- [ ] Desk smoke GREEN post-deploy.
+- [ ] Confirm SoftDent table/column name for appointment start time (e.g., `Appointment.ApptTime`, `Schedule.StartTime`).  
+- [ ] Verify `softdent_odbc_extract.py` ODBC driver permissions allow reading the time column.  
+- [ ] Staging test: Run `nr2_softdent_daily.py` manually and confirm `appt_time` appears in the generated JSON beam.  
+- [ ] UI spot-check: Office Manager views Mon–Thu board and sees "09:00" instead of "—" for a known 9:00 AM appointment.  
+- [ ] Desk smoke assertion added to prevent regression (fail smoke if all times are null while appointment count > 0).

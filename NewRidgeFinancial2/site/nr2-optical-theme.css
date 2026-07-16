@@ -656,7 +656,15 @@ a:hover { color: var(--hal); }
   .om-weekly-body { grid-template-columns: 1fr; }
   .wk-days-grid { grid-template-columns: repeat(4, 1fr); }
   .wk-day { border-color: #999; background: #fff; break-inside: avoid; }
-  .wk-slot { color: #222; cursor: default; box-shadow: none; }
+  .wk-prov-group {
+    color: #111;
+    font-weight: 600;
+    border-bottom: 1px solid #999;
+    margin-top: 8px;
+    padding-bottom: 2px;
+    break-after: avoid;
+  }
+  .wk-slot { color: #222; cursor: default; box-shadow: none; break-inside: avoid; }
   .wk-slot .ada-badge {
     border-color: #666;
     color: #222;

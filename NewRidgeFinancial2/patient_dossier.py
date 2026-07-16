@@ -375,30 +375,37 @@ def format_hal_patient_summary_reply(
     used_bound = False
     if not ref and query_refers_to_bound_patient(query):
         sid = str(session_id or "").strip()
-        if sid:
-            try:
-                from hal_session_store import active_patient_context
+        if not sid:
+            return {
+                "text": (
+                    'No HAL session is attached to this ask. '
+                    "Open Office Manager → click a Mon–Thu patient → Ask HAL "
+                    '(or pass a session), then say "this patient". '
+                    "SoftDent read-only · empty≠$0."
+                ),
+                "intent": "policy:patient-summary-unbound",
+            }
+        try:
+            from hal_session_store import active_patient_context
 
-                bound_ctx = active_patient_context(sid)
-            except Exception:
-                bound_ctx = None
+            bound_ctx = active_patient_context(sid)
+        except Exception:
+            bound_ctx = None
         if not bound_ctx or not str((bound_ctx or {}).get("patientId") or "").strip():
             # Distinguish never-bound vs expired TTL for clearer OM recovery.
             expired_hint = ""
-            sid = str(session_id or "").strip()
-            if sid:
-                try:
-                    from hal_session_store import get_session_meta
+            try:
+                from hal_session_store import get_session_meta
 
-                    meta = get_session_meta(sid) or {}
-                    raw_ctx = meta.get("patientContext") if isinstance(meta, dict) else None
-                    if isinstance(raw_ctx, dict) and str(raw_ctx.get("patientId") or "").strip():
-                        expired_hint = (
-                            " Bound SoftDent context expired (30 min) — "
-                            "re-open Office Manager → Ask HAL to rebind."
-                        )
-                except Exception:
-                    expired_hint = ""
+                meta = get_session_meta(sid) or {}
+                raw_ctx = meta.get("patientContext") if isinstance(meta, dict) else None
+                if isinstance(raw_ctx, dict) and str(raw_ctx.get("patientId") or "").strip():
+                    expired_hint = (
+                        " Bound SoftDent context expired (30 min) — "
+                        "re-open Office Manager → Ask HAL to rebind."
+                    )
+            except Exception:
+                expired_hint = ""
             return {
                 "text": (
                     "No SoftDent patient is bound to this HAL session. "

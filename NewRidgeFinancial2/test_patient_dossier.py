@@ -112,6 +112,47 @@ class PatientDossierTests(unittest.TestCase):
         self.assertEqual(out.get("intent"), "policy:patient-summary-unbound")
         self.assertIn("expired", (out.get("text") or "").lower())
 
+    def test_this_patient_without_session_id(self) -> None:
+        import sys
+        import types
+
+        fake = types.ModuleType("nr2_rbac")
+        fake.has_capability = lambda *_a, **_k: True  # type: ignore[attr-defined]
+        fake.current_role = lambda: "office_manager"  # type: ignore[attr-defined]
+        prev = sys.modules.get("nr2_rbac")
+        sys.modules["nr2_rbac"] = fake
+        try:
+            out = format_hal_patient_summary_reply("Tell me about this patient")
+        finally:
+            if prev is None:
+                sys.modules.pop("nr2_rbac", None)
+            else:
+                sys.modules["nr2_rbac"] = prev
+        self.assertEqual(out.get("intent"), "policy:patient-summary-unbound")
+        self.assertIn("session", (out.get("text") or "").lower())
+
+    def test_this_patient_denied_without_capability(self) -> None:
+        import sys
+        import types
+
+        fake = types.ModuleType("nr2_rbac")
+        fake.has_capability = lambda *_a, **_k: False  # type: ignore[attr-defined]
+        fake.current_role = lambda: "front_desk"  # type: ignore[attr-defined]
+        prev = sys.modules.get("nr2_rbac")
+        sys.modules["nr2_rbac"] = fake
+        try:
+            out = format_hal_patient_summary_reply(
+                "What's the copay for this patient?",
+                session_id="any",
+            )
+        finally:
+            if prev is None:
+                sys.modules.pop("nr2_rbac", None)
+            else:
+                sys.modules["nr2_rbac"] = prev
+        self.assertEqual(out.get("intent"), "policy:patient-summary-denied")
+        self.assertIn("office manager", (out.get("text") or "").lower())
+
 
 if __name__ == "__main__":
     unittest.main()
