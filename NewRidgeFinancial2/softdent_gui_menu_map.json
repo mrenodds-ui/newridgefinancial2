@@ -1,18 +1,20 @@
 {
   "version": 1,
   "softdentVersionHint": "CS SoftDent Software v19.1.4",
-  "notes": [
+    "notes": [
     "Carestream docs: Reports > Accounting > Registers > Period → Output Options → Excel → Register Setup.",
     "Interaction: keyboard OR mouse, SoftDent (SDWIN) windows only — never AMD (Alt+R = Instant Replay).",
     "Prefer SoftDent Win32 menu_select (Reports->Accounting->Registers->Period); F10+letters fallback.",
-    "MUST click Excel prompt then Enter for file export — NEVER the Printer prompt.",
+    "MUST click Excel prompt then Enter for Excel export — NEVER Printer, NEVER File.",
     "Print Preview path: click Print Preview prompt then Enter — page through with Next/PageDown when detail spans pages; go to LAST page for exact totals (visual read). Page 1 alone is often incomplete.",
-    "HARD RULE: Excel or Print Preview only — never Printer (Waiting for printer connection…).",
+    "HARD RULE: Excel or Print Preview only — never Printer, never File (Output Options).",
     "NEVER Esc on SoftDent main (quit). Enter=OK, Tab=fields, Space=checkbox (Carestream KystrkSht).",
     "Launch only via desktop/Programs shortcut CS SoftDent Software.lnk (-sus).",
-    "Select File Name: SoftDent uses ONE path edit (SoftDent's folder\\\\stem) + static .XLS. Keep SoftDent's folder (this office: E:\\\\OneDrive\\\\Documents). Never substitute SoftDentReportExports/C:\\\\SOFTDE~1 — SoftDent rejects those. NR2 copies the XLS into SoftDentReportExports after SoftDent saves."
+    "Select File Name: SoftDent uses ONE path edit (SoftDent's folder\\\\stem) + static .XLS. Keep SoftDent's folder (this office: E:\\\\OneDrive\\\\Documents). Never substitute SoftDentReportExports/C:\\\\SOFTDE~1 — SoftDent rejects those. NR2 copies the XLS into SoftDentReportExports after SoftDent saves.",
+    "Collections F10 path: Reports → Practice Management (p) → Collection Reports — not Accounting (a). Close Chrome Claim Management during morning Excel bundle (focus thief)."
   ],
   "pathPrefix": "{F10} r a",
+  "pathPrefixPracticeManagement": "{F10} r p",
   "reports": {
     "register": {
       "id": "register",

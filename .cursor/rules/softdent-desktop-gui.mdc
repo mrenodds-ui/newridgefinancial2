@@ -9,9 +9,9 @@ alwaysApply: true
 - SoftDent UI: **keyboard or mouse only** (SoftDent windows). Never Esc on SoftDent main (quit prompt).
 - Sign On: user **`COMPUTE`**, password **`computer`** (lowercase, case-sensitive). Prefer env/`SOFTDENT_SIGNON_*` when set; same values.
 - Launch only via desktop/Start Menu **CS SoftDent Software.lnk** (`-sus`), never bare `SDWIN.EXE`.
-- Output Options: **Excel** or **Print Preview** only — **never Printer**. Excel → click Excel → Enter → Setup → save. Preview → last page for totals. Printer wait → Cancel (Alt+C).
+- Output Options: **Excel** or **Print Preview** only — **never Printer**, **never File**. Excel → click Excel → Enter → Setup → save. Preview → last page for totals. Printer wait → Cancel (Alt+C).
 - SoftDent is **32-bit**; prefer keyboard F10 menus when 64-bit `menu_select` fails (`ElementNotEnabled`).
 - Account transactions → Excel: **Reports → Accounting → Trans for a Period** → Excel → Format **1** (List Each Transaction Separately). SoftDent may open temp `SDWIN*.csv` in Excel — SaveCopyAs to `C:\SoftDentReportExports`. One patient: Account/Patient → Transactions → Print Transactions → Excel if offered.
 - HAL knows this playbook via `format_softdent_account_tx_excel_hal_reply` / local SoftDent policy.
 - Full SoftDent **product** map (Help TOC + topic bodies + 13 report categories): `softdent_product_kb.json` / `softdent_product_kb_topics.json` / HAL `policy:softdent-product-kb` / `GET /api/apex/hal/softdent-kb`. Automation subset remains `softdent_gui_menu_map.json` + `softdent_master_reports.json`.
-- Teach report pulls: `softdent_report_pull.py` / HAL `policy:softdent-report-pull` / `GET /api/apex/hal/softdent-report-pull` — Output Options Excel or Print Preview only.
+- Teach report pulls: `softdent_report_pull.py` / HAL `policy:softdent-report-pull` / `GET /api/apex/hal/softdent-report-pull` — Output Options Excel or Print Preview only (never Printer, never File).

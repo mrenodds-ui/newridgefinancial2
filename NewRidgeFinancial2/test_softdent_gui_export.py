@@ -24,6 +24,20 @@ class SoftDentGuiExportTests(unittest.TestCase):
         self.assertTrue(_is_reclaimable_focus_title("nr2 — Cursor"))
         self.assertFalse(_is_reclaimable_focus_title("AMD Software: Adrenalin Edition"))
 
+    def test_output_options_refuse_file_and_printer(self):
+        from softdent_gui_export import _select_output_option_prompt
+
+        with self.assertRaises(RuntimeError) as ctx_file:
+            _select_output_option_prompt("file")
+        self.assertIn("File", str(ctx_file.exception))
+        with self.assertRaises(RuntimeError) as ctx_printer:
+            _select_output_option_prompt("printer")
+        self.assertIn("Printer", str(ctx_printer.exception))
+
+    def test_ag_excel_stem_recognized(self):
+        self.assertTrue(_is_softdent_excel_workbook_name("AG260716.XLS"))
+        self.assertTrue(_is_softdent_excel_workbook_name("AGE260716.XLS"))
+
     def test_menu_map_phase1_ids(self):
         catalog = load_menu_map()
         self.assertEqual(catalog.get("version"), 1)

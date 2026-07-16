@@ -1104,24 +1104,26 @@ def _focus_select_file_name_filename_edit(dlg) -> tuple[int, str]:
 
 
 def _select_output_option_prompt(kind: str = "excel") -> None:
-    """SoftDent Output Options: Excel, File, or Print Preview — never Printer.
+    """SoftDent Output Options: Excel or Print Preview only — never Printer, never File.
 
-    HARD RULE: never use Printer (offline hang). Prefer enabled Excel; when Excel is
-    disabled SoftDent often still offers File (Select File Name) — use that for
-    machine-readable period exports. Print Preview is visual-only.
+    HARD RULE: never use Printer (offline hang). Never use File (Select File Name
+    prompt). Prefer enabled Excel; when Excel is greyed out, use Print Preview.
     SoftDent often defaults Printer — never Enter until a safe prompt is selected.
     """
     raw = str(kind or "excel").strip().lower()
     if raw in {"printer", "print", "lpt", "spool"}:
         raise RuntimeError(
-            "Refusing SoftDent Output Options 'Printer' — use Excel, File, or Print Preview only."
+            "Refusing SoftDent Output Options 'Printer' — use Excel or Print Preview only."
         )
-    # excel kind: prefer Excel, fall back to File when Excel control is disabled
-    want_file_export = raw in {"excel", "xls", "file", "xlsx"}
-    want_preview = raw in {"print preview", "print_preview", "preview"}
-    if not want_file_export and not want_preview:
+    if raw in {"file", "filename", "select file", "select_file"}:
         raise RuntimeError(
-            f"SoftDent Output Options kind must be excel/file or print_preview (got {kind!r})"
+            "Refusing SoftDent Output Options 'File' — use Excel or Print Preview only."
+        )
+    want_excel = raw in {"excel", "xls", "xlsx"}
+    want_preview = raw in {"print preview", "print_preview", "preview"}
+    if not want_excel and not want_preview:
+        raise RuntimeError(
+            f"SoftDent Output Options kind must be excel or print_preview (got {kind!r})"
         )
 
     out = None
@@ -1144,42 +1146,41 @@ def _select_output_option_prompt(kind: str = "excel") -> None:
             return True
 
     def _pick_button() -> str | None:
-        """Click a safe output radio. Returns 'excel'|'file'|'preview' or None."""
+        """Click a safe output radio. Returns 'excel'|'preview' or None. Never File/Printer."""
         try:
             from pywinauto import Application
 
             app_out = Application(backend="win32").connect(handle=out.handle)
             d_out = app_out.window(handle=out.handle)
             excel_btn = None
-            file_btn = None
             preview_btn = None
             for b in d_out.descendants(class_name="Button"):
                 label = (b.window_text() or "").replace("&", "").strip()
                 lab = label.lower()
-                if lab == "printer":
+                if lab in {"printer", "file"}:
                     continue
                 if lab == "excel":
                     excel_btn = b
-                elif lab == "file":
-                    file_btn = b
                 elif "preview" in lab:
                     preview_btn = b
 
             chosen = None
             target = None
             if want_preview:
-                target, chosen = preview_btn, "preview"
+                if preview_btn is not None and _btn_enabled(preview_btn):
+                    target, chosen = preview_btn, "preview"
+                elif excel_btn is not None and _btn_enabled(excel_btn):
+                    target, chosen = excel_btn, "excel"
+                    logger.info(
+                        "SoftDent Output Options: Print Preview unavailable — using Excel"
+                    )
             elif excel_btn is not None and _btn_enabled(excel_btn):
                 target, chosen = excel_btn, "excel"
-            elif file_btn is not None and _btn_enabled(file_btn):
-                # Excel greyed out on some SoftDent states — File → Select File Name
-                target, chosen = file_btn, "file"
-                logger.info("SoftDent Output Options: Excel disabled — using File export")
             elif preview_btn is not None and _btn_enabled(preview_btn):
-                # Last safe option for visual; caller may not ingest
                 target, chosen = preview_btn, "preview"
                 logger.warning(
-                    "SoftDent Output Options: Excel/File unavailable — Print Preview only"
+                    "SoftDent Output Options: Excel disabled — Print Preview only "
+                    "(never File)"
                 )
             if target is None or chosen is None:
                 return None
@@ -1194,16 +1195,13 @@ def _select_output_option_prompt(kind: str = "excel") -> None:
 
     chosen = _pick_button()
     if not chosen:
-        # Accelerators: E=Excel, F=File. Never send P (Printer). V ≈ Pre&view.
+        # Accelerators: E=Excel, V≈Pre&view. Never P (Printer). Never F (File).
         if want_preview:
             _send_softdent_keys("v", hwnd=hwnd)
             chosen = "preview"
         else:
             _send_softdent_keys("e", hwnd=hwnd)
-            time.sleep(0.2)
-            # If Excel is disabled, SoftDent may ignore E — try File (F)
-            _send_softdent_keys("f", hwnd=hwnd)
-            chosen = "file"
+            chosen = "excel"
         time.sleep(0.25)
 
     # Sweep printer again BEFORE Enter — default Printer can still steal focus
@@ -1212,7 +1210,8 @@ def _select_output_option_prompt(kind: str = "excel") -> None:
         cancelled_early = cancel_printer_dialogs(max_rounds=4)
         if cancelled_early:
             raise RuntimeError(
-                "SoftDent selected Printer before OK — cancelled wait. Retry Excel/File/Preview only."
+                "SoftDent selected Printer before OK — cancelled wait. "
+                "Retry Excel or Print Preview only (never File)."
             )
         raise RuntimeError("Output Options closed unexpectedly before OK")
 
@@ -1223,7 +1222,13 @@ def _select_output_option_prompt(kind: str = "excel") -> None:
     if cancelled:
         raise RuntimeError(
             "SoftDent opened a printer-wait dialog after Output Options — "
-            "Printer must not be used. Click Excel, File, or Print Preview only, then Enter."
+            "Printer must not be used. Click Excel or Print Preview only, then Enter."
+        )
+    if want_excel and chosen == "preview":
+        raise RuntimeError(
+            "SoftDent Output Options: Excel was unavailable — Print Preview selected "
+            "(File refused). Use the Print Preview path for visual totals; "
+            "empty ≠ $0 — do not invent dollars from a missing Excel drop."
         )
 
 
@@ -1233,12 +1238,14 @@ _SOFTDENT_EXCEL_STEM_PREFIXES = (
     "REG",
     "COL",
     "AGE",
+    "AG",  # Account Aging short stem AG{yy}{mm}{dd}
     "DAY",
     "TXN",
     "TRA",
     "WOF",
     "IPA",
     "INS",
+    "ACCT",
 )
 
 
@@ -1371,6 +1378,7 @@ def _complete_output_setup_and_save(
     dest_root: Path,
     canonical_name: str,
     also_copy_as: list[str] | None = None,
+    date_mode: str = "range",
 ) -> Path:
     """Drive Output Options → Report Setup → Save (SoftDent keyboard/mouse only).
 
@@ -1398,40 +1406,53 @@ def _complete_output_setup_and_save(
                         continue
                     if pids and _window_pid(int(w.handle)) not in pids:
                         continue
-                    if "setup" in t.lower():
+                    if "setup" in t.lower() or "aging" in t.lower():
                         setup = w
                         break
                 except Exception:
                     continue
         if setup:
             break
+        # Aging sometimes skips Report Setup and opens Excel / Select File Name directly.
+        if _excel_sdwin_workbook_open() or find_dialog("Select File Name"):
+            break
         time.sleep(0.25)
-    if not setup:
+    if setup:
+        _keyboard_activate_dialog(setup)
+        mode = str(date_mode or "range").strip().lower()
+        h = int(setup.handle)
+        if mode == "as_of":
+            # Account Aging: typically one As-Of date + provider (not start/end range).
+            as_of_txt = end.strftime("%m/%d/%y")
+            _send_softdent_keys("{TAB}", hwnd=h)
+            time.sleep(0.1)
+            _type_keys_clear_and_text(as_of_txt, hwnd=h)
+            _send_softdent_keys("{TAB}", hwnd=h)
+            time.sleep(0.1)
+            _type_keys_clear_and_text("999", hwnd=h)
+        else:
+            start_txt = start.strftime("%m/%d/%y")
+            end_txt = end.strftime("%m/%d/%y")
+            # SoftDent Report Setup edits: Tab from first field → start → end → provider
+            _send_softdent_keys("{TAB}", hwnd=h)
+            time.sleep(0.1)
+            _type_keys_clear_and_text(start_txt, hwnd=h)
+            _send_softdent_keys("{TAB}", hwnd=h)
+            time.sleep(0.1)
+            _type_keys_clear_and_text(end_txt, hwnd=h)
+            _send_softdent_keys("{TAB}", hwnd=h)
+            time.sleep(0.1)
+            _type_keys_clear_and_text("999", hwnd=h)  # all providers
+        time.sleep(0.15)
+        _keyboard_press_ok(hwnd=h)
+        time.sleep(1.0)
+        cancel_printer_dialogs()
+        dismiss_softdent_alerts()
+    elif not (_excel_sdwin_workbook_open() or find_dialog("Select File Name")):
         raise RuntimeError("Report Setup dialog did not appear")
 
-    _keyboard_activate_dialog(setup)
-    start_txt = start.strftime("%m/%d/%y")
-    end_txt = end.strftime("%m/%d/%y")
-    # SoftDent Report Setup edits: Tab from first field → start → end → provider
-    # Typical order: title, start, end, provider — Tab once into start date.
-    h = int(setup.handle)
-    _send_softdent_keys("{TAB}", hwnd=h)
-    time.sleep(0.1)
-    _type_keys_clear_and_text(start_txt, hwnd=h)
-    _send_softdent_keys("{TAB}", hwnd=h)
-    time.sleep(0.1)
-    _type_keys_clear_and_text(end_txt, hwnd=h)
-    _send_softdent_keys("{TAB}", hwnd=h)
-    time.sleep(0.1)
-    _type_keys_clear_and_text("999", hwnd=h)  # all providers
-    time.sleep(0.15)
-    _keyboard_press_ok(hwnd=h)
-    time.sleep(1.0)
-    cancel_printer_dialogs()
-    dismiss_softdent_alerts()
-
     save = None
-    for _ in range(60):
+    for _ in range(90):
         cancel_printer_dialogs(max_rounds=2)
         dismiss_softdent_alerts(max_rounds=2)
         save = find_dialog("Select File Name")
@@ -1742,6 +1763,7 @@ def _export_report_by_id_once(
         dest_root=dest,
         canonical_name=canonical,
         also_copy_as=also,
+        date_mode=date_mode,
     )
     produced = Path(out_path)
     try:
