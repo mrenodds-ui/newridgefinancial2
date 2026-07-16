@@ -140,6 +140,57 @@ class SoftDentGuiExportTests(unittest.TestCase):
             self.assertEqual(out, dest)
             self.assertEqual(calls["n"], 2)
 
+    def test_ensure_ready_already_running(self):
+        from softdent_gui_export import ensure_softdent_ready_for_gui_export
+
+        with mock.patch("softdent_gui_export.softdent_main_running", return_value=True):
+            out = ensure_softdent_ready_for_gui_export()
+        self.assertTrue(out.get("ok"))
+        self.assertTrue(out.get("alreadyRunning"))
+
+    def test_ensure_ready_launches_when_down(self):
+        from softdent_gui_export import ensure_softdent_ready_for_gui_export
+
+        with mock.patch("softdent_gui_export.softdent_main_running", side_effect=[False, True]):
+            with mock.patch(
+                "softdent_signon.ensure_softdent_signed_on",
+                return_value={
+                    "ok": True,
+                    "signedOn": True,
+                    "steps": ["launched_via_shortcut:shell"],
+                },
+            ):
+                with mock.patch("softdent_gui_export.time.sleep", return_value=None):
+                    out = ensure_softdent_ready_for_gui_export(timeout_s=30.0)
+        self.assertTrue(out.get("ok"))
+        self.assertTrue(out.get("launched"))
+        self.assertIn("main_window_ready", out.get("steps") or [])
+
+    def test_export_report_by_id_ensures_when_down(self):
+        from softdent_gui_export import EXPORT_MIN_BYTES, export_report_by_id
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "out.xls"
+            dest.write_bytes(b"x" * EXPORT_MIN_BYTES)
+            with mock.patch("softdent_gui_export.softdent_main_running", side_effect=[False, True]):
+                with mock.patch(
+                    "softdent_gui_export.ensure_softdent_ready_for_gui_export",
+                    return_value={"ok": True, "launched": True},
+                ) as ensure:
+                    with mock.patch(
+                        "softdent_gui_export._export_report_by_id_once",
+                        return_value=dest,
+                    ):
+                        out = export_report_by_id(
+                            "aging",
+                            start=date(2026, 7, 1),
+                            end=date(2026, 7, 15),
+                            retries=0,
+                        )
+            self.assertEqual(out, dest)
+            ensure.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

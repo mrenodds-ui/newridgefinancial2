@@ -714,17 +714,28 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
     """
     _ = consent  # retained for API compatibility; SoftDent export is consent-free for HAL
     try:
-        from softdent_gui_export import export_report_by_id, softdent_main_running
+        from softdent_gui_export import (
+            ensure_softdent_ready_for_gui_export,
+            export_report_by_id,
+            softdent_main_running,
+        )
 
+        ensure = None
         if not softdent_main_running():
-            return {
-                "ok": False,
-                "error": "softdent_gui_unreachable",
-                "detail": "SoftDent desktop not running. Launch CS SoftDent Software.lnk, then retry export.",
-                "fallback": "Teach mode — open SoftDent → Reports → Accounting for the requested report; Output Options Excel only.",
-                "exportRoot": r"C:\SoftDentReportExports",
-                "pathHygiene": "Keep SoftDent folder; never SoftDentReportExports in Select File Name.",
-            }
+            ensure = ensure_softdent_ready_for_gui_export(timeout_s=60.0)
+            if not ensure.get("ok"):
+                return {
+                    "ok": False,
+                    "error": "softdent_gui_unreachable",
+                    "detail": str(
+                        ensure.get("error")
+                        or "SoftDent desktop not running. Launch CS SoftDent Software.lnk, then retry export."
+                    ),
+                    "ensure": ensure,
+                    "fallback": "Teach mode — open SoftDent → Reports → Accounting for the requested report; Output Options Excel only.",
+                    "exportRoot": r"C:\SoftDentReportExports",
+                    "pathHygiene": "Keep SoftDent folder; never SoftDentReportExports in Select File Name.",
+                }
         end = date.today()
         start = end - timedelta(days=max(1, min(int(days), 366)))
         # Map friendly aliases
@@ -758,6 +769,7 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
         return {
             "ok": True,
             "consentRequired": False,
+            "autonomous": True,
             "reportId": rid,
             "start": start.isoformat(),
             "end": end.isoformat(),
@@ -767,6 +779,7 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
             "refreshImportsSuggested": True,
             "pathHygiene": "SoftDent kept its own folder; NR2 copied into SoftDentReportExports.",
             "emptyNotZero": True,
+            "ensure": ensure,
             "at": _utc_now(),
         }
     except Exception as exc:  # noqa: BLE001
@@ -791,6 +804,15 @@ def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
     If aging fails → ok=False (caller may attest-only). Partial secondary failures
     still return ok=True with failed[] listed — empty ≠ $0.
     """
+    ensure = None
+    try:
+        from softdent_gui_export import ensure_softdent_ready_for_gui_export, softdent_main_running
+
+        if not softdent_main_running():
+            ensure = ensure_softdent_ready_for_gui_export(timeout_s=90.0)
+    except Exception as exc:  # noqa: BLE001
+        ensure = {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:240]}
+
     reports: dict[str, Any] = {}
     failed: list[str] = []
     paths: list[str] = []
@@ -811,10 +833,12 @@ def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
         "bundle": True,
         "reportIds": list(MORNING_SOFTDENT_REPORT_IDS),
         "reports": reports,
+        "ensure": ensure,
         "okCount": ok_count,
         "failed": failed,
         "agingOk": aging_ok,
         "partial": aging_ok and bool(failed),
+        "exportPartial": bool(failed) and aging_ok,
         "path": (reports.get("aging") or {}).get("path"),
         "paths": paths,
         "exportRoot": r"C:\SoftDentReportExports",

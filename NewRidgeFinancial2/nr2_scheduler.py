@@ -801,6 +801,18 @@ def hal_autonomous_ops_tick(store) -> dict[str, Any]:
         lasers = (ready or {}).get("alignmentLasers") or {}
         red = lasers.get("red") is True or bool((ready or {}).get("blocking"))
         if red:
+            try:
+                from softdent_gui_export import ensure_softdent_ready_for_gui_export
+
+                ensure = ensure_softdent_ready_for_gui_export(timeout_s=60.0)
+                steps.append({"step": "ensure_softdent", "result": {
+                    "ok": ensure.get("ok"),
+                    "alreadyRunning": ensure.get("alreadyRunning"),
+                    "launched": ensure.get("launched"),
+                    "error": ensure.get("error"),
+                }})
+            except Exception as ensure_exc:  # noqa: BLE001
+                steps.append({"step": "ensure_softdent", "error": str(ensure_exc)[:240]})
             from daily_closeout import force_period_close
 
             forced = force_period_close(store=store, actor="hal-autonomous")

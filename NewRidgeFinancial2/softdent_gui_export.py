@@ -576,6 +576,58 @@ def softdent_main_running() -> bool:
         return False
 
 
+def ensure_softdent_ready_for_gui_export(*, timeout_s: float = 60.0) -> dict[str, Any]:
+    """Launch SoftDent via CS SoftDent Software.lnk + Sign On when main is down.
+
+    Autonomous morning/HAL paths call this before Excel export. Never bare SDWIN.EXE.
+    SoftDent write-back remains forbidden. empty ≠ $0.
+    """
+    out: dict[str, Any] = {
+        "ok": False,
+        "alreadyRunning": False,
+        "launched": False,
+        "signedOn": False,
+        "steps": [],
+    }
+    if softdent_main_running():
+        out["ok"] = True
+        out["alreadyRunning"] = True
+        out["signedOn"] = True
+        out["steps"].append("already_running")
+        return out
+    try:
+        from softdent_signon import ensure_softdent_signed_on
+
+        assist = ensure_softdent_signed_on(
+            timeout_s=max(15.0, float(timeout_s)),
+            force_change_login=False,
+        )
+        out["steps"].extend(list(assist.get("steps") or []))
+        out["signedOn"] = bool(assist.get("signedOn") or assist.get("ok"))
+        out["launched"] = any(
+            str(s).startswith("launched_via_shortcut") for s in (assist.get("steps") or [])
+        )
+        if assist.get("launchShortcut"):
+            out["launchShortcut"] = assist.get("launchShortcut")
+        if assist.get("error"):
+            out["error"] = assist.get("error")
+        # Give SoftDent a beat after launch/sign-on before GUI automation.
+        if out["launched"] or out["signedOn"]:
+            time.sleep(2.0)
+        if softdent_main_running():
+            out["ok"] = True
+            out["steps"].append("main_window_ready")
+            return out
+        out["error"] = out.get("error") or (
+            assist.get("error")
+            or "SoftDent main window not available after launch/sign-on"
+        )
+        return out
+    except Exception as exc:  # noqa: BLE001
+        out["error"] = f"{type(exc).__name__}: {exc}"[:240]
+        return out
+
+
 def _validate_export_file(path: Path, *, report_id: str = "") -> int:
     """Require a real Excel drop — empty/missing must not become money truth."""
     produced = Path(path)
@@ -1488,9 +1540,15 @@ def export_report_by_id(
     for attempt in range(1, max_attempts + 1):
         try:
             if not softdent_main_running():
-                raise RuntimeError(
-                    "SoftDent desktop not running. Launch CS SoftDent Software.lnk (-sus), then retry."
-                )
+                ready = ensure_softdent_ready_for_gui_export(timeout_s=60.0)
+                if not ready.get("ok"):
+                    raise RuntimeError(
+                        "SoftDent desktop not running. "
+                        + str(
+                            ready.get("error")
+                            or "Launch CS SoftDent Software.lnk (-sus), then retry."
+                        )
+                    )
             if attempt > 1:
                 prepare_softdent_for_next_report()
             out = _export_report_by_id_once(

@@ -58,7 +58,13 @@ class HalSoftdentExportConsentTests(unittest.TestCase):
     def test_export_runs_without_consent_flag(self) -> None:
         from hal_brain_tools import softdent_export
 
-        with patch("softdent_gui_export.softdent_main_running", return_value=False):
+        with (
+            patch("softdent_gui_export.softdent_main_running", return_value=False),
+            patch(
+                "softdent_gui_export.ensure_softdent_ready_for_gui_export",
+                return_value={"ok": False, "error": "shortcut missing"},
+            ),
+        ):
             out = softdent_export(consent=False, report_id="aging")
         # consent ignored — failure is SoftDent unreachable, not consent_required
         self.assertFalse(out.get("ok"))
@@ -68,11 +74,36 @@ class HalSoftdentExportConsentTests(unittest.TestCase):
     def test_unreachable_when_softdent_not_running(self) -> None:
         from hal_brain_tools import softdent_export
 
-        with patch("softdent_gui_export.softdent_main_running", return_value=False):
+        with (
+            patch("softdent_gui_export.softdent_main_running", return_value=False),
+            patch(
+                "softdent_gui_export.ensure_softdent_ready_for_gui_export",
+                return_value={"ok": False, "error": "SoftDent shortcut launch failed"},
+            ),
+        ):
             out = softdent_export(report_id="aging")
         self.assertFalse(out.get("ok"))
         self.assertEqual(out.get("error"), "softdent_gui_unreachable")
         self.assertIn("SoftDentReportExports", out.get("pathHygiene") or "")
+
+    def test_export_auto_ensures_when_not_running(self) -> None:
+        from hal_brain_tools import softdent_export
+
+        with (
+            patch("softdent_gui_export.softdent_main_running", side_effect=[False, True, True]),
+            patch(
+                "softdent_gui_export.ensure_softdent_ready_for_gui_export",
+                return_value={"ok": True, "launched": True, "signedOn": True},
+            ) as ensure,
+            patch(
+                "softdent_gui_export.export_report_by_id",
+                return_value=r"C:\SoftDentReportExports\AG260715.XLS",
+            ),
+        ):
+            out = softdent_export(report_id="aging", days=30)
+        self.assertTrue(out.get("ok"))
+        ensure.assert_called_once()
+        self.assertTrue((out.get("ensure") or {}).get("launched"))
 
     def test_success_flags_import_refresh(self) -> None:
         from hal_brain_tools import softdent_export
