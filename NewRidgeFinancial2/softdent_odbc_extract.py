@@ -330,6 +330,51 @@ def _normalize_appt_time_value(raw: Any) -> str:
     return text[:12] if any(ch.isdigit() for ch in text) else ""
 
 
+def _upsert_sd_appointment(
+    conn: sqlite3.Connection,
+    *,
+    practice_id: str,
+    patient_id: str,
+    appt_date: str,
+    provider_code: str,
+    status: str,
+    appt_time: str,
+    extracted_at: str,
+) -> None:
+    """Upsert appointment; never wipe a known appt_time with empty (daysheet used to)."""
+    practice_id = str(practice_id or "")
+    patient_id = str(patient_id or "").strip()
+    appt_date = str(appt_date or "").strip()
+    provider_code = str(provider_code or "").strip()
+    status = str(status or "").strip()
+    appt_time = _normalize_appt_time_value(appt_time)
+    if not patient_id or not appt_date:
+        return
+    existing = conn.execute(
+        """
+        SELECT appt_time, status FROM sd_appointments
+        WHERE practice_id = ? AND patient_id = ? AND appt_date = ? AND provider_code = ?
+        """,
+        (practice_id, patient_id, appt_date, provider_code),
+    ).fetchone()
+    if existing:
+        prev_time = _normalize_appt_time_value(existing[0])
+        if not appt_time and prev_time:
+            appt_time = prev_time
+        # Prefer richer clinical status over generic daysheet "seen" when time-bearing row exists
+        prev_status = str(existing[1] or "").strip()
+        if status == "seen" and prev_status and prev_status != "seen":
+            status = prev_status
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO sd_appointments
+        (practice_id, patient_id, appt_date, provider_code, status, appt_time, extracted_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (practice_id, patient_id, appt_date, provider_code, status, appt_time, extracted_at),
+    )
+
+
 def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
     conn.execute(
         "INSERT OR REPLACE INTO sd_extract_meta (key, value) VALUES (?, ?)",
@@ -978,13 +1023,15 @@ def _populate_from_daysheet(conn: sqlite3.Connection, path: Path, *, extracted_a
                 ("", patient_id, proc_date, code, "", "", provider_code, description, amount, extracted_at),
             )
             counts["sd_procedures"] += 1
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO sd_appointments
-                (practice_id, patient_id, appt_date, provider_code, status, appt_time, extracted_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                ("", patient_id, proc_date, provider_code, "seen", "", extracted_at),
+            _upsert_sd_appointment(
+                conn,
+                practice_id="",
+                patient_id=patient_id,
+                appt_date=proc_date,
+                provider_code=provider_code,
+                status="seen",
+                appt_time="",
+                extracted_at=extracted_at,
             )
             counts["sd_appointments"] += 1
 
@@ -1248,21 +1295,20 @@ def _populate_from_odbc(conn: sqlite3.Connection, *, extracted_at: str) -> dict[
                         or mapping.get("Time")
                         or ""
                     )
-                    conn.execute(
-                        """
-                        INSERT OR REPLACE INTO sd_appointments
-                        (practice_id, patient_id, appt_date, provider_code, status, appt_time, extracted_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            str(mapping.get("practice_id") or mapping.get("PracticeID") or ""),
-                            str(mapping.get("patient_id") or mapping.get("PatientID") or ""),
-                            str(mapping.get("appt_date") or mapping.get("ApptDate") or mapping.get("AppointmentDate") or ""),
-                            str(mapping.get("provider_code") or mapping.get("ProviderCode") or ""),
-                            str(mapping.get("status") or mapping.get("Status") or ""),
-                            appt_time,
-                            extracted_at,
+                    _upsert_sd_appointment(
+                        conn,
+                        practice_id=str(mapping.get("practice_id") or mapping.get("PracticeID") or ""),
+                        patient_id=str(mapping.get("patient_id") or mapping.get("PatientID") or ""),
+                        appt_date=str(
+                            mapping.get("appt_date")
+                            or mapping.get("ApptDate")
+                            or mapping.get("AppointmentDate")
+                            or ""
                         ),
+                        provider_code=str(mapping.get("provider_code") or mapping.get("ProviderCode") or ""),
+                        status=str(mapping.get("status") or mapping.get("Status") or ""),
+                        appt_time=appt_time,
+                        extracted_at=extracted_at,
                     )
                     inserted += 1
                 elif table == "sd_adjustments":
@@ -1992,6 +2038,79 @@ def refresh_claims_payer_attribution(
     return result
 
 
+def backfill_appt_times_from_sensei(
+    conn: sqlite3.Connection,
+    root: Path | None = None,
+    *,
+    extracted_at: str | None = None,
+) -> dict[str, Any]:
+    """Fill empty sd_appointments.appt_time from Sensei APPTS.Time (READ-ONLY Sensei)."""
+    ensure_sd_schema(conn)
+    root = Path(root) if root else resolve_sensei_datasync_root()
+    extracted_at = extracted_at or _utc_now()
+    if not root or not Path(root).is_dir():
+        return {"ok": False, "error": "sensei_root_missing", "updated": 0, "seen": 0}
+    updated = 0
+    seen = 0
+    with_time = 0
+    for path in _iter_sensei_entity_files(Path(root), "appointment"):
+        entity = _load_sensei_entity(path, SENSEI_ENTITY_WRAPPERS["appointment"])
+        if not entity:
+            continue
+        patient_id = _sensei_patient_id(entity)
+        appt_date = _normalize_sensei_date(entity.get("Date") or entity.get("ApptDate"))
+        provider_code = str(
+            entity.get("Dr") or entity.get("ProviderCode") or entity.get("DentistId") or "unknown"
+        ).strip()
+        appt_time = _normalize_appt_time_value(entity.get("Time") or entity.get("ApptTime") or "")
+        if not patient_id or not appt_date or not appt_time:
+            continue
+        seen += 1
+        with_time += 1
+        cur = conn.execute(
+            """
+            UPDATE sd_appointments
+            SET appt_time = ?, extracted_at = ?
+            WHERE practice_id = ''
+              AND patient_id = ?
+              AND appt_date = ?
+              AND provider_code = ?
+              AND COALESCE(appt_time, '') = ''
+            """,
+            (appt_time, extracted_at, patient_id, appt_date, provider_code),
+        )
+        updated += int(cur.rowcount or 0)
+        # If row missing entirely, upsert with Sensei status/time
+        if cur.rowcount == 0:
+            exists = conn.execute(
+                """
+                SELECT 1 FROM sd_appointments
+                WHERE practice_id = '' AND patient_id = ? AND appt_date = ? AND provider_code = ?
+                """,
+                (patient_id, appt_date, provider_code),
+            ).fetchone()
+            if not exists:
+                _upsert_sd_appointment(
+                    conn,
+                    practice_id="",
+                    patient_id=patient_id,
+                    appt_date=appt_date,
+                    provider_code=provider_code,
+                    status=_sensei_appt_status(entity),
+                    appt_time=appt_time,
+                    extracted_at=extracted_at,
+                )
+                updated += 1
+    conn.commit()
+    return {
+        "ok": True,
+        "root": str(root),
+        "seen": seen,
+        "withTime": with_time,
+        "updated": updated,
+    }
+
+
 def _populate_from_sensei_datasync(
     conn: sqlite3.Connection,
     root: Path,
@@ -2051,13 +2170,15 @@ def _populate_from_sensei_datasync(
             continue
         status = _sensei_appt_status(entity)
         appt_time = _normalize_appt_time_value(entity.get("Time") or entity.get("ApptTime") or "")
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO sd_appointments
-            (practice_id, patient_id, appt_date, provider_code, status, appt_time, extracted_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            ("", patient_id, appt_date, provider_code, status, appt_time, extracted_at),
+        _upsert_sd_appointment(
+            conn,
+            practice_id="",
+            patient_id=patient_id,
+            appt_date=appt_date,
+            provider_code=provider_code,
+            status=status,
+            appt_time=appt_time,
+            extracted_at=extracted_at,
         )
         counts["sd_appointments"] += 1
 
@@ -2184,6 +2305,16 @@ def extract_softdent_odbc(*, db_path: Path | None = None, force: bool = False) -
             result["warnings"].append(f"payer_attribution:{attr_exc}")
 
         result["fallback"] = fallback_counts
+
+        # Daysheet/ODBC can leave appt_time empty — restore from Sensei without inventing times.
+        try:
+            if sensei_root:
+                result["apptTimeBackfill"] = backfill_appt_times_from_sensei(
+                    conn, sensei_root, extracted_at=extracted_at
+                )
+        except Exception as bf_exc:  # noqa: BLE001
+            result["apptTimeBackfill"] = {"ok": False, "error": str(bf_exc)[:300]}
+            result["warnings"].append(f"appt_time_backfill:{bf_exc}")
 
         # After ODBC/Sensei populate named payers, refresh inbox CSV for HAL join/readiness.
         try:

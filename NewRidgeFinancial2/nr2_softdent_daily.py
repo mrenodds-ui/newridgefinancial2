@@ -488,10 +488,10 @@ def appointments_range_snapshot(
                         "adaCodes": adas,
                     }
                 )
-            # Sort by real time when present, else provider
+            # Provider then time — supports OM provider section headers without inventing operatory.
             def _slot_sort_key(s: dict[str, Any]) -> tuple:
                 t = str(s.get("time") or "—")
-                return (t == "—", t, str(s.get("provider") or ""))
+                return (str(s.get("provider") or ""), t == "—", t)
 
             slots.sort(key=_slot_sort_key)
             days_out.append(
@@ -512,10 +512,68 @@ def appointments_range_snapshot(
             "dbPath": str(db_path),
             "apptTimeColumn": has_appt_time,
             "emptyNotZero": True,
+            "nextPatient": _next_patient_hint(days_out),
             "emptyMessage": "No appointments found for Mon–Thu — verify SoftDent sync.",
         }
     finally:
         conn.close()
+
+
+def _next_patient_hint(days_out: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Earliest upcoming timed slot for today (local ISO date) — SoftDent READ-ONLY."""
+    from datetime import date, datetime
+
+    today = date.today().isoformat()
+    now_hm = datetime.now().strftime("%H:%M")
+    today_day = next((d for d in days_out if str(d.get("date") or "")[:10] == today), None)
+    if not today_day:
+        return None
+    candidates: list[dict[str, Any]] = []
+    for slot in today_day.get("slots") or []:
+        if not isinstance(slot, dict):
+            continue
+        t = str(slot.get("time") or "—")
+        if t == "—" or slot.get("timeMissing"):
+            continue
+        if t >= now_hm:
+            candidates.append(slot)
+    candidates.sort(key=lambda s: str(s.get("time") or "99:99"))
+    pick = candidates[0] if candidates else None
+    if not pick:
+        # All timed slots already passed — surface last timed slot as context only
+        timed = [
+            s
+            for s in (today_day.get("slots") or [])
+            if isinstance(s, dict) and str(s.get("time") or "—") != "—"
+        ]
+        timed.sort(key=lambda s: str(s.get("time") or ""))
+        if not timed:
+            return {"ok": True, "available": False, "reason": "no_timed_slots_today"}
+        pick = timed[-1]
+        return {
+            "ok": True,
+            "available": True,
+            "past": True,
+            "date": today,
+            "time": pick.get("time"),
+            "patientHash": pick.get("patientHash"),
+            "initials": pick.get("initials"),
+            "provider": pick.get("provider"),
+            "adaCodes": pick.get("adaCodes") or [],
+            "patientId": pick.get("patientId"),
+        }
+    return {
+        "ok": True,
+        "available": True,
+        "past": False,
+        "date": today,
+        "time": pick.get("time"),
+        "patientHash": pick.get("patientHash"),
+        "initials": pick.get("initials"),
+        "provider": pick.get("provider"),
+        "adaCodes": pick.get("adaCodes") or [],
+        "patientId": pick.get("patientId"),
+    }
 
 
 def monday_of_week_iso(ref_iso: str | None = None) -> str:

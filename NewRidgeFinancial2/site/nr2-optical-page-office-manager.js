@@ -508,11 +508,42 @@
   function renderWeeklySchedule(data) {
     const grid = document.getElementById("wk-days-grid");
     const rangeEl = document.getElementById("wk-range-label");
+    const nextEl = document.getElementById("wk-next-hint");
     if (!grid) return;
     grid.textContent = "";
     const days = data && Array.isArray(data.days) ? data.days : [];
     if (rangeEl) {
       rangeEl.textContent = data && data.dateRange ? String(data.dateRange) : "—";
+    }
+    const nextHint = data && data.nextPatient && typeof data.nextPatient === "object" ? data.nextPatient : null;
+    const nextPid = nextHint && nextHint.available && !nextHint.past ? String(nextHint.patientId || "") : "";
+    if (nextEl) {
+      if (nextHint && nextHint.available) {
+        nextEl.hidden = false;
+        const ada = Array.isArray(nextHint.adaCodes) && nextHint.adaCodes.length
+          ? " · " + nextHint.adaCodes.slice(0, 3).join(", ")
+          : "";
+        nextEl.textContent = nextHint.past
+          ? "Last timed today · " +
+            String(nextHint.initials || "P—") +
+            " · " +
+            shortHash(nextHint.patientHash) +
+            " · " +
+            String(nextHint.time || "—") +
+            ada
+          : "Next timed · " +
+            String(nextHint.initials || "P—") +
+            " · " +
+            shortHash(nextHint.patientHash) +
+            " · " +
+            String(nextHint.time || "—") +
+            " · " +
+            String(nextHint.provider || "—") +
+            ada;
+      } else {
+        nextEl.hidden = true;
+        nextEl.textContent = "";
+      }
     }
     if (!selectedProvider()) {
       fillProviderSelect(collectProviders(data));
@@ -557,26 +588,47 @@
           String(day.emptyMessage || "").trim() || "No SoftDent appointments.";
         col.appendChild(empty);
       } else {
+        // Provider section headers for print/scan (group consecutive provider blocks)
         const ul = document.createElement("ul");
         ul.className = "wk-slots";
+        let lastProv = null;
         slots.forEach(function (slot) {
           if (!slot || typeof slot !== "object") return;
+          const provName = String(slot.provider || "—");
+          if (provName !== lastProv) {
+            lastProv = provName;
+            const group = document.createElement("li");
+            group.className = "wk-prov-group";
+            group.textContent = "Provider " + provName;
+            ul.appendChild(group);
+          }
           const li = document.createElement("li");
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "wk-slot";
-          if (wkActivePatientId && String(slot.patientId || "") === wkActivePatientId) {
+          const pid = String(slot.patientId || "");
+          if (wkActivePatientId && pid === wkActivePatientId) {
             btn.classList.add("is-active");
+          }
+          if (nextPid && pid === nextPid && dateIso === today) {
+            btn.classList.add("is-next");
           }
           const phi = document.createElement("span");
           phi.className = "phi";
           const initials = String(slot.initials || "P—").trim() || "P—";
           // Board stays initials + hash (PHI). Full name only in dossier panel.
           phi.textContent = initials + " · " + shortHash(slot.patientHash);
+          if (btn.classList.contains("is-next")) {
+            const nextBadge = document.createElement("span");
+            nextBadge.className = "next-badge";
+            nextBadge.textContent = "NEXT";
+            phi.appendChild(document.createTextNode(" "));
+            phi.appendChild(nextBadge);
+          }
           const prov = document.createElement("span");
           prov.className = "prov";
-          prov.textContent = String(slot.provider || "—");
-          prov.title = String(slot.provider || "");
+          prov.textContent = provName;
+          prov.title = provName;
           const st = document.createElement("span");
           st.className = "st";
           st.textContent = String(slot.status || "scheduled");

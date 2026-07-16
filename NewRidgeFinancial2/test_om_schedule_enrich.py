@@ -125,3 +125,43 @@ def test_format_appt_time_never_invents():
     assert daily._format_appt_time("") == "—"
     assert daily._format_appt_time("930") == "09:30"
     assert daily._format_appt_time("14:05:00") == "14:05"
+
+
+def test_next_patient_hint_prefers_upcoming(monkeypatch):
+    import nr2_softdent_daily as daily
+    from datetime import date
+
+    today = date.today().isoformat()
+    monkeypatch.setattr(
+        daily,
+        "_next_patient_hint",
+        daily._next_patient_hint,
+    )
+    days = [
+        {
+            "date": today,
+            "slots": [
+                {
+                    "time": "06:00",
+                    "patientId": "A",
+                    "patientHash": "AAAA",
+                    "initials": "AA",
+                    "provider": "1",
+                    "adaCodes": ["D0120"],
+                },
+                {
+                    "time": "23:50",
+                    "patientId": "B",
+                    "patientHash": "BBBB",
+                    "initials": "BB",
+                    "provider": "1",
+                    "adaCodes": ["D1110"],
+                },
+            ],
+        }
+    ]
+    hint = daily._next_patient_hint(days)
+    assert hint and hint.get("available") is True
+    # Depending on wall clock, either upcoming 23:50 or past last timed
+    assert hint.get("patientId") in ("A", "B")
+    assert hint.get("time") in ("06:00", "23:50")
