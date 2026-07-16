@@ -65,13 +65,28 @@
         <div class="om-weekly-head">
           <h2>This Week · Mon – Thu</h2>
           <span class="om-weekly-range" id="wk-range-label">—</span>
+          <label class="wk-filter" for="wk-provider">
+            <span>Provider</span>
+            <select id="wk-provider" title="Filter Mon–Thu list by SoftDent provider code">
+              <option value="">All</option>
+            </select>
+          </label>
           <button type="button" class="btn-quiet" id="btn-wk-refresh" title="Reload Mon–Thu SoftDent schedule">Refresh</button>
         </div>
         <p class="om-weekly-note" id="wk-phi-note">
-          SoftDent read-only · initials + hash only · time = — (no SoftDent appt time) · empty ≠ $0
+          SoftDent read-only · initials + hash only · click row for mini dossier · time = — · empty ≠ $0
         </p>
-        <div class="wk-days-grid" id="wk-days-grid" aria-live="polite">
-          <p class="wk-loading" id="wk-loading">Loading Mon–Thu schedule…</p>
+        <div class="om-weekly-body">
+          <div class="wk-days-grid" id="wk-days-grid" aria-live="polite">
+            <p class="wk-loading" id="wk-loading">Loading Mon–Thu schedule…</p>
+          </div>
+          <aside class="wk-dossier" id="wk-dossier" hidden>
+            <div class="wk-dossier-head">
+              <h3>Patient context</h3>
+              <button type="button" class="btn-quiet" id="btn-wk-dossier-close" title="Close patient context">Close</button>
+            </div>
+            <p class="wk-dossier-body" id="wk-dossier-body">Click a schedule row (initials · hash) to load SoftDent mini dossier — no full name on the board.</p>
+          </aside>
         </div>
       </section>
       <p class="foot-nav">

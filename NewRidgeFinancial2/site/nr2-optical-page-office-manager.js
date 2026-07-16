@@ -26,6 +26,158 @@
     return "#" + s.slice(0, 4);
   }
 
+  let wkProviderOptions = [];
+  let wkActivePatientId = "";
+
+  function selectedProvider() {
+    const sel = document.getElementById("wk-provider");
+    return sel ? String(sel.value || "").trim() : "";
+  }
+
+  function collectProviders(data) {
+    const set = {};
+    (data && data.days ? data.days : []).forEach(function (day) {
+      (day && day.slots ? day.slots : []).forEach(function (slot) {
+        const p = String((slot && slot.provider) || "").trim();
+        if (p && p !== "—") set[p] = true;
+      });
+    });
+    return Object.keys(set).sort();
+  }
+
+  function fillProviderSelect(providers) {
+    const sel = document.getElementById("wk-provider");
+    if (!sel) return;
+    const cur = String(sel.value || "");
+    const merged = {};
+    (wkProviderOptions || []).forEach(function (p) {
+      merged[p] = true;
+    });
+    (providers || []).forEach(function (p) {
+      merged[p] = true;
+    });
+    wkProviderOptions = Object.keys(merged).sort();
+    sel.textContent = "";
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = "All";
+    sel.appendChild(all);
+    wkProviderOptions.forEach(function (p) {
+      const opt = document.createElement("option");
+      opt.value = p;
+      opt.textContent = p;
+      sel.appendChild(opt);
+    });
+    if (cur && merged[cur]) sel.value = cur;
+  }
+
+  function setDossierMessage(text, isFault) {
+    const panel = document.getElementById("wk-dossier");
+    const body = document.getElementById("wk-dossier-body");
+    const wrap = document.querySelector(".om-weekly-body");
+    if (!panel || !body) return;
+    panel.hidden = false;
+    if (wrap) wrap.classList.add("has-dossier");
+    body.textContent = "";
+    const p = document.createElement("p");
+    p.className = isFault ? "d-fault" : "";
+    p.style.margin = "0";
+    p.textContent = text;
+    body.appendChild(p);
+  }
+
+  function renderDossierMini(data, fallback) {
+    const panel = document.getElementById("wk-dossier");
+    const body = document.getElementById("wk-dossier-body");
+    const wrap = document.querySelector(".om-weekly-body");
+    if (!panel || !body) return;
+    panel.hidden = false;
+    if (wrap) wrap.classList.add("has-dossier");
+    body.textContent = "";
+    if (!data || data.ok === false) {
+      const p = document.createElement("p");
+      p.className = "d-fault";
+      p.style.margin = "0";
+      p.textContent =
+        (data && data.error) ||
+        "Mini dossier unavailable · capability or SoftDent gap · empty ≠ $0";
+      body.appendChild(p);
+      return;
+    }
+    const rows = [
+      ["Initials", String(data.initials || (fallback && fallback.initials) || "P—")],
+      ["Hash", shortHash(data.patientHash || (fallback && fallback.patientHash))],
+      ["Carrier", data.primaryCarrier != null ? String(data.primaryCarrier) : "—"],
+      ["Open claims", data.openClaims != null ? String(data.openClaims) : "—"],
+      ["Last visit", data.lastVisit != null ? String(data.lastVisit) : "—"],
+      ["Clinical notes", data.hasClinicalNotes ? "yes" : "none / unknown"],
+      ["Account $", data.accountBalance != null ? String(data.accountBalance) : "unavailable"],
+    ];
+    rows.forEach(function (pair) {
+      const row = document.createElement("div");
+      row.className = "d-row";
+      const k = document.createElement("span");
+      k.textContent = pair[0];
+      const v = document.createElement("span");
+      v.textContent = pair[1];
+      row.appendChild(k);
+      row.appendChild(v);
+      body.appendChild(row);
+    });
+    if (data.schemaGap) {
+      const note = document.createElement("p");
+      note.style.margin = "8px 0 0";
+      note.style.color = "#5a6575";
+      note.textContent = String(data.schemaGap);
+      body.appendChild(note);
+    }
+  }
+
+  async function openPatientContext(slot) {
+    const pid = String((slot && slot.patientId) || "").trim();
+    const ph = String((slot && slot.patientHash) || "").trim();
+    wkActivePatientId = pid;
+    document.querySelectorAll(".wk-slot.is-active").forEach(function (el) {
+      el.classList.remove("is-active");
+    });
+    if (!pid) {
+      setDossierMessage("No SoftDent patient id on this slot.", true);
+      return;
+    }
+    setDossierMessage("Loading mini dossier…");
+    try {
+      if (W.ensureSession) await W.ensureSession();
+      if (ph && W.postJson) {
+        W.postJson(
+          "/api/audit/hal-patient-context",
+          { patientHash: ph, action: "set_context", toolsUsed: '["om_weekly_click"]' },
+          8000
+        ).catch(function () {});
+      }
+      const res = await W.getJson(
+        "/api/apex/patient-dossier-mini/" + encodeURIComponent(pid),
+        12000
+      );
+      if (wkActivePatientId !== pid) return;
+      if (!res.ok) {
+        setDossierMessage(
+          "Mini dossier " +
+            (res.status === 403 ? "capability rejected" : "NO SIGNAL") +
+            " · " +
+            String((res.data && res.data.error) || res.status),
+          true
+        );
+        return;
+      }
+      renderDossierMini(res.data, slot);
+    } catch (err) {
+      setDossierMessage(
+        "Mini dossier fault · " + String(err && err.message ? err.message : err),
+        true
+      );
+    }
+  }
+
   function renderWeeklySchedule(data) {
     const grid = document.getElementById("wk-days-grid");
     const rangeEl = document.getElementById("wk-range-label");
@@ -34,6 +186,11 @@
     const days = data && Array.isArray(data.days) ? data.days : [];
     if (rangeEl) {
       rangeEl.textContent = data && data.dateRange ? String(data.dateRange) : "—";
+    }
+    if (!selectedProvider()) {
+      fillProviderSelect(collectProviders(data));
+    } else {
+      fillProviderSelect(wkProviderOptions);
     }
     if (!days.length) {
       const p = document.createElement("p");
@@ -78,7 +235,12 @@
         slots.forEach(function (slot) {
           if (!slot || typeof slot !== "object") return;
           const li = document.createElement("li");
-          li.className = "wk-slot";
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "wk-slot";
+          if (wkActivePatientId && String(slot.patientId || "") === wkActivePatientId) {
+            btn.classList.add("is-active");
+          }
           const phi = document.createElement("span");
           phi.className = "phi";
           const initials = String(slot.initials || "P—").trim() || "P—";
@@ -93,10 +255,15 @@
           const tm = document.createElement("span");
           tm.className = "tm";
           tm.textContent = "time " + (String(slot.time || "—").trim() || "—");
-          li.appendChild(phi);
-          li.appendChild(prov);
-          li.appendChild(st);
-          li.appendChild(tm);
+          btn.appendChild(phi);
+          btn.appendChild(prov);
+          btn.appendChild(st);
+          btn.appendChild(tm);
+          btn.addEventListener("click", function () {
+            btn.classList.add("is-active");
+            openPatientContext(slot);
+          });
+          li.appendChild(btn);
           ul.appendChild(li);
         });
         col.appendChild(ul);
@@ -115,8 +282,10 @@
       p.textContent = "Loading Mon–Thu schedule…";
       grid.appendChild(p);
     }
-    // Server defaults start=monday_of_week_iso when omitted
-    const res = await W.getJson("/api/softdent/appointments-range?days=4", 15000);
+    const prov = selectedProvider();
+    let path = "/api/softdent/appointments-range?days=4";
+    if (prov) path += "&provider=" + encodeURIComponent(prov);
+    const res = await W.getJson(path, 15000);
     if (!res.ok || !res.data) {
       if (grid) {
         grid.textContent = "";
@@ -131,25 +300,51 @@
       if (rangeEl) rangeEl.textContent = "NO SIGNAL";
       return false;
     }
+    if (!prov) {
+      fillProviderSelect(collectProviders(res.data));
+    }
     renderWeeklySchedule(res.data);
     return !!(res.data.hasData || (res.data.days && res.data.days.length));
   }
 
-  function wireWeeklyRefresh() {
+  function wireWeeklyControls() {
     const btn = document.getElementById("btn-wk-refresh");
-    if (!btn || btn._nr2WkBound) return;
-    btn._nr2WkBound = true;
-    btn.addEventListener("click", function () {
-      loadWeeklySchedule().catch(function (err) {
-        const grid = document.getElementById("wk-days-grid");
-        if (!grid) return;
-        grid.textContent = "";
-        const p = document.createElement("p");
-        p.className = "wk-fault";
-        p.textContent = "Mon–Thu refresh fault · " + String(err && err.message ? err.message : err);
-        grid.appendChild(p);
+    if (btn && !btn._nr2WkBound) {
+      btn._nr2WkBound = true;
+      btn.addEventListener("click", function () {
+        loadWeeklySchedule().catch(function (err) {
+          const grid = document.getElementById("wk-days-grid");
+          if (!grid) return;
+          grid.textContent = "";
+          const p = document.createElement("p");
+          p.className = "wk-fault";
+          p.textContent =
+            "Mon–Thu refresh fault · " + String(err && err.message ? err.message : err);
+          grid.appendChild(p);
+        });
       });
-    });
+    }
+    const sel = document.getElementById("wk-provider");
+    if (sel && !sel._nr2WkBound) {
+      sel._nr2WkBound = true;
+      sel.addEventListener("change", function () {
+        loadWeeklySchedule().catch(function () {});
+      });
+    }
+    const closeBtn = document.getElementById("btn-wk-dossier-close");
+    if (closeBtn && !closeBtn._nr2WkBound) {
+      closeBtn._nr2WkBound = true;
+      closeBtn.addEventListener("click", function () {
+        const panel = document.getElementById("wk-dossier");
+        const wrap = document.querySelector(".om-weekly-body");
+        if (panel) panel.hidden = true;
+        if (wrap) wrap.classList.remove("has-dossier");
+        wkActivePatientId = "";
+        document.querySelectorAll(".wk-slot.is-active").forEach(function (el) {
+          el.classList.remove("is-active");
+        });
+      });
+    }
   }
 
   function gapKeys(ready) {
@@ -242,7 +437,7 @@
     W.setText("val-gaps", null, "—");
     W.setText("val-health", null, "—");
 
-    wireWeeklyRefresh();
+    wireWeeklyControls();
     const [ready, health, np, appt, weeklyOk] = await Promise.all([
       W.getJson("/api/import-readiness", 12000),
       W.getJson("/api/health", 12000),
