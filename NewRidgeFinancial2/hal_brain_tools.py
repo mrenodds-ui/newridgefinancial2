@@ -709,14 +709,18 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
     HAL may run this without operator consent (read-only GUI export). SoftDent
     Select File Name keeps SoftDent's own folder (e.g. OneDrive\\Documents).
     Never type SoftDentReportExports / C:\\SOFTDE~1 into SoftDent — invalid directory.
-    NR2 copies the XLS into C:\\SoftDentReportExports after SoftDent saves. Excel/Print
-    Preview only — never Printer. No SoftDent write-back.
+    NR2 copies the XLS into C:\\SoftDentReportExports after SoftDent saves.
+    Output Options: Excel or Print Preview only — never Printer, never File.
+    When SoftDent greys out Excel, falls back to Print Preview (visual; no money invent).
+    No SoftDent write-back.
     """
     _ = consent  # retained for API compatibility; SoftDent export is consent-free for HAL
     try:
         from softdent_gui_export import (
+            SoftDentExcelDisabledError,
             ensure_softdent_ready_for_gui_export,
             export_report_by_id,
+            open_report_print_preview,
             softdent_main_running,
         )
 
@@ -732,7 +736,10 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
                         or "SoftDent desktop not running. Launch CS SoftDent Software.lnk, then retry export."
                     ),
                     "ensure": ensure,
-                    "fallback": "Teach mode — open SoftDent → Reports → Accounting for the requested report; Output Options Excel only.",
+                    "fallback": (
+                        "Teach mode — open SoftDent → Reports for the requested report; "
+                        "Output Options Excel or Print Preview only (never File/Printer)."
+                    ),
                     "exportRoot": r"C:\SoftDentReportExports",
                     "pathHygiene": "Keep SoftDent folder; never SoftDentReportExports in Select File Name.",
                 }
@@ -760,7 +767,32 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
             reports = (load_menu_map().get("reports") or {})
             if rid not in reports and "aging" in reports:
                 rid = "aging"
-        path = export_report_by_id(rid, start=start, end=end)
+        try:
+            path = export_report_by_id(rid, start=start, end=end)
+        except SoftDentExcelDisabledError as exc:
+            # SoftDent Excel greyed out — Print Preview only (never File).
+            preview = open_report_print_preview(rid, start=start, end=end)
+            return {
+                "ok": bool(preview.get("ok")),
+                "consentRequired": False,
+                "autonomous": True,
+                "reportId": rid,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "path": None,
+                "fileSizeBytes": 0,
+                "outputMode": "print_preview",
+                "moneyBeamIngest": False,
+                "excelDisabled": True,
+                "preview": preview,
+                "exportRoot": r"C:\SoftDentReportExports",
+                "refreshImportsSuggested": False,
+                "pathHygiene": "Excel disabled on SoftDent Output Options — Print Preview only (never File).",
+                "emptyNotZero": True,
+                "ensure": ensure,
+                "detail": str(exc)[:400],
+                "at": _utc_now(),
+            }
         file_size = 0
         try:
             file_size = int(Path(path).stat().st_size)
@@ -775,6 +807,9 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
             "end": end.isoformat(),
             "path": str(path),
             "fileSizeBytes": file_size,
+            "outputMode": "excel",
+            "moneyBeamIngest": True,
+            "excelDisabled": False,
             "exportRoot": r"C:\SoftDentReportExports",
             "refreshImportsSuggested": True,
             "pathHygiene": "SoftDent kept its own folder; NR2 copied into SoftDentReportExports.",
@@ -857,13 +892,26 @@ def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
         if one.get("ok"):
             if one.get("path"):
                 paths.append(str(one["path"]))
+            elif one.get("outputMode") == "print_preview":
+                # Preview-only is an allowed Output Options path (never File), but not money ingest.
+                pass
+            else:
+                failed.append(rid)
         else:
             failed.append(rid)
 
-    aging_ok = bool((reports.get("aging") or {}).get("ok"))
+    aging = reports.get("aging") or {}
+    # Money beams need Excel aging drop — Print Preview is honest visual only (empty ≠ $0).
+    aging_excel_ok = bool(aging.get("ok")) and bool(aging.get("moneyBeamIngest")) and bool(aging.get("path"))
+    preview_ok_count = sum(
+        1
+        for r in reports.values()
+        if r.get("ok") and r.get("outputMode") == "print_preview"
+    )
+    excel_disabled = any(bool(r.get("excelDisabled")) for r in reports.values())
     ok_count = sum(1 for r in reports.values() if r.get("ok"))
     return {
-        "ok": aging_ok,
+        "ok": aging_excel_ok,
         "consentRequired": False,
         "bundle": True,
         "reportIds": list(MORNING_SOFTDENT_REPORT_IDS),
@@ -871,18 +919,42 @@ def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
         "ensure": ensure,
         "okCount": ok_count,
         "failed": failed,
-        "agingOk": aging_ok,
-        "partial": aging_ok and bool(failed),
-        "exportPartial": bool(failed) and aging_ok,
-        "path": (reports.get("aging") or {}).get("path"),
+        "agingOk": aging_excel_ok,
+        "previewOkCount": preview_ok_count,
+        "excelDisabled": excel_disabled,
+        "partial": aging_excel_ok and bool(failed),
+        "exportPartial": bool(failed) and aging_excel_ok,
+        "path": aging.get("path"),
         "paths": paths,
         "exportRoot": r"C:\SoftDentReportExports",
-        "refreshImportsSuggested": aging_ok,
-        "pathHygiene": "SoftDent kept its own folder; NR2 copied into SoftDentReportExports.",
+        "refreshImportsSuggested": aging_excel_ok,
+        "pathHygiene": (
+            "Excel or Print Preview only (never File/Printer). "
+            "SoftDent Excel greyed out → Print Preview; money beams stay empty ≠ $0 until Excel enabled."
+            if excel_disabled
+            else "SoftDent kept its own folder; NR2 copied into SoftDentReportExports."
+        ),
         "emptyNotZero": True,
         "at": _utc_now(),
-        "error": None if aging_ok else str((reports.get("aging") or {}).get("error") or "aging_export_failed"),
-        "detail": None if aging_ok else str((reports.get("aging") or {}).get("detail") or "")[:600],
+        "error": None
+        if aging_excel_ok
+        else (
+            "softdent_excel_disabled"
+            if excel_disabled
+            else str(aging.get("error") or "aging_export_failed")
+        ),
+        "detail": None
+        if aging_excel_ok
+        else str(
+            aging.get("detail")
+            or (
+                "SoftDent Output Options Excel disabled — Print Preview used; "
+                "enable SoftDent Excel export for money-beam ingest."
+                if excel_disabled
+                else ""
+            )
+        )[:600],
+        "fallback": "attest_only" if not aging_excel_ok else None,
     }
 
 

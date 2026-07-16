@@ -25,7 +25,7 @@ class SoftDentGuiExportTests(unittest.TestCase):
         self.assertFalse(_is_reclaimable_focus_title("AMD Software: Adrenalin Edition"))
 
     def test_output_options_refuse_file_and_printer(self):
-        from softdent_gui_export import _select_output_option_prompt
+        from softdent_gui_export import SoftDentExcelDisabledError, _select_output_option_prompt
 
         with self.assertRaises(RuntimeError) as ctx_file:
             _select_output_option_prompt("file")
@@ -33,6 +33,7 @@ class SoftDentGuiExportTests(unittest.TestCase):
         with self.assertRaises(RuntimeError) as ctx_printer:
             _select_output_option_prompt("printer")
         self.assertIn("Printer", str(ctx_printer.exception))
+        self.assertTrue(issubclass(SoftDentExcelDisabledError, RuntimeError))
 
     def test_ag_excel_stem_recognized(self):
         self.assertTrue(_is_softdent_excel_workbook_name("AG260716.XLS"))

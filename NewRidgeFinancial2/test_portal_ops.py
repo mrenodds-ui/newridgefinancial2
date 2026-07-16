@@ -311,10 +311,22 @@ def test_softdent_export_morning_bundle_requires_aging(monkeypatch):
     def fake_export(*, report_id="aging", **kwargs):
         calls.append(report_id)
         if report_id == "aging":
-            return {"ok": True, "reportId": "aging", "path": r"C:\SoftDentReportExports\AG.xls"}
+            return {
+                "ok": True,
+                "reportId": "aging",
+                "path": r"C:\SoftDentReportExports\AG.xls",
+                "outputMode": "excel",
+                "moneyBeamIngest": True,
+            }
         if report_id == "register":
             return {"ok": False, "error": "transient"}
-        return {"ok": True, "reportId": report_id, "path": r"C:\SoftDentReportExports\CO.xls"}
+        return {
+            "ok": True,
+            "reportId": report_id,
+            "path": r"C:\SoftDentReportExports\CO.xls",
+            "outputMode": "excel",
+            "moneyBeamIngest": True,
+        }
 
     monkeypatch.setattr(h, "softdent_export", fake_export)
     out = softdent_export_morning_bundle(days=30)

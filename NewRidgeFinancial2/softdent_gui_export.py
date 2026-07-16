@@ -29,6 +29,11 @@ MENU_MAP_PATH = Path(__file__).resolve().parent / "softdent_gui_menu_map.json"
 
 PHASE1_IDS = ("register", "collections", "transactions", "daysheet", "aging")
 
+
+class SoftDentExcelDisabledError(RuntimeError):
+    """SoftDent Output Options has Excel greyed out — use Print Preview (never File)."""
+
+
 # Post-export honesty: empty file ≠ valid SoftDent Excel (never invent $0 from ∅).
 EXPORT_MIN_BYTES = 64
 EXPORT_RETRY_DELAYS_SEC = (2.0, 5.0, 10.0)
@@ -42,7 +47,7 @@ _FOCUS_BLOCKLIST_SUBSTR = (
     "intel® graphics",
     "intel graphics",
 )
-# Browser / IDE titles — reclaim SoftDent foreground (do not refuse forever).
+# Browser / IDE / shell titles — reclaim SoftDent foreground (do not refuse forever).
 _FOCUS_RECLAIM_SUBSTR = (
     "cursor",
     "google chrome",
@@ -51,6 +56,9 @@ _FOCUS_RECLAIM_SUBSTR = (
     "claim management",
     " - chrome",
     " - edge",
+    "file explorer",
+    "explorer",
+    "notepad",
 )
 
 
@@ -115,12 +123,59 @@ def _is_reclaimable_focus_title(title: str) -> bool:
 
 
 def _minimize_focus_thieves() -> int:
-    """Do NOT touch AMD windows (minimizing/activating can launch Adrenalin).
+    """Minimize reclaimable desktop thieves so SoftDent can keep Output Options focus.
 
-    SoftDent Reports must not use Alt+R — AMD Instant Replay steals that chord.
-    Return 0 always; callers rely on SoftDent-only foreground + F10 menus.
+    Never touch AMD / Adrenalin (minimizing can launch Instant Replay / steal Alt+R).
+    SoftDent Reports must not use Alt+R. Excel or Print Preview only — never File/Printer.
     """
-    return 0
+    import win32con
+    import win32gui
+
+    sd_pids = _softdent_pids()
+    minimized = 0
+    handles: list[int] = []
+
+    def _cb(hwnd: int, _: Any) -> bool:
+        try:
+            if win32gui.IsWindowVisible(hwnd):
+                handles.append(int(hwnd))
+        except Exception:
+            pass
+        return True
+
+    try:
+        win32gui.EnumWindows(_cb, None)
+    except Exception:
+        return 0
+
+    for hwnd in handles:
+        try:
+            title = (win32gui.GetWindowText(hwnd) or "").strip()
+            if not title:
+                continue
+            if _is_blocked_focus_title(title):
+                continue
+            pid = _window_pid(hwnd)
+            if sd_pids and pid in sd_pids:
+                continue
+            # Only minimize known SoftDent-export thieves (not every Chrome window).
+            lower = title.lower()
+            steal = (
+                "claim management" in lower
+                or "file explorer" in lower
+                or lower == "explorer"
+                or lower.startswith("notepad")
+                or "optical bench" in lower
+            )
+            if not steal:
+                continue
+            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+            minimized += 1
+        except Exception:
+            continue
+    if minimized:
+        logger.info("Minimized %s SoftDent focus thief window(s)", minimized)
+    return minimized
 
 
 def _force_foreground(hwnd: int) -> bool:
@@ -174,6 +229,8 @@ def _assert_softdent_foreground(hwnd: int | None = None) -> int:
     target = int(hwnd or _main_softdent_hwnd())
     last_title = ""
     for attempt in range(12):
+        if attempt in (0, 3, 6):
+            _minimize_focus_thieves()
         _force_foreground(target)
         time.sleep(0.12 + 0.05 * attempt)
         fg = win32gui.GetForegroundWindow()
@@ -192,7 +249,7 @@ def _assert_softdent_foreground(hwnd: int | None = None) -> int:
             return target
         if fg == target:
             return target
-        # Cursor / Chrome / Edge often steal focus mid-automation — retry SoftDent only
+        # Cursor / Chrome / Edge / Explorer often steal focus — retry SoftDent only
         if _is_reclaimable_focus_title(fg_title):
             continue
         if attempt >= 11:
@@ -1177,6 +1234,13 @@ def _select_output_option_prompt(kind: str = "excel") -> None:
             elif excel_btn is not None and _btn_enabled(excel_btn):
                 target, chosen = excel_btn, "excel"
             elif preview_btn is not None and _btn_enabled(preview_btn):
+                if want_excel:
+                    # Do not OK into Preview here — cancel and let caller use
+                    # open_report_print_preview (never File).
+                    raise SoftDentExcelDisabledError(
+                        "SoftDent Output Options: Excel disabled — Print Preview is available "
+                        "(File refused). empty ≠ $0 — no Excel drop for money beams."
+                    )
                 target, chosen = preview_btn, "preview"
                 logger.warning(
                     "SoftDent Output Options: Excel disabled — Print Preview only "
@@ -1189,19 +1253,32 @@ def _select_output_option_prompt(kind: str = "excel") -> None:
             _softdent_click(target)
             time.sleep(0.12)
             return chosen
+        except SoftDentExcelDisabledError:
+            raise
         except Exception as exc:
             logger.warning("Output Options click failed: %s", type(exc).__name__)
             return None
 
-    chosen = _pick_button()
+    try:
+        chosen = _pick_button()
+    except SoftDentExcelDisabledError:
+        # Leave Output Options open for caller cancel, or cancel here.
+        try:
+            _keyboard_cancel_dialog(hwnd)
+        except Exception:
+            pass
+        raise
+
     if not chosen:
         # Accelerators: E=Excel, V≈Pre&view. Never P (Printer). Never F (File).
         if want_preview:
             _send_softdent_keys("v", hwnd=hwnd)
             chosen = "preview"
         else:
+            # Prefer E; if SoftDent ignores (Excel greyed), probe buttons again.
             _send_softdent_keys("e", hwnd=hwnd)
-            chosen = "excel"
+            time.sleep(0.2)
+            chosen = _pick_button() or "excel"
         time.sleep(0.25)
 
     # Sweep printer again BEFORE Enter — default Printer can still steal focus
@@ -1225,11 +1302,11 @@ def _select_output_option_prompt(kind: str = "excel") -> None:
             "Printer must not be used. Click Excel or Print Preview only, then Enter."
         )
     if want_excel and chosen == "preview":
-        raise RuntimeError(
-            "SoftDent Output Options: Excel was unavailable — Print Preview selected "
-            "(File refused). Use the Print Preview path for visual totals; "
-            "empty ≠ $0 — do not invent dollars from a missing Excel drop."
+        raise SoftDentExcelDisabledError(
+            "SoftDent Output Options: Excel disabled — Print Preview is available "
+            "(File refused). empty ≠ $0 — no Excel drop for money beams."
         )
+    return str(chosen)
 
 
 # SoftDent Excel titles/stems: temp SDWIN*.csv OR classic short names (REG2607.XLS).
@@ -1663,6 +1740,14 @@ def export_report_by_id(
                 out,
             )
             return out
+        except SoftDentExcelDisabledError:
+            # Excel greyed out — do not burn retries; Print Preview is the allowed path.
+            try:
+                cancel_stale_report_dialogs(max_rounds=6)
+                cancel_printer_dialogs(max_rounds=3)
+            except Exception:
+                pass
+            raise
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             logger.warning(
