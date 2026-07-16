@@ -608,6 +608,15 @@ def try_local_policy_reply(query: str) -> dict[str, str] | None:
         )
     )
 
+    # Patient dossier summarize — local SoftDent extract only (before product KB / LLM).
+    try:
+        from patient_dossier import format_hal_patient_summary_reply, query_touches_patient_summary
+
+        if query_touches_patient_summary(raw):
+            return format_hal_patient_summary_reply(raw)
+    except Exception:
+        pass
+
     if re.search(r"\b(open|go to|navigate to|take me to|launch)\b", q) and not wants_explain:
         page = find_page(q)
         if page:

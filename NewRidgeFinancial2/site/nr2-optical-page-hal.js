@@ -898,6 +898,29 @@
     const q = (document.getElementById("memoQuery").value || "").trim();
     if (q) memoSearch(q);
   });
+  async function runPatientSummary(ref) {
+    const needle = String(ref || "").trim();
+    if (!needle || busy) return;
+    const q = "Summarize patient " + needle;
+    addMsg("user", q);
+    busy = true;
+    if (!browserToken) await ensureBrowserSession();
+    await ensureChatSession();
+    await streamChat(q);
+    busy = false;
+    refreshActions();
+  }
+  document.getElementById("btnPatientSummary").addEventListener("click", function () {
+    const q = (document.getElementById("patientSummaryQuery").value || "").trim();
+    if (q) runPatientSummary(q);
+  });
+  document.getElementById("patientSummaryQuery").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const q = (document.getElementById("patientSummaryQuery").value || "").trim();
+      if (q) runPatientSummary(q);
+    }
+  });
   document.getElementById("btnWebSearch").addEventListener("click", function () {
     const q = (document.getElementById("webQuery").value || "").trim();
     if (q) webResearch(q);

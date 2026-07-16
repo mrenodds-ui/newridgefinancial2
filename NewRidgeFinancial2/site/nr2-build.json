@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12042-optical-unify",
-  "BUILD_ID": "nr2-12042-optical-unify",
-  "assetVersion": "nr2-12042-optical-unify",
-  "builtAt": "2026-07-16T01:30:00.000Z",
-  "notes": "nr2-12042-optical-unify: all optical subpages share Hub money-face rhythm (mode eyebrow, honesty, metric-face strip, foot nav); staff sans / laser mono; quiet API path chrome; landing aligned. SoftDent write-back forbidden. empty ≠ $0.",
+  "schemaVersion": "nr2-12043-hal-patient-summary",
+  "BUILD_ID": "nr2-12043-hal-patient-summary",
+  "assetVersion": "nr2-12043-hal-patient-summary",
+  "builtAt": "2026-07-16T01:40:00.000Z",
+  "notes": "nr2-12043-hal-patient-summary: HAL chat local policy summarizes patients via SoftDent dossier (RBAC, audit, empty≠$0); optical HAL SUMMARIZE tool. SoftDent write-back forbidden.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12042-OPTICAL-UNIFY",
+  "package": "NR2-12043-HAL-PATIENT-SUMMARY",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

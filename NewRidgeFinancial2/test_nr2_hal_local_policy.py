@@ -175,6 +175,33 @@ class HalLocalPolicyTests(unittest.TestCase):
         self.assertTrue(reply["text"].lower().startswith("yes"))
         self.assertIn("read-only", reply["text"].lower())
 
+    def test_patient_summary_help(self) -> None:
+        reply = try_local_policy_reply("Can you summarize patients?")
+        self.assertIsNotNone(reply)
+        assert reply is not None
+        self.assertEqual(reply["intent"], "policy:patient-summary-help")
+        self.assertTrue(reply["text"].lower().startswith("yes"))
+        self.assertIn("summarize patient", reply["text"].lower())
+
+    def test_patient_summary_does_not_steal_hal_program_summary(self) -> None:
+        reply = try_local_policy_reply("Summarize what HAL does in this program in two sentences.")
+        self.assertIsNotNone(reply)
+        assert reply is not None
+        self.assertEqual(reply["intent"], "policy:hal-summary")
+
+    def test_patient_summary_not_writeback(self) -> None:
+        reply = try_local_policy_reply("Summarize patient chart for 99999")
+        self.assertIsNotNone(reply)
+        assert reply is not None
+        self.assertNotEqual(reply["intent"], "consent:writeback-blocked")
+        self.assertIn(reply["intent"], {
+            "policy:patient-summary",
+            "policy:patient-summary-miss",
+            "policy:patient-summary-ambiguous",
+            "policy:patient-summary-rate",
+            "policy:patient-summary-denied",
+        })
+
 
 if __name__ == "__main__":
     unittest.main()

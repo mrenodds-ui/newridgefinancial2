@@ -9,12 +9,34 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from softdent_odbc_extract import resolve_sd_sqlite_db
+
+_PATIENT_SUMMARY_TOUCH_RE = re.compile(
+    r"(?i)\b("
+    r"summarize\s+(?:the\s+)?(?:patient(?:\s+(?:chart|dossier))?|chart|dossier)\b|"
+    r"patient\s+summary\b|"
+    r"(?:show|get|pull|give(?:\s+me)?)\s+(?:a\s+|the\s+)?(?:patient\s+)?(?:dossier|summary)\b|"
+    r"dossier\s+for\b|"
+    r"summarize\s+patients?\b|"
+    r"(?:can|could|will|would)\s+(?:hal|you)\s+summarize\s+patients?\b"
+    r")"
+)
+_PATIENT_REF_RE = re.compile(
+    r"(?i)(?:^|\b)(?:"
+    r"summarize\s+(?:the\s+)?(?:patient(?:\s+(?:chart|dossier))?|chart|dossier)\s+(?:for\s+|of\s+|on\s+)?"
+    r"|patient\s+summary\s+(?:for\s+|of\s+|on\s+)?"
+    r"|(?:show|get|pull|give(?:\s+me)?)\s+(?:a\s+|the\s+)?(?:patient\s+)?(?:dossier|summary)\s+(?:for\s+|of\s+|on\s+)?"
+    r"|dossier\s+for\s+(?:patient\s+)?"
+    r"|patient(?:\s+id)?\s*[#:]?\s*"
+    r")(.+?)\s*$"
+)
+_PATIENT_ID_TOKEN_RE = re.compile(r"(?i)^(?:pt|acct|account)?[#:]?\s*([A-Za-z0-9][A-Za-z0-9\-_]{0,31})$")
 
 # NICE: 5-minute server-side cache
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -248,6 +270,226 @@ def patient_hash(patient_id: str) -> str:
     if not raw:
         return "——"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:4].upper()
+
+
+def query_touches_patient_summary(query: str) -> bool:
+    """True when staff ask HAL to summarize a patient / dossier (local PHI path)."""
+    raw = str(query or "").strip()
+    if not raw:
+        return False
+    q = re.sub(r"^hal[,:]\s+", "", raw, flags=re.IGNORECASE).lower().strip()
+    # Keep "summarize what HAL does" on policy:hal-summary
+    if re.search(r"\bsummarize\b", q) and re.search(r"\bhal\b", q) and re.search(
+        r"\b(program|does|do)\b", q
+    ):
+        if not re.search(r"\bpatient\b", q):
+            return False
+    return bool(_PATIENT_SUMMARY_TOUCH_RE.search(raw) or _PATIENT_SUMMARY_TOUCH_RE.search(q))
+
+
+def extract_patient_ref_from_query(query: str) -> str | None:
+    """Pull patient id or name fragment from a summarize/dossier ask."""
+    raw = str(query or "").strip()
+    if not raw:
+        return None
+    cleaned = re.sub(r"^hal[,:]\s+", "", raw, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"[?.!]+$", "", cleaned).strip()
+    # Bare capability asks — no patient ref
+    if re.search(
+        r"(?i)^(can|could|will|would)\s+(hal|you)\s+summarize\s+patients?\s*$|"
+        r"^summarize\s+patients?\s*$|"
+        r"^patient\s+summary\s*$|"
+        r"^how\s+(do|can)\s+(i|you|hal)\s+summarize\s+(a\s+)?patients?\b",
+        cleaned,
+    ):
+        return None
+    m = _PATIENT_REF_RE.search(cleaned)
+    if not m:
+        return None
+    ref = str(m.group(1) or "").strip().strip("\"'")
+    ref = re.sub(r"(?i)^(the\s+)?patient\s+", "", ref).strip()
+    ref = re.sub(r"(?i)^(chart|dossier)\s+(for\s+|of\s+)?", "", ref).strip()
+    if not ref or ref.lower() in {"patients", "a patient", "the patient"}:
+        return None
+    return ref
+
+
+def resolve_patient_id(ref: str, *, practice_id: str = "") -> dict[str, Any]:
+    """Resolve SoftDent patient_id from id token or name (Last, First / First Last)."""
+    needle = str(ref or "").strip()
+    practice = str(practice_id or "").strip()
+    out: dict[str, Any] = {"ok": False, "patientId": "", "matches": [], "error": ""}
+    if not needle:
+        out["error"] = "Patient id or name required."
+        return out
+
+    token_m = _PATIENT_ID_TOKEN_RE.match(needle)
+    id_candidate = token_m.group(1) if token_m else ""
+
+    conn, db_path = _open_db()
+    if not conn:
+        out["error"] = "SoftDent analytics DB unavailable — run SoftDent extract."
+        out["dbPath"] = str(db_path) if db_path else None
+        return out
+
+    try:
+        if not _table_exists(conn, "sd_patients"):
+            out["error"] = "sd_patients table missing — run SoftDent extract."
+            return out
+        cur = conn.cursor()
+
+        def _rows_to_matches(rows: list[Any]) -> list[dict[str, str]]:
+            matches: list[dict[str, str]] = []
+            for r in rows:
+                pid = str(r["patient_id"] or "").strip()
+                if not pid:
+                    continue
+                matches.append(
+                    {
+                        "patientId": pid,
+                        "patientHash": patient_hash(pid),
+                        "initials": _initials(str(r["patient_name"] or "")),
+                        "nameHash": name_hash(str(r["patient_name"] or "")),
+                    }
+                )
+            return matches
+
+        if id_candidate and re.fullmatch(r"[A-Za-z0-9\-_]{1,32}", id_candidate):
+            if practice:
+                cur.execute(
+                    """
+                    SELECT patient_id, patient_name FROM sd_patients
+                    WHERE patient_id=? AND practice_id=? LIMIT 5
+                    """,
+                    (id_candidate, practice),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT patient_id, patient_name FROM sd_patients
+                    WHERE patient_id=? LIMIT 5
+                    """,
+                    (id_candidate,),
+                )
+            matches = _rows_to_matches(list(cur.fetchall()))
+            if len(matches) == 1:
+                out["ok"] = True
+                out["patientId"] = matches[0]["patientId"]
+                out["matches"] = matches
+                return out
+            if len(matches) > 1:
+                out["matches"] = matches
+                out["error"] = "Multiple SoftDent patients matched that id — specify practice."
+                return out
+
+        # Name lookup: "Last, First" or "First Last"
+        name = needle
+        if "," in name:
+            parts = [p.strip() for p in name.split(",", 1)]
+            last, first = parts[0], (parts[1] if len(parts) > 1 else "")
+            like = f"%{last}%{first}%" if first else f"%{last}%"
+        else:
+            bits = [b for b in re.split(r"\s+", name) if b]
+            if len(bits) >= 2:
+                like = f"%{bits[-1]}%{bits[0]}%"
+            else:
+                like = f"%{bits[0]}%" if bits else ""
+        if not like or like == "%%":
+            out["error"] = "Could not parse patient name."
+            return out
+
+        sql = """
+            SELECT patient_id, patient_name FROM sd_patients
+            WHERE patient_name LIKE ? COLLATE NOCASE
+        """
+        params: list[Any] = [like]
+        if practice:
+            sql += " AND practice_id=?"
+            params.append(practice)
+        sql += " ORDER BY patient_name LIMIT 8"
+        cur.execute(sql, params)
+        matches = _rows_to_matches(list(cur.fetchall()))
+        if len(matches) == 1:
+            out["ok"] = True
+            out["patientId"] = matches[0]["patientId"]
+            out["matches"] = matches
+            return out
+        if len(matches) > 1:
+            out["matches"] = matches
+            out["error"] = (
+                "Multiple SoftDent patients matched — use SoftDent patient id "
+                f"(hashes: {', '.join(m['patientHash'] for m in matches[:5])})."
+            )
+            return out
+        out["error"] = "Patient not found in SoftDent extract."
+        return out
+    finally:
+        conn.close()
+
+
+def format_hal_patient_summary_reply(query: str) -> dict[str, str]:
+    """HAL chat policy: local patient dossier summary (RBAC + audit + empty≠$0)."""
+    from nr2_rbac import current_role, has_capability
+
+    if not (
+        has_capability("read_patient_dossier")
+        or has_capability("read_all")
+        or has_capability("*")
+    ):
+        return {
+            "text": (
+                f"No — patient summaries require office manager or dentist "
+                f"(current role: {current_role()})."
+            ),
+            "intent": "policy:patient-summary-denied",
+        }
+
+    ref = extract_patient_ref_from_query(query)
+    if not ref:
+        return {
+            "text": (
+                "Yes — I can summarize a patient from the local SoftDent extract "
+                "(read-only; empty≠$0; PHI stays on this workstation). "
+                'Ask: "Summarize patient 12345" or "Patient summary for Nickel, Donna".'
+            ),
+            "intent": "policy:patient-summary-help",
+        }
+
+    allowed, retry_after = check_rate_limit(current_role())
+    if not allowed:
+        return {
+            "text": f"Rate limited — wait {retry_after}s before another patient summary.",
+            "intent": "policy:patient-summary-rate",
+        }
+
+    resolved = resolve_patient_id(ref)
+    if not resolved.get("ok"):
+        err = str(resolved.get("error") or "Patient not found.")
+        matches = resolved.get("matches") or []
+        if matches:
+            lines = [err, "Candidates (hash only):"]
+            for m in matches[:5]:
+                lines.append(f"- {m.get('patientHash')} · {m.get('initials')}")
+            return {"text": "\n".join(lines), "intent": "policy:patient-summary-ambiguous"}
+        return {"text": err, "intent": "policy:patient-summary-miss"}
+
+    pid = str(resolved["patientId"])
+    dossier = build_patient_dossier(pid)
+    try:
+        from hal_patient_audit import log_patient_query
+
+        log_patient_query(current_role() or "Staff", pid, "dossier_summary_chat")
+    except Exception:
+        pass
+
+    ai = summarize_dossier_with_local_ai(dossier)
+    text = str(ai.get("summary") or format_dossier_markdown(dossier)).strip()
+    source = str(ai.get("source") or "deterministic")
+    if ai.get("error") and source.startswith("deterministic"):
+        text = f"{text}\n\n_(local model unavailable — deterministic summary; {ai.get('error')})_"
+    else:
+        text = f"{text}\n\n_(source: {source} · SoftDent read-only · empty≠$0)_"
+    return {"text": text, "intent": "policy:patient-summary"}
 
 
 def name_hash(name: str) -> str:
