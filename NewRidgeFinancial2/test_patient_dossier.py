@@ -41,9 +41,12 @@ class PatientDossierTests(unittest.TestCase):
         self.assertIsNone(extract_patient_ref_from_query("Summarize patients"))
         self.assertIsNone(extract_patient_ref_from_query("What's the copay for this patient?"))
 
-    def test_this_patient_unbound_asks_for_id(self) -> None:
+    def test_this_patient_expired_context_hints_rebind(self) -> None:
         import sys
         import types
+        from datetime import datetime, timedelta, timezone
+        from pathlib import Path
+        import tempfile
 
         fake = types.ModuleType("nr2_rbac")
         fake.has_capability = lambda *_a, **_k: True  # type: ignore[attr-defined]
@@ -51,17 +54,41 @@ class PatientDossierTests(unittest.TestCase):
         prev = sys.modules.get("nr2_rbac")
         sys.modules["nr2_rbac"] = fake
         try:
-            out = format_hal_patient_summary_reply(
-                "What's the copay for this patient?",
-                session_id="missing-session",
-            )
+            import hal_session_store as store
+
+            with tempfile.TemporaryDirectory() as tmp:
+                store.SESSIONS_DIR = Path(tmp)
+                sid = "expired-bound-session"
+                path = store._session_path(sid)
+                expired = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+                header = {
+                    "type": "session",
+                    "sessionId": sid,
+                    "createdAt": datetime.now(timezone.utc).isoformat(),
+                    "meta": {
+                        "patientContext": {
+                            "patientId": "999",
+                            "patientHash": "ABCD",
+                            "initials": "ZZ",
+                            "expiresAt": expired,
+                        }
+                    },
+                }
+                path.write_text(
+                    __import__("json").dumps(header) + "\n",
+                    encoding="utf-8",
+                )
+                out = format_hal_patient_summary_reply(
+                    "What's the copay for this patient?",
+                    session_id=sid,
+                )
         finally:
             if prev is None:
                 sys.modules.pop("nr2_rbac", None)
             else:
                 sys.modules["nr2_rbac"] = prev
         self.assertEqual(out.get("intent"), "policy:patient-summary-unbound")
-        self.assertIn("No SoftDent patient is bound", out.get("text") or "")
+        self.assertIn("expired", (out.get("text") or "").lower())
 
 
 if __name__ == "__main__":

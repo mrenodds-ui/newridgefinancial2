@@ -383,11 +383,28 @@ def format_hal_patient_summary_reply(
             except Exception:
                 bound_ctx = None
         if not bound_ctx or not str((bound_ctx or {}).get("patientId") or "").strip():
+            # Distinguish never-bound vs expired TTL for clearer OM recovery.
+            expired_hint = ""
+            sid = str(session_id or "").strip()
+            if sid:
+                try:
+                    from hal_session_store import get_session_meta
+
+                    meta = get_session_meta(sid) or {}
+                    raw_ctx = meta.get("patientContext") if isinstance(meta, dict) else None
+                    if isinstance(raw_ctx, dict) and str(raw_ctx.get("patientId") or "").strip():
+                        expired_hint = (
+                            " Bound SoftDent context expired (30 min) — "
+                            "re-open Office Manager → Ask HAL to rebind."
+                        )
+                except Exception:
+                    expired_hint = ""
             return {
                 "text": (
                     "No SoftDent patient is bound to this HAL session. "
                     "Open Office Manager → click a Mon–Thu patient → Ask HAL, "
                     'or say: "Summarize patient 12345". SoftDent read-only · empty≠$0.'
+                    + expired_hint
                 ),
                 "intent": "policy:patient-summary-unbound",
             }
