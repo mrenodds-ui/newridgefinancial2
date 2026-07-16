@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from nr2_trellis_nightly import tomorrow_insurance_snapshot
+from nr2_trellis_nightly import eligibility_report_html, eligibility_report_snapshot, tomorrow_insurance_snapshot
 
 
 class TomorrowInsuranceSnapshotTests(unittest.TestCase):
@@ -64,6 +64,24 @@ class TomorrowInsuranceSnapshotTests(unittest.TestCase):
             blob = json.dumps(snap)
             self.assertNotIn("Aguilera", blob)
             self.assertNotIn("$0", blob)
+
+    def test_eligibility_report_snapshot_and_html(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            missing = eligibility_report_snapshot(target_date="2026-07-20", out_dir=root)
+            self.assertTrue(missing.get("ok"))
+            self.assertFalse(missing.get("hasReport"))
+            html_path = root / "trellis_eligibility_report_2026-07-20.html"
+            html_path.write_text(
+                "<!DOCTYPE html><html><body><h1>Trellis</h1><p>empty ≠ $0</p></body></html>",
+                encoding="utf-8",
+            )
+            meta = eligibility_report_snapshot(target_date="2026-07-20", out_dir=root)
+            self.assertTrue(meta.get("hasReport"))
+            self.assertIn("eligibility-report.html", str(meta.get("reportUrl") or ""))
+            doc = eligibility_report_html(target_date="2026-07-20", out_dir=root)
+            self.assertTrue(doc.get("hasReport"))
+            self.assertIn("<h1>Trellis</h1>", str(doc.get("html") or ""))
 
 
 if __name__ == "__main__":

@@ -597,6 +597,17 @@ a:hover { color: var(--hal); }
   margin: 0.45rem 0 0; font-size: 0.82rem; color: #9aa6b8; line-height: 1.4;
 }
 .om-trellis-summary { font-family: var(--mono); font-size: 11px; color: #b8c2d0; }
+.om-trellis-report {
+  margin: 0 0 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+.om-trellis-report .muted {
+  font-size: 11px;
+  color: #8a94a3;
+}
 .om-trellis-list {
   margin-top: 0.65rem;
   display: grid;

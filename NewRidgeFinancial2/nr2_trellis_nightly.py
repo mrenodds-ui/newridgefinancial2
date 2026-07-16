@@ -537,3 +537,72 @@ def tomorrow_insurance_snapshot(
         "patients": patients_out,
         "signal": "ok" if has_data else ("NO SIGNAL — worklist missing" if not work else "NO SIGNAL — empty worklist"),
     }
+
+
+def eligibility_report_snapshot(
+    *,
+    target_date: str | None = None,
+    out_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Metadata for printable Trellis ClearCoverage HTML report (staff; OM board stays PHI-safe)."""
+    root = Path(out_dir) if out_dir else OUT_DIR
+    target: date | None = None
+    if target_date:
+        try:
+            target = date.fromisoformat(str(target_date).strip()[:10])
+        except ValueError:
+            target = None
+    if target is None:
+        target = next_clinical_day()
+    if target is None:
+        return {
+            "ok": False,
+            "hasReport": False,
+            "error": "no_clinical_day",
+            "emptyNotZero": True,
+        }
+
+    iso = _iso(target)
+    path = root / f"trellis_eligibility_report_{iso}.html"
+    has = path.is_file()
+    size = 0
+    if has:
+        try:
+            size = int(path.stat().st_size)
+        except OSError:
+            size = 0
+    return {
+        "ok": True,
+        "hasReport": has and size > 64,
+        "emptyNotZero": True,
+        "targetDate": iso,
+        "path": str(path) if has else None,
+        "bytes": size if has else 0,
+        "reportUrl": f"/api/trellis/eligibility-report.html?date={iso}",
+        "boardPhi": "initials+hash",
+        "note": (
+            "Staff printable ClearCoverage report — may show full names for chairside use. "
+            "OM huddle list stays initials+hash · empty ≠ $0."
+            if has
+            else "NO SIGNAL — run Trellis verify / build_trellis_eligibility_report for this date."
+        ),
+    }
+
+
+def eligibility_report_html(
+    *,
+    target_date: str | None = None,
+    out_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Load report HTML bytes for authenticated OM/staff serve (no SoftDent write-back)."""
+    meta = eligibility_report_snapshot(target_date=target_date, out_dir=out_dir)
+    if not meta.get("hasReport"):
+        return {**meta, "html": None, "error": meta.get("error") or "report_missing"}
+    path = Path(str(meta.get("path") or ""))
+    try:
+        html_doc = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        return {**meta, "hasReport": False, "html": None, "error": f"read_failed:{exc}"}
+    if len(html_doc.strip()) < 64:
+        return {**meta, "hasReport": False, "html": None, "error": "report_empty", "emptyNotZero": True}
+    return {**meta, "html": html_doc, "error": None}

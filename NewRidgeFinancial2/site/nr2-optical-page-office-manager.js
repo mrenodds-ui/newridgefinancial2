@@ -756,6 +756,34 @@
         (statusBits ? " · " + statusBits : "") +
         " · empty ≠ $0";
     }
+    const reportLink = document.getElementById("tr-report-link");
+    const reportHint = document.getElementById("tr-report-hint");
+    const reportDate = data.targetDate || "";
+    W.getJson(
+      "/api/trellis/eligibility-report" +
+        (reportDate ? "?date=" + encodeURIComponent(reportDate) : ""),
+      12000
+    ).then(function (rep) {
+      if (!reportLink) return;
+      if (rep && rep.ok && rep.data && rep.data.hasReport && rep.data.reportUrl) {
+        reportLink.hidden = false;
+        reportLink.href = String(rep.data.reportUrl);
+        reportLink.target = "_blank";
+        reportLink.rel = "noopener";
+        if (reportHint) {
+          reportHint.textContent =
+            "Staff print · ClearCoverage benefits · board stays initials+hash · empty ≠ $0";
+        }
+      } else {
+        reportLink.hidden = true;
+        reportLink.removeAttribute("href");
+        if (reportHint) {
+          reportHint.textContent =
+            (rep && rep.data && rep.data.note) ||
+            "NO SIGNAL — benefits HTML not built for this date yet · empty ≠ $0";
+        }
+      }
+    });
     if (!list) return true;
     const patients = Array.isArray(data.patients) ? data.patients : [];
     if (!patients.length) {

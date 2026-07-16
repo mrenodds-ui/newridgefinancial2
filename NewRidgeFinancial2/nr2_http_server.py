@@ -3408,6 +3408,37 @@ class NR2BottleServer(BottleServer):
             target = str(bottle.request.params.get("date") or "").strip() or None
             return _json_response(tomorrow_insurance_snapshot(target_date=target))
 
+        @app.get("/api/trellis/eligibility-report")
+        def trellis_eligibility_report_meta_api():
+            """Metadata for printable Trellis ClearCoverage HTML (staff; board stays initials+hash)."""
+            from nr2_trellis_nightly import eligibility_report_snapshot
+
+            target = str(bottle.request.params.get("date") or "").strip() or None
+            return _json_response(eligibility_report_snapshot(target_date=target))
+
+        @app.get("/api/trellis/eligibility-report.html")
+        def trellis_eligibility_report_html_api():
+            """Serve printable Trellis eligibility HTML for authenticated staff."""
+            from nr2_trellis_nightly import eligibility_report_html
+
+            target = str(bottle.request.params.get("date") or "").strip() or None
+            payload = eligibility_report_html(target_date=target)
+            if not payload.get("hasReport") or not payload.get("html"):
+                return _json_response(
+                    {
+                        "ok": False,
+                        "error": payload.get("error") or "report_missing",
+                        "targetDate": payload.get("targetDate"),
+                        "emptyNotZero": True,
+                        "note": payload.get("note"),
+                    },
+                    status=404,
+                )
+            bottle.response.content_type = "text/html; charset=utf-8"
+            bottle.response.set_header("Cache-Control", "no-store")
+            bottle.response.set_header("X-NR2-Board-PHI", "staff-print-report")
+            return str(payload.get("html") or "")
+
         @app.get("/api/qb/auth-url")
         def qb_auth_url_api():
             from qb_connector import auth_url
