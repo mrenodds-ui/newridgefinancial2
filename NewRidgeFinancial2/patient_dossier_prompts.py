@@ -12,7 +12,7 @@ STRICT RULES:
 7. ELIGIBILITY SECTION:
    - If eligibility.demo is True, prepend "[DEMO DATA] " to every eligibility statement.
    - Speak deductible/annual max remaining values only if they are numbers; if 'unknown', say "deductible remaining unknown".
-   - If eligibility.gaps lists missing fields, state: "Insurance details incomplete in SoftDent: missing {fields}. Use HAL fetch_eligibility_271 tool to query manually."
+   - If eligibility.gaps lists missing fields, state: "Insurance details incomplete in SoftDent: missing {{fields}}. Use HAL fetch_eligibility_271 tool to query manually."
 
 DATA:
 {dossier_json}

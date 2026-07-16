@@ -899,6 +899,7 @@ class NR2BottleServer(BottleServer):
                     shift_context=shift_context,
                     requested_lane=lane_key,
                     store=store,
+                    session_id=session_id or None,
                 )
             else:
                 result = evaluate_query(
@@ -911,6 +912,7 @@ class NR2BottleServer(BottleServer):
                     shift_context=shift_context,
                     requested_lane=lane_key,
                     store=store,
+                    session_id=session_id or None,
                 )
             result["resolvedLane"] = result.get("resolvedLane") or resolved["lane"]
             bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
@@ -1316,6 +1318,7 @@ class NR2BottleServer(BottleServer):
                         shift_context=shift_context,
                         requested_lane=lane_key,
                         store=store,
+                        session_id=session_id,
                     ):
                         if isinstance(frame, bytes):
                             frame = frame.decode("utf-8", errors="replace")
@@ -1389,6 +1392,7 @@ class NR2BottleServer(BottleServer):
                     shift_context=shift_context,
                     requested_lane=lane_key,
                     store=store,
+                    session_id=session_id,
                 )
                 result["resolvedLane"] = result.get("resolvedLane") or resolved["lane"]
                 result["sessionId"] = session_id
@@ -3135,6 +3139,7 @@ class NR2BottleServer(BottleServer):
             bottle.response.set_header("X-Accel-Buffering", "no")
             bottle.response.set_header("X-HAL-Gateway-Enforced", "1")
             bottle.response.set_header("X-HAL-Lane-Used", str(resolved["lane"]))
+            stream_session_id = str(payload.get("sessionId") or payload.get("session_id") or "").strip() or None
 
             def _gen():
                 yield from evaluate_query_sse_frames(
@@ -3147,6 +3152,7 @@ class NR2BottleServer(BottleServer):
                     shift_context=shift_context,
                     requested_lane=lane_key,
                     store=store,
+                    session_id=stream_session_id,
                 )
 
             return _gen()

@@ -595,7 +595,11 @@ def _extract_account_tx_query_filters(query: str) -> dict[str, Any] | None:
     return filters
 
 
-def try_local_policy_reply(query: str) -> dict[str, str] | None:
+def try_local_policy_reply(
+    query: str,
+    *,
+    session_id: str | None = None,
+) -> dict[str, str] | None:
     """Deterministic consent/navigation answers — mirrors hal-core before model calls."""
     raw = str(query or "").strip()
     if not raw:
@@ -610,10 +614,14 @@ def try_local_policy_reply(query: str) -> dict[str, str] | None:
 
     # Patient dossier summarize — local SoftDent extract only (before product KB / LLM).
     try:
-        from patient_dossier import format_hal_patient_summary_reply, query_touches_patient_summary
+        from patient_dossier import (
+            format_hal_patient_summary_reply,
+            query_refers_to_bound_patient,
+            query_touches_patient_summary,
+        )
 
-        if query_touches_patient_summary(raw):
-            return format_hal_patient_summary_reply(raw)
+        if query_touches_patient_summary(raw) or query_refers_to_bound_patient(raw):
+            return format_hal_patient_summary_reply(raw, session_id=session_id)
     except Exception:
         pass
 
@@ -2327,6 +2335,7 @@ def evaluate_query_stream(
     shift_context: dict[str, Any] | None = None,
     requested_lane: str | None = None,
     store=None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Gateway gates + Ollama streaming aggregation (server-side)."""
     financial = is_financial_query(query)
@@ -2361,7 +2370,37 @@ def evaluate_query_stream(
                 "resolvedLane": resolved["lane"],
             }
 
-    local = try_local_policy_reply(query)
+    # Bound-patient / dossier asks before money beams so "this patient" stays on SoftDent dossier
+    try:
+        from patient_dossier import query_refers_to_bound_patient, query_touches_patient_summary
+
+        if query_touches_patient_summary(query) or query_refers_to_bound_patient(query):
+            local_patient = try_local_policy_reply(query, session_id=session_id)
+            if local_patient:
+                text = local_patient["text"]
+                append_lane_history(
+                    store,
+                    lane="local",
+                    model="policy",
+                    query=query,
+                    intent=local_patient.get("intent", "local:policy"),
+                )
+                return {
+                    "ok": True,
+                    "text": text,
+                    "message": {"content": text},
+                    "model": "local-policy",
+                    "readinessLevel": level,
+                    "intent": local_patient.get("intent", "local:policy"),
+                    "softStale": soft_stale,
+                    "resolvedLane": "local",
+                    "routingReason": "local_policy",
+                    "streamed": False,
+                }
+    except Exception:
+        pass
+
+    local = try_local_policy_reply(query, session_id=session_id)
     if local:
         text = local["text"]
         append_lane_history(store, lane="local", model="policy", query=query, intent=local.get("intent", "local:policy"))
@@ -2457,6 +2496,7 @@ def evaluate_query_sse_frames(
     shift_context: dict[str, Any] | None = None,
     requested_lane: str | None = None,
     store=None,
+    session_id: str | None = None,
 ):
     """Generator of SSE frames for true browser token streaming."""
     financial = is_financial_query(query)
@@ -2480,7 +2520,28 @@ def evaluate_query_sse_frames(
     # Phase 3 TTFT: emit typing meta before local policy / Ollama so clients can paint immediately.
     yield f"event: meta\ndata: {json.dumps({'lane': resolved['lane'], 'model': model, 'done': False, 'status': 'typing', 'ttft': True})}\n\n"
 
-    local = try_local_policy_reply(query)
+    try:
+        from patient_dossier import query_refers_to_bound_patient, query_touches_patient_summary
+
+        if query_touches_patient_summary(query) or query_refers_to_bound_patient(query):
+            local_patient = try_local_policy_reply(query, session_id=session_id)
+            if local_patient:
+                text = local_patient["text"]
+                append_lane_history(
+                    store,
+                    lane="local",
+                    model="policy",
+                    query=query,
+                    intent=local_patient.get("intent", "local:policy"),
+                )
+                yield f"event: meta\ndata: {json.dumps({'lane': 'local', 'model': 'local-policy', 'done': False})}\n\n"
+                yield f"data: {json.dumps({'token': text, 'done': False})}\n\n"
+                yield f"data: {json.dumps({'token': '', 'done': True})}\n\n"
+                return
+    except Exception:
+        pass
+
+    local = try_local_policy_reply(query, session_id=session_id)
     if local:
         text = local["text"]
         append_lane_history(store, lane="local", model="policy", query=query, intent=local.get("intent", "local:policy"))
@@ -2552,6 +2613,7 @@ def evaluate_query(
     shift_context: dict[str, Any] | None = None,
     requested_lane: str | None = None,
     store=None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     financial = is_financial_query(query)
     level = str(readiness.get("level") or "unknown")
@@ -2593,6 +2655,34 @@ def evaluate_query(
                 "intent": intent,
                 "resolvedLane": resolved["lane"],
             }
+
+    try:
+        from patient_dossier import query_refers_to_bound_patient, query_touches_patient_summary
+
+        if query_touches_patient_summary(query) or query_refers_to_bound_patient(query):
+            local_patient = try_local_policy_reply(query, session_id=session_id)
+            if local_patient:
+                text = local_patient["text"]
+                append_lane_history(
+                    store,
+                    lane="local",
+                    model="policy",
+                    query=query,
+                    intent=local_patient.get("intent", "local:policy"),
+                )
+                return {
+                    "ok": True,
+                    "text": text,
+                    "message": {"content": text},
+                    "model": "local-policy",
+                    "readinessLevel": level,
+                    "intent": local_patient.get("intent", "local:policy"),
+                    "softStale": soft_stale,
+                    "resolvedLane": "local",
+                    "routingReason": "local_policy",
+                }
+    except Exception:
+        pass
 
     claims_total = try_live_claims_total_reply(query)
     if claims_total:
@@ -2677,7 +2767,7 @@ def evaluate_query(
             "beamTimestamp": money_det.get("beamTimestamp"),
         }
 
-    local = try_local_policy_reply(query)
+    local = try_local_policy_reply(query, session_id=session_id)
     if local:
         text = local["text"]
         append_lane_history(store, lane="local", model="policy", query=query, intent=local.get("intent", "local:policy"))

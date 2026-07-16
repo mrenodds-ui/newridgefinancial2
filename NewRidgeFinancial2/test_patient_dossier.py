@@ -7,6 +7,8 @@ import unittest
 from patient_dossier import (
     _safe_money,
     extract_patient_ref_from_query,
+    format_hal_patient_summary_reply,
+    query_refers_to_bound_patient,
     query_touches_patient_summary,
 )
 
@@ -23,6 +25,9 @@ class PatientDossierTests(unittest.TestCase):
         self.assertTrue(query_touches_patient_summary("Summarize patient 12345"))
         self.assertTrue(query_touches_patient_summary("Patient summary for Nickel, Donna"))
         self.assertTrue(query_touches_patient_summary("Can HAL summarize patients?"))
+        self.assertTrue(query_touches_patient_summary("What's the copay for this patient?"))
+        self.assertTrue(query_touches_patient_summary("about this patient"))
+        self.assertTrue(query_refers_to_bound_patient("Tell me about this patient"))
         self.assertFalse(query_touches_patient_summary("Summarize what HAL does in this program"))
         self.assertFalse(query_touches_patient_summary("What is insurance lag?"))
 
@@ -34,6 +39,29 @@ class PatientDossierTests(unittest.TestCase):
         )
         self.assertIsNone(extract_patient_ref_from_query("Can you summarize patients?"))
         self.assertIsNone(extract_patient_ref_from_query("Summarize patients"))
+        self.assertIsNone(extract_patient_ref_from_query("What's the copay for this patient?"))
+
+    def test_this_patient_unbound_asks_for_id(self) -> None:
+        import sys
+        import types
+
+        fake = types.ModuleType("nr2_rbac")
+        fake.has_capability = lambda *_a, **_k: True  # type: ignore[attr-defined]
+        fake.current_role = lambda: "office_manager"  # type: ignore[attr-defined]
+        prev = sys.modules.get("nr2_rbac")
+        sys.modules["nr2_rbac"] = fake
+        try:
+            out = format_hal_patient_summary_reply(
+                "What's the copay for this patient?",
+                session_id="missing-session",
+            )
+        finally:
+            if prev is None:
+                sys.modules.pop("nr2_rbac", None)
+            else:
+                sys.modules["nr2_rbac"] = prev
+        self.assertEqual(out.get("intent"), "policy:patient-summary-unbound")
+        self.assertIn("No SoftDent patient is bound", out.get("text") or "")
 
 
 if __name__ == "__main__":

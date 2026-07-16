@@ -27,6 +27,19 @@ _PATIENT_SUMMARY_TOUCH_RE = re.compile(
     r"(?:can|could|will|would)\s+(?:hal|you)\s+summarize\s+patients?\b"
     r")"
 )
+_THIS_PATIENT_RE = re.compile(
+    r"(?i)\b("
+    r"this\s+patient|current\s+patient|about\s+(?:this\s+)?patient|"
+    r"the\s+patient(?:\s+(?:above|selected|bound))?"
+    r")\b"
+)
+_BOUND_PATIENT_ASK_RE = re.compile(
+    r"(?i)\b("
+    r"summarize|summary|dossier|chart|insurance|claims?|copay|co-?pay|"
+    r"clinical\s+notes?|treatment\s+estimate|estimate|balance|"
+    r"eligibility|coverage|about|tell\s+me|what(?:'s|\s+is|\s+are)"
+    r")\b"
+)
 _PATIENT_REF_RE = re.compile(
     r"(?i)(?:^|\b)(?:"
     r"summarize\s+(?:the\s+)?(?:patient(?:\s+(?:chart|dossier))?|chart|dossier)\s+(?:for\s+|of\s+|on\s+)?"
@@ -272,6 +285,11 @@ def patient_hash(patient_id: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:4].upper()
 
 
+def query_refers_to_bound_patient(query: str) -> bool:
+    """True when staff refer to the OM/HAL-bound patient without naming SoftDent id."""
+    return bool(_THIS_PATIENT_RE.search(str(query or "")))
+
+
 def query_touches_patient_summary(query: str) -> bool:
     """True when staff ask HAL to summarize a patient / dossier (local PHI path)."""
     raw = str(query or "").strip()
@@ -284,6 +302,12 @@ def query_touches_patient_summary(query: str) -> bool:
     ):
         if not re.search(r"\bpatient\b", q):
             return False
+    if query_refers_to_bound_patient(raw):
+        if _BOUND_PATIENT_ASK_RE.search(q) or _PATIENT_SUMMARY_TOUCH_RE.search(q):
+            return True
+        # Short follow-ups after OM Ask HAL: "this patient?" / "about this patient"
+        if len(q.split()) <= 5:
+            return True
     return bool(_PATIENT_SUMMARY_TOUCH_RE.search(raw) or _PATIENT_SUMMARY_TOUCH_RE.search(q))
 
 
@@ -294,6 +318,11 @@ def extract_patient_ref_from_query(query: str) -> str | None:
         return None
     cleaned = re.sub(r"^hal[,:]\s+", "", raw, flags=re.IGNORECASE).strip()
     cleaned = re.sub(r"[?.!]+$", "", cleaned).strip()
+    # Bound-patient language is resolved via session context — not a SoftDent name/id ref
+    if query_refers_to_bound_patient(cleaned) and not _PATIENT_REF_RE.search(
+        re.sub(_THIS_PATIENT_RE, " ", cleaned)
+    ):
+        return None
     # Bare capability asks — no patient ref
     if re.search(
         r"(?i)^(can|could|will|would)\s+(hal|you)\s+summarize\s+patients?\s*$|"
@@ -309,9 +338,129 @@ def extract_patient_ref_from_query(query: str) -> str | None:
     ref = str(m.group(1) or "").strip().strip("\"'")
     ref = re.sub(r"(?i)^(the\s+)?patient\s+", "", ref).strip()
     ref = re.sub(r"(?i)^(chart|dossier)\s+(for\s+|of\s+)?", "", ref).strip()
-    if not ref or ref.lower() in {"patients", "a patient", "the patient"}:
+    if not ref or ref.lower() in {
+        "patients",
+        "a patient",
+        "the patient",
+        "this patient",
+        "current patient",
+    }:
         return None
     return ref
+
+
+def format_hal_patient_summary_reply(
+    query: str,
+    *,
+    session_id: str | None = None,
+) -> dict[str, str]:
+    """HAL chat policy: local patient dossier summary (RBAC + audit + empty≠$0)."""
+    from nr2_rbac import current_role, has_capability
+
+    if not (
+        has_capability("read_patient_dossier")
+        or has_capability("read_all")
+        or has_capability("*")
+    ):
+        return {
+            "text": (
+                f"No — patient summaries require office manager or dentist "
+                f"(current role: {current_role()})."
+            ),
+            "intent": "policy:patient-summary-denied",
+        }
+
+    ref = extract_patient_ref_from_query(query)
+    bound_ctx = None
+    used_bound = False
+    if not ref and query_refers_to_bound_patient(query):
+        sid = str(session_id or "").strip()
+        if sid:
+            try:
+                from hal_session_store import active_patient_context
+
+                bound_ctx = active_patient_context(sid)
+            except Exception:
+                bound_ctx = None
+        if not bound_ctx or not str((bound_ctx or {}).get("patientId") or "").strip():
+            return {
+                "text": (
+                    "No SoftDent patient is bound to this HAL session. "
+                    "Open Office Manager → click a Mon–Thu patient → Ask HAL, "
+                    'or say: "Summarize patient 12345". SoftDent read-only · empty≠$0.'
+                ),
+                "intent": "policy:patient-summary-unbound",
+            }
+        ref = str(bound_ctx.get("patientId") or "").strip()
+        used_bound = True
+
+    if not ref:
+        return {
+            "text": (
+                "Yes — I can summarize a patient from the local SoftDent extract "
+                "(read-only; empty≠$0; PHI stays on this workstation). "
+                'Ask: "Summarize patient 12345" or "Patient summary for Nickel, Donna". '
+                "After Ask HAL from Office Manager, you can say \"this patient\"."
+            ),
+            "intent": "policy:patient-summary-help",
+        }
+
+    allowed, retry_after = check_rate_limit(current_role())
+    if not allowed:
+        return {
+            "text": f"Rate limited — wait {retry_after}s before another patient summary.",
+            "intent": "policy:patient-summary-rate",
+        }
+
+    if used_bound:
+        pid = ref
+        resolved = {"ok": True, "patientId": pid}
+    else:
+        resolved = resolve_patient_id(ref)
+        if not resolved.get("ok"):
+            err = str(resolved.get("error") or "Patient not found.")
+            matches = resolved.get("matches") or []
+            if matches:
+                lines = [err, "Candidates (hash only):"]
+                for m in matches[:5]:
+                    lines.append(f"- {m.get('patientHash')} · {m.get('initials')}")
+                return {"text": "\n".join(lines), "intent": "policy:patient-summary-ambiguous"}
+            return {"text": err, "intent": "policy:patient-summary-miss"}
+        pid = str(resolved["patientId"])
+
+    dossier = build_patient_dossier(pid)
+    try:
+        from hal_patient_audit import log_patient_query
+
+        log_patient_query(
+            current_role() or "Staff",
+            pid,
+            "dossier_summary_chat_bound" if used_bound else "dossier_summary_chat",
+        )
+    except Exception:
+        pass
+
+    ai = summarize_dossier_with_local_ai(dossier)
+    text = str(ai.get("summary") or format_dossier_markdown(dossier)).strip()
+    source = str(ai.get("source") or "deterministic")
+    ph = patient_hash(pid)
+    initials = "P—"
+    if used_bound and bound_ctx:
+        initials = str(bound_ctx.get("initials") or initials)
+        ph = str(bound_ctx.get("patientHash") or ph).replace("#", "")[:4] or ph
+    if ai.get("error") and source.startswith("deterministic"):
+        text = f"{text}\n\n_(local model unavailable — deterministic summary; {ai.get('error')})_"
+    else:
+        text = f"{text}\n\n_(source: {source} · SoftDent read-only · empty≠$0)_"
+    if used_bound:
+        text = (
+            f"Using bound patient context · {initials} · #{ph}\n\n"
+            + text
+        )
+    return {
+        "text": text,
+        "intent": "policy:patient-summary-bound" if used_bound else "policy:patient-summary",
+    }
 
 
 def resolve_patient_id(ref: str, *, practice_id: str = "") -> dict[str, Any]:
@@ -425,71 +574,6 @@ def resolve_patient_id(ref: str, *, practice_id: str = "") -> dict[str, Any]:
         return out
     finally:
         conn.close()
-
-
-def format_hal_patient_summary_reply(query: str) -> dict[str, str]:
-    """HAL chat policy: local patient dossier summary (RBAC + audit + empty≠$0)."""
-    from nr2_rbac import current_role, has_capability
-
-    if not (
-        has_capability("read_patient_dossier")
-        or has_capability("read_all")
-        or has_capability("*")
-    ):
-        return {
-            "text": (
-                f"No — patient summaries require office manager or dentist "
-                f"(current role: {current_role()})."
-            ),
-            "intent": "policy:patient-summary-denied",
-        }
-
-    ref = extract_patient_ref_from_query(query)
-    if not ref:
-        return {
-            "text": (
-                "Yes — I can summarize a patient from the local SoftDent extract "
-                "(read-only; empty≠$0; PHI stays on this workstation). "
-                'Ask: "Summarize patient 12345" or "Patient summary for Nickel, Donna".'
-            ),
-            "intent": "policy:patient-summary-help",
-        }
-
-    allowed, retry_after = check_rate_limit(current_role())
-    if not allowed:
-        return {
-            "text": f"Rate limited — wait {retry_after}s before another patient summary.",
-            "intent": "policy:patient-summary-rate",
-        }
-
-    resolved = resolve_patient_id(ref)
-    if not resolved.get("ok"):
-        err = str(resolved.get("error") or "Patient not found.")
-        matches = resolved.get("matches") or []
-        if matches:
-            lines = [err, "Candidates (hash only):"]
-            for m in matches[:5]:
-                lines.append(f"- {m.get('patientHash')} · {m.get('initials')}")
-            return {"text": "\n".join(lines), "intent": "policy:patient-summary-ambiguous"}
-        return {"text": err, "intent": "policy:patient-summary-miss"}
-
-    pid = str(resolved["patientId"])
-    dossier = build_patient_dossier(pid)
-    try:
-        from hal_patient_audit import log_patient_query
-
-        log_patient_query(current_role() or "Staff", pid, "dossier_summary_chat")
-    except Exception:
-        pass
-
-    ai = summarize_dossier_with_local_ai(dossier)
-    text = str(ai.get("summary") or format_dossier_markdown(dossier)).strip()
-    source = str(ai.get("source") or "deterministic")
-    if ai.get("error") and source.startswith("deterministic"):
-        text = f"{text}\n\n_(local model unavailable — deterministic summary; {ai.get('error')})_"
-    else:
-        text = f"{text}\n\n_(source: {source} · SoftDent read-only · empty≠$0)_"
-    return {"text": text, "intent": "policy:patient-summary"}
 
 
 def name_hash(name: str) -> str:
