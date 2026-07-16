@@ -283,13 +283,27 @@ def patient_context_persona_block(session_id: str) -> str:
     initials = str(ctx.get("initials") or "P—")
     ph = str(ctx.get("patientHash") or "").replace("#", "")[:4]
     ph_disp = f"#{ph}" if ph else "hash —"
-    return (
-        "ACTIVE SOFTDENT PATIENT CONTEXT (this session only, SoftDent READ-ONLY):\n"
-        f"- Display: {initials} · {ph_disp}\n"
-        "- SoftDent patient id is bound server-side for this session — do not invent PHI.\n"
-        '- When operator says "this patient" / "about this patient", summarize the bound patient.\n'
-        "- empty ≠ $0 — missing dollars are NO SIGNAL / unavailable, never fabricated $0."
-    )
+    lines = [
+        "ACTIVE SOFTDENT PATIENT CONTEXT (this session only, SoftDent READ-ONLY):",
+        f"- Display: {initials} · {ph_disp}",
+        "- SoftDent patient id is bound server-side for this session — do not invent PHI.",
+        '- When operator says "this patient" / "about this patient", summarize the bound patient.',
+        "- empty ≠ $0 — missing dollars are NO SIGNAL / unavailable, never fabricated $0.",
+    ]
+    try:
+        from patient_force_attest import patient_attest_status_today
+
+        full_ph = str(ctx.get("patientHash") or "").replace("#", "")
+        st = patient_attest_status_today(full_ph) if full_ph else {}
+        if st.get("attestedToday"):
+            att = st.get("attest") if isinstance(st.get("attest"), dict) else {}
+            dh = str(att.get("dataBeamHash") or "")[:12]
+            lines.append(
+                f"- OM ATTESTED this patient today · dataBeamHash={dh or 'n/a'} · shadow review only."
+            )
+    except Exception:
+        pass
+    return "\n".join(lines)
 
 
 def messages_for_chat(session_id: str, *, limit: int = 20) -> list[dict[str, str]]:

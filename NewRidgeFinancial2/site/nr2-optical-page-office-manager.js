@@ -258,7 +258,103 @@
       askHalAboutPatient(pid, ph, initials);
     });
     actions.appendChild(halBtn);
+
+    const attestBtn = document.createElement("button");
+    attestBtn.type = "button";
+    attestBtn.className = "mech-lock";
+    attestBtn.textContent = "ATTEST REVIEW";
+    attestBtn.disabled = true;
+    attestBtn.title = "Requires VERIFY BEAM · MATCH · SoftDent READ-ONLY · empty ≠ $0";
+    actions.appendChild(attestBtn);
     body.appendChild(actions);
+
+    wirePatientAttestButton(attestBtn, pid, ph);
+  }
+
+  function wirePatientAttestButton(btn, patientId, patientHash) {
+    const pid = String(patientId || "").trim();
+    if (!btn || !pid || !W) return;
+
+    function markAttested(attest) {
+      btn.disabled = true;
+      btn.textContent = "ATTESTED TODAY";
+      const hash = attest && attest.dataBeamHash ? String(attest.dataBeamHash).slice(0, 8) : "";
+      btn.title =
+        "OM attested today · SoftDent READ-ONLY · empty ≠ $0" +
+        (hash ? " · dataBeamHash " + hash : "");
+      setDossierMessage(
+        "Attested today · #" +
+          String(patientHash || "").slice(0, 4) +
+          (hash ? " · hash " + hash : "") +
+          " · empty ≠ $0 · shadow review only",
+        false
+      );
+    }
+
+    function refresh() {
+      const statusP =
+        W.patientForceAttestStatus
+          ? W.patientForceAttestStatus(pid, 10000)
+          : Promise.resolve({ ok: false });
+      const eligP =
+        W.patientForceAttestEligible
+          ? W.patientForceAttestEligible(10000)
+          : W.fetchBeamVerify
+            ? W.fetchBeamVerify(10000)
+            : Promise.resolve({ ok: false });
+      Promise.all([statusP, eligP]).then(function (pair) {
+        const stRes = pair[0] || {};
+        const elRes = pair[1] || {};
+        const st = (stRes && stRes.data) || {};
+        const el = (elRes && elRes.data) || {};
+        if (st.attestedToday) {
+          markAttested(st.attest || {});
+          return;
+        }
+        const proof = String(el.deskProof || "").toUpperCase();
+        const eligible =
+          el.eligible === true || proof === "MATCH" || String(el.deskProof || "") === "MATCH";
+        btn.disabled = !eligible;
+        btn.textContent = eligible ? "ATTEST REVIEW" : "ATTEST · NEED MATCH";
+        btn.title = eligible
+          ? "Beam MATCH · SoftDent READ-ONLY · empty ≠ $0"
+          : "VERIFY BEAM first — patient attest requires deskProof MATCH (period Force Close stays laser-gated)";
+      });
+    }
+
+    btn.addEventListener("click", function () {
+      if (btn.disabled || btn.classList.contains("busy")) return;
+      btn.classList.add("busy");
+      const label = btn.textContent;
+      btn.textContent = "ATTESTING…";
+      const run = W.patientForceAttest
+        ? W.patientForceAttest(pid, { actor: "optical-om" })
+        : Promise.resolve({ ok: false, error: "wire_helper_missing" });
+      run
+        .then(function (res) {
+          const data = (res && res.data) || {};
+          if (res && res.ok && data.ok) {
+            markAttested(data.attest || data);
+            return;
+          }
+          const err = String(data.error || data.hint || res.error || "attest_failed");
+          setDossierMessage(
+            "Attest blocked · " + err + " · empty ≠ $0 · SoftDent READ-ONLY",
+            true
+          );
+          btn.textContent = label;
+          refresh();
+        })
+        .catch(function (err) {
+          setDossierMessage("Attest failed · " + String(err && err.message ? err.message : err), true);
+          btn.textContent = label;
+        })
+        .finally(function () {
+          btn.classList.remove("busy");
+        });
+    });
+
+    refresh();
   }
 
   function askHalAboutPatient(patientId, patientHash, initials) {

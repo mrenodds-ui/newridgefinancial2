@@ -476,8 +476,9 @@ a:hover { color: var(--hal); }
   padding: 5px 0; border-bottom: 1px solid rgba(36, 48, 64, 0.6);
   line-height: 1.35;
 }
-.wk-dossier-actions { margin-top: 12px; }
+.wk-dossier-actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .wk-dossier-actions .btn-quiet { display: inline-flex; }
+.wk-dossier-actions .mech-lock { font-size: 0.78rem; letter-spacing: 0.04em; }
 .wk-slot .phi {
   font-family: var(--mono); color: #cfd8e3; font-size: 12px;
 }

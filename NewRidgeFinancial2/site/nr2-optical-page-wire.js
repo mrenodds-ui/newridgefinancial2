@@ -250,6 +250,26 @@
   async function fetchBeamVerify(timeoutMs) {
     return getJson("/api/hal/tools/beam-verify", timeoutMs || 12000);
   }
+  async function patientForceAttest(patientId, opts) {
+    const o = opts || {};
+    await ensureSession();
+    return postJson(
+      "/api/apex/patient-force-attest",
+      {
+        patientId: String(patientId || "").trim(),
+        actor: o.actor || "optical-om",
+        sessionId: o.sessionId || undefined,
+      },
+      o.timeoutMs || 20000
+    );
+  }
+  async function patientForceAttestStatus(patientId, timeoutMs) {
+    const pid = encodeURIComponent(String(patientId || "").trim());
+    return getJson("/api/apex/patient-force-attest/" + pid, timeoutMs || 12000);
+  }
+  async function patientForceAttestEligible(timeoutMs) {
+    return getJson("/api/apex/patient-force-attest/eligible", timeoutMs || 12000);
+  }
   function bindVerifyBeamButton(btnId, opts) {
     const btn = document.getElementById(btnId || "btn-verify-beam");
     if (!btn || btn._nr2VerifyBound) return btn;
@@ -502,6 +522,9 @@
     formatBeamHash: formatBeamHash,
     hashesMatch: hashesMatch,
     fetchBeamVerify: fetchBeamVerify,
+    patientForceAttest: patientForceAttest,
+    patientForceAttestStatus: patientForceAttestStatus,
+    patientForceAttestEligible: patientForceAttestEligible,
     bindVerifyBeamButton: bindVerifyBeamButton,
     runDeskSmoke: runDeskSmoke,
     bindDeskSmokeButton: bindDeskSmokeButton,

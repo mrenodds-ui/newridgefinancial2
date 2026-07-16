@@ -209,6 +209,18 @@ def run_desk_smoke(
         if not http_ok:
             failures.append("beam_verify_http")
 
+    # Patient attest is MATCH-gated (sibling of laser-gated period Force Close).
+    patient_attest_eligible = proof_status == "MATCH"
+    checks.append(
+        {
+            "id": "patient_attest_eligible",
+            "ok": True,
+            "eligible": patient_attest_eligible,
+            "deskProof": proof_status,
+            "note": "Informational — does not fail smoke; period forceCloseAvailable stays laser-gated.",
+        }
+    )
+
     overall = len(failures) == 0
     row = {
         "ok": overall,
@@ -226,6 +238,7 @@ def run_desk_smoke(
         "dataBeamHash": data_hash or None,
         "beamHash": beam_hash or None,
         "forceCloseAvailable": bool(fc_available),
+        "patientAttestEligible": patient_attest_eligible,
         "logPath": str(SMOKE_LOG_PATH),
         "buildHint": None,
     }
@@ -246,6 +259,7 @@ def run_desk_smoke(
             "deskProof": proof_status,
             "dataBeamHash": data_hash or None,
             "forceCloseAvailable": bool(fc_available),
+            "patientAttestEligible": patient_attest_eligible,
         }
     )
     return row

@@ -8601,6 +8601,89 @@ def register_apex_routes(app: Any, json_response_fn: Callable[..., Any]) -> None
         except Exception as exc:  # noqa: BLE001
             return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
 
+    @app.get("/api/apex/patient-force-attest/eligible")
+    def apex_patient_force_attest_eligible_api():
+        """MATCH-gated eligibility for OM patient attest (not period Force Close)."""
+        try:
+            from patient_force_attest import patient_attest_eligible
+
+            gate = patient_attest_eligible()
+            gate["buildId"] = BUILD_ID
+            return json_response_fn(gate)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.get("/api/apex/patient-force-attest/<patient_id>")
+    def apex_patient_force_attest_status_api(patient_id: str):
+        try:
+            from nr2_rbac import current_role, has_capability
+            from patient_dossier import patient_hash
+            from patient_force_attest import patient_attest_status_today
+
+            if not (
+                has_capability("read_patient_dossier")
+                or has_capability("read_all")
+                or has_capability("*")
+                or has_capability("read_schedule")
+            ):
+                return json_response_fn(
+                    {"ok": False, "error": "capability_rejected", "role": current_role(), "buildId": BUILD_ID},
+                    status=403,
+                )
+            ph = patient_hash(patient_id)
+            status = patient_attest_status_today(ph)
+            status["patientHash"] = ph
+            status["buildId"] = BUILD_ID
+            return json_response_fn(status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
+    @app.post("/api/apex/patient-force-attest")
+    def apex_patient_force_attest_api():
+        """OM attest review for one SoftDent patient — SoftDent READ-ONLY; requires deskProof MATCH."""
+        try:
+            import bottle
+            from nr2_rbac import current_role, has_capability
+            from hal_patient_audit import log_hal_patient_action
+            from patient_force_attest import force_attest_patient
+
+            if not (
+                has_capability("read_patient_dossier")
+                or has_capability("read_all")
+                or has_capability("*")
+                or has_capability("read_schedule")
+            ):
+                return json_response_fn(
+                    {"ok": False, "error": "capability_rejected", "role": current_role(), "buildId": BUILD_ID},
+                    status=403,
+                )
+            raw = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(raw or "{}")
+            patient_id = str(payload.get("patientId") or payload.get("patient_id") or "").strip()
+            actor = str(payload.get("actor") or current_role() or "optical-om").strip() or "optical-om"
+            session_id = str(payload.get("sessionId") or payload.get("session_id") or "").strip()
+            result = force_attest_patient(
+                patient_id,
+                actor=actor,
+                session_id=session_id,
+            )
+            if result.get("ok"):
+                try:
+                    log_hal_patient_action(
+                        user_id=actor,
+                        patient_hash=str(result.get("patientHash") or ""),
+                        action="patient_force_attest",
+                        tools_used='["beam_desk_proof","get_patient_dossier_mini"]',
+                        ip=str(bottle.request.remote_addr or ""),
+                    )
+                except Exception:
+                    pass
+            result["buildId"] = BUILD_ID
+            http_status = 200 if result.get("ok") else int(result.get("status") or 400)
+            return json_response_fn(result, status=http_status)
+        except Exception as exc:  # noqa: BLE001
+            return json_response_fn({"ok": False, "error": str(exc), "buildId": BUILD_ID}, status=500)
+
     @app.get("/api/apex/export-playbook")
     def apex_export_playbook_api():
         try:
