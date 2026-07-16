@@ -479,7 +479,8 @@ def morning_routine_tick(store, *, force: bool = False) -> dict[str, Any]:
     heal = heal_import_pipeline(force=False)
     actions.append({"action": "heal_import_pipeline", "result": heal})
 
-    # Shadow period-close with SoftDent aging auto-pull (consent-free Excel; no write-back).
+    # Shadow period-close with SoftDent aging+register+collections auto-pull
+    # (consent-free Excel; no write-back). Aging required; others best-effort.
     # Skipped earlier when a human shift is active (same as rest of morning tick).
     try:
         from daily_closeout import run_period_close
@@ -494,8 +495,12 @@ def morning_routine_tick(store, *, force: bool = False) -> dict[str, Any]:
             "ok": close_result.get("ok"),
             "status": close_result.get("status"),
             "beamHash": close_result.get("beamHash"),
+            "dataBeamHash": close_result.get("dataBeamHash"),
             "softdentTotal": close_result.get("softdentTotal"),
             "softdentDisplay": close_result.get("softdentDisplay"),
+            "softdentReports": close_result.get("softdentReports"),
+            "exportOkCount": close_result.get("exportOkCount"),
+            "exportPartial": close_result.get("exportPartial"),
             "exportOk": bool((close_result.get("export") or {}).get("ok"))
             if isinstance(close_result.get("export"), dict)
             else close_result.get("export") is not None and close_result.get("ok"),

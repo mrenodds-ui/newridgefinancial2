@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12036-beamhash-desk-proof",
-  "BUILD_ID": "nr2-12036-beamhash-desk-proof",
-  "assetVersion": "nr2-12036-beamhash-desk-proof",
-  "builtAt": "2026-07-16T00:50:00.000Z",
-  "notes": "nr2-12036-beamhash-desk-proof: dataBeamHash + 3s attest cache; GET /api/hal/tools/beam-verify; Hub/OM VERIFY BEAM; HAL money replies cite hashes. SoftDent write-back forbidden. empty ≠ $0.",
+  "schemaVersion": "nr2-12037-softdent-morning-bundle",
+  "BUILD_ID": "nr2-12037-softdent-morning-bundle",
+  "assetVersion": "nr2-12037-softdent-morning-bundle",
+  "builtAt": "2026-07-16T01:00:00.000Z",
+  "notes": "nr2-12037-softdent-morning-bundle: morning period-close pulls SoftDent aging+register+collections; aging required, others best-effort; attest-only if aging fails. SoftDent write-back forbidden. empty ≠ $0.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12036-BEAMHASH-DESK-PROOF",
+  "package": "NR2-12037-SOFTDENT-MORNING-BUNDLE",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

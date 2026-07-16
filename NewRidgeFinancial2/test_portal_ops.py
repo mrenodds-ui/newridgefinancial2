@@ -155,8 +155,18 @@ def test_period_close_softdent_pull(tmp_path, monkeypatch):
         "quickbooks": {"hasData": True, "display": "$78,399", "monthlyRevenue": 78399.0},
     }
     monkeypatch.setattr(
-        "hal_brain_tools.softdent_export",
-        lambda **kwargs: {"ok": True, "path": r"C:\SoftDentReportExports\AG260715.XLS", "consentRequired": False},
+        "hal_brain_tools.softdent_export_morning_bundle",
+        lambda **kwargs: {
+            "ok": True,
+            "bundle": True,
+            "reportIds": ["aging", "register", "collections"],
+            "okCount": 3,
+            "failed": [],
+            "agingOk": True,
+            "partial": False,
+            "path": r"C:\SoftDentReportExports\AG260715.XLS",
+            "consentRequired": False,
+        },
     )
     monkeypatch.setattr(
         "import_healing.heal_import_pipeline",
@@ -183,6 +193,8 @@ def test_period_close_softdent_pull(tmp_path, monkeypatch):
     assert result["pullSoftdent"] is True
     assert result["softdentTotal"] == 7714.0
     assert (result.get("export") or {}).get("ok") is True
+    assert result.get("softdentReports") == ["aging", "register", "collections"]
+    assert result.get("exportOkCount") == 3
     assert (result.get("importRefresh") or {}).get("ok") is True
 
 
@@ -207,8 +219,14 @@ def test_period_close_softdent_pull_blocked_after_heal(tmp_path, monkeypatch):
         "alignmentLasers": {"red": True, "green": False, "reason": "critical_import_gaps"},
     }
     monkeypatch.setattr(
-        "hal_brain_tools.softdent_export",
-        lambda **kwargs: {"ok": True, "path": r"C:\SoftDentReportExports\AG260715.XLS"},
+        "hal_brain_tools.softdent_export_morning_bundle",
+        lambda **kwargs: {
+            "ok": True,
+            "bundle": True,
+            "reportIds": ["aging", "register", "collections"],
+            "okCount": 3,
+            "path": r"C:\SoftDentReportExports\AG260715.XLS",
+        },
     )
     monkeypatch.setattr(
         "import_healing.heal_import_pipeline",
@@ -255,8 +273,8 @@ def test_period_close_softdent_pull_fallback_attest(tmp_path, monkeypatch):
         "quickbooks": {"hasData": True, "display": "$78,399", "monthlyRevenue": 78399.0},
     }
     monkeypatch.setattr(
-        "hal_brain_tools.softdent_export",
-        lambda **kwargs: {"ok": False, "error": "softdent_gui_unreachable"},
+        "hal_brain_tools.softdent_export_morning_bundle",
+        lambda **kwargs: {"ok": False, "error": "softdent_gui_unreachable", "bundle": True, "agingOk": False},
     )
     monkeypatch.setattr(
         "import_diagnostics.assess_import_readiness",
@@ -280,6 +298,44 @@ def test_period_close_softdent_pull_fallback_attest(tmp_path, monkeypatch):
     assert result["guiExport"] is False
     assert result["softdentTotal"] == 7714.0
     assert (result.get("export") or {}).get("fallback") == "attest_only"
+
+
+def test_softdent_export_morning_bundle_requires_aging(monkeypatch):
+    from hal_brain_tools import softdent_export_morning_bundle
+    import hal_brain_tools as h
+
+    calls: list[str] = []
+
+    def fake_export(*, report_id="aging", **kwargs):
+        calls.append(report_id)
+        if report_id == "aging":
+            return {"ok": True, "reportId": "aging", "path": r"C:\SoftDentReportExports\AG.xls"}
+        if report_id == "register":
+            return {"ok": False, "error": "transient"}
+        return {"ok": True, "reportId": report_id, "path": r"C:\SoftDentReportExports\CO.xls"}
+
+    monkeypatch.setattr(h, "softdent_export", fake_export)
+    out = softdent_export_morning_bundle(days=30)
+    assert out["ok"] is True
+    assert out["agingOk"] is True
+    assert out["partial"] is True
+    assert out["failed"] == ["register"]
+    assert calls == ["aging", "register", "collections"]
+
+
+def test_softdent_export_morning_bundle_aging_fail(monkeypatch):
+    from hal_brain_tools import softdent_export_morning_bundle
+    import hal_brain_tools as h
+
+    def fake_export(*, report_id="aging", **kwargs):
+        if report_id == "aging":
+            return {"ok": False, "error": "softdent_gui_unreachable"}
+        return {"ok": True, "reportId": report_id, "path": "x.xls"}
+
+    monkeypatch.setattr(h, "softdent_export", fake_export)
+    out = softdent_export_morning_bundle(days=30)
+    assert out["ok"] is False
+    assert out["agingOk"] is False
 
 
 def test_force_close_decides_pull_on_red_or_stalled():

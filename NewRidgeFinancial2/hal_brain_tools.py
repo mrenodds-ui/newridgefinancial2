@@ -738,6 +738,53 @@ def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int
         }
 
 
+# Morning period-close SoftDent Excel bundle (consent-free; write-back forbidden).
+MORNING_SOFTDENT_REPORT_IDS = ("aging", "register", "collections")
+
+
+def softdent_export_morning_bundle(*, days: int = 30) -> dict[str, Any]:
+    """Export aging + register + collections for morning period-close.
+
+    Aging is required for money beams. Register/collections are best-effort.
+    If aging fails → ok=False (caller may attest-only). Partial secondary failures
+    still return ok=True with failed[] listed — empty ≠ $0.
+    """
+    reports: dict[str, Any] = {}
+    failed: list[str] = []
+    paths: list[str] = []
+    for rid in MORNING_SOFTDENT_REPORT_IDS:
+        one = softdent_export(report_id=rid, days=days)
+        reports[rid] = one
+        if one.get("ok"):
+            if one.get("path"):
+                paths.append(str(one["path"]))
+        else:
+            failed.append(rid)
+
+    aging_ok = bool((reports.get("aging") or {}).get("ok"))
+    ok_count = sum(1 for r in reports.values() if r.get("ok"))
+    return {
+        "ok": aging_ok,
+        "consentRequired": False,
+        "bundle": True,
+        "reportIds": list(MORNING_SOFTDENT_REPORT_IDS),
+        "reports": reports,
+        "okCount": ok_count,
+        "failed": failed,
+        "agingOk": aging_ok,
+        "partial": aging_ok and bool(failed),
+        "path": (reports.get("aging") or {}).get("path"),
+        "paths": paths,
+        "exportRoot": r"C:\SoftDentReportExports",
+        "refreshImportsSuggested": aging_ok,
+        "pathHygiene": "SoftDent kept its own folder; NR2 copied into SoftDentReportExports.",
+        "emptyNotZero": True,
+        "at": _utc_now(),
+        "error": None if aging_ok else str((reports.get("aging") or {}).get("error") or "aging_export_failed"),
+        "detail": None if aging_ok else str((reports.get("aging") or {}).get("detail") or "")[:600],
+    }
+
+
 def memo_search(*, query: str, limit: int = 5) -> dict[str, Any]:
     from knowledge_memory_index import search_memories
 

@@ -509,9 +509,10 @@ def run_period_close(
 ) -> dict[str, Any]:
     """Execute one shadow period-close cycle.
 
-    Default (auto/morning): SoftDent aging pull when pull_softdent=True (scheduler),
-    then heal imports, laser gate, money-beam attest, JSONL log.
+    Default (auto/morning): SoftDent aging+register+collections pull when pull_softdent=True
+    (scheduler), then heal imports, laser gate, money-beam attest, JSONL log.
     SoftDent GUI export is consent-free (Excel/Print Preview only; write-back forbidden).
+    Aging is required; register/collections are best-effort (partial still heals).
     """
     _ = consent_export  # SoftDent export no longer gated; kept for API compatibility
     with _LOCK:
@@ -584,12 +585,13 @@ def run_period_close(
         export_fallback_attest = False
         if pull_softdent:
             try:
-                from hal_brain_tools import softdent_export
+                from hal_brain_tools import softdent_export_morning_bundle
 
+                # Morning bundle: aging (required) + register + collections (best-effort).
                 # SoftDent GUI export is consent-free; retries live in export_report_by_id.
-                export_result = softdent_export(report_id="aging", days=30)
+                export_result = softdent_export_morning_bundle(days=30)
             except Exception as exc:  # noqa: BLE001
-                export_result = {"ok": False, "error": str(exc)[:240]}
+                export_result = {"ok": False, "error": str(exc)[:240], "bundle": True}
             if not export_result.get("ok"):
                 # Circuit breaker: do not stall morning close — attest from existing beams.
                 export_fallback_attest = True
@@ -628,6 +630,10 @@ def run_period_close(
                             "export": export_result,
                             "importRefresh": import_refresh,
                             "pullSoftdent": True,
+                            "softdentReports": list(
+                                (export_result or {}).get("reportIds")
+                                or ["aging", "register", "collections"]
+                            ),
                         }
                         _append_close_log(entry)
                         state.update(
@@ -685,6 +691,15 @@ def run_period_close(
             "export": export_result,
             "importRefresh": import_refresh,
             "pullSoftdent": bool(pull_softdent),
+            "softdentReports": list((export_result or {}).get("reportIds") or [])
+            if pull_softdent and isinstance(export_result, dict)
+            else (["aging"] if pull_softdent else None),
+            "exportOkCount": (export_result or {}).get("okCount")
+            if pull_softdent and isinstance(export_result, dict)
+            else None,
+            "exportPartial": bool((export_result or {}).get("partial"))
+            if pull_softdent and isinstance(export_result, dict)
+            else None,
             "guiExport": bool(export_result and export_result.get("ok")) if pull_softdent else None,
             "fallback": "attest_only" if export_fallback_attest else None,
             "buildStamp": build_stamp,
