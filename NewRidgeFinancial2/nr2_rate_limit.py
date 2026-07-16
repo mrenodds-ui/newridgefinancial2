@@ -54,6 +54,8 @@ RATE_LIMIT_EXEMPT_PATHS = frozenset(
         "/api/hal/tools/qb-summary",
         "/api/hal/tools/money-beams",
         "/api/hal/tools/beam-verify",
+        "/api/desk-smoke",
+        "/api/health/desk-smoke",
         "/api/hal/actions/pending",
     }
 )

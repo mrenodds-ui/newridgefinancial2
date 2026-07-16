@@ -309,6 +309,69 @@
     });
     return btn;
   }
+  async function runDeskSmoke(opts) {
+    const o = opts || {};
+    const q = o.run === false || o.run === 0 ? "?run=0" : "?run=1";
+    const probe = o.probeHttp === false ? "&probeHttp=0" : "&probeHttp=1";
+    return getJson("/api/health/desk-smoke" + q + probe, o.timeoutMs || 60000);
+  }
+  function bindDeskSmokeButton(btnId, opts) {
+    const btn = document.getElementById(btnId || "btn-desk-smoke");
+    if (!btn || btn._nr2SmokeBound) return btn;
+    btn._nr2SmokeBound = true;
+    const o = opts || {};
+    btn.disabled = false;
+    btn.addEventListener("click", function () {
+      if (btn.classList.contains("busy")) return;
+      btn.classList.add("busy");
+      btn.disabled = true;
+      const label = btn.textContent;
+      btn.textContent = "SMOKING…";
+      runDeskSmoke({ probeHttp: o.probeHttp !== false })
+        .then(function (res) {
+          const data = (res && res.data) || {};
+          const status = String(data.status || (data.ok ? "GREEN" : "RED")).toUpperCase();
+          const fails = Array.isArray(data.failures) ? data.failures.join(",") : "";
+          const bit =
+            "DESK SMOKE · " +
+            status +
+            (data.deskProof ? " · proof " + data.deskProof : "") +
+            (data.dataBeamHash ? " · data " + formatBeamHash(data.dataBeamHash, 8) : "") +
+            (fails ? " · fail " + fails : "") +
+            " · empty ≠ $0";
+          if (typeof setBanner === "function") {
+            setBanner(status === "GREEN" ? "live" : "partial", bit);
+          }
+          if (o.hintId) {
+            const hint = document.getElementById(o.hintId);
+            if (hint) hint.textContent = bit;
+          }
+          if (o.valId) {
+            const el = document.getElementById(o.valId);
+            if (el) {
+              el.textContent = status;
+              el.classList.remove("stale", "hal", "sd");
+              el.classList.add(status === "GREEN" ? "hal" : "stale");
+            }
+          }
+        })
+        .catch(function (err) {
+          if (typeof setBanner === "function") {
+            setBanner(
+              "partial",
+              "DESK SMOKE · fault · " + String(err && err.message ? err.message : err)
+            );
+          }
+        })
+        .finally(function () {
+          btn.classList.remove("busy");
+          btn.textContent = label || "RUN SMOKE";
+          btn.disabled = false;
+          if (typeof o.onFinally === "function") o.onFinally();
+        });
+    });
+    return btn;
+  }
   function periodCloseStatus(ready) {
     const close = ready && ready.periodClose;
     if (!close || typeof close !== "object") {
@@ -436,5 +499,7 @@
     hashesMatch: hashesMatch,
     fetchBeamVerify: fetchBeamVerify,
     bindVerifyBeamButton: bindVerifyBeamButton,
+    runDeskSmoke: runDeskSmoke,
+    bindDeskSmokeButton: bindDeskSmokeButton,
   };
 })(window);

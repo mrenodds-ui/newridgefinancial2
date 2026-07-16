@@ -184,6 +184,22 @@
         valId: "val-beam-proof",
       });
     }
+    if (W.bindDeskSmokeButton) {
+      W.bindDeskSmokeButton("btn-desk-smoke", {
+        hintId: "hint-desk-smoke",
+        valId: "val-desk-smoke",
+      });
+    }
+    W.getJson("/api/health/desk-smoke?run=0", 8000).then(function (res) {
+      if (!res || !res.ok || !res.data) return;
+      const st = String(res.data.status || "NO SIGNAL").toUpperCase();
+      W.setText("val-desk-smoke", st);
+      const el = document.getElementById("val-desk-smoke");
+      if (el) {
+        el.classList.remove("stale", "hal");
+        el.classList.add(st === "GREEN" ? "hal" : "stale");
+      }
+    });
     const btn = document.getElementById("btn-force-close");
     if (btn && !btn.classList.contains("busy")) {
       const available = W.forceCloseAvailable

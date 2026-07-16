@@ -158,6 +158,26 @@
         valId: "hub-beam-proof",
       });
     }
+    if (W.bindDeskSmokeButton) {
+      W.bindDeskSmokeButton("btn-desk-smoke", {
+        hintId: "hint-desk-smoke",
+        valId: "hub-desk-smoke",
+      });
+    }
+    // Show last smoke without re-running.
+    W.getJson("/api/health/desk-smoke?run=0", 8000).then(function (res) {
+      if (!res || !res.ok || !res.data) return;
+      const st = String(res.data.status || "NO SIGNAL").toUpperCase();
+      setVal("hub-desk-smoke", st, st === "GREEN" ? "hal" : "stale");
+      const hint = document.getElementById("hint-desk-smoke");
+      if (hint && res.data.at) {
+        hint.textContent =
+          "last " +
+          String(res.data.at).slice(0, 19) +
+          (res.data.deskProof ? " · proof " + res.data.deskProof : "") +
+          " · empty ≠ $0";
+      }
+    });
     const btn = document.getElementById("btn-force-close");
     if (btn && !btn.classList.contains("busy")) {
       const available = W.forceCloseAvailable

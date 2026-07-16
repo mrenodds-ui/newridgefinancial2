@@ -1400,6 +1400,31 @@ class NR2BottleServer(BottleServer):
                 beam_desk_proof(readiness=readiness if isinstance(readiness, dict) else None)
             )
 
+        @app.get("/api/desk-smoke")
+        @app.get("/api/health/desk-smoke")
+        def desk_smoke_api():
+            """Desk confidence loop — close status, beams, Force Close, VERIFY BEAM."""
+            from desk_smoke import last_smoke_state, run_desk_smoke
+
+            run = str(bottle.request.params.get("run") or "1").strip().lower()
+            if run in ("0", "false", "no", "last", "status"):
+                last = last_smoke_state() or {
+                    "ok": False,
+                    "status": "NO SIGNAL",
+                    "at": None,
+                    "failures": ["never_run"],
+                }
+                last = {**last, "emptyNotZero": True, "source": "last"}
+                return _json_response(last)
+            result = run_desk_smoke(
+                probe_http=str(bottle.request.params.get("probeHttp") or "1").lower()
+                not in ("0", "false", "no"),
+                readiness=_get_import_readiness(),
+            )
+            result["source"] = "live"
+            status = 200 if result.get("ok") else 503
+            return _json_response(result, status=status)
+
         @app.get("/api/hal/tools/period-close-status")
         def hal_period_close_status_api():
             """Shadow period-close status — cites daily_close_log.jsonl only."""

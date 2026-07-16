@@ -396,6 +396,8 @@ FINANCIAL_READ_EXEMPT = frozenset(
         "/api/hal/tools/money-beams",
         "/api/hal/tools/beam-verify",
         "/api/hal/tools/period-close-status",
+        "/api/desk-smoke",
+        "/api/health/desk-smoke",
         "/api/hal/tools/memo-search",
         "/api/hal/tools/web-research",
         "/api/hal/actions/propose",
