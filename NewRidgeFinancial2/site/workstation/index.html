@@ -95,5 +95,22 @@
     <script src="/desktop-boot.js?v=hal-10099"></script>
     <script src="/nr2-tier3.js?v=hal-10099"></script>
     <script src="/app.js?v=hal-10099"></script>
+    <script>
+      (function bootHalAutonomy() {
+        function start() {
+          if (typeof HalAutonomousOps === "undefined" || !HalAutonomousOps.ensureStarted) return;
+          HalAutonomousOps.ensureStarted(function () {
+            return {
+              page: "workstation",
+              Services: typeof Services !== "undefined" ? Services : null,
+              DesktopBridge: typeof DesktopBridge !== "undefined" ? DesktopBridge : null,
+              halModels: typeof window !== "undefined" ? window.halModels : null,
+            };
+          });
+        }
+        if (document.readyState === "complete") setTimeout(start, 2000);
+        else window.addEventListener("load", function () { setTimeout(start, 2000); });
+      })();
+    </script>
   </body>
 </html>

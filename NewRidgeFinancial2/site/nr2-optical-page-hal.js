@@ -268,11 +268,17 @@
       actionQueue.innerHTML = "";
       if (!pending.length) {
         const li = document.createElement("li");
-        li.textContent = "No pending consents";
+        li.textContent = "No pending write/outbound consents";
         actionQueue.appendChild(li);
         return;
       }
-      pending.forEach(function (a) {
+      for (let i = 0; i < pending.length; i++) {
+        const a = pending[i];
+        // Read-autonomous kinds: execute immediately (no modal).
+        if (a && a.consentRequired === false) {
+          await autoExecuteAction(a);
+          continue;
+        }
         const li = document.createElement("li");
         const btn = document.createElement("button");
         btn.type = "button";
@@ -284,8 +290,59 @@
         });
         li.appendChild(btn);
         actionQueue.appendChild(li);
-      });
+      }
+      if (!actionQueue.children.length) {
+        const li = document.createElement("li");
+        li.textContent = "No pending write/outbound consents";
+        actionQueue.appendChild(li);
+      }
     } catch (_) {}
+  }
+
+  async function autoExecuteAction(action) {
+    if (!action || !action.actionId) return;
+    setOrb("busy");
+    try {
+      const res = await fetch("/api/hal/actions/execute", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(browserToken ? { "X-NR2-Session-Token": browserToken } : {}),
+        },
+        body: JSON.stringify({ actionId: action.actionId, consent: true }),
+      });
+      const data = await res.json();
+      const result = data.result || data;
+      if (result && result.clientMustNavigate && (result.navigate || result.href)) {
+        addMsg(
+          "hal",
+          "Autonomous navigate · " +
+            (action.label || action.kind) +
+            " → " +
+            String(result.navigate || result.href)
+        );
+        window.location.href = String(result.navigate || result.href);
+        return;
+      }
+      if (!data.ok) {
+        addMsg(
+          "hal",
+          "Autonomous action failed · " + (result.detail || result.error || data.error || res.status)
+        );
+        setOrb("error");
+        return;
+      }
+      addMsg(
+        "hal",
+        "Autonomous · " + (action.label || action.kind) + " · empty ≠ $0 · no SoftDent write-back"
+      );
+      setOrb("idle");
+      await refreshImportTruth();
+      await refreshBeams();
+    } catch (err) {
+      addMsg("hal", "Autonomous fault · " + String(err && err.message ? err.message : err));
+      setOrb("error");
+    }
   }
 
   function openConsent(action) {
@@ -421,9 +478,17 @@
   });
 
   async function proposeAndConsent(kind, label, payload) {
-    // SoftDent Excel export is consent-free for HAL — run immediately.
+    // SoftDent Excel + QB read sync + navigate are consent-free — run immediately.
     if (kind === "softdent_export" || kind === "softdent-export") {
       await runSoftdentExport(label, payload || {});
+      return;
+    }
+    if (kind === "qb_sync" || kind === "qb-sync") {
+      await runQbSync(label, payload || {});
+      return;
+    }
+    if (kind === "navigate") {
+      await runNavigate(label, payload || {});
       return;
     }
     const res = await fetch("/api/hal/actions/propose", {
@@ -436,10 +501,86 @@
     });
     const data = await res.json();
     if (data && data.action) {
+      if (data.consentRequired === false || (data.action && data.action.consentRequired === false)) {
+        await autoExecuteAction(data.action);
+        return;
+      }
       await refreshActions();
       openConsent(data.action);
     } else {
       addMsg("hal", "Could not propose action · " + (data.error || res.status));
+    }
+  }
+
+  async function runNavigate(label, payload) {
+    const href = String((payload && (payload.href || payload.navigate)) || "").trim();
+    if (!href) {
+      addMsg("hal", "Navigate failed · no optical href · empty ≠ invent a route.");
+      return;
+    }
+    addMsg("hal", (label || "Navigate") + " → " + href + " · autonomous");
+    window.location.href = href;
+  }
+
+  async function runQbSync(label, payload) {
+    setOrb("busy");
+    try {
+      const res = await fetch("/api/hal/tools/qb-sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(browserToken ? { "X-NR2-Session-Token": browserToken } : {}),
+        },
+        body: JSON.stringify({
+          consent: true,
+          actor: "optical-hal",
+          refreshImports: (payload && payload.refreshImports) !== false,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        addMsg("hal", "QB sync failed · " + (data.detail || data.error || res.status));
+        setOrb("error");
+        return;
+      }
+      let line = (label || "QB sync") + " · autonomous read-only · empty ≠ $0";
+      const ir = data.importRefresh;
+      if (ir && ir.status === "running") {
+        line +=
+          ir.alreadyRunning
+            ? " · import refresh already running"
+            : " · import refresh started (E2E)";
+        addMsg("hal", line);
+        addMsg("hal", "Waiting for SoftDent/QB imports… empty ≠ $0 while syncing.");
+        const sync = await waitForImportSync(180000);
+        addMsg(
+          "hal",
+          "Import sync · " +
+            (sync.status || "done") +
+            (sync.error ? " · " + sync.error : "")
+        );
+      } else if ((payload && payload.refreshImports) !== false) {
+        try {
+          await fetch("/api/refresh-imports", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(browserToken ? { "X-NR2-Session-Token": browserToken } : {}),
+            },
+            body: "{}",
+          });
+          line += " · import refresh requested";
+        } catch (_) {}
+        addMsg("hal", line);
+      } else {
+        addMsg("hal", line);
+      }
+      setOrb("idle");
+      await refreshBeams();
+      await refreshImportTruth();
+    } catch (err) {
+      addMsg("hal", "QB sync error · " + (err && err.message ? err.message : err));
+      setOrb("error");
     }
   }
 
@@ -677,7 +818,7 @@
           (nav.page || "page") +
           " → " +
           nav.href +
-          " · approve consent to open (empty ≠ $0 on that bench)."
+          " · opening autonomously (empty ≠ $0 on that bench)."
       );
     }
     await proposeAndConsent("navigate", "Open optical · " + (nav.page || nav.href), {
@@ -749,7 +890,7 @@
     });
   });
   document.getElementById("btnQbSync").addEventListener("click", function () {
-    proposeAndConsent("qb_sync", "Sync QuickBooks read-only → then refresh imports", {
+    runQbSync("Sync QuickBooks read-only → then refresh imports", {
       refreshImports: true,
     });
   });
@@ -833,6 +974,24 @@
     await refreshImportTruth();
     await refreshBeams();
     await refreshActions();
+    try {
+      if (typeof HalAutonomousOps !== "undefined" && HalAutonomousOps.ensureStarted) {
+        HalAutonomousOps.ensureStarted(function () {
+          return {
+            page: "optical-hal",
+            optical: true,
+            halModels: {
+              config: {
+                autonomousOps: { enabled: true },
+                employee: { enabled: true, targetLevel: 7 },
+                ascension10000: { enabled: true },
+              },
+            },
+          };
+        });
+        addMsg("hal", "Autonomous ops online · read paths run without consent · write/outbound still gated.");
+      }
+    } catch (_) {}
     try {
       if (typeof HalPageCanvas !== "undefined") {
         const slot = document.getElementById("halCanvasSlot");

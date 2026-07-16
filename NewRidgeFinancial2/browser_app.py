@@ -240,15 +240,28 @@ def main() -> int:
                 except Exception as exc:
                     print(f"Health monitor tick failed: {exc}", file=sys.stderr)
 
+            def _hal_autonomous_tick() -> None:
+                try:
+                    from nr2_scheduler import hal_autonomous_ops_tick
+
+                    result = hal_autonomous_ops_tick(store)
+                    print(
+                        f"HAL autonomous tick: ok={result.get('ok')} steps={len(result.get('steps') or [])}",
+                        file=sys.stderr,
+                    )
+                except Exception as exc:
+                    print(f"HAL autonomous tick failed: {exc}", file=sys.stderr)
+
             sched = BackgroundScheduler(daemon=True)
             sched.add_job(_alert_tick, IntervalTrigger(minutes=15), id="nr2-alerts")
+            sched.add_job(_hal_autonomous_tick, IntervalTrigger(minutes=15), id="nr2-hal-autonomous")
             sched.add_job(_morning_tick, CronTrigger(hour=6, minute=30), id="nr2-morning")
             sched.add_job(_eod_tick, CronTrigger(hour=22, minute=0), id="nr2-eod")
             # Proactive health every 6 hours (Moonshot REC-004).
             sched.add_job(_health_monitor_tick, IntervalTrigger(hours=6), id="nr2-health-monitor")
             sched.start()
             print(
-                "NR2 background scheduler: alerts every 15m, health every 6h, morning 06:30 UTC, EOD handoff 22:00 UTC",
+                "NR2 background scheduler: alerts+HAL autonomy every 15m, health every 6h, morning 06:30 UTC, EOD handoff 22:00 UTC",
                 file=sys.stderr,
             )
         except ImportError:

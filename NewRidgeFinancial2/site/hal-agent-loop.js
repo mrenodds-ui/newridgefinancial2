@@ -30,7 +30,7 @@
     "For run_command use query: validate-hal | node-check-agent | node-check-app | git-status.",
     "After tool results appear in context, either request more tools or write the final staff-facing answer (no <<<tool blocks in the final answer).",
     "To propose code changes, include <<<patch blocks; they may be applied automatically when task completion is enabled.",
-    "To propose operator actions (sync, refresh, navigate), include <<<actuator blocks; execution requires an explicit operator click — never run POST/automation without consent:",
+    "To propose write/outbound actions, include <<<actuator blocks; SoftDent write-back, QB post, payer submit, and email require an explicit operator click. Read-only refresh/sync/navigate may run autonomously:",
     "<<<actuator",
     "label: Sync QuickBooks now?",
     "action_id: refresh-imports",
@@ -179,19 +179,28 @@
     }
     const id = String(proposal.actionId).toLowerCase();
     if (id === "navigate" && proposal.target) {
-      return { ok: true, navigate: proposal.target, autonomous: false };
+      return { ok: true, navigate: proposal.target, autonomous: true };
     }
     if (id === "refresh-imports" || id === "sync-qb" || id === "sync-softdent") {
       const Svc = ctx && ctx.Services;
       if (Svc && typeof Svc.refreshImports === "function") {
-        await Svc.refreshImports({ reason: "hal-actuator-consent", waitForCompletion: true });
-        return { ok: true, message: "Import refresh completed.", autonomous: false };
+        await Svc.refreshImports({ reason: "hal-actuator-autonomous", waitForCompletion: true });
+        return { ok: true, message: "Import refresh completed.", autonomous: true };
       }
       if (typeof ImportCoordinator !== "undefined" && ImportCoordinator.refresh) {
-        await ImportCoordinator.refresh({ reason: "hal-actuator-consent" });
-        return { ok: true, message: "Import refresh started.", autonomous: false };
+        await ImportCoordinator.refresh({ reason: "hal-actuator-autonomous" });
+        return { ok: true, message: "Import refresh started.", autonomous: true };
       }
-      return { ok: false, reason: "no-refresh-path", autonomous: false };
+      try {
+        await fetch("/api/refresh-imports", {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: "{}",
+        });
+        return { ok: true, message: "Import refresh started.", autonomous: true };
+      } catch (_) {
+        return { ok: false, reason: "no-refresh-path", autonomous: true };
+      }
     }
     return { ok: false, reason: "unknown-action", autonomous: false };
   }

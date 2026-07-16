@@ -12,10 +12,11 @@ class HalSoftdentExportConsentTests(unittest.TestCase):
 
         doctrine = HAL_9000_BRAIN_SYSTEM
         self.assertIn("consent-free", doctrine.lower())
-        self.assertIn("SoftDent Excel/Print Preview GUI export does NOT require consent", doctrine)
+        self.assertIn("SoftDent Excel/Print Preview GUI export", doctrine)
+        self.assertIn("QB read-only sync", doctrine)
         self.assertNotIn("Outbound and GUI exports require explicit operator consent.", doctrine)
-        self.assertIn("QB sync", doctrine)
         self.assertIn("write-back", doctrine.lower())
+        self.assertNotIn("QB sync (requires consent)", doctrine)
 
     def test_propose_softdent_export_marks_consent_not_required(self) -> None:
         from hal_brain_tools import propose_action
@@ -25,12 +26,34 @@ class HalSoftdentExportConsentTests(unittest.TestCase):
         self.assertFalse(out.get("consentRequired"))
         self.assertFalse((out.get("action") or {}).get("consentRequired"))
 
-    def test_propose_qb_sync_still_requires_consent(self) -> None:
+    def test_propose_qb_sync_is_consent_free(self) -> None:
         from hal_brain_tools import propose_action
 
         out = propose_action(kind="qb_sync", label="QB sync")
         self.assertTrue(out.get("ok"))
-        self.assertTrue(out.get("consentRequired"))
+        self.assertFalse(out.get("consentRequired"))
+        self.assertTrue((out.get("action") or {}).get("autonomous"))
+
+    def test_propose_navigate_is_consent_free(self) -> None:
+        from hal_brain_tools import propose_action
+
+        out = propose_action(kind="navigate", label="Open SoftDent", payload={"page": "softdent"})
+        self.assertTrue(out.get("ok"))
+        self.assertFalse(out.get("consentRequired"))
+
+    def test_execute_qb_sync_without_consent(self) -> None:
+        from hal_brain_tools import execute_action, propose_action
+
+        proposed = propose_action(kind="qb_sync", label="QB sync", payload={"refreshImports": True})
+        action_id = proposed["action"]["actionId"]
+        with patch(
+            "hal_brain_tools.qb_sync",
+            return_value={"ok": True, "autonomous": True, "consentRequired": False},
+        ) as mocked:
+            out = execute_action(action_id=action_id, consent=False, store=None)
+        self.assertTrue(out.get("ok"))
+        mocked.assert_called_once()
+        self.assertEqual(out["action"]["status"], "executed")
 
     def test_export_runs_without_consent_flag(self) -> None:
         from hal_brain_tools import softdent_export

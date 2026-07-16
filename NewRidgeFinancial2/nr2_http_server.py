@@ -1497,8 +1497,16 @@ class NR2BottleServer(BottleServer):
 
             body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
             payload = json.loads(body or "{}")
-            result = qb_sync(consent=bool(payload.get("consent")), store=_local_store())
-            status = 200 if result.get("ok") else (403 if result.get("error") == "consent_required" else 502)
+            # Read-only QB sync is consent-free for HAL (never silent post).
+            result = qb_sync(
+                consent=True,
+                store=_local_store(),
+                actor=str(payload.get("actor") or "hal-api")[:64],
+            )
+            if result.get("ok") and payload.get("refreshImports", True) is not False:
+                result["importRefresh"] = _start_import_refresh(store=_local_store())
+                result["e2e"] = "qb-sync→refresh-imports"
+            status = 200 if result.get("ok") else 502
             return _json_response(result, status=status)
 
         @app.post("/api/hal/tools/memo-search")
@@ -3186,6 +3194,12 @@ class NR2BottleServer(BottleServer):
             payload = bottle.request.json or {}
             force = bool((payload or {}).get("force"))
             return _json_response(morning_routine_tick(_local_store(), force=force))
+
+        @app.post("/api/hal/autonomous/tick")
+        def hal_autonomous_tick_api():
+            from nr2_scheduler import hal_autonomous_ops_tick
+
+            return _json_response(hal_autonomous_ops_tick(_local_store()))
 
         @app.post("/api/scheduler/halt")
         def scheduler_halt_api():

@@ -35,7 +35,8 @@ class OpticalBoardNavigateTests(unittest.TestCase):
             label="Open SoftDent",
             payload={"page": "softdent"},
         )
-        out = execute_action(action_id=proposed["action"]["actionId"], consent=True)
+        self.assertFalse(proposed.get("consentRequired"))
+        out = execute_action(action_id=proposed["action"]["actionId"], consent=False)
         self.assertTrue(out.get("ok"))
         result = out.get("result") or {}
         self.assertTrue(result.get("clientMustNavigate"))

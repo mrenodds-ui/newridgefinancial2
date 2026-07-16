@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 AUTONOMOUS_RUNS_KEY = "nr2:scheduler:autonomous-state"
-MAX_AUTONOMOUS_TICKS_PER_DAY = 3
+MAX_AUTONOMOUS_TICKS_PER_DAY = 12
 MAX_APPEALS_PER_TICK = 5
 UNDO_WINDOW_HOURS = 4
 
@@ -454,14 +454,28 @@ def _persist_work_from_morning(
     return written
 
 
-def morning_routine_tick(store, *, force: bool = False) -> dict[str, Any]:
+def _human_operator_shift_blocks_auto(store) -> bool:
+    """True only when a non-HAL human employee shift is active.
+
+    HAL continuous / Level-7 shift must not block morning or EOD autonomy.
+    """
     from employee_actions import get_current_shift_context
+
+    ctx = get_current_shift_context(store)
+    if not ctx.get("active"):
+        return False
+    emp = str(ctx.get("employeeId") or "").strip().upper()
+    if not emp or emp == "HAL" or emp.startswith("HAL"):
+        return False
+    return True
+
+
+def morning_routine_tick(store, *, force: bool = False) -> dict[str, Any]:
     from import_healing import heal_import_pipeline
 
     if not store:
         return {"ok": False, "error": "no_store"}
-    ctx = get_current_shift_context(store)
-    if ctx.get("active") and not force:
+    if _human_operator_shift_blocks_auto(store) and not force:
         return {"ok": True, "skipped": True, "reason": "human_shift_active"}
 
     state = _load_state(store)
@@ -509,6 +523,42 @@ def morning_routine_tick(store, *, force: bool = False) -> dict[str, Any]:
         }})
     except Exception as close_exc:
         actions.append({"action": "period_close_softdent_pull", "error": str(close_exc)[:240]})
+
+    # QB read-only sync — consent-free for scheduler (never silent QB post).
+    try:
+        from hal_brain_tools import qb_sync
+
+        qb_result = qb_sync(consent=True, store=store, actor="scheduler")
+        actions.append(
+            {
+                "action": "qb_sync_readonly",
+                "result": {
+                    "ok": qb_result.get("ok"),
+                    "error": qb_result.get("error"),
+                    "autonomous": True,
+                },
+            }
+        )
+    except Exception as qb_exc:
+        actions.append({"action": "qb_sync_readonly", "error": str(qb_exc)[:240]})
+
+    # Desk smoke self-proof (in-process; no HTTP required).
+    try:
+        from desk_smoke import run_desk_smoke
+
+        smoke = run_desk_smoke(probe_http=False)
+        actions.append(
+            {
+                "action": "desk_smoke",
+                "result": {
+                    "ok": smoke.get("ok"),
+                    "status": smoke.get("status"),
+                    "deskProof": smoke.get("deskProof"),
+                },
+            }
+        )
+    except Exception as smoke_exc:
+        actions.append({"action": "desk_smoke", "error": str(smoke_exc)[:240]})
 
     collections_result: dict[str, Any] | None = None
     month_end: dict[str, Any] | None = None
@@ -629,7 +679,6 @@ def eod_handoff_tick(store, *, force: bool = False) -> dict[str, Any]:
     """Compile shift handoff without requiring clock-out (local only)."""
     if not store:
         return {"ok": False, "error": "no_store"}
-    from employee_actions import get_current_shift_context
     from hal_employee_workflows import compile_shift_handoff, init_employee_workflow_schemas
 
     state = _load_state(store)
@@ -642,9 +691,8 @@ def eod_handoff_tick(store, *, force: bool = False) -> dict[str, Any]:
             "handoffId": state.get("lastEodHandoffId"),
         }
 
-    ctx = get_current_shift_context(store)
-    # Prefer running when no human shift; allow force during shift for tests/manual
-    if ctx.get("active") and not force:
+    # Prefer running when no human operator shift; HAL continuous shift coexists.
+    if _human_operator_shift_blocks_auto(store) and not force:
         return {"ok": True, "skipped": True, "reason": "human_shift_active"}
 
     handoff = compile_shift_handoff(store, employee_id="HAL")
@@ -711,4 +759,70 @@ def eod_handoff_tick(store, *, force: bool = False) -> dict[str, Any]:
         "handoffId": handoff_id,
         "openItemCount": handoff.get("openItemCount"),
         "reportMarkdown": handoff.get("reportMarkdown"),
+    }
+
+
+def hal_autonomous_ops_tick(store) -> dict[str, Any]:
+    """Always-on server tick — heal + desk smoke (+ optional QB sync if beams stale).
+
+    Does not write SoftDent, post QB, or submit payers. Safe to run every 15m.
+    """
+    if not store:
+        return {"ok": False, "error": "no_store"}
+    steps: list[dict[str, Any]] = []
+    try:
+        from import_healing import heal_import_pipeline
+
+        steps.append({"step": "heal_import_pipeline", "result": heal_import_pipeline(force=False)})
+    except Exception as exc:  # noqa: BLE001
+        steps.append({"step": "heal_import_pipeline", "error": str(exc)[:240]})
+
+    try:
+        from desk_smoke import run_desk_smoke
+
+        smoke = run_desk_smoke(probe_http=False)
+        steps.append(
+            {
+                "step": "desk_smoke",
+                "result": {
+                    "ok": smoke.get("ok"),
+                    "status": smoke.get("status"),
+                    "deskProof": smoke.get("deskProof"),
+                },
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        steps.append({"step": "desk_smoke", "error": str(exc)[:240]})
+
+    try:
+        from import_diagnostics import assess_import_readiness
+
+        ready = assess_import_readiness(operation="dailyOps")
+        lasers = (ready or {}).get("alignmentLasers") or {}
+        red = lasers.get("red") is True or bool((ready or {}).get("blocking"))
+        if red:
+            from daily_closeout import force_period_close
+
+            forced = force_period_close(store=store, actor="hal-autonomous")
+            steps.append(
+                {
+                    "step": "force_close_on_red_lasers",
+                    "result": {
+                        "ok": forced.get("ok"),
+                        "status": forced.get("status"),
+                        "pullSoftdent": forced.get("pullSoftdent"),
+                    },
+                }
+            )
+    except Exception as exc:  # noqa: BLE001
+        steps.append({"step": "force_close_on_red_lasers", "error": str(exc)[:240]})
+
+    ok = not any(s.get("error") for s in steps if s.get("step") == "heal_import_pipeline")
+    return {
+        "ok": ok,
+        "at": _utc_now(),
+        "autonomous": True,
+        "steps": steps,
+        "emptyNotZero": True,
+        "writebackForbidden": True,
     }

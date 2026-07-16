@@ -114,7 +114,7 @@
       "hal9000Voice": true,
       "orchestratorAgents": 5,
       "tickMinutes": 3,
-      "policy": "Always-on heal, placement, and multi-agent triage on desktop. Payer submit and SoftDent writeback remain consent-gated; staff confirm in portal."
+      "policy": "Always-on heal, placement, multi-agent triage, and server autonomous tick. SoftDent Excel + QB read sync + navigate run without consent. SoftDent write-back, QB post, payer submit, and outbound email remain consent-gated."
     },
     "chat9000": {
       "enabled": true,

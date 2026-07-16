@@ -1,8 +1,9 @@
 """HAL brains tool + consent action helpers (Moonshot P1/P2).
 
 Invoked only from /api/hal/tools/* and /api/hal/actions/* routes.
-SoftDent write-back forbidden; SoftDent GUI Excel export is consent-free for HAL.
-QB sync still requires consent=true.
+SoftDent write-back forbidden. SoftDent GUI Excel export, QB read-only sync, and
+optical navigate are consent-free for HAL (read autonomy). SoftDent write-back,
+QB post, payer submit, and outbound email stay consent-gated.
 
 Money honesty (nr2-12019): monetary chat must cite live SoftDent/QB beams
 or explicit UNAVAILABLE — never invent dollars; empty ≠ $0.
@@ -19,8 +20,39 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-# In-process pending consent actions (operator must click Approve)
+# In-process pending actions — write/outbound kinds still need Approve;
+# read-autonomous kinds auto-execute without a modal.
 _PENDING: dict[str, dict[str, Any]] = {}
+
+# Read-only / local desk actions HAL may run without operator click.
+_READ_AUTONOMOUS_KINDS = frozenset(
+    {
+        "softdent_export",
+        "softdent-export",
+        "qb_sync",
+        "qb-sync",
+        "navigate",
+        "web_research",
+        "web-research",
+        "memo_write",
+        "memo-write",
+        "memo_search",
+        "memo-search",
+        "refresh_imports",
+        "refresh-imports",
+        "desk_smoke",
+        "desk-smoke",
+        "beam_verify",
+        "beam-verify",
+    }
+)
+
+
+def is_read_autonomous_kind(kind: str | None) -> bool:
+    k = str(kind or "").strip().lower()
+    if k in _READ_AUTONOMOUS_KINDS:
+        return True
+    return k.replace("_", "-") in {x.replace("_", "-") for x in _READ_AUTONOMOUS_KINDS}
 
 # Beam attestation considered stale for optical banner / gate after this many seconds
 MONEY_BEAM_STALE_SECONDS = 300
@@ -645,20 +677,30 @@ def enforce_money_grounding(
     }
 
 
-def qb_sync(*, consent: bool, store) -> dict[str, Any]:
-    if not consent:
-        return {
-            "ok": False,
-            "error": "consent_required",
-            "detail": "QB sync requires explicit operator consent (consent:true).",
-        }
+def qb_sync(*, consent: bool = True, store, actor: str = "hal") -> dict[str, Any]:
+    """QuickBooks read-only sync — consent-free for HAL / scheduler (no silent QB post)."""
+    _ = consent  # retained for API compatibility; read sync is autonomous
     try:
         from qb_connector import sync_read_only
 
         result = sync_read_only(store)
-        return {"ok": True, "consent": True, "result": result, "at": _utc_now()}
+        return {
+            "ok": True,
+            "consentRequired": False,
+            "autonomous": True,
+            "actor": str(actor or "hal")[:64],
+            "result": result,
+            "at": _utc_now(),
+            "emptyNotZero": True,
+        }
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": str(exc)[:400], "consent": True}
+        return {
+            "ok": False,
+            "error": str(exc)[:400],
+            "consentRequired": False,
+            "autonomous": True,
+            "actor": str(actor or "hal")[:64],
+        }
 
 
 def softdent_export(*, consent: bool = True, report_id: str = "aging", days: int = 30) -> dict[str, Any]:
@@ -835,8 +877,8 @@ def web_research_tool(*, query: str) -> dict[str, Any]:
 def propose_action(*, kind: str, label: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     action_id = uuid.uuid4().hex
     kind_s = str(kind or "custom")[:64]
-    # SoftDent GUI Excel export is consent-free for HAL (read-only; no write-back).
-    consent_required = kind_s not in ("softdent_export", "softdent-export")
+    # Read autonomy: SoftDent Excel, QB sync, navigate, memo/web — no operator click.
+    consent_required = not is_read_autonomous_kind(kind_s)
     row = {
         "actionId": action_id,
         "kind": kind_s,
@@ -845,6 +887,7 @@ def propose_action(*, kind: str, label: str, payload: dict[str, Any] | None = No
         "status": "pending",
         "createdAt": _utc_now(),
         "consentRequired": consent_required,
+        "autonomous": not consent_required,
     }
     _PENDING[action_id] = row
     return {"ok": True, "action": row, "consentRequired": consent_required}
@@ -863,8 +906,9 @@ def execute_action(*, action_id: str, consent: bool, store=None) -> dict[str, An
         return {"ok": False, "error": "action_not_pending", "action": row}
 
     kind = str(row.get("kind") or "")
+    read_auto = is_read_autonomous_kind(kind)
     softdent_export_kind = kind in ("softdent_export", "softdent-export")
-    if not consent and not softdent_export_kind:
+    if not consent and not read_auto:
         return {"ok": False, "error": "consent_required"}
 
     payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
@@ -875,7 +919,7 @@ def execute_action(*, action_id: str, consent: bool, store=None) -> dict[str, An
             days=int(payload.get("days") or 30),
         )
     elif kind in ("qb_sync", "qb-sync"):
-        result = qb_sync(consent=True, store=store)
+        result = qb_sync(consent=True, store=store, actor="hal-action")
     elif kind == "navigate":
         from nr2_optical_routes import resolve_optical_href
 

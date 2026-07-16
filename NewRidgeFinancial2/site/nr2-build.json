@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12039-optical-theme-lock",
-  "BUILD_ID": "nr2-12039-optical-theme-lock",
-  "assetVersion": "nr2-12039-optical-theme-lock",
-  "builtAt": "2026-07-16T01:05:00.000Z",
-  "notes": "nr2-12039-optical-theme-lock: Hub Alignment Bench (no card soup); staff sans vs laser mono; mech-lock Force Close/VERIFY BEAM vs mech-action RUN SMOKE; shared honesty strip with landing. SoftDent write-back forbidden. empty ≠ $0. STALE/fringe preserved.",
+  "schemaVersion": "nr2-12040-hal-autonomous",
+  "BUILD_ID": "nr2-12040-hal-autonomous",
+  "assetVersion": "nr2-12040-hal-autonomous",
+  "builtAt": "2026-07-16T01:20:00.000Z",
+  "notes": "nr2-12040-hal-autonomous: HAL read autonomy — SoftDent Excel + QB sync + navigate consent-free; HalAutonomousOps actually starts; server /api/hal/autonomous/tick every 15m; HAL continuous shift no longer blocks morning tick. SoftDent write-back / payer / email still gated. empty ≠ $0.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12039-OPTICAL-THEME-LOCK",
+  "package": "NR2-12040-HAL-AUTONOMOUS",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"
