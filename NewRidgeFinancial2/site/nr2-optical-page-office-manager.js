@@ -173,18 +173,56 @@
     }
 
     const ph = shortHash(data.patientHash || (fallback && fallback.patientHash)).replace(/^#/, "");
+    const pid = String((fallback && fallback.patientId) || "").trim();
+    const initials = String(data.initials || (fallback && fallback.initials) || "P—");
     const actions = document.createElement("div");
     actions.className = "wk-dossier-actions";
-    const halLink = document.createElement("a");
-    halLink.className = "btn-quiet";
-    halLink.href =
-      "/nr2-optical-page-hal.html?patientHash=" +
-      encodeURIComponent(ph) +
-      "&patientId=" +
-      encodeURIComponent(String((fallback && fallback.patientId) || ""));
-    halLink.textContent = "Ask HAL about this patient →";
-    actions.appendChild(halLink);
+    const halBtn = document.createElement("button");
+    halBtn.type = "button";
+    halBtn.className = "btn-quiet";
+    halBtn.textContent = "Ask HAL about this patient →";
+    halBtn.addEventListener("click", function () {
+      askHalAboutPatient(pid, ph, initials);
+    });
+    actions.appendChild(halBtn);
     body.appendChild(actions);
+  }
+
+  function askHalAboutPatient(patientId, patientHash, initials) {
+    const pid = String(patientId || "").trim();
+    const ph = String(patientHash || "").replace(/^#/, "").trim();
+    if (!pid) {
+      setDossierMessage("Cannot hand off to HAL — SoftDent patient id missing.", true);
+      return;
+    }
+    const ctx = {
+      patientId: pid,
+      patientHash: ph,
+      initials: String(initials || "P—"),
+      at: Date.now(),
+      ttlMs: 30 * 60 * 1000,
+    };
+    try {
+      sessionStorage.setItem("nr2.hal.patientContext", JSON.stringify(ctx));
+    } catch (_) {}
+    if (W.postJson && ph) {
+      W.postJson(
+        "/api/audit/hal-patient-context",
+        {
+          patientHash: ph,
+          action: "context_set",
+          toolsUsed: '["om_ask_hal_link"]',
+        },
+        8000
+      ).catch(function () {});
+    }
+    const url =
+      "/nr2-optical-page-hal.html?patientId=" +
+      encodeURIComponent(pid) +
+      "&patientHash=" +
+      encodeURIComponent(ph) +
+      "&autoSummarize=1";
+    window.location.href = url;
   }
 
   async function openPatientContext(slot) {

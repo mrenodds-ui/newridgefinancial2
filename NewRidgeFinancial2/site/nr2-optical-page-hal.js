@@ -123,6 +123,96 @@
     return chatSessionId;
   }
 
+  const PATIENT_CTX_KEY = "nr2.hal.patientContext";
+  const PATIENT_CTX_TTL_MS = 30 * 60 * 1000;
+
+  function readStoredPatientContext() {
+    try {
+      const raw = sessionStorage.getItem(PATIENT_CTX_KEY);
+      if (!raw) return null;
+      const ctx = JSON.parse(raw);
+      if (!ctx || typeof ctx !== "object") return null;
+      const at = Number(ctx.at || 0);
+      const ttl = Number(ctx.ttlMs || PATIENT_CTX_TTL_MS);
+      if (at && Date.now() - at > ttl) {
+        sessionStorage.removeItem(PATIENT_CTX_KEY);
+        return null;
+      }
+      return ctx;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function showPatientContextBanner(ctx) {
+    const banner = document.getElementById("patientContextBanner");
+    const text = document.getElementById("patientContextText");
+    if (!banner || !text || !ctx) return;
+    const ph = String(ctx.patientHash || "").replace(/^#/, "").slice(0, 4);
+    const initials = String(ctx.initials || "P—");
+    text.textContent =
+      initials + " · #" + (ph || "————") + " · SoftDent bound · empty ≠ $0";
+    banner.hidden = false;
+    const qEl = document.getElementById("patientSummaryQuery");
+    if (qEl && ctx.patientId) qEl.value = String(ctx.patientId);
+  }
+
+  function hidePatientContextBanner() {
+    const banner = document.getElementById("patientContextBanner");
+    if (banner) banner.hidden = true;
+    try {
+      sessionStorage.removeItem(PATIENT_CTX_KEY);
+    } catch (_) {}
+  }
+
+  async function setHalPatientContext(ctx) {
+    const pid = String((ctx && ctx.patientId) || "").trim();
+    if (!pid) return { ok: false, error: "patientId_required" };
+    await ensureChatSession();
+    if (!chatSessionId) return { ok: false, error: "no_session" };
+    const ph = String((ctx && ctx.patientHash) || "").replace(/^#/, "").trim();
+    const initials = String((ctx && ctx.initials) || "").trim() || null;
+    const res = await fetch("/api/hal/patient-context", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(browserToken ? { "X-NR2-Session-Token": browserToken } : {}),
+      },
+      body: JSON.stringify({
+        sessionId: chatSessionId,
+        patientId: pid,
+        patientHash: ph || undefined,
+        initials: initials || undefined,
+        toolsUsed: '["set_patient_context","om_ask_hal"]',
+      }),
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (_) {
+      data = null;
+    }
+    if (res.ok && data && data.ok) {
+      const bound = {
+        patientId: pid,
+        patientHash: ph || (data.patientContext && data.patientContext.patientHash) || "",
+        initials: initials || (data.patientContext && data.patientContext.initials) || "P—",
+        at: Date.now(),
+        ttlMs: PATIENT_CTX_TTL_MS,
+      };
+      try {
+        sessionStorage.setItem(PATIENT_CTX_KEY, JSON.stringify(bound));
+      } catch (_) {}
+      showPatientContextBanner(bound);
+      return { ok: true, patientContext: bound };
+    }
+    return {
+      ok: false,
+      error: (data && data.error) || "context_set_failed",
+      status: res.status,
+    };
+  }
+
   async function restoreHistory() {
     if (!chatSessionId) return;
     try {
@@ -1022,20 +1112,74 @@
       }
     } catch (_) {}
     try {
+      const clearBtn = document.getElementById("btnClearPatientContext");
+      if (clearBtn && !clearBtn._nr2Bound) {
+        clearBtn._nr2Bound = true;
+        clearBtn.addEventListener("click", function () {
+          hidePatientContextBanner();
+          addMsg("hal", "Patient context cleared · SoftDent id unbound from this UI session.");
+        });
+      }
       const params = new URLSearchParams(window.location.search || "");
+      const pid = String(params.get("patientId") || "").trim();
       const ph = String(params.get("patientHash") || "").replace(/^#/, "").trim();
-      if (ph && input) {
-        input.value = "Summarize SoftDent patient hash #" + ph.slice(0, 4) + " — insurance, claims, clinical notes. empty ≠ $0.";
-        input.focus();
-        addMsg(
-          "hal",
-          "OM schedule handoff · patient hash #" +
-            ph.slice(0, 4) +
-            " · draft ready in compose · SoftDent read-only · empty ≠ $0"
-        );
-        if (chatBind) {
-          chatBind.textContent =
-            "OM patient context · hash #" + ph.slice(0, 4) + " · POST /api/hal/chat when you transmit";
+      const auto = String(params.get("autoSummarize") || "") === "1";
+      let ctx = null;
+      if (pid) {
+        ctx = { patientId: pid, patientHash: ph, initials: "P—", at: Date.now(), ttlMs: PATIENT_CTX_TTL_MS };
+      } else {
+        ctx = readStoredPatientContext();
+      }
+      if (ctx && ctx.patientId) {
+        if (!browserToken) await ensureBrowserSession();
+        await ensureChatSession();
+        // Enrich initials from mini dossier when possible
+        try {
+          const miniRes = await fetch(
+            "/api/apex/patient-dossier-mini/" + encodeURIComponent(ctx.patientId),
+            { headers: { Accept: "application/json" }, cache: "no-store" }
+          );
+          if (miniRes.ok) {
+            const mini = await miniRes.json();
+            if (mini && mini.ok) {
+              if (mini.initials) ctx.initials = String(mini.initials);
+              if (mini.patientHash) ctx.patientHash = String(mini.patientHash).replace(/^#/, "");
+            }
+          }
+        } catch (_) {}
+        const setRes = await setHalPatientContext(ctx);
+        if (setRes.ok) {
+          addMsg(
+            "hal",
+            "OM patient context bound · " +
+              String(ctx.initials || "P—") +
+              " · #" +
+              String(ctx.patientHash || "").slice(0, 4) +
+              " · SoftDent READ-ONLY · empty ≠ $0"
+          );
+          if (input) {
+            input.value =
+              "Summarize patient " +
+              ctx.patientId +
+              " — insurance, claims, clinical notes. empty ≠ $0.";
+          }
+          if (chatBind) {
+            chatBind.textContent =
+              "OM patient context · #" +
+              String(ctx.patientHash || "").slice(0, 4) +
+              " · bound to session · POST /api/hal/chat";
+          }
+          if (auto && !busy) {
+            await runPatientSummary(ctx.patientId);
+          }
+        } else {
+          addMsg(
+            "hal",
+            "Could not bind patient context · " +
+              String(setRes.error || setRes.status || "failed") +
+              (setRes.status === 403 ? " · capability rejected" : "")
+          );
+          showPatientContextBanner(ctx);
         }
       }
     } catch (_) {}

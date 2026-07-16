@@ -15,6 +15,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SESSIONS_DIR = REPO_ROOT / "app_data" / "nr2" / "hal-sessions"
 MAX_TURNS = 50
+PATIENT_CONTEXT_TTL_SEC = 1800  # 30 min — Moonshot OM→HAL patient context
 
 # Personality doctrine injected when chat route builds system prompt (HalChat9000 parity)
 HAL_9000_BRAIN_SYSTEM = """You are HAL, the NR2 Optical AI Core — ship-computer operational intelligence.
@@ -102,11 +103,12 @@ def append_turn(
 
 def _rewrite_capped(session_id: str, turns: list[dict[str, Any]]) -> None:
     path = _session_path(session_id)
+    prior_meta = get_session_meta(session_id)
     header = {
         "type": "session",
         "sessionId": session_id,
         "createdAt": _utc_now(),
-        "meta": {"capped": True, "maxTurns": MAX_TURNS},
+        "meta": {**(prior_meta or {}), "capped": True, "maxTurns": MAX_TURNS},
     }
     with path.open("w", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(header, ensure_ascii=False) + "\n")
@@ -128,6 +130,7 @@ def get_history(session_id: str, *, limit: int = MAX_TURNS) -> dict[str, Any]:
         return {"ok": False, "error": "session_not_found", "sessionId": session_id, "turns": []}
     turns: list[dict[str, Any]] = []
     created_at = ""
+    meta: dict[str, Any] = {}
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         for line in handle:
             line = line.strip()
@@ -139,6 +142,8 @@ def get_history(session_id: str, *, limit: int = MAX_TURNS) -> dict[str, Any]:
                 continue
             if row.get("type") == "session":
                 created_at = str(row.get("createdAt") or "")
+                raw_meta = row.get("meta")
+                meta = raw_meta if isinstance(raw_meta, dict) else {}
                 continue
             if row.get("role"):
                 turns.append(row)
@@ -148,10 +153,143 @@ def get_history(session_id: str, *, limit: int = MAX_TURNS) -> dict[str, Any]:
         "ok": True,
         "sessionId": session_id,
         "createdAt": created_at,
+        "meta": meta,
         "turns": turns,
         "messages": messages,
         "turnCount": len(turns),
     }
+
+
+def get_session_meta(session_id: str) -> dict[str, Any]:
+    hist = get_history(session_id, limit=1)
+    if not hist.get("ok"):
+        return {}
+    meta = hist.get("meta")
+    return meta if isinstance(meta, dict) else {}
+
+
+def patch_session_meta(session_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+    """Merge patch into session header meta (preserves turns)."""
+    path = _session_path(session_id)
+    if not path.is_file():
+        create_session(meta={"resurrected": True})
+        # Prefer keeping caller session id if create used a new uuid — rewrite path
+        path = _session_path(session_id)
+        if not path.is_file():
+            header = {
+                "type": "session",
+                "sessionId": session_id,
+                "createdAt": _utc_now(),
+                "meta": {},
+            }
+            with path.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps(header, ensure_ascii=False) + "\n")
+
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    header: dict[str, Any] | None = None
+    turns: list[dict[str, Any]] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("type") == "session" and header is None:
+            header = row
+            continue
+        if row.get("role"):
+            turns.append(row)
+    if header is None:
+        header = {
+            "type": "session",
+            "sessionId": session_id,
+            "createdAt": _utc_now(),
+            "meta": {},
+        }
+    meta = header.get("meta") if isinstance(header.get("meta"), dict) else {}
+    meta = dict(meta)
+    for key, val in (patch or {}).items():
+        if val is None:
+            meta.pop(str(key), None)
+        else:
+            meta[str(key)] = val
+    header["meta"] = meta
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(header, ensure_ascii=False) + "\n")
+        for turn in turns:
+            handle.write(json.dumps(turn, ensure_ascii=False) + "\n")
+    return {"ok": True, "sessionId": session_id, "meta": meta}
+
+
+def set_patient_context(
+    session_id: str,
+    *,
+    patient_id: str,
+    patient_hash: str | None = None,
+    initials: str | None = None,
+    ttl_sec: int = PATIENT_CONTEXT_TTL_SEC,
+) -> dict[str, Any]:
+    from datetime import timedelta
+
+    pid = str(patient_id or "").strip()
+    if not pid:
+        return {"ok": False, "error": "patient_id_required"}
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(seconds=max(60, int(ttl_sec or PATIENT_CONTEXT_TTL_SEC)))
+    ctx = {
+        "patientId": pid,
+        "patientHash": str(patient_hash or "").strip() or None,
+        "initials": str(initials or "").strip() or None,
+        "setAt": now.isoformat(),
+        "expiresAt": expires.isoformat(),
+        "ttlSec": int(ttl_sec or PATIENT_CONTEXT_TTL_SEC),
+    }
+    patched = patch_session_meta(session_id, {"patientContext": ctx})
+    if not patched.get("ok"):
+        return patched
+    return {"ok": True, "sessionId": session_id, "patientContext": ctx}
+
+
+def clear_patient_context(session_id: str) -> dict[str, Any]:
+    return patch_session_meta(session_id, {"patientContext": None})
+
+
+def active_patient_context(session_id: str) -> dict[str, Any] | None:
+    meta = get_session_meta(session_id)
+    ctx = meta.get("patientContext") if isinstance(meta, dict) else None
+    if not isinstance(ctx, dict):
+        return None
+    exp = str(ctx.get("expiresAt") or "").strip()
+    if exp:
+        try:
+            expires = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > expires:
+                return None
+        except ValueError:
+            pass
+    if not str(ctx.get("patientId") or "").strip():
+        return None
+    return ctx
+
+
+def patient_context_persona_block(session_id: str) -> str:
+    ctx = active_patient_context(session_id)
+    if not ctx:
+        return ""
+    initials = str(ctx.get("initials") or "P—")
+    ph = str(ctx.get("patientHash") or "").replace("#", "")[:4]
+    ph_disp = f"#{ph}" if ph else "hash —"
+    return (
+        "ACTIVE SOFTDENT PATIENT CONTEXT (this session only, SoftDent READ-ONLY):\n"
+        f"- Display: {initials} · {ph_disp}\n"
+        "- SoftDent patient id is bound server-side for this session — do not invent PHI.\n"
+        '- When operator says "this patient" / "about this patient", summarize the bound patient.\n'
+        "- empty ≠ $0 — missing dollars are NO SIGNAL / unavailable, never fabricated $0."
+    )
 
 
 def messages_for_chat(session_id: str, *, limit: int = 20) -> list[dict[str, str]]:

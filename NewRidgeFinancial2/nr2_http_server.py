@@ -964,6 +964,73 @@ class NR2BottleServer(BottleServer):
             limit = int(bottle.request.params.get("limit") or 50)
             return _json_response(get_history(session_id, limit=limit))
 
+        @app.post("/api/hal/patient-context")
+        def hal_patient_context_set_api():
+            """Bind SoftDent patient to HAL session (hash/initials for UI; id server-side)."""
+            from hal_patient_audit import log_hal_patient_action
+            from hal_session_store import set_patient_context
+            from nr2_rbac import current_role, has_capability
+            from patient_dossier import patient_hash as dossier_patient_hash
+
+            if not (
+                has_capability("read_patient_dossier")
+                or has_capability("read_all")
+                or has_capability("*")
+                or has_capability("read_schedule")
+            ):
+                return _json_response(
+                    {"ok": False, "error": "capability_rejected", "role": current_role()},
+                    status=403,
+                )
+            body = bottle.request.body.read().decode("utf-8") if bottle.request.body else "{}"
+            payload = json.loads(body or "{}")
+            session_id = str(payload.get("sessionId") or payload.get("session_id") or "").strip()
+            patient_id = str(payload.get("patientId") or payload.get("patient_id") or "").strip()
+            if not session_id or not patient_id:
+                return _json_response(
+                    {"ok": False, "error": "sessionId_and_patientId_required"},
+                    status=400,
+                )
+            ph = str(payload.get("patientHash") or payload.get("patient_hash") or "").strip()
+            if not ph:
+                ph = dossier_patient_hash(patient_id)
+            initials = str(payload.get("initials") or "").strip() or None
+            result = set_patient_context(
+                session_id,
+                patient_id=patient_id,
+                patient_hash=ph,
+                initials=initials,
+            )
+            if result.get("ok"):
+                log_hal_patient_action(
+                    user_id=str(payload.get("userId") or current_role()),
+                    patient_hash=ph,
+                    action="context_set",
+                    tools_used=str(payload.get("toolsUsed") or '["set_patient_context"]'),
+                    ip=str(bottle.request.remote_addr or ""),
+                )
+            return _json_response(result, status=200 if result.get("ok") else 400)
+
+        @app.get("/api/hal/patient-context")
+        def hal_patient_context_get_api():
+            from hal_session_store import active_patient_context
+
+            session_id = str(bottle.request.params.get("sessionId") or "").strip()
+            if not session_id:
+                return _json_response({"ok": False, "error": "sessionId_required"}, status=400)
+            ctx = active_patient_context(session_id)
+            if not ctx:
+                return _json_response({"ok": True, "active": False, "patientContext": None})
+            # Do not echo full SoftDent id to clients that only need display fields
+            safe = {
+                "patientHash": ctx.get("patientHash"),
+                "initials": ctx.get("initials"),
+                "setAt": ctx.get("setAt"),
+                "expiresAt": ctx.get("expiresAt"),
+                "patientId": ctx.get("patientId"),  # needed for summarize tool on same staff session
+            }
+            return _json_response({"ok": True, "active": True, "patientContext": safe})
+
         @app.post("/api/hal/chat")
         def hal_chat_api():
             """Multi-turn HAL chat (Moonshot P0). stream:true → SSE; else JSON.
@@ -984,6 +1051,7 @@ class NR2BottleServer(BottleServer):
                 append_turn,
                 create_session,
                 messages_for_chat,
+                patient_context_persona_block,
             )
             from nr2_hal_gateway import (
                 APPROVED_LOCAL_MODEL,
@@ -1049,6 +1117,13 @@ class NR2BottleServer(BottleServer):
                 persona = HAL_9000_BRAIN_SYSTEM
             elif "HAL" not in persona[:80]:
                 persona = HAL_9000_BRAIN_SYSTEM + "\n\n" + persona
+
+            try:
+                ctx_block = patient_context_persona_block(session_id)
+                if ctx_block:
+                    persona = persona + "\n\n" + ctx_block
+            except Exception:
+                pass
 
             store = _local_store()
             readiness = _get_import_readiness()
@@ -1389,6 +1464,52 @@ class NR2BottleServer(BottleServer):
                     readiness=readiness if isinstance(readiness, dict) else None
                 )
             )
+
+        @app.get("/api/hal/tools/patient-dossier-summary")
+        def hal_tools_patient_dossier_summary():
+            """Thin HAL tool: SoftDent dossier + optional local AI summarize (READ-ONLY)."""
+            from nr2_rbac import current_role, has_capability
+            from patient_dossier import (
+                build_patient_dossier,
+                format_dossier_markdown,
+                log_patient_query,
+                patient_hash,
+                summarize_dossier_with_local_ai,
+            )
+
+            if not (
+                has_capability("read_patient_dossier")
+                or has_capability("read_all")
+                or has_capability("*")
+            ):
+                return _json_response(
+                    {"ok": False, "error": "capability_rejected", "role": current_role()},
+                    status=403,
+                )
+            patient_id = str(bottle.request.params.get("patientId") or "").strip()
+            if not patient_id:
+                return _json_response({"ok": False, "error": "patientId_required"}, status=400)
+            do_summarize = str(bottle.request.params.get("summarize") or "1").strip().lower() not in (
+                "0",
+                "false",
+                "no",
+            )
+            dossier = build_patient_dossier(patient_id)
+            log_patient_query(str(current_role()), patient_id, "dossier_summary_tool")
+            payload = {
+                "ok": bool(dossier.get("ok", True)),
+                "patientHash": patient_hash(patient_id),
+                "summaryMarkdown": format_dossier_markdown(dossier),
+                "readOnly": True,
+            }
+            if do_summarize:
+                ai = summarize_dossier_with_local_ai(dossier)
+                payload["summary"] = ai.get("summary")
+                payload["summarySource"] = ai.get("source")
+                payload["summaryModel"] = ai.get("model")
+                if ai.get("error"):
+                    payload["summaryError"] = ai.get("error")
+            return _json_response(payload)
 
         @app.get("/api/hal/tools/beam-verify")
         def hal_beam_verify_api():
