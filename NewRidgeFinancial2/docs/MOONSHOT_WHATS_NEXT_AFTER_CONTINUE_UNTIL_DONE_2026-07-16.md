@@ -14,75 +14,72 @@
 ---
 
 # Verdict
-Restart NR2 server to load nr2-12070 routes, then prove Trellis tomorrow-insurance HTTP 200 and validate desk smoke remains GREEN with appointments-range emitting apptTimeColumn.
+Restart NR2 server to load the new Trellis routes and prove HTTP 200 on `trellis_tomorrow` before proceeding to SoftDent morning-bundle rehearsal.
 
 ## 0. Operator Intent (verbatim)
 continue
 
 ## 1. Recommended NEXT (name, why now, effort, REAL files, validation gate)
-**Package:** NR2-12071-RESTART-ROUTE-PROOF  
-**Why now:** The LIVE AUDIT shows `trellisTomorrow.error: "HTTPError"` and the build notes explicitly state *"Restart NR2 server to load new routes"*. Commit 82aa59e deployed the Trellis tomorrow-insurance endpoint and the appointments-range fix (always emit `apptTimeColumn`), but the runtime is still serving the old route table. Until the process restarts, the new `/api/trellis/tomorrow` handler is unreachable, desk smoke cannot validate the HTTP path, and the morning bundle pipeline cannot initialize.
-
-**Effort:** 15 min (process restart + 3 validation curls).
-
-**REAL files (known NR2 layout):**
-- `C:\Users\mreno\newridgefamilyfinancial\app.py` (or `server.py` / `main.py` — the ASGI/WSGI entrypoint)
-- `C:\Users\mreno\newridgefamilyfinancial\routes\trellis.py` (new tomorrow-insurance handler)
-- `C:\Users\mreno\newridgefamilyfinancial\services\desk_smoke.py` (HTTP probe logic)
-- `C:\Users\mreno\newridgefamilyfinancial\services\appointments_range.py` (apptTimeColumn emitter)
-
-**Validation gate (must pass before proceeding):**
-1. `GET /api/trellis/tomorrow` returns HTTP 200 with JSON payload containing `targetDate`, `total`, `hasData` (not HTTPError).
-2. Desk smoke run shows `status: "GREEN"`, `deskProof: "MATCH"`, `forceCloseAvailable: false` (laser-gated).
-3. `appointmentsRange.apptTimeColumn` is non-null (populated with time strings or empty array `[]`, never missing key).
-4. No 500s in `NR2.log` post-restart.
+**Package:** `NR2-12071-TRELLIS-HTTP-PROOF`  
+**Why now:** LIVE AUDIT shows `trellisTomorrow.error: "HTTPError"` and `ok: null`. The build notes explicitly state *"Restart NR2 server to load new routes"* (82aa59e). Until the server restarts, the new Trellis tomorrow-insurance endpoint is unreachable, desk smoke cannot validate HTTP GREEN, and `morningConfidence` remains unpopulated. This is a deployment blocker, not a code defect.  
+**Effort:** Low (operational restart + verification; zero code changes).  
+**REAL files:**  
+- `C:\Users\mreno\newridgefamilyfinancial\server.py` (or `app.py` / `main.py` entry point) — restart target  
+- `routes/trellis.py` — new route module requiring load  
+- `services/desk_smoke.py` — validation consumer  
+- `app_data/nr2/office/` — Hub data path (per audit)  
+**Validation gate:**  
+1. `trellisTomorrow.ok === true`  
+2. `trellisTomorrow.error === null`  
+3. `deskSmokeRun.status === "GREEN"` **and** `deskProof === "MATCH"` **and** HTTP layer returns 200 (not just Python-level OK)  
+4. `morningConfidence` field populates (non-null)  
 
 ## 2. Ordered backlog AFTER #1 (2–4 items)
-1. **NR2-12072-SOFTDENT-MORNING-BUNDLE** — Rehearse SoftDent GUI morning Excel export (`softdent_export_morning_bundle`) and populate `periodCloseStatus.morningBundle` with the shadow-day run. Harden the desktop report-pull path so the Excel parser handles null cells as `emptyNotZero` (not `$0`).  
-   *Files:* `services/softdent_export.py`, `services/period_close.py`, `utils/excel_parser.py`.
+1. **SoftDent GUI Morning Excel Bundle Rehearsal** (`NR2-12072-SOFTDENT-MORNING-BUNDLE`)  
+   - Shadow-run the period-close morning bundle export via SoftDent GUI (read-only).  
+   - Validate `periodCloseStatus.morningBundle` transitions from `null` to a valid path/hash.  
+   - Confirm `emptyNotZero` remains `true` throughout.  
 
-2. **NR2-12073-APEX-2B-WEEKLY-WIDGET** — Classic Apex 2B weekly widget (optional; only if post-restart audit shows widget gap). Low priority unless OM dashboard reports missing weekly rollup.  
-   *Files:* `widgets/apex_2b.py`, `routes/widgets.py`.
+2. **Period-Close Excel Path Hardening** (`NR2-12073-PERIOD-CLOSE-EXCEL-PATH`)  
+   - Harden the desktop report-pull logic for SoftDent → Excel → NR2 ingestion.  
+   - Ensure PHI initials+hash masking on board views before Excel generation.  
 
-3. **NR2-12074-EXCEL-PATH-HARDENING** — Defensive parsing for period-close Excel paths (schema validation, PHI hash on initials, temp file cleanup).  
-   *Files:* `services/excel_import.py`, `services/phi_hasher.py`.
+3. **Desk Smoke: Trellis Tomorrow HTTP Resilience** (`NR2-12074-TRELLIS-RESILIENCE`)  
+   - Add retry/backoff for Trellis HTTP calls (if not already present) to prevent transient `HTTPError` from failing desk smoke.  
 
-4. **NR2-12075-HAL-BLUENOTE-DUCKING** — HAL BlueNote voice/ducking follow-on only if LIVE AUDIT after #1 shows `cloudHal.enabled: true` and voice gap exists. Currently disabled; defer.  
-   *Files:* `services/hal_voice.py`, `config/hal.yaml`.
+4. **Classic Apex 2B Weekly Widget** (`NR2-12075-APEX-2B-WIDGET`) — *Optional, only if audit after #1–3 shows gap.*  
 
 ## 3. Why this beats the other candidates now
-- **Candidate 2 (SoftDent GUI bundle):** Cannot succeed while the server returns HTTPError on the Trellis probe; the morning bundle depends on the same route table that is currently stale. Restart is a prerequisite.
-- **Candidate 3 (Apex 2B):** Widget data is secondary to core financial pipeline stability; audit shows no widget blocking errors.
-- **Candidate 4 (Excel hardening):** Belongs after the bundle rehearsal (NR2-12072) so we have real Excel files to harden against.
-- **Candidate 5 (HAL BlueNote):** `cloudHal.enabled` is `false` in LIVE AUDIT; no gap exists today.
-- **Candidate 6 (Other):** No other gaps are blocking; the HTTPError is the only red flag.
+- **Candidate #2 (SoftDent morning bundle):** Cannot be validated end-to-end while the Trellis HTTP layer is failing; desk smoke will remain incomplete.  
+- **Candidate #3 (Classic Apex):** No audit evidence of missing widget; Trellis HTTP error is a hard blocker.  
+- **Candidate #4 (SoftDent report-pull):** Depends on stable period-close status, which depends on functioning Trellis tomorrow data for insurance validation.  
+- **Candidate #5 (HAL BlueNote):** Audit shows no voice/ducking gaps; HAL Hub is reachable (`halHubUrl` responsive).  
 
 ## 4. What NOT to redo
-- OM schedule enrich (already shipped in nr2-12070).
-- Trellis huddle data model (already on main).
-- This-patient shortcut logic (already covered, `thisPatientShortcutCovered: true`).
-- PushEngage scorer or embeds (hygiene already applied; AVOID rule active).
-- Flip `forceCloseAvailable` to `true` on GREEN+MATCH (must remain laser-gated by design; keep `false` unless red lasers fire).
+- OM schedule enrich (already shipped).  
+- Trellis huddle logic (already shipped).  
+- This-patient shortcut coverage (already shipped).  
+- PushEngage scorer or embeds (already shipped; AVOID rule active).  
+- Flip `forceCloseAvailable` to `true` on GREEN+MATCH (must stay laser-gated by design).  
 
 ## 5. Acceptance criteria
-- [ ] Server process terminated and restarted; new PID in logs.
-- [ ] `trellisTomorrow.ok === true` and `error === null` in LIVE AUDIT.
-- [ ] `trellisTomorrow.total` is a number (≥ 0) and `targetDate` is ISO date string.
-- [ ] `appointmentsRange.apptTimeColumn` is present (array) even when `hasData === false`.
-- [ ] `deskSmokeLast.morningConfidence` is non-null after first morning run post-restart.
-- [ ] No regressions: `periodCloseStatus.status` remains `"completed"`, `alignmentLasers.green` stays `true`.
-- [ ] `softdent` sources remain `fresh` (lastSyncAt within 5 min of restart).
+- [ ] NR2 server restarted and new routes loaded (commit 82aa59e active).  
+- [ ] `GET /api/trellis/tomorrow` (or equivalent) returns HTTP 200 with JSON payload.  
+- [ ] `trellisTomorrow.hasData` is boolean (not null).  
+- [ ] `deskSmokeRun` shows `status: "GREEN"`, `deskProof: "MATCH"`, and no `error`.  
+- [ ] `morningConfidence` field is populated (number or object, not null).  
+- [ ] `forceCloseAvailable` remains `false` (laser-gate preserved).  
 
 ## 6. Executive Summary (5 bullets)
-- **Restart Required:** Build nr2-12070 added new HTTP routes (Trellis tomorrow, appointments-range fix) that are not loaded until the server restarts; current HTTPError proves the route is unreachable.
-- **Validation Before Bundle:** Morning bundle and period-close shadow runs depend on valid HTTP probes; restart must precede SoftDent Excel rehearsal.
-- **Laser-Gate Intact:** Force Close remains unavailable (`forceCloseAvailable: false`) by design; do not bypass even when desk smoke is GREEN.
-- **SoftDent Read-Only:** All exports remain read-only; empty cells will map to `emptyNotZero`, not `$0`, in the upcoming bundle package.
-- **Sequential Safety:** NR2-12071 validates the runtime; NR2-12072 exercises the business logic; NR2-12073+ are optimizations deferred until the pipeline is proven stable.
+- **Deployment Blocker:** LIVE AUDIT confirms `trellisTomorrow` throws `HTTPError` because new routes are not loaded; server restart is required to activate commit 82aa59e.  
+- **Zero Code Change:** This package is purely operational (restart + smoke test); no Python or JS modifications.  
+- **Validation Chain:** Fixing HTTP 200 unblocks `morningConfidence` calculation and validates the desk smoke “HTTP GREEN” requirement.  
+- **SoftDent Next:** Once Trellis HTTP is proven, the immediate follow-on is the SoftDent morning-bundle rehearsal (period-close shadow day).  
+- **Laser-Gate Preserved:** Force Close remains unavailable (`forceCloseAvailable: false`) until explicit business rules (outside GREEN+MATCH) are met.  
 
 ## 7. Approval Checklist
-- [ ] Operator acknowledges server restart is required to load nr2-12070 routes.
-- [ ] Backup or shadow copy of `app_data/nr2/office` verified before restart.
-- [ ] Maintenance window communicated to OM desk (brief interruption expected).
-- [ ] Validation gates for NR2-12071 documented and ready to execute post-restart.
-- [ ] Next package (NR2-12072) held in backlog until gate #1 passes.
+- [ ] Operator confirms NR2 server restart executed.  
+- [ ] Operator confirms `trellisTomorrow` endpoint returns HTTP 200 (checked via browser/curl or desk smoke).  
+- [ ] Operator verifies `deskSmokeRun.status === "GREEN"` post-restart.  
+- [ ] Operator confirms `morningConfidence` is no longer null.  
+- [ ] Operator approves proceeding to `NR2-12072-SOFTDENT-MORNING-BUNDLE`.
