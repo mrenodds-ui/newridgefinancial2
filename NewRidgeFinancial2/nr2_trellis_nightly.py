@@ -373,6 +373,8 @@ def format_hal_trellis_nightly_reply(query: str = "") -> str:
         "Flow: SoftDent appts -> Trellis Add Patient -> Verify -> ClearCoverage scrape "
         "(deductible/max/ADA %) -> results JSON + printable HTML report under "
         "app_data/nr2/vyne_pulls/ (trellis_eligibility_report_YYYY-MM-DD.html).\n"
+        "Staff open: OM Tomorrow · Trellis → Open benefits report "
+        "(GET /api/trellis/eligibility-report.html) — huddle list stays initials+hash, no $ invent.\n"
         "Credentials: gitignored .env.vyne.local (Wichita password only - never Emporia).\n"
         "Gating: set NR2_TRELLIS_VERIFY=1 to drive the Trellis UI; without it HAL still "
         "builds the worklist/pending batch and opens a work item for staff.\n"
@@ -571,6 +573,37 @@ def eligibility_report_snapshot(
             size = int(path.stat().st_size)
         except OSError:
             size = 0
+
+    # Counts only — never copy deductible/$ into the OM huddle API.
+    patients = 0
+    with_benefits = 0
+    results = _load_json(root / f"tomorrow_trellis_verify_results_{iso}.json")
+    if results:
+        rows = results.get("results") or []
+        patients = len(rows)
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            ben = row.get("benefits")
+            if not isinstance(ben, dict):
+                continue
+            if ben.get("scrapeOk") is True:
+                with_benefits += 1
+                continue
+            cats = ben.get("categories") or {}
+            if any(cats.get(k) for k in ("preventive", "basic", "major", "ortho")):
+                with_benefits += 1
+                continue
+            if any(
+                ben.get(k) is not None
+                for k in (
+                    "deductibleRemaining",
+                    "annualMaxRemaining",
+                    "planName",
+                )
+            ):
+                with_benefits += 1
+
     return {
         "ok": True,
         "hasReport": has and size > 64,
@@ -578,10 +611,15 @@ def eligibility_report_snapshot(
         "targetDate": iso,
         "path": str(path) if has else None,
         "bytes": size if has else 0,
+        "patients": patients,
+        "withBenefits": with_benefits,
+        "statusOnly": max(0, patients - with_benefits),
         "reportUrl": f"/api/trellis/eligibility-report.html?date={iso}",
         "boardPhi": "initials+hash",
         "note": (
             "Staff printable ClearCoverage report — may show full names for chairside use. "
+            f"Verified rows {patients}; ClearCoverage benefits captured {with_benefits} "
+            f"(status-only {max(0, patients - with_benefits)}). "
             "OM huddle list stays initials+hash · empty ≠ $0."
             if has
             else "NO SIGNAL — run Trellis verify / build_trellis_eligibility_report for this date."

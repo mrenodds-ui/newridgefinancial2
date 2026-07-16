@@ -69,12 +69,15 @@ def universal_report_pull_steps() -> list[str]:
     return [
         "Launch SoftDent only via CS SoftDent Software.lnk (-sus) — never bare SDWIN.EXE.",
         "Sign On: COMPUTE / computer (or SOFTDENT_SIGNON_* env). Keyboard or mouse; never Esc on SoftDent main.",
-        "Open the report: Reports → <category> → <report> (F10 menus preferred if Alt keys fail).",
-        "Output Options appears: click Excel then Enter — OR click Print Preview then Enter. NEVER Printer.",
+        "Before unattended pulls: close or minimize Chrome Claim Management / NR2 Optical Claims — they steal SoftDent focus.",
+        "Open the report: Reports → <category> → <report> (F10 menus preferred if 64-bit menu_select fails ElementNotEnabled).",
+        "Output Options appears: click Excel then Enter — OR click Print Preview then Enter. NEVER Printer. NEVER File.",
+        "If Excel is GREYED OUT on Output Options: use Print Preview only (NR2 will not invent money from preview; empty ≠ $0 until Excel is enabled in SoftDent).",
         "If SoftDent shows Waiting for printer connection… → Cancel (Alt+C) and choose Excel or Print Preview.",
         "Setup window: set Start/End (or as-of) dates; Doctors/Providers 999 = all unless filtering; OK.",
         SOFTDENT_SELECT_FILE_PATH_HYGIENE,
         "Print Preview path: page to the LAST page for exact totals (page 1 is often incomplete).",
+        "Morning money bundle (aging/register/collections) needs Excel enabled for money beams; Preview-only keeps attest_only.",
         "NR2: https://127.0.0.1:8765 → SoftDent page → Sync (or refresh_softdent_period_imports). "
         "Never invent SoftDent dollars; empty ≠ $0.",
     ]
@@ -155,8 +158,10 @@ def format_softdent_report_pull_hal_reply(query: str = "") -> str:
     lines = [
         "HOW TO PULL SOFTDENT REPORTS (desktop SoftDent — this office):",
         " ".join(f"{i}) {s}" for i, s in enumerate(steps, 1)),
-        "Hard rules: Excel or Print Preview only — never Printer; never Esc on SoftDent main; "
+        "Hard rules: Excel or Print Preview only — never Printer; never File; never Esc on SoftDent main; "
         "never Alt+R for Reports (AMD Instant Replay steals it); SoftDent is 32-bit — prefer F10. "
+        "If Excel is greyed out on Output Options → Print Preview only (empty ≠ $0 for money until Excel enabled). "
+        "Minimize Chrome Claim Management / NR2 Optical Claims before unattended pulls (focus thieves). "
         + SOFTDENT_SELECT_FILE_PATH_HYGIENE,
     ]
     catalog = office_report_catalog()

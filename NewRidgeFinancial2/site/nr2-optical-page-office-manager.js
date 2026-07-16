@@ -771,8 +771,17 @@
         reportLink.target = "_blank";
         reportLink.rel = "noopener";
         if (reportHint) {
-          reportHint.textContent =
-            "Staff print · ClearCoverage benefits · board stays initials+hash · empty ≠ $0";
+          var wb = rep.data.withBenefits;
+          var st = rep.data.statusOnly;
+          var bits =
+            "Staff print · ClearCoverage · board stays initials+hash · empty ≠ $0";
+          if (typeof wb === "number") {
+            bits +=
+              " · benefits " +
+              wb +
+              (typeof st === "number" ? " / status-only " + st : "");
+          }
+          reportHint.textContent = bits;
         }
       } else {
         reportLink.hidden = true;

@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12070-trellis-om-huddle",
-  "BUILD_ID": "nr2-12070-trellis-om-huddle",
-  "assetVersion": "nr2-12070-trellis-om-huddle",
-  "builtAt": "2026-07-16T12:40:00.000Z",
-  "notes": "nr2-12070: OM Trellis tomorrow-insurance + desk smoke Trellis/morningConfidence; appointments-range always emits apptTimeColumn; PushEngage AVOID embeds; Force Close stays laser-gated. SoftDent write-back forbidden. Restart NR2 server to load new routes.",
+  "schemaVersion": "nr2-12071-trellis-benefits-surface",
+  "BUILD_ID": "nr2-12071-trellis-benefits-surface",
+  "assetVersion": "nr2-12071-trellis-benefits-surface",
+  "builtAt": "2026-07-16T13:35:00.000Z",
+  "notes": "nr2-12071: OM Open benefits report + eligibility-report withBenefits counts; HAL softdent-report-pull teaches Excel-greyed→Preview + Claim Management focus; QB optional refresh attempted (AP/payroll SDK unavailable). SoftDent write-back forbidden; empty≠$0; Force Close laser-gated. Restart NR2 to pick up teach + snapshot counts.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12070-TRELLIS-OM-HUDDLE",
+  "package": "NR2-12071-TRELLIS-BENEFITS-SURFACE",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"
