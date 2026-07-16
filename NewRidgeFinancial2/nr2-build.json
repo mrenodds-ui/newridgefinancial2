@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "nr2-12043-hal-patient-summary",
-  "BUILD_ID": "nr2-12043-hal-patient-summary",
-  "assetVersion": "nr2-12043-hal-patient-summary",
-  "builtAt": "2026-07-16T01:40:00.000Z",
-  "notes": "nr2-12043-hal-patient-summary: HAL chat local policy summarizes patients via SoftDent dossier (RBAC, audit, empty≠$0); optical HAL SUMMARIZE tool. SoftDent write-back forbidden.",
+  "schemaVersion": "nr2-12070-trellis-om-huddle",
+  "BUILD_ID": "nr2-12070-trellis-om-huddle",
+  "assetVersion": "nr2-12070-trellis-om-huddle",
+  "builtAt": "2026-07-16T12:40:00.000Z",
+  "notes": "nr2-12070: OM Trellis tomorrow-insurance panel + GET /api/trellis/tomorrow-insurance; PushEngage consult hygiene (AVOID embeds); desk smoke probes Trellis route. SoftDent write-back forbidden. Restart NR2 server to load new routes.",
   "staffRenderMode": "nr2-clean",
-  "package": "NR2-12043-HAL-PATIENT-SUMMARY",
+  "package": "NR2-12070-TRELLIS-OM-HUDDLE",
   "compat": false,
   "packsAllowed": false,
   "baseCleanStamp": "nr2-11000-clean"

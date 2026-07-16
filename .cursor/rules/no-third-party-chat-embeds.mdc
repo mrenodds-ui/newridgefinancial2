@@ -1,0 +1,11 @@
+---
+description: Do not embed third-party chat or web-push widgets on NR2 pages
+alwaysApply: true
+---
+
+# No third-party chat / push embeds
+
+- Do **not** paste PushEngage, Tawk.to, Tidio, HubSpot chat, Crisp, Chaty, LiveChat, or similar consumer chat / web-push scripts into NR2 SoftDent, optical, or financial pages.
+- Visiting vendor marketing pages does not inject code into NR2; only installing embeds would.
+- Keep HAL UI flash rings disabled (`hal-live-widget-bridge.js` `flashElement` no-op) unless the operator explicitly requests otherwise.
+- Prefer on-workstation HAL / SoftDent read-only flows over third-party SaaS widgets (PHI / fiduciary surface).

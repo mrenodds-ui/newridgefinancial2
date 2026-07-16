@@ -405,6 +405,26 @@ def run_desk_smoke(
         if not http_ok:
             failures.append("beam_verify_http")
 
+        # Trellis tomorrow panel — detect stale server missing the route
+        tr_probe = _http_get("/api/trellis/tomorrow-insurance", base=http_base)
+        tr_ok = bool(tr_probe.get("ok")) and int(tr_probe.get("status") or 0) == 200
+        tr_data = tr_probe.get("data") if isinstance(tr_probe.get("data"), dict) else {}
+        checks.append(
+            {
+                "id": "trellis_tomorrow_http",
+                "ok": tr_ok,
+                "status": tr_probe.get("status"),
+                "hasData": tr_data.get("hasData") if tr_ok else None,
+                "targetDate": tr_data.get("targetDate") if tr_ok else None,
+                "error": tr_probe.get("error"),
+                "hint": None
+                if tr_ok
+                else "Restart NR2 browser/workstation server to load /api/trellis/tomorrow-insurance",
+            }
+        )
+        if not tr_ok:
+            failures.append("trellis_tomorrow_http")
+
     # Patient attest is MATCH-gated (sibling of laser-gated period Force Close).
     patient_attest_eligible = proof_status == "MATCH"
     checks.append(
@@ -490,6 +510,26 @@ def run_desk_smoke(
         row_time_covered = False
 
     overall = len(failures) == 0
+    # Morning confidence: GREEN+MATCH is healthy; period Force Close stays laser-gated.
+    morning_confidence = {
+        "deskProof": proof_status,
+        "status": "GREEN" if overall else "RED",
+        "forceCloseAvailable": bool(fc_available),
+        "patientAttestEligible": patient_attest_eligible,
+        "forceCloseLaserGated": True,
+        "note": (
+            "GREEN + MATCH does not enable period Force Close; "
+            "use patientAttestEligible for MATCH-gated patient ATTEST REVIEW."
+        ),
+    }
+    checks.append(
+        {
+            "id": "morning_confidence",
+            "ok": True,
+            **morning_confidence,
+        }
+    )
+    overall = len(failures) == 0
     row = {
         "ok": overall,
         "emptyNotZero": True if patient_ctx.get("emptyNotZero", True) else False,
@@ -509,6 +549,7 @@ def run_desk_smoke(
         "patientAttestEligible": patient_attest_eligible,
         "thisPatientShortcutCovered": bool(patient_ctx.get("covered")),
         "monThuApptTimeOk": bool(row_time_covered),
+        "morningConfidence": morning_confidence,
         "logPath": str(SMOKE_LOG_PATH),
         "buildHint": None,
     }
