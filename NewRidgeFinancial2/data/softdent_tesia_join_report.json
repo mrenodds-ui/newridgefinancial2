@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "builtAt": "2026-07-09T18:42:56Z",
+  "builtAt": "2026-07-16T01:37:47Z",
   "exactMatches": [
     {
       "payerReferenceId": "delta-dental",
@@ -344,8 +344,9 @@
       "name": "TRICARE Dental (United Concordia)",
       "source": null,
       "tesiaPayerId": "0000D",
-      "matchedSoftDentId": "UCCTR",
+      "matchedSoftDentId": "0000D",
       "allMatchingIds": [
+        "0000D",
         "UCCTR",
         "99726"
       ],
@@ -422,8 +423,9 @@
       "name": "DELTA DENTAL OF MI",
       "source": "softdent-insco-sensei",
       "tesiaPayerId": "DELTA",
-      "matchedSoftDentId": "10004",
+      "matchedSoftDentId": "DELTA",
       "allMatchingIds": [
+        "DELTA",
         "10004"
       ],
       "kansasRelevant": false
@@ -850,8 +852,9 @@
       "name": "DELTA DENTAL - DDIC",
       "source": "softdent-insco-sensei",
       "tesiaPayerId": "94276",
-      "matchedSoftDentId": "01033",
+      "matchedSoftDentId": "94276",
       "allMatchingIds": [
+        "94276",
         "01033"
       ],
       "kansasRelevant": false
@@ -884,8 +887,9 @@
       "name": "UCCI - FED VIP",
       "source": "softdent-insco-sensei",
       "tesiaPayerId": "0000D",
-      "matchedSoftDentId": "18004",
+      "matchedSoftDentId": "0000D",
       "allMatchingIds": [
+        "0000D",
         "18004"
       ],
       "kansasRelevant": false
@@ -917,8 +921,9 @@
       "name": "DELTA DENTAL OF OR",
       "source": "softdent-insco-sensei",
       "tesiaPayerId": "CDOR1",
-      "matchedSoftDentId": "25004",
+      "matchedSoftDentId": "CDOR1",
       "allMatchingIds": [
+        "CDOR1",
         "25004"
       ],
       "kansasRelevant": false
@@ -961,8 +966,9 @@
       "name": "UNITED CONCORDIA - CX007",
       "source": "softdent-insco-sensei",
       "tesiaPayerId": "0000D",
-      "matchedSoftDentId": "00864",
+      "matchedSoftDentId": "0000D",
       "allMatchingIds": [
+        "0000D",
         "00864"
       ],
       "kansasRelevant": false
@@ -1408,7 +1414,7 @@
     "payerReference": 137,
     "tesiaSeed": 226
   },
-  "appliedAt": "2026-07-09T18:42:56Z",
+  "appliedAt": "2026-07-16T01:37:47Z",
   "expandedTesiaRows": 0,
-  "stampedPayerReference": 8
+  "stampedPayerReference": 0
 }

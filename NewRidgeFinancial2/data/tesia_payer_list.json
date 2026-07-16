@@ -1,7 +1,7 @@
 {
-  "version": 5,
-  "updatedAt": "2026-07-09T18:42:44Z",
-  "sourceNote": "Seeded from Vyne/Tesia Dental Payer Listing (public vendor list v05.14.25) plus New Ridge Kansas focus. Import office Desktop Tesia/Vyne export to expand. Catch-all unlisted payers: 06126 with full payer name+address. Office Desktop Tesia/Vyne import merged. Office Desktop Tesia/Vyne import merged. Office Desktop Tesia/Vyne import merged. Office Desktop Tesia/Vyne import merged.",
+  "version": 6,
+  "updatedAt": "2026-07-16T01:37:41Z",
+  "sourceNote": "Seeded from Vyne/Tesia Dental Payer Listing (public vendor list v05.14.25) plus New Ridge Kansas focus. Import office Desktop Tesia/Vyne export to expand. Catch-all unlisted payers: 06126 with full payer name+address. Office Desktop Tesia/Vyne import merged. Office Desktop Tesia/Vyne import merged. Office Desktop Tesia/Vyne import merged. Office Desktop Tesia/Vyne import merged. Office Desktop Tesia/Vyne import merged.",
   "catchAllPayerId": "06126",
   "payers": [
     {
